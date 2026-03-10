@@ -171,7 +171,7 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
   };
 
   return (
-    <AppPage title="Approvals" contentClassName="max-w-4xl gap-5">
+    <AppPage contentClassName="max-w-4xl gap-5">
       <LiveRegion data-testid="approvals-pending-live">
         {approvals.pendingIds.length} pending approvals
       </LiveRegion>

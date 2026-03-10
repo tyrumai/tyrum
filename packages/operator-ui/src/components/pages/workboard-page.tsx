@@ -334,7 +334,7 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-bg">
-      <AppPageToolbar title="Work" actions={toolbarActions} />
+      <AppPageToolbar actions={toolbarActions} />
 
       {desktopBoard ? (
         <div className="min-h-0 flex-1 overflow-hidden">

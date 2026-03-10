@@ -43,8 +43,7 @@ function registerDashboardTests(): void {
     });
 
     const pageHeader = container.querySelector<HTMLElement>("header");
-    expect(pageHeader).not.toBeNull();
-    expect(pageHeader?.className).toContain("h-14");
+    expect(pageHeader).toBeNull();
 
     expect(container.querySelector('[data-testid="dashboard-refresh-status"]')).toBeNull();
 
@@ -195,7 +194,6 @@ function registerDashboardTests(): void {
       await Promise.resolve();
     });
 
-    expect(container.textContent).toContain("Active runs");
     expect(
       container.querySelector('[data-testid="run-status-11111111-1111-1111-1111-111111111111"]'),
     ).not.toBeNull();

@@ -143,7 +143,7 @@ export function DashboardPage({
   const connectionDisplay = getConnectionDisplay(connection.status);
 
   return (
-    <AppPage title="Dashboard" contentClassName="max-w-4xl gap-4">
+    <AppPage contentClassName="max-w-4xl gap-4">
       <LiveRegion data-testid="dashboard-approvals-live">
         {approvals.pendingIds.length} pending approvals
       </LiveRegion>

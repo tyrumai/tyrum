@@ -22,7 +22,7 @@ function ConfigurePageContent({ core }: ConfigurePageProps) {
   const [activeTab, setActiveTab] = useState("general");
 
   return (
-    <AppPage title="Configure" contentClassName="max-w-6xl gap-4" data-testid="configure-page">
+    <AppPage contentClassName="max-w-6xl gap-4" data-testid="configure-page">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="grid gap-3">
         <TabsList aria-label="Configure sections" className="flex-wrap">
           <TabsTrigger value="general" data-testid="configure-tab-general">

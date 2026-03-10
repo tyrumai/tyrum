@@ -13,17 +13,10 @@ export interface RunsPageProps {
   core: OperatorCore;
   agentId?: string;
   statuses?: ExecutionRun["status"][];
-  hideHeader?: boolean;
-  title?: string;
+  embedded?: boolean;
 }
 
-export function RunsPage({
-  core,
-  agentId,
-  statuses,
-  hideHeader = false,
-  title = "Runs",
-}: RunsPageProps) {
+export function RunsPage({ core, agentId, statuses, embedded = false }: RunsPageProps) {
   const runsState = useOperatorStore(core.runsStore);
   const [expandedRunIds, setExpandedRunIds] = useState<Set<string>>(() => new Set());
 
@@ -82,13 +75,9 @@ export function RunsPage({
       </div>
     );
 
-  if (hideHeader) {
+  if (embedded) {
     return <div className="grid gap-4">{content}</div>;
   }
 
-  return (
-    <AppPage title={title} contentClassName="max-w-5xl gap-4">
-      {content}
-    </AppPage>
-  );
+  return <AppPage contentClassName="max-w-5xl gap-4">{content}</AppPage>;
 }

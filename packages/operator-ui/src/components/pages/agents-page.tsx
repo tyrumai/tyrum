@@ -233,7 +233,7 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
       className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-bg"
       data-testid="agents-page"
     >
-      <AppPageToolbar title="Agents" actions={mobileToolbarActions} />
+      <AppPageToolbar actions={mobileToolbarActions} />
 
       <ConfirmDangerDialog
         open={deleteOpen}
@@ -479,7 +479,7 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
                   </TabsContent>
 
                   <TabsContent value="runs">
-                    <RunsPage core={core} agentId={selectedAgentKey} hideHeader={true} />
+                    <RunsPage core={core} agentId={selectedAgentKey} embedded />
                   </TabsContent>
                 </Tabs>
               </div>

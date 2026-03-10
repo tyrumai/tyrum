@@ -46,7 +46,7 @@ export function BrowserCapabilitiesPage() {
   })();
 
   return (
-    <AppPage title="Browser" contentClassName="max-w-5xl gap-4">
+    <AppPage contentClassName="max-w-5xl gap-4">
       {!globalThis.isSecureContext ? (
         <Alert
           variant="warning"

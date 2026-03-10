@@ -40,7 +40,7 @@ export function PairingPage({ core }: { core: OperatorCore }) {
   );
 
   return (
-    <AppPage title="Nodes" contentClassName="max-w-5xl gap-5">
+    <AppPage contentClassName="max-w-5xl gap-5">
       {inventory.error ? (
         <Alert variant="error" title="Live node status unavailable" description={inventory.error} />
       ) : null}
