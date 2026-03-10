@@ -6,7 +6,7 @@ import {
   TyrumClient,
   type TaskResult,
 } from "@tyrum/client/browser";
-import { type BrowserActionArgs } from "@tyrum/schemas";
+import { BrowserActionArgs } from "@tyrum/schemas";
 import {
   createContext,
   useCallback,
@@ -232,7 +232,12 @@ export function BrowserNodeProvider({
         execute: async (...args: Parameters<typeof baseProvider.execute>) => {
           const [action, ctx] = args;
           if (action.type === "Browser") {
-            const browserArgs = action.args as BrowserActionArgs;
+            const parsedArgs = BrowserActionArgs.safeParse(action.args);
+            if (!parsedArgs.success) {
+              return await baseProvider.execute(action, ctx);
+            }
+
+            const browserArgs = parsedArgs.data;
             const actionState = capabilityStatesRef.current[browserArgs.op];
             if (!actionState.enabled) {
               return {
