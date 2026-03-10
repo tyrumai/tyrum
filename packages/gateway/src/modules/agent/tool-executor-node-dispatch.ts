@@ -139,8 +139,8 @@ async function performNodeDispatch(
   let actionArgs: Record<string, unknown>;
   try {
     actionArgs = catalogAction.inputParser.parse({
-      [catalogAction.transport.op_field]: catalogAction.transport.op_value,
       ...request.input,
+      [catalogAction.transport.op_field]: catalogAction.transport.op_value,
     }) as Record<string, unknown>;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -240,18 +240,26 @@ export async function executeNodeInspectTool(
     };
   }
 
-  const payload = await context.inspectionService.inspect({
-    tenantId,
-    nodeId,
-    capabilityId: capability,
-    includeDisabled: false,
-  });
-  const tagged = tagContent(JSON.stringify(payload), "tool");
-  return {
-    tool_call_id: toolCallId,
-    output: sanitizeForModel(tagged),
-    provenance: tagged,
-  };
+  try {
+    const payload = await context.inspectionService.inspect({
+      tenantId,
+      nodeId,
+      capabilityId: capability,
+      includeDisabled: false,
+    });
+    const tagged = tagContent(JSON.stringify(payload), "tool");
+    return {
+      tool_call_id: toolCallId,
+      output: sanitizeForModel(tagged),
+      provenance: tagged,
+    };
+  } catch (error) {
+    return {
+      tool_call_id: toolCallId,
+      output: "",
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
 }
 
 export async function executeNodeListTool(

@@ -161,6 +161,34 @@ export function registerToolExecutorNodeDispatchTests(home: HomeDirState): void 
     expect(result.output).toContain('"foo":"bar"');
   });
 
+  it("tool.node.dispatch does not allow input.op to override the catalog action", async () => {
+    const nodeDispatchService = {
+      dispatchAndWait: vi.fn(async () => ({
+        taskId: "task-123",
+        result: { ok: true, evidence: { foo: "bar" } },
+      })),
+    };
+
+    const result = await executeNodeDispatch(home, nodeDispatchService, {
+      ...nodeDispatchArgs,
+      input: { op: "act", include_tree: false },
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(nodeDispatchService.dispatchAndWait).toHaveBeenCalledOnce();
+    expect(nodeDispatchService.dispatchAndWait).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "Desktop",
+        args: expect.objectContaining({
+          op: "snapshot",
+          include_tree: false,
+        }),
+      }),
+      expect.any(Object),
+      { timeoutMs: 30_000, nodeId: "node-1" },
+    );
+  });
+
   it("tool.node.dispatch returns a structured, retryable timeout error", async () => {
     const nodeDispatchService = {
       dispatchAndWait: vi.fn(async () => {
@@ -317,6 +345,30 @@ export function registerToolExecutorNodeDispatchTests(home: HomeDirState): void 
       expect(result.error).toBeUndefined();
       expect(result.output).toContain('"status":"ok"');
       expect(result.output).toContain('"attached_to_requested_lane":true');
+    } finally {
+      await db.close();
+    }
+  });
+
+  it("tool.node.inspect returns a tool error when inspection fails", async () => {
+    const db = openTestSqliteDb();
+
+    try {
+      const result = await createToolExecutor({
+        homeDir: requireHomeDir(home),
+        workspaceLease: createWorkspaceLease(db),
+        nodeCapabilityInspectionService: {
+          inspect: vi.fn(async () => {
+            throw new Error("unknown_node: node-404");
+          }),
+        } as never,
+      }).execute("tool.node.inspect", "call-9", {
+        node_id: "node-404",
+        capability: "tyrum.browser",
+      });
+
+      expect(result.output).toBe("");
+      expect(result.error).toBe("unknown_node: node-404");
     } finally {
       await db.close();
     }
