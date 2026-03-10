@@ -68,6 +68,7 @@ export function ProviderAccountDialog({
   const [providerFilter, setProviderFilter] = React.useState("");
   const [saving, setSaving] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
+  const [autoSelectReady, setAutoSelectReady] = React.useState(false);
   const providerFilterId = React.useId();
 
   const supportedProviders = React.useMemo(
@@ -105,7 +106,11 @@ export function ProviderAccountDialog({
     : 0;
 
   React.useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setAutoSelectReady(false);
+      return;
+    }
+    setAutoSelectReady(false);
     setProviderFilter("");
     setErrorMessage(null);
     setSaving(false);
@@ -116,6 +121,11 @@ export function ProviderAccountDialog({
         account: account ?? undefined,
       }),
     );
+  }, [account, initialProviderKey, open, registry]);
+
+  React.useEffect(() => {
+    if (!open) return;
+    setAutoSelectReady(true);
   }, [account, initialProviderKey, open, registry]);
 
   const applyProviderSelection = React.useCallback(
@@ -145,7 +155,7 @@ export function ProviderAccountDialog({
   );
 
   React.useEffect(() => {
-    if (!open || account) return;
+    if (!open || account || !autoSelectReady) return;
     if (
       filteredSupportedProviders.some((provider) => provider.provider_key === state.providerKey)
     ) {
@@ -158,16 +168,32 @@ export function ProviderAccountDialog({
     }
     setState((current) =>
       current.providerKey || current.methodKey || Object.keys(current.secretValues).length > 0
-        ? {
-            ...current,
-            providerKey: "",
-            methodKey: "",
-            configValues: {},
-            secretValues: {},
-          }
+        ? (() => {
+            const currentProviderName = supportedProviders.find(
+              (provider) => provider.provider_key === current.providerKey,
+            )?.name;
+            const shouldClearDisplayName =
+              !current.displayName.trim() || current.displayName === (currentProviderName ?? "");
+            return {
+              ...current,
+              providerKey: "",
+              methodKey: "",
+              displayName: shouldClearDisplayName ? "" : current.displayName,
+              configValues: {},
+              secretValues: {},
+            };
+          })()
         : current,
     );
-  }, [account, applyProviderSelection, filteredSupportedProviders, open, state.providerKey]);
+  }, [
+    account,
+    applyProviderSelection,
+    autoSelectReady,
+    filteredSupportedProviders,
+    open,
+    state.providerKey,
+    supportedProviders,
+  ]);
 
   const formError = validateProviderForm(state, selectedMethod, mode);
 

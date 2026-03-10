@@ -309,6 +309,23 @@ export async function openAddAccountDialog(
   };
 }
 
+export async function openAddExistingProviderAccountDialog(
+  core: OperatorCore,
+  providerKey: string,
+): Promise<TestRoot & { dialog: HTMLElement }> {
+  const testRoot = await renderAdminHttpProvidersPanel(core);
+  click(
+    getByTestId<HTMLButtonElement>(
+      testRoot.container,
+      `providers-group-add-account-${providerKey}`,
+    ),
+  );
+  return {
+    ...testRoot,
+    dialog: getByTestId<HTMLElement>(document.body, "providers-account-dialog"),
+  };
+}
+
 export async function openEditAccountDialog(
   core: OperatorCore,
 ): Promise<TestRoot & { dialog: HTMLElement }> {
