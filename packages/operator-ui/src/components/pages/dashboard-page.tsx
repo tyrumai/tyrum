@@ -146,7 +146,7 @@ export function DashboardPage({
             "w-full cursor-pointer text-left",
             "rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
           )}
-          onClick={() => onNavigate?.(connectionRouteId)}
+          onClick={onNavigate ? () => onNavigate(connectionRouteId) : undefined}
         >
           <Alert
             variant={connection.status === "connecting" ? "warning" : "error"}
@@ -173,7 +173,7 @@ export function DashboardPage({
           label="Pending Approvals"
           loading={approvals.loading && approvals.lastSyncedAt === null}
           valueClassName={approvals.pendingIds.length > 0 ? "text-warning" : undefined}
-          onClick={() => onNavigate?.("approvals")}
+          onClick={onNavigate ? () => onNavigate("approvals") : undefined}
           testId="dashboard-card-approvals"
           ariaLabel={`${approvals.pendingIds.length} pending approvals, navigate to approvals`}
         />
@@ -182,7 +182,7 @@ export function DashboardPage({
           value={activeRunsCount === null ? "-" : String(activeRunsCount)}
           label="Active Runs"
           loading={status.loading.status && status.status === null}
-          onClick={() => onNavigate?.("runs")}
+          onClick={onNavigate ? () => onNavigate("runs") : undefined}
           testId="dashboard-card-runs"
           ariaLabel={`${activeRunsCount ?? 0} active runs, navigate to runs`}
         />
@@ -190,7 +190,7 @@ export function DashboardPage({
           icon={Bot}
           value={activeAgentsText}
           label="Active Agents"
-          onClick={() => onNavigate?.("agents")}
+          onClick={onNavigate ? () => onNavigate("agents") : undefined}
           testId="dashboard-card-agents"
           ariaLabel={`${activeAgentIds.size} active agents, navigate to agents`}
         />
@@ -200,7 +200,7 @@ export function DashboardPage({
           label="Open Work"
           subtitle={activeWorkCount > 0 ? `${activeWorkCount} in progress` : undefined}
           loading={workboard.loading && workboard.items.length === 0}
-          onClick={() => onNavigate?.("workboard")}
+          onClick={onNavigate ? () => onNavigate("workboard") : undefined}
           testId="dashboard-card-open-work"
           ariaLabel={`${openWorkCount} open work items, navigate to workboard`}
         />
@@ -216,7 +216,7 @@ export function DashboardPage({
             <StatusRow
               label="Connection"
               testId="dashboard-card-connection"
-              onClick={() => onNavigate?.(connectionRouteId)}
+              onClick={onNavigate ? () => onNavigate(connectionRouteId) : undefined}
               value={
                 <span className="inline-flex items-center gap-2">
                   <StatusDot
@@ -242,13 +242,13 @@ export function DashboardPage({
               label="Connected nodes"
               value={String(connectedNodesCount)}
               loading={status.loading.presence}
-              onClick={() => onNavigate?.("pairing")}
+              onClick={onNavigate ? () => onNavigate("pairing") : undefined}
             />
             <StatusRow
               label="Pending nodes"
               loading={pairing.loading && pairing.lastSyncedAt === null}
               testId="dashboard-card-pairing"
-              onClick={() => onNavigate?.("pairing")}
+              onClick={onNavigate ? () => onNavigate("pairing") : undefined}
               value={
                 <span className={pairing.pendingIds.length > 0 ? "text-warning" : undefined}>
                   {String(pairing.pendingIds.length)}
