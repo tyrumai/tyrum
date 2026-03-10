@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { normalizeExecutionFailure } from "../../src/modules/agent/tool-executor-node-dispatch-helpers.js";
+import {
+  normalizeExecutionFailure,
+  selectPayload,
+} from "../../src/modules/agent/tool-executor-node-dispatch-helpers.js";
 import {
   NoCapableNodeError,
   NodeNotConnectedError,
@@ -42,6 +45,40 @@ describe("normalizeExecutionFailure", () => {
       code: "runtime_unavailable",
       message: "no connected node with capability: desktop",
       retryable: false,
+    });
+  });
+});
+
+describe("selectPayload", () => {
+  it("falls back to result when result_or_evidence gets null evidence", () => {
+    expect(selectPayload("result_or_evidence", { ok: true }, null)).toEqual({
+      payload_source: "result",
+      payload: { ok: true },
+    });
+  });
+
+  it("returns none when result_or_evidence receives only nullish payloads", () => {
+    expect(selectPayload("result_or_evidence", null, null)).toEqual({
+      payload_source: "none",
+      payload: null,
+    });
+    expect(selectPayload("result_or_evidence", undefined, undefined)).toEqual({
+      payload_source: "none",
+      payload: null,
+    });
+  });
+
+  it("preserves explicit null for the result channel", () => {
+    expect(selectPayload("result", null, { ignored: true })).toEqual({
+      payload_source: "result",
+      payload: null,
+    });
+  });
+
+  it("preserves explicit null for the evidence channel", () => {
+    expect(selectPayload("evidence", { ignored: true }, null)).toEqual({
+      payload_source: "evidence",
+      payload: null,
     });
   });
 });

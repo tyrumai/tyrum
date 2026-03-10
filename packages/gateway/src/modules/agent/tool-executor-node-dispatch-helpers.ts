@@ -217,10 +217,10 @@ export function selectPayload(
       ? { payload_source: "evidence", payload: evidence }
       : { payload_source: "none", payload: null };
   }
-  if (evidence !== undefined) {
+  if (evidence !== undefined && evidence !== null) {
     return { payload_source: "evidence", payload: evidence };
   }
-  if (result !== undefined) {
+  if (result !== undefined && result !== null) {
     return { payload_source: "result", payload: result };
   }
   return { payload_source: "none", payload: null };
