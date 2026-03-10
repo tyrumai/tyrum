@@ -339,7 +339,10 @@ export function TuiApp({ runtime, config }: { runtime: TuiRuntime; config: Resol
           void currentCore.approvalsStore.refreshPending();
           return;
         case "resolveApproval":
-          void currentCore.approvalsStore.resolve(command.approvalId, command.decision);
+          void currentCore.approvalsStore.resolve({
+            approvalId: command.approvalId,
+            decision: command.decision,
+          });
           return;
         case "refreshPairing":
           void currentCore.pairingStore.refresh();

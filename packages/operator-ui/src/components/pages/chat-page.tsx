@@ -1,4 +1,4 @@
-import type { OperatorCore } from "@tyrum/operator-core";
+import type { OperatorCore, ResolveApprovalInput } from "@tyrum/operator-core";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useBrowserNodeOptional } from "../../browser-node/browser-node-provider.js";
@@ -21,6 +21,7 @@ export function ChatPage({ core }: { core: OperatorCore }) {
   const connection = useOperatorStore(core.connectionStore);
   const isConnected = connection.status === "connected";
   const chat = useOperatorStore(core.chatStore);
+  const approvals = useOperatorStore(core.approvalsStore);
   const lgUp = useAppShellMinWidth(CHAT_TWO_PANEL_CONTENT_WIDTH_PX);
   const browserNode = useBrowserNodeOptional();
   const host = useHostApiOptional();
@@ -29,7 +30,10 @@ export function ChatPage({ core }: { core: OperatorCore }) {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [mobileView, setMobileView] = useState<"threads" | "conversation">("threads");
   const [renderMode, setRenderMode] = useState<"markdown" | "text">("markdown");
-  const [resolvingApprovalId, setResolvingApprovalId] = useState<string | null>(null);
+  const [resolvingApproval, setResolvingApproval] = useState<{
+    approvalId: string;
+    state: "approved" | "denied" | "always";
+  } | null>(null);
 
   const threads = useMemo<ChatThreadSummary[]>(
     () =>
@@ -89,17 +93,20 @@ export function ChatPage({ core }: { core: OperatorCore }) {
     if (!lgUp) setMobileView("conversation");
   };
 
-  const resolveApproval = async (
-    approvalId: string,
-    decision: "approved" | "denied",
-  ): Promise<void> => {
-    setResolvingApprovalId(approvalId);
+  const resolveApproval = async (input: ResolveApprovalInput): Promise<void> => {
+    setResolvingApproval({
+      approvalId: input.approvalId,
+      state: input.mode === "always" ? "always" : input.decision,
+    });
     try {
-      await core.approvalsStore.resolve(approvalId, decision);
+      await core.approvalsStore.resolve(input);
+      if (input.decision === "approved" && input.mode === "always") {
+        toast.success("Always approve enabled");
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));
     } finally {
-      setResolvingApprovalId(null);
+      setResolvingApproval(null);
     }
   };
 
@@ -174,8 +181,9 @@ export function ChatPage({ core }: { core: OperatorCore }) {
             sendBusy={chat.send.sending}
             canSend={canSend}
             working={working}
+            approvalsById={approvals.byId}
             onResolveApproval={resolveApproval}
-            resolvingApprovalId={resolvingApprovalId}
+            resolvingApproval={resolvingApproval}
             onBack={
               lgUp
                 ? undefined

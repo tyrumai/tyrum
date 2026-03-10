@@ -7,7 +7,21 @@ import { createChatStore } from "../../../operator-core/src/stores/chat-store.js
 import { createStore } from "../../../operator-core/src/store.js";
 import { ChatPage } from "../../src/components/pages/chat-page.js";
 import { ChatConversationPanel } from "../../src/components/pages/chat-page-parts.js";
-import { cleanupTestRoot, renderIntoDocument, stubMatchMedia } from "../test-utils.js";
+import { cleanupTestRoot, click, renderIntoDocument, stubMatchMedia } from "../test-utils.js";
+
+function createApprovalsStoreStub() {
+  const { store } = createStore({
+    byId: {},
+    pendingIds: [],
+    loading: false,
+    error: null,
+    lastSyncedAt: null,
+  });
+  return {
+    ...store,
+    resolve: vi.fn(async () => ({ approval: {} as never })),
+  };
+}
 
 describe("ChatPage", () => {
   it("fades in the transcript copy button on hover", () => {
@@ -85,7 +99,8 @@ describe("ChatPage", () => {
       transportError: null,
     });
 
-    const core = { connectionStore, chatStore } as unknown as OperatorCore;
+    const approvalsStore = createApprovalsStoreStub();
+    const core = { connectionStore, approvalsStore, chatStore } as unknown as OperatorCore;
     const testRoot = renderIntoDocument(React.createElement(ChatPage, { core }));
 
     const threadButton = testRoot.container.querySelector<HTMLButtonElement>(
@@ -132,7 +147,8 @@ describe("ChatPage", () => {
       transportError: null,
     });
 
-    const core = { connectionStore, chatStore } as unknown as OperatorCore;
+    const approvalsStore = createApprovalsStoreStub();
+    const core = { connectionStore, approvalsStore, chatStore } as unknown as OperatorCore;
     const testRoot = renderIntoDocument(React.createElement(ChatPage, { core }));
 
     const threadButton = testRoot.container.querySelector<HTMLButtonElement>(
@@ -180,7 +196,8 @@ describe("ChatPage", () => {
     });
 
     const matchMedia = stubMatchMedia("(min-width: 800px)", true);
-    const core = { connectionStore, chatStore } as unknown as OperatorCore;
+    const approvalsStore = createApprovalsStoreStub();
+    const core = { connectionStore, approvalsStore, chatStore } as unknown as OperatorCore;
     const testRoot = renderIntoDocument(React.createElement(ChatPage, { core }));
 
     const page = testRoot.container.querySelector<HTMLElement>('[data-testid="chat-page"]');
@@ -239,7 +256,8 @@ describe("ChatPage", () => {
     });
 
     const matchMedia = stubMatchMedia("(min-width: 800px)", true);
-    const core = { connectionStore, chatStore } as unknown as OperatorCore;
+    const approvalsStore = createApprovalsStoreStub();
+    const core = { connectionStore, approvalsStore, chatStore } as unknown as OperatorCore;
     const testRoot = renderIntoDocument(React.createElement(ChatPage, { core }));
 
     await act(async () => {
@@ -315,7 +333,8 @@ describe("ChatPage", () => {
     });
 
     const matchMedia = stubMatchMedia("(min-width: 800px)", false);
-    const core = { connectionStore, chatStore } as unknown as OperatorCore;
+    const approvalsStore = createApprovalsStoreStub();
+    const core = { connectionStore, approvalsStore, chatStore } as unknown as OperatorCore;
     const testRoot = renderIntoDocument(React.createElement(ChatPage, { core }));
 
     expect(testRoot.container.querySelector('[data-testid="chat-threads-panel"]')).not.toBeNull();
@@ -340,5 +359,165 @@ describe("ChatPage", () => {
 
     matchMedia.cleanup();
     cleanupTestRoot(testRoot);
+  });
+
+  it("offers always approve for hydrated pending transcript approvals", async () => {
+    const approvalId = "11111111-1111-1111-1111-111111111111";
+    const resolve = vi.fn(async () => ({
+      approval: {
+        approval_id: approvalId,
+        approval_key: "approval:1",
+        kind: "workflow_step",
+        status: "approved",
+        prompt: "Approve execution of 'tool.automation.schedule.create' (risk=medium)",
+        created_at: "2026-03-10T00:00:00.000Z",
+        expires_at: null,
+        resolution: {
+          decision: "approved",
+          resolved_at: "2026-03-10T00:00:01.000Z",
+        },
+      },
+      createdOverrides: [],
+    }));
+    const approval = {
+      approval_id: approvalId,
+      approval_key: "approval:1",
+      kind: "workflow_step",
+      status: "pending",
+      prompt: "Approve execution of 'tool.automation.schedule.create' (risk=medium)",
+      context: {
+        policy: {
+          suggested_overrides: [
+            {
+              tool_id: "tool.automation.schedule.create",
+              pattern: "kind:heartbeat;execution:agent_turn;delivery:quiet",
+              workspace_id: "22222222-2222-4222-8222-222222222222",
+            },
+          ],
+        },
+      },
+      created_at: "2026-03-10T00:00:00.000Z",
+      expires_at: null,
+      resolution: null,
+    } as const;
+    const transcriptApproval = {
+      kind: "approval",
+      id: approvalId,
+      approval_id: approvalId,
+      status: "pending",
+      title: "Approval required",
+      detail: approval.prompt,
+      created_at: approval.created_at,
+      updated_at: approval.created_at,
+    } as const;
+
+    const { store: connectionStore } = createStore({
+      status: "disconnected",
+      clientId: null,
+      lastDisconnect: null,
+      transportError: null,
+    });
+    const { store: approvalsBaseStore } = createStore({
+      byId: { [approvalId]: approval },
+      pendingIds: [approvalId],
+      loading: false,
+      error: null,
+      lastSyncedAt: null,
+    });
+    const approvalsStore = {
+      ...approvalsBaseStore,
+      resolve,
+    };
+    const { store: chatBaseStore } = createStore({
+      agentId: "default",
+      agents: {
+        agents: [],
+        loading: false,
+        error: null,
+      },
+      sessions: {
+        sessions: [],
+        nextCursor: null,
+        loading: false,
+        error: null,
+      },
+      active: {
+        sessionId: "session-1",
+        session: {
+          session_id: "session-1",
+          agent_id: "default",
+          channel: "ui",
+          thread_id: "ui-thread-1",
+          title: "Session",
+          summary: "",
+          transcript: [transcriptApproval],
+          updated_at: approval.created_at,
+          created_at: approval.created_at,
+        },
+        loading: false,
+        typing: false,
+        activeToolCallIds: [],
+        error: null,
+      },
+      send: {
+        sending: false,
+        error: null,
+      },
+    });
+    const chatStore = {
+      ...chatBaseStore,
+      setAgentId: vi.fn(),
+      refreshAgents: vi.fn(async () => {}),
+      refreshSessions: vi.fn(async () => {}),
+      loadMoreSessions: vi.fn(async () => {}),
+      openSession: vi.fn(async () => {}),
+      newChat: vi.fn(async () => {}),
+      sendMessage: vi.fn(async () => {}),
+      compactActive: vi.fn(async () => {}),
+      deleteActive: vi.fn(async () => {}),
+    };
+
+    const matchMedia = stubMatchMedia("(min-width: 800px)", true);
+    const core = { connectionStore, approvalsStore, chatStore } as unknown as OperatorCore;
+    const testRoot = renderIntoDocument(React.createElement(ChatPage, { core }));
+
+    try {
+      const alwaysButton = testRoot.container.querySelector<HTMLButtonElement>(
+        `[data-testid="approval-always-${approvalId}"]`,
+      );
+      expect(alwaysButton).not.toBeNull();
+
+      await act(async () => {
+        click(alwaysButton!);
+        await Promise.resolve();
+      });
+      const confirm = document.querySelector<HTMLButtonElement>(
+        `[data-testid="approval-always-confirm-${approvalId}"]`,
+      );
+      expect(document.body.textContent ?? "").toContain(
+        "Heartbeat schedule creation in this scope",
+      );
+
+      await act(async () => {
+        click(confirm!);
+        await Promise.resolve();
+      });
+
+      expect(resolve).toHaveBeenCalledWith({
+        approvalId,
+        decision: "approved",
+        mode: "always",
+        overrides: [
+          {
+            tool_id: "tool.automation.schedule.create",
+            pattern: "kind:heartbeat;execution:agent_turn;delivery:quiet",
+            workspace_id: "22222222-2222-4222-8222-222222222222",
+          },
+        ],
+      });
+    } finally {
+      matchMedia.cleanup();
+      cleanupTestRoot(testRoot);
+    }
   });
 });

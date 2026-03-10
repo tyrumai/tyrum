@@ -18,6 +18,9 @@ export function suggestedOverridesForToolCall(input: {
 }): SuggestedOverride[] | undefined {
   const trimmed = input.matchTarget.trim();
   if (trimmed.length === 0) return undefined;
+  if (input.toolId === "tool.automation.schedule.create" && trimmed.includes("execution:steps")) {
+    return undefined;
+  }
 
   const patterns: string[] = [];
 
