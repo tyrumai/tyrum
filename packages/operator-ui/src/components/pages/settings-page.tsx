@@ -12,7 +12,7 @@ function SettingsPageContent({
   mode: OperatorUiMode;
 }) {
   return (
-    <AppPage title="Settings" contentClassName="max-w-4xl gap-5">
+    <AppPage contentClassName="max-w-4xl gap-5">
       <ConfigureGeneralPanel />
     </AppPage>
   );

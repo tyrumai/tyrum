@@ -80,7 +80,7 @@ export function ExtensionsPage({ core }: { core: OperatorCore }) {
 
   if (!extensionsApi || !mutationHttp.extensions) {
     return (
-      <AppPage title="Extensions" contentClassName="max-w-5xl gap-4">
+      <AppPage contentClassName="max-w-5xl gap-4">
         <Alert variant="error" title="Extensions API unavailable" />
       </AppPage>
     );
@@ -175,7 +175,7 @@ export function ExtensionsPage({ core }: { core: OperatorCore }) {
   }
 
   return (
-    <AppPage title="Extensions" contentClassName="max-w-5xl gap-4" data-testid="extensions-page">
+    <AppPage contentClassName="max-w-5xl gap-4" data-testid="extensions-page">
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center gap-2 text-base font-semibold text-fg">

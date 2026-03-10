@@ -27,7 +27,7 @@ export function NodeConfigurePage({ onReloadPage }: { onReloadPage?: () => void 
   const host = useHostApi();
   if (host.kind !== "desktop") {
     return (
-      <AppPage title="Desktop" contentClassName="max-w-5xl gap-4">
+      <AppPage contentClassName="max-w-5xl gap-4">
         <Alert
           variant="warning"
           title="Not available"
@@ -40,7 +40,7 @@ export function NodeConfigurePage({ onReloadPage }: { onReloadPage?: () => void 
   const api = host.api;
   if (!api) {
     return (
-      <AppPage title="Desktop" contentClassName="max-w-5xl gap-4">
+      <AppPage contentClassName="max-w-5xl gap-4">
         <Alert variant="error" title="Desktop API not available." />
       </AppPage>
     );
@@ -62,7 +62,7 @@ function DesktopNodeConfigurePage({
 
   if (model.loading) {
     return (
-      <AppPage title="Desktop" contentClassName="max-w-5xl gap-4">
+      <AppPage contentClassName="max-w-5xl gap-4">
         <Card>
           <CardContent className="grid gap-2 pt-6 text-sm text-fg-muted">
             <div>Loading node settings…</div>
@@ -74,14 +74,14 @@ function DesktopNodeConfigurePage({
 
   if (model.loadError) {
     return (
-      <AppPage title="Desktop" contentClassName="max-w-5xl gap-4">
+      <AppPage contentClassName="max-w-5xl gap-4">
         <Alert variant="error" title="Failed to load node settings" description={model.loadError} />
       </AppPage>
     );
   }
 
   return (
-    <AppPage title="Desktop" contentClassName="max-w-6xl gap-4">
+    <AppPage contentClassName="max-w-6xl gap-4">
       <div className="text-sm text-fg-muted">
         Configure the local node runtime used by Tyrum Desktop.
       </div>

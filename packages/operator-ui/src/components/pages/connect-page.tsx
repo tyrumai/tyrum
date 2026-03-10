@@ -34,7 +34,6 @@ export function ConnectPage({
   const [nowMs, setNowMs] = useState(() => Date.now());
 
   const tokenRef = useRef<HTMLInputElement | null>(null);
-  const title = "Connect";
   const isWeb = mode === "web";
 
   const lastDisconnect = connection.lastDisconnect;
@@ -117,8 +116,6 @@ export function ConnectPage({
 
   return (
     <div className="grid gap-5">
-      <h1 className="text-2xl font-semibold tracking-tight text-fg">{title}</h1>
-
       <Card>
         <CardHeader className="pb-2.5">
           <div className="text-sm text-fg-muted">

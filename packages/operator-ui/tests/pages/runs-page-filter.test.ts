@@ -45,7 +45,7 @@ describe("RunsPage", () => {
 
     const core = { runsStore } as unknown as OperatorCore;
     const testRoot = renderIntoDocument(
-      React.createElement(RunsPage, { core, agentId: "default", hideHeader: true }),
+      React.createElement(RunsPage, { core, agentId: "default", embedded: true }),
     );
 
     expect(
@@ -86,7 +86,7 @@ describe("RunsPage", () => {
 
     const core = { runsStore } as unknown as OperatorCore;
     const testRoot = renderIntoDocument(
-      React.createElement(RunsPage, { core, agentId: "default", hideHeader: true }),
+      React.createElement(RunsPage, { core, agentId: "default", embedded: true }),
     );
 
     expect(

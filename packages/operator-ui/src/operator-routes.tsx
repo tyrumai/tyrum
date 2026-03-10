@@ -56,7 +56,6 @@ const ExtensionsPage = lazyNamed<{ core: OperatorCore }>(
 );
 const RunsPage = lazyNamed<{
   core: OperatorCore;
-  title?: string;
   statuses?: ExecutionRun["status"][];
 }>(() => import("./components/pages/runs-page.js"), "RunsPage");
 const PairingPage = lazyNamed<{ core: OperatorCore }>(
@@ -177,9 +176,7 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
     navGroup: "none",
     shortcut: false,
     hostKinds: ["desktop", "web"],
-    render: ({ core }) => (
-      <RunsPage core={core} title="Active runs" statuses={ACTIVE_RUN_STATUSES} />
-    ),
+    render: ({ core }) => <RunsPage core={core} statuses={ACTIVE_RUN_STATUSES} />,
   },
   {
     id: "pairing",
