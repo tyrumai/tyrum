@@ -70,10 +70,10 @@ function registerDashboardTests(): void {
     expect(presenceList.mock.calls.length).toBeGreaterThanOrEqual(1);
     expect(pairingsList.mock.calls.length).toBeGreaterThanOrEqual(1);
     expect(ws.approvalList.mock.calls.length).toBeGreaterThanOrEqual(1);
-    expect(container.textContent).toContain("Pending approvals");
+    expect(container.textContent).toContain("Pending Approvals");
     expect(container.textContent).not.toContain("Instance ID");
     expect(container.textContent).not.toContain("Tokens Used");
-    expect(container.textContent).toContain("Active runs");
+    expect(container.textContent).toContain("Active Runs");
     expect(container.textContent).toContain("Pending nodes");
 
     expect(container.querySelector('[data-testid="dashboard-approvals-badge"]')).toBeNull();
