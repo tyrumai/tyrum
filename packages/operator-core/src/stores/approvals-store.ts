@@ -1,4 +1,5 @@
 import type { Approval } from "@tyrum/client";
+import type { PolicyOverride } from "@tyrum/schemas";
 import type { OperatorWsClient } from "../deps.js";
 import { createStore, type ExternalStore } from "../store.js";
 
@@ -12,7 +13,26 @@ export interface ApprovalsState {
 
 export interface ApprovalsStore extends ExternalStore<ApprovalsState> {
   refreshPending(): Promise<void>;
-  resolve(approvalId: string, decision: "approved" | "denied", reason?: string): Promise<Approval>;
+  resolve(input: ResolveApprovalInput): Promise<ResolveApprovalResult>;
+}
+
+export interface ResolveApprovalOverride {
+  tool_id: string;
+  pattern: string;
+  workspace_id?: string;
+}
+
+export interface ResolveApprovalInput {
+  approvalId: string;
+  decision: "approved" | "denied";
+  reason?: string;
+  mode?: "once" | "always";
+  overrides?: ResolveApprovalOverride[];
+}
+
+export interface ResolveApprovalResult {
+  approval: Approval;
+  createdOverrides?: PolicyOverride[];
 }
 
 function upsertApproval(state: ApprovalsState, approval: Approval): ApprovalsState {
@@ -99,15 +119,20 @@ export function createApprovalsStore(ws: OperatorWsClient): {
     }
   }
 
-  async function resolve(
-    approvalId: string,
-    decision: "approved" | "denied",
-    reason?: string,
-  ): Promise<Approval> {
-    const result = await ws.approvalResolve({ approval_id: approvalId, decision, reason });
+  async function resolve(input: ResolveApprovalInput): Promise<ResolveApprovalResult> {
+    const result = await ws.approvalResolve({
+      approval_id: input.approvalId,
+      decision: input.decision,
+      reason: input.reason,
+      mode: input.mode,
+      overrides: input.overrides,
+    });
     const approval = result.approval;
     handleApprovalUpsert(approval);
-    return approval;
+    return {
+      approval,
+      createdOverrides: result.created_overrides,
+    };
   }
 
   return {

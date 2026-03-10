@@ -216,4 +216,64 @@ describe("canonicalizeToolMatchTarget", () => {
     expect(unknownTarget).toBe("capability:tyrum.browser;action:Browser;op:unknown");
     expect(unknownTarget).not.toContain("secret");
   });
+
+  it("canonicalizes heartbeat schedule creation using normalized schedule semantics", () => {
+    const target = canonicalizeToolMatchTarget("tool.automation.schedule.create", {
+      kind: "heartbeat",
+      cadence: { type: "interval", interval_ms: 1_800_000 },
+      execution: {
+        kind: "agent_turn",
+        instruction: "Review everything and summarize",
+      },
+      workspace_key: "workspace-alpha",
+    });
+
+    expect(target).toBe(
+      "kind:heartbeat;execution:agent_turn;delivery:quiet;workspace_key:workspace-alpha",
+    );
+    expect(target).not.toContain("Review everything");
+    expect(target).not.toContain("1800000");
+  });
+
+  it("canonicalizes playbook schedule creation with the playbook id but not cadence details", () => {
+    const target = canonicalizeToolMatchTarget("tool.automation.schedule.create", {
+      kind: "cron",
+      cadence: { type: "cron", expression: "0 * * * *", timezone: "UTC" },
+      execution: {
+        kind: "playbook",
+        playbook_id: "playbook-123",
+      },
+      agent_key: "agent-alpha",
+    });
+
+    expect(target).toBe(
+      "kind:cron;execution:playbook;delivery:notify;agent_key:agent-alpha;playbook_id:playbook-123",
+    );
+    expect(target).not.toContain("0 * * * *");
+  });
+
+  it("canonicalizes schedule update targets around the exact schedule id", () => {
+    const target = canonicalizeToolMatchTarget("tool.automation.schedule.update", {
+      schedule_id: "11111111-1111-1111-1111-111111111111",
+      kind: "heartbeat",
+      delivery: { mode: "quiet" },
+    });
+
+    expect(target).toBe(
+      "schedule_id:11111111-1111-1111-1111-111111111111;kind:heartbeat;delivery:quiet",
+    );
+  });
+
+  it("canonicalizes direct schedule actions to the exact schedule id", () => {
+    expect(
+      canonicalizeToolMatchTarget("tool.automation.schedule.pause", {
+        schedule_id: "11111111-1111-1111-1111-111111111111",
+      }),
+    ).toBe("schedule_id:11111111-1111-1111-1111-111111111111");
+    expect(
+      canonicalizeToolMatchTarget("tool.automation.schedule.delete", {
+        schedule_id: "11111111-1111-1111-1111-111111111111",
+      }),
+    ).toBe("schedule_id:11111111-1111-1111-1111-111111111111");
+  });
 });

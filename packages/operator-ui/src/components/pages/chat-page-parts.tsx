@@ -1,9 +1,11 @@
 import type {
+  Approval,
   SessionTranscriptApprovalItem,
   SessionTranscriptItem,
   SessionTranscriptTextItem,
   SessionTranscriptToolItem,
 } from "@tyrum/client";
+import type { ResolveApprovalInput } from "@tyrum/operator-core";
 import { ChevronLeft, Copy, Hammer, Send, ShieldCheck, Trash2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -11,6 +13,7 @@ import { useEffect, useLayoutEffect, useRef } from "react";
 import { toast } from "sonner";
 import { cn } from "../../lib/cn.js";
 import { formatRelativeTime } from "../../utils/format-relative-time.js";
+import { ApprovalActions } from "./approval-actions.js";
 import { Alert } from "../ui/alert.js";
 import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
@@ -186,12 +189,14 @@ function ChatToolItem({ item }: { item: SessionTranscriptToolItem }) {
 
 function ChatApprovalItem({
   item,
+  approval,
   onResolve,
-  resolving,
+  resolvingState,
 }: {
   item: SessionTranscriptApprovalItem;
-  onResolve: (approvalId: string, decision: "approved" | "denied") => void;
-  resolving: boolean;
+  approval?: Approval | null;
+  onResolve: (input: ResolveApprovalInput) => void;
+  resolvingState?: "approved" | "denied" | "always";
 }) {
   const actionable = item.status === "pending";
   return (
@@ -205,23 +210,13 @@ function ChatApprovalItem({
       </div>
       <div className="text-sm text-warning-950">{item.detail}</div>
       {actionable ? (
-        <div className="mt-3 flex gap-2">
-          <Button
-            size="sm"
-            disabled={resolving}
-            onClick={() => onResolve(item.approval_id, "approved")}
-          >
-            Approve
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={resolving}
-            onClick={() => onResolve(item.approval_id, "denied")}
-          >
-            Deny
-          </Button>
-        </div>
+        <ApprovalActions
+          approvalId={item.approval_id}
+          approval={approval}
+          resolvingState={resolvingState}
+          onResolve={onResolve}
+          className="mt-3 flex flex-wrap gap-2"
+        />
       ) : null}
       <div className="mt-2 text-xs text-warning-900/80">{formatRelativeTime(item.updated_at)}</div>
     </div>
@@ -243,8 +238,9 @@ export function ChatConversationPanel({
   sendBusy,
   canSend,
   working,
+  approvalsById,
   onResolveApproval,
-  resolvingApprovalId,
+  resolvingApproval,
   onBack,
 }: {
   activeThreadId: string | null;
@@ -261,8 +257,9 @@ export function ChatConversationPanel({
   sendBusy: boolean;
   canSend: boolean;
   working: boolean;
-  onResolveApproval: (approvalId: string, decision: "approved" | "denied") => void;
-  resolvingApprovalId: string | null;
+  approvalsById: Record<string, Approval>;
+  onResolveApproval: (input: ResolveApprovalInput) => void;
+  resolvingApproval: { approvalId: string; state: "approved" | "denied" | "always" } | null;
   onBack?: () => void;
 }) {
   const transcriptRef = useRef<HTMLDivElement | null>(null);
@@ -347,8 +344,13 @@ export function ChatConversationPanel({
                 <ChatApprovalItem
                   key={item.id}
                   item={item}
+                  approval={approvalsById[item.approval_id] ?? null}
                   onResolve={onResolveApproval}
-                  resolving={resolvingApprovalId === item.approval_id}
+                  resolvingState={
+                    resolvingApproval?.approvalId === item.approval_id
+                      ? resolvingApproval.state
+                      : undefined
+                  }
                 />
               );
             })}

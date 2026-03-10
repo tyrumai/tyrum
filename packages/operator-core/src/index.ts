@@ -48,7 +48,13 @@ export {
   type ElevatedModeStore,
 } from "./stores/elevated-mode-store.js";
 
-export type { ApprovalsState, ApprovalsStore } from "./stores/approvals-store.js";
+export type {
+  ApprovalsState,
+  ApprovalsStore,
+  ResolveApprovalInput,
+  ResolveApprovalOverride,
+  ResolveApprovalResult,
+} from "./stores/approvals-store.js";
 export type {
   ActivityAgent,
   ActivityAttentionLevel,

@@ -84,6 +84,7 @@ export function createDashboardCore(): OperatorCore {
 export function createChatCore(): OperatorCore {
   return {
     connectionStore: createConnectionStore(),
+    approvalsStore: createApprovalsStore(),
     chatStore: createChatStore(),
   } as unknown as OperatorCore;
 }

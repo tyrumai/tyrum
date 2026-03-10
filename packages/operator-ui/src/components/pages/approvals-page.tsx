@@ -1,10 +1,11 @@
 import type { ExecutionAttempt } from "@tyrum/client";
-import type { OperatorCore, RunsState } from "@tyrum/operator-core";
+import type { OperatorCore, ResolveApprovalInput, RunsState } from "@tyrum/operator-core";
 import { CircleCheck } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { AttemptArtifactsDialog } from "../artifacts/attempt-artifacts-dialog.js";
 import { AppPage } from "../layout/app-page.js";
+import { ApprovalActions } from "./approval-actions.js";
 import { Alert } from "../ui/alert.js";
 import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
@@ -128,7 +129,7 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
   const pairingState = useOperatorStore(core.pairingStore);
   const runsState = useOperatorStore(core.runsStore);
   const [resolvingById, setResolvingById] = useState<
-    Record<string, "approved" | "denied" | undefined>
+    Record<string, "approved" | "denied" | "always" | undefined>
   >({});
 
   const desktopTakeoverLinks = Object.values(pairingState.byId)
@@ -149,22 +150,28 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
 
   const takeoverUrl = desktopTakeoverLinks.at(0)?.url;
 
-  const resolveApproval = async (
-    approvalId: string,
-    decision: "approved" | "denied",
-  ): Promise<void> => {
-    if (resolvingById[approvalId]) return;
+  const resolveApproval = async (input: ResolveApprovalInput): Promise<void> => {
+    if (resolvingById[input.approvalId]) return;
 
-    setResolvingById((prev) => ({ ...prev, [approvalId]: decision }));
+    setResolvingById((prev) => ({
+      ...prev,
+      [input.approvalId]: input.mode === "always" ? "always" : input.decision,
+    }));
     try {
-      await core.approvalsStore.resolve(approvalId, decision);
-      toast.success(decision === "approved" ? "Approval resolved" : "Approval denied");
+      await core.approvalsStore.resolve(input);
+      toast.success(
+        input.decision === "denied"
+          ? "Approval denied"
+          : input.mode === "always"
+            ? "Always approve enabled"
+            : "Approval resolved",
+      );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));
     } finally {
       setResolvingById((prev) => {
         const next = { ...prev };
-        delete next[approvalId];
+        delete next[input.approvalId];
         return next;
       });
     }
@@ -203,7 +210,6 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
             if (!approval) return null;
 
             const resolvingDecision = resolvingById[approvalId];
-            const isResolving = resolvingDecision !== undefined;
             const scope = approval.scope;
             const approvalAgentKey =
               typeof scope?.key === "string" ? parseAgentIdFromKey(scope.key) : null;
@@ -298,28 +304,14 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
                   })()}
                 </CardContent>
                 <CardFooter className="gap-2">
-                  <Button
-                    data-testid={`approval-approve-${approvalId}`}
-                    variant="success"
-                    disabled={isResolving}
-                    isLoading={resolvingDecision === "approved"}
-                    onClick={() => {
-                      void resolveApproval(approvalId, "approved");
+                  <ApprovalActions
+                    approvalId={approvalId}
+                    approval={approval}
+                    resolvingState={resolvingDecision}
+                    onResolve={(input) => {
+                      void resolveApproval(input);
                     }}
-                  >
-                    Approve
-                  </Button>
-                  <Button
-                    data-testid={`approval-deny-${approvalId}`}
-                    variant="danger"
-                    disabled={isResolving}
-                    isLoading={resolvingDecision === "denied"}
-                    onClick={() => {
-                      void resolveApproval(approvalId, "denied");
-                    }}
-                  >
-                    Deny
-                  </Button>
+                  />
                 </CardFooter>
               </Card>
             );

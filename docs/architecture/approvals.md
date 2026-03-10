@@ -87,6 +87,7 @@ Each suggested override is a _tool-specific wildcard pattern_ over a well-define
 - narrow scope by default (agent and workspace scoped where applicable)
 - prefer prefix patterns over broad wildcards
 - never suggest a rule that would bypass an explicit `deny`
+- for automation schedules, prefer exact normalized heartbeat-create targets over free-form cadence or instruction text
 
 ## Integration with workflows (pause/resume)
 

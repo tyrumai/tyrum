@@ -137,6 +137,7 @@ type BrowserDispatchOp =
   | "camera.capture_photo"
   | "microphone.record"
   | "unknown";
+type ScheduleExecutionKind = "agent_turn" | "playbook" | "steps" | "unknown";
 
 function normalizeNodeDispatchOpRaw(parsed: Record<string, unknown> | null): string | undefined {
   let current = parsed;
@@ -185,6 +186,84 @@ function canonicalizeBrowserDispatchOp(parsed: Record<string, unknown> | null): 
     default:
       return "unknown";
   }
+}
+
+function normalizeScheduleExecutionKind(
+  parsed: Record<string, unknown> | null,
+): ScheduleExecutionKind {
+  const execution = asRecord(parsed?.["execution"]);
+  const kind = normalizeToken(execution?.["kind"]);
+  if (kind === "agent_turn" || kind === "playbook" || kind === "steps") {
+    return kind;
+  }
+  return "unknown";
+}
+
+function normalizeScheduleDeliveryMode(
+  parsed: Record<string, unknown> | null,
+  fallbackKind?: string,
+): "quiet" | "notify" | "unknown" {
+  const delivery = asRecord(parsed?.["delivery"]);
+  const mode = normalizeToken(delivery?.["mode"]);
+  if (mode === "quiet" || mode === "notify") return mode;
+  if (fallbackKind === "heartbeat") return "quiet";
+  if (fallbackKind === "cron") return "notify";
+  return "unknown";
+}
+
+function buildScheduleScopeTokens(parsed: Record<string, unknown> | null): string[] {
+  const tokens: string[] = [];
+  const agentKey = normalizeToken(parsed?.["agent_key"]);
+  const workspaceKey = normalizeToken(parsed?.["workspace_key"]);
+  if (agentKey) tokens.push(`agent_key:${agentKey}`);
+  if (workspaceKey) tokens.push(`workspace_key:${workspaceKey}`);
+  return tokens;
+}
+
+function canonicalizeScheduleCreateMatchTarget(parsed: Record<string, unknown> | null): string {
+  const kind = normalizeToken(parsed?.["kind"]) ?? "unknown";
+  const executionKind = normalizeScheduleExecutionKind(parsed);
+  const deliveryMode = normalizeScheduleDeliveryMode(parsed, kind);
+  const tokens = [
+    `kind:${kind}`,
+    `execution:${executionKind}`,
+    `delivery:${deliveryMode}`,
+    ...buildScheduleScopeTokens(parsed),
+  ];
+
+  if (executionKind === "playbook") {
+    const execution = asRecord(parsed?.["execution"]);
+    const playbookId = normalizeToken(execution?.["playbook_id"]) ?? "unknown";
+    tokens.push(`playbook_id:${playbookId}`);
+  }
+
+  return tokens.join(";");
+}
+
+function canonicalizeScheduleUpdateMatchTarget(parsed: Record<string, unknown> | null): string {
+  const scheduleId = normalizeToken(parsed?.["schedule_id"]) ?? "";
+  const tokens = [`schedule_id:${scheduleId}`];
+  const kind = normalizeToken(parsed?.["kind"]);
+  if (kind) {
+    tokens.push(`kind:${kind}`);
+  }
+
+  const execution = asRecord(parsed?.["execution"]);
+  const executionKind = normalizeToken(execution?.["kind"]);
+  if (executionKind === "agent_turn" || executionKind === "playbook" || executionKind === "steps") {
+    tokens.push(`execution:${executionKind}`);
+    if (executionKind === "playbook") {
+      tokens.push(`playbook_id:${normalizeToken(execution?.["playbook_id"]) ?? "unknown"}`);
+    }
+  }
+
+  const delivery = asRecord(parsed?.["delivery"]);
+  const mode = normalizeToken(delivery?.["mode"]);
+  if (mode === "quiet" || mode === "notify") {
+    tokens.push(`delivery:${mode}`);
+  }
+
+  return tokens.join(";");
 }
 
 export function canonicalizeNodeDispatchMatchTarget(
@@ -265,6 +344,24 @@ export function canonicalizeToolMatchTarget(
     if (!parsedAction.success) return "capability:;action:";
 
     return canonicalizeNodeDispatchMatchTarget(parsedAction.data, parsed?.["args"]);
+  }
+
+  if (normalizedToolId === "tool.automation.schedule.create") {
+    return canonicalizeScheduleCreateMatchTarget(parsed);
+  }
+
+  if (normalizedToolId === "tool.automation.schedule.update") {
+    return canonicalizeScheduleUpdateMatchTarget(parsed);
+  }
+
+  if (
+    normalizedToolId === "tool.automation.schedule.get" ||
+    normalizedToolId === "tool.automation.schedule.pause" ||
+    normalizedToolId === "tool.automation.schedule.resume" ||
+    normalizedToolId === "tool.automation.schedule.delete"
+  ) {
+    const scheduleId = normalizeToken(parsed?.["schedule_id"]) ?? "";
+    return `schedule_id:${scheduleId}`;
   }
 
   if (normalizedToolId.startsWith("mcp.")) {

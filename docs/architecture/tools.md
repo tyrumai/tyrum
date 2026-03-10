@@ -103,6 +103,16 @@ Recommended normalization rules for high-risk tool classes:
     - `capability:tyrum.desktop;action:Desktop;op:wait_for`
     - `capability:tyrum.desktop;action:Desktop;op:snapshot`
     - `capability:tyrum.desktop;action:Desktop;op:act*`
+- **`tool.automation.schedule.*` (automation schedule management):**
+  - Match targets SHOULD encode the stable schedule semantics, not cadence expressions or free-form instructions.
+  - `create` SHOULD include normalized schedule kind, execution kind, delivery mode, and any explicit target scope keys.
+  - `get` / `pause` / `resume` / `delete` SHOULD anchor to the exact `schedule_id`.
+  - `update` SHOULD anchor to the exact `schedule_id` and may include explicitly changed normalized kind/execution/delivery fields.
+  - Match targets MUST NOT include cron expressions, interval values, `agent_turn` instruction text, or raw step payloads.
+  - Example match targets:
+    - `kind:heartbeat;execution:agent_turn;delivery:quiet`
+    - `kind:cron;execution:playbook;delivery:notify;playbook_id:playbook-123`
+    - `schedule_id:11111111-1111-1111-1111-111111111111`
 
 ### Suggested patterns (examples)
 
@@ -112,3 +122,4 @@ Tools define what their override patterns match. Suggested patterns should be co
 - **`fs`**: narrow prefixes like `write:src/generated/*` or `read:docs/architecture/*`.
 - **`messaging`**: destination-scoped patterns like `send:slack:acct_123:chan_C024BE91L`.
 - **MCP tools**: tool-name prefixes like `mcp.github.*` (prefer stable identifiers over broad argument matches).
+- **Automation schedules**: exact heartbeat creation targets like `kind:heartbeat;execution:agent_turn;delivery:quiet`.
