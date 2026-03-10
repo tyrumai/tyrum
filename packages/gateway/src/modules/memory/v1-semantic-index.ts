@@ -34,15 +34,6 @@ type MemoryEmbeddingJoinedRow = {
   vector_data: string | null;
 };
 
-type MemoryEmbeddingFreshnessCandidateRow = {
-  memory_item_id: string;
-  kind: MemoryItemKind;
-  sensitivity: MemorySensitivity;
-  title: string | null;
-  body_md: string | null;
-  summary_md: string | null;
-};
-
 function assertFiniteVector(value: unknown): asserts value is number[] {
   if (!Array.isArray(value)) {
     throw new Error("embedding vector is not an array");
@@ -242,7 +233,7 @@ export class MemoryV1SemanticIndex {
   }
 
   async hasStaleItems(): Promise<boolean> {
-    const items = await this.db.all<MemoryEmbeddingFreshnessCandidateRow>(
+    const items = await this.db.all<MemoryEmbeddingCandidateRow>(
       `SELECT memory_item_id, kind, sensitivity, title, body_md, summary_md
        FROM memory_items
        WHERE tenant_id = ?

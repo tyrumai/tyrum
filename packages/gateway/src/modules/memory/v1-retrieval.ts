@@ -10,6 +10,7 @@ export type MemoryV1RetrievedHit = {
   match_sources: MemoryV1MatchSource[];
   keyword_score: number;
   semantic_score: number;
+  structured_rank?: number;
 };
 
 export type MemoryV1RetrievalResult = {
@@ -24,6 +25,7 @@ type CandidateState = {
   match_sources: Set<MemoryV1MatchSource>;
   keyword_score: number;
   semantic_score: number;
+  structured_rank?: number;
   item?: MemoryItem;
 };
 
@@ -150,6 +152,11 @@ function compareHits(left: MemoryV1RetrievedHit, right: MemoryV1RetrievedHit): n
   if (left.semantic_score !== right.semantic_score) {
     return right.semantic_score - left.semantic_score;
   }
+  if (left.structured_rank !== undefined && right.structured_rank !== undefined) {
+    if (left.structured_rank !== right.structured_rank) {
+      return left.structured_rank - right.structured_rank;
+    }
+  }
   if (left.item.created_at !== right.item.created_at) {
     return right.item.created_at.localeCompare(left.item.created_at);
   }
@@ -204,9 +211,10 @@ export async function retrieveMemoryV1(params: {
       maxItems: Math.max(1, Math.min(200, params.structuredMaxItems ?? 20)),
     });
 
-    for (const item of structuredItems) {
+    for (const [index, item] of structuredItems.entries()) {
       const candidate = rememberCandidate(item.memory_item_id);
       candidate.match_sources.add("structured");
+      candidate.structured_rank ??= index;
       candidate.item = item;
     }
   }
@@ -275,6 +283,9 @@ export async function retrieveMemoryV1(params: {
       ),
       keyword_score: candidate.keyword_score,
       semantic_score: candidate.semantic_score,
+      ...(candidate.structured_rank !== undefined
+        ? { structured_rank: candidate.structured_rank }
+        : {}),
     });
   }
 
