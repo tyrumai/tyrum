@@ -1,4 +1,4 @@
-import { canonicalizeToolId, type PolicyBundle as PolicyBundleT } from "@tyrum/schemas";
+import { canonicalizeToolIdList, type PolicyBundle as PolicyBundleT } from "@tyrum/schemas";
 
 export type PolicyDecisionValue = "allow" | "require_approval" | "deny";
 
@@ -120,17 +120,19 @@ function parsePositiveInt(raw: string): number | undefined {
 
 function normalizeStringRows(
   rows: PolicyStringRow[],
-  transform?: (value: string) => string,
+  transform?: (value: string) => readonly string[],
 ): string[] {
   const seen = new Set<string>();
   const values: string[] = [];
   for (const row of rows) {
     const trimmed = row.value.trim();
     if (!trimmed) continue;
-    const normalized = transform ? transform(trimmed) : trimmed;
-    if (!normalized || seen.has(normalized)) continue;
-    seen.add(normalized);
-    values.push(normalized);
+    const normalizedValues = transform ? transform(trimmed) : [trimmed];
+    for (const normalized of normalizedValues) {
+      if (!normalized || seen.has(normalized)) continue;
+      seen.add(normalized);
+      values.push(normalized);
+    }
   }
   return values;
 }
@@ -180,15 +182,19 @@ function normalizeSensitivityInput(value: {
   };
 }
 
+function expandToolIds(value: string): readonly string[] {
+  return canonicalizeToolIdList([value]);
+}
+
 function toDomainBundle(value: PolicyDomainFormState, normalizeToolIds = false) {
   return {
     default: value.defaultDecision,
-    allow: normalizeStringRows(value.allow, normalizeToolIds ? canonicalizeToolId : undefined),
+    allow: normalizeStringRows(value.allow, normalizeToolIds ? expandToolIds : undefined),
     require_approval: normalizeStringRows(
       value.requireApproval,
-      normalizeToolIds ? canonicalizeToolId : undefined,
+      normalizeToolIds ? expandToolIds : undefined,
     ),
-    deny: normalizeStringRows(value.deny, normalizeToolIds ? canonicalizeToolId : undefined),
+    deny: normalizeStringRows(value.deny, normalizeToolIds ? expandToolIds : undefined),
   };
 }
 
@@ -215,13 +221,26 @@ export function normalizeToolRows(rows: PolicyStringRow[]): PolicyStringRow[] {
       continue;
     }
 
-    const canonical = canonicalizeToolId(trimmed);
-    if (!canonical || seen.has(canonical)) {
+    const canonicalValues = canonicalizeToolIdList([trimmed]);
+    if (canonicalValues.length === 0) {
       continue;
     }
 
-    seen.add(canonical);
-    nextRows.push(canonical === row.value ? row : { ...row, value: canonical });
+    let inserted = false;
+    for (const [index, canonical] of canonicalValues.entries()) {
+      if (seen.has(canonical)) continue;
+      seen.add(canonical);
+      nextRows.push(
+        canonical === row.value && index === 0 && !inserted
+          ? row
+          : {
+              ...row,
+              id: inserted ? createRowId(row.id) : row.id,
+              value: canonical,
+            },
+      );
+      inserted = true;
+    }
   }
 
   return nextRows;

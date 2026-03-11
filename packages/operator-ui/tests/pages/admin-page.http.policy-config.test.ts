@@ -271,12 +271,45 @@ describe("PolicyConfigSection", () => {
     cleanupAdminHttpPage(page);
   });
 
-  it("collapses aliased duplicate tool rows back to the canonical saved state", async () => {
-    const onSave = vi.fn(async () => undefined);
+  it("initializes the editor from the saved deployment bundle instead of the effective bundle", async () => {
     const page = renderIntoDocument(
       React.createElement(PolicyConfigSection, {
         effective: {
           sha256: "policy-sha-1",
+          bundle: {
+            v: 1,
+            tools: {
+              default: "require_approval",
+              allow: ["read"],
+              require_approval: [],
+              deny: ["bash"],
+            },
+            network_egress: {
+              default: "require_approval",
+              allow: [],
+              require_approval: [],
+              deny: [],
+            },
+            secrets: {
+              default: "require_approval",
+              allow: [],
+              require_approval: [],
+              deny: [],
+            },
+            connectors: {
+              default: "require_approval",
+              allow: ["telegram:*"],
+              require_approval: [],
+              deny: [],
+            },
+            artifacts: { default: "allow" },
+            provenance: { untrusted_shell_requires_approval: true },
+          },
+          sources: { deployment: "shared", agent: "default", playbook: null },
+        },
+        currentRevision: {
+          revision: 7,
+          agent_key: null,
           bundle: {
             v: 1,
             tools: {
@@ -306,9 +339,11 @@ describe("PolicyConfigSection", () => {
             artifacts: { default: "allow" },
             provenance: { untrusted_shell_requires_approval: true },
           },
-          sources: { deployment: "default", agent: null, playbook: null },
+          created_at: "2026-03-01T00:00:00.000Z",
+          created_by: { kind: "tenant.token", token_id: "token-1" },
+          reason: "seed",
+          reverted_from_revision: null,
         },
-        currentRevision: null,
         revisions: [],
         loadBusy: false,
         loadError: null,
@@ -319,32 +354,20 @@ describe("PolicyConfigSection", () => {
         canMutate: true,
         requestEnter: () => {},
         onRefresh: () => {},
-        onSave,
+        onSave: async () => undefined,
         onRevert: async () => undefined,
       }),
     );
 
     await flush();
 
-    click(getByTestId<HTMLButtonElement>(page.container, "policy-config-tools-allow-add"));
-    act(() => {
-      setNativeValue(
-        getByTestId<HTMLInputElement>(page.container, "policy-config-tools-allow-row-1"),
-        "tool.fs.read",
-      );
-    });
-
     expect(
-      getByTestId<HTMLInputElement>(page.container, "policy-config-tools-allow-row-0").value,
-    ).toBe("read");
-    expect(
-      page.container.querySelector("[data-testid='policy-config-tools-allow-row-1']"),
+      page.container.querySelector("[data-testid='policy-config-tools-deny-row-0']"),
     ).toBeNull();
     expect(page.container.textContent).toContain("No unsaved changes");
     expect(getByTestId<HTMLButtonElement>(page.container, "policy-config-save").disabled).toBe(
       true,
     );
-    expect(onSave).not.toHaveBeenCalled();
 
     cleanupAdminHttpPage(page);
   });

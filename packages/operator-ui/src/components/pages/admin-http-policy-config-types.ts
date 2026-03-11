@@ -1,4 +1,10 @@
-import type { PolicyBundle as PolicyBundleT } from "@tyrum/schemas";
+import type {
+  DeploymentPolicyConfigGetResponse as PolicyConfigDeployment,
+  DeploymentPolicyConfigRevision as PolicyConfigRevision,
+  PolicyBundle as PolicyBundleT,
+} from "@tyrum/schemas";
+
+export type { PolicyConfigDeployment, PolicyConfigRevision };
 
 export type PolicyEffectiveBundle = {
   sha256: string;
@@ -10,17 +16,9 @@ export type PolicyEffectiveBundle = {
   };
 };
 
-export type PolicyConfigRevision = {
-  revision: number;
-  created_at?: string | null;
-  created_by?: unknown;
-  reason?: string | null;
-  reverted_from_revision?: number | null;
-};
-
 export interface PolicyConfigSectionProps {
   effective: PolicyEffectiveBundle | null;
-  currentRevision: PolicyConfigRevision | null;
+  currentRevision: PolicyConfigDeployment | null;
   revisions: PolicyConfigRevision[];
   loadBusy: boolean;
   loadError: unknown;

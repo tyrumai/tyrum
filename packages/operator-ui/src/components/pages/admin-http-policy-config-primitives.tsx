@@ -140,7 +140,7 @@ export function DomainEditor(props: {
   };
 
   const helperText = props.toolMode
-    ? "Use a canonical tool ID. Registry-backed tools should match the IDs shown in the Tools tab."
+    ? "Use a canonical tool ID. Legacy aliases and tool groups expand to their saved IDs."
     : "Use a narrow wildcard pattern. `*` matches many characters, `?` matches one.";
 
   return (

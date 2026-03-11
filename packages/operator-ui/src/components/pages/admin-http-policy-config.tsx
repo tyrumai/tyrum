@@ -18,6 +18,7 @@ import {
   sourceLabel,
 } from "./admin-http-policy-config-primitives.js";
 import type {
+  PolicyConfigDeployment,
   PolicyConfigRevision,
   PolicyConfigSectionProps,
   PolicyEffectiveBundle,
@@ -29,7 +30,14 @@ import {
   type PolicyFormState,
 } from "./admin-http-policy-shared.js";
 
-export type { PolicyConfigRevision, PolicyConfigSectionProps, PolicyEffectiveBundle };
+export type {
+  PolicyConfigDeployment,
+  PolicyConfigRevision,
+  PolicyConfigSectionProps,
+  PolicyEffectiveBundle,
+};
+
+const EMPTY_POLICY_BUNDLE: PolicyBundleT = { v: 1 };
 
 function normalizePolicyBundle(bundle: PolicyBundleT): PolicyBundleT {
   return policyFormStateToBundle(policyBundleToFormState(bundle));
@@ -51,9 +59,9 @@ export function PolicyConfigSection(props: PolicyConfigSectionProps): React.Reac
 
   React.useEffect(() => {
     if (!props.effective) return;
-    applyBundleToEditor(props.effective.bundle);
+    applyBundleToEditor(props.currentRevision?.bundle ?? EMPTY_POLICY_BUNDLE);
     setSaveReason("");
-  }, [applyBundleToEditor, props.effective]);
+  }, [applyBundleToEditor, props.currentRevision, props.effective]);
 
   if (props.loadError && !props.effective) {
     return (
@@ -191,7 +199,7 @@ export function PolicyConfigSection(props: PolicyConfigSectionProps): React.Reac
             description={
               dirty
                 ? "Saving creates a new deployment policy revision for the whole gateway."
-                : "The editor matches the currently effective deployment policy."
+                : "The editor matches the currently saved deployment policy revision."
             }
           />
         </CardContent>

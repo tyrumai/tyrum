@@ -5,6 +5,7 @@ import type { AdminHttpClient } from "./admin-http-shared.js";
 import { useAdminHttpClient } from "./admin-http-shared.js";
 import {
   PolicyConfigSection,
+  type PolicyConfigDeployment,
   type PolicyConfigRevision,
   type PolicyEffectiveBundle,
 } from "./admin-http-policy-config.js";
@@ -16,7 +17,7 @@ import {
 } from "./admin-http-policy-overrides.js";
 
 type PolicyConfigApi = {
-  getDeployment: () => Promise<PolicyConfigRevision & { bundle: unknown }>;
+  getDeployment: () => Promise<PolicyConfigDeployment>;
   listDeploymentRevisions: () => Promise<{ revisions: PolicyConfigRevision[] }>;
   updateDeployment: (input: { bundle: unknown; reason?: string }) => Promise<unknown>;
   revertDeployment: (input: { revision: number; reason?: string }) => Promise<unknown>;
@@ -94,7 +95,7 @@ export function AdminHttpPolicyCard({
 }): React.ReactElement {
   const http = (useAdminHttpClient() ?? core.http) as PolicyHttpClient;
   const [effective, setEffective] = React.useState<PolicyEffectiveBundle | null>(null);
-  const [currentRevision, setCurrentRevision] = React.useState<PolicyConfigRevision | null>(null);
+  const [currentRevision, setCurrentRevision] = React.useState<PolicyConfigDeployment | null>(null);
   const [revisions, setRevisions] = React.useState<PolicyConfigRevision[]>([]);
   const [overrides, setOverrides] = React.useState<PolicyOverrideRecord[]>([]);
   const [agents, setAgents] = React.useState<PolicyAgentOption[]>([]);
