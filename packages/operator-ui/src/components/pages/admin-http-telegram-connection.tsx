@@ -51,6 +51,34 @@ function sameStringList(left: readonly string[], right: readonly string[]): bool
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
+function buildTelegramConnectionSaveInput(input: {
+  botTokenRaw: string;
+  clearBotToken: boolean;
+  webhookSecretRaw: string;
+  clearWebhookSecret: boolean;
+  allowedUserIds: string[];
+  pipelineEnabled: boolean;
+}): {
+  bot_token?: string;
+  clear_bot_token?: true;
+  webhook_secret?: string;
+  clear_webhook_secret?: true;
+  allowed_user_ids: string[];
+  pipeline_enabled: boolean;
+} {
+  const botToken = input.botTokenRaw.trim();
+  const webhookSecret = input.webhookSecretRaw.trim();
+
+  return {
+    ...(input.clearBotToken ? { clear_bot_token: true as const } : {}),
+    ...(!input.clearBotToken && botToken ? { bot_token: botToken } : {}),
+    ...(input.clearWebhookSecret ? { clear_webhook_secret: true as const } : {}),
+    ...(!input.clearWebhookSecret && webhookSecret ? { webhook_secret: webhookSecret } : {}),
+    allowed_user_ids: input.allowedUserIds,
+    pipeline_enabled: input.pipelineEnabled,
+  };
+}
+
 function TelegramSecretField({
   label,
   inputTestId,
@@ -407,14 +435,16 @@ export function AdminHttpTelegramConnectionPanel({
     setErrorMessage(null);
     setStatusMessage(null);
     try {
-      await mutationApi.updateTelegramConfig({
-        ...(botTokenRaw.trim() ? { bot_token: botTokenRaw.trim() } : {}),
-        ...(webhookSecretRaw.trim() ? { webhook_secret: webhookSecretRaw.trim() } : {}),
-        ...(clearBotToken ? { clear_bot_token: true } : {}),
-        ...(clearWebhookSecret ? { clear_webhook_secret: true } : {}),
-        allowed_user_ids: parsedAllowedUserIds.ids,
-        pipeline_enabled: pipelineEnabled,
-      });
+      await mutationApi.updateTelegramConfig(
+        buildTelegramConnectionSaveInput({
+          botTokenRaw,
+          clearBotToken,
+          webhookSecretRaw,
+          clearWebhookSecret,
+          allowedUserIds: parsedAllowedUserIds.ids,
+          pipelineEnabled,
+        }),
+      );
       setStatusMessage("Telegram connection settings saved. Restart the gateway to apply them.");
       await refreshConfig();
     } finally {
