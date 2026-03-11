@@ -13,8 +13,8 @@ type SessionEventType =
   | "reasoning.final";
 
 type SessionStreamPart =
-  | { type: "text-delta"; id: string; text: string }
-  | { type: "reasoning-delta"; id: string; text: string }
+  | { type: "text-delta"; id: string; delta: string }
+  | { type: "reasoning-delta"; id: string; delta: string }
   | { type: "tool-approval-request" }
   | { type: string };
 
@@ -103,7 +103,7 @@ export async function broadcastSessionSendStream(input: {
       switch (part.type) {
         case "text-delta": {
           const textPart = part as TextDeltaPart;
-          const next = `${assistantParts.get(textPart.id) ?? ""}${textPart.text}`;
+          const next = `${assistantParts.get(textPart.id) ?? ""}${textPart.delta}`;
           assistantParts.set(textPart.id, next);
           await emitSessionEvent(
             deps,
@@ -117,7 +117,7 @@ export async function broadcastSessionSendStream(input: {
                 lane: "assistant",
                 message_id: textPart.id,
                 role: "assistant",
-                delta: textPart.text,
+                delta: textPart.delta,
               },
             }),
           );
@@ -125,7 +125,7 @@ export async function broadcastSessionSendStream(input: {
         }
         case "reasoning-delta": {
           const reasoningPart = part as ReasoningDeltaPart;
-          const next = `${reasoningParts.get(reasoningPart.id) ?? ""}${reasoningPart.text}`;
+          const next = `${reasoningParts.get(reasoningPart.id) ?? ""}${reasoningPart.delta}`;
           reasoningParts.set(reasoningPart.id, next);
           await emitSessionEvent(
             deps,
@@ -138,7 +138,7 @@ export async function broadcastSessionSendStream(input: {
                 thread_id: threadId,
                 lane: "assistant",
                 reasoning_id: reasoningPart.id,
-                delta: reasoningPart.text,
+                delta: reasoningPart.delta,
               },
             }),
           );

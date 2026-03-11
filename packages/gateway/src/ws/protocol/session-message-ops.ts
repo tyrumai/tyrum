@@ -13,13 +13,55 @@ import {
 } from "@tyrum/schemas";
 import type { WsResponseEnvelope } from "@tyrum/schemas";
 import { SessionDal } from "../../modules/agent/session-dal.js";
+import { SessionLaneNodeAttachmentDal } from "../../modules/agent/session-lane-node-attachment-dal.js";
 import { ChannelThreadDal } from "../../modules/channels/thread-dal.js";
 import { IdentityScopeDal } from "../../modules/identity/scope.js";
+import { WorkboardDal } from "../../modules/workboard/dal.js";
 import { resolveWorkspaceKey } from "../../modules/workspace/id.js";
 import type { ConnectedClient } from "../connection-manager.js";
 import { errorResponse } from "./helpers.js";
 import { broadcastSessionSendStream } from "./session-message-stream.js";
 import type { ProtocolDeps, ProtocolRequestEnvelope } from "./types.js";
+
+async function recordSessionSendActivity(input: {
+  deps: ProtocolDeps;
+  tenantId: string;
+  agentId: string;
+  sessionKey: string;
+  sourceClientDeviceId?: string;
+  attachedNodeId?: string;
+}): Promise<void> {
+  const { deps, tenantId, agentId, sessionKey, sourceClientDeviceId, attachedNodeId } = input;
+  if (!deps.db) return;
+  try {
+    const identityScopeDal =
+      deps.identityScopeDal ?? new IdentityScopeDal(deps.db, { cacheTtlMs: 60_000 });
+    const workspaceKey = resolveWorkspaceKey();
+    const agentScopeId = await identityScopeDal.ensureAgentId(tenantId, agentId);
+    const workspaceId = await identityScopeDal.ensureWorkspaceId(tenantId, workspaceKey);
+    await identityScopeDal.ensureMembership(tenantId, agentScopeId, workspaceId);
+    const updatedAtMs = Date.now();
+    await new WorkboardDal(deps.db).upsertScopeActivity({
+      scope: {
+        tenant_id: tenantId,
+        agent_id: agentScopeId,
+        workspace_id: workspaceId,
+      },
+      last_active_session_key: sessionKey,
+      updated_at_ms: updatedAtMs,
+    });
+    await new SessionLaneNodeAttachmentDal(deps.db).upsert({
+      tenantId,
+      key: sessionKey,
+      lane: "main",
+      sourceClientDeviceId,
+      attachedNodeId: attachedNodeId ?? null,
+      updatedAtMs,
+    });
+  } catch {
+    // Intentional: mirror execution-engine activity tracking as best-effort only.
+  }
+}
 
 export async function handleSessionListMessage(
   client: ConnectedClient,
@@ -371,6 +413,14 @@ export async function handleSessionSendMessage(
       },
     });
     const sessionKey = session?.session_key ?? stream.sessionId;
+    await recordSessionSendActivity({
+      deps,
+      tenantId,
+      agentId,
+      sessionKey,
+      sourceClientDeviceId,
+      attachedNodeId: parsedReq.data.payload.attached_node_id,
+    });
     const { approvalRequested } = await broadcastSessionSendStream({
       deps,
       tenantId,
