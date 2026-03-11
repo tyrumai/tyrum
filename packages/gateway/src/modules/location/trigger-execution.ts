@@ -17,7 +17,9 @@ import type { LocationAutomationTriggerRecord } from "./types.js";
 
 type FireLocationTriggersInput = {
   tenantId: string;
+  agentId?: string;
   event: LocationEvent;
+  triggers?: LocationAutomationTriggerRecord[];
   dal: LocationDal;
   db: SqlDb;
   identityScopeDal: IdentityScopeDal;
@@ -194,11 +196,14 @@ export async function recordLocationEpisode(
 }
 
 export async function fireLocationTriggers(input: FireLocationTriggersInput): Promise<void> {
-  const agentId = await input.identityScopeDal.ensureAgentId(input.tenantId, input.event.agent_key);
-  const triggers = await input.dal.listAutomationTriggers({
-    tenantId: input.tenantId,
-    agentId,
-  });
+  const triggers =
+    input.triggers ??
+    (await input.dal.listAutomationTriggers({
+      tenantId: input.tenantId,
+      agentId:
+        input.agentId ??
+        (await input.identityScopeDal.ensureAgentId(input.tenantId, input.event.agent_key)),
+    }));
 
   for (const trigger of triggers) {
     if (!matchesTrigger(trigger, input.event)) continue;

@@ -334,6 +334,10 @@ export class LocationService {
       states.map((state) => [`${state.subject_kind}:${state.subject_ref}`, state]),
     );
     const places = await this.dal.listPlaces({ tenantId: input.tenantId, agentId, agentKey });
+    const automationTriggers = await this.dal.listAutomationTriggers({
+      tenantId: input.tenantId,
+      agentId,
+    });
     const events: LocationEvent[] = [];
 
     for (const place of places) {
@@ -381,7 +385,9 @@ export class LocationService {
           );
           await fireLocationTriggers({
             tenantId: input.tenantId,
+            agentId,
             event: nextEvent.event,
+            triggers: automationTriggers,
             dal: this.dal,
             db: this.db,
             identityScopeDal: this.opts.identityScopeDal,
@@ -402,6 +408,7 @@ export class LocationService {
       payload: input.payload,
       profile,
       stateMap,
+      automationTriggers,
     });
     events.push(...categoryEvents);
 
@@ -416,14 +423,11 @@ export class LocationService {
     payload: LocationBeacon;
     profile: LocationProfile;
     stateMap: Map<string, LocationSubjectState>;
+    automationTriggers: LocationAutomationTriggerRecord[];
   }): Promise<LocationEvent[]> {
-    const triggers = await this.dal.listAutomationTriggers({
-      tenantId: input.tenantId,
-      agentId: input.agentId,
-    });
     const categoryKeys = [
       ...new Set(
-        triggers
+        input.automationTriggers
           .filter((trigger) => trigger.enabled)
           .flatMap((trigger) =>
             trigger.condition.type === "poi_category" ? [trigger.condition.category_key] : [],
@@ -480,7 +484,9 @@ export class LocationService {
         );
         await fireLocationTriggers({
           tenantId: input.tenantId,
+          agentId: input.agentId,
           event: event.event,
+          triggers: input.automationTriggers,
           dal: this.dal,
           db: this.db,
           identityScopeDal: this.opts.identityScopeDal,
