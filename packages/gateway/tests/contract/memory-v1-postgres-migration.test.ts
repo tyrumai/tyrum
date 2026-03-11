@@ -37,7 +37,7 @@ describe("Memory v1 migrations (postgres)", () => {
     }
   });
 
-  it("backfills auth token display names with pg-mem-compatible SQL", async () => {
+  it("backfills and truncates auth token display names with pg-mem-compatible SQL", async () => {
     const mem = createPgMemDb();
     const { Client } = mem.adapters.createPg();
     const pg = new Client();
@@ -60,7 +60,7 @@ describe("Memory v1 migrations (postgres)", () => {
           "token-1",
           null,
           "client",
-          "  operator-ui  ",
+          `  ${"device-".repeat(25)}  `,
           "[]",
           "salt",
           "hash",
@@ -73,6 +73,11 @@ describe("Memory v1 migrations (postgres)", () => {
         postgresMigrationsDir,
         "126_auth_tokens_display_name_updated_at.sql",
       );
+      await applyPostgresMigration(
+        pg,
+        postgresMigrationsDir,
+        "127_auth_tokens_display_name_max_length.sql",
+      );
 
       const result = await pg.query(
         "SELECT display_name, updated_at, created_at FROM auth_tokens WHERE token_id = $1",
@@ -82,7 +87,8 @@ describe("Memory v1 migrations (postgres)", () => {
         | { created_at: string; display_name: string; updated_at: string }
         | undefined;
       expect(row).toBeDefined();
-      expect(row?.display_name).toBe("operator-ui");
+      expect(row?.display_name).toHaveLength(120);
+      expect(row?.display_name).toBe("device-".repeat(17) + "device-".slice(0, 1));
       expect(row?.updated_at).toBe(row?.created_at);
     } finally {
       await pg.end();

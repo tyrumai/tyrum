@@ -10,6 +10,7 @@ import type { SqlDb } from "../../statestore/types.js";
 
 const TOKEN_PREFIX = "tyrum-token";
 const TOKEN_VERSION = "v1";
+const MAX_AUTH_TOKEN_DISPLAY_NAME_LENGTH = 120;
 
 function normalizeScopes(scopes: string[] | undefined): string[] {
   if (!Array.isArray(scopes)) return [];
@@ -24,7 +25,7 @@ function normalizeDisplayName(
   const trimmed = displayName?.trim();
   if (trimmed) return trimmed;
   const deviceId = input.deviceId?.trim();
-  if (deviceId) return deviceId;
+  if (deviceId) return deviceId.slice(0, MAX_AUTH_TOKEN_DISPLAY_NAME_LENGTH);
   if (input.role === "admin") return "Admin token";
   if (input.role === "node") return "Node token";
   return "Client token";

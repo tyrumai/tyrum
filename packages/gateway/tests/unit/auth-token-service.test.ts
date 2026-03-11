@@ -103,6 +103,22 @@ describe("AuthTokenService", () => {
     );
   });
 
+  it("truncates derived display names from long device ids", async () => {
+    const svc = new AuthTokenService(db);
+    const deviceId = `dev_${"x".repeat(140)}`;
+
+    const issued = await svc.issueToken({
+      tenantId: DEFAULT_TENANT_ID,
+      role: "client",
+      deviceId,
+      scopes: ["operator.read"],
+    });
+
+    expect(issued.row.display_name).toHaveLength(120);
+    expect(issued.row.display_name).toBe(deviceId.slice(0, 120));
+    expect(issued.row.device_id).toBe(deviceId);
+  });
+
   it("rejects malformed or unknown tokens", async () => {
     const svc = new AuthTokenService(db);
     expect(await svc.authenticate(undefined)).toBeNull();
