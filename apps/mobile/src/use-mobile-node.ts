@@ -27,22 +27,44 @@ export function useMobileNode(options: UseMobileNodeOptions): {
   hostApi: MobileHostApi;
   state: MobileHostState;
 } {
+  const config = options.config;
+  const token = options.token;
+  const updateConfig = options.updateConfig;
   const platform = resolveMobilePlatform();
   const [status, setStatus] = useState<MobileHostState["status"]>("disconnected");
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const connectionConfig = useMemo(
+    () =>
+      config
+        ? {
+            httpBaseUrl: config.httpBaseUrl,
+            wsUrl: config.wsUrl,
+            nodeEnabled: config.nodeEnabled,
+            actionSettings: config.actionSettings,
+          }
+        : null,
+    [
+      config?.actionSettings["audio.record_clip"],
+      config?.actionSettings["camera.capture_photo"],
+      config?.actionSettings["location.get_current"],
+      config?.httpBaseUrl,
+      config?.nodeEnabled,
+      config?.wsUrl,
+    ],
+  );
 
-  const enabled = options.config?.nodeEnabled ?? false;
+  const enabled = connectionConfig?.nodeEnabled ?? false;
   const actionStates = useMemo(
     () =>
       resolveMobileActionStates(
-        options.config?.actionSettings ?? {
+        connectionConfig?.actionSettings ?? {
           "location.get_current": true,
           "camera.capture_photo": true,
           "audio.record_clip": true,
         },
       ),
-    [options.config?.actionSettings],
+    [connectionConfig?.actionSettings],
   );
 
   const actionStatesRef = useRef(actionStates);
@@ -89,9 +111,7 @@ export function useMobileNode(options: UseMobileNodeOptions): {
   }, [actionStates, enabled, publishCapabilityState, status]);
 
   useEffect(() => {
-    const config = options.config;
-    const token = options.token;
-    if (!config || !token || !enabled) {
+    if (!connectionConfig || !token || !enabled) {
       clientRef.current?.disconnect();
       clientRef.current = null;
       setStatus("disconnected");
@@ -131,7 +151,7 @@ export function useMobileNode(options: UseMobileNodeOptions): {
 
       setDeviceId(identity.deviceId);
       const client = new TyrumClient({
-        url: config.wsUrl,
+        url: connectionConfig.wsUrl,
         token,
         role: "node",
         capabilities: [platform],
@@ -188,14 +208,14 @@ export function useMobileNode(options: UseMobileNodeOptions): {
       clientRef.current?.disconnect();
       clientRef.current = null;
     };
-  }, [enabled, options.config, options.token, platform, publishCapabilityState]);
+  }, [connectionConfig, enabled, platform, publishCapabilityState, token]);
 
   const hostApi = useMemo<MobileHostApi>(
     () => ({
       node: {
         getState: async () => stateRef.current,
         setEnabled: async (nextEnabled) => {
-          const updated = await options.updateConfig({ nodeEnabled: nextEnabled });
+          const updated = await updateConfig({ nodeEnabled: nextEnabled });
           return buildMobileHostState({
             platform,
             enabled: updated?.nodeEnabled ?? false,
@@ -212,12 +232,12 @@ export function useMobileNode(options: UseMobileNodeOptions): {
           });
         },
         setActionEnabled: async (action, nextEnabled) => {
-          const current = options.config?.actionSettings ?? {
+          const current = connectionConfig?.actionSettings ?? {
             "location.get_current": true,
             "camera.capture_photo": true,
             "audio.record_clip": true,
           };
-          const updated = await options.updateConfig({
+          const updated = await updateConfig({
             actionSettings: { ...current, [action]: nextEnabled },
           });
           return buildMobileHostState({
@@ -243,7 +263,13 @@ export function useMobileNode(options: UseMobileNodeOptions): {
         };
       },
     }),
-    [options, platform],
+    [
+      connectionConfig?.actionSettings["audio.record_clip"],
+      connectionConfig?.actionSettings["camera.capture_photo"],
+      connectionConfig?.actionSettings["location.get_current"],
+      platform,
+      updateConfig,
+    ],
   );
 
   return { hostApi, state };

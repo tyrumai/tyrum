@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { createRoot } from "react-dom/client";
 import {
   Alert,
@@ -56,14 +56,18 @@ function ErrorScreen({
 function MobileRoot() {
   const operator = useMobileOperatorCore();
   const bootstrap = operator.bootstrap;
-  const connectionConfig = operator.bootstrap
-    ? {
-        httpBaseUrl: operator.bootstrap.httpBaseUrl,
-        wsUrl: operator.bootstrap.wsUrl,
-        nodeEnabled: operator.bootstrap.nodeEnabled,
-        actionSettings: operator.bootstrap.actionSettings,
-      }
-    : null;
+  const connectionConfig = useMemo(
+    () =>
+      bootstrap
+        ? {
+            httpBaseUrl: bootstrap.httpBaseUrl,
+            wsUrl: bootstrap.wsUrl,
+            nodeEnabled: bootstrap.nodeEnabled,
+            actionSettings: bootstrap.actionSettings,
+          }
+        : null,
+    [bootstrap],
+  );
   const mobileNode = useMobileNode({
     config: connectionConfig,
     token: operator.bootstrap?.token ?? null,
