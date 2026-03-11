@@ -133,3 +133,4 @@ Capacitor mobile shell for Tyrum operator UI and the local iOS/Android node runt
   - `audio.record_clip`
 - Local mobile node support is only enabled on Capacitor iOS and Android targets, not the browser `vite` dev server.
 - Manual QA checklist: [`QA.md`](./QA.md)
+- Keep the `tyrum://bootstrap` deep-link scheme, Android intent filter, and camera permission strings in sync when updating native QR onboarding support.

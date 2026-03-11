@@ -8,9 +8,11 @@ import { Button } from "../../ui/button.js";
 import { Card, CardContent } from "../../ui/card.js";
 import { JsonViewer } from "../../ui/json-viewer.js";
 import { Switch } from "../../ui/switch.js";
+import { useClipboard } from "../../../utils/clipboard.js";
 
 export function BrowserCapabilitiesPage() {
   const browserNode = useBrowserNode();
+  const clipboard = useClipboard();
   const [testBusy, setTestBusy] = useState(false);
   const [testResult, setTestResult] = useState<TaskResult | null>(null);
 
@@ -87,8 +89,7 @@ export function BrowserCapabilitiesPage() {
                 size="sm"
                 variant="outline"
                 onClick={() => {
-                  const clipboard = globalThis.navigator?.clipboard;
-                  if (!clipboard?.writeText) {
+                  if (!clipboard.canWrite) {
                     toast.error("Clipboard API unavailable");
                     return;
                   }

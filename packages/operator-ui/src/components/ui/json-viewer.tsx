@@ -1,6 +1,7 @@
 import * as React from "react";
 import { toast } from "sonner";
 import { isRecord } from "../../utils/is-record.js";
+import { useClipboard } from "../../utils/clipboard.js";
 import { cn } from "../../lib/cn.js";
 import { Button } from "./button.js";
 
@@ -98,8 +99,8 @@ export function JsonViewer({
   className,
   ...props
 }: JsonViewerProps): React.ReactElement {
-  const clipboard = globalThis.navigator?.clipboard;
-  const canCopy = withCopyButton && typeof clipboard?.writeText === "function";
+  const clipboard = useClipboard();
+  const canCopy = withCopyButton && clipboard.canWrite;
   const canDownload =
     withDownloadButton &&
     typeof globalThis.Blob === "function" &&

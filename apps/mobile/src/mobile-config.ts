@@ -1,3 +1,4 @@
+import type { MobileBootstrapPayload } from "@tyrum/schemas";
 import { SecureStorage } from "@aparajita/capacitor-secure-storage";
 import { Preferences } from "@capacitor/preferences";
 import type { DeviceIdentity, DeviceIdentityStorage } from "@tyrum/client";
@@ -30,8 +31,23 @@ const DEFAULT_ACTION_SETTINGS: MobileActionSettings = {
 
 let storageReadyPromise: Promise<void> | null = null;
 
-function normalizeUrl(value: string): string {
+export function normalizeHttpBaseUrl(value: string): string {
   return value.trim().replace(/\/+$/, "");
+}
+
+export function normalizeWsUrl(value: string): string {
+  return value.trim();
+}
+
+export function inferGatewayWsUrl(httpBaseUrl: string): string {
+  const normalized = normalizeHttpBaseUrl(httpBaseUrl);
+  if (normalized.startsWith("https://")) {
+    return `${normalized.replace(/^https:\/\//, "wss://")}/ws`;
+  }
+  if (normalized.startsWith("http://")) {
+    return `${normalized.replace(/^http:\/\//, "ws://")}/ws`;
+  }
+  return normalized;
 }
 
 function ensureStorageReady(): Promise<void> {
@@ -47,8 +63,8 @@ function parseConnectionConfig(raw: unknown): MobileConnectionConfig | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const record = raw as Record<string, unknown>;
   const httpBaseUrl =
-    typeof record["httpBaseUrl"] === "string" ? normalizeUrl(record["httpBaseUrl"]) : "";
-  const wsUrl = typeof record["wsUrl"] === "string" ? record["wsUrl"].trim() : "";
+    typeof record["httpBaseUrl"] === "string" ? normalizeHttpBaseUrl(record["httpBaseUrl"]) : "";
+  const wsUrl = typeof record["wsUrl"] === "string" ? normalizeWsUrl(record["wsUrl"]) : "";
   if (!httpBaseUrl || !wsUrl) return null;
 
   const actionRecord =
@@ -118,6 +134,29 @@ export function getDefaultConnectionConfig(): MobileConnectionConfig {
   };
 }
 
+export function mobileBootstrapConfigFromPayload(
+  payload: MobileBootstrapPayload,
+): MobileBootstrapConfig {
+  return {
+    httpBaseUrl: normalizeHttpBaseUrl(payload.httpBaseUrl),
+    wsUrl: normalizeWsUrl(payload.wsUrl),
+    token: payload.token.trim(),
+    nodeEnabled: true,
+    actionSettings: getDefaultActionSettings(),
+  };
+}
+
+export function sameMobileBootstrapConfig(
+  left: Pick<MobileBootstrapConfig, "httpBaseUrl" | "wsUrl" | "token">,
+  right: Pick<MobileBootstrapConfig, "httpBaseUrl" | "wsUrl" | "token">,
+): boolean {
+  return (
+    normalizeHttpBaseUrl(left.httpBaseUrl) === normalizeHttpBaseUrl(right.httpBaseUrl) &&
+    normalizeWsUrl(left.wsUrl) === normalizeWsUrl(right.wsUrl) &&
+    left.token.trim() === right.token.trim()
+  );
+}
+
 export async function loadMobileBootstrapConfig(): Promise<MobileBootstrapConfig | null> {
   const [rawConfig, token] = await Promise.all([
     getPreferencesJson(PREFS_CONFIG_KEY),
@@ -130,8 +169,8 @@ export async function loadMobileBootstrapConfig(): Promise<MobileBootstrapConfig
 
 export async function saveMobileBootstrapConfig(input: MobileBootstrapConfig): Promise<void> {
   const config: MobileConnectionConfig = {
-    httpBaseUrl: normalizeUrl(input.httpBaseUrl),
-    wsUrl: input.wsUrl.trim(),
+    httpBaseUrl: normalizeHttpBaseUrl(input.httpBaseUrl),
+    wsUrl: normalizeWsUrl(input.wsUrl),
     nodeEnabled: input.nodeEnabled,
     actionSettings: { ...input.actionSettings },
   };

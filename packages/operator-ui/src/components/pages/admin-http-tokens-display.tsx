@@ -1,19 +1,95 @@
+import { createMobileBootstrapUrl } from "@tyrum/schemas";
 import type * as React from "react";
+import QRCode from "qrcode";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { useClipboard } from "../../utils/clipboard.js";
 import { Alert } from "../ui/alert.js";
 import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "../ui/dialog.js";
 import { Input } from "../ui/input.js";
 import type { AuthTokenIssueResult } from "./admin-http-tokens-shared.js";
 import { formatTimestamp } from "./admin-http-tokens-shared.js";
 
-async function copyText(text: string): Promise<void> {
-  try {
-    await globalThis.navigator.clipboard.writeText(text);
-    toast.success("Copied to clipboard");
-  } catch {
-    toast.error("Failed to copy to clipboard");
+function inferWsUrl(httpBaseUrl: string): string {
+  const normalized = httpBaseUrl.trim().replace(/\/+$/, "");
+  if (normalized.startsWith("https://")) {
+    return `${normalized.replace(/^https:\/\//, "wss://")}/ws`;
   }
+  if (normalized.startsWith("http://")) {
+    return `${normalized.replace(/^http:\/\//, "ws://")}/ws`;
+  }
+  return normalized;
+}
+
+function MobileBootstrapQrDialog({
+  open,
+  bootstrapUrl,
+  onOpenChange,
+}: {
+  open: boolean;
+  bootstrapUrl: string;
+  onOpenChange: (open: boolean) => void;
+}): React.ReactElement {
+  const [svg, setSvg] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    let active = true;
+
+    void QRCode.toString(bootstrapUrl, {
+      type: "svg",
+      errorCorrectionLevel: "M",
+      margin: 1,
+      width: 256,
+    })
+      .then((nextSvg) => {
+        if (!active) return;
+        setSvg(nextSvg);
+        setErrorMessage(null);
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        setSvg(null);
+        setErrorMessage(error instanceof Error ? error.message : String(error));
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [bootstrapUrl, open]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Mobile bootstrap QR</DialogTitle>
+          <DialogDescription>
+            Scan this code in Tyrum Mobile or open the copied mobile link on the device.
+          </DialogDescription>
+        </DialogHeader>
+
+        {errorMessage ? (
+          <Alert variant="error" title="QR generation failed" description={errorMessage} />
+        ) : svg ? (
+          <div
+            className="mx-auto w-full max-w-[18rem] rounded-lg border border-border bg-white p-3"
+            dangerouslySetInnerHTML={{ __html: svg }}
+          />
+        ) : (
+          <div className="text-sm text-fg-muted">Generating QR…</div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 export function SummaryBadge({
@@ -28,11 +104,26 @@ export function SummaryBadge({
 
 export function IssuedTokenNotice({
   token,
+  gatewayHttpBaseUrl,
   onDismiss,
 }: {
   token: AuthTokenIssueResult;
+  gatewayHttpBaseUrl: string;
   onDismiss: () => void;
 }): React.ReactElement {
+  const clipboard = useClipboard();
+  const [qrOpen, setQrOpen] = useState(false);
+  const mobileBootstrapUrl = useMemo(
+    () =>
+      createMobileBootstrapUrl({
+        v: 1,
+        httpBaseUrl: gatewayHttpBaseUrl.trim().replace(/\/+$/, ""),
+        wsUrl: inferWsUrl(gatewayHttpBaseUrl),
+        token: token.token,
+      }),
+    [gatewayHttpBaseUrl, token.token],
+  );
+
   return (
     <div
       data-testid="admin-http-token-secret-panel"
@@ -71,6 +162,39 @@ export function IssuedTokenNotice({
         </div>
       </div>
 
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          data-testid="admin-http-token-mobile-qr"
+          onClick={() => {
+            setQrOpen(true);
+          }}
+        >
+          Show mobile QR
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          data-testid="admin-http-token-mobile-link-copy"
+          disabled={!clipboard.canWrite}
+          onClick={() => {
+            void clipboard
+              .writeText(mobileBootstrapUrl)
+              .then(() => {
+                toast.success("Copied mobile link");
+              })
+              .catch(() => {
+                toast.error("Failed to copy mobile link");
+              });
+          }}
+        >
+          Copy mobile link
+        </Button>
+      </div>
+
       <Input
         label="Token secret"
         readOnly
@@ -84,13 +208,27 @@ export function IssuedTokenNotice({
             type="button"
             data-testid="admin-http-token-secret-copy"
             className="text-xs font-medium text-fg-muted enabled:hover:text-fg disabled:opacity-50"
+            disabled={!clipboard.canWrite}
             onClick={() => {
-              void copyText(token.token);
+              void clipboard
+                .writeText(token.token)
+                .then(() => {
+                  toast.success("Copied to clipboard");
+                })
+                .catch(() => {
+                  toast.error("Failed to copy to clipboard");
+                });
             }}
           >
             Copy
           </button>
         }
+      />
+
+      <MobileBootstrapQrDialog
+        open={qrOpen}
+        bootstrapUrl={mobileBootstrapUrl}
+        onOpenChange={setQrOpen}
       />
     </div>
   );

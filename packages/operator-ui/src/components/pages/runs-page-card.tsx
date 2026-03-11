@@ -8,6 +8,7 @@ import { Button } from "../ui/button.js";
 import { Card } from "../ui/card.js";
 import { StatusDot, type StatusDotVariant } from "../ui/status-dot.js";
 import { cn } from "../../lib/cn.js";
+import { useClipboard } from "../../utils/clipboard.js";
 import { formatRelativeTime } from "../../utils/format-relative-time.js";
 import type { RunTimelineEntry } from "./runs-page.lib.js";
 
@@ -92,9 +93,11 @@ function resolveAttemptStatusLabel(status: ExecutionAttempt["status"]): string {
 }
 
 function CopyableId({ id }: { id: string }) {
+  const clipboard = useClipboard();
+
   const copy = async (): Promise<void> => {
     try {
-      await globalThis.navigator.clipboard.writeText(id);
+      await clipboard.writeText(id);
       toast.success("Copied to clipboard");
     } catch {
       toast.error("Failed to copy to clipboard");

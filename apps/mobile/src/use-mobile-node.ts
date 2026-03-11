@@ -6,6 +6,8 @@ import {
 } from "@tyrum/client/browser";
 import { Capacitor } from "@capacitor/core";
 import { capabilityDescriptorsForClientCapability } from "@tyrum/schemas";
+import { Clipboard } from "@capacitor/clipboard";
+import { Device, type DeviceInfo } from "@capacitor/device";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MobileHostApi, MobileHostState } from "@tyrum/operator-ui";
 import type { MobileConnectionConfig } from "./mobile-config.js";
@@ -24,9 +26,41 @@ type UseMobileNodeOptions = {
   updateConfig: (next: Partial<MobileConnectionConfig>) => Promise<MobileConnectionConfig | null>;
 };
 
+function optionalTrimmedString(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function buildMobileNodeLabel(platform: string, deviceInfo: DeviceInfo | null): string {
+  const deviceName = optionalTrimmedString(deviceInfo?.name);
+  if (deviceName) {
+    return `Tyrum Mobile (${deviceName})`;
+  }
+
+  const manufacturer = optionalTrimmedString(deviceInfo?.manufacturer);
+  const model = optionalTrimmedString(deviceInfo?.model);
+  const deviceSummary = [manufacturer, model].filter((part) => part !== undefined).join(" ");
+  if (deviceSummary) {
+    return `Tyrum Mobile (${deviceSummary})`;
+  }
+
+  return `tyrum mobile ${platform}`;
+}
+
+async function loadNativeDeviceInfo(): Promise<DeviceInfo | null> {
+  if (!Capacitor.isNativePlatform()) return null;
+  try {
+    return await Device.getInfo();
+  } catch {
+    return null;
+  }
+}
+
 export function useMobileNode(options: UseMobileNodeOptions): {
   hostApi: MobileHostApi;
   state: MobileHostState;
+  retry: () => void;
 } {
   const config = options.config;
   const token = options.token;
@@ -35,6 +69,7 @@ export function useMobileNode(options: UseMobileNodeOptions): {
   const [status, setStatus] = useState<MobileHostState["status"]>("disconnected");
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reloadVersion, setReloadVersion] = useState(0);
   const connectionConfig = useMemo(
     () =>
       config
@@ -94,6 +129,9 @@ export function useMobileNode(options: UseMobileNodeOptions): {
   }, [state]);
 
   const clientRef = useRef<TyrumClient | null>(null);
+  const retry = useCallback(() => {
+    setReloadVersion((current) => current + 1);
+  }, []);
 
   const publishCapabilityState = useCallback(
     async (client: TyrumClient) => {
@@ -141,6 +179,7 @@ export function useMobileNode(options: UseMobileNodeOptions): {
 
     void (async () => {
       let identity: Awaited<ReturnType<typeof loadOrCreateDeviceIdentity>>;
+      const deviceInfo = await loadNativeDeviceInfo();
       try {
         identity = await loadOrCreateDeviceIdentity(createNodeIdentityStorage());
       } catch (loadError) {
@@ -162,8 +201,9 @@ export function useMobileNode(options: UseMobileNodeOptions): {
           deviceId: identity.deviceId,
           publicKey: identity.publicKey,
           privateKey: identity.privateKey,
-          label: `tyrum mobile ${platform}`,
-          platform,
+          label: buildMobileNodeLabel(platform, deviceInfo),
+          platform: optionalTrimmedString(deviceInfo?.operatingSystem) ?? platform,
+          version: optionalTrimmedString(deviceInfo?.osVersion),
           mode: "mobile-node",
         },
       });
@@ -211,7 +251,7 @@ export function useMobileNode(options: UseMobileNodeOptions): {
       clientRef.current?.disconnect();
       clientRef.current = null;
     };
-  }, [connectionConfig, enabled, platform, publishCapabilityState, token]);
+  }, [connectionConfig, enabled, platform, publishCapabilityState, reloadVersion, token]);
 
   const hostApi = useMemo<MobileHostApi>(
     () => ({
@@ -259,6 +299,11 @@ export function useMobileNode(options: UseMobileNodeOptions): {
           });
         },
       },
+      clipboard: {
+        writeText: async (text) => {
+          await Clipboard.write({ string: text });
+        },
+      },
       onStateChange: (listener) => {
         listenersRef.current.add(listener);
         return () => {
@@ -275,5 +320,5 @@ export function useMobileNode(options: UseMobileNodeOptions): {
     ],
   );
 
-  return { hostApi, state };
+  return { hostApi, state, retry };
 }

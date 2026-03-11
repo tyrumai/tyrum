@@ -9,6 +9,7 @@ import { Label } from "../ui/label.js";
 import { RadioGroup, RadioGroupItem } from "../ui/radio-group.js";
 import { Switch } from "../ui/switch.js";
 import { Textarea } from "../ui/textarea.js";
+import { useClipboard } from "../../utils/clipboard.js";
 import {
   PROFILE_OPTIONS,
   type ConnectionState,
@@ -90,11 +91,11 @@ export function NodeConnectionCard(props: {
       : props.connectionDirty && props.currentOperatorConnection
         ? `Visible token matches saved ${savedModeLabel} settings until you save changes.`
         : "Use this token to sign in to the gateway UI at /ui.";
+  const clipboard = useClipboard();
 
   const copyCurrentToken = async (): Promise<void> => {
     const token = props.currentOperatorConnection?.token ?? "";
-    const clipboard = globalThis.navigator?.clipboard;
-    if (!token || !clipboard?.writeText) {
+    if (!token || !clipboard.canWrite) {
       toast.error("Failed to copy to clipboard");
       return;
     }
@@ -144,7 +145,11 @@ export function NodeConnectionCard(props: {
               type="button"
               data-testid="node-current-token-copy"
               aria-label="Copy gateway token"
-              disabled={props.currentTokenLoading || !props.currentOperatorConnection?.token}
+              disabled={
+                props.currentTokenLoading ||
+                !props.currentOperatorConnection?.token ||
+                !clipboard.canWrite
+              }
               className="text-xs font-medium text-fg-muted enabled:hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
               onClick={() => {
                 void copyCurrentToken();

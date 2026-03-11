@@ -8,15 +8,27 @@ import type { MobileConnectionConfig } from "../src/mobile-config.js";
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const {
+  capturedClientOptions,
   MockTyrumClient,
   autoExecuteMock,
+  clipboardWriteMock,
   connectMock,
+  deviceInfoMock,
   disconnectMock,
   isNativePlatformMock,
   updateConfigMock,
 } = vi.hoisted(() => {
+  const capturedClientOptionsInner: unknown[] = [];
   const autoExecuteMockInner = vi.fn();
+  const clipboardWriteMockInner = vi.fn(async () => {});
   const connectMockInner = vi.fn();
+  const deviceInfoMockInner = vi.fn(async () => ({
+    name: "Ron phone",
+    manufacturer: "Virtunet",
+    model: "Ty-Phone",
+    operatingSystem: "ios",
+    osVersion: "18.1",
+  }));
   const disconnectMockInner = vi.fn();
   const isNativePlatformMockInner = vi.fn(() => true);
 
@@ -24,6 +36,10 @@ const {
     private readonly listeners = new Map<string, Set<() => void>>();
 
     capabilityReady = vi.fn(async () => {});
+
+    constructor(options: unknown) {
+      capturedClientOptionsInner.push(options);
+    }
 
     connect() {
       connectMockInner();
@@ -50,19 +66,34 @@ const {
   }
 
   return {
+    capturedClientOptions: capturedClientOptionsInner,
     MockTyrumClient: MockTyrumClientInner,
     autoExecuteMock: autoExecuteMockInner,
+    clipboardWriteMock: clipboardWriteMockInner,
     connectMock: connectMockInner,
+    deviceInfoMock: deviceInfoMockInner,
     disconnectMock: disconnectMockInner,
     isNativePlatformMock: isNativePlatformMockInner,
     updateConfigMock: vi.fn(async () => null),
   };
 });
 
+vi.mock("@capacitor/clipboard", () => ({
+  Clipboard: {
+    write: clipboardWriteMock,
+  },
+}));
+
 vi.mock("@capacitor/core", () => ({
   Capacitor: {
     getPlatform: vi.fn(() => "ios"),
     isNativePlatform: isNativePlatformMock,
+  },
+}));
+
+vi.mock("@capacitor/device", () => ({
+  Device: {
+    getInfo: deviceInfoMock,
   },
 }));
 
@@ -107,6 +138,7 @@ async function flushMicrotasks(count = 4) {
 describe("useMobileNode", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    capturedClientOptions.length = 0;
     isNativePlatformMock.mockReturnValue(true);
   });
 
@@ -155,6 +187,61 @@ describe("useMobileNode", () => {
     });
 
     expect(disconnectMock).toHaveBeenCalledTimes(1);
+    container.remove();
+  });
+
+  it("enriches the node descriptor with native device info and exposes clipboard writes", async () => {
+    const { useMobileNode } = await import("../src/use-mobile-node.js");
+    const { container, root } = createTestRoot();
+
+    const config: MobileConnectionConfig = {
+      httpBaseUrl: "http://127.0.0.1:8788",
+      wsUrl: "ws://127.0.0.1:8788/ws",
+      nodeEnabled: true,
+      actionSettings: {
+        "location.get_current": true,
+        "camera.capture_photo": true,
+        "audio.record_clip": true,
+      },
+    };
+
+    let latestResult: ReturnType<typeof useMobileNode> | null = null;
+
+    const Probe = () => {
+      latestResult = useMobileNode({
+        config,
+        token: "token-1",
+        updateConfig: updateConfigMock,
+      });
+      return null;
+    };
+
+    await act(async () => {
+      root.render(React.createElement(Probe));
+      await flushMicrotasks();
+    });
+
+    const clientOptions = capturedClientOptions.at(0) as
+      | {
+          device?: {
+            label?: string;
+            platform?: string;
+            version?: string;
+          };
+        }
+      | undefined;
+
+    expect(deviceInfoMock).toHaveBeenCalledTimes(1);
+    expect(clientOptions?.device?.label).toBe("Tyrum Mobile (Ron phone)");
+    expect(clientOptions?.device?.platform).toBe("ios");
+    expect(clientOptions?.device?.version).toBe("18.1");
+
+    await latestResult?.hostApi.clipboard?.writeText("hello from mobile");
+    expect(clipboardWriteMock).toHaveBeenCalledWith({ string: "hello from mobile" });
+
+    act(() => {
+      root.unmount();
+    });
     container.remove();
   });
 });
