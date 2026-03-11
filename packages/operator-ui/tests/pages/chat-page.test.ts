@@ -39,6 +39,8 @@ describe("ChatPage", () => {
         ],
         renderMode: "markdown",
         onRenderModeChange: () => {},
+        reasoningMode: "collapsed",
+        onReasoningModeChange: () => {},
         loadError: null,
         sendError: null,
         deleteDisabled: false,
@@ -49,8 +51,9 @@ describe("ChatPage", () => {
         sendBusy: false,
         canSend: false,
         working: false,
+        approvalsById: {},
         onResolveApproval: () => {},
-        resolvingApprovalId: null,
+        resolvingApproval: null,
       }),
     );
 

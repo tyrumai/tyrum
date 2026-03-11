@@ -304,7 +304,7 @@ describe("ConfigurePage (HTTP) policy + config", () => {
     );
 
     const dialogSelects = Array.from(dialog.querySelectorAll<HTMLSelectElement>("select"));
-    expect(dialogSelects).toHaveLength(2);
+    expect(dialogSelects).toHaveLength(3);
     setSelectValue(dialogSelects[0]!, "openai/gpt-4.1-mini");
     expect(
       expectPresent(
@@ -333,7 +333,7 @@ describe("ConfigurePage (HTTP) policy + config", () => {
     click(getByTestId<HTMLButtonElement>(page.container, "models-add-open"));
     const dialog = getByTestId<HTMLElement>(document.body, "models-preset-dialog");
     const dialogSelects = Array.from(dialog.querySelectorAll<HTMLSelectElement>("select"));
-    expect(dialogSelects).toHaveLength(2);
+    expect(dialogSelects).toHaveLength(3);
     setSelectValue(dialogSelects[0]!, "openai/gpt-4.1-mini");
 
     await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "models-save"));
@@ -368,7 +368,8 @@ describe("ConfigurePage (HTTP) policy + config", () => {
     act(() => {
       setNativeValue(displayNameInput, "Renamed preset");
     });
-    setSelectValue(expectPresent(dialog.querySelector<HTMLSelectElement>("select")), "medium");
+    const dialogSelects = Array.from(dialog.querySelectorAll<HTMLSelectElement>("select"));
+    setSelectValue(expectPresent(dialogSelects[0]), "medium");
 
     await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "models-save"));
     await flush();

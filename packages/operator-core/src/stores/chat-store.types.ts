@@ -24,7 +24,7 @@ export interface ChatSessionsState {
 
 export interface ChatActiveSessionState {
   sessionId: string | null;
-  session: WsSessionGetSession | null;
+  session: ChatSession | null;
   loading: boolean;
   typing: boolean;
   activeToolCallIds: string[];
@@ -55,6 +55,18 @@ export interface ChatStore extends ExternalStore<ChatState> {
   compactActive(input?: { keepLastMessages?: number }): Promise<void>;
   deleteActive(): Promise<void>;
 }
+
+export type ChatReasoningTranscriptItem = {
+  kind: "reasoning";
+  id: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ChatSession = Omit<WsSessionGetSession, "transcript"> & {
+  transcript: Array<WsSessionGetSession["transcript"][number] | ChatReasoningTranscriptItem>;
+};
 
 export type ChatStoreRunIds = {
   agents: number;

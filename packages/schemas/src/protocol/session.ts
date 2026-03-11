@@ -24,6 +24,7 @@ export const WsSessionSendPayload = z
     thread_id: z.string().trim().min(1),
     content: z.string().trim().min(1),
     attached_node_id: z.string().trim().min(1).optional(),
+    client_message_id: z.string().trim().min(1).optional(),
   })
   .strict();
 export type WsSessionSendPayload = z.infer<typeof WsSessionSendPayload>;
@@ -296,12 +297,18 @@ export type WsSessionDeleteResponseErrEnvelope = z.infer<typeof WsSessionDeleteR
 // Events (typed) — messaging/session
 // ---------------------------------------------------------------------------
 
+const WsSessionEventLane = z.union([Lane, z.enum(["user", "assistant"])]);
+
 export const WsTypingEventPayload = z
   .object({
-    session_id: z.string().trim().min(1),
-    lane: Lane.optional(),
+    session_id: z.string().trim().min(1).optional(),
+    lane: WsSessionEventLane.optional(),
+    thread_id: z.string().trim().min(1).optional(),
   })
-  .strict();
+  .strict()
+  .refine((payload) => payload.session_id !== undefined || payload.thread_id !== undefined, {
+    message: "session_id or thread_id required",
+  });
 export type WsTypingEventPayload = z.infer<typeof WsTypingEventPayload>;
 
 export const WsTypingStartedEvent = WsEventEnvelope.extend({
@@ -319,10 +326,11 @@ export type WsTypingStoppedEvent = z.infer<typeof WsTypingStoppedEvent>;
 export const WsMessageDeltaEventPayload = z
   .object({
     session_id: z.string().trim().min(1),
-    lane: Lane.optional(),
+    lane: WsSessionEventLane.optional(),
     message_id: z.string().trim().min(1),
     role: WsMessageRole,
     delta: z.string(),
+    thread_id: z.string().trim().min(1).optional(),
   })
   .strict();
 export type WsMessageDeltaEventPayload = z.infer<typeof WsMessageDeltaEventPayload>;
@@ -336,10 +344,11 @@ export type WsMessageDeltaEvent = z.infer<typeof WsMessageDeltaEvent>;
 export const WsMessageFinalEventPayload = z
   .object({
     session_id: z.string().trim().min(1),
-    lane: Lane.optional(),
+    lane: WsSessionEventLane.optional(),
     message_id: z.string().trim().min(1),
     role: WsMessageRole,
     content: z.string(),
+    thread_id: z.string().trim().min(1).optional(),
   })
   .strict();
 export type WsMessageFinalEventPayload = z.infer<typeof WsMessageFinalEventPayload>;
@@ -349,6 +358,58 @@ export const WsMessageFinalEvent = WsEventEnvelope.extend({
   payload: WsMessageFinalEventPayload,
 });
 export type WsMessageFinalEvent = z.infer<typeof WsMessageFinalEvent>;
+
+export const WsReasoningDeltaEventPayload = z
+  .object({
+    session_id: z.string().trim().min(1),
+    lane: WsSessionEventLane.optional(),
+    reasoning_id: z.string().trim().min(1),
+    delta: z.string(),
+    thread_id: z.string().trim().min(1).optional(),
+  })
+  .strict();
+export type WsReasoningDeltaEventPayload = z.infer<typeof WsReasoningDeltaEventPayload>;
+
+export const WsReasoningDeltaEvent = WsEventEnvelope.extend({
+  type: z.literal("reasoning.delta"),
+  payload: WsReasoningDeltaEventPayload,
+});
+export type WsReasoningDeltaEvent = z.infer<typeof WsReasoningDeltaEvent>;
+
+export const WsReasoningFinalEventPayload = z
+  .object({
+    session_id: z.string().trim().min(1),
+    lane: WsSessionEventLane.optional(),
+    reasoning_id: z.string().trim().min(1),
+    content: z.string(),
+    thread_id: z.string().trim().min(1).optional(),
+  })
+  .strict();
+export type WsReasoningFinalEventPayload = z.infer<typeof WsReasoningFinalEventPayload>;
+
+export const WsReasoningFinalEvent = WsEventEnvelope.extend({
+  type: z.literal("reasoning.final"),
+  payload: WsReasoningFinalEventPayload,
+});
+export type WsReasoningFinalEvent = z.infer<typeof WsReasoningFinalEvent>;
+
+export const WsSessionSendFailedEventPayload = z
+  .object({
+    session_id: z.string().trim().min(1),
+    lane: WsSessionEventLane.optional(),
+    user_message_id: z.string().trim().min(1).optional(),
+    message_ids: z.array(z.string().trim().min(1)),
+    reasoning_ids: z.array(z.string().trim().min(1)),
+    thread_id: z.string().trim().min(1).optional(),
+  })
+  .strict();
+export type WsSessionSendFailedEventPayload = z.infer<typeof WsSessionSendFailedEventPayload>;
+
+export const WsSessionSendFailedEvent = WsEventEnvelope.extend({
+  type: z.literal("session.send.failed"),
+  payload: WsSessionSendFailedEventPayload,
+});
+export type WsSessionSendFailedEvent = z.infer<typeof WsSessionSendFailedEvent>;
 
 export const WsFormattingFallbackEventPayload = z
   .object({

@@ -13,6 +13,7 @@ import {
   deriveThreadPreview,
   deriveThreadTitle,
   type ChatThreadSummary,
+  type ReasoningDisplayMode,
 } from "./chat-page-parts.js";
 
 const CHAT_TWO_PANEL_CONTENT_WIDTH_PX = 800;
@@ -25,11 +26,13 @@ export function ChatPage({ core }: { core: OperatorCore }) {
   const lgUp = useAppShellMinWidth(CHAT_TWO_PANEL_CONTENT_WIDTH_PX);
   const browserNode = useBrowserNodeOptional();
   const host = useHostApiOptional();
+  const modelConfigApi = core.http?.modelConfig;
 
   const [draft, setDraft] = useState("");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [mobileView, setMobileView] = useState<"threads" | "conversation">("threads");
   const [renderMode, setRenderMode] = useState<"markdown" | "text">("markdown");
+  const [reasoningMode, setReasoningMode] = useState<ReasoningDisplayMode>("collapsed");
   const [resolvingApproval, setResolvingApproval] = useState<{
     approvalId: string;
     state: "approved" | "denied" | "always";
@@ -60,6 +63,38 @@ export function ChatPage({ core }: { core: OperatorCore }) {
     setMobileView("threads");
   }, [chat.active.sessionId, lgUp]);
 
+  useEffect(() => {
+    if (!isConnected) return;
+    if (!modelConfigApi) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const [assignments, presets] = await Promise.all([
+          modelConfigApi.listAssignments(),
+          modelConfigApi.listPresets(),
+        ]);
+        if (cancelled) return;
+        const interaction = assignments.assignments.find(
+          (assignment) => assignment.execution_profile_id === "interaction",
+        );
+        const preset = presets.presets.find(
+          (entry) => entry.preset_key === interaction?.preset_key,
+        );
+        const configured = preset
+          ? (preset.options as Record<string, unknown>)["reasoning_visibility"]
+          : undefined;
+        if (configured === "hidden" || configured === "collapsed" || configured === "expanded") {
+          setReasoningMode(configured);
+        }
+      } catch {
+        // Intentional: chat still works without model-config access.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isConnected, modelConfigApi]);
+
   const resolveAttachedNodeId = useCallback(async (): Promise<string | null> => {
     if (browserNode?.status === "connected" && browserNode.deviceId) {
       return browserNode.deviceId;
@@ -86,9 +121,13 @@ export function ChatPage({ core }: { core: OperatorCore }) {
   const send = async (): Promise<void> => {
     const text = draft.trim();
     if (!text) return;
+    const previousDraft = draft;
+    setDraft("");
     const attachedNodeId = await resolveAttachedNodeId();
     await core.chatStore.sendMessage(text, { attachedNodeId });
-    if (!core.chatStore.getSnapshot().send.error) setDraft("");
+    if (core.chatStore.getSnapshot().send.error) {
+      setDraft((current) => (current.length === 0 ? previousDraft : current));
+    }
   };
 
   const openThread = async (sessionId: string): Promise<void> => {
@@ -177,6 +216,8 @@ export function ChatPage({ core }: { core: OperatorCore }) {
             transcript={active?.transcript ?? []}
             renderMode={renderMode}
             onRenderModeChange={setRenderMode}
+            reasoningMode={reasoningMode}
+            onReasoningModeChange={setReasoningMode}
             loadError={chat.active.error?.message ?? null}
             sendError={chat.send.error?.message ?? null}
             deleteDisabled={!active || chat.active.loading}

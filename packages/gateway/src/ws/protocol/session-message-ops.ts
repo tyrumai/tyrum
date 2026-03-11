@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import {
   WsSessionCompactRequest,
   WsSessionCompactResult,
@@ -12,12 +13,55 @@ import {
 } from "@tyrum/schemas";
 import type { WsResponseEnvelope } from "@tyrum/schemas";
 import { SessionDal } from "../../modules/agent/session-dal.js";
+import { SessionLaneNodeAttachmentDal } from "../../modules/agent/session-lane-node-attachment-dal.js";
 import { ChannelThreadDal } from "../../modules/channels/thread-dal.js";
 import { IdentityScopeDal } from "../../modules/identity/scope.js";
+import { WorkboardDal } from "../../modules/workboard/dal.js";
 import { resolveWorkspaceKey } from "../../modules/workspace/id.js";
 import type { ConnectedClient } from "../connection-manager.js";
 import { errorResponse } from "./helpers.js";
+import { broadcastSessionSendStream } from "./session-message-stream.js";
 import type { ProtocolDeps, ProtocolRequestEnvelope } from "./types.js";
+
+async function recordSessionSendActivity(input: {
+  deps: ProtocolDeps;
+  tenantId: string;
+  agentId: string;
+  sessionKey: string;
+  sourceClientDeviceId?: string;
+  attachedNodeId?: string;
+}): Promise<void> {
+  const { deps, tenantId, agentId, sessionKey, sourceClientDeviceId, attachedNodeId } = input;
+  if (!deps.db) return;
+  try {
+    const identityScopeDal =
+      deps.identityScopeDal ?? new IdentityScopeDal(deps.db, { cacheTtlMs: 60_000 });
+    const workspaceKey = resolveWorkspaceKey();
+    const agentScopeId = await identityScopeDal.ensureAgentId(tenantId, agentId);
+    const workspaceId = await identityScopeDal.ensureWorkspaceId(tenantId, workspaceKey);
+    await identityScopeDal.ensureMembership(tenantId, agentScopeId, workspaceId);
+    const updatedAtMs = Date.now();
+    await new WorkboardDal(deps.db).upsertScopeActivity({
+      scope: {
+        tenant_id: tenantId,
+        agent_id: agentScopeId,
+        workspace_id: workspaceId,
+      },
+      last_active_session_key: sessionKey,
+      updated_at_ms: updatedAtMs,
+    });
+    await new SessionLaneNodeAttachmentDal(deps.db).upsert({
+      tenantId,
+      key: sessionKey,
+      lane: "main",
+      sourceClientDeviceId,
+      attachedNodeId: attachedNodeId ?? null,
+      updatedAtMs,
+    });
+  } catch {
+    // Intentional: mirror execution-engine activity tracking as best-effort only.
+  }
+}
 
 export async function handleSessionListMessage(
   client: ConnectedClient,
@@ -331,6 +375,14 @@ export async function handleSessionSendMessage(
 
   try {
     const agentId = parsedReq.data.payload.agent_id ?? "default";
+    const session = deps.db
+      ? await createSessionDal(deps).getOrCreate({
+          scopeKeys: { agentKey: agentId, workspaceKey: resolveWorkspaceKey() },
+          connectorKey: parsedReq.data.payload.channel,
+          providerThreadId: parsedReq.data.payload.thread_id,
+          containerKind: "channel",
+        })
+      : undefined;
     const runtime = await deps.agents.getRuntime({ tenantId, agentKey: agentId });
     const sourceClientDeviceId =
       typeof client.device_id === "string" && client.device_id.trim().length > 0
@@ -339,7 +391,12 @@ export async function handleSessionSendMessage(
             client.auth_claims.device_id.trim().length > 0
           ? client.auth_claims.device_id
           : undefined;
-    const response = await runtime.turn({
+    const requestPayload = parsedReq.data.payload as Record<string, unknown>;
+    const clientMessageId =
+      typeof requestPayload["client_message_id"] === "string"
+        ? requestPayload["client_message_id"]
+        : randomUUID();
+    const stream = await runtime.turnStream({
       channel: parsedReq.data.payload.channel,
       thread_id: parsedReq.data.payload.thread_id,
       message: parsedReq.data.payload.content,
@@ -347,14 +404,38 @@ export async function handleSessionSendMessage(
         source: "ws",
         request_id: msg.request_id,
         ...(sourceClientDeviceId ? { source_client_device_id: sourceClientDeviceId } : {}),
+        ...(typeof requestPayload["client_message_id"] === "string"
+          ? { client_message_id: requestPayload["client_message_id"] }
+          : {}),
         ...(parsedReq.data.payload.attached_node_id
           ? { attached_node_id: parsedReq.data.payload.attached_node_id }
           : {}),
       },
     });
+    const sessionKey = session?.session_key ?? stream.sessionId;
+    await recordSessionSendActivity({
+      deps,
+      tenantId,
+      agentId,
+      sessionKey,
+      sourceClientDeviceId,
+      attachedNodeId: parsedReq.data.payload.attached_node_id,
+    });
+    const { approvalRequested } = await broadcastSessionSendStream({
+      deps,
+      tenantId,
+      agentId,
+      sessionKey,
+      threadId: parsedReq.data.payload.thread_id,
+      clientMessageId,
+      userContent: parsedReq.data.payload.content,
+      stream,
+    });
+
+    const response = approvalRequested ? null : await stream.finalize();
     const result = WsSessionSendResult.parse({
-      session_id: response.session_id,
-      assistant_message: response.reply,
+      session_id: sessionKey,
+      assistant_message: response?.reply ?? "",
     });
     return { request_id: msg.request_id, type: msg.type, ok: true, result };
   } catch (err) {

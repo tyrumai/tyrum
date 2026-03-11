@@ -227,6 +227,31 @@ describe("WS envelopes", () => {
     expect(msg.payload.outcome).toBe("succeeded");
   });
 
+  it("parses thread-scoped typing events and session send cleanup events", () => {
+    const typing = WsEvent.parse({
+      event_id: "e-typing-1",
+      type: "typing.started",
+      occurred_at: "2026-02-19T12:00:00Z",
+      payload: {
+        thread_id: "thread-1",
+      },
+    });
+    expect(typing.type).toBe("typing.started");
+
+    const cleanup = WsEvent.parse({
+      event_id: "e-session-failed-1",
+      type: "session.send.failed",
+      occurred_at: "2026-02-19T12:00:01Z",
+      payload: {
+        session_id: "session-1",
+        thread_id: "thread-1",
+        message_ids: ["assistant-1"],
+        reasoning_ids: ["reason-1"],
+      },
+    });
+    expect(cleanup.type).toBe("session.send.failed");
+  });
+
   it("parses union message envelope", () => {
     const msg = WsMessageEnvelope.parse({
       request_id: "r-7",

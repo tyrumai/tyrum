@@ -9,7 +9,7 @@ import type { ResolveApprovalInput } from "@tyrum/operator-core";
 import { ChevronLeft, Copy, Hammer, Send, ShieldCheck, Trash2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { cn } from "../../lib/cn.js";
 import { formatRelativeTime } from "../../utils/format-relative-time.js";
@@ -45,7 +45,7 @@ export function isBottomLocked(element: HTMLElement): boolean {
   );
 }
 
-function transcriptTimestamp(item: SessionTranscriptItem): string {
+function transcriptTimestamp(item: ChatTranscriptItem): string {
   return item.kind === "text" ? item.created_at : item.updated_at;
 }
 
@@ -94,6 +94,16 @@ async function copyToClipboard(text: string): Promise<void> {
 
 export { ChatThreadsPanel, type ChatThreadSummary };
 
+export type ReasoningDisplayMode = "hidden" | "collapsed" | "expanded";
+type ChatReasoningItem = {
+  kind: "reasoning";
+  id: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+};
+type ChatTranscriptItem = SessionTranscriptItem | ChatReasoningItem;
+
 function MarkdownToggle({
   value,
   onChange,
@@ -114,6 +124,32 @@ function MarkdownToggle({
           onClick={() => onChange(mode)}
         >
           {mode === "markdown" ? "Markdown" : "Text"}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function ReasoningToggle({
+  value,
+  onChange,
+}: {
+  value: ReasoningDisplayMode;
+  onChange: (value: ReasoningDisplayMode) => void;
+}) {
+  return (
+    <div className="inline-flex rounded-md border border-border bg-bg-subtle/60 p-0.5">
+      {(["hidden", "collapsed", "expanded"] as const).map((mode) => (
+        <button
+          key={mode}
+          type="button"
+          className={cn(
+            "rounded px-2 py-1 text-xs font-medium capitalize transition-colors",
+            value === mode ? "bg-bg text-fg shadow-sm" : "text-fg-muted hover:text-fg",
+          )}
+          onClick={() => onChange(mode)}
+        >
+          {mode}
         </button>
       ))}
     </div>
@@ -187,6 +223,38 @@ function ChatToolItem({ item }: { item: SessionTranscriptToolItem }) {
   );
 }
 
+function ChatReasoningItem({
+  item,
+  mode,
+}: {
+  item: ChatReasoningItem;
+  mode: Exclude<ReasoningDisplayMode, "hidden">;
+}) {
+  const [open, setOpen] = useState(mode === "expanded");
+
+  useEffect(() => {
+    setOpen(mode === "expanded");
+  }, [mode]);
+
+  return (
+    <details
+      className="rounded-xl border border-border/70 bg-bg-subtle/30 px-4 py-3"
+      open={open}
+      onToggle={(event) => {
+        setOpen(event.currentTarget.open);
+      }}
+    >
+      <summary className="cursor-pointer text-sm font-medium text-fg-muted">
+        Model reasoning
+      </summary>
+      <pre className="mt-3 whitespace-pre-wrap break-words text-sm text-fg-muted">
+        {item.content}
+      </pre>
+      <div className="mt-2 text-xs text-fg-muted">{formatRelativeTime(item.updated_at)}</div>
+    </details>
+  );
+}
+
 function ChatApprovalItem({
   item,
   approval,
@@ -228,6 +296,8 @@ export function ChatConversationPanel({
   transcript,
   renderMode,
   onRenderModeChange,
+  reasoningMode,
+  onReasoningModeChange,
   loadError,
   sendError,
   deleteDisabled,
@@ -244,9 +314,11 @@ export function ChatConversationPanel({
   onBack,
 }: {
   activeThreadId: string | null;
-  transcript: SessionTranscriptItem[];
+  transcript: ChatTranscriptItem[];
   renderMode: "markdown" | "text";
   onRenderModeChange: (value: "markdown" | "text") => void;
+  reasoningMode: ReasoningDisplayMode;
+  onReasoningModeChange: (value: ReasoningDisplayMode) => void;
   loadError: string | null;
   sendError: string | null;
   deleteDisabled: boolean;
@@ -304,6 +376,7 @@ export function ChatConversationPanel({
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <ReasoningToggle value={reasoningMode} onChange={onReasoningModeChange} />
           <MarkdownToggle value={renderMode} onChange={onRenderModeChange} />
           <Button
             size="sm"
@@ -336,6 +409,11 @@ export function ChatConversationPanel({
             {transcript.map((item) => {
               if (item.kind === "text") {
                 return <ChatTextItem key={item.id} item={item} renderMode={renderMode} />;
+              }
+              if (item.kind === "reasoning") {
+                return reasoningMode === "hidden" ? null : (
+                  <ChatReasoningItem key={item.id} item={item} mode={reasoningMode} />
+                );
               }
               if (item.kind === "tool") {
                 return <ChatToolItem key={item.id} item={item} />;

@@ -1,6 +1,14 @@
 import { toOperatorCoreError } from "../operator-error.js";
 import type { ChatStoreContext } from "./chat-store.types.js";
-import { activeToolCallIdsForSession, mergeFetchedTranscript } from "./chat-store.transcript.js";
+import {
+  activeToolCallIdsForSession,
+  appendTranscriptTextItem,
+  mergeFetchedTranscript,
+} from "./chat-store.transcript.js";
+
+function createClientMessageId(): string {
+  return globalThis.crypto?.randomUUID?.() ?? `chat-local-${String(Date.now())}`;
+}
 
 function normalizeAgentId(agentId: string): string {
   const trimmed = agentId.trim();
@@ -221,25 +229,37 @@ export async function sendMessage(
   const runId = ++ctx.runIds.send;
   const expectedAgentId = snapshot.agentId;
   const expectedSessionId = session.session_id;
+  const createdAt = new Date().toISOString();
+  const clientMessageId = createClientMessageId();
 
-  ctx.setState((prev) => ({ ...prev, send: { sending: true, error: null } }));
+  ctx.setState((prev) => ({
+    ...prev,
+    active: prev.active.session
+      ? {
+          ...prev.active,
+          session: appendTranscriptTextItem(prev.active.session, {
+            id: clientMessageId,
+            role: "user",
+            content: text,
+            createdAt,
+          }),
+        }
+      : prev.active,
+    send: { sending: true, error: null },
+  }));
   try {
-    const reply = await ctx.ws.sessionSend({
+    const payload = {
       agent_id: expectedAgentId,
       channel: session.channel,
       thread_id: session.thread_id,
       content: text,
       ...(input?.attachedNodeId ? { attached_node_id: input.attachedNodeId } : {}),
-    });
+    } as Parameters<ChatStoreContext["ws"]["sessionSend"]>[0] & { client_message_id?: string };
+    payload.client_message_id = clientMessageId;
+    const reply = await ctx.ws.sessionSend(payload);
     void reply;
 
     if (runId !== ctx.runIds.send) return;
-
-    const afterSend = ctx.store.getSnapshot();
-    if (afterSend.agentId === expectedAgentId && afterSend.active.sessionId === expectedSessionId) {
-      await openSession(ctx, expectedSessionId);
-      if (runId !== ctx.runIds.send) return;
-    }
 
     if (ctx.store.getSnapshot().agentId === expectedAgentId) {
       await refreshSessions(ctx);
@@ -248,6 +268,18 @@ export async function sendMessage(
     if (runId === ctx.runIds.send) {
       ctx.setState((prev) => ({
         ...prev,
+        active:
+          prev.active.sessionId === expectedSessionId && prev.active.session
+            ? {
+                ...prev.active,
+                session: {
+                  ...prev.active.session,
+                  transcript: prev.active.session.transcript.filter(
+                    (item) => !(item.kind === "text" && item.id === clientMessageId),
+                  ),
+                },
+              }
+            : prev.active,
         send: { sending: false, error: toOperatorCoreError("ws", "session.send", err) },
       }));
     }

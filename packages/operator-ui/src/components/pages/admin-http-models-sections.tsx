@@ -13,6 +13,13 @@ import {
   type ModelPreset,
 } from "./admin-http-models.shared.js";
 
+function readReasoningVisibility(options: ModelPreset["options"]): string {
+  const value = (options as Record<string, unknown>)["reasoning_visibility"];
+  return value === "hidden" || value === "collapsed" || value === "expanded"
+    ? value
+    : "preset default";
+}
+
 export function ReplacementAssignmentsFields({
   requiredExecutionProfileIds,
   candidatePresets,
@@ -235,6 +242,9 @@ export function ConfiguredModelsCard({
                     </div>
                     <div className="text-sm text-fg-muted">
                       Reasoning effort: {preset.options.reasoning_effort ?? "default"}
+                    </div>
+                    <div className="text-sm text-fg-muted">
+                      Reasoning display: {readReasoningVisibility(preset.options)}
                     </div>
                     {warning ? (
                       <Alert variant="warning" title="Provider warning" description={warning} />

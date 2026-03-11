@@ -17,6 +17,7 @@ import {
   modelRefFor,
   normalizeDialogState,
   REASONING_OPTIONS,
+  REASONING_VISIBILITY_OPTIONS,
   splitModelRef,
   type AvailableModel,
   type ModelConfigHttpClient,
@@ -69,8 +70,12 @@ export function ModelPresetDialog({
     setSaving(true);
     setErrorMessage(null);
     try {
-      const options =
-        state.reasoningEffort === "" ? {} : { reasoning_effort: state.reasoningEffort };
+      const options = {
+        ...(state.reasoningEffort === "" ? {} : { reasoning_effort: state.reasoningEffort }),
+        ...(state.reasoningVisibility === ""
+          ? {}
+          : { reasoning_visibility: state.reasoningVisibility }),
+      };
       if (preset) {
         await api.updatePreset(preset.preset_key, {
           display_name: state.displayName.trim(),
@@ -165,6 +170,24 @@ export function ModelPresetDialog({
             }}
           >
             {REASONING_OPTIONS.map((option) => (
+              <option key={option.value || "default"} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </Select>
+
+          <Select
+            label="Reasoning display"
+            value={state.reasoningVisibility}
+            onChange={(event) => {
+              setState((current) => ({
+                ...current,
+                reasoningVisibility: event.currentTarget
+                  .value as ModelDialogState["reasoningVisibility"],
+              }));
+            }}
+          >
+            {REASONING_VISIBILITY_OPTIONS.map((option) => (
               <option key={option.value || "default"} value={option.value}>
                 {option.label}
               </option>
