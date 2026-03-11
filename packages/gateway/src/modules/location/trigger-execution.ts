@@ -29,15 +29,28 @@ type FireLocationTriggersInput = {
   playbookRunner: PlaybookRunner;
 };
 
-function matchesTrigger(trigger: LocationAutomationTriggerRecord, event: LocationEvent): boolean {
+function isSavedPlaceEvent(event: LocationEvent): boolean {
+  return event.type.startsWith("saved_place.");
+}
+
+function isPoiCategoryEvent(event: LocationEvent): boolean {
+  return event.type.startsWith("poi_category.");
+}
+
+export function matchesTrigger(
+  trigger: LocationAutomationTriggerRecord,
+  event: LocationEvent,
+): boolean {
   if (!trigger.enabled) return false;
   if (trigger.condition.type === "saved_place") {
     return (
+      isSavedPlaceEvent(event) &&
       trigger.condition.place_id === event.place_id &&
       trigger.condition.transition === event.transition
     );
   }
   return (
+    isPoiCategoryEvent(event) &&
     trigger.condition.category_key === event.category_key &&
     trigger.condition.transition === event.transition
   );

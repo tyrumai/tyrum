@@ -184,7 +184,6 @@ export function evaluateCategoryEvent(input: {
   }
 
   if (
-    !retainedPresence ||
     !shouldEmitDwell(occurredAt, input.currentState.entered_at, input.currentState.dwell_emitted_at)
   ) {
     return null;
