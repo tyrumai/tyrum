@@ -13,7 +13,7 @@ import {
   type ElevatedModeController,
 } from "@tyrum/operator-ui";
 import { formatDeviceIdentityError, loadOrCreateDeviceIdentity } from "@tyrum/client/browser";
-import { useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 import type { ElevatedModeStore } from "@tyrum/operator-core/browser";
 import type { MobileBootstrapConfig, MobileConnectionConfig } from "./mobile-config.js";
 import {
@@ -60,6 +60,17 @@ export function useMobileOperatorCore(): UseMobileOperatorCoreState {
   const managerRef = useRef<OperatorCoreManager | null>(null);
   const unsubscribeRef = useRef<(() => void) | null>(null);
   const elevatedModeStoreRef = useRef<ElevatedModeStore | null>(null);
+  const connectionBootstrap = useMemo(
+    () =>
+      bootstrap
+        ? {
+            httpBaseUrl: bootstrap.httpBaseUrl,
+            wsUrl: bootstrap.wsUrl,
+            token: bootstrap.token,
+          }
+        : null,
+    [bootstrap?.httpBaseUrl, bootstrap?.token, bootstrap?.wsUrl],
+  );
 
   const retry = useCallback(() => {
     setReloadVersion((current) => current + 1);
@@ -116,7 +127,7 @@ export function useMobileOperatorCore(): UseMobileOperatorCoreState {
   }, []);
 
   useEffect(() => {
-    if (!bootstrap) {
+    if (!connectionBootstrap) {
       disposeManager(managerRef, unsubscribeRef, elevatedModeStoreRef);
       setCore(null);
       setElevatedModeController(null);
@@ -133,14 +144,14 @@ export function useMobileOperatorCore(): UseMobileOperatorCoreState {
         if (disposed) return;
 
         const elevatedModeStore = createElevatedModeStore();
-        const baselineAuth = createBearerTokenAuth(bootstrap.token);
+        const baselineAuth = createBearerTokenAuth(connectionBootstrap.token);
         const baselineHttp = createTyrumHttpClient({
-          baseUrl: bootstrap.httpBaseUrl,
+          baseUrl: connectionBootstrap.httpBaseUrl,
           auth: httpAuthForAuth(baselineAuth),
         });
         const manager = createOperatorCoreManager({
-          wsUrl: bootstrap.wsUrl,
-          httpBaseUrl: bootstrap.httpBaseUrl,
+          wsUrl: connectionBootstrap.wsUrl,
+          httpBaseUrl: connectionBootstrap.httpBaseUrl,
           baselineAuth,
           elevatedModeStore,
           createCore(coreOptions) {
@@ -190,7 +201,7 @@ export function useMobileOperatorCore(): UseMobileOperatorCoreState {
       disposed = true;
       disposeManager(managerRef, unsubscribeRef, elevatedModeStoreRef);
     };
-  }, [bootstrap, reloadVersion]);
+  }, [connectionBootstrap, reloadVersion]);
 
   return {
     bootstrap,

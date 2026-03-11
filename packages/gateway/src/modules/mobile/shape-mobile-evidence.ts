@@ -73,6 +73,7 @@ export async function shapeMobileEvidenceForArtifacts(input: {
       fallbackScope: input.fallbackScope,
     });
   } catch {
+    // Intentional: artifact persistence is best-effort; keep bounded evidence even if storage fails.
     stored = null;
   }
 
