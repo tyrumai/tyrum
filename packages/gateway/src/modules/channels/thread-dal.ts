@@ -1,6 +1,25 @@
 import { randomUUID } from "node:crypto";
 import type { NormalizedContainerKind } from "@tyrum/schemas";
+import { normalizeDbDateTime } from "../../utils/db-time.js";
 import type { SqlDb } from "../../statestore/types.js";
+
+type RawObservedChannelThreadRow = {
+  account_key: string;
+  provider_thread_id: string;
+  container_kind: NormalizedContainerKind;
+  created_at: string | Date;
+  session_title: string | null;
+  last_active_at: string | Date | null;
+};
+
+export type ObservedChannelThread = {
+  channel: string;
+  accountKey: string;
+  threadId: string;
+  containerKind: NormalizedContainerKind;
+  sessionTitle?: string;
+  lastActiveAt?: string;
+};
 
 export class ChannelThreadDal {
   constructor(private readonly db: SqlDb) {}
@@ -115,5 +134,72 @@ export class ChannelThreadDal {
       ],
     );
     return result.changes === 1;
+  }
+
+  async listObservedThreads(input: {
+    tenantId: string;
+    connectorKey: string;
+    limit?: number;
+  }): Promise<ObservedChannelThread[]> {
+    const tenantId = input.tenantId.trim();
+    if (!tenantId) {
+      throw new Error("tenantId is required");
+    }
+    const connectorKey = input.connectorKey.trim();
+    if (!connectorKey) {
+      throw new Error("connectorKey is required");
+    }
+    const limit =
+      typeof input.limit === "number" && Number.isFinite(input.limit)
+        ? Math.max(1, Math.min(200, Math.trunc(input.limit)))
+        : 200;
+
+    const rows = await this.db.all<RawObservedChannelThreadRow>(
+      `SELECT
+         ca.account_key,
+         ct.provider_thread_id,
+         ct.container_kind,
+         ct.created_at,
+         (
+           SELECT NULLIF(TRIM(s.title), '')
+           FROM sessions s
+           WHERE s.tenant_id = ct.tenant_id
+             AND s.channel_thread_id = ct.channel_thread_id
+           ORDER BY s.updated_at DESC, s.session_id DESC
+           LIMIT 1
+         ) AS session_title,
+         (
+           SELECT s.updated_at
+           FROM sessions s
+           WHERE s.tenant_id = ct.tenant_id
+             AND s.channel_thread_id = ct.channel_thread_id
+           ORDER BY s.updated_at DESC, s.session_id DESC
+           LIMIT 1
+         ) AS last_active_at
+       FROM channel_threads ct
+       JOIN channel_accounts ca
+         ON ca.tenant_id = ct.tenant_id
+        AND ca.workspace_id = ct.workspace_id
+        AND ca.channel_account_id = ct.channel_account_id
+       WHERE ct.tenant_id = ?
+         AND ca.connector_key = ?
+       ORDER BY COALESCE(last_active_at, ct.created_at) DESC, ct.provider_thread_id ASC
+       LIMIT ?`,
+      [tenantId, connectorKey, limit],
+    );
+
+    return rows.map((row) => {
+      const thread: ObservedChannelThread = {
+        channel: connectorKey,
+        accountKey: row.account_key,
+        threadId: row.provider_thread_id,
+        containerKind: row.container_kind,
+        lastActiveAt: normalizeDbDateTime(row.last_active_at ?? row.created_at),
+      };
+      if (row.session_title) {
+        thread.sessionTitle = row.session_title;
+      }
+      return thread;
+    });
   }
 }

@@ -4,7 +4,13 @@ import { createRoutingConfigRoutes } from "../../src/routes/routing-config.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { RoutingConfigDal } from "../../src/modules/channels/routing-config-dal.js";
-import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
+import { ChannelThreadDal } from "../../src/modules/channels/thread-dal.js";
+import {
+  DEFAULT_AGENT_KEY,
+  DEFAULT_TENANT_ID,
+  DEFAULT_WORKSPACE_KEY,
+  IdentityScopeDal,
+} from "../../src/modules/identity/scope.js";
 
 describe("routing config routes", () => {
   let db: SqliteDb;
@@ -22,8 +28,7 @@ describe("routing config routes", () => {
     await db.close();
   });
 
-  it("persists routing config revisions and emits ws events", async () => {
-    const send = vi.fn();
+  function createAuthedApp(send?: ReturnType<typeof vi.fn>): Hono {
     const app = new Hono();
     app.use("*", async (c, next) => {
       c.set("authClaims", {
@@ -36,30 +41,41 @@ describe("routing config routes", () => {
       await next();
     });
 
-    const routing = new RoutingConfigDal(db);
     app.route(
       "/",
       createRoutingConfigRoutes({
-        routingConfigDal: routing,
-        ws: {
-          connectionManager: {
-            allClients: () => [
-              {
-                role: "client",
-                auth_claims: {
-                  token_kind: "admin",
-                  token_id: "test-token",
-                  tenant_id: DEFAULT_TENANT_ID,
-                  role: "admin",
-                  scopes: ["*"],
+        routingConfigDal: new RoutingConfigDal(db),
+        channelThreadDal: new ChannelThreadDal(db),
+        ...(send
+          ? {
+              ws: {
+                connectionManager: {
+                  allClients: () => [
+                    {
+                      role: "client",
+                      auth_claims: {
+                        token_kind: "admin",
+                        token_id: "test-token",
+                        tenant_id: DEFAULT_TENANT_ID,
+                        role: "admin",
+                        scopes: ["*"],
+                      },
+                      ws: { send },
+                    },
+                  ],
                 },
-                ws: { send },
               },
-            ],
-          },
-        },
+            }
+          : {}),
       } as never),
     );
+
+    return app;
+  }
+
+  it("persists routing config revisions and emits ws events", async () => {
+    const send = vi.fn();
+    const app = createAuthedApp(send);
 
     const res = await app.request("/routing/config", {
       method: "PUT",
@@ -101,42 +117,7 @@ describe("routing config routes", () => {
 
   it("reverts to an earlier revision", async () => {
     const send = vi.fn();
-    const app = new Hono();
-    app.use("*", async (c, next) => {
-      c.set("authClaims", {
-        token_kind: "admin",
-        token_id: "test-token",
-        tenant_id: DEFAULT_TENANT_ID,
-        role: "admin",
-        scopes: ["*"],
-      });
-      await next();
-    });
-
-    const routing = new RoutingConfigDal(db);
-    app.route(
-      "/",
-      createRoutingConfigRoutes({
-        routingConfigDal: routing,
-        ws: {
-          connectionManager: {
-            allClients: () => [
-              {
-                role: "client",
-                auth_claims: {
-                  token_kind: "admin",
-                  token_id: "test-token",
-                  tenant_id: DEFAULT_TENANT_ID,
-                  role: "admin",
-                  scopes: ["*"],
-                },
-                ws: { send },
-              },
-            ],
-          },
-        },
-      } as never),
-    );
+    const app = createAuthedApp(send);
 
     const created = await app.request("/routing/config", {
       method: "PUT",
@@ -211,27 +192,104 @@ describe("routing config routes", () => {
       [DEFAULT_TENANT_ID, JSON.stringify({ v: "invalid" }), "{}", "corrupt"],
     );
 
-    const app = new Hono();
-    app.use("*", async (c, next) => {
-      c.set("authClaims", {
-        token_kind: "admin",
-        token_id: "test-token",
-        tenant_id: DEFAULT_TENANT_ID,
-        role: "admin",
-        scopes: ["*"],
-      });
-      await next();
-    });
-    app.route(
-      "/",
-      createRoutingConfigRoutes({
-        routingConfigDal: new RoutingConfigDal(db),
-      } as never),
-    );
+    const app = createAuthedApp();
 
     const res = await app.request("/routing/config", { method: "GET" });
 
     expect(res.status).toBe(500);
     await expect(res.json()).resolves.toMatchObject({ error: "corrupt_state" });
+  });
+
+  it("lists routing config revisions newest first", async () => {
+    const app = createAuthedApp();
+
+    await app.request("/routing/config", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        config: { v: 1, telegram: { default_agent_key: "default" } },
+        reason: "first",
+      }),
+    });
+    await app.request("/routing/config", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        config: { v: 1, telegram: { default_agent_key: "agent-b" } },
+        reason: "second",
+      }),
+    });
+
+    const res = await app.request("/routing/config/revisions?limit=1", { method: "GET" });
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({
+      revisions: [
+        {
+          revision: 2,
+          reason: "second",
+          config: { telegram: { default_agent_key: "agent-b" } },
+        },
+      ],
+    });
+  });
+
+  it("lists observed telegram threads with best-effort session metadata", async () => {
+    const app = createAuthedApp();
+    const identity = new IdentityScopeDal(db);
+    const workspaceId = await identity.ensureWorkspaceId(DEFAULT_TENANT_ID, DEFAULT_WORKSPACE_KEY);
+    const agentId = await identity.ensureAgentId(DEFAULT_TENANT_ID, DEFAULT_AGENT_KEY);
+    await identity.ensureMembership(DEFAULT_TENANT_ID, agentId, workspaceId);
+
+    const channelThreads = new ChannelThreadDal(db);
+    const channelAccountId = await channelThreads.ensureChannelAccountId({
+      tenantId: DEFAULT_TENANT_ID,
+      workspaceId,
+      connectorKey: "telegram",
+      accountKey: "default",
+    });
+    const channelThreadId = await channelThreads.ensureChannelThreadId({
+      tenantId: DEFAULT_TENANT_ID,
+      workspaceId,
+      channelAccountId,
+      providerThreadId: "thread-42",
+      containerKind: "group",
+    });
+
+    await db.run(
+      `INSERT INTO sessions (
+         tenant_id, session_id, session_key, agent_id, workspace_id, channel_thread_id,
+         title, summary, transcript_json, created_at, updated_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        DEFAULT_TENANT_ID,
+        "session-1",
+        "agent:default:telegram:group:thread-42",
+        agentId,
+        workspaceId,
+        channelThreadId,
+        "Support room",
+        "",
+        "[]",
+        "2026-03-01T00:00:00.000Z",
+        "2026-03-02T00:00:00.000Z",
+      ],
+    );
+
+    const res = await app.request("/routing/channels/telegram/threads", { method: "GET" });
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({
+      threads: [
+        {
+          channel: "telegram",
+          account_key: "default",
+          thread_id: "thread-42",
+          container_kind: "group",
+          session_title: "Support room",
+          last_active_at: "2026-03-02T00:00:00.000Z",
+        },
+      ],
+    });
   });
 });

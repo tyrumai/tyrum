@@ -61,6 +61,8 @@ const adminApiPaths = [
   "agentList.get",
   "agentStatus.get",
   "routingConfig.get",
+  "routingConfig.listRevisions",
+  "routingConfig.listObservedTelegramThreads",
   "routingConfig.update",
   "routingConfig.revert",
   "audit.listPlans",

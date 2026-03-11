@@ -67,10 +67,30 @@ function createCore(): {
         verify: vi.fn(async () => ({ status: "ok" })),
         forget: vi.fn(async () => ({ status: "ok" })),
       },
+      agentList: {
+        get: vi.fn(async () => ({
+          agents: [
+            {
+              agent_key: "default",
+              agent_id: "agent-1",
+              has_config: true,
+              persona: {
+                name: "Default",
+                description: "Default agent",
+                tone: "direct",
+                palette: "blue",
+                character: "pragmatic",
+              },
+            },
+          ],
+        })),
+      },
       routingConfig: {
-        get: vi.fn(async () => ({ revision: 0, config: {} })),
-        update: vi.fn(async () => ({ revision: 1, config: {} })),
-        revert: vi.fn(async () => ({ revision: 0, config: {} })),
+        get: vi.fn(async () => ({ revision: 1, config: { v: 1 } })),
+        listRevisions: vi.fn(async () => ({ revisions: [] })),
+        listObservedTelegramThreads: vi.fn(async () => ({ threads: [] })),
+        update: vi.fn(async () => ({ revision: 1, config: { v: 1 } })),
+        revert: vi.fn(async () => ({ revision: 1, config: { v: 1 } })),
       },
       secrets: {
         list: vi.fn(async () => ({ handles: [] })),

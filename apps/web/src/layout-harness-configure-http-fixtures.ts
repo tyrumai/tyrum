@@ -56,6 +56,24 @@ export function createHarnessConfigureHttpFixtures() {
       issue: async () => ({ status: "ok" as const, token: "secret" }),
       revoke: async () => ({ status: "ok" as const }),
     },
+    agentList: {
+      get: async () => ({
+        agents: [
+          {
+            agent_key: "default",
+            agent_id: "agent-1",
+            has_config: true,
+            persona: {
+              name: "Default",
+              description: "Default agent",
+              tone: "direct",
+              palette: "blue",
+              character: "pragmatic",
+            },
+          },
+        ],
+      }),
+    },
     deviceTokens: {
       issue: async () => ({ status: "ok" as const, token: "device-token" }),
       revoke: async () => ({ status: "ok" as const }),
@@ -128,9 +146,45 @@ export function createHarnessConfigureHttpFixtures() {
       }),
     },
     routingConfig: {
-      get: async () => ({ status: "ok" as const, config: { v: 1 } }),
-      update: async () => ({ status: "ok" as const }),
-      revert: async () => ({ status: "ok" as const }),
+      get: async () => ({
+        revision: 1,
+        config: {
+          v: 1,
+          telegram: {
+            default_agent_key: "default",
+            threads: { "tg-123": "default" },
+          },
+        },
+      }),
+      listRevisions: async () => ({
+        revisions: [
+          {
+            revision: 1,
+            config: {
+              v: 1,
+              telegram: {
+                default_agent_key: "default",
+                threads: { "tg-123": "default" },
+              },
+            },
+            created_at: "2026-03-08T00:00:00.000Z",
+          },
+        ],
+      }),
+      listObservedTelegramThreads: async () => ({
+        threads: [
+          {
+            channel: "telegram" as const,
+            account_key: "default",
+            thread_id: "tg-123",
+            container_kind: "group" as const,
+            session_title: "Support room",
+            last_active_at: "2026-03-08T00:00:00.000Z",
+          },
+        ],
+      }),
+      update: async () => ({ revision: 2, config: { v: 1 } }),
+      revert: async () => ({ revision: 2, config: { v: 1 } }),
     },
     secrets: {
       list: async () => ({

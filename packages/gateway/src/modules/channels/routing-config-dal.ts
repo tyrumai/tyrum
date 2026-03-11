@@ -156,6 +156,30 @@ export class RoutingConfigDal {
     return row ? rowToRevision(row) : undefined;
   }
 
+  async listRevisions(params: {
+    tenantId: string;
+    limit?: number;
+  }): Promise<RoutingConfigRevision[]> {
+    const tenantId = params.tenantId.trim();
+    if (!tenantId) {
+      throw new Error("tenantId is required");
+    }
+    const limit =
+      typeof params.limit === "number" && Number.isFinite(params.limit)
+        ? Math.max(1, Math.min(100, Math.trunc(params.limit)))
+        : 20;
+
+    const rows = await this.db.all<RawRoutingConfigRow>(
+      `SELECT revision, config_json, created_at, created_by_json, reason, reverted_from_revision
+       FROM routing_configs
+       WHERE tenant_id = ?
+       ORDER BY revision DESC
+       LIMIT ?`,
+      [tenantId, limit],
+    );
+    return rows.map(rowToRevision);
+  }
+
   async set(params: {
     tenantId: string;
     config: RoutingConfig;

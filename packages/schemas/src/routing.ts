@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { DateTimeSchema } from "./common.js";
-import { AgentKey, ThreadId } from "./keys.js";
+import { AgentKey, ThreadId, AccountId } from "./keys.js";
+import { NormalizedContainerKind } from "./message.js";
 
 export const TelegramRoutingConfig = z
   .object({
@@ -54,3 +55,41 @@ export type RoutingConfigRevertRequest = z.infer<typeof RoutingConfigRevertReque
 
 export const RoutingConfigRevertResponse = RoutingConfigGetResponse;
 export type RoutingConfigRevertResponse = z.infer<typeof RoutingConfigRevertResponse>;
+
+export const RoutingConfigRevisionSummary = z
+  .object({
+    revision: RoutingConfigRevisionNumber,
+    config: RoutingConfig,
+    created_at: DateTimeSchema,
+    created_by: z.unknown().optional(),
+    reason: z.string().trim().min(1).optional(),
+    reverted_from_revision: RoutingConfigRevisionNumber.optional(),
+  })
+  .strict();
+export type RoutingConfigRevisionSummary = z.infer<typeof RoutingConfigRevisionSummary>;
+
+export const RoutingConfigRevisionListResponse = z
+  .object({
+    revisions: z.array(RoutingConfigRevisionSummary),
+  })
+  .strict();
+export type RoutingConfigRevisionListResponse = z.infer<typeof RoutingConfigRevisionListResponse>;
+
+export const ObservedTelegramThread = z
+  .object({
+    channel: z.literal("telegram"),
+    account_key: AccountId,
+    thread_id: ThreadId,
+    container_kind: NormalizedContainerKind,
+    session_title: z.string().trim().min(1).optional(),
+    last_active_at: DateTimeSchema.optional(),
+  })
+  .strict();
+export type ObservedTelegramThread = z.infer<typeof ObservedTelegramThread>;
+
+export const ObservedTelegramThreadListResponse = z
+  .object({
+    threads: z.array(ObservedTelegramThread),
+  })
+  .strict();
+export type ObservedTelegramThreadListResponse = z.infer<typeof ObservedTelegramThreadListResponse>;

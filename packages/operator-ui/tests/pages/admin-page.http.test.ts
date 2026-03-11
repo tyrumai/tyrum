@@ -76,41 +76,116 @@ describe("ConfigurePage (HTTP)", () => {
 });
 
 describe("ConfigurePage (HTTP) routing config", () => {
-  it("requires confirmation before updating routing config", async () => {
+  it("filters structured routing rules", async () => {
+    const { core } = createAdminHttpTestCore();
+    const page = renderAdminHttpConfigurePage(core);
+
+    await switchHttpTab(page.container, "admin-http-tab-routing-config");
+    await flush();
+
+    expect(page.container.textContent).toContain("Support room");
+
+    act(() => {
+      setNativeValue(getByTestId<HTMLInputElement>(page.container, "channels-filter"), "missing");
+    });
+    await flush();
+
+    expect(page.container.textContent).toContain("No routing rules match the current filter");
+    cleanupAdminHttpPage(page);
+  });
+
+  it("adds a thread override from the structured dialog", async () => {
     const { core, routingConfigUpdate } = createAdminHttpTestCore();
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       expectAuthorizedJsonRequest(input, init, {
         url: "http://example.test/routing/config",
         method: "PUT",
-        body: { config: { v: 1 } },
+        body: {
+          config: {
+            v: 1,
+            telegram: {
+              default_agent_key: "default",
+              threads: { "tg-123": "agent-b", "tg-456": "default" },
+            },
+          },
+        },
       });
-      return jsonResponse({ revision: 1, config: { v: 1 } }, 201);
+      return jsonResponse({ revision: 2, config: { v: 1 } }, 201);
     });
     vi.stubGlobal("fetch", fetchMock);
 
     const page = renderAdminHttpConfigurePage(core);
     await switchHttpTab(page.container, "admin-http-tab-routing-config");
+    await flush();
 
-    const configTextarea = getByTestId<HTMLTextAreaElement>(
-      page.container,
-      "routing-config-update-json",
-    );
-    act(() => {
-      setNativeValue(configTextarea, JSON.stringify({ v: 1 }));
-    });
-
-    click(getByTestId<HTMLButtonElement>(page.container, "routing-config-update-open"));
-
-    const confirmButton = getByTestId<HTMLButtonElement>(document.body, "confirm-danger-confirm");
-    expect(getByTestId(document.body, "confirm-danger-dialog")).not.toBeNull();
-    expect(confirmButton.disabled).toBe(true);
-
-    click(getByTestId<HTMLElement>(document.body, "confirm-danger-checkbox"));
-    expect(confirmButton.disabled).toBe(false);
-
-    await clickAndFlush(confirmButton);
+    click(getByTestId<HTMLButtonElement>(page.container, "channels-add-open"));
+    await flush();
+    await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "channels-rule-save"));
 
     expect(routingConfigUpdate).toHaveBeenCalledTimes(0);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    cleanupAdminHttpPage(page);
+  });
+
+  it("removes a routing rule via the row action", async () => {
+    const { core } = createAdminHttpTestCore();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      expectAuthorizedJsonRequest(input, init, {
+        url: "http://example.test/routing/config",
+        method: "PUT",
+        body: {
+          config: {
+            v: 1,
+            telegram: {
+              default_agent_key: "default",
+            },
+          },
+        },
+      });
+      return jsonResponse({ revision: 2, config: { v: 1 } }, 201);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const page = renderAdminHttpConfigurePage(core);
+    await switchHttpTab(page.container, "admin-http-tab-routing-config");
+    await flush();
+
+    click(
+      expectPresent(
+        page.container.querySelector<HTMLButtonElement>('[aria-label="Remove Support room"]'),
+      ),
+    );
+    click(getByTestId<HTMLElement>(document.body, "confirm-danger-checkbox"));
+    await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "confirm-danger-confirm"));
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    cleanupAdminHttpPage(page);
+  });
+
+  it("reverts from the structured history table", async () => {
+    const { core } = createAdminHttpTestCore();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      expectAuthorizedJsonRequest(input, init, {
+        url: "http://example.test/routing/config/revert",
+        method: "POST",
+        body: { revision: 1 },
+      });
+      return jsonResponse({ revision: 2, config: { v: 1 } }, 201);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const page = renderAdminHttpConfigurePage(core);
+    await switchHttpTab(page.container, "admin-http-tab-routing-config");
+    await flush();
+
+    click(
+      expectPresent(
+        page.container.querySelector<HTMLButtonElement>('[aria-label="Revert to revision 1"]'),
+      ),
+    );
+    click(getByTestId<HTMLElement>(document.body, "confirm-danger-checkbox"));
+    await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "confirm-danger-confirm"));
+
     expect(fetchMock).toHaveBeenCalledTimes(1);
     cleanupAdminHttpPage(page);
   });
