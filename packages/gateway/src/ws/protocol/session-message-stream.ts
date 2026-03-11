@@ -10,7 +10,8 @@ type SessionEventType =
   | "message.delta"
   | "message.final"
   | "reasoning.delta"
-  | "reasoning.final";
+  | "reasoning.final"
+  | "session.send.failed";
 
 type SessionStreamPart =
   | { type: "text-delta"; id: string; delta: string }
@@ -151,6 +152,25 @@ export async function broadcastSessionSendStream(input: {
           break;
       }
     }
+  } catch (error) {
+    if (assistantParts.size > 0 || reasoningParts.size > 0) {
+      await emitSessionEvent(
+        deps,
+        tenantId,
+        createSessionEvent({
+          type: "session.send.failed",
+          agentId,
+          payload: {
+            session_id: sessionKey,
+            thread_id: threadId,
+            lane: "assistant",
+            message_ids: [...assistantParts.keys()],
+            reasoning_ids: [...reasoningParts.keys()],
+          },
+        }),
+      );
+    }
+    throw error;
   } finally {
     await emitSessionEvent(
       deps,

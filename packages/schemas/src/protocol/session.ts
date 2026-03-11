@@ -301,11 +301,14 @@ const WsSessionEventLane = z.union([Lane, z.enum(["user", "assistant"])]);
 
 export const WsTypingEventPayload = z
   .object({
-    session_id: z.string().trim().min(1),
+    session_id: z.string().trim().min(1).optional(),
     lane: WsSessionEventLane.optional(),
     thread_id: z.string().trim().min(1).optional(),
   })
-  .strict();
+  .strict()
+  .refine((payload) => payload.session_id !== undefined || payload.thread_id !== undefined, {
+    message: "session_id or thread_id required",
+  });
 export type WsTypingEventPayload = z.infer<typeof WsTypingEventPayload>;
 
 export const WsTypingStartedEvent = WsEventEnvelope.extend({
@@ -389,6 +392,23 @@ export const WsReasoningFinalEvent = WsEventEnvelope.extend({
   payload: WsReasoningFinalEventPayload,
 });
 export type WsReasoningFinalEvent = z.infer<typeof WsReasoningFinalEvent>;
+
+export const WsSessionSendFailedEventPayload = z
+  .object({
+    session_id: z.string().trim().min(1),
+    lane: WsSessionEventLane.optional(),
+    message_ids: z.array(z.string().trim().min(1)),
+    reasoning_ids: z.array(z.string().trim().min(1)),
+    thread_id: z.string().trim().min(1).optional(),
+  })
+  .strict();
+export type WsSessionSendFailedEventPayload = z.infer<typeof WsSessionSendFailedEventPayload>;
+
+export const WsSessionSendFailedEvent = WsEventEnvelope.extend({
+  type: z.literal("session.send.failed"),
+  payload: WsSessionSendFailedEventPayload,
+});
+export type WsSessionSendFailedEvent = z.infer<typeof WsSessionSendFailedEvent>;
 
 export const WsFormattingFallbackEventPayload = z
   .object({

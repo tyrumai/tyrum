@@ -53,12 +53,41 @@ function handleTypingState(setState: ChatStateSetter, data: unknown, typing: boo
   const payload = readPayload(data);
   const sessionId = typeof payload?.["session_id"] === "string" ? payload["session_id"] : null;
   const threadId = typeof payload?.["thread_id"] === "string" ? payload["thread_id"] : null;
-  if (!sessionId) return;
   setState((prev) =>
     !matchesActiveSession(prev, { sessionId, threadId })
       ? prev
       : { ...prev, active: { ...prev.active, typing } },
   );
+}
+
+function handleSessionSendFailed(setState: ChatStateSetter, data: unknown): void {
+  const payload = readPayload(data);
+  const sessionId = typeof payload?.["session_id"] === "string" ? payload["session_id"] : null;
+  const threadId = typeof payload?.["thread_id"] === "string" ? payload["thread_id"] : null;
+  const messageIds = Array.isArray(payload?.["message_ids"])
+    ? payload["message_ids"].filter((value): value is string => typeof value === "string")
+    : [];
+  const reasoningIds = Array.isArray(payload?.["reasoning_ids"])
+    ? payload["reasoning_ids"].filter((value): value is string => typeof value === "string")
+    : [];
+  if (messageIds.length === 0 && reasoningIds.length === 0) return;
+  const removedIds = new Set([...messageIds, ...reasoningIds]);
+  setState((prev) => {
+    const session = prev.active.session;
+    if (!session || !matchesActiveSession(prev, { sessionId, threadId })) return prev;
+    const transcript = session.transcript.filter((item) => !removedIds.has(item.id));
+    if (transcript.length === session.transcript.length) return prev;
+    return {
+      ...prev,
+      active: {
+        ...prev.active,
+        session: {
+          ...session,
+          transcript,
+        },
+      },
+    };
+  });
 }
 
 function handleApprovalEvent(setState: ChatStateSetter, data: unknown): void {
@@ -234,5 +263,8 @@ export function registerChatStoreEventHandlers(
   });
   ws.on?.("reasoning.final" as never, (data) => {
     handleReasoningFinal(setState, data);
+  });
+  ws.on?.("session.send.failed" as never, (data) => {
+    handleSessionSendFailed(setState, data);
   });
 }
