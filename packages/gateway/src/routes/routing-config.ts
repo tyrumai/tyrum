@@ -13,6 +13,7 @@ import {
 import type { ConnectionManager } from "../ws/connection-manager.js";
 import type { OutboxDal } from "../modules/backplane/outbox-dal.js";
 import type { RoutingConfigDal } from "../modules/channels/routing-config-dal.js";
+import type { ChannelThreadDal } from "../modules/channels/thread-dal.js";
 import type { Logger } from "../modules/observability/logger.js";
 import { getClientIp } from "../modules/auth/client-ip.js";
 import type { WsBroadcastAudience } from "../ws/audience.js";
@@ -22,6 +23,7 @@ import { requireTenantId } from "../modules/auth/claims.js";
 export interface RoutingConfigRouteDeps {
   logger?: Logger;
   routingConfigDal: RoutingConfigDal;
+  channelThreadDal: ChannelThreadDal;
   ws?: {
     connectionManager: ConnectionManager;
     maxBufferedBytes?: number;
@@ -41,6 +43,13 @@ function emitEvent(deps: RoutingConfigRouteDeps, tenantId: string, evt: WsEventE
   const ws = deps.ws;
   if (!ws) return;
   broadcastWsEvent(tenantId, evt, { ...ws, logger: deps.logger }, ROUTING_CONFIG_WS_AUDIENCE);
+}
+
+function parseLimit(raw: string | undefined, fallback: number, max: number): number {
+  if (typeof raw !== "string" || !/^[0-9]+$/.test(raw.trim())) {
+    return fallback;
+  }
+  return Math.max(1, Math.min(max, Number(raw)));
 }
 
 export function createRoutingConfigRoutes(deps: RoutingConfigRouteDeps): Hono {
@@ -175,6 +184,48 @@ export function createRoutingConfigRoutes(deps: RoutingConfigRouteDeps): Hono {
         reverted_from_revision: persisted.revertedFromRevision ?? parsed.data.revision,
       },
       201,
+    );
+  });
+
+  app.get("/routing/config/revisions", async (c) => {
+    const tenantId = requireTenantId(c);
+    const limit = parseLimit(c.req.query("limit"), 20, 100);
+    const revisions = await deps.routingConfigDal.listRevisions({ tenantId, limit });
+    return c.json(
+      {
+        revisions: revisions.map((revision) => ({
+          revision: revision.revision,
+          config: revision.config,
+          created_at: revision.createdAt,
+          created_by: revision.createdBy,
+          reason: revision.reason ?? undefined,
+          reverted_from_revision: revision.revertedFromRevision ?? undefined,
+        })),
+      },
+      200,
+    );
+  });
+
+  app.get("/routing/channels/telegram/threads", async (c) => {
+    const tenantId = requireTenantId(c);
+    const limit = parseLimit(c.req.query("limit"), 200, 200);
+    const threads = await deps.channelThreadDal.listObservedThreads({
+      tenantId,
+      connectorKey: "telegram",
+      limit,
+    });
+    return c.json(
+      {
+        threads: threads.map((thread) => ({
+          channel: "telegram",
+          account_key: thread.accountKey,
+          thread_id: thread.threadId,
+          container_kind: thread.containerKind,
+          session_title: thread.sessionTitle,
+          last_active_at: thread.lastActiveAt,
+        })),
+      },
+      200,
     );
   });
 

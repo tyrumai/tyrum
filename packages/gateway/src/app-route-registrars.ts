@@ -47,6 +47,7 @@ import { createUsageRoutes } from "./routes/usage.js";
 import { createWatcherRoutes } from "./routes/watcher.js";
 import { createWorkflowRoutes } from "./routes/workflow.js";
 import { TelegramChannelQueue } from "./modules/channels/telegram.js";
+import { ChannelThreadDal } from "./modules/channels/thread-dal.js";
 import { RoutingConfigDal } from "./modules/channels/routing-config-dal.js";
 import { LifecycleHookConfigDal } from "./modules/hooks/config-dal.js";
 import { AuthProfileDal } from "./modules/models/auth-profile-dal.js";
@@ -70,6 +71,7 @@ export interface AppRouteDependencies {
   configuredModelPresetDal: ConfiguredModelPresetDal;
   executionProfileModelAssignmentDal: ExecutionProfileModelAssignmentDal;
   routingConfigDal: RoutingConfigDal;
+  channelThreadDal: ChannelThreadDal;
   wsEventDal: WsEventDal;
 }
 
@@ -98,6 +100,7 @@ export function createAppRouteDependencies(container: GatewayContainer): AppRout
     configuredModelPresetDal: new ConfiguredModelPresetDal(container.db),
     executionProfileModelAssignmentDal: new ExecutionProfileModelAssignmentDal(container.db),
     routingConfigDal: new RoutingConfigDal(container.db),
+    channelThreadDal: new ChannelThreadDal(container.db),
     wsEventDal: new WsEventDal(container.db),
   };
 }
@@ -331,6 +334,7 @@ export function registerModelsAndConfigRoutes(context: AppRouteContext): void {
     createRoutingConfigRoutes({
       logger: context.container.logger,
       routingConfigDal: context.routeDeps.routingConfigDal,
+      channelThreadDal: context.routeDeps.channelThreadDal,
       ws: createWsRouteOptions(context),
     }),
   );

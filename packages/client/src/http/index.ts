@@ -72,10 +72,12 @@ export type { AgentListResult } from "./agent-list.js";
 export type { AgentStatusResult } from "./agent-status.js";
 export type {
   RoutingConfigGetResult,
+  RoutingConfigRevisionListResult,
   RoutingConfigUpdateInput,
   RoutingConfigUpdateResult,
   RoutingConfigRevertInput,
   RoutingConfigRevertResult,
+  ObservedTelegramThreadListResult,
 } from "./routing-config.js";
 export type {
   AuditPlansListInput,

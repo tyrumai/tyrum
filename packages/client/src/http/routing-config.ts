@@ -1,21 +1,40 @@
 import {
+  ObservedTelegramThreadListResponse,
   RoutingConfigGetResponse,
+  RoutingConfigRevisionListResponse,
   RoutingConfigRevertRequest,
   RoutingConfigRevertResponse,
   RoutingConfigUpdateRequest,
   RoutingConfigUpdateResponse,
 } from "@tyrum/schemas";
-import type { z } from "zod";
+import { z } from "zod";
 import { HttpTransport, validateOrThrow, type TyrumRequestOptions } from "./shared.js";
+
+const RoutingConfigListQuery = z
+  .object({
+    limit: z.number().int().positive().optional(),
+  })
+  .strict();
 
 export type RoutingConfigGetResult = z.output<typeof RoutingConfigGetResponse>;
 export type RoutingConfigUpdateInput = z.input<typeof RoutingConfigUpdateRequest>;
 export type RoutingConfigUpdateResult = z.output<typeof RoutingConfigUpdateResponse>;
 export type RoutingConfigRevertInput = z.input<typeof RoutingConfigRevertRequest>;
 export type RoutingConfigRevertResult = z.output<typeof RoutingConfigRevertResponse>;
+export type RoutingConfigRevisionListResult = z.output<typeof RoutingConfigRevisionListResponse>;
+export type ObservedTelegramThreadListResult = z.output<typeof ObservedTelegramThreadListResponse>;
+export type RoutingConfigListQuery = z.input<typeof RoutingConfigListQuery>;
 
 export interface RoutingConfigApi {
   get(options?: TyrumRequestOptions): Promise<RoutingConfigGetResult>;
+  listRevisions(
+    query?: RoutingConfigListQuery,
+    options?: TyrumRequestOptions,
+  ): Promise<RoutingConfigRevisionListResult>;
+  listObservedTelegramThreads(
+    query?: RoutingConfigListQuery,
+    options?: TyrumRequestOptions,
+  ): Promise<ObservedTelegramThreadListResult>;
   update(
     input: RoutingConfigUpdateInput,
     options?: TyrumRequestOptions,
@@ -33,6 +52,36 @@ export function createRoutingConfigApi(transport: HttpTransport): RoutingConfigA
         method: "GET",
         path: "/routing/config",
         response: RoutingConfigGetResponse,
+        signal: options?.signal,
+      });
+    },
+
+    async listRevisions(query, options) {
+      const parsedQuery = validateOrThrow(
+        RoutingConfigListQuery,
+        query ?? {},
+        "routing config revisions query",
+      );
+      return await transport.request({
+        method: "GET",
+        path: "/routing/config/revisions",
+        query: parsedQuery,
+        response: RoutingConfigRevisionListResponse,
+        signal: options?.signal,
+      });
+    },
+
+    async listObservedTelegramThreads(query, options) {
+      const parsedQuery = validateOrThrow(
+        RoutingConfigListQuery,
+        query ?? {},
+        "routing observed telegram threads query",
+      );
+      return await transport.request({
+        method: "GET",
+        path: "/routing/channels/telegram/threads",
+        query: parsedQuery,
+        response: ObservedTelegramThreadListResponse,
         signal: options?.signal,
       });
     },
