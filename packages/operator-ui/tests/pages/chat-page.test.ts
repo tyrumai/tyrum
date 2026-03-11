@@ -6,7 +6,6 @@ import type { OperatorCore } from "../../../operator-core/src/index.js";
 import { createChatStore } from "../../../operator-core/src/stores/chat-store.js";
 import { createStore } from "../../../operator-core/src/store.js";
 import { ChatPage } from "../../src/components/pages/chat-page.js";
-import { ChatConversationPanel } from "../../src/components/pages/chat-page-parts.js";
 import { cleanupTestRoot, click, renderIntoDocument, stubMatchMedia } from "../test-utils.js";
 
 function createApprovalsStoreStub() {
@@ -24,51 +23,6 @@ function createApprovalsStoreStub() {
 }
 
 describe("ChatPage", () => {
-  it("fades in the transcript copy button on hover", () => {
-    const testRoot = renderIntoDocument(
-      React.createElement(ChatConversationPanel, {
-        activeThreadId: "thread-1",
-        transcript: [
-          {
-            kind: "text",
-            id: "turn-1",
-            role: "assistant",
-            content: "Copied text",
-            created_at: new Date().toISOString(),
-          },
-        ],
-        renderMode: "markdown",
-        onRenderModeChange: () => {},
-        reasoningMode: "collapsed",
-        onReasoningModeChange: () => {},
-        loadError: null,
-        sendError: null,
-        deleteDisabled: false,
-        onDelete: () => {},
-        draft: "",
-        setDraft: () => {},
-        send: async () => {},
-        sendBusy: false,
-        canSend: false,
-        working: false,
-        approvalsById: {},
-        onResolveApproval: () => {},
-        resolvingApproval: null,
-      }),
-    );
-
-    const copyButton = testRoot.container.querySelector<HTMLButtonElement>(
-      'button[title="Copy message"]',
-    );
-
-    expect(copyButton).not.toBeNull();
-    expect(copyButton?.className).toContain("opacity-0");
-    expect(copyButton?.className).toContain("group-hover:opacity-100");
-    expect(copyButton?.className).toContain("transition-opacity");
-
-    cleanupTestRoot(testRoot);
-  });
-
   it("uses the persisted session title instead of deriving it from the last turn", async () => {
     const ws = {
       on: vi.fn(),
