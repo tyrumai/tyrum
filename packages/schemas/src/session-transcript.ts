@@ -18,6 +18,17 @@ export const SessionTranscriptTextItem = z
   .strict();
 export type SessionTranscriptTextItem = z.infer<typeof SessionTranscriptTextItem>;
 
+export const SessionTranscriptReasoningItem = z
+  .object({
+    kind: z.literal("reasoning"),
+    id: z.string().trim().min(1),
+    content: z.string(),
+    created_at: DateTimeSchema,
+    updated_at: DateTimeSchema,
+  })
+  .strict();
+export type SessionTranscriptReasoningItem = z.infer<typeof SessionTranscriptReasoningItem>;
+
 export const SessionTranscriptToolStatus = z.enum([
   "queued",
   "running",
@@ -66,6 +77,7 @@ export type SessionTranscriptApprovalItem = z.infer<typeof SessionTranscriptAppr
 
 export const SessionTranscriptItem = z.discriminatedUnion("kind", [
   SessionTranscriptTextItem,
+  SessionTranscriptReasoningItem,
   SessionTranscriptToolItem,
   SessionTranscriptApprovalItem,
 ]);

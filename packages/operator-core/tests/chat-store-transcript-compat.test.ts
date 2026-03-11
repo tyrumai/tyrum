@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import type { SessionTranscriptItem, WsSessionGetSession } from "@tyrum/client";
+import type { WsSessionGetSession } from "@tyrum/client";
+import type { SessionTranscriptItem } from "@tyrum/schemas";
 import {
   activeToolCallIdsForSession,
   eventOccurredAt,

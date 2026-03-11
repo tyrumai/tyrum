@@ -1,17 +1,19 @@
 import type {
   SessionTranscriptApprovalItem,
-  SessionTranscriptItem,
+  SessionTranscriptTextItem,
   SessionTranscriptToolItem,
-  WsSessionGetSession,
 } from "@tyrum/client";
+import type { ChatReasoningTranscriptItem, ChatSession } from "./chat-store.types.js";
 
-function transcriptTimestamp(item: SessionTranscriptItem): string {
+type ChatTranscriptItem = ChatSession["transcript"][number];
+
+function transcriptTimestamp(item: ChatTranscriptItem): string {
   return item.kind === "text" ? item.created_at : item.updated_at;
 }
 
 export function sortTranscriptItems(
-  transcript: readonly SessionTranscriptItem[],
-): SessionTranscriptItem[] {
+  transcript: readonly ChatTranscriptItem[],
+): ChatTranscriptItem[] {
   return transcript.toSorted((left, right) => {
     const leftAt = transcriptTimestamp(left);
     const rightAt = transcriptTimestamp(right);
@@ -21,9 +23,9 @@ export function sortTranscriptItems(
 }
 
 export function mergeFetchedTranscript(
-  previous: readonly SessionTranscriptItem[] | undefined,
-  fetched: readonly SessionTranscriptItem[],
-): SessionTranscriptItem[] {
+  previous: readonly ChatTranscriptItem[] | undefined,
+  fetched: readonly ChatTranscriptItem[],
+): ChatTranscriptItem[] {
   if (!previous || previous.length === 0) return [...fetched];
   const overlay = previous.filter((item) => item.kind !== "text");
   if (overlay.length === 0) return [...fetched];
@@ -31,10 +33,7 @@ export function mergeFetchedTranscript(
   return sortTranscriptItems([...fetched, ...overlay.filter((item) => !fetchedIds.has(item.id))]);
 }
 
-export function upsertTranscriptItem(
-  session: WsSessionGetSession,
-  item: SessionTranscriptItem,
-): WsSessionGetSession {
+export function upsertTranscriptItem(session: ChatSession, item: ChatTranscriptItem): ChatSession {
   return {
     ...session,
     transcript: sortTranscriptItems(
@@ -45,7 +44,66 @@ export function upsertTranscriptItem(
   };
 }
 
-export function activeToolCallIdsForSession(session: WsSessionGetSession | null): string[] {
+export function appendTranscriptTextItem(
+  session: ChatSession,
+  input: {
+    id: string;
+    role: SessionTranscriptTextItem["role"];
+    content: string;
+    createdAt: string;
+  },
+): ChatSession {
+  return upsertTranscriptItem(session, {
+    kind: "text",
+    id: input.id,
+    role: input.role,
+    content: input.content,
+    created_at: input.createdAt,
+  });
+}
+
+export function appendTranscriptTextDelta(
+  session: ChatSession,
+  input: {
+    id: string;
+    role: SessionTranscriptTextItem["role"];
+    delta: string;
+    occurredAt: string;
+  },
+): ChatSession {
+  const existing = session.transcript.find(
+    (item): item is SessionTranscriptTextItem => item.kind === "text" && item.id === input.id,
+  );
+  return appendTranscriptTextItem(session, {
+    id: input.id,
+    role: input.role,
+    content: `${existing?.content ?? ""}${input.delta}`,
+    createdAt: existing?.created_at ?? input.occurredAt,
+  });
+}
+
+export function appendTranscriptReasoningDelta(
+  session: ChatSession,
+  input: {
+    id: string;
+    delta: string;
+    occurredAt: string;
+  },
+): ChatSession {
+  const existing = session.transcript.find(
+    (item): item is ChatReasoningTranscriptItem =>
+      item.kind === "reasoning" && item.id === input.id,
+  );
+  return upsertTranscriptItem(session, {
+    kind: "reasoning",
+    id: input.id,
+    content: `${existing?.content ?? ""}${input.delta}`,
+    created_at: existing?.created_at ?? input.occurredAt,
+    updated_at: input.occurredAt,
+  });
+}
+
+export function activeToolCallIdsForSession(session: ChatSession | null): string[] {
   if (!session) return [];
   return session.transcript
     .filter(
@@ -73,6 +131,15 @@ export function readApprovalSessionId(payload: Record<string, unknown> | null): 
   if (!context || typeof context !== "object" || Array.isArray(context)) return null;
   const sessionId = (context as Record<string, unknown>)["session_id"];
   return typeof sessionId === "string" && sessionId.trim().length > 0 ? sessionId : null;
+}
+
+export function readApprovalThreadId(payload: Record<string, unknown> | null): string | null {
+  const approval = payload?.["approval"];
+  if (!approval || typeof approval !== "object" || Array.isArray(approval)) return null;
+  const context = (approval as Record<string, unknown>)["context"];
+  if (!context || typeof context !== "object" || Array.isArray(context)) return null;
+  const threadId = (context as Record<string, unknown>)["thread_id"];
+  return typeof threadId === "string" && threadId.trim().length > 0 ? threadId : null;
 }
 
 export function toApprovalTranscriptItem(
@@ -138,5 +205,28 @@ export function toToolTranscriptItem(
       : {}),
     ...(typeof payload["channel"] === "string" ? { channel: payload["channel"] } : {}),
     ...(typeof payload["thread_id"] === "string" ? { thread_id: payload["thread_id"] } : {}),
+  };
+}
+
+export function toReasoningTranscriptItem(
+  payload: Record<string, unknown> | null,
+  occurredAt: string,
+): ChatReasoningTranscriptItem | null {
+  if (!payload) return null;
+  const reasoningId =
+    typeof payload["reasoning_id"] === "string" ? payload["reasoning_id"].trim() : "";
+  if (!reasoningId) return null;
+  const content =
+    typeof payload["content"] === "string"
+      ? payload["content"]
+      : typeof payload["delta"] === "string"
+        ? payload["delta"]
+        : "";
+  return {
+    kind: "reasoning",
+    id: reasoningId,
+    content,
+    created_at: occurredAt,
+    updated_at: occurredAt,
   };
 }

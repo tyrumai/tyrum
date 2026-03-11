@@ -24,6 +24,7 @@ export const WsSessionSendPayload = z
     thread_id: z.string().trim().min(1),
     content: z.string().trim().min(1),
     attached_node_id: z.string().trim().min(1).optional(),
+    client_message_id: z.string().trim().min(1).optional(),
   })
   .strict();
 export type WsSessionSendPayload = z.infer<typeof WsSessionSendPayload>;
@@ -349,6 +350,40 @@ export const WsMessageFinalEvent = WsEventEnvelope.extend({
   payload: WsMessageFinalEventPayload,
 });
 export type WsMessageFinalEvent = z.infer<typeof WsMessageFinalEvent>;
+
+export const WsReasoningDeltaEventPayload = z
+  .object({
+    session_id: z.string().trim().min(1),
+    lane: Lane.optional(),
+    reasoning_id: z.string().trim().min(1),
+    delta: z.string(),
+    thread_id: z.string().trim().min(1).optional(),
+  })
+  .strict();
+export type WsReasoningDeltaEventPayload = z.infer<typeof WsReasoningDeltaEventPayload>;
+
+export const WsReasoningDeltaEvent = WsEventEnvelope.extend({
+  type: z.literal("reasoning.delta"),
+  payload: WsReasoningDeltaEventPayload,
+});
+export type WsReasoningDeltaEvent = z.infer<typeof WsReasoningDeltaEvent>;
+
+export const WsReasoningFinalEventPayload = z
+  .object({
+    session_id: z.string().trim().min(1),
+    lane: Lane.optional(),
+    reasoning_id: z.string().trim().min(1),
+    content: z.string(),
+    thread_id: z.string().trim().min(1).optional(),
+  })
+  .strict();
+export type WsReasoningFinalEventPayload = z.infer<typeof WsReasoningFinalEventPayload>;
+
+export const WsReasoningFinalEvent = WsEventEnvelope.extend({
+  type: z.literal("reasoning.final"),
+  payload: WsReasoningFinalEventPayload,
+});
+export type WsReasoningFinalEvent = z.infer<typeof WsReasoningFinalEvent>;
 
 export const WsFormattingFallbackEventPayload = z
   .object({

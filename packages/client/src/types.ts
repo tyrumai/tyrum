@@ -8,6 +8,7 @@ export type {
   Approval,
   SessionTranscriptApprovalItem,
   SessionTranscriptItem,
+  SessionTranscriptReasoningItem,
   SessionTranscriptTextItem,
   SessionTranscriptTextPreview,
   SessionTranscriptTextRole,

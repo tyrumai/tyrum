@@ -29,6 +29,13 @@ export const REASONING_OPTIONS = [
   { value: "high", label: "High" },
 ] as const;
 
+export const REASONING_VISIBILITY_OPTIONS = [
+  { value: "", label: "Preset default" },
+  { value: "hidden", label: "Hidden" },
+  { value: "collapsed", label: "Collapsed" },
+  { value: "expanded", label: "Expanded" },
+] as const;
+
 export type ModelPreset = Awaited<
   ReturnType<AdminHttpClient["modelConfig"]["listPresets"]>
 >["presets"][number];
@@ -44,6 +51,7 @@ export type ModelDialogState = {
   displayName: string;
   modelRef: string;
   reasoningEffort: "" | "low" | "medium" | "high";
+  reasoningVisibility: "" | "hidden" | "collapsed" | "expanded";
 };
 
 type ModelRefSource = {
@@ -57,11 +65,22 @@ export type DeletePresetDialogState = {
   replacementAssignments: Record<string, string | null>;
 } | null;
 
+function readReasoningVisibility(
+  options: ModelPreset["options"],
+): "" | "hidden" | "collapsed" | "expanded" {
+  const value = (options as Record<string, unknown>)["reasoning_visibility"];
+  if (value === "hidden" || value === "collapsed" || value === "expanded") {
+    return value;
+  }
+  return "";
+}
+
 export function emptyDialogState(): ModelDialogState {
   return {
     displayName: "",
     modelRef: "",
     reasoningEffort: "",
+    reasoningVisibility: "",
   };
 }
 
@@ -91,6 +110,7 @@ export function normalizeDialogState(input: {
         | "low"
         | "medium"
         | "high",
+      reasoningVisibility: readReasoningVisibility(input.preset.options),
     };
   }
 
@@ -98,6 +118,7 @@ export function normalizeDialogState(input: {
     displayName: "",
     modelRef: input.availableModels[0] ? modelRefFor(input.availableModels[0]) : "",
     reasoningEffort: "",
+    reasoningVisibility: "",
   };
 }
 

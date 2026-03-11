@@ -120,6 +120,6 @@ export { PluginId, PluginContributions, PluginPermissions, PluginManifest, Plugi
 // prettier-ignore
 export { ExtensionKind, ManagedBundleFile, ManagedSkillSource, ManagedMcpSource, ManagedSkillPackage, ManagedMcpPackage, ManagedExtensionRevision, ManagedExtensionSourceDescriptor, ManagedExtensionSummary, ManagedExtensionDetail, ExtensionsListResponse, ExtensionsDetailResponse, ExtensionsMutateResponse } from "./extensions.js";
 // prettier-ignore
-export { SessionTranscriptTextRole, SessionTranscriptTextItem, SessionTranscriptToolStatus, SessionTranscriptToolItem, SessionTranscriptApprovalItem, SessionTranscriptItem, SessionTranscriptTextPreview } from "./session-transcript.js";
+export { SessionTranscriptTextRole, SessionTranscriptTextItem, SessionTranscriptReasoningItem, SessionTranscriptToolStatus, SessionTranscriptToolItem, SessionTranscriptApprovalItem, SessionTranscriptItem, SessionTranscriptTextPreview } from "./session-transcript.js";
 // prettier-ignore
 export { base32LowerNoPad, deviceIdFromSha256Digest } from "./device-id.js";

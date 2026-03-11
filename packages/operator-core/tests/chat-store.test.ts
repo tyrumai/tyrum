@@ -53,6 +53,7 @@ function sampleGetSession(sessionId: string) {
 }
 
 function createFakeWs() {
+  const handlers = new Map<string, Array<(data: unknown) => void>>();
   return {
     sessionList: vi.fn(async () => ({ sessions: [], next_cursor: null })),
     sessionGet: vi.fn(async () => ({ session: sampleGetSession("session-1") })),
@@ -70,8 +71,17 @@ function createFakeWs() {
     })),
     sessionDelete: vi.fn(async () => ({ session_id: "session-1" })),
     sessionSend: vi.fn(async () => ({ session_id: "session-1", assistant_message: "" })),
-    on: vi.fn(),
+    on: vi.fn((event: string, handler: (data: unknown) => void) => {
+      const current = handlers.get(event) ?? [];
+      current.push(handler);
+      handlers.set(event, current);
+    }),
     off: vi.fn(),
+    emit: (event: string, data: unknown) => {
+      for (const handler of handlers.get(event) ?? []) {
+        handler(data);
+      }
+    },
   };
 }
 
@@ -265,12 +275,16 @@ describe("chatStore", () => {
     await chat.openSession("session-1");
     await chat.sendMessage("hello");
 
-    expect(ws.sessionSend).toHaveBeenCalledWith({
-      agent_id: "default",
-      channel: "ui",
-      thread_id: "ui-session-1",
-      content: "hello",
-    });
+    expect(ws.sessionSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agent_id: "default",
+        channel: "ui",
+        thread_id: "ui-session-1",
+        content: "hello",
+      }),
+    );
+    const transcript = chat.getSnapshot().active.session?.transcript ?? [];
+    expect(transcript.some((item) => item.kind === "text" && item.role === "user")).toBe(true);
     expect(chat.getSnapshot().send.sending).toBe(false);
     expect(chat.getSnapshot().send.error).toBeNull();
   });
@@ -286,13 +300,15 @@ describe("chatStore", () => {
     await chat.openSession("session-1");
     await chat.sendMessage("hello", { attachedNodeId: "node-desktop-1" });
 
-    expect(ws.sessionSend).toHaveBeenCalledWith({
-      agent_id: "default",
-      channel: "ui",
-      thread_id: "ui-session-1",
-      content: "hello",
-      attached_node_id: "node-desktop-1",
-    });
+    expect(ws.sessionSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agent_id: "default",
+        channel: "ui",
+        thread_id: "ui-session-1",
+        content: "hello",
+        attached_node_id: "node-desktop-1",
+      }),
+    );
   });
 
   it("does not reopen the old session after switching agents mid-send", async () => {
@@ -322,6 +338,112 @@ describe("chatStore", () => {
     expect(chat.getSnapshot().agentId).toBe("agent-2");
     expect(chat.getSnapshot().active.sessionId).toBeNull();
     expect(ws.sessionGet).toHaveBeenCalledTimes(1);
+  });
+
+  it("streams assistant text and reasoning events into the active transcript", async () => {
+    const ws = createFakeWs();
+    ws.sessionGet.mockResolvedValue({ session: sampleGetSession("session-1") });
+    const http = createFakeHttp();
+    const chat = createChatStore(ws as any, http as any);
+
+    await chat.openSession("session-1");
+
+    ws.emit("message.delta", {
+      occurred_at: "2026-01-01T00:00:01.000Z",
+      payload: {
+        session_id: "session-1",
+        thread_id: "ui-session-1",
+        message_id: "assistant-1",
+        role: "assistant",
+        delta: "Hello",
+      },
+    });
+    ws.emit("reasoning.delta", {
+      occurred_at: "2026-01-01T00:00:00.500Z",
+      payload: {
+        session_id: "session-1",
+        thread_id: "ui-session-1",
+        reasoning_id: "reason-1",
+        delta: "Think",
+      },
+    });
+    ws.emit("message.final", {
+      occurred_at: "2026-01-01T00:00:02.000Z",
+      payload: {
+        session_id: "session-1",
+        thread_id: "ui-session-1",
+        message_id: "assistant-1",
+        role: "assistant",
+        content: "Hello there",
+      },
+    });
+
+    expect(chat.getSnapshot().active.session?.transcript).toEqual([
+      {
+        kind: "text",
+        id: "session-1-user-1",
+        role: "user",
+        content: "hello",
+        created_at: "2026-01-01T00:00:00.000Z",
+      },
+      {
+        kind: "reasoning",
+        id: "reason-1",
+        content: "Think",
+        created_at: "2026-01-01T00:00:00.500Z",
+        updated_at: "2026-01-01T00:00:00.500Z",
+      },
+      {
+        kind: "text",
+        id: "assistant-1",
+        role: "assistant",
+        content: "Hello there",
+        created_at: "2026-01-01T00:00:02.000Z",
+      },
+    ]);
+  });
+
+  it("matches approval and tool lifecycle events by thread id", async () => {
+    const ws = createFakeWs();
+    ws.sessionGet.mockResolvedValue({ session: sampleGetSession("session-1") });
+    const http = createFakeHttp();
+    const chat = createChatStore(ws as any, http as any);
+
+    await chat.openSession("session-1");
+
+    ws.emit("tool.lifecycle", {
+      occurred_at: "2026-01-01T00:00:02.000Z",
+      payload: {
+        session_id: "internal-session-id",
+        thread_id: "ui-session-1",
+        tool_call_id: "tool-1",
+        tool_id: "shell.exec",
+        status: "running",
+      },
+    });
+    ws.emit("approval.requested", {
+      occurred_at: "2026-01-01T00:00:03.000Z",
+      payload: {
+        approval: {
+          approval_id: "approval-1",
+          status: "pending",
+          prompt: "Allow tool?",
+          context: {
+            session_id: "internal-session-id",
+            thread_id: "ui-session-1",
+          },
+        },
+      },
+    });
+
+    expect(chat.getSnapshot().active.activeToolCallIds).toEqual(["tool-1"]);
+    expect(
+      chat
+        .getSnapshot()
+        .active.session?.transcript.some(
+          (item) => item.kind === "approval" && item.id === "approval-1",
+        ),
+    ).toBe(true);
   });
 
   it("does not open a new session after switching agents mid-newChat", async () => {

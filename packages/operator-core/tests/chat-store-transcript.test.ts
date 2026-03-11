@@ -1,12 +1,17 @@
 import { describe, expect, it, vi } from "vitest";
-import type { SessionTranscriptItem, WsSessionGetSession } from "@tyrum/client";
+import type { WsSessionGetSession } from "@tyrum/client";
+import type { SessionTranscriptItem } from "@tyrum/schemas";
 import {
   activeToolCallIdsForSession,
+  appendTranscriptReasoningDelta,
+  appendTranscriptTextDelta,
   eventOccurredAt,
   mergeFetchedTranscript,
+  readApprovalThreadId,
   readApprovalSessionId,
   sortTranscriptItems,
   toApprovalTranscriptItem,
+  toReasoningTranscriptItem,
   toToolTranscriptItem,
   upsertTranscriptItem,
 } from "../src/stores/chat-store.transcript.js";
@@ -139,6 +144,15 @@ describe("chat-store transcript helpers", () => {
     ).toBe("session-123");
     expect(readApprovalSessionId({ approval: { context: {} } })).toBeNull();
     expect(readApprovalSessionId(null)).toBeNull();
+    expect(
+      readApprovalThreadId({
+        approval: {
+          context: {
+            thread_id: "thread-123",
+          },
+        },
+      }),
+    ).toBe("thread-123");
   });
 
   it("builds approval transcript items from valid payloads", () => {
@@ -229,5 +243,61 @@ describe("chat-store transcript helpers", () => {
         "2026-03-09T00:00:03.000Z",
       ),
     ).toBeNull();
+  });
+
+  it("accumulates streaming text and reasoning deltas", () => {
+    const session = sessionWithTranscript([]);
+    const withText = appendTranscriptTextDelta(session, {
+      id: "msg-1",
+      role: "assistant",
+      delta: "Hello",
+      occurredAt: "2026-03-09T00:00:03.000Z",
+    });
+    const withMoreText = appendTranscriptTextDelta(withText, {
+      id: "msg-1",
+      role: "assistant",
+      delta: " world",
+      occurredAt: "2026-03-09T00:00:04.000Z",
+    });
+    const withReasoning = appendTranscriptReasoningDelta(withMoreText, {
+      id: "reason-1",
+      delta: "Plan",
+      occurredAt: "2026-03-09T00:00:02.000Z",
+    });
+
+    expect(withReasoning.transcript).toEqual([
+      {
+        kind: "reasoning",
+        id: "reason-1",
+        content: "Plan",
+        created_at: "2026-03-09T00:00:02.000Z",
+        updated_at: "2026-03-09T00:00:02.000Z",
+      },
+      {
+        kind: "text",
+        id: "msg-1",
+        role: "assistant",
+        content: "Hello world",
+        created_at: "2026-03-09T00:00:03.000Z",
+      },
+    ]);
+  });
+
+  it("builds reasoning transcript items from valid payloads", () => {
+    expect(
+      toReasoningTranscriptItem(
+        {
+          reasoning_id: "reason-1",
+          content: "Need to compare the inputs",
+        },
+        "2026-03-09T00:00:05.000Z",
+      ),
+    ).toEqual({
+      kind: "reasoning",
+      id: "reason-1",
+      content: "Need to compare the inputs",
+      created_at: "2026-03-09T00:00:05.000Z",
+      updated_at: "2026-03-09T00:00:05.000Z",
+    });
   });
 });

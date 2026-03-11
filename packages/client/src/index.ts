@@ -84,6 +84,7 @@ export type {
   ExecutionAttempt,
   ExecutionRun,
   ExecutionStep,
+  SessionTranscriptReasoningItem,
   SessionTranscriptApprovalItem,
   SessionTranscriptItem,
   SessionTranscriptTextItem,

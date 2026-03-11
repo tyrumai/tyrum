@@ -19,6 +19,7 @@ export type ConfiguredExecutionProfileId = z.infer<typeof ConfiguredExecutionPro
 export const ConfiguredModelPresetOptionSet = z
   .object({
     reasoning_effort: z.enum(["low", "medium", "high"]).optional(),
+    reasoning_visibility: z.enum(["hidden", "collapsed", "expanded"]).optional(),
   })
   .strict();
 export type ConfiguredModelPresetOptionSet = z.infer<typeof ConfiguredModelPresetOptionSet>;
