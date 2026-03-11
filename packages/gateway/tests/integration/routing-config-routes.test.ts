@@ -44,6 +44,7 @@ describe("routing config routes", () => {
     app.route(
       "/",
       createRoutingConfigRoutes({
+        db,
         routingConfigDal: new RoutingConfigDal(db),
         channelThreadDal: new ChannelThreadDal(db),
         ...(send
@@ -290,6 +291,80 @@ describe("routing config routes", () => {
           last_active_at: "2026-03-02T00:00:00.000Z",
         },
       ],
+    });
+  });
+
+  it("reads telegram connection config without returning secret values", async () => {
+    const app = createAuthedApp();
+
+    const update = await app.request("/routing/channels/telegram/config", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        bot_token: "telegram-bot-token",
+        webhook_secret: "telegram-webhook-secret",
+        allowed_user_ids: ["123", "456"],
+        pipeline_enabled: false,
+        reason: "configure telegram",
+      }),
+    });
+
+    expect(update.status).toBe(200);
+    await expect(update.json()).resolves.toMatchObject({
+      config: {
+        bot_token_configured: true,
+        webhook_secret_configured: true,
+        allowed_user_ids: ["123", "456"],
+        pipeline_enabled: false,
+      },
+    });
+
+    const fetchRes = await app.request("/routing/channels/telegram/config", { method: "GET" });
+    expect(fetchRes.status).toBe(200);
+    const fetched = (await fetchRes.json()) as {
+      config: Record<string, unknown>;
+    };
+    expect(fetched.config).toMatchObject({
+      bot_token_configured: true,
+      webhook_secret_configured: true,
+      allowed_user_ids: ["123", "456"],
+      pipeline_enabled: false,
+    });
+    expect(fetched.config).not.toHaveProperty("bot_token");
+    expect(fetched.config).not.toHaveProperty("webhook_secret");
+  });
+
+  it("allows clearing stored telegram secrets while preserving other config", async () => {
+    const app = createAuthedApp();
+
+    const seed = await app.request("/routing/channels/telegram/config", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        bot_token: "telegram-bot-token",
+        webhook_secret: "telegram-webhook-secret",
+        allowed_user_ids: ["123"],
+      }),
+    });
+    expect(seed.status).toBe(200);
+
+    const clear = await app.request("/routing/channels/telegram/config", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        clear_bot_token: true,
+        clear_webhook_secret: true,
+        allowed_user_ids: ["123"],
+      }),
+    });
+    expect(clear.status).toBe(200);
+    await expect(clear.json()).resolves.toMatchObject({
+      config: {
+        bot_token_configured: false,
+        webhook_secret_configured: false,
+        allowed_user_ids: ["123"],
+        pipeline_enabled: true,
+      },
     });
   });
 });

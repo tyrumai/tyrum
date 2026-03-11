@@ -23,6 +23,7 @@ import { safeDetail } from "../utils/safe-detail.js";
 export interface IngressDeps {
   telegramBot?: TelegramBot;
   telegramWebhookSecret?: string;
+  telegramAllowedUserIds?: string[];
   agents?: AgentRegistry;
   telegramQueue?: TelegramChannelQueue;
   routingConfigDal?: RoutingConfigDal;
@@ -69,6 +70,18 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
         return c.json({ error: "normalization_error", message: err.message }, 400);
       }
       throw err;
+    }
+
+    const allowedUserIds = deps.telegramAllowedUserIds ?? [];
+    if (allowedUserIds.length > 0) {
+      const senderId = normalized.message.sender?.id?.trim();
+      if (!senderId || !allowedUserIds.includes(senderId)) {
+        deps.logger?.info("ingress.telegram.sender_blocked", {
+          sender_id: senderId ?? "unknown",
+          reason: "telegram_user_not_allowlisted",
+        });
+        return c.json({ ok: true, ignored: true, reason: "sender_not_allowlisted" }, 200);
+      }
     }
 
     // If no agent runtime, return normalized message (legacy behavior)

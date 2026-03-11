@@ -4,6 +4,8 @@ import {
   RoutingConfigRevisionListResponse,
   RoutingConfigRevertRequest,
   RoutingConfigRevertResponse,
+  TelegramConnectionConfigResponse,
+  TelegramConnectionConfigUpdateRequest,
   RoutingConfigUpdateRequest,
   RoutingConfigUpdateResponse,
 } from "@tyrum/schemas";
@@ -23,6 +25,10 @@ export type RoutingConfigRevertInput = z.input<typeof RoutingConfigRevertRequest
 export type RoutingConfigRevertResult = z.output<typeof RoutingConfigRevertResponse>;
 export type RoutingConfigRevisionListResult = z.output<typeof RoutingConfigRevisionListResponse>;
 export type ObservedTelegramThreadListResult = z.output<typeof ObservedTelegramThreadListResponse>;
+export type TelegramConnectionConfigResult = z.output<typeof TelegramConnectionConfigResponse>;
+export type TelegramConnectionConfigUpdateInput = z.input<
+  typeof TelegramConnectionConfigUpdateRequest
+>;
 export type RoutingConfigListQuery = z.input<typeof RoutingConfigListQuery>;
 
 export interface RoutingConfigApi {
@@ -35,10 +41,15 @@ export interface RoutingConfigApi {
     query?: RoutingConfigListQuery,
     options?: TyrumRequestOptions,
   ): Promise<ObservedTelegramThreadListResult>;
+  getTelegramConfig(options?: TyrumRequestOptions): Promise<TelegramConnectionConfigResult>;
   update(
     input: RoutingConfigUpdateInput,
     options?: TyrumRequestOptions,
   ): Promise<RoutingConfigUpdateResult>;
+  updateTelegramConfig(
+    input: TelegramConnectionConfigUpdateInput,
+    options?: TyrumRequestOptions,
+  ): Promise<TelegramConnectionConfigResult>;
   revert(
     input: RoutingConfigRevertInput,
     options?: TyrumRequestOptions,
@@ -86,6 +97,15 @@ export function createRoutingConfigApi(transport: HttpTransport): RoutingConfigA
       });
     },
 
+    async getTelegramConfig(options) {
+      return await transport.request({
+        method: "GET",
+        path: "/routing/channels/telegram/config",
+        response: TelegramConnectionConfigResponse,
+        signal: options?.signal,
+      });
+    },
+
     async update(input, options) {
       const body = validateOrThrow(
         RoutingConfigUpdateRequest,
@@ -98,6 +118,22 @@ export function createRoutingConfigApi(transport: HttpTransport): RoutingConfigA
         body,
         response: RoutingConfigUpdateResponse,
         expectedStatus: 201,
+        signal: options?.signal,
+      });
+    },
+
+    async updateTelegramConfig(input, options) {
+      const body = validateOrThrow(
+        TelegramConnectionConfigUpdateRequest,
+        input,
+        "telegram connection config update request",
+      );
+      return await transport.request({
+        method: "PUT",
+        path: "/routing/channels/telegram/config",
+        body,
+        response: TelegramConnectionConfigResponse,
+        expectedStatus: 200,
         signal: options?.signal,
       });
     },

@@ -332,6 +332,7 @@ export function registerModelsAndConfigRoutes(context: AppRouteContext): void {
   context.app.route(
     "/",
     createRoutingConfigRoutes({
+      db: context.container.db,
       logger: context.container.logger,
       routingConfigDal: context.routeDeps.routingConfigDal,
       channelThreadDal: context.routeDeps.channelThreadDal,
@@ -401,6 +402,7 @@ export function registerAgentsAndWorkspaceRoutes(context: AppRouteContext): void
     createIngressRoutes({
       telegramBot: context.container.telegramBot,
       telegramWebhookSecret: context.container.deploymentConfig.channels.telegramWebhookSecret,
+      telegramAllowedUserIds: context.container.deploymentConfig.channels.telegramAllowedUserIds,
       telegramQueue:
         context.channelPipelineEnabled && context.container.telegramBot && context.opts.agents
           ? new TelegramChannelQueue(context.container.db, {

@@ -78,6 +78,8 @@ export type {
   RoutingConfigRevertInput,
   RoutingConfigRevertResult,
   ObservedTelegramThreadListResult,
+  TelegramConnectionConfigResult,
+  TelegramConnectionConfigUpdateInput,
 } from "./routing-config.js";
 export type {
   AuditPlansListInput,

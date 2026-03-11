@@ -1,6 +1,18 @@
 import { z } from "zod";
 import { DateTimeSchema } from "./common.js";
 
+function canonicalizeTelegramAllowedUserIds(userIds: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+  for (const userId of userIds) {
+    const trimmed = userId.trim();
+    if (!trimmed || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    normalized.push(trimmed);
+  }
+  return normalized;
+}
+
 export const DeploymentConfigServer = z
   .object({
     trustedProxies: z.string().trim().min(1).optional(),
@@ -105,6 +117,15 @@ export const DeploymentConfigChannels = z
   .object({
     telegramBotToken: z.string().trim().min(1).optional(),
     telegramWebhookSecret: z.string().trim().min(1).optional(),
+    telegramAllowedUserIds: z
+      .array(
+        z
+          .string()
+          .trim()
+          .regex(/^[0-9]+$/),
+      )
+      .default([])
+      .overwrite(canonicalizeTelegramAllowedUserIds),
     pipelineEnabled: z.boolean().default(true),
     typingAutomationEnabled: z.boolean().default(false),
     typingMode: z.enum(["never", "message", "thinking", "instant"]).default("never"),
