@@ -9,19 +9,24 @@ vi.mock("@capacitor/core", () => ({
   },
 }));
 
-const requestPermissions = vi.fn(async () => ({ location: "granted" }));
-const getCurrentPosition = vi.fn(async () => ({
-  coords: {
-    latitude: 52.3676,
-    longitude: 4.9041,
-    accuracy: 12,
-    altitude: null,
-    altitudeAccuracy: null,
-    heading: null,
-    speed: null,
-  },
-  timestamp: Date.parse("2026-03-11T12:00:00.000Z"),
-}));
+const { cameraGetPhoto, cameraRequestPermissions, getCurrentPosition, requestPermissions } =
+  vi.hoisted(() => ({
+    cameraGetPhoto: vi.fn(),
+    cameraRequestPermissions: vi.fn(),
+    requestPermissions: vi.fn(async () => ({ location: "granted" })),
+    getCurrentPosition: vi.fn(async () => ({
+      coords: {
+        latitude: 52.3676,
+        longitude: 4.9041,
+        accuracy: 12,
+        altitude: null,
+        altitudeAccuracy: null,
+        heading: null,
+        speed: null,
+      },
+      timestamp: Date.parse("2026-03-11T12:00:00.000Z"),
+    })),
+  }));
 
 vi.mock("@capacitor/geolocation", () => ({
   Geolocation: {
@@ -32,8 +37,8 @@ vi.mock("@capacitor/geolocation", () => ({
 
 vi.mock("@capacitor/camera", () => ({
   Camera: {
-    requestPermissions: vi.fn(),
-    getPhoto: vi.fn(),
+    requestPermissions: cameraRequestPermissions,
+    getPhoto: cameraGetPhoto,
   },
   CameraDirection: { Front: "FRONT", Rear: "REAR" },
   CameraResultType: { Base64: "base64" },
@@ -74,5 +79,44 @@ describe("createMobileCapabilityProvider", () => {
       },
       timestamp: "2026-03-11T12:00:00.000Z",
     });
+  });
+
+  it("omits image dimensions when they cannot be measured", async () => {
+    const previousImage = globalThis.Image;
+    // Simulate environments where Image is unavailable inside the webview.
+    Object.defineProperty(globalThis, "Image", {
+      configurable: true,
+      value: undefined,
+    });
+    cameraGetPhoto.mockResolvedValue({
+      base64String: "ZmFrZS1pbWFnZQ==",
+      format: "jpeg",
+    });
+
+    try {
+      const { createMobileCapabilityProvider } =
+        await import("../src/mobile-capability-provider.js");
+      const provider = createMobileCapabilityProvider("ios");
+
+      const result = await provider.execute({
+        type: "IOS",
+        args: { op: "camera.capture_photo", format: "jpeg" },
+      });
+
+      expect(result.success).toBe(true);
+      expect(cameraRequestPermissions).toHaveBeenCalledWith({ permissions: ["camera"] });
+      expect(IosActionResult.parse(result.evidence)).toMatchObject({
+        op: "camera.capture_photo",
+        bytesBase64: "ZmFrZS1pbWFnZQ==",
+        mime: "image/jpeg",
+      });
+      expect(result.evidence).not.toHaveProperty("width");
+      expect(result.evidence).not.toHaveProperty("height");
+    } finally {
+      Object.defineProperty(globalThis, "Image", {
+        configurable: true,
+        value: previousImage,
+      });
+    }
   });
 });

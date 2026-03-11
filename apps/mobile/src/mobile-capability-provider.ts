@@ -49,9 +49,9 @@ function mapLocationCoords(coords: NativeLocationCoords) {
 async function measureBase64Image(
   base64: string,
   mime: string,
-): Promise<{ width: number; height: number }> {
+): Promise<{ width?: number; height?: number }> {
   if (typeof globalThis.Image !== "function") {
-    return { width: 0, height: 0 };
+    return {};
   }
 
   return await new Promise((resolve) => {
@@ -66,7 +66,7 @@ async function measureBase64Image(
       },
       { once: true },
     );
-    image.addEventListener("error", () => resolve({ width: 0, height: 0 }), { once: true });
+    image.addEventListener("error", () => resolve({}), { once: true });
     image.src = `data:${mime};base64,${base64}`;
   });
 }
@@ -114,8 +114,8 @@ async function capturePhoto(
   return {
     bytesBase64,
     mime,
-    width: dimensions.width,
-    height: dimensions.height,
+    ...(dimensions.width ? { width: dimensions.width } : {}),
+    ...(dimensions.height ? { height: dimensions.height } : {}),
     timestamp: new Date().toISOString(),
   };
 }
