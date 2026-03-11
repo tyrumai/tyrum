@@ -46,14 +46,6 @@ function resolveViewport(rootNode: ElementRef<typeof ScrollArea> | null): HTMLEl
   return rootNode.querySelector<HTMLElement>("[data-scroll-area-viewport]");
 }
 
-function useRetainedUiStateStore(): RetainedUiStateStore {
-  const value = useContext(RetainedUiStateContext);
-  if (!value) {
-    throw new Error("Reconnect UI state hooks must be used inside RetainedUiStateProvider.");
-  }
-  return value;
-}
-
 export function RetainedUiStateProvider({
   scopeKey,
   children,
@@ -99,12 +91,13 @@ export function useReconnectTabState<T extends string>(
   key: string,
   defaultValue: T,
 ): [T, Dispatch<SetStateAction<T>>] {
-  const store = useRetainedUiStateStore();
-  const [value, setValue] = useState<T>(() => (store.getTab(key) as T | null) ?? defaultValue);
+  const store = useContext(RetainedUiStateContext);
+  const [value, setValue] = useState<T>(() => (store?.getTab(key) as T | null) ?? defaultValue);
 
   useEffect(() => {
+    if (!store) return;
     setValue((store.getTab(key) as T | null) ?? defaultValue);
-  }, [defaultValue, key, store, store.scopeKey]);
+  }, [defaultValue, key, store, store?.scopeKey]);
 
   const setRetainedValue = useCallback<Dispatch<SetStateAction<T>>>(
     (nextValue) => {
@@ -113,7 +106,7 @@ export function useReconnectTabState<T extends string>(
           typeof nextValue === "function"
             ? (nextValue as (previousValue: T) => T)(previousValue)
             : nextValue;
-        store.setTab(key, resolved);
+        store?.setTab(key, resolved);
         return resolved;
       });
     },
@@ -124,10 +117,11 @@ export function useReconnectTabState<T extends string>(
 }
 
 export function useReconnectScrollArea(key: string): RefCallback<ElementRef<typeof ScrollArea>> {
-  const store = useRetainedUiStateStore();
+  const store = useContext(RetainedUiStateContext);
   const [rootNode, setRootNode] = useState<ElementRef<typeof ScrollArea> | null>(null);
 
   useLayoutEffect(() => {
+    if (!store) return;
     const viewport = resolveViewport(rootNode);
     if (!viewport) return;
 
@@ -148,7 +142,7 @@ export function useReconnectScrollArea(key: string): RefCallback<ElementRef<type
       cancelFrame(frameId);
       viewport.removeEventListener("scroll", handleScroll);
     };
-  }, [key, rootNode, store, store.scopeKey]);
+  }, [key, rootNode, store, store?.scopeKey]);
 
   return useCallback((node: ElementRef<typeof ScrollArea> | null) => {
     setRootNode(node);
