@@ -373,6 +373,51 @@ describe("ConfigurePage (HTTP) policy + config", () => {
     cleanupAdminHttpPage(page);
   });
 
+  it("re-prompts for Elevated Mode if policy save is confirmed after elevated access expires", async () => {
+    const { core } = createAdminHttpTestCore();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const getResponse = policyPageGetResponse(input, init);
+      if (getResponse) return getResponse;
+      throw new Error(`Unexpected mutation request to ${requestUrl(input)}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const page = renderAdminHttpConfigurePage(core);
+    await switchHttpTab(page.container, "admin-http-tab-policy");
+    await flush();
+    await flush();
+
+    setSelectValue(
+      getByTestId<HTMLSelectElement>(page.container, "policy-config-tools-default"),
+      "allow",
+    );
+    click(getByTestId<HTMLButtonElement>(page.container, "policy-config-save"));
+
+    act(() => {
+      core.elevatedModeStore.exit();
+    });
+    await flush();
+
+    click(getByTestId<HTMLElement>(document.body, "confirm-danger-checkbox"));
+    await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "confirm-danger-confirm"));
+    await flush();
+
+    expect(
+      fetchMock.mock.calls.filter(([input, init]) =>
+        matchMutation(
+          input as RequestInfo | URL,
+          init as RequestInit | undefined,
+          "http://example.test/config/policy/deployment",
+          "PUT",
+        ),
+      ),
+    ).toHaveLength(0);
+    expect(document.body.textContent).toContain("Enter Elevated Mode");
+    expect(document.body.textContent).toContain("Enter Elevated Mode to continue.");
+
+    cleanupAdminHttpPage(page);
+  });
+
   it("requires confirmation before creating policy overrides", async () => {
     const { core, policyCreateOverride } = createAdminHttpTestCore();
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -457,6 +502,64 @@ describe("ConfigurePage (HTTP) policy + config", () => {
         ),
       ),
     ).toHaveLength(1);
+    cleanupAdminHttpPage(page);
+  });
+
+  it("re-prompts for Elevated Mode if override creation is confirmed after elevated access expires", async () => {
+    const { core, policyCreateOverride } = createAdminHttpTestCore();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const getResponse = policyPageGetResponse(input, init);
+      if (getResponse) return getResponse;
+      throw new Error(`Unexpected mutation request to ${requestUrl(input)}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const page = renderAdminHttpConfigurePage(core);
+    await switchHttpTab(page.container, "admin-http-tab-policy");
+    await flush();
+    await flush();
+
+    setSelectValue(
+      getByTestId<HTMLSelectElement>(page.container, "admin-policy-override-agent"),
+      "00000000-0000-4000-8000-000000000002",
+    );
+    setSelectValue(
+      getByTestId<HTMLSelectElement>(page.container, "admin-policy-override-tool"),
+      "read",
+    );
+    await act(async () => {
+      setNativeValue(
+        getByTestId<HTMLInputElement>(page.container, "admin-policy-override-pattern"),
+        "docs/*",
+      );
+      await Promise.resolve();
+    });
+
+    click(getByTestId<HTMLButtonElement>(page.container, "admin-policy-override-create"));
+
+    act(() => {
+      core.elevatedModeStore.exit();
+    });
+    await flush();
+
+    click(getByTestId<HTMLElement>(document.body, "confirm-danger-checkbox"));
+    await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "confirm-danger-confirm"));
+    await flush();
+
+    expect(policyCreateOverride).toHaveBeenCalledTimes(0);
+    expect(
+      fetchMock.mock.calls.filter(([input, init]) =>
+        matchMutation(
+          input as RequestInfo | URL,
+          init as RequestInit | undefined,
+          "http://example.test/policy/overrides",
+          "POST",
+        ),
+      ),
+    ).toHaveLength(0);
+    expect(document.body.textContent).toContain("Enter Elevated Mode");
+    expect(document.body.textContent).toContain("Enter Elevated Mode to continue.");
+
     cleanupAdminHttpPage(page);
   });
 });

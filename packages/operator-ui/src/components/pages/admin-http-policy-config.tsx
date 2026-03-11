@@ -43,13 +43,17 @@ export function PolicyConfigSection(props: PolicyConfigSectionProps): React.Reac
   const [revertReason, setRevertReason] = React.useState("");
   const [revertTarget, setRevertTarget] = React.useState<PolicyConfigRevision | null>(null);
 
-  React.useEffect(() => {
-    if (!props.effective) return;
-    const normalizedBundle = normalizePolicyBundle(props.effective.bundle);
+  const applyBundleToEditor = React.useCallback((bundle: PolicyBundleT): void => {
+    const normalizedBundle = normalizePolicyBundle(bundle);
     setFormState(policyBundleToFormState(normalizedBundle));
     setInitialBundle(normalizedBundle);
+  }, []);
+
+  React.useEffect(() => {
+    if (!props.effective) return;
+    applyBundleToEditor(props.effective.bundle);
     setSaveReason("");
-  }, [props.effective]);
+  }, [applyBundleToEditor, props.effective]);
 
   if (props.loadError && !props.effective) {
     return (
@@ -240,6 +244,7 @@ export function PolicyConfigSection(props: PolicyConfigSectionProps): React.Reac
         isLoading={props.saveBusy}
         onConfirm={async () => {
           await props.onSave(nextBundle, saveReason);
+          applyBundleToEditor(nextBundle);
           setSaveReason("");
         }}
       >

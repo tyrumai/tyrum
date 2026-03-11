@@ -110,6 +110,12 @@ export function AdminHttpPolicyCard({
   const [revokeBusy, setRevokeBusy] = React.useState(false);
   const [revokeError, setRevokeError] = React.useState<unknown>(null);
 
+  const requireMutationAccess = React.useCallback((): void => {
+    if (canMutate) return;
+    requestEnter();
+    throw new Error("Enter Elevated Mode to continue.");
+  }, [canMutate, requestEnter]);
+
   const loadAll = React.useCallback(async (): Promise<void> => {
     setLoadBusy(true);
     setLoadError(null);
@@ -173,6 +179,7 @@ export function AdminHttpPolicyCard({
           setSaveBusy(true);
           setSaveError(null);
           try {
+            requireMutationAccess();
             if (!http.policyConfig) throw new Error("Deployment policy config API unavailable.");
             await http.policyConfig.updateDeployment({
               bundle,
@@ -190,6 +197,7 @@ export function AdminHttpPolicyCard({
           setRevertBusy(true);
           setRevertError(null);
           try {
+            requireMutationAccess();
             if (!http.policyConfig) throw new Error("Deployment policy config API unavailable.");
             await http.policyConfig.revertDeployment({
               revision,
@@ -223,6 +231,7 @@ export function AdminHttpPolicyCard({
           setCreateBusy(true);
           setCreateError(null);
           try {
+            requireMutationAccess();
             await http.policy.createOverride(input);
             await loadAll();
           } catch (error) {
@@ -236,6 +245,7 @@ export function AdminHttpPolicyCard({
           setRevokeBusy(true);
           setRevokeError(null);
           try {
+            requireMutationAccess();
             await http.policy.revokeOverride(input);
             await loadAll();
           } catch (error) {

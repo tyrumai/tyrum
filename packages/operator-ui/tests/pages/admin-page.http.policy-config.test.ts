@@ -101,4 +101,83 @@ describe("PolicyConfigSection", () => {
 
     cleanupAdminHttpPage(page);
   });
+
+  it("resets the dirty state after a successful save even before refreshed props arrive", async () => {
+    const onSave = vi.fn(async () => undefined);
+    const page = renderIntoDocument(
+      React.createElement(PolicyConfigSection, {
+        effective: {
+          sha256: "policy-sha-1",
+          bundle: {
+            v: 1,
+            tools: {
+              default: "require_approval",
+              allow: ["read"],
+              require_approval: [],
+              deny: [],
+            },
+            network_egress: {
+              default: "require_approval",
+              allow: [],
+              require_approval: [],
+              deny: [],
+            },
+            secrets: {
+              default: "require_approval",
+              allow: [],
+              require_approval: [],
+              deny: [],
+            },
+            connectors: {
+              default: "require_approval",
+              allow: ["telegram:*"],
+              require_approval: [],
+              deny: [],
+            },
+            artifacts: { default: "allow" },
+            provenance: { untrusted_shell_requires_approval: true },
+          },
+          sources: { deployment: "default", agent: null, playbook: null },
+        },
+        currentRevision: null,
+        revisions: [],
+        loadBusy: false,
+        loadError: null,
+        saveBusy: false,
+        saveError: null,
+        revertBusy: false,
+        revertError: null,
+        canMutate: true,
+        requestEnter: () => {},
+        onRefresh: () => {},
+        onSave,
+        onRevert: async () => undefined,
+      }),
+    );
+
+    await flush();
+
+    setSelectValue(
+      getByTestId<HTMLSelectElement>(page.container, "policy-config-tools-default"),
+      "allow",
+    );
+
+    expect(page.container.textContent).toContain("Unsaved changes ready");
+    expect(getByTestId<HTMLButtonElement>(page.container, "policy-config-save").disabled).toBe(
+      false,
+    );
+
+    click(getByTestId<HTMLButtonElement>(page.container, "policy-config-save"));
+    click(getByTestId<HTMLElement>(document.body, "confirm-danger-checkbox"));
+    await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "confirm-danger-confirm"));
+    await flush();
+
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(page.container.textContent).toContain("No unsaved changes");
+    expect(getByTestId<HTMLButtonElement>(page.container, "policy-config-save").disabled).toBe(
+      true,
+    );
+
+    cleanupAdminHttpPage(page);
+  });
 });
