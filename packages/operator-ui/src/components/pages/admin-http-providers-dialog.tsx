@@ -1,4 +1,5 @@
 import * as React from "react";
+import { cn } from "../../lib/cn.js";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
@@ -12,6 +13,8 @@ import {
   DialogTitle,
 } from "../ui/dialog.js";
 import { Input } from "../ui/input.js";
+import { Label } from "../ui/label.js";
+import { ScrollArea } from "../ui/scroll-area.js";
 import { Select } from "../ui/select.js";
 import type { AdminHttpClient } from "./admin-http-shared.js";
 import {
@@ -24,9 +27,21 @@ import {
   validateProviderForm,
   type ConfiguredProviderAccount,
   type ConfiguredProviderGroup,
+  type ProviderMethod,
   type ProviderFormState,
   type ProviderRegistryEntry,
 } from "./admin-http-providers.shared.js";
+
+const PROVIDER_PICKER_VISIBLE_COUNT = 5;
+const PROVIDER_PICKER_ROW_REM = 4.25;
+
+function getBooleanConfigDefaults(method: ProviderMethod | undefined): Record<string, boolean> {
+  return Object.fromEntries(
+    (method?.fields ?? [])
+      .filter((field) => field.kind === "config" && field.input === "boolean")
+      .map((field) => [field.key, false]),
+  );
+}
 
 export function ProviderAccountDialog({
   open,
@@ -53,6 +68,8 @@ export function ProviderAccountDialog({
   const [providerFilter, setProviderFilter] = React.useState("");
   const [saving, setSaving] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
+  const [autoSelectReady, setAutoSelectReady] = React.useState(false);
+  const providerFilterId = React.useId();
 
   const supportedProviders = React.useMemo(
     () => registry.filter((provider) => provider.supported && provider.methods.length > 0),
@@ -71,26 +88,29 @@ export function ProviderAccountDialog({
   const filteredSupportedProviders = React.useMemo(() => {
     const query = providerFilter.trim().toLowerCase();
     if (!query) return supportedProviders;
-    const filtered = supportedProviders.filter((provider) => {
+    return supportedProviders.filter((provider) => {
       const name = provider.name.toLowerCase();
       const key = provider.provider_key.toLowerCase();
       return name.includes(query) || key.includes(query);
     });
-    if (
-      selectedProvider &&
-      !filtered.some((provider) => provider.provider_key === selectedProvider.provider_key)
-    ) {
-      return [selectedProvider, ...filtered];
-    }
-    return filtered;
-  }, [providerFilter, selectedProvider, supportedProviders]);
+  }, [providerFilter, supportedProviders]);
   const selectedMethod =
     selectedProvider?.methods.find((method) => method.method_key === state.methodKey) ??
     selectedProvider?.methods[0];
   const mode = account ? "edit" : "create";
+  const providerPickerHeightRem =
+    Math.min(Math.max(filteredSupportedProviders.length, 1), PROVIDER_PICKER_VISIBLE_COUNT) *
+    PROVIDER_PICKER_ROW_REM;
+  const selectedProviderConfiguredCount = state.providerKey
+    ? (configuredCounts.get(state.providerKey) ?? 0)
+    : 0;
 
   React.useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setAutoSelectReady(false);
+      return;
+    }
+    setAutoSelectReady(false);
     setProviderFilter("");
     setErrorMessage(null);
     setSaving(false);
@@ -102,6 +122,78 @@ export function ProviderAccountDialog({
       }),
     );
   }, [account, initialProviderKey, open, registry]);
+
+  React.useEffect(() => {
+    if (!open) return;
+    setAutoSelectReady(true);
+  }, [account, initialProviderKey, open, registry]);
+
+  const applyProviderSelection = React.useCallback(
+    (providerKey: string) => {
+      const nextProvider = supportedProviders.find(
+        (provider) => provider.provider_key === providerKey,
+      );
+      setState((current) => {
+        const currentProviderName = supportedProviders.find(
+          (provider) => provider.provider_key === current.providerKey,
+        )?.name;
+        const nextMethod = nextProvider?.methods[0];
+        return {
+          providerKey: nextProvider?.provider_key ?? "",
+          methodKey: nextMethod?.method_key ?? "",
+          displayName: syncDisplayNameOnProviderChange({
+            currentDisplayName: current.displayName,
+            currentProviderName,
+            nextProviderName: nextProvider?.name,
+          }),
+          configValues: getBooleanConfigDefaults(nextMethod),
+          secretValues: {},
+        };
+      });
+    },
+    [supportedProviders],
+  );
+
+  React.useEffect(() => {
+    if (!open || account || !autoSelectReady) return;
+    if (
+      filteredSupportedProviders.some((provider) => provider.provider_key === state.providerKey)
+    ) {
+      return;
+    }
+    const firstVisibleProvider = filteredSupportedProviders[0];
+    if (firstVisibleProvider) {
+      applyProviderSelection(firstVisibleProvider.provider_key);
+      return;
+    }
+    setState((current) =>
+      current.providerKey || current.methodKey || Object.keys(current.secretValues).length > 0
+        ? (() => {
+            const currentProviderName = supportedProviders.find(
+              (provider) => provider.provider_key === current.providerKey,
+            )?.name;
+            const shouldClearDisplayName =
+              !current.displayName.trim() || current.displayName === (currentProviderName ?? "");
+            return {
+              ...current,
+              providerKey: "",
+              methodKey: "",
+              displayName: shouldClearDisplayName ? "" : current.displayName,
+              configValues: {},
+              secretValues: {},
+            };
+          })()
+        : current,
+    );
+  }, [
+    account,
+    applyProviderSelection,
+    autoSelectReady,
+    filteredSupportedProviders,
+    open,
+    state.providerKey,
+    supportedProviders,
+  ]);
 
   const formError = validateProviderForm(state, selectedMethod, mode);
 
@@ -154,57 +246,124 @@ export function ProviderAccountDialog({
 
         <div className="grid gap-4">
           {!account ? (
-            <Input
-              label="Filter providers"
-              value={providerFilter}
-              helperText="Search by provider name or key."
-              onChange={(event) => {
-                setProviderFilter(event.currentTarget.value);
-              }}
-            />
+            <div className="grid gap-1.5">
+              <Label htmlFor={providerFilterId} required>
+                Provider
+              </Label>
+              <div className="overflow-hidden rounded-lg border border-border bg-bg-card/40">
+                <div className="border-b border-border/70 p-2">
+                  <input
+                    id={providerFilterId}
+                    type="text"
+                    value={providerFilter}
+                    data-testid="providers-filter-input"
+                    aria-label="Filter providers"
+                    placeholder="Filter providers by name or key"
+                    onChange={(event) => {
+                      setProviderFilter(event.currentTarget.value);
+                    }}
+                    className={cn(
+                      "box-border flex h-8 w-full rounded-md border border-border bg-bg px-2.5 py-1 text-sm text-fg transition-colors duration-150",
+                      "placeholder:text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-0",
+                    )}
+                  />
+                </div>
+                <ScrollArea
+                  className="w-full"
+                  data-testid="providers-provider-picker"
+                  style={{ height: `${providerPickerHeightRem}rem` }}
+                >
+                  <div className="grid gap-1 p-2" role="radiogroup" aria-label="Provider">
+                    {filteredSupportedProviders.length > 0 ? (
+                      filteredSupportedProviders.map((provider) => {
+                        const active = provider.provider_key === state.providerKey;
+                        const configuredCount = configuredCounts.get(provider.provider_key) ?? 0;
+                        const accountLabel =
+                          configuredCount === 1
+                            ? "1 account configured"
+                            : `${configuredCount} accounts configured`;
+
+                        return (
+                          <button
+                            key={provider.provider_key}
+                            type="button"
+                            role="radio"
+                            aria-checked={active}
+                            data-testid={`providers-provider-option-${provider.provider_key}`}
+                            className={cn(
+                              "flex w-full items-start justify-between gap-3 rounded-md border px-3 py-2.5 text-left transition-colors",
+                              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-0",
+                              active
+                                ? "border-primary bg-bg text-fg"
+                                : "border-border bg-bg hover:bg-bg-subtle",
+                            )}
+                            onClick={() => {
+                              applyProviderSelection(provider.provider_key);
+                            }}
+                          >
+                            <div className="grid gap-0.5">
+                              <span className="text-sm font-medium text-fg">{provider.name}</span>
+                              <span className="text-xs text-fg-muted">{provider.provider_key}</span>
+                            </div>
+                            <div className="grid justify-items-end gap-1 text-xs text-fg-muted">
+                              {configuredCount > 0 ? (
+                                <span
+                                  className={cn(
+                                    "rounded-full border px-2 py-0.5",
+                                    active
+                                      ? "border-primary/50 bg-primary/10 text-fg"
+                                      : "border-border bg-bg-card/60",
+                                  )}
+                                >
+                                  {accountLabel}
+                                </span>
+                              ) : (
+                                <span>Not configured</span>
+                              )}
+                              {provider.methods.length > 1 ? (
+                                <span>{provider.methods.length} auth methods</span>
+                              ) : null}
+                            </div>
+                          </button>
+                        );
+                      })
+                    ) : (
+                      <div className="rounded-md border border-dashed border-border px-3 py-4 text-sm text-fg-muted">
+                        No providers match this filter.
+                      </div>
+                    )}
+                  </div>
+                </ScrollArea>
+              </div>
+              <p className="text-sm text-fg-muted">
+                Type to narrow the list. Up to five providers stay visible before scrolling.
+              </p>
+              {selectedProviderConfiguredCount > 0 ? (
+                <p className="text-sm text-fg-muted">
+                  This provider is already configured. Saving will add another account.
+                </p>
+              ) : null}
+            </div>
           ) : null}
 
-          <Select
-            label="Provider"
-            value={state.providerKey}
-            disabled={Boolean(account)}
-            onChange={(event) => {
-              const nextProvider = supportedProviders.find(
-                (provider) => provider.provider_key === event.currentTarget.value,
-              );
-              setState((current) => {
-                const currentProviderName = supportedProviders.find(
-                  (provider) => provider.provider_key === current.providerKey,
-                )?.name;
-                return {
-                  providerKey: nextProvider?.provider_key ?? "",
-                  methodKey: nextProvider?.methods[0]?.method_key ?? "",
-                  displayName: syncDisplayNameOnProviderChange({
-                    currentDisplayName: current.displayName,
-                    currentProviderName,
-                    nextProviderName: nextProvider?.name,
-                  }),
-                  configValues: Object.fromEntries(
-                    (nextProvider?.methods[0]?.fields ?? [])
-                      .filter((field) => field.kind === "config" && field.input === "boolean")
-                      .map((field) => [field.key, false]),
-                  ),
-                  secretValues: {},
-                };
-              });
-            }}
-            helperText={
-              state.providerKey && configuredCounts.get(state.providerKey)
-                ? "This provider is already configured. Saving will add another account."
-                : undefined
-            }
-          >
-            {filteredSupportedProviders.map((provider) => (
-              <option key={provider.provider_key} value={provider.provider_key}>
-                {provider.name}
-              </option>
-            ))}
-          </Select>
+          {account ? (
+            <Select
+              label="Provider"
+              value={state.providerKey}
+              disabled={true}
+              helperText={
+                state.providerKey && configuredCounts.get(state.providerKey)
+                  ? "This provider is already configured. Saving will add another account."
+                  : undefined
+              }
+            >
+              {supportedProviders.map((provider) => (
+                <option key={provider.provider_key} value={provider.provider_key}>
+                  {provider.name}
+                </option>
+              ))}
+            </Select>
+          ) : null}
 
           {selectedProvider ? (
             <Select
@@ -218,11 +377,7 @@ export function ProviderAccountDialog({
                 setState((current) => ({
                   ...current,
                   methodKey: nextMethod?.method_key ?? "",
-                  configValues: Object.fromEntries(
-                    (nextMethod?.fields ?? [])
-                      .filter((field) => field.kind === "config" && field.input === "boolean")
-                      .map((field) => [field.key, false]),
-                  ),
+                  configValues: getBooleanConfigDefaults(nextMethod),
                   secretValues: {},
                 }));
               }}

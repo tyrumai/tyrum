@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 
 // Skip all tests if playwright browsers aren't installed
 let canRunPlaywright = false;
@@ -78,5 +78,30 @@ describe("RealPlaywrightBackend construction", () => {
     const mod = await import("../src/main/providers/backends/real-playwright-backend.js");
     const backend = new mod.RealPlaywrightBackend({ headless: true });
     expect(backend).toBeDefined();
+  });
+
+  it("closes the browser without waiting on a stuck page close", async () => {
+    const mod = await import("../src/main/providers/backends/real-playwright-backend.js");
+    const backend = new mod.RealPlaywrightBackend({ headless: true });
+    const browserClose = vi.fn(async () => undefined);
+    const pageClose = vi.fn(() => new Promise<void>(() => {}));
+
+    (
+      backend as unknown as {
+        browser: { close: () => Promise<void> };
+        page: { close: () => Promise<void> };
+      }
+    ).browser = { close: browserClose };
+    (
+      backend as unknown as {
+        browser: { close: () => Promise<void> };
+        page: { close: () => Promise<void> };
+      }
+    ).page = { close: pageClose };
+
+    await backend.close();
+
+    expect(browserClose).toHaveBeenCalledTimes(1);
+    expect(pageClose).not.toHaveBeenCalled();
   });
 });

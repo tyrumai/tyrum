@@ -15,12 +15,13 @@ import {
   getByTestId,
   getLabeledInput,
   getLabeledSelect,
+  getProviderOption,
   getToggleButton,
   openAddAccountDialog,
+  openAddExistingProviderAccountDialog,
   openEditAccountDialog,
   renderAdminHttpProvidersPanel,
   setSelectValue,
-  setSelectValueWithoutAct,
 } from "./admin-http-providers.test-support.js";
 
 afterEach(() => {
@@ -28,16 +29,41 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+function createRegistryProvider(providerKey: string, name: string): Record<string, unknown> {
+  return {
+    provider_key: providerKey,
+    name,
+    doc: null,
+    supported: true,
+    methods: [
+      {
+        method_key: "api_key",
+        label: "API key",
+        type: "api_key",
+        fields: [
+          {
+            key: "api_key",
+            label: "API key",
+            description: null,
+            kind: "secret",
+            input: "password",
+            required: true,
+          },
+        ],
+      },
+    ],
+  };
+}
+
 describe("AdminHttpProvidersPanel", () => {
   it("updates the default display name when the selected provider changes", async () => {
     const { core } = createAdminHttpProvidersTestCore();
     const panel = await openAddAccountDialog(core);
 
-    const providerSelect = getLabeledSelect(panel.dialog, "Provider");
     const displayNameInput = getLabeledInput(panel.dialog, "Display name");
 
     expect(displayNameInput.value).toBe("OpenAI");
-    setSelectValue(providerSelect, "anthropic");
+    click(getProviderOption(panel.dialog, "anthropic"));
     expect(displayNameInput.value).toBe("Anthropic");
 
     cleanupPanel(panel);
@@ -47,13 +73,12 @@ describe("AdminHttpProvidersPanel", () => {
     const { core } = createAdminHttpProvidersTestCore();
     const panel = await openAddAccountDialog(core);
 
-    const providerSelect = getLabeledSelect(panel.dialog, "Provider");
     const displayNameInput = getLabeledInput(panel.dialog, "Display name");
 
     act(() => {
       setNativeValue(displayNameInput, "Team account");
     });
-    setSelectValue(providerSelect, "anthropic");
+    click(getProviderOption(panel.dialog, "anthropic"));
 
     expect(displayNameInput.value).toBe("Team account");
     cleanupPanel(panel);
@@ -63,17 +88,128 @@ describe("AdminHttpProvidersPanel", () => {
     const { core } = createAdminHttpProvidersTestCore();
     const panel = await openAddAccountDialog(core);
 
-    const providerSelect = getLabeledSelect(panel.dialog, "Provider");
+    const openaiOption = getProviderOption(panel.dialog, "openai");
+    const anthropicOption = getProviderOption(panel.dialog, "anthropic");
     const displayNameInput = getLabeledInput(panel.dialog, "Display name");
 
     expect(displayNameInput.value).toBe("OpenAI");
     act(() => {
-      setSelectValueWithoutAct(providerSelect, "anthropic");
-      setSelectValueWithoutAct(providerSelect, "openai");
+      anthropicOption.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      openaiOption.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    expect(providerSelect.value).toBe("openai");
+    expect(openaiOption.getAttribute("aria-checked")).toBe("true");
     expect(displayNameInput.value).toBe("OpenAI");
+    cleanupPanel(panel);
+  });
+
+  it("filters the provider list, auto-selects the first match, and caps the visible list to five rows", async () => {
+    const { core } = createAdminHttpProvidersTestCore();
+    (
+      core.http.providerConfig.listRegistry as unknown as {
+        mockResolvedValue: (value: unknown) => void;
+      }
+    ).mockResolvedValue({
+      status: "ok",
+      providers: [
+        createRegistryProvider("openai", "OpenAI"),
+        createRegistryProvider("anthropic", "Anthropic"),
+        createRegistryProvider("azure-openai", "Azure OpenAI"),
+        createRegistryProvider("groq", "Groq"),
+        createRegistryProvider("mistral", "Mistral"),
+        createRegistryProvider("cohere", "Cohere"),
+      ],
+    });
+
+    const panel = await openAddAccountDialog(core);
+    const filterInput = getByTestId<HTMLInputElement>(panel.dialog, "providers-filter-input");
+    const providerPicker = getByTestId<HTMLElement>(panel.dialog, "providers-provider-picker");
+    const displayNameInput = getLabeledInput(panel.dialog, "Display name");
+
+    expect(providerPicker.style.height).toBe("21.25rem");
+    expect(displayNameInput.value).toBe("OpenAI");
+
+    act(() => {
+      setNativeValue(filterInput, "coh");
+    });
+
+    expect(
+      panel.dialog.querySelector("[data-testid='providers-provider-option-openai']"),
+    ).toBeNull();
+    expect(getProviderOption(panel.dialog, "cohere").getAttribute("aria-checked")).toBe("true");
+    expect(displayNameInput.value).toBe("Cohere");
+
+    cleanupPanel(panel);
+  });
+
+  it("keeps the requested provider selected when opening add account from a provider group", async () => {
+    const { core } = createAdminHttpProvidersTestCore({
+      providers: [
+        createProviderGroup("openai", { accounts: [createProviderAccount("openai")] }),
+        createProviderGroup("anthropic", { accounts: [createProviderAccount("anthropic")] }),
+      ],
+    });
+    const panel = await openAddExistingProviderAccountDialog(core, "anthropic");
+
+    const anthropicOption = getProviderOption(panel.dialog, "anthropic");
+    const openaiOption = getProviderOption(panel.dialog, "openai");
+    const displayNameInput = getLabeledInput(panel.dialog, "Display name");
+
+    expect(anthropicOption.getAttribute("aria-checked")).toBe("true");
+    expect(openaiOption.getAttribute("aria-checked")).toBe("false");
+    expect(displayNameInput.value).toBe("Anthropic");
+
+    cleanupPanel(panel);
+  });
+
+  it("resets auto-filled display names when filter recovery reselects a provider", async () => {
+    const { core } = createAdminHttpProvidersTestCore();
+    const panel = await openAddAccountDialog(core);
+
+    const filterInput = getByTestId<HTMLInputElement>(panel.dialog, "providers-filter-input");
+    const displayNameInput = getLabeledInput(panel.dialog, "Display name");
+
+    click(getProviderOption(panel.dialog, "anthropic"));
+    expect(displayNameInput.value).toBe("Anthropic");
+
+    act(() => {
+      setNativeValue(filterInput, "zzz");
+    });
+
+    expect(displayNameInput.value).toBe("");
+
+    act(() => {
+      setNativeValue(filterInput, "");
+    });
+
+    expect(getProviderOption(panel.dialog, "openai").getAttribute("aria-checked")).toBe("true");
+    expect(displayNameInput.value).toBe("OpenAI");
+
+    cleanupPanel(panel);
+  });
+
+  it("preserves custom display names across empty filter recovery", async () => {
+    const { core } = createAdminHttpProvidersTestCore();
+    const panel = await openAddAccountDialog(core);
+
+    const filterInput = getByTestId<HTMLInputElement>(panel.dialog, "providers-filter-input");
+    const displayNameInput = getLabeledInput(panel.dialog, "Display name");
+
+    click(getProviderOption(panel.dialog, "anthropic"));
+    act(() => {
+      setNativeValue(displayNameInput, "Team account");
+      setNativeValue(filterInput, "zzz");
+    });
+
+    expect(displayNameInput.value).toBe("Team account");
+
+    act(() => {
+      setNativeValue(filterInput, "");
+    });
+
+    expect(getProviderOption(panel.dialog, "openai").getAttribute("aria-checked")).toBe("true");
+    expect(displayNameInput.value).toBe("Team account");
+
     cleanupPanel(panel);
   });
 

@@ -193,6 +193,7 @@ function ProviderGroupCard({
               <Button
                 type="button"
                 variant="secondary"
+                data-testid={`providers-group-add-account-${group.provider_key}`}
                 onClick={() => {
                   onAddAccount(group.provider_key);
                 }}
