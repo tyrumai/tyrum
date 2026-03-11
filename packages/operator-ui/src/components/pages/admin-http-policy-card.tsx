@@ -84,6 +84,13 @@ function normalizeToolOptions(
     .toSorted((left, right) => left.toolId.localeCompare(right.toolId));
 }
 
+function loadOptionalAuxiliary<T>(loader: (() => Promise<T>) | undefined, fallback: T): Promise<T> {
+  if (!loader) return Promise.resolve(fallback);
+  return Promise.resolve()
+    .then(() => loader())
+    .catch(() => fallback);
+}
+
 export function AdminHttpPolicyCard({
   core,
   canMutate,
@@ -139,8 +146,8 @@ export function AdminHttpPolicyCard({
         }),
         http.policyConfig.listDeploymentRevisions(),
         http.policy.listOverrides({ limit: 500 }),
-        http.agents?.list?.() ?? Promise.resolve({ agents: [] }),
-        http.toolRegistry?.list?.() ?? Promise.resolve({ status: "ok" as const, tools: [] }),
+        loadOptionalAuxiliary(http.agents?.list, { agents: [] }),
+        loadOptionalAuxiliary(http.toolRegistry?.list, { status: "ok" as const, tools: [] }),
       ]);
       setEffective(effectiveResult.effective);
       setCurrentRevision(revisionResult);

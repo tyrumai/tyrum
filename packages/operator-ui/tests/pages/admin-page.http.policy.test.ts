@@ -160,6 +160,40 @@ describe("ConfigurePage (HTTP) policy + config", () => {
     cleanupAdminHttpPage(page);
   });
 
+  it("keeps the policy tab available when auxiliary agent and tool registry calls fail", async () => {
+    const { core } = createAdminHttpTestCore();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input);
+      const method = init?.method ?? "GET";
+      if (method !== "GET") {
+        throw new Error(`Unexpected ${method} request to ${url}`);
+      }
+      if (url === "http://example.test/agents") {
+        throw new Error("agents unavailable");
+      }
+      if (url === "http://example.test/config/tools") {
+        throw new Error("tool registry unavailable");
+      }
+      const response = policyPageGetResponse(input, init);
+      if (response) return response;
+      throw new Error(`Unexpected request to ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const page = renderAdminHttpConfigurePage(core);
+    await switchHttpTab(page.container, "admin-http-tab-policy");
+    await flush();
+    await flush();
+
+    expect(page.container.textContent).not.toContain("Policy tab failed to load");
+    expect(getByTestId<HTMLElement>(page.container, "policy-config-save-card")).not.toBeNull();
+    expect(
+      getByTestId<HTMLButtonElement>(page.container, "admin-policy-override-create").disabled,
+    ).toBe(true);
+
+    cleanupAdminHttpPage(page);
+  });
+
   it("retries policy loading when elevated mode enables the admin client after mount", async () => {
     const { core } = createAdminHttpTestCore();
     core.elevatedModeStore.exit();
