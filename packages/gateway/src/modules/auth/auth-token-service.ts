@@ -6,17 +6,12 @@ import {
   type AuthTokenRole,
   type AuthTokenRow,
 } from "./auth-token-dal.js";
+import { normalizeScopes } from "./scopes.js";
 import type { SqlDb } from "../../statestore/types.js";
 
 const TOKEN_PREFIX = "tyrum-token";
 const TOKEN_VERSION = "v1";
 const MAX_AUTH_TOKEN_DISPLAY_NAME_LENGTH = 120;
-
-function normalizeScopes(scopes: string[] | undefined): string[] {
-  if (!Array.isArray(scopes)) return [];
-  const normalized = scopes.map((scope) => scope.trim()).filter((scope) => scope.length > 0);
-  return [...new Set(normalized)];
-}
 
 function normalizeDisplayName(
   displayName: string | undefined,

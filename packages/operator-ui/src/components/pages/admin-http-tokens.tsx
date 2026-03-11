@@ -20,6 +20,7 @@ import {
   formStateFromToken,
   matchesQuery,
   type DialogMode,
+  type TokenFormState,
   type TokenRole,
   type TokenStatusFilter,
   sortVisibleTokens,
@@ -39,6 +40,10 @@ export function AuthTokensCard({ core }: { core: OperatorCore }): React.ReactEle
   const [roleFilter, setRoleFilter] = React.useState<"all" | TokenRole>("all");
   const [dialogMode, setDialogMode] = React.useState<DialogMode | null>(null);
   const [editingToken, setEditingToken] = React.useState<AuthTokenListEntry | null>(null);
+  const [initialEditExpirationState, setInitialEditExpirationState] = React.useState<Pick<
+    TokenFormState,
+    "expirationPreset" | "customExpiresAt"
+  > | null>(null);
   const [formState, setFormState] = React.useState(defaultFormState());
   const [dialogErrorMessage, setDialogErrorMessage] = React.useState<string | null>(null);
   const [dialogBusy, setDialogBusy] = React.useState(false);
@@ -87,15 +92,21 @@ export function AuthTokensCard({ core }: { core: OperatorCore }): React.ReactEle
   const openCreateDialog = () => {
     setDialogMode("create");
     setEditingToken(null);
+    setInitialEditExpirationState(null);
     setFormState(defaultFormState());
     setDialogErrorMessage(null);
     setIssuedToken(null);
   };
 
   const openEditDialog = (token: AuthTokenListEntry) => {
+    const initialFormState = formStateFromToken(token);
     setDialogMode("edit");
     setEditingToken(token);
-    setFormState(formStateFromToken(token));
+    setInitialEditExpirationState({
+      expirationPreset: initialFormState.expirationPreset,
+      customExpiresAt: initialFormState.customExpiresAt,
+    });
+    setFormState(initialFormState);
     setDialogErrorMessage(null);
     setIssuedToken(null);
   };
@@ -104,6 +115,7 @@ export function AuthTokensCard({ core }: { core: OperatorCore }): React.ReactEle
     if (open) return;
     setDialogMode(null);
     setEditingToken(null);
+    setInitialEditExpirationState(null);
     setDialogErrorMessage(null);
     setDialogBusy(false);
   };
@@ -129,7 +141,11 @@ export function AuthTokensCard({ core }: { core: OperatorCore }): React.ReactEle
       } else if (dialogMode === "edit" && editingToken) {
         await http.authTokens.update(
           editingToken.token_id,
-          buildUpdateInput(formState, { initialExpiresAt: editingToken.expires_at }),
+          buildUpdateInput(formState, {
+            initialExpiresAt: editingToken.expires_at,
+            initialExpirationPreset: initialEditExpirationState?.expirationPreset,
+            initialCustomExpiresAt: initialEditExpirationState?.customExpiresAt,
+          }),
         );
       }
       closeDialog(false);

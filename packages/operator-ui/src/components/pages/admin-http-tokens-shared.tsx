@@ -287,17 +287,29 @@ export function buildIssueInput(state: TokenFormState) {
 
 function isExpirationUnchanged(
   state: TokenFormState,
-  initialExpiresAt: string | null | undefined,
+  options?: {
+    initialExpiresAt?: string | null;
+    initialExpirationPreset?: ExpirationPresetKey;
+    initialCustomExpiresAt?: string;
+  },
 ): boolean {
+  const initialExpirationPreset =
+    options?.initialExpirationPreset ?? matchingExpirationPreset(options?.initialExpiresAt ?? null);
+  const initialCustomExpiresAt =
+    options?.initialCustomExpiresAt ?? toDateTimeLocalValue(options?.initialExpiresAt);
   return (
-    state.expirationPreset === matchingExpirationPreset(initialExpiresAt ?? null) &&
-    state.customExpiresAt === toDateTimeLocalValue(initialExpiresAt)
+    state.expirationPreset === initialExpirationPreset &&
+    state.customExpiresAt === initialCustomExpiresAt
   );
 }
 
 export function buildUpdateInput(
   state: TokenFormState,
-  options?: { initialExpiresAt?: string | null },
+  options?: {
+    initialExpiresAt?: string | null;
+    initialExpirationPreset?: ExpirationPresetKey;
+    initialCustomExpiresAt?: string;
+  },
 ): AuthTokenUpdateInput {
   const input: AuthTokenUpdateInput = {
     display_name: state.displayName.trim(),
@@ -305,7 +317,7 @@ export function buildUpdateInput(
     device_id: state.deviceId.trim() ? state.deviceId.trim() : null,
     scopes: state.role === "admin" ? [] : uniqueScopes(state.selectedScopes),
   };
-  if (isExpirationUnchanged(state, options?.initialExpiresAt)) return input;
+  if (isExpirationUnchanged(state, options)) return input;
   if (state.expirationPreset === "custom") {
     input.expires_at = parseDateTimeLocalValue(state.customExpiresAt) ?? null;
   } else if (state.expirationPreset === "never") {
