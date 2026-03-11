@@ -153,6 +153,7 @@ export function createHarnessConfigureHttpFixtures() {
     policyConfig: {
       getDeployment: async () => ({
         revision: 1,
+        agent_key: null,
         bundle: {
           v: 1,
           tools: {
@@ -172,6 +173,7 @@ export function createHarnessConfigureHttpFixtures() {
       listDeploymentRevisions: async () => ({ revisions: [] }),
       updateDeployment: async (input: { bundle: unknown; reason?: string }) => ({
         revision: 1,
+        agent_key: null,
         bundle: input.bundle,
         created_at: "2026-03-08T00:00:00.000Z",
         created_by: { kind: "tenant.token", token_id: "token-1" },
@@ -180,6 +182,7 @@ export function createHarnessConfigureHttpFixtures() {
       }),
       revertDeployment: async (input: { revision: number; reason?: string }) => ({
         revision: input.revision + 1,
+        agent_key: null,
         bundle: {
           v: 1,
           tools: {

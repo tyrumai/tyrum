@@ -107,6 +107,7 @@ export function createPanelsCore(activeAdminMode: boolean): { core: OperatorCore
       policyConfig: {
         getDeployment: vi.fn(async () => ({
           revision: 1,
+          agent_key: null,
           bundle: {
             v: 1,
             tools: { default: "require_approval", allow: ["read"], require_approval: [], deny: [] },
@@ -120,6 +121,7 @@ export function createPanelsCore(activeAdminMode: boolean): { core: OperatorCore
           revisions: [
             {
               revision: 1,
+              agent_key: null,
               created_at: "2026-03-01T00:00:00.000Z",
               created_by: { kind: "tenant.token", token_id: "token-1" },
               reason: "seed",
@@ -127,8 +129,32 @@ export function createPanelsCore(activeAdminMode: boolean): { core: OperatorCore
             },
           ],
         })),
-        updateDeployment: vi.fn(async () => ({ revision: 2 })),
-        revertDeployment: vi.fn(async () => ({ revision: 3 })),
+        updateDeployment: vi.fn(async (input: { bundle: unknown; reason?: string }) => ({
+          revision: 2,
+          agent_key: null,
+          bundle: input.bundle,
+          created_at: "2026-03-01T00:00:00.000Z",
+          created_by: { kind: "tenant.token", token_id: "token-1" },
+          reason: input.reason,
+          reverted_from_revision: null,
+        })),
+        revertDeployment: vi.fn(async (input: { revision: number; reason?: string }) => ({
+          revision: 3,
+          agent_key: null,
+          bundle: {
+            v: 1,
+            tools: {
+              default: "require_approval",
+              allow: ["read"],
+              require_approval: [],
+              deny: [],
+            },
+          },
+          created_at: "2026-03-01T00:00:00.000Z",
+          created_by: { kind: "tenant.token", token_id: "token-1" },
+          reason: input.reason,
+          reverted_from_revision: input.revision,
+        })),
       },
       agents: {
         list: vi.fn(async () => ({

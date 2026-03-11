@@ -191,6 +191,7 @@ export function createAdminHttpTestCore(): {
           async (input: { bundle: unknown; reason?: string }) =>
             ({
               revision: 1,
+              agent_key: null,
               bundle: input.bundle,
               created_at: TEST_TIMESTAMP,
               created_by: { kind: "tenant.token", token_id: "token-1" },
@@ -202,6 +203,7 @@ export function createAdminHttpTestCore(): {
           async (input: { revision: number; reason?: string }) =>
             ({
               revision: input.revision + 1,
+              agent_key: null,
               bundle: {
                 v: 1,
                 tools: {
