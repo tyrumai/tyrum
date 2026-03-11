@@ -3,6 +3,7 @@ import type { ManagedAgentDetail } from "@tyrum/schemas";
 import * as React from "react";
 import { useApiAction } from "../../hooks/use-api-action.js";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
+import type { ModelPreset } from "./admin-http-models.shared.js";
 import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent } from "../ui/card.js";
@@ -23,6 +24,45 @@ type AgentEditorProps = {
   onCancelCreate: () => void;
 };
 
+function modelRefForPreset(preset: ModelPreset): string {
+  return `${preset.provider_key}/${preset.model_id}`;
+}
+
+function sortJsonValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(sortJsonValue);
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .toSorted(([left], [right]) => left.localeCompare(right))
+        .map(([key, entryValue]) => [key, sortJsonValue(entryValue)]),
+    );
+  }
+  return value;
+}
+
+function stableRecordStringify(value: Record<string, unknown>): string {
+  return JSON.stringify(sortJsonValue(value));
+}
+
+function resolveSelectedPrimaryPreset(input: {
+  presets: ModelPreset[];
+  modelRef: string;
+  options: Record<string, unknown>;
+}): ModelPreset | null {
+  const trimmedModel = input.modelRef.trim();
+  if (!trimmedModel) return null;
+  const normalizedOptions = stableRecordStringify(input.options);
+  const matches = input.presets.filter((preset) => {
+    return (
+      modelRefForPreset(preset) === trimmedModel &&
+      stableRecordStringify(preset.options) === normalizedOptions
+    );
+  });
+  return matches.length === 1 ? (matches[0] ?? null) : null;
+}
+
 export function AgentsPageEditor({
   core,
   mode,
@@ -34,6 +74,9 @@ export function AgentsPageEditor({
   const [form, setForm] = React.useState<AgentEditorFormState>(createBlankForm());
   const [loading, setLoading] = React.useState(mode === "edit");
   const [loadError, setLoadError] = React.useState<string | null>(null);
+  const [modelPresets, setModelPresets] = React.useState<ModelPreset[]>([]);
+  const [modelPresetsLoading, setModelPresetsLoading] = React.useState(true);
+  const [modelPresetsError, setModelPresetsError] = React.useState<string | null>(null);
   const [preservedModelOptions, setPreservedModelOptions] = React.useState<Record<string, unknown>>(
     {},
   );
@@ -43,38 +86,70 @@ export function AgentsPageEditor({
     let cancelled = false;
 
     async function load(): Promise<void> {
+      setModelPresetsLoading(true);
+      setModelPresetsError(null);
+
       if (mode === "create") {
         setForm(createBlankForm());
         setPreservedModelOptions({});
         setLoadError(null);
         setLoading(false);
+        try {
+          const presetList = await core.http.modelConfig.listPresets();
+          if (cancelled) return;
+          setModelPresets(presetList.presets);
+        } catch (error) {
+          if (cancelled) return;
+          setModelPresets([]);
+          setModelPresetsError(formatErrorMessage(error));
+        } finally {
+          if (!cancelled) {
+            setModelPresetsLoading(false);
+          }
+        }
         return;
       }
       if (!agentKey) {
         setLoadError("Select an agent to edit.");
         setLoading(false);
+        setModelPresets([]);
+        setModelPresetsLoading(false);
         return;
       }
 
       setLoading(true);
       setLoadError(null);
       try {
-        const detail = await core.http.agents.get(agentKey);
+        const [detailResult, presetResult] = await Promise.allSettled([
+          core.http.agents.get(agentKey),
+          core.http.modelConfig.listPresets(),
+        ]);
         if (cancelled) return;
-        setForm(
-          snapshotToForm({
-            agentKey: detail.agent_key,
-            config: detail.config,
-            identity: detail.identity,
-          }),
-        );
-        setPreservedModelOptions(detail.config.model.options ?? {});
-      } catch (error) {
-        if (cancelled) return;
-        setLoadError(formatErrorMessage(error));
+
+        if (detailResult.status === "fulfilled") {
+          setForm(
+            snapshotToForm({
+              agentKey: detailResult.value.agent_key,
+              config: detailResult.value.config,
+              identity: detailResult.value.identity,
+            }),
+          );
+          setPreservedModelOptions(detailResult.value.config.model.options ?? {});
+        } else {
+          setLoadError(formatErrorMessage(detailResult.reason));
+        }
+
+        if (presetResult.status === "fulfilled") {
+          setModelPresets(presetResult.value.presets);
+          setModelPresetsError(null);
+        } else {
+          setModelPresets([]);
+          setModelPresetsError(formatErrorMessage(presetResult.reason));
+        }
       } finally {
         if (!cancelled) {
           setLoading(false);
+          setModelPresetsLoading(false);
         }
       }
     }
@@ -83,12 +158,30 @@ export function AgentsPageEditor({
     return () => {
       cancelled = true;
     };
-  }, [agentKey, core.http.agents, createNonce, mode]);
+  }, [agentKey, core.http.agents, core.http.modelConfig, createNonce, mode]);
+
+  const selectedPrimaryPreset = React.useMemo(
+    () =>
+      resolveSelectedPrimaryPreset({
+        presets: modelPresets,
+        modelRef: form.model,
+        options: preservedModelOptions,
+      }),
+    [form.model, modelPresets, preservedModelOptions],
+  );
 
   const unsupportedModelOptions =
-    Object.keys(preservedModelOptions).length > 0
+    !selectedPrimaryPreset && Object.keys(preservedModelOptions).length > 0
       ? JSON.stringify(preservedModelOptions, null, 2)
       : null;
+  const legacyPrimarySelection = React.useMemo(() => {
+    const trimmedModel = form.model.trim();
+    if (!trimmedModel || selectedPrimaryPreset) return null;
+    return {
+      modelRef: trimmedModel,
+      optionsJson: unsupportedModelOptions,
+    };
+  }, [form.model, selectedPrimaryPreset, unsupportedModelOptions]);
 
   const setField = React.useCallback(
     <K extends keyof AgentEditorFormState>(key: K, value: AgentEditorFormState[K]) => {
@@ -96,6 +189,17 @@ export function AgentsPageEditor({
     },
     [],
   );
+  const selectPrimaryPreset = React.useCallback(
+    (preset: ModelPreset) => {
+      setField("model", modelRefForPreset(preset));
+      setPreservedModelOptions(preset.options);
+    },
+    [setField],
+  );
+  const clearPrimaryModel = React.useCallback(() => {
+    setField("model", "");
+    setPreservedModelOptions({});
+  }, [setField]);
 
   const save = async (): Promise<void> => {
     if (mode === "create") {
@@ -176,6 +280,13 @@ export function AgentsPageEditor({
         form={form}
         mode={mode}
         setField={setField}
+        modelPresets={modelPresets}
+        modelPresetsLoading={modelPresetsLoading}
+        modelPresetsError={modelPresetsError}
+        selectedPrimaryPreset={selectedPrimaryPreset}
+        legacyPrimarySelection={legacyPrimarySelection}
+        onSelectPrimaryPreset={selectPrimaryPreset}
+        onClearPrimaryModel={clearPrimaryModel}
         unsupportedModelOptions={unsupportedModelOptions}
       />
     </div>

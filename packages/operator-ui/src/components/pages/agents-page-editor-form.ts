@@ -78,14 +78,14 @@ export type AgentEditorSetField = <K extends keyof AgentEditorFormState>(
   value: AgentEditorFormState[K],
 ) => void;
 
-function splitList(value: string): string[] {
+export function splitList(value: string): string[] {
   return value
     .split(/[\n,]/u)
     .map((item) => item.trim())
     .filter((item) => item.length > 0);
 }
 
-function joinList(values: string[] | undefined): string {
+export function joinList(values: string[] | undefined): string {
   return (values ?? []).join("\n");
 }
 

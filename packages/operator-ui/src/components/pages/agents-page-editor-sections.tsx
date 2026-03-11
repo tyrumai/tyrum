@@ -1,5 +1,7 @@
 import * as React from "react";
 import type { AgentEditorFormState, AgentEditorSetField } from "./agents-page-editor-form.js";
+import type { ModelPreset } from "./admin-http-models.shared.js";
+import { AgentEditorModelFields } from "./agents-page-editor-models.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { Checkbox } from "../ui/checkbox.js";
 import { Input } from "../ui/input.js";
@@ -92,11 +94,25 @@ export function AgentEditorSections({
   form,
   mode,
   setField,
+  modelPresets,
+  modelPresetsLoading,
+  modelPresetsError,
+  selectedPrimaryPreset,
+  legacyPrimarySelection,
+  onSelectPrimaryPreset,
+  onClearPrimaryModel,
   unsupportedModelOptions,
 }: {
   form: AgentEditorFormState;
   mode: "create" | "edit";
   setField: AgentEditorSetField;
+  modelPresets: ModelPreset[];
+  modelPresetsLoading: boolean;
+  modelPresetsError: string | null;
+  selectedPrimaryPreset: ModelPreset | null;
+  legacyPrimarySelection: { modelRef: string; optionsJson: string | null } | null;
+  onSelectPrimaryPreset: (preset: ModelPreset) => void;
+  onClearPrimaryModel: () => void;
   unsupportedModelOptions: string | null;
 }) {
   return (
@@ -185,30 +201,18 @@ export function AgentEditorSections({
       </FieldGroup>
 
       <FieldGroup title="Model" description="Primary model assignment and fallbacks.">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Input
-            label="Primary model"
-            value={form.model}
-            onChange={(event) => {
-              setField("model", event.currentTarget.value);
-            }}
-          />
-          <Input
-            label="Variant"
-            value={form.variant}
-            onChange={(event) => {
-              setField("variant", event.currentTarget.value);
-            }}
-          />
-        </div>
-        <Textarea
-          label="Fallback models"
-          rows={4}
-          helperText="One model per line."
-          value={form.fallbacks}
-          onChange={(event) => {
-            setField("fallbacks", event.currentTarget.value);
-          }}
+        <AgentEditorModelFields
+          model={form.model}
+          variant={form.variant}
+          fallbacks={form.fallbacks}
+          setField={setField}
+          presets={modelPresets}
+          presetsLoading={modelPresetsLoading}
+          presetsError={modelPresetsError}
+          selectedPrimaryPreset={selectedPrimaryPreset}
+          legacyPrimarySelection={legacyPrimarySelection}
+          onSelectPrimaryPreset={onSelectPrimaryPreset}
+          onClearPrimaryModel={onClearPrimaryModel}
         />
         {unsupportedModelOptions ? (
           <Textarea

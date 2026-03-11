@@ -34,19 +34,65 @@ function findToggle(container: HTMLElement, labelText: string): HTMLElement {
   return button;
 }
 
+function sampleModelPresets() {
+  return [
+    {
+      preset_id: "11111111-1111-4111-8111-111111111111",
+      preset_key: "gpt-4-1",
+      display_name: "GPT-4.1",
+      provider_key: "openai",
+      model_id: "gpt-4.1",
+      options: {},
+      created_at: "2026-03-01T00:00:00.000Z",
+      updated_at: "2026-03-01T00:00:00.000Z",
+    },
+    {
+      preset_id: "22222222-2222-4222-8222-222222222222",
+      preset_key: "gpt-4-1-mini",
+      display_name: "GPT-4.1 Mini",
+      provider_key: "openai",
+      model_id: "gpt-4.1-mini",
+      options: { reasoning_effort: "medium" as const },
+      created_at: "2026-03-01T00:00:00.000Z",
+      updated_at: "2026-03-01T00:00:00.000Z",
+    },
+  ];
+}
+
 describe("AgentEditorSections", () => {
   it("wires profile, runtime, session, and memory controls into setField", () => {
-    const form = createBlankForm();
     const setField = vi.fn();
 
-    const { root, container } = renderIntoDocument(
-      React.createElement(AgentEditorSections, {
+    function Harness() {
+      const [form, setForm] = React.useState(createBlankForm());
+      return React.createElement(AgentEditorSections, {
         form,
         mode: "create",
-        setField,
+        setField: (key, value) => {
+          setField(key, value);
+          setForm((current) => ({ ...current, [key]: value }));
+        },
+        modelPresets: sampleModelPresets(),
+        modelPresetsLoading: false,
+        modelPresetsError: null,
+        selectedPrimaryPreset: null,
+        legacyPrimarySelection: null,
+        onSelectPrimaryPreset: (preset) => {
+          setField("model", `${preset.provider_key}/${preset.model_id}`);
+          setForm((current) => ({
+            ...current,
+            model: `${preset.provider_key}/${preset.model_id}`,
+          }));
+        },
+        onClearPrimaryModel: () => {
+          setField("model", "");
+          setForm((current) => ({ ...current, model: "" }));
+        },
         unsupportedModelOptions: '{\n  "temperature": 0.2\n}',
-      }),
-    );
+      });
+    }
+
+    const { root, container } = renderIntoDocument(React.createElement(Harness));
 
     const inputUpdates = [
       ["Agent key", "agent-review"],
@@ -57,7 +103,6 @@ describe("AgentEditorSections", () => {
       ["Emoji", "R"],
       ["Verbosity", "low"],
       ["Format", "markdown"],
-      ["Primary model", "openai/gpt-4.1-mini"],
       ["Variant", "fast"],
       ["TTL days", "45"],
       ["Max turns", "18"],
@@ -97,7 +142,6 @@ describe("AgentEditorSections", () => {
     const textAreaUpdates = [
       ["Description", "Managed reviewer"],
       ["Identity body", "Be concise and rigorous."],
-      ["Fallback models", "openai/gpt-4.1\nopenai/gpt-4.1-mini"],
       ["Enabled skills", "review\ntriage"],
       ["Enabled MCP servers", "filesystem"],
       ["Allowed tools", "shell.read"],
@@ -110,6 +154,54 @@ describe("AgentEditorSections", () => {
         setNativeValue(findLabeledControl(container, label), value);
       });
     }
+
+    const primaryToggle = container.querySelector<HTMLElement>(
+      '[data-testid="agents-editor-primary-model-toggle"]',
+    );
+    expect(primaryToggle).not.toBeNull();
+    act(() => {
+      if (primaryToggle) click(primaryToggle);
+    });
+
+    act(() => {
+      setNativeValue(findLabeledControl(container, "Filter configured models"), "mini");
+    });
+
+    const primaryOption = container.querySelector<HTMLElement>(
+      '[data-testid="agents-editor-primary-model-option-gpt-4-1-mini"]',
+    );
+    expect(primaryOption).not.toBeNull();
+    act(() => {
+      if (primaryOption) click(primaryOption);
+    });
+
+    const fallbackToggle = container.querySelector<HTMLElement>(
+      '[data-testid="agents-editor-fallbacks-toggle"]',
+    );
+    expect(fallbackToggle).not.toBeNull();
+    act(() => {
+      if (fallbackToggle) click(fallbackToggle);
+    });
+
+    const firstFallbackOption = container.querySelector<HTMLElement>(
+      '[data-testid="agents-editor-fallback-option-openai/gpt-4.1"]',
+    );
+    expect(firstFallbackOption).not.toBeNull();
+    act(() => {
+      if (firstFallbackOption) click(firstFallbackOption);
+    });
+
+    act(() => {
+      if (fallbackToggle) click(fallbackToggle);
+    });
+
+    const secondFallbackOption = container.querySelector<HTMLElement>(
+      '[data-testid="agents-editor-fallback-option-openai/gpt-4.1-mini"]',
+    );
+    expect(secondFallbackOption).not.toBeNull();
+    act(() => {
+      if (secondFallbackOption) click(secondFallbackOption);
+    });
 
     const toggleLabels = [
       "Trust workspace skills",
@@ -135,6 +227,7 @@ describe("AgentEditorSections", () => {
     expect(calls).toContainEqual(["description", "Managed reviewer"]);
     expect(calls).toContainEqual(["identityBody", "Be concise and rigorous."]);
     expect(calls).toContainEqual(["model", "openai/gpt-4.1-mini"]);
+    expect(calls).toContainEqual(["fallbacks", "openai/gpt-4.1"]);
     expect(calls).toContainEqual(["fallbacks", "openai/gpt-4.1\nopenai/gpt-4.1-mini"]);
     expect(calls).toContainEqual(["skillsEnabled", "review\ntriage"]);
     expect(calls).toContainEqual(["mcpEnabled", "filesystem"]);
@@ -183,6 +276,13 @@ describe("AgentEditorSections", () => {
         form,
         mode: "edit",
         setField,
+        modelPresets: sampleModelPresets(),
+        modelPresetsLoading: false,
+        modelPresetsError: null,
+        selectedPrimaryPreset: null,
+        legacyPrimarySelection: null,
+        onSelectPrimaryPreset: vi.fn(),
+        onClearPrimaryModel: vi.fn(),
         unsupportedModelOptions: null,
       }),
     );
