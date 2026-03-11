@@ -269,11 +269,14 @@ export function registerPairingNodeInventoryTests(): void {
 
     expect(container.querySelector('[data-testid="pairing-connected-section"]')).not.toBeNull();
     expect(container.textContent).toContain("2 live now");
-    expect(container.querySelector('[data-testid="pairing-connected-node-node-1"]')).not.toBeNull();
-    expect(container.querySelector('[data-testid="pairing-connected-node-node-2"]')).not.toBeNull();
-    expect(container.textContent).toContain("Trusted");
-    expect(container.textContent).toContain("Unpaired");
-    expect(container.textContent).toContain("Trusted node");
+    const trustedNode = container.querySelector('[data-testid="pairing-connected-node-node-1"]');
+    const unpairedNode = container.querySelector('[data-testid="pairing-connected-node-node-2"]');
+    expect(trustedNode).not.toBeNull();
+    expect(unpairedNode).not.toBeNull();
+    expect(trustedNode?.textContent).toContain("Trusted");
+    expect(unpairedNode?.textContent).toContain("Unpaired");
+    expect(trustedNode?.textContent).toContain("trusted node");
+    expect(unpairedNode?.textContent).toContain("new node");
 
     act(() => {
       root?.unmount();
