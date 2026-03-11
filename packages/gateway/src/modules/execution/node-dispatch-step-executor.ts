@@ -10,6 +10,10 @@ import {
   resolveBrowserEvidenceSensitivity,
   shapeBrowserEvidenceForArtifacts,
 } from "../browser/shape-browser-evidence.js";
+import {
+  resolveMobileEvidenceSensitivity,
+  shapeMobileEvidenceForArtifacts,
+} from "../mobile/shape-mobile-evidence.js";
 import type { StepExecutionContext, StepExecutor, StepResult } from "./engine.js";
 
 export interface NodeDispatchStepExecutorOptions {
@@ -35,7 +39,12 @@ class NodeDispatchStepExecutor implements StepExecutor {
     timeoutMs: number,
     context: StepExecutionContext,
   ): Promise<StepResult> {
-    if (action.type !== "Desktop" && action.type !== "Browser") {
+    if (
+      action.type !== "Desktop" &&
+      action.type !== "Browser" &&
+      action.type !== "IOS" &&
+      action.type !== "Android"
+    ) {
       return await this.opts.fallback.execute(action, planId, stepIndex, timeoutMs, context);
     }
 
@@ -72,16 +81,28 @@ class NodeDispatchStepExecutor implements StepExecutor {
                 sensitivity,
               });
             })()
-          : await shapeBrowserEvidenceForArtifacts({
-              db: this.opts.db,
-              artifactStore: this.opts.artifactStore,
-              runId: context.runId,
-              stepId: context.stepId,
-              workspaceId: context.workspaceId,
-              evidence: result.evidence,
-              result: result.result,
-              sensitivity: resolveBrowserEvidenceSensitivity(),
-            });
+          : action.type === "Browser"
+            ? await shapeBrowserEvidenceForArtifacts({
+                db: this.opts.db,
+                artifactStore: this.opts.artifactStore,
+                runId: context.runId,
+                stepId: context.stepId,
+                workspaceId: context.workspaceId,
+                evidence: result.evidence,
+                result: result.result,
+                sensitivity: resolveBrowserEvidenceSensitivity(),
+              })
+            : await shapeMobileEvidenceForArtifacts({
+                db: this.opts.db,
+                artifactStore: this.opts.artifactStore,
+                runId: context.runId,
+                stepId: context.stepId,
+                workspaceId: context.workspaceId,
+                evidence: result.evidence,
+                result: result.result,
+                sensitivity: resolveMobileEvidenceSensitivity(),
+                platformLabel: action.type === "IOS" ? "ios" : "android",
+              });
 
       const cost = { duration_ms: Math.max(0, Date.now() - startedAtMs) };
       const evidence =

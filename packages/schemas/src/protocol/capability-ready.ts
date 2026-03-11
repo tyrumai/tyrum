@@ -75,6 +75,7 @@ export type WsCapabilityReadyEvent = z.infer<typeof WsCapabilityReadyEvent>;
 const CAPABILITY_MAP: Partial<Record<ActionPrimitiveKind, CapabilityKind>> = {
   Web: "playwright",
   Browser: "browser",
+  IOS: "ios",
   Android: "android",
   Desktop: "desktop",
   CLI: "cli",

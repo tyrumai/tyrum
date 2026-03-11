@@ -20,6 +20,7 @@ import { getCapabilityCatalogEntry } from "./capability-catalog.js";
 const ACTION_CAPABILITIES = [
   { capability: "playwright" },
   { capability: "browser" },
+  { capability: "ios" },
   { capability: "android" },
   { capability: "desktop" },
   { capability: "cli" },

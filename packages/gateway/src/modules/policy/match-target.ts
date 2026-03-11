@@ -132,6 +132,11 @@ type BrowserDispatchOp =
   | "camera.capture_photo"
   | "microphone.record"
   | "unknown";
+type MobileDispatchOp =
+  | "location.get_current"
+  | "camera.capture_photo"
+  | "audio.record_clip"
+  | "unknown";
 type ScheduleExecutionKind = "agent_turn" | "playbook" | "steps" | "unknown";
 
 function normalizeNodeDispatchOpRaw(parsed: Record<string, unknown> | null): string | undefined {
@@ -177,6 +182,20 @@ function canonicalizeBrowserDispatchOp(parsed: Record<string, unknown> | null): 
     case "geolocation.get":
     case "camera.capture_photo":
     case "microphone.record":
+      return opRaw;
+    default:
+      return "unknown";
+  }
+}
+
+function canonicalizeMobileDispatchOp(parsed: Record<string, unknown> | null): MobileDispatchOp {
+  const opRaw = normalizeNodeDispatchOpRaw(parsed);
+  if (!opRaw) return "unknown";
+
+  switch (opRaw) {
+    case "location.get_current":
+    case "camera.capture_photo":
+    case "audio.record_clip":
       return opRaw;
     default:
       return "unknown";
@@ -282,6 +301,12 @@ export function canonicalizeNodeDispatchMatchTarget(
     target += `;op:${op}`;
   }
 
+  if (actionKind === "IOS" || actionKind === "Android") {
+    const parsed = asRecord(actionArgs);
+    const op = canonicalizeMobileDispatchOp(parsed);
+    target += `;op:${op}`;
+  }
+
   return target;
 }
 
@@ -346,13 +371,21 @@ export function canonicalizeToolMatchTarget(
     const inferredPrimitive =
       capability === "tyrum.browser"
         ? "Browser"
-        : capability === "tyrum.desktop"
-          ? "Desktop"
-          : actionName.startsWith("camera.") ||
-              actionName.startsWith("microphone.") ||
-              actionName.startsWith("geolocation.")
-            ? "Browser"
-            : "Desktop";
+        : capability === "tyrum.ios"
+          ? "IOS"
+          : capability === "tyrum.android"
+            ? "Android"
+            : capability === "tyrum.desktop"
+              ? "Desktop"
+              : actionName.startsWith("location.") || actionName.startsWith("audio.")
+                ? capability === "tyrum.android"
+                  ? "Android"
+                  : "IOS"
+                : actionName.startsWith("camera.") ||
+                    actionName.startsWith("microphone.") ||
+                    actionName.startsWith("geolocation.")
+                  ? "Browser"
+                  : "Desktop";
     const parsedAction = ActionPrimitiveKind.safeParse(inferredPrimitive);
 
     if (!parsedAction.success) return `capability:${capability};action:${actionName}`;

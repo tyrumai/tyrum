@@ -3,7 +3,16 @@ export type { OperatorCore } from "@tyrum/operator-core";
 export type { OperatorUiAppProps, OperatorUiMode } from "./app.js";
 export { OperatorUiApp } from "./app.js";
 
-export type { HostKind, OperatorUiHostApi, OperatorUiHostProviderProps } from "./host/host-api.js";
+export type {
+  HostKind,
+  MobileHostActionName,
+  MobileHostActionState,
+  MobileHostApi,
+  MobileHostPlatform,
+  MobileHostState,
+  OperatorUiHostApi,
+  OperatorUiHostProviderProps,
+} from "./host/host-api.js";
 export { OperatorUiHostProvider, useHostApi, useHostApiOptional } from "./host/host-api.js";
 
 export type { DesktopApi } from "./desktop-api.js";

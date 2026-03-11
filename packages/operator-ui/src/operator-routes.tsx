@@ -12,6 +12,7 @@ import {
   Play,
   Settings,
   ShieldCheck,
+  Smartphone,
   SquareKanban,
 } from "lucide-react";
 import { lazy, type LazyExoticComponent, type ComponentType, type ReactNode } from "react";
@@ -32,7 +33,7 @@ function lazyNamed<TProps>(
 const DashboardPage = lazyNamed<{
   core: OperatorCore;
   onNavigate: (id: string) => void;
-  connectionRouteId: "configure" | "desktop";
+  connectionRouteId: "configure" | "desktop" | "mobile";
 }>(() => import("./components/pages/dashboard-page.js"), "DashboardPage");
 const ChatPage = lazyNamed<{ core: OperatorCore }>(
   () => import("./components/pages/chat-page.js"),
@@ -74,7 +75,12 @@ const BrowserCapabilitiesPage = lazyNamed<Record<string, never>>(
   () => import("./components/pages/platform/browser-capabilities-page.js"),
   "BrowserCapabilitiesPage",
 );
+const MobilePlatformPage = lazyNamed<Record<string, never>>(
+  () => import("./components/pages/platform/mobile-platform-page.js"),
+  "MobilePlatformPage",
+);
 const ACTIVE_RUN_STATUSES: ExecutionRun["status"][] = ["queued", "running", "paused"];
+const SHARED_HOST_KINDS = ["desktop", "mobile", "web"] as const satisfies readonly HostKind[];
 
 export type OperatorUiRouteId =
   | "dashboard"
@@ -87,7 +93,8 @@ export type OperatorUiRouteId =
   | "pairing"
   | "configure"
   | "desktop"
-  | "browser";
+  | "browser"
+  | "mobile";
 
 export interface OperatorRouteRenderContext {
   core: OperatorCore;
@@ -102,7 +109,7 @@ export interface OperatorRouteDefinition {
   id: OperatorUiRouteId;
   label: string;
   icon: LucideIcon;
-  navGroup: "sidebar" | "platformDesktop" | "platformWeb" | "none";
+  navGroup: "sidebar" | "platformDesktop" | "platformMobile" | "platformWeb" | "none";
   shortcut: boolean;
   hostKinds: readonly HostKind[];
   render(context: OperatorRouteRenderContext): ReactNode;
@@ -115,12 +122,12 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
     icon: LayoutGrid,
     navGroup: "sidebar",
     shortcut: true,
-    hostKinds: ["desktop", "web"],
+    hostKinds: SHARED_HOST_KINDS,
     render: ({ core, hostKind, navigate }) => (
       <DashboardPage
         core={core}
         onNavigate={navigate}
-        connectionRouteId={hostKind === "desktop" ? "desktop" : "configure"}
+        connectionRouteId={hostKind === "desktop" || hostKind === "mobile" ? hostKind : "configure"}
       />
     ),
   },
@@ -130,7 +137,7 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
     icon: MessageSquare,
     navGroup: "sidebar",
     shortcut: true,
-    hostKinds: ["desktop", "web"],
+    hostKinds: SHARED_HOST_KINDS,
     render: ({ core }) => <ChatPage core={core} />,
   },
   {
@@ -139,7 +146,7 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
     icon: ShieldCheck,
     navGroup: "sidebar",
     shortcut: true,
-    hostKinds: ["desktop", "web"],
+    hostKinds: SHARED_HOST_KINDS,
     render: ({ core }) => <ApprovalsPage core={core} />,
   },
   {
@@ -148,7 +155,7 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
     icon: SquareKanban,
     navGroup: "sidebar",
     shortcut: true,
-    hostKinds: ["desktop", "web"],
+    hostKinds: SHARED_HOST_KINDS,
     render: ({ core }) => <WorkBoardPage core={core} />,
   },
   {
@@ -157,7 +164,7 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
     icon: Bot,
     navGroup: "sidebar",
     shortcut: true,
-    hostKinds: ["desktop", "web"],
+    hostKinds: SHARED_HOST_KINDS,
     render: ({ core }) => <AgentsPage core={core} />,
   },
   {
@@ -166,7 +173,7 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
     icon: Blocks,
     navGroup: "sidebar",
     shortcut: true,
-    hostKinds: ["desktop", "web"],
+    hostKinds: SHARED_HOST_KINDS,
     render: ({ core }) => <ExtensionsPage core={core} />,
   },
   {
@@ -175,7 +182,7 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
     icon: Play,
     navGroup: "none",
     shortcut: false,
-    hostKinds: ["desktop", "web"],
+    hostKinds: SHARED_HOST_KINDS,
     render: ({ core }) => <RunsPage core={core} statuses={ACTIVE_RUN_STATUSES} />,
   },
   {
@@ -184,7 +191,7 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
     icon: Link2,
     navGroup: "sidebar",
     shortcut: true,
-    hostKinds: ["desktop", "web"],
+    hostKinds: SHARED_HOST_KINDS,
     render: ({ core }) => <PairingPage core={core} />,
   },
   {
@@ -193,7 +200,7 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
     icon: Settings,
     navGroup: "sidebar",
     shortcut: true,
-    hostKinds: ["desktop", "web"],
+    hostKinds: SHARED_HOST_KINDS,
     render: ({ core }) => <ConfigurePage core={core} />,
   },
   {
@@ -213,6 +220,15 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
     shortcut: false,
     hostKinds: ["web"],
     render: () => <BrowserCapabilitiesPage />,
+  },
+  {
+    id: "mobile",
+    label: "Mobile",
+    icon: Smartphone,
+    navGroup: "platformMobile",
+    shortcut: false,
+    hostKinds: ["mobile"],
+    render: () => <MobilePlatformPage />,
   },
 ];
 

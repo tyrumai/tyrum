@@ -228,6 +228,32 @@ describe("canonicalizeToolMatchTarget", () => {
     expect(unknownTarget).not.toContain("secret");
   });
 
+  it("canonicalizes iOS and Android node dispatch by capability + action + mobile op", () => {
+    const iosTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
+      capability: "tyrum.ios",
+      action_name: "location.get_current",
+      input: { enable_high_accuracy: true },
+    });
+    expect(iosTarget).toBe("capability:tyrum.ios;action:IOS;op:location.get_current");
+    expect(iosTarget).not.toContain("enable_high_accuracy");
+
+    const androidTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
+      capability: "tyrum.android",
+      action_name: "audio.record_clip",
+      input: { duration_ms: 5000 },
+    });
+    expect(androidTarget).toBe("capability:tyrum.android;action:Android;op:audio.record_clip");
+    expect(androidTarget).not.toContain("5000");
+
+    const unknownTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
+      capability: "tyrum.ios",
+      action_name: "not-a-real-op",
+      input: { secret: "should-not-appear" },
+    });
+    expect(unknownTarget).toBe("capability:tyrum.ios;action:IOS;op:unknown");
+    expect(unknownTarget).not.toContain("secret");
+  });
+
   it("canonicalizes heartbeat schedule creation using normalized schedule semantics", () => {
     const target = canonicalizeToolMatchTarget("tool.automation.schedule.create", {
       kind: "heartbeat",

@@ -1,4 +1,10 @@
 import {
+  AndroidAudioRecordClipArgs,
+  AndroidAudioRecordClipResult,
+  AndroidCameraCapturePhotoArgs,
+  AndroidCameraCapturePhotoResult,
+  AndroidLocationGetCurrentArgs,
+  AndroidLocationGetCurrentResult,
   BrowserCameraCapturePhotoArgs,
   BrowserCameraCapturePhotoResult,
   BrowserGeolocationGetArgs,
@@ -17,6 +23,12 @@ import {
   DesktopSnapshotResult,
   DesktopWaitForArgs,
   DesktopWaitForResult,
+  IosAudioRecordClipArgs,
+  IosAudioRecordClipResult,
+  IosCameraCapturePhotoArgs,
+  IosCameraCapturePhotoResult,
+  IosLocationGetCurrentArgs,
+  IosLocationGetCurrentResult,
   type CapabilityDescriptor,
   type NodeActionConsentMetadata,
   type NodeActionPermissionMetadata,
@@ -110,6 +122,43 @@ function desktopAction(
       op_field: "op",
       op_value: name,
       result_channel: resultChannel,
+      artifactize_binary_fields: ["bytesBase64"],
+    },
+  };
+}
+
+function mobileAction(
+  primitiveKind: "IOS" | "Android",
+  name: CatalogAction["name"],
+  description: string,
+  inputSchema: unknown,
+  outputSchema: unknown,
+  permissions: NodeActionPermissionMetadata,
+): CatalogAction {
+  return {
+    name,
+    description,
+    inputParser: inputSchema as ZodType,
+    outputParser: outputSchema as ZodType,
+    inputSchema: jsonSchemaOf(inputSchema, "input"),
+    outputSchema: jsonSchemaOf(outputSchema, "output"),
+    consent: {
+      requires_operator_enable: true,
+      requires_runtime_consent: true,
+      may_prompt_user: true,
+      sensitive_data_category:
+        name === "location.get_current"
+          ? "location"
+          : name === "camera.capture_photo"
+            ? "image"
+            : "audio",
+    },
+    permissions,
+    transport: {
+      primitive_kind: primitiveKind,
+      op_field: "op",
+      op_value: name,
+      result_channel: "evidence",
       artifactize_binary_fields: ["bytesBase64"],
     },
   };
@@ -231,8 +280,100 @@ const DESKTOP_CATALOG: CapabilityCatalogEntry = {
   ],
 };
 
+const IOS_CATALOG: CapabilityCatalogEntry = {
+  descriptor: {
+    id: "tyrum.ios",
+    version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+  },
+  actions: [
+    mobileAction(
+      "IOS",
+      "location.get_current",
+      "Read the device's current location.",
+      IosLocationGetCurrentArgs,
+      IosLocationGetCurrentResult,
+      {
+        secure_context_required: false,
+        browser_apis: [],
+        hardware_may_be_required: true,
+      },
+    ),
+    mobileAction(
+      "IOS",
+      "camera.capture_photo",
+      "Capture a still photo from the device camera.",
+      IosCameraCapturePhotoArgs,
+      IosCameraCapturePhotoResult,
+      {
+        secure_context_required: false,
+        browser_apis: [],
+        hardware_may_be_required: true,
+      },
+    ),
+    mobileAction(
+      "IOS",
+      "audio.record_clip",
+      "Record an audio clip from the device microphone.",
+      IosAudioRecordClipArgs,
+      IosAudioRecordClipResult,
+      {
+        secure_context_required: false,
+        browser_apis: ["MediaRecorder"],
+        hardware_may_be_required: true,
+      },
+    ),
+  ],
+};
+
+const ANDROID_CATALOG: CapabilityCatalogEntry = {
+  descriptor: {
+    id: "tyrum.android",
+    version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+  },
+  actions: [
+    mobileAction(
+      "Android",
+      "location.get_current",
+      "Read the device's current location.",
+      AndroidLocationGetCurrentArgs,
+      AndroidLocationGetCurrentResult,
+      {
+        secure_context_required: false,
+        browser_apis: [],
+        hardware_may_be_required: true,
+      },
+    ),
+    mobileAction(
+      "Android",
+      "camera.capture_photo",
+      "Capture a still photo from the device camera.",
+      AndroidCameraCapturePhotoArgs,
+      AndroidCameraCapturePhotoResult,
+      {
+        secure_context_required: false,
+        browser_apis: [],
+        hardware_may_be_required: true,
+      },
+    ),
+    mobileAction(
+      "Android",
+      "audio.record_clip",
+      "Record an audio clip from the device microphone.",
+      AndroidAudioRecordClipArgs,
+      AndroidAudioRecordClipResult,
+      {
+        secure_context_required: false,
+        browser_apis: ["MediaRecorder"],
+        hardware_may_be_required: true,
+      },
+    ),
+  ],
+};
+
 const CATALOG = new Map<string, CapabilityCatalogEntry>([
   [BROWSER_CATALOG.descriptor.id, BROWSER_CATALOG],
+  [IOS_CATALOG.descriptor.id, IOS_CATALOG],
+  [ANDROID_CATALOG.descriptor.id, ANDROID_CATALOG],
   [DESKTOP_CATALOG.descriptor.id, DESKTOP_CATALOG],
 ]);
 

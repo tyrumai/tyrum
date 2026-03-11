@@ -11,7 +11,7 @@ import { expect } from "vitest";
 import { createWsHandler } from "../../src/routes/ws.js";
 
 type ConnectRole = "client" | "node";
-type ClientCapability = "cli" | "playwright" | "android" | "desktop" | "http";
+type ClientCapability = "cli" | "playwright" | "ios" | "android" | "desktop" | "http";
 
 function authProtocols(token: string): string[] {
   return ["tyrum-v1", `tyrum-auth.${Buffer.from(token, "utf-8").toString("base64url")}`];

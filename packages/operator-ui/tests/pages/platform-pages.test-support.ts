@@ -4,7 +4,9 @@ import type { DesktopApi } from "../../src/desktop-api.js";
 import { BrowserNodeProvider } from "../../src/browser-node/browser-node-provider.js";
 import { NodeConfigurePage } from "../../src/components/pages/node-configure-page.js";
 import { BrowserCapabilitiesPage } from "../../src/components/pages/platform/browser-capabilities-page.js";
+import { MobilePlatformPage } from "../../src/components/pages/platform/mobile-platform-page.js";
 import { OperatorUiHostProvider } from "../../src/host/host-api.js";
+import type { MobileHostApi } from "../../src/host/host-api.js";
 import { cleanupTestRoot, renderIntoDocument, type TestRoot } from "../test-utils.js";
 
 type HostValue =
@@ -14,6 +16,10 @@ type HostValue =
   | {
       kind: "desktop";
       api: DesktopApi | null;
+    }
+  | {
+      kind: "mobile";
+      api: MobileHostApi;
     };
 
 const DEFAULT_NODE_CONFIG = {
@@ -201,6 +207,71 @@ export async function withDesktopNodeConfigurePage(
   props?: React.ComponentProps<typeof NodeConfigurePage>,
 ): Promise<void> {
   await withNodeConfigurePage({ kind: "desktop", api }, run, props);
+}
+
+export function createMobileHostApi(
+  overrides: Partial<MobileHostApi> = {},
+  initialState?: Partial<Awaited<ReturnType<MobileHostApi["node"]["getState"]>>>,
+): MobileHostApi {
+  const state = {
+    platform: "ios" as const,
+    enabled: true,
+    status: "connected" as const,
+    deviceId: "mobile-node-1",
+    error: null,
+    actions: {
+      "location.get_current": {
+        enabled: true,
+        availabilityStatus: "ready" as const,
+      },
+      "camera.capture_photo": {
+        enabled: true,
+        availabilityStatus: "ready" as const,
+      },
+      "audio.record_clip": {
+        enabled: true,
+        availabilityStatus: "ready" as const,
+      },
+    },
+    ...initialState,
+  };
+
+  return {
+    node: {
+      getState: vi.fn(async () => state),
+      setEnabled: vi.fn(async (enabled: boolean) => ({ ...state, enabled })),
+      setActionEnabled: vi.fn(
+        async (action, enabled: boolean) =>
+          ({
+            ...state,
+            actions: {
+              ...state.actions,
+              [action]: {
+                ...state.actions[action],
+                enabled,
+              },
+            },
+          }) as typeof state,
+      ),
+    },
+    onStateChange: vi.fn((_cb: (nextState: typeof state) => void) => () => {}),
+    onNavigationRequest: vi.fn((_cb: (request: unknown) => void) => () => {}),
+    ...overrides,
+  };
+}
+
+export async function withMobilePlatformPage(
+  api: MobileHostApi,
+  run: (testRoot: TestRoot) => Promise<void> | void,
+): Promise<void> {
+  await withRenderedElement(
+    React.createElement(
+      OperatorUiHostProvider,
+      { value: { kind: "mobile", api } },
+      React.createElement(MobilePlatformPage),
+    ),
+    run,
+  );
 }
 
 export async function withHostNodeConfigurePage(

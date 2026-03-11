@@ -9,6 +9,7 @@ import {
   clickSwitchAndFlush,
   clickTabAndFlush,
   createDesktopApi,
+  createMobileHostApi,
   createNodeConfig,
   flushEffects,
   getInputByLabel,
@@ -16,6 +17,7 @@ import {
   withBrowserCapabilitiesPage,
   withDesktopNodeConfigurePage,
   withHostNodeConfigurePage,
+  withMobilePlatformPage,
 } from "./platform-pages.test-support.js";
 import { setNativeValue } from "../test-utils.js";
 
@@ -34,6 +36,25 @@ describe("Platform pages", () => {
     await withBrowserCapabilitiesPage(({ container }) => {
       expect(container.textContent).toContain("Browser node executor");
       expect(container.textContent).toContain("Status");
+    });
+  });
+
+  it("renders the mobile platform page and toggles a mobile action", async () => {
+    const mobileHostApi = createMobileHostApi();
+
+    await withMobilePlatformPage(mobileHostApi, async ({ container }) => {
+      await flushEffects();
+
+      expect(container.textContent).toContain("Mobile node executor");
+      expect(container.textContent).toContain("iOS");
+      expect(container.textContent).toContain("Location");
+
+      await clickSwitchAndFlush(container, 1);
+
+      expect(mobileHostApi.node.setActionEnabled).toHaveBeenCalledWith(
+        "location.get_current",
+        false,
+      );
     });
   });
 

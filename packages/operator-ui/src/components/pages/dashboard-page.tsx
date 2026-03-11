@@ -44,7 +44,7 @@ function getConfigHealthAction(issue: ConfigHealthIssue): {
 export interface DashboardPageProps {
   core: OperatorCore;
   onNavigate?: (id: string) => void;
-  connectionRouteId?: "configure" | "desktop";
+  connectionRouteId?: "configure" | "desktop" | "mobile";
 }
 
 export function DashboardPage({

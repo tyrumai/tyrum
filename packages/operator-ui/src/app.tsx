@@ -83,7 +83,7 @@ function OperatorUiAppRoot({
     mode,
     hostKind,
     onNavigationRequest:
-      host?.kind === "desktop" && host.api?.onNavigationRequest
+      (host?.kind === "desktop" || host?.kind === "mobile") && host.api?.onNavigationRequest
         ? host.api.onNavigationRequest
         : undefined,
   });
@@ -111,7 +111,9 @@ function OperatorUiAppRoot({
             collapsible
             connectionStatus={viewModel.connection.status}
             onConnectionClick={() => {
-              viewModel.navigate(hostKind === "desktop" ? "desktop" : "configure");
+              viewModel.navigate(
+                hostKind === "desktop" ? "desktop" : hostKind === "mobile" ? "mobile" : "configure",
+              );
             }}
             onSyncNow={() => {
               void core.syncAllNow();

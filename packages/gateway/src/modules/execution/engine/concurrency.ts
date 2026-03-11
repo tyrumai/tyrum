@@ -17,7 +17,15 @@ function normalizePositiveInt(value: unknown): number | undefined {
   return n;
 }
 
-const KNOWN_CAPABILITIES = new Set<string>(["playwright", "android", "desktop", "cli", "http"]);
+const KNOWN_CAPABILITIES = new Set<string>([
+  "playwright",
+  "browser",
+  "ios",
+  "android",
+  "desktop",
+  "cli",
+  "http",
+]);
 const NORMALIZERS = { normalizeNonnegativeInt, normalizePositiveInt };
 
 export function parseConcurrencyLimitsJson(
