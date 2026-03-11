@@ -272,6 +272,44 @@ describe("canonicalizeToolMatchTarget", () => {
     expect(audioTarget).toBe("capability:;action:IOS;op:audio.record_clip");
   });
 
+  it("uses capability hints and input shape to disambiguate camera.capture_photo for unknown capabilities", () => {
+    const hintedMobileTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
+      capability: "acme.mobile-camera",
+      action_name: "camera.capture_photo",
+      input: { format: "jpeg" },
+    });
+    expect(hintedMobileTarget).toBe(
+      "capability:acme.mobile-camera;action:IOS;op:camera.capture_photo",
+    );
+
+    const androidHintTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
+      capability: "vendor.android-edge",
+      action_name: "camera.capture_photo",
+      input: { format: "jpeg" },
+    });
+    expect(androidHintTarget).toBe(
+      "capability:vendor.android-edge;action:Android;op:camera.capture_photo",
+    );
+
+    const mobileInputTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
+      capability: "custom.camera-node",
+      action_name: "camera.capture_photo",
+      input: { camera: "rear", format: "jpeg" },
+    });
+    expect(mobileInputTarget).toBe(
+      "capability:custom.camera-node;action:IOS;op:camera.capture_photo",
+    );
+
+    const browserInputTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
+      capability: "custom.camera-node",
+      action_name: "camera.capture_photo",
+      input: { facing_mode: "environment", format: "jpeg" },
+    });
+    expect(browserInputTarget).toBe(
+      "capability:custom.camera-node;action:Browser;op:camera.capture_photo",
+    );
+  });
+
   it("canonicalizes heartbeat schedule creation using normalized schedule semantics", () => {
     const target = canonicalizeToolMatchTarget("tool.automation.schedule.create", {
       kind: "heartbeat",

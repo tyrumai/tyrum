@@ -202,6 +202,41 @@ function canonicalizeMobileDispatchOp(parsed: Record<string, unknown> | null): M
   }
 }
 
+function inferPrimitiveFromCapabilityHint(capability: string): ActionPrimitiveKind | undefined {
+  const normalized = capability.trim().toLowerCase();
+  if (!normalized) return undefined;
+  if (normalized.includes("android")) return "Android";
+  if (normalized.includes("ios") || normalized.includes("mobile")) return "IOS";
+  if (normalized.includes("browser")) return "Browser";
+  if (normalized.includes("desktop") || normalized.includes("electron")) return "Desktop";
+  return undefined;
+}
+
+function inferPrimitiveFromUnknownCapability(
+  capability: string,
+  actionName: string,
+  input: Record<string, unknown> | null,
+): ActionPrimitiveKind {
+  const capabilityHint = inferPrimitiveFromCapabilityHint(capability);
+  if (capabilityHint) return capabilityHint;
+
+  if (actionName.startsWith("location.") || actionName.startsWith("audio.")) {
+    return "IOS";
+  }
+  if (actionName.startsWith("geolocation.") || actionName.startsWith("microphone.")) {
+    return "Browser";
+  }
+  if (actionName === "camera.capture_photo") {
+    if (normalizeToken(input?.["camera"])) return "IOS";
+    if (normalizeToken(input?.["facing_mode"]) || normalizeToken(input?.["device_id"])) {
+      return "Browser";
+    }
+    return "Browser";
+  }
+  if (actionName.startsWith("camera.")) return "Browser";
+  return "Desktop";
+}
+
 function normalizeScheduleExecutionKind(
   parsed: Record<string, unknown> | null,
 ): ScheduleExecutionKind {
@@ -367,6 +402,7 @@ export function canonicalizeToolMatchTarget(
     const capability = normalizeToken(parsed?.["capability"]) ?? "";
     const actionName = normalizeToken(parsed?.["action_name"]);
     if (!actionName) return `capability:${capability};action:`;
+    const input = asRecord(parsed?.["input"]);
 
     const inferredPrimitive =
       capability === "tyrum.browser"
@@ -377,18 +413,11 @@ export function canonicalizeToolMatchTarget(
             ? "Android"
             : capability === "tyrum.desktop"
               ? "Desktop"
-              : actionName.startsWith("location.") || actionName.startsWith("audio.")
-                ? "IOS"
-                : actionName.startsWith("camera.") ||
-                    actionName.startsWith("microphone.") ||
-                    actionName.startsWith("geolocation.")
-                  ? "Browser"
-                  : "Desktop";
+              : inferPrimitiveFromUnknownCapability(capability, actionName, input);
     const parsedAction = ActionPrimitiveKind.safeParse(inferredPrimitive);
 
     if (!parsedAction.success) return `capability:${capability};action:${actionName}`;
 
-    const input = asRecord(parsed?.["input"]);
     const actionArgs = input ? { ...input, op: actionName } : { op: actionName };
     return `capability:${capability};${canonicalizeNodeDispatchMatchTarget(
       parsedAction.data,

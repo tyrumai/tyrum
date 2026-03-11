@@ -47,8 +47,6 @@ export function useMobileNode(options: UseMobileNodeOptions): {
 
   const actionStatesRef = useRef(actionStates);
   actionStatesRef.current = actionStates;
-  const enabledRef = useRef(enabled);
-  enabledRef.current = enabled;
 
   const state = useMemo(
     () =>
@@ -159,7 +157,7 @@ export function useMobileNode(options: UseMobileNodeOptions): {
       };
       const onDisconnected = () => {
         if (disposed) return;
-        setStatus(enabledRef.current ? "disconnected" : "disconnected");
+        setStatus("disconnected");
       };
       const onTransportError = (event: unknown) => {
         if (disposed) return;
