@@ -2,14 +2,12 @@
 
 import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { setNativeValue, cleanupTestRoot } from "../test-utils.js";
-import { cleanupTestRoot } from "../test-utils.js";
+import { cleanupTestRoot, setNativeValue } from "../test-utils.js";
 import {
   createPanelsCore,
   renderStrictAdminConfigurePage,
   switchAdminTab,
 } from "./admin-page.http-panels.test-support.js";
-import { setNativeValue } from "../test-utils.js";
 
 afterEach(() => {
   vi.unstubAllGlobals();
