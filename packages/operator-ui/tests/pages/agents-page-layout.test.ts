@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import React, { act } from "react";
+import { AgentConfig, IdentityPack } from "@tyrum/schemas";
 import { describe, expect, it, vi } from "vitest";
 import type { OperatorCore } from "../../../operator-core/src/index.js";
 import { createStore } from "../../../operator-core/src/store.js";
@@ -57,12 +58,67 @@ function sampleAgentStatus() {
   } as const;
 }
 
+function sampleManagedAgentDetail() {
+  return {
+    agent_id: "11111111-1111-4111-8111-111111111111",
+    agent_key: "default",
+    created_at: "2026-03-08T00:00:00.000Z",
+    updated_at: "2026-03-08T00:00:00.000Z",
+    has_config: true,
+    has_identity: true,
+    can_delete: false,
+    persona: {
+      name: "Default Agent",
+      description: "Managed agent",
+      tone: "direct",
+      palette: "graphite",
+      character: "architect",
+    },
+    config: AgentConfig.parse({
+      model: { model: "openai/gpt-5.4" },
+      persona: {
+        name: "Default Agent",
+        description: "Managed agent",
+        tone: "direct",
+        palette: "graphite",
+        character: "architect",
+      },
+    }),
+    identity: IdentityPack.parse({
+      meta: {
+        name: "Default Agent",
+        description: "Managed agent",
+        style: { tone: "direct" },
+      },
+      body: "",
+    }),
+  };
+}
+
 async function flush(): Promise<void> {
   await act(async () => {
     await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
   });
+}
+
+function samplePresets() {
+  return {
+    status: "ok" as const,
+    presets: [
+      {
+        preset_id: "33333333-3333-4333-8333-333333333333",
+        preset_key: "gpt-5-4",
+        display_name: "GPT-5.4",
+        provider_key: "openrouter",
+        model_id: "openai/gpt-5.4",
+        options: {},
+        created_at: "2026-03-08T00:00:00.000Z",
+        updated_at: "2026-03-08T00:00:00.000Z",
+      },
+    ],
+  };
 }
 
 function createCore(): OperatorCore {
@@ -136,10 +192,13 @@ function createCore(): OperatorCore {
             },
           ],
         })),
-        get: vi.fn(),
+        get: vi.fn().mockResolvedValue(sampleManagedAgentDetail()),
         create: vi.fn(),
         update: vi.fn(),
         delete: vi.fn(),
+      },
+      modelConfig: {
+        listPresets: vi.fn().mockResolvedValue(samplePresets()),
       },
     },
   } as unknown as OperatorCore;

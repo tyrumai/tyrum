@@ -112,12 +112,31 @@ async function flush(): Promise<void> {
   });
 }
 
+function samplePresets() {
+  return {
+    status: "ok" as const,
+    presets: [
+      {
+        preset_id: "33333333-3333-4333-8333-333333333333",
+        preset_key: "gpt-5-4",
+        display_name: "GPT-5.4",
+        provider_key: "openrouter",
+        model_id: "openai/gpt-5.4",
+        options: {},
+        created_at: "2026-03-08T00:00:00.000Z",
+        updated_at: "2026-03-08T00:00:00.000Z",
+      },
+    ],
+  };
+}
+
 function createCore(options?: {
   list?: ReturnType<typeof vi.fn>;
   get?: ReturnType<typeof vi.fn>;
   create?: ReturnType<typeof vi.fn>;
   update?: ReturnType<typeof vi.fn>;
   remove?: ReturnType<typeof vi.fn>;
+  listPresets?: ReturnType<typeof vi.fn>;
 }): {
   core: OperatorCore;
   setAgentKey: ReturnType<typeof vi.fn>;
@@ -181,6 +200,9 @@ function createCore(options?: {
         create: options?.create ?? vi.fn().mockResolvedValue(sampleManagedAgentDetail("default")),
         update: options?.update ?? vi.fn().mockResolvedValue(sampleManagedAgentDetail("default")),
         delete: options?.remove ?? vi.fn().mockResolvedValue({ deleted: true }),
+      },
+      modelConfig: {
+        listPresets: options?.listPresets ?? vi.fn().mockResolvedValue(samplePresets()),
       },
     },
     memoryStore: {

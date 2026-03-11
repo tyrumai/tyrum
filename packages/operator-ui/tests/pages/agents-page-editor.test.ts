@@ -6,7 +6,7 @@ import React, { act } from "react";
 import type { OperatorCore } from "../../../operator-core/src/index.js";
 import { createStore } from "../../../operator-core/src/store.js";
 import { AgentsPage } from "../../src/components/pages/agents-page.js";
-import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
+import { cleanupTestRoot, click, renderIntoDocument } from "../test-utils.js";
 
 function sampleManagedAgentDetail(agentKey: string) {
   return {
@@ -56,10 +56,39 @@ async function flush(): Promise<void> {
   });
 }
 
+function samplePresets() {
+  return {
+    status: "ok" as const,
+    presets: [
+      {
+        preset_id: "33333333-3333-4333-8333-333333333333",
+        preset_key: "claude-opus-4-6-high",
+        display_name: "Claude Opus 4.6 High",
+        provider_key: "openrouter",
+        model_id: "anthropic/claude-opus-4.6",
+        options: { reasoning_effort: "high" as const },
+        created_at: "2026-03-08T00:00:00.000Z",
+        updated_at: "2026-03-08T00:00:00.000Z",
+      },
+      {
+        preset_id: "44444444-4444-4444-8444-444444444444",
+        preset_key: "gpt-5-4",
+        display_name: "GPT-5.4",
+        provider_key: "openrouter",
+        model_id: "openai/gpt-5.4",
+        options: {},
+        created_at: "2026-03-08T00:00:00.000Z",
+        updated_at: "2026-03-08T00:00:00.000Z",
+      },
+    ],
+  };
+}
+
 function createCore(
   list: ReturnType<typeof vi.fn>,
   get: ReturnType<typeof vi.fn>,
   update: ReturnType<typeof vi.fn>,
+  listPresets = vi.fn().mockResolvedValue(samplePresets()),
 ) {
   const { store: connectionStore } = createStore({
     status: "connected",
@@ -105,7 +134,12 @@ function createCore(
       setAgentKey: vi.fn(),
       refresh: vi.fn().mockResolvedValue(undefined),
     },
-    http: { agents: { list, get, create: vi.fn(), update, delete: vi.fn() } },
+    http: {
+      agents: { list, get, create: vi.fn(), update, delete: vi.fn() },
+      modelConfig: {
+        listPresets,
+      },
+    },
     memoryStore: {
       ...memoryStore,
       list: vi.fn(),
@@ -178,6 +212,79 @@ describe("AgentsPage editor", () => {
       "agent-1",
       expect.objectContaining({ config: expect.any(Object), identity: expect.any(Object) }),
     );
+    cleanupTestRoot(testRoot);
+  });
+
+  it("replaces a legacy model with a configured preset and persists its options", async () => {
+    const list = vi.fn(async () => ({
+      agents: [
+        {
+          agent_key: "default",
+          agent_id: "11111111-1111-4111-8111-111111111111",
+          can_delete: false,
+          persona: { name: "Feynman" },
+        },
+      ],
+    }));
+    const get = vi.fn().mockResolvedValue(sampleManagedAgentDetail("default"));
+    const update = vi.fn().mockResolvedValue(sampleManagedAgentDetail("default"));
+    const listPresets = vi.fn().mockResolvedValue(samplePresets());
+    const core = createCore(list, get, update, listPresets);
+
+    const testRoot = renderIntoDocument(React.createElement(AgentsPage, { core }));
+    await flush();
+
+    const editorTab = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="agents-tab-editor"]',
+    );
+    const primaryToggle = testRoot.container.querySelector<HTMLElement>(
+      '[data-testid="agents-editor-primary-model-toggle"]',
+    );
+    const saveButton = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="agents-editor-save"]',
+    );
+
+    expect(editorTab).not.toBeNull();
+    expect(primaryToggle).not.toBeNull();
+    expect(saveButton).not.toBeNull();
+
+    await act(async () => {
+      if (editorTab) click(editorTab);
+      if (primaryToggle) click(primaryToggle);
+      await Promise.resolve();
+    });
+
+    const primaryOption = testRoot.container.querySelector<HTMLElement>(
+      '[data-testid="agents-editor-primary-model-option-claude-opus-4-6-high"]',
+    );
+    expect(primaryOption).not.toBeNull();
+
+    await act(async () => {
+      if (primaryOption) click(primaryOption);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      if (saveButton) click(saveButton);
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(listPresets).toHaveBeenCalled();
+    expect(update).toHaveBeenCalledWith(
+      "default",
+      expect.objectContaining({
+        config: expect.objectContaining({
+          model: expect.objectContaining({
+            model: "openrouter/anthropic/claude-opus-4.6",
+            options: { reasoning_effort: "high" },
+          }),
+        }),
+      }),
+    );
+
     cleanupTestRoot(testRoot);
   });
 });
