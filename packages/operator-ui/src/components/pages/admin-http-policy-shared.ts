@@ -159,6 +159,7 @@ function normalizeKeySensitivityRows(
       const sensitive = parsePositiveInt(row.sensitive);
       if (normal === undefined && sensitive === undefined) return acc;
       acc[key] = {
+        ...acc[key],
         ...(normal === undefined ? {} : { normal }),
         ...(sensitive === undefined ? {} : { sensitive }),
       };

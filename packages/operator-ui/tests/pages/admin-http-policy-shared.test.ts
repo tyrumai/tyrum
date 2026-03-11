@@ -77,4 +77,60 @@ describe("admin-http-policy-shared", () => {
     ]);
     expect(bundle.tools?.allow).toEqual(["read", "write", "edit", "apply_patch", "glob", "grep"]);
   });
+
+  it("merges duplicate label sensitivity rows instead of dropping earlier values", () => {
+    const bundle = policyFormStateToBundle({
+      tools: {
+        defaultDecision: "deny",
+        allow: [],
+        requireApproval: [],
+        deny: [],
+      },
+      networkEgress: {
+        defaultDecision: "deny",
+        allow: [],
+        requireApproval: [],
+        deny: [],
+      },
+      secrets: {
+        defaultDecision: "deny",
+        allow: [],
+        requireApproval: [],
+        deny: [],
+      },
+      connectors: {
+        defaultDecision: "deny",
+        allow: [],
+        requireApproval: [],
+        deny: [],
+      },
+      artifacts: {
+        defaultDecision: "allow",
+        retentionDefaultDays: "",
+        retentionByLabel: [],
+        retentionBySensitivity: { normal: "", sensitive: "" },
+        retentionByLabelSensitivity: [
+          { id: "retention-1", key: "log", normal: "7", sensitive: "" },
+          { id: "retention-2", key: "log", normal: "", sensitive: "30" },
+        ],
+        quotaDefaultMaxBytes: "",
+        quotaByLabel: [],
+        quotaBySensitivity: { normal: "", sensitive: "" },
+        quotaByLabelSensitivity: [
+          { id: "quota-1", key: "log", normal: "", sensitive: "200" },
+          { id: "quota-2", key: "log", normal: "100", sensitive: "" },
+        ],
+      },
+      provenance: {
+        untrustedShellRequiresApproval: true,
+      },
+    });
+
+    expect(bundle.artifacts?.retention?.by_label_sensitivity).toEqual({
+      log: { normal: 7, sensitive: 30 },
+    });
+    expect(bundle.artifacts?.quota?.by_label_sensitivity).toEqual({
+      log: { normal: 100, sensitive: 200 },
+    });
+  });
 });
