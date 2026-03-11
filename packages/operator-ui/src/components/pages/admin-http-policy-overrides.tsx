@@ -56,7 +56,7 @@ export interface PolicyOverridesSectionProps {
     tool_id: string;
     pattern: string;
     expires_at?: string;
-  }) => Promise<void>;
+  }) => Promise<boolean>;
   onRevoke: (input: { policy_override_id: string; reason: string }) => Promise<void>;
 }
 
@@ -402,13 +402,14 @@ export function PolicyOverridesSection(props: PolicyOverridesSectionProps): Reac
         confirmLabel="Create override"
         isLoading={props.createBusy}
         onConfirm={async () => {
-          await props.onCreate({
+          const created = await props.onCreate({
             agent_id: agentId.trim(),
             ...(workspaceId.trim() ? { workspace_id: workspaceId.trim() } : {}),
             tool_id: toolId,
             pattern: pattern.trim(),
             ...(expiresAt.trim() ? { expires_at: new Date(expiresAt).toISOString() } : {}),
           });
+          if (!created) return;
           setAgentId("");
           setWorkspaceId("");
           setSelectedToolId("");

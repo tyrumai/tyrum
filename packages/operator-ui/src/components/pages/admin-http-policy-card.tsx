@@ -230,11 +230,12 @@ export function AdminHttpPolicyCard({
         }}
         onCreate={async (input) => {
           setCreateError(null);
-          if (!requireMutationAccess()) return;
+          if (!requireMutationAccess()) return false;
           setCreateBusy(true);
           try {
             await http.policy.createOverride(input);
             await loadAll();
+            return true;
           } catch (error) {
             setCreateError(error);
             throw error;

@@ -127,6 +127,15 @@ describe("ConfigurePage (HTTP) policy elevated mode prompts", () => {
     expect(getByTestId(document.body, "elevated-mode-dialog")).not.toBeNull();
     expect(document.body.textContent).not.toContain("Override creation failed");
     expect(document.body.textContent).not.toContain("Action failed");
+    expect(
+      getByTestId<HTMLSelectElement>(page.container, "admin-policy-override-agent").value,
+    ).toBe("00000000-0000-4000-8000-000000000002");
+    expect(getByTestId<HTMLSelectElement>(page.container, "admin-policy-override-tool").value).toBe(
+      "read",
+    );
+    expect(
+      getByTestId<HTMLInputElement>(page.container, "admin-policy-override-pattern").value,
+    ).toBe("docs/*");
 
     cleanupAdminHttpPage(page);
   });
