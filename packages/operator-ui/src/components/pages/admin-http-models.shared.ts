@@ -46,6 +46,11 @@ export type ModelDialogState = {
   reasoningEffort: "" | "low" | "medium" | "high";
 };
 
+type ModelRefSource = {
+  provider_key: string;
+  model_id: string;
+};
+
 export type DeletePresetDialogState = {
   preset: ModelPreset;
   requiredExecutionProfileIds: string[];
@@ -60,8 +65,8 @@ export function emptyDialogState(): ModelDialogState {
   };
 }
 
-export function modelRefFor(availableModel: AvailableModel): string {
-  return `${availableModel.provider_key}/${availableModel.model_id}`;
+export function modelRefFor(model: ModelRefSource): string {
+  return `${model.provider_key}/${model.model_id}`;
 }
 
 export function splitModelRef(modelRef: string): { providerKey: string; modelId: string } | null {

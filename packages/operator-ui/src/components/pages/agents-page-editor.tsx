@@ -3,7 +3,7 @@ import type { ManagedAgentDetail } from "@tyrum/schemas";
 import * as React from "react";
 import { useApiAction } from "../../hooks/use-api-action.js";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
-import type { ModelPreset } from "./admin-http-models.shared.js";
+import { modelRefFor, type ModelPreset } from "./admin-http-models.shared.js";
 import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent } from "../ui/card.js";
@@ -23,10 +23,6 @@ type AgentEditorProps = {
   onSaved: (agentKey: string) => void;
   onCancelCreate: () => void;
 };
-
-function modelRefForPreset(preset: ModelPreset): string {
-  return `${preset.provider_key}/${preset.model_id}`;
-}
 
 function sortJsonValue(value: unknown): unknown {
   if (Array.isArray(value)) {
@@ -56,7 +52,7 @@ function resolveSelectedPrimaryPreset(input: {
   const normalizedOptions = stableRecordStringify(input.options);
   const matches = input.presets.filter((preset) => {
     return (
-      modelRefForPreset(preset) === trimmedModel &&
+      modelRefFor(preset) === trimmedModel &&
       stableRecordStringify(preset.options) === normalizedOptions
     );
   });
@@ -191,7 +187,7 @@ export function AgentsPageEditor({
   );
   const selectPrimaryPreset = React.useCallback(
     (preset: ModelPreset) => {
-      setField("model", modelRefForPreset(preset));
+      setField("model", modelRefFor(preset));
       setPreservedModelOptions(preset.options);
     },
     [setField],

@@ -1,3 +1,4 @@
+import { AgentConfig, IdentityPack } from "@tyrum/schemas";
 import { describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -7,6 +8,7 @@ import type { OperatorCore } from "../../operator-core/src/index.js";
 import { OperatorUiApp } from "../src/index.js";
 import { AgentsPage } from "../src/components/pages/agents-page.js";
 import { RetainedUiStateProvider, useReconnectTabState } from "../src/reconnect-ui-state.js";
+import { createModelConfigHttpFixtures } from "./operator-ui.admin-http-fixtures.js";
 import {
   TEST_DEVICE_IDENTITY,
   openConfigureTab,
@@ -44,6 +46,7 @@ function createConnectedOperatorCore(initiallyConnected: boolean): {
 }
 
 function createAgentsCore(): OperatorCore {
+  const { modelConfig } = createModelConfigHttpFixtures();
   const { store: connectionStore } = createStore({
     status: "connected",
     clientId: null,
@@ -106,15 +109,46 @@ function createAgentsCore(): OperatorCore {
         get: vi.fn().mockResolvedValue({
           agent_id: "11111111-1111-4111-8111-111111111111",
           agent_key: "default",
+          created_at: "2026-03-08T00:00:00.000Z",
+          updated_at: "2026-03-08T00:00:00.000Z",
           has_config: true,
           has_identity: true,
           can_delete: false,
-          persona: { name: "Default Agent" },
+          persona: {
+            name: "Default Agent",
+            description: "Managed agent",
+            tone: "direct",
+            palette: "graphite",
+            character: "architect",
+          },
+          config: AgentConfig.parse({
+            model: { model: "openai/gpt-4.1" },
+            persona: {
+              name: "Default Agent",
+              description: "Managed agent",
+              tone: "direct",
+              palette: "graphite",
+              character: "architect",
+            },
+          }),
+          identity: IdentityPack.parse({
+            meta: {
+              name: "Default Agent",
+              description: "Managed agent",
+              style: { tone: "direct" },
+            },
+            body: "",
+          }),
+          config_revision: 1,
+          identity_revision: 1,
+          config_sha256: "a".repeat(64),
+          identity_sha256: "b".repeat(64),
         }),
         create: vi.fn(),
         update: vi.fn(),
         delete: vi.fn(),
       },
+      modelConfig,
     },
     memoryStore: {
       ...memoryStore,

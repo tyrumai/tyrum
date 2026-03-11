@@ -2,7 +2,7 @@ import { ArrowDown, ArrowUp, ChevronDown, Plus, Trash2 } from "lucide-react";
 import * as React from "react";
 import type { AgentEditorSetField } from "./agents-page-editor-form.js";
 import { joinList, splitList } from "./agents-page-editor-form.js";
-import type { ModelPreset } from "./admin-http-models.shared.js";
+import { modelRefFor, type ModelPreset } from "./admin-http-models.shared.js";
 import { Alert } from "../ui/alert.js";
 import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
@@ -36,10 +36,6 @@ type FallbackChoice = {
   filterText: string;
 };
 
-function modelRefForPreset(preset: ModelPreset): string {
-  return `${preset.provider_key}/${preset.model_id}`;
-}
-
 function formatReasoningEffort(preset: ModelPreset): string {
   return preset.options.reasoning_effort ?? "default";
 }
@@ -47,7 +43,7 @@ function formatReasoningEffort(preset: ModelPreset): string {
 function buildFallbackChoices(presets: ModelPreset[]): FallbackChoice[] {
   const grouped = new Map<string, Set<string>>();
   for (const preset of presets) {
-    const modelRef = modelRefForPreset(preset);
+    const modelRef = modelRefFor(preset);
     const displayNames = grouped.get(modelRef) ?? new Set<string>();
     displayNames.add(preset.display_name);
     grouped.set(modelRef, displayNames);
@@ -129,7 +125,7 @@ export function AgentEditorModelFields({
         const searchable = [
           preset.display_name,
           preset.preset_key,
-          modelRefForPreset(preset),
+          modelRefFor(preset),
           formatReasoningEffort(preset),
         ]
           .join(" ")
@@ -191,7 +187,7 @@ export function AgentEditorModelFields({
       return (
         <SelectionSummary
           label={selectedPrimaryPreset.display_name}
-          detail={modelRefForPreset(selectedPrimaryPreset)}
+          detail={modelRefFor(selectedPrimaryPreset)}
           badges={
             <Badge variant="outline">
               Reasoning: {formatReasoningEffort(selectedPrimaryPreset)}
@@ -332,9 +328,7 @@ export function AgentEditorModelFields({
                                 Reasoning: {formatReasoningEffort(preset)}
                               </Badge>
                             </div>
-                            <span className="text-xs text-fg-muted">
-                              {modelRefForPreset(preset)}
-                            </span>
+                            <span className="text-xs text-fg-muted">{modelRefFor(preset)}</span>
                           </button>
                         );
                       })
