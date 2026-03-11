@@ -217,4 +217,76 @@ describe("handleSessionCompactMessage", () => {
       },
     });
   });
+
+  it("preserves the original stream error when cleanup emits fail", async () => {
+    vi.mocked(enqueueWsBroadcastMessage).mockClear();
+    vi.mocked(enqueueWsBroadcastMessage).mockImplementation(async (_db, _tenantId, event) => {
+      if (event.type === "session.send.failed" || event.type === "typing.stopped") {
+        throw new Error(`emit failed for ${event.type}`);
+      }
+    });
+
+    const cm = new ConnectionManager();
+    const { id } = makeClient(cm, ["cli"]);
+    const client = cm.getClient(id)!;
+    const runtime = {
+      turnStream: vi.fn(async () => ({
+        sessionId: "internal-session-1",
+        streamResult: {
+          fullStream: (async function* () {
+            yield { type: "text-delta", id: "assistant-1", delta: "Hello" };
+            throw new Error("stream failed");
+          })(),
+        },
+        finalize: vi.fn(async () => ({
+          reply: "ignored",
+          session_id: "internal-session-1",
+          session_key: "session-key-1",
+          used_tools: [],
+          memory_written: false,
+        })),
+      })),
+    };
+    const agents = {
+      getRuntime: vi.fn(async () => runtime),
+    };
+
+    vi.spyOn(SessionDal.prototype, "getOrCreate").mockResolvedValue({
+      session_id: "internal-session-1",
+      session_key: "session-key-1",
+    } as never);
+
+    const response = await handleSessionSendMessage(
+      client,
+      {
+        request_id: "r-4",
+        type: "session.send",
+        payload: {
+          agent_id: "default",
+          channel: "ui",
+          thread_id: "ui-session-1",
+          content: "hello",
+          client_message_id: "user-1",
+        },
+      } as never,
+      makeDeps(cm, { db: {} as never, agents: agents as never }),
+    );
+
+    expect(response).toMatchObject({
+      ok: false,
+      error: {
+        code: "agent_runtime_error",
+        message: "stream failed",
+      },
+    });
+    expect(
+      vi.mocked(enqueueWsBroadcastMessage).mock.calls.map(([, , event]) => event.type),
+    ).toEqual([
+      "typing.started",
+      "message.final",
+      "message.delta",
+      "session.send.failed",
+      "typing.stopped",
+    ]);
+  });
 });

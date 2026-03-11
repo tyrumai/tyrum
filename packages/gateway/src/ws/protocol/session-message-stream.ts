@@ -37,6 +37,25 @@ async function emitSessionEvent(
   await enqueueWsBroadcastMessage(deps.db, tenantId, event, OPERATOR_WS_AUDIENCE);
 }
 
+async function emitSessionEventBestEffort(input: {
+  deps: ProtocolDeps;
+  tenantId: string;
+  event: WsEventEnvelope;
+  stage: "stream_failed" | "typing_stopped_after_error";
+}): Promise<void> {
+  const { deps, tenantId, event, stage } = input;
+  try {
+    await emitSessionEvent(deps, tenantId, event);
+  } catch (error) {
+    deps.logger?.warn("ws.session_send.event_emit_failed", {
+      tenant_id: tenantId,
+      stage,
+      event_type: event.type,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
 function createSessionEvent(input: {
   type: SessionEventType;
   agentId: string;
@@ -68,6 +87,7 @@ export async function broadcastSessionSendStream(input: {
   const assistantParts = new Map<string, string>();
   const reasoningParts = new Map<string, string>();
   let approvalRequested = false;
+  let streamError: unknown;
 
   await emitSessionEvent(
     deps,
@@ -153,11 +173,13 @@ export async function broadcastSessionSendStream(input: {
       }
     }
   } catch (error) {
+    streamError = error;
     if (assistantParts.size > 0 || reasoningParts.size > 0) {
-      await emitSessionEvent(
+      await emitSessionEventBestEffort({
         deps,
         tenantId,
-        createSessionEvent({
+        stage: "stream_failed",
+        event: createSessionEvent({
           type: "session.send.failed",
           agentId,
           payload: {
@@ -168,23 +190,29 @@ export async function broadcastSessionSendStream(input: {
             reasoning_ids: [...reasoningParts.keys()],
           },
         }),
-      );
+      });
     }
     throw error;
   } finally {
-    await emitSessionEvent(
-      deps,
-      tenantId,
-      createSessionEvent({
-        type: "typing.stopped",
-        agentId,
-        payload: {
-          session_id: sessionKey,
-          thread_id: threadId,
-          lane: "assistant",
-        },
-      }),
-    );
+    const typingStoppedEvent = createSessionEvent({
+      type: "typing.stopped",
+      agentId,
+      payload: {
+        session_id: sessionKey,
+        thread_id: threadId,
+        lane: "assistant",
+      },
+    });
+    if (streamError) {
+      await emitSessionEventBestEffort({
+        deps,
+        tenantId,
+        stage: "typing_stopped_after_error",
+        event: typingStoppedEvent,
+      });
+    } else {
+      await emitSessionEvent(deps, tenantId, typingStoppedEvent);
+    }
   }
 
   for (const [messageId, content] of assistantParts) {
