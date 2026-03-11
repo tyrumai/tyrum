@@ -4,9 +4,11 @@ import { registerHttpClientAuditTests } from "./http-client.test-audit-support.j
 import { registerHttpClientCoreTests } from "./http-client.test-core-support.js";
 import { registerHttpClientManagedAgentTests } from "./http-client.test-managed-agents-support.js";
 import { registerHttpClientOpsTests } from "./http-client.test-ops-support.js";
+import { registerHttpClientTokenTests } from "./http-client.test-token-support.js";
 
 describe("createTyrumHttpClient", () => {
   registerHttpClientCoreTests();
+  registerHttpClientTokenTests();
   registerHttpClientAuthTests();
   registerHttpClientAuditTests();
   registerHttpClientOpsTests();

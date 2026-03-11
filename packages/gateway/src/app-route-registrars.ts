@@ -220,8 +220,20 @@ export function registerSystemAndPublicRoutes(context: AppRouteContext): void {
 export function registerAuthAndSecurityRoutes(context: AppRouteContext): void {
   if (context.opts.authTokens) {
     context.app.route("/", createAuthSessionRoutes({ authTokens: context.opts.authTokens }));
-    context.app.route("/", createAuthTokenRoutes({ authTokens: context.opts.authTokens }));
-    context.app.route("/", createDeviceTokenRoutes({ authTokens: context.opts.authTokens }));
+    context.app.route(
+      "/",
+      createAuthTokenRoutes({
+        authTokens: context.opts.authTokens,
+        connectionManager: context.opts.connectionManager,
+      }),
+    );
+    context.app.route(
+      "/",
+      createDeviceTokenRoutes({
+        authTokens: context.opts.authTokens,
+        connectionManager: context.opts.connectionManager,
+      }),
+    );
     context.app.route(
       "/",
       createSystemRoutes({

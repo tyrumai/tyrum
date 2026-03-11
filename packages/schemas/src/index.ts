@@ -57,7 +57,7 @@ export { TenantStatus, Tenant, TenantListResponse, TenantCreateRequest, TenantCr
 // prettier-ignore
 export { DeviceTokenIssueRequest, DeviceTokenIssueResponse, DeviceTokenRevokeRequest, DeviceTokenRevokeResponse, DeviceTokenClaims, MAX_DEVICE_TOKEN_TTL_SECONDS } from "./device-token.js";
 // prettier-ignore
-export { AuthTokenRole, AuthTokenClaims, MAX_AUTH_TOKEN_TTL_SECONDS, AuthTokenCreatedBy, AuthTokenIssueRequest, TenantAuthTokenIssueRequest, AuthTokenIssueResponse, AuthTokenListItem, AuthTokenListResponse, AuthTokenRevokeRequest, AuthTokenRevokeResponse } from "./auth-token.js";
+export { AuthTokenRole, AuthTokenClaims, MAX_AUTH_TOKEN_TTL_SECONDS, AuthTokenCreatedBy, AuthTokenIssueRequest, TenantAuthTokenIssueRequest, AuthTokenIssueResponse, AuthTokenListItem, AuthTokenListResponse, AuthTokenRevokeRequest, AuthTokenRevokeResponse, AuthTokenUpdateRequest, AuthTokenUpdateResponse } from "./auth-token.js";
 // prettier-ignore
 export { AuthProfileId, AuthProfileKey, AuthProviderId, AuthProfileType, AuthProfileStatus, AuthProfileSecretKeys, AuthProfileLabels, AuthProfile, AuthProfileCreateRequest, AuthProfileCreateResponse, AuthProfileListResponse, AuthProfileUpdateRequest, AuthProfileDisableRequest, AuthProfileEnableRequest, SessionProviderPin, SessionProviderPinListResponse, SessionProviderPinSetRequest } from "./auth-profile.js";
 // prettier-ignore

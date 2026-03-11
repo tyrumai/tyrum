@@ -116,7 +116,7 @@ function registerConfigurePanelsNavTests(): void {
     }
   });
 
-  it("requires confirmation before issuing a tenant token from Configure", async () => {
+  it("opens the structured add-token dialog from Configure", async () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
     const core = createOperatorCore({
@@ -150,20 +150,12 @@ function registerConfigurePanelsNavTests(): void {
         issueButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       });
 
-      const confirmButton = document.body.querySelector<HTMLButtonElement>(
-        '[data-testid="confirm-danger-confirm"]',
+      const dialog = document.body.querySelector<HTMLElement>(
+        '[data-testid="admin-http-token-dialog"]',
       );
-      expect(confirmButton).not.toBeNull();
-      expect(confirmButton?.disabled).toBe(true);
-
-      const checkbox = document.body.querySelector('[data-testid="confirm-danger-checkbox"]');
-      expect(checkbox).not.toBeNull();
-
-      act(() => {
-        checkbox?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      });
-
-      expect(confirmButton?.disabled).toBe(false);
+      expect(dialog).not.toBeNull();
+      expect(dialog?.textContent).toContain("Add token");
+      expect(document.body.querySelector('[data-testid="confirm-danger-dialog"]')).toBeNull();
     } finally {
       act(() => {
         root?.unmount();
@@ -197,6 +189,7 @@ function registerConfigurePanelsNavTests(): void {
               {
                 token_id: "token-1",
                 tenant_id: "11111111-1111-4111-8111-111111111111",
+                display_name: "Operator UI",
                 role: "client",
                 device_id: "operator-ui",
                 scopes: ["operator.read"],
@@ -204,6 +197,7 @@ function registerConfigurePanelsNavTests(): void {
                 expires_at: "2099-01-01T00:00:00.000Z",
                 revoked_at: null,
                 created_at: "2026-02-27T00:00:00.000Z",
+                updated_at: "2026-02-27T00:00:00.000Z",
               },
             ],
           }),

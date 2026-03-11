@@ -174,6 +174,7 @@ export function createSystemRoutes(deps: SystemRouteDeps): Hono {
 
     const issued = await deps.authTokens.issueToken({
       tenantId: parsed.data.tenant_id,
+      displayName: parsed.data.display_name,
       role: parsed.data.role,
       scopes: parsed.data.scopes,
       deviceId: parsed.data.device_id,
@@ -185,11 +186,13 @@ export function createSystemRoutes(deps: SystemRouteDeps): Hono {
         token: issued.token,
         token_id: issued.row.token_id,
         tenant_id: issued.row.tenant_id,
+        display_name: issued.row.display_name,
         role: issued.row.role,
         device_id: issued.row.device_id ?? undefined,
         scopes: JSON.parse(issued.row.scopes_json) as unknown,
         issued_at: issued.row.issued_at,
         expires_at: issued.row.expires_at ?? undefined,
+        updated_at: issued.row.updated_at,
       }),
       201,
     );

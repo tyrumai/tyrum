@@ -147,6 +147,20 @@ function applySessionTranscriptMigration(mem: ReturnType<typeof newDb>): void {
 
 function registerCommonPgFunctions(mem: ReturnType<typeof newDb>): void {
   mem.public.registerFunction({
+    name: "trim",
+    args: [DataType.text],
+    returns: DataType.text,
+    implementation: (value: string) => value.trim(),
+  });
+
+  mem.public.registerFunction({
+    name: "btrim",
+    args: [DataType.text],
+    returns: DataType.text,
+    implementation: (value: string) => value.trim(),
+  });
+
+  mem.public.registerFunction({
     name: "strpos",
     args: [DataType.text, DataType.text],
     returns: DataType.integer,

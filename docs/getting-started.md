@@ -40,7 +40,7 @@ If you lose that token later, issue a fresh recovery token against the same gate
 tyrum tokens issue-default-tenant-admin
 ```
 
-After you sign in, open `Configure -> Tokens` to manage tenant-scoped tokens in the UI. The list shows token metadata only; newly minted token secrets are shown once in the issue result and cannot be read back later.
+After you sign in, open `Configure -> Tokens` to manage tenant-scoped tokens in the UI. The page provides a filterable token list plus structured add/edit/revoke flows; newly minted token secrets are shown once in the issue result and cannot be read back later.
 
 ## 4. Singleton agent routes (default on)
 

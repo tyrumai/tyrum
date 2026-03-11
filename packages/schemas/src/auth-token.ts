@@ -43,6 +43,7 @@ export const AuthTokenIssueRequest = z
      * When set, issues a tenant-scoped token.
      */
     tenant_id: UuidSchema.nullable(),
+    display_name: z.string().trim().min(1).max(120).optional(),
     role: AuthTokenRole,
     scopes: z.array(Scope).default([]),
     /** Optional device binding (recommended for node/client tokens). */
@@ -62,10 +63,12 @@ export const AuthTokenIssueResponse = z
     token: z.string().trim().min(1),
     token_id: z.string().trim().min(1),
     tenant_id: UuidSchema.nullable(),
+    display_name: z.string().trim().min(1).max(120),
     role: AuthTokenRole,
     device_id: z.string().trim().min(1).optional(),
     scopes: z.array(Scope),
     issued_at: DateTimeSchema,
+    updated_at: DateTimeSchema,
     expires_at: DateTimeSchema.optional(),
   })
   .strict();
@@ -75,6 +78,7 @@ export const AuthTokenListItem = z
   .object({
     token_id: z.string().trim().min(1),
     tenant_id: UuidSchema.nullable(),
+    display_name: z.string().trim().min(1).max(120),
     role: AuthTokenRole,
     device_id: z.string().trim().min(1).nullable(),
     scopes: z.array(Scope),
@@ -82,6 +86,7 @@ export const AuthTokenListItem = z
     expires_at: DateTimeSchema.nullable(),
     revoked_at: DateTimeSchema.nullable(),
     created_at: DateTimeSchema,
+    updated_at: DateTimeSchema,
     created_by: AuthTokenCreatedBy.optional(),
   })
   .strict();
@@ -108,3 +113,32 @@ export const AuthTokenRevokeResponse = z
   })
   .strict();
 export type AuthTokenRevokeResponse = z.infer<typeof AuthTokenRevokeResponse>;
+
+export const AuthTokenUpdateRequest = z
+  .object({
+    display_name: z.string().trim().min(1).max(120).optional(),
+    role: AuthTokenRole.optional(),
+    device_id: z.string().trim().min(1).nullable().optional(),
+    scopes: z.array(Scope).optional(),
+    expires_at: DateTimeSchema.nullable().optional(),
+  })
+  .strict()
+  .refine(
+    (value) =>
+      typeof value.display_name !== "undefined" ||
+      typeof value.role !== "undefined" ||
+      typeof value.device_id !== "undefined" ||
+      typeof value.scopes !== "undefined" ||
+      typeof value.expires_at !== "undefined",
+    {
+      message: "at least one field must be updated",
+    },
+  );
+export type AuthTokenUpdateRequest = z.infer<typeof AuthTokenUpdateRequest>;
+
+export const AuthTokenUpdateResponse = z
+  .object({
+    token: AuthTokenListItem,
+  })
+  .strict();
+export type AuthTokenUpdateResponse = z.infer<typeof AuthTokenUpdateResponse>;

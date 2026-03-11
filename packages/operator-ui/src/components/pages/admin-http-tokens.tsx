@@ -3,274 +3,63 @@ import type { AuthTokenListEntry } from "@tyrum/client/browser";
 import * as React from "react";
 import { ElevatedModeTooltip } from "../elevated-mode/elevated-mode-tooltip.js";
 import { Alert } from "../ui/alert.js";
-import { ApiResultCard } from "../ui/api-result-card.js";
-import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
-import { Card, CardContent, CardFooter, CardHeader } from "../ui/card.js";
+import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { ConfirmDangerDialog } from "../ui/confirm-danger-dialog.js";
 import { Input } from "../ui/input.js";
-import { Label } from "../ui/label.js";
-import { RadioGroup, RadioGroupItem } from "../ui/radio-group.js";
-import { Separator } from "../ui/separator.js";
-import { Textarea } from "../ui/textarea.js";
+import { Select } from "../ui/select.js";
 import { useAdminHttpClient, useAdminMutationAccess } from "./admin-http-shared.js";
-
-type TokenRole = "admin" | "client" | "node";
-
-function parseScopesInput(value: string): string[] {
-  const scopes = value
-    .split(/[\n,]+/g)
-    .map((scope) => scope.trim())
-    .filter(Boolean);
-  return Array.from(new Set(scopes));
-}
-
-function isExpiredToken(token: AuthTokenListEntry): boolean {
-  if (!token.expires_at || token.revoked_at) return false;
-  const expiresAtMs = Date.parse(token.expires_at);
-  return Number.isFinite(expiresAtMs) && expiresAtMs <= Date.now();
-}
-
-function isInactiveToken(token: AuthTokenListEntry): boolean {
-  return Boolean(token.revoked_at) || isExpiredToken(token);
-}
-
-function statusVariant(token: AuthTokenListEntry): "success" | "warning" {
-  return isInactiveToken(token) ? "warning" : "success";
-}
-
-function statusLabel(token: AuthTokenListEntry): string {
-  if (token.revoked_at) return "Revoked";
-  if (isExpiredToken(token)) return "Expired";
-  return "Active";
-}
-
-function formatTimestamp(value: string | null | undefined): string {
-  return value ?? "Never";
-}
-
-function TokenListCard({
-  tokens,
-  busy,
-  error,
-  canMutate,
-  requestEnter,
-  onRefresh,
-  onRevoke,
-}: {
-  tokens: AuthTokenListEntry[];
-  busy: boolean;
-  error: unknown;
-  canMutate: boolean;
-  requestEnter: () => void;
-  onRefresh: () => Promise<void>;
-  onRevoke: (token: AuthTokenListEntry) => void;
-}): React.ReactElement {
-  return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between gap-3">
-          <div className="grid gap-1">
-            <div className="text-sm font-medium text-fg">Existing tokens</div>
-            <div className="text-sm text-fg-muted">
-              Token secrets are never shown here again after issuance.
-            </div>
-          </div>
-          <Button
-            type="button"
-            variant="secondary"
-            data-testid="admin-http-tokens-refresh"
-            isLoading={busy}
-            onClick={() => {
-              void onRefresh();
-            }}
-          >
-            Refresh
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent className="grid gap-4">
-        {error ? <ApiResultCard heading="Token list" error={error} /> : null}
-        {!error && tokens.length === 0 ? (
-          <Alert
-            variant="info"
-            title="No tenant tokens yet"
-            description="Issue a token below to create the first tenant-scoped token."
-          />
-        ) : null}
-        {tokens.map((token) => (
-          <div
-            key={token.token_id}
-            className="grid gap-3 rounded-lg border border-border p-4"
-            data-testid={`admin-http-token-row-${token.token_id}`}
-          >
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge>{token.role}</Badge>
-              <Badge variant={statusVariant(token)}>{statusLabel(token)}</Badge>
-              {token.device_id ? <Badge variant="outline">{token.device_id}</Badge> : null}
-            </div>
-            <div className="grid gap-1 text-sm text-fg-muted">
-              <div>
-                <span className="font-medium text-fg">Token ID:</span>{" "}
-                <span className="font-mono text-xs">{token.token_id}</span>
-              </div>
-              <div>
-                <span className="font-medium text-fg">Issued:</span>{" "}
-                {formatTimestamp(token.issued_at)}
-              </div>
-              <div>
-                <span className="font-medium text-fg">Expires:</span>{" "}
-                {formatTimestamp(token.expires_at)}
-              </div>
-              <div>
-                <span className="font-medium text-fg">Revoked:</span>{" "}
-                {formatTimestamp(token.revoked_at)}
-              </div>
-              <div>
-                <span className="font-medium text-fg">Scopes:</span>{" "}
-                {token.scopes.length > 0 ? token.scopes.join(", ") : "(none)"}
-              </div>
-            </div>
-            <div>
-              <ElevatedModeTooltip canMutate={canMutate} requestEnter={requestEnter}>
-                <Button
-                  type="button"
-                  variant="danger"
-                  size="sm"
-                  data-testid={`admin-http-token-revoke-${token.token_id}`}
-                  disabled={isInactiveToken(token)}
-                  onClick={() => {
-                    onRevoke(token);
-                  }}
-                >
-                  Revoke
-                </Button>
-              </ElevatedModeTooltip>
-            </div>
-          </div>
-        ))}
-      </CardContent>
-    </Card>
-  );
-}
-
-function TokenIssueFields({
-  role,
-  setRole,
-  deviceId,
-  setDeviceId,
-  scopes,
-  setScopes,
-  ttlSeconds,
-  setTtlSeconds,
-}: {
-  role: TokenRole;
-  setRole: (next: TokenRole) => void;
-  deviceId: string;
-  setDeviceId: (next: string) => void;
-  scopes: string;
-  setScopes: (next: string) => void;
-  ttlSeconds: string;
-  setTtlSeconds: (next: string) => void;
-}) {
-  return (
-    <div className="grid gap-4">
-      <fieldset className="grid gap-3">
-        <legend className="text-sm font-medium leading-none text-fg">
-          Role{" "}
-          <span aria-hidden="true" className="text-error">
-            *
-          </span>
-        </legend>
-        <RadioGroup
-          value={role}
-          onValueChange={(value) => {
-            if (value === "admin" || value === "client" || value === "node") {
-              setRole(value);
-            }
-          }}
-          className="grid gap-3"
-        >
-          <div className="flex items-center gap-2">
-            <RadioGroupItem id="auth-token-role-admin" value="admin" />
-            <Label htmlFor="auth-token-role-admin">Admin</Label>
-          </div>
-          <div className="flex items-center gap-2">
-            <RadioGroupItem id="auth-token-role-client" value="client" />
-            <Label htmlFor="auth-token-role-client">Client</Label>
-          </div>
-          <div className="flex items-center gap-2">
-            <RadioGroupItem id="auth-token-role-node" value="node" />
-            <Label htmlFor="auth-token-role-node">Node</Label>
-          </div>
-        </RadioGroup>
-      </fieldset>
-
-      <Input
-        label="Device ID"
-        value={deviceId}
-        placeholder={role === "admin" ? "Optional" : "device-123"}
-        helperText={
-          role === "admin" ? "Optional for admin tokens." : "Recommended for client/node tokens."
-        }
-        onChange={(event) => {
-          setDeviceId(event.currentTarget.value);
-        }}
-      />
-
-      <Textarea
-        label="Scopes"
-        rows={3}
-        value={scopes}
-        placeholder={role === "admin" ? "*" : "operator.read\noperator.admin"}
-        helperText="Comma or newline separated. Leave blank for no scopes."
-        onChange={(event) => {
-          setScopes(event.currentTarget.value);
-        }}
-      />
-
-      <Input
-        label="TTL (seconds)"
-        type="number"
-        inputMode="numeric"
-        value={ttlSeconds}
-        helperText="Leave blank to issue a persistent token."
-        onChange={(event) => {
-          setTtlSeconds(event.currentTarget.value);
-        }}
-      />
-    </div>
-  );
-}
+import { IssuedTokenNotice, SummaryBadge } from "./admin-http-tokens-display.js";
+import { TokenResults } from "./admin-http-tokens-results.js";
+import {
+  type AuthTokenIssueResult,
+  buildIssueInput,
+  buildUpdateInput,
+  defaultFormState,
+  formatAccessSummary,
+  formStateFromToken,
+  matchesQuery,
+  type DialogMode,
+  type TokenFormState,
+  type TokenRole,
+  type TokenStatusFilter,
+  sortVisibleTokens,
+  TokenDialog,
+  tokenStatus,
+  validateForm,
+} from "./admin-http-tokens-shared.js";
 
 export function AuthTokensCard({ core }: { core: OperatorCore }): React.ReactElement {
   const { canMutate, requestEnter } = useAdminMutationAccess(core);
   const http = useAdminHttpClient() ?? core.http;
   const [tokens, setTokens] = React.useState<AuthTokenListEntry[]>([]);
-  const [listBusy, setListBusy] = React.useState(false);
-  const [listError, setListError] = React.useState<unknown>(undefined);
-  const [issueOpen, setIssueOpen] = React.useState(false);
-  const [issueRole, setIssueRole] = React.useState<TokenRole>("client");
-  const [issueDeviceId, setIssueDeviceId] = React.useState("operator-ui");
-  const [issueScopes, setIssueScopes] = React.useState("");
-  const [issueTtlSeconds, setIssueTtlSeconds] = React.useState("600");
-  const [issueResult, setIssueResult] = React.useState<unknown>(undefined);
-  const [issueError, setIssueError] = React.useState<unknown>(undefined);
+  const [listBusy, setListBusy] = React.useState(true);
+  const [listErrorMessage, setListErrorMessage] = React.useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = React.useState("");
+  const [statusFilter, setStatusFilter] = React.useState<TokenStatusFilter>("all");
+  const [roleFilter, setRoleFilter] = React.useState<"all" | TokenRole>("all");
+  const [dialogMode, setDialogMode] = React.useState<DialogMode | null>(null);
+  const [editingToken, setEditingToken] = React.useState<AuthTokenListEntry | null>(null);
+  const [initialEditExpirationState, setInitialEditExpirationState] = React.useState<Pick<
+    TokenFormState,
+    "expirationPreset" | "customExpiresAt"
+  > | null>(null);
+  const [formState, setFormState] = React.useState(defaultFormState());
+  const [dialogErrorMessage, setDialogErrorMessage] = React.useState<string | null>(null);
+  const [dialogBusy, setDialogBusy] = React.useState(false);
+  const [issuedToken, setIssuedToken] = React.useState<AuthTokenIssueResult | null>(null);
   const [revokeTarget, setRevokeTarget] = React.useState<AuthTokenListEntry | null>(null);
-  const [revokeResult, setRevokeResult] = React.useState<unknown>(undefined);
-  const [revokeError, setRevokeError] = React.useState<unknown>(undefined);
+  const [revokeErrorMessage, setRevokeErrorMessage] = React.useState<string | null>(null);
 
-  const issueDeviceIdTrimmed = issueDeviceId.trim();
-  const canIssue = issueRole === "admin" || issueDeviceIdTrimmed.length > 0;
-
-  const loadTokens = React.useCallback(async (): Promise<void> => {
+  const loadTokens = React.useCallback(async () => {
     setListBusy(true);
-    setListError(undefined);
+    setListErrorMessage(null);
     try {
       const result = await http.authTokens.list();
       setTokens(result.tokens);
     } catch (error) {
-      setListError(error);
+      setListErrorMessage(error instanceof Error ? error.message : "Failed to load tokens.");
+      setTokens([]);
     } finally {
       setListBusy(false);
     }
@@ -280,41 +69,95 @@ export function AuthTokensCard({ core }: { core: OperatorCore }): React.ReactEle
     void loadTokens();
   }, [loadTokens]);
 
-  const runIssue = async (): Promise<void> => {
-    setIssueResult(undefined);
-    setIssueError(undefined);
+  const visibleTokens = React.useMemo(() => {
+    const filtered = tokens.filter((token) => {
+      if (!matchesQuery(token, searchQuery.trim())) return false;
+      if (statusFilter !== "all" && tokenStatus(token) !== statusFilter) return false;
+      if (roleFilter !== "all" && token.role !== roleFilter) return false;
+      return true;
+    });
+    return sortVisibleTokens(filtered);
+  }, [roleFilter, searchQuery, statusFilter, tokens]);
+
+  const counts = React.useMemo(
+    () => ({
+      total: tokens.length,
+      active: tokens.filter((token) => tokenStatus(token) === "active").length,
+      expired: tokens.filter((token) => tokenStatus(token) === "expired").length,
+      revoked: tokens.filter((token) => tokenStatus(token) === "revoked").length,
+    }),
+    [tokens],
+  );
+
+  const openCreateDialog = () => {
+    setDialogMode("create");
+    setEditingToken(null);
+    setInitialEditExpirationState(null);
+    setFormState(defaultFormState());
+    setDialogErrorMessage(null);
+    setIssuedToken(null);
+  };
+
+  const openEditDialog = (token: AuthTokenListEntry) => {
+    const initialFormState = formStateFromToken(token);
+    setDialogMode("edit");
+    setEditingToken(token);
+    setInitialEditExpirationState({
+      expirationPreset: initialFormState.expirationPreset,
+      customExpiresAt: initialFormState.customExpiresAt,
+    });
+    setFormState(initialFormState);
+    setDialogErrorMessage(null);
+    setIssuedToken(null);
+  };
+
+  const closeDialog = (open: boolean) => {
+    if (open) return;
+    setDialogMode(null);
+    setEditingToken(null);
+    setInitialEditExpirationState(null);
+    setDialogErrorMessage(null);
+    setDialogBusy(false);
+  };
+
+  const saveDialog = async (): Promise<void> => {
     if (!canMutate) {
       requestEnter();
-      throw new Error("Enter Elevated Mode to issue tokens.");
+      return;
+    }
+    const validationError = validateForm(formState, {
+      initialExpiresAt: dialogMode === "edit" ? (editingToken?.expires_at ?? null) : null,
+    });
+    if (validationError) {
+      setDialogErrorMessage(validationError);
+      return;
     }
 
-    const ttlRaw = issueTtlSeconds.trim();
-    const ttl_seconds = ttlRaw.length > 0 ? Number(ttlRaw) : undefined;
-    if (typeof ttl_seconds === "number" && (!Number.isInteger(ttl_seconds) || ttl_seconds <= 0)) {
-      throw new Error("TTL must be a positive integer number of seconds.");
-    }
-    if (issueRole !== "admin" && issueDeviceIdTrimmed.length === 0) {
-      throw new Error("Device ID is required for client and node tokens.");
-    }
-
+    setDialogBusy(true);
+    setDialogErrorMessage(null);
     try {
-      const result = await http.authTokens.issue({
-        role: issueRole,
-        scopes: parseScopesInput(issueScopes),
-        ...(issueDeviceIdTrimmed.length > 0 ? { device_id: issueDeviceIdTrimmed } : {}),
-        ...(typeof ttl_seconds === "number" ? { ttl_seconds } : {}),
-      });
-      setIssueResult(result);
+      if (dialogMode === "create") {
+        setIssuedToken(await http.authTokens.issue(buildIssueInput(formState)));
+      } else if (dialogMode === "edit" && editingToken) {
+        await http.authTokens.update(
+          editingToken.token_id,
+          buildUpdateInput(formState, {
+            initialExpiresAt: editingToken.expires_at,
+            initialExpirationPreset: initialEditExpirationState?.expirationPreset,
+            initialCustomExpiresAt: initialEditExpirationState?.customExpiresAt,
+          }),
+        );
+      }
+      closeDialog(false);
       await loadTokens();
     } catch (error) {
-      setIssueError(error);
-      throw error;
+      setDialogErrorMessage(error instanceof Error ? error.message : "Failed to save token.");
+    } finally {
+      setDialogBusy(false);
     }
   };
 
-  const runRevoke = async (): Promise<void> => {
-    setRevokeResult(undefined);
-    setRevokeError(undefined);
+  const revokeToken = async (): Promise<void> => {
     if (!canMutate) {
       requestEnter();
       throw new Error("Enter Elevated Mode to revoke tokens.");
@@ -323,12 +166,17 @@ export function AuthTokensCard({ core }: { core: OperatorCore }): React.ReactEle
       throw new Error("Select a token to revoke.");
     }
 
+    setRevokeErrorMessage(null);
     try {
       const result = await http.authTokens.revoke({ token_id: revokeTarget.token_id });
-      setRevokeResult(result);
+      if (!result.revoked) {
+        throw new Error("Token could not be revoked.");
+      }
+      setIssuedToken(null);
       await loadTokens();
     } catch (error) {
-      setRevokeError(error);
+      const message = error instanceof Error ? error.message : "Failed to revoke token.";
+      setRevokeErrorMessage(message);
       throw error;
     }
   };
@@ -336,70 +184,129 @@ export function AuthTokensCard({ core }: { core: OperatorCore }): React.ReactEle
   return (
     <Card data-testid="admin-http-tokens">
       <CardHeader>
-        <div className="text-sm font-medium text-fg">Tenant Tokens</div>
-        <div className="text-sm text-fg-muted">
-          List tenant tokens, mint new ones, and revoke by token ID.
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="space-y-1">
+            <div className="text-sm font-medium text-fg">Tenant tokens</div>
+            <p className="text-sm text-fg-muted">
+              Filter existing tokens, create new ones with structured fields, and edit or revoke
+              them in place.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <SummaryBadge label="Visible" value={visibleTokens.length} />
+            <SummaryBadge label="Total" value={counts.total} />
+            <SummaryBadge label="Active" value={counts.active} />
+            <SummaryBadge label="Expired" value={counts.expired} />
+            <SummaryBadge label="Revoked" value={counts.revoked} />
+            <Button
+              type="button"
+              variant="secondary"
+              data-testid="admin-http-tokens-refresh"
+              isLoading={listBusy}
+              onClick={() => {
+                void loadTokens();
+              }}
+            >
+              Refresh
+            </Button>
+            <ElevatedModeTooltip canMutate={canMutate} requestEnter={requestEnter}>
+              <Button
+                type="button"
+                data-testid="admin-http-tokens-issue"
+                onClick={openCreateDialog}
+              >
+                Add token
+              </Button>
+            </ElevatedModeTooltip>
+          </div>
         </div>
       </CardHeader>
-      <CardContent className="grid gap-6">
+
+      <CardContent className="grid gap-4">
         <Alert
           variant="info"
           title="Write-once secrets"
-          description="Token secrets are shown only in the issue result after minting and are not readable later."
+          description="Token secrets are shown once after creation and are never readable from the list."
         />
 
-        <TokenListCard
-          tokens={tokens}
-          busy={listBusy}
-          error={listError}
-          canMutate={canMutate}
-          requestEnter={requestEnter}
-          onRefresh={loadTokens}
-          onRevoke={setRevokeTarget}
-        />
-
-        <Separator />
-
-        <div className="grid gap-4">
-          <div className="text-sm font-medium text-fg">Issue token</div>
-          <TokenIssueFields
-            role={issueRole}
-            setRole={setIssueRole}
-            deviceId={issueDeviceId}
-            setDeviceId={setIssueDeviceId}
-            scopes={issueScopes}
-            setScopes={setIssueScopes}
-            ttlSeconds={issueTtlSeconds}
-            setTtlSeconds={setIssueTtlSeconds}
+        {issuedToken ? (
+          <IssuedTokenNotice
+            token={issuedToken}
+            onDismiss={() => {
+              setIssuedToken(null);
+            }}
           />
-          <ApiResultCard heading="Issue result" value={issueResult} error={issueError} />
-        </div>
+        ) : null}
 
-        <ApiResultCard heading="Revoke result" value={revokeResult} error={revokeError} />
-      </CardContent>
-      <CardFooter className="gap-3">
-        <ElevatedModeTooltip canMutate={canMutate} requestEnter={requestEnter}>
-          <Button
-            type="button"
-            variant="danger"
-            data-testid="admin-http-tokens-issue"
-            disabled={!canIssue}
-            onClick={() => {
-              setIssueOpen(true);
+        {revokeErrorMessage ? (
+          <Alert variant="error" title="Token revoke failed" description={revokeErrorMessage} />
+        ) : null}
+
+        {listErrorMessage ? (
+          <Alert variant="error" title="Token list failed" description={listErrorMessage} />
+        ) : null}
+
+        <div className="grid gap-3 rounded-lg border border-border p-3 lg:grid-cols-[minmax(0,1fr)_12rem_12rem]">
+          <Input
+            label="Search"
+            data-testid="admin-http-token-search"
+            value={searchQuery}
+            placeholder="Search by name, token ID, device ID, role, or scope"
+            onChange={(event) => {
+              setSearchQuery(event.currentTarget.value);
+            }}
+          />
+          <Select
+            label="Status"
+            data-testid="admin-http-token-filter-status"
+            value={statusFilter}
+            onChange={(event) => {
+              setStatusFilter(event.currentTarget.value as TokenStatusFilter);
             }}
           >
-            Issue token
-          </Button>
-        </ElevatedModeTooltip>
-      </CardFooter>
+            <option value="all">All</option>
+            <option value="active">Active</option>
+            <option value="expired">Expired</option>
+            <option value="revoked">Revoked</option>
+          </Select>
+          <Select
+            label="Role"
+            data-testid="admin-http-token-filter-role"
+            value={roleFilter}
+            onChange={(event) => {
+              setRoleFilter(event.currentTarget.value as "all" | TokenRole);
+            }}
+          >
+            <option value="all">All</option>
+            <option value="admin">Admin</option>
+            <option value="client">Client</option>
+            <option value="node">Node</option>
+          </Select>
+        </div>
 
-      <ConfirmDangerDialog
-        open={issueOpen}
-        onOpenChange={setIssueOpen}
-        title="Issue tenant token"
-        description="This creates credentials that can immediately access the tenant gateway APIs."
-        confirmLabel="Issue token"
-        onConfirm={runIssue}
+        <TokenResults
+          listBusy={listBusy}
+          tokens={tokens}
+          visibleTokens={visibleTokens}
+          canMutate={canMutate}
+          requestEnter={requestEnter}
+          onAddToken={openCreateDialog}
+          onEditToken={openEditDialog}
+          onRevokeToken={setRevokeTarget}
+        />
+      </CardContent>
+
+      <TokenDialog
+        open={dialogMode !== null}
+        mode={dialogMode ?? "create"}
+        state={formState}
+        errorMessage={dialogErrorMessage}
+        saving={dialogBusy}
+        onOpenChange={closeDialog}
+        onStateChange={setFormState}
+        onSave={() => {
+          void saveDialog();
+        }}
       />
 
       <ConfirmDangerDialog
@@ -409,20 +316,30 @@ export function AuthTokensCard({ core }: { core: OperatorCore }): React.ReactEle
             setRevokeTarget(null);
           }
         }}
-        title="Revoke tenant token"
-        description="This invalidates the selected token immediately."
+        title="Revoke token"
+        description={
+          revokeTarget
+            ? `Revoke ${revokeTarget.display_name} (${revokeTarget.token_id}). This invalidates the token immediately.`
+            : undefined
+        }
         confirmLabel="Revoke token"
-        onConfirm={runRevoke}
+        onConfirm={revokeToken}
       >
-        <div className="grid gap-2 text-sm text-fg-muted">
-          <div>
-            <span className="font-medium text-fg">Token ID:</span>{" "}
-            <span className="font-mono text-xs">{revokeTarget?.token_id ?? "(missing)"}</span>
+        {revokeTarget ? (
+          <div className="grid gap-2 text-sm text-fg-muted">
+            <div>
+              <span className="font-medium text-fg">Role:</span> {revokeTarget.role}
+            </div>
+            <div>
+              <span className="font-medium text-fg">Device:</span>{" "}
+              {revokeTarget.device_id ?? "Optional"}
+            </div>
+            <div>
+              <span className="font-medium text-fg">Access:</span>{" "}
+              {formatAccessSummary(revokeTarget)}
+            </div>
           </div>
-          <div>
-            <span className="font-medium text-fg">Role:</span> {revokeTarget?.role ?? "(missing)"}
-          </div>
-        </div>
+        ) : null}
       </ConfirmDangerDialog>
     </Card>
   );

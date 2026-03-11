@@ -15,9 +15,11 @@ import {
 } from "@tyrum/schemas";
 import type { AuthTokenService } from "../modules/auth/auth-token-service.js";
 import { requireAuthClaims, requireTenantId } from "../modules/auth/claims.js";
+import type { ConnectionManager } from "../ws/connection-manager.js";
 
 export interface DeviceTokenRouteDeps {
   authTokens: AuthTokenService;
+  connectionManager?: ConnectionManager;
 }
 
 export function createDeviceTokenRoutes(deps: DeviceTokenRouteDeps): Hono {
@@ -103,6 +105,11 @@ export function createDeviceTokenRoutes(deps: DeviceTokenRouteDeps): Hono {
     }
 
     const revoked = await deps.authTokens.revokeToken(tokenClaims.token_id);
+    if (revoked) {
+      deps.connectionManager?.closeClientsForTokenId(tokenClaims.token_id, {
+        reason: "token revoked",
+      });
+    }
     return c.json(
       DeviceTokenRevokeResponse.parse({
         revoked,

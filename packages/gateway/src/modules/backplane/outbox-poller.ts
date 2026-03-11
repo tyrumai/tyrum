@@ -8,7 +8,7 @@ import {
   type WsBroadcastAudience,
   type WsBroadcastRole,
 } from "../../ws/audience.js";
-import { normalizeScopes } from "../auth/scopes.js";
+import { isBreakGlassAdmin, normalizeScopes } from "../auth/scopes.js";
 import { safeSendWs } from "../../ws/safe-send.js";
 
 export interface OutboxPollerOptions {
@@ -38,6 +38,7 @@ function canReceiveAuthAudit(client: ConnectedClient): boolean {
   if (client.role !== "client") return false;
   const claims = client.auth_claims;
   if (!claims) return false;
+  if (isBreakGlassAdmin(claims)) return true;
   const scopes = Array.isArray(claims.scopes) ? claims.scopes : [];
   if (scopes.includes("*")) return true;
   return scopes.some((scope) => typeof scope === "string" && scope.startsWith("operator."));

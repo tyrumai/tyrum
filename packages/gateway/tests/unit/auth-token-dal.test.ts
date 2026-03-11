@@ -8,6 +8,7 @@ describe("AuthTokenDal", () => {
       {
         token_id: "token-1",
         tenant_id: "11111111-1111-4111-8111-111111111111",
+        display_name: "Admin token",
         role: "admin",
         device_id: null,
         scopes_json: JSON.stringify(["*"]),
@@ -16,6 +17,7 @@ describe("AuthTokenDal", () => {
         revoked_at: null,
         created_by_json: "{}",
         created_at: "2026-03-01T00:00:00.000Z",
+        updated_at: "2026-03-01T00:00:00.000Z",
       },
     ]);
     const db = {
@@ -30,6 +32,7 @@ describe("AuthTokenDal", () => {
       {
         token_id: "token-1",
         tenant_id: "11111111-1111-4111-8111-111111111111",
+        display_name: "Admin token",
         role: "admin",
         device_id: null,
         scopes_json: JSON.stringify(["*"]),
@@ -38,6 +41,7 @@ describe("AuthTokenDal", () => {
         revoked_at: null,
         created_by_json: "{}",
         created_at: "2026-03-01T00:00:00.000Z",
+        updated_at: "2026-03-01T00:00:00.000Z",
       },
     ]);
 
@@ -46,5 +50,24 @@ describe("AuthTokenDal", () => {
     expect(sql).not.toContain("secret_salt");
     expect(sql).not.toContain("secret_hash");
     expect(sql).not.toContain("kdf");
+  });
+
+  it("updates updated_at when revoking a token", async () => {
+    const get = vi.fn(async () => ({ token_id: "token-1" }));
+    const db = {
+      kind: "sqlite",
+      get,
+    } as unknown as SqlDb;
+
+    const dal = new AuthTokenDal(db);
+    const nowIso = "2026-03-11T12:00:00.000Z";
+
+    await expect(dal.revoke("token-1", nowIso)).resolves.toBe(true);
+
+    const sql = get.mock.calls[0]?.[0] as string | undefined;
+    const params = get.mock.calls[0]?.[1] as unknown[] | undefined;
+    expect(sql).toContain("SET revoked_at = ?,");
+    expect(sql).toContain("updated_at = ?");
+    expect(params).toEqual([nowIso, nowIso, "token-1"]);
   });
 });

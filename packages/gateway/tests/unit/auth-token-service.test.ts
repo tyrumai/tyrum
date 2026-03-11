@@ -31,7 +31,7 @@ describe("AuthTokenService", () => {
         token_id: issued.row.token_id,
         tenant_id: DEFAULT_TENANT_ID,
         role: "admin",
-        scopes: ["*"],
+        scopes: [],
       }),
     );
   });
@@ -62,6 +62,86 @@ describe("AuthTokenService", () => {
     expect(await svc.authenticate(issued.token, { expectedRole: "admin" })).toBeNull();
   });
 
+  it("derives display names and supports in-place token updates", async () => {
+    const svc = new AuthTokenService(db);
+    const issued = await svc.issueToken({
+      tenantId: DEFAULT_TENANT_ID,
+      role: "client",
+      deviceId: "dev_client_1",
+      scopes: ["operator.read"],
+    });
+
+    expect(issued.row.display_name).toBe("dev_client_1");
+    expect(issued.row.updated_at).toBe(issued.row.issued_at);
+
+    const updated = await svc.updateToken({
+      tokenId: issued.row.token_id,
+      displayName: "Operator token",
+      role: "admin",
+      deviceId: null,
+      scopes: ["operator.read", "operator.admin"],
+      expiresAt: null,
+    });
+
+    expect(updated).toEqual(
+      expect.objectContaining({
+        token_id: issued.row.token_id,
+        display_name: "Operator token",
+        role: "admin",
+        device_id: null,
+        scopes_json: JSON.stringify([]),
+      }),
+    );
+
+    const claims = await svc.authenticate(issued.token);
+    expect(claims).toEqual(
+      expect.objectContaining({
+        token_kind: "admin",
+        role: "admin",
+        scopes: [],
+      }),
+    );
+  });
+
+  it("truncates derived display names from long device ids", async () => {
+    const svc = new AuthTokenService(db);
+    const deviceId = `dev_${"x".repeat(140)}`;
+
+    const issued = await svc.issueToken({
+      tenantId: DEFAULT_TENANT_ID,
+      role: "client",
+      deviceId,
+      scopes: ["operator.read"],
+    });
+
+    expect(issued.row.display_name).toHaveLength(120);
+    expect(issued.row.display_name).toBe(deviceId.slice(0, 120));
+    expect(issued.row.device_id).toBe(deviceId);
+  });
+
+  it("truncates explicit display names from direct service callers", async () => {
+    const svc = new AuthTokenService(db);
+    const displayName = `token-${"x".repeat(140)}`;
+
+    const issued = await svc.issueToken({
+      tenantId: DEFAULT_TENANT_ID,
+      displayName,
+      role: "client",
+      scopes: ["operator.read"],
+    });
+
+    expect(issued.row.display_name).toHaveLength(120);
+    expect(issued.row.display_name).toBe(displayName.slice(0, 120));
+
+    const updated = await svc.updateToken({
+      tokenId: issued.row.token_id,
+      displayName: `renamed-${"y".repeat(140)}`,
+    });
+
+    expect(updated?.display_name).toHaveLength(120);
+    expect(updated?.display_name).toBe(`renamed-${"y".repeat(140)}`.slice(0, 120));
+  });
+
   it("rejects malformed or unknown tokens", async () => {
     const svc = new AuthTokenService(db);
     expect(await svc.authenticate(undefined)).toBeNull();
@@ -90,6 +170,14 @@ describe("AuthTokenService", () => {
     expect(await svc.authenticate(issued.token)).not.toBeNull();
     expect(await svc.revokeToken(issued.row.token_id)).toBe(true);
     expect(await svc.authenticate(issued.token)).toBeNull();
+    const revokedRow = await db.get<{ revoked_at: string | null; updated_at: string | null }>(
+      `SELECT revoked_at, updated_at
+       FROM auth_tokens
+       WHERE token_id = ?`,
+      [issued.row.token_id],
+    );
+    expect(revokedRow?.revoked_at).toBeTruthy();
+    expect(revokedRow?.updated_at).toBe(revokedRow?.revoked_at);
 
     // Expiry path (new token).
     const issued2 = await svc.issueToken({
@@ -126,7 +214,7 @@ describe("AuthTokenService", () => {
         token_id: "provisioned-default-tenant-admin",
         tenant_id: DEFAULT_TENANT_ID,
         role: "admin",
-        scopes: ["*"],
+        scopes: [],
       }),
     );
     expect(await svc.countActiveTenantAdminTokens(DEFAULT_TENANT_ID)).toBe(1);
