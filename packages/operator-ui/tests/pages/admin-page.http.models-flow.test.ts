@@ -34,6 +34,32 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+function getDialogInput(dialog: HTMLElement, labelText: string): HTMLInputElement {
+  const label = expectPresent(
+    Array.from(dialog.querySelectorAll<HTMLLabelElement>("label")).find((candidate) =>
+      candidate.textContent?.includes(labelText),
+    ),
+  );
+  const control = label.control;
+  if (!(control instanceof HTMLInputElement)) {
+    throw new Error(`Expected label "${labelText}" to target an input.`);
+  }
+  return control;
+}
+
+function getDialogSelect(dialog: HTMLElement, labelText: string): HTMLSelectElement {
+  const label = expectPresent(
+    Array.from(dialog.querySelectorAll<HTMLLabelElement>("label")).find((candidate) =>
+      candidate.textContent?.includes(labelText),
+    ),
+  );
+  const control = label.control;
+  if (!(control instanceof HTMLSelectElement)) {
+    throw new Error(`Expected label "${labelText}" to target a select.`);
+  }
+  return control;
+}
+
 describe("ConfigurePage (HTTP) models", () => {
   it("disables model creation when no provider models are available", async () => {
     const { core } = createAdminHttpTestCore();
@@ -100,9 +126,10 @@ describe("ConfigurePage (HTTP) models", () => {
       ),
     );
 
-    const dialogSelects = Array.from(dialog.querySelectorAll<HTMLSelectElement>("select"));
-    expect(dialogSelects).toHaveLength(2);
-    setSelectValue(dialogSelects[0]!, "openai/gpt-4.1-mini");
+    const modelSelect = getDialogSelect(dialog, "Model");
+    const reasoningEffortSelect = getDialogSelect(dialog, "Reasoning effort");
+    expect(getDialogSelect(dialog, "Reasoning display").value).toBe("");
+    setSelectValue(modelSelect, "openai/gpt-4.1-mini");
     expect(
       expectPresent(
         Array.from(dialog.querySelectorAll<HTMLInputElement>("input")).find(
@@ -110,7 +137,7 @@ describe("ConfigurePage (HTTP) models", () => {
         ),
       ).value,
     ).toBe("GPT-4.1 Mini");
-    setSelectValue(dialogSelects[1]!, "high");
+    setSelectValue(reasoningEffortSelect, "high");
 
     await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "models-save"));
     await flush();
@@ -129,9 +156,7 @@ describe("ConfigurePage (HTTP) models", () => {
 
     click(getByTestId<HTMLButtonElement>(page.container, "models-add-open"));
     const dialog = getByTestId<HTMLElement>(document.body, "models-preset-dialog");
-    const dialogSelects = Array.from(dialog.querySelectorAll<HTMLSelectElement>("select"));
-    expect(dialogSelects).toHaveLength(2);
-    setSelectValue(dialogSelects[0]!, "openai/gpt-4.1-mini");
+    setSelectValue(getDialogSelect(dialog, "Model"), "openai/gpt-4.1-mini");
 
     await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "models-save"));
     await flush();
@@ -153,11 +178,8 @@ describe("ConfigurePage (HTTP) models", () => {
     click(getButton(page.container, "Edit"));
 
     const dialog = getByTestId<HTMLElement>(document.body, "models-preset-dialog");
-    const dialogInputs = Array.from(dialog.querySelectorAll<HTMLInputElement>("input")).filter(
-      (input) => input.type !== "hidden",
-    );
-    const displayNameInput = expectPresent(dialogInputs.find((input) => !input.readOnly));
-    const modelInput = expectPresent(dialogInputs.find((input) => input.readOnly));
+    const displayNameInput = getDialogInput(dialog, "Display name");
+    const modelInput = getDialogInput(dialog, "Model");
 
     expect(displayNameInput.value).toBe("Legacy OpenAI");
     expect(modelInput.value).toBe("openai/gpt-4.1");
@@ -165,7 +187,7 @@ describe("ConfigurePage (HTTP) models", () => {
     act(() => {
       setNativeValue(displayNameInput, "Renamed preset");
     });
-    setSelectValue(expectPresent(dialog.querySelector<HTMLSelectElement>("select")), "medium");
+    setSelectValue(getDialogSelect(dialog, "Reasoning effort"), "medium");
 
     await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "models-save"));
     await flush();
