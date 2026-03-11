@@ -270,4 +270,82 @@ describe("PolicyConfigSection", () => {
 
     cleanupAdminHttpPage(page);
   });
+
+  it("collapses aliased duplicate tool rows back to the canonical saved state", async () => {
+    const onSave = vi.fn(async () => undefined);
+    const page = renderIntoDocument(
+      React.createElement(PolicyConfigSection, {
+        effective: {
+          sha256: "policy-sha-1",
+          bundle: {
+            v: 1,
+            tools: {
+              default: "require_approval",
+              allow: ["read"],
+              require_approval: [],
+              deny: [],
+            },
+            network_egress: {
+              default: "require_approval",
+              allow: [],
+              require_approval: [],
+              deny: [],
+            },
+            secrets: {
+              default: "require_approval",
+              allow: [],
+              require_approval: [],
+              deny: [],
+            },
+            connectors: {
+              default: "require_approval",
+              allow: ["telegram:*"],
+              require_approval: [],
+              deny: [],
+            },
+            artifacts: { default: "allow" },
+            provenance: { untrusted_shell_requires_approval: true },
+          },
+          sources: { deployment: "default", agent: null, playbook: null },
+        },
+        currentRevision: null,
+        revisions: [],
+        loadBusy: false,
+        loadError: null,
+        saveBusy: false,
+        saveError: null,
+        revertBusy: false,
+        revertError: null,
+        canMutate: true,
+        requestEnter: () => {},
+        onRefresh: () => {},
+        onSave,
+        onRevert: async () => undefined,
+      }),
+    );
+
+    await flush();
+
+    click(getByTestId<HTMLButtonElement>(page.container, "policy-config-tools-allow-add"));
+    act(() => {
+      setNativeValue(
+        getByTestId<HTMLInputElement>(page.container, "policy-config-tools-allow-row-1"),
+        "tool.fs.read",
+      );
+    });
+
+    expect(
+      getByTestId<HTMLInputElement>(page.container, "policy-config-tools-allow-row-0").value,
+    ).toBe("read");
+    expect(
+      page.container.querySelector("[data-testid='policy-config-tools-allow-row-1']"),
+    ).toBeNull();
+    expect(page.container.textContent).toContain("No unsaved changes");
+    expect(getByTestId<HTMLButtonElement>(page.container, "policy-config-save").disabled).toBe(
+      true,
+    );
+    expect(onSave).not.toHaveBeenCalled();
+
+    cleanupAdminHttpPage(page);
+  });
 });

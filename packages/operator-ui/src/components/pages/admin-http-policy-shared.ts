@@ -204,6 +204,29 @@ export function createBlankKeySensitivityRow(prefix: string): PolicyKeySensitivi
   return { id: createRowId(prefix), key: "", normal: "", sensitive: "" };
 }
 
+export function normalizeToolRows(rows: PolicyStringRow[]): PolicyStringRow[] {
+  const seen = new Set<string>();
+  const nextRows: PolicyStringRow[] = [];
+
+  for (const row of rows) {
+    const trimmed = row.value.trim();
+    if (!trimmed) {
+      nextRows.push(row);
+      continue;
+    }
+
+    const canonical = canonicalizeToolId(trimmed);
+    if (!canonical || seen.has(canonical)) {
+      continue;
+    }
+
+    seen.add(canonical);
+    nextRows.push(canonical === row.value ? row : { ...row, value: canonical });
+  }
+
+  return nextRows;
+}
+
 export function policyBundleToFormState(bundle: PolicyBundleT): PolicyFormState {
   return {
     tools: createDomainFormState(bundle.tools, "deny", "tools"),

@@ -6,6 +6,7 @@ import { Input } from "../ui/input.js";
 import { Select } from "../ui/select.js";
 import {
   createBlankStringRow,
+  normalizeToolRows,
   type PolicyDecisionValue,
   type PolicyDomainFormState,
   type PolicyStringRow,
@@ -131,9 +132,10 @@ export function DomainEditor(props: {
     key: "allow" | "requireApproval" | "deny",
     transform: (rows: PolicyStringRow[]) => PolicyStringRow[],
   ) => {
+    const nextRows = transform(props.state[key]);
     props.onChange({
       ...props.state,
-      [key]: transform(props.state[key]),
+      [key]: props.toolMode ? normalizeToolRows(nextRows) : nextRows,
     });
   };
 
