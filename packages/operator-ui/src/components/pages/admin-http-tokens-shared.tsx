@@ -25,14 +25,7 @@ export type ScopePresetKey =
   | "pairing"
   | "full_admin"
   | "custom";
-export type ExpirationPresetKey =
-  | "never"
-  | "1h"
-  | "24h"
-  | "7d"
-  | "30d"
-  | "90d"
-  | "custom";
+export type ExpirationPresetKey = "never" | "1h" | "24h" | "7d" | "30d" | "90d" | "custom";
 export type DialogMode = "create" | "edit";
 export type AuthTokenIssueResult = Awaited<ReturnType<OperatorCore["http"]["authTokens"]["issue"]>>;
 
@@ -355,9 +348,7 @@ export function TokenDialog({
                   selectedScopes:
                     role === "admin" ? presetScopes("full_admin") : current.selectedScopes,
                   scopePreset:
-                    role === "admin"
-                      ? "full_admin"
-                      : resolveScopePreset(current.selectedScopes),
+                    role === "admin" ? "full_admin" : resolveScopePreset(current.selectedScopes),
                 }));
               }}
             >

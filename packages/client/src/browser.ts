@@ -46,6 +46,8 @@ export type {
   AuthTokenIssueResult,
   AuthTokenRevokeInput,
   AuthTokenRevokeResult,
+  AuthTokenUpdateInput,
+  AuthTokenUpdateResult,
   AgentListResult,
   AgentStatusResult,
   RoutingConfigGetResult,

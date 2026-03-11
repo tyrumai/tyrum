@@ -25,11 +25,7 @@ export function SummaryBadge({
   return <Badge variant="outline">{`${label}: ${String(value)}`}</Badge>;
 }
 
-export function IssuedTokenNotice({
-  token,
-}: {
-  token: AuthTokenIssueResult;
-}): React.ReactElement {
+export function IssuedTokenNotice({ token }: { token: AuthTokenIssueResult }): React.ReactElement {
   return (
     <div
       data-testid="admin-http-token-secret-panel"
