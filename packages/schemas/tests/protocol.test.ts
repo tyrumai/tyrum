@@ -16,6 +16,8 @@ import {
   WsResponseEnvelope,
   WsTaskExecuteRequest,
   requiredCapability,
+  requiredCapabilityDescriptor,
+  requiredCapabilityDescriptorForAction,
 } from "../src/protocol.js";
 import { expectRejects } from "./test-helpers.js";
 
@@ -332,5 +334,85 @@ describe("requiredCapability", () => {
 
   it("returns undefined for Research", () => {
     expect(requiredCapability("Research")).toBeUndefined();
+  });
+});
+
+describe("requiredCapabilityDescriptor", () => {
+  it("returns undefined when a platform action omits a usable op", () => {
+    expect(requiredCapabilityDescriptor("Desktop")).toBeUndefined();
+    expect(requiredCapabilityDescriptor("Desktop", [])).toBeUndefined();
+    expect(requiredCapabilityDescriptor("Desktop", { op: 1 })).toBeUndefined();
+    expect(requiredCapabilityDescriptor("Desktop", { op: "   " })).toBeUndefined();
+  });
+
+  it("maps desktop action ops to exact descriptors", () => {
+    expect(requiredCapabilityDescriptor("Desktop", { op: "screenshot" })).toBe(
+      "tyrum.desktop.screenshot",
+    );
+    expect(requiredCapabilityDescriptor("Desktop", { op: "snapshot" })).toBe(
+      "tyrum.desktop.snapshot",
+    );
+    expect(requiredCapabilityDescriptor("Desktop", { op: "query" })).toBe("tyrum.desktop.query");
+    expect(requiredCapabilityDescriptor("Desktop", { op: "act" })).toBe("tyrum.desktop.act");
+    expect(requiredCapabilityDescriptor("Desktop", { op: "mouse" })).toBe("tyrum.desktop.mouse");
+    expect(requiredCapabilityDescriptor("Desktop", { op: "keyboard" })).toBe(
+      "tyrum.desktop.keyboard",
+    );
+    expect(requiredCapabilityDescriptor("Desktop", { op: "wait_for" })).toBe(
+      "tyrum.desktop.wait-for",
+    );
+    expect(requiredCapabilityDescriptor("Desktop", { op: "unknown" })).toBeUndefined();
+  });
+
+  it("maps browser, iOS, and Android ops to exact descriptors", () => {
+    expect(requiredCapabilityDescriptor("Browser", { op: "geolocation.get" })).toBe(
+      "tyrum.browser.geolocation.get",
+    );
+    expect(requiredCapabilityDescriptor("Browser", { op: "camera.capture_photo" })).toBe(
+      "tyrum.browser.camera.capture-photo",
+    );
+    expect(requiredCapabilityDescriptor("Browser", { op: "microphone.record" })).toBe(
+      "tyrum.browser.microphone.record",
+    );
+    expect(requiredCapabilityDescriptor("Browser", { op: "unknown" })).toBeUndefined();
+
+    expect(requiredCapabilityDescriptor("IOS", { op: "location.get_current" })).toBe(
+      "tyrum.ios.location.get-current",
+    );
+    expect(requiredCapabilityDescriptor("IOS", { op: "camera.capture_photo" })).toBe(
+      "tyrum.ios.camera.capture-photo",
+    );
+    expect(requiredCapabilityDescriptor("IOS", { op: "audio.record_clip" })).toBe(
+      "tyrum.ios.audio.record-clip",
+    );
+    expect(requiredCapabilityDescriptor("IOS", { op: "unknown" })).toBeUndefined();
+
+    expect(requiredCapabilityDescriptor("Android", { op: "location.get_current" })).toBe(
+      "tyrum.android.location.get-current",
+    );
+    expect(requiredCapabilityDescriptor("Android", { op: "camera.capture_photo" })).toBe(
+      "tyrum.android.camera.capture-photo",
+    );
+    expect(requiredCapabilityDescriptor("Android", { op: "audio.record_clip" })).toBe(
+      "tyrum.android.audio.record-clip",
+    );
+    expect(requiredCapabilityDescriptor("Android", { op: "unknown" })).toBeUndefined();
+  });
+
+  it("falls back to single-descriptor capability kinds and action helpers", () => {
+    expect(requiredCapabilityDescriptor("Http", { op: "anything" })).toBe("tyrum.http");
+    expect(requiredCapabilityDescriptor("Research", { op: "anything" })).toBeUndefined();
+    expect(
+      requiredCapabilityDescriptorForAction({
+        type: "Desktop",
+        args: { op: "mouse" },
+      }),
+    ).toBe("tyrum.desktop.mouse");
+    expect(
+      requiredCapabilityDescriptorForAction({
+        type: "Browser",
+        args: { op: "unknown" },
+      }),
+    ).toBeUndefined();
   });
 });
