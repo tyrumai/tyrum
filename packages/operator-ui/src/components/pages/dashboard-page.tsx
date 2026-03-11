@@ -24,6 +24,7 @@ import {
   WorkDistributionBar,
   type WorkSegment,
 } from "./dashboard-page.parts.js";
+import { useNodeInventory } from "./pairing-page.inventory.js";
 
 export interface DashboardPageProps {
   core: OperatorCore;
@@ -43,6 +44,13 @@ export function DashboardPage({
   const runs = useOperatorStore(core.runsStore);
   const workboard = useOperatorStore(core.workboardStore);
   const activity = useOperatorStore(core.activityStore);
+  const nodeInventory = useNodeInventory({
+    core,
+    connected:
+      connection.status === "connected" ||
+      (connection.status === "connecting" && connection.recovering),
+    refreshAt: pairing.lastSyncedAt,
+  });
 
   // Force re-render every 30s so relative timestamps stay fresh
   const [, setTick] = React.useState(0);
@@ -112,7 +120,7 @@ export function DashboardPage({
 
   const activeRunsCount = getActiveExecutionRunsCountFromQueueDepth(status.status?.queue_depth);
   const connectionDisplay = getConnectionDisplay(connection.status);
-  const connectedNodesCount = Object.keys(status.presenceByInstanceId).length;
+  const connectedNodesCount = nodeInventory.nodes.filter((node) => node.connected).length;
   const usage = status.usage;
 
   // -- Derived: recent activity
@@ -256,8 +264,9 @@ export function DashboardPage({
             />
             <StatusRow
               label="Connected nodes"
+              testId="dashboard-card-connected-nodes"
               value={String(connectedNodesCount)}
-              loading={status.loading.presence}
+              loading={nodeInventory.loading && nodeInventory.nodes.length === 0}
               onClick={onNavigate ? () => onNavigate("pairing") : undefined}
             />
             <StatusRow
