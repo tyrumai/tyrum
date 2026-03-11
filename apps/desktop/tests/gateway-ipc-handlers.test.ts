@@ -5,6 +5,7 @@ import {
   createOkResponse,
   getRegisteredHandler as getHandler,
   registerGatewayIpcForTest,
+  resetGatewayIpcForTest,
   expectConnection,
 } from "./gateway-ipc-handlers.test-helpers.js";
 
@@ -92,8 +93,8 @@ function getRegisteredHandler(channel: string): (...args: unknown[]) => unknown 
 }
 
 describe("registerGatewayIpc handlers", () => {
-  beforeEach(() => {
-    vi.resetModules();
+  beforeEach(async () => {
+    await resetGatewayIpcForTest();
     testState.port = 8788;
     testState.mode = "embedded";
     testState.embeddedDbPath = "/tmp/test-gateway.db";

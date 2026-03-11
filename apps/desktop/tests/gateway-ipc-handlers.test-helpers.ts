@@ -55,6 +55,18 @@ export function getRegisteredHandler(
   return handler!;
 }
 
+let gatewayIpcModulePromise: Promise<typeof import("../src/main/ipc/gateway-ipc.js")> | null = null;
+
+async function loadGatewayIpcModule(): Promise<typeof import("../src/main/ipc/gateway-ipc.js")> {
+  gatewayIpcModulePromise ??= import("../src/main/ipc/gateway-ipc.js");
+  return await gatewayIpcModulePromise;
+}
+
+export async function resetGatewayIpcForTest(): Promise<void> {
+  const gatewayIpc = await loadGatewayIpcModule();
+  await gatewayIpc.resetGatewayIpcStateForTests();
+}
+
 export async function registerGatewayIpcForTest(
   sentEvents?: Array<{ channel: string; payload: unknown }>,
 ): Promise<{
@@ -64,7 +76,7 @@ export async function registerGatewayIpcForTest(
   startEmbeddedGatewayFromConfig: typeof import("../src/main/ipc/gateway-ipc.js").startEmbeddedGatewayFromConfig;
   manager: unknown;
 }> {
-  const gatewayIpc = await import("../src/main/ipc/gateway-ipc.js");
+  const gatewayIpc = await loadGatewayIpcModule();
   const manager = gatewayIpc.registerGatewayIpc(createWindowStub(sentEvents));
   return { ...gatewayIpc, manager };
 }

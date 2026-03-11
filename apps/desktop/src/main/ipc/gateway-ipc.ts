@@ -16,9 +16,8 @@ import type { DesktopNodeConfig } from "../config/schema.js";
 import { getGatewayStatusSnapshot } from "./gateway-status.js";
 
 const sender = createWindowSender();
-
-let manager: GatewayManager | null = null;
-let ipcRegistered = false;
+let manager: GatewayManager | null = null,
+  ipcRegistered = false;
 
 type PinnedGatewayFetchState = {
   key: string;
@@ -109,8 +108,8 @@ export interface OperatorConnectionInfo {
   tlsAllowSelfSigned: boolean;
 }
 
-let startPromise: Promise<void> | null = null;
-let embeddedGatewayAccessToken: string | null = null;
+let startPromise: Promise<void> | null = null,
+  embeddedGatewayAccessToken: string | null = null;
 
 type EmbeddedGatewayTokenRecoveryContext = "running" | "started";
 
@@ -379,28 +378,18 @@ export async function startEmbeddedGatewayFromConfig(): Promise<{
   if (!mgr) throw new Error("Gateway IPC is not initialized");
   const config = loadConfig();
   await startEmbeddedGatewayWithConfig(mgr, config);
-  return {
-    status: "running",
-    port: config.embedded.port,
-  };
+  return { status: "running", port: config.embedded.port };
 }
 
 function ensureGatewayManager(): GatewayManager {
-  if (manager) {
-    return manager;
-  }
-
+  if (manager) return manager;
   manager = new GatewayManager();
-
-  // Forward logs to renderer
   manager.on("log", (entry) => {
     sender.send("log:entry", { source: "gateway", ...entry });
   });
-
   manager.on("status-change", (status) => {
     sender.send("status:change", { gatewayStatus: status });
   });
-
   return manager;
 }
 
@@ -412,26 +401,29 @@ async function handleGatewayStop(): Promise<{ status: "stopped" }> {
   return { status: "stopped" };
 }
 
-export async function stopEmbeddedGatewayFromMainProcess(): Promise<{ status: "stopped" }> {
-  return handleGatewayStop();
+export const stopEmbeddedGatewayFromMainProcess = handleGatewayStop;
+export async function resetGatewayIpcStateForTests(): Promise<void> {
+  try {
+    await manager?.stop();
+  } catch {}
+  manager?.removeAllListeners();
+  [manager, ipcRegistered, startPromise, embeddedGatewayAccessToken] = [null, false, null, null];
+  sender.setWindow(null);
+  await destroyPinnedGatewayFetchState();
 }
 
 async function handleGatewayStatus(): Promise<ReturnType<typeof getGatewayStatusSnapshot>> {
-  const config = loadConfig();
-  return getGatewayStatusSnapshot(manager?.status, config.embedded.port);
+  return getGatewayStatusSnapshot(manager?.status, loadConfig().embedded.port);
 }
 
 async function handleGatewayOperatorConnection(): Promise<OperatorConnectionInfo> {
   if (!configExists()) {
     throw new Error("Desktop is not configured yet. Choose Embedded or Remote mode first.");
   }
-
   const config = loadConfig();
   if (config.mode === "embedded") {
     const mgr = manager;
-    if (!mgr) {
-      throw new Error("Gateway IPC is not initialized");
-    }
+    if (!mgr) throw new Error("Gateway IPC is not initialized");
     const token = await startEmbeddedGatewayWithConfig(mgr, config);
     const port = config.embedded.port;
     return {
