@@ -79,21 +79,26 @@ export class RealPlaywrightBackend implements PlaywrightBackend {
   }
 
   async close(): Promise<void> {
-    if (this.page) {
+    const browser = this.browser;
+    const page = this.page;
+    this.browser = null;
+    this.page = null;
+
+    if (browser) {
       try {
-        await this.page.close();
-      } catch {
-        // Page may already be closed
-      }
-      this.page = null;
-    }
-    if (this.browser) {
-      try {
-        await this.browser.close();
+        await browser.close();
       } catch {
         // Browser may already be closed
       }
-      this.browser = null;
+      return;
+    }
+
+    if (page) {
+      try {
+        await page.close();
+      } catch {
+        // Page may already be closed
+      }
     }
   }
 }
