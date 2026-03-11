@@ -255,7 +255,28 @@ export function createAdminHttpTestCore(): {
             },
           ],
         })),
+        getTelegramConfig: vi.fn(async () => ({
+          revision: 3,
+          config: {
+            bot_token_configured: true,
+            webhook_secret_configured: true,
+            allowed_user_ids: ["123"],
+            pipeline_enabled: true,
+          },
+        })),
         update: routingConfigUpdate,
+        updateTelegramConfig: vi.fn(
+          async () =>
+            ({
+              revision: 4,
+              config: {
+                bot_token_configured: true,
+                webhook_secret_configured: true,
+                allowed_user_ids: ["123"],
+                pipeline_enabled: true,
+              },
+            }) as unknown,
+        ),
         revert: vi.fn(async () => ({ revision: 2, config: { v: 1 } }) as unknown),
       },
       toolRegistry: {

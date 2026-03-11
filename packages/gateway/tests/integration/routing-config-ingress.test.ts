@@ -164,4 +164,65 @@ describe("routing config (durable) + ingress", () => {
     expect(res.status).toBe(200);
     expect(capturedAgentId).toBe("default");
   });
+
+  it("ignores telegram updates from senders outside the configured allowlist", async () => {
+    let enqueueCalled = false;
+
+    const app = new Hono();
+    app.route(
+      "/",
+      createIngressRoutes({
+        telegramBot: {} as never,
+        telegramWebhookSecret: "test-secret",
+        telegramAllowedUserIds: ["111"],
+        agents: {} as never,
+        telegramQueue: {
+          enqueue: async () => {
+            enqueueCalled = true;
+            return {
+              inbox: { inbox_id: 1, status: "queued" },
+              deduped: false,
+              message_text: "Hello bot",
+            };
+          },
+        } as never,
+      } as never),
+    );
+
+    const update = {
+      update_id: 100,
+      message: {
+        message_id: 42,
+        date: 1700000000,
+        from: {
+          id: 999,
+          is_bot: false,
+          first_name: "Alice",
+          username: "alice",
+        },
+        chat: {
+          id: 123,
+          type: "private",
+        },
+        text: "Hello bot",
+      },
+    };
+
+    const res = await app.request("/ingress/telegram", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-telegram-bot-api-secret-token": "test-secret",
+      },
+      body: JSON.stringify(update),
+    });
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({
+      ok: true,
+      ignored: true,
+      reason: "sender_not_allowlisted",
+    });
+    expect(enqueueCalled).toBe(false);
+  });
 });

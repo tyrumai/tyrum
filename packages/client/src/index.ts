@@ -59,6 +59,8 @@ export type {
   RoutingConfigRevertInput,
   RoutingConfigRevertResult,
   ObservedTelegramThreadListResult,
+  TelegramConnectionConfigResult,
+  TelegramConnectionConfigUpdateInput,
   AuditExportResult,
   AuditVerifyInput,
   AuditVerifyResult,

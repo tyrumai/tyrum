@@ -13,6 +13,7 @@ import { ConfirmDangerDialog } from "../ui/confirm-danger-dialog.js";
 import { EmptyState } from "../ui/empty-state.js";
 import { Input } from "../ui/input.js";
 import { useAdminHttpClient, useAdminMutationAccess } from "./admin-http-shared.js";
+import { AdminHttpTelegramConnectionPanel } from "./admin-http-telegram-connection.js";
 import { RoutingRuleDialog, type RoutingAgentOption } from "./admin-http-routing-config-dialog.js";
 import {
   buildRoutingRuleRows,
@@ -187,6 +188,8 @@ export function AdminHttpRoutingConfigPanel({ core }: { core: OperatorCore }): R
   return (
     <section className="grid gap-4" data-testid="admin-http-routing-config">
       <div className="text-sm font-medium text-fg">Channels</div>
+
+      <AdminHttpTelegramConnectionPanel core={core} />
 
       <Card>
         <CardHeader className="pb-2.5">

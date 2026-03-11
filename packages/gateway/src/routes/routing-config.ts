@@ -5,15 +5,20 @@
 import { Hono } from "hono";
 import { randomUUID } from "node:crypto";
 import {
+  DeploymentConfig,
   RoutingConfigRevertRequest,
   RoutingConfigUpdateRequest,
+  TelegramConnectionConfigResponse,
+  TelegramConnectionConfigUpdateRequest,
   WsRoutingConfigUpdatedEvent,
   type WsEventEnvelope,
 } from "@tyrum/schemas";
+import type { SqlDb } from "../statestore/types.js";
 import type { ConnectionManager } from "../ws/connection-manager.js";
 import type { OutboxDal } from "../modules/backplane/outbox-dal.js";
 import type { RoutingConfigDal } from "../modules/channels/routing-config-dal.js";
 import type { ChannelThreadDal } from "../modules/channels/thread-dal.js";
+import { DeploymentConfigDal } from "../modules/config/deployment-config-dal.js";
 import type { Logger } from "../modules/observability/logger.js";
 import { getClientIp } from "../modules/auth/client-ip.js";
 import type { WsBroadcastAudience } from "../ws/audience.js";
@@ -21,6 +26,7 @@ import { broadcastWsEvent } from "../ws/broadcast.js";
 import { requireTenantId } from "../modules/auth/claims.js";
 
 export interface RoutingConfigRouteDeps {
+  db: SqlDb;
   logger?: Logger;
   routingConfigDal: RoutingConfigDal;
   channelThreadDal: ChannelThreadDal;
@@ -52,8 +58,24 @@ function parseLimit(raw: string | undefined, fallback: number, max: number): num
   return Math.max(1, Math.min(max, Number(raw)));
 }
 
+function toTelegramConnectionConfig(config: DeploymentConfig): {
+  bot_token_configured: boolean;
+  webhook_secret_configured: boolean;
+  allowed_user_ids: string[];
+  pipeline_enabled: boolean;
+} {
+  const channels = config.channels;
+  return {
+    bot_token_configured: Boolean(channels.telegramBotToken?.trim()),
+    webhook_secret_configured: Boolean(channels.telegramWebhookSecret?.trim()),
+    allowed_user_ids: channels.telegramAllowedUserIds ?? [],
+    pipeline_enabled: channels.pipelineEnabled ?? true,
+  };
+}
+
 export function createRoutingConfigRoutes(deps: RoutingConfigRouteDeps): Hono {
   const app = new Hono();
+  const deploymentConfigDal = new DeploymentConfigDal(deps.db);
 
   app.get("/routing/config", async (c) => {
     try {
@@ -225,6 +247,91 @@ export function createRoutingConfigRoutes(deps: RoutingConfigRouteDeps): Hono {
           last_active_at: thread.lastActiveAt,
         })),
       },
+      200,
+    );
+  });
+
+  app.get("/routing/channels/telegram/config", async (c) => {
+    requireTenantId(c);
+    const revision = await deploymentConfigDal.ensureSeeded({
+      defaultConfig: DeploymentConfig.parse({}),
+      createdBy: { kind: "bootstrap" },
+      reason: "seed",
+    });
+
+    return c.json(
+      TelegramConnectionConfigResponse.parse({
+        revision: revision.revision,
+        config: toTelegramConnectionConfig(revision.config),
+        created_at: revision.createdAt,
+        created_by: revision.createdBy,
+        reason: revision.reason,
+        reverted_from_revision: revision.revertedFromRevision,
+      }),
+      200,
+    );
+  });
+
+  app.put("/routing/channels/telegram/config", async (c) => {
+    requireTenantId(c);
+    const body = (await c.req.json().catch(() => undefined)) as unknown;
+    const parsed = TelegramConnectionConfigUpdateRequest.safeParse(body);
+    if (!parsed.success) {
+      return c.json({ error: "invalid_request", message: parsed.error.message }, 400);
+    }
+
+    const current = await deploymentConfigDal.ensureSeeded({
+      defaultConfig: DeploymentConfig.parse({}),
+      createdBy: { kind: "bootstrap" },
+      reason: "seed",
+    });
+    const nextChannels = {
+      ...current.config.channels,
+    };
+
+    if (parsed.data.clear_bot_token) {
+      delete nextChannels.telegramBotToken;
+    } else if (parsed.data.bot_token !== undefined) {
+      nextChannels.telegramBotToken = parsed.data.bot_token;
+    }
+
+    if (parsed.data.clear_webhook_secret) {
+      delete nextChannels.telegramWebhookSecret;
+    } else if (parsed.data.webhook_secret !== undefined) {
+      nextChannels.telegramWebhookSecret = parsed.data.webhook_secret;
+    }
+
+    if (parsed.data.allowed_user_ids !== undefined) {
+      nextChannels.telegramAllowedUserIds = parsed.data.allowed_user_ids;
+    }
+
+    if (parsed.data.pipeline_enabled !== undefined) {
+      nextChannels.pipelineEnabled = parsed.data.pipeline_enabled;
+    }
+
+    const createdBy = {
+      kind: "http",
+      ip: getClientIp(c),
+      user_agent: c.req.header("user-agent") ?? undefined,
+    };
+    const persisted = await deploymentConfigDal.set({
+      config: {
+        ...current.config,
+        channels: nextChannels,
+      },
+      createdBy,
+      reason: parsed.data.reason,
+    });
+
+    return c.json(
+      TelegramConnectionConfigResponse.parse({
+        revision: persisted.revision,
+        config: toTelegramConnectionConfig(persisted.config),
+        created_at: persisted.createdAt,
+        created_by: persisted.createdBy,
+        reason: persisted.reason,
+        reverted_from_revision: persisted.revertedFromRevision,
+      }),
       200,
     );
   });
