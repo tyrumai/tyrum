@@ -109,6 +109,7 @@ export type ApprovalDecisionResult = {
 
 export type ApprovalStatusUpdate = {
   approvalId: string;
+  toolCallId?: string;
   status: ApprovalStatus;
   prompt: string;
   createdAt: string;
@@ -180,6 +181,7 @@ export async function awaitApprovalForToolExecution(
   deps.approvalNotifier.notify(approval);
   await onStatusUpdate?.({
     approvalId: approval.approval_id,
+    toolCallId,
     status: approval.status,
     prompt: approval.prompt,
     createdAt: approval.created_at,
@@ -194,6 +196,7 @@ export async function awaitApprovalForToolExecution(
     if (!current) {
       await onStatusUpdate?.({
         approvalId: approval.approval_id,
+        toolCallId,
         status: "expired",
         prompt: approval.prompt,
         createdAt: approval.created_at,
@@ -210,6 +213,7 @@ export async function awaitApprovalForToolExecution(
       const reason = extractApprovalReason(current);
       await onStatusUpdate?.({
         approvalId: current.approval_id,
+        toolCallId,
         status: current.status,
         prompt: current.prompt,
         createdAt: current.created_at,
@@ -226,6 +230,7 @@ export async function awaitApprovalForToolExecution(
       const reason = extractApprovalReason(current);
       await onStatusUpdate?.({
         approvalId: current.approval_id,
+        toolCallId,
         status: current.status,
         prompt: current.prompt,
         createdAt: current.created_at,
@@ -250,6 +255,7 @@ export async function awaitApprovalForToolExecution(
   const reason = extractApprovalReason(expired) ?? "approval timed out";
   await onStatusUpdate?.({
     approvalId: approval.approval_id,
+    toolCallId,
     status: "expired",
     prompt: approval.prompt,
     createdAt: approval.created_at,

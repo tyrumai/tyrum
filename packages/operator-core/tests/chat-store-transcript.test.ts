@@ -164,6 +164,9 @@ describe("chat-store transcript helpers", () => {
             status: "pending",
             prompt: "Approve deployment?",
             created_at: "2026-03-09T00:00:01.000Z",
+            context: {
+              tool_call_id: "tool-call-1",
+            },
             scope: {
               run_id: "run-1",
             },
@@ -175,6 +178,7 @@ describe("chat-store transcript helpers", () => {
       kind: "approval",
       id: "approval-1",
       approval_id: "approval-1",
+      tool_call_id: "tool-call-1",
       status: "pending",
       title: "Approval required",
       detail: "Approve deployment?",

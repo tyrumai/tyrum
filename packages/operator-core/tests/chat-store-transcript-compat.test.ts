@@ -117,6 +117,9 @@ describe("chat-store-transcript compatibility helpers", () => {
             approval_id: "approval-compat",
             status: "approved",
             prompt: "Proceed",
+            context: {
+              tool_call_id: "tool-call-compat",
+            },
             scope: {
               run_id: "run-compat",
             },
@@ -126,6 +129,7 @@ describe("chat-store-transcript compatibility helpers", () => {
       ),
     ).toMatchObject({
       approval_id: "approval-compat",
+      tool_call_id: "tool-call-compat",
       status: "approved",
       detail: "Proceed",
       run_id: "run-compat",

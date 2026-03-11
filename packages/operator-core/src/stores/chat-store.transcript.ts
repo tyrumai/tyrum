@@ -153,6 +153,12 @@ export function toApprovalTranscriptItem(
   const status = typeof record["status"] === "string" ? record["status"].trim() : "";
   const prompt = typeof record["prompt"] === "string" ? record["prompt"] : "";
   if (!approvalId || !status || !prompt) return null;
+  const context =
+    typeof record["context"] === "object" &&
+    record["context"] !== null &&
+    !Array.isArray(record["context"])
+      ? (record["context"] as Record<string, unknown>)
+      : null;
   const scope =
     typeof record["scope"] === "object" &&
     record["scope"] !== null &&
@@ -171,6 +177,9 @@ export function toApprovalTranscriptItem(
         ? record["created_at"]
         : occurredAt,
     updated_at: occurredAt,
+    ...(typeof context?.["tool_call_id"] === "string" && context["tool_call_id"].trim().length > 0
+      ? { tool_call_id: context["tool_call_id"] as string }
+      : {}),
     ...(typeof scope?.["run_id"] === "string" ? { run_id: scope["run_id"] as string } : {}),
   };
 }

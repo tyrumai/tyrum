@@ -1,24 +1,22 @@
-import type {
-  Approval,
-  SessionTranscriptApprovalItem,
-  SessionTranscriptItem,
-  SessionTranscriptTextItem,
-  SessionTranscriptToolItem,
-} from "@tyrum/client";
+import type { Approval } from "@tyrum/client";
 import type { ResolveApprovalInput } from "@tyrum/operator-core";
-import { ChevronLeft, Copy, Hammer, Send, ShieldCheck, Trash2 } from "lucide-react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { toast } from "sonner";
+import { ChevronLeft, Send, Trash2 } from "lucide-react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { cn } from "../../lib/cn.js";
-import { formatRelativeTime } from "../../utils/format-relative-time.js";
-import { ApprovalActions } from "./approval-actions.js";
 import { Alert } from "../ui/alert.js";
-import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
 import { Spinner } from "../ui/spinner.js";
 import { ChatThreadsPanel, type ChatThreadSummary } from "./chat-page-threads.js";
+import {
+  buildTranscriptDisplayItems,
+  ChatApprovalItem,
+  ChatReasoningItem,
+  ChatTextItem,
+  ChatToolItem,
+  isActiveToolStatus,
+  type ChatTranscriptItem,
+  type ReasoningDisplayMode,
+} from "./chat-page-transcript.js";
 
 const CHAT_AUTOSCROLL_THRESHOLD_PX = 40;
 
@@ -45,64 +43,8 @@ export function isBottomLocked(element: HTMLElement): boolean {
   );
 }
 
-function transcriptTimestamp(item: ChatTranscriptItem): string {
-  return item.kind === "text" ? item.created_at : item.updated_at;
-}
-
-function formatToolStatus(status: SessionTranscriptToolItem["status"]): string {
-  return status === "awaiting_approval" ? "awaiting approval" : status;
-}
-
-function toolBadgeVariant(
-  status: SessionTranscriptToolItem["status"],
-): React.ComponentProps<typeof Badge>["variant"] {
-  switch (status) {
-    case "completed":
-      return "success";
-    case "failed":
-      return "danger";
-    case "awaiting_approval":
-      return "warning";
-    default:
-      return "outline";
-  }
-}
-
-function approvalBadgeVariant(
-  status: SessionTranscriptApprovalItem["status"],
-): React.ComponentProps<typeof Badge>["variant"] {
-  switch (status) {
-    case "approved":
-      return "success";
-    case "denied":
-    case "expired":
-    case "cancelled":
-      return "danger";
-    default:
-      return "warning";
-  }
-}
-
-async function copyToClipboard(text: string): Promise<void> {
-  try {
-    await globalThis.navigator.clipboard.writeText(text);
-    toast.success("Copied to clipboard");
-  } catch {
-    toast.error("Failed to copy to clipboard");
-  }
-}
-
 export { ChatThreadsPanel, type ChatThreadSummary };
-
-export type ReasoningDisplayMode = "hidden" | "collapsed" | "expanded";
-type ChatReasoningItem = {
-  kind: "reasoning";
-  id: string;
-  content: string;
-  created_at: string;
-  updated_at: string;
-};
-type ChatTranscriptItem = SessionTranscriptItem | ChatReasoningItem;
+export type { ReasoningDisplayMode } from "./chat-page-transcript.js";
 
 function MarkdownToggle({
   value,
@@ -156,141 +98,6 @@ function ReasoningToggle({
   );
 }
 
-function ChatTextItem({
-  item,
-  renderMode,
-}: {
-  item: SessionTranscriptTextItem;
-  renderMode: "markdown" | "text";
-}) {
-  return (
-    <div
-      className={cn(
-        "group relative rounded-xl border px-4 py-3 shadow-sm",
-        item.role === "assistant"
-          ? "border-border bg-bg"
-          : item.role === "system"
-            ? "border-amber-200/70 bg-amber-50/70"
-            : "border-border bg-bg-subtle/70",
-      )}
-    >
-      <div className="mb-2 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-fg-muted">
-          <span>{item.role}</span>
-          <span>•</span>
-          <span>{formatRelativeTime(item.created_at)}</span>
-        </div>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-7 w-7 p-0 text-fg-muted opacity-0 transition-opacity hover:text-fg group-hover:opacity-100"
-          onClick={() => {
-            void copyToClipboard(item.content);
-          }}
-          title="Copy message"
-        >
-          <Copy className="h-3.5 w-3.5" />
-        </Button>
-      </div>
-      {renderMode === "markdown" ? (
-        <div className="prose prose-sm max-w-none text-fg prose-headings:text-fg prose-p:text-fg prose-strong:text-fg prose-code:text-fg prose-pre:bg-bg-subtle">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{item.content}</ReactMarkdown>
-        </div>
-      ) : (
-        <pre className="whitespace-pre-wrap break-words text-sm text-fg">{item.content}</pre>
-      )}
-    </div>
-  );
-}
-
-function ChatToolItem({ item }: { item: SessionTranscriptToolItem }) {
-  return (
-    <div className="rounded-xl border border-border bg-bg-subtle/50 px-4 py-3">
-      <div className="mb-2 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 text-sm font-medium text-fg">
-          <Hammer className="h-4 w-4" />
-          <span>{item.tool_id}</span>
-        </div>
-        <Badge variant={toolBadgeVariant(item.status)}>{formatToolStatus(item.status)}</Badge>
-      </div>
-      <div className="text-sm text-fg-muted">{item.summary || "Working…"}</div>
-      {item.error ? <div className="mt-2 text-sm text-danger-700">{item.error}</div> : null}
-      <div className="mt-2 text-xs text-fg-muted">
-        {formatRelativeTime(transcriptTimestamp(item))}
-        {typeof item.duration_ms === "number" ? ` • ${item.duration_ms} ms` : ""}
-      </div>
-    </div>
-  );
-}
-
-function ChatReasoningItem({
-  item,
-  mode,
-}: {
-  item: ChatReasoningItem;
-  mode: Exclude<ReasoningDisplayMode, "hidden">;
-}) {
-  const [open, setOpen] = useState(mode === "expanded");
-
-  useEffect(() => {
-    setOpen(mode === "expanded");
-  }, [mode]);
-
-  return (
-    <details
-      className="rounded-xl border border-border/70 bg-bg-subtle/30 px-4 py-3"
-      open={open}
-      onToggle={(event) => {
-        setOpen(event.currentTarget.open);
-      }}
-    >
-      <summary className="cursor-pointer text-sm font-medium text-fg-muted">
-        Model reasoning
-      </summary>
-      <pre className="mt-3 whitespace-pre-wrap break-words text-sm text-fg-muted">
-        {item.content}
-      </pre>
-      <div className="mt-2 text-xs text-fg-muted">{formatRelativeTime(item.updated_at)}</div>
-    </details>
-  );
-}
-
-function ChatApprovalItem({
-  item,
-  approval,
-  onResolve,
-  resolvingState,
-}: {
-  item: SessionTranscriptApprovalItem;
-  approval?: Approval | null;
-  onResolve: (input: ResolveApprovalInput) => void;
-  resolvingState?: "approved" | "denied" | "always";
-}) {
-  const actionable = item.status === "pending";
-  return (
-    <div className="rounded-xl border border-warning-300 bg-warning-50/80 px-4 py-3">
-      <div className="mb-2 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 text-sm font-medium text-warning-900">
-          <ShieldCheck className="h-4 w-4" />
-          <span>{item.title}</span>
-        </div>
-        <Badge variant={approvalBadgeVariant(item.status)}>{item.status}</Badge>
-      </div>
-      <div className="text-sm text-warning-950">{item.detail}</div>
-      {actionable ? (
-        <ApprovalActions
-          approvalId={item.approval_id}
-          approval={approval}
-          resolvingState={resolvingState}
-          onResolve={onResolve}
-          className="mt-3 flex flex-wrap gap-2"
-        />
-      ) : null}
-      <div className="mt-2 text-xs text-warning-900/80">{formatRelativeTime(item.updated_at)}</div>
-    </div>
-  );
-}
-
 export function ChatConversationPanel({
   activeThreadId,
   transcript,
@@ -336,6 +143,14 @@ export function ChatConversationPanel({
 }) {
   const transcriptRef = useRef<HTMLDivElement | null>(null);
   const wasBottomLockedRef = useRef(true);
+  const displayItems = buildTranscriptDisplayItems(transcript, approvalsById);
+  const visibleItems =
+    reasoningMode === "hidden"
+      ? displayItems.filter((item) => item.kind !== "reasoning")
+      : displayItems;
+  const showInlineWorking =
+    working &&
+    !displayItems.some((item) => item.kind === "tool" && isActiveToolStatus(item.item.status));
 
   useEffect(() => {
     const element = transcriptRef.current;
@@ -356,7 +171,7 @@ export function ChatConversationPanel({
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col" data-testid="chat-conversation-panel">
-      <div className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4">
+      <div className="flex h-12 shrink-0 items-center justify-between border-b border-border px-3">
         <div className="flex items-center gap-2">
           {onBack ? (
             <Button
@@ -392,48 +207,66 @@ export function ChatConversationPanel({
       </div>
 
       {loadError ? (
-        <div className="p-4">
+        <div className="p-3">
           <Alert variant="error" title="Failed to load conversation" description={loadError} />
         </div>
       ) : null}
 
       <div
         ref={transcriptRef}
-        className="min-h-0 flex-1 overflow-y-auto p-4"
+        className="min-h-0 flex-1 overflow-y-auto px-3 py-3"
         data-testid="chat-transcript"
       >
-        {transcript.length === 0 ? (
+        {visibleItems.length === 0 ? (
           <div className="text-sm text-fg-muted">No messages yet.</div>
         ) : (
-          <div className="grid gap-3">
-            {transcript.map((item) => {
+          <div className="grid gap-2">
+            {visibleItems.map((item) => {
               if (item.kind === "text") {
-                return <ChatTextItem key={item.id} item={item} renderMode={renderMode} />;
+                return <ChatTextItem key={item.item.id} item={item.item} renderMode={renderMode} />;
               }
               if (item.kind === "reasoning") {
-                return reasoningMode === "hidden" ? null : (
-                  <ChatReasoningItem key={item.id} item={item} mode={reasoningMode} />
+                return (
+                  <ChatReasoningItem
+                    key={item.item.id}
+                    item={item.item}
+                    mode={reasoningMode === "hidden" ? "collapsed" : reasoningMode}
+                  />
                 );
               }
               if (item.kind === "tool") {
-                return <ChatToolItem key={item.id} item={item} />;
+                return (
+                  <ChatToolItem
+                    key={item.item.id}
+                    item={item.item}
+                    approvalItem={item.approvalItem}
+                    approval={item.approval}
+                    onResolve={onResolveApproval}
+                    resolvingState={
+                      item.approvalItem &&
+                      resolvingApproval?.approvalId === item.approvalItem.approval_id
+                        ? resolvingApproval.state
+                        : undefined
+                    }
+                  />
+                );
               }
               return (
                 <ChatApprovalItem
-                  key={item.id}
-                  item={item}
-                  approval={approvalsById[item.approval_id] ?? null}
+                  key={item.item.id}
+                  item={item.item}
+                  approval={item.approval}
                   onResolve={onResolveApproval}
                   resolvingState={
-                    resolvingApproval?.approvalId === item.approval_id
+                    resolvingApproval?.approvalId === item.item.approval_id
                       ? resolvingApproval.state
                       : undefined
                   }
                 />
               );
             })}
-            {working ? (
-              <div className="inline-flex items-center gap-2 rounded-xl border border-border bg-bg-subtle/40 px-4 py-3 text-sm text-fg-muted">
+            {showInlineWorking ? (
+              <div className="inline-flex items-center gap-2 px-1 py-0.5 text-xs text-fg-muted">
                 <Spinner className="h-4 w-4" />
                 Agent is working
               </div>
@@ -442,9 +275,9 @@ export function ChatConversationPanel({
         )}
       </div>
 
-      <div className="border-t border-border p-4">
+      <div className="border-t border-border p-3">
         {sendError ? (
-          <div className="mb-3">
+          <div className="mb-2.5">
             <Alert variant="error" title="Failed to send" description={sendError} />
           </div>
         ) : null}
@@ -459,10 +292,10 @@ export function ChatConversationPanel({
               }
             }}
             placeholder="Send a message…"
-            className="min-h-[52px] flex-1 resize-none rounded-xl border border-border bg-bg px-4 py-3 text-sm text-fg outline-none transition focus:border-focus-ring"
+            className="min-h-[44px] flex-1 resize-none rounded-lg border border-border bg-bg px-3 py-2.5 text-sm text-fg outline-none transition focus:border-focus-ring"
           />
           <Button
-            className="h-[52px] rounded-xl px-4"
+            className="h-[44px] rounded-lg px-4"
             onClick={() => {
               void send();
             }}

@@ -64,6 +64,7 @@ export async function upsertApprovalTranscript(
       kind: "approval",
       id: input.update.approvalId,
       approval_id: input.update.approvalId,
+      tool_call_id: input.update.toolCallId,
       status: input.update.status,
       title: "Approval required",
       detail: input.update.reason?.trim() || input.update.prompt,
