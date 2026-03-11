@@ -1,10 +1,17 @@
 export {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+  CAPABILITY_DESCRIPTOR_IDS,
+  LEGACY_UMBRELLA_PLATFORM_DESCRIPTOR_IDS,
   CapabilityDescriptor,
   CapabilityKind,
   ClientCapability,
+  capabilityDescriptorsForClientCapability,
   clientCapabilityFromDescriptorId,
   descriptorIdForClientCapability,
+  descriptorIdsForClientCapability,
+  expandCapabilityDescriptorId,
+  isLegacyUmbrellaCapabilityDescriptorId,
+  normalizeCapabilityDescriptors,
 } from "./capability.js";
 
 // NOTE: `export *` makes every exported symbol in submodules part of the public API.

@@ -10,6 +10,11 @@ import { NoCapableNodeError, NodeNotPairedError } from "../../src/ws/protocol/er
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { createMockWs, makeDeps, makeClient } from "./ws-protocol.test-support.js";
 
+const cliDescriptor = {
+  id: descriptorIdForClientCapability("cli"),
+  version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+} as const;
+
 /**
  * Policy, allowlist, legacy client, and error tests for dispatchTask.
  * Must be called inside a `describe("dispatchTask")` block.
@@ -18,7 +23,7 @@ function registerAllowlistTests(): void {
   it("dispatches to a paired node and prefers nodes over legacy clients", async () => {
     const cm = new ConnectionManager();
     const nodeWs = createMockWs();
-    cm.addClient(nodeWs as never, ["cli"] as never, {
+    cm.addClient(nodeWs as never, [cliDescriptor] as never, {
       id: "node-1",
       role: "node",
       deviceId: "dev_test",
@@ -32,7 +37,7 @@ function registerAllowlistTests(): void {
         scopes: [],
       },
     });
-    const { ws: legacyWs } = makeClient(cm, ["cli"]);
+    const { ws: legacyWs } = makeClient(cm, [cliDescriptor]);
 
     const deps = makeDeps(cm, {
       nodePairingDal: {
@@ -41,8 +46,8 @@ function registerAllowlistTests(): void {
             status: "approved",
             capability_allowlist: [
               {
-                id: descriptorIdForClientCapability("cli"),
-                version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+                id: cliDescriptor.id,
+                version: cliDescriptor.version,
               },
             ],
           }) as never,
@@ -57,8 +62,8 @@ function registerAllowlistTests(): void {
         payload: {
           capabilities: [
             {
-              id: descriptorIdForClientCapability("cli"),
-              version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+              id: cliDescriptor.id,
+              version: cliDescriptor.version,
             },
           ],
         },
@@ -91,7 +96,7 @@ function registerAllowlistTests(): void {
   it("does not dispatch to a node when its pairing allowlist excludes the capability", async () => {
     const cm = new ConnectionManager();
     const nodeWs = createMockWs();
-    cm.addClient(nodeWs as never, ["cli"] as never, {
+    cm.addClient(nodeWs as never, [cliDescriptor] as never, {
       id: "node-1",
       role: "node",
       deviceId: "dev_test",
@@ -105,7 +110,7 @@ function registerAllowlistTests(): void {
         scopes: [],
       },
     });
-    const { ws: clientWs } = makeClient(cm, ["cli"], { protocolRev: 2 });
+    const { ws: clientWs } = makeClient(cm, [cliDescriptor], { protocolRev: 2 });
 
     const deps = makeDeps(cm, {
       nodePairingDal: {
@@ -146,7 +151,7 @@ function registerAllowlistTests(): void {
   it("does not dispatch to a node when its pairing allowlist version excludes the capability", async () => {
     const cm = new ConnectionManager();
     const nodeWs = createMockWs();
-    cm.addClient(nodeWs as never, ["cli"] as never, {
+    cm.addClient(nodeWs as never, [cliDescriptor] as never, {
       id: "node-1",
       role: "node",
       deviceId: "dev_test",
@@ -160,7 +165,7 @@ function registerAllowlistTests(): void {
         scopes: [],
       },
     });
-    const { ws: clientWs } = makeClient(cm, ["cli"], { protocolRev: 2 });
+    const { ws: clientWs } = makeClient(cm, [cliDescriptor], { protocolRev: 2 });
 
     const deps = makeDeps(cm, {
       nodePairingDal: {
@@ -169,7 +174,7 @@ function registerAllowlistTests(): void {
             status: "approved",
             capability_allowlist: [
               {
-                id: descriptorIdForClientCapability("cli"),
+                id: cliDescriptor.id,
                 version: "2.0.0",
               },
             ],
@@ -203,7 +208,7 @@ function registerPolicyEvaluationTests(): void {
   it("throws NodeDispatchDeniedError when policy denies node dispatch", async () => {
     const cm = new ConnectionManager();
     const nodeWs = createMockWs();
-    cm.addClient(nodeWs as never, ["cli"] as never, {
+    cm.addClient(nodeWs as never, [cliDescriptor] as never, {
       id: "node-1",
       role: "node",
       deviceId: "dev_test",
@@ -225,8 +230,8 @@ function registerPolicyEvaluationTests(): void {
             status: "approved",
             capability_allowlist: [
               {
-                id: descriptorIdForClientCapability("cli"),
-                version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+                id: cliDescriptor.id,
+                version: cliDescriptor.version,
               },
             ],
           }) as never,
@@ -251,8 +256,8 @@ function registerPolicyEvaluationTests(): void {
         payload: {
           capabilities: [
             {
-              id: descriptorIdForClientCapability("cli"),
-              version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+              id: cliDescriptor.id,
+              version: cliDescriptor.version,
             },
           ],
         },
@@ -284,7 +289,7 @@ function registerPolicyEvaluationTests(): void {
   it("includes policy snapshot metadata in node dispatch trace", async () => {
     const cm = new ConnectionManager();
     const nodeWs = createMockWs();
-    cm.addClient(nodeWs as never, ["cli"] as never, {
+    cm.addClient(nodeWs as never, [cliDescriptor] as never, {
       id: "node-1",
       role: "node",
       deviceId: "dev_test",
@@ -306,8 +311,8 @@ function registerPolicyEvaluationTests(): void {
             status: "approved",
             capability_allowlist: [
               {
-                id: descriptorIdForClientCapability("cli"),
-                version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+                id: cliDescriptor.id,
+                version: cliDescriptor.version,
               },
             ],
           }) as never,
@@ -332,8 +337,8 @@ function registerPolicyEvaluationTests(): void {
         payload: {
           capabilities: [
             {
-              id: descriptorIdForClientCapability("cli"),
-              version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+              id: cliDescriptor.id,
+              version: cliDescriptor.version,
             },
           ],
         },
@@ -372,7 +377,7 @@ function registerDispatchErrorTests(): void {
   it("does not dispatch tasks to legacy clients", async () => {
     const cm = new ConnectionManager();
     const nodeWs = createMockWs();
-    cm.addClient(nodeWs as never, ["cli"] as never, {
+    cm.addClient(nodeWs as never, [cliDescriptor] as never, {
       id: "node-1",
       role: "node",
       deviceId: "dev_test",
@@ -386,7 +391,7 @@ function registerDispatchErrorTests(): void {
         scopes: [],
       },
     });
-    const { ws: legacyWs } = makeClient(cm, ["cli"]);
+    const { ws: legacyWs } = makeClient(cm, [cliDescriptor]);
 
     const deps = makeDeps(cm, {
       nodePairingDal: {
@@ -417,7 +422,7 @@ function registerDispatchErrorTests(): void {
 
   it("throws NoCapableNodeError when no node has the capability", () => {
     const cm = new ConnectionManager();
-    makeClient(cm, ["cli"]); // Only CLI capability
+    makeClient(cm, [cliDescriptor]); // Only CLI capability
     const deps = makeDeps(cm);
 
     const action: ActionPrimitive = {
@@ -464,7 +469,7 @@ function registerDispatchErrorTests(): void {
 
   it("throws NoCapableClientError for unmapped action type", () => {
     const cm = new ConnectionManager();
-    makeClient(cm, ["playwright"]);
+    makeClient(cm, []);
     const deps = makeDeps(cm);
 
     // "Research" has no capability mapping

@@ -1,8 +1,12 @@
 import { z } from "zod";
-import { CapabilityDescriptor, CapabilityKind } from "../capability.js";
+import {
+  CapabilityDescriptor,
+  CapabilityKind,
+  descriptorIdForClientCapability,
+} from "../capability.js";
 import { NodeId } from "../keys.js";
 import { NodeCapabilityState } from "../node-capability.js";
-import { ActionPrimitiveKind } from "../planner.js";
+import { ActionPrimitiveKind, type ActionPrimitive } from "../planner.js";
 import {
   WsEventEnvelope,
   WsRequestEnvelope,
@@ -84,4 +88,88 @@ const CAPABILITY_MAP: Partial<Record<ActionPrimitiveKind, CapabilityKind>> = {
 
 export function requiredCapability(kind: ActionPrimitiveKind): CapabilityKind | undefined {
   return CAPABILITY_MAP[kind];
+}
+
+function readActionOp(args: unknown): string | undefined {
+  if (!args || typeof args !== "object" || Array.isArray(args)) {
+    return undefined;
+  }
+  const op = (args as Record<string, unknown>)["op"];
+  return typeof op === "string" ? op.trim() : undefined;
+}
+
+export function requiredCapabilityDescriptor(
+  kind: ActionPrimitiveKind,
+  args?: unknown,
+): string | undefined {
+  const op = readActionOp(args);
+
+  if (kind === "Desktop") {
+    switch (op) {
+      case "screenshot":
+        return "tyrum.desktop.screenshot";
+      case "snapshot":
+        return "tyrum.desktop.snapshot";
+      case "query":
+        return "tyrum.desktop.query";
+      case "act":
+        return "tyrum.desktop.act";
+      case "mouse":
+        return "tyrum.desktop.mouse";
+      case "keyboard":
+        return "tyrum.desktop.keyboard";
+      case "wait_for":
+        return "tyrum.desktop.wait-for";
+      default:
+        return undefined;
+    }
+  }
+
+  if (kind === "Browser") {
+    switch (op) {
+      case "geolocation.get":
+        return "tyrum.browser.geolocation.get";
+      case "camera.capture_photo":
+        return "tyrum.browser.camera.capture-photo";
+      case "microphone.record":
+        return "tyrum.browser.microphone.record";
+      default:
+        return undefined;
+    }
+  }
+
+  if (kind === "IOS") {
+    switch (op) {
+      case "location.get_current":
+        return "tyrum.ios.location.get-current";
+      case "camera.capture_photo":
+        return "tyrum.ios.camera.capture-photo";
+      case "audio.record_clip":
+        return "tyrum.ios.audio.record-clip";
+      default:
+        return undefined;
+    }
+  }
+
+  if (kind === "Android") {
+    switch (op) {
+      case "location.get_current":
+        return "tyrum.android.location.get-current";
+      case "camera.capture_photo":
+        return "tyrum.android.camera.capture-photo";
+      case "audio.record_clip":
+        return "tyrum.android.audio.record-clip";
+      default:
+        return undefined;
+    }
+  }
+
+  const capability = requiredCapability(kind);
+  return capability ? descriptorIdForClientCapability(capability) : undefined;
+}
+
+export function requiredCapabilityDescriptorForAction(
+  action: Pick<ActionPrimitive, "type" | "args">,
+): string | undefined {
+  return requiredCapabilityDescriptor(action.type, action.args);
 }

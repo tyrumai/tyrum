@@ -1,7 +1,7 @@
 import type { WsPeerRole, WsRequestEnvelope, WsResponseEnvelope } from "@tyrum/schemas";
 import {
-  CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-  descriptorIdForClientCapability,
+  capabilityDescriptorsForClientCapability,
+  normalizeCapabilityDescriptors,
   WsConnectInitResult,
   WsConnectProofResult,
 } from "@tyrum/schemas";
@@ -272,6 +272,12 @@ export abstract class TyrumClientTransportCore extends TyrumClientProtocolCore {
       const role = this.opts.role;
       const protocolRev = this.opts.protocolRev;
       const requestId = crypto.randomUUID();
+      const advertisedCapabilities = normalizeCapabilityDescriptors(
+        this.opts.advertisedCapabilities ??
+          this.opts.capabilities.flatMap((capability) =>
+            capabilityDescriptorsForClientCapability(capability),
+          ),
+      );
       const request: WsRequestEnvelope = {
         request_id: requestId,
         type: "connect.init",
@@ -286,10 +292,7 @@ export abstract class TyrumClientTransportCore extends TyrumClientProtocolCore {
             version: toOptionalTrimmedString(device.version),
             mode: toOptionalTrimmedString(device.mode),
           },
-          capabilities: this.opts.capabilities.map((capability) => ({
-            id: descriptorIdForClientCapability(capability),
-            version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-          })),
+          capabilities: advertisedCapabilities,
         },
       };
 

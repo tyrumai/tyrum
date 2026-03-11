@@ -10,6 +10,7 @@ import {
   loadOrCreateDeviceIdentity,
   normalizeFingerprint256,
 } from "@tyrum/client/node";
+import { capabilityDescriptorsForClientCapability } from "@tyrum/schemas";
 
 import { DesktopProvider } from "../providers/desktop-provider.js";
 import { NutJsDesktopBackend } from "../providers/backends/nutjs-desktop-backend.js";
@@ -179,6 +180,7 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
     tlsCertFingerprint256,
     tlsAllowSelfSigned,
     capabilities: ["desktop"],
+    advertisedCapabilities: capabilityDescriptorsForClientCapability("desktop"),
     role: "node",
     device: {
       publicKey: identity.publicKey,

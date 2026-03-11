@@ -1,4 +1,5 @@
 import type {
+  CapabilityDescriptor,
   ClientCapability,
   WsApprovalRequest,
   WsEvent as WsEventT,
@@ -38,6 +39,7 @@ export interface TyrumClientOptions {
   tlsAllowSelfSigned?: boolean;
   tlsCaCertPem?: string;
   capabilities: ClientCapability[];
+  advertisedCapabilities?: CapabilityDescriptor[];
   role?: WsPeerRole;
   protocolRev?: number;
   device?: {

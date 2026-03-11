@@ -231,7 +231,8 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
       properties: {
         capability: {
           type: "string",
-          description: "Optional capability descriptor id filter (example: tyrum.desktop).",
+          description:
+            "Optional exact capability descriptor id filter (example: tyrum.desktop.query).",
         },
         dispatchable_only: {
           type: "boolean",
@@ -266,7 +267,7 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
         },
         capability: {
           type: "string",
-          description: "Capability descriptor id (example: tyrum.ios).",
+          description: "Exact capability descriptor id (example: tyrum.ios.location.get-current).",
         },
       },
       required: ["node_id", "capability"],
@@ -290,7 +291,7 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
         },
         capability: {
           type: "string",
-          description: "Capability descriptor id (example: tyrum.android).",
+          description: "Exact capability descriptor id (example: tyrum.android.audio.record-clip).",
         },
         action_name: {
           type: "string",

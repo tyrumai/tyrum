@@ -1,8 +1,7 @@
 import { createPublicKey, verify } from "node:crypto";
 import {
-  clientCapabilityFromDescriptorId,
   type CapabilityDescriptor,
-  type ClientCapability,
+  normalizeCapabilityDescriptors,
   type WsEventEnvelope,
   type WsPeerRole,
 } from "@tyrum/schemas";
@@ -21,7 +20,7 @@ export interface PendingInit {
   platform?: string;
   version?: string;
   mode?: string;
-  capabilities: ClientCapability[];
+  capabilities: CapabilityDescriptor[];
   connectionId: string;
   challenge: string;
 }
@@ -45,14 +44,8 @@ function buildConnectProofTranscript(input: {
 
 export function parseCapabilitiesFromInit(payload: {
   capabilities: CapabilityDescriptor[];
-}): ClientCapability[] {
-  return [
-    ...new Set(
-      payload.capabilities
-        .map((capability) => clientCapabilityFromDescriptorId(capability.id))
-        .filter((capability): capability is ClientCapability => capability !== undefined),
-    ),
-  ];
+}): CapabilityDescriptor[] {
+  return normalizeCapabilityDescriptors(payload.capabilities);
 }
 
 export function verifyConnectProof(pending: PendingInit, proof: string): boolean {

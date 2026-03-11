@@ -2,10 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { TaskResultRegistry } from "../../src/ws/protocol/task-result-registry.js";
 import type { ProtocolDeps } from "../../src/ws/protocol.js";
-import {
-  CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-  descriptorIdForClientCapability,
-} from "@tyrum/schemas";
+import { CAPABILITY_DESCRIPTOR_DEFAULT_VERSION } from "@tyrum/schemas";
 
 interface MockWebSocket {
   send: ReturnType<typeof vi.fn>;
@@ -32,6 +29,15 @@ function createMockWs(registry: TaskResultRegistry): MockWebSocket {
 }
 
 describe("NodeDispatchService", () => {
+  const desktopActDescriptor = {
+    id: "tyrum.desktop.act",
+    version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+  } as const;
+  const desktopMouseDescriptor = {
+    id: "tyrum.desktop.mouse",
+    version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+  } as const;
+
   it("dispatches task.execute and awaits the task result registry", async () => {
     const { NodeDispatchService } =
       await import("../../src/modules/agent/node-dispatch-service.js");
@@ -39,14 +45,13 @@ describe("NodeDispatchService", () => {
     const cm = new ConnectionManager();
     const registry = new TaskResultRegistry();
     const nodeWs = createMockWs(registry);
-    cm.addClient(nodeWs as never, ["desktop"], {
+    cm.addClient(nodeWs as never, [desktopActDescriptor], {
       id: "conn-1",
       role: "node",
       deviceId: "node-1",
       protocolRev: 2,
     });
 
-    const desktopDescriptorId = descriptorIdForClientCapability("desktop");
     const deps: ProtocolDeps = {
       connectionManager: cm,
       taskResults: registry,
@@ -54,9 +59,7 @@ describe("NodeDispatchService", () => {
         getByNodeId: async () => {
           return {
             status: "approved",
-            capability_allowlist: [
-              { id: desktopDescriptorId, version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION },
-            ],
+            capability_allowlist: [desktopActDescriptor],
           };
         },
       } as never,
@@ -64,7 +67,7 @@ describe("NodeDispatchService", () => {
 
     const service = new NodeDispatchService(deps);
     const res = await service.dispatchAndWait(
-      { type: "Desktop", args: {} },
+      { type: "Desktop", args: { op: "act" } },
       {
         runId: crypto.randomUUID(),
         stepId: crypto.randomUUID(),
@@ -85,7 +88,7 @@ describe("NodeDispatchService", () => {
     const cm = new ConnectionManager();
     const registry = new TaskResultRegistry();
     const nodeWs = createMockWs(registry);
-    cm.addClient(nodeWs as never, ["desktop"], {
+    cm.addClient(nodeWs as never, [desktopMouseDescriptor], {
       id: "conn-1",
       role: "node",
       deviceId: "node-1",
@@ -96,7 +99,6 @@ describe("NodeDispatchService", () => {
       return { decision: "allow" as const };
     });
 
-    const desktopDescriptorId = descriptorIdForClientCapability("desktop");
     const deps: ProtocolDeps = {
       connectionManager: cm,
       taskResults: registry,
@@ -109,9 +111,7 @@ describe("NodeDispatchService", () => {
         getByNodeId: async () => {
           return {
             status: "approved",
-            capability_allowlist: [
-              { id: desktopDescriptorId, version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION },
-            ],
+            capability_allowlist: [desktopMouseDescriptor],
           };
         },
       } as never,
@@ -131,7 +131,7 @@ describe("NodeDispatchService", () => {
     expect(evaluateToolCall).toHaveBeenCalledWith(
       expect.objectContaining({
         toolId: "tool.node.dispatch",
-        toolMatchTarget: "capability:tyrum.desktop;action:Desktop;op:act;act:mouse",
+        toolMatchTarget: "capability:tyrum.desktop.mouse;action:Desktop;op:act;act:mouse",
       }),
     );
   });
@@ -143,14 +143,13 @@ describe("NodeDispatchService", () => {
     const cm = new ConnectionManager();
     const registry = new TaskResultRegistry();
     const nodeWs = createMockWs(registry);
-    cm.addClient(nodeWs as never, ["desktop"], {
+    cm.addClient(nodeWs as never, [desktopActDescriptor], {
       id: "conn-1",
       role: "node",
       deviceId: "node-1",
       protocolRev: 2,
     });
 
-    const desktopDescriptorId = descriptorIdForClientCapability("desktop");
     const deps: ProtocolDeps = {
       connectionManager: cm,
       taskResults: registry,
@@ -165,9 +164,7 @@ describe("NodeDispatchService", () => {
         getByNodeId: async () => {
           return {
             status: "approved",
-            capability_allowlist: [
-              { id: desktopDescriptorId, version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION },
-            ],
+            capability_allowlist: [desktopActDescriptor],
           };
         },
       } as never,
@@ -175,7 +172,7 @@ describe("NodeDispatchService", () => {
 
     const service = new NodeDispatchService(deps);
     const res = await service.dispatchAndWait(
-      { type: "Desktop", args: {} },
+      { type: "Desktop", args: { op: "act" } },
       {
         runId: crypto.randomUUID(),
         stepId: crypto.randomUUID(),
@@ -196,14 +193,14 @@ describe("NodeDispatchService", () => {
     const registry = new TaskResultRegistry();
     const firstWs = createMockWs(registry);
     const secondWs = createMockWs(registry);
-    cm.addClient(firstWs as never, ["desktop"], {
+    cm.addClient(firstWs as never, [desktopActDescriptor], {
       id: "conn-1",
       role: "node",
       deviceId: "node-1",
       protocolRev: 2,
       authClaims: { tenant_id: "default" } as never,
     });
-    cm.addClient(secondWs as never, ["desktop"], {
+    cm.addClient(secondWs as never, [desktopActDescriptor], {
       id: "conn-2",
       role: "node",
       deviceId: "node-2",
@@ -212,16 +209,13 @@ describe("NodeDispatchService", () => {
     });
     cm.setReadyCapabilities("conn-1", []);
 
-    const desktopDescriptorId = descriptorIdForClientCapability("desktop");
     const deps: ProtocolDeps = {
       connectionManager: cm,
       taskResults: registry,
       nodePairingDal: {
         getByNodeId: async () => ({
           status: "approved",
-          capability_allowlist: [
-            { id: desktopDescriptorId, version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION },
-          ],
+          capability_allowlist: [desktopActDescriptor],
         }),
       } as never,
     };
@@ -229,7 +223,7 @@ describe("NodeDispatchService", () => {
     const service = new NodeDispatchService(deps);
     await expect(
       service.dispatchAndWait(
-        { type: "Desktop", args: {} },
+        { type: "Desktop", args: { op: "act" } },
         {
           tenantId: "default",
           runId: crypto.randomUUID(),
@@ -252,14 +246,14 @@ describe("NodeDispatchService", () => {
     const registry = new TaskResultRegistry();
     const firstWs = createMockWs(registry);
     const secondWs = createMockWs(registry);
-    cm.addClient(firstWs as never, ["desktop"], {
+    cm.addClient(firstWs as never, [desktopActDescriptor], {
       id: "conn-1",
       role: "node",
       deviceId: "node-1",
       protocolRev: 2,
       authClaims: { tenant_id: "default" } as never,
     });
-    cm.addClient(secondWs as never, ["desktop"], {
+    cm.addClient(secondWs as never, [desktopActDescriptor], {
       id: "conn-2",
       role: "node",
       deviceId: "node-2",
@@ -267,23 +261,20 @@ describe("NodeDispatchService", () => {
       authClaims: { tenant_id: "default" } as never,
     });
 
-    const desktopDescriptorId = descriptorIdForClientCapability("desktop");
     const deps: ProtocolDeps = {
       connectionManager: cm,
       taskResults: registry,
       nodePairingDal: {
         getByNodeId: async () => ({
           status: "approved",
-          capability_allowlist: [
-            { id: desktopDescriptorId, version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION },
-          ],
+          capability_allowlist: [desktopActDescriptor],
         }),
       } as never,
     };
 
     const service = new NodeDispatchService(deps);
     const res = await service.dispatchAndWait(
-      { type: "Desktop", args: {} },
+      { type: "Desktop", args: { op: "act" } },
       {
         tenantId: "default",
         runId: crypto.randomUUID(),
@@ -315,7 +306,6 @@ describe("NodeDispatchService", () => {
       }
     });
 
-    const desktopDescriptorId = descriptorIdForClientCapability("desktop");
     const deps: ProtocolDeps = {
       connectionManager: cm,
       taskResults: registry,
@@ -330,8 +320,8 @@ describe("NodeDispatchService", () => {
               connection_id: "conn-local-stale",
               edge_id: "edge-local",
               protocol_rev: 2,
-              capabilities: ["desktop"],
-              ready_capabilities: ["desktop"],
+              capabilities: [desktopActDescriptor],
+              ready_capabilities: [desktopActDescriptor],
               last_seen_at_ms: 2_000,
               expires_at_ms: Date.now() + 30_000,
             },
@@ -341,8 +331,8 @@ describe("NodeDispatchService", () => {
               connection_id: "conn-remote-live",
               edge_id: "edge-remote",
               protocol_rev: 2,
-              capabilities: ["desktop"],
-              ready_capabilities: ["desktop"],
+              capabilities: [desktopActDescriptor],
+              ready_capabilities: [desktopActDescriptor],
               last_seen_at_ms: 1_000,
               expires_at_ms: Date.now() + 30_000,
             },
@@ -352,16 +342,14 @@ describe("NodeDispatchService", () => {
       nodePairingDal: {
         getByNodeId: async () => ({
           status: "approved",
-          capability_allowlist: [
-            { id: desktopDescriptorId, version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION },
-          ],
+          capability_allowlist: [desktopActDescriptor],
         }),
       } as never,
     };
 
     const service = new NodeDispatchService(deps);
     const res = await service.dispatchAndWait(
-      { type: "Desktop", args: {} },
+      { type: "Desktop", args: { op: "act" } },
       {
         tenantId: "default",
         runId: crypto.randomUUID(),
@@ -393,7 +381,7 @@ describe("NodeDispatchService", () => {
 
     await expect(
       service.dispatchAndWait(
-        { type: "Desktop", args: {} },
+        { type: "Desktop", args: { op: "act" } },
         {
           runId: crypto.randomUUID(),
           stepId: crypto.randomUUID(),

@@ -325,7 +325,7 @@ describe("AgentRuntime - provenance and policy overrides", () => {
 
     const result = await toolSet["tool.node.dispatch"]!.execute({
       node_id: "node-1",
-      capability: "tyrum.desktop",
+      capability: "tyrum.desktop.act",
       action_name: "act",
       input: {
         target: { kind: "a11y", role: "button", name: "Submit", states: [] },
@@ -336,7 +336,7 @@ describe("AgentRuntime - provenance and policy overrides", () => {
     expect(result).toBe("ok");
     expect(policyService.evaluateToolCall).toHaveBeenCalledWith(
       expect.objectContaining({
-        toolMatchTarget: "capability:tyrum.desktop;action:Desktop;op:act;act:ui",
+        toolMatchTarget: "capability:tyrum.desktop.act;action:Desktop;op:act;act:ui",
       }),
     );
 
@@ -352,12 +352,12 @@ describe("AgentRuntime - provenance and policy overrides", () => {
         suggested_overrides: [
           {
             tool_id: "tool.node.dispatch",
-            pattern: "capability:tyrum.desktop;action:Desktop;op:act;act:ui",
+            pattern: "capability:tyrum.desktop.act;action:Desktop;op:act;act:ui",
             workspace_id: DEFAULT_WORKSPACE_ID,
           },
           {
             tool_id: "tool.node.dispatch",
-            pattern: "capability:tyrum.desktop;action:Desktop;op:act*",
+            pattern: "capability:tyrum.desktop.act;action:Desktop;op:act*",
             workspace_id: DEFAULT_WORKSPACE_ID,
           },
         ],

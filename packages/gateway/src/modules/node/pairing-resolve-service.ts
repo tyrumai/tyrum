@@ -4,6 +4,7 @@ import type {
   NodePairingTrustLevel,
   WsEventEnvelope,
 } from "@tyrum/schemas";
+import { isLegacyUmbrellaCapabilityDescriptorId } from "@tyrum/schemas";
 import type { WsEventDal } from "../ws-event/dal.js";
 import type { NodePairingDal } from "./pairing-dal.js";
 import type { WsBroadcastAudience } from "../../ws/audience.js";
@@ -51,7 +52,7 @@ export type ResolveNodePairingResult =
     }
   | {
       ok: false;
-      code: "not_found";
+      code: "invalid_request" | "not_found";
       message: string;
     };
 
@@ -91,6 +92,16 @@ export async function resolveNodePairing(
   }
 
   if (input.decision === "approved") {
+    const legacyCapability = input.capabilityAllowlist.find((capability) =>
+      isLegacyUmbrellaCapabilityDescriptorId(capability.id),
+    );
+    if (legacyCapability) {
+      return {
+        ok: false,
+        code: "invalid_request",
+        message: `legacy umbrella capability '${legacyCapability.id}' is not supported; approve exact split descriptors instead`,
+      };
+    }
     const resolved = await deps.nodePairingDal.resolve({
       tenantId: input.tenantId,
       pairingId: input.pairingId,

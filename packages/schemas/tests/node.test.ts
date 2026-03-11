@@ -6,7 +6,10 @@ describe("Node contracts", () => {
   const baseNode = {
     node_id: "node-1",
     label: "My Mac mini",
-    capabilities: ["desktop", "cli"],
+    capabilities: [
+      { id: "tyrum.desktop.query", version: "1.0.0" },
+      { id: "tyrum.cli", version: "1.0.0" },
+    ],
     last_seen_at: "2026-02-19T12:00:00Z",
   } as const;
 
@@ -32,7 +35,7 @@ describe("Node contracts", () => {
       requested_at: "2026-02-19T12:00:00Z",
       node: {
         node_id: "node-1",
-        capabilities: ["desktop"],
+        capabilities: [{ id: "tyrum.desktop.query", version: "1.0.0" }],
         last_seen_at: "2026-02-19T12:00:00Z",
       },
       resolution: null,

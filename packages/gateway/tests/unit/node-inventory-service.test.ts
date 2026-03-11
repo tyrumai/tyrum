@@ -6,6 +6,7 @@ import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { createTestContainer } from "../integration/helpers.js";
 
 describe("NodeInventoryService", () => {
+  const cliDescriptor = { id: descriptorIdForClientCapability("cli"), version: "1.0.0" } as const;
   const containers: Array<Awaited<ReturnType<typeof createTestContainer>>> = [];
 
   afterEach(async () => {
@@ -103,20 +104,24 @@ describe("NodeInventoryService", () => {
 
   it("preserves connected non-catalog capabilities in node summaries", async () => {
     const connectionManager = new ConnectionManager();
-    connectionManager.addClient({ on: vi.fn(), send: vi.fn(), readyState: 1 } as never, ["cli"], {
-      id: "conn-cli-1",
-      role: "node",
-      deviceId: "node-cli-1",
-      authClaims: {
-        token_kind: "device",
-        token_id: "token-cli-1",
-        tenant_id: DEFAULT_TENANT_ID,
-        device_id: "node-cli-1",
+    connectionManager.addClient(
+      { on: vi.fn(), send: vi.fn(), readyState: 1 } as never,
+      [cliDescriptor],
+      {
+        id: "conn-cli-1",
         role: "node",
-        scopes: [],
+        deviceId: "node-cli-1",
+        authClaims: {
+          token_kind: "device",
+          token_id: "token-cli-1",
+          tenant_id: DEFAULT_TENANT_ID,
+          device_id: "node-cli-1",
+          role: "node",
+          scopes: [],
+        },
+        protocolRev: 2,
       },
-      protocolRev: 2,
-    });
+    );
 
     const service = new NodeInventoryService({ connectionManager });
     const result = await service.list({
@@ -124,21 +129,20 @@ describe("NodeInventoryService", () => {
       dispatchableOnly: false,
     });
 
-    expect(result.nodes).toEqual([
+    expect(result.nodes).toHaveLength(1);
+    expect(result.nodes[0]).toMatchObject({
+      node_id: "node-cli-1",
+      connected: true,
+    });
+    expect(result.nodes[0]?.capabilities).toContainEqual(
       expect.objectContaining({
-        node_id: "node-cli-1",
-        connected: true,
-        capabilities: [
-          expect.objectContaining({
-            capability: descriptorIdForClientCapability("cli"),
-            dispatchable: false,
-            supported_action_count: 0,
-            enabled_action_count: 0,
-            available_action_count: 0,
-            unknown_action_count: 0,
-          }),
-        ],
+        capability: descriptorIdForClientCapability("cli"),
+        dispatchable: false,
+        supported_action_count: 0,
+        enabled_action_count: 0,
+        available_action_count: 0,
+        unknown_action_count: 0,
       }),
-    ]);
+    );
   });
 });

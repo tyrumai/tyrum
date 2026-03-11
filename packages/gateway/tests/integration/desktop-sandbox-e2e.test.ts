@@ -7,11 +7,7 @@ import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { getRequestListener } from "@hono/node-server";
-import {
-  CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-  type DesktopQueryMatch,
-  descriptorIdForClientCapability,
-} from "@tyrum/schemas";
+import { CAPABILITY_DESCRIPTOR_DEFAULT_VERSION, type DesktopQueryMatch } from "@tyrum/schemas";
 
 import { createContainer } from "../../src/container.js";
 import { createApp } from "../../src/app.js";
@@ -145,25 +141,23 @@ describe("e2e: tool.node.dispatch against docker desktop-sandbox", () => {
                 pairing_id: p.pairing_id,
                 node: {
                   node_id: p.node.node_id,
-                  capabilities: p.node.capabilities as unknown as string[],
+                  capabilities: p.node.capabilities,
                 },
               }));
             },
             timeoutMs: 90_000,
           });
 
-          const desktopDescriptorId = descriptorIdForClientCapability("desktop");
+          const desktopSnapshotDescriptor = {
+            id: "tyrum.desktop.snapshot",
+            version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+          } as const;
           await container.nodePairingDal.resolve({
             tenantId: DEFAULT_TENANT_ID,
             pairingId: pairing.pairing_id,
             decision: "approved",
             trustLevel: "local",
-            capabilityAllowlist: [
-              {
-                id: desktopDescriptorId,
-                version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-              },
-            ],
+            capabilityAllowlist: [desktopSnapshotDescriptor],
           });
 
           const scope: ExecutionScopeIds = {
@@ -199,7 +193,7 @@ describe("e2e: tool.node.dispatch against docker desktop-sandbox", () => {
                 status: "ok",
                 generated_at: new Date().toISOString(),
                 node_id: pairing.node.node_id,
-                capability: "tyrum.desktop",
+                capability: "tyrum.desktop.snapshot",
                 capability_version: "1.0.0",
                 connected: true,
                 paired: true,
@@ -265,7 +259,7 @@ describe("e2e: tool.node.dispatch against docker desktop-sandbox", () => {
             "call-1",
             {
               node_id: pairing.node.node_id,
-              capability: "tyrum.desktop",
+              capability: "tyrum.desktop.snapshot",
               action_name: "snapshot",
               input: { include_tree: true, max_nodes: 512, max_text_chars: 8192 },
               timeout_ms: 120_000,
@@ -332,7 +326,7 @@ describe("e2e: tool.node.dispatch against docker desktop-sandbox", () => {
             "call-2",
             {
               node_id: pairing.node.node_id,
-              capability: "tyrum.desktop",
+              capability: "tyrum.desktop.mouse",
               action_name: "mouse",
               input: { action: "move", x: 5, y: 5 },
               timeout_ms: 60_000,

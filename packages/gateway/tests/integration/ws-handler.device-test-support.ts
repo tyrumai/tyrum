@@ -22,6 +22,11 @@ import {
   waitForOpen,
 } from "./ws-handler.test-support.js";
 
+const httpDescriptor = {
+  id: descriptorIdForClientCapability("http"),
+  version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+} as const;
+
 function registerDeviceProofTests(ctx: TestContext): void {
   it("supports connect.init/connect.proof with device identity proof", async () => {
     ctx.setHomeDir(await mkdtemp(join(tmpdir(), "tyrum-ws-")));
@@ -68,12 +73,7 @@ function registerDeviceProofTests(ctx: TestContext): void {
           protocol_rev: 2,
           role: "client",
           device: { device_id: deviceId, pubkey: pubkeyB64Url, label: "test" },
-          capabilities: [
-            {
-              id: descriptorIdForClientCapability("http"),
-              version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-            },
-          ],
+          capabilities: [httpDescriptor],
         },
       }),
     );
@@ -118,7 +118,7 @@ function registerDeviceProofTests(ctx: TestContext): void {
     expect(registered).toBeDefined();
     expect(registered!.device_id).toBe(deviceId);
     expect(registered!.role).toBe("client");
-    expect(registered!.capabilities).toEqual(["http"]);
+    expect(registered!.capabilities).toEqual([httpDescriptor]);
 
     stopHeartbeat();
   });
@@ -168,12 +168,7 @@ function registerDeviceProofTests(ctx: TestContext): void {
           protocol_rev: 999,
           role: "client",
           device: { device_id: deviceId, pubkey: pubkeyB64Url, label: "test" },
-          capabilities: [
-            {
-              id: descriptorIdForClientCapability("http"),
-              version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-            },
-          ],
+          capabilities: [httpDescriptor],
         },
       }),
     );
@@ -293,12 +288,7 @@ function registerDeviceTokenTests(ctx: TestContext): void {
           protocol_rev: 2,
           role: "client",
           device: { device_id: deviceIdB, pubkey: pubkeyB64UrlB, label: "test" },
-          capabilities: [
-            {
-              id: descriptorIdForClientCapability("http"),
-              version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-            },
-          ],
+          capabilities: [httpDescriptor],
         },
       }),
     );
@@ -361,12 +351,7 @@ function registerDeviceTokenTests(ctx: TestContext): void {
           protocol_rev: 2,
           role: "node",
           device: { device_id: deviceId, pubkey: pubkeyB64Url, label: "test" },
-          capabilities: [
-            {
-              id: descriptorIdForClientCapability("http"),
-              version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-            },
-          ],
+          capabilities: [httpDescriptor],
         },
       }),
     );

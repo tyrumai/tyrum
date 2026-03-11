@@ -51,7 +51,7 @@ type CatalogAction = {
 
 export type CapabilityCatalogEntry = {
   descriptor: CapabilityDescriptor;
-  actions: readonly CatalogAction[];
+  actions: readonly [CatalogAction];
 };
 
 function jsonSchemaOf(schema: unknown, io: "input" | "output"): Record<string, unknown> {
@@ -164,12 +164,19 @@ function mobileAction(
   };
 }
 
-const BROWSER_CATALOG: CapabilityCatalogEntry = {
-  descriptor: {
-    id: "tyrum.browser",
-    version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-  },
-  actions: [
+function createEntry(descriptorId: string, action: CatalogAction): CapabilityCatalogEntry {
+  return {
+    descriptor: {
+      id: descriptorId,
+      version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+    },
+    actions: [action],
+  };
+}
+
+const CATALOG_ENTRIES: CapabilityCatalogEntry[] = [
+  createEntry(
+    "tyrum.browser.geolocation.get",
     browserAction(
       "geolocation.get",
       "Read the browser geolocation position.",
@@ -187,6 +194,9 @@ const BROWSER_CATALOG: CapabilityCatalogEntry = {
         hardware_may_be_required: false,
       },
     ),
+  ),
+  createEntry(
+    "tyrum.browser.camera.capture-photo",
     browserAction(
       "camera.capture_photo",
       "Capture a still photo from the browser camera.",
@@ -204,6 +214,9 @@ const BROWSER_CATALOG: CapabilityCatalogEntry = {
         hardware_may_be_required: true,
       },
     ),
+  ),
+  createEntry(
+    "tyrum.browser.microphone.record",
     browserAction(
       "microphone.record",
       "Record audio from the browser microphone.",
@@ -221,27 +234,27 @@ const BROWSER_CATALOG: CapabilityCatalogEntry = {
         hardware_may_be_required: true,
       },
     ),
-  ],
-};
-
-const DESKTOP_CATALOG: CapabilityCatalogEntry = {
-  descriptor: {
-    id: "tyrum.desktop",
-    version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-  },
-  actions: [
+  ),
+  createEntry(
+    "tyrum.desktop.screenshot",
     desktopAction(
       "screenshot",
       "Capture a desktop screenshot.",
       DesktopScreenshotArgs,
       DesktopSnapshotResult,
     ),
+  ),
+  createEntry(
+    "tyrum.desktop.snapshot",
     desktopAction(
       "snapshot",
       "Collect a desktop accessibility snapshot.",
       DesktopSnapshotArgs,
       DesktopSnapshotResult,
     ),
+  ),
+  createEntry(
+    "tyrum.desktop.query",
     desktopAction(
       "query",
       "Query desktop UI elements.",
@@ -249,6 +262,9 @@ const DESKTOP_CATALOG: CapabilityCatalogEntry = {
       DesktopQueryResult,
       "result",
     ),
+  ),
+  createEntry(
+    "tyrum.desktop.act",
     desktopAction(
       "act",
       "Perform a desktop UI action.",
@@ -256,6 +272,9 @@ const DESKTOP_CATALOG: CapabilityCatalogEntry = {
       DesktopActResult,
       "result",
     ),
+  ),
+  createEntry(
+    "tyrum.desktop.mouse",
     desktopAction(
       "mouse",
       "Perform a low-level desktop mouse action.",
@@ -263,6 +282,9 @@ const DESKTOP_CATALOG: CapabilityCatalogEntry = {
       z.object({}).passthrough(),
       "result",
     ),
+  ),
+  createEntry(
+    "tyrum.desktop.keyboard",
     desktopAction(
       "keyboard",
       "Perform a low-level desktop keyboard action.",
@@ -270,6 +292,9 @@ const DESKTOP_CATALOG: CapabilityCatalogEntry = {
       z.object({}).passthrough(),
       "result",
     ),
+  ),
+  createEntry(
+    "tyrum.desktop.wait-for",
     desktopAction(
       "wait_for",
       "Wait for a desktop UI condition.",
@@ -277,15 +302,9 @@ const DESKTOP_CATALOG: CapabilityCatalogEntry = {
       DesktopWaitForResult,
       "result",
     ),
-  ],
-};
-
-const IOS_CATALOG: CapabilityCatalogEntry = {
-  descriptor: {
-    id: "tyrum.ios",
-    version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-  },
-  actions: [
+  ),
+  createEntry(
+    "tyrum.ios.location.get-current",
     mobileAction(
       "IOS",
       "location.get_current",
@@ -298,6 +317,9 @@ const IOS_CATALOG: CapabilityCatalogEntry = {
         hardware_may_be_required: true,
       },
     ),
+  ),
+  createEntry(
+    "tyrum.ios.camera.capture-photo",
     mobileAction(
       "IOS",
       "camera.capture_photo",
@@ -310,6 +332,9 @@ const IOS_CATALOG: CapabilityCatalogEntry = {
         hardware_may_be_required: true,
       },
     ),
+  ),
+  createEntry(
+    "tyrum.ios.audio.record-clip",
     mobileAction(
       "IOS",
       "audio.record_clip",
@@ -322,15 +347,9 @@ const IOS_CATALOG: CapabilityCatalogEntry = {
         hardware_may_be_required: true,
       },
     ),
-  ],
-};
-
-const ANDROID_CATALOG: CapabilityCatalogEntry = {
-  descriptor: {
-    id: "tyrum.android",
-    version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-  },
-  actions: [
+  ),
+  createEntry(
+    "tyrum.android.location.get-current",
     mobileAction(
       "Android",
       "location.get_current",
@@ -343,6 +362,9 @@ const ANDROID_CATALOG: CapabilityCatalogEntry = {
         hardware_may_be_required: true,
       },
     ),
+  ),
+  createEntry(
+    "tyrum.android.camera.capture-photo",
     mobileAction(
       "Android",
       "camera.capture_photo",
@@ -355,6 +377,9 @@ const ANDROID_CATALOG: CapabilityCatalogEntry = {
         hardware_may_be_required: true,
       },
     ),
+  ),
+  createEntry(
+    "tyrum.android.audio.record-clip",
     mobileAction(
       "Android",
       "audio.record_clip",
@@ -367,15 +392,16 @@ const ANDROID_CATALOG: CapabilityCatalogEntry = {
         hardware_may_be_required: true,
       },
     ),
-  ],
-};
+  ),
+];
 
-const CATALOG = new Map<string, CapabilityCatalogEntry>([
-  [BROWSER_CATALOG.descriptor.id, BROWSER_CATALOG],
-  [IOS_CATALOG.descriptor.id, IOS_CATALOG],
-  [ANDROID_CATALOG.descriptor.id, ANDROID_CATALOG],
-  [DESKTOP_CATALOG.descriptor.id, DESKTOP_CATALOG],
-]);
+const CATALOG = new Map<string, CapabilityCatalogEntry>(
+  CATALOG_ENTRIES.map((entry) => [entry.descriptor.id, entry] as const),
+);
+
+export function listCapabilityCatalogEntries(): readonly CapabilityCatalogEntry[] {
+  return CATALOG_ENTRIES;
+}
 
 export function getCapabilityCatalogEntry(
   capabilityId: string,

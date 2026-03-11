@@ -1,5 +1,10 @@
-import { NodeCapabilityState as NodeCapabilityStateSchema } from "@tyrum/schemas";
-import type { ClientCapability, NodeCapabilityState } from "@tyrum/schemas";
+import {
+  CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+  CapabilityDescriptor as CapabilityDescriptorSchema,
+  NodeCapabilityState as NodeCapabilityStateSchema,
+  normalizeCapabilityDescriptors,
+} from "@tyrum/schemas";
+import type { CapabilityDescriptor, NodeCapabilityState } from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
 import { DEFAULT_TENANT_ID } from "../identity/scope.js";
 
@@ -13,8 +18,8 @@ export interface ConnectionDirectoryRow {
   label: string | null;
   version: string | null;
   mode: string | null;
-  capabilities: ClientCapability[];
-  ready_capabilities: ClientCapability[];
+  capabilities: CapabilityDescriptor[];
+  ready_capabilities: CapabilityDescriptor[];
   capability_states: NodeCapabilityState[];
   connected_at_ms: number;
   last_seen_at_ms: number;
@@ -67,31 +72,32 @@ function parseCapabilityStates(raw: string | null): NodeCapabilityState[] {
   }
 }
 
-function toRow(raw: RawConnectionDirectoryRow): ConnectionDirectoryRow {
-  let capabilities: ClientCapability[] = [];
+function parseCapabilityDescriptors(raw: string | null): CapabilityDescriptor[] {
+  if (typeof raw !== "string" || raw.trim().length === 0) return [];
   try {
-    const parsed = JSON.parse(raw.capabilities_json) as unknown;
-    if (Array.isArray(parsed)) {
-      capabilities = parsed.filter(
-        (v): v is ClientCapability => typeof v === "string",
-      ) as ClientCapability[];
-    }
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    const descriptors = parsed
+      .map((value) => {
+        if (typeof value === "string") {
+          return CapabilityDescriptorSchema.parse({
+            id: value,
+            version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+          });
+        }
+        const result = CapabilityDescriptorSchema.safeParse(value);
+        return result.success ? result.data : null;
+      })
+      .filter((value): value is CapabilityDescriptor => value !== null);
+    return normalizeCapabilityDescriptors(descriptors);
   } catch {
-    // Intentional: treat invalid JSON columns as empty capabilities.
+    return [];
   }
-  let readyCapabilities: ClientCapability[] | undefined;
-  if (typeof raw.ready_capabilities_json === "string") {
-    try {
-      const parsed = JSON.parse(raw.ready_capabilities_json) as unknown;
-      if (Array.isArray(parsed)) {
-        readyCapabilities = parsed.filter(
-          (v): v is ClientCapability => typeof v === "string",
-        ) as ClientCapability[];
-      }
-    } catch {
-      // Intentional: treat invalid JSON columns as missing so callers fall back to advertised capabilities.
-    }
-  }
+}
+
+function toRow(raw: RawConnectionDirectoryRow): ConnectionDirectoryRow {
+  const capabilities = parseCapabilityDescriptors(raw.capabilities_json);
+  const readyCapabilities = parseCapabilityDescriptors(raw.ready_capabilities_json);
   const role = raw.role === "node" ? "node" : "client";
   const metadata = safeParseJsonObject(raw.metadata_json);
   const version = typeof metadata.version === "string" ? metadata.version : null;
@@ -111,7 +117,7 @@ function toRow(raw: RawConnectionDirectoryRow): ConnectionDirectoryRow {
     version,
     mode,
     capabilities,
-    ready_capabilities: readyCapabilities ?? capabilities,
+    ready_capabilities: readyCapabilities.length > 0 ? readyCapabilities : capabilities,
     capability_states: parseCapabilityStates(raw.capability_states_json),
     connected_at_ms: raw.connected_at_ms,
     last_seen_at_ms: raw.last_seen_at_ms,
@@ -133,8 +139,8 @@ export class ConnectionDirectoryDal {
     label?: string | null;
     version?: string | null;
     mode?: string | null;
-    capabilities: readonly ClientCapability[];
-    readyCapabilities?: readonly ClientCapability[];
+    capabilities: readonly CapabilityDescriptor[];
+    readyCapabilities?: readonly CapabilityDescriptor[];
     capabilityStates?: readonly NodeCapabilityState[];
     nowMs: number;
     ttlMs: number;
@@ -241,7 +247,7 @@ export class ConnectionDirectoryDal {
   async setReadyCapabilities(params: {
     tenantId: string;
     connectionId: string;
-    readyCapabilities: readonly ClientCapability[];
+    readyCapabilities: readonly CapabilityDescriptor[];
   }): Promise<void> {
     const tenantId = params.tenantId.trim();
     if (tenantId.length === 0) {
@@ -340,13 +346,15 @@ export class ConnectionDirectoryDal {
 
   async listConnectionsForCapability(
     tenantId: string,
-    capability: ClientCapability,
+    capabilityId: string,
     nowMs: number,
     opts?: { role?: "client" | "node" },
   ): Promise<ConnectionDirectoryRow[]> {
     const rows = await this.listNonExpired(tenantId, nowMs);
     return rows.filter(
-      (r) => r.capabilities.includes(capability) && (opts?.role ? r.role === opts.role : true),
+      (r) =>
+        r.capabilities.some((capability) => capability.id === capabilityId) &&
+        (opts?.role ? r.role === opts.role : true),
     );
   }
 }

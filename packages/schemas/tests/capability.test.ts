@@ -6,6 +6,7 @@ import {
   ClientCapability,
   clientCapabilityFromDescriptorId,
   descriptorIdForClientCapability,
+  descriptorIdsForClientCapability,
 } from "../src/capability.js";
 import { expectRejects } from "./test-helpers.js";
 
@@ -55,8 +56,12 @@ describe("descriptor legacy mappings", () => {
     expect(descriptorIdForClientCapability("cli")).toBe("tyrum.cli");
   });
 
-  it("maps browser capability to namespaced ID", () => {
-    expect(descriptorIdForClientCapability("browser")).toBe("tyrum.browser");
+  it("expands browser capability to exact descriptor IDs", () => {
+    expect(descriptorIdsForClientCapability("browser")).toEqual([
+      "tyrum.browser.geolocation.get",
+      "tyrum.browser.camera.capture-photo",
+      "tyrum.browser.microphone.record",
+    ]);
   });
 
   it("maps namespaced core descriptor ID back to client capability", () => {

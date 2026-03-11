@@ -1,4 +1,10 @@
 import { vi } from "vitest";
+import {
+  CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+  capabilityDescriptorsForClientCapability,
+  type CapabilityDescriptor,
+  type CapabilityKind,
+} from "@tyrum/schemas";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import type { ProtocolDeps } from "../../src/ws/protocol.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
@@ -41,7 +47,7 @@ export function makeDeps(cm: ConnectionManager, overrides?: Partial<ProtocolDeps
 
 export function makeClient(
   cm: ConnectionManager,
-  capabilities: string[],
+  capabilities: Array<CapabilityDescriptor | CapabilityKind | string>,
   opts?: {
     id?: string;
     role?: "client" | "node";
@@ -60,6 +66,22 @@ export function makeClient(
       role: "admin",
       scopes: ["*"],
     } as const);
-  const id = cm.addClient(ws as never, capabilities as never, { ...opts, authClaims } as never);
+  const normalizedCapabilities = capabilities.flatMap((capability) => {
+    if (typeof capability !== "string") {
+      return [capability];
+    }
+    if (capability.includes(".")) {
+      return [{ id: capability, version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION }];
+    }
+    return capabilityDescriptorsForClientCapability(capability as CapabilityKind);
+  });
+  const id = cm.addClient(
+    ws as never,
+    normalizedCapabilities as never,
+    {
+      ...opts,
+      authClaims,
+    } as never,
+  );
   return { id, ws };
 }

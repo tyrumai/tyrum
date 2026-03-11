@@ -1,7 +1,6 @@
 import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-  descriptorIdForClientCapability,
-  type CapabilityKind,
+  type CapabilityDescriptor,
   type NodeCapabilityState,
   type NodeCapabilitySummary,
   type NodeInventoryEntry,
@@ -15,17 +14,7 @@ import type { PresenceDal } from "../presence/dal.js";
 import { readRecordString } from "../util/coerce.js";
 import type { ConnectionManager, ConnectedClient } from "../../ws/connection-manager.js";
 import { SessionLaneNodeAttachmentDal } from "../agent/session-lane-node-attachment-dal.js";
-import { getCapabilityCatalogEntry } from "./capability-catalog.js";
-
-const ACTION_CAPABILITIES = [
-  { capability: "playwright" },
-  { capability: "browser" },
-  { capability: "ios" },
-  { capability: "android" },
-  { capability: "desktop" },
-  { capability: "cli" },
-  { capability: "http" },
-] as const satisfies ReadonlyArray<{ capability: CapabilityKind }>;
+import { listCapabilityCatalogEntries } from "./capability-catalog.js";
 
 type InventoryNode = {
   nodeId: string;
@@ -33,8 +22,8 @@ type InventoryNode = {
   mode?: string;
   version?: string;
   connected: boolean;
-  capabilities: Set<CapabilityKind>;
-  readyCapabilities: Set<CapabilityKind>;
+  capabilities: Map<string, CapabilityDescriptor>;
+  readyCapabilities: Map<string, CapabilityDescriptor>;
   capabilityStates: Map<string, NodeCapabilityState>;
   lastSeenAtMs?: number;
 };
@@ -47,8 +36,10 @@ type NodeInventoryServiceDeps = {
   attachmentDal?: SessionLaneNodeAttachmentDal;
 };
 
-function capabilitySet(values: readonly CapabilityKind[] | undefined): Set<CapabilityKind> {
-  return new Set(values ?? []);
+function capabilityMap(
+  values: readonly CapabilityDescriptor[] | undefined,
+): Map<string, CapabilityDescriptor> {
+  return new Map((values ?? []).map((capability) => [capability.id, capability] as const));
 }
 
 function capabilityStateMap(
@@ -69,8 +60,12 @@ function upsertNode(map: Map<string, InventoryNode>, next: InventoryNode): void 
   existing.version = existing.version ?? next.version;
   existing.lastSeenAtMs = Math.max(existing.lastSeenAtMs ?? 0, next.lastSeenAtMs ?? 0) || undefined;
   existing.connected ||= next.connected;
-  for (const capability of next.capabilities) existing.capabilities.add(capability);
-  for (const capability of next.readyCapabilities) existing.readyCapabilities.add(capability);
+  for (const [capabilityId, capability] of next.capabilities) {
+    existing.capabilities.set(capabilityId, capability);
+  }
+  for (const [capabilityId, capability] of next.readyCapabilities) {
+    existing.readyCapabilities.set(capabilityId, capability);
+  }
   for (const [capabilityId, state] of next.capabilityStates) {
     existing.capabilityStates.set(capabilityId, state);
   }
@@ -84,8 +79,8 @@ function fromDirectoryRow(row: ConnectionDirectoryRow): InventoryNode | undefine
     mode: row.mode ?? undefined,
     version: row.version ?? undefined,
     connected: true,
-    capabilities: capabilitySet(row.capabilities),
-    readyCapabilities: capabilitySet(row.ready_capabilities),
+    capabilities: capabilityMap(row.capabilities),
+    readyCapabilities: capabilityMap(row.ready_capabilities),
     capabilityStates: capabilityStateMap(row.capability_states),
     lastSeenAtMs: row.last_seen_at_ms,
   };
@@ -96,8 +91,8 @@ function fromConnectedClient(client: ConnectedClient): InventoryNode | undefined
   return {
     nodeId: client.device_id,
     connected: true,
-    capabilities: capabilitySet(client.capabilities),
-    readyCapabilities: new Set(client.readyCapabilities),
+    capabilities: capabilityMap(client.capabilities),
+    readyCapabilities: capabilityMap(client.readyCapabilities),
     capabilityStates: new Map(client.capabilityStates),
     lastSeenAtMs: client.lastWsPongAt,
   };
@@ -141,8 +136,8 @@ export class NodeInventoryService {
         mode: readRecordString(pairing.node.metadata, "mode"),
         version: readRecordString(pairing.node.metadata, "version"),
         connected: false,
-        capabilities: capabilitySet(pairing.node.capabilities),
-        readyCapabilities: new Set(),
+        capabilities: capabilityMap(pairing.node.capabilities),
+        readyCapabilities: new Map(),
         capabilityStates: new Map(),
         lastSeenAtMs: Number.isFinite(lastSeenAtMs) ? lastSeenAtMs : undefined,
       });
@@ -168,22 +163,29 @@ export class NodeInventoryService {
       const pairing = pairings.find((entry) => entry.node.node_id === nodeId);
       const allowlist = pairing?.capability_allowlist ?? [];
       const summaries: NodeCapabilitySummary[] = [];
+      const catalogEntries = new Map(
+        listCapabilityCatalogEntries().map((entry) => [entry.descriptor.id, entry] as const),
+      );
+      const candidateDescriptorIds = [
+        ...new Set([
+          ...catalogEntries.keys(),
+          ...node.capabilities.keys(),
+          ...allowlist.map((entry) => entry.id),
+        ]),
+      ];
 
-      for (const { capability } of ACTION_CAPABILITIES) {
-        const descriptorId = descriptorIdForClientCapability(capability);
+      for (const descriptorId of candidateDescriptorIds) {
         if (filteredCapability && filteredCapability !== descriptorId) continue;
-        if (
-          !node.capabilities.has(capability) &&
-          !allowlist.some((entry) => entry.id === descriptorId)
-        ) {
+        const advertisedCapability = node.capabilities.get(descriptorId);
+        const pairedCapability = allowlist.find((entry) => entry.id === descriptorId);
+        if (!advertisedCapability && !pairedCapability) {
           continue;
         }
 
-        const catalog = getCapabilityCatalogEntry(descriptorId);
+        const catalog = catalogEntries.get(descriptorId);
         const state = node.capabilityStates.get(descriptorId);
-        const ready = node.readyCapabilities.has(capability);
-        const paired =
-          pairing?.status === "approved" && allowlist.some((entry) => entry.id === descriptorId);
+        const ready = node.readyCapabilities.has(descriptorId);
+        const paired = pairing?.status === "approved" && pairedCapability !== undefined;
         let supportedActionCount = 0;
         let enabledActionCount = 0;
         let availableActionCount = 0;
@@ -212,13 +214,13 @@ export class NodeInventoryService {
           capability: descriptorId,
           capability_version:
             state?.capability.version ??
-            allowlist.find((entry) => entry.id === descriptorId)?.version ??
+            node.readyCapabilities.get(descriptorId)?.version ??
+            advertisedCapability?.version ??
+            pairedCapability?.version ??
             CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-          connected: node.connected,
+          connected: node.connected && advertisedCapability !== undefined,
           paired,
-          dispatchable: catalog
-            ? node.connected && ready && paired && enabledActionCount > 0
-            : false,
+          dispatchable: node.connected && ready && paired && enabledActionCount > 0,
           supported_action_count: supportedActionCount,
           enabled_action_count: enabledActionCount,
           available_action_count: availableActionCount,

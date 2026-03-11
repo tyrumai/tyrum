@@ -1,9 +1,8 @@
 import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-  descriptorIdForClientCapability,
-  requiredCapability,
+  requiredCapabilityDescriptorForAction,
 } from "@tyrum/schemas";
-import type { ActionPrimitive, CapabilityKind, WsRequestEnvelope } from "@tyrum/schemas";
+import type { ActionPrimitive, CapabilityDescriptor, WsRequestEnvelope } from "@tyrum/schemas";
 import { canonicalizeNodeDispatchMatchTarget } from "../../modules/policy/match-target.js";
 import type { ConnectionDirectoryRow } from "../../modules/backplane/connection-directory.js";
 import type { ConnectedClient } from "../connection-manager.js";
@@ -31,6 +30,13 @@ type PolicyDispatchState = {
   nodeDispatchAllowed: boolean;
   trace?: { policy_snapshot_id?: string; policy_decision?: string };
 };
+
+function hasCapability(
+  capabilities: readonly CapabilityDescriptor[],
+  capabilityId: string,
+): boolean {
+  return capabilities.some((capability) => capability.id === capabilityId);
+}
 
 async function resolvePolicyDispatchState(
   deps: ProtocolDeps,
@@ -154,7 +160,7 @@ async function resolveTargetedDispatch(
   deps: ProtocolDeps,
   input: {
     nodeId: string;
-    capability: CapabilityKind;
+    capability: string;
     toolMatchTarget: string;
     policyEnabled: boolean;
     policyEvalPromise:
@@ -170,10 +176,13 @@ async function resolveTargetedDispatch(
       client.device_id === input.nodeId,
   );
   if (localTarget) {
-    if (localTarget.protocol_rev < 2 || !localTarget.capabilities.includes(input.capability)) {
+    if (
+      localTarget.protocol_rev < 2 ||
+      !hasCapability(localTarget.capabilities, input.capability)
+    ) {
       throw new NodeNotCapableError(input.nodeId, input.capability);
     }
-    if (!localTarget.readyCapabilities.has(input.capability)) {
+    if (!hasCapability(localTarget.readyCapabilities, input.capability)) {
       throw new NodeNotReadyError(input.nodeId, input.capability);
     }
     if (!(await input.isNodeAuthorizedForDispatch(input.nodeId))) {
@@ -207,13 +216,15 @@ async function resolveTargetedDispatch(
       )
       .toSorted((a, b) => b.last_seen_at_ms - a.last_seen_at_ms);
     if (remoteRows.length > 0) {
-      const capableRows = remoteRows.filter((row) => row.capabilities.includes(input.capability));
+      const capableRows = remoteRows.filter((row) =>
+        hasCapability(row.capabilities, input.capability),
+      );
       if (capableRows.length === 0) {
         throw new NodeNotCapableError(input.nodeId, input.capability);
       }
 
       const readyRows = capableRows.filter((row) =>
-        row.ready_capabilities.includes(input.capability),
+        hasCapability(row.ready_capabilities, input.capability),
       );
       if (readyRows.length === 0) {
         throw new NodeNotReadyError(input.nodeId, input.capability);
@@ -268,12 +279,11 @@ export function dispatchTask(
   deps: ProtocolDeps,
   targetNodeId?: string,
 ): Promise<string> {
-  const capability = requiredCapability(action.type);
-  if (capability === undefined) {
-    throw new NoCapableClientError(action.type as CapabilityKind);
+  const descriptorId = requiredCapabilityDescriptorForAction(action);
+  if (descriptorId === undefined) {
+    throw new NoCapableClientError(action.type);
   }
 
-  const descriptorId = descriptorIdForClientCapability(capability);
   const toolMatchTarget = `capability:${descriptorId};${canonicalizeNodeDispatchMatchTarget(
     action.type,
     action.args,
@@ -303,7 +313,7 @@ export function dispatchTask(
   if (typeof targetNodeId === "string" && targetNodeId.trim().length > 0) {
     return resolveTargetedDispatch(action, scope, deps, {
       nodeId: targetNodeId.trim(),
-      capability,
+      capability: descriptorId,
       toolMatchTarget,
       policyEnabled,
       policyEvalPromise,
@@ -314,7 +324,7 @@ export function dispatchTask(
   const localCandidates: ConnectedClient[] = [];
   for (const client of deps.connectionManager.allClients()) {
     if (client.auth_claims?.tenant_id !== scope.tenantId) continue;
-    if (client.protocol_rev >= 2 && client.capabilities.includes(capability)) {
+    if (client.protocol_rev >= 2 && hasCapability(client.capabilities, descriptorId)) {
       localCandidates.push(client);
     }
   }
@@ -322,7 +332,7 @@ export function dispatchTask(
   if (localCandidates.length === 0) {
     const cluster = deps.cluster;
     if (!cluster) {
-      throw new NoCapableNodeError(capability);
+      throw new NoCapableNodeError(descriptorId);
     }
 
     const nowMs = Date.now();
@@ -337,7 +347,7 @@ export function dispatchTask(
 
       const candidates = await cluster.connectionDirectory.listConnectionsForCapability(
         scope.tenantId,
-        capability,
+        descriptorId,
         nowMs,
       );
       const nodeCandidates = candidates.filter(
@@ -346,7 +356,7 @@ export function dispatchTask(
           candidate.role === "node" &&
           typeof candidate.device_id === "string" &&
           candidate.device_id.trim().length > 0 &&
-          candidate.ready_capabilities.includes(capability),
+          hasCapability(candidate.ready_capabilities, descriptorId),
       );
 
       const authorizedNodes = deps.nodePairingDal
@@ -367,11 +377,11 @@ export function dispatchTask(
         eligibleNodes.find((candidate) => candidate.edge_id !== cluster.edgeId) ?? eligibleNodes[0];
       if (!target || target.edge_id === cluster.edgeId) {
         if (!policyState.nodeDispatchAllowed && authorizedNodes.length > 0) {
-          throw new NodeDispatchDeniedError(capability, policyState.policySnapshotId);
+          throw new NodeDispatchDeniedError(descriptorId, policyState.policySnapshotId);
         }
         throw nodeCandidates.length > 0
-          ? new NodeNotPairedError(capability)
-          : new NoCapableNodeError(capability);
+          ? new NodeNotPairedError(descriptorId)
+          : new NoCapableNodeError(descriptorId);
       }
 
       return await dispatchToClusterNode(deps, scope, action, target, policyState.trace);
@@ -395,7 +405,7 @@ export function dispatchTask(
       if (candidate.role !== "node") continue;
       const nodeId = candidate.device_id;
       if (!nodeId) continue;
-      if (!candidate.readyCapabilities.has(capability)) continue;
+      if (!hasCapability(candidate.readyCapabilities, descriptorId)) continue;
       hasReadyNodeCandidate = true;
       const authorized = await isNodeAuthorizedForDispatch(nodeId);
       if (authorized) {
@@ -414,21 +424,21 @@ export function dispatchTask(
       const cluster = deps.cluster;
       if (!cluster) {
         if (!policyState.nodeDispatchAllowed && hasAuthorizedNodeCandidate) {
-          throw new NodeDispatchDeniedError(capability, policyState.policySnapshotId);
+          throw new NodeDispatchDeniedError(descriptorId, policyState.policySnapshotId);
         }
         throw hasReadyNodeCandidate
-          ? new NodeNotPairedError(capability)
-          : new NoCapableNodeError(capability);
+          ? new NodeNotPairedError(descriptorId)
+          : new NoCapableNodeError(descriptorId);
       }
 
       if (!policyState.nodeDispatchAllowed && hasAuthorizedNodeCandidate) {
-        throw new NodeDispatchDeniedError(capability, policyState.policySnapshotId);
+        throw new NodeDispatchDeniedError(descriptorId, policyState.policySnapshotId);
       }
 
       const nowMs = Date.now();
       const candidates = await cluster.connectionDirectory.listConnectionsForCapability(
         scope.tenantId,
-        capability,
+        descriptorId,
         nowMs,
       );
       const nodeCandidates = candidates.filter(
@@ -437,7 +447,7 @@ export function dispatchTask(
           candidate.role === "node" &&
           typeof candidate.device_id === "string" &&
           candidate.device_id.trim().length > 0 &&
-          candidate.ready_capabilities.includes(capability),
+          hasCapability(candidate.ready_capabilities, descriptorId),
       );
 
       const authorizedNodes = deps.nodePairingDal
@@ -462,11 +472,11 @@ export function dispatchTask(
           !policyState.nodeDispatchAllowed &&
           (hasAuthorizedNodeCandidate || authorizedNodes.length > 0)
         ) {
-          throw new NodeDispatchDeniedError(capability, policyState.policySnapshotId);
+          throw new NodeDispatchDeniedError(descriptorId, policyState.policySnapshotId);
         }
         throw nodeCandidates.length > 0 || hasReadyNodeCandidate
-          ? new NodeNotPairedError(capability)
-          : new NoCapableNodeError(capability);
+          ? new NodeNotPairedError(descriptorId)
+          : new NoCapableNodeError(descriptorId);
       }
 
       return await dispatchToClusterNode(deps, scope, action, target, policyState.trace);

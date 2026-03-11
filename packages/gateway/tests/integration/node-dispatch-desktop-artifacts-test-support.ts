@@ -96,67 +96,49 @@ export function extractPayloadArtifactId(
 
 export function createDesktopInspectionService(nodeId: string) {
   return {
-    inspect: vi.fn(async () => ({
-      status: "ok",
-      generated_at: new Date().toISOString(),
-      node_id: nodeId,
-      capability: "tyrum.desktop",
-      capability_version: "1.0.0",
-      connected: true,
-      paired: true,
-      dispatchable: true,
-      source_of_truth: {
-        schema: "gateway_catalog",
-        state: "node_capability_state",
-      },
-      actions: [
-        {
-          name: "screenshot",
-          description: "Capture a desktop screenshot.",
-          supported: true,
-          enabled: true,
-          availability_status: "unknown",
-          input_schema: {},
-          output_schema: {},
-          consent: {
-            requires_operator_enable: false,
-            requires_runtime_consent: false,
-            may_prompt_user: false,
-            sensitive_data_category: "screen",
-          },
-          permissions: { browser_apis: [] },
-          transport: {
-            primitive_kind: "Desktop",
-            op_field: "op",
-            op_value: "screenshot",
-            result_channel: "result_or_evidence",
-            artifactize_binary_fields: [],
-          },
+    inspect: vi.fn(async ({ capabilityId }: { capabilityId: string }) => {
+      const isScreenshot = capabilityId === "tyrum.desktop.screenshot";
+      return {
+        status: "ok",
+        generated_at: new Date().toISOString(),
+        node_id: nodeId,
+        capability: capabilityId,
+        capability_version: "1.0.0",
+        connected: true,
+        paired: true,
+        dispatchable: true,
+        source_of_truth: {
+          schema: "gateway_catalog",
+          state: "node_capability_state",
         },
-        {
-          name: "snapshot",
-          description: "Collect a desktop accessibility snapshot.",
-          supported: true,
-          enabled: true,
-          availability_status: "unknown",
-          input_schema: {},
-          output_schema: {},
-          consent: {
-            requires_operator_enable: false,
-            requires_runtime_consent: false,
-            may_prompt_user: false,
-            sensitive_data_category: "screen",
+        actions: [
+          {
+            name: isScreenshot ? "screenshot" : "snapshot",
+            description: isScreenshot
+              ? "Capture a desktop screenshot."
+              : "Collect a desktop accessibility snapshot.",
+            supported: true,
+            enabled: true,
+            availability_status: "unknown",
+            input_schema: {},
+            output_schema: {},
+            consent: {
+              requires_operator_enable: false,
+              requires_runtime_consent: false,
+              may_prompt_user: false,
+              sensitive_data_category: "screen",
+            },
+            permissions: { browser_apis: [] },
+            transport: {
+              primitive_kind: "Desktop",
+              op_field: "op",
+              op_value: isScreenshot ? "screenshot" : "snapshot",
+              result_channel: "result_or_evidence",
+              artifactize_binary_fields: [],
+            },
           },
-          permissions: { browser_apis: [] },
-          transport: {
-            primitive_kind: "Desktop",
-            op_field: "op",
-            op_value: "snapshot",
-            result_channel: "result_or_evidence",
-            artifactize_binary_fields: [],
-          },
-        },
-      ],
-    })),
+        ],
+      };
+    }),
   };
 }

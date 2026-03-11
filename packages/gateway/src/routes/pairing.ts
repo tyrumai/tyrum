@@ -124,7 +124,10 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
       },
     );
     if (!result.ok) {
-      return c.json({ error: result.code, message: result.message }, 404);
+      return c.json(
+        { error: result.code, message: result.message },
+        result.code === "invalid_request" ? 400 : 404,
+      );
     }
 
     return c.json({ status: "ok", pairing: result.pairing });
@@ -159,7 +162,10 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
       },
     );
     if (!result.ok) {
-      return c.json({ error: result.code, message: result.message }, 404);
+      return c.json(
+        { error: result.code, message: result.message },
+        result.code === "invalid_request" ? 400 : 404,
+      );
     }
 
     return c.json({ status: "ok", pairing: result.pairing });
@@ -194,7 +200,10 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
       },
     );
     if (!result.ok) {
-      return c.json({ error: result.code, message: result.message }, 404);
+      return c.json(
+        { error: result.code, message: result.message },
+        result.code === "invalid_request" ? 400 : 404,
+      );
     }
 
     return c.json({ status: "ok", pairing: result.pairing });

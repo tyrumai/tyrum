@@ -1,14 +1,14 @@
 import { z } from "zod";
 import { DateTimeSchema } from "./common.js";
 import { NodeId } from "./keys.js";
-import { CapabilityDescriptor, CapabilityKind } from "./capability.js";
+import { CapabilityDescriptor } from "./capability.js";
 import { NodeCapabilitySummary } from "./node-capability.js";
 
 export const NodeIdentity = z
   .object({
     node_id: NodeId,
     label: z.string().trim().min(1).optional(),
-    capabilities: z.array(CapabilityKind).default([]),
+    capabilities: z.array(CapabilityDescriptor).default([]),
     last_seen_at: DateTimeSchema,
     metadata: z.unknown().optional(),
   })

@@ -21,7 +21,7 @@ describe("ApprovalsPage (desktop approvals)", () => {
         tool_call_id: "tc-1",
         tool_match_target: "tool.node.dispatch.desktop.act",
         args: {
-          capability: "tyrum.desktop",
+          capability: "tyrum.desktop.act",
           action_name: "act",
           input: {
             target: { kind: "a11y", role: "button", name: "Submit", states: [] },
@@ -43,9 +43,9 @@ describe("ApprovalsPage (desktop approvals)", () => {
         node_id: "node-1",
         label: "tyrum-desktop-sandbox (takeover: http://localhost:6080/vnc.html?autoconnect=true)",
         last_seen_at: "2026-01-01T00:00:00.000Z",
-        capabilities: ["desktop"],
+        capabilities: [{ id: "tyrum.desktop.act", version: "1.0.0" }],
       },
-      capability_allowlist: [{ id: "tyrum.desktop", version: "1.0.0" }],
+      capability_allowlist: [{ id: "tyrum.desktop.act", version: "1.0.0" }],
       resolution: {
         decision: "approved",
         resolved_at: "2026-01-01T00:00:01.000Z",
@@ -124,7 +124,7 @@ describe("ApprovalsPage (desktop approvals)", () => {
         tool_call_id: "tc-1",
         tool_match_target: "tool.node.dispatch.desktop.act",
         args: {
-          capability: "tyrum.desktop",
+          capability: "tyrum.desktop.act",
           action_name: "act",
           input: {
             target: { kind: "a11y", role: "button", name: "Submit", states: [] },
@@ -146,12 +146,12 @@ describe("ApprovalsPage (desktop approvals)", () => {
         node_id: "node-1",
         label: "tyrum-desktop-sandbox",
         last_seen_at: "2026-01-01T00:00:00.000Z",
-        capabilities: ["desktop"],
+        capabilities: [{ id: "tyrum.desktop.act", version: "1.0.0" }],
         metadata: {
           takeover_url: "http://localhost:6080/vnc.html?autoconnect=true",
         },
       },
-      capability_allowlist: [{ id: "tyrum.desktop", version: "1.0.0" }],
+      capability_allowlist: [{ id: "tyrum.desktop.act", version: "1.0.0" }],
       resolution: {
         decision: "approved",
         resolved_at: "2026-01-01T00:00:01.000Z",
@@ -223,7 +223,7 @@ describe("ApprovalsPage (desktop approvals)", () => {
         tool_call_id: "tc-1",
         tool_match_target: "tool.node.dispatch.desktop.act",
         args: {
-          capability: "tyrum.desktop",
+          capability: "tyrum.desktop.act",
           action_name: "act",
           input: {
             target: { kind: "a11y", role: "button", name: "Submit", states: [] },
@@ -353,7 +353,7 @@ describe("ApprovalsPage (desktop approvals)", () => {
         tool_call_id: "tc-1",
         tool_match_target: "tool.node.dispatch.desktop.act",
         args: {
-          capability: "tyrum.desktop",
+          capability: "tyrum.desktop.act",
           action_name: "act",
           input: {
             target: { kind: "a11y", role: "button", name: "Submit", states: [] },

@@ -1,9 +1,5 @@
 import type { OperatorCore, Pairing } from "@tyrum/operator-core";
 import type { NodeIdentity, NodeInventoryEntry } from "@tyrum/schemas";
-import {
-  CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-  descriptorIdForClientCapability,
-} from "@tyrum/schemas";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Badge } from "../ui/badge.js";
@@ -158,10 +154,7 @@ export function PendingPairingCard({
       return pairing.capability_allowlist;
     }
 
-    return pairing.node.capabilities.map((capability) => ({
-      id: descriptorIdForClientCapability(capability),
-      version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-    }));
+    return pairing.node.capabilities;
   }, [pairing.capability_allowlist, pairing.node.capabilities]);
 
   const [selectedCapabilityIds, setSelectedCapabilityIds] = useState<Set<string>>(

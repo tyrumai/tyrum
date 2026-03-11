@@ -4,6 +4,7 @@ import {
   NodeActionDispatchResponse,
   NodeCapabilityInspectionResponse,
   NodeInventoryResponse,
+  isLegacyUmbrellaCapabilityDescriptorId,
 } from "@tyrum/schemas";
 import { requireTenantId } from "../modules/auth/claims.js";
 import { NodeInventoryService } from "../modules/node/inventory-service.js";
@@ -24,6 +25,15 @@ export function createNodesRoute(deps: {
   app.get("/nodes", async (c) => {
     const tenantId = requireTenantId(c);
     const capability = c.req.query("capability")?.trim() || undefined;
+    if (capability && isLegacyUmbrellaCapabilityDescriptorId(capability)) {
+      return c.json(
+        {
+          error: "invalid_request",
+          message: `legacy umbrella capability '${capability}' is not supported; use exact split descriptors`,
+        },
+        400,
+      );
+    }
     const dispatchableOnlyRaw = c.req.query("dispatchable_only")?.trim().toLowerCase();
     const dispatchableOnly =
       dispatchableOnlyRaw === undefined
@@ -57,11 +67,21 @@ export function createNodesRoute(deps: {
         includeDisabledRaw === undefined
           ? false
           : ["1", "true", "yes"].includes(includeDisabledRaw);
+      const capabilityId = c.req.param("capabilityId");
+      if (isLegacyUmbrellaCapabilityDescriptorId(capabilityId)) {
+        return c.json(
+          {
+            error: "invalid_request",
+            message: `legacy umbrella capability '${capabilityId}' is not supported; use exact split descriptors`,
+          },
+          400,
+        );
+      }
 
       const result = await inspectionService.inspect({
         tenantId,
         nodeId: c.req.param("nodeId"),
-        capabilityId: c.req.param("capabilityId"),
+        capabilityId,
         includeDisabled,
       });
 
@@ -74,11 +94,21 @@ export function createNodesRoute(deps: {
       "/nodes/:nodeId/capabilities/:capabilityId/actions/:actionName/dispatch",
       async (c) => {
         const tenantId = requireTenantId(c);
+        const capabilityId = c.req.param("capabilityId");
+        if (isLegacyUmbrellaCapabilityDescriptorId(capabilityId)) {
+          return c.json(
+            {
+              error: "invalid_request",
+              message: `legacy umbrella capability '${capabilityId}' is not supported; use exact split descriptors`,
+            },
+            400,
+          );
+        }
         const body = await c.req.json();
         const parsed = NodeActionDispatchRequest.parse({
           ...(body && typeof body === "object" ? body : {}),
           node_id: c.req.param("nodeId"),
-          capability: c.req.param("capabilityId"),
+          capability: capabilityId,
           action_name: c.req.param("actionName"),
         });
 

@@ -1,6 +1,10 @@
 import { TyrumClient, autoExecute } from "@tyrum/operator-core/node";
 import type { CapabilityProvider } from "@tyrum/operator-core/node";
-import { deviceIdFromSha256Digest, type ClientCapability } from "@tyrum/operator-core";
+import {
+  capabilityDescriptorsForClientCapability,
+  deviceIdFromSha256Digest,
+  type ClientCapability,
+} from "@tyrum/operator-core";
 import type { DesktopNodeConfig } from "./config/schema.js";
 import type { ResolvedPermissions } from "./config/permissions.js";
 import { saveConfig } from "./config/store.js";
@@ -144,6 +148,9 @@ export class NodeRuntime {
       tlsCertFingerprint256,
       tlsAllowSelfSigned,
       capabilities,
+      advertisedCapabilities: capabilities.flatMap((capability) =>
+        capabilityDescriptorsForClientCapability(capability),
+      ),
       role: "node",
       device: {
         publicKey: device.publicKey,
