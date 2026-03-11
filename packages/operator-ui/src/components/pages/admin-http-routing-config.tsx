@@ -41,13 +41,7 @@ async function loadAgentOptions(core: OperatorCore): Promise<RoutingAgentOption[
   }
   if (core.http.agents) {
     const result = await core.http.agents.list();
-    return result.agents.map((agent) => ({
-      key: agent.agent_key,
-      label:
-        agent.persona.name.trim().toLowerCase() === agent.agent_key.trim().toLowerCase()
-          ? agent.agent_key
-          : `${agent.agent_key} · ${agent.persona.name}`,
-    }));
+    return buildAgentOptions(result.agents);
   }
   return [];
 }

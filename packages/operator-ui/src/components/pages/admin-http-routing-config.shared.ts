@@ -1,8 +1,4 @@
-import type {
-  ObservedTelegramThread,
-  RoutingConfig,
-  RoutingConfigRevisionSummary,
-} from "@tyrum/schemas";
+import type { ObservedTelegramThread, RoutingConfig } from "@tyrum/schemas";
 
 export type RoutingRuleKind = "default" | "thread";
 
@@ -168,11 +164,4 @@ export function removeRoutingRule(config: RoutingConfig, row: RoutingRuleRow): R
     v: config.v,
     telegram: nextTelegram,
   };
-}
-
-export function findLatestRevision(
-  revisions: RoutingConfigRevisionSummary[],
-  revision: number,
-): RoutingConfigRevisionSummary | undefined {
-  return revisions.find((candidate) => candidate.revision === revision);
 }
