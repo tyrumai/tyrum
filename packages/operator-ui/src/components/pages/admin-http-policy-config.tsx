@@ -50,7 +50,7 @@ export function PolicyConfigSection(props: PolicyConfigSectionProps): React.Reac
     setInitialBundle(normalizedBundle);
   }, [props.effective]);
 
-  if (props.loadError) {
+  if (props.loadError && !props.effective) {
     return (
       <Alert
         variant="error"

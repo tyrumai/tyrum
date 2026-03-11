@@ -237,6 +237,90 @@ describe("ConfigurePage (HTTP) policy + config", () => {
     cleanupAdminHttpPage(page);
   });
 
+  it("keeps the policy editor visible when refresh fails after an initial successful load", async () => {
+    const { core } = createAdminHttpTestCore();
+    let policyBundleRequests = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input);
+      const method = init?.method ?? "GET";
+      if (method !== "GET") {
+        throw new Error(`Unexpected ${method} request to ${url}`);
+      }
+      if (url === "http://example.test/policy/bundle") {
+        policyBundleRequests += 1;
+        if (policyBundleRequests === 1) {
+          return jsonResponse({
+            status: "ok",
+            generated_at: "2026-03-01T00:00:00.000Z",
+            effective: {
+              sha256: "policy-sha-1",
+              bundle: {
+                v: 1,
+                tools: {
+                  default: "require_approval",
+                  allow: ["read"],
+                  require_approval: [],
+                  deny: [],
+                },
+                network_egress: {
+                  default: "require_approval",
+                  allow: [],
+                  require_approval: [],
+                  deny: [],
+                },
+                secrets: {
+                  default: "require_approval",
+                  allow: [],
+                  require_approval: [],
+                  deny: [],
+                },
+                connectors: {
+                  default: "require_approval",
+                  allow: ["telegram:*"],
+                  require_approval: [],
+                  deny: [],
+                },
+                artifacts: { default: "allow" },
+                provenance: { untrusted_shell_requires_approval: true },
+              },
+              sources: { deployment: "default", agent: null, playbook: null },
+            },
+          });
+        }
+        throw new Error("refresh failed");
+      }
+      const response = policyPageGetResponse(input, init);
+      if (response) return response;
+      throw new Error(`Unexpected request to ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const page = renderAdminHttpConfigurePage(core);
+    await switchHttpTab(page.container, "admin-http-tab-policy");
+    await flush();
+    await flush();
+
+    const toolsDefault = getByTestId<HTMLSelectElement>(
+      page.container,
+      "policy-config-tools-default",
+    );
+    setSelectValue(toolsDefault, "allow");
+    expect(toolsDefault.value).toBe("allow");
+
+    await clickAndFlush(getByTestId<HTMLButtonElement>(page.container, "policy-config-refresh"));
+    await flush();
+    await flush();
+
+    expect(page.container.textContent).not.toContain("Policy tab failed to load");
+    expect(page.container.textContent).toContain("Policy history failed to load");
+    expect(getByTestId<HTMLElement>(page.container, "policy-config-save-card")).not.toBeNull();
+    expect(
+      getByTestId<HTMLSelectElement>(page.container, "policy-config-tools-default").value,
+    ).toBe("allow");
+
+    cleanupAdminHttpPage(page);
+  });
+
   it("saves deployment policy revisions from structured controls", async () => {
     const { core } = createAdminHttpTestCore();
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
