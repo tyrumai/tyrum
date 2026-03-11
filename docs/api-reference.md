@@ -1115,11 +1115,20 @@ User-facing automation should prefer schedules over raw watchers. Schedule APIs 
 
 ### Audit
 
-#### GET /audit/export/:planId
+#### GET /audit/plans
 
 - Auth: Required (unless gateway auth is disabled)
 - Device scope: `operator.admin`
-- Request: Path param `:planId`
+- Request: Optional query param `limit` (default/max `100`)
+- Response:
+  - `200` JSON `{ status: "ok", plans: AuditPlanSummary[] }`
+  - `401`, `403`
+
+#### GET /audit/export/:planKey
+
+- Auth: Required (unless gateway auth is disabled)
+- Device scope: `operator.admin`
+- Request: Path param `:planKey` (plan key from `GET /audit/plans`)
 - Response:
   - `200` JSON receipt bundle
   - `404` no events found

@@ -49,7 +49,7 @@ export {
   randomizePersona,
 } from "./agent-persona.js";
 // prettier-ignore
-export { AuditEvent, ChainVerification, ReceiptBundle, AuditForgetDecision, AuditForgetRequest, AuditForgetResponse } from "./audit.js";
+export { AuditPlanSummary, AuditPlansListResponse, AuditEvent, ChainVerification, ReceiptBundle, AuditForgetDecision, AuditForgetRequest, AuditForgetResponse } from "./audit.js";
 // prettier-ignore
 export { SecretHandle, SecretStoreRequest, SecretProviderKind, SecretRotateRequest, SecretRotateResponse, SecretResolveRequest, SecretResolveResponse, SecretListResponse, SecretRevokeRequest, SecretRevokeResponse } from "./secret.js";
 // prettier-ignore

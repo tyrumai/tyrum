@@ -1,6 +1,26 @@
 import { z } from "zod";
 import { DateTimeSchema } from "./common.js";
 
+export const AuditPlanSummary = z
+  .object({
+    plan_key: z.string(),
+    plan_id: z.string(),
+    kind: z.string(),
+    status: z.string(),
+    event_count: z.number().int().nonnegative(),
+    last_event_at: DateTimeSchema,
+  })
+  .strict();
+export type AuditPlanSummary = z.infer<typeof AuditPlanSummary>;
+
+export const AuditPlansListResponse = z
+  .object({
+    status: z.literal("ok"),
+    plans: z.array(AuditPlanSummary),
+  })
+  .strict();
+export type AuditPlansListResponse = z.infer<typeof AuditPlansListResponse>;
+
 export const AuditEvent = z.object({
   id: z.number().int(),
   plan_id: z.string(),

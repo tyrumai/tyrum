@@ -175,9 +175,37 @@ export function createHarnessConfigureHttpFixtures() {
       revoke: async () => ({ revoked: true }),
     },
     audit: {
-      export: async () => ({ status: "ok" as const, rows: [] }),
-      verify: async () => ({ status: "ok" as const, verified: true }),
-      forget: async () => ({ status: "ok" as const }),
+      listPlans: async () => ({
+        status: "ok" as const,
+        plans: [
+          {
+            plan_key: "plan-default",
+            plan_id: "00000000-0000-4000-8000-000000000100",
+            kind: "planner",
+            status: "success",
+            event_count: 4,
+            last_event_at: "2026-03-08T00:00:00.000Z",
+          },
+        ],
+      }),
+      exportReceiptBundle: async () => ({
+        plan_id: "00000000-0000-4000-8000-000000000100",
+        events: [],
+        chain_verification: {
+          valid: true,
+          checked_count: 0,
+          broken_at_index: null,
+          broken_at_id: null,
+        },
+        exported_at: "2026-03-08T00:00:00.000Z",
+      }),
+      verify: async () => ({
+        valid: true,
+        checked_count: 0,
+        broken_at_index: null,
+        broken_at_id: null,
+      }),
+      forget: async () => ({ decision: "delete" as const, deleted_count: 3, proof_event_id: 4 }),
     },
     plugins: {
       list: async () => ({ plugins: [{ id: "echo", version: "1.0.0" }] }),

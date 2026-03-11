@@ -3,6 +3,7 @@ import type { ChainableEvent } from "../audit/hash-chain.js";
 import type { RedactionEngine } from "../redaction/engine.js";
 import type { Logger } from "../observability/logger.js";
 import type { SqlDb } from "../../statestore/types.js";
+import type { AuditPlanSummary } from "@tyrum/schemas";
 import { isUniqueViolation } from "../../utils/sql-errors.js";
 import { insertPlannerEventNext, retryOnUniqueViolation } from "./planner-events.js";
 import { PlanDal } from "./plan-dal.js";
@@ -38,6 +39,24 @@ interface RawPlannerEventRow {
   created_at: string | Date;
   prev_hash: string | null;
   event_hash: string | null;
+}
+
+interface RawAuditPlanSummaryRow {
+  plan_key: string;
+  plan_id: string;
+  kind: string;
+  status: string;
+  event_count: number | string;
+  last_event_at: string;
+}
+
+function asFiniteNumber(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return 0;
 }
 
 function normalizeTime(value: string | Date): string {
@@ -277,5 +296,38 @@ export class EventLog {
       [input.tenantId, plan.plan_id],
     );
     return rows;
+  }
+
+  async listRecentPlans(input: { tenantId: string; limit?: number }): Promise<AuditPlanSummary[]> {
+    const requestedLimit = input.limit ?? 100;
+    const limit = Math.max(1, Math.min(100, Math.trunc(requestedLimit)));
+
+    const rows = await this.db.all<RawAuditPlanSummaryRow>(
+      `SELECT
+         p.plan_key,
+         p.plan_id,
+         p.kind,
+         p.status,
+         COUNT(*) AS event_count,
+         MAX(e.occurred_at) AS last_event_at
+       FROM plans p
+       INNER JOIN planner_events e
+         ON e.tenant_id = p.tenant_id
+        AND e.plan_id = p.plan_id
+       WHERE p.tenant_id = ?
+       GROUP BY p.plan_key, p.plan_id, p.kind, p.status
+       ORDER BY last_event_at DESC, p.plan_key ASC
+       LIMIT ?`,
+      [input.tenantId, limit],
+    );
+
+    return rows.map((row) => ({
+      plan_key: row.plan_key,
+      plan_id: row.plan_id,
+      kind: row.kind,
+      status: row.status,
+      event_count: asFiniteNumber(row.event_count),
+      last_event_at: row.last_event_at,
+    }));
   }
 }

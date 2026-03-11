@@ -34,6 +34,8 @@ import { VERSION } from "./version.js";
 export { autoExecute } from "./capability.js";
 export type { CapabilityProvider, TaskExecuteContext, TaskResult } from "./capability.js";
 export type {
+  AuditPlansListInput,
+  AuditPlansListResult,
   StatusResponse,
   UsageResponse,
   PresenceResponse,

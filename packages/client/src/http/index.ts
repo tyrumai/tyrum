@@ -78,6 +78,8 @@ export type {
   RoutingConfigRevertResult,
 } from "./routing-config.js";
 export type {
+  AuditPlansListInput,
+  AuditPlansListResult,
   AuditExportResult,
   AuditVerifyInput,
   AuditVerifyResult,
