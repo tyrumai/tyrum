@@ -113,7 +113,9 @@ export function AuthTokensCard({ core }: { core: OperatorCore }): React.ReactEle
       requestEnter();
       return;
     }
-    const validationError = validateForm(formState);
+    const validationError = validateForm(formState, {
+      initialExpiresAt: dialogMode === "edit" ? (editingToken?.expires_at ?? null) : null,
+    });
     if (validationError) {
       setDialogErrorMessage(validationError);
       return;

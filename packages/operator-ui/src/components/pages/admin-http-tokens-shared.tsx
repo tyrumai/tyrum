@@ -239,7 +239,10 @@ export function formStateFromToken(token: AuthTokenListEntry): TokenFormState {
   };
 }
 
-export function validateForm(state: TokenFormState): string | null {
+export function validateForm(
+  state: TokenFormState,
+  options?: { initialExpiresAt?: string | null },
+): string | null {
   if (!state.displayName.trim()) return "Name is required.";
   if (state.role !== "admin" && !state.deviceId.trim()) {
     return "Device ID is required for client and node tokens.";
@@ -247,7 +250,17 @@ export function validateForm(state: TokenFormState): string | null {
   if (state.expirationPreset === "custom") {
     const expiresAt = parseDateTimeLocalValue(state.customExpiresAt);
     if (!expiresAt) return "Choose a valid expiration date and time.";
-    if (Date.parse(expiresAt) <= Date.now()) return "Expiration must be in the future.";
+    if (Date.parse(expiresAt) <= Date.now()) {
+      // Editing an existing token should allow preserving its current expiration, even if it is
+      // already in the past, so metadata-only edits still work for expired tokens.
+      if (
+        options?.initialExpiresAt &&
+        state.customExpiresAt === toDateTimeLocalValue(options.initialExpiresAt)
+      ) {
+        return null;
+      }
+      return "Expiration must be in the future.";
+    }
   }
   return null;
 }

@@ -89,6 +89,14 @@ async function issueToken(container: HTMLElement, name: string): Promise<void> {
   });
 }
 
+async function flushAsyncWork(turns = 3): Promise<void> {
+  await act(async () => {
+    for (let index = 0; index < turns; index += 1) {
+      await Promise.resolve();
+    }
+  });
+}
+
 describe("AuthTokensCard", () => {
   it("lets users dismiss issued secrets and clears them when a new token action starts", async () => {
     const core = createCore();
@@ -170,6 +178,120 @@ describe("AuthTokensCard", () => {
       expect(document.body.querySelector("[data-testid='admin-http-token-dialog']")).not.toBeNull();
     } finally {
       cleanupTestRoot(testRoot);
+    }
+  });
+
+  it("allows editing an expired token without changing its expiration", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-01T00:00:00.000Z"));
+
+    const core = createCore();
+    let tokens = [
+      {
+        token_id: "expired-token",
+        tenant_id: "11111111-1111-4111-8111-111111111111",
+        display_name: "Expired token",
+        role: "client",
+        device_id: "operator-ui",
+        scopes: ["operator.read"],
+        issued_at: "2026-02-01T00:00:00.000Z",
+        expires_at: "2026-02-28T23:59:59.000Z",
+        revoked_at: null,
+        created_at: "2026-02-01T00:00:00.000Z",
+        updated_at: "2026-02-01T00:00:00.000Z",
+      },
+    ];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url =
+        typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      if (url === "http://example.test/auth/tokens" && (!init?.method || init.method === "GET")) {
+        return new Response(JSON.stringify({ tokens }), { status: 200 });
+      }
+      if (url === "http://example.test/auth/tokens/expired-token" && init?.method === "PATCH") {
+        const body = JSON.parse(String(init.body)) as { display_name: string };
+        tokens = tokens.map((token) =>
+          token.token_id === "expired-token"
+            ? { ...token, display_name: body.display_name }
+            : token,
+        );
+        return new Response(JSON.stringify({ token: tokens[0] }), { status: 200 });
+      }
+      throw new Error(`Unexpected fetch request: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const testRoot = renderIntoDocument(
+      React.createElement(
+        ThemeProvider,
+        null,
+        React.createElement(
+          ElevatedModeProvider,
+          { core, mode: "web" },
+          React.createElement(AuthTokensCard, { core }),
+        ),
+      ),
+    );
+
+    try {
+      await flushAsyncWork();
+      const editButton = testRoot.container.querySelector<HTMLButtonElement>(
+        "[data-testid='admin-http-token-edit-expired-token']",
+      );
+      expect(editButton).not.toBeNull();
+
+      await act(async () => {
+        editButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await Promise.resolve();
+      });
+
+      const dialog = document.body.querySelector<HTMLElement>(
+        "[data-testid='admin-http-token-dialog']",
+      );
+      expect(dialog).not.toBeNull();
+
+      const nameLabel = Array.from(dialog?.querySelectorAll<HTMLLabelElement>("label") ?? []).find(
+        (label) => label.textContent?.includes("Name"),
+      );
+      const nameInput = nameLabel
+        ? (document.getElementById(nameLabel.htmlFor) as HTMLInputElement | null)
+        : null;
+      expect(nameInput).not.toBeNull();
+
+      await act(async () => {
+        setNativeValue(nameInput!, "Expired token renamed");
+        await Promise.resolve();
+      });
+
+      const saveButton = document.body.querySelector<HTMLButtonElement>(
+        "[data-testid='admin-http-token-dialog-save']",
+      );
+      expect(saveButton).not.toBeNull();
+
+      await act(async () => {
+        saveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await Promise.resolve();
+      });
+
+      await flushAsyncWork();
+
+      const patchCall = fetchMock.mock.calls.find(
+        ([input, init]) =>
+          (typeof input === "string"
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : input.url) === "http://example.test/auth/tokens/expired-token" &&
+          init?.method === "PATCH",
+      );
+      expect(patchCall).toBeDefined();
+      expect(JSON.parse(String(patchCall?.[1]?.body))).toMatchObject({
+        display_name: "Expired token renamed",
+      });
+      expect(document.body.querySelector("[data-testid='admin-http-token-dialog']")).toBeNull();
+      expect(testRoot.container.textContent).toContain("Expired token renamed");
+    } finally {
+      cleanupTestRoot(testRoot);
+      vi.useRealTimers();
     }
   });
 });
