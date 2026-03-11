@@ -56,7 +56,7 @@ describe("ConfigurePage (HTTP) models", () => {
     const page = renderAdminHttpConfigurePage(core);
     await openModelsTab(page.container);
 
-    expect(page.container.textContent).toContain("No models configured");
+    expect(page.container.textContent).toContain("No model presets configured");
     expect(page.container.textContent).toContain("Available model discovery failed");
     expect(page.container.textContent).not.toContain("Model config failed");
 
@@ -190,20 +190,9 @@ describe("ConfigurePage (HTTP) models", () => {
     click(getByTestId<HTMLElement>(document.body, "confirm-danger-checkbox"));
     await clickAndFlush(confirmButton);
 
-    expect(fetchMock).toHaveBeenCalledTimes(0);
-    expect(document.body.textContent).toContain(
-      "Select a replacement preset for every required execution profile.",
-    );
-
-    setSelectValue(
-      expectPresent(confirmDialog.querySelector<HTMLSelectElement>("select")),
-      "preset-review",
-    );
-    await clickAndFlush(confirmButton);
-
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(document.body.textContent).toContain(
-      "Select replacement presets before removing this model.",
+      "Choose replacement presets or None before removing this model.",
     );
 
     setSelectValue(
