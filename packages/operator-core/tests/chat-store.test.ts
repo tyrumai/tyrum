@@ -167,6 +167,41 @@ describe("chatStore", () => {
     expect(chat.getSnapshot().active.loading).toBe(false);
   });
 
+  it("reopening a session discards stale local reasoning items", async () => {
+    const ws = createFakeWs();
+    ws.sessionGet.mockResolvedValue({ session: sampleGetSession("session-1") });
+    const http = createFakeHttp();
+    const chat = createChatStore(ws as any, http as any);
+
+    await chat.openSession("session-1");
+
+    ws.emit("reasoning.delta", {
+      occurred_at: "2026-01-01T00:00:00.500Z",
+      payload: {
+        thread_id: "ui-session-1",
+        reasoning_id: "reason-1",
+        delta: "Think",
+      },
+    });
+
+    expect(chat.getSnapshot().active.session?.transcript.map((item) => item.id)).toEqual([
+      "session-1-user-1",
+      "reason-1",
+    ]);
+
+    await chat.openSession("session-1");
+
+    expect(chat.getSnapshot().active.session?.transcript).toEqual([
+      {
+        kind: "text",
+        id: "session-1-user-1",
+        role: "user",
+        content: "hello",
+        created_at: "2026-01-01T00:00:00.000Z",
+      },
+    ]);
+  });
+
   it("setAgentId clears sessions and active selection", async () => {
     const ws = createFakeWs();
     ws.sessionList.mockResolvedValueOnce({
