@@ -56,7 +56,7 @@ export function AuditPanel({ core }: { core: OperatorCore }) {
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [downloadError, setDownloadError] = React.useState<string | null>(null);
 
-  const visiblePlans = filterPlans(plans, filterValue);
+  const visiblePlans = React.useMemo(() => filterPlans(plans, filterValue), [plans, filterValue]);
   const selectedPlan =
     visiblePlans.find((plan) => plan.plan_key === selectedPlanKey) ??
     (selectedPlanKey ? (plans.find((plan) => plan.plan_key === selectedPlanKey) ?? null) : null);
