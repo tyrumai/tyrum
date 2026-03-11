@@ -373,6 +373,7 @@ describe("chatStore", () => {
     expect(chat.getSnapshot().agentId).toBe("agent-2");
     expect(chat.getSnapshot().active.sessionId).toBeNull();
     expect(ws.sessionGet).toHaveBeenCalledTimes(1);
+    expect(ws.sessionList).not.toHaveBeenCalled();
   });
 
   it("preserves streaming transcript order when final events confirm existing content", async () => {
