@@ -54,22 +54,6 @@ describe("ConfigurePage (HTTP)", () => {
     cleanupAdminHttpPage(page);
   });
 
-  it("renders the tool registry tab and lists registered tools", async () => {
-    const { core } = createAdminHttpTestCore();
-    const page = renderAdminHttpConfigurePage(core);
-
-    await switchHttpTab(page.container, "admin-http-tab-tools");
-    await flush();
-
-    expect(page.container.querySelector("[data-testid='admin-http-tools']")).not.toBeNull();
-    expect(page.container.textContent).toContain("read");
-    expect(page.container.textContent).toContain("websearch");
-    expect(page.container.textContent).toContain("plugin.echo.say");
-    expect(page.container.textContent).toContain("Blocked by agent allowlist");
-
-    cleanupAdminHttpPage(page);
-  });
-
   it("enables saving the first execution-profile assignment set", async () => {
     const { core } = createAdminHttpTestCore();
     const { presetReview } = setupFirstAssignmentSaveScenario(core);

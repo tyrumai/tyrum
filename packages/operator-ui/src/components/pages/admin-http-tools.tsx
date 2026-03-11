@@ -1,43 +1,71 @@
-import type { ToolRegistryListResult } from "@tyrum/client";
 import type { OperatorCore } from "@tyrum/operator-core";
 import * as React from "react";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
+import {
+  FacetFilterGroup,
+  SOURCE_LABELS,
+  ToolTableSection,
+  groupForTool,
+  type ToolGroupId,
+  type ToolRegistryEntry,
+} from "./admin-http-tools.shared.js";
 import { Alert } from "../ui/alert.js";
-import { Badge, type BadgeVariant } from "../ui/badge.js";
+import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { Input } from "../ui/input.js";
-import { JsonViewer } from "../ui/json-viewer.js";
 
-type ToolRegistryEntry = ToolRegistryListResult["tools"][number];
+type SourceFilter = ToolRegistryEntry["source"] | "all";
+type RiskFilter = ToolRegistryEntry["risk"] | "all";
+type ExposureFilter = ToolRegistryEntry["effective_exposure"]["reason"] | "all";
+type ConfirmationFilter = "all" | "required" | "not_required";
 
-const SOURCE_LABELS: Record<ToolRegistryEntry["source"], string> = {
-  builtin: "Built-in",
-  builtin_mcp: "Built-in MCP",
-  mcp: "MCP",
-  plugin: "Plugin",
-};
+const GROUP_ORDER: ToolGroupId[] = ["built_in", "extensions"];
 
-const SOURCE_ORDER: ToolRegistryEntry["source"][] = ["builtin", "builtin_mcp", "mcp", "plugin"];
+const SOURCE_OPTIONS: Array<{ value: SourceFilter; label: string }> = [
+  { value: "all", label: "All" },
+  { value: "builtin", label: "Built-in" },
+  { value: "builtin_mcp", label: "Built-in MCP" },
+  { value: "mcp", label: "MCP" },
+  { value: "plugin", label: "Plugin" },
+];
 
-function riskBadgeVariant(risk: ToolRegistryEntry["risk"]): BadgeVariant {
-  if (risk === "high") return "danger";
-  if (risk === "medium") return "warning";
-  return "success";
-}
+const RISK_OPTIONS: Array<{ value: RiskFilter; label: string }> = [
+  { value: "all", label: "All" },
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+];
 
-function matchesFilter(tool: ToolRegistryEntry, query: string): boolean {
+const EXPOSURE_OPTIONS: Array<{ value: ExposureFilter; label: string }> = [
+  { value: "all", label: "All" },
+  { value: "enabled", label: "Exposed" },
+  { value: "disabled_by_agent_allowlist", label: "Allowlist blocked" },
+  { value: "disabled_by_state_mode", label: "State-mode blocked" },
+];
+
+const CONFIRMATION_OPTIONS: Array<{ value: ConfirmationFilter; label: string }> = [
+  { value: "all", label: "All" },
+  { value: "required", label: "Confirm required" },
+  { value: "not_required", label: "No confirm" },
+];
+
+function matchesTextFilter(tool: ToolRegistryEntry, query: string): boolean {
   if (!query) return true;
   const normalized = query.toLowerCase();
   const haystacks = [
     tool.canonical_id,
     tool.description,
     tool.source,
+    SOURCE_LABELS[tool.source],
     tool.family,
     tool.backing_server?.id,
     tool.backing_server?.name,
+    tool.backing_server?.transport,
+    tool.backing_server?.url,
     tool.plugin?.id,
     tool.plugin?.name,
+    tool.plugin?.version,
     tool.effective_exposure.reason,
     tool.effective_exposure.agent_key,
     ...(tool.keywords ?? []),
@@ -45,117 +73,57 @@ function matchesFilter(tool: ToolRegistryEntry, query: string): boolean {
   return haystacks.some((value) => value?.toLowerCase().includes(normalized));
 }
 
-function groupTools(tools: ToolRegistryEntry[]): Array<{
-  source: ToolRegistryEntry["source"];
+function matchesFacetFilters(
+  tool: ToolRegistryEntry,
+  filters: {
+    source: SourceFilter;
+    risk: RiskFilter;
+    exposure: ExposureFilter;
+    confirmation: ConfirmationFilter;
+  },
+): boolean {
+  if (filters.source !== "all" && tool.source !== filters.source) {
+    return false;
+  }
+
+  if (filters.risk !== "all" && tool.risk !== filters.risk) {
+    return false;
+  }
+
+  if (filters.exposure !== "all" && tool.effective_exposure.reason !== filters.exposure) {
+    return false;
+  }
+
+  if (filters.confirmation === "required" && !tool.requires_confirmation) {
+    return false;
+  }
+
+  if (filters.confirmation === "not_required" && tool.requires_confirmation) {
+    return false;
+  }
+
+  return true;
+}
+
+function buildGroups(tools: readonly ToolRegistryEntry[]): Array<{
+  id: ToolGroupId;
   items: ToolRegistryEntry[];
 }> {
-  return SOURCE_ORDER.map((source) => ({
-    source,
-    items: tools.filter((tool) => tool.source === source),
+  return GROUP_ORDER.map((groupId) => ({
+    id: groupId,
+    items: tools.filter((tool) => groupForTool(tool) === groupId),
   })).filter((group) => group.items.length > 0);
-}
-
-function exposureBadge(tool: ToolRegistryEntry): {
-  label: string;
-  variant: BadgeVariant;
-} {
-  if (!tool.effective_exposure.enabled) {
-    if (tool.effective_exposure.reason === "disabled_by_state_mode") {
-      return { label: "Blocked by state mode", variant: "warning" };
-    }
-    return { label: "Blocked by agent allowlist", variant: "warning" };
-  }
-  return { label: "Exposed", variant: "success" };
-}
-
-function ToolRow({ tool }: { tool: ToolRegistryEntry }): React.ReactElement {
-  const exposure = exposureBadge(tool);
-  return (
-    <article className="grid gap-3 rounded-lg border border-border bg-bg-subtle/40 p-3">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 space-y-1">
-          <div className="font-mono text-sm text-fg">{tool.canonical_id}</div>
-          <p className="text-sm text-fg-muted">{tool.description}</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Badge variant="outline">{SOURCE_LABELS[tool.source]}</Badge>
-          {tool.family ? <Badge variant="outline">{tool.family}</Badge> : null}
-          <Badge variant={riskBadgeVariant(tool.risk)}>{tool.risk} risk</Badge>
-          <Badge variant={tool.requires_confirmation ? "warning" : "default"}>
-            {tool.requires_confirmation ? "Confirm required" : "No confirm"}
-          </Badge>
-          <Badge variant={exposure.variant}>{exposure.label}</Badge>
-        </div>
-      </div>
-
-      {tool.backing_server || tool.plugin || tool.effective_exposure.agent_key ? (
-        <div className="flex flex-wrap gap-2 text-xs text-fg-muted">
-          {tool.backing_server ? (
-            <span>
-              Server: {tool.backing_server.name} ({tool.backing_server.id},{" "}
-              {tool.backing_server.transport}
-              {tool.backing_server.url ? `, ${tool.backing_server.url}` : ""})
-            </span>
-          ) : null}
-          {tool.plugin ? (
-            <span>
-              Plugin: {tool.plugin.name} ({tool.plugin.id}@{tool.plugin.version})
-            </span>
-          ) : null}
-          {tool.effective_exposure.agent_key ? (
-            <span>Agent scope: {tool.effective_exposure.agent_key}</span>
-          ) : null}
-        </div>
-      ) : null}
-
-      {tool.keywords && tool.keywords.length > 0 ? (
-        <div className="flex flex-wrap gap-2">
-          {tool.keywords.map((keyword) => (
-            <Badge key={keyword} variant="default">
-              {keyword}
-            </Badge>
-          ))}
-        </div>
-      ) : null}
-
-      {tool.input_schema ? (
-        <details className="rounded-md border border-border bg-bg p-2">
-          <summary className="cursor-pointer text-sm font-medium text-fg">Input schema</summary>
-          <div className="mt-2">
-            <JsonViewer value={tool.input_schema} />
-          </div>
-        </details>
-      ) : null}
-    </article>
-  );
-}
-
-function ToolSourceSection({
-  source,
-  tools,
-}: {
-  source: ToolRegistryEntry["source"];
-  tools: ToolRegistryEntry[];
-}): React.ReactElement {
-  return (
-    <section className="grid gap-3">
-      <div className="flex items-center justify-between gap-3">
-        <div className="text-sm font-medium text-fg">{SOURCE_LABELS[source]}</div>
-        <Badge variant="outline">{tools.length}</Badge>
-      </div>
-      <div className="grid gap-3">
-        {tools.map((tool) => (
-          <ToolRow key={`${tool.source}:${tool.canonical_id}`} tool={tool} />
-        ))}
-      </div>
-    </section>
-  );
 }
 
 export function ToolRegistryCard({ core }: { core: OperatorCore }): React.ReactElement {
   const toolRegistryApi = core.http.toolRegistry;
   const [tools, setTools] = React.useState<ToolRegistryEntry[]>([]);
+  const [expandedIds, setExpandedIds] = React.useState<Set<string>>(() => new Set());
   const [filter, setFilter] = React.useState("");
+  const [sourceFilter, setSourceFilter] = React.useState<SourceFilter>("all");
+  const [riskFilter, setRiskFilter] = React.useState<RiskFilter>("all");
+  const [exposureFilter, setExposureFilter] = React.useState<ExposureFilter>("all");
+  const [confirmationFilter, setConfirmationFilter] = React.useState<ConfirmationFilter>("all");
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
@@ -186,10 +154,32 @@ export function ToolRegistryCard({ core }: { core: OperatorCore }): React.ReactE
   }, [refresh]);
 
   const filteredTools = React.useMemo(
-    () => tools.filter((tool) => matchesFilter(tool, filter.trim())),
-    [filter, tools],
+    () =>
+      tools.filter(
+        (tool) =>
+          matchesTextFilter(tool, filter.trim()) &&
+          matchesFacetFilters(tool, {
+            source: sourceFilter,
+            risk: riskFilter,
+            exposure: exposureFilter,
+            confirmation: confirmationFilter,
+          }),
+      ),
+    [confirmationFilter, exposureFilter, filter, riskFilter, sourceFilter, tools],
   );
-  const groupedTools = React.useMemo(() => groupTools(filteredTools), [filteredTools]);
+  const groupedTools = React.useMemo(() => buildGroups(filteredTools), [filteredTools]);
+
+  function toggleExpanded(toolId: string): void {
+    setExpandedIds((previous) => {
+      const next = new Set(previous);
+      if (next.has(toolId)) {
+        next.delete(toolId);
+      } else {
+        next.add(toolId);
+      }
+      return next;
+    });
+  }
 
   return (
     <Card data-testid="admin-http-tools">
@@ -198,8 +188,8 @@ export function ToolRegistryCard({ core }: { core: OperatorCore }): React.ReactE
           <div className="space-y-1">
             <div className="text-sm font-medium text-fg">Tools</div>
             <p className="text-sm text-fg-muted">
-              Read-only registry of built-in, plugin, and MCP-backed tool descriptors with effective
-              exposure.
+              Compact registry of built-in and extension-backed tool descriptors with exposure and
+              structured input fields.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -229,16 +219,56 @@ export function ToolRegistryCard({ core }: { core: OperatorCore }): React.ReactE
           />
         ) : null}
 
-        <div className="max-w-xl">
-          <Input
-            label="Filter tools"
-            value={filter}
-            data-testid="admin-http-tools-filter"
-            placeholder="Search by id, source, exposure, plugin, server, or keyword"
-            onChange={(event) => {
-              setFilter(event.currentTarget.value);
-            }}
-          />
+        <Alert
+          variant="info"
+          data-testid="admin-http-tools-skills-note"
+          title="Skills are managed separately"
+          description="Skills guide behavior but do not register tool rows directly on this page."
+        />
+
+        <div className="grid gap-4 rounded-lg border border-border/80 bg-bg-subtle/20 p-4">
+          <div className="max-w-xl">
+            <Input
+              label="Filter tools"
+              value={filter}
+              data-testid="admin-http-tools-filter"
+              placeholder="Search by id, source, exposure, plugin, server, or keyword"
+              onChange={(event) => {
+                setFilter(event.currentTarget.value);
+              }}
+            />
+          </div>
+
+          <div className="grid gap-4">
+            <FacetFilterGroup
+              label="Source"
+              value={sourceFilter}
+              options={SOURCE_OPTIONS}
+              onChange={setSourceFilter}
+              testIdPrefix="admin-http-tools-filter-source"
+            />
+            <FacetFilterGroup
+              label="Risk"
+              value={riskFilter}
+              options={RISK_OPTIONS}
+              onChange={setRiskFilter}
+              testIdPrefix="admin-http-tools-filter-risk"
+            />
+            <FacetFilterGroup
+              label="Exposure"
+              value={exposureFilter}
+              options={EXPOSURE_OPTIONS}
+              onChange={setExposureFilter}
+              testIdPrefix="admin-http-tools-filter-exposure"
+            />
+            <FacetFilterGroup
+              label="Confirmation"
+              value={confirmationFilter}
+              options={CONFIRMATION_OPTIONS}
+              onChange={setConfirmationFilter}
+              testIdPrefix="admin-http-tools-filter-confirmation"
+            />
+          </div>
         </div>
 
         {errorMessage ? (
@@ -254,7 +284,7 @@ export function ToolRegistryCard({ core }: { core: OperatorCore }): React.ReactE
             description={
               tools.length === 0
                 ? "No tool descriptors were returned by the gateway."
-                : "Adjust the filter to see more registry entries."
+                : "Adjust the search or filters to see more registry entries."
             }
           />
         ) : null}
@@ -262,7 +292,13 @@ export function ToolRegistryCard({ core }: { core: OperatorCore }): React.ReactE
         {!loading && !errorMessage ? (
           <div className="grid gap-5">
             {groupedTools.map((group) => (
-              <ToolSourceSection key={group.source} source={group.source} tools={group.items} />
+              <ToolTableSection
+                key={group.id}
+                groupId={group.id}
+                tools={group.items}
+                expandedIds={expandedIds}
+                onToggleExpanded={toggleExpanded}
+              />
             ))}
           </div>
         ) : null}
