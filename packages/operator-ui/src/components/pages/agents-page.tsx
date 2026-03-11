@@ -22,6 +22,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs.js";
 import { AgentIdentityPanel } from "./agents-page-identity.js";
 import { AgentsPageEditor } from "./agents-page-editor.js";
 import { RunsPage } from "./runs-page.js";
+import { useReconnectScrollArea, useReconnectTabState } from "../../reconnect-ui-state.js";
 
 type AgentOption = {
   agentKey: string;
@@ -29,6 +30,7 @@ type AgentOption = {
   canDelete: boolean;
   displayName: string;
 };
+type AgentsPageTab = "identity" | "editor" | "memory" | "runs";
 
 function trimAgentKey(value: string): string {
   const trimmed = value.trim();
@@ -89,10 +91,11 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
   const [agentsError, setAgentsError] = useState<string | null>(null);
   const [selectedAgentKey, setSelectedAgentKey] = useState(trimAgentKey(agentStatus.agentKey));
   const [selectionReady, setSelectionReady] = useState(false);
-  const [activeTab, setActiveTab] = useState("identity");
+  const [activeTab, setActiveTab] = useReconnectTabState<AgentsPageTab>("agents.tab", "identity");
   const [createMode, setCreateMode] = useState(false);
   const [createNonce, setCreateNonce] = useState(0);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const detailScrollAreaRef = useReconnectScrollArea(`agents:${activeTab}:detail`);
 
   const deleteAction = useApiAction<void>();
   const isConnected = connection.status === "connected";
@@ -385,7 +388,7 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
           </div>
 
           <div className="min-h-0 flex-1 overflow-hidden">
-            <ScrollArea className="h-full">
+            <ScrollArea ref={detailScrollAreaRef} className="h-full">
               <div
                 className="grid box-border min-w-0 w-full gap-4 px-4 py-4 md:px-5 md:py-5"
                 data-testid="agents-content-layout"
@@ -410,7 +413,7 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
                 <Tabs
                   value={activeTab}
                   onValueChange={(nextTab) => {
-                    setActiveTab(nextTab);
+                    setActiveTab(nextTab as AgentsPageTab);
                   }}
                   className="grid min-w-0 gap-4"
                 >

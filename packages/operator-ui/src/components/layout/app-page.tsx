@@ -27,6 +27,7 @@ export function AppPageToolbar({ title, actions, className, ...props }: AppPageT
 export interface AppPageContentProps extends React.HTMLAttributes<HTMLDivElement> {
   contentClassName?: string;
   scrollAreaClassName?: string;
+  scrollAreaRef?: React.Ref<React.ElementRef<typeof ScrollArea>>;
 }
 
 export function AppPageContent({
@@ -34,11 +35,12 @@ export function AppPageContent({
   className,
   contentClassName,
   scrollAreaClassName,
+  scrollAreaRef,
   ...props
 }: AppPageContentProps) {
   return (
     <div className={cn("min-h-0 flex-1 overflow-hidden", className)} {...props}>
-      <ScrollArea className={cn("h-full", scrollAreaClassName)}>
+      <ScrollArea ref={scrollAreaRef} className={cn("h-full", scrollAreaClassName)}>
         <div
           data-layout-content=""
           className={cn(
@@ -58,6 +60,7 @@ export interface AppPageProps extends Omit<React.HTMLAttributes<HTMLDivElement>,
   actions?: React.ReactNode;
   contentClassName?: string;
   scrollAreaClassName?: string;
+  scrollAreaRef?: React.Ref<React.ElementRef<typeof ScrollArea>>;
   bodyClassName?: string;
 }
 
@@ -68,6 +71,7 @@ export function AppPage({
   className,
   contentClassName,
   scrollAreaClassName,
+  scrollAreaRef,
   bodyClassName,
   ...props
 }: AppPageProps) {
@@ -81,6 +85,7 @@ export function AppPage({
         className={bodyClassName}
         contentClassName={contentClassName}
         scrollAreaClassName={scrollAreaClassName}
+        scrollAreaRef={scrollAreaRef}
       >
         {children}
       </AppPageContent>
