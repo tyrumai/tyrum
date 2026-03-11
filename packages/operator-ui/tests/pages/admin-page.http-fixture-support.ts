@@ -1,109 +1,28 @@
 import { vi } from "vitest";
 import { TyrumHttpClientError } from "@tyrum/client/browser";
 import { createElevatedModeStore, type OperatorCore } from "../../../operator-core/src/index.js";
+import { createLocationFixture } from "./admin-page.http-location-fixture-support.js";
+import {
+  TEST_TIMESTAMP,
+  createAssignmentsForAllProfiles,
+  createModelPreset,
+} from "./admin-page.http.models.shared.js";
 
-export const TEST_TIMESTAMP = "2026-03-01T00:00:00.000Z";
-export const ADMIN_HTTP_EXECUTION_PROFILE_IDS = [
-  "interaction",
-  "explorer_ro",
-  "reviewer_ro",
-  "planner",
-  "jury",
-  "executor_rw",
-  "integrator",
-] as const;
-
-export type ExecutionProfileId = (typeof ADMIN_HTTP_EXECUTION_PROFILE_IDS)[number];
-
-export type ModelPresetFixture = {
-  preset_id: string;
-  preset_key: string;
-  display_name: string;
-  provider_key: string;
-  model_id: string;
-  options: Record<string, unknown>;
-  created_at: string;
-  updated_at: string;
-};
-
-export type AvailableModelFixture = {
-  provider_key: string;
-  provider_name: string;
-  model_id: string;
-  model_name: string;
-  family: string | null;
-  reasoning: boolean;
-  tool_call: boolean;
-  modalities: { output: string[] };
-};
-
-export type ModelAssignmentFixture = {
-  execution_profile_id: string;
-  preset_key: string | null;
-  preset_display_name: string | null;
-  provider_key: string | null;
-  model_id: string | null;
-};
-
-export function createModelPreset(overrides: Partial<ModelPresetFixture> = {}): ModelPresetFixture {
-  return {
-    preset_id: "00000000-0000-4000-8000-000000000001",
-    preset_key: "preset-default",
-    display_name: "Default",
-    provider_key: "openai",
-    model_id: "gpt-4.1",
-    options: {},
-    created_at: TEST_TIMESTAMP,
-    updated_at: TEST_TIMESTAMP,
-    ...overrides,
-  };
-}
-
-export function createAvailableModel(
-  overrides: Partial<AvailableModelFixture> = {},
-): AvailableModelFixture {
-  return {
-    provider_key: "openai",
-    provider_name: "OpenAI",
-    model_id: "gpt-4.1",
-    model_name: "GPT-4.1",
-    family: null,
-    reasoning: true,
-    tool_call: true,
-    modalities: { output: ["text"] },
-    ...overrides,
-  };
-}
-
-export function createModelAssignment(
-  executionProfileId: ExecutionProfileId,
-  preset: Pick<
-    ModelPresetFixture,
-    "preset_key" | "display_name" | "provider_key" | "model_id"
-  > | null,
-): ModelAssignmentFixture {
-  return {
-    execution_profile_id: executionProfileId,
-    preset_key: preset?.preset_key ?? null,
-    preset_display_name: preset?.display_name ?? null,
-    provider_key: preset?.provider_key ?? null,
-    model_id: preset?.model_id ?? null,
-  };
-}
-
-export function createAssignmentsForAllProfiles(
-  preset: Pick<ModelPresetFixture, "preset_key" | "display_name" | "provider_key" | "model_id">,
-): ModelAssignmentFixture[] {
-  return ADMIN_HTTP_EXECUTION_PROFILE_IDS.map((executionProfileId) =>
-    createModelAssignment(executionProfileId, preset),
-  );
-}
-
-export function createUnassignedAssignmentsForAllProfiles(): ModelAssignmentFixture[] {
-  return ADMIN_HTTP_EXECUTION_PROFILE_IDS.map((executionProfileId) =>
-    createModelAssignment(executionProfileId, null),
-  );
-}
+export {
+  ADMIN_HTTP_EXECUTION_PROFILE_IDS,
+  TEST_TIMESTAMP,
+  createAssignmentsForAllProfiles,
+  createAvailableModel,
+  createModelAssignment,
+  createModelPreset,
+  createUnassignedAssignmentsForAllProfiles,
+} from "./admin-page.http.models.shared.js";
+export type {
+  AvailableModelFixture,
+  ExecutionProfileId,
+  ModelAssignmentFixture,
+  ModelPresetFixture,
+} from "./admin-page.http.models.shared.js";
 
 export function createAdminHttpTestCore(): {
   core: OperatorCore;
@@ -129,59 +48,13 @@ export function createAdminHttpTestCore(): {
   const routingConfigRevert = vi.fn(async () => ({ revision: 2, config: { v: 1 } }) as unknown);
   const secretsRotate = vi.fn(async () => ({ revoked: true, handle: {} }) as unknown);
   const policyCreateOverride = vi.fn(async () => ({ status: "ok" }) as unknown);
-  const locationUpdateProfile = vi.fn(
-    async () =>
-      ({
-        status: "ok",
-        profile: {
-          primary_node_id: "mobile-node-1",
-          poi_provider_key: "geoapify",
-          updated_at: TEST_TIMESTAMP,
-        },
-      }) as unknown,
-  );
-  const locationCreatePlace = vi.fn(
-    async () =>
-      ({
-        status: "ok",
-        place: {
-          place_id: "place-created",
-          name: "Home",
-          latitude: 52.3676,
-          longitude: 4.9041,
-          radius_m: 100,
-          tags: ["home"],
-          source: "manual",
-          created_at: TEST_TIMESTAMP,
-          updated_at: TEST_TIMESTAMP,
-        },
-      }) as unknown,
-  );
-  const locationUpdatePlace = vi.fn(
-    async () =>
-      ({
-        status: "ok",
-        place: {
-          place_id: "place-home",
-          name: "Home",
-          latitude: 52.3676,
-          longitude: 4.9041,
-          radius_m: 100,
-          tags: ["home"],
-          source: "manual",
-          created_at: TEST_TIMESTAMP,
-          updated_at: TEST_TIMESTAMP,
-        },
-      }) as unknown,
-  );
-  const locationDeletePlace = vi.fn(
-    async () =>
-      ({
-        status: "ok",
-        place_id: "place-home",
-        deleted: true,
-      }) as unknown,
-  );
+  const {
+    locationUpdateProfile,
+    locationCreatePlace,
+    locationUpdatePlace,
+    locationDeletePlace,
+    locationApi,
+  } = createLocationFixture(TEST_TIMESTAMP);
 
   const core = {
     httpBaseUrl: "http://example.test",
@@ -578,42 +451,7 @@ export function createAdminHttpTestCore(): {
         ),
         updateAssignments: vi.fn(async () => ({ status: "ok", assignments: [] }) as unknown),
       },
-      location: {
-        listPlaces: vi.fn(
-          async () =>
-            ({
-              status: "ok",
-              places: [
-                {
-                  place_id: "place-home",
-                  name: "Home",
-                  latitude: 52.3676,
-                  longitude: 4.9041,
-                  radius_m: 100,
-                  tags: ["home"],
-                  source: "manual",
-                  created_at: TEST_TIMESTAMP,
-                  updated_at: TEST_TIMESTAMP,
-                },
-              ],
-            }) as unknown,
-        ),
-        createPlace: locationCreatePlace,
-        updatePlace: locationUpdatePlace,
-        deletePlace: locationDeletePlace,
-        getProfile: vi.fn(
-          async () =>
-            ({
-              status: "ok",
-              profile: {
-                primary_node_id: "mobile-node-1",
-                poi_provider_key: "geoapify",
-                updated_at: TEST_TIMESTAMP,
-              },
-            }) as unknown,
-        ),
-        updateProfile: locationUpdateProfile,
-      },
+      location: locationApi,
     },
   } as unknown as OperatorCore;
 

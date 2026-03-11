@@ -127,7 +127,6 @@ export function createTyrumHttpClient(options: TyrumHttpClientOptions): TyrumHtt
     extensions: createExtensionsApi(transport),
     policyConfig: createPolicyConfigApi(transport),
     location: createLocationApi(transport),
-    policyConfig: createPolicyConfigApi(transport),
   };
 }
 
