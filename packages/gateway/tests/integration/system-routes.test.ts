@@ -123,6 +123,7 @@ describe("System routes integration", () => {
       },
       body: JSON.stringify({
         tenant_id: auth.tenantId,
+        display_name: "System client token",
         role: "client",
         scopes: ["operator.read"],
         device_id: "dev_client_test",
@@ -130,9 +131,16 @@ describe("System routes integration", () => {
       }),
     });
     expect(issued.status).toBe(201);
-    const issuedBody = (await issued.json()) as { token_id: string; token: string };
+    const issuedBody = (await issued.json()) as {
+      token_id: string;
+      token: string;
+      display_name: string;
+      updated_at: string;
+    };
     expect(issuedBody.token_id.length > 0).toBe(true);
     expect(issuedBody.token.startsWith("tyrum-token.v1.")).toBe(true);
+    expect(issuedBody.display_name).toBe("System client token");
+    expect(typeof issuedBody.updated_at).toBe("string");
 
     const revokeInvalidJson = await requestUnauthenticated("/system/tokens/revoke", {
       method: "POST",

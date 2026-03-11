@@ -299,10 +299,11 @@ export class AuthTokenDal {
   async revoke(tokenId: string, nowIso: string): Promise<boolean> {
     const row = await this.db.get<{ token_id: string }>(
       `UPDATE auth_tokens
-       SET revoked_at = ?
+       SET revoked_at = ?,
+           updated_at = ?
        WHERE token_id = ? AND revoked_at IS NULL
        RETURNING token_id`,
-      [nowIso, tokenId],
+      [nowIso, nowIso, tokenId],
     );
     return Boolean(row?.token_id);
   }

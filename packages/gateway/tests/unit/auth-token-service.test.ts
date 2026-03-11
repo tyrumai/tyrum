@@ -131,6 +131,14 @@ describe("AuthTokenService", () => {
     expect(await svc.authenticate(issued.token)).not.toBeNull();
     expect(await svc.revokeToken(issued.row.token_id)).toBe(true);
     expect(await svc.authenticate(issued.token)).toBeNull();
+    const revokedRow = await db.get<{ revoked_at: string | null; updated_at: string | null }>(
+      `SELECT revoked_at, updated_at
+       FROM auth_tokens
+       WHERE token_id = ?`,
+      [issued.row.token_id],
+    );
+    expect(revokedRow?.revoked_at).toBeTruthy();
+    expect(revokedRow?.updated_at).toBe(revokedRow?.revoked_at);
 
     // Expiry path (new token).
     const issued2 = await svc.issueToken({
