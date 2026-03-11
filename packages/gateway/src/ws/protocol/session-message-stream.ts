@@ -87,7 +87,15 @@ export async function broadcastSessionSendStream(input: {
   const assistantParts = new Map<string, string>();
   const reasoningParts = new Map<string, string>();
   let approvalRequested = false;
-  let streamError: unknown;
+  const typingStoppedEvent = createSessionEvent({
+    type: "typing.stopped",
+    agentId,
+    payload: {
+      session_id: sessionKey,
+      thread_id: threadId,
+      lane: "assistant",
+    },
+  });
 
   await emitSessionEvent(
     deps,
@@ -173,7 +181,6 @@ export async function broadcastSessionSendStream(input: {
       }
     }
   } catch (error) {
-    streamError = error;
     if (assistantParts.size > 0 || reasoningParts.size > 0) {
       await emitSessionEventBestEffort({
         deps,
@@ -193,63 +200,60 @@ export async function broadcastSessionSendStream(input: {
         }),
       });
     }
-    throw error;
-  } finally {
-    const typingStoppedEvent = createSessionEvent({
-      type: "typing.stopped",
-      agentId,
-      payload: {
-        session_id: sessionKey,
-        thread_id: threadId,
-        lane: "assistant",
-      },
+    await emitSessionEventBestEffort({
+      deps,
+      tenantId,
+      stage: "typing_stopped_after_error",
+      event: typingStoppedEvent,
     });
-    if (streamError) {
-      await emitSessionEventBestEffort({
-        deps,
-        tenantId,
-        stage: "typing_stopped_after_error",
-        event: typingStoppedEvent,
-      });
-    } else {
-      await emitSessionEvent(deps, tenantId, typingStoppedEvent);
-    }
+    throw error;
   }
 
-  for (const [messageId, content] of assistantParts) {
-    await emitSessionEvent(
+  try {
+    for (const [messageId, content] of assistantParts) {
+      await emitSessionEvent(
+        deps,
+        tenantId,
+        createSessionEvent({
+          type: "message.final",
+          agentId,
+          payload: {
+            session_id: sessionKey,
+            thread_id: threadId,
+            lane: "assistant",
+            message_id: messageId,
+            role: "assistant",
+            content,
+          },
+        }),
+      );
+    }
+    for (const [reasoningId, content] of reasoningParts) {
+      await emitSessionEvent(
+        deps,
+        tenantId,
+        createSessionEvent({
+          type: "reasoning.final",
+          agentId,
+          payload: {
+            session_id: sessionKey,
+            thread_id: threadId,
+            lane: "assistant",
+            reasoning_id: reasoningId,
+            content,
+          },
+        }),
+      );
+    }
+    await emitSessionEvent(deps, tenantId, typingStoppedEvent);
+  } catch (error) {
+    await emitSessionEventBestEffort({
       deps,
       tenantId,
-      createSessionEvent({
-        type: "message.final",
-        agentId,
-        payload: {
-          session_id: sessionKey,
-          thread_id: threadId,
-          lane: "assistant",
-          message_id: messageId,
-          role: "assistant",
-          content,
-        },
-      }),
-    );
-  }
-  for (const [reasoningId, content] of reasoningParts) {
-    await emitSessionEvent(
-      deps,
-      tenantId,
-      createSessionEvent({
-        type: "reasoning.final",
-        agentId,
-        payload: {
-          session_id: sessionKey,
-          thread_id: threadId,
-          lane: "assistant",
-          reasoning_id: reasoningId,
-          content,
-        },
-      }),
-    );
+      stage: "typing_stopped_after_error",
+      event: typingStoppedEvent,
+    });
+    throw error;
   }
 
   return { approvalRequested };

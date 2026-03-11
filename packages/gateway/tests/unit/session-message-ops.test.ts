@@ -72,6 +72,8 @@ describe("handleSessionCompactMessage", () => {
   });
 
   it("streams chat events while sending a session message", async () => {
+    vi.mocked(enqueueWsBroadcastMessage).mockClear();
+
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["cli"]);
     const client = cm.getClient(id)!;
@@ -135,7 +137,17 @@ describe("handleSessionCompactMessage", () => {
         client_message_id: "user-1",
       }),
     });
-    expect(enqueueWsBroadcastMessage).toHaveBeenCalled();
+    expect(
+      vi.mocked(enqueueWsBroadcastMessage).mock.calls.map(([, , event]) => event.type),
+    ).toEqual([
+      "typing.started",
+      "message.final",
+      "reasoning.delta",
+      "message.delta",
+      "message.final",
+      "reasoning.final",
+      "typing.stopped",
+    ]);
   });
 
   it("emits a cleanup event when a streamed send fails after partial deltas", async () => {
