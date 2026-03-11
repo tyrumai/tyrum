@@ -1,6 +1,6 @@
 import type { OperatorWsClient } from "../deps.js";
 import { readPayload } from "../operator-core.event-helpers.js";
-import type { ChatState } from "./chat-store.types.js";
+import type { ChatReasoningTranscriptItem, ChatState } from "./chat-store.types.js";
 import {
   activeToolCallIdsForSession,
   appendTranscriptReasoningDelta,
@@ -16,6 +16,28 @@ import {
 } from "./chat-store.transcript.js";
 
 type ChatStateSetter = (updater: (prev: ChatState) => ChatState) => void;
+
+function findExistingTextCreatedAt(state: ChatState, messageId: string): string | null {
+  const item = state.active.session?.transcript.find(
+    (entry) => entry.kind === "text" && entry.id === messageId,
+  );
+  return item?.kind === "text" ? item.created_at : null;
+}
+
+function mergeReasoningFinal(
+  state: ChatState,
+  item: ChatReasoningTranscriptItem,
+): ChatReasoningTranscriptItem {
+  const existing = state.active.session?.transcript.find(
+    (entry) => entry.kind === "reasoning" && entry.id === item.id,
+  );
+  if (!existing || existing.kind !== "reasoning") return item;
+  return {
+    ...item,
+    created_at: existing.created_at,
+    updated_at: existing.content === item.content ? existing.updated_at : item.updated_at,
+  };
+}
 
 function matchesActiveSession(
   state: ChatState,
@@ -132,7 +154,7 @@ function handleMessageFinal(setState: ChatStateSetter, data: unknown): void {
           id: messageId,
           role,
           content,
-          createdAt: eventOccurredAt(data),
+          createdAt: findExistingTextCreatedAt(prev, messageId) ?? eventOccurredAt(data),
         }),
       },
     };
@@ -167,7 +189,8 @@ function handleReasoningFinal(setState: ChatStateSetter, data: unknown): void {
   const payload = readPayload(data);
   const sessionId = typeof payload?.["session_id"] === "string" ? payload["session_id"] : null;
   const threadId = typeof payload?.["thread_id"] === "string" ? payload["thread_id"] : null;
-  const item = toReasoningTranscriptItem(payload, eventOccurredAt(data));
+  const occurredAt = eventOccurredAt(data);
+  const item = toReasoningTranscriptItem(payload, occurredAt);
   if (!item) return;
   setState((prev) => {
     if (!prev.active.session || !matchesActiveSession(prev, { sessionId, threadId })) return prev;
@@ -175,7 +198,7 @@ function handleReasoningFinal(setState: ChatStateSetter, data: unknown): void {
       ...prev,
       active: {
         ...prev.active,
-        session: upsertTranscriptItem(prev.active.session, item),
+        session: upsertTranscriptItem(prev.active.session, mergeReasoningFinal(prev, item)),
       },
     };
   });

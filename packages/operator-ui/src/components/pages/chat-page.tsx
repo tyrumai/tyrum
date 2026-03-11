@@ -118,7 +118,7 @@ export function ChatPage({ core }: { core: OperatorCore }) {
     const attachedNodeId = await resolveAttachedNodeId();
     await core.chatStore.sendMessage(text, { attachedNodeId });
     if (core.chatStore.getSnapshot().send.error) {
-      setDraft(previousDraft);
+      setDraft((current) => (current.length === 0 ? previousDraft : current));
     }
   };
 

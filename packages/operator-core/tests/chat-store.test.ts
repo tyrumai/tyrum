@@ -340,7 +340,7 @@ describe("chatStore", () => {
     expect(ws.sessionGet).toHaveBeenCalledTimes(1);
   });
 
-  it("streams assistant text and reasoning events into the active transcript", async () => {
+  it("preserves streaming transcript order when final events confirm existing content", async () => {
     const ws = createFakeWs();
     ws.sessionGet.mockResolvedValue({ session: sampleGetSession("session-1") });
     const http = createFakeHttp();
@@ -377,6 +377,15 @@ describe("chatStore", () => {
         content: "Hello there",
       },
     });
+    ws.emit("reasoning.final", {
+      occurred_at: "2026-01-01T00:00:03.000Z",
+      payload: {
+        session_id: "session-1",
+        thread_id: "ui-session-1",
+        reasoning_id: "reason-1",
+        content: "Think",
+      },
+    });
 
     expect(chat.getSnapshot().active.session?.transcript).toEqual([
       {
@@ -398,7 +407,7 @@ describe("chatStore", () => {
         id: "assistant-1",
         role: "assistant",
         content: "Hello there",
-        created_at: "2026-01-01T00:00:02.000Z",
+        created_at: "2026-01-01T00:00:01.000Z",
       },
     ]);
   });
