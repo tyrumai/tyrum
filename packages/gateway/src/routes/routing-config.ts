@@ -252,6 +252,7 @@ export function createRoutingConfigRoutes(deps: RoutingConfigRouteDeps): Hono {
   });
 
   app.get("/routing/channels/telegram/config", async (c) => {
+    requireTenantId(c);
     const revision = await deploymentConfigDal.ensureSeeded({
       defaultConfig: DeploymentConfig.parse({}),
       createdBy: { kind: "bootstrap" },
@@ -272,6 +273,7 @@ export function createRoutingConfigRoutes(deps: RoutingConfigRouteDeps): Hono {
   });
 
   app.put("/routing/channels/telegram/config", async (c) => {
+    requireTenantId(c);
     const body = (await c.req.json().catch(() => undefined)) as unknown;
     const parsed = TelegramConnectionConfigUpdateRequest.safeParse(body);
     if (!parsed.success) {

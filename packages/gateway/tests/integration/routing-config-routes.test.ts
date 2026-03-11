@@ -74,6 +74,30 @@ describe("routing config routes", () => {
     return app;
   }
 
+  function createAppWithoutTenantId(): Hono {
+    const app = new Hono();
+    app.use("*", async (c, next) => {
+      c.set("authClaims", {
+        token_kind: "admin",
+        token_id: "test-token",
+        role: "admin",
+        scopes: ["*"],
+      });
+      await next();
+    });
+
+    app.route(
+      "/",
+      createRoutingConfigRoutes({
+        db,
+        routingConfigDal: new RoutingConfigDal(db),
+        channelThreadDal: new ChannelThreadDal(db),
+      } as never),
+    );
+
+    return app;
+  }
+
   it("persists routing config revisions and emits ws events", async () => {
     const send = vi.fn();
     const app = createAuthedApp(send);
@@ -366,5 +390,19 @@ describe("routing config routes", () => {
         pipeline_enabled: true,
       },
     });
+  });
+
+  it("requires tenant-scoped claims for telegram connection config endpoints", async () => {
+    const app = createAppWithoutTenantId();
+
+    const getRes = await app.request("/routing/channels/telegram/config", { method: "GET" });
+    expect(getRes.status).toBe(403);
+
+    const putRes = await app.request("/routing/channels/telegram/config", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ allowed_user_ids: ["123"] }),
+    });
+    expect(putRes.status).toBe(403);
   });
 });
