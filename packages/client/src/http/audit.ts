@@ -1,4 +1,5 @@
 import {
+  AuditPlansListResponse,
   AuditForgetRequest,
   AuditForgetResponse,
   ChainVerification,
@@ -32,6 +33,14 @@ const AuditVerifyRequest = z
   })
   .strict();
 
+const AuditPlansListQuery = z
+  .object({
+    limit: z.number().int().positive().max(100).optional(),
+  })
+  .strict();
+
+export type AuditPlansListInput = z.input<typeof AuditPlansListQuery>;
+export type AuditPlansListResult = z.output<typeof AuditPlansListResponse>;
 export type AuditExportResult = z.output<typeof ReceiptBundle>;
 export type AuditVerifyInput = z.input<typeof AuditVerifyRequest>;
 export type AuditVerifyResult = z.output<typeof ChainVerification>;
@@ -39,6 +48,10 @@ export type AuditForgetInput = z.input<typeof AuditForgetRequest>;
 export type AuditForgetResult = z.output<typeof AuditForgetResponse>;
 
 export interface AuditApi {
+  listPlans(
+    query?: AuditPlansListInput,
+    options?: TyrumRequestOptions,
+  ): Promise<AuditPlansListResult>;
   exportReceiptBundle(planId: string, options?: TyrumRequestOptions): Promise<AuditExportResult>;
   verify(input: AuditVerifyInput, options?: TyrumRequestOptions): Promise<AuditVerifyResult>;
   forget(input: AuditForgetInput, options?: TyrumRequestOptions): Promise<AuditForgetResult>;
@@ -46,6 +59,17 @@ export interface AuditApi {
 
 export function createAuditApi(transport: HttpTransport): AuditApi {
   return {
+    async listPlans(query, options) {
+      const parsedQuery = validateOrThrow(AuditPlansListQuery, query ?? {}, "audit plans query");
+      return await transport.request({
+        method: "GET",
+        path: "/audit/plans",
+        query: parsedQuery,
+        response: AuditPlansListResponse,
+        signal: options?.signal,
+      });
+    },
+
     async exportReceiptBundle(planId, options) {
       const parsedPlanId = validateOrThrow(NonEmptyString, planId, "plan id");
       return await transport.request({

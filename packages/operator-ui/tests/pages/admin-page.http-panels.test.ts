@@ -118,6 +118,7 @@ function createCore(activeAdminMode: boolean): {
         deleteProvider: vi.fn(async () => ({ status: "ok" })),
       },
       audit: {
+        listPlans: vi.fn(async () => ({ status: "ok", plans: [] })),
         exportReceiptBundle: vi.fn(async () => ({ status: "ok" })),
         verify: vi.fn(async () => ({ status: "ok" })),
         forget: vi.fn(async () => ({ status: "ok" })),

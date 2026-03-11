@@ -30,15 +30,44 @@ function createCore(): OperatorCore {
 }
 
 describe("AuditPanel", () => {
-  it("trims inputs and uses the elevated admin token for audit actions", async () => {
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
+  it("loads recent plans, hides verify/json UI, and exports the selected plan", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url =
         typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
 
-      if (url === "http://example.test/audit/export/plan-123") {
+      if (url === "http://example.test/audit/plans?limit=100") {
         return new Response(
           JSON.stringify({
-            plan_id: "plan-123",
+            status: "ok",
+            plans: [
+              {
+                plan_key: "plan-123",
+                plan_id: "00000000-0000-4000-8000-000000000123",
+                kind: "planner",
+                status: "success",
+                event_count: 3,
+                last_event_at: "2026-03-01T00:00:00.000Z",
+              },
+              {
+                plan_key: "plan-999",
+                plan_id: "00000000-0000-4000-8000-000000000999",
+                kind: "audit",
+                status: "active",
+                event_count: 1,
+                last_event_at: "2026-03-01T00:05:00.000Z",
+              },
+            ],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+
+      if (url === "http://example.test/audit/export/plan-999") {
+        expect(init?.method).toBe("GET");
+        expect(new Headers(init?.headers).get("authorization")).toBe("Bearer elevated-test-token");
+        return new Response(
+          JSON.stringify({
+            plan_id: "00000000-0000-4000-8000-000000000999",
             events: [],
             chain_verification: {
               valid: true,
@@ -46,15 +75,8 @@ describe("AuditPanel", () => {
               broken_at_index: null,
               broken_at_id: null,
             },
-            exported_at: "2026-03-01T00:00:00.000Z",
+            exported_at: "2026-03-01T00:06:00.000Z",
           }),
-          { status: 200, headers: { "content-type": "application/json" } },
-        );
-      }
-
-      if (url === "http://example.test/audit/forget") {
-        return new Response(
-          JSON.stringify({ decision: "delete", deleted_count: 0, proof_event_id: 0 }),
           { status: 200, headers: { "content-type": "application/json" } },
         );
       }
@@ -78,14 +100,25 @@ describe("AuditPanel", () => {
       );
       expect(panel).not.toBeNull();
 
-      const planIdInput = panel?.querySelector<HTMLInputElement>(
-        'input[placeholder="agent-turn-default-..."]',
-      );
-      expect(planIdInput).not.toBeNull();
-
-      act(() => {
-        setNativeValue(planIdInput!, "  plan-123  ");
+      await act(async () => {
+        await Promise.resolve();
       });
+
+      expect(panel?.textContent).toContain("Audit receipts");
+      expect(panel?.textContent).not.toContain("Verify");
+      expect(panel?.querySelector("textarea")).toBeNull();
+
+      const filterInput = panel?.querySelector<HTMLInputElement>(
+        '[data-testid="audit-plan-filter"]',
+      );
+      expect(filterInput).not.toBeNull();
+
+      await act(async () => {
+        setNativeValue(filterInput!, "999");
+        await Promise.resolve();
+      });
+
+      expect(panel?.textContent).toContain("plan-999");
 
       const exportButton = Array.from(panel?.querySelectorAll("button") ?? []).find((button) =>
         button.textContent?.includes("Export receipt bundle"),
@@ -97,39 +130,89 @@ describe("AuditPanel", () => {
         await Promise.resolve();
       });
 
-      expect(fetchMock).toHaveBeenCalledTimes(1);
-      const [exportInput, exportInit] = fetchMock.mock.calls[0] ?? [];
-      const exportUrl =
-        typeof exportInput === "string"
-          ? exportInput
-          : exportInput instanceof URL
-            ? exportInput.toString()
-            : exportInput.url;
-      expect(exportUrl).toBe("http://example.test/audit/export/plan-123");
-      expect(exportInit?.method).toBe("GET");
-      expect(new Headers(exportInit?.headers).get("authorization")).toBe(
-        "Bearer elevated-test-token",
-      );
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(panel?.textContent).toContain("Download receipt bundle");
+      expect(panel?.textContent).toContain("Valid");
+    } finally {
+      cleanupTestRoot(testRoot);
+    }
+  });
 
-      const entityTypeInput = panel?.querySelector<HTMLInputElement>(
-        'input[placeholder="user | session | ..."]',
-      );
-      const entityIdInput = panel?.querySelector<HTMLInputElement>('input[placeholder="..."]');
-      expect(entityTypeInput).not.toBeNull();
-      expect(entityIdInput).not.toBeNull();
+  it("forgets the selected plan using the fixed plan delete payload", async () => {
+    let plansRequestCount = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url =
+        typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
 
-      act(() => {
-        setNativeValue(entityTypeInput!, "  user  ");
-        setNativeValue(entityIdInput!, "  123  ");
+      if (url === "http://example.test/audit/plans?limit=100") {
+        plansRequestCount += 1;
+        const eventCount = plansRequestCount === 1 ? 4 : 1;
+        return new Response(
+          JSON.stringify({
+            status: "ok",
+            plans: [
+              {
+                plan_key: "plan-123",
+                plan_id: "00000000-0000-4000-8000-000000000123",
+                kind: "planner",
+                status: "success",
+                event_count: eventCount,
+                last_event_at: "2026-03-01T00:00:00.000Z",
+              },
+            ],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+
+      if (url === "http://example.test/audit/forget") {
+        expect(init?.method).toBe("POST");
+        expect(new Headers(init?.headers).get("authorization")).toBe("Bearer elevated-test-token");
+        expect(JSON.parse(String(init?.body ?? ""))).toEqual({
+          confirm: "FORGET",
+          entity_type: "plan",
+          entity_id: "plan-123",
+          decision: "delete",
+        });
+        return new Response(
+          JSON.stringify({ decision: "delete", deleted_count: 4, proof_event_id: 5 }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+
+      throw new Error(`Unexpected fetch URL: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+    const core = createCore();
+    const testRoot = renderIntoDocument(
+      React.createElement(
+        ElevatedModeProvider,
+        { core, mode: "web" },
+        React.createElement(AuditPanel, { core }),
+      ),
+    );
+
+    try {
+      const panel = testRoot.container.querySelector<HTMLElement>(
+        "[data-testid='admin-http-audit-panel']",
+      );
+      expect(panel).not.toBeNull();
+
+      await act(async () => {
+        await Promise.resolve();
       });
 
       const forgetButton = Array.from(panel?.querySelectorAll("button") ?? []).find((button) =>
-        button.textContent?.includes("Forget…"),
+        button.textContent?.includes("Forget audit receipts"),
       );
       expect(forgetButton).toBeDefined();
+
       act(() => {
         forgetButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       });
+
+      expect(document.body.textContent).toContain("plan-123");
 
       const checkbox = document.body.querySelector('[data-testid="confirm-danger-checkbox"]');
       expect(checkbox).not.toBeNull();
@@ -147,25 +230,9 @@ describe("AuditPanel", () => {
         await Promise.resolve();
       });
 
-      expect(fetchMock).toHaveBeenCalledTimes(2);
-      const [forgetInput, forgetInit] = fetchMock.mock.calls[1] ?? [];
-      const forgetUrl =
-        typeof forgetInput === "string"
-          ? forgetInput
-          : forgetInput instanceof URL
-            ? forgetInput.toString()
-            : forgetInput.url;
-      expect(forgetUrl).toBe("http://example.test/audit/forget");
-      expect(forgetInit?.method).toBe("POST");
-      expect(new Headers(forgetInit?.headers).get("authorization")).toBe(
-        "Bearer elevated-test-token",
-      );
-      expect(JSON.parse(String(forgetInit?.body ?? ""))).toEqual({
-        confirm: "FORGET",
-        entity_type: "user",
-        entity_id: "123",
-        decision: "delete",
-      });
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+      expect(panel?.textContent).toContain("Deleted receipts");
+      expect(panel?.textContent).toContain("4");
     } finally {
       cleanupTestRoot(testRoot);
     }

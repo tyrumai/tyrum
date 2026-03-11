@@ -63,6 +63,7 @@ const adminApiPaths = [
   "routingConfig.get",
   "routingConfig.update",
   "routingConfig.revert",
+  "audit.listPlans",
   "audit.exportReceiptBundle",
   "audit.verify",
   "audit.forget",

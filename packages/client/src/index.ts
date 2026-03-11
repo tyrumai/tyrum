@@ -35,6 +35,8 @@ export type {
 export type { CapabilityProvider, TaskExecuteContext, TaskResult } from "./capability.js";
 
 export type {
+  AuditPlansListInput,
+  AuditPlansListResult,
   StatusResponse,
   UsageResponse,
   PresenceResponse,

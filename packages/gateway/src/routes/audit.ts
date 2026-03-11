@@ -23,6 +23,15 @@ export interface AuditRouteDeps {
 export function createAuditRoutes(deps: AuditRouteDeps): Hono {
   const audit = new Hono();
 
+  audit.get("/audit/plans", async (c) => {
+    const tenantId = requireTenantId(c);
+    const rawLimit = c.req.query("limit");
+    const parsedLimit = rawLimit ? Number(rawLimit) : undefined;
+    const limit = Number.isFinite(parsedLimit) ? parsedLimit : undefined;
+    const plans = await deps.eventLog.listRecentPlans({ tenantId, limit });
+    return c.json({ status: "ok", plans });
+  });
+
   /** Export a receipt bundle for a plan. */
   audit.get("/audit/export/:planKey", async (c) => {
     const tenantId = requireTenantId(c);

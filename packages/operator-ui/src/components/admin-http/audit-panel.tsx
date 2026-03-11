@@ -1,353 +1,309 @@
+import type { AuditExportResult, AuditForgetResult } from "@tyrum/client/browser";
 import type { OperatorCore } from "@tyrum/operator-core";
+import { FileSearch } from "lucide-react";
 import * as React from "react";
+import { formatErrorMessage } from "../../utils/format-error-message.js";
+import { useApiAction } from "../../hooks/use-api-action.js";
 import { ElevatedModeTooltip } from "../elevated-mode/elevated-mode-tooltip.js";
-import { ApiResultCard } from "../ui/api-result-card.js";
+import { useAdminHttpClient, useAdminMutationAccess } from "../pages/admin-http-shared.js";
+import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { ConfirmDangerDialog } from "../ui/confirm-danger-dialog.js";
-import { Input } from "../ui/input.js";
-import { JsonTextarea } from "../ui/json-textarea.js";
-import { Label } from "../ui/label.js";
-import { RadioGroup, RadioGroupItem } from "../ui/radio-group.js";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs.js";
-import { optionalString, useApiAction } from "./admin-http-shared.js";
-import { useAdminHttpClient, useAdminMutationAccess } from "../pages/admin-http-shared.js";
+import { EmptyState } from "../ui/empty-state.js";
+import {
+  AuditExportResultCard,
+  AuditForgetResultCard,
+  AuditPlansBrowser,
+  AuditSelectionSummary,
+  downloadReceiptBundle,
+  type AuditPlanSummary,
+} from "./audit-panel.parts.js";
 
-const DEFAULT_RESULT_VIEWER_PROPS = {
-  defaultExpandedDepth: 1,
-  contentClassName: "max-h-[420px]",
-} as const;
-
-type AuditApi = OperatorCore["http"]["audit"];
-
-function AuditExportTab({ auditApi }: { auditApi: AuditApi }) {
-  const [planId, setPlanId] = React.useState("");
-  const action = useApiAction<unknown>();
-  const resolvedPlanId = optionalString(planId);
-
-  return (
-    <>
-      <Input
-        label="Plan ID"
-        placeholder="agent-turn-default-..."
-        value={planId}
-        onChange={(event) => {
-          setPlanId(event.target.value);
-        }}
-      />
-      <div className="flex flex-wrap gap-2">
-        <Button
-          variant="primary"
-          isLoading={action.isLoading}
-          disabled={!resolvedPlanId}
-          onClick={() => {
-            if (!resolvedPlanId) return;
-            void action.run(() => auditApi.exportReceiptBundle(resolvedPlanId));
-          }}
-        >
-          Export receipt bundle
-        </Button>
-        <Button
-          variant="secondary"
-          disabled={action.isLoading}
-          onClick={() => {
-            action.reset();
-          }}
-        >
-          Clear
-        </Button>
-      </div>
-      <ApiResultCard
-        heading="Export result"
-        value={action.value}
-        error={action.error}
-        jsonViewerProps={DEFAULT_RESULT_VIEWER_PROPS}
-      />
-    </>
-  );
+function resolveSelectedPlanKey(
+  plans: AuditPlanSummary[],
+  currentPlanKey: string | null,
+): string | null {
+  if (currentPlanKey && plans.some((plan) => plan.plan_key === currentPlanKey)) {
+    return currentPlanKey;
+  }
+  return plans[0]?.plan_key ?? null;
 }
 
-function AuditVerifyTab({ auditApi }: { auditApi: AuditApi }) {
-  const [raw, setRaw] = React.useState("");
-  const [value, setValue] = React.useState<unknown | undefined>(undefined);
-  const [error, setError] = React.useState<string | null>(null);
-  const action = useApiAction<unknown>();
+function filterPlans(plans: AuditPlanSummary[], rawFilter: string): AuditPlanSummary[] {
+  const needle = rawFilter.trim().toLowerCase();
+  if (!needle) return plans;
 
-  return (
-    <>
-      <JsonTextarea
-        label="Verify request JSON"
-        placeholder='{"events":[{"id":1,"plan_id":"...","step_index":0,"occurred_at":"2026-01-01T00:00:00.000Z","action":"...","prev_hash":null,"event_hash":null}]}'
-        rows={6}
-        value={raw}
-        onChange={(event) => {
-          setRaw(event.target.value);
-        }}
-        onJsonChange={(nextValue, errorMessage) => {
-          if (errorMessage) {
-            setValue(undefined);
-            setError(errorMessage);
-            return;
-          }
-          setError(null);
-          setValue(nextValue);
-        }}
-      />
-      <div className="flex flex-wrap gap-2">
-        <Button
-          isLoading={action.isLoading}
-          disabled={error !== null || typeof value === "undefined"}
-          onClick={() => {
-            void action.run(() => auditApi.verify(value as never));
-          }}
-        >
-          Verify chain
-        </Button>
-        <Button
-          variant="secondary"
-          disabled={action.isLoading}
-          onClick={() => {
-            action.reset();
-          }}
-        >
-          Clear
-        </Button>
-      </div>
-      <ApiResultCard
-        heading="Verify result"
-        value={action.value}
-        error={action.error}
-        jsonViewerProps={DEFAULT_RESULT_VIEWER_PROPS}
-      />
-    </>
-  );
-}
-
-function AuditForgetDecisionFieldset({
-  decision,
-  onDecisionChange,
-}: {
-  decision: "delete" | "anonymize" | "retain";
-  onDecisionChange: (next: "delete" | "anonymize" | "retain") => void;
-}) {
-  return (
-    <fieldset className="grid gap-3">
-      <legend className="text-sm font-medium leading-none text-fg">Decision</legend>
-      <RadioGroup
-        value={decision}
-        onValueChange={(value) => {
-          if (value === "delete" || value === "anonymize" || value === "retain") {
-            onDecisionChange(value);
-          }
-        }}
-        className="flex flex-wrap gap-4"
-      >
-        {(["delete", "anonymize", "retain"] as const).map((option) => {
-          const id = `audit-forget-${option}`;
-          return (
-            <div key={option} className="flex items-center gap-2">
-              <RadioGroupItem id={id} value={option} />
-              <Label htmlFor={id} className="text-sm font-normal text-fg">
-                {option}
-              </Label>
-            </div>
-          );
-        })}
-      </RadioGroup>
-    </fieldset>
-  );
-}
-
-function AuditForgetDialogSummary({
-  entityType,
-  entityId,
-  decision,
-}: {
-  entityType: string | undefined;
-  entityId: string | undefined;
-  decision: "delete" | "anonymize" | "retain";
-}) {
-  return (
-    <div className="grid gap-2 text-sm text-fg">
-      <div>
-        <span className="text-fg-muted">Entity:</span>{" "}
-        <span className="font-mono">
-          {entityType ?? "<missing>"}:{entityId ?? "<missing>"}
-        </span>
-      </div>
-      <div>
-        <span className="text-fg-muted">Decision:</span>{" "}
-        <span className="font-mono">{decision}</span>
-      </div>
-    </div>
-  );
-}
-
-function AuditForgetConfirmDialog({
-  open,
-  onOpenChange,
-  isLoading,
-  onConfirm,
-  entityType,
-  entityId,
-  decision,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  isLoading: boolean;
-  onConfirm: () => Promise<void>;
-  entityType: string | undefined;
-  entityId: string | undefined;
-  decision: "delete" | "anonymize" | "retain";
-}) {
-  return (
-    <ConfirmDangerDialog
-      open={open}
-      onOpenChange={onOpenChange}
-      title="Forget audit receipts?"
-      description="This action may delete or anonymize audit receipts and cannot be undone."
-      confirmLabel="Forget"
-      onConfirm={onConfirm}
-      isLoading={isLoading}
-    >
-      <AuditForgetDialogSummary entityType={entityType} entityId={entityId} decision={decision} />
-    </ConfirmDangerDialog>
-  );
-}
-
-function AuditForgetTab({
-  auditApi,
-  canMutate,
-  requestEnter,
-}: {
-  auditApi: AuditApi;
-  canMutate: boolean;
-  requestEnter: () => void;
-}) {
-  const [entityType, setEntityType] = React.useState("");
-  const [entityId, setEntityId] = React.useState("");
-  const [decision, setDecision] = React.useState<"delete" | "anonymize" | "retain">("delete");
-  const [dialogOpen, setDialogOpen] = React.useState(false);
-  const action = useApiAction<unknown>();
-
-  const resolvedEntityType = optionalString(entityType);
-  const resolvedEntityId = optionalString(entityId);
-
-  return (
-    <>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Input
-          label="Entity type"
-          placeholder="user | session | ..."
-          value={entityType}
-          onChange={(event) => {
-            setEntityType(event.target.value);
-          }}
-        />
-        <Input
-          label="Entity id"
-          placeholder="..."
-          value={entityId}
-          onChange={(event) => {
-            setEntityId(event.target.value);
-          }}
-        />
-      </div>
-
-      <AuditForgetDecisionFieldset decision={decision} onDecisionChange={setDecision} />
-
-      <div className="flex flex-wrap gap-2">
-        <ElevatedModeTooltip canMutate={canMutate} requestEnter={requestEnter}>
-          <Button
-            variant="danger"
-            disabled={!resolvedEntityType || !resolvedEntityId}
-            onClick={() => {
-              setDialogOpen(true);
-            }}
-          >
-            Forget…
-          </Button>
-        </ElevatedModeTooltip>
-        <Button
-          variant="secondary"
-          disabled={action.isLoading}
-          onClick={() => {
-            action.reset();
-          }}
-        >
-          Clear
-        </Button>
-      </div>
-
-      <ApiResultCard
-        heading="Forget result"
-        value={action.value}
-        error={action.error}
-        jsonViewerProps={DEFAULT_RESULT_VIEWER_PROPS}
-      />
-
-      <AuditForgetConfirmDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        isLoading={action.isLoading}
-        onConfirm={async () => {
-          if (!canMutate) {
-            requestEnter();
-            throw new Error("Enter Elevated Mode to forget audit receipts.");
-          }
-          if (!resolvedEntityType || !resolvedEntityId) return;
-          await action.run(
-            () =>
-              auditApi.forget({
-                confirm: "FORGET",
-                entity_type: resolvedEntityType,
-                entity_id: resolvedEntityId,
-                decision,
-              }),
-            { throwOnError: true },
-          );
-        }}
-        entityType={resolvedEntityType}
-        entityId={resolvedEntityId}
-        decision={decision}
-      />
-    </>
+  return plans.filter((plan) =>
+    [plan.plan_key, plan.plan_id, plan.kind, plan.status].some((value) =>
+      value.toLowerCase().includes(needle),
+    ),
   );
 }
 
 export function AuditPanel({ core }: { core: OperatorCore }) {
   const { canMutate, requestEnter } = useAdminMutationAccess(core);
   const http = useAdminHttpClient() ?? core.http;
+  const auditApi = http.audit ?? null;
+  const exportAction = useApiAction<AuditExportResult>();
+  const forgetAction = useApiAction<AuditForgetResult>();
+
+  const [plans, setPlans] = React.useState<AuditPlanSummary[]>([]);
+  const [plansLoading, setPlansLoading] = React.useState(false);
+  const [plansError, setPlansError] = React.useState<unknown>(null);
+  const [filterValue, setFilterValue] = React.useState("");
+  const [selectedPlanKey, setSelectedPlanKey] = React.useState<string | null>(null);
+  const [dialogOpen, setDialogOpen] = React.useState(false);
+  const [downloadError, setDownloadError] = React.useState<string | null>(null);
+
+  const visiblePlans = filterPlans(plans, filterValue);
+  const selectedPlan =
+    visiblePlans.find((plan) => plan.plan_key === selectedPlanKey) ??
+    (selectedPlanKey ? (plans.find((plan) => plan.plan_key === selectedPlanKey) ?? null) : null);
+
+  React.useEffect(() => {
+    if (visiblePlans.some((plan) => plan.plan_key === selectedPlanKey)) return;
+    setSelectedPlanKey(visiblePlans[0]?.plan_key ?? null);
+  }, [selectedPlanKey, visiblePlans]);
+
+  React.useEffect(() => {
+    exportAction.reset();
+    forgetAction.reset();
+    setDownloadError(null);
+  }, [selectedPlanKey]);
+
+  React.useEffect(() => {
+    if (!auditApi) {
+      setPlans([]);
+      setSelectedPlanKey(null);
+      setPlansError(new Error("Audit API is unavailable."));
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadPlans(): Promise<void> {
+      setPlansLoading(true);
+      setPlansError(null);
+      try {
+        const result = await auditApi.listPlans({ limit: 100 });
+        if (cancelled) return;
+        setPlans(result.plans);
+        setSelectedPlanKey((current) => resolveSelectedPlanKey(result.plans, current));
+      } catch (error) {
+        if (cancelled) return;
+        setPlans([]);
+        setSelectedPlanKey(null);
+        setPlansError(error);
+      } finally {
+        if (!cancelled) setPlansLoading(false);
+      }
+    }
+
+    void loadPlans();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [auditApi]);
+
+  async function refreshPlans(): Promise<void> {
+    if (!auditApi) return;
+    setPlansLoading(true);
+    setPlansError(null);
+    try {
+      const result = await auditApi.listPlans({ limit: 100 });
+      setPlans(result.plans);
+      setSelectedPlanKey((current) => resolveSelectedPlanKey(result.plans, current));
+    } catch (error) {
+      setPlansError(error);
+    } finally {
+      setPlansLoading(false);
+    }
+  }
+
+  if (!auditApi) {
+    return (
+      <Card data-testid="admin-http-audit-panel">
+        <CardHeader>
+          <div className="text-sm font-medium text-fg">Audit</div>
+        </CardHeader>
+        <CardContent>
+          <Alert variant="error" title="Audit API unavailable" />
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card data-testid="admin-http-audit-panel">
-      <CardHeader>
-        <div className="text-sm font-medium text-fg">Audit</div>
+      <CardHeader className="gap-2">
+        <div className="text-sm font-medium text-fg">Audit receipts</div>
+        <div className="max-w-3xl text-sm text-fg-muted">
+          Browse recent audited plans, inspect their receipt metadata, export a receipt bundle, or
+          forget the selected plan&apos;s stored receipts. This page uses only structured fields and
+          never requires JSON input.
+        </div>
       </CardHeader>
-      <CardContent className="grid gap-4">
-        <Tabs defaultValue="export" className="grid gap-3">
-          <TabsList aria-label="Audit endpoints">
-            <TabsTrigger value="export">Export</TabsTrigger>
-            <TabsTrigger value="verify">Verify</TabsTrigger>
-            <TabsTrigger value="forget">Forget</TabsTrigger>
-          </TabsList>
+      <CardContent className="grid gap-4 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
+        <AuditPlansBrowser
+          plans={visiblePlans}
+          selectedPlanKey={selectedPlanKey}
+          filterValue={filterValue}
+          isLoading={plansLoading}
+          error={plansError}
+          onFilterChange={setFilterValue}
+          onRefresh={refreshPlans}
+          onSelectPlan={setSelectedPlanKey}
+        />
 
-          <TabsContent value="export" forceMount className="grid gap-3">
-            <AuditExportTab auditApi={http.audit} />
-          </TabsContent>
+        <div className="grid gap-4">
+          {selectedPlan ? (
+            <Card data-testid="audit-plan-detail">
+              <CardHeader className="gap-2">
+                <div className="text-sm font-medium text-fg">Selected plan</div>
+                <div className="text-sm text-fg-muted">
+                  Export the selected plan&apos;s receipt bundle or delete its stored receipts.
+                </div>
+              </CardHeader>
+              <CardContent className="grid gap-4">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="grid gap-1 rounded-lg border border-border bg-bg-subtle p-3">
+                    <div className="text-xs font-medium uppercase tracking-wide text-fg-muted">
+                      Plan
+                    </div>
+                    <div className="font-mono text-sm text-fg break-words">
+                      {selectedPlan.plan_key}
+                    </div>
+                  </div>
+                  <div className="grid gap-1 rounded-lg border border-border bg-bg-subtle p-3">
+                    <div className="text-xs font-medium uppercase tracking-wide text-fg-muted">
+                      Internal plan ID
+                    </div>
+                    <div className="font-mono text-sm text-fg break-words">
+                      {selectedPlan.plan_id}
+                    </div>
+                  </div>
+                  <div className="grid gap-1 rounded-lg border border-border bg-bg-subtle p-3">
+                    <div className="text-xs font-medium uppercase tracking-wide text-fg-muted">
+                      Kind
+                    </div>
+                    <div className="text-sm text-fg">{selectedPlan.kind}</div>
+                  </div>
+                  <div className="grid gap-1 rounded-lg border border-border bg-bg-subtle p-3">
+                    <div className="text-xs font-medium uppercase tracking-wide text-fg-muted">
+                      Status
+                    </div>
+                    <div className="text-sm text-fg">{selectedPlan.status}</div>
+                  </div>
+                  <div className="grid gap-1 rounded-lg border border-border bg-bg-subtle p-3">
+                    <div className="text-xs font-medium uppercase tracking-wide text-fg-muted">
+                      Event count
+                    </div>
+                    <div className="text-sm text-fg">{String(selectedPlan.event_count)}</div>
+                  </div>
+                  <div className="grid gap-1 rounded-lg border border-border bg-bg-subtle p-3">
+                    <div className="text-xs font-medium uppercase tracking-wide text-fg-muted">
+                      Last activity
+                    </div>
+                    <div className="text-sm text-fg">{selectedPlan.last_event_at}</div>
+                  </div>
+                </div>
 
-          <TabsContent value="verify" forceMount className="grid gap-3">
-            <AuditVerifyTab auditApi={http.audit} />
-          </TabsContent>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="primary"
+                    isLoading={exportAction.isLoading}
+                    onClick={() => {
+                      setDownloadError(null);
+                      void exportAction.run(() =>
+                        auditApi.exportReceiptBundle(selectedPlan.plan_key),
+                      );
+                    }}
+                  >
+                    Export receipt bundle
+                  </Button>
+                  <ElevatedModeTooltip canMutate={canMutate} requestEnter={requestEnter}>
+                    <Button
+                      variant="danger"
+                      disabled={forgetAction.isLoading}
+                      onClick={() => {
+                        setDialogOpen(true);
+                      }}
+                    >
+                      Forget audit receipts…
+                    </Button>
+                  </ElevatedModeTooltip>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardContent>
+                <EmptyState
+                  icon={FileSearch}
+                  title="Select a plan"
+                  description="Choose a recent audited plan from the list to inspect its receipt data."
+                />
+              </CardContent>
+            </Card>
+          )}
 
-          <TabsContent value="forget" forceMount className="grid gap-3">
-            <AuditForgetTab
-              auditApi={http.audit}
-              canMutate={canMutate}
-              requestEnter={requestEnter}
-            />
-          </TabsContent>
-        </Tabs>
+          <AuditExportResultCard
+            plan={selectedPlan}
+            result={exportAction.value}
+            error={exportAction.error}
+            downloadError={downloadError}
+            onDownload={() => {
+              if (!selectedPlan || !exportAction.value) return;
+              try {
+                downloadReceiptBundle(exportAction.value, selectedPlan.plan_key);
+                setDownloadError(null);
+              } catch (error) {
+                setDownloadError(formatErrorMessage(error));
+              }
+            }}
+          />
+
+          <AuditForgetResultCard
+            planKey={selectedPlan?.plan_key ?? selectedPlanKey}
+            result={forgetAction.value}
+            error={forgetAction.error}
+          />
+        </div>
       </CardContent>
+
+      <ConfirmDangerDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        title="Forget audit receipts?"
+        description="This deletes the selected plan's stored receipt events and appends a proof event. It cannot be undone from this UI."
+        confirmLabel="Forget receipts"
+        confirmationLabel="I understand this will delete the stored audit receipts."
+        isLoading={forgetAction.isLoading}
+        onConfirm={async () => {
+          if (!canMutate) {
+            requestEnter();
+            throw new Error("Enter Elevated Mode to forget audit receipts.");
+          }
+          if (!selectedPlan) return;
+          await forgetAction.run(
+            async () => {
+              const result = await auditApi.forget({
+                confirm: "FORGET",
+                entity_type: "plan",
+                entity_id: selectedPlan.plan_key,
+                decision: "delete",
+              });
+              await refreshPlans();
+              return result;
+            },
+            { throwOnError: true },
+          );
+        }}
+      >
+        {selectedPlan ? <AuditSelectionSummary plan={selectedPlan} /> : null}
+      </ConfirmDangerDialog>
     </Card>
   );
 }

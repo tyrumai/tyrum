@@ -4,8 +4,13 @@ import { EventLog } from "../../src/modules/planner/event-log.js";
 import { createAuditRoutes } from "../../src/routes/audit.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
-import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
+import {
+  DEFAULT_AGENT_ID,
+  DEFAULT_TENANT_ID,
+  DEFAULT_WORKSPACE_ID,
+} from "../../src/modules/identity/scope.js";
 import { IdentityScopeDal } from "../../src/modules/identity/scope.js";
+import { PlanDal } from "../../src/modules/planner/plan-dal.js";
 
 describe("Audit routes", () => {
   let db: SqliteDb;
@@ -88,6 +93,57 @@ describe("Audit routes", () => {
       });
 
       expect(res.status).toBe(404);
+    });
+  });
+
+  describe("GET /audit/plans", () => {
+    it("lists recent audited plans in descending activity order and excludes empty plans", async () => {
+      await appendEvents("plan-older", 1);
+      await appendEvents("plan-newer", 2);
+      await new PlanDal(db).ensurePlanId({
+        tenantId: DEFAULT_TENANT_ID,
+        planKey: "plan-empty",
+        agentId: DEFAULT_AGENT_ID,
+        workspaceId: DEFAULT_WORKSPACE_ID,
+        kind: "planner",
+        status: "active",
+      });
+
+      const res = await app.request("/audit/plans?limit=10", {
+        method: "GET",
+      });
+
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as {
+        status: string;
+        plans: Array<{
+          plan_key: string;
+          event_count: number;
+          last_event_at: string;
+        }>;
+      };
+
+      expect(body.status).toBe("ok");
+      expect(body.plans.map((plan) => plan.plan_key)).toEqual(["plan-newer", "plan-older"]);
+      expect(body.plans[0]?.event_count).toBe(2);
+      expect(body.plans[1]?.event_count).toBe(1);
+      expect(body.plans.some((plan) => plan.plan_key === "plan-empty")).toBe(false);
+    });
+
+    it("clamps invalid limits to the recent-plan default window", async () => {
+      await appendEvents("plan-1", 1);
+      await appendEvents("plan-2", 1);
+
+      const res = await app.request("/audit/plans?limit=0", {
+        method: "GET",
+      });
+
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as {
+        plans: Array<{ plan_key: string }>;
+      };
+      expect(body.plans).toHaveLength(1);
+      expect(["plan-1", "plan-2"]).toContain(body.plans[0]?.plan_key);
     });
   });
 
