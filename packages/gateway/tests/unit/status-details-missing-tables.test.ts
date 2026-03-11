@@ -48,6 +48,7 @@ describe("status details missing tables", () => {
     expect(details.session_lanes).toEqual([]);
     expect(details.queue_depth).toBeNull();
     expect(details.catalog_freshness.last_refresh_status).toBe("unavailable");
+    expect(details.config_health).toEqual({ status: "ok", issues: [] });
   });
 
   it("GET /status returns ok when observability tables are missing", async () => {
@@ -81,6 +82,7 @@ describe("status details missing tables", () => {
     const body = (await res.json()) as Record<string, unknown>;
     expect(body["status"]).toBe("ok");
     expect(body["queue_depth"]).toBeNull();
+    expect(body["config_health"]).toEqual({ status: "ok", issues: [] });
   });
 
   it("keeps queue depth when some queue tables are missing", async () => {

@@ -2,10 +2,11 @@ import { isAuthProfilesEnabled } from "../models/auth-profiles-enabled.js";
 import type { ModelsDevService } from "../models/models-dev-service.js";
 import type { AgentRegistry } from "../agent/registry.js";
 import type { SqlDb } from "../../statestore/types.js";
+import { isMissingTableError } from "./db-errors.js";
 
 type StatusCountMap = Record<string, number>;
 type ActiveModelStatus = {
-  model_id: string;
+  model_id: string | null;
   provider: string | null;
   model: string | null;
   fallback_models: string[];
@@ -72,21 +73,6 @@ function parseIsoToMs(value: string | null | undefined): number | null {
   if (!value) return null;
   const ms = Date.parse(value);
   return Number.isFinite(ms) ? ms : null;
-}
-
-function isMissingTableError(err: unknown): boolean {
-  if (!err || typeof err !== "object") return false;
-
-  const code = (err as { code?: unknown }).code;
-  if (code === "42P01") return true;
-
-  const message = (err as { message?: unknown }).message;
-  if (typeof message !== "string") return false;
-  const lowered = message.toLowerCase();
-  return (
-    lowered.includes("no such table") ||
-    (lowered.includes("relation") && lowered.includes("does not exist"))
-  );
 }
 
 function asFiniteNumber(value: unknown): number {
@@ -159,6 +145,14 @@ export async function loadActiveModel(
     const runtime = await agents.getRuntime({ tenantId, agentKey: "default" });
     const status = await runtime.status(true);
     const modelId = status.model.model;
+    if (modelId === null) {
+      return {
+        model_id: null,
+        provider: null,
+        model: null,
+        fallback_models: status.model.fallback ?? [],
+      };
+    }
     const slash = modelId.indexOf("/");
     const provider = slash > 0 ? modelId.slice(0, slash) : null;
     const model = slash > 0 && slash < modelId.length - 1 ? modelId.slice(slash + 1) : null;

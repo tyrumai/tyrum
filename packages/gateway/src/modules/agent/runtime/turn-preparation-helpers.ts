@@ -27,7 +27,7 @@ export async function semanticSearch(
   deps: PrepareTurnHelperDeps,
   query: string,
   limit: number,
-  primaryModelId: string,
+  primaryModelId: string | null | undefined,
   sessionId: string,
   tenantId: string,
   agentId: string,

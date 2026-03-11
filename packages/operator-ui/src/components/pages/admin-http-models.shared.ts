@@ -49,7 +49,7 @@ export type ModelDialogState = {
 export type DeletePresetDialogState = {
   preset: ModelPreset;
   requiredExecutionProfileIds: string[];
-  replacementAssignments: Record<string, string>;
+  replacementAssignments: Record<string, string | null>;
 } | null;
 
 export function emptyDialogState(): ModelDialogState {

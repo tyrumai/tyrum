@@ -4,6 +4,7 @@ import type { SqlDb } from "../../statestore/types.js";
 import type { SandboxHardeningProfile } from "../sandbox/hardening.js";
 import type { ModelsDevService } from "../models/models-dev-service.js";
 import { loadSandboxStatus } from "./sandbox-status.js";
+import { loadConfigHealth, type ConfigHealthStatus } from "./config-health.js";
 import {
   loadActiveModel,
   loadAuthProfileHealth,
@@ -28,7 +29,7 @@ export type SandboxStatus = {
 export interface StatusDetails {
   model_auth: {
     active_model: {
-      model_id: string;
+      model_id: string | null;
       provider: string | null;
       model: string | null;
       fallback_models: string[];
@@ -39,6 +40,7 @@ export interface StatusDetails {
   session_lanes: SessionLaneStatus[];
   queue_depth: QueueDepthStatus | null;
   sandbox: SandboxStatus | null;
+  config_health: ConfigHealthStatus;
 }
 
 export interface StatusDetailsDeps {
@@ -53,8 +55,8 @@ export interface StatusDetailsDeps {
 
 export async function buildStatusDetails(deps: StatusDetailsDeps): Promise<StatusDetails> {
   const tenantId = deps.tenantId.trim();
-  const [activeModel, authProfiles, catalog, sessionLanes, queueDepth, sandbox] = await Promise.all(
-    [
+  const [activeModel, authProfiles, catalog, sessionLanes, queueDepth, sandbox, configHealth] =
+    await Promise.all([
       loadActiveModel(deps.agents, tenantId),
       loadAuthProfileHealth(deps.db, tenantId),
       loadCatalogFreshness(deps.db, deps.modelsDev),
@@ -66,13 +68,18 @@ export async function buildStatusDetails(deps: StatusDetailsDeps): Promise<Statu
         policyStatus: deps.policyStatus,
         toolrunnerHardeningProfile: deps.toolrunnerHardeningProfile ?? "baseline",
       }),
-    ],
-  );
+      loadConfigHealth({
+        tenantId,
+        db: deps.db,
+        modelsDev: deps.modelsDev,
+      }),
+    ]);
   return {
     model_auth: { active_model: activeModel, auth_profiles: authProfiles },
     catalog_freshness: catalog,
     session_lanes: sessionLanes,
     queue_depth: queueDepth,
     sandbox,
+    config_health: configHealth,
   };
 }

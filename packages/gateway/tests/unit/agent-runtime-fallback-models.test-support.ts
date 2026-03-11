@@ -39,11 +39,11 @@ const providerFixtures = {
 type ProviderFixtureId = keyof typeof providerFixtures;
 
 type ResolveSessionModelArgs = {
-  model: string;
+  model: string | null;
   fallback?: string[];
   sessionId: string;
   executionProfileId?: string;
-  profileModelId?: string;
+  profileModelId?: string | null;
   fetchImpl?: typeof fetch;
 };
 
@@ -166,8 +166,7 @@ export async function resolveSessionModel(
       config: {
         model: {
           model: args.model,
-          fallback: args.fallback ?? [],
-          options: {},
+          ...(args.model !== null ? { fallback: args.fallback ?? [], options: {} } : {}),
         },
       },
       tenantId: DEFAULT_TENANT_ID,

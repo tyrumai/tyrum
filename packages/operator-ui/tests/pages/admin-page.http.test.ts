@@ -200,7 +200,7 @@ describe("ConfigurePage (HTTP) policy + config", () => {
     const page = renderAdminHttpConfigurePage(core);
     await openModelsTab(page.container);
 
-    expect(page.container.textContent).toContain("No models configured");
+    expect(page.container.textContent).toContain("No model presets configured");
     expect(page.container.textContent).toContain("Available model discovery failed");
     expect(page.container.textContent).not.toContain("Model config failed");
 
@@ -319,7 +319,7 @@ describe("ConfigurePage (HTTP) policy + config", () => {
     cleanupAdminHttpPage(page);
   });
 
-  it("requires replacements before deleting a preset and handles assignment conflicts", async () => {
+  it("treats untouched None as a valid replacement before resolving preset conflicts", async () => {
     const { core } = createAdminHttpTestCore();
     const { fetchMock } = setupDeletePresetScenario(core);
 
@@ -334,20 +334,9 @@ describe("ConfigurePage (HTTP) policy + config", () => {
     click(getByTestId<HTMLElement>(document.body, "confirm-danger-checkbox"));
     await clickAndFlush(confirmButton);
 
-    expect(fetchMock).toHaveBeenCalledTimes(0);
-    expect(document.body.textContent).toContain(
-      "Select a replacement preset for every required execution profile.",
-    );
-
-    setSelectValue(
-      expectPresent(confirmDialog.querySelector<HTMLSelectElement>("select")),
-      "preset-review",
-    );
-    await clickAndFlush(confirmButton);
-
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(document.body.textContent).toContain(
-      "Select replacement presets before removing this model.",
+      "Choose replacement presets or None before removing this model.",
     );
 
     setSelectValue(
@@ -414,11 +403,19 @@ describe("ConfigurePage (HTTP) policy + config", () => {
     expect(policyCreateOverride).toHaveBeenCalledTimes(0);
     expect(fetchMock).toHaveBeenCalledTimes(0);
 
-    const confirmButton = getByTestId<HTMLButtonElement>(document.body, "confirm-danger-confirm");
-    expect(confirmButton.disabled).toBe(true);
+    const confirmButton = Array.from(
+      document.body.querySelectorAll<HTMLButtonElement>('[data-testid="confirm-danger-confirm"]'),
+    ).at(-1);
+    expect(confirmButton).not.toBeUndefined();
+    expect(confirmButton?.disabled).toBe(true);
 
-    click(getByTestId<HTMLElement>(document.body, "confirm-danger-checkbox"));
-    expect(confirmButton.disabled).toBe(false);
+    const confirmCheckbox = Array.from(
+      document.body.querySelectorAll<HTMLElement>('[data-testid="confirm-danger-checkbox"]'),
+    ).at(-1);
+    expect(confirmCheckbox).not.toBeUndefined();
+
+    click(confirmCheckbox);
+    expect(confirmButton?.disabled).toBe(false);
 
     await clickAndFlush(confirmButton);
 

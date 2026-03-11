@@ -99,6 +99,7 @@ async function createSecureHttpTestServer(): Promise<{
           session_lanes: null,
           queue_depth: null,
           sandbox: null,
+          config_health: { status: "ok", issues: [] },
         }),
       );
       return;

@@ -23,8 +23,8 @@ export function ReplacementAssignmentsFields({
 }: {
   requiredExecutionProfileIds: string[];
   candidatePresets: ModelPreset[];
-  selections: Record<string, string>;
-  onChange: (profileId: string, presetKey: string) => void;
+  selections: Record<string, string | null>;
+  onChange: (profileId: string, presetKey: string | null) => void;
 }): React.ReactElement | null {
   if (requiredExecutionProfileIds.length === 0) return null;
 
@@ -41,10 +41,10 @@ export function ReplacementAssignmentsFields({
           label={`${EXECUTION_PROFILE_LABELS[profileId] ?? profileId} replacement`}
           value={selections[profileId] ?? ""}
           onChange={(event) => {
-            onChange(profileId, event.currentTarget.value);
+            onChange(profileId, event.currentTarget.value || null);
           }}
         >
-          <option value="">Select a preset</option>
+          <option value="">None</option>
           {candidatePresets.map((preset) => (
             <option key={preset.preset_key} value={preset.preset_key}>
               {preset.display_name} ({preset.provider_key}/{preset.model_id})

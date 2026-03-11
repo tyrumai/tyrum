@@ -43,3 +43,13 @@ export function useAdminMutationAccess(core: OperatorCore): {
   const elevatedMode = useOperatorStore(core.elevatedModeStore);
   return { canMutate: isElevatedModeActive(elevatedMode), requestEnter };
 }
+
+export function buildReplacementAssignments(
+  requiredExecutionProfileIds: readonly string[],
+  selections: Record<string, string | null>,
+): Record<string, string | null> | undefined {
+  if (requiredExecutionProfileIds.length === 0) return undefined;
+  return Object.fromEntries(
+    requiredExecutionProfileIds.map((profileId) => [profileId, selections[profileId] ?? null]),
+  );
+}

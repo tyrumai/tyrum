@@ -238,7 +238,11 @@ export function AgentIdentityPanel({
     },
   ];
   const modelFields: Array<{ label: string; value: ReactNode; valueClassName?: string }> = [
-    { label: "Primary", value: status.model.model, valueClassName: "text-base font-medium" },
+    {
+      label: "Primary",
+      value: status.model.model ?? "None",
+      valueClassName: "text-base font-medium",
+    },
     ...(status.model.variant ? [{ label: "Variant", value: status.model.variant }] : []),
   ];
 

@@ -10,7 +10,7 @@ export function buildDefaultAgentConfig(
   persona?: AgentConfigT["persona"],
 ): AgentConfigT {
   return AgentConfig.parse({
-    model: { model: "openai/gpt-5.4" },
+    model: { model: null },
     ...(persona ? { persona } : {}),
     tools: { allow: stateMode === "local" ? ["read"] : [] },
   });

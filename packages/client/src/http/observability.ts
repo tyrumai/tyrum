@@ -13,6 +13,67 @@ import {
 import { z } from "zod";
 import { HttpTransport, validateOrThrow, type TyrumRequestOptions } from "./shared.js";
 
+const ActiveModelStatus = z
+  .object({
+    model_id: z.string().trim().min(1).nullable(),
+    provider: z.string().trim().min(1).nullable(),
+    model: z.string().trim().min(1).nullable(),
+    fallback_models: z.array(z.string().trim().min(1)),
+  })
+  .strict();
+
+const AuthProfilesStatus = z
+  .object({
+    enabled: z.boolean(),
+    total: z.number().int().nonnegative(),
+    active: z.number().int().nonnegative(),
+    disabled: z.number().int().nonnegative(),
+    cooldown_active: z.number().int().nonnegative(),
+    oauth_expired: z.number().int().nonnegative(),
+    oauth_expiring_within_24h: z.number().int().nonnegative(),
+    providers: z.array(z.string().trim().min(1)),
+    disabled_reasons: z.array(
+      z
+        .object({
+          reason: z.string().trim().min(1),
+          count: z.number().int().nonnegative(),
+        })
+        .strict(),
+    ),
+    selected: z
+      .object({
+        agent_id: z.string().trim().min(1),
+        session_id: z.string().trim().min(1),
+        provider: z.string().trim().min(1),
+        profile_id: z.string().trim().min(1),
+        updated_at: DateTimeSchema,
+      })
+      .strict()
+      .nullable(),
+  })
+  .strict();
+
+const ConfigHealthIssue = z
+  .object({
+    code: z.string().trim().min(1),
+    severity: z.enum(["warning", "error"]),
+    message: z.string().trim().min(1),
+    target: z
+      .object({
+        kind: z.enum(["deployment", "execution_profile", "agent"]),
+        id: z.string().trim().min(1).nullable(),
+      })
+      .strict(),
+  })
+  .strict();
+
+const ConfigHealthStatus = z
+  .object({
+    status: z.enum(["ok", "issues"]),
+    issues: z.array(ConfigHealthIssue),
+  })
+  .strict();
+
 const StatusResponse = z
   .object({
     status: z.literal("ok"),
@@ -24,11 +85,18 @@ const StatusResponse = z
     otel_enabled: z.boolean(),
     ws: z.unknown().nullable(),
     policy: z.unknown().nullable(),
-    model_auth: z.unknown().nullable(),
+    model_auth: z
+      .object({
+        active_model: ActiveModelStatus.nullable(),
+        auth_profiles: AuthProfilesStatus.nullable(),
+      })
+      .strict()
+      .nullable(),
     catalog_freshness: z.unknown().nullable(),
     session_lanes: z.unknown().nullable(),
     queue_depth: z.unknown().nullable(),
     sandbox: z.unknown().nullable(),
+    config_health: ConfigHealthStatus,
   })
   .passthrough();
 

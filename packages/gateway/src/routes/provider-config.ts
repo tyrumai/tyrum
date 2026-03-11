@@ -324,7 +324,7 @@ export function createProviderConfigRoutes(deps: ProviderConfigRouteDeps): Hono 
 
       await deps.db.transaction(async (tx) => {
         if (resolved.replacementAssignments.length > 0) {
-          await new ExecutionProfileModelAssignmentDal(tx).upsertManyTx({
+          await new ExecutionProfileModelAssignmentDal(tx).setManyTx({
             tenantId,
             assignments: resolved.replacementAssignments,
           });

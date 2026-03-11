@@ -3,6 +3,7 @@ import { DateTimeSchema, UuidSchema } from "./common.js";
 
 const JsonRecord = z.record(z.string().trim().min(1), z.unknown());
 const NonEmptyString = z.string().trim().min(1);
+const NullableNonEmptyString = NonEmptyString.nullable();
 
 export const ConfiguredExecutionProfileId = z.enum([
   "interaction",
@@ -99,10 +100,10 @@ export type ConfiguredAvailableModelListResponse = z.infer<
 export const ExecutionProfileModelAssignment = z
   .object({
     execution_profile_id: ConfiguredExecutionProfileId,
-    preset_key: NonEmptyString,
-    preset_display_name: NonEmptyString,
-    provider_key: NonEmptyString,
-    model_id: NonEmptyString,
+    preset_key: NullableNonEmptyString,
+    preset_display_name: NullableNonEmptyString,
+    provider_key: NullableNonEmptyString,
+    model_id: NullableNonEmptyString,
   })
   .strict();
 export type ExecutionProfileModelAssignment = z.infer<typeof ExecutionProfileModelAssignment>;
@@ -119,7 +120,7 @@ export type ExecutionProfileModelAssignmentListResponse = z.infer<
 
 export const ExecutionProfileModelAssignmentUpdateRequest = z
   .object({
-    assignments: z.record(NonEmptyString, NonEmptyString),
+    assignments: z.record(NonEmptyString, NullableNonEmptyString),
   })
   .strict();
 export type ExecutionProfileModelAssignmentUpdateRequest = z.infer<
@@ -134,7 +135,7 @@ export type ExecutionProfileModelAssignmentUpdateResponse = z.infer<
 
 export const ModelConfigDeleteRequest = z
   .object({
-    replacement_assignments: z.record(NonEmptyString, NonEmptyString).optional(),
+    replacement_assignments: z.record(NonEmptyString, NullableNonEmptyString).optional(),
   })
   .strict();
 export type ModelConfigDeleteRequest = z.infer<typeof ModelConfigDeleteRequest>;

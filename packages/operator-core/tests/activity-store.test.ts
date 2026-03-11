@@ -333,6 +333,7 @@ describe("activityStore", () => {
         catalog_freshness: null,
         queue_depth: null,
         sandbox: null,
+        config_health: { status: "ok", issues: [] },
         session_lanes: [
           {
             key: "agent:alpha:main",

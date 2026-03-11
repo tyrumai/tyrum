@@ -23,7 +23,7 @@ describe("ExecutionProfileModelAssignmentDal", () => {
 
     const dal = new ExecutionProfileModelAssignmentDal(txDb);
     await expect(
-      dal.upsertManyTx({
+      dal.setManyTx({
         tenantId: "tenant-1",
         assignments: [
           {
@@ -37,5 +37,41 @@ describe("ExecutionProfileModelAssignmentDal", () => {
     expect(runs).toHaveLength(1);
     expect(runs[0]?.sql).toContain("INSERT INTO execution_profile_model_assignments");
     expect(runs[0]?.params.slice(0, 3)).toEqual(["tenant-1", "interaction", "preset-a"]);
+  });
+
+  it("deletes assignment rows when a profile is set to None", async () => {
+    const runs: Array<{ sql: string; params: readonly unknown[] }> = [];
+
+    const txDb: SqlDb = {
+      kind: "sqlite",
+      get: async () => undefined,
+      all: async () => [],
+      run: async (sql, params = []) => {
+        runs.push({ sql, params });
+        return { changes: 1 };
+      },
+      exec: async () => {},
+      transaction: async () => {
+        throw new Error("nested transaction should not be opened");
+      },
+      close: async () => {},
+    };
+
+    const dal = new ExecutionProfileModelAssignmentDal(txDb);
+    await expect(
+      dal.setManyTx({
+        tenantId: "tenant-1",
+        assignments: [
+          {
+            executionProfileId: "interaction",
+            presetKey: null,
+          },
+        ],
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(runs).toHaveLength(1);
+    expect(runs[0]?.sql).toContain("DELETE FROM execution_profile_model_assignments");
+    expect(runs[0]?.params).toEqual(["tenant-1", "interaction"]);
   });
 });

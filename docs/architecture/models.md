@@ -38,14 +38,17 @@ Operators configure **providers** and **model presets** in the control plane:
 
 - A provider can have multiple configured accounts.
 - A model preset points to one discovered `provider/model` and applies curated options such as `reasoning_effort`.
-- Built-in execution profiles are assigned to configured presets.
+- Built-in execution profiles can be assigned to configured presets or left unset (`None`).
 
 At runtime, Tyrum resolves models in this order:
 
 1. Session preset override (`/model <preset_key>`).
 2. Session raw model override (legacy compatibility).
 3. Execution-profile preset assignment.
-4. Legacy bootstrap fallback when no preset assignment exists.
+4. Agent primary model.
+5. Agent fallback chain.
+
+Tyrum no longer seeds bootstrap provider accounts, model presets, or execution-profile assignments on first launch. If no configured candidate is available, runtime resolution fails closed with a configuration error instead of silently selecting a default model.
 
 ## Fallback
 
@@ -77,3 +80,5 @@ Model selection emits events that include:
 - rotations, cooldowns, and fallback decisions
 
 Operator surfaces (`/status`, `/usage`, Configure > Providers, Configure > Models) expose the active model/provider, account state, and provider usage where available (see [Observability](./observability.md)).
+
+`/status` also exposes `config_health`, which reports operator-facing configuration issues such as missing provider accounts, missing presets, unset execution profiles, or agents without a primary model.

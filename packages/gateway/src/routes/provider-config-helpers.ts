@@ -11,9 +11,8 @@ import {
 } from "../modules/models/provider-config-registry.js";
 import type { SecretProvider } from "../modules/secret/provider.js";
 import type { ModelCatalogService } from "../modules/models/model-catalog-service.js";
-import { coerceString } from "../modules/util/coerce.js";
 
-export type ReplacementAssignments = Record<string, string>;
+export type ReplacementAssignments = Record<string, string | null>;
 
 export const invalidRequest = (c: Context, message: string) =>
   c.json({ error: "invalid_request", message }, 400);
@@ -188,14 +187,12 @@ export async function resolveProviderDeletionRequirements(input: {
   if (requiredExecutionProfileIds.length === 0) {
     return {
       deletedPresetKeys,
-      replacementAssignments: [] as Array<{ executionProfileId: string; presetKey: string }>,
+      replacementAssignments: [] as Array<{ executionProfileId: string; presetKey: string | null }>,
     };
   }
 
   const replacements = input.replacementAssignments ?? {};
-  const missing = requiredExecutionProfileIds.filter(
-    (profileId) => !coerceString(replacements[profileId]),
-  );
+  const missing = requiredExecutionProfileIds.filter((profileId) => !(profileId in replacements));
   if (missing.length > 0) {
     return {
       deletedPresetKeys,
@@ -211,6 +208,12 @@ export async function resolveProviderDeletionRequirements(input: {
   const presetsByKey = new Map(allPresets.map((preset) => [preset.preset_key, preset]));
   const replacementAssignmentsResult = requiredExecutionProfileIds.map((executionProfileId) => {
     const presetKey = replacements[executionProfileId];
+    if (presetKey === null) {
+      return {
+        executionProfileId,
+        presetKey: null,
+      };
+    }
     const preset = presetKey ? presetsByKey.get(presetKey) : undefined;
     if (!preset || deletedPresetKeys.has(preset.preset_key)) {
       throw new Error(`replacement preset '${presetKey ?? ""}' is invalid`);

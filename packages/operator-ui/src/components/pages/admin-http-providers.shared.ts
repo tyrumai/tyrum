@@ -33,7 +33,7 @@ export type ProviderFormState = {
 export type ProviderDeleteDialogState = {
   group: ConfiguredProviderGroup;
   requiredExecutionProfileIds: string[];
-  replacementAssignments: Record<string, string>;
+  replacementAssignments: Record<string, string | null>;
   candidatePresets: ModelPreset[];
 } | null;
 

@@ -5,24 +5,43 @@ import { NormalizedContainerKind, NormalizedMessageEnvelope } from "./message.js
 import { MemorySensitivity } from "./memory.js";
 import { canonicalizeToolIdList } from "./tool-id.js";
 
-export const AgentModelConfig = z.object({
-  model: z
-    .string()
-    .trim()
-    .min(1)
-    .regex(/^[^/\s]+\/.+$/, "model must be in provider/model format"),
-  variant: z.string().trim().min(1).optional(),
-  options: z.record(z.string(), z.unknown()).optional(),
-  fallback: z
-    .array(
-      z
-        .string()
-        .trim()
-        .min(1)
-        .regex(/^[^/\s]+\/.+$/, "fallback model must be in provider/model format"),
-    )
-    .optional(),
-});
+const ProviderModelId = z
+  .string()
+  .trim()
+  .min(1)
+  .regex(/^[^/\s]+\/.+$/, "model must be in provider/model format");
+
+export const AgentModelConfig = z
+  .object({
+    model: ProviderModelId.nullable(),
+    variant: z.string().trim().min(1).optional(),
+    options: z.record(z.string(), z.unknown()).optional(),
+    fallback: z.array(ProviderModelId).optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.model !== null) return;
+    if (value.variant) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "variant requires a primary model",
+        path: ["variant"],
+      });
+    }
+    if (value.options && Object.keys(value.options).length > 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "model options require a primary model",
+        path: ["options"],
+      });
+    }
+    if (value.fallback && value.fallback.length > 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "fallback models require a primary model",
+        path: ["fallback"],
+      });
+    }
+  });
 export type AgentModelConfig = z.infer<typeof AgentModelConfig>;
 
 export const AgentSkillConfig = z.object({

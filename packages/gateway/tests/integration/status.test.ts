@@ -24,5 +24,12 @@ describe("GET /status", () => {
     expect(body["session_lanes"]).toBeInstanceOf(Array);
     expect(body["queue_depth"]).toBeTypeOf("object");
     expect(body["sandbox"]).toBeTypeOf("object");
+    expect(body["config_health"]).toBeTypeOf("object");
+    expect((body["config_health"] as { status: string }).status).toBe("issues");
+    expect(
+      (body["config_health"] as { issues: Array<{ code: string }> }).issues.some(
+        (issue) => issue.code === "no_provider_accounts",
+      ),
+    ).toBe(true);
   });
 });

@@ -428,7 +428,7 @@ describe("AdminHttpProvidersPanel", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(document.body.textContent).toContain(
-      "Select replacement presets before removing this provider.",
+      "Select replacement presets or None before removing this provider.",
     );
 
     setSelectValue(
@@ -438,6 +438,68 @@ describe("AdminHttpProvidersPanel", () => {
       ),
       "anthropic-default",
     );
+    await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "confirm-danger-confirm"));
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(panel.container.textContent).toContain("No providers configured");
+
+    cleanupPanel(panel);
+  });
+
+  it("accepts the visible None replacement after a provider removal conflict", async () => {
+    const { core, setProviders, setPresets } = createAdminHttpProvidersTestCore({
+      providers: [
+        createProviderGroup("openai", {
+          accounts: [
+            createProviderAccount("openai", {
+              account_id: "00000000-0000-4000-8000-000000000122",
+              display_name: "Primary OpenAI",
+            }),
+          ],
+        }),
+      ],
+      presets: [createPreset("openai"), createPreset("anthropic")],
+    });
+
+    let deleteAttempts = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : "";
+      expect(url).toBe("http://example.test/config/providers/openai");
+      expect(init?.method).toBe("DELETE");
+      deleteAttempts += 1;
+
+      if (deleteAttempts === 1) {
+        expect(init?.body).toBeUndefined();
+        setPresets([createPreset("openai"), createPreset("anthropic")]);
+        return new Response(
+          JSON.stringify({
+            error: "assignment_required",
+            message: "Execution profiles still reference this provider.",
+            required_execution_profile_ids: ["interaction"],
+          }),
+          { status: 409 },
+        );
+      }
+
+      expect(JSON.parse(String(init?.body ?? ""))).toEqual({
+        replacement_assignments: { interaction: null },
+      });
+      setProviders([]);
+      return new Response(JSON.stringify({ status: "ok" }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const panel = await renderAdminHttpProvidersPanel(core);
+
+    click(getButton(panel.container, "Remove provider"));
+    click(getByTestId<HTMLElement>(document.body, "confirm-danger-checkbox"));
+    await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "confirm-danger-confirm"));
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(document.body.textContent).toContain(
+      "Select replacement presets or None before removing this provider.",
+    );
+
     await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "confirm-danger-confirm"));
 
     expect(fetchMock).toHaveBeenCalledTimes(2);

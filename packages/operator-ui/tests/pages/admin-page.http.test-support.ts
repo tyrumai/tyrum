@@ -42,10 +42,10 @@ export type AvailableModelFixture = {
 
 export type ModelAssignmentFixture = {
   execution_profile_id: string;
-  preset_key: string;
-  preset_display_name: string;
-  provider_key: string;
-  model_id: string;
+  preset_key: string | null;
+  preset_display_name: string | null;
+  provider_key: string | null;
+  model_id: string | null;
 };
 
 type ModelConfigMocks = {
@@ -346,7 +346,7 @@ export function createAdminHttpTestCore(): {
           async () =>
             ({
               status: "ok",
-              assignments: createAssignmentsForAllProfiles(createModelPreset()),
+              assignments: createUnassignedAssignmentsForAllProfiles(),
             }) as unknown,
         ),
         updateAssignments: vi.fn(async () => ({ status: "ok", assignments: [] }) as unknown),
@@ -423,14 +423,17 @@ export function createAvailableModel(
 
 export function createModelAssignment(
   executionProfileId: ExecutionProfileId,
-  preset: Pick<ModelPresetFixture, "preset_key" | "display_name" | "provider_key" | "model_id">,
+  preset: Pick<
+    ModelPresetFixture,
+    "preset_key" | "display_name" | "provider_key" | "model_id"
+  > | null,
 ): ModelAssignmentFixture {
   return {
     execution_profile_id: executionProfileId,
-    preset_key: preset.preset_key,
-    preset_display_name: preset.display_name,
-    provider_key: preset.provider_key,
-    model_id: preset.model_id,
+    preset_key: preset?.preset_key ?? null,
+    preset_display_name: preset?.display_name ?? null,
+    provider_key: preset?.provider_key ?? null,
+    model_id: preset?.model_id ?? null,
   };
 }
 
@@ -439,6 +442,12 @@ export function createAssignmentsForAllProfiles(
 ): ModelAssignmentFixture[] {
   return ADMIN_HTTP_EXECUTION_PROFILE_IDS.map((executionProfileId) =>
     createModelAssignment(executionProfileId, preset),
+  );
+}
+
+export function createUnassignedAssignmentsForAllProfiles(): ModelAssignmentFixture[] {
+  return ADMIN_HTTP_EXECUTION_PROFILE_IDS.map((executionProfileId) =>
+    createModelAssignment(executionProfileId, null),
   );
 }
 

@@ -464,6 +464,7 @@ export async function buildStatusPayload(deps: CommandDeps): Promise<{
   session_lanes: unknown;
   queue_depth: unknown;
   sandbox: unknown;
+  config_health: unknown;
 }> {
   const tenantId = resolveTenantId(deps);
   const policy = deps.policyService ? await deps.policyService.getStatus({ tenantId }) : null;
@@ -491,5 +492,6 @@ export async function buildStatusPayload(deps: CommandDeps): Promise<{
     session_lanes: details.session_lanes,
     queue_depth: details.queue_depth,
     sandbox: details.sandbox,
+    config_health: details.config_health,
   };
 }
