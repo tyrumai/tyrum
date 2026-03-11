@@ -308,7 +308,9 @@ export function buildUpdateInput(
   if (isExpirationUnchanged(state, options?.initialExpiresAt)) return input;
   if (state.expirationPreset === "custom") {
     input.expires_at = parseDateTimeLocalValue(state.customExpiresAt) ?? null;
-  } else if (state.expirationPreset !== "never") {
+  } else if (state.expirationPreset === "never") {
+    input.expires_at = null;
+  } else {
     input.expires_at = new Date(
       Date.now() + expirationSeconds(state.expirationPreset) * 1000,
     ).toISOString();
