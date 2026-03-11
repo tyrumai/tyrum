@@ -31,14 +31,6 @@ function parseCreatedBy(raw: string): unknown {
   }
 }
 
-function isRoleDeviceValid(input: {
-  role: "admin" | "client" | "node";
-  deviceId?: string | null;
-}): boolean {
-  if (input.role === "admin") return true;
-  return Boolean(input.deviceId?.trim());
-}
-
 function closeClientsForToken(
   connectionManager: ConnectionManager | undefined,
   tokenId: string,
@@ -160,16 +152,6 @@ export function createAuthTokenRoutes(deps: AuthTokenRouteDeps): Hono {
     }
     if (existing.revoked_at) {
       return c.json({ error: "conflict", message: "revoked tokens cannot be edited" }, 409);
-    }
-
-    const nextRole = parsed.data.role ?? existing.role;
-    const nextDeviceId =
-      typeof parsed.data.device_id === "undefined" ? existing.device_id : parsed.data.device_id;
-    if (!isRoleDeviceValid({ role: nextRole, deviceId: nextDeviceId })) {
-      return c.json(
-        { error: "invalid_request", message: "device_id is required for client and node tokens" },
-        400,
-      );
     }
 
     const updated = await deps.authTokens.updateToken({

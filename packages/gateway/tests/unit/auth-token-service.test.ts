@@ -119,6 +119,29 @@ describe("AuthTokenService", () => {
     expect(issued.row.device_id).toBe(deviceId);
   });
 
+  it("truncates explicit display names from direct service callers", async () => {
+    const svc = new AuthTokenService(db);
+    const displayName = `token-${"x".repeat(140)}`;
+
+    const issued = await svc.issueToken({
+      tenantId: DEFAULT_TENANT_ID,
+      displayName,
+      role: "client",
+      scopes: ["operator.read"],
+    });
+
+    expect(issued.row.display_name).toHaveLength(120);
+    expect(issued.row.display_name).toBe(displayName.slice(0, 120));
+
+    const updated = await svc.updateToken({
+      tokenId: issued.row.token_id,
+      displayName: `renamed-${"y".repeat(140)}`,
+    });
+
+    expect(updated?.display_name).toHaveLength(120);
+    expect(updated?.display_name).toBe(`renamed-${"y".repeat(140)}`.slice(0, 120));
+  });
+
   it("rejects malformed or unknown tokens", async () => {
     const svc = new AuthTokenService(db);
     expect(await svc.authenticate(undefined)).toBeNull();

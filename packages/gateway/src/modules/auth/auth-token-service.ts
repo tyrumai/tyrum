@@ -23,7 +23,7 @@ function normalizeDisplayName(
   input: { role: AuthTokenRole; deviceId?: string | null },
 ): string {
   const trimmed = displayName?.trim();
-  if (trimmed) return trimmed;
+  if (trimmed) return trimmed.slice(0, MAX_AUTH_TOKEN_DISPLAY_NAME_LENGTH);
   const deviceId = input.deviceId?.trim();
   if (deviceId) return deviceId.slice(0, MAX_AUTH_TOKEN_DISPLAY_NAME_LENGTH);
   if (input.role === "admin") return "Admin token";

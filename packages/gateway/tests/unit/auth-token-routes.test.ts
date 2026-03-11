@@ -235,6 +235,68 @@ describe("auth token routes", () => {
     });
   });
 
+  it("allows metadata-only edits for client tokens without device bindings", async () => {
+    const getTokenById = vi.fn(async () => ({
+      token_id: "token-legacy",
+      tenant_id: "11111111-1111-4111-8111-111111111111",
+      display_name: "Legacy client token",
+      role: "client",
+      device_id: null,
+      scopes_json: JSON.stringify(["operator.read"]),
+      secret_salt: "salt",
+      secret_hash: "hash",
+      kdf: "scrypt",
+      issued_at: "2026-03-06T12:00:00.000Z",
+      expires_at: null,
+      revoked_at: null,
+      created_by_json: "{}",
+      created_at: "2026-03-06T12:00:00.000Z",
+      updated_at: "2026-03-06T12:00:00.000Z",
+    }));
+    const updateToken = vi.fn(async () => ({
+      token_id: "token-legacy",
+      tenant_id: "11111111-1111-4111-8111-111111111111",
+      display_name: "Renamed legacy token",
+      role: "client",
+      device_id: null,
+      scopes_json: JSON.stringify(["operator.read"]),
+      secret_salt: "salt",
+      secret_hash: "hash",
+      kdf: "scrypt",
+      issued_at: "2026-03-06T12:00:00.000Z",
+      expires_at: null,
+      revoked_at: null,
+      created_by_json: "{}",
+      created_at: "2026-03-06T12:00:00.000Z",
+      updated_at: "2026-03-07T12:00:00.000Z",
+    }));
+    const app = createApp({ getTokenById, updateToken });
+
+    const res = await app.request("/auth/tokens/token-legacy", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        display_name: "Renamed legacy token",
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(updateToken).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tokenId: "token-legacy",
+        displayName: "Renamed legacy token",
+        deviceId: undefined,
+      }),
+    );
+    expect(await res.json()).toEqual({
+      token: expect.objectContaining({
+        token_id: "token-legacy",
+        display_name: "Renamed legacy token",
+        device_id: null,
+      }),
+    });
+  });
+
   it("returns revoked false when the token is outside the current tenant", async () => {
     const getTokenById = vi.fn(async () => ({
       token_id: "token-1",
