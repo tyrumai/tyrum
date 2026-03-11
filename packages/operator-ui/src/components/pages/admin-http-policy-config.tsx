@@ -106,32 +106,34 @@ export function PolicyConfigSection(props: PolicyConfigSectionProps): React.Reac
           state={formState.tools}
           testIdPrefix="policy-config-tools"
           toolMode={true}
-          onChange={(next) => setFormState({ ...formState, tools: next })}
+          onChange={(next) => setFormState((prev) => (prev ? { ...prev, tools: next } : prev))}
         />
         <DomainEditor
           title="Network egress"
           description="Control outbound network access targets."
           state={formState.networkEgress}
           testIdPrefix="policy-config-network"
-          onChange={(next) => setFormState({ ...formState, networkEgress: next })}
+          onChange={(next) =>
+            setFormState((prev) => (prev ? { ...prev, networkEgress: next } : prev))
+          }
         />
         <DomainEditor
           title="Secrets"
           description="Decide which secret-resolution scopes are allowed, approval-gated, or denied."
           state={formState.secrets}
           testIdPrefix="policy-config-secrets"
-          onChange={(next) => setFormState({ ...formState, secrets: next })}
+          onChange={(next) => setFormState((prev) => (prev ? { ...prev, secrets: next } : prev))}
         />
         <DomainEditor
           title="Connectors"
           description="Control connector and messaging scope access."
           state={formState.connectors}
           testIdPrefix="policy-config-connectors"
-          onChange={(next) => setFormState({ ...formState, connectors: next })}
+          onChange={(next) => setFormState((prev) => (prev ? { ...prev, connectors: next } : prev))}
         />
         <ArtifactsEditor
           state={formState.artifacts}
-          onChange={(next) => setFormState({ ...formState, artifacts: next })}
+          onChange={(next) => setFormState((prev) => (prev ? { ...prev, artifacts: next } : prev))}
         />
         <Card data-testid="policy-config-provenance">
           <CardHeader>
@@ -148,13 +150,17 @@ export function PolicyConfigSection(props: PolicyConfigSectionProps): React.Reac
                 formState.provenance.untrustedShellRequiresApproval ? "require_approval" : "allow"
               }
               onChange={(event) =>
-                setFormState({
-                  ...formState,
-                  provenance: {
-                    untrustedShellRequiresApproval:
-                      event.currentTarget.value === "require_approval",
-                  },
-                })
+                setFormState((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        provenance: {
+                          untrustedShellRequiresApproval:
+                            event.currentTarget.value === "require_approval",
+                        },
+                      }
+                    : prev,
+                )
               }
             >
               <option value="require_approval">Require approval</option>
