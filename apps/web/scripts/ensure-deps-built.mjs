@@ -2,19 +2,15 @@ import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createPackageBuilds } from "../../../scripts/workspace-package-builds.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const APP_ROOT = resolve(__dirname, "..");
 const REPO_ROOT = resolve(APP_ROOT, "../..");
 
 const WORKSPACE_MARKER = resolve(REPO_ROOT, "pnpm-workspace.yaml");
-const REQUIRED_ARTIFACTS = [
-  resolve(REPO_ROOT, "packages/schemas/dist/index.mjs"),
-  resolve(REPO_ROOT, "packages/schemas/dist/jsonschema/catalog.json"),
-  resolve(REPO_ROOT, "packages/client/dist/index.mjs"),
-  resolve(REPO_ROOT, "packages/operator-core/dist/index.mjs"),
-  resolve(REPO_ROOT, "packages/operator-ui/dist/index.mjs"),
-];
+const PACKAGE_BUILDS = createPackageBuilds(REPO_ROOT);
+const REQUIRED_ARTIFACTS = PACKAGE_BUILDS.flatMap((build) => build.outputs);
 
 const isWindows = process.platform === "win32";
 
@@ -37,7 +33,6 @@ if (missing.length === 0) {
   process.exit(0);
 }
 
-runPnpm(["--filter", "@tyrum/schemas", "build"]);
-runPnpm(["--filter", "@tyrum/client", "build"]);
-runPnpm(["--filter", "@tyrum/operator-core", "build"]);
-runPnpm(["--filter", "@tyrum/operator-ui", "build"]);
+for (const build of PACKAGE_BUILDS) {
+  runPnpm(["--filter", build.name, "build"]);
+}
