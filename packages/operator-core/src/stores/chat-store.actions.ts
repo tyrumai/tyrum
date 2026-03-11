@@ -197,6 +197,60 @@ export async function openSession(ctx: ChatStoreContext, sessionId: string): Pro
   }
 }
 
+async function refreshActiveSessionIfCurrent(
+  ctx: ChatStoreContext,
+  input: {
+    agentId: string;
+    sessionId: string;
+    sendRunId?: number;
+  },
+): Promise<void> {
+  const isCurrent = (): boolean => {
+    const snapshot = ctx.store.getSnapshot();
+    return (
+      snapshot.agentId === input.agentId &&
+      snapshot.active.sessionId === input.sessionId &&
+      (input.sendRunId === undefined || ctx.runIds.send === input.sendRunId)
+    );
+  };
+
+  if (!isCurrent()) return;
+
+  try {
+    const res = await ctx.ws.sessionGet({
+      agent_id: input.agentId,
+      session_id: input.sessionId,
+    });
+    if (!isCurrent()) return;
+
+    ctx.setState((prev) => {
+      if (
+        prev.agentId !== input.agentId ||
+        prev.active.sessionId !== input.sessionId ||
+        !prev.active.session ||
+        (input.sendRunId !== undefined && ctx.runIds.send !== input.sendRunId)
+      ) {
+        return prev;
+      }
+
+      const session = {
+        ...res.session,
+        transcript: mergeFetchedTranscript(prev.active.session.transcript, res.session.transcript),
+      };
+      return {
+        ...prev,
+        active: {
+          ...prev.active,
+          session,
+          activeToolCallIds: activeToolCallIdsForSession(session),
+        },
+      };
+    });
+  } catch {
+    // Intentional: keep the current transcript if the post-send reload fails.
+  }
+}
+
 export async function newChat(ctx: ChatStoreContext): Promise<void> {
   ctx.setState((prev) => ({ ...prev, sessions: { ...prev.sessions, error: null } }));
   const expectedAgentId = ctx.store.getSnapshot().agentId;
@@ -256,10 +310,15 @@ export async function sendMessage(
       ...(input?.attachedNodeId ? { attached_node_id: input.attachedNodeId } : {}),
     } as Parameters<ChatStoreContext["ws"]["sessionSend"]>[0] & { client_message_id?: string };
     payload.client_message_id = clientMessageId;
-    const reply = await ctx.ws.sessionSend(payload);
-    void reply;
+    await ctx.ws.sessionSend(payload);
 
     if (runId !== ctx.runIds.send) return;
+
+    await refreshActiveSessionIfCurrent(ctx, {
+      agentId: expectedAgentId,
+      sessionId: expectedSessionId,
+      sendRunId: runId,
+    });
 
     if (ctx.store.getSnapshot().agentId === expectedAgentId) {
       await refreshSessions(ctx);
