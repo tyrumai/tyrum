@@ -42,9 +42,9 @@ describe("Memory v1 migrations (postgres)", () => {
     const { Client } = mem.adapters.createPg();
     const pg = new Client();
     await pg.connect();
-    const pre126Dir = copyMigrationsBefore(postgresMigrationsDir, "126_");
+    const pre127Dir = copyMigrationsBefore(postgresMigrationsDir, "127_");
     try {
-      await migratePostgres(pg, pre126Dir);
+      await migratePostgres(pg, pre127Dir);
       await pg.query(
         `INSERT INTO auth_tokens (
            token_id,
@@ -71,12 +71,12 @@ describe("Memory v1 migrations (postgres)", () => {
       await applyPostgresMigration(
         pg,
         postgresMigrationsDir,
-        "126_auth_tokens_display_name_updated_at.sql",
+        "127_auth_tokens_display_name_updated_at.sql",
       );
       await applyPostgresMigration(
         pg,
         postgresMigrationsDir,
-        "127_auth_tokens_display_name_max_length.sql",
+        "128_auth_tokens_display_name_max_length.sql",
       );
 
       const result = await pg.query(
