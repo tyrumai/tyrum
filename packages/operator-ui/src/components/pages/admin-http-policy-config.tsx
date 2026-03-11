@@ -50,16 +50,26 @@ export function PolicyConfigSection(props: PolicyConfigSectionProps): React.Reac
   const [saveOpen, setSaveOpen] = React.useState(false);
   const [revertReason, setRevertReason] = React.useState("");
   const [revertTarget, setRevertTarget] = React.useState<PolicyConfigRevision | null>(null);
+  const skipNextPropBundleSignatureRef = React.useRef<string | null>(null);
 
-  const applyBundleToEditor = React.useCallback((bundle: PolicyBundleT): void => {
+  const applyBundleToEditor = React.useCallback((bundle: PolicyBundleT): string => {
     const normalizedBundle = normalizePolicyBundle(bundle);
+    const normalizedSignature = stringifyPolicyBundle(normalizedBundle);
     setFormState(policyBundleToFormState(normalizedBundle));
     setInitialBundle(normalizedBundle);
+    return normalizedSignature;
   }, []);
 
   React.useEffect(() => {
     if (!props.effective) return;
-    applyBundleToEditor(props.currentRevision?.bundle ?? EMPTY_POLICY_BUNDLE);
+    const deploymentBundle = props.currentRevision?.bundle ?? EMPTY_POLICY_BUNDLE;
+    const deploymentBundleSignature = stringifyPolicyBundle(deploymentBundle);
+    if (skipNextPropBundleSignatureRef.current === deploymentBundleSignature) {
+      skipNextPropBundleSignatureRef.current = null;
+      setSaveReason("");
+      return;
+    }
+    applyBundleToEditor(deploymentBundle);
     setSaveReason("");
   }, [applyBundleToEditor, props.currentRevision, props.effective]);
 
@@ -258,7 +268,7 @@ export function PolicyConfigSection(props: PolicyConfigSectionProps): React.Reac
         isLoading={props.saveBusy}
         onConfirm={async () => {
           await props.onSave(nextBundle, saveReason);
-          applyBundleToEditor(nextBundle);
+          skipNextPropBundleSignatureRef.current = applyBundleToEditor(nextBundle);
           setSaveReason("");
         }}
       >
