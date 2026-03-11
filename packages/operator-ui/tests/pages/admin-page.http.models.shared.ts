@@ -175,6 +175,16 @@ export function createAssignmentsForAllProfiles(
   );
 }
 
+export function createUnassignedAssignmentsForAllProfiles(): ModelAssignmentFixture[] {
+  return ADMIN_HTTP_EXECUTION_PROFILE_IDS.map((executionProfileId) => ({
+    execution_profile_id: executionProfileId,
+    preset_key: null,
+    preset_display_name: null,
+    provider_key: null,
+    model_id: null,
+  }));
+}
+
 export function stubModelsFetch(input: ModelsFetchStubInput): ReturnType<typeof vi.fn> {
   let deleteAttempt = 0;
   const fetchMock = vi.fn(async (requestInput: RequestInfo | URL, init?: RequestInit) => {
