@@ -182,6 +182,92 @@ export function createFakeHttpClient(): {
   );
   const agentListGet = vi.fn(async () => ({ agents: [{ agent_key: "default" }] }) as const);
   const agentStatusGet = vi.fn(async () => sampleAgentStatusResponse());
+  const policyGetBundle = vi.fn(
+    async () =>
+      ({
+        status: "ok",
+        generated_at: "2026-03-01T00:00:00.000Z",
+        effective: {
+          sha256: "policy-sha-1",
+          bundle: {
+            v: 1,
+            tools: { default: "require_approval", allow: ["read"], require_approval: [], deny: [] },
+            network_egress: {
+              default: "require_approval",
+              allow: [],
+              require_approval: [],
+              deny: [],
+            },
+            secrets: { default: "require_approval", allow: [], require_approval: [], deny: [] },
+            connectors: {
+              default: "require_approval",
+              allow: ["telegram:*"],
+              require_approval: [],
+              deny: [],
+            },
+            artifacts: { default: "allow" },
+            provenance: { untrusted_shell_requires_approval: true },
+          },
+          sources: { deployment: "default", agent: null, playbook: null },
+        },
+      }) as const,
+  );
+  const policyListOverrides = vi.fn(async () => ({ overrides: [] }) as const);
+  const policyCreateOverride = vi.fn(async () => ({ override: {} }) as const);
+  const policyRevokeOverride = vi.fn(async () => ({ override: {} }) as const);
+  const policyConfigGetDeployment = vi.fn(async () => {
+    throw new Error("not found");
+  });
+  const policyConfigListDeploymentRevisions = vi.fn(async () => ({ revisions: [] }) as const);
+  const policyConfigUpdateDeployment = vi.fn(async () => ({ revision: 1 }) as const);
+  const policyConfigRevertDeployment = vi.fn(async () => ({ revision: 2 }) as const);
+  const agentsList = vi.fn(
+    async () =>
+      ({
+        agents: [
+          {
+            agent_id: "00000000-0000-4000-8000-000000000002",
+            agent_key: "default",
+            created_at: "2026-03-01T00:00:00.000Z",
+            updated_at: "2026-03-01T00:00:00.000Z",
+            has_config: true,
+            has_identity: true,
+            can_delete: false,
+            persona: {
+              name: "Default Agent",
+              description: "Primary operator",
+              tone: "Direct",
+              palette: "neutral",
+              character: "operator",
+            },
+          },
+        ],
+      }) as const,
+  );
+  const toolRegistryList = vi.fn(
+    async () =>
+      ({
+        status: "ok",
+        tools: [
+          {
+            source: "builtin",
+            canonical_id: "read",
+            description: "Read files from disk.",
+            risk: "low",
+            requires_confirmation: false,
+            effective_exposure: { enabled: true, reason: "enabled" },
+          },
+          {
+            source: "plugin",
+            canonical_id: "connector.send",
+            description: "Send via a connector.",
+            risk: "medium",
+            requires_confirmation: true,
+            effective_exposure: { enabled: true, reason: "enabled" },
+          },
+        ],
+      }) as const,
+  );
 
   const http: OperatorHttpClient = {
     authTokens: {
@@ -209,6 +295,24 @@ export function createFakeHttpClient(): {
     providerConfig,
     modelConfig,
     extensions,
+    policy: {
+      getBundle: policyGetBundle,
+      listOverrides: policyListOverrides,
+      createOverride: policyCreateOverride,
+      revokeOverride: policyRevokeOverride,
+    },
+    policyConfig: {
+      getDeployment: policyConfigGetDeployment,
+      listDeploymentRevisions: policyConfigListDeploymentRevisions,
+      updateDeployment: policyConfigUpdateDeployment,
+      revertDeployment: policyConfigRevertDeployment,
+    },
+    agents: {
+      list: agentsList,
+    },
+    toolRegistry: {
+      list: toolRegistryList,
+    },
   };
 
   return {
