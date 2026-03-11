@@ -12,7 +12,7 @@ export function registerPairingNodeInventoryTests(): void {
     const ws = new FakeWsClient();
     const { http, pairingsList, nodesList } = createFakeHttpClient();
     const sampleInventory = sampleNodeInventoryResponse();
-    pairingsList.mockResolvedValueOnce({
+    pairingsList.mockResolvedValue({
       status: "ok",
       pairings: [
         {
@@ -80,6 +80,9 @@ export function registerPairingNodeInventoryTests(): void {
     await act(async () => {
       await Promise.resolve();
       await Promise.resolve();
+      await new Promise((resolve) => {
+        setTimeout(resolve, 0);
+      });
     });
 
     expect(nodesList).toHaveBeenCalledWith({
@@ -173,6 +176,9 @@ export function registerPairingNodeInventoryTests(): void {
     await act(async () => {
       await Promise.resolve();
       await Promise.resolve();
+      await new Promise((resolve) => {
+        setTimeout(resolve, 0);
+      });
     });
 
     expect(container.querySelector('[data-testid="pairing-attached-local-1"]')).toBeNull();
@@ -180,6 +186,97 @@ export function registerPairingNodeInventoryTests(): void {
     expect(
       container.querySelector('[data-testid="pairing-card-1"]')?.className ?? "",
     ).not.toContain("border-primary/40");
+
+    act(() => {
+      root?.unmount();
+    });
+    container.remove();
+  });
+
+  it("shows all connected nodes in the live section, including unpaired ones", async () => {
+    const ws = new FakeWsClient();
+    const { http, pairingsList, nodesList } = createFakeHttpClient();
+    const sampleInventory = sampleNodeInventoryResponse();
+    pairingsList.mockResolvedValueOnce({
+      status: "ok",
+      pairings: [
+        {
+          pairing_id: 1,
+          status: "approved",
+          requested_at: "2026-01-01T00:00:00.000Z",
+          node: {
+            node_id: "node-1",
+            label: "trusted node",
+            last_seen_at: "2026-01-01T00:00:00.000Z",
+            capabilities: [],
+          },
+          capability_allowlist: [{ id: "tyrum.cli", version: "1.0.0" }],
+          trust_level: "local",
+          resolution: {
+            decision: "approved",
+            resolved_at: "2026-01-01T00:00:01.000Z",
+            reason: "ok",
+          },
+          resolved_at: "2026-01-01T00:00:01.000Z",
+        },
+      ],
+    });
+    nodesList.mockResolvedValue({
+      ...sampleInventory,
+      nodes: [
+        {
+          ...sampleInventory.nodes[0],
+          node_id: "node-1",
+          label: "trusted node",
+          connected: true,
+          paired_status: "approved",
+        },
+        {
+          ...sampleInventory.nodes[0],
+          node_id: "node-2",
+          label: "new node",
+          connected: true,
+          paired_status: null,
+        },
+      ],
+    });
+
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test"),
+      deviceIdentity: TEST_DEVICE_IDENTITY,
+      deps: { ws, http },
+    });
+
+    act(() => {
+      core.connect();
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    act(() => {
+      root = createRoot(container);
+      root.render(React.createElement(PairingPage, { core }));
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('[data-testid="pairing-connected-section"]')).not.toBeNull();
+    expect(container.textContent).toContain("2 live now");
+    const trustedNode = container.querySelector('[data-testid="pairing-connected-node-node-1"]');
+    const unpairedNode = container.querySelector('[data-testid="pairing-connected-node-node-2"]');
+    expect(trustedNode).not.toBeNull();
+    expect(unpairedNode).not.toBeNull();
+    expect(trustedNode?.textContent).toContain("Trusted");
+    expect(unpairedNode?.textContent).toContain("Unpaired");
+    expect(trustedNode?.textContent).toContain("trusted node");
+    expect(unpairedNode?.textContent).toContain("new node");
 
     act(() => {
       root?.unmount();

@@ -8,6 +8,7 @@ import type { OperatorCore } from "../../../operator-core/src/index.js";
 import { createStore } from "../../../operator-core/src/store.js";
 import type { ActivityState } from "../../../operator-core/src/stores/activity-store.js";
 import { DashboardPage } from "../../src/components/pages/dashboard-page.js";
+import { sampleNodeInventoryResponse } from "../operator-ui.http-fixture-data.js";
 import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
 
 const emptyActivityState: ActivityState = {
@@ -32,6 +33,7 @@ function createMockCore(overrides?: Partial<Record<string, unknown>>) {
   const { store: connectionStore, setState: setConnectionState } = createStore({
     status: "disconnected" as string,
     clientId: null,
+    recovering: false,
     lastDisconnect: null,
     transportError: null,
   });
@@ -79,6 +81,7 @@ function createMockCore(overrides?: Partial<Record<string, unknown>>) {
   });
 
   const activityStore = createMockActivityStore();
+  const nodesList = vi.fn(async () => sampleNodeInventoryResponse());
 
   const core = {
     connectionStore,
@@ -88,10 +91,15 @@ function createMockCore(overrides?: Partial<Record<string, unknown>>) {
     runsStore,
     workboardStore,
     activityStore,
+    http: {
+      nodes: {
+        list: nodesList,
+      },
+    },
     ...overrides,
   } as unknown as OperatorCore;
 
-  return { core, setConnectionState };
+  return { core, setConnectionState, nodesList };
 }
 
 describe("DashboardPage", () => {
@@ -215,6 +223,65 @@ describe("DashboardPage", () => {
 
     const banner = container.querySelector('[role="alert"]');
     expect(banner).not.toBeNull();
+
+    cleanupTestRoot({ container, root });
+  });
+
+  it("counts connected nodes from live node inventory instead of presence entries", async () => {
+    const liveInventory = sampleNodeInventoryResponse();
+    const { store: statusStore } = createStore({
+      status: { version: "1.0.0", db_kind: "sqlite", sandbox: false },
+      usage: null,
+      presenceByInstanceId: {
+        gateway: { instance_id: "gateway", role: "gateway", last_seen_at: "2026-03-08T00:00:00Z" },
+        client: { instance_id: "client", role: "client", last_seen_at: "2026-03-08T00:00:00Z" },
+        "node-1": { instance_id: "node-1", role: "node", last_seen_at: "2026-03-08T00:00:00Z" },
+        "node-2": { instance_id: "node-2", role: "node", last_seen_at: "2026-03-08T00:00:00Z" },
+      },
+      loading: { status: false, usage: false, presence: false },
+      error: { status: null, usage: null, presence: null },
+      lastSyncedAt: "2026-03-08T00:00:00.000Z",
+    });
+    const { core, setConnectionState } = createMockCore({
+      statusStore,
+      http: {
+        nodes: {
+          list: vi.fn(async () => ({
+            ...liveInventory,
+            nodes: [
+              {
+                ...liveInventory.nodes[0],
+                node_id: "node-1",
+                connected: true,
+              },
+              {
+                ...liveInventory.nodes[0],
+                node_id: "node-2",
+                connected: true,
+                paired_status: null,
+              },
+            ],
+          })),
+        },
+      },
+    });
+
+    act(() => {
+      setConnectionState((prev) => ({ ...prev, status: "connected" }));
+    });
+
+    const { container, root } = renderIntoDocument(React.createElement(DashboardPage, { core }));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const connectedNodesRow = container.querySelector(
+      '[data-testid="dashboard-card-connected-nodes"]',
+    );
+    expect(connectedNodesRow?.textContent).toContain("Connected nodes");
+    expect(connectedNodesRow?.textContent).toContain("2");
 
     cleanupTestRoot({ container, root });
   });

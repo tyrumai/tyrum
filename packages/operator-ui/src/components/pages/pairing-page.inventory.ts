@@ -11,6 +11,7 @@ type ActiveChatSession = {
 };
 
 type PairingPageNodeInventoryState = {
+  nodes: NodeInventoryEntry[];
   byNodeId: Record<string, NodeInventoryEntry>;
   loading: boolean;
   error: string | null;
@@ -32,15 +33,16 @@ function buildSessionKey(session: ActiveChatSession | null): string | null {
   }
 }
 
-export function usePairingPageNodeInventory(input: {
+export function useNodeInventory(input: {
   core: OperatorCore;
   connected: boolean;
-  activeSession: ActiveChatSession | null;
+  activeSession?: ActiveChatSession | null;
   refreshAt: string | null;
 }): PairingPageNodeInventoryState {
   const { core, connected, activeSession, refreshAt } = input;
-  const key = useMemo(() => buildSessionKey(activeSession), [activeSession]);
+  const key = useMemo(() => buildSessionKey(activeSession ?? null), [activeSession]);
   const [state, setState] = useState<PairingPageNodeInventoryState>({
+    nodes: [],
     byNodeId: {},
     loading: false,
     error: null,
@@ -51,7 +53,7 @@ export function usePairingPageNodeInventory(input: {
     let cancelled = false;
 
     if (!connected) {
-      setState({ byNodeId: {}, loading: false, error: null, key });
+      setState({ nodes: [], byNodeId: {}, loading: false, error: null, key });
       return;
     }
 
@@ -68,11 +70,18 @@ export function usePairingPageNodeInventory(input: {
         for (const node of response.nodes) {
           byNodeId[node.node_id] = node;
         }
-        setState({ byNodeId, loading: false, error: null, key });
+        setState({
+          nodes: response.nodes,
+          byNodeId,
+          loading: false,
+          error: null,
+          key,
+        });
       })
       .catch((error) => {
         if (cancelled) return;
         setState({
+          nodes: [],
           byNodeId: {},
           loading: false,
           error: formatErrorMessage(error),
