@@ -64,11 +64,13 @@ export function createMobileLocationBeaconStream(
   let activeConfig: MobileLocationStreamingConfig | null = null;
   let watchId: Awaited<ReturnType<typeof Geolocation.watchPosition>> | null = null;
   let lastSentSample: SentSample | null = null;
+  let lastQueuedSample: SentSample | null = null;
   let sendChain: Promise<void> = Promise.resolve();
 
   const stop = async (): Promise<void> => {
     activeConfig = null;
     lastSentSample = null;
+    lastQueuedSample = null;
     if (!watchId) {
       return;
     }
@@ -103,9 +105,10 @@ export function createMobileLocationBeaconStream(
       recordedAtMs: position.timestamp,
       coords: mapLocationCoords(position.coords),
     };
-    if (!shouldSendSample(activeConfig, nextSample, lastSentSample)) {
+    if (!shouldSendSample(activeConfig, nextSample, lastQueuedSample)) {
       return;
     }
+    lastQueuedSample = nextSample;
 
     sendChain = sendChain
       .catch(() => {})
@@ -113,7 +116,14 @@ export function createMobileLocationBeaconStream(
         if (!activeConfig || isBackgroundBlocked(activeConfig)) {
           return;
         }
-        await emitBeacon(nextSample);
+        try {
+          await emitBeacon(nextSample);
+        } catch (sendError) {
+          if (lastQueuedSample === nextSample) {
+            lastQueuedSample = lastSentSample;
+          }
+          throw sendError;
+        }
       })
       .catch(() => {});
   };

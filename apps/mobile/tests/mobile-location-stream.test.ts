@@ -137,4 +137,41 @@ describe("createMobileLocationBeaconStream", () => {
 
     expect(clearWatchMock).toHaveBeenCalledWith({ id: "watch-1" });
   });
+
+  it("does not queue duplicate nearby beacons while the previous beacon is still in flight", async () => {
+    let resolveBeacon: (() => void) | null = null;
+    const locationBeacon = vi
+      .fn<() => Promise<{ sample: object; events: never[] }>>()
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveBeacon = () => resolve({ sample: {}, events: [] });
+          }),
+      )
+      .mockResolvedValue({ sample: {}, events: [] });
+    const { createMobileLocationBeaconStream } = await import("../src/mobile-location-stream.js");
+    const stream = createMobileLocationBeaconStream({
+      client: { locationBeacon } as never,
+    });
+
+    await stream.start({
+      streamEnabled: true,
+      distanceFilterM: 100,
+      maxIntervalMs: 900_000,
+      maxAccuracyM: 100,
+      backgroundEnabled: true,
+    });
+
+    emit(buildPosition(52.3676, 4.9041, "2026-03-11T12:00:00Z"));
+    await flushMicrotasks();
+    expect(locationBeacon).toHaveBeenCalledTimes(1);
+
+    emit(buildPosition(52.36761, 4.90411, "2026-03-11T12:00:05Z"));
+    await flushMicrotasks();
+    expect(locationBeacon).toHaveBeenCalledTimes(1);
+
+    resolveBeacon?.();
+    await flushMicrotasks();
+    expect(locationBeacon).toHaveBeenCalledTimes(1);
+  });
 });
