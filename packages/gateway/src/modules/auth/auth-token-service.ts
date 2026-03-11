@@ -360,7 +360,7 @@ function normalizeProvisionedTokens(
         tenant_id: entry.tenantId,
         device_id: entry.deviceId?.trim() || undefined,
         role: entry.role,
-        scopes: normalizeScopes(entry.scopes),
+        scopes: normalizeRoleScopes(entry.role, entry.scopes),
         issued_at: issuedAt,
       },
     });

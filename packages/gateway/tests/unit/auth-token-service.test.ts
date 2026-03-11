@@ -175,7 +175,7 @@ describe("AuthTokenService", () => {
         token_id: "provisioned-default-tenant-admin",
         tenant_id: DEFAULT_TENANT_ID,
         role: "admin",
-        scopes: ["*"],
+        scopes: [],
       }),
     );
     expect(await svc.countActiveTenantAdminTokens(DEFAULT_TENANT_ID)).toBe(1);

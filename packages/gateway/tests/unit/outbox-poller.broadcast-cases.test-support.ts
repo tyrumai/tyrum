@@ -80,10 +80,12 @@ function badScopesClient(key = "bad"): ClientSpec {
 function adminClient({
   id,
   key,
+  scopes = ["*"],
   tokenId,
 }: {
   id?: string;
   key: string;
+  scopes?: string[];
   tokenId: string;
 }): ClientSpec {
   return {
@@ -96,7 +98,7 @@ function adminClient({
         token_id: tokenId,
         tenant_id: DEFAULT_TENANT_ID,
         role: "admin",
-        scopes: ["*"],
+        scopes,
       },
     },
   };
@@ -212,10 +214,13 @@ export const authAuditCases = [
     expectedSilent: ["bad"],
   },
   {
-    name: "delivers auth audit events to admin-token clients",
+    name: "delivers auth audit events to admin-token clients even without wildcard scopes",
     createScenario: () =>
       createBroadcastScenario({
-        clients: [adminClient({ key: "admin", tokenId: "token-admin-1" }), plainClient()],
+        clients: [
+          adminClient({ key: "admin", tokenId: "token-admin-1", scopes: [] }),
+          plainClient(),
+        ],
         payload: {
           message: createAuthAuditMessage({ type: "authz.denied" }),
         },
