@@ -40,7 +40,7 @@ export function useNodeInventory(input: {
   refreshAt: string | null;
 }): PairingPageNodeInventoryState {
   const { core, connected, activeSession, refreshAt } = input;
-  const key = useMemo(() => buildSessionKey(activeSession), [activeSession]);
+  const key = useMemo(() => buildSessionKey(activeSession ?? null), [activeSession]);
   const [state, setState] = useState<PairingPageNodeInventoryState>({
     nodes: [],
     byNodeId: {},
