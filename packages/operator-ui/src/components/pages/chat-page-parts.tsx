@@ -9,7 +9,7 @@ import type { ResolveApprovalInput } from "@tyrum/operator-core";
 import { ChevronLeft, Copy, Hammer, Send, ShieldCheck, Trash2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { cn } from "../../lib/cn.js";
 import { formatRelativeTime } from "../../utils/format-relative-time.js";
@@ -230,10 +230,19 @@ function ChatReasoningItem({
   item: ChatReasoningItem;
   mode: Exclude<ReasoningDisplayMode, "hidden">;
 }) {
+  const [open, setOpen] = useState(mode === "expanded");
+
+  useEffect(() => {
+    setOpen(mode === "expanded");
+  }, [mode]);
+
   return (
     <details
       className="rounded-xl border border-border/70 bg-bg-subtle/30 px-4 py-3"
-      open={mode === "expanded"}
+      open={open}
+      onToggle={(event) => {
+        setOpen(event.currentTarget.open);
+      }}
     >
       <summary className="cursor-pointer text-sm font-medium text-fg-muted">
         Model reasoning
