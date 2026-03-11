@@ -593,7 +593,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          yes | sdkmanager --licenses >/dev/null
+          (yes 2>/dev/null || true) | sdkmanager --licenses >/dev/null
           sdkmanager "platform-tools" "build-tools;36.0.0" "platforms;android-36"
 
       - run: pnpm install --frozen-lockfile

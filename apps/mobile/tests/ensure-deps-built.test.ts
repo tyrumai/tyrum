@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { createPackageBuilds } from "../scripts/ensure-deps-built.shared.mjs";
+import { createPackageBuilds } from "../../../scripts/workspace-package-builds.mjs";
 
 describe("createPackageBuilds", () => {
   it("treats upstream dist outputs as downstream freshness inputs", () => {
