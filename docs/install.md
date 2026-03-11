@@ -76,7 +76,7 @@ If you lose the token later, recover by issuing a fresh one against the same gat
 tyrum tokens issue-default-tenant-admin
 ```
 
-After login, open `Configure -> Tokens` to list tenant tokens, mint new ones, and revoke by token ID. Existing token secrets are not readable from the UI because the gateway stores token secrets hashed at rest; only freshly issued tokens are shown once in the issue result.
+After login, open `Configure -> Tokens` to manage tenant tokens with a filterable list, structured add/edit/revoke dialogs, and one-time secret reveal on creation. Existing token secrets are not readable from the UI because the gateway stores token secrets hashed at rest; only freshly issued tokens are shown once in the issue result.
 
 Singleton agent routes are enabled by default.
 

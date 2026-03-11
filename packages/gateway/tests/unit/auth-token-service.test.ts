@@ -31,7 +31,7 @@ describe("AuthTokenService", () => {
         token_id: issued.row.token_id,
         tenant_id: DEFAULT_TENANT_ID,
         role: "admin",
-        scopes: ["*"],
+        scopes: [],
       }),
     );
   });
@@ -60,6 +60,47 @@ describe("AuthTokenService", () => {
 
     expect(await svc.authenticate(issued.token, { expectedDeviceId: "dev_client_2" })).toBeNull();
     expect(await svc.authenticate(issued.token, { expectedRole: "admin" })).toBeNull();
+  });
+
+  it("derives display names and supports in-place token updates", async () => {
+    const svc = new AuthTokenService(db);
+    const issued = await svc.issueToken({
+      tenantId: DEFAULT_TENANT_ID,
+      role: "client",
+      deviceId: "dev_client_1",
+      scopes: ["operator.read"],
+    });
+
+    expect(issued.row.display_name).toBe("dev_client_1");
+    expect(issued.row.updated_at).toBe(issued.row.issued_at);
+
+    const updated = await svc.updateToken({
+      tokenId: issued.row.token_id,
+      displayName: "Operator token",
+      role: "admin",
+      deviceId: null,
+      scopes: ["operator.read", "operator.admin"],
+      expiresAt: null,
+    });
+
+    expect(updated).toEqual(
+      expect.objectContaining({
+        token_id: issued.row.token_id,
+        display_name: "Operator token",
+        role: "admin",
+        device_id: null,
+        scopes_json: JSON.stringify([]),
+      }),
+    );
+
+    const claims = await svc.authenticate(issued.token);
+    expect(claims).toEqual(
+      expect.objectContaining({
+        token_kind: "admin",
+        role: "admin",
+        scopes: [],
+      }),
+    );
   });
 
   it("rejects malformed or unknown tokens", async () => {

@@ -5,6 +5,7 @@ export type AuthTokenRole = "admin" | "client" | "node";
 export interface AuthTokenRow {
   token_id: string;
   tenant_id: string | null;
+  display_name: string;
   role: AuthTokenRole;
   device_id: string | null;
   scopes_json: string;
@@ -16,11 +17,13 @@ export interface AuthTokenRow {
   revoked_at: string | null;
   created_by_json: string;
   created_at: string;
+  updated_at: string;
 }
 
 export interface AuthTokenListRow {
   token_id: string;
   tenant_id: string | null;
+  display_name: string;
   role: AuthTokenRole;
   device_id: string | null;
   scopes_json: string;
@@ -29,11 +32,13 @@ export interface AuthTokenListRow {
   revoked_at: string | null;
   created_by_json: string;
   created_at: string;
+  updated_at: string;
 }
 
 interface RawAuthTokenRow {
   token_id: string;
   tenant_id: string | null;
+  display_name: string;
   role: string;
   device_id: string | null;
   scopes_json: string;
@@ -45,11 +50,13 @@ interface RawAuthTokenRow {
   revoked_at: string | Date | null;
   created_by_json: string;
   created_at: string | Date;
+  updated_at: string | Date;
 }
 
 interface RawAuthTokenListRow {
   token_id: string;
   tenant_id: string | null;
+  display_name: string;
   role: string;
   device_id: string | null;
   scopes_json: string;
@@ -58,6 +65,7 @@ interface RawAuthTokenListRow {
   revoked_at: string | Date | null;
   created_by_json: string;
   created_at: string | Date;
+  updated_at: string | Date;
 }
 
 function normalizeTime(value: string | Date | null | undefined): string | null {
@@ -80,6 +88,7 @@ function toRow(raw: RawAuthTokenRow): AuthTokenRow {
   return {
     token_id: raw.token_id,
     tenant_id: raw.tenant_id,
+    display_name: raw.display_name,
     role: normalizeRole(raw.role),
     device_id: raw.device_id,
     scopes_json: raw.scopes_json,
@@ -91,6 +100,7 @@ function toRow(raw: RawAuthTokenRow): AuthTokenRow {
     revoked_at: normalizeTime(raw.revoked_at),
     created_by_json: raw.created_by_json,
     created_at: normalizeTime(raw.created_at) ?? new Date().toISOString(),
+    updated_at: normalizeTime(raw.updated_at) ?? new Date().toISOString(),
   };
 }
 
@@ -98,6 +108,7 @@ function toListRow(raw: RawAuthTokenListRow): AuthTokenListRow {
   return {
     token_id: raw.token_id,
     tenant_id: raw.tenant_id,
+    display_name: raw.display_name,
     role: normalizeRole(raw.role),
     device_id: raw.device_id,
     scopes_json: raw.scopes_json,
@@ -106,6 +117,7 @@ function toListRow(raw: RawAuthTokenListRow): AuthTokenListRow {
     revoked_at: normalizeTime(raw.revoked_at),
     created_by_json: raw.created_by_json,
     created_at: normalizeTime(raw.created_at) ?? new Date().toISOString(),
+    updated_at: normalizeTime(raw.updated_at) ?? new Date().toISOString(),
   };
 }
 
@@ -117,6 +129,7 @@ export class AuthTokenDal {
       `SELECT
          token_id,
          tenant_id,
+         display_name,
          role,
          device_id,
          scopes_json,
@@ -124,11 +137,13 @@ export class AuthTokenDal {
          expires_at,
          revoked_at,
          created_by_json,
-         created_at
+         created_at,
+         updated_at
        FROM auth_tokens
        WHERE tenant_id = ?
        ORDER BY
          CASE WHEN revoked_at IS NULL THEN 0 ELSE 1 END ASC,
+         updated_at DESC,
          issued_at DESC,
          created_at DESC`,
       [tenantId],
@@ -141,6 +156,7 @@ export class AuthTokenDal {
       `SELECT
          token_id,
          tenant_id,
+         display_name,
          role,
          device_id,
          scopes_json,
@@ -151,7 +167,8 @@ export class AuthTokenDal {
          expires_at,
          revoked_at,
          created_by_json,
-         created_at
+         created_at,
+         updated_at
        FROM auth_tokens
        WHERE token_id = ?
        LIMIT 1`,
@@ -163,6 +180,7 @@ export class AuthTokenDal {
   async insert(input: {
     tokenId: string;
     tenantId: string | null;
+    displayName: string;
     role: AuthTokenRole;
     deviceId?: string | null;
     scopesJson: string;
@@ -173,11 +191,13 @@ export class AuthTokenDal {
     expiresAt?: string | null;
     createdByJson?: string;
     createdAt: string;
+    updatedAt: string;
   }): Promise<AuthTokenRow> {
     const row = await this.db.get<RawAuthTokenRow>(
       `INSERT INTO auth_tokens (
          token_id,
          tenant_id,
+         display_name,
          role,
          device_id,
          scopes_json,
@@ -187,11 +207,13 @@ export class AuthTokenDal {
          issued_at,
          expires_at,
          created_by_json,
-         created_at
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         created_at,
+         updated_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        RETURNING
          token_id,
          tenant_id,
+         display_name,
          role,
          device_id,
          scopes_json,
@@ -202,10 +224,12 @@ export class AuthTokenDal {
          expires_at,
          revoked_at,
          created_by_json,
-         created_at`,
+         created_at,
+         updated_at`,
       [
         input.tokenId,
         input.tenantId,
+        input.displayName,
         input.role,
         input.deviceId ?? null,
         input.scopesJson,
@@ -216,12 +240,60 @@ export class AuthTokenDal {
         input.expiresAt ?? null,
         input.createdByJson ?? "{}",
         input.createdAt,
+        input.updatedAt,
       ],
     );
     if (!row) {
       throw new Error("auth_tokens insert failed");
     }
     return toRow(row);
+  }
+
+  async updateById(input: {
+    tokenId: string;
+    displayName: string;
+    role: AuthTokenRole;
+    deviceId?: string | null;
+    scopesJson: string;
+    expiresAt?: string | null;
+    updatedAt: string;
+  }): Promise<AuthTokenRow | undefined> {
+    const row = await this.db.get<RawAuthTokenRow>(
+      `UPDATE auth_tokens
+       SET display_name = ?,
+           role = ?,
+           device_id = ?,
+           scopes_json = ?,
+           expires_at = ?,
+           updated_at = ?
+       WHERE token_id = ? AND revoked_at IS NULL
+       RETURNING
+         token_id,
+         tenant_id,
+         display_name,
+         role,
+         device_id,
+         scopes_json,
+         secret_salt,
+         secret_hash,
+         kdf,
+         issued_at,
+         expires_at,
+         revoked_at,
+         created_by_json,
+         created_at,
+         updated_at`,
+      [
+        input.displayName,
+        input.role,
+        input.deviceId ?? null,
+        input.scopesJson,
+        input.expiresAt ?? null,
+        input.updatedAt,
+        input.tokenId,
+      ],
+    );
+    return row ? toRow(row) : undefined;
   }
 
   async revoke(tokenId: string, nowIso: string): Promise<boolean> {

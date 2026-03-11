@@ -57,6 +57,7 @@ function createCore(activeAdminMode: boolean): {
       authTokens: {
         list: vi.fn(async () => ({ tokens: [] })),
         issue: vi.fn(async () => ({ status: "ok" })),
+        update: vi.fn(async () => ({ token: {} })),
         revoke: vi.fn(async () => ({ revoked: true })),
       },
       authProfiles: {

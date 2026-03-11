@@ -142,6 +142,7 @@ export function createFakeHttpClient(): {
   http: OperatorHttpClient;
   authTokensList: ReturnType<typeof vi.fn>;
   authTokensIssue: ReturnType<typeof vi.fn>;
+  authTokensUpdate: ReturnType<typeof vi.fn>;
   authTokensRevoke: ReturnType<typeof vi.fn>;
   deviceTokensIssue: ReturnType<typeof vi.fn>;
   deviceTokensRevoke: ReturnType<typeof vi.fn>;
@@ -157,7 +158,8 @@ export function createFakeHttpClient(): {
   agentStatusGet: ReturnType<typeof vi.fn>;
   modelAssignmentsUpdate: ReturnType<typeof vi.fn>;
 } {
-  const { authTokensList, authTokensIssue, authTokensRevoke } = createAuthTokenHttpFixtures();
+  const { authTokensList, authTokensIssue, authTokensUpdate, authTokensRevoke } =
+    createAuthTokenHttpFixtures();
   const { deviceTokensIssue, deviceTokensRevoke } = createDeviceTokenHttpFixtures();
   const providerConfig = createProviderConfigHttpFixtures();
   const { modelConfig, modelAssignmentsUpdate } = createModelConfigHttpFixtures();
@@ -185,6 +187,7 @@ export function createFakeHttpClient(): {
     authTokens: {
       list: authTokensList,
       issue: authTokensIssue,
+      update: authTokensUpdate,
       revoke: authTokensRevoke,
     },
     deviceTokens: {
@@ -212,6 +215,7 @@ export function createFakeHttpClient(): {
     http,
     authTokensList,
     authTokensIssue,
+    authTokensUpdate,
     authTokensRevoke,
     deviceTokensIssue,
     deviceTokensRevoke,

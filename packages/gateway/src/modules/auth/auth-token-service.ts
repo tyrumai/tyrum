@@ -17,6 +17,23 @@ function normalizeScopes(scopes: string[] | undefined): string[] {
   return [...new Set(normalized)];
 }
 
+function normalizeDisplayName(
+  displayName: string | undefined,
+  input: { role: AuthTokenRole; deviceId?: string | null },
+): string {
+  const trimmed = displayName?.trim();
+  if (trimmed) return trimmed;
+  const deviceId = input.deviceId?.trim();
+  if (deviceId) return deviceId;
+  if (input.role === "admin") return "Admin token";
+  if (input.role === "node") return "Node token";
+  return "Client token";
+}
+
+function normalizeRoleScopes(role: AuthTokenRole, scopes: string[] | undefined): string[] {
+  return role === "admin" ? [] : normalizeScopes(scopes);
+}
+
 function parseScopesJson(raw: string): string[] {
   try {
     const parsed = JSON.parse(raw) as unknown;
@@ -169,6 +186,7 @@ export class AuthTokenService {
 
   async issueToken(input: {
     tenantId: string | null;
+    displayName?: string;
     role: AuthTokenRole;
     scopes?: string[];
     deviceId?: string;
@@ -190,10 +208,15 @@ export class AuthTokenService {
     const salt = randomBytes(16);
 
     const hash = deriveScryptHash(secret, salt);
-    const scopes = normalizeScopes(input.scopes);
+    const displayName = normalizeDisplayName(input.displayName, {
+      role: input.role,
+      deviceId: input.deviceId,
+    });
+    const scopes = normalizeRoleScopes(input.role, input.scopes);
     const row = await this.dal.insert({
       tokenId,
       tenantId: input.tenantId,
+      displayName,
       role: input.role,
       deviceId: input.deviceId?.trim() || null,
       scopesJson: JSON.stringify(scopes),
@@ -204,12 +227,47 @@ export class AuthTokenService {
       expiresAt,
       createdByJson: input.createdByJson,
       createdAt: issuedAt,
+      updatedAt: issuedAt,
     });
 
     return {
       token: formatToken({ tokenId, secretB64Url }),
       row,
     };
+  }
+
+  async updateToken(input: {
+    tokenId: string;
+    displayName?: string;
+    role?: AuthTokenRole;
+    deviceId?: string | null;
+    scopes?: string[];
+    expiresAt?: string | null;
+  }): Promise<AuthTokenRow | undefined> {
+    const current = await this.getTokenById(input.tokenId);
+    if (!current || current.revoked_at) return undefined;
+
+    const role = input.role ?? current.role;
+    const deviceId =
+      typeof input.deviceId === "undefined" ? current.device_id : (input.deviceId?.trim() ?? null);
+    const displayName = normalizeDisplayName(input.displayName ?? current.display_name, {
+      role,
+      deviceId,
+    });
+    const scopes = normalizeRoleScopes(
+      role,
+      typeof input.scopes === "undefined" ? parseScopesJson(current.scopes_json) : input.scopes,
+    );
+
+    return await this.dal.updateById({
+      tokenId: current.token_id,
+      displayName,
+      role,
+      deviceId,
+      scopesJson: JSON.stringify(scopes),
+      expiresAt: typeof input.expiresAt === "undefined" ? current.expires_at : input.expiresAt,
+      updatedAt: new Date().toISOString(),
+    });
   }
 
   async revokeToken(tokenId: string): Promise<boolean> {

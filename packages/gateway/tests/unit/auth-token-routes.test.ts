@@ -7,8 +7,10 @@ function createApp(overrides?: {
   tenantId?: string;
   listTenantTokens?: ReturnType<typeof vi.fn>;
   issueToken?: ReturnType<typeof vi.fn>;
+  updateToken?: ReturnType<typeof vi.fn>;
   getTokenById?: ReturnType<typeof vi.fn>;
   revokeToken?: ReturnType<typeof vi.fn>;
+  connectionManager?: { closeClientsForTokenId: ReturnType<typeof vi.fn> };
 }) {
   const app = new Hono();
   app.use("*", async (c, next) => {
@@ -33,16 +35,23 @@ function createApp(overrides?: {
             row: {
               token_id: "token-id",
               tenant_id: "11111111-1111-4111-8111-111111111111",
+              display_name: "Client token",
               role: "client",
               device_id: "device-1",
               scopes_json: JSON.stringify(["operator.read"]),
               issued_at: "2026-03-06T12:00:00.000Z",
               expires_at: "2026-04-05T12:00:00.000Z",
+              revoked_at: null,
+              created_by_json: "{}",
+              created_at: "2026-03-06T12:00:00.000Z",
+              updated_at: "2026-03-06T12:00:00.000Z",
             },
           })),
+        updateToken: overrides?.updateToken ?? vi.fn(async () => undefined),
         getTokenById: overrides?.getTokenById ?? vi.fn(async () => undefined),
         revokeToken: overrides?.revokeToken ?? vi.fn(async () => false),
       } as never,
+      connectionManager: overrides?.connectionManager as never,
     }),
   );
   return app;
@@ -54,6 +63,7 @@ describe("auth token routes", () => {
       {
         token_id: "token-1",
         tenant_id: "11111111-1111-4111-8111-111111111111",
+        display_name: "Admin token",
         role: "admin",
         device_id: null,
         scopes_json: JSON.stringify(["*"]),
@@ -68,6 +78,7 @@ describe("auth token routes", () => {
           issued_by: "admin-token-id",
         }),
         created_at: "2026-03-06T12:00:00.000Z",
+        updated_at: "2026-03-06T12:00:00.000Z",
       },
     ]);
     const app = createApp({ listTenantTokens });
@@ -82,7 +93,9 @@ describe("auth token routes", () => {
     expect(body.tokens).toHaveLength(1);
     expect(body.tokens[0]).toMatchObject({
       token_id: "token-1",
+      display_name: "Admin token",
       role: "admin",
+      updated_at: "2026-03-06T12:00:00.000Z",
       created_by: {
         kind: "http.auth_token.issue",
         issued_by: "admin-token-id",
@@ -98,11 +111,16 @@ describe("auth token routes", () => {
       row: {
         token_id: "token-id",
         tenant_id: "11111111-1111-4111-8111-111111111111",
+        display_name: "Admin token",
         role: "admin",
         device_id: null,
         scopes_json: JSON.stringify(["*"]),
         issued_at: "2026-03-06T12:00:00.000Z",
         expires_at: null,
+        revoked_at: null,
+        created_by_json: "{}",
+        created_at: "2026-03-06T12:00:00.000Z",
+        updated_at: "2026-03-06T12:00:00.000Z",
       },
     }));
     const app = createApp({ issueToken });
@@ -126,6 +144,97 @@ describe("auth token routes", () => {
     );
   });
 
+  it("updates tenant tokens in place and evicts matching websocket clients", async () => {
+    const getTokenById = vi
+      .fn()
+      .mockResolvedValueOnce({
+        token_id: "token-1",
+        tenant_id: "11111111-1111-4111-8111-111111111111",
+        display_name: "Old token",
+        role: "client",
+        device_id: "device-1",
+        scopes_json: JSON.stringify(["operator.read"]),
+        secret_salt: "salt",
+        secret_hash: "hash",
+        kdf: "scrypt",
+        issued_at: "2026-03-06T12:00:00.000Z",
+        expires_at: null,
+        revoked_at: null,
+        created_by_json: "{}",
+        created_at: "2026-03-06T12:00:00.000Z",
+        updated_at: "2026-03-06T12:00:00.000Z",
+      })
+      .mockResolvedValueOnce({
+        token_id: "token-1",
+        tenant_id: "11111111-1111-4111-8111-111111111111",
+        display_name: "Operator token",
+        role: "client",
+        device_id: "device-2",
+        scopes_json: JSON.stringify(["operator.read", "operator.write"]),
+        secret_salt: "salt",
+        secret_hash: "hash",
+        kdf: "scrypt",
+        issued_at: "2026-03-06T12:00:00.000Z",
+        expires_at: null,
+        revoked_at: null,
+        created_by_json: "{}",
+        created_at: "2026-03-06T12:00:00.000Z",
+        updated_at: "2026-03-07T12:00:00.000Z",
+      });
+    const updateToken = vi.fn(async () => ({
+      token_id: "token-1",
+      tenant_id: "11111111-1111-4111-8111-111111111111",
+      display_name: "Operator token",
+      role: "client",
+      device_id: "device-2",
+      scopes_json: JSON.stringify(["operator.read", "operator.write"]),
+      secret_salt: "salt",
+      secret_hash: "hash",
+      kdf: "scrypt",
+      issued_at: "2026-03-06T12:00:00.000Z",
+      expires_at: null,
+      revoked_at: null,
+      created_by_json: "{}",
+      created_at: "2026-03-06T12:00:00.000Z",
+      updated_at: "2026-03-07T12:00:00.000Z",
+    }));
+    const closeClientsForTokenId = vi.fn();
+    const app = createApp({
+      getTokenById,
+      updateToken,
+      connectionManager: { closeClientsForTokenId },
+    });
+
+    const res = await app.request("/auth/tokens/token-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        display_name: "Operator token",
+        device_id: "device-2",
+        scopes: ["operator.read", "operator.write"],
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(updateToken).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tokenId: "token-1",
+        displayName: "Operator token",
+        deviceId: "device-2",
+        scopes: ["operator.read", "operator.write"],
+      }),
+    );
+    expect(closeClientsForTokenId).toHaveBeenCalledWith("token-1", { reason: "token updated" });
+    expect(await res.json()).toEqual({
+      token: expect.objectContaining({
+        token_id: "token-1",
+        display_name: "Operator token",
+        device_id: "device-2",
+        updated_at: "2026-03-07T12:00:00.000Z",
+      }),
+    });
+  });
+
   it("returns revoked false when the token is outside the current tenant", async () => {
     const getTokenById = vi.fn(async () => ({
       token_id: "token-1",
@@ -143,5 +252,29 @@ describe("auth token routes", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ revoked: false });
     expect(revokeToken).not.toHaveBeenCalled();
+  });
+
+  it("evicts matching websocket clients when a tenant token is revoked", async () => {
+    const getTokenById = vi.fn(async () => ({
+      token_id: "token-1",
+      tenant_id: "11111111-1111-4111-8111-111111111111",
+    }));
+    const revokeToken = vi.fn(async () => true);
+    const closeClientsForTokenId = vi.fn();
+    const app = createApp({
+      getTokenById,
+      revokeToken,
+      connectionManager: { closeClientsForTokenId },
+    });
+
+    const res = await app.request("/auth/tokens/revoke", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token_id: "token-1" }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ revoked: true, token_id: "token-1" });
+    expect(closeClientsForTokenId).toHaveBeenCalledWith("token-1", { reason: "token revoked" });
   });
 });

@@ -395,6 +395,56 @@ For device tokens, each WS request `type` is scope-checked via `packages/gateway
   - `200` JSON `{ status: "ok", cleared: boolean }` (clear when `profile_id: null`)
   - `400`, `401`, `403`
 
+### Tenant tokens
+
+These routes manage tenant-scoped auth tokens used by the operator UI and other admin tooling.
+Responses expose metadata only; token secrets are returned once at creation time and are not
+readable later.
+
+#### GET /auth/tokens
+
+- Auth: Admin token required
+- Availability: Only when gateway auth is enabled (TokenStore is wired)
+- Request: None
+- Response:
+  - `200` JSON `AuthTokenListResponse`
+  - Each token item includes `display_name`, `updated_at`, timestamps, role, device binding, and scopes
+  - `403` if admin token is missing/invalid
+
+#### POST /auth/tokens/issue
+
+- Auth: Admin token required
+- Availability: Only when gateway auth is enabled (TokenStore is wired)
+- Request: JSON `TenantAuthTokenIssueRequest`
+  - `display_name` is optional for compatibility; when omitted the gateway derives one from the device ID or role
+- Response:
+  - `201` JSON `AuthTokenIssueResponse`
+  - Includes the one-time token secret plus `display_name` and `updated_at`
+  - `403` if admin token is missing/invalid
+  - `400` invalid request
+
+#### PATCH /auth/tokens/:tokenId
+
+- Auth: Admin token required
+- Availability: Only when gateway auth is enabled (TokenStore is wired)
+- Request: JSON `AuthTokenUpdateRequest`
+- Response:
+  - `200` JSON `AuthTokenUpdateResponse`
+  - `404` token not found / outside current tenant
+  - `409` revoked tokens cannot be edited
+  - `403` if admin token is missing/invalid
+  - `400` invalid request
+
+#### POST /auth/tokens/revoke
+
+- Auth: Admin token required
+- Availability: Only when gateway auth is enabled (TokenStore is wired)
+- Request: JSON `AuthTokenRevokeRequest`
+- Response:
+  - `200` JSON `AuthTokenRevokeResponse`
+  - `403` if admin token is missing/invalid
+  - `400` invalid request
+
 ### Device tokens
 
 #### POST /auth/device-tokens/issue

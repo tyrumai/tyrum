@@ -8,6 +8,7 @@ describe("AuthTokenDal", () => {
       {
         token_id: "token-1",
         tenant_id: "11111111-1111-4111-8111-111111111111",
+        display_name: "Admin token",
         role: "admin",
         device_id: null,
         scopes_json: JSON.stringify(["*"]),
@@ -16,6 +17,7 @@ describe("AuthTokenDal", () => {
         revoked_at: null,
         created_by_json: "{}",
         created_at: "2026-03-01T00:00:00.000Z",
+        updated_at: "2026-03-01T00:00:00.000Z",
       },
     ]);
     const db = {
@@ -30,6 +32,7 @@ describe("AuthTokenDal", () => {
       {
         token_id: "token-1",
         tenant_id: "11111111-1111-4111-8111-111111111111",
+        display_name: "Admin token",
         role: "admin",
         device_id: null,
         scopes_json: JSON.stringify(["*"]),
@@ -38,6 +41,7 @@ describe("AuthTokenDal", () => {
         revoked_at: null,
         created_by_json: "{}",
         created_at: "2026-03-01T00:00:00.000Z",
+        updated_at: "2026-03-01T00:00:00.000Z",
       },
     ]);
 

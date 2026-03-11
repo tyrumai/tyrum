@@ -51,6 +51,8 @@ export type {
   AuthTokenIssueResult,
   AuthTokenRevokeInput,
   AuthTokenRevokeResult,
+  AuthTokenUpdateInput,
+  AuthTokenUpdateResult,
 } from "./auth-tokens.js";
 export type { ContractCatalog, ContractJsonSchema } from "./contracts.js";
 export type { PolicyBundleResponse } from "./policy.js";

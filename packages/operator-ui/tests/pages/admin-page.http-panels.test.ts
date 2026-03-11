@@ -7,7 +7,7 @@ import { createElevatedModeStore } from "../../../operator-core/src/stores/eleva
 import { ElevatedModeProvider } from "../../src/elevated-mode.js";
 import { ConfigurePage } from "../../src/components/pages/configure-page.js";
 import { ThemeProvider } from "../../src/hooks/use-theme.js";
-import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
+import { cleanupTestRoot, renderIntoDocument, setNativeValue } from "../test-utils.js";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -64,11 +64,14 @@ function createCore(activeAdminMode: boolean): {
           token: "tyrum-token.v1.token-id.secret",
           token_id: "token-1",
           tenant_id: "11111111-1111-4111-8111-111111111111",
+          display_name: "Operator UI",
           role: "client",
           device_id: "operator-ui",
           scopes: [],
           issued_at: "2026-03-01T00:00:00.000Z",
+          updated_at: "2026-03-01T00:00:00.000Z",
         })),
+        update: vi.fn(async () => ({ token: {} })),
         revoke: vi.fn(async () => ({ revoked: true, token_id: "token-1" })),
       },
       authProfiles: {
@@ -334,10 +337,12 @@ describe("ConfigurePage (strict admin tabs)", () => {
             token: "tyrum-token.v1.token-id.secret",
             token_id: "dev_test_id",
             tenant_id: "11111111-1111-4111-8111-111111111111",
+            display_name: "Operator token",
             device_id: "operator-ui",
             role: "client",
             scopes: [],
             issued_at: "2026-03-01T00:00:00.000Z",
+            updated_at: "2026-03-01T00:00:00.000Z",
           }),
           { status: 201 },
         );
@@ -371,16 +376,28 @@ describe("ConfigurePage (strict admin tabs)", () => {
         await Promise.resolve();
       });
 
-      const checkbox = document.body.querySelector<HTMLButtonElement>(
-        "[data-testid='confirm-danger-checkbox']",
+      const dialog = document.body.querySelector<HTMLElement>(
+        "[data-testid='admin-http-token-dialog']",
       );
-      expect(checkbox).not.toBeNull();
-      act(() => {
-        checkbox?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      expect(dialog).not.toBeNull();
+
+      const nameLabel = Array.from(dialog?.querySelectorAll<HTMLLabelElement>("label") ?? []).find(
+        (label) => label.textContent?.includes("Name"),
+      );
+      const nameInput = nameLabel
+        ? (document.getElementById(nameLabel.htmlFor) as HTMLInputElement | null)
+        : null;
+      expect(nameInput).not.toBeNull();
+
+      await act(async () => {
+        if (nameInput) {
+          setNativeValue(nameInput, "Operator token");
+        }
+        await Promise.resolve();
       });
 
       const confirmButton = document.body.querySelector<HTMLButtonElement>(
-        "[data-testid='confirm-danger-confirm']",
+        "[data-testid='admin-http-token-dialog-save']",
       );
       expect(confirmButton).not.toBeNull();
 
@@ -402,17 +419,18 @@ describe("ConfigurePage (strict admin tabs)", () => {
 
       const bodyRaw = String(init?.body ?? "");
       expect(JSON.parse(bodyRaw)).toEqual({
+        display_name: "Operator token",
         role: "client",
-        scopes: [],
+        scopes: ["operator.read"],
         device_id: "operator-ui",
-        ttl_seconds: 600,
+        ttl_seconds: 86400,
       });
     } finally {
       cleanupTestRoot(testRoot);
     }
   });
 
-  it("shows expired tenant tokens as expired and disables revoke", async () => {
+  it("shows expired tenant tokens as expired and keeps revoke available", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-03-01T00:00:00.000Z"));
 
@@ -427,6 +445,7 @@ describe("ConfigurePage (strict admin tabs)", () => {
               {
                 token_id: "expired-token",
                 tenant_id: "11111111-1111-4111-8111-111111111111",
+                display_name: "Expired token",
                 role: "client",
                 device_id: "operator-ui",
                 scopes: ["operator.read"],
@@ -434,6 +453,7 @@ describe("ConfigurePage (strict admin tabs)", () => {
                 expires_at: "2026-02-28T23:59:59.000Z",
                 revoked_at: null,
                 created_at: "2026-02-01T00:00:00.000Z",
+                updated_at: "2026-02-01T00:00:00.000Z",
               },
             ],
           }),
@@ -464,7 +484,7 @@ describe("ConfigurePage (strict admin tabs)", () => {
         "[data-testid='admin-http-token-revoke-expired-token']",
       );
       expect(revokeButton).not.toBeNull();
-      expect(revokeButton?.disabled).toBe(true);
+      expect(revokeButton?.disabled).toBe(false);
     } finally {
       cleanupTestRoot(testRoot);
       vi.useRealTimers();

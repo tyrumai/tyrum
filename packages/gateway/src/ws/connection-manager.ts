@@ -146,6 +146,38 @@ export class ConnectionManager {
     this.updateWsConnectionsActive();
   }
 
+  closeClientsForTokenId(
+    tokenId: string,
+    opts?: {
+      code?: number;
+      reason?: string;
+    },
+  ): void {
+    const normalizedTokenId = tokenId.trim();
+    if (!normalizedTokenId) return;
+
+    let changed = false;
+    for (const [id, client] of this.clients) {
+      if (client.auth_claims?.token_id !== normalizedTokenId) continue;
+      try {
+        client.ws.close(opts?.code ?? 4001, opts?.reason ?? "token invalidated");
+      } catch (_closeErr) {
+        void _closeErr;
+        try {
+          client.ws.terminate();
+        } catch (_terminateErr) {
+          void _terminateErr;
+        }
+      }
+      this.clients.delete(id);
+      changed = true;
+    }
+
+    if (changed) {
+      this.updateWsConnectionsActive();
+    }
+  }
+
   /** Return the first connected client that advertises the given capability. */
   getClientForCapability(capability: ClientCapability): ConnectedClient | undefined {
     for (const client of this.clients.values()) {

@@ -53,8 +53,34 @@ export function createHarnessConfigureHttpFixtures() {
   return {
     authTokens: {
       list: async () => ({ tokens: [] }),
-      issue: async () => ({ status: "ok" as const, token: "secret" }),
-      revoke: async () => ({ status: "ok" as const }),
+      issue: async () => ({
+        token: "secret",
+        token_id: "token-1",
+        tenant_id: "11111111-1111-4111-8111-111111111111",
+        display_name: "Harness token",
+        role: "client" as const,
+        device_id: "operator-ui",
+        scopes: ["operator.read"],
+        issued_at: "2026-03-01T00:00:00.000Z",
+        updated_at: "2026-03-01T00:00:00.000Z",
+        expires_at: "2026-03-02T00:00:00.000Z",
+      }),
+      update: async () => ({
+        token: {
+          token_id: "token-1",
+          tenant_id: "11111111-1111-4111-8111-111111111111",
+          display_name: "Harness token",
+          role: "client" as const,
+          device_id: "operator-ui",
+          scopes: ["operator.read", "operator.write"],
+          issued_at: "2026-03-01T00:00:00.000Z",
+          expires_at: "2026-03-02T00:00:00.000Z",
+          revoked_at: null,
+          created_at: "2026-03-01T00:00:00.000Z",
+          updated_at: "2026-03-01T01:00:00.000Z",
+        },
+      }),
+      revoke: async () => ({ revoked: true, token_id: "token-1" }),
     },
     deviceTokens: {
       issue: async () => ({ status: "ok" as const, token: "device-token" }),

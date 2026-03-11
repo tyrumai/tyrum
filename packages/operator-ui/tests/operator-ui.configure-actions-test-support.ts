@@ -193,7 +193,7 @@ function registerConfigureActionsModelTests(): void {
     }
   });
 
-  it("shows a friendly error when issuing a device token with an invalid TTL", async () => {
+  it("shows a friendly error when saving a token with an invalid custom expiration", async () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
     const core = createOperatorCore({
@@ -218,16 +218,6 @@ function registerConfigureActionsModelTests(): void {
         root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
       });
       await openConfigureTab(container, "admin-http-tab-gateway");
-      const tokensCard = container.querySelector<HTMLElement>('[data-testid="admin-http-tokens"]');
-      expect(tokensCard).not.toBeNull();
-
-      const ttlInput = tokensCard?.querySelector<HTMLInputElement>('input[type="number"]');
-      expect(ttlInput).not.toBeNull();
-
-      act(() => {
-        setControlledInputValue(ttlInput!, "0");
-      });
-
       const issueButton = container.querySelector<HTMLButtonElement>(
         '[data-testid="admin-http-tokens-issue"]',
       );
@@ -237,31 +227,57 @@ function registerConfigureActionsModelTests(): void {
         issueButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       });
 
-      const checkbox = document.body.querySelector('[data-testid="confirm-danger-checkbox"]');
-      expect(checkbox).not.toBeNull();
-      act(() => {
-        checkbox?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      });
-
-      const confirmButton = document.body.querySelector<HTMLButtonElement>(
-        '[data-testid="confirm-danger-confirm"]',
-      );
-      expect(confirmButton).not.toBeNull();
-      expect(confirmButton?.disabled).toBe(false);
-
-      await act(async () => {
-        confirmButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-        await Promise.resolve();
-      });
-
       const dialog = document.body.querySelector<HTMLElement>(
-        '[data-testid="confirm-danger-dialog"]',
+        '[data-testid="admin-http-token-dialog"]',
       );
       expect(dialog).not.toBeNull();
 
+      const nameLabel = Array.from(dialog?.querySelectorAll<HTMLLabelElement>("label") ?? []).find(
+        (label) => label.textContent?.includes("Name"),
+      );
+      const nameInput = nameLabel
+        ? (document.getElementById(nameLabel.htmlFor) as HTMLInputElement | null)
+        : null;
+      expect(nameInput).not.toBeNull();
+
+      const expirationLabel = Array.from(
+        dialog?.querySelectorAll<HTMLLabelElement>("label") ?? [],
+      ).find((label) => label.textContent?.includes("Expiration"));
+      const expirationSelect = expirationLabel
+        ? (document.getElementById(expirationLabel.htmlFor) as HTMLSelectElement | null)
+        : null;
+      expect(expirationSelect).not.toBeNull();
+
+      await act(async () => {
+        setControlledInputValue(nameInput!, "Broken token");
+        expirationSelect!.value = "custom";
+        expirationSelect!.dispatchEvent(new Event("change", { bubbles: true }));
+        await Promise.resolve();
+      });
+
+      const expirationInput = dialog?.querySelector<HTMLInputElement>(
+        'input[type="datetime-local"]',
+      );
+      expect(expirationInput).not.toBeNull();
+
+      await act(async () => {
+        setControlledInputValue(expirationInput!, "2026-02-28T00:00");
+        await Promise.resolve();
+      });
+
+      const saveButton = document.body.querySelector<HTMLButtonElement>(
+        '[data-testid="admin-http-token-dialog-save"]',
+      );
+      expect(saveButton).not.toBeNull();
+
+      await act(async () => {
+        saveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await Promise.resolve();
+      });
+
       const alert = dialog?.querySelector('[role="alert"]');
-      expect(alert?.textContent).toContain("Action failed");
-      expect(alert?.textContent).toContain("TTL must be a positive integer");
+      expect(alert?.textContent).toContain("Unable to save token");
+      expect(alert?.textContent).toContain("Expiration must be in the future");
     } finally {
       act(() => {
         root?.unmount();
