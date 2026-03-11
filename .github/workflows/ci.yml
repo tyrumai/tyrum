@@ -56,6 +56,7 @@ jobs:
             ci:
               - "packages/**"
               - "apps/desktop/**"
+              - "apps/mobile/**"
               - "apps/web/**"
               - "apps/docs/**"
               - "config/**"
@@ -519,6 +520,99 @@ jobs:
           else
             pnpm exec vitest run apps/desktop/tests --passWithNoTests
           fi
+
+  mobile-native-ios:
+    name: Mobile Native iOS (macos-latest)
+    needs: [changes, validation]
+    if: needs.validation.result == 'success' && (needs.changes.outputs.ci == 'true' || needs.changes.outputs.deps == 'true')
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Configure node-gyp to use local headers (macOS)
+        shell: bash
+        run: |
+          set -euo pipefail
+          node_prefix="$(dirname "$(dirname "$(command -v node)")")"
+          echo "npm_config_nodedir=$node_prefix" >> "$GITHUB_ENV"
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Typecheck mobile app
+        run: pnpm --filter @tyrum/mobile typecheck
+
+      - name: Test mobile app
+        run: pnpm --filter @tyrum/mobile test
+
+      - name: Sync native iOS project
+        run: pnpm --filter @tyrum/mobile ios:sync
+
+      - name: Verify tracked iOS scaffolding is current
+        shell: bash
+        run: git diff --exit-code -- apps/mobile/ios
+
+      - name: Build iOS simulator target
+        run: pnpm --filter @tyrum/mobile exec node ./scripts/build-ios.mjs
+
+  mobile-native-android:
+    name: Mobile Native Android (ubuntu-latest)
+    needs: [changes, validation]
+    if: needs.validation.result == 'success' && (needs.changes.outputs.ci == 'true' || needs.changes.outputs.deps == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          yes | sdkmanager --licenses >/dev/null
+          sdkmanager "platform-tools" "build-tools;36.0.0" "platforms;android-36"
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Typecheck mobile app
+        run: pnpm --filter @tyrum/mobile typecheck
+
+      - name: Test mobile app
+        run: pnpm --filter @tyrum/mobile test
+
+      - name: Sync native Android project
+        run: pnpm --filter @tyrum/mobile android:sync
+
+      - name: Verify tracked Android scaffolding is current
+        shell: bash
+        run: git diff --exit-code -- apps/mobile/android
+
+      - name: Build Android debug APK
+        run: pnpm --filter @tyrum/mobile exec node ./scripts/build-android.mjs
 
   reference-deployment-smoke:
     name: Reference Deployment Smoke (Docker)
