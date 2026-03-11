@@ -58,7 +58,7 @@ export function ConfirmDangerDialog({
   };
 
   const submit = async (): Promise<void> => {
-    if (!confirmed || busy) return;
+    if (!confirmed || busy || confirmDisabled) return;
     setSubmitting(true);
     setErrorMessage(null);
     try {
