@@ -1,7 +1,6 @@
 import { TyrumHttpClientError } from "@tyrum/client/browser";
 import type { OperatorCore } from "@tyrum/operator-core";
 import * as React from "react";
-import { Alert } from "../ui/alert.js";
 import type { AdminHttpClient } from "./admin-http-shared.js";
 import { useAdminHttpClient } from "./admin-http-shared.js";
 import {
@@ -157,15 +156,6 @@ export function AdminHttpPolicyCard({
 
   return (
     <div className="grid gap-6" data-testid="admin-http-policy">
-      {loadError && !effective ? (
-        <Alert
-          variant="error"
-          title="Policy tab failed to load"
-          description={String(
-            loadError instanceof Error ? loadError.message : (loadError ?? "Unknown policy error"),
-          )}
-        />
-      ) : null}
       <PolicyConfigSection
         effective={effective}
         currentRevision={currentRevision}

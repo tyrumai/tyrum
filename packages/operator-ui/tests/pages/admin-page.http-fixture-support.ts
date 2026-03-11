@@ -1,4 +1,5 @@
 import { vi } from "vitest";
+import { TyrumHttpClientError } from "@tyrum/client/browser";
 import { createElevatedModeStore, type OperatorCore } from "../../../operator-core/src/index.js";
 
 export const TEST_TIMESTAMP = "2026-03-01T00:00:00.000Z";
@@ -107,6 +108,7 @@ export function createUnassignedAssignmentsForAllProfiles(): ModelAssignmentFixt
 export function createAdminHttpTestCore(): {
   core: OperatorCore;
   routingConfigUpdate: ReturnType<typeof vi.fn>;
+  routingConfigRevert: ReturnType<typeof vi.fn>;
   secretsRotate: ReturnType<typeof vi.fn>;
   policyCreateOverride: ReturnType<typeof vi.fn>;
 } {
@@ -120,6 +122,7 @@ export function createAdminHttpTestCore(): {
   });
 
   const routingConfigUpdate = vi.fn(async () => ({ revision: 1, config: { v: 1 } }) as unknown);
+  const routingConfigRevert = vi.fn(async () => ({ revision: 2, config: { v: 1 } }) as unknown);
   const secretsRotate = vi.fn(async () => ({ revoked: true, handle: {} }) as unknown);
   const policyCreateOverride = vi.fn(async () => ({ status: "ok" }) as unknown);
 
@@ -128,10 +131,117 @@ export function createAdminHttpTestCore(): {
     elevatedModeStore,
     http: {
       policy: {
-        getBundle: vi.fn(async () => ({ status: "ok" }) as unknown),
+        getBundle: vi.fn(
+          async () =>
+            ({
+              status: "ok",
+              generated_at: TEST_TIMESTAMP,
+              effective: {
+                sha256: "policy-sha-1",
+                bundle: {
+                  v: 1,
+                  tools: {
+                    default: "require_approval",
+                    allow: ["read"],
+                    require_approval: [],
+                    deny: [],
+                  },
+                  network_egress: {
+                    default: "require_approval",
+                    allow: [],
+                    require_approval: [],
+                    deny: [],
+                  },
+                  secrets: {
+                    default: "require_approval",
+                    allow: [],
+                    require_approval: [],
+                    deny: [],
+                  },
+                  connectors: {
+                    default: "require_approval",
+                    allow: ["telegram:*"],
+                    require_approval: [],
+                    deny: [],
+                  },
+                  artifacts: { default: "allow" },
+                  provenance: { untrusted_shell_requires_approval: true },
+                },
+                sources: {
+                  deployment: "default",
+                  agent: null,
+                  playbook: null,
+                },
+              },
+            }) as unknown,
+        ),
         listOverrides: vi.fn(async () => ({ status: "ok", overrides: [] }) as unknown),
         createOverride: policyCreateOverride,
         revokeOverride: vi.fn(async () => ({ status: "ok" }) as unknown),
+      },
+      policyConfig: {
+        getDeployment: vi.fn(async () => {
+          throw new TyrumHttpClientError("http_error", "not found", {
+            status: 404,
+            error: "not_found",
+          });
+        }),
+        listDeploymentRevisions: vi.fn(async () => ({ revisions: [] }) as unknown),
+        updateDeployment: vi.fn(
+          async (input: { bundle: unknown; reason?: string }) =>
+            ({
+              revision: 1,
+              bundle: input.bundle,
+              created_at: TEST_TIMESTAMP,
+              created_by: { kind: "tenant.token", token_id: "token-1" },
+              reason: input.reason,
+              reverted_from_revision: null,
+            }) as unknown,
+        ),
+        revertDeployment: vi.fn(
+          async (input: { revision: number; reason?: string }) =>
+            ({
+              revision: input.revision + 1,
+              bundle: {
+                v: 1,
+                tools: {
+                  default: "require_approval",
+                  allow: ["read"],
+                  require_approval: [],
+                  deny: [],
+                },
+              },
+              created_at: TEST_TIMESTAMP,
+              created_by: { kind: "tenant.token", token_id: "token-1" },
+              reason: input.reason,
+              reverted_from_revision: input.revision,
+            }) as unknown,
+        ),
+      },
+      agents: {
+        list: vi.fn(
+          async () =>
+            ({
+              agents: [
+                {
+                  agent_id: "00000000-0000-4000-8000-000000000002",
+                  agent_key: "default",
+                  created_at: TEST_TIMESTAMP,
+                  updated_at: TEST_TIMESTAMP,
+                  has_config: true,
+                  has_identity: true,
+                  can_delete: false,
+                  persona: {
+                    name: "Default Agent",
+                    description: "Primary operator",
+                    tone: "Direct",
+                    palette: "neutral",
+                    character: "operator",
+                  },
+                },
+              ],
+            }) as unknown,
+        ),
       },
       authProfiles: {
         list: vi.fn(async () => ({ status: "ok", profiles: [] }) as unknown),
@@ -277,7 +387,7 @@ export function createAdminHttpTestCore(): {
               },
             }) as unknown,
         ),
-        revert: vi.fn(async () => ({ revision: 2, config: { v: 1 } }) as unknown),
+        revert: routingConfigRevert,
       },
       toolRegistry: {
         list: vi.fn(async () => ({
@@ -346,5 +456,5 @@ export function createAdminHttpTestCore(): {
     },
   } as unknown as OperatorCore;
 
-  return { core, routingConfigUpdate, secretsRotate, policyCreateOverride };
+  return { core, routingConfigUpdate, routingConfigRevert, secretsRotate, policyCreateOverride };
 }

@@ -237,6 +237,33 @@ describe("ConfigurePage (HTTP) policy + config", () => {
     cleanupAdminHttpPage(page);
   });
 
+  it("shows the initial policy load failure only once", async () => {
+    const { core } = createAdminHttpTestCore();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input);
+      const method = init?.method ?? "GET";
+      if (method !== "GET") {
+        throw new Error(`Unexpected ${method} request to ${url}`);
+      }
+      if (url === "http://example.test/policy/bundle") {
+        throw new Error("initial policy load failed");
+      }
+      const response = policyPageGetResponse(input, init);
+      if (response) return response;
+      throw new Error(`Unexpected request to ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const page = renderAdminHttpConfigurePage(core);
+    await switchHttpTab(page.container, "admin-http-tab-policy");
+    await flush();
+    await flush();
+
+    expect(page.container.textContent?.match(/Policy tab failed to load/g)).toHaveLength(1);
+
+    cleanupAdminHttpPage(page);
+  });
+
   it("keeps the policy editor visible when refresh fails after an initial successful load", async () => {
     const { core } = createAdminHttpTestCore();
     let policyBundleRequests = 0;
