@@ -1,14 +1,18 @@
+import { Hono } from "hono";
+import type { AppOptions } from "./app.js";
+export { createAppRouteDependencies } from "./app-route-support.js";
 import {
   createClusterWsRouteOptions,
+  createExecutionRouteServices,
   createWsRouteOptions,
-  resolvePlaybooks,
-} from "./app-route-helpers.js";
-import type { AppRouteContext } from "./app-route-types.js";
+} from "./app-route-support.js";
+import type { GatewayContainer } from "./container.js";
 import { createAgentsRoutes } from "./routes/agents.js";
 import { createAgentConfigRoutes } from "./routes/agent-config.js";
 import { createAgentRoutes } from "./routes/agent.js";
 import { createApprovalRoutes } from "./routes/approval.js";
 import { createAutomationScheduleRoutes } from "./routes/automation-schedules.js";
+import { createAutomationTriggerRoutes } from "./routes/automation-triggers.js";
 import { createArtifactRoutes } from "./routes/artifact.js";
 import { createAuditRoutes } from "./routes/audit.js";
 import { createAuthProfileRoutes } from "./routes/auth-profiles.js";
@@ -33,6 +37,7 @@ import { createPlanRoutes } from "./routes/plan.js";
 import { createPlaybookRoutes } from "./routes/playbook.js";
 import { policy } from "./routes/policy.js";
 import { createGatewayConfigRoutes } from "./routes/gateway-config.js";
+import { createLocationRoutes } from "./routes/location.js";
 import { createPolicyBundleRoutes } from "./routes/policy-bundle.js";
 import { createPluginRoutes } from "./routes/plugins.js";
 import { createPresenceRoutes } from "./routes/presence.js";
@@ -49,20 +54,45 @@ import { createUsageRoutes } from "./routes/usage.js";
 import { createWatcherRoutes } from "./routes/watcher.js";
 import { createWorkflowRoutes } from "./routes/workflow.js";
 import { ChannelConfigDal } from "./modules/channels/channel-config-dal.js";
+import type { ChannelThreadDal } from "./modules/channels/thread-dal.js";
 import { TelegramChannelQueue } from "./modules/channels/telegram.js";
 import { TelegramChannelRuntime } from "./modules/channels/telegram-runtime.js";
 import { LifecycleHookConfigDal } from "./modules/hooks/config-dal.js";
-import { PlaybookRunner } from "./modules/playbook/runner.js";
+import type { AuthProfileDal } from "./modules/models/auth-profile-dal.js";
+import type { ConfiguredModelPresetDal } from "./modules/models/configured-model-preset-dal.js";
+import type { ExecutionProfileModelAssignmentDal } from "./modules/models/execution-profile-model-assignment-dal.js";
+import type { RoutingConfigDal } from "./modules/channels/routing-config-dal.js";
 import { isAuthProfilesEnabled } from "./modules/models/auth-profiles-enabled.js";
+import type { SessionProviderPinDal } from "./modules/models/session-pin-dal.js";
 import { gatewayMetrics } from "./modules/observability/metrics.js";
 import { PolicyBundleConfigDal } from "./modules/policy/config-dal.js";
 import { NodeInventoryService } from "./modules/node/inventory-service.js";
 import { NodeCapabilityInspectionService } from "./modules/node/capability-inspection-service.js";
 import { NodeDispatchService } from "./modules/agent/node-dispatch-service.js";
 import { isSharedStateMode, resolveGatewayStateMode } from "./modules/runtime-state/mode.js";
+import type { WsEventDal } from "./modules/ws-event/dal.js";
 
-export { createAppRouteDependencies } from "./app-route-helpers.js";
-export type { AppRouteContext, AppRouteDependencies } from "./app-route-types.js";
+export interface AppRouteDependencies {
+  authProfileDal: AuthProfileDal;
+  pinDal: SessionProviderPinDal;
+  configuredModelPresetDal: ConfiguredModelPresetDal;
+  executionProfileModelAssignmentDal: ExecutionProfileModelAssignmentDal;
+  routingConfigDal: RoutingConfigDal;
+  channelThreadDal: ChannelThreadDal;
+  wsEventDal: WsEventDal;
+}
+
+export interface AppRouteContext {
+  app: Hono;
+  container: GatewayContainer;
+  opts: AppOptions;
+  runtime: { version: string; instanceId: string; role: string; otelEnabled: boolean };
+  isLocalOnly: boolean;
+  wsMaxBufferedBytes?: number;
+  engine: AppOptions["engine"];
+  secretProviderForTenant: AppOptions["secretProviderForTenant"];
+  routeDeps: AppRouteDependencies;
+}
 
 export function registerSystemAndPublicRoutes(context: AppRouteContext): void {
   context.app.route("/", createHealthRoute({ isLocalOnly: context.isLocalOnly }));
@@ -295,6 +325,7 @@ export function registerModelsAndConfigRoutes(context: AppRouteContext): void {
 
 export function registerExecutionAndWorkflowRoutes(context: AppRouteContext): void {
   context.app.route("/", createPlanRoutes(context.container));
+  const { playbookRunner, playbooks, locationService } = createExecutionRouteServices(context);
 
   if (context.engine) {
     context.app.route(
@@ -315,6 +346,8 @@ export function registerExecutionAndWorkflowRoutes(context: AppRouteContext): vo
     }),
   );
   context.app.route("/", createAutomationScheduleRoutes(context.container));
+  context.app.route("/", createAutomationTriggerRoutes(locationService));
+  context.app.route("/", createLocationRoutes(locationService));
 
   context.app.route(
     "/",
@@ -324,14 +357,10 @@ export function registerExecutionAndWorkflowRoutes(context: AppRouteContext): vo
     }),
   );
 
-  const playbookRunner = new PlaybookRunner();
   context.app.route(
     "/",
     createPlaybookRoutes({
-      playbooks: resolvePlaybooks({
-        playbooks: context.opts.playbooks,
-        tyrumHome: context.container.config?.tyrumHome,
-      }),
+      playbooks,
       runner: playbookRunner,
       engine: context.engine,
       policyService: context.container.policyService,

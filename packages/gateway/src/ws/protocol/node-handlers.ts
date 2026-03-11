@@ -14,6 +14,7 @@ import type { ConnectedClient } from "../connection-manager.js";
 import { broadcastEvent, errorResponse } from "./helpers.js";
 import {
   handleAttemptEvidenceMessage,
+  handleLocationBeaconMessage,
   handlePresenceBeaconMessage,
 } from "./node-runtime-handlers.js";
 import type { ProtocolDeps, ProtocolRequestEnvelope } from "./types.js";
@@ -38,6 +39,10 @@ export async function handleNodeMessage(
 
   if (msg.type === "attempt.evidence") {
     return handleAttemptEvidenceMessage(client, msg, raw, deps);
+  }
+
+  if (msg.type === "location.beacon") {
+    return handleLocationBeaconMessage(client, msg, deps);
   }
 
   if (msg.type !== "presence.beacon") {

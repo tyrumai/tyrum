@@ -116,3 +116,14 @@ export type {
   ExtensionsToggleInput,
   ExtensionsRevertInput,
 } from "./extensions.js";
+export type {
+  LocationPlace,
+  LocationProfile,
+  LocationPlaceListResult,
+  LocationPlaceMutateResult,
+  LocationPlaceDeleteResult,
+  LocationProfileResult,
+  LocationPlaceCreateInput,
+  LocationPlaceUpdateInput,
+  LocationProfileUpdateInput,
+} from "./location.js";

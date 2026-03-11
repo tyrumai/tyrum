@@ -81,6 +81,9 @@ export function resolveWsRequestRequiredScopes(type: string): string[] | null {
     case "presence.beacon": {
       return [];
     }
+    case "location.beacon": {
+      return [];
+    }
     case "ping": {
       return [];
     }

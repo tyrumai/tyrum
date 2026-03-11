@@ -13,6 +13,7 @@ import type { MobileHostApi, MobileHostState } from "@tyrum/operator-ui";
 import type { MobileConnectionConfig } from "./mobile-config.js";
 import { createNodeIdentityStorage } from "./mobile-config.js";
 import { createMobileCapabilityProvider } from "./mobile-capability-provider.js";
+import { createMobileLocationBeaconStream } from "./mobile-location-stream.js";
 import {
   buildMobileHostState,
   resolveMobileActionStates,
@@ -78,12 +79,18 @@ export function useMobileNode(options: UseMobileNodeOptions): {
             wsUrl: config.wsUrl,
             nodeEnabled: config.nodeEnabled,
             actionSettings: config.actionSettings,
+            locationStreaming: config.locationStreaming,
           }
         : null,
     [
       config?.actionSettings["audio.record_clip"],
       config?.actionSettings["camera.capture_photo"],
       config?.actionSettings["location.get_current"],
+      config?.locationStreaming.backgroundEnabled,
+      config?.locationStreaming.distanceFilterM,
+      config?.locationStreaming.maxAccuracyM,
+      config?.locationStreaming.maxIntervalMs,
+      config?.locationStreaming.streamEnabled,
       config?.httpBaseUrl,
       config?.nodeEnabled,
       config?.wsUrl,
@@ -132,6 +139,9 @@ export function useMobileNode(options: UseMobileNodeOptions): {
   const retry = useCallback(() => {
     setReloadVersion((current) => current + 1);
   }, []);
+  const locationStreamRef = useRef<ReturnType<typeof createMobileLocationBeaconStream> | null>(
+    null,
+  );
 
   const publishCapabilityState = useCallback(
     async (client: TyrumClient) => {
@@ -211,6 +221,14 @@ export function useMobileNode(options: UseMobileNodeOptions): {
       clientRef.current = client;
 
       const provider = createMobileCapabilityProvider(platform);
+      const locationStream = createMobileLocationBeaconStream({
+        client,
+        onWatchError: (message) => {
+          if (disposed) return;
+          setError(message);
+        },
+      });
+      locationStreamRef.current = locationStream;
       autoExecute(client, [provider]);
 
       const onConnected = () => {
@@ -221,6 +239,7 @@ export function useMobileNode(options: UseMobileNodeOptions): {
       };
       const onDisconnected = () => {
         if (disposed) return;
+        void locationStream.stop();
         setStatus("disconnected");
       };
       const onTransportError = (event: unknown) => {
@@ -243,16 +262,52 @@ export function useMobileNode(options: UseMobileNodeOptions): {
         client.off("connected", onConnected);
         client.off("disconnected", onDisconnected);
         client.off("transport_error", onTransportError);
+        void locationStream.stop();
         client.disconnect();
+        locationStreamRef.current = null;
       }
     })();
 
     return () => {
       disposed = true;
+      void locationStreamRef.current?.stop();
       clientRef.current?.disconnect();
       clientRef.current = null;
+      locationStreamRef.current = null;
     };
   }, [connectionConfig, enabled, platform, publishCapabilityState, reloadVersion, token]);
+
+  useEffect(() => {
+    const locationStream = locationStreamRef.current;
+    if (!locationStream) return;
+
+    const locationStreaming = connectionConfig?.locationStreaming;
+    const locationActionEnabled = connectionConfig?.actionSettings["location.get_current"] ?? false;
+    if (
+      status !== "connected" ||
+      !enabled ||
+      !locationActionEnabled ||
+      !locationStreaming?.streamEnabled
+    ) {
+      void locationStream.stop();
+      return;
+    }
+
+    void locationStream.start(locationStreaming);
+
+    return () => {
+      void locationStream.stop();
+    };
+  }, [
+    connectionConfig?.actionSettings["location.get_current"],
+    connectionConfig?.locationStreaming.backgroundEnabled,
+    connectionConfig?.locationStreaming.distanceFilterM,
+    connectionConfig?.locationStreaming.maxAccuracyM,
+    connectionConfig?.locationStreaming.maxIntervalMs,
+    connectionConfig?.locationStreaming.streamEnabled,
+    enabled,
+    status,
+  ]);
 
   const hostApi = useMemo<MobileHostApi>(
     () => ({

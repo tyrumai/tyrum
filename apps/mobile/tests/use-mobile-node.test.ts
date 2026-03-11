@@ -14,6 +14,8 @@ const {
   clipboardWriteMock,
   connectMock,
   deviceInfoMock,
+  locationStreamStartMock,
+  locationStreamStopMock,
   disconnectMock,
   isNativePlatformMock,
   loadOrCreateDeviceIdentityMock,
@@ -30,6 +32,8 @@ const {
     operatingSystem: "ios",
     osVersion: "18.1",
   }));
+  const locationStreamStartMockInner = vi.fn(async () => {});
+  const locationStreamStopMockInner = vi.fn(async () => {});
   const disconnectMockInner = vi.fn();
   const isNativePlatformMockInner = vi.fn(() => true);
   const loadOrCreateDeviceIdentityMockInner = vi.fn(async () => ({
@@ -42,6 +46,10 @@ const {
     private readonly listeners = new Map<string, Set<() => void>>();
 
     capabilityReady = vi.fn(async () => {});
+    locationBeacon = vi.fn(async () => ({
+      sample: {},
+      events: [],
+    }));
 
     constructor(options: unknown) {
       capturedClientOptionsInner.push(options);
@@ -78,6 +86,8 @@ const {
     clipboardWriteMock: clipboardWriteMockInner,
     connectMock: connectMockInner,
     deviceInfoMock: deviceInfoMockInner,
+    locationStreamStartMock: locationStreamStartMockInner,
+    locationStreamStopMock: locationStreamStopMockInner,
     disconnectMock: disconnectMockInner,
     isNativePlatformMock: isNativePlatformMockInner,
     loadOrCreateDeviceIdentityMock: loadOrCreateDeviceIdentityMockInner,
@@ -115,6 +125,13 @@ vi.mock("@tyrum/client/browser", () => ({
 
 vi.mock("../src/mobile-capability-provider.js", () => ({
   createMobileCapabilityProvider: vi.fn(() => ({ kind: "mock-provider" })),
+}));
+
+vi.mock("../src/mobile-location-stream.js", () => ({
+  createMobileLocationBeaconStream: vi.fn(() => ({
+    start: locationStreamStartMock,
+    stop: locationStreamStopMock,
+  })),
 }));
 
 vi.mock("../src/mobile-config.js", async () => {
@@ -169,6 +186,13 @@ describe("useMobileNode", () => {
         "camera.capture_photo": true,
         "audio.record_clip": true,
       },
+      locationStreaming: {
+        streamEnabled: true,
+        distanceFilterM: 100,
+        maxIntervalMs: 900_000,
+        maxAccuracyM: 100,
+        backgroundEnabled: true,
+      },
     };
 
     let latestState: ReturnType<typeof useMobileNode>["state"] | null = null;
@@ -194,12 +218,14 @@ describe("useMobileNode", () => {
     expect(connectMock).toHaveBeenCalledTimes(1);
     expect(disconnectMock).not.toHaveBeenCalled();
     expect(autoExecuteMock).toHaveBeenCalledTimes(1);
+    expect(locationStreamStartMock).toHaveBeenCalledTimes(1);
     expect(latestState?.status).toBe("connected");
 
     act(() => {
       root.unmount();
     });
 
+    expect(locationStreamStopMock).toHaveBeenCalled();
     expect(disconnectMock).toHaveBeenCalledTimes(1);
     container.remove();
   });

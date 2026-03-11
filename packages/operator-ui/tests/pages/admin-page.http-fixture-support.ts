@@ -111,6 +111,10 @@ export function createAdminHttpTestCore(): {
   routingConfigRevert: ReturnType<typeof vi.fn>;
   secretsRotate: ReturnType<typeof vi.fn>;
   policyCreateOverride: ReturnType<typeof vi.fn>;
+  locationUpdateProfile: ReturnType<typeof vi.fn>;
+  locationCreatePlace: ReturnType<typeof vi.fn>;
+  locationUpdatePlace: ReturnType<typeof vi.fn>;
+  locationDeletePlace: ReturnType<typeof vi.fn>;
 } {
   const elevatedModeStore = createElevatedModeStore({
     tickIntervalMs: 0,
@@ -125,11 +129,88 @@ export function createAdminHttpTestCore(): {
   const routingConfigRevert = vi.fn(async () => ({ revision: 2, config: { v: 1 } }) as unknown);
   const secretsRotate = vi.fn(async () => ({ revoked: true, handle: {} }) as unknown);
   const policyCreateOverride = vi.fn(async () => ({ status: "ok" }) as unknown);
+  const locationUpdateProfile = vi.fn(
+    async () =>
+      ({
+        status: "ok",
+        profile: {
+          primary_node_id: "mobile-node-1",
+          poi_provider_key: "geoapify",
+          updated_at: TEST_TIMESTAMP,
+        },
+      }) as unknown,
+  );
+  const locationCreatePlace = vi.fn(
+    async () =>
+      ({
+        status: "ok",
+        place: {
+          place_id: "place-created",
+          name: "Home",
+          latitude: 52.3676,
+          longitude: 4.9041,
+          radius_m: 100,
+          tags: ["home"],
+          source: "manual",
+          created_at: TEST_TIMESTAMP,
+          updated_at: TEST_TIMESTAMP,
+        },
+      }) as unknown,
+  );
+  const locationUpdatePlace = vi.fn(
+    async () =>
+      ({
+        status: "ok",
+        place: {
+          place_id: "place-home",
+          name: "Home",
+          latitude: 52.3676,
+          longitude: 4.9041,
+          radius_m: 100,
+          tags: ["home"],
+          source: "manual",
+          created_at: TEST_TIMESTAMP,
+          updated_at: TEST_TIMESTAMP,
+        },
+      }) as unknown,
+  );
+  const locationDeletePlace = vi.fn(
+    async () =>
+      ({
+        status: "ok",
+        place_id: "place-home",
+        deleted: true,
+      }) as unknown,
+  );
 
   const core = {
     httpBaseUrl: "http://example.test",
     elevatedModeStore,
     http: {
+      nodes: {
+        list: vi.fn(async () => ({
+          status: "ok",
+          generated_at: TEST_TIMESTAMP,
+          nodes: [
+            {
+              node_id: "mobile-node-1",
+              label: "iPhone 15",
+              connected: true,
+              paired_status: "approved",
+              attached_to_requested_lane: false,
+              capabilities: [],
+            },
+            {
+              node_id: "mobile-node-2",
+              label: "Android test phone",
+              connected: true,
+              paired_status: "approved",
+              attached_to_requested_lane: false,
+              capabilities: [],
+            },
+          ],
+        })),
+      },
       policy: {
         getBundle: vi.fn(
           async () =>
@@ -497,8 +578,54 @@ export function createAdminHttpTestCore(): {
         ),
         updateAssignments: vi.fn(async () => ({ status: "ok", assignments: [] }) as unknown),
       },
+      location: {
+        listPlaces: vi.fn(
+          async () =>
+            ({
+              status: "ok",
+              places: [
+                {
+                  place_id: "place-home",
+                  name: "Home",
+                  latitude: 52.3676,
+                  longitude: 4.9041,
+                  radius_m: 100,
+                  tags: ["home"],
+                  source: "manual",
+                  created_at: TEST_TIMESTAMP,
+                  updated_at: TEST_TIMESTAMP,
+                },
+              ],
+            }) as unknown,
+        ),
+        createPlace: locationCreatePlace,
+        updatePlace: locationUpdatePlace,
+        deletePlace: locationDeletePlace,
+        getProfile: vi.fn(
+          async () =>
+            ({
+              status: "ok",
+              profile: {
+                primary_node_id: "mobile-node-1",
+                poi_provider_key: "geoapify",
+                updated_at: TEST_TIMESTAMP,
+              },
+            }) as unknown,
+        ),
+        updateProfile: locationUpdateProfile,
+      },
     },
   } as unknown as OperatorCore;
 
-  return { core, routingConfigUpdate, routingConfigRevert, secretsRotate, policyCreateOverride };
+  return {
+    core,
+    routingConfigUpdate,
+    routingConfigRevert,
+    secretsRotate,
+    policyCreateOverride,
+    locationUpdateProfile,
+    locationCreatePlace,
+    locationUpdatePlace,
+    locationDeletePlace,
+  };
 }

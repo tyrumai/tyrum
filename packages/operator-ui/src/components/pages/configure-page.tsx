@@ -5,6 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs.js";
 import { AuthTokensCard } from "./admin-http-tokens.js";
 import { ToolRegistryCard } from "./admin-http-tools.js";
 import { AdminHttpModelsPanel } from "./admin-http-models.js";
+import { AdminHttpLocationPanel } from "./admin-http-location.js";
 import { AdminHttpProvidersPanel } from "./admin-http-providers.js";
 import { AdminHttpPolicyAuthPanels } from "./admin-http-policy-auth-panels.js";
 import { AdminHttpRoutingConfigPanel } from "./admin-http-routing-config.js";
@@ -25,6 +26,7 @@ type ConfigurePageTab =
   | "models"
   | "audit"
   | "routing-config"
+  | "location"
   | "secrets"
   | "tools"
   | "device-tokens"
@@ -69,6 +71,9 @@ function ConfigurePageContent({ core }: ConfigurePageProps) {
           <TabsTrigger value="routing-config" data-testid="admin-http-tab-routing-config">
             Channels
           </TabsTrigger>
+          <TabsTrigger value="location" data-testid="admin-http-tab-location">
+            Location
+          </TabsTrigger>
           <TabsTrigger value="secrets" data-testid="admin-http-tab-secrets">
             Secrets
           </TabsTrigger>
@@ -105,6 +110,10 @@ function ConfigurePageContent({ core }: ConfigurePageProps) {
 
         <TabsContent value="routing-config">
           <AdminHttpRoutingConfigPanel core={core} />
+        </TabsContent>
+
+        <TabsContent value="location">
+          <AdminHttpLocationPanel core={core} />
         </TabsContent>
 
         <TabsContent value="secrets">

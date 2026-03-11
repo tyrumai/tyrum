@@ -257,6 +257,61 @@ function registerControlPlaneWorkflowTests(fixture: ControlPlaneFixture): void {
       },
     });
 
+    const locationBeaconP = client.locationBeacon({
+      sample_id: "11111111-1111-4111-8111-111111111111",
+      recorded_at: "2026-02-21T12:01:05Z",
+      coords: {
+        latitude: 52.37,
+        longitude: 4.89,
+        accuracy_m: 12,
+      },
+      source: "gps",
+      is_background: false,
+    });
+    const locationBeaconReq = (await waitForMessage(ws)) as Record<string, unknown>;
+    expect(locationBeaconReq["type"]).toBe("location.beacon");
+    ws.send(
+      JSON.stringify({
+        request_id: locationBeaconReq["request_id"],
+        type: "location.beacon",
+        ok: true,
+        result: {
+          sample: {
+            sample_id: "11111111-1111-4111-8111-111111111111",
+            agent_key: "default",
+            node_id: "node-1",
+            recorded_at: "2026-02-21T12:01:05Z",
+            coords: {
+              latitude: 52.37,
+              longitude: 4.89,
+              accuracy_m: 12,
+            },
+            source: "gps",
+            is_background: false,
+            accepted: true,
+          },
+          events: [],
+        },
+      }),
+    );
+    await expect(locationBeaconP).resolves.toEqual({
+      sample: {
+        sample_id: "11111111-1111-4111-8111-111111111111",
+        agent_key: "default",
+        node_id: "node-1",
+        recorded_at: "2026-02-21T12:01:05Z",
+        coords: {
+          latitude: 52.37,
+          longitude: 4.89,
+          accuracy_m: 12,
+        },
+        source: "gps",
+        is_background: false,
+        accepted: true,
+      },
+      events: [],
+    });
+
     const readyP = client.capabilityReady({
       capabilities: [
         {

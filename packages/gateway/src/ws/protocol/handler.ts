@@ -26,7 +26,11 @@ type ParsedMessageResult =
   | { ok: true; msg: ProtocolRequestEnvelope | ProtocolResponseEnvelope }
   | { ok: false; response: WsEventEnvelope };
 
-const NODE_DEVICE_REQUEST_TYPES = new Set(["attempt.evidence", "capability.ready"]);
+const NODE_DEVICE_REQUEST_TYPES = new Set([
+  "attempt.evidence",
+  "capability.ready",
+  "location.beacon",
+]);
 
 /**
  * Parse and dispatch a raw WebSocket message from a connected client.

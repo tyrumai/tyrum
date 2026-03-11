@@ -1,5 +1,7 @@
 import {
   WsAttemptEvidenceRequest,
+  WsLocationBeaconRequest,
+  WsLocationBeaconResult,
   WsPresenceBeaconRequest,
   WsPresenceBeaconResult,
 } from "@tyrum/schemas";
@@ -152,6 +154,44 @@ export async function handlePresenceBeaconMessage(
 
   const result = WsPresenceBeaconResult.parse({ entry });
   return { request_id: msg.request_id, type: msg.type, ok: true, result };
+}
+
+export async function handleLocationBeaconMessage(
+  client: ConnectedClient,
+  msg: ProtocolRequestEnvelope,
+  deps: ProtocolDeps,
+): Promise<WsResponseEnvelope> {
+  const tenantId = client.auth_claims?.tenant_id;
+  if (!tenantId) {
+    return errorResponse(msg.request_id, msg.type, "unauthorized", "tenant token required");
+  }
+  if (!deps.locationService || !client.device_id) {
+    return errorResponse(
+      msg.request_id,
+      msg.type,
+      "unsupported_request",
+      "location.beacon not supported",
+    );
+  }
+
+  const parsedReq = WsLocationBeaconRequest.safeParse(msg);
+  if (!parsedReq.success) {
+    return errorResponse(msg.request_id, msg.type, "invalid_request", parsedReq.error.message, {
+      issues: parsedReq.error.issues,
+    });
+  }
+
+  const result = await deps.locationService.ingestBeacon({
+    tenantId,
+    nodeId: client.device_id,
+    payload: parsedReq.data.payload,
+  });
+  return {
+    request_id: msg.request_id,
+    type: msg.type,
+    ok: true,
+    result: WsLocationBeaconResult.parse(result),
+  };
 }
 
 function validateAttemptEvidenceSize(
