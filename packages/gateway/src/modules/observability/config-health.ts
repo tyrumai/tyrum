@@ -1,6 +1,7 @@
 import { AgentConfig } from "@tyrum/schemas";
 import type { ModelsDevService } from "../models/models-dev-service.js";
 import type { SqlDb } from "../../statestore/types.js";
+import { isMissingTableError } from "./db-errors.js";
 
 const EXECUTION_PROFILE_IDS = [
   "interaction",
@@ -13,21 +14,6 @@ const EXECUTION_PROFILE_IDS = [
 ] as const;
 
 type CatalogLookup = Map<string, Set<string>>;
-
-function isMissingTableError(err: unknown): boolean {
-  if (!err || typeof err !== "object") return false;
-
-  const code = (err as { code?: unknown }).code;
-  if (code === "42P01") return true;
-
-  const message = (err as { message?: unknown }).message;
-  if (typeof message !== "string") return false;
-  const lowered = message.toLowerCase();
-  return (
-    lowered.includes("no such table") ||
-    (lowered.includes("relation") && lowered.includes("does not exist"))
-  );
-}
 
 async function safeAll<T>(
   db: SqlDb,

@@ -2,6 +2,7 @@ import { isAuthProfilesEnabled } from "../models/auth-profiles-enabled.js";
 import type { ModelsDevService } from "../models/models-dev-service.js";
 import type { AgentRegistry } from "../agent/registry.js";
 import type { SqlDb } from "../../statestore/types.js";
+import { isMissingTableError } from "./db-errors.js";
 
 type StatusCountMap = Record<string, number>;
 type ActiveModelStatus = {
@@ -72,21 +73,6 @@ function parseIsoToMs(value: string | null | undefined): number | null {
   if (!value) return null;
   const ms = Date.parse(value);
   return Number.isFinite(ms) ? ms : null;
-}
-
-function isMissingTableError(err: unknown): boolean {
-  if (!err || typeof err !== "object") return false;
-
-  const code = (err as { code?: unknown }).code;
-  if (code === "42P01") return true;
-
-  const message = (err as { message?: unknown }).message;
-  if (typeof message !== "string") return false;
-  const lowered = message.toLowerCase();
-  return (
-    lowered.includes("no such table") ||
-    (lowered.includes("relation") && lowered.includes("does not exist"))
-  );
 }
 
 function asFiniteNumber(value: unknown): number {

@@ -16,11 +16,7 @@ export const AgentModelConfig = z
     model: ProviderModelId.nullable(),
     variant: z.string().trim().min(1).optional(),
     options: z.record(z.string(), z.unknown()).optional(),
-    fallback: z
-      .array(
-        ProviderModelId.regex(/^[^/\s]+\/.+$/, "fallback model must be in provider/model format"),
-      )
-      .optional(),
+    fallback: z.array(ProviderModelId).optional(),
   })
   .superRefine((value, ctx) => {
     if (value.model !== null) return;
