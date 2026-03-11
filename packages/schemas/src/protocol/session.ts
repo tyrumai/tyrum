@@ -397,6 +397,7 @@ export const WsSessionSendFailedEventPayload = z
   .object({
     session_id: z.string().trim().min(1),
     lane: WsSessionEventLane.optional(),
+    user_message_id: z.string().trim().min(1).optional(),
     message_ids: z.array(z.string().trim().min(1)),
     reasoning_ids: z.array(z.string().trim().min(1)),
     thread_id: z.string().trim().min(1).optional(),
