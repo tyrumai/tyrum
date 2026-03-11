@@ -205,10 +205,11 @@ function canonicalizeMobileDispatchOp(parsed: Record<string, unknown> | null): M
 function inferPrimitiveFromCapabilityHint(capability: string): ActionPrimitiveKind | undefined {
   const normalized = capability.trim().toLowerCase();
   if (!normalized) return undefined;
-  if (normalized.includes("android")) return "Android";
-  if (normalized.includes("ios") || normalized.includes("mobile")) return "IOS";
-  if (normalized.includes("browser")) return "Browser";
-  if (normalized.includes("desktop") || normalized.includes("electron")) return "Desktop";
+  const segments = new Set(normalized.split(/[^a-z0-9]+/).filter((segment) => segment.length > 0));
+  if (segments.has("android")) return "Android";
+  if (segments.has("ios") || segments.has("mobile")) return "IOS";
+  if (segments.has("browser")) return "Browser";
+  if (segments.has("desktop") || segments.has("electron")) return "Desktop";
   return undefined;
 }
 

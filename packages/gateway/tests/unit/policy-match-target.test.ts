@@ -310,6 +310,16 @@ describe("canonicalizeToolMatchTarget", () => {
     );
   });
 
+  it("does not treat incidental ios substrings inside capability words as mobile hints", () => {
+    const target = canonicalizeToolMatchTarget("tool.node.dispatch", {
+      capability: "acme.studios-camera",
+      action_name: "camera.capture_photo",
+      input: { format: "jpeg" },
+    });
+
+    expect(target).toBe("capability:acme.studios-camera;action:Browser;op:camera.capture_photo");
+  });
+
   it("canonicalizes heartbeat schedule creation using normalized schedule semantics", () => {
     const target = canonicalizeToolMatchTarget("tool.automation.schedule.create", {
       kind: "heartbeat",
