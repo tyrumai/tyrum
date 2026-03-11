@@ -230,6 +230,70 @@ describe("useMobileNode", () => {
     container.remove();
   });
 
+  it("does not reconnect when location streaming settings change", async () => {
+    const { useMobileNode } = await import("../src/use-mobile-node.js");
+    const { container, root } = createTestRoot();
+
+    let currentConfig: MobileConnectionConfig = {
+      httpBaseUrl: "http://127.0.0.1:8788",
+      wsUrl: "ws://127.0.0.1:8788/ws",
+      nodeEnabled: true,
+      actionSettings: {
+        "location.get_current": true,
+        "camera.capture_photo": true,
+        "audio.record_clip": true,
+      },
+      locationStreaming: {
+        streamEnabled: true,
+        distanceFilterM: 100,
+        maxIntervalMs: 900_000,
+        maxAccuracyM: 100,
+        backgroundEnabled: true,
+      },
+    };
+
+    const Probe = () => {
+      useMobileNode({
+        config: currentConfig,
+        token: "token-1",
+        updateConfig: updateConfigMock,
+      });
+      return null;
+    };
+
+    await act(async () => {
+      root.render(React.createElement(Probe));
+      await flushMicrotasks();
+    });
+
+    expect(connectMock).toHaveBeenCalledTimes(1);
+    expect(disconnectMock).not.toHaveBeenCalled();
+    expect(locationStreamStartMock).toHaveBeenCalledTimes(1);
+
+    currentConfig = {
+      ...currentConfig,
+      locationStreaming: {
+        ...currentConfig.locationStreaming,
+        distanceFilterM: 250,
+      },
+    };
+
+    await act(async () => {
+      root.render(React.createElement(Probe));
+      await flushMicrotasks();
+    });
+
+    expect(connectMock).toHaveBeenCalledTimes(1);
+    expect(disconnectMock).not.toHaveBeenCalled();
+    expect(locationStreamStartMock).toHaveBeenCalledTimes(2);
+    act(() => {
+      root.unmount();
+    });
+
+    expect(disconnectMock).toHaveBeenCalledTimes(1);
+    container.remove();
+  });
+
   it("enriches the node descriptor with native device info and exposes clipboard writes", async () => {
     const { useMobileNode } = await import("../src/use-mobile-node.js");
     const { container, root } = createTestRoot();
@@ -242,6 +306,13 @@ describe("useMobileNode", () => {
         "location.get_current": true,
         "camera.capture_photo": true,
         "audio.record_clip": true,
+      },
+      locationStreaming: {
+        streamEnabled: true,
+        distanceFilterM: 100,
+        maxIntervalMs: 900_000,
+        maxAccuracyM: 100,
+        backgroundEnabled: true,
       },
     };
 
@@ -305,6 +376,13 @@ describe("useMobileNode", () => {
         "location.get_current": true,
         "camera.capture_photo": true,
         "audio.record_clip": true,
+      },
+      locationStreaming: {
+        streamEnabled: true,
+        distanceFilterM: 100,
+        maxIntervalMs: 900_000,
+        maxAccuracyM: 100,
+        backgroundEnabled: true,
       },
     };
 

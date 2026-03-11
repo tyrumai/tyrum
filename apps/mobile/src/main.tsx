@@ -68,6 +68,7 @@ function MobileRoot() {
             wsUrl: bootstrap.wsUrl,
             nodeEnabled: bootstrap.nodeEnabled,
             actionSettings: bootstrap.actionSettings,
+            locationStreaming: bootstrap.locationStreaming,
           }
         : null,
     [bootstrap],

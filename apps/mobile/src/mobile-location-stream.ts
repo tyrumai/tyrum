@@ -1,5 +1,5 @@
 import { Capacitor } from "@capacitor/core";
-import { Geolocation } from "@capacitor/geolocation";
+import { Geolocation, type Position } from "@capacitor/geolocation";
 import type { TyrumClient } from "@tyrum/client/browser";
 import type { LocationCoords, WsLocationBeaconPayload } from "@tyrum/schemas";
 import type { MobileLocationStreamingConfig } from "./mobile-config.js";
@@ -8,19 +8,6 @@ import {
   formatUnknownError,
   mapLocationCoords,
 } from "./mobile-location-utils.js";
-
-type NativePosition = {
-  coords: {
-    latitude: number;
-    longitude: number;
-    accuracy: number;
-    altitude: number | null;
-    altitudeAccuracy: number | null;
-    heading: number | null;
-    speed: number | null;
-  };
-  timestamp: number;
-};
 
 type SentSample = {
   recordedAtMs: number;
@@ -91,7 +78,7 @@ export function createMobileLocationBeaconStream(
     lastSentSample = sample;
   };
 
-  const handlePosition = (position: NativePosition | null, error?: unknown): void => {
+  const handlePosition = (position: Position | null, error?: unknown): void => {
     if (!activeConfig) return;
     if (error) {
       options.onWatchError?.(formatUnknownError(error));

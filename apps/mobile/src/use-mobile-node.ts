@@ -71,43 +71,22 @@ export function useMobileNode(options: UseMobileNodeOptions): {
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reloadVersion, setReloadVersion] = useState(0);
-  const connectionConfig = useMemo(
-    () =>
-      config
-        ? {
-            httpBaseUrl: config.httpBaseUrl,
-            wsUrl: config.wsUrl,
-            nodeEnabled: config.nodeEnabled,
-            actionSettings: config.actionSettings,
-            locationStreaming: config.locationStreaming,
-          }
-        : null,
-    [
-      config?.actionSettings["audio.record_clip"],
-      config?.actionSettings["camera.capture_photo"],
-      config?.actionSettings["location.get_current"],
-      config?.locationStreaming.backgroundEnabled,
-      config?.locationStreaming.distanceFilterM,
-      config?.locationStreaming.maxAccuracyM,
-      config?.locationStreaming.maxIntervalMs,
-      config?.locationStreaming.streamEnabled,
-      config?.httpBaseUrl,
-      config?.nodeEnabled,
-      config?.wsUrl,
-    ],
-  );
-
-  const enabled = connectionConfig?.nodeEnabled ?? false;
+  const enabled = config?.nodeEnabled ?? false;
+  const wsUrl = config?.wsUrl ?? null;
   const actionStates = useMemo(
     () =>
       resolveMobileActionStates(
-        connectionConfig?.actionSettings ?? {
+        config?.actionSettings ?? {
           "location.get_current": true,
           "camera.capture_photo": true,
           "audio.record_clip": true,
         },
       ),
-    [connectionConfig?.actionSettings],
+    [
+      config?.actionSettings["audio.record_clip"],
+      config?.actionSettings["camera.capture_photo"],
+      config?.actionSettings["location.get_current"],
+    ],
   );
 
   const actionStatesRef = useRef(actionStates);
@@ -161,7 +140,7 @@ export function useMobileNode(options: UseMobileNodeOptions): {
   }, [actionStates, enabled, publishCapabilityState, status]);
 
   useEffect(() => {
-    if (!connectionConfig || !token || !enabled) {
+    if (!wsUrl || !token || !enabled) {
       clientRef.current?.disconnect();
       clientRef.current = null;
       setStatus("disconnected");
@@ -203,7 +182,7 @@ export function useMobileNode(options: UseMobileNodeOptions): {
 
       setDeviceId(identity.deviceId);
       const client = new TyrumClient({
-        url: connectionConfig.wsUrl,
+        url: wsUrl,
         token,
         role: "node",
         capabilities: [platform],
@@ -275,14 +254,14 @@ export function useMobileNode(options: UseMobileNodeOptions): {
       clientRef.current = null;
       locationStreamRef.current = null;
     };
-  }, [connectionConfig, enabled, platform, publishCapabilityState, reloadVersion, token]);
+  }, [enabled, platform, publishCapabilityState, reloadVersion, token, wsUrl]);
 
   useEffect(() => {
     const locationStream = locationStreamRef.current;
     if (!locationStream) return;
 
-    const locationStreaming = connectionConfig?.locationStreaming;
-    const locationActionEnabled = connectionConfig?.actionSettings["location.get_current"] ?? false;
+    const locationStreaming = config?.locationStreaming;
+    const locationActionEnabled = config?.actionSettings["location.get_current"] ?? false;
     if (
       status !== "connected" ||
       !enabled ||
@@ -299,12 +278,12 @@ export function useMobileNode(options: UseMobileNodeOptions): {
       void locationStream.stop();
     };
   }, [
-    connectionConfig?.actionSettings["location.get_current"],
-    connectionConfig?.locationStreaming.backgroundEnabled,
-    connectionConfig?.locationStreaming.distanceFilterM,
-    connectionConfig?.locationStreaming.maxAccuracyM,
-    connectionConfig?.locationStreaming.maxIntervalMs,
-    connectionConfig?.locationStreaming.streamEnabled,
+    config?.actionSettings["location.get_current"],
+    config?.locationStreaming.backgroundEnabled,
+    config?.locationStreaming.distanceFilterM,
+    config?.locationStreaming.maxAccuracyM,
+    config?.locationStreaming.maxIntervalMs,
+    config?.locationStreaming.streamEnabled,
     enabled,
     status,
   ]);
@@ -331,7 +310,7 @@ export function useMobileNode(options: UseMobileNodeOptions): {
           });
         },
         setActionEnabled: async (action, nextEnabled) => {
-          const current = connectionConfig?.actionSettings ?? {
+          const current = config?.actionSettings ?? {
             "location.get_current": true,
             "camera.capture_photo": true,
             "audio.record_clip": true,
@@ -368,9 +347,9 @@ export function useMobileNode(options: UseMobileNodeOptions): {
       },
     }),
     [
-      connectionConfig?.actionSettings["audio.record_clip"],
-      connectionConfig?.actionSettings["camera.capture_photo"],
-      connectionConfig?.actionSettings["location.get_current"],
+      config?.actionSettings["audio.record_clip"],
+      config?.actionSettings["camera.capture_photo"],
+      config?.actionSettings["location.get_current"],
       platform,
       updateConfig,
     ],
