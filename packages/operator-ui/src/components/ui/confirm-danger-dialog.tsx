@@ -22,6 +22,7 @@ export interface ConfirmDangerDialogProps {
   confirmationLabel?: React.ReactNode;
   onConfirm: () => void | Promise<void>;
   isLoading?: boolean;
+  confirmDisabled?: boolean;
   children?: React.ReactNode;
 }
 
@@ -35,6 +36,7 @@ export function ConfirmDangerDialog({
   confirmationLabel = "I understand and want to proceed.",
   onConfirm,
   isLoading = false,
+  confirmDisabled = false,
   children,
 }: ConfirmDangerDialogProps): React.ReactElement {
   const [confirmed, setConfirmed] = React.useState(false);
@@ -56,7 +58,7 @@ export function ConfirmDangerDialog({
   };
 
   const submit = async (): Promise<void> => {
-    if (!confirmed || busy) return;
+    if (!confirmed || busy || confirmDisabled) return;
     setSubmitting(true);
     setErrorMessage(null);
     try {
@@ -130,7 +132,7 @@ export function ConfirmDangerDialog({
             data-testid="confirm-danger-confirm"
             variant="danger"
             isLoading={submitting}
-            disabled={!confirmed || busy}
+            disabled={!confirmed || busy || confirmDisabled}
             onClick={() => {
               void submit();
             }}

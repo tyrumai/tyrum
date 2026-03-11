@@ -133,10 +133,46 @@ export function createHarnessConfigureHttpFixtures() {
       revert: async () => ({ status: "ok" as const }),
     },
     secrets: {
-      list: async () => ({ status: "ok" as const, handles: [] }),
-      store: async () => ({ status: "ok" as const }),
-      rotate: async () => ({ status: "ok" as const }),
-      revoke: async () => ({ status: "ok" as const }),
+      list: async () => ({
+        handles: [
+          {
+            handle_id: "alpha",
+            provider: "db" as const,
+            scope: "alpha",
+            created_at: "2026-03-08T00:00:00.000Z",
+          },
+          {
+            handle_id: "beta",
+            provider: "db" as const,
+            scope: "scope:beta",
+            created_at: "2026-03-09T00:00:00.000Z",
+          },
+          {
+            handle_id: "provider-account:openai:api_key",
+            provider: "db" as const,
+            scope: "provider-account:openai:api_key",
+            created_at: "2026-03-10T00:00:00.000Z",
+          },
+        ],
+      }),
+      store: async () => ({
+        handle: {
+          handle_id: "gamma",
+          provider: "db" as const,
+          scope: "gamma",
+          created_at: "2026-03-10T00:00:00.000Z",
+        },
+      }),
+      rotate: async () => ({
+        revoked: true,
+        handle: {
+          handle_id: "alpha",
+          provider: "db" as const,
+          scope: "alpha",
+          created_at: "2026-03-08T00:00:00.000Z",
+        },
+      }),
+      revoke: async () => ({ revoked: true }),
     },
     audit: {
       export: async () => ({ status: "ok" as const, rows: [] }),

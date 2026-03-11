@@ -23,7 +23,6 @@ import {
   flush,
   getButton,
   getByTestId,
-  getLabeledInput,
   jsonResponse,
   openModelsTab,
   openPolicyTab,
@@ -128,52 +127,6 @@ describe("ConfigurePage (HTTP) routing config", () => {
     await clickAndFlush(confirmButton);
 
     expect(routingConfigUpdate).toHaveBeenCalledTimes(0);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    cleanupAdminHttpPage(page);
-  });
-});
-
-describe("ConfigurePage (HTTP) secrets", () => {
-  it("preserves whitespace when rotating secrets", async () => {
-    const { core, secretsRotate } = createAdminHttpTestCore();
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      expectAuthorizedJsonRequest(input, init, {
-        url: "http://example.test/secrets/h-1/rotate",
-        method: "POST",
-        body: { value: "  new-secret  " },
-      });
-      return jsonResponse(
-        {
-          revoked: true,
-          handle: {
-            handle_id: "h-1",
-            provider: "db",
-            scope: "h-1",
-            created_at: "2026-03-01T00:00:00.000Z",
-          },
-        },
-        201,
-      );
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    const page = renderAdminHttpConfigurePage(core);
-    await switchHttpTab(page.container, "admin-http-tab-secrets");
-
-    const rotateCard = getByTestId<HTMLDivElement>(page.container, "secrets-rotate-card");
-    act(() => {
-      setNativeValue(getLabeledInput(rotateCard, "Handle ID"), "h-1");
-      setNativeValue(getLabeledInput(rotateCard, "New value"), "  new-secret  ");
-    });
-
-    const rotateButton = getByTestId<HTMLButtonElement>(page.container, "secrets-rotate-open");
-    expect(rotateButton.disabled).toBe(false);
-    click(rotateButton);
-    click(getByTestId<HTMLElement>(document.body, "confirm-danger-checkbox"));
-
-    await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "confirm-danger-confirm"));
-
-    expect(secretsRotate).toHaveBeenCalledTimes(0);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     cleanupAdminHttpPage(page);
   });

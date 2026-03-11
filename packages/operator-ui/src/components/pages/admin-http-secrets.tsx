@@ -1,291 +1,439 @@
+import type { SecretHandle } from "@tyrum/schemas";
 import type { OperatorCore } from "@tyrum/operator-core";
+import { KeyRound, Plus, RefreshCw, RotateCcw, Trash2 } from "lucide-react";
 import * as React from "react";
+import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { ElevatedModeTooltip } from "../elevated-mode/elevated-mode-tooltip.js";
-import { ApiResultCard } from "../ui/api-result-card.js";
+import { Alert } from "../ui/alert.js";
+import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
-import { Card, CardContent, CardFooter, CardHeader } from "../ui/card.js";
+import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { ConfirmDangerDialog } from "../ui/confirm-danger-dialog.js";
+import { EmptyState } from "../ui/empty-state.js";
 import { Input } from "../ui/input.js";
 import { useAdminHttpClient, useAdminMutationAccess } from "./admin-http-shared.js";
 
 type SecretsApi = OperatorCore["http"]["secrets"];
+type SecretPanelMessage = {
+  title: string;
+  description: string;
+};
+type SecretRow = {
+  handle: SecretHandle;
+  secretKey: string;
+  scopeLabel: string | null;
+  filterText: string;
+};
+
 const MANAGED_PROVIDER_SECRET_PREFIX = "provider-account:";
 
-function normalizeAgentKey(agentKeyRaw: string): { agent_key?: string } | undefined {
-  const agentKey = agentKeyRaw.trim();
-  if (!agentKey) return undefined;
-  return { agent_key: agentKey };
+function normalizeSecretRows(handles: SecretHandle[]): SecretRow[] {
+  return handles
+    .filter((handle) => !handle.handle_id.startsWith(MANAGED_PROVIDER_SECRET_PREFIX))
+    .map((handle) => ({
+      handle,
+      secretKey: handle.handle_id,
+      scopeLabel: handle.scope !== handle.handle_id ? handle.scope : null,
+      filterText: `${handle.handle_id} ${handle.scope} ${handle.provider}`.toLowerCase(),
+    }))
+    .toSorted((left, right) => {
+      const leftTime = Date.parse(left.handle.created_at);
+      const rightTime = Date.parse(right.handle.created_at);
+      if (Number.isFinite(leftTime) && Number.isFinite(rightTime) && leftTime !== rightTime) {
+        return rightTime - leftTime;
+      }
+      return left.secretKey.localeCompare(right.secretKey);
+    });
+}
+
+function formatCreatedAt(value: string): string {
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) return value;
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(timestamp));
+}
+
+function matchesSecretFilter(row: SecretRow, filterValue: string): boolean {
+  const normalizedFilter = filterValue.trim().toLowerCase();
+  if (!normalizedFilter) return true;
+  return row.filterText.includes(normalizedFilter);
+}
+
+function SecretMetadata({ row }: { row: SecretRow }): React.ReactElement {
+  return (
+    <div className="grid gap-1 text-sm text-fg-muted">
+      <div>
+        <span className="font-medium text-fg">Secret key:</span>{" "}
+        <span className="font-mono text-xs">{row.secretKey}</span>
+      </div>
+      {row.scopeLabel ? (
+        <div>
+          <span className="font-medium text-fg">Scope:</span>{" "}
+          <span className="font-mono text-xs">{row.scopeLabel}</span>
+        </div>
+      ) : null}
+      <div>
+        <span className="font-medium text-fg">Provider:</span> {row.handle.provider}
+      </div>
+      <div>
+        <span className="font-medium text-fg">Created:</span>{" "}
+        {formatCreatedAt(row.handle.created_at)}
+      </div>
+    </div>
+  );
+}
+
+function SecretRowActions({
+  row,
+  canMutate,
+  requestEnter,
+  onRotate,
+  onRevoke,
+}: {
+  row: SecretRow;
+  canMutate: boolean;
+  requestEnter: () => void;
+  onRotate: (row: SecretRow) => void;
+  onRevoke: (row: SecretRow) => void;
+}): React.ReactElement {
+  return (
+    <ElevatedModeTooltip canMutate={canMutate} requestEnter={requestEnter}>
+      <div className="flex items-center justify-start gap-1 md:justify-end">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-8 w-8 p-0"
+          data-testid={`secret-rotate-open-${row.secretKey}`}
+          aria-label={`Rotate ${row.secretKey}`}
+          title="Rotate secret"
+          onClick={() => {
+            onRotate(row);
+          }}
+        >
+          <RotateCcw className="h-4 w-4" />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-8 w-8 p-0 text-error hover:bg-error/10 hover:text-error"
+          data-testid={`secret-revoke-open-${row.secretKey}`}
+          aria-label={`Revoke ${row.secretKey}`}
+          title="Revoke secret"
+          onClick={() => {
+            onRevoke(row);
+          }}
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </div>
+    </ElevatedModeTooltip>
+  );
 }
 
 export function AdminHttpSecretsPanel({ core }: { core: OperatorCore }): React.ReactElement {
-  const [agentKeyRaw, setAgentKeyRaw] = React.useState("");
+  const readApi: SecretsApi = core.http.secrets;
+  const mutationApi: SecretsApi = (useAdminHttpClient() ?? core.http).secrets;
   const { canMutate, requestEnter } = useAdminMutationAccess(core);
 
-  const api = (useAdminHttpClient() ?? core.http).secrets;
-  const agentQuery = normalizeAgentKey(agentKeyRaw);
+  const [rows, setRows] = React.useState<SecretRow[]>([]);
+  const [filterValue, setFilterValue] = React.useState("");
+  const [loading, setLoading] = React.useState(true);
+  const [refreshing, setRefreshing] = React.useState(false);
+  const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = React.useState<SecretPanelMessage | null>(null);
+  const [storeOpen, setStoreOpen] = React.useState(false);
+  const [storeSecretKeyRaw, setStoreSecretKeyRaw] = React.useState("");
+  const [storeValueRaw, setStoreValueRaw] = React.useState("");
+  const [rotateTarget, setRotateTarget] = React.useState<SecretRow | null>(null);
+  const [rotateValueRaw, setRotateValueRaw] = React.useState("");
+  const [revokeTarget, setRevokeTarget] = React.useState<SecretRow | null>(null);
 
-  return (
-    <section className="grid gap-3" data-testid="admin-http-secrets">
-      <div className="text-sm font-medium text-fg">Secrets</div>
-
-      <AgentScopeCard agentKeyRaw={agentKeyRaw} onAgentKeyRawChange={setAgentKeyRaw} />
-      <SecretsListCard api={api} agentQuery={agentQuery} />
-      <SecretsStoreCard
-        api={api}
-        agentQuery={agentQuery}
-        canMutate={canMutate}
-        requestEnter={requestEnter}
-      />
-      <SecretsRotateCard
-        api={api}
-        agentQuery={agentQuery}
-        canMutate={canMutate}
-        requestEnter={requestEnter}
-      />
-      <SecretsRevokeCard
-        api={api}
-        agentQuery={agentQuery}
-        canMutate={canMutate}
-        requestEnter={requestEnter}
-      />
-    </section>
-  );
-}
-
-function AgentScopeCard({
-  agentKeyRaw,
-  onAgentKeyRawChange,
-}: {
-  agentKeyRaw: string;
-  onAgentKeyRawChange: (next: string) => void;
-}): React.ReactElement {
-  return (
-    <Card>
-      <CardHeader>
-        <div className="text-sm font-medium text-fg">Agent scope (optional)</div>
-      </CardHeader>
-      <CardContent>
-        <Input
-          label="Agent key"
-          placeholder="Optional"
-          value={agentKeyRaw}
-          onChange={(event) => onAgentKeyRawChange(event.target.value)}
-        />
-      </CardContent>
-    </Card>
-  );
-}
-
-function SecretsListCard({
-  api,
-  agentQuery,
-}: {
-  api: SecretsApi;
-  agentQuery: ReturnType<typeof normalizeAgentKey>;
-}): React.ReactElement {
-  const [busy, setBusy] = React.useState(false);
-  const [result, setResult] = React.useState<unknown>(undefined);
-  const [error, setError] = React.useState<unknown>(undefined);
-
-  const runList = async (): Promise<void> => {
-    if (busy) return;
-    setBusy(true);
-    setResult(undefined);
-    setError(undefined);
+  const refreshSecrets = React.useCallback(async (): Promise<void> => {
+    setRefreshing(true);
+    setErrorMessage(null);
     try {
-      const next = await api.list(agentQuery);
-      if (Array.isArray(next.handles)) {
-        setResult({
-          ...next,
-          handles: next.handles.filter(
-            (handle) => !handle.handle_id.startsWith(MANAGED_PROVIDER_SECRET_PREFIX),
-          ),
-        });
-      } else {
-        setResult(next);
-      }
-    } catch (e) {
-      setError(e);
+      const result = await readApi.list();
+      setRows(normalizeSecretRows(result.handles));
+    } catch (error) {
+      setErrorMessage(formatErrorMessage(error));
+      setRows([]);
     } finally {
-      setBusy(false);
+      setLoading(false);
+      setRefreshing(false);
     }
-  };
+  }, [readApi]);
 
-  return (
-    <Card>
-      <CardHeader>
-        <div className="text-sm font-medium text-fg">List</div>
-      </CardHeader>
-      <CardContent className="grid gap-4">
-        <Button
-          type="button"
-          variant="secondary"
-          data-testid="secrets-list"
-          isLoading={busy}
-          onClick={() => void runList()}
-        >
-          List secrets
-        </Button>
-        <ApiResultCard heading="Secrets" value={result} error={error} />
-      </CardContent>
-    </Card>
+  React.useEffect(() => {
+    void refreshSecrets();
+  }, [refreshSecrets]);
+
+  const filteredRows = React.useMemo(
+    () => rows.filter((row) => matchesSecretFilter(row, filterValue)),
+    [filterValue, rows],
   );
-}
-
-function SecretsStoreCard({
-  api,
-  agentQuery,
-  canMutate,
-  requestEnter,
-}: {
-  api: SecretsApi;
-  agentQuery: ReturnType<typeof normalizeAgentKey>;
-  canMutate: boolean;
-  requestEnter: () => void;
-}): React.ReactElement {
-  const [open, setOpen] = React.useState(false);
-  const [secretKeyRaw, setSecretKeyRaw] = React.useState("");
-  const [valueRaw, setValueRaw] = React.useState("");
-  const [result, setResult] = React.useState<unknown>(undefined);
-  const [error, setError] = React.useState<unknown>(undefined);
-
-  const canStore = secretKeyRaw.trim().length > 0 && valueRaw.trim().length > 0;
+  const canStore = storeSecretKeyRaw.trim().length > 0 && storeValueRaw.trim().length > 0;
+  const canRotate = rotateValueRaw.trim().length > 0;
 
   const runStore = async (): Promise<void> => {
-    setResult(undefined);
-    setError(undefined);
     if (!canMutate) {
       requestEnter();
       throw new Error("Enter Elevated Mode to store secrets.");
     }
 
-    const secretKey = secretKeyRaw.trim();
-    if (!secretKey) return void setError(new Error("secret_key is required"));
-
-    const value = valueRaw.trim();
-    if (!value) return void setError(new Error("value is required"));
-
-    try {
-      setResult(await api.store({ secret_key: secretKey, value }, agentQuery));
-      setValueRaw("");
-    } catch (e) {
-      setError(e);
-      throw e;
+    const secretKey = storeSecretKeyRaw.trim();
+    if (!secretKey) {
+      throw new Error("secret_key is required");
     }
+
+    const rawValue = storeValueRaw;
+    if (rawValue.trim().length === 0) {
+      throw new Error("value is required");
+    }
+
+    await mutationApi.store({ secret_key: secretKey, value: rawValue });
+    await refreshSecrets();
+    setStoreSecretKeyRaw("");
+    setStoreValueRaw("");
+    setStatusMessage({
+      title: "Secret stored",
+      description: `Stored secret "${secretKey}".`,
+    });
   };
 
-  return (
-    <>
-      <Card>
-        <CardHeader>
-          <div className="text-sm font-medium text-fg">Store</div>
-        </CardHeader>
-        <CardContent className="grid gap-4">
-          <Input
-            label="Secret key"
-            required
-            value={secretKeyRaw}
-            onChange={(event) => setSecretKeyRaw(event.target.value)}
-          />
-
-          <Input
-            label="Value"
-            type="password"
-            placeholder="Write-only"
-            autoCapitalize="none"
-            autoCorrect="off"
-            autoComplete="off"
-            spellCheck={false}
-            value={valueRaw}
-            onChange={(event) => setValueRaw(event.target.value)}
-          />
-
-          <ApiResultCard heading="Store result" value={result} error={error} />
-        </CardContent>
-        <CardFooter>
-          <ElevatedModeTooltip canMutate={canMutate} requestEnter={requestEnter}>
-            <Button
-              type="button"
-              variant="danger"
-              data-testid="secrets-store-open"
-              disabled={!canStore}
-              onClick={() => setOpen(true)}
-            >
-              Store secret
-            </Button>
-          </ElevatedModeTooltip>
-        </CardFooter>
-      </Card>
-
-      <ConfirmDangerDialog
-        open={open}
-        onOpenChange={setOpen}
-        title="Store secret"
-        description="Secret values are write-only and will not be displayed after submission."
-        confirmLabel="Store"
-        onConfirm={runStore}
-      />
-    </>
-  );
-}
-
-function SecretsRotateCard({
-  api,
-  agentQuery,
-  canMutate,
-  requestEnter,
-}: {
-  api: SecretsApi;
-  agentQuery: ReturnType<typeof normalizeAgentKey>;
-  canMutate: boolean;
-  requestEnter: () => void;
-}): React.ReactElement {
-  const [open, setOpen] = React.useState(false);
-  const [handleIdRaw, setHandleIdRaw] = React.useState("");
-  const [valueRaw, setValueRaw] = React.useState("");
-  const [result, setResult] = React.useState<unknown>(undefined);
-  const [error, setError] = React.useState<unknown>(undefined);
-
-  const canRotate = handleIdRaw.trim().length > 0 && valueRaw.trim().length > 0;
-
   const runRotate = async (): Promise<void> => {
-    setResult(undefined);
-    setError(undefined);
     if (!canMutate) {
       requestEnter();
       throw new Error("Enter Elevated Mode to rotate secrets.");
     }
-
-    const handleId = handleIdRaw.trim();
-    if (!handleId) return void setError(new Error("handle_id is required"));
-
-    const rawValue = valueRaw;
-    if (rawValue.trim().length === 0) return void setError(new Error("value is required"));
-
-    try {
-      setResult(await api.rotate(handleId, { value: rawValue }, agentQuery));
-      setValueRaw("");
-    } catch (e) {
-      setError(e);
-      throw e;
+    if (!rotateTarget) {
+      throw new Error("Select a secret to rotate.");
     }
+
+    const rawValue = rotateValueRaw;
+    if (rawValue.trim().length === 0) {
+      throw new Error("value is required");
+    }
+
+    await mutationApi.rotate(rotateTarget.handle.handle_id, { value: rawValue });
+    await refreshSecrets();
+    setRotateValueRaw("");
+    setStatusMessage({
+      title: "Secret rotated",
+      description: `Rotated secret "${rotateTarget.secretKey}".`,
+    });
+  };
+
+  const runRevoke = async (): Promise<void> => {
+    if (!canMutate) {
+      requestEnter();
+      throw new Error("Enter Elevated Mode to revoke secrets.");
+    }
+    if (!revokeTarget) {
+      throw new Error("Select a secret to revoke.");
+    }
+
+    await mutationApi.revoke(revokeTarget.handle.handle_id);
+    await refreshSecrets();
+    setStatusMessage({
+      title: "Secret revoked",
+      description: `Revoked secret "${revokeTarget.secretKey}".`,
+    });
   };
 
   return (
-    <>
-      <Card data-testid="secrets-rotate-card">
+    <section className="grid gap-4" data-testid="admin-http-secrets">
+      <Alert
+        variant="info"
+        title="Write-only secrets"
+        description="Secret values are never shown again after submission. Provider-managed credentials stay in Providers and do not appear in this list."
+      />
+
+      {statusMessage ? (
+        <Alert
+          variant="success"
+          title={statusMessage.title}
+          description={statusMessage.description}
+        />
+      ) : null}
+
+      <Card>
         <CardHeader>
-          <div className="text-sm font-medium text-fg">Rotate</div>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="grid gap-1">
+              <div className="text-sm font-medium text-fg">Secrets</div>
+              <div className="text-sm text-fg-muted">
+                Manage active operator secrets with structured metadata only.
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline">{filteredRows.length} visible</Badge>
+              <Badge variant="outline">{rows.length} total</Badge>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                data-testid="admin-http-secrets-refresh"
+                isLoading={refreshing}
+                onClick={() => {
+                  void refreshSecrets();
+                }}
+              >
+                <RefreshCw className="h-4 w-4" />
+                Refresh
+              </Button>
+              <ElevatedModeTooltip canMutate={canMutate} requestEnter={requestEnter}>
+                <Button
+                  type="button"
+                  size="sm"
+                  data-testid="admin-http-secrets-store-open"
+                  onClick={() => {
+                    setStoreOpen(true);
+                  }}
+                >
+                  <Plus className="h-4 w-4" />
+                  Store secret
+                </Button>
+              </ElevatedModeTooltip>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="grid gap-4">
+          <div className="max-w-xl">
+            <Input
+              label="Filter secrets"
+              data-testid="admin-http-secrets-filter"
+              value={filterValue}
+              placeholder="Search by secret key, scope, or provider"
+              onChange={(event) => {
+                setFilterValue(event.currentTarget.value);
+              }}
+            />
+          </div>
+
+          {errorMessage ? (
+            <Alert variant="error" title="Failed to load secrets" description={errorMessage} />
+          ) : null}
+
+          {loading ? <div className="text-sm text-fg-muted">Loading secrets...</div> : null}
+
+          {!loading && !errorMessage && rows.length === 0 ? (
+            <EmptyState
+              icon={KeyRound}
+              title="No secrets stored"
+              description="Store a secret to create the first operator-managed secret handle."
+              action={{
+                label: canMutate ? "Store secret" : "Unlock changes",
+                onClick: () => {
+                  if (canMutate) {
+                    setStoreOpen(true);
+                    return;
+                  }
+                  requestEnter();
+                },
+              }}
+            />
+          ) : null}
+
+          {!loading && !errorMessage && rows.length > 0 && filteredRows.length === 0 ? (
+            <Alert
+              variant="info"
+              title="No secrets match the current filter"
+              description="Adjust the filter to see more secrets."
+            />
+          ) : null}
+
+          {!loading && !errorMessage && filteredRows.length > 0 ? (
+            <div className="grid gap-2" role="table" aria-label="Secrets list">
+              <div
+                className="hidden items-center gap-4 rounded-lg border border-border bg-bg-subtle/60 px-4 py-2 text-xs font-medium uppercase tracking-wide text-fg-muted md:grid md:grid-cols-[minmax(0,1.8fr)_minmax(0,0.8fr)_minmax(0,1fr)_auto]"
+                role="row"
+              >
+                <div role="columnheader">Secret key</div>
+                <div role="columnheader">Provider</div>
+                <div role="columnheader">Created</div>
+                <div className="text-right" role="columnheader">
+                  Actions
+                </div>
+              </div>
+
+              {filteredRows.map((row) => (
+                <div
+                  key={row.secretKey}
+                  className="grid gap-3 rounded-lg border border-border bg-bg px-4 py-3 md:grid-cols-[minmax(0,1.8fr)_minmax(0,0.8fr)_minmax(0,1fr)_auto] md:items-center md:gap-4"
+                  data-testid={`secret-row-${row.secretKey}`}
+                  role="row"
+                >
+                  <div className="min-w-0" role="cell">
+                    <div className="font-mono text-sm text-fg [overflow-wrap:anywhere]">
+                      {row.secretKey}
+                    </div>
+                    {row.scopeLabel ? (
+                      <div className="mt-1 text-xs text-fg-muted [overflow-wrap:anywhere]">
+                        Scope: <span className="font-mono">{row.scopeLabel}</span>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div role="cell">
+                    <Badge variant="outline">{row.handle.provider}</Badge>
+                  </div>
+
+                  <div className="text-sm text-fg-muted" role="cell" title={row.handle.created_at}>
+                    {formatCreatedAt(row.handle.created_at)}
+                  </div>
+
+                  <div role="cell">
+                    <SecretRowActions
+                      row={row}
+                      canMutate={canMutate}
+                      requestEnter={requestEnter}
+                      onRotate={(nextRow) => {
+                        setRotateTarget(nextRow);
+                        setRotateValueRaw("");
+                      }}
+                      onRevoke={(nextRow) => {
+                        setRevokeTarget(nextRow);
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
+
+      <ConfirmDangerDialog
+        open={storeOpen}
+        onOpenChange={(open) => {
+          setStoreOpen(open);
+          if (!open) {
+            setStoreValueRaw("");
+          }
+        }}
+        title="Store secret"
+        description="Create a new write-only secret value. Existing secret keys must be rotated instead."
+        confirmLabel="Store secret"
+        confirmationLabel="I understand the value is write-only and will not be shown again."
+        confirmDisabled={!canStore}
+        onConfirm={runStore}
+      >
+        <div className="grid gap-4">
           <Input
-            label="Handle ID"
+            label="Secret key"
             required
-            value={handleIdRaw}
-            onChange={(event) => setHandleIdRaw(event.target.value)}
+            value={storeSecretKeyRaw}
+            helperText="Use a unique key without whitespace."
+            onChange={(event) => {
+              setStoreSecretKeyRaw(event.currentTarget.value);
+            }}
           />
           <Input
-            label="New value"
+            label="Value"
             type="password"
             required
             placeholder="Write-only"
@@ -293,113 +441,63 @@ function SecretsRotateCard({
             autoCorrect="off"
             autoComplete="off"
             spellCheck={false}
-            value={valueRaw}
-            onChange={(event) => setValueRaw(event.target.value)}
+            value={storeValueRaw}
+            onChange={(event) => {
+              setStoreValueRaw(event.currentTarget.value);
+            }}
           />
-          <ApiResultCard heading="Rotate result" value={result} error={error} />
-        </CardContent>
-        <CardFooter>
-          <ElevatedModeTooltip canMutate={canMutate} requestEnter={requestEnter}>
-            <Button
-              type="button"
-              variant="danger"
-              data-testid="secrets-rotate-open"
-              disabled={!canRotate}
-              onClick={() => setOpen(true)}
-            >
-              Rotate secret
-            </Button>
-          </ElevatedModeTooltip>
-        </CardFooter>
-      </Card>
+        </div>
+      </ConfirmDangerDialog>
 
       <ConfirmDangerDialog
-        open={open}
-        onOpenChange={setOpen}
+        open={rotateTarget !== null}
+        onOpenChange={(open) => {
+          if (open) return;
+          setRotateTarget(null);
+          setRotateValueRaw("");
+        }}
         title="Rotate secret"
-        description="Secret values are write-only and will not be displayed after submission."
-        confirmLabel="Rotate"
+        description="Replace the current value for this secret key without exposing the existing value."
+        confirmLabel="Rotate secret"
+        confirmationLabel="I understand this replaces the current secret value."
+        confirmDisabled={!canRotate}
         onConfirm={runRotate}
-      />
-    </>
-  );
-}
-
-function SecretsRevokeCard({
-  api,
-  agentQuery,
-  canMutate,
-  requestEnter,
-}: {
-  api: SecretsApi;
-  agentQuery: ReturnType<typeof normalizeAgentKey>;
-  canMutate: boolean;
-  requestEnter: () => void;
-}): React.ReactElement {
-  const [open, setOpen] = React.useState(false);
-  const [handleIdRaw, setHandleIdRaw] = React.useState("");
-  const [result, setResult] = React.useState<unknown>(undefined);
-  const [error, setError] = React.useState<unknown>(undefined);
-
-  const canRevoke = handleIdRaw.trim().length > 0;
-
-  const runRevoke = async (): Promise<void> => {
-    setResult(undefined);
-    setError(undefined);
-    if (!canMutate) {
-      requestEnter();
-      throw new Error("Enter Elevated Mode to revoke secrets.");
-    }
-
-    const handleId = handleIdRaw.trim();
-    if (!handleId) return void setError(new Error("handle_id is required"));
-
-    try {
-      setResult(await api.revoke(handleId, agentQuery));
-    } catch (e) {
-      setError(e);
-      throw e;
-    }
-  };
-
-  return (
-    <>
-      <Card>
-        <CardHeader>
-          <div className="text-sm font-medium text-fg">Revoke</div>
-        </CardHeader>
-        <CardContent className="grid gap-4">
-          <Input
-            label="Handle ID"
-            required
-            value={handleIdRaw}
-            onChange={(event) => setHandleIdRaw(event.target.value)}
-          />
-          <ApiResultCard heading="Revoke result" value={result} error={error} />
-        </CardContent>
-        <CardFooter>
-          <ElevatedModeTooltip canMutate={canMutate} requestEnter={requestEnter}>
-            <Button
-              type="button"
-              variant="danger"
-              data-testid="secrets-revoke-open"
-              disabled={!canRevoke}
-              onClick={() => setOpen(true)}
-            >
-              Revoke secret
-            </Button>
-          </ElevatedModeTooltip>
-        </CardFooter>
-      </Card>
+      >
+        {rotateTarget ? (
+          <div className="grid gap-4" data-testid="secrets-rotate-card">
+            <SecretMetadata row={rotateTarget} />
+            <Input
+              label="New value"
+              type="password"
+              required
+              placeholder="Write-only"
+              autoCapitalize="none"
+              autoCorrect="off"
+              autoComplete="off"
+              spellCheck={false}
+              value={rotateValueRaw}
+              onChange={(event) => {
+                setRotateValueRaw(event.currentTarget.value);
+              }}
+            />
+          </div>
+        ) : null}
+      </ConfirmDangerDialog>
 
       <ConfirmDangerDialog
-        open={open}
-        onOpenChange={setOpen}
+        open={revokeTarget !== null}
+        onOpenChange={(open) => {
+          if (open) return;
+          setRevokeTarget(null);
+        }}
         title="Revoke secret"
-        description="Revoking a secret cannot be undone."
-        confirmLabel="Revoke"
+        description="Revoking a secret invalidates the selected handle immediately."
+        confirmLabel="Revoke secret"
+        confirmationLabel="I understand this invalidates the selected secret immediately."
         onConfirm={runRevoke}
-      />
-    </>
+      >
+        {revokeTarget ? <SecretMetadata row={revokeTarget} /> : null}
+      </ConfirmDangerDialog>
+    </section>
   );
 }
