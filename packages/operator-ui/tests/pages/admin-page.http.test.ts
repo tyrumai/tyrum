@@ -130,6 +130,41 @@ describe("ConfigurePage (HTTP) routing config", () => {
     cleanupAdminHttpPage(page);
   });
 
+  it("shows telegram connection save failures in the confirmation dialog", async () => {
+    const { core } = createAdminHttpTestCore();
+    const fetchMock = vi.fn(async () =>
+      jsonResponse(
+        {
+          error: "upstream_error",
+          message: "telegram config save failed",
+        },
+        500,
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const page = renderAdminHttpConfigurePage(core);
+    await switchHttpTab(page.container, "admin-http-tab-routing-config");
+    await flush();
+
+    act(() => {
+      setNativeValue(
+        getByTestId<HTMLInputElement>(page.container, "channels-telegram-bot-token"),
+        "new-bot-token",
+      );
+    });
+    await flush();
+
+    click(getByTestId<HTMLButtonElement>(page.container, "channels-telegram-save-open"));
+    await flush();
+    click(getByTestId<HTMLElement>(document.body, "confirm-danger-checkbox"));
+    await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "confirm-danger-confirm"));
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(document.body.textContent).toContain("telegram config save failed");
+    cleanupAdminHttpPage(page);
+  });
+
   it("filters structured routing rules", async () => {
     const { core } = createAdminHttpTestCore();
     const page = renderAdminHttpConfigurePage(core);

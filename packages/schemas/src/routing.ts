@@ -2,18 +2,7 @@ import { z } from "zod";
 import { DateTimeSchema } from "./common.js";
 import { AgentKey, ThreadId, AccountId } from "./keys.js";
 import { NormalizedContainerKind } from "./message.js";
-
-function canonicalizeTelegramAllowedUserIds(userIds: readonly string[]): string[] {
-  const seen = new Set<string>();
-  const normalized: string[] = [];
-  for (const userId of userIds) {
-    const trimmed = userId.trim();
-    if (!trimmed || seen.has(trimmed)) continue;
-    seen.add(trimmed);
-    normalized.push(trimmed);
-  }
-  return normalized;
-}
+import { canonicalizeTelegramAllowedUserIds } from "./telegram.js";
 
 export const TelegramRoutingConfig = z
   .object({
