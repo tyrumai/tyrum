@@ -9,6 +9,7 @@ import { ConfirmDangerDialog } from "../ui/confirm-danger-dialog.js";
 import { Input } from "../ui/input.js";
 import { Select } from "../ui/select.js";
 import { Textarea } from "../ui/textarea.js";
+import { formatTimestamp } from "./admin-http-policy-config-primitives.js";
 
 export type PolicyOverrideRecord = {
   policy_override_id: string;
@@ -57,10 +58,6 @@ export interface PolicyOverridesSectionProps {
     expires_at?: string;
   }) => Promise<void>;
   onRevoke: (input: { policy_override_id: string; reason: string }) => Promise<void>;
-}
-
-function formatTimestamp(value: string | null | undefined): string {
-  return value ?? "Never";
 }
 
 function statusVariant(status: PolicyOverrideRecord["status"]): "success" | "warning" | "danger" {
@@ -325,7 +322,7 @@ export function PolicyOverridesSection(props: PolicyOverridesSectionProps): Reac
                   <Badge variant={statusVariant(override.status)}>{override.status}</Badge>
                   <Badge variant={expiryVariant(override)}>
                     {override.expires_at
-                      ? `Expires ${formatTimestamp(override.expires_at)}`
+                      ? `Expires ${formatTimestamp(override.expires_at, "Never")}`
                       : "No expiry"}
                   </Badge>
                   <Badge variant="outline">{override.tool_id}</Badge>

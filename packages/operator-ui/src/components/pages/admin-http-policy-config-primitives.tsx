@@ -11,8 +11,11 @@ import {
   type PolicyStringRow,
 } from "./admin-http-policy-shared.js";
 
-export function formatTimestamp(value: string | null | undefined): string {
-  return value ?? "Not saved yet";
+export function formatTimestamp(
+  value: string | null | undefined,
+  fallback = "Not saved yet",
+): string {
+  return value ?? fallback;
 }
 
 export function sourceLabel(source: string): string {

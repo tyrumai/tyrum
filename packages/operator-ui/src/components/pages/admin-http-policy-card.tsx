@@ -110,7 +110,7 @@ export function AdminHttpPolicyCard({
   const [revokeBusy, setRevokeBusy] = React.useState(false);
   const [revokeError, setRevokeError] = React.useState<unknown>(null);
 
-  const loadAll = async (): Promise<void> => {
+  const loadAll = React.useCallback(async (): Promise<void> => {
     setLoadBusy(true);
     setLoadError(null);
     try {
@@ -146,13 +146,11 @@ export function AdminHttpPolicyCard({
     } finally {
       setLoadBusy(false);
     }
-  };
+  }, [http]);
 
   React.useEffect(() => {
     void loadAll();
-    // The admin HTTP client instance is stable for the lifetime of the active elevated-mode session.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [loadAll]);
 
   return (
     <div className="grid gap-6" data-testid="admin-http-policy">
