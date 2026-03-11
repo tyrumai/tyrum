@@ -96,5 +96,3 @@ export function useNodeInventory(input: {
 
   return state;
 }
-
-export const usePairingPageNodeInventory = useNodeInventory;
