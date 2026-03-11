@@ -27,7 +27,9 @@ export function useOperatorAppViewModel(opts: {
   onNavigationRequest?: (handler: (request: unknown) => void) => (() => void) | undefined;
 }) {
   const { core, mode, hostKind } = opts;
-  const [route, setRoute] = useState<OperatorUiRouteId>("dashboard");
+  const [route, setRoute] = useState<OperatorUiRouteId>(
+    hostKind === "mobile" ? "mobile" : "dashboard",
+  );
   const connection = useOperatorStore(core.connectionStore);
   const autoSync = useOperatorStore(core.autoSyncStore);
   const approvals = useOperatorStore(core.approvalsStore);
@@ -82,11 +84,11 @@ export function useOperatorAppViewModel(opts: {
   const mobileItems = sidebarItems.slice(0, 4);
   const mobileOverflowItems = sidebarItems.slice(4);
   const platformItems = availableRoutes
-    .filter((item) =>
-      hostKind === "desktop"
-        ? item.navGroup === "platformDesktop"
-        : item.navGroup === "platformWeb",
-    )
+    .filter((item) => {
+      if (hostKind === "desktop") return item.navGroup === "platformDesktop";
+      if (hostKind === "mobile") return item.navGroup === "platformMobile";
+      return item.navGroup === "platformWeb";
+    })
     .map((item) => toNavItem(item.id));
 
   const navigate = (id: string): void => {
@@ -134,15 +136,17 @@ export function useOperatorAppViewModel(opts: {
 
   const platformRouteIds = new Set(platformItems.map((item) => item.id as OperatorUiRouteId));
   const isPlatformRoute = platformRouteIds.has(route);
-  const showConnectPage =
-    mode === "web" ? !showOperatorRoutes : !showOperatorRoutes && !isPlatformRoute;
+  const supportsPlatformRouteWhileOffline = mode === "desktop" || hostKind === "mobile";
+  const showConnectPage = supportsPlatformRouteWhileOffline
+    ? !showOperatorRoutes && !isPlatformRoute
+    : !showOperatorRoutes;
 
   return {
     route,
     navigate,
     connection,
     autoSync,
-    showShell,
+    showShell: showShell || hostKind === "mobile",
     showOperatorRoutes,
     showConnectPage,
     sidebarItems: mode === "desktop" && !showOperatorRoutes ? [] : sidebarItems,

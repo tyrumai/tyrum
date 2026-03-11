@@ -25,6 +25,10 @@ import {
   shapeDesktopEvidenceForArtifacts,
 } from "../desktop/shape-desktop-evidence.js";
 import {
+  resolveMobileEvidenceSensitivity,
+  shapeMobileEvidenceForArtifacts,
+} from "../mobile/shape-mobile-evidence.js";
+import {
   DEFAULT_NODE_DISPATCH_TIMEOUT_MS,
   MAX_NODE_DISPATCH_TIMEOUT_MS,
   MAX_RESPONSE_BYTES,
@@ -156,7 +160,14 @@ export async function shapeNodeDispatchEvidence(
   scope: { runId: string; stepId: string },
   policySnapshotId?: string,
 ): Promise<unknown> {
-  if (actionKind !== "Desktop" && actionKind !== "Browser") return evidence;
+  if (
+    actionKind !== "Desktop" &&
+    actionKind !== "Browser" &&
+    actionKind !== "IOS" &&
+    actionKind !== "Android"
+  ) {
+    return evidence;
+  }
   if (!context.artifactStore) return evidence;
   const lease = context.workspaceLease;
   const db = lease?.db;
@@ -187,8 +198,24 @@ export async function shapeNodeDispatchEvidence(
     return shaped.evidence;
   }
 
-  const sensitivity = resolveBrowserEvidenceSensitivity();
-  const shaped = await shapeBrowserEvidenceForArtifacts({
+  if (actionKind === "Browser") {
+    const sensitivity = resolveBrowserEvidenceSensitivity();
+    const shaped = await shapeBrowserEvidenceForArtifacts({
+      db,
+      artifactStore: context.artifactStore,
+      runId: scope.runId,
+      stepId: scope.stepId,
+      workspaceId: lease?.workspaceId,
+      fallbackScope,
+      evidence,
+      result,
+      sensitivity,
+    });
+    return shaped.evidence;
+  }
+
+  const sensitivity = resolveMobileEvidenceSensitivity();
+  const shaped = await shapeMobileEvidenceForArtifacts({
     db,
     artifactStore: context.artifactStore,
     runId: scope.runId,
@@ -198,6 +225,7 @@ export async function shapeNodeDispatchEvidence(
     evidence,
     result,
     sensitivity,
+    platformLabel: actionKind === "IOS" ? "ios" : "android",
   });
   return shaped.evidence;
 }

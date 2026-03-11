@@ -39,6 +39,12 @@ export { DesktopDisplayTarget, DesktopElementRef, DesktopWindowRef, DesktopBacke
 // prettier-ignore
 export { BrowserGeolocationGetArgs, BrowserCameraFacingMode, BrowserCameraCapturePhotoFormat, BrowserCameraCapturePhotoArgs, BrowserMicrophoneRecordArgs, BrowserActionArgs, BrowserGeolocationCoords, BrowserGeolocationGetResult, BrowserCameraCapturePhotoResult, BrowserMicrophoneRecordResult, BrowserActionResult } from "./browser.js";
 // prettier-ignore
+export { MobileLocationGetCurrentArgs, MobileCameraTarget, MobileCameraCapturePhotoFormat, MobileCameraCapturePhotoArgs, MobileAudioRecordClipArgs, MobileActionArgs, MobileLocationCoords, MobileLocationGetCurrentResult, MobileCameraCapturePhotoResult, MobileAudioRecordClipResult, MobileActionResult } from "./mobile.js";
+// prettier-ignore
+export { IosLocationGetCurrentArgs, IosCameraTarget, IosCameraCapturePhotoFormat, IosCameraCapturePhotoArgs, IosAudioRecordClipArgs, IosActionArgs, IosLocationCoords, IosLocationGetCurrentResult, IosCameraCapturePhotoResult, IosAudioRecordClipResult, IosActionResult } from "./ios.js";
+// prettier-ignore
+export { AndroidLocationGetCurrentArgs, AndroidCameraTarget, AndroidCameraCapturePhotoFormat, AndroidCameraCapturePhotoArgs, AndroidAudioRecordClipArgs, AndroidActionArgs, AndroidLocationCoords, AndroidLocationGetCurrentResult, AndroidCameraCapturePhotoResult, AndroidAudioRecordClipResult, AndroidActionResult } from "./android.js";
+// prettier-ignore
 export { AgentModelConfig, AgentSkillConfig, AgentMcpConfig, AgentToolConfig, AgentSessionConfig, AgentMemoryConfig, AgentPersona, AgentConfig, IdentityStyle, IdentityFrontmatter, IdentityPack, SkillRequires, SkillFrontmatter, SkillManifest, SkillProvenanceSource, SkillStatus, McpServerSpec, AgentTurnRequest, AgentTurnResponse, AgentListItem, AgentListResponse, AgentConfigListItem, AgentConfigListResponse, AgentConfigGetResponse, AgentConfigUpdateRequest, AgentConfigUpdateResponse, ManagedAgentSummary, ManagedAgentListResponse, ManagedAgentDetail, ManagedAgentGetResponse, ManagedAgentCreateRequest, ManagedAgentUpdateRequest, ManagedAgentDeleteResponse, AgentStatusResponse } from "./agent.js";
 export {
   CODEX_AGENT_NAMES,

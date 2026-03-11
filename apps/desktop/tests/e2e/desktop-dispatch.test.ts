@@ -65,7 +65,7 @@ function delay(ms: number): Promise<void> {
 
 async function waitForCapabilities(
   connectionManager: ConnectionManager,
-  capabilities: ReadonlyArray<"desktop" | "cli" | "playwright" | "http" | "android">,
+  capabilities: ReadonlyArray<"desktop" | "cli" | "playwright" | "http" | "ios" | "android">,
   timeoutMs = 2_000,
 ): Promise<void> {
   const required = [...new Set(capabilities)];
@@ -183,7 +183,7 @@ async function startServer(): Promise<{
 async function connectClient(
   port: number,
   token: string,
-  capabilities: Array<"desktop" | "cli" | "playwright" | "http" | "android">,
+  capabilities: Array<"desktop" | "cli" | "playwright" | "http" | "ios" | "android">,
   connectionManager: ConnectionManager,
 ): Promise<TyrumClient> {
   const { publicKey, privateKey } = generateKeyPairSync("ed25519");

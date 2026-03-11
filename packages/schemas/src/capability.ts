@@ -8,6 +8,7 @@ import { z } from "zod";
  */
 export const ClientCapability = z.enum([
   "playwright",
+  "ios",
   "android",
   "desktop",
   "cli",
@@ -45,6 +46,7 @@ export const CapabilityDescriptorVersion = z
 
 const LEGACY_TO_DESCRIPTOR_ID = {
   playwright: "tyrum.playwright",
+  ios: "tyrum.ios",
   android: "tyrum.android",
   desktop: "tyrum.desktop",
   cli: "tyrum.cli",

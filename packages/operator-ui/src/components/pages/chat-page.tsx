@@ -64,6 +64,14 @@ export function ChatPage({ core }: { core: OperatorCore }) {
     if (browserNode?.status === "connected" && browserNode.deviceId) {
       return browserNode.deviceId;
     }
+    if (host?.kind === "mobile") {
+      try {
+        const state = await host.api.node.getState();
+        return state.status === "connected" && state.deviceId ? state.deviceId : null;
+      } catch {
+        return null;
+      }
+    }
     if (host?.kind !== "desktop") return null;
     const getStatus = host.api?.node.getStatus;
     if (typeof getStatus !== "function") return null;

@@ -132,6 +132,11 @@ type BrowserDispatchOp =
   | "camera.capture_photo"
   | "microphone.record"
   | "unknown";
+type MobileDispatchOp =
+  | "location.get_current"
+  | "camera.capture_photo"
+  | "audio.record_clip"
+  | "unknown";
 type ScheduleExecutionKind = "agent_turn" | "playbook" | "steps" | "unknown";
 
 function normalizeNodeDispatchOpRaw(parsed: Record<string, unknown> | null): string | undefined {
@@ -181,6 +186,56 @@ function canonicalizeBrowserDispatchOp(parsed: Record<string, unknown> | null): 
     default:
       return "unknown";
   }
+}
+
+function canonicalizeMobileDispatchOp(parsed: Record<string, unknown> | null): MobileDispatchOp {
+  const opRaw = normalizeNodeDispatchOpRaw(parsed);
+  if (!opRaw) return "unknown";
+
+  switch (opRaw) {
+    case "location.get_current":
+    case "camera.capture_photo":
+    case "audio.record_clip":
+      return opRaw;
+    default:
+      return "unknown";
+  }
+}
+
+function inferPrimitiveFromCapabilityHint(capability: string): ActionPrimitiveKind | undefined {
+  const normalized = capability.trim().toLowerCase();
+  if (!normalized) return undefined;
+  const segments = new Set(normalized.split(/[^a-z0-9]+/).filter((segment) => segment.length > 0));
+  if (segments.has("android")) return "Android";
+  if (segments.has("ios") || segments.has("mobile")) return "IOS";
+  if (segments.has("browser")) return "Browser";
+  if (segments.has("desktop") || segments.has("electron")) return "Desktop";
+  return undefined;
+}
+
+function inferPrimitiveFromUnknownCapability(
+  capability: string,
+  actionName: string,
+  input: Record<string, unknown> | null,
+): ActionPrimitiveKind {
+  const capabilityHint = inferPrimitiveFromCapabilityHint(capability);
+  if (capabilityHint) return capabilityHint;
+
+  if (actionName.startsWith("location.") || actionName.startsWith("audio.")) {
+    return "IOS";
+  }
+  if (actionName.startsWith("geolocation.") || actionName.startsWith("microphone.")) {
+    return "Browser";
+  }
+  if (actionName === "camera.capture_photo") {
+    if (normalizeToken(input?.["camera"])) return "IOS";
+    if (normalizeToken(input?.["facing_mode"]) || normalizeToken(input?.["device_id"])) {
+      return "Browser";
+    }
+    return "Browser";
+  }
+  if (actionName.startsWith("camera.")) return "Browser";
+  return "Desktop";
 }
 
 function normalizeScheduleExecutionKind(
@@ -282,6 +337,12 @@ export function canonicalizeNodeDispatchMatchTarget(
     target += `;op:${op}`;
   }
 
+  if (actionKind === "IOS" || actionKind === "Android") {
+    const parsed = asRecord(actionArgs);
+    const op = canonicalizeMobileDispatchOp(parsed);
+    target += `;op:${op}`;
+  }
+
   return target;
 }
 
@@ -342,22 +403,22 @@ export function canonicalizeToolMatchTarget(
     const capability = normalizeToken(parsed?.["capability"]) ?? "";
     const actionName = normalizeToken(parsed?.["action_name"]);
     if (!actionName) return `capability:${capability};action:`;
+    const input = asRecord(parsed?.["input"]);
 
     const inferredPrimitive =
       capability === "tyrum.browser"
         ? "Browser"
-        : capability === "tyrum.desktop"
-          ? "Desktop"
-          : actionName.startsWith("camera.") ||
-              actionName.startsWith("microphone.") ||
-              actionName.startsWith("geolocation.")
-            ? "Browser"
-            : "Desktop";
+        : capability === "tyrum.ios"
+          ? "IOS"
+          : capability === "tyrum.android"
+            ? "Android"
+            : capability === "tyrum.desktop"
+              ? "Desktop"
+              : inferPrimitiveFromUnknownCapability(capability, actionName, input);
     const parsedAction = ActionPrimitiveKind.safeParse(inferredPrimitive);
 
     if (!parsedAction.success) return `capability:${capability};action:${actionName}`;
 
-    const input = asRecord(parsed?.["input"]);
     const actionArgs = input ? { ...input, op: actionName } : { op: actionName };
     return `capability:${capability};${canonicalizeNodeDispatchMatchTarget(
       parsedAction.data,

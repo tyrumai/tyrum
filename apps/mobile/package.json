@@ -1,0 +1,46 @@
+{
+  "name": "@tyrum/mobile",
+  "version": "0.1.0",
+  "private": true,
+  "author": "Ron Hernaus <ron@virtunet.nl>",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "prebuild": "node ./scripts/ensure-deps-built.mjs",
+    "pretypecheck": "node ./scripts/ensure-deps-built.mjs",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "pnpm exec tsc --noEmit --project tsconfig.json",
+    "cap:add:ios": "capacitor add ios",
+    "cap:add:android": "capacitor add android",
+    "cap:sync": "capacitor sync",
+    "cap:open:ios": "capacitor open ios",
+    "cap:open:android": "capacitor open android"
+  },
+  "dependencies": {
+    "@aparajita/capacitor-secure-storage": "^8.0.0",
+    "@capacitor/camera": "^8.0.2",
+    "@capacitor/core": "^8.2.0",
+    "@capacitor/geolocation": "^8.1.0",
+    "@capacitor/preferences": "^8.0.1",
+    "@tyrum/client": "workspace:*",
+    "@tyrum/operator-core": "workspace:*",
+    "@tyrum/operator-ui": "workspace:*",
+    "@tyrum/schemas": "workspace:*",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^8.2.0",
+    "@capacitor/cli": "^8.2.0",
+    "@capacitor/ios": "^8.2.0",
+    "@tailwindcss/vite": "^4.2.1",
+    "@types/node": "^24.12.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^5.1.4",
+    "tailwindcss": "^4.2.1",
+    "vite": "^7.3.0"
+  }
+}

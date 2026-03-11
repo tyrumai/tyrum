@@ -266,7 +266,7 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
         },
         capability: {
           type: "string",
-          description: "Capability descriptor id (example: tyrum.browser).",
+          description: "Capability descriptor id (example: tyrum.ios).",
         },
       },
       required: ["node_id", "capability"],
@@ -290,7 +290,7 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
         },
         capability: {
           type: "string",
-          description: "Capability descriptor id (example: tyrum.desktop).",
+          description: "Capability descriptor id (example: tyrum.android).",
         },
         action_name: {
           type: "string",
