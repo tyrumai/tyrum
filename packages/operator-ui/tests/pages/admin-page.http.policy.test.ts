@@ -357,6 +357,8 @@ describe("ConfigurePage (HTTP) policy + config", () => {
     click(getByTestId<HTMLButtonElement>(page.container, "policy-config-save"));
     click(getByTestId<HTMLElement>(document.body, "confirm-danger-checkbox"));
     await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "confirm-danger-confirm"));
+    await flush();
+    await flush();
 
     expect(
       fetchMock.mock.calls.filter(([input, init]) =>

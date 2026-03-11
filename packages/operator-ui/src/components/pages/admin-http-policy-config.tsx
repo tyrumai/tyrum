@@ -48,6 +48,7 @@ export function PolicyConfigSection(props: PolicyConfigSectionProps): React.Reac
     const normalizedBundle = normalizePolicyBundle(props.effective.bundle);
     setFormState(policyBundleToFormState(normalizedBundle));
     setInitialBundle(normalizedBundle);
+    setSaveReason("");
   }, [props.effective]);
 
   if (props.loadError && !props.effective) {
@@ -239,6 +240,7 @@ export function PolicyConfigSection(props: PolicyConfigSectionProps): React.Reac
         isLoading={props.saveBusy}
         onConfirm={async () => {
           await props.onSave(nextBundle, saveReason);
+          setSaveReason("");
         }}
       >
         <div className="grid gap-3 text-sm text-fg-muted">
