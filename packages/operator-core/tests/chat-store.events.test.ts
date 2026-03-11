@@ -137,8 +137,51 @@ describe("chatStore event handling", () => {
       occurred_at: "2026-01-01T00:00:02.000Z",
       payload: {
         thread_id: "ui-session-1",
+        user_message_id: "user-pending-1",
         message_ids: ["assistant-1"],
         reasoning_ids: ["reason-1"],
+      },
+    });
+
+    expect(chat.getSnapshot().active.session?.transcript).toEqual([
+      {
+        kind: "text",
+        id: "session-1-user-1",
+        role: "user",
+        content: "hello",
+        created_at: "2026-01-01T00:00:00.000Z",
+      },
+    ]);
+  });
+
+  it("retracts a user message confirmed before the send eventually fails", async () => {
+    const ws = createFakeWs();
+    ws.sessionGet.mockResolvedValue({ session: sampleGetSession("session-1") });
+    const http = createFakeHttp();
+    const chat = createChatStore(ws as any, http as any);
+
+    await chat.openSession("session-1");
+
+    ws.emit("message.final", {
+      occurred_at: "2026-01-01T00:00:01.000Z",
+      payload: {
+        thread_id: "ui-session-1",
+        message_id: "user-pending-1",
+        role: "user",
+        content: "retry me",
+      },
+    });
+
+    expect(chat.getSnapshot().active.session?.transcript.map((item) => item.id)).toEqual([
+      "session-1-user-1",
+      "user-pending-1",
+    ]);
+
+    ws.emit("session.send.failed", {
+      occurred_at: "2026-01-01T00:00:02.000Z",
+      payload: {
+        thread_id: "ui-session-1",
+        user_message_id: "user-pending-1",
       },
     });
 

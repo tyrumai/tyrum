@@ -64,14 +64,20 @@ function handleSessionSendFailed(setState: ChatStateSetter, data: unknown): void
   const payload = readPayload(data);
   const sessionId = typeof payload?.["session_id"] === "string" ? payload["session_id"] : null;
   const threadId = typeof payload?.["thread_id"] === "string" ? payload["thread_id"] : null;
+  const userMessageId =
+    typeof payload?.["user_message_id"] === "string" ? payload["user_message_id"] : null;
   const messageIds = Array.isArray(payload?.["message_ids"])
     ? payload["message_ids"].filter((value): value is string => typeof value === "string")
     : [];
   const reasoningIds = Array.isArray(payload?.["reasoning_ids"])
     ? payload["reasoning_ids"].filter((value): value is string => typeof value === "string")
     : [];
-  if (messageIds.length === 0 && reasoningIds.length === 0) return;
-  const removedIds = new Set([...messageIds, ...reasoningIds]);
+  if (!userMessageId && messageIds.length === 0 && reasoningIds.length === 0) return;
+  const removedIds = new Set([
+    ...messageIds,
+    ...reasoningIds,
+    ...(userMessageId ? [userMessageId] : []),
+  ]);
   setState((prev) => {
     const session = prev.active.session;
     if (!session || !matchesActiveSession(prev, { sessionId, threadId })) return prev;

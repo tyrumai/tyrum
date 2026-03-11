@@ -186,6 +186,7 @@ export async function broadcastSessionSendStream(input: {
             session_id: sessionKey,
             thread_id: threadId,
             lane: "assistant",
+            user_message_id: clientMessageId,
             message_ids: [...assistantParts.keys()],
             reasoning_ids: [...reasoningParts.keys()],
           },

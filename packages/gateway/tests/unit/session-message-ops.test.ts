@@ -212,6 +212,7 @@ describe("handleSessionCompactMessage", () => {
       payload: {
         session_id: "session-key-1",
         thread_id: "ui-session-1",
+        user_message_id: "user-1",
         message_ids: ["assistant-1"],
         reasoning_ids: ["reason-1"],
       },
