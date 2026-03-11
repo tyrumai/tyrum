@@ -178,7 +178,7 @@ export function AdminHttpPolicyCard({
         }}
         onSave={async (bundle, reason) => {
           setSaveError(null);
-          if (!requireMutationAccess()) return;
+          if (!requireMutationAccess()) return false;
           setSaveBusy(true);
           try {
             if (!http.policyConfig) throw new Error("Deployment policy config API unavailable.");
@@ -187,6 +187,7 @@ export function AdminHttpPolicyCard({
               ...(reason.trim() ? { reason: reason.trim() } : {}),
             });
             await loadAll();
+            return true;
           } catch (error) {
             setSaveError(error);
             throw error;

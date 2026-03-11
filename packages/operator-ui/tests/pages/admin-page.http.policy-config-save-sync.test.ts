@@ -49,7 +49,7 @@ describe("PolicyConfigSection save sync", () => {
       artifacts: { default: "allow" as const },
       provenance: { untrusted_shell_requires_approval: true },
     };
-    const onSave = vi.fn(async () => undefined);
+    const onSave = vi.fn(async () => true);
     const page = renderIntoDocument(
       React.createElement(PolicyConfigSection, {
         effective: {

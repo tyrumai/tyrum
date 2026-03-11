@@ -51,6 +51,7 @@ export function PolicyConfigSection(props: PolicyConfigSectionProps): React.Reac
   const [revertReason, setRevertReason] = React.useState("");
   const [revertTarget, setRevertTarget] = React.useState<PolicyConfigRevision | null>(null);
   const skipNextPropBundleSignatureRef = React.useRef<string | null>(null);
+  const lastAppliedDeploymentBundleSignatureRef = React.useRef<string | null>(null);
 
   const applyBundleToEditor = React.useCallback((bundle: PolicyBundleT): string => {
     const normalizedBundle = normalizePolicyBundle(bundle);
@@ -66,10 +67,15 @@ export function PolicyConfigSection(props: PolicyConfigSectionProps): React.Reac
     const deploymentBundleSignature = stringifyPolicyBundle(deploymentBundle);
     if (skipNextPropBundleSignatureRef.current === deploymentBundleSignature) {
       skipNextPropBundleSignatureRef.current = null;
+      lastAppliedDeploymentBundleSignatureRef.current = deploymentBundleSignature;
       setSaveReason("");
       return;
     }
+    if (lastAppliedDeploymentBundleSignatureRef.current === deploymentBundleSignature) {
+      return;
+    }
     applyBundleToEditor(deploymentBundle);
+    lastAppliedDeploymentBundleSignatureRef.current = deploymentBundleSignature;
     setSaveReason("");
   }, [applyBundleToEditor, props.currentRevision, props.effective]);
 
@@ -267,7 +273,8 @@ export function PolicyConfigSection(props: PolicyConfigSectionProps): React.Reac
         confirmLabel="Save policy"
         isLoading={props.saveBusy}
         onConfirm={async () => {
-          await props.onSave(nextBundle, saveReason);
+          const saved = await props.onSave(nextBundle, saveReason);
+          if (!saved) return;
           skipNextPropBundleSignatureRef.current = applyBundleToEditor(nextBundle);
           setSaveReason("");
         }}

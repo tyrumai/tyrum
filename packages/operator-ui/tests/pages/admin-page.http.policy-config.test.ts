@@ -27,7 +27,7 @@ function dispatchSelectChange(select: HTMLSelectElement, value: string): void {
 
 describe("PolicyConfigSection", () => {
   it("clears the save reason after a successful policy save", async () => {
-    const onSave = vi.fn(async () => undefined);
+    const onSave = vi.fn(async () => true);
     const page = renderIntoDocument(
       React.createElement(PolicyConfigSection, {
         effective: {
@@ -111,7 +111,7 @@ describe("PolicyConfigSection", () => {
   });
 
   it("resets the dirty state after a successful save even before refreshed props arrive", async () => {
-    const onSave = vi.fn(async () => undefined);
+    const onSave = vi.fn(async () => true);
     const page = renderIntoDocument(
       React.createElement(PolicyConfigSection, {
         effective: {
@@ -189,8 +189,91 @@ describe("PolicyConfigSection", () => {
     cleanupAdminHttpPage(page);
   });
 
+  it("preserves dirty state and save reason when saving is aborted", async () => {
+    const onSave = vi.fn(async () => false);
+    const page = renderIntoDocument(
+      React.createElement(PolicyConfigSection, {
+        effective: {
+          sha256: "policy-sha-1",
+          bundle: {
+            v: 1,
+            tools: {
+              default: "require_approval",
+              allow: ["read"],
+              require_approval: [],
+              deny: [],
+            },
+            network_egress: {
+              default: "require_approval",
+              allow: [],
+              require_approval: [],
+              deny: [],
+            },
+            secrets: {
+              default: "require_approval",
+              allow: [],
+              require_approval: [],
+              deny: [],
+            },
+            connectors: {
+              default: "require_approval",
+              allow: ["telegram:*"],
+              require_approval: [],
+              deny: [],
+            },
+            artifacts: { default: "allow" },
+            provenance: { untrusted_shell_requires_approval: true },
+          },
+          sources: { deployment: "default", agent: null, playbook: null },
+        },
+        currentRevision: null,
+        revisions: [],
+        loadBusy: false,
+        loadError: null,
+        saveBusy: false,
+        saveError: null,
+        revertBusy: false,
+        revertError: null,
+        canMutate: true,
+        requestEnter: () => {},
+        onRefresh: () => {},
+        onSave,
+        onRevert: async () => undefined,
+      }),
+    );
+
+    await flush();
+
+    setSelectValue(
+      getByTestId<HTMLSelectElement>(page.container, "policy-config-tools-default"),
+      "allow",
+    );
+    act(() => {
+      setNativeValue(
+        getByTestId<HTMLInputElement>(page.container, "policy-config-save-reason"),
+        "Keep this draft",
+      );
+    });
+
+    click(getByTestId<HTMLButtonElement>(page.container, "policy-config-save"));
+    click(getByTestId<HTMLElement>(document.body, "confirm-danger-checkbox"));
+    await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "confirm-danger-confirm"));
+    await flush();
+
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(page.container.textContent).toContain("Unsaved changes ready");
+    expect(getByTestId<HTMLButtonElement>(page.container, "policy-config-save").disabled).toBe(
+      false,
+    );
+    expect(getByTestId<HTMLInputElement>(page.container, "policy-config-save-reason").value).toBe(
+      "Keep this draft",
+    );
+
+    cleanupAdminHttpPage(page);
+  });
+
   it("preserves batched domain edits before saving", async () => {
-    const onSave = vi.fn(async () => undefined);
+    const onSave = vi.fn(async () => true);
     const page = renderIntoDocument(
       React.createElement(PolicyConfigSection, {
         effective: {
@@ -354,7 +437,7 @@ describe("PolicyConfigSection", () => {
         canMutate: true,
         requestEnter: () => {},
         onRefresh: () => {},
-        onSave: async () => undefined,
+        onSave: async () => true,
         onRevert: async () => undefined,
       }),
     );

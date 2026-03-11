@@ -44,6 +44,13 @@ describe("ConfigurePage (HTTP) policy elevated mode prompts", () => {
       getByTestId<HTMLSelectElement>(page.container, "policy-config-tools-default"),
       "allow",
     );
+    await act(async () => {
+      setNativeValue(
+        getByTestId<HTMLInputElement>(page.container, "policy-config-save-reason"),
+        "Still pending approval",
+      );
+      await Promise.resolve();
+    });
     click(getByTestId<HTMLButtonElement>(page.container, "policy-config-save"));
 
     act(() => {
@@ -68,6 +75,13 @@ describe("ConfigurePage (HTTP) policy elevated mode prompts", () => {
     expect(getByTestId(document.body, "elevated-mode-dialog")).not.toBeNull();
     expect(document.body.textContent).not.toContain("Policy save failed");
     expect(document.body.textContent).not.toContain("Action failed");
+    expect(page.container.textContent).toContain("Unsaved changes ready");
+    expect(getByTestId<HTMLButtonElement>(page.container, "policy-config-save").disabled).toBe(
+      false,
+    );
+    expect(getByTestId<HTMLInputElement>(page.container, "policy-config-save-reason").value).toBe(
+      "Still pending approval",
+    );
 
     cleanupAdminHttpPage(page);
   });
