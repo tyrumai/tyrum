@@ -1,5 +1,4 @@
 import {
-  CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   CapabilityDescriptor as CapabilityDescriptorSchema,
   type CapabilityDescriptor,
   normalizeCapabilityDescriptors,
@@ -10,6 +9,7 @@ import { NodePairingRequest } from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
 import { createHash, randomBytes } from "node:crypto";
 import { requireTenantIdValue } from "../identity/scope.js";
+import { parseStoredCapabilityDescriptors } from "./stored-capability-descriptors.js";
 
 type NodePairingStatus = "pending" | "approved" | "denied" | "revoked";
 
@@ -47,20 +47,7 @@ function parseJsonOrEmpty(raw: string): unknown {
 function parseCapabilities(raw: string): CapabilityDescriptor[] {
   try {
     const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return [];
-    const descriptors = parsed
-      .map((entry) => {
-        if (typeof entry === "string") {
-          return CapabilityDescriptorSchema.parse({
-            id: entry,
-            version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-          });
-        }
-        const result = CapabilityDescriptorSchema.safeParse(entry);
-        return result.success ? result.data : null;
-      })
-      .filter((entry): entry is CapabilityDescriptor => entry !== null);
-    return normalizeCapabilityDescriptors(descriptors);
+    return parseStoredCapabilityDescriptors(parsed);
   } catch {
     // Intentional: treat invalid JSON columns as empty capabilities.
   }

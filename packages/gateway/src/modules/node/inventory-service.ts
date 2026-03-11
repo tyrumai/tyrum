@@ -158,14 +158,14 @@ export class NodeInventoryService {
     const filteredCapability = input.capability?.trim() || undefined;
     const dispatchableOnly = input.dispatchableOnly === true;
     const entries: NodeInventoryEntry[] = [];
+    const catalogEntries = new Map(
+      listCapabilityCatalogEntries().map((entry) => [entry.descriptor.id, entry] as const),
+    );
 
     for (const [nodeId, node] of nodesById) {
       const pairing = pairings.find((entry) => entry.node.node_id === nodeId);
       const allowlist = pairing?.capability_allowlist ?? [];
       const summaries: NodeCapabilitySummary[] = [];
-      const catalogEntries = new Map(
-        listCapabilityCatalogEntries().map((entry) => [entry.descriptor.id, entry] as const),
-      );
       const candidateDescriptorIds = [
         ...new Set([
           ...catalogEntries.keys(),

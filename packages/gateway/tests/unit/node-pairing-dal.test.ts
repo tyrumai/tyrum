@@ -5,6 +5,7 @@ import { NodePairingDal } from "../../src/modules/node/pairing-dal.js";
 import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   descriptorIdForClientCapability,
+  descriptorIdsForClientCapability,
 } from "@tyrum/schemas";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
@@ -209,5 +210,52 @@ describe("NodePairingDal.upsertOnConnect", () => {
       pairing_id: secondary.pairing_id,
       node: { label: "secondary" },
     });
+  });
+
+  it("expands legacy stored capability strings without dropping valid descriptors", async () => {
+    db = openTestSqliteDb();
+    const dal = new NodePairingDal(db);
+
+    await dal.upsertOnConnect({
+      tenantId,
+      nodeId: "node-legacy-capabilities",
+      pubkey: "pubkey-legacy",
+      label: "legacy",
+      capabilities: [
+        {
+          id: descriptorIdForClientCapability("cli"),
+          version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+        },
+      ],
+      nowIso: "2026-02-23T00:00:00.000Z",
+    });
+
+    await db.run(
+      `UPDATE node_pairings
+       SET capabilities_json = ?
+       WHERE tenant_id = ?
+         AND node_id = ?`,
+      [
+        JSON.stringify([
+          "desktop",
+          {
+            id: descriptorIdForClientCapability("cli"),
+            version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+          },
+          "not-a-capability",
+        ]),
+        tenantId,
+        "node-legacy-capabilities",
+      ],
+    );
+
+    const pairing = await dal.getByNodeId("node-legacy-capabilities", tenantId);
+    expect(pairing).toBeDefined();
+    expect(pairing!.node.capabilities.map((capability) => capability.id).toSorted()).toEqual(
+      [
+        ...descriptorIdsForClientCapability("desktop"),
+        descriptorIdForClientCapability("cli"),
+      ].toSorted(),
+    );
   });
 });

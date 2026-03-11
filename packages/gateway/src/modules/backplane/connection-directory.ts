@@ -1,12 +1,8 @@
-import {
-  CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-  CapabilityDescriptor as CapabilityDescriptorSchema,
-  NodeCapabilityState as NodeCapabilityStateSchema,
-  normalizeCapabilityDescriptors,
-} from "@tyrum/schemas";
+import { NodeCapabilityState as NodeCapabilityStateSchema } from "@tyrum/schemas";
 import type { CapabilityDescriptor, NodeCapabilityState } from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
 import { DEFAULT_TENANT_ID } from "../identity/scope.js";
+import { parseStoredCapabilityDescriptors } from "../node/stored-capability-descriptors.js";
 
 export interface ConnectionDirectoryRow {
   connection_id: string;
@@ -76,20 +72,7 @@ function parseCapabilityDescriptors(raw: string | null): CapabilityDescriptor[] 
   if (typeof raw !== "string" || raw.trim().length === 0) return [];
   try {
     const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return [];
-    const descriptors = parsed
-      .map((value) => {
-        if (typeof value === "string") {
-          return CapabilityDescriptorSchema.parse({
-            id: value,
-            version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-          });
-        }
-        const result = CapabilityDescriptorSchema.safeParse(value);
-        return result.success ? result.data : null;
-      })
-      .filter((value): value is CapabilityDescriptor => value !== null);
-    return normalizeCapabilityDescriptors(descriptors);
+    return parseStoredCapabilityDescriptors(parsed);
   } catch {
     return [];
   }
