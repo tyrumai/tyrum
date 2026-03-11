@@ -78,9 +78,35 @@ function parseCapabilityDescriptors(raw: string | null): CapabilityDescriptor[] 
   }
 }
 
+function parseReadyCapabilityDescriptors(raw: string | null): {
+  descriptors: CapabilityDescriptor[];
+  fallbackToCapabilities: boolean;
+} {
+  if (raw === null) {
+    return { descriptors: [], fallbackToCapabilities: true };
+  }
+
+  if (raw.trim().length === 0) {
+    return { descriptors: [], fallbackToCapabilities: true };
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) {
+      return { descriptors: [], fallbackToCapabilities: true };
+    }
+    return {
+      descriptors: parseStoredCapabilityDescriptors(parsed),
+      fallbackToCapabilities: false,
+    };
+  } catch {
+    return { descriptors: [], fallbackToCapabilities: true };
+  }
+}
+
 function toRow(raw: RawConnectionDirectoryRow): ConnectionDirectoryRow {
   const capabilities = parseCapabilityDescriptors(raw.capabilities_json);
-  const readyCapabilities = parseCapabilityDescriptors(raw.ready_capabilities_json);
+  const readyCapabilities = parseReadyCapabilityDescriptors(raw.ready_capabilities_json);
   const role = raw.role === "node" ? "node" : "client";
   const metadata = safeParseJsonObject(raw.metadata_json);
   const version = typeof metadata.version === "string" ? metadata.version : null;
@@ -100,7 +126,9 @@ function toRow(raw: RawConnectionDirectoryRow): ConnectionDirectoryRow {
     version,
     mode,
     capabilities,
-    ready_capabilities: readyCapabilities.length > 0 ? readyCapabilities : capabilities,
+    ready_capabilities: readyCapabilities.fallbackToCapabilities
+      ? capabilities
+      : readyCapabilities.descriptors,
     capability_states: parseCapabilityStates(raw.capability_states_json),
     connected_at_ms: raw.connected_at_ms,
     last_seen_at_ms: raw.last_seen_at_ms,
