@@ -39,36 +39,6 @@ type ModelConfigMocks = {
   listAssignments: ReturnType<typeof vi.fn>;
 };
 
-type ModelsFetchStubInput = {
-  presets: ModelPresetFixture[] | (() => ModelPresetFixture[]);
-  models: AvailableModelFixture[] | (() => AvailableModelFixture[]);
-  assignments: ModelAssignmentFixture[] | (() => ModelAssignmentFixture[]);
-  createPreset?: {
-    expectedBody: unknown;
-    responsePreset: ModelPresetFixture;
-    afterCreate?: () => void;
-  };
-  updatePreset?: {
-    presetKey: string;
-    expectedBody: unknown;
-    responsePreset: ModelPresetFixture | (() => ModelPresetFixture);
-    afterUpdate?: () => void;
-  };
-  updateAssignments?: {
-    expectedBody: unknown;
-    responseAssignments: ModelAssignmentFixture[] | (() => ModelAssignmentFixture[]);
-    afterUpdate?: () => void;
-  };
-  deletePreset?: {
-    presetKey: string;
-    handle: (body: unknown, attempt: number) => Response | Promise<Response>;
-  };
-};
-
-function resolveValue<T>(value: T | (() => T)): T {
-  return typeof value === "function" ? (value as () => T)() : value;
-}
-
 function getRequestUrl(input: RequestInfo | URL): string {
   if (typeof input === "string") return input;
   if (input instanceof URL) return input.toString();
