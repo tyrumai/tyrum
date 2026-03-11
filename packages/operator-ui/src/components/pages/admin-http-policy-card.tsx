@@ -111,10 +111,10 @@ export function AdminHttpPolicyCard({
   const [revokeBusy, setRevokeBusy] = React.useState(false);
   const [revokeError, setRevokeError] = React.useState<unknown>(null);
 
-  const requireMutationAccess = React.useCallback((): void => {
-    if (canMutate) return;
+  const requireMutationAccess = React.useCallback((): boolean => {
+    if (canMutate) return true;
     requestEnter();
-    throw new Error("Enter Elevated Mode to continue.");
+    return false;
   }, [canMutate, requestEnter]);
 
   const loadAll = React.useCallback(async (): Promise<void> => {
@@ -177,10 +177,10 @@ export function AdminHttpPolicyCard({
           void loadAll();
         }}
         onSave={async (bundle, reason) => {
-          setSaveBusy(true);
           setSaveError(null);
+          if (!requireMutationAccess()) return;
+          setSaveBusy(true);
           try {
-            requireMutationAccess();
             if (!http.policyConfig) throw new Error("Deployment policy config API unavailable.");
             await http.policyConfig.updateDeployment({
               bundle,
@@ -195,10 +195,10 @@ export function AdminHttpPolicyCard({
           }
         }}
         onRevert={async (revision, reason) => {
-          setRevertBusy(true);
           setRevertError(null);
+          if (!requireMutationAccess()) return;
+          setRevertBusy(true);
           try {
-            requireMutationAccess();
             if (!http.policyConfig) throw new Error("Deployment policy config API unavailable.");
             await http.policyConfig.revertDeployment({
               revision,
@@ -229,10 +229,10 @@ export function AdminHttpPolicyCard({
           void loadAll();
         }}
         onCreate={async (input) => {
-          setCreateBusy(true);
           setCreateError(null);
+          if (!requireMutationAccess()) return;
+          setCreateBusy(true);
           try {
-            requireMutationAccess();
             await http.policy.createOverride(input);
             await loadAll();
           } catch (error) {
@@ -243,10 +243,10 @@ export function AdminHttpPolicyCard({
           }
         }}
         onRevoke={async (input) => {
-          setRevokeBusy(true);
           setRevokeError(null);
+          if (!requireMutationAccess()) return;
+          setRevokeBusy(true);
           try {
-            requireMutationAccess();
             await http.policy.revokeOverride(input);
             await loadAll();
           } catch (error) {
