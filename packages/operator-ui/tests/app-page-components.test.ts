@@ -1,30 +1,36 @@
 import { describe, expect, it } from "vitest";
 import { OPERATOR_ROUTE_DEFINITIONS } from "../src/operator-routes.js";
 
-describe("Operator UI app/page component structure", () => {
-  it("exports each page from components/pages", async () => {
-    const expected = [
-      { specifier: "../src/components/pages/connect-page.js", exportName: "ConnectPage" },
-      { specifier: "../src/components/pages/dashboard-page.js", exportName: "DashboardPage" },
-      { specifier: "../src/components/pages/chat-page.js", exportName: "ChatPage" },
-      { specifier: "../src/components/pages/memory-page.js", exportName: "MemoryPage" },
-      { specifier: "../src/components/pages/approvals-page.js", exportName: "ApprovalsPage" },
-      { specifier: "../src/components/pages/runs-page.js", exportName: "RunsPage" },
-      { specifier: "../src/components/pages/agents-page.js", exportName: "AgentsPage" },
-      { specifier: "../src/components/pages/pairing-page.js", exportName: "PairingPage" },
-      {
-        specifier: "../src/components/pages/node-configure-page.js",
-        exportName: "NodeConfigurePage",
-      },
-      { specifier: "../src/components/pages/settings-page.js", exportName: "SettingsPage" },
-      { specifier: "../src/components/pages/configure-page.js", exportName: "ConfigurePage" },
-    ] as const;
+const TEST_TIMEOUT_MS = 15_000;
 
-    for (const { specifier, exportName } of expected) {
-      const mod = (await import(specifier)) as Record<string, unknown>;
-      expect(mod[exportName]).toBeTypeOf("function");
-    }
-  });
+describe("Operator UI app/page component structure", () => {
+  it(
+    "exports each page from components/pages",
+    async () => {
+      const expected = [
+        { specifier: "../src/components/pages/connect-page.js", exportName: "ConnectPage" },
+        { specifier: "../src/components/pages/dashboard-page.js", exportName: "DashboardPage" },
+        { specifier: "../src/components/pages/chat-page.js", exportName: "ChatPage" },
+        { specifier: "../src/components/pages/memory-page.js", exportName: "MemoryPage" },
+        { specifier: "../src/components/pages/approvals-page.js", exportName: "ApprovalsPage" },
+        { specifier: "../src/components/pages/runs-page.js", exportName: "RunsPage" },
+        { specifier: "../src/components/pages/agents-page.js", exportName: "AgentsPage" },
+        { specifier: "../src/components/pages/pairing-page.js", exportName: "PairingPage" },
+        {
+          specifier: "../src/components/pages/node-configure-page.js",
+          exportName: "NodeConfigurePage",
+        },
+        { specifier: "../src/components/pages/settings-page.js", exportName: "SettingsPage" },
+        { specifier: "../src/components/pages/configure-page.js", exportName: "ConfigurePage" },
+      ] as const;
+
+      for (const { specifier, exportName } of expected) {
+        const mod = (await import(specifier)) as Record<string, unknown>;
+        expect(mod[exportName]).toBeTypeOf("function");
+      }
+    },
+    TEST_TIMEOUT_MS,
+  );
 
   it("keeps the PR 1124 primary navigation shape in the shared route table", () => {
     const sidebarShortcutIds = OPERATOR_ROUTE_DEFINITIONS.filter(

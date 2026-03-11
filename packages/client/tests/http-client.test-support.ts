@@ -55,6 +55,10 @@ const clientApiPaths = [
 ] as const;
 
 const adminApiPaths = [
+  "policyConfig.getDeployment",
+  "policyConfig.listDeploymentRevisions",
+  "policyConfig.updateDeployment",
+  "policyConfig.revertDeployment",
   "agentConfig.list",
   "agentConfig.get",
   "agentConfig.update",

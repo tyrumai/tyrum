@@ -32,6 +32,7 @@ import {
 } from "./observability.js";
 import { createPluginsApi, type PluginsApi } from "./plugins.js";
 import { createPolicyApi, type PolicyApi } from "./policy.js";
+import { createPolicyConfigApi, type PolicyConfigApi } from "./policy-config.js";
 import { createProviderConfigApi, type ProviderConfigApi } from "./provider-config.js";
 import { createRoutingConfigApi, type RoutingConfigApi } from "./routing-config.js";
 import { createSecretsApi, type SecretsApi } from "./secrets.js";
@@ -72,6 +73,7 @@ export interface TyrumHttpClient {
   health?: HealthApi;
   toolRegistry?: ToolRegistryApi;
   extensions?: ExtensionsApi;
+  policyConfig?: PolicyConfigApi;
 }
 
 export type TyrumHttpClientOperator = TyrumHttpClient & {
@@ -86,6 +88,7 @@ export type TyrumHttpClientOperator = TyrumHttpClient & {
   health: HealthApi;
   toolRegistry: ToolRegistryApi;
   extensions: ExtensionsApi;
+  policyConfig: PolicyConfigApi;
 };
 
 export function createTyrumHttpClient(options: TyrumHttpClientOptions): TyrumHttpClientOperator {
@@ -119,6 +122,7 @@ export function createTyrumHttpClient(options: TyrumHttpClientOptions): TyrumHtt
     health: createHealthApi(transport),
     toolRegistry: createToolRegistryApi(transport),
     extensions: createExtensionsApi(transport),
+    policyConfig: createPolicyConfigApi(transport),
   };
 }
 

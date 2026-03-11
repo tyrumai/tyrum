@@ -1,222 +1,22 @@
 // @vitest-environment jsdom
 
+import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import React, { act } from "react";
-import type { OperatorCore } from "../../../operator-core/src/index.js";
-import { createElevatedModeStore } from "../../../operator-core/src/stores/elevated-mode-store.js";
-import { ElevatedModeProvider } from "../../src/elevated-mode.js";
-import { ConfigurePage } from "../../src/components/pages/configure-page.js";
-import { ThemeProvider } from "../../src/hooks/use-theme.js";
-import { cleanupTestRoot, renderIntoDocument, setNativeValue } from "../test-utils.js";
+import { cleanupTestRoot, setNativeValue } from "../test-utils.js";
+import {
+  createPanelsCore,
+  renderStrictAdminConfigurePage,
+  switchAdminTab,
+} from "./admin-page.http-panels.test-support.js";
 
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
-
-const EXECUTION_PROFILE_IDS = [
-  "interaction",
-  "explorer_ro",
-  "reviewer_ro",
-  "planner",
-  "jury",
-  "executor_rw",
-  "integrator",
-] as const;
-
-async function switchAdminTab(container: HTMLElement, testId: string): Promise<void> {
-  const tab = container.querySelector<HTMLButtonElement>(`[data-testid="${testId}"]`);
-  expect(tab).not.toBeNull();
-  await act(async () => {
-    tab?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
-    await Promise.resolve();
-  });
-}
-
-function createCore(activeAdminMode: boolean): {
-  core: OperatorCore;
-} {
-  const nowMs = Date.parse("2026-03-01T00:00:00.000Z");
-  const elevatedModeStore = createElevatedModeStore({ tickIntervalMs: 0, now: () => nowMs });
-  if (activeAdminMode) {
-    elevatedModeStore.enter({
-      elevatedToken: "test-elevated-token",
-      expiresAt: "2026-03-01T00:10:00.000Z",
-    });
-  }
-
-  const core = {
-    httpBaseUrl: "http://example.test",
-    elevatedModeStore,
-    ws: {
-      commandExecute: vi.fn(async () => ({ output: "ok" })),
-    },
-    http: {
-      policy: {
-        getBundle: vi.fn(async () => ({ status: "ok" })),
-        listOverrides: vi.fn(async () => ({ status: "ok", overrides: [] })),
-        createOverride: vi.fn(async () => ({ status: "ok" })),
-        revokeOverride: vi.fn(async () => ({ status: "ok" })),
-      },
-      authTokens: {
-        list: vi.fn(async () => ({ tokens: [] })),
-        issue: vi.fn(async () => ({
-          token: "tyrum-token.v1.token-id.secret",
-          token_id: "token-1",
-          tenant_id: "11111111-1111-4111-8111-111111111111",
-          display_name: "Operator UI",
-          role: "client",
-          device_id: "operator-ui",
-          scopes: [],
-          issued_at: "2026-03-01T00:00:00.000Z",
-          updated_at: "2026-03-01T00:00:00.000Z",
-        })),
-        update: vi.fn(async () => ({ token: {} })),
-        revoke: vi.fn(async () => ({ revoked: true, token_id: "token-1" })),
-      },
-      authProfiles: {
-        list: vi.fn(async () => ({ status: "ok", profiles: [] })),
-        create: vi.fn(async () => ({ status: "ok" })),
-        update: vi.fn(async () => ({ status: "ok" })),
-        disable: vi.fn(async () => ({ status: "ok" })),
-        enable: vi.fn(async () => ({ status: "ok" })),
-      },
-      authPins: {
-        list: vi.fn(async () => ({ status: "ok", pins: [] })),
-        set: vi.fn(async () => ({ status: "ok" })),
-      },
-      agentList: {
-        get: vi.fn(async () => ({
-          agents: [
-            {
-              agent_key: "default",
-              agent_id: "agent-1",
-              has_config: true,
-              persona: {
-                name: "Default",
-                description: "Default agent",
-                tone: "direct",
-                palette: "blue",
-                character: "pragmatic",
-              },
-            },
-          ],
-        })),
-      },
-      providerConfig: {
-        listRegistry: vi.fn(async () => ({
-          status: "ok",
-          providers: [
-            {
-              provider_key: "openai",
-              name: "OpenAI",
-              doc: null,
-              supported: true,
-              methods: [
-                {
-                  method_key: "api_key",
-                  label: "API key",
-                  type: "api_key",
-                  fields: [
-                    {
-                      key: "api_key",
-                      label: "API key",
-                      description: null,
-                      kind: "secret",
-                      input: "password",
-                      required: true,
-                    },
-                  ],
-                },
-              ],
-            },
-          ],
-        })),
-        listProviders: vi.fn(async () => ({ status: "ok", providers: [] })),
-        createAccount: vi.fn(async () => ({ status: "ok" })),
-        updateAccount: vi.fn(async () => ({ status: "ok" })),
-        deleteAccount: vi.fn(async () => ({ status: "ok" })),
-        deleteProvider: vi.fn(async () => ({ status: "ok" })),
-      },
-      audit: {
-        listPlans: vi.fn(async () => ({ status: "ok", plans: [] })),
-        exportReceiptBundle: vi.fn(async () => ({ status: "ok" })),
-        verify: vi.fn(async () => ({ status: "ok" })),
-        forget: vi.fn(async () => ({ status: "ok" })),
-      },
-      routingConfig: {
-        get: vi.fn(async () => ({ revision: 1, config: { v: 1 } })),
-        listRevisions: vi.fn(async () => ({ revisions: [] })),
-        listObservedTelegramThreads: vi.fn(async () => ({ threads: [] })),
-        update: vi.fn(async () => ({ revision: 1, config: { v: 1 } })),
-        revert: vi.fn(async () => ({ revision: 1, config: { v: 1 } })),
-      },
-      secrets: {
-        list: vi.fn(async () => ({ handles: [] })),
-        store: vi.fn(async () => ({ handle: {} })),
-        rotate: vi.fn(async () => ({ revoked: true })),
-        revoke: vi.fn(async () => ({ revoked: true })),
-      },
-      deviceTokens: {
-        issue: vi.fn(async () => ({ status: "ok" })),
-        revoke: vi.fn(async () => ({ status: "ok" })),
-      },
-      modelConfig: {
-        listPresets: vi.fn(async () => ({ status: "ok", presets: [] })),
-        listAvailable: vi.fn(async () => ({
-          status: "ok",
-          models: [
-            {
-              provider_key: "openai",
-              provider_name: "OpenAI",
-              model_id: "gpt-4.1",
-              model_name: "GPT-4.1",
-              family: null,
-              reasoning: true,
-              tool_call: true,
-              modalities: { output: ["text"] },
-            },
-          ],
-        })),
-        createPreset: vi.fn(async () => ({ status: "ok" })),
-        updatePreset: vi.fn(async () => ({ status: "ok" })),
-        deletePreset: vi.fn(async () => ({ status: "ok" })),
-        listAssignments: vi.fn(async () => ({
-          status: "ok",
-          assignments: EXECUTION_PROFILE_IDS.map((execution_profile_id) => ({
-            execution_profile_id,
-            preset_key: null,
-            preset_display_name: null,
-            provider_key: null,
-            model_id: null,
-          })),
-        })),
-        updateAssignments: vi.fn(async () => ({ status: "ok", assignments: [] })),
-      },
-      models: {
-        refresh: vi.fn(async () => ({ status: "ok" })),
-      },
-    },
-  } as unknown as OperatorCore;
-
-  return { core };
-}
-
 describe("ConfigurePage (strict admin tabs)", () => {
   it("renders admin domain tabs and removes transport tabs", () => {
-    const { core } = createCore(false);
-
-    const testRoot = renderIntoDocument(
-      React.createElement(
-        ThemeProvider,
-        null,
-        React.createElement(
-          ElevatedModeProvider,
-          { core, mode: "web" },
-          React.createElement(ConfigurePage, { core }),
-        ),
-      ),
-    );
+    const { core } = createPanelsCore(false);
+    const testRoot = renderStrictAdminConfigurePage(core);
 
     try {
       expect(testRoot.container.querySelector("[data-testid='admin-tab-http']")).toBeNull();
@@ -255,19 +55,8 @@ describe("ConfigurePage (strict admin tabs)", () => {
   });
 
   it("keeps admin mutations disabled outside Elevated Mode", async () => {
-    const { core } = createCore(false);
-
-    const testRoot = renderIntoDocument(
-      React.createElement(
-        ThemeProvider,
-        null,
-        React.createElement(
-          ElevatedModeProvider,
-          { core, mode: "web" },
-          React.createElement(ConfigurePage, { core }),
-        ),
-      ),
-    );
+    const { core } = createPanelsCore(false);
+    const testRoot = renderStrictAdminConfigurePage(core);
 
     try {
       await switchAdminTab(testRoot.container, "admin-http-tab-gateway");
@@ -303,19 +92,8 @@ describe("ConfigurePage (strict admin tabs)", () => {
   });
 
   it("enables admin mutations when Elevated Mode is active", async () => {
-    const { core } = createCore(true);
-
-    const testRoot = renderIntoDocument(
-      React.createElement(
-        ThemeProvider,
-        null,
-        React.createElement(
-          ElevatedModeProvider,
-          { core, mode: "web" },
-          React.createElement(ConfigurePage, { core }),
-        ),
-      ),
-    );
+    const { core } = createPanelsCore(true);
+    const testRoot = renderStrictAdminConfigurePage(core);
 
     try {
       await switchAdminTab(testRoot.container, "admin-http-tab-gateway");
@@ -344,7 +122,7 @@ describe("ConfigurePage (strict admin tabs)", () => {
   });
 
   it("uses the elevated admin token for tenant token issuance", async () => {
-    const { core } = createCore(true);
+    const { core } = createPanelsCore(true);
 
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url =
@@ -372,17 +150,7 @@ describe("ConfigurePage (strict admin tabs)", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const testRoot = renderIntoDocument(
-      React.createElement(
-        ThemeProvider,
-        null,
-        React.createElement(
-          ElevatedModeProvider,
-          { core, mode: "web" },
-          React.createElement(ConfigurePage, { core }),
-        ),
-      ),
-    );
+    const testRoot = renderStrictAdminConfigurePage(core);
 
     try {
       await switchAdminTab(testRoot.container, "admin-http-tab-gateway");
@@ -455,7 +223,7 @@ describe("ConfigurePage (strict admin tabs)", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-03-01T00:00:00.000Z"));
 
-    const { core } = createCore(true);
+    const { core } = createPanelsCore(true);
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url =
         typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
@@ -485,17 +253,7 @@ describe("ConfigurePage (strict admin tabs)", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const testRoot = renderIntoDocument(
-      React.createElement(
-        ThemeProvider,
-        null,
-        React.createElement(
-          ElevatedModeProvider,
-          { core, mode: "web" },
-          React.createElement(ConfigurePage, { core }),
-        ),
-      ),
-    );
+    const testRoot = renderStrictAdminConfigurePage(core);
 
     try {
       await switchAdminTab(testRoot.container, "admin-http-tab-gateway");

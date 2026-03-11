@@ -1,313 +1,271 @@
-import { ElevatedModeTooltip } from "../elevated-mode/elevated-mode-tooltip.js";
-import { ApiResultCard } from "../ui/api-result-card.js";
-import { Alert } from "../ui/alert.js";
-import { Button } from "../ui/button.js";
-import { Card, CardContent, CardHeader } from "../ui/card.js";
-import { JsonViewer } from "../ui/json-viewer.js";
-import { Separator } from "../ui/separator.js";
+import { TyrumHttpClientError } from "@tyrum/client/browser";
+import type { OperatorCore } from "@tyrum/operator-core";
+import * as React from "react";
 import type { AdminHttpClient } from "./admin-http-shared.js";
+import { useAdminHttpClient } from "./admin-http-shared.js";
 import {
-  JsonInput,
-  resolveJsonValue,
-  useApiResultState,
-  useJsonInputState,
-  type ApiRunner,
-  type JsonInputState,
-  type OpenMutation,
-} from "./admin-http-panels.shared.js";
+  PolicyConfigSection,
+  type PolicyConfigDeployment,
+  type PolicyConfigRevision,
+  type PolicyEffectiveBundle,
+} from "./admin-http-policy-config.js";
+import {
+  PolicyOverridesSection,
+  type PolicyAgentOption,
+  type PolicyOverrideRecord,
+  type PolicyToolOption,
+} from "./admin-http-policy-overrides.js";
 
-export interface AdminHttpPolicyCardProps {
-  http: AdminHttpClient;
-  openMutation: OpenMutation;
-  canMutate: boolean;
-  requestEnter: () => void;
+type PolicyConfigApi = {
+  getDeployment: () => Promise<PolicyConfigDeployment>;
+  listDeploymentRevisions: () => Promise<{ revisions: PolicyConfigRevision[] }>;
+  updateDeployment: (input: { bundle: unknown; reason?: string }) => Promise<unknown>;
+  revertDeployment: (input: { revision: number; reason?: string }) => Promise<unknown>;
+};
+
+type PolicyHttpClient = AdminHttpClient & {
+  policyConfig?: PolicyConfigApi;
+  agents?: {
+    list: () => Promise<{
+      agents: Array<{
+        agent_id: string;
+        agent_key: string;
+        persona?: { name?: string };
+      }>;
+    }>;
+  };
+  toolRegistry?: {
+    list: () => Promise<{
+      status: "ok";
+      tools: Array<{
+        canonical_id: string;
+        description: string;
+        risk: "low" | "medium" | "high";
+      }>;
+    }>;
+  };
+};
+
+function isNotFoundError(error: unknown): boolean {
+  return error instanceof TyrumHttpClientError && error.status === 404;
+}
+
+function normalizeAgentOptions(
+  agents: Array<{
+    agent_id: string;
+    agent_key: string;
+    persona?: { name?: string };
+  }>,
+): PolicyAgentOption[] {
+  return agents
+    .map((agent) => ({
+      agentId: agent.agent_id.trim(),
+      agentKey: agent.agent_key.trim(),
+      displayName: agent.persona?.name?.trim() || agent.agent_key.trim(),
+    }))
+    .filter((agent) => agent.agentId && agent.agentKey)
+    .toSorted((left, right) => left.agentKey.localeCompare(right.agentKey));
+}
+
+function normalizeToolOptions(
+  tools: Array<{
+    canonical_id: string;
+    description: string;
+    risk: "low" | "medium" | "high";
+  }>,
+): PolicyToolOption[] {
+  return tools
+    .map((tool) => ({
+      toolId: tool.canonical_id.trim(),
+      description: tool.description,
+      risk: tool.risk,
+    }))
+    .filter((tool) => tool.toolId)
+    .toSorted((left, right) => left.toolId.localeCompare(right.toolId));
+}
+
+function loadOptionalAuxiliary<T>(loader: (() => Promise<T>) | undefined, fallback: T): Promise<T> {
+  if (!loader) return Promise.resolve(fallback);
+  return Promise.resolve()
+    .then(() => loader())
+    .catch(() => fallback);
 }
 
 export function AdminHttpPolicyCard({
-  http,
-  openMutation,
-  canMutate,
-  requestEnter,
-}: AdminHttpPolicyCardProps) {
-  return (
-    <Card data-testid="admin-http-policy">
-      <CardHeader className="pb-2.5">
-        <div className="text-sm font-medium text-fg">Policy</div>
-        <div className="text-sm text-fg-muted">
-          View the effective policy bundle and manage overrides.
-        </div>
-      </CardHeader>
-      <CardContent className="grid gap-6">
-        <PolicyBundleSection http={http} />
-        <Separator />
-        <PolicyOverridesSection
-          http={http}
-          openMutation={openMutation}
-          canMutate={canMutate}
-          requestEnter={requestEnter}
-        />
-      </CardContent>
-    </Card>
-  );
-}
-
-function PolicyBundleSection({ http }: { http: AdminHttpClient }) {
-  const bundle = useApiResultState("Policy bundle");
-
-  return (
-    <div className="grid gap-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="grid gap-0.5">
-          <div className="text-sm font-medium text-fg">Effective bundle</div>
-          <div className="text-xs text-fg-muted">
-            Resolved deployment + agent + playbook policy bundle.
-          </div>
-        </div>
-        <Button
-          data-testid="admin-policy-bundle-fetch"
-          variant="secondary"
-          isLoading={bundle.state.busy}
-          onClick={() => {
-            void bundle.run("Policy bundle", async () => await http.policy.getBundle());
-          }}
-        >
-          Fetch bundle
-        </Button>
-      </div>
-
-      <ApiResultCard
-        heading={bundle.state.heading}
-        value={bundle.state.value}
-        error={bundle.state.error}
-      />
-    </div>
-  );
-}
-
-function PolicyOverridesSection({
-  http,
-  openMutation,
+  core,
   canMutate,
   requestEnter,
 }: {
-  http: AdminHttpClient;
-  openMutation: OpenMutation;
+  core: OperatorCore;
   canMutate: boolean;
   requestEnter: () => void;
-}) {
-  const overrides = useApiResultState("Policy overrides");
-  const listOverridesQuery = useJsonInputState("{}");
-  const createOverrideBody = useJsonInputState(
-    JSON.stringify(
-      {
-        agent_id: "00000000-0000-4000-8000-000000000002",
-        tool_id: "tool-1",
-        pattern: ".*",
-      },
-      null,
-      2,
-    ),
-  );
-  const revokeOverrideBody = useJsonInputState(
-    JSON.stringify(
-      { policy_override_id: "00000000-0000-0000-0000-000000000000", reason: "No longer needed" },
-      null,
-      2,
-    ),
-  );
+}): React.ReactElement {
+  const http = (useAdminHttpClient() ?? core.http) as PolicyHttpClient;
+  const [effective, setEffective] = React.useState<PolicyEffectiveBundle | null>(null);
+  const [currentRevision, setCurrentRevision] = React.useState<PolicyConfigDeployment | null>(null);
+  const [revisions, setRevisions] = React.useState<PolicyConfigRevision[]>([]);
+  const [overrides, setOverrides] = React.useState<PolicyOverrideRecord[]>([]);
+  const [agents, setAgents] = React.useState<PolicyAgentOption[]>([]);
+  const [tools, setTools] = React.useState<PolicyToolOption[]>([]);
+  const [loadBusy, setLoadBusy] = React.useState(false);
+  const [loadError, setLoadError] = React.useState<unknown>(null);
+  const [saveBusy, setSaveBusy] = React.useState(false);
+  const [saveError, setSaveError] = React.useState<unknown>(null);
+  const [revertBusy, setRevertBusy] = React.useState(false);
+  const [revertError, setRevertError] = React.useState<unknown>(null);
+  const [createBusy, setCreateBusy] = React.useState(false);
+  const [createError, setCreateError] = React.useState<unknown>(null);
+  const [revokeBusy, setRevokeBusy] = React.useState(false);
+  const [revokeError, setRevokeError] = React.useState<unknown>(null);
+
+  const requireMutationAccess = React.useCallback((): boolean => {
+    if (canMutate) return true;
+    requestEnter();
+    return false;
+  }, [canMutate, requestEnter]);
+
+  const loadAll = React.useCallback(async (): Promise<void> => {
+    setLoadBusy(true);
+    setLoadError(null);
+    try {
+      if (!http.policyConfig) {
+        throw new Error("Deployment policy config API unavailable.");
+      }
+      const [
+        effectiveResult,
+        revisionResult,
+        revisionsResult,
+        overridesResult,
+        agentResult,
+        toolResult,
+      ] = await Promise.all([
+        http.policy.getBundle(),
+        http.policyConfig.getDeployment().catch((error) => {
+          if (isNotFoundError(error)) return null;
+          throw error;
+        }),
+        http.policyConfig.listDeploymentRevisions(),
+        http.policy.listOverrides({ limit: 500 }),
+        loadOptionalAuxiliary(http.agents?.list, { agents: [] }),
+        loadOptionalAuxiliary(http.toolRegistry?.list, { status: "ok" as const, tools: [] }),
+      ]);
+      setEffective(effectiveResult.effective);
+      setCurrentRevision(revisionResult);
+      setRevisions(revisionsResult.revisions);
+      setOverrides(overridesResult.overrides);
+      setAgents(normalizeAgentOptions(agentResult.agents));
+      setTools(normalizeToolOptions(toolResult.tools));
+    } catch (error) {
+      setLoadError(error);
+    } finally {
+      setLoadBusy(false);
+    }
+  }, [http]);
+
+  React.useEffect(() => {
+    void loadAll();
+  }, [loadAll]);
 
   return (
-    <div className="grid gap-4">
-      <div className="grid gap-1">
-        <div className="text-sm font-medium text-fg">Overrides</div>
-        <div className="text-xs text-fg-muted">
-          Overrides have global impact across the gateway instance.
-        </div>
-      </div>
-
-      <Alert
-        variant="warning"
-        title="Global impact"
-        description="Policy overrides apply to all operators and runs. Use short TTLs when possible."
-      />
-
-      <PolicyOverridesListRow
-        http={http}
-        busy={overrides.state.busy}
-        run={overrides.run}
-        query={listOverridesQuery}
-      />
-
-      <PolicyOverrideCreateRow
-        http={http}
-        run={overrides.run}
-        body={createOverrideBody}
-        openMutation={openMutation}
+    <div className="grid gap-6" data-testid="admin-http-policy">
+      <PolicyConfigSection
+        effective={effective}
+        currentRevision={currentRevision}
+        revisions={revisions}
+        loadBusy={loadBusy}
+        loadError={loadError}
+        saveBusy={saveBusy}
+        saveError={saveError}
+        revertBusy={revertBusy}
+        revertError={revertError}
         canMutate={canMutate}
         requestEnter={requestEnter}
+        onRefresh={() => {
+          void loadAll();
+        }}
+        onSave={async (bundle, reason) => {
+          setSaveError(null);
+          if (!requireMutationAccess()) return false;
+          setSaveBusy(true);
+          try {
+            if (!http.policyConfig) throw new Error("Deployment policy config API unavailable.");
+            await http.policyConfig.updateDeployment({
+              bundle,
+              ...(reason.trim() ? { reason: reason.trim() } : {}),
+            });
+            await loadAll();
+            return true;
+          } catch (error) {
+            setSaveError(error);
+            throw error;
+          } finally {
+            setSaveBusy(false);
+          }
+        }}
+        onRevert={async (revision, reason) => {
+          setRevertError(null);
+          if (!requireMutationAccess()) return;
+          setRevertBusy(true);
+          try {
+            if (!http.policyConfig) throw new Error("Deployment policy config API unavailable.");
+            await http.policyConfig.revertDeployment({
+              revision,
+              ...(reason.trim() ? { reason: reason.trim() } : {}),
+            });
+            await loadAll();
+          } catch (error) {
+            setRevertError(error);
+            throw error;
+          } finally {
+            setRevertBusy(false);
+          }
+        }}
       />
-
-      <PolicyOverrideRevokeRow
-        http={http}
-        run={overrides.run}
-        body={revokeOverrideBody}
-        openMutation={openMutation}
+      <PolicyOverridesSection
+        overrides={overrides}
+        loadBusy={loadBusy}
+        loadError={loadError}
+        createBusy={createBusy}
+        createError={createError}
+        revokeBusy={revokeBusy}
+        revokeError={revokeError}
         canMutate={canMutate}
         requestEnter={requestEnter}
+        agents={agents}
+        tools={tools}
+        onRefresh={() => {
+          void loadAll();
+        }}
+        onCreate={async (input) => {
+          setCreateError(null);
+          if (!requireMutationAccess()) return false;
+          setCreateBusy(true);
+          try {
+            await http.policy.createOverride(input);
+            await loadAll();
+            return true;
+          } catch (error) {
+            setCreateError(error);
+            throw error;
+          } finally {
+            setCreateBusy(false);
+          }
+        }}
+        onRevoke={async (input) => {
+          setRevokeError(null);
+          if (!requireMutationAccess()) return;
+          setRevokeBusy(true);
+          try {
+            await http.policy.revokeOverride(input);
+            await loadAll();
+          } catch (error) {
+            setRevokeError(error);
+            throw error;
+          } finally {
+            setRevokeBusy(false);
+          }
+        }}
       />
-
-      <ApiResultCard
-        heading={overrides.state.heading}
-        value={overrides.state.value}
-        error={overrides.state.error}
-      />
-    </div>
-  );
-}
-
-function PolicyOverridesListRow({
-  http,
-  busy,
-  run,
-  query,
-}: {
-  http: AdminHttpClient;
-  busy: boolean;
-  run: ApiRunner;
-  query: JsonInputState;
-}) {
-  return (
-    <div className="grid gap-3 md:grid-cols-2">
-      <JsonInput
-        data-testid="admin-policy-overrides-list-query"
-        label="List query (optional)"
-        placeholder="{}"
-        state={query}
-      />
-
-      <div className="flex items-end">
-        <Button
-          data-testid="admin-policy-overrides-list"
-          variant="secondary"
-          isLoading={busy}
-          disabled={query.errorMessage !== null}
-          onClick={() => {
-            const value = resolveJsonValue(query, {});
-            void run(
-              "Policy overrides",
-              async () => await http.policy.listOverrides(value as never),
-            );
-          }}
-        >
-          List overrides
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function PolicyOverrideCreateRow({
-  http,
-  run,
-  body,
-  openMutation,
-  canMutate,
-  requestEnter,
-}: {
-  http: AdminHttpClient;
-  run: ApiRunner;
-  body: JsonInputState;
-  openMutation: OpenMutation;
-  canMutate: boolean;
-  requestEnter: () => void;
-}) {
-  return (
-    <div className="grid gap-3 md:grid-cols-2">
-      <JsonInput
-        data-testid="admin-policy-override-create-json"
-        label="Create override JSON"
-        state={body}
-      />
-
-      <div className="flex items-end gap-2">
-        <ElevatedModeTooltip canMutate={canMutate} requestEnter={requestEnter}>
-          <Button
-            data-testid="admin-policy-override-create"
-            variant="danger"
-            disabled={body.errorMessage !== null || typeof body.value === "undefined"}
-            onClick={() => {
-              const input = resolveJsonValue(body, undefined);
-              openMutation({
-                title: "Create policy override",
-                description: "This affects policy globally for the gateway instance.",
-                confirmLabel: "Create override",
-                content: <JsonViewer value={input} />,
-                onConfirm: async () => {
-                  const outcome = await run("Policy override created", async () => {
-                    return await http.policy.createOverride(input as never);
-                  });
-                  if (!outcome.ok) throw outcome.error;
-                },
-              });
-            }}
-          >
-            Create override
-          </Button>
-        </ElevatedModeTooltip>
-      </div>
-    </div>
-  );
-}
-
-function PolicyOverrideRevokeRow({
-  http,
-  run,
-  body,
-  openMutation,
-  canMutate,
-  requestEnter,
-}: {
-  http: AdminHttpClient;
-  run: ApiRunner;
-  body: JsonInputState;
-  openMutation: OpenMutation;
-  canMutate: boolean;
-  requestEnter: () => void;
-}) {
-  return (
-    <div className="grid gap-3 md:grid-cols-2">
-      <JsonInput
-        data-testid="admin-policy-override-revoke-json"
-        label="Revoke override JSON"
-        state={body}
-      />
-
-      <div className="flex items-end gap-2">
-        <ElevatedModeTooltip canMutate={canMutate} requestEnter={requestEnter}>
-          <Button
-            data-testid="admin-policy-override-revoke"
-            variant="danger"
-            disabled={body.errorMessage !== null || typeof body.value === "undefined"}
-            onClick={() => {
-              const input = resolveJsonValue(body, undefined);
-              openMutation({
-                title: "Revoke policy override",
-                description: "This affects policy globally for the gateway instance.",
-                confirmLabel: "Revoke override",
-                content: <JsonViewer value={input} />,
-                onConfirm: async () => {
-                  const outcome = await run("Policy override revoked", async () => {
-                    return await http.policy.revokeOverride(input as never);
-                  });
-                  if (!outcome.ok) throw outcome.error;
-                },
-              });
-            }}
-          >
-            Revoke override
-          </Button>
-        </ElevatedModeTooltip>
-      </div>
     </div>
   );
 }

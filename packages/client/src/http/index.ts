@@ -56,6 +56,14 @@ export type {
 } from "./auth-tokens.js";
 export type { ContractCatalog, ContractJsonSchema } from "./contracts.js";
 export type { PolicyBundleResponse } from "./policy.js";
+export type {
+  DeploymentPolicyConfigGetResult,
+  DeploymentPolicyConfigListRevisionsResult,
+  DeploymentPolicyConfigUpdateInput,
+  DeploymentPolicyConfigUpdateResult,
+  DeploymentPolicyConfigRevertInput,
+  DeploymentPolicyConfigRevertResult,
+} from "./policy-config.js";
 
 export type {
   ManagedAgentListResult,

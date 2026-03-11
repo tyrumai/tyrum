@@ -105,10 +105,120 @@ export function createHarnessConfigureHttpFixtures() {
       revoke: async () => ({ status: "ok" as const }),
     },
     policy: {
-      getBundle: async () => ({ status: "ok" as const, bundle: { version: 1 } }),
+      getBundle: async () => ({
+        status: "ok" as const,
+        generated_at: "2026-03-08T00:00:00.000Z",
+        effective: {
+          sha256: "policy-sha-1",
+          bundle: {
+            v: 1,
+            tools: {
+              default: "require_approval" as const,
+              allow: ["read"],
+              require_approval: [],
+              deny: [],
+            },
+            network_egress: {
+              default: "require_approval" as const,
+              allow: [],
+              require_approval: [],
+              deny: [],
+            },
+            secrets: {
+              default: "require_approval" as const,
+              allow: [],
+              require_approval: [],
+              deny: [],
+            },
+            connectors: {
+              default: "require_approval" as const,
+              allow: ["telegram:*"],
+              require_approval: [],
+              deny: [],
+            },
+            artifacts: { default: "allow" as const },
+            provenance: { untrusted_shell_requires_approval: true },
+          },
+          sources: {
+            deployment: "default",
+            agent: null,
+            playbook: null,
+          },
+        },
+      }),
       listOverrides: async () => ({ status: "ok" as const, overrides: [] }),
       createOverride: async () => ({ status: "ok" as const }),
       revokeOverride: async () => ({ status: "ok" as const }),
+    },
+    policyConfig: {
+      getDeployment: async () => ({
+        revision: 1,
+        agent_key: null,
+        bundle: {
+          v: 1,
+          tools: {
+            default: "require_approval" as const,
+            allow: ["read"],
+            require_approval: [],
+            deny: [],
+          },
+          artifacts: { default: "allow" as const },
+          provenance: { untrusted_shell_requires_approval: true },
+        },
+        created_at: "2026-03-08T00:00:00.000Z",
+        created_by: { kind: "tenant.token", token_id: "token-1" },
+        reason: "seed",
+        reverted_from_revision: null,
+      }),
+      listDeploymentRevisions: async () => ({ revisions: [] }),
+      updateDeployment: async (input: { bundle: unknown; reason?: string }) => ({
+        revision: 1,
+        agent_key: null,
+        bundle: input.bundle,
+        created_at: "2026-03-08T00:00:00.000Z",
+        created_by: { kind: "tenant.token", token_id: "token-1" },
+        reason: input.reason,
+        reverted_from_revision: null,
+      }),
+      revertDeployment: async (input: { revision: number; reason?: string }) => ({
+        revision: input.revision + 1,
+        agent_key: null,
+        bundle: {
+          v: 1,
+          tools: {
+            default: "require_approval" as const,
+            allow: ["read"],
+            require_approval: [],
+            deny: [],
+          },
+        },
+        created_at: "2026-03-08T00:00:00.000Z",
+        created_by: { kind: "tenant.token", token_id: "token-1" },
+        reason: input.reason,
+        reverted_from_revision: input.revision,
+      }),
+    },
+    agents: {
+      list: async () => ({
+        agents: [
+          {
+            agent_id: "00000000-0000-4000-8000-000000000002",
+            agent_key: "default",
+            created_at: "2026-03-08T00:00:00.000Z",
+            updated_at: "2026-03-08T00:00:00.000Z",
+            has_config: true,
+            has_identity: true,
+            can_delete: false,
+            persona: {
+              name: "Default Agent",
+              description: "Primary operator",
+              tone: "Direct",
+              palette: "neutral",
+              character: "operator",
+            },
+          },
+        ],
+      }),
     },
     providerConfig: {
       listRegistry: async () => ({

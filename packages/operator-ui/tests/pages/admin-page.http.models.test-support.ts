@@ -9,7 +9,7 @@ import {
   createUnassignedAssignmentsForAllProfiles,
   setModelConfigResponses,
   stubModelsFetch,
-} from "./admin-page.http.test-support.js";
+} from "./admin-page.http.models.shared.js";
 
 export function setupFirstAssignmentSaveScenario(core: OperatorCore) {
   const presetDefault = createModelPreset({

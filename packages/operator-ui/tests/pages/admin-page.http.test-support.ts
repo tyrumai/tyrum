@@ -7,7 +7,7 @@ import { cleanupTestRoot, renderIntoDocument, type TestRoot } from "../test-util
 import {
   ADMIN_HTTP_EXECUTION_PROFILE_IDS,
   TEST_TIMESTAMP,
-  createAdminHttpTestCore,
+  createAdminHttpTestCore as createFixtureAdminHttpTestCore,
   createAssignmentsForAllProfiles,
   createAvailableModel,
   createModelAssignment,
@@ -22,7 +22,6 @@ import {
 export {
   ADMIN_HTTP_EXECUTION_PROFILE_IDS,
   TEST_TIMESTAMP,
-  createAdminHttpTestCore,
   createAssignmentsForAllProfiles,
   createAvailableModel,
   createModelAssignment,
@@ -39,36 +38,6 @@ type ModelConfigMocks = {
   listAvailable: ReturnType<typeof vi.fn>;
   listAssignments: ReturnType<typeof vi.fn>;
 };
-
-type ModelsFetchStubInput = {
-  presets: ModelPresetFixture[] | (() => ModelPresetFixture[]);
-  models: AvailableModelFixture[] | (() => AvailableModelFixture[]);
-  assignments: ModelAssignmentFixture[] | (() => ModelAssignmentFixture[]);
-  createPreset?: {
-    expectedBody: unknown;
-    responsePreset: ModelPresetFixture;
-    afterCreate?: () => void;
-  };
-  updatePreset?: {
-    presetKey: string;
-    expectedBody: unknown;
-    responsePreset: ModelPresetFixture | (() => ModelPresetFixture);
-    afterUpdate?: () => void;
-  };
-  updateAssignments?: {
-    expectedBody: unknown;
-    responseAssignments: ModelAssignmentFixture[] | (() => ModelAssignmentFixture[]);
-    afterUpdate?: () => void;
-  };
-  deletePreset?: {
-    presetKey: string;
-    handle: (body: unknown, attempt: number) => Response | Promise<Response>;
-  };
-};
-
-function resolveValue<T>(value: T | (() => T)): T {
-  return typeof value === "function" ? (value as () => T)() : value;
-}
 
 function getRequestUrl(input: RequestInfo | URL): string {
   if (typeof input === "string") return input;
@@ -210,6 +179,8 @@ export function setModelConfigResponses(
   });
   return modelConfig;
 }
+
+export const createAdminHttpTestCore = createFixtureAdminHttpTestCore;
 export function expectAuthorizedJsonRequest(
   input: RequestInfo | URL,
   init: RequestInit | undefined,
@@ -225,68 +196,4 @@ export function expectAuthorizedJsonRequest(
 
 export function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status });
-}
-
-export function stubModelsFetch(input: ModelsFetchStubInput): ReturnType<typeof vi.fn> {
-  let deleteAttempt = 0;
-  const fetchMock = vi.fn(async (requestInput: RequestInfo | URL, init?: RequestInit) => {
-    const url = getRequestUrl(requestInput);
-    const method = init?.method ?? "GET";
-    expect(new Headers(init?.headers).get("authorization")).toBe("Bearer test-elevated-token");
-
-    if (method === "GET" && url === "http://example.test/config/models/presets") {
-      return jsonResponse({ status: "ok", presets: resolveValue(input.presets) });
-    }
-    if (method === "GET" && url === "http://example.test/config/models/presets/available") {
-      return jsonResponse({ status: "ok", models: resolveValue(input.models) });
-    }
-    if (method === "GET" && url === "http://example.test/config/models/assignments") {
-      return jsonResponse({ status: "ok", assignments: resolveValue(input.assignments) });
-    }
-    if (
-      method === "POST" &&
-      url === "http://example.test/config/models/presets" &&
-      input.createPreset
-    ) {
-      expect(JSON.parse(String(init?.body ?? ""))).toEqual(input.createPreset.expectedBody);
-      input.createPreset.afterCreate?.();
-      return jsonResponse({ status: "ok", preset: input.createPreset.responsePreset }, 201);
-    }
-    if (
-      method === "PATCH" &&
-      url === `http://example.test/config/models/presets/${input.updatePreset?.presetKey}` &&
-      input.updatePreset
-    ) {
-      expect(JSON.parse(String(init?.body ?? ""))).toEqual(input.updatePreset.expectedBody);
-      input.updatePreset.afterUpdate?.();
-      return jsonResponse(
-        { status: "ok", preset: resolveValue(input.updatePreset.responsePreset) },
-        200,
-      );
-    }
-    if (
-      method === "PUT" &&
-      url === "http://example.test/config/models/assignments" &&
-      input.updateAssignments
-    ) {
-      expect(JSON.parse(String(init?.body ?? ""))).toEqual(input.updateAssignments.expectedBody);
-      input.updateAssignments.afterUpdate?.();
-      return jsonResponse(
-        { status: "ok", assignments: resolveValue(input.updateAssignments.responseAssignments) },
-        200,
-      );
-    }
-    if (
-      method === "DELETE" &&
-      url === `http://example.test/config/models/presets/${input.deletePreset?.presetKey}` &&
-      input.deletePreset
-    ) {
-      deleteAttempt += 1;
-      return input.deletePreset.handle(JSON.parse(String(init?.body ?? "")), deleteAttempt);
-    }
-    throw new Error(`Unexpected request: ${method} ${url}`);
-  });
-
-  vi.stubGlobal("fetch", fetchMock);
-  return fetchMock;
 }
