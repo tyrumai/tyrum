@@ -91,7 +91,8 @@ async function loadCatalogLookup(
     try {
       const loaded = await modelsDev.ensureLoaded();
       return buildCatalogLookup(loaded.catalog);
-    } catch {
+    } catch (error) {
+      void error;
       // Intentional: config health falls back to the cached DB snapshot when the in-memory
       // models.dev service is unavailable.
     }
@@ -107,7 +108,8 @@ async function loadCatalogLookup(
     );
     if (!row?.json) return null;
     return buildCatalogLookup(JSON.parse(row.json) as unknown);
-  } catch {
+  } catch (error) {
+    void error;
     return null;
   }
 }
@@ -278,7 +280,8 @@ export async function loadConfigHealth(input: {
     let configJson: unknown;
     try {
       configJson = JSON.parse(row.config_json) as unknown;
-    } catch {
+    } catch (error) {
+      void error;
       issues.push({
         code: "agent_model_unavailable",
         severity: "error",

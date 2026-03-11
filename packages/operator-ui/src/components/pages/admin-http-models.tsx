@@ -16,7 +16,11 @@ import {
   type ModelConfigHttpClient,
   type ModelPreset,
 } from "./admin-http-models.shared.js";
-import { useAdminHttpClient, useAdminMutationAccess } from "./admin-http-shared.js";
+import {
+  buildReplacementAssignments,
+  useAdminHttpClient,
+  useAdminMutationAccess,
+} from "./admin-http-shared.js";
 
 function normalizeAssignments(assignments: Assignment[]): Assignment[] {
   const assignmentsByProfileId = new Map(
@@ -146,17 +150,10 @@ export function AdminHttpModelsPanel({ core }: { core: OperatorCore }): React.Re
 
   const removePreset = async (): Promise<void> => {
     if (!deletingPreset) return;
-    if (
-      deletingPreset.requiredExecutionProfileIds.some(
-        (profileId) => !(profileId in deletingPreset.replacementAssignments),
-      )
-    ) {
-      throw new Error("Choose a replacement preset or None for every required execution profile.");
-    }
-    const replacementAssignments =
-      deletingPreset.requiredExecutionProfileIds.length > 0
-        ? deletingPreset.replacementAssignments
-        : undefined;
+    const replacementAssignments = buildReplacementAssignments(
+      deletingPreset.requiredExecutionProfileIds,
+      deletingPreset.replacementAssignments,
+    );
     const result = await mutationHttp.modelConfig.deletePreset(
       deletingPreset.preset.preset_key,
       replacementAssignments ? { replacement_assignments: replacementAssignments } : undefined,

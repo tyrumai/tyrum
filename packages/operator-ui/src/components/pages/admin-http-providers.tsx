@@ -2,7 +2,11 @@ import type { OperatorCore } from "@tyrum/operator-core";
 import * as React from "react";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { ConfirmDangerDialog } from "../ui/confirm-danger-dialog.js";
-import { useAdminHttpClient, useAdminMutationAccess } from "./admin-http-shared.js";
+import {
+  buildReplacementAssignments,
+  useAdminHttpClient,
+  useAdminMutationAccess,
+} from "./admin-http-shared.js";
 import { ProviderAccountDialog } from "./admin-http-providers-dialog.js";
 import { ProvidersCard, ReplacementAssignmentsFields } from "./admin-http-providers-sections.js";
 import type {
@@ -83,17 +87,10 @@ export function AdminHttpProvidersPanel({ core }: { core: OperatorCore }): React
 
   const removeProvider = async (): Promise<void> => {
     if (!deletingProvider) return;
-    if (
-      deletingProvider.requiredExecutionProfileIds.some(
-        (profileId) => !(profileId in deletingProvider.replacementAssignments),
-      )
-    ) {
-      throw new Error("Choose a replacement preset or None for every required execution profile.");
-    }
-    const replacementAssignments =
-      deletingProvider.requiredExecutionProfileIds.length > 0
-        ? deletingProvider.replacementAssignments
-        : undefined;
+    const replacementAssignments = buildReplacementAssignments(
+      deletingProvider.requiredExecutionProfileIds,
+      deletingProvider.replacementAssignments,
+    );
 
     const result = await mutationHttp.providerConfig.deleteProvider(
       deletingProvider.group.provider_key,
@@ -113,7 +110,7 @@ export function AdminHttpProvidersPanel({ core }: { core: OperatorCore }): React
             }
           : current,
       );
-      throw new Error("Select replacement presets before removing this provider.");
+      throw new Error("Select replacement presets or None before removing this provider.");
     }
 
     setDeletingProvider(null);

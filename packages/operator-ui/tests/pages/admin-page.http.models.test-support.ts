@@ -238,7 +238,7 @@ export function setupDeletePresetScenario(core: OperatorCore) {
       presetKey: "preset-default",
       handle: (body, attempt) => {
         if (attempt === 1) {
-          expect(body).toEqual({ replacement_assignments: { interaction: "preset-review" } });
+          expect(body).toEqual({ replacement_assignments: { interaction: null } });
           return new Response(
             JSON.stringify({
               error: "assignment_required",
@@ -251,7 +251,6 @@ export function setupDeletePresetScenario(core: OperatorCore) {
 
         expect(body).toEqual({
           replacement_assignments: {
-            interaction: "preset-review",
             planner: "preset-review",
           },
         });

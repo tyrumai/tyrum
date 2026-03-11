@@ -366,7 +366,7 @@ describe("ConfigurePage (HTTP) policy + config", () => {
     cleanupAdminHttpPage(page);
   });
 
-  it("requires replacements before deleting a preset and handles assignment conflicts", async () => {
+  it("treats untouched None as a valid replacement before resolving preset conflicts", async () => {
     const { core } = createAdminHttpTestCore();
     const { fetchMock } = setupDeletePresetScenario(core);
 
@@ -379,17 +379,6 @@ describe("ConfigurePage (HTTP) policy + config", () => {
     const confirmButton = getByTestId<HTMLButtonElement>(document.body, "confirm-danger-confirm");
 
     click(getByTestId<HTMLElement>(document.body, "confirm-danger-checkbox"));
-    await clickAndFlush(confirmButton);
-
-    expect(fetchMock).toHaveBeenCalledTimes(0);
-    expect(document.body.textContent).toContain(
-      "Choose a replacement preset or None for every required execution profile.",
-    );
-
-    setSelectValue(
-      expectPresent(confirmDialog.querySelector<HTMLSelectElement>("select")),
-      "preset-review",
-    );
     await clickAndFlush(confirmButton);
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
