@@ -206,14 +206,10 @@ export function createBlankKeySensitivityRow(prefix: string): PolicyKeySensitivi
 
 export function policyBundleToFormState(bundle: PolicyBundleT): PolicyFormState {
   return {
-    tools: createDomainFormState(bundle.tools, "require_approval", "tools"),
-    networkEgress: createDomainFormState(
-      bundle.network_egress,
-      "require_approval",
-      "network-egress",
-    ),
-    secrets: createDomainFormState(bundle.secrets, "require_approval", "secrets"),
-    connectors: createDomainFormState(bundle.connectors, "require_approval", "connectors"),
+    tools: createDomainFormState(bundle.tools, "deny", "tools"),
+    networkEgress: createDomainFormState(bundle.network_egress, "deny", "network-egress"),
+    secrets: createDomainFormState(bundle.secrets, "deny", "secrets"),
+    connectors: createDomainFormState(bundle.connectors, "deny", "connectors"),
     artifacts: {
       defaultDecision: bundle.artifacts?.default ?? "allow",
       retentionDefaultDays:
