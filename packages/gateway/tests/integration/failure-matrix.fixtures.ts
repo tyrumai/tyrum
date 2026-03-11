@@ -197,7 +197,7 @@ export async function expectSingleCapabilityEdge(
 ): Promise<void> {
   const list = await connectionDirectory.listConnectionsForCapability(
     DEFAULT_TENANT_ID,
-    "cli",
+    descriptorIdForClientCapability("cli"),
     Date.now(),
   );
   expect(list.length).toBe(1);

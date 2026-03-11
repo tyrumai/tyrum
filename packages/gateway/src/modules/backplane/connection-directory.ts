@@ -74,6 +74,7 @@ function parseCapabilityDescriptors(raw: string | null): CapabilityDescriptor[] 
     const parsed = JSON.parse(raw) as unknown;
     return parseStoredCapabilityDescriptors(parsed);
   } catch {
+    // Intentional: treat malformed capability descriptor payloads as absent during rolling upgrades.
     return [];
   }
 }
@@ -100,6 +101,7 @@ function parseReadyCapabilityDescriptors(raw: string | null): {
       fallbackToCapabilities: false,
     };
   } catch {
+    // Intentional: fall back to advertised capabilities when stored readiness JSON is malformed.
     return { descriptors: [], fallbackToCapabilities: true };
   }
 }

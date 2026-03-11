@@ -32,6 +32,14 @@ import { CONFORMANCE_TIMEOUT_MS, createConnectedClient, waitForEvent } from "./w
 
 const TIMEOUT = CONFORMANCE_TIMEOUT_MS;
 
+function capabilityIds(
+  capabilities: ReadonlyArray<{
+    id: string;
+  }>,
+): string[] {
+  return capabilities.map((capability) => capability.id);
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -104,7 +112,9 @@ describe("WS SDK conformance (client <-> gateway)", () => {
     expect(clients.length).toBe(1);
     const registered = clients[0];
     expect(registered.protocol_rev).toBe(2);
-    expect(registered.capabilities).toContain("http");
+    expect(capabilityIds(registered!.capabilities)).toContain(
+      descriptorIdForClientCapability("http"),
+    );
     expect(registered.role).toBe("client");
     expect(registered.device_id).toBeTruthy();
   });
@@ -217,8 +227,12 @@ describe("WS SDK conformance (client <-> gateway)", () => {
     const clients = [...gw.connectionManager.allClients()];
     expect(clients.length).toBe(1);
     const registered = clients[0];
-    expect(registered.capabilities).toContain("http");
-    expect(registered.capabilities).toContain("playwright");
+    expect(capabilityIds(registered!.capabilities)).toEqual(
+      expect.arrayContaining([
+        descriptorIdForClientCapability("http"),
+        descriptorIdForClientCapability("playwright"),
+      ]),
+    );
   });
 
   // -------------------------------------------------------------------------
@@ -260,8 +274,8 @@ describe("WS SDK conformance (client <-> gateway)", () => {
     const clients = [...gw.connectionManager.allClients()];
     expect(clients.length).toBe(2);
 
-    const caps = clients.flatMap((c) => c.capabilities);
-    expect(caps).toContain("http");
-    expect(caps).toContain("playwright");
+    const caps = clients.flatMap((c) => capabilityIds(c.capabilities));
+    expect(caps).toContain(descriptorIdForClientCapability("http"));
+    expect(caps).toContain(descriptorIdForClientCapability("playwright"));
   });
 });

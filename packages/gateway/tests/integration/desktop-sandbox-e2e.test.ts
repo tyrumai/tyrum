@@ -7,7 +7,11 @@ import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { getRequestListener } from "@hono/node-server";
-import { CAPABILITY_DESCRIPTOR_DEFAULT_VERSION, type DesktopQueryMatch } from "@tyrum/schemas";
+import {
+  CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+  descriptorIdsForClientCapability,
+  type DesktopQueryMatch,
+} from "@tyrum/schemas";
 
 import { createContainer } from "../../src/container.js";
 import { createApp } from "../../src/app.js";
@@ -148,16 +152,15 @@ describe("e2e: tool.node.dispatch against docker desktop-sandbox", () => {
             timeoutMs: 90_000,
           });
 
-          const desktopSnapshotDescriptor = {
-            id: "tyrum.desktop.snapshot",
-            version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-          } as const;
           await container.nodePairingDal.resolve({
             tenantId: DEFAULT_TENANT_ID,
             pairingId: pairing.pairing_id,
             decision: "approved",
             trustLevel: "local",
-            capabilityAllowlist: [desktopSnapshotDescriptor],
+            capabilityAllowlist: descriptorIdsForClientCapability("desktop").map((id) => ({
+              id,
+              version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+            })),
           });
 
           const scope: ExecutionScopeIds = {

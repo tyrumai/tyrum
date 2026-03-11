@@ -4,6 +4,10 @@
  */
 
 import { describe, expect, it, vi } from "vitest";
+import {
+  capabilityDescriptorsForClientCapability,
+  descriptorIdForClientCapability,
+} from "@tyrum/schemas";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { MetricsRegistry } from "../../src/modules/observability/metrics.js";
 
@@ -39,6 +43,10 @@ function createMockWs(): MockWebSocket & { emitPong: () => void } {
   };
 }
 
+function descriptorsFor(...capabilities: Array<"playwright" | "cli" | "http">) {
+  return capabilities.flatMap((capability) => capabilityDescriptorsForClientCapability(capability));
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -47,19 +55,19 @@ describe("ConnectionManager", () => {
   it("addClient returns a UUID and the client is retrievable", () => {
     const cm = new ConnectionManager();
     const ws = createMockWs();
-    const id = cm.addClient(ws as never, ["playwright"]);
+    const id = cm.addClient(ws as never, descriptorsFor("playwright"));
 
     expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
 
     const client = cm.getClient(id);
     expect(client).toBeDefined();
     expect(client!.id).toBe(id);
-    expect(client!.capabilities).toEqual(["playwright"]);
+    expect(client!.capabilities).toEqual(capabilityDescriptorsForClientCapability("playwright"));
   });
 
   it("removeClient evicts the client", () => {
     const cm = new ConnectionManager();
-    const id = cm.addClient(createMockWs() as never, ["cli"]);
+    const id = cm.addClient(createMockWs() as never, descriptorsFor("cli"));
     cm.removeClient(id);
 
     expect(cm.getClient(id)).toBeUndefined();
@@ -71,7 +79,7 @@ describe("ConnectionManager", () => {
     metrics.wsConnectionsActive.set(0);
     const cm = new ConnectionManager(metrics);
 
-    const id = cm.addClient(createMockWs() as never, ["cli"], { id: "client-1" });
+    const id = cm.addClient(createMockWs() as never, descriptorsFor("cli"), { id: "client-1" });
     await expect(
       metrics.registry.getSingleMetricAsString("ws_connections_active"),
     ).resolves.toMatch(/ws_connections_active\s+1(\s|$)/);
@@ -84,27 +92,38 @@ describe("ConnectionManager", () => {
 
   it("getClientForCapability returns matching client", () => {
     const cm = new ConnectionManager();
-    cm.addClient(createMockWs() as never, ["playwright"]);
-    cm.addClient(createMockWs() as never, ["cli", "http"]);
+    cm.addClient(createMockWs() as never, descriptorsFor("playwright"));
+    cm.addClient(createMockWs() as never, descriptorsFor("cli", "http"));
 
-    const playwrightClient = cm.getClientForCapability("playwright");
+    const playwrightClient = cm.getClientForCapability(
+      descriptorIdForClientCapability("playwright"),
+    );
     expect(playwrightClient).toBeDefined();
-    expect(playwrightClient!.capabilities).toContain("playwright");
+    expect(playwrightClient!.capabilities).toContainEqual({
+      id: descriptorIdForClientCapability("playwright"),
+      version: "1.0.0",
+    });
 
-    const cliClient = cm.getClientForCapability("cli");
+    const cliClient = cm.getClientForCapability(descriptorIdForClientCapability("cli"));
     expect(cliClient).toBeDefined();
-    expect(cliClient!.capabilities).toContain("cli");
+    expect(cliClient!.capabilities).toContainEqual({
+      id: descriptorIdForClientCapability("cli"),
+      version: "1.0.0",
+    });
 
-    const httpClient = cm.getClientForCapability("http");
+    const httpClient = cm.getClientForCapability(descriptorIdForClientCapability("http"));
     expect(httpClient).toBeDefined();
-    expect(httpClient!.capabilities).toContain("http");
+    expect(httpClient!.capabilities).toContainEqual({
+      id: descriptorIdForClientCapability("http"),
+      version: "1.0.0",
+    });
   });
 
   it("getClientForCapability returns undefined when no match", () => {
     const cm = new ConnectionManager();
-    cm.addClient(createMockWs() as never, ["playwright"]);
+    cm.addClient(createMockWs() as never, descriptorsFor("playwright"));
 
-    expect(cm.getClientForCapability("android")).toBeUndefined();
+    expect(cm.getClientForCapability("tyrum.android.location.get-current")).toBeUndefined();
   });
 
   it("broadcastToCapable sends to all matching clients", () => {
@@ -113,11 +132,11 @@ describe("ConnectionManager", () => {
     const ws2 = createMockWs();
     const ws3 = createMockWs();
 
-    cm.addClient(ws1 as never, ["playwright"]);
-    cm.addClient(ws2 as never, ["playwright", "cli"]);
-    cm.addClient(ws3 as never, ["cli"]);
+    cm.addClient(ws1 as never, descriptorsFor("playwright"));
+    cm.addClient(ws2 as never, descriptorsFor("playwright", "cli"));
+    cm.addClient(ws3 as never, descriptorsFor("cli"));
 
-    cm.broadcastToCapable("playwright", {
+    cm.broadcastToCapable(descriptorIdForClientCapability("playwright"), {
       event_id: "evt-1",
       type: "plan.update",
       occurred_at: "2026-02-19T12:00:00Z",
@@ -152,8 +171,8 @@ describe("ConnectionManager", () => {
       const ws1 = createMockWs();
       const ws2 = createMockWs();
 
-      cm.addClient(ws1 as never, ["playwright"]);
-      cm.addClient(ws2 as never, ["cli"]);
+      cm.addClient(ws1 as never, descriptorsFor("playwright"));
+      cm.addClient(ws2 as never, descriptorsFor("cli"));
 
       cm.heartbeat();
 
@@ -164,7 +183,7 @@ describe("ConnectionManager", () => {
     it("evicts clients that have not ponged within timeout", () => {
       const cm = new ConnectionManager();
       const ws = createMockWs();
-      const id = cm.addClient(ws as never, ["playwright"]);
+      const id = cm.addClient(ws as never, descriptorsFor("playwright"));
 
       // Simulate a stale client by setting the WS pong timestamp to the past.
       const client = cm.getClient(id);
@@ -181,7 +200,7 @@ describe("ConnectionManager", () => {
     it("keeps fresh clients alive", () => {
       const cm = new ConnectionManager();
       const ws = createMockWs();
-      const id = cm.addClient(ws as never, ["playwright"]);
+      const id = cm.addClient(ws as never, descriptorsFor("playwright"));
 
       // Client just ponged.
       const client = cm.getClient(id);
@@ -198,7 +217,7 @@ describe("ConnectionManager", () => {
     it("updates lastWsPongAt on websocket pong frames", () => {
       const cm = new ConnectionManager();
       const ws = createMockWs();
-      const id = cm.addClient(ws as never, ["playwright"]);
+      const id = cm.addClient(ws as never, descriptorsFor("playwright"));
       const client = cm.getClient(id);
       expect(client).toBeDefined();
 
@@ -215,16 +234,16 @@ describe("ConnectionManager", () => {
   describe("getStats", () => {
     it("returns correct totals and capability counts", () => {
       const cm = new ConnectionManager();
-      cm.addClient(createMockWs() as never, ["playwright", "cli"]);
-      cm.addClient(createMockWs() as never, ["playwright"]);
-      cm.addClient(createMockWs() as never, ["http"]);
+      cm.addClient(createMockWs() as never, descriptorsFor("playwright", "cli"));
+      cm.addClient(createMockWs() as never, descriptorsFor("playwright"));
+      cm.addClient(createMockWs() as never, descriptorsFor("http"));
 
       const stats = cm.getStats();
       expect(stats.totalClients).toBe(3);
       expect(stats.capabilityCounts).toEqual({
-        playwright: 2,
-        cli: 1,
-        http: 1,
+        [descriptorIdForClientCapability("playwright")]: 2,
+        [descriptorIdForClientCapability("cli")]: 1,
+        [descriptorIdForClientCapability("http")]: 1,
       });
     });
 
@@ -238,8 +257,8 @@ describe("ConnectionManager", () => {
 
   it("allClients iterates all clients", () => {
     const cm = new ConnectionManager();
-    const id1 = cm.addClient(createMockWs() as never, ["playwright"]);
-    const id2 = cm.addClient(createMockWs() as never, ["cli"]);
+    const id1 = cm.addClient(createMockWs() as never, descriptorsFor("playwright"));
+    const id2 = cm.addClient(createMockWs() as never, descriptorsFor("cli"));
 
     const ids = [...cm.allClients()].map((c) => c.id);
     expect(ids).toContain(id1);

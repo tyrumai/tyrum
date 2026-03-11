@@ -32,7 +32,7 @@ patchedDependencies:
     hash: 9de5625782d661750c4261c2f5575c217222758f9f5aac99b523818484696f82
     path: patches/dmg-license@1.0.11.patch
   file-type@16.5.4:
-    hash: 63f9983ce06e2dbd7ba23649fe5d7d8295439b7558b31517b154f3fbe803e34d
+    hash: 0d09dc6d3110dbc84a8478ef36ae203aa4e2d52b69db53c77abe527907b62cc8
     path: patches/file-type@16.5.4.patch
   usocket@0.3.0:
     hash: 350501ab4a37805654ff8b4c3af9735d12894fc93b7aa26f58b7813486af5f2f
@@ -14740,7 +14740,7 @@ snapshots:
       any-base: 1.1.0
       buffer: 5.7.1
       exif-parser: 0.1.12
-      file-type: 16.5.4(patch_hash=63f9983ce06e2dbd7ba23649fe5d7d8295439b7558b31517b154f3fbe803e34d)
+      file-type: 16.5.4(patch_hash=0d09dc6d3110dbc84a8478ef36ae203aa4e2d52b69db53c77abe527907b62cc8)
       isomorphic-fetch: 3.0.0(encoding@0.1.13)
       pixelmatch: 4.0.2
       tinycolor2: 1.6.0
@@ -20114,7 +20114,7 @@ snapshots:
       schema-utils: 4.3.3
       webpack: 5.105.2
 
-  file-type@16.5.4(patch_hash=63f9983ce06e2dbd7ba23649fe5d7d8295439b7558b31517b154f3fbe803e34d):
+  file-type@16.5.4(patch_hash=0d09dc6d3110dbc84a8478ef36ae203aa4e2d52b69db53c77abe527907b62cc8):
     dependencies:
       readable-web-to-node-stream: 3.0.4
       strtok3: 6.3.0

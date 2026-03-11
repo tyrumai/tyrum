@@ -1,5 +1,5 @@
 ALTER TABLE auth_tokens ADD COLUMN display_name TEXT NOT NULL DEFAULT '';
-ALTER TABLE auth_tokens ADD COLUMN updated_at TEXT NOT NULL DEFAULT (datetime('now'));
+ALTER TABLE auth_tokens ADD COLUMN updated_at TEXT;
 
 UPDATE auth_tokens
 SET display_name =

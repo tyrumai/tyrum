@@ -40,7 +40,12 @@ function registerControlPlaneWorkflowTests(fixture: ControlPlaneFixture): void {
         requested_at: "2026-02-21T12:00:00Z",
         node: {
           node_id: "node-1",
-          capabilities: ["http"],
+          capabilities: [
+            {
+              id: descriptorIdForClientCapability("http"),
+              version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+            },
+          ],
           last_seen_at: "2026-02-21T12:00:00Z",
         },
         capability_allowlist: [
@@ -65,7 +70,12 @@ function registerControlPlaneWorkflowTests(fixture: ControlPlaneFixture): void {
         requested_at: "2026-02-21T12:00:00Z",
         node: {
           node_id: "node-1",
-          capabilities: ["http"],
+          capabilities: [
+            {
+              id: descriptorIdForClientCapability("http"),
+              version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+            },
+          ],
           last_seen_at: "2026-02-21T12:00:00Z",
         },
         capability_allowlist: [],
@@ -85,7 +95,12 @@ function registerControlPlaneWorkflowTests(fixture: ControlPlaneFixture): void {
         requested_at: "2026-02-21T12:00:00Z",
         node: {
           node_id: "node-1",
-          capabilities: ["http"],
+          capabilities: [
+            {
+              id: descriptorIdForClientCapability("http"),
+              version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+            },
+          ],
           last_seen_at: "2026-02-21T12:00:00Z",
         },
         capability_allowlist: [],
