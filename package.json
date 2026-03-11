@@ -45,7 +45,7 @@
       "rollup": "4.59.0",
       "serialize-javascript": "7.0.3",
       "svgo": "3.3.3",
-      "tar": "7.5.10",
+      "tar": "7.5.11",
       "tmp": ">=0.2.4",
       "url-loader>schema-utils": "4.3.3",
       "usocket>node-gyp": "11.5.0"
@@ -53,12 +53,14 @@
     "patchedDependencies": {
       "@develar/schema-utils@2.6.5": "patches/@develar__schema-utils@2.6.5.patch",
       "dmg-license@1.0.11": "patches/dmg-license@1.0.11.patch",
+      "file-type@16.5.4": "patches/file-type@16.5.4.patch",
       "usocket@0.3.0": "patches/usocket@0.3.0.patch"
     },
     "allowUnusedPatches": true,
     "auditConfig": {
       "ignoreCves": [
-        "CVE-2026-0540"
+        "CVE-2026-0540",
+        "CVE-2026-31808"
       ]
     },
     "onlyBuiltDependencies": [
