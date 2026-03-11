@@ -74,7 +74,7 @@ export function RoutingRuleDialog({
     }
     return [
       {
-        channel: "telegram",
+        channel: "telegram" as const,
         account_key: row.accountKey ?? "default",
         thread_id: row.threadId,
         container_kind: row.containerKind ?? "group",
