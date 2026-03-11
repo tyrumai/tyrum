@@ -285,14 +285,27 @@ export function buildIssueInput(state: TokenFormState) {
   return input;
 }
 
-export function buildUpdateInput(state: TokenFormState): AuthTokenUpdateInput {
+function isExpirationUnchanged(
+  state: TokenFormState,
+  initialExpiresAt: string | null | undefined,
+): boolean {
+  return (
+    state.expirationPreset === matchingExpirationPreset(initialExpiresAt ?? null) &&
+    state.customExpiresAt === toDateTimeLocalValue(initialExpiresAt)
+  );
+}
+
+export function buildUpdateInput(
+  state: TokenFormState,
+  options?: { initialExpiresAt?: string | null },
+): AuthTokenUpdateInput {
   const input: AuthTokenUpdateInput = {
     display_name: state.displayName.trim(),
     role: state.role,
     device_id: state.deviceId.trim() ? state.deviceId.trim() : null,
     scopes: state.role === "admin" ? [] : uniqueScopes(state.selectedScopes),
-    expires_at: null,
   };
+  if (isExpirationUnchanged(state, options?.initialExpiresAt)) return input;
   if (state.expirationPreset === "custom") {
     input.expires_at = parseDateTimeLocalValue(state.customExpiresAt) ?? null;
   } else if (state.expirationPreset !== "never") {

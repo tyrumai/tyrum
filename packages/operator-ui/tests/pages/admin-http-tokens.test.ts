@@ -294,4 +294,218 @@ describe("AuthTokensCard", () => {
       vi.useRealTimers();
     }
   });
+
+  it("preserves preset-matched expiration timestamps on metadata-only edits", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-01T00:00:00.000Z"));
+
+    const core = createCore();
+    const tokens = [
+      {
+        token_id: "preset-token",
+        tenant_id: "11111111-1111-4111-8111-111111111111",
+        display_name: "Preset token",
+        role: "client" as const,
+        device_id: "operator-ui",
+        scopes: ["operator.read"],
+        issued_at: "2026-02-01T00:00:00.000Z",
+        expires_at: "2026-03-02T00:00:30.000Z",
+        revoked_at: null,
+        created_at: "2026-02-01T00:00:00.000Z",
+        updated_at: "2026-02-01T00:00:00.000Z",
+      },
+    ];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url =
+        typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      if (url === "http://example.test/auth/tokens" && (!init?.method || init.method === "GET")) {
+        return new Response(JSON.stringify({ tokens }), { status: 200 });
+      }
+      if (url === "http://example.test/auth/tokens/preset-token" && init?.method === "PATCH") {
+        return new Response(JSON.stringify({ token: tokens[0] }), { status: 200 });
+      }
+      throw new Error(`Unexpected fetch request: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const testRoot = renderIntoDocument(
+      React.createElement(
+        ThemeProvider,
+        null,
+        React.createElement(
+          ElevatedModeProvider,
+          { core, mode: "web" },
+          React.createElement(AuthTokensCard, { core }),
+        ),
+      ),
+    );
+
+    try {
+      await flushAsyncWork();
+      const editButton = testRoot.container.querySelector<HTMLButtonElement>(
+        "[data-testid='admin-http-token-edit-preset-token']",
+      );
+      expect(editButton).not.toBeNull();
+
+      await act(async () => {
+        editButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await Promise.resolve();
+      });
+
+      const dialog = document.body.querySelector<HTMLElement>(
+        "[data-testid='admin-http-token-dialog']",
+      );
+      const nameLabel = Array.from(dialog?.querySelectorAll<HTMLLabelElement>("label") ?? []).find(
+        (label) => label.textContent?.includes("Name"),
+      );
+      const nameInput = nameLabel
+        ? (document.getElementById(nameLabel.htmlFor) as HTMLInputElement | null)
+        : null;
+      expect(nameInput).not.toBeNull();
+
+      await act(async () => {
+        setNativeValue(nameInput!, "Preset token renamed");
+        await Promise.resolve();
+      });
+
+      const saveButton = document.body.querySelector<HTMLButtonElement>(
+        "[data-testid='admin-http-token-dialog-save']",
+      );
+      expect(saveButton).not.toBeNull();
+
+      await act(async () => {
+        saveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await Promise.resolve();
+      });
+
+      await flushAsyncWork();
+
+      const patchCall = fetchMock.mock.calls.find(
+        ([input, init]) =>
+          (typeof input === "string"
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : input.url) === "http://example.test/auth/tokens/preset-token" &&
+          init?.method === "PATCH",
+      );
+      expect(patchCall).toBeDefined();
+      expect(JSON.parse(String(patchCall?.[1]?.body))).toEqual({
+        display_name: "Preset token renamed",
+        role: "client",
+        device_id: "operator-ui",
+        scopes: ["operator.read"],
+      });
+    } finally {
+      cleanupTestRoot(testRoot);
+      vi.useRealTimers();
+    }
+  });
+
+  it("preserves custom expiration seconds on metadata-only edits", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-01T00:00:00.000Z"));
+
+    const core = createCore();
+    const tokens = [
+      {
+        token_id: "custom-token",
+        tenant_id: "11111111-1111-4111-8111-111111111111",
+        display_name: "Custom token",
+        role: "client" as const,
+        device_id: "operator-ui",
+        scopes: ["operator.read"],
+        issued_at: "2026-02-01T00:00:00.000Z",
+        expires_at: "2026-03-05T12:34:56.000Z",
+        revoked_at: null,
+        created_at: "2026-02-01T00:00:00.000Z",
+        updated_at: "2026-02-01T00:00:00.000Z",
+      },
+    ];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url =
+        typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      if (url === "http://example.test/auth/tokens" && (!init?.method || init.method === "GET")) {
+        return new Response(JSON.stringify({ tokens }), { status: 200 });
+      }
+      if (url === "http://example.test/auth/tokens/custom-token" && init?.method === "PATCH") {
+        return new Response(JSON.stringify({ token: tokens[0] }), { status: 200 });
+      }
+      throw new Error(`Unexpected fetch request: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const testRoot = renderIntoDocument(
+      React.createElement(
+        ThemeProvider,
+        null,
+        React.createElement(
+          ElevatedModeProvider,
+          { core, mode: "web" },
+          React.createElement(AuthTokensCard, { core }),
+        ),
+      ),
+    );
+
+    try {
+      await flushAsyncWork();
+      const editButton = testRoot.container.querySelector<HTMLButtonElement>(
+        "[data-testid='admin-http-token-edit-custom-token']",
+      );
+      expect(editButton).not.toBeNull();
+
+      await act(async () => {
+        editButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await Promise.resolve();
+      });
+
+      const dialog = document.body.querySelector<HTMLElement>(
+        "[data-testid='admin-http-token-dialog']",
+      );
+      const nameLabel = Array.from(dialog?.querySelectorAll<HTMLLabelElement>("label") ?? []).find(
+        (label) => label.textContent?.includes("Name"),
+      );
+      const nameInput = nameLabel
+        ? (document.getElementById(nameLabel.htmlFor) as HTMLInputElement | null)
+        : null;
+      expect(nameInput).not.toBeNull();
+
+      await act(async () => {
+        setNativeValue(nameInput!, "Custom token renamed");
+        await Promise.resolve();
+      });
+
+      const saveButton = document.body.querySelector<HTMLButtonElement>(
+        "[data-testid='admin-http-token-dialog-save']",
+      );
+      expect(saveButton).not.toBeNull();
+
+      await act(async () => {
+        saveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await Promise.resolve();
+      });
+
+      await flushAsyncWork();
+
+      const patchCall = fetchMock.mock.calls.find(
+        ([input, init]) =>
+          (typeof input === "string"
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : input.url) === "http://example.test/auth/tokens/custom-token" &&
+          init?.method === "PATCH",
+      );
+      expect(patchCall).toBeDefined();
+      expect(JSON.parse(String(patchCall?.[1]?.body))).toEqual({
+        display_name: "Custom token renamed",
+        role: "client",
+        device_id: "operator-ui",
+        scopes: ["operator.read"],
+      });
+    } finally {
+      cleanupTestRoot(testRoot);
+      vi.useRealTimers();
+    }
+  });
 });

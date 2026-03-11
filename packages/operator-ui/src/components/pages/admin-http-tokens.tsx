@@ -127,7 +127,10 @@ export function AuthTokensCard({ core }: { core: OperatorCore }): React.ReactEle
       if (dialogMode === "create") {
         setIssuedToken(await http.authTokens.issue(buildIssueInput(formState)));
       } else if (dialogMode === "edit" && editingToken) {
-        await http.authTokens.update(editingToken.token_id, buildUpdateInput(formState));
+        await http.authTokens.update(
+          editingToken.token_id,
+          buildUpdateInput(formState, { initialExpiresAt: editingToken.expires_at }),
+        );
       }
       closeDialog(false);
       await loadTokens();
