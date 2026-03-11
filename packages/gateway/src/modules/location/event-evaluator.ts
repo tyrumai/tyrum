@@ -134,7 +134,8 @@ export function evaluateCategoryEvent(input: {
   match: { providerPlaceId: string; name: string; distanceM: number } | null;
 }): EvaluatedLocationEvent | null {
   const inside = input.match !== null && input.match.distanceM <= DEFAULT_CATEGORY_ENTER_M;
-  const outside = input.match === null;
+  const retainedPresence = input.match !== null && input.match.distanceM <= DEFAULT_CATEGORY_EXIT_M;
+  const outside = !retainedPresence;
   const occurredAt = input.payload.recorded_at;
   const coords = input.payload.coords;
 
@@ -183,7 +184,7 @@ export function evaluateCategoryEvent(input: {
   }
 
   if (
-    !inside ||
+    !retainedPresence ||
     !shouldEmitDwell(occurredAt, input.currentState.entered_at, input.currentState.dwell_emitted_at)
   ) {
     return null;

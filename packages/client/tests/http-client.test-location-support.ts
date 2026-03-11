@@ -84,6 +84,46 @@ export function registerHttpClientLocationTests(): void {
     });
   });
 
+  it("updates a saved place without defaulting missing tags", async () => {
+    const fetch = makeFetchMock(async () =>
+      jsonResponse({
+        status: "ok",
+        place: {
+          place_id: "place-home",
+          name: "Home Base",
+          latitude: 52.3676,
+          longitude: 4.9041,
+          radius_m: 80,
+          tags: ["personal", "favorite"],
+          source: "manual",
+          created_at: "2026-03-01T00:00:00.000Z",
+          updated_at: "2026-03-01T00:00:00.000Z",
+        },
+      }),
+    );
+    const client = createTestClient({ fetch });
+
+    await client.location?.updatePlace("place-home", { name: "Home Base" });
+
+    const [url, init] = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [
+      string,
+      RequestInit,
+    ];
+    expect(url).toBe("https://gateway.example/location/places/place-home");
+    expect(init.method).toBe("PATCH");
+    expect(JSON.parse(String(init.body))).toEqual({ name: "Home Base" });
+  });
+
+  it("rejects an empty saved place update payload", async () => {
+    const fetch = makeFetchMock(async () => jsonResponse({ status: "ok" }));
+    const client = createTestClient({ fetch });
+
+    await expect(client.location?.updatePlace("place-home", {})).rejects.toThrow(
+      "location place update request",
+    );
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("updates the location profile with the primary node and provider key", async () => {
     const fetch = makeFetchMock(async () =>
       jsonResponse({

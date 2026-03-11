@@ -15,7 +15,7 @@ const PlaceId = NonEmptyString;
 const NodeId = NonEmptyString;
 const ProviderKey = NonEmptyString;
 
-const PlaceTags = z.array(NonEmptyString).default([]);
+const PlaceTags = z.array(NonEmptyString);
 
 const LocationPlace = z
   .object({
@@ -24,7 +24,7 @@ const LocationPlace = z
     latitude: Latitude,
     longitude: Longitude,
     radius_m: RadiusMeters,
-    tags: PlaceTags,
+    tags: PlaceTags.default([]),
     source: PlaceSource.default("manual"),
     created_at: DateTimeSchema,
     updated_at: DateTimeSchema,
@@ -79,16 +79,24 @@ const LocationPlaceCreateRequest = z
   })
   .strict();
 
-const LocationPlaceUpdateRequest = LocationPlaceCreateRequest.partial().superRefine(
-  (value, ctx) => {
+const LocationPlaceUpdateRequest = z
+  .object({
+    name: NonEmptyString.optional(),
+    latitude: Latitude.optional(),
+    longitude: Longitude.optional(),
+    radius_m: RadiusMeters.optional(),
+    tags: PlaceTags.optional(),
+    source: PlaceSource.optional(),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
     if (Object.keys(value).length > 0) return;
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: "location place update request must include at least one field",
       path: [],
     });
-  },
-);
+  });
 
 const LocationProfileUpdateRequest = z
   .object({
