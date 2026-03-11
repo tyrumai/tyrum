@@ -136,6 +136,56 @@ describe("Session v1 WS protocol", () => {
     }
   });
 
+  it("parses session event payloads with thread_id via WsEvent union", () => {
+    const agentId = "550e8400-e29b-41d4-a716-446655440000";
+    const events = [
+      {
+        event_id: "e-typing-1",
+        type: "typing.started",
+        occurred_at: "2026-03-11T12:00:00Z",
+        scope: { kind: "agent", agent_id: agentId },
+        payload: {
+          session_id: "session-1",
+          thread_id: "ui-thread-1",
+          lane: "assistant",
+        },
+      },
+      {
+        event_id: "e-message-delta-1",
+        type: "message.delta",
+        occurred_at: "2026-03-11T12:00:00Z",
+        scope: { kind: "agent", agent_id: agentId },
+        payload: {
+          session_id: "session-1",
+          thread_id: "ui-thread-1",
+          lane: "assistant",
+          message_id: "assistant-1",
+          role: "assistant",
+          delta: "hello",
+        },
+      },
+      {
+        event_id: "e-message-final-1",
+        type: "message.final",
+        occurred_at: "2026-03-11T12:00:00Z",
+        scope: { kind: "agent", agent_id: agentId },
+        payload: {
+          session_id: "session-1",
+          thread_id: "ui-thread-1",
+          lane: "assistant",
+          message_id: "assistant-1",
+          role: "assistant",
+          content: "hello",
+        },
+      },
+    ];
+
+    for (const event of events) {
+      const parsed = Protocol.WsEvent.safeParse(event);
+      expect(parsed.success, event.type).toBe(true);
+    }
+  });
+
   it("rejects session.* request envelopes missing payload", () => {
     expectRejects(WsRequest, { request_id: "r-missing-payload", type: "session.list" });
   });

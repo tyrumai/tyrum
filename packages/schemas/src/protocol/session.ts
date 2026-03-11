@@ -297,10 +297,13 @@ export type WsSessionDeleteResponseErrEnvelope = z.infer<typeof WsSessionDeleteR
 // Events (typed) — messaging/session
 // ---------------------------------------------------------------------------
 
+const WsSessionEventLane = z.union([Lane, z.enum(["user", "assistant"])]);
+
 export const WsTypingEventPayload = z
   .object({
     session_id: z.string().trim().min(1),
-    lane: Lane.optional(),
+    lane: WsSessionEventLane.optional(),
+    thread_id: z.string().trim().min(1).optional(),
   })
   .strict();
 export type WsTypingEventPayload = z.infer<typeof WsTypingEventPayload>;
@@ -320,10 +323,11 @@ export type WsTypingStoppedEvent = z.infer<typeof WsTypingStoppedEvent>;
 export const WsMessageDeltaEventPayload = z
   .object({
     session_id: z.string().trim().min(1),
-    lane: Lane.optional(),
+    lane: WsSessionEventLane.optional(),
     message_id: z.string().trim().min(1),
     role: WsMessageRole,
     delta: z.string(),
+    thread_id: z.string().trim().min(1).optional(),
   })
   .strict();
 export type WsMessageDeltaEventPayload = z.infer<typeof WsMessageDeltaEventPayload>;
@@ -337,10 +341,11 @@ export type WsMessageDeltaEvent = z.infer<typeof WsMessageDeltaEvent>;
 export const WsMessageFinalEventPayload = z
   .object({
     session_id: z.string().trim().min(1),
-    lane: Lane.optional(),
+    lane: WsSessionEventLane.optional(),
     message_id: z.string().trim().min(1),
     role: WsMessageRole,
     content: z.string(),
+    thread_id: z.string().trim().min(1).optional(),
   })
   .strict();
 export type WsMessageFinalEventPayload = z.infer<typeof WsMessageFinalEventPayload>;
@@ -354,7 +359,7 @@ export type WsMessageFinalEvent = z.infer<typeof WsMessageFinalEvent>;
 export const WsReasoningDeltaEventPayload = z
   .object({
     session_id: z.string().trim().min(1),
-    lane: Lane.optional(),
+    lane: WsSessionEventLane.optional(),
     reasoning_id: z.string().trim().min(1),
     delta: z.string(),
     thread_id: z.string().trim().min(1).optional(),
@@ -371,7 +376,7 @@ export type WsReasoningDeltaEvent = z.infer<typeof WsReasoningDeltaEvent>;
 export const WsReasoningFinalEventPayload = z
   .object({
     session_id: z.string().trim().min(1),
-    lane: Lane.optional(),
+    lane: WsSessionEventLane.optional(),
     reasoning_id: z.string().trim().min(1),
     content: z.string(),
     thread_id: z.string().trim().min(1).optional(),
