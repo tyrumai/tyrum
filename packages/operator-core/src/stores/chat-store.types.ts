@@ -75,12 +75,20 @@ export type ChatStoreRunIds = {
   send: number;
 };
 
+export type ChatPendingOpenState = {
+  sessionId: string;
+  threadId: string | null;
+  transcript: ChatSession["transcript"];
+  typing: boolean;
+};
+
 export type ChatStoreContext = {
   store: ExternalStore<ChatState>;
   setState: (updater: (prev: ChatState) => ChatState) => void;
   ws: OperatorWsClient;
   http: OperatorHttpClient;
   runIds: ChatStoreRunIds;
+  pendingOpen: ChatPendingOpenState | null;
 };
 
 export function createInitialChatState(): ChatState {

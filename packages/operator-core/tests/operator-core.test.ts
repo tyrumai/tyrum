@@ -155,6 +155,38 @@ describe("operator-core wiring", () => {
     expect(runs.attemptIdsByStepId["step-1"]).toEqual(["attempt-1"]);
   });
 
+  it("hydrates approvalsStore from approval_request envelopes", () => {
+    const { core, ws } = createTestOperatorCore();
+
+    ws.emit("approval_request", {
+      occurred_at: "2026-01-01T00:00:05.000Z",
+      payload: {
+        approval_id: "11111111-1111-1111-1111-111111111111",
+        approval_key: "approval:11111111-1111-1111-1111-111111111111",
+        kind: "other",
+        prompt: "Approve shell.exec?",
+        context: {
+          session_id: "session-1",
+          thread_id: "ui-1",
+          tool_call_id: "tool-1",
+        },
+      },
+    });
+
+    expect(core.approvalsStore.getSnapshot().pendingIds).toEqual([
+      "11111111-1111-1111-1111-111111111111",
+    ]);
+    expect(core.approvalsStore.getSnapshot().byId["11111111-1111-1111-1111-111111111111"]).toEqual(
+      expect.objectContaining({
+        approval_id: "11111111-1111-1111-1111-111111111111",
+        status: "pending",
+        prompt: "Approve shell.exec?",
+        created_at: "2026-01-01T00:00:05.000Z",
+        resolution: null,
+      }),
+    );
+  });
+
   it("hydrates recent runs from run.list on connect", async () => {
     const { core, ws } = createTestOperatorCore();
     const run = {

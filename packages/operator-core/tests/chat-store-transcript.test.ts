@@ -62,17 +62,17 @@ function sessionWithTranscript(transcript: SessionTranscriptItem[]): WsSessionGe
 }
 
 describe("chat-store transcript helpers", () => {
-  it("sorts transcript items by effective timestamp and id", () => {
+  it("sorts transcript items by created_at and preserves equal-timestamp order", () => {
     const sorted = sortTranscriptItems([
       toolItem("b", "2026-03-09T00:00:02.000Z", "running"),
       textItem("c", "2026-03-09T00:00:01.000Z", "later"),
       textItem("a", "2026-03-09T00:00:01.000Z", "first"),
     ]);
 
-    expect(sorted.map((item) => item.id)).toEqual(["a", "c", "b"]);
+    expect(sorted.map((item) => item.id)).toEqual(["c", "a", "b"]);
   });
 
-  it("merges fetched transcript with local structured overlay items", () => {
+  it("merges fetched transcript with missing local overlay items", () => {
     const merged = mergeFetchedTranscript(
       [
         textItem("old-text", "2026-03-09T00:00:01.000Z", "old"),
@@ -81,13 +81,49 @@ describe("chat-store transcript helpers", () => {
       [textItem("new-text", "2026-03-09T00:00:02.000Z", "new")],
     );
 
-    expect(merged.map((item) => item.id)).toEqual(["new-text", "tool-local"]);
+    expect(merged.map((item) => item.id)).toEqual(["old-text", "new-text", "tool-local"]);
+  });
+
+  it("prefers newer local streamed text when a fetched snapshot is stale", () => {
+    const merged = mergeFetchedTranscript(
+      [
+        {
+          kind: "text",
+          id: "assistant-1",
+          role: "assistant",
+          content: "Hello there",
+          created_at: "2026-03-09T00:00:02.000Z",
+        },
+      ],
+      [
+        {
+          kind: "text",
+          id: "assistant-1",
+          role: "assistant",
+          content: "Hello",
+          created_at: "2026-03-09T00:00:02.000Z",
+        },
+      ],
+    );
+
+    expect(merged).toEqual([
+      {
+        kind: "text",
+        id: "assistant-1",
+        role: "assistant",
+        content: "Hello there",
+        created_at: "2026-03-09T00:00:02.000Z",
+      },
+    ]);
   });
 
   it("upserts transcript items and preserves sorted order", () => {
     const session = sessionWithTranscript([
-      textItem("message-1", "2026-03-09T00:00:01.000Z", "hello"),
-      toolItem("tool-1", "2026-03-09T00:00:02.000Z", "running"),
+      {
+        ...toolItem("tool-1", "2026-03-09T00:00:01.000Z", "running"),
+        summary: "starting",
+      },
+      textItem("message-1", "2026-03-09T00:00:02.000Z", "hello"),
     ]);
 
     const updated = upsertTranscriptItem(session, {
@@ -96,10 +132,12 @@ describe("chat-store transcript helpers", () => {
     });
 
     expect(updated.transcript).toHaveLength(2);
-    expect(updated.transcript[1]).toMatchObject({
+    expect(updated.transcript.map((item) => item.id)).toEqual(["tool-1", "message-1"]);
+    expect(updated.transcript[0]).toMatchObject({
       id: "tool-1",
       status: "completed",
       summary: "done",
+      created_at: "2026-03-09T00:00:01.000Z",
     });
   });
 

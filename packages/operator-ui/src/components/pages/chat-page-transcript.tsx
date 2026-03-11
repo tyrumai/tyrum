@@ -205,10 +205,10 @@ export function ChatTextItem({
     <div
       className={
         item.role === "assistant"
-          ? "group relative rounded-lg border border-border bg-bg px-3 py-2.5"
+          ? "group relative rounded-lg border border-border bg-bg px-2 py-1.5"
           : item.role === "system"
-            ? "group relative rounded-lg border border-amber-200/70 bg-amber-50/70 px-3 py-2.5"
-            : "group relative rounded-lg border border-border bg-bg-subtle/70 px-3 py-2.5"
+            ? "group relative rounded-lg border border-amber-200/70 bg-amber-50/70 px-2 py-1.5"
+            : "group relative rounded-lg border border-border bg-bg-subtle/70 px-2 py-1.5"
       }
     >
       <div className="mb-1.5 flex items-center justify-between gap-2">
@@ -260,7 +260,7 @@ export function ChatToolItem({
 
   return (
     <div
-      className="rounded-lg border border-border bg-bg-subtle/40 px-3 py-2.5"
+      className="rounded-lg border border-border bg-bg-subtle/40 px-2 py-1.5"
       data-testid={`chat-tool-card-${item.tool_call_id}`}
     >
       <div className="flex items-start justify-between gap-3">
@@ -276,7 +276,7 @@ export function ChatToolItem({
       </div>
       {approvalItem && approvalStatus === "pending" ? (
         <div
-          className="mt-2 rounded-md border border-warning-300/70 bg-warning-50/70 px-2.5 py-2"
+          className="mt-2 rounded-md border border-warning-300/70 bg-warning-50/70 px-2 py-1.5"
           data-testid={`chat-tool-approval-${approvalItem.approval_id}`}
         >
           <div className="mb-1.5 flex items-center justify-between gap-2">
@@ -335,7 +335,7 @@ export function ChatReasoningItem({
 
   return (
     <details
-      className="rounded-lg border border-border/70 bg-bg-subtle/30 px-3 py-2.5"
+      className="rounded-lg border border-border/70 bg-bg-subtle/30 px-2 py-1.5"
       open={open}
       onToggle={(event) => {
         setOpen(event.currentTarget.open);
@@ -368,7 +368,7 @@ export function ChatApprovalItem({
 
   return (
     <div
-      className="rounded-lg border border-warning-300 bg-warning-50/80 px-3 py-2.5"
+      className="rounded-lg border border-warning-300 bg-warning-50/80 px-2 py-1.5"
       data-testid={`chat-approval-card-${item.approval_id}`}
     >
       <div className="mb-1.5 flex items-center justify-between gap-2">

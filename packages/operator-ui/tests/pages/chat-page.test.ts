@@ -168,6 +168,10 @@ describe("ChatPage", () => {
     const transcript = testRoot.container.querySelector<HTMLElement>(
       '[data-testid="chat-transcript"]',
     );
+    const composer = testRoot.container.querySelector<HTMLTextAreaElement>("textarea");
+    const composerShell = composer?.closest<HTMLElement>("div.border-t");
+    const composerRow = composer?.parentElement;
+    const sendButton = composerRow?.querySelector<HTMLButtonElement>("button") ?? null;
     const threadsScrollArea = threadsPanel?.querySelector<HTMLElement>("[data-scroll-area-root]");
 
     expect(page?.className).toContain("h-full");
@@ -183,6 +187,13 @@ describe("ChatPage", () => {
     expect(threadsScrollArea?.parentElement?.className).toContain("flex-1");
     expect(transcript?.parentElement?.className).toContain("min-h-0");
     expect(transcript?.parentElement?.className).toContain("flex-1");
+    expect(transcript?.className).toContain("p-2");
+    expect(composerShell?.className).toContain("p-2");
+    expect(composerRow?.className).toContain("gap-2");
+    expect(composer?.className).toContain("px-2.5");
+    expect(composer?.className).toContain("py-2");
+    expect(sendButton?.className).toContain("h-[44px]");
+    expect(sendButton?.className).toContain("px-4");
     expect(testRoot.container.querySelector('[data-testid="chat-delete"]')).not.toBeNull();
 
     matchMedia.cleanup();

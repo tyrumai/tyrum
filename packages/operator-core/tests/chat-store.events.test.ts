@@ -1,6 +1,20 @@
 import { describe, expect, it, vi } from "vitest";
 import { createChatStore } from "../src/stores/chat-store.js";
 
+function deferred<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+  reject: (error: unknown) => void;
+} {
+  let resolve!: (value: T) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 function sampleGetSession(sessionId: string) {
   return {
     session_id: sessionId,
@@ -192,6 +206,105 @@ describe("chatStore event handling", () => {
         role: "user",
         content: "hello",
         created_at: "2026-01-01T00:00:00.000Z",
+      },
+    ]);
+  });
+
+  it("buffers matching live updates while openSession is still loading", async () => {
+    const ws = createFakeWs();
+    const pendingGet = deferred<{ session: ReturnType<typeof sampleGetSession> }>();
+    ws.sessionGet.mockImplementation(async () => await pendingGet.promise);
+    const http = createFakeHttp();
+    const chat = createChatStore(ws as any, http as any);
+
+    const openPromise = chat.openSession("session-1");
+
+    expect(chat.getSnapshot().active.loading).toBe(true);
+    expect(chat.getSnapshot().active.session).toBeNull();
+
+    ws.emit("typing.started", {
+      occurred_at: "2026-01-01T00:00:00.500Z",
+      payload: {
+        session_id: "session-1",
+      },
+    });
+    ws.emit("tool.lifecycle", {
+      occurred_at: "2026-01-01T00:00:01.000Z",
+      payload: {
+        session_id: "session-1",
+        thread_id: "ui-session-1",
+        tool_call_id: "tool-1",
+        tool_id: "shell.exec",
+        status: "awaiting_approval",
+        summary: "Waiting for approval",
+      },
+    });
+    ws.emit("approval_request", {
+      occurred_at: "2026-01-01T00:00:02.000Z",
+      payload: {
+        approval_id: "11111111-1111-1111-1111-111111111111",
+        approval_key: "approval:11111111-1111-1111-1111-111111111111",
+        kind: "other",
+        prompt: "Allow shell command?",
+        context: {
+          session_id: "session-1",
+          thread_id: "ui-session-1",
+          tool_call_id: "tool-1",
+        },
+      },
+    });
+    ws.emit("message.delta", {
+      occurred_at: "2026-01-01T00:00:03.000Z",
+      payload: {
+        session_id: "session-1",
+        thread_id: "ui-session-1",
+        message_id: "assistant-1",
+        role: "assistant",
+        delta: "Working on it",
+      },
+    });
+
+    pendingGet.resolve({ session: sampleGetSession("session-1") });
+    await openPromise;
+
+    expect(chat.getSnapshot().active.typing).toBe(true);
+    expect(chat.getSnapshot().active.activeToolCallIds).toEqual(["tool-1"]);
+    expect(chat.getSnapshot().active.session?.transcript).toEqual([
+      {
+        kind: "text",
+        id: "session-1-user-1",
+        role: "user",
+        content: "hello",
+        created_at: "2026-01-01T00:00:00.000Z",
+      },
+      {
+        kind: "tool",
+        id: "tool-1",
+        tool_id: "shell.exec",
+        tool_call_id: "tool-1",
+        status: "awaiting_approval",
+        summary: "Waiting for approval",
+        created_at: "2026-01-01T00:00:01.000Z",
+        updated_at: "2026-01-01T00:00:01.000Z",
+        thread_id: "ui-session-1",
+      },
+      {
+        kind: "approval",
+        id: "11111111-1111-1111-1111-111111111111",
+        approval_id: "11111111-1111-1111-1111-111111111111",
+        tool_call_id: "tool-1",
+        status: "pending",
+        title: "Approval required",
+        detail: "Allow shell command?",
+        created_at: "2026-01-01T00:00:02.000Z",
+        updated_at: "2026-01-01T00:00:02.000Z",
+      },
+      {
+        kind: "text",
+        id: "assistant-1",
+        role: "assistant",
+        content: "Working on it",
+        created_at: "2026-01-01T00:00:03.000Z",
       },
     ]);
   });

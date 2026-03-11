@@ -11,6 +11,7 @@ import {
   type MemoryItem,
   type MemoryTombstone,
   type TyrumClientEvents,
+  type WsApprovalRequest,
 } from "@tyrum/client/browser";
 import { httpAuthForAuth, wsTokenForAuth, type OperatorAuthStrategy } from "./auth.js";
 import type { OperatorHttpClient, OperatorWsClient } from "./deps.js";
@@ -33,7 +34,7 @@ import { createAgentStatusStore, type AgentStatusStore } from "./stores/agent-st
 import { createActivityStore, type ActivityStore } from "./stores/activity-store.js";
 import { registerActivityWsHandlers } from "./operator-core.activity-events.js";
 import { readOccurredAt, readPayload } from "./operator-core.event-helpers.js";
-import type { WorkItem } from "@tyrum/schemas";
+import { ApprovalKind, type WorkItem } from "@tyrum/schemas";
 import type { WorkTaskEvent } from "./workboard/workboard-utils.js";
 
 export interface OperatorCoreOptions {
@@ -103,6 +104,36 @@ function readReconnectSchedule(data: unknown): number | null {
   if (typeof raw !== "number") return null;
   if (!Number.isFinite(raw)) return null;
   return raw;
+}
+
+function readPendingApprovalFromRequest(data: unknown): Approval | null {
+  const payload = readPayload(data);
+  if (!payload) return null;
+  const approvalId =
+    typeof payload["approval_id"] === "string" ? payload["approval_id"].trim() : "";
+  const approvalKey =
+    typeof payload["approval_key"] === "string" ? payload["approval_key"].trim() : "";
+  const kind = typeof payload["kind"] === "string" ? payload["kind"].trim() : "";
+  const prompt = typeof payload["prompt"] === "string" ? payload["prompt"] : "";
+  const occurredAt = readOccurredAt(data) ?? new Date().toISOString();
+  const parsedKind = ApprovalKind.safeParse(kind);
+
+  if (!approvalId || !approvalKey || !kind || !prompt) return null;
+
+  return {
+    approval_id: approvalId,
+    approval_key: approvalKey,
+    kind: parsedKind.success ? parsedKind.data : "other",
+    status: "pending",
+    prompt,
+    context: payload["context"],
+    created_at: occurredAt,
+    expires_at:
+      typeof payload["expires_at"] === "string" || payload["expires_at"] === null
+        ? (payload["expires_at"] as WsApprovalRequest["payload"]["expires_at"])
+        : null,
+    resolution: null,
+  };
 }
 
 export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
@@ -300,6 +331,13 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
     const approval = payload?.["approval"];
     if (approval) {
       approvals.handleApprovalUpsert(approval as Approval);
+    }
+  });
+
+  on("approval_request", (data) => {
+    const approval = readPendingApprovalFromRequest(data);
+    if (approval) {
+      approvals.handleApprovalUpsert(approval);
     }
   });
 
