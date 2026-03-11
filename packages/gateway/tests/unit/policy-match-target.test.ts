@@ -254,6 +254,24 @@ describe("canonicalizeToolMatchTarget", () => {
     expect(unknownTarget).not.toContain("secret");
   });
 
+  it("defaults unknown mobile-like capabilities to IOS for location/audio fallback inference", () => {
+    const locationTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
+      capability: "tyrum.mobile-preview",
+      action_name: "location.get_current",
+      input: { enable_high_accuracy: true },
+    });
+    expect(locationTarget).toBe(
+      "capability:tyrum.mobile-preview;action:IOS;op:location.get_current",
+    );
+
+    const audioTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
+      capability: "",
+      action_name: "audio.record_clip",
+      input: { duration_ms: 5000 },
+    });
+    expect(audioTarget).toBe("capability:;action:IOS;op:audio.record_clip");
+  });
+
   it("canonicalizes heartbeat schedule creation using normalized schedule semantics", () => {
     const target = canonicalizeToolMatchTarget("tool.automation.schedule.create", {
       kind: "heartbeat",

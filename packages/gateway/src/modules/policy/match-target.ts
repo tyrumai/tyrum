@@ -378,9 +378,7 @@ export function canonicalizeToolMatchTarget(
             : capability === "tyrum.desktop"
               ? "Desktop"
               : actionName.startsWith("location.") || actionName.startsWith("audio.")
-                ? capability === "tyrum.android"
-                  ? "Android"
-                  : "IOS"
+                ? "IOS"
                 : actionName.startsWith("camera.") ||
                     actionName.startsWith("microphone.") ||
                     actionName.startsWith("geolocation.")

@@ -32,6 +32,20 @@ function blobToBase64(blob: Blob): Promise<string> {
   });
 }
 
+type NativeLocationCoords = Awaited<ReturnType<typeof Geolocation.getCurrentPosition>>["coords"];
+
+function mapLocationCoords(coords: NativeLocationCoords) {
+  return {
+    latitude: coords.latitude,
+    longitude: coords.longitude,
+    accuracy_m: coords.accuracy,
+    altitude_m: coords.altitude,
+    altitude_accuracy_m: coords.altitudeAccuracy,
+    heading_deg: coords.heading,
+    speed_mps: coords.speed,
+  };
+}
+
 async function measureBase64Image(
   base64: string,
   mime: string,
@@ -70,7 +84,7 @@ async function getCurrentLocation(
   });
 
   return {
-    coords: position.coords,
+    coords: mapLocationCoords(position.coords),
     timestamp: new Date(position.timestamp).toISOString(),
   };
 }
