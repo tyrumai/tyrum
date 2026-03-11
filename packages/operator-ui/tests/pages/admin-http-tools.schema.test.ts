@@ -91,6 +91,7 @@ describe("buildStructuredToolSchema", () => {
     });
 
     expect(schema?.sections.map((section) => section.label)).toEqual(["fact", "note"]);
+    expect(schema?.sections.map((section) => section.id)).toEqual(["variant-1", "variant-2"]);
     expect(schema?.sections[0]?.rows).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ field: "kind", type: "string (fact)", required: true }),
@@ -103,5 +104,29 @@ describe("buildStructuredToolSchema", () => {
         expect.objectContaining({ field: "body_md", type: "string", required: true }),
       ]),
     );
+  });
+
+  it("keeps unique section ids when oneOf labels repeat", () => {
+    const schema = buildStructuredToolSchema({
+      oneOf: [
+        {
+          type: "object",
+          properties: {
+            kind: { type: "string", enum: ["fact"] },
+            key: { type: "string" },
+          },
+        },
+        {
+          type: "object",
+          properties: {
+            kind: { type: "string", enum: ["fact"] },
+            body_md: { type: "string" },
+          },
+        },
+      ],
+    });
+
+    expect(schema?.sections.map((section) => section.label)).toEqual(["fact", "fact"]);
+    expect(schema?.sections.map((section) => section.id)).toEqual(["variant-1", "variant-2"]);
   });
 });

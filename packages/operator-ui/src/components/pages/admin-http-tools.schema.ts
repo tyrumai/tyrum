@@ -8,6 +8,7 @@ export interface StructuredToolSchemaRow {
 }
 
 export interface StructuredToolSchemaSection {
+  id: string;
   label: string;
   rows: StructuredToolSchemaRow[];
   summary?: string;
@@ -45,6 +46,7 @@ function buildSections(schema: Record<string, unknown>): StructuredToolSchemaSec
 
   return [
     {
+      id: "fields",
       label: "Fields",
       rows,
       summary: buildSectionSummary(schema),
@@ -58,6 +60,7 @@ function buildVariantSection(
 ): StructuredToolSchemaSection {
   const rows = collectRows(schema, "");
   return {
+    id: `variant-${String(index + 1)}`,
     label: detectVariantLabel(schema, index),
     rows,
     summary: rows.length > 0 ? buildSectionSummary(schema) : buildLooseSummary(schema),

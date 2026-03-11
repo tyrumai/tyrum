@@ -72,7 +72,7 @@ function StructuredSchemaDetails({
       <div className="text-sm font-medium text-fg">Input fields</div>
       {schema.summary ? <div className="text-sm text-fg-muted">{schema.summary}</div> : null}
       {schema.sections.map((section) => (
-        <div key={section.label} className="grid gap-2">
+        <div key={section.id} className="grid gap-2">
           <div className="flex items-center gap-2">
             <Badge variant="outline">{section.label}</Badge>
             {section.summary ? (
@@ -92,7 +92,7 @@ function StructuredSchemaDetails({
                 </thead>
                 <tbody>
                   {section.rows.map((row) => (
-                    <tr key={`${section.label}:${row.field}`} className="border-t border-border/70">
+                    <tr key={`${section.id}:${row.field}`} className="border-t border-border/70">
                       <td className="px-3 py-2 font-mono text-xs text-fg">{row.field}</td>
                       <td className="px-3 py-2 text-fg">{row.type}</td>
                       <td className="px-3 py-2 text-fg">{row.required ? "Yes" : "No"}</td>
