@@ -89,6 +89,7 @@ export function AuthTokensCard({ core }: { core: OperatorCore }): React.ReactEle
     setEditingToken(null);
     setFormState(defaultFormState());
     setDialogErrorMessage(null);
+    setIssuedToken(null);
   };
 
   const openEditDialog = (token: AuthTokenListEntry) => {
@@ -96,6 +97,7 @@ export function AuthTokensCard({ core }: { core: OperatorCore }): React.ReactEle
     setEditingToken(token);
     setFormState(formStateFromToken(token));
     setDialogErrorMessage(null);
+    setIssuedToken(null);
   };
 
   const closeDialog = (open: boolean) => {
@@ -149,6 +151,7 @@ export function AuthTokensCard({ core }: { core: OperatorCore }): React.ReactEle
       if (!result.revoked) {
         throw new Error("Token could not be revoked.");
       }
+      setIssuedToken(null);
       await loadTokens();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to revoke token.";
@@ -205,7 +208,14 @@ export function AuthTokensCard({ core }: { core: OperatorCore }): React.ReactEle
           description="Token secrets are shown once after creation and are never readable from the list."
         />
 
-        {issuedToken ? <IssuedTokenNotice token={issuedToken} /> : null}
+        {issuedToken ? (
+          <IssuedTokenNotice
+            token={issuedToken}
+            onDismiss={() => {
+              setIssuedToken(null);
+            }}
+          />
+        ) : null}
 
         {revokeErrorMessage ? (
           <Alert variant="error" title="Token revoke failed" description={revokeErrorMessage} />

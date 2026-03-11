@@ -2,6 +2,7 @@ import type * as React from "react";
 import { toast } from "sonner";
 import { Alert } from "../ui/alert.js";
 import { Badge } from "../ui/badge.js";
+import { Button } from "../ui/button.js";
 import { Input } from "../ui/input.js";
 import type { AuthTokenIssueResult } from "./admin-http-tokens-shared.js";
 import { formatTimestamp } from "./admin-http-tokens-shared.js";
@@ -25,17 +26,35 @@ export function SummaryBadge({
   return <Badge variant="outline">{`${label}: ${String(value)}`}</Badge>;
 }
 
-export function IssuedTokenNotice({ token }: { token: AuthTokenIssueResult }): React.ReactElement {
+export function IssuedTokenNotice({
+  token,
+  onDismiss,
+}: {
+  token: AuthTokenIssueResult;
+  onDismiss: () => void;
+}): React.ReactElement {
   return (
     <div
       data-testid="admin-http-token-secret-panel"
       className="grid gap-3 rounded-lg border border-success/30 p-4"
     >
-      <Alert
-        variant="success"
-        title="Token created"
-        description="Copy this secret now. It will not be shown again after you dismiss it."
-      />
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <Alert
+          variant="success"
+          title="Token created"
+          description="Copy this secret now. It will not be shown again after you dismiss it."
+          className="min-w-0 flex-1"
+        />
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          data-testid="admin-http-token-secret-dismiss"
+          onClick={onDismiss}
+        >
+          Dismiss
+        </Button>
+      </div>
 
       <div className="grid gap-2 text-sm text-fg-muted sm:grid-cols-2">
         <div>
