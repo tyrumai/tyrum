@@ -1,3 +1,4 @@
+import { TyrumHttpClientError } from "@tyrum/client/browser";
 import { vi } from "vitest";
 import type { OperatorHttpClient, OperatorWsClient } from "../../operator-core/src/deps.js";
 import type { Handler } from "./operator-ui.test-support.js";
@@ -216,7 +217,10 @@ export function createFakeHttpClient(): {
   const policyCreateOverride = vi.fn(async () => ({ override: {} }) as const);
   const policyRevokeOverride = vi.fn(async () => ({ override: {} }) as const);
   const policyConfigGetDeployment = vi.fn(async () => {
-    throw new Error("not found");
+    throw new TyrumHttpClientError("http_error", "not found", {
+      status: 404,
+      error: "not_found",
+    });
   });
   const policyConfigListDeploymentRevisions = vi.fn(async () => ({ revisions: [] }) as const);
   const policyConfigUpdateDeployment = vi.fn(async () => ({ revision: 1 }) as const);

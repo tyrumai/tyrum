@@ -31,6 +31,10 @@ import {
 
 export type { PolicyConfigRevision, PolicyConfigSectionProps, PolicyEffectiveBundle };
 
+function normalizePolicyBundle(bundle: PolicyBundleT): PolicyBundleT {
+  return policyFormStateToBundle(policyBundleToFormState(bundle));
+}
+
 export function PolicyConfigSection(props: PolicyConfigSectionProps): React.ReactElement {
   const [formState, setFormState] = React.useState<PolicyFormState | null>(null);
   const [initialBundle, setInitialBundle] = React.useState<PolicyBundleT | null>(null);
@@ -41,8 +45,9 @@ export function PolicyConfigSection(props: PolicyConfigSectionProps): React.Reac
 
   React.useEffect(() => {
     if (!props.effective) return;
-    setFormState(policyBundleToFormState(props.effective.bundle));
-    setInitialBundle(props.effective.bundle);
+    const normalizedBundle = normalizePolicyBundle(props.effective.bundle);
+    setFormState(policyBundleToFormState(normalizedBundle));
+    setInitialBundle(normalizedBundle);
   }, [props.effective]);
 
   if (props.loadError) {
