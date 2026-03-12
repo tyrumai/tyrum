@@ -405,7 +405,7 @@ describe("useMobileNode", () => {
       root.unmount();
     });
 
-    expect(connectMock).toHaveBeenCalledTimes(1);
+    expect(connectMock).not.toHaveBeenCalled();
     await act(async () => {
       deferredDeviceInfo.resolve({
         name: "Ron phone",

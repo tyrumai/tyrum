@@ -3,6 +3,7 @@
 import React, { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MobileSetupPage } from "../src/mobile-setup-page.js";
+import { getDefaultLocationStreamingConfig } from "../src/mobile-config.js";
 import {
   cleanupTestRoot,
   renderIntoDocument,
@@ -90,6 +91,7 @@ describe("MobileSetupPage", () => {
           "camera.capture_photo": true,
           "audio.record_clip": true,
         },
+        locationStreaming: getDefaultLocationStreamingConfig(),
       });
     } finally {
       cleanupTestRoot(testRoot);
