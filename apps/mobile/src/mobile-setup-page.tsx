@@ -108,8 +108,7 @@ export function MobileSetupPage({
       token: normalizedToken,
       nodeEnabled: initialConfig?.nodeEnabled ?? true,
       actionSettings: initialConfig?.actionSettings ?? getDefaultActionSettings(),
-      locationStreaming:
-        initialConfig?.locationStreaming ?? getDefaultLocationStreamingConfig(),
+      locationStreaming: initialConfig?.locationStreaming ?? getDefaultLocationStreamingConfig(),
     };
 
     if (existingConfig && !sameMobileBootstrapConfig(existingConfig, nextConfig)) {
