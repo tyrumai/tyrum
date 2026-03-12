@@ -88,13 +88,20 @@ export function createDeferred<T = void>(): {
 
 export async function seedAgentConfig(
   container: GatewayContainer,
-  input: { agentKey?: string; config: unknown },
+  input: {
+    tenantKey?: string;
+    agentKey?: string;
+    workspaceKey?: string;
+    config: unknown;
+  },
 ): Promise<void> {
+  const tenantKey = input.tenantKey?.trim() || "default";
   const agentKey = input.agentKey?.trim() || "default";
+  const workspaceKey = input.workspaceKey?.trim() || "default";
   const scopeIds = await container.identityScopeDal.resolveScopeIds({
-    tenantKey: "default",
+    tenantKey,
     agentKey,
-    workspaceKey: "default",
+    workspaceKey,
   });
   await new AgentConfigDal(container.db).set({
     tenantId: scopeIds.tenantId,
@@ -116,6 +123,34 @@ export async function setupTestEnv(): Promise<{
     tyrumHome: homeDir,
   });
   return { homeDir, container };
+}
+
+export async function setupFileBackedTestEnv(): Promise<{
+  homeDir: string;
+  dbPath: string;
+  container: GatewayContainer;
+}> {
+  const homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
+  const dbPath = join(homeDir, "gateway.sqlite");
+  const container = await createContainer({
+    dbPath,
+    migrationsDir,
+    tyrumHome: homeDir,
+  });
+  return { homeDir, dbPath, container };
+}
+
+export async function restartFileBackedContainer(input: {
+  homeDir: string;
+  dbPath: string;
+  container?: GatewayContainer;
+}): Promise<GatewayContainer> {
+  await input.container?.db.close();
+  return await createContainer({
+    dbPath: input.dbPath,
+    migrationsDir,
+    tyrumHome: input.homeDir,
+  });
 }
 
 export async function teardownTestEnv(env: {
