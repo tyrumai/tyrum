@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from "react";
+import React, { useMemo } from "react";
 import { createRoot } from "react-dom/client";
 import {
   Alert,
@@ -77,7 +77,7 @@ function MobileRoot() {
     token: operator.bootstrap?.token ?? null,
     updateConfig: operator.updateConfig,
   });
-  const reconnectConnections = useCallback(() => {
+  const reconnectConnections = () => {
     const operatorConnection = operator.core?.connectionStore.getSnapshot();
     if (operator.bootstrap && operator.core && operatorConnection?.status === "disconnected") {
       operator.core.connect();
@@ -88,15 +88,7 @@ function MobileRoot() {
     if (mobileNode.state.enabled && mobileNode.state.status === "disconnected") {
       mobileNode.retry();
     }
-  }, [
-    mobileNode.retry,
-    mobileNode.state.enabled,
-    mobileNode.state.status,
-    operator.bootstrap,
-    operator.busy,
-    operator.core,
-    operator.retry,
-  ]);
+  };
   const runtimeSignals = useMobileRuntimeSignals(reconnectConnections);
   const setupDraft = bootstrapIntents.draftConfig;
   const runtimeAlerts = (

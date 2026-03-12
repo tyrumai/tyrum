@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { createMobileBootstrapUrl } from "@tyrum/schemas";
+import * as schemas from "@tyrum/schemas";
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -55,6 +55,17 @@ function createTestRoot(): { container: HTMLDivElement; root: Root } {
   return { container, root: createRoot(container) };
 }
 
+function createDeferred<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+} {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
 async function flushMicrotasks(count = 4): Promise<void> {
   for (let index = 0; index < count; index += 1) {
     await Promise.resolve();
@@ -71,7 +82,7 @@ describe("useMobileBootstrapIntents", () => {
   });
 
   it("loads bootstrap drafts from launch URLs and allows the same URL again after clearing", async () => {
-    const launchUrl = createMobileBootstrapUrl({
+    const launchUrl = schemas.createMobileBootstrapUrl({
       v: 1,
       httpBaseUrl: "https://gateway.example",
       wsUrl: "wss://gateway.example/ws",
@@ -123,7 +134,7 @@ describe("useMobileBootstrapIntents", () => {
   });
 
   it("loads bootstrap drafts from QR scans", async () => {
-    const scannedUrl = createMobileBootstrapUrl({
+    const scannedUrl = schemas.createMobileBootstrapUrl({
       v: 1,
       httpBaseUrl: "http://127.0.0.1:8788",
       wsUrl: "ws://127.0.0.1:8788/ws",
@@ -165,7 +176,7 @@ describe("useMobileBootstrapIntents", () => {
   });
 
   it("clears a previously loaded draft when a scanned bootstrap URL is malformed", async () => {
-    const scannedUrl = createMobileBootstrapUrl({
+    const scannedUrl = schemas.createMobileBootstrapUrl({
       v: 1,
       httpBaseUrl: "https://gateway.example",
       wsUrl: "wss://gateway.example/ws",
@@ -242,7 +253,7 @@ describe("useMobileBootstrapIntents", () => {
   });
 
   it("clears prior imports for malformed deep links and allows the same link to load again", async () => {
-    const launchUrl = createMobileBootstrapUrl({
+    const launchUrl = schemas.createMobileBootstrapUrl({
       v: 1,
       httpBaseUrl: "https://gateway.example",
       wsUrl: "wss://gateway.example/ws",
@@ -295,6 +306,59 @@ describe("useMobileBootstrapIntents", () => {
     act(() => {
       root.unmount();
     });
+    container.remove();
+  });
+
+  it("ignores appUrlOpen events after unmount when listener registration resolves late", async () => {
+    const launchUrl = schemas.createMobileBootstrapUrl({
+      v: 1,
+      httpBaseUrl: "https://gateway.example",
+      wsUrl: "wss://gateway.example/ws",
+      token: "token-race",
+    });
+    const parseSpy = vi.spyOn(schemas, "parseMobileBootstrapUrl");
+    const listenerDeferred = createDeferred<{ remove: () => Promise<void> }>();
+    const removeListener = vi.fn(async () => {
+      listeners.delete("appUrlOpen");
+    });
+
+    addListenerMock.mockImplementation((event: string, listener: (event: unknown) => void) => {
+      listeners.set(event, listener);
+      return listenerDeferred.promise;
+    });
+
+    const { useMobileBootstrapIntents } = await import("../src/use-mobile-bootstrap-intents.js");
+    const { container, root } = createTestRoot();
+
+    const Probe = () => {
+      useMobileBootstrapIntents();
+      return null;
+    };
+
+    await act(async () => {
+      root.render(React.createElement(Probe));
+      await flushMicrotasks();
+    });
+
+    act(() => {
+      root.unmount();
+    });
+
+    await act(async () => {
+      listeners.get("appUrlOpen")?.({ url: launchUrl });
+      await flushMicrotasks();
+    });
+
+    expect(parseSpy).not.toHaveBeenCalled();
+
+    await act(async () => {
+      listenerDeferred.resolve({ remove: removeListener });
+      await flushMicrotasks();
+    });
+
+    expect(removeListener).toHaveBeenCalledTimes(1);
+    expect(listeners.has("appUrlOpen")).toBe(false);
+
     container.remove();
   });
 });

@@ -118,6 +118,9 @@ export function useMobileBootstrapIntents(): {
       });
 
     void App.addListener("appUrlOpen", (event) => {
+      if (disposed) {
+        return;
+      }
       try {
         queueBootstrapUrl(event.url, "deep-link");
       } catch (error) {
