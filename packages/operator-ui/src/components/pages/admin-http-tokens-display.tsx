@@ -37,6 +37,8 @@ function MobileBootstrapQrDialog({
   useEffect(() => {
     if (!open) return;
     let active = true;
+    setSvg(null);
+    setErrorMessage(null);
 
     void QRCode.toString(bootstrapUrl, {
       type: "svg",

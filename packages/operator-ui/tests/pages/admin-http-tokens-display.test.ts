@@ -36,6 +36,17 @@ async function flushMicrotasks(count = 4): Promise<void> {
   }
 }
 
+function createDeferred<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+} {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
 describe("IssuedTokenNotice", () => {
   it("copies a mobile bootstrap link and renders a QR dialog for the issued token", async () => {
     const writeText = vi.fn(async () => {});
@@ -100,6 +111,90 @@ describe("IssuedTokenNotice", () => {
           width: 256,
         }),
       );
+    } finally {
+      cleanupTestRoot(testRoot);
+    }
+  });
+
+  it("clears stale QR markup while regenerating after bootstrap data changes", async () => {
+    const firstQr = createDeferred<string>();
+    const secondQr = createDeferred<string>();
+    qrcodeToStringMock
+      .mockImplementationOnce(() => firstQr.promise)
+      .mockImplementationOnce(() => secondQr.promise);
+
+    const testRoot = renderIntoDocument(
+      React.createElement(IssuedTokenNotice, {
+        token: {
+          token: "tyrum-token.v1.first",
+          token_id: "token-1",
+          tenant_id: "11111111-1111-4111-8111-111111111111",
+          display_name: "Mobile bootstrap token",
+          role: "client",
+          device_id: "phone-1",
+          scopes: [],
+          issued_at: "2026-03-01T00:00:00.000Z",
+          updated_at: "2026-03-01T00:00:00.000Z",
+        },
+        gatewayHttpBaseUrl: "https://gateway.example/",
+        onDismiss: vi.fn(),
+      }),
+    );
+
+    try {
+      const qrButton = testRoot.container.querySelector<HTMLButtonElement>(
+        '[data-testid="admin-http-token-mobile-qr"]',
+      );
+      expect(qrButton).not.toBeNull();
+
+      await act(async () => {
+        qrButton?.click();
+        await flushMicrotasks();
+      });
+
+      expect(document.body.textContent).toContain("Generating QR…");
+
+      await act(async () => {
+        firstQr.resolve('<svg data-testid="mobile-bootstrap-qr-first"></svg>');
+        await flushMicrotasks();
+      });
+
+      expect(
+        document.body.querySelector('[data-testid="mobile-bootstrap-qr-first"]'),
+      ).not.toBeNull();
+
+      await act(async () => {
+        testRoot.root.render(
+          React.createElement(IssuedTokenNotice, {
+            token: {
+              token: "tyrum-token.v1.second",
+              token_id: "token-2",
+              tenant_id: "11111111-1111-4111-8111-111111111111",
+              display_name: "Mobile bootstrap token",
+              role: "client",
+              device_id: "phone-2",
+              scopes: [],
+              issued_at: "2026-03-02T00:00:00.000Z",
+              updated_at: "2026-03-02T00:00:00.000Z",
+            },
+            gatewayHttpBaseUrl: "https://gateway.example/",
+            onDismiss: vi.fn(),
+          }),
+        );
+        await flushMicrotasks();
+      });
+
+      expect(document.body.textContent).toContain("Generating QR…");
+      expect(document.body.querySelector('[data-testid="mobile-bootstrap-qr-first"]')).toBeNull();
+
+      await act(async () => {
+        secondQr.resolve('<svg data-testid="mobile-bootstrap-qr-second"></svg>');
+        await flushMicrotasks();
+      });
+
+      expect(
+        document.body.querySelector('[data-testid="mobile-bootstrap-qr-second"]'),
+      ).not.toBeNull();
     } finally {
       cleanupTestRoot(testRoot);
     }

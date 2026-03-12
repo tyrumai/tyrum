@@ -34,6 +34,9 @@ export function useMobileRuntimeSignals(onReconnect: () => void): {
     });
 
     void App.addListener("appStateChange", (state) => {
+      if (disposed) {
+        return;
+      }
       setAppActive(state.isActive);
       if (state.isActive) {
         reconnect();
@@ -49,6 +52,9 @@ export function useMobileRuntimeSignals(onReconnect: () => void): {
     });
 
     void Network.addListener("networkStatusChange", (status) => {
+      if (disposed) {
+        return;
+      }
       setNetworkStatus(status);
       if (status.connected) {
         reconnect();

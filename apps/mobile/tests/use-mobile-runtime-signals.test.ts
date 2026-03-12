@@ -69,6 +69,17 @@ function createTestRoot(): { container: HTMLDivElement; root: Root } {
   return { container, root: createRoot(container) };
 }
 
+function createDeferred<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+} {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
 async function flushMicrotasks(count = 4): Promise<void> {
   for (let index = 0; index < count; index += 1) {
     await Promise.resolve();
@@ -164,6 +175,66 @@ describe("useMobileRuntimeSignals", () => {
     act(() => {
       root.unmount();
     });
+    container.remove();
+  });
+
+  it("ignores listener callbacks after unmount when registration resolves late", async () => {
+    const onReconnect = vi.fn();
+    const { useMobileRuntimeSignals } = await import("../src/use-mobile-runtime-signals.js");
+    const { container, root } = createTestRoot();
+    const appListenerDeferred = createDeferred<{ remove: () => Promise<void> }>();
+    const networkListenerDeferred = createDeferred<{ remove: () => Promise<void> }>();
+    const appRemove = vi.fn(async () => {
+      appListeners.delete("appStateChange");
+    });
+    const networkRemove = vi.fn(async () => {
+      networkListeners.delete("networkStatusChange");
+    });
+
+    addAppListenerMock.mockImplementation((event: string, listener: (event: unknown) => void) => {
+      appListeners.set(event, listener);
+      return appListenerDeferred.promise;
+    });
+    addNetworkListenerMock.mockImplementation(
+      (event: string, listener: (event: unknown) => void) => {
+        networkListeners.set(event, listener);
+        return networkListenerDeferred.promise;
+      },
+    );
+
+    const Probe = () => {
+      useMobileRuntimeSignals(onReconnect);
+      return null;
+    };
+
+    await act(async () => {
+      root.render(React.createElement(Probe));
+      await flushMicrotasks();
+    });
+
+    act(() => {
+      root.unmount();
+    });
+
+    await act(async () => {
+      appListeners.get("appStateChange")?.({ isActive: true });
+      networkListeners.get("networkStatusChange")?.({ connected: true, connectionType: "wifi" });
+      await flushMicrotasks();
+    });
+
+    expect(onReconnect).not.toHaveBeenCalled();
+
+    await act(async () => {
+      appListenerDeferred.resolve({ remove: appRemove });
+      networkListenerDeferred.resolve({ remove: networkRemove });
+      await flushMicrotasks();
+    });
+
+    expect(appRemove).toHaveBeenCalledTimes(1);
+    expect(networkRemove).toHaveBeenCalledTimes(1);
+    expect(appListeners.has("appStateChange")).toBe(false);
+    expect(networkListeners.has("networkStatusChange")).toBe(false);
+
     container.remove();
   });
 });
