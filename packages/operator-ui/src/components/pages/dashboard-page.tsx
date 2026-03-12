@@ -56,6 +56,12 @@ function getElevatedExecutionLabel(status: StatusResponse | null): string {
   return value ? "available" : "unavailable";
 }
 
+function getAuthEnabledLabel(status: StatusResponse | null): string {
+  const enabled = status?.auth?.enabled;
+  if (enabled === undefined) return "-";
+  return enabled ? "enabled" : "disabled";
+}
+
 export interface DashboardPageProps {
   core: OperatorCore;
   onNavigate?: (id: string) => void;
@@ -381,7 +387,7 @@ export function DashboardPage({
             <StatusRow
               label="Auth"
               loading={statusLoading}
-              value={status.status ? (status.status.auth.enabled ? "enabled" : "disabled") : "-"}
+              value={getAuthEnabledLabel(status.status)}
             />
             <StatusRow
               label="Policy"

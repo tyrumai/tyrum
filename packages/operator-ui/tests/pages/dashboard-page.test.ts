@@ -216,6 +216,31 @@ describe("DashboardPage", () => {
     cleanupTestRoot({ container, root });
   });
 
+  it("renders the security card without crashing when auth status is absent", () => {
+    const { store: statusStore } = createStore({
+      status: {
+        version: "1.0.0",
+        db_kind: "sqlite",
+        is_exposed: false,
+        sandbox: null,
+        config_health: { status: "ok", issues: [] },
+      },
+      usage: null,
+      presenceByInstanceId: {},
+      loading: { status: false, usage: false, presence: false },
+      error: { status: null, usage: null, presence: null },
+      lastSyncedAt: "2026-03-08T00:00:00.000Z",
+    });
+    const { core } = createMockCore({ statusStore });
+
+    const { container, root } = renderIntoDocument(React.createElement(DashboardPage, { core }));
+
+    expect(container.textContent).toContain("Security");
+    expect(container.textContent).toContain("Auth");
+
+    cleanupTestRoot({ container, root });
+  });
+
   it("shows the connection banner when disconnected", () => {
     const { core } = createMockCore();
 
