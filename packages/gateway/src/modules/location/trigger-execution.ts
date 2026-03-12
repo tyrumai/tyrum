@@ -9,11 +9,14 @@ import type { ExecutionEngine } from "../execution/engine.js";
 import type { IdentityScopeDal } from "../identity/scope.js";
 import type { MemoryV1Dal } from "../memory/v1-dal.js";
 import { recordMemoryV1SystemEpisode } from "../memory/v1-episode-recorder.js";
+import { Logger } from "../observability/logger.js";
 import { PlaybookRunner } from "../playbook/runner.js";
 import type { PolicyService } from "../policy/service.js";
 import { loadScopedPolicySnapshot } from "../policy/scoped-snapshot.js";
 import type { LocationDal } from "./dal.js";
 import type { LocationAutomationTriggerRecord } from "./types.js";
+
+const logger = new Logger({ base: { module: "location.trigger-execution" } });
 
 type FireLocationTriggersInput = {
   tenantId: string;
@@ -220,6 +223,22 @@ export async function fireLocationTriggers(input: FireLocationTriggersInput): Pr
 
   for (const trigger of triggers) {
     if (!matchesTrigger(trigger, input.event)) continue;
-    await enqueueTrigger(input, trigger);
+    try {
+      await enqueueTrigger(input, trigger);
+    } catch (error) {
+      logger.warn("location.trigger_dispatch_failed", {
+        tenant_id: input.tenantId,
+        agent_id: input.agentId ?? null,
+        trigger_id: trigger.trigger_id,
+        condition_type: trigger.condition.type,
+        execution_kind: trigger.execution.kind,
+        event_id: input.event.event_id,
+        event_type: input.event.type,
+        transition: input.event.transition,
+        place_id: input.event.place_id ?? null,
+        category_key: input.event.category_key ?? null,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 }

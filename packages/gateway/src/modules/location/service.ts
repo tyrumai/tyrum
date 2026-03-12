@@ -357,18 +357,11 @@ export class LocationService {
             agentId,
             nextEvent.event,
           );
-          await fireLocationTriggers({
+          await this.dispatchLocationTriggers({
             tenantId: input.tenantId,
             agentId,
             event: nextEvent.event,
             triggers: automationTriggers,
-            dal: this.dal,
-            db: this.db,
-            identityScopeDal: this.opts.identityScopeDal,
-            engine: this.opts.engine,
-            policyService: this.opts.policyService,
-            playbooksById: this.playbooksById,
-            playbookRunner: this.playbookRunner,
           });
         }
       }
@@ -467,23 +460,50 @@ export class LocationService {
           input.agentId,
           event.event,
         );
-        await fireLocationTriggers({
+        await this.dispatchLocationTriggers({
           tenantId: input.tenantId,
           agentId: input.agentId,
           event: event.event,
           triggers: input.automationTriggers,
-          dal: this.dal,
-          db: this.db,
-          identityScopeDal: this.opts.identityScopeDal,
-          engine: this.opts.engine,
-          policyService: this.opts.policyService,
-          playbooksById: this.playbooksById,
-          playbookRunner: this.playbookRunner,
         });
       }
     }
 
     return events;
+  }
+
+  private async dispatchLocationTriggers(input: {
+    tenantId: string;
+    agentId: string;
+    event: LocationEvent;
+    triggers: LocationAutomationTriggerRecord[];
+  }): Promise<void> {
+    try {
+      await fireLocationTriggers({
+        tenantId: input.tenantId,
+        agentId: input.agentId,
+        event: input.event,
+        triggers: input.triggers,
+        dal: this.dal,
+        db: this.db,
+        identityScopeDal: this.opts.identityScopeDal,
+        engine: this.opts.engine,
+        policyService: this.opts.policyService,
+        playbooksById: this.playbooksById,
+        playbookRunner: this.playbookRunner,
+      });
+    } catch (error) {
+      logger.warn("location.trigger_dispatch_failed", {
+        tenant_id: input.tenantId,
+        agent_id: input.agentId,
+        event_id: input.event.event_id,
+        event_type: input.event.type,
+        transition: input.event.transition,
+        place_id: input.event.place_id ?? null,
+        category_key: input.event.category_key ?? null,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   private getPoiProvider(kind: LocationProfile["poi_provider_kind"]): PoiProvider {

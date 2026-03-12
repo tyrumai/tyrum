@@ -150,6 +150,87 @@ describe("LocationService", () => {
     expect(listAutomationTriggersSpy).toHaveBeenCalledTimes(1);
   });
 
+  it("continues evaluating later saved places when one trigger dispatch fails", async () => {
+    const tenantId = "00000000-0000-4000-8000-000000000001";
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    service = new LocationService(db, {
+      identityScopeDal: container.identityScopeDal,
+      memoryV1Dal: container.memoryV1Dal,
+      engine: {
+        enqueuePlanInTx: vi.fn().mockResolvedValue({ runId: "run-1" }),
+      } as never,
+      policyService: container.policyService,
+    });
+
+    const home = await service.createPlace({
+      tenantId,
+      agentKey: "default",
+      body: {
+        name: "Home",
+        latitude: 52.3702,
+        longitude: 4.8952,
+        radius_m: 120,
+        tags: ["home"],
+        source: "manual",
+        metadata: {},
+      },
+    });
+    await service.createPlace({
+      tenantId,
+      agentKey: "default",
+      body: {
+        name: "Office",
+        latitude: 52.3702,
+        longitude: 4.8952,
+        radius_m: 200,
+        tags: ["work"],
+        source: "manual",
+        metadata: {},
+      },
+    });
+    await service.createAutomationTrigger({
+      tenantId,
+      agentKey: "default",
+      body: {
+        workspace_key: "default",
+        enabled: true,
+        delivery_mode: "notify",
+        condition: {
+          type: "saved_place",
+          place_id: home.place_id,
+          transition: "enter",
+        },
+        execution: {
+          kind: "playbook",
+          playbook_id: "missing-playbook",
+        },
+      },
+    });
+
+    const result = await service.ingestBeacon({
+      tenantId,
+      nodeId: "node-mobile-1",
+      payload: {
+        sample_id: "88888888-8888-4888-8888-888888888888",
+        recorded_at: "2026-03-11T11:05:00.000Z",
+        coords: {
+          latitude: 52.3702,
+          longitude: 4.8952,
+          accuracy_m: 8,
+        },
+        source: "gps",
+        is_background: false,
+      },
+    });
+
+    expect(result.events).toHaveLength(2);
+    expect(result.events.map((event) => event.place_name).toSorted()).toEqual(["Home", "Office"]);
+    const events = await service.listEvents({ tenantId, agentKey: "default", limit: 10 });
+    expect(events).toHaveLength(2);
+    expect(events.map((event) => event.place_name).toSorted()).toEqual(["Home", "Office"]);
+    expect(logSpy).toHaveBeenCalled();
+  });
+
   it("updates a place without reloading the full place list and preserves explicit null clears", async () => {
     const tenantId = "00000000-0000-4000-8000-000000000001";
     const created = await service.createPlace({
