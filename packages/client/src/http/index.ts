@@ -88,8 +88,12 @@ export type {
   RoutingConfigRevertInput,
   RoutingConfigRevertResult,
   ObservedTelegramThreadListResult,
-  TelegramConnectionConfigResult,
-  TelegramConnectionConfigUpdateInput,
+  ChannelConfigListResult,
+  ChannelConfigCreateInput,
+  ChannelConfigCreateResult,
+  TelegramChannelConfigUpdateInput,
+  ChannelConfigUpdateResult,
+  ChannelConfigDeleteResult,
 } from "./routing-config.js";
 export type {
   AuditPlansListInput,

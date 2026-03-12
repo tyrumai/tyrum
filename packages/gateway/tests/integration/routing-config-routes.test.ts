@@ -109,9 +109,13 @@ describe("routing config routes", () => {
         config: {
           v: 1,
           telegram: {
-            default_agent_key: "default",
-            threads: {
-              "123": "agent-b",
+            accounts: {
+              default: {
+                default_agent_key: "default",
+                threads: {
+                  "123": "agent-b",
+                },
+              },
             },
           },
         },
@@ -123,7 +127,13 @@ describe("routing config routes", () => {
     const body = (await res.json()) as { revision: number; config: unknown };
     expect(body.revision).toBeGreaterThan(0);
     expect(body.config).toMatchObject({
-      telegram: { threads: { "123": "agent-b" } },
+      telegram: {
+        accounts: {
+          default: {
+            threads: { "123": "agent-b" },
+          },
+        },
+      },
     });
 
     const fetchRes = await app.request("/routing/config", { method: "GET" });
@@ -151,9 +161,13 @@ describe("routing config routes", () => {
         config: {
           v: 1,
           telegram: {
-            default_agent_key: "default",
-            threads: {
-              "123": "agent-b",
+            accounts: {
+              default: {
+                default_agent_key: "default",
+                threads: {
+                  "123": "agent-b",
+                },
+              },
             },
           },
         },
@@ -218,9 +232,7 @@ describe("routing config routes", () => {
     );
 
     const app = createAuthedApp();
-
     const res = await app.request("/routing/config", { method: "GET" });
-
     expect(res.status).toBe(500);
     await expect(res.json()).resolves.toMatchObject({ error: "corrupt_state" });
   });
@@ -232,7 +244,10 @@ describe("routing config routes", () => {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        config: { v: 1, telegram: { default_agent_key: "default" } },
+        config: {
+          v: 1,
+          telegram: { accounts: { default: { default_agent_key: "default" } } },
+        },
         reason: "first",
       }),
     });
@@ -240,7 +255,10 @@ describe("routing config routes", () => {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        config: { v: 1, telegram: { default_agent_key: "agent-b" } },
+        config: {
+          v: 1,
+          telegram: { accounts: { default: { default_agent_key: "agent-b" } } },
+        },
         reason: "second",
       }),
     });
@@ -253,7 +271,9 @@ describe("routing config routes", () => {
         {
           revision: 2,
           reason: "second",
-          config: { telegram: { default_agent_key: "agent-b" } },
+          config: {
+            telegram: { accounts: { default: { default_agent_key: "agent-b" } } },
+          },
         },
       ],
     });
@@ -318,24 +338,27 @@ describe("routing config routes", () => {
     });
   });
 
-  it("reads telegram connection config without returning secret values", async () => {
+  it("creates, lists, updates, and deletes telegram channel configs without returning secret values", async () => {
     const app = createAuthedApp();
 
-    const update = await app.request("/routing/channels/telegram/config", {
-      method: "PUT",
+    const create = await app.request("/routing/channels/configs", {
+      method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        channel: "telegram",
+        account_key: "work",
         bot_token: "telegram-bot-token",
         webhook_secret: "telegram-webhook-secret",
         allowed_user_ids: ["123", "456"],
         pipeline_enabled: false,
-        reason: "configure telegram",
       }),
     });
 
-    expect(update.status).toBe(200);
-    await expect(update.json()).resolves.toMatchObject({
+    expect(create.status).toBe(201);
+    await expect(create.json()).resolves.toMatchObject({
       config: {
+        channel: "telegram",
+        account_key: "work",
         bot_token_configured: true,
         webhook_secret_configured: true,
         allowed_user_ids: ["123", "456"],
@@ -343,37 +366,26 @@ describe("routing config routes", () => {
       },
     });
 
-    const fetchRes = await app.request("/routing/channels/telegram/config", { method: "GET" });
+    const fetchRes = await app.request("/routing/channels/configs", { method: "GET" });
     expect(fetchRes.status).toBe(200);
     const fetched = (await fetchRes.json()) as {
-      config: Record<string, unknown>;
+      channels: Array<Record<string, unknown>>;
     };
-    expect(fetched.config).toMatchObject({
-      bot_token_configured: true,
-      webhook_secret_configured: true,
-      allowed_user_ids: ["123", "456"],
-      pipeline_enabled: false,
-    });
-    expect(fetched.config).not.toHaveProperty("bot_token");
-    expect(fetched.config).not.toHaveProperty("webhook_secret");
-  });
-
-  it("allows clearing stored telegram secrets while preserving other config", async () => {
-    const app = createAuthedApp();
-
-    const seed = await app.request("/routing/channels/telegram/config", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        bot_token: "telegram-bot-token",
-        webhook_secret: "telegram-webhook-secret",
-        allowed_user_ids: ["123"],
+    expect(fetched.channels).toEqual([
+      expect.objectContaining({
+        channel: "telegram",
+        account_key: "work",
+        bot_token_configured: true,
+        webhook_secret_configured: true,
+        allowed_user_ids: ["123", "456"],
+        pipeline_enabled: false,
       }),
-    });
-    expect(seed.status).toBe(200);
+    ]);
+    expect(fetched.channels[0]).not.toHaveProperty("bot_token");
+    expect(fetched.channels[0]).not.toHaveProperty("webhook_secret");
 
-    const clear = await app.request("/routing/channels/telegram/config", {
-      method: "PUT",
+    const update = await app.request("/routing/channels/configs/telegram/work", {
+      method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         clear_bot_token: true,
@@ -381,28 +393,83 @@ describe("routing config routes", () => {
         allowed_user_ids: ["123"],
       }),
     });
-    expect(clear.status).toBe(200);
-    await expect(clear.json()).resolves.toMatchObject({
+    expect(update.status).toBe(200);
+    await expect(update.json()).resolves.toMatchObject({
       config: {
+        channel: "telegram",
+        account_key: "work",
         bot_token_configured: false,
         webhook_secret_configured: false,
         allowed_user_ids: ["123"],
-        pipeline_enabled: true,
+        pipeline_enabled: false,
       },
+    });
+
+    const removed = await app.request("/routing/channels/configs/telegram/work", {
+      method: "DELETE",
+    });
+    expect(removed.status).toBe(200);
+    await expect(removed.json()).resolves.toMatchObject({
+      deleted: true,
+      channel: "telegram",
+      account_key: "work",
+    });
+
+    const listAfterDelete = await app.request("/routing/channels/configs", { method: "GET" });
+    expect(listAfterDelete.status).toBe(200);
+    await expect(listAfterDelete.json()).resolves.toMatchObject({ channels: [] });
+  });
+
+  it("imports the legacy singleton telegram deployment config into the default account on first list", async () => {
+    await db.run(
+      `INSERT INTO deployment_configs (config_json, created_by_json, reason)
+       VALUES (?, ?, ?)`,
+      [
+        JSON.stringify({
+          v: 1,
+          channels: {
+            telegramBotToken: "legacy-bot-token",
+            telegramWebhookSecret: "legacy-webhook-secret",
+            telegramAllowedUserIds: ["123", "456"],
+            pipelineEnabled: false,
+          },
+        }),
+        "{}",
+        "legacy",
+      ],
+    );
+
+    const app = createAuthedApp();
+    const fetchRes = await app.request("/routing/channels/configs", { method: "GET" });
+    expect(fetchRes.status).toBe(200);
+    await expect(fetchRes.json()).resolves.toMatchObject({
+      channels: [
+        {
+          channel: "telegram",
+          account_key: "default",
+          bot_token_configured: true,
+          webhook_secret_configured: true,
+          allowed_user_ids: ["123", "456"],
+          pipeline_enabled: false,
+        },
+      ],
     });
   });
 
-  it("requires tenant-scoped claims for telegram connection config endpoints", async () => {
+  it("requires tenant-scoped claims for channel config endpoints", async () => {
     const app = createAppWithoutTenantId();
 
-    const getRes = await app.request("/routing/channels/telegram/config", { method: "GET" });
+    const getRes = await app.request("/routing/channels/configs", { method: "GET" });
     expect(getRes.status).toBe(403);
 
-    const putRes = await app.request("/routing/channels/telegram/config", {
-      method: "PUT",
+    const postRes = await app.request("/routing/channels/configs", {
+      method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ allowed_user_ids: ["123"] }),
+      body: JSON.stringify({
+        channel: "telegram",
+        account_key: "work",
+      }),
     });
-    expect(putRes.status).toBe(403);
+    expect(postRes.status).toBe(403);
   });
 });

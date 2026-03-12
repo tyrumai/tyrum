@@ -197,10 +197,6 @@ async function createGatewayBootContext(
     keyProvider: secretKeyProvider,
   });
 
-  if (container.telegramBot) {
-    console.log("Telegram bot initialized");
-  }
-
   return {
     instanceId,
     role,

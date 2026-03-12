@@ -57,6 +57,7 @@ const DEFAULT_TABLES = [
   "policy_snapshots",
   "policy_overrides",
   "routing_configs",
+  "channel_configs",
   // Models/auth profiles
   "auth_profiles",
   "session_provider_pins",
@@ -86,6 +87,7 @@ const IMPORT_ORDER = [
   "policy_snapshots",
   "policy_overrides",
   "routing_configs",
+  "channel_configs",
   "auth_profiles",
   "session_provider_pins",
   "secret_resolutions",

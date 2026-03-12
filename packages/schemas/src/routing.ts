@@ -2,14 +2,86 @@ import { z } from "zod";
 import { DateTimeSchema } from "./common.js";
 import { AgentKey, ThreadId, AccountId } from "./keys.js";
 import { NormalizedContainerKind } from "./message.js";
-import { canonicalizeTelegramAllowedUserIds } from "./telegram.js";
 
-export const TelegramRoutingConfig = z
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+const LegacyTelegramRoutingConfig = z
   .object({
     default_agent_key: AgentKey.optional(),
     threads: z.record(ThreadId, AgentKey).optional(),
   })
   .strict();
+
+export const TelegramAccountRoutingConfig = z
+  .object({
+    default_agent_key: AgentKey.optional(),
+    threads: z.record(ThreadId, AgentKey).optional(),
+  })
+  .strict();
+export type TelegramAccountRoutingConfig = z.infer<typeof TelegramAccountRoutingConfig>;
+
+function normalizeTelegramAccountRoutingConfig(
+  value: TelegramAccountRoutingConfig,
+): TelegramAccountRoutingConfig | undefined {
+  const threads =
+    value.threads && Object.keys(value.threads).length > 0 ? value.threads : undefined;
+  if (!value.default_agent_key && !threads) {
+    return undefined;
+  }
+  return {
+    ...(value.default_agent_key ? { default_agent_key: value.default_agent_key } : {}),
+    ...(threads ? { threads } : {}),
+  };
+}
+
+function normalizeTelegramRoutingConfigInput(value: unknown): unknown {
+  if (!isRecord(value)) {
+    return value;
+  }
+
+  if (isRecord(value["accounts"])) {
+    const accounts: Record<string, unknown> = {};
+    for (const [accountKey, accountValue] of Object.entries(value["accounts"])) {
+      accounts[accountKey] = accountValue;
+    }
+    return { accounts };
+  }
+
+  const legacyCandidate = LegacyTelegramRoutingConfig.safeParse(value);
+  if (!legacyCandidate.success) {
+    return value;
+  }
+
+  return {
+    accounts: {
+      default: legacyCandidate.data,
+    },
+  };
+}
+
+const TelegramRoutingConfigShape = z
+  .object({
+    accounts: z.record(AccountId, TelegramAccountRoutingConfig).optional(),
+  })
+  .strict();
+
+export const TelegramRoutingConfig = z
+  .preprocess(normalizeTelegramRoutingConfigInput, TelegramRoutingConfigShape)
+  .transform((value) => {
+    const normalizedAccounts = Object.fromEntries(
+      Object.entries(value.accounts ?? {})
+        .map(([accountKey, accountConfig]) => [
+          accountKey,
+          normalizeTelegramAccountRoutingConfig(accountConfig),
+        ])
+        .filter(([, accountConfig]) => accountConfig !== undefined),
+    );
+    return Object.keys(normalizedAccounts).length > 0
+      ? { accounts: normalizedAccounts }
+      : { accounts: undefined };
+  });
 export type TelegramRoutingConfig = z.infer<typeof TelegramRoutingConfig>;
 
 export const RoutingConfig = z
@@ -17,7 +89,13 @@ export const RoutingConfig = z
     v: z.number().int().min(1).default(1),
     telegram: TelegramRoutingConfig.optional(),
   })
-  .strict();
+  .strict()
+  .transform((value) => ({
+    v: value.v,
+    ...(value.telegram?.accounts && Object.keys(value.telegram.accounts).length > 0
+      ? { telegram: value.telegram }
+      : {}),
+  }));
 export type RoutingConfig = z.infer<typeof RoutingConfig>;
 
 export const RoutingConfigRevisionNumber = z.number().int().positive();
@@ -94,72 +172,3 @@ export const ObservedTelegramThreadListResponse = z
   })
   .strict();
 export type ObservedTelegramThreadListResponse = z.infer<typeof ObservedTelegramThreadListResponse>;
-
-export const TelegramConnectionConfig = z
-  .object({
-    bot_token_configured: z.boolean(),
-    webhook_secret_configured: z.boolean(),
-    allowed_user_ids: z
-      .array(
-        z
-          .string()
-          .trim()
-          .regex(/^[0-9]+$/),
-      )
-      .default([])
-      .overwrite(canonicalizeTelegramAllowedUserIds),
-    pipeline_enabled: z.boolean().default(true),
-  })
-  .strict();
-export type TelegramConnectionConfig = z.infer<typeof TelegramConnectionConfig>;
-
-export const TelegramConnectionConfigResponse = z
-  .object({
-    revision: z.number().int().nonnegative(),
-    config: TelegramConnectionConfig,
-    created_at: DateTimeSchema.optional(),
-    created_by: z.unknown().optional(),
-    reason: z.string().trim().min(1).optional(),
-    reverted_from_revision: RoutingConfigRevisionNumber.optional(),
-  })
-  .strict();
-export type TelegramConnectionConfigResponse = z.infer<typeof TelegramConnectionConfigResponse>;
-
-export const TelegramConnectionConfigUpdateRequest = z
-  .object({
-    bot_token: z.string().trim().min(1).optional(),
-    clear_bot_token: z.boolean().optional(),
-    webhook_secret: z.string().trim().min(1).optional(),
-    clear_webhook_secret: z.boolean().optional(),
-    allowed_user_ids: z
-      .array(
-        z
-          .string()
-          .trim()
-          .regex(/^[0-9]+$/),
-      )
-      .overwrite(canonicalizeTelegramAllowedUserIds)
-      .optional(),
-    pipeline_enabled: z.boolean().optional(),
-    reason: z.string().trim().min(1).optional(),
-  })
-  .strict()
-  .superRefine((value, ctx) => {
-    if (value.bot_token && value.clear_bot_token) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "bot_token and clear_bot_token cannot be used together",
-        path: ["clear_bot_token"],
-      });
-    }
-    if (value.webhook_secret && value.clear_webhook_secret) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "webhook_secret and clear_webhook_secret cannot be used together",
-        path: ["clear_webhook_secret"],
-      });
-    }
-  });
-export type TelegramConnectionConfigUpdateRequest = z.infer<
-  typeof TelegramConnectionConfigUpdateRequest
->;

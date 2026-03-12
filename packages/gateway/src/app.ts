@@ -32,6 +32,7 @@ import {
 } from "./modules/auth/rate-limiter.js";
 import { createMetricsMiddleware, gatewayMetrics } from "./modules/observability/metrics.js";
 import { requestIdForAudit } from "./modules/observability/request-id.js";
+import type { TelegramChannelRuntime } from "./modules/channels/telegram-runtime.js";
 import {
   createAppRouteDependencies,
   registerAgentsAndWorkspaceRoutes,
@@ -44,6 +45,7 @@ import {
 
 export interface AppOptions {
   agents?: AgentRegistry;
+  telegramRuntime?: TelegramChannelRuntime;
   plugins?: PluginRegistry;
   pluginCatalogProvider?: PluginCatalogProvider;
   authTokens?: AuthTokenService;
@@ -142,7 +144,6 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
     );
   }
 
-  const channelPipelineEnabled = container.deploymentConfig.channels.pipelineEnabled ?? true;
   const wsMaxBufferedBytes = container.deploymentConfig.websocket.maxBufferedBytes;
 
   // Apply auth middleware if a token store is provided
@@ -173,7 +174,6 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
     runtime,
     isLocalOnly,
     wsMaxBufferedBytes,
-    channelPipelineEnabled,
     engine,
     secretProviderForTenant,
     routeDeps,

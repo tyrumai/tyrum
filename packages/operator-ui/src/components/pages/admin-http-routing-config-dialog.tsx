@@ -12,7 +12,11 @@ import {
   DialogTitle,
 } from "../ui/dialog.js";
 import { Select } from "../ui/select.js";
-import type { RoutingRuleDraft, RoutingRuleRow } from "./admin-http-routing-config.shared.js";
+import {
+  buildTelegramThreadKey,
+  type RoutingRuleDraft,
+  type RoutingRuleRow,
+} from "./admin-http-routing-config.shared.js";
 
 export type RoutingAgentOption = {
   key: string;
@@ -21,30 +25,55 @@ export type RoutingAgentOption = {
 
 function resolveInitialDraft(input: {
   row: RoutingRuleRow | null;
-  defaultAvailable: boolean;
+  defaultAccountOptions: string[];
   agents: RoutingAgentOption[];
   threads: ObservedTelegramThread[];
 }): RoutingRuleDraft {
   if (input.row) {
     return {
       kind: input.row.kind,
+      accountKey: input.row.accountKey,
       agentKey: input.row.agentKey,
       threadId: input.row.threadId ?? "",
     };
   }
 
+  const firstDefaultAccount = input.defaultAccountOptions[0];
+  const firstThread = input.threads[0];
+  if (firstDefaultAccount) {
+    return {
+      kind: "default",
+      accountKey: firstDefaultAccount,
+      agentKey: input.agents[0]?.key ?? "",
+      threadId: "",
+    };
+  }
   return {
-    kind: input.defaultAvailable ? "default" : "thread",
+    kind: "thread",
+    accountKey: firstThread?.account_key ?? "",
     agentKey: input.agents[0]?.key ?? "",
-    threadId: input.threads[0]?.thread_id ?? "",
+    threadId: firstThread?.thread_id ?? "",
   };
+}
+
+function buildThreadOptionValue(accountKey: string, threadId: string): string {
+  return buildTelegramThreadKey(accountKey, threadId);
+}
+
+function findSelectedThread(
+  threads: ObservedTelegramThread[],
+  draft: RoutingRuleDraft,
+): ObservedTelegramThread | undefined {
+  return threads.find(
+    (thread) => thread.account_key === draft.accountKey && thread.thread_id === draft.threadId,
+  );
 }
 
 export function RoutingRuleDialog({
   open,
   onOpenChange,
   row,
-  defaultAvailable,
+  defaultAccountOptions,
   agents,
   observedThreads,
   onSubmit,
@@ -53,7 +82,7 @@ export function RoutingRuleDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   row: RoutingRuleRow | null;
-  defaultAvailable: boolean;
+  defaultAccountOptions: string[];
   agents: RoutingAgentOption[];
   observedThreads: ObservedTelegramThread[];
   onSubmit: (draft: RoutingRuleDraft) => Promise<void>;
@@ -61,6 +90,7 @@ export function RoutingRuleDialog({
 }): React.ReactElement {
   const [draft, setDraft] = React.useState<RoutingRuleDraft>({
     kind: "default",
+    accountKey: "",
     agentKey: "",
     threadId: "",
   });
@@ -69,13 +99,17 @@ export function RoutingRuleDialog({
   const mode = row ? "edit" : "create";
   const effectiveThreads = React.useMemo(() => {
     if (!row?.threadId) return observedThreads;
-    if (observedThreads.some((thread) => thread.thread_id === row.threadId)) {
+    if (
+      observedThreads.some(
+        (thread) => thread.account_key === row.accountKey && thread.thread_id === row.threadId,
+      )
+    ) {
       return observedThreads;
     }
     return [
       {
         channel: "telegram" as const,
-        account_key: row.accountKey ?? "default",
+        account_key: row.accountKey,
         thread_id: row.threadId,
         container_kind: row.containerKind ?? "group",
         ...(row.sessionTitle ? { session_title: row.sessionTitle } : {}),
@@ -84,7 +118,7 @@ export function RoutingRuleDialog({
       ...observedThreads,
     ];
   }, [observedThreads, row]);
-  const selectedThread = effectiveThreads.find((thread) => thread.thread_id === draft.threadId);
+  const selectedThread = findSelectedThread(effectiveThreads, draft);
 
   React.useEffect(() => {
     if (!open) return;
@@ -93,21 +127,30 @@ export function RoutingRuleDialog({
     setDraft(
       resolveInitialDraft({
         row,
-        defaultAvailable,
+        defaultAccountOptions,
         agents,
         threads: effectiveThreads,
       }),
     );
-  }, [agents, defaultAvailable, effectiveThreads, open, row]);
+  }, [agents, defaultAccountOptions, effectiveThreads, open, row]);
 
   const canSave =
     canMutate &&
     draft.agentKey.trim().length > 0 &&
+    draft.accountKey.trim().length > 0 &&
     (draft.kind === "default" || draft.threadId.trim().length > 0);
 
   const submit = async (): Promise<void> => {
     if (!canMutate) {
       setErrorMessage("Enter Elevated Mode to change channels routing.");
+      return;
+    }
+    if (!draft.accountKey.trim()) {
+      setErrorMessage(
+        draft.kind === "default"
+          ? "Choose a configured Telegram account."
+          : "Choose an observed Telegram thread.",
+      );
       return;
     }
     if (!draft.agentKey.trim()) {
@@ -153,12 +196,18 @@ export function RoutingRuleDialog({
                 const kind = event.currentTarget.value as RoutingRuleDraft["kind"];
                 setDraft((current) => ({
                   kind,
+                  accountKey:
+                    kind === "default"
+                      ? (defaultAccountOptions[0] ?? "")
+                      : (effectiveThreads[0]?.account_key ?? ""),
                   agentKey: current.agentKey || agents[0]?.key || "",
                   threadId: kind === "thread" ? (effectiveThreads[0]?.thread_id ?? "") : "",
                 }));
               }}
             >
-              {defaultAvailable ? <option value="default">Default route</option> : null}
+              {defaultAccountOptions.length > 0 ? (
+                <option value="default">Default route</option>
+              ) : null}
               <option value="thread">Thread override</option>
             </Select>
           ) : (
@@ -167,19 +216,47 @@ export function RoutingRuleDialog({
               title={row?.kind === "default" ? "Default route" : "Thread override"}
               description={
                 row?.kind === "default"
-                  ? "This rule handles unmatched Telegram chats."
+                  ? `This rule handles unmatched Telegram chats on account ${row.accountKey}.`
                   : row?.threadId
-                    ? `This rule targets Telegram thread ${row.threadId}.`
+                    ? `This rule targets Telegram thread ${row.threadId} on account ${row.accountKey}.`
                     : undefined
               }
             />
           )}
 
-          {draft.kind === "thread" ? (
+          {draft.kind === "default" ? (
+            <Select
+              label="Telegram account"
+              data-testid="channels-rule-account"
+              value={draft.accountKey}
+              disabled={defaultAccountOptions.length === 0}
+              helperText={
+                defaultAccountOptions.length === 0
+                  ? "Every configured Telegram account already has a default route."
+                  : "Choose which configured Telegram account this default route applies to."
+              }
+              onChange={(event) => {
+                setDraft((current) => ({ ...current, accountKey: event.currentTarget.value }));
+              }}
+            >
+              {defaultAccountOptions.length === 0 ? (
+                <option value="">No accounts available</option>
+              ) : null}
+              {defaultAccountOptions.map((accountKey) => (
+                <option key={accountKey} value={accountKey}>
+                  {accountKey}
+                </option>
+              ))}
+            </Select>
+          ) : (
             <Select
               label="Telegram thread"
               data-testid="channels-rule-thread"
-              value={draft.threadId}
+              value={
+                draft.accountKey && draft.threadId
+                  ? buildThreadOptionValue(draft.accountKey, draft.threadId)
+                  : ""
+              }
               disabled={effectiveThreads.length === 0}
               helperText={
                 effectiveThreads.length === 0
@@ -187,18 +264,30 @@ export function RoutingRuleDialog({
                   : "Only observed Telegram threads are selectable."
               }
               onChange={(event) => {
-                setDraft((current) => ({ ...current, threadId: event.currentTarget.value }));
+                const nextThread = effectiveThreads.find(
+                  (thread) =>
+                    buildThreadOptionValue(thread.account_key, thread.thread_id) ===
+                    event.currentTarget.value,
+                );
+                setDraft((current) => ({
+                  ...current,
+                  accountKey: nextThread?.account_key ?? "",
+                  threadId: nextThread?.thread_id ?? "",
+                }));
               }}
             >
               {effectiveThreads.length === 0 ? <option value="">No observed threads</option> : null}
               {effectiveThreads.map((thread) => (
-                <option key={`${thread.account_key}:${thread.thread_id}`} value={thread.thread_id}>
+                <option
+                  key={buildThreadOptionValue(thread.account_key, thread.thread_id)}
+                  value={buildThreadOptionValue(thread.account_key, thread.thread_id)}
+                >
                   {(thread.session_title ?? thread.thread_id) +
                     ` (${thread.container_kind}/${thread.account_key})`}
                 </option>
               ))}
             </Select>
-          ) : null}
+          )}
 
           {draft.kind === "thread" && selectedThread ? (
             <Alert

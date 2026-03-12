@@ -109,8 +109,61 @@ describe("ConfigurePage (HTTP) routing config", () => {
           config: {
             v: 1,
             telegram: {
-              default_agent_key: "default",
-              threads: { "tg-123": "agent-b", "tg-456": "default" },
+              accounts: {
+                default: {
+                  default_agent_key: "default",
+                  threads: { "tg-123": "agent-b" },
+                },
+                ops: {
+                  threads: { "tg-123": "default" },
+                },
+              },
+            },
+          },
+        },
+      });
+      return jsonResponse({ revision: 2, config: { v: 1 } }, 201);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const page = renderAdminHttpConfigurePage(core);
+    await switchHttpTab(page.container, "admin-http-tab-routing-config");
+    await flush();
+
+    click(getByTestId<HTMLButtonElement>(page.container, "channels-add-open"));
+    await flush();
+    setSelectValue(getByTestId<HTMLSelectElement>(document.body, "channels-rule-kind"), "thread");
+    setSelectValue(
+      getByTestId<HTMLSelectElement>(document.body, "channels-rule-thread"),
+      JSON.stringify(["ops", "tg-123"]),
+    );
+    await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "channels-rule-save"));
+    await flush();
+
+    expect(routingConfigUpdate).toHaveBeenCalledTimes(0);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    cleanupAdminHttpPage(page);
+  });
+
+  it("adds an account-scoped default route from the structured dialog", async () => {
+    const { core } = createAdminHttpTestCore();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      expectAuthorizedJsonRequest(input, init, {
+        url: "http://example.test/routing/config",
+        method: "PUT",
+        body: {
+          config: {
+            v: 1,
+            telegram: {
+              accounts: {
+                default: {
+                  default_agent_key: "default",
+                  threads: { "tg-123": "agent-b" },
+                },
+                ops: {
+                  default_agent_key: "default",
+                },
+              },
             },
           },
         },
@@ -126,9 +179,7 @@ describe("ConfigurePage (HTTP) routing config", () => {
     click(getByTestId<HTMLButtonElement>(page.container, "channels-add-open"));
     await flush();
     await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "channels-rule-save"));
-    await flush();
 
-    expect(routingConfigUpdate).toHaveBeenCalledTimes(0);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     cleanupAdminHttpPage(page);
   });
@@ -143,7 +194,11 @@ describe("ConfigurePage (HTTP) routing config", () => {
           config: {
             v: 1,
             telegram: {
-              default_agent_key: "default",
+              accounts: {
+                default: {
+                  default_agent_key: "default",
+                },
+              },
             },
           },
         },

@@ -29,9 +29,13 @@ describe("RoutingConfigDal", () => {
       config: {
         v: 1,
         telegram: {
-          default_agent_key: "agent-a",
-          threads: {
-            "123": "agent-b",
+          accounts: {
+            default: {
+              default_agent_key: "agent-a",
+              threads: {
+                "123": "agent-b",
+              },
+            },
           },
         },
       },
@@ -41,7 +45,7 @@ describe("RoutingConfigDal", () => {
     });
 
     expect(created.revision).toBeGreaterThan(0);
-    expect(created.config.telegram?.threads?.["123"]).toBe("agent-b");
+    expect(created.config.telegram?.accounts?.default?.threads?.["123"]).toBe("agent-b");
 
     const latest = await dal.getLatest(DEFAULT_TENANT_ID);
     expect(latest?.revision).toBe(created.revision);
@@ -87,9 +91,13 @@ describe("RoutingConfigDal", () => {
       config: {
         v: 1,
         telegram: {
-          default_agent_key: "agent-b",
-          threads: {
-            "123": "agent-b",
+          accounts: {
+            default: {
+              default_agent_key: "agent-b",
+              threads: {
+                "123": "agent-b",
+              },
+            },
           },
         },
       },
@@ -125,15 +133,54 @@ describe("RoutingConfigDal", () => {
     await expect(dal.getLatest(DEFAULT_TENANT_ID)).rejects.toThrow();
   });
 
+  it("normalizes legacy telegram routing revisions into account-scoped config", async () => {
+    await db.run(
+      "INSERT INTO routing_configs (tenant_id, config_json, created_by_json, reason) VALUES (?, ?, ?, ?)",
+      [
+        DEFAULT_TENANT_ID,
+        JSON.stringify({
+          v: 1,
+          telegram: {
+            default_agent_key: "agent-a",
+            threads: {
+              "123": "agent-b",
+            },
+          },
+        }),
+        "{}",
+        "legacy",
+      ],
+    );
+
+    const latest = await dal.getLatest(DEFAULT_TENANT_ID);
+    expect(latest?.config).toEqual({
+      v: 1,
+      telegram: {
+        accounts: {
+          default: {
+            default_agent_key: "agent-a",
+            threads: {
+              "123": "agent-b",
+            },
+          },
+        },
+      },
+    });
+  });
+
   it("reverts to an earlier revision by creating a new revision", async () => {
     const initial = await dal.set({
       tenantId: DEFAULT_TENANT_ID,
       config: {
         v: 1,
         telegram: {
-          default_agent_key: "agent-a",
-          threads: {
-            "123": "agent-b",
+          accounts: {
+            default: {
+              default_agent_key: "agent-a",
+              threads: {
+                "123": "agent-b",
+              },
+            },
           },
         },
       },
@@ -147,7 +194,11 @@ describe("RoutingConfigDal", () => {
       config: {
         v: 1,
         telegram: {
-          default_agent_key: "agent-c",
+          accounts: {
+            default: {
+              default_agent_key: "agent-c",
+            },
+          },
         },
       },
       createdBy: { kind: "test" },

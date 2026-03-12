@@ -287,8 +287,12 @@ export function createHarnessConfigureHttpFixtures() {
         config: {
           v: 1,
           telegram: {
-            default_agent_key: "default",
-            threads: { "tg-123": "default" },
+            accounts: {
+              default: {
+                default_agent_key: "default",
+                threads: { "tg-123": "default" },
+              },
+            },
           },
         },
       }),
@@ -299,8 +303,12 @@ export function createHarnessConfigureHttpFixtures() {
             config: {
               v: 1,
               telegram: {
-                default_agent_key: "default",
-                threads: { "tg-123": "default" },
+                accounts: {
+                  default: {
+                    default_agent_key: "default",
+                    threads: { "tg-123": "default" },
+                  },
+                },
               },
             },
             created_at: "2026-03-08T00:00:00.000Z",
@@ -319,7 +327,44 @@ export function createHarnessConfigureHttpFixtures() {
           },
         ],
       }),
+      listChannelConfigs: async () => ({
+        channels: [
+          {
+            channel: "telegram" as const,
+            account_key: "default",
+            bot_token_configured: true,
+            webhook_secret_configured: true,
+            allowed_user_ids: ["123"],
+            pipeline_enabled: true,
+          },
+        ],
+      }),
+      createChannelConfig: async () => ({
+        config: {
+          channel: "telegram" as const,
+          account_key: "default",
+          bot_token_configured: true,
+          webhook_secret_configured: true,
+          allowed_user_ids: ["123"],
+          pipeline_enabled: true,
+        },
+      }),
       update: async () => ({ revision: 2, config: { v: 1 } }),
+      updateChannelConfig: async () => ({
+        config: {
+          channel: "telegram" as const,
+          account_key: "default",
+          bot_token_configured: true,
+          webhook_secret_configured: true,
+          allowed_user_ids: ["123"],
+          pipeline_enabled: true,
+        },
+      }),
+      deleteChannelConfig: async () => ({
+        deleted: true,
+        channel: "telegram" as const,
+        account_key: "default",
+      }),
       revert: async () => ({ revision: 2, config: { v: 1 } }),
     },
     secrets: {

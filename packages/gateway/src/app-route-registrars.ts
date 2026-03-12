@@ -46,7 +46,9 @@ import { createToolRegistryRoutes } from "./routes/tool-registry.js";
 import { createUsageRoutes } from "./routes/usage.js";
 import { createWatcherRoutes } from "./routes/watcher.js";
 import { createWorkflowRoutes } from "./routes/workflow.js";
+import { ChannelConfigDal } from "./modules/channels/channel-config-dal.js";
 import { TelegramChannelQueue } from "./modules/channels/telegram.js";
+import { TelegramChannelRuntime } from "./modules/channels/telegram-runtime.js";
 import { ChannelThreadDal } from "./modules/channels/thread-dal.js";
 import { RoutingConfigDal } from "./modules/channels/routing-config-dal.js";
 import { LifecycleHookConfigDal } from "./modules/hooks/config-dal.js";
@@ -87,7 +89,6 @@ export interface AppRouteContext {
   };
   isLocalOnly: boolean;
   wsMaxBufferedBytes?: number;
-  channelPipelineEnabled: boolean;
   engine: AppOptions["engine"];
   secretProviderForTenant: AppOptions["secretProviderForTenant"];
   routeDeps: AppRouteDependencies;
@@ -399,6 +400,9 @@ export function registerExecutionAndWorkflowRoutes(context: AppRouteContext): vo
 }
 
 export function registerAgentsAndWorkspaceRoutes(context: AppRouteContext): void {
+  const telegramRuntime =
+    context.opts.telegramRuntime ??
+    new TelegramChannelRuntime(new ChannelConfigDal(context.container.db));
   context.app.route(
     "/",
     createPairingRoutes({
@@ -412,17 +416,14 @@ export function registerAgentsAndWorkspaceRoutes(context: AppRouteContext): void
   context.app.route(
     "/",
     createIngressRoutes({
-      telegramBot: context.container.telegramBot,
-      telegramWebhookSecret: context.container.deploymentConfig.channels.telegramWebhookSecret,
-      telegramAllowedUserIds: context.container.deploymentConfig.channels.telegramAllowedUserIds,
-      telegramQueue:
-        context.channelPipelineEnabled && context.container.telegramBot && context.opts.agents
-          ? new TelegramChannelQueue(context.container.db, {
-              sessionDal: context.container.sessionDal,
-              logger: context.container.logger,
-              ws: createWsRouteOptions(context),
-            })
-          : undefined,
+      telegramRuntime,
+      telegramQueue: context.opts.agents
+        ? new TelegramChannelQueue(context.container.db, {
+            sessionDal: context.container.sessionDal,
+            logger: context.container.logger,
+            ws: createWsRouteOptions(context),
+          })
+        : undefined,
       agents: context.opts.agents,
       memoryV1Dal: context.container.memoryV1Dal,
       routingConfigDal: context.routeDeps.routingConfigDal,

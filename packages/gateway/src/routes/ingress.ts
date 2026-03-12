@@ -8,12 +8,14 @@ import { secureStringEqual } from "../utils/secure-string-equal.js";
 import type { TelegramBot } from "../modules/ingress/telegram-bot.js";
 import type { AgentRegistry } from "../modules/agent/registry.js";
 import type { TelegramChannelQueue } from "../modules/channels/telegram.js";
+import type { StoredTelegramChannelConfig } from "../modules/channels/channel-config-dal.js";
 import {
   renderMarkdownForTelegram,
   type TelegramFormattingFallbackEvent,
 } from "../modules/markdown/telegram.js";
 import { resolveTelegramAgentId } from "../modules/channels/routing.js";
 import type { RoutingConfigDal } from "../modules/channels/routing-config-dal.js";
+import type { TelegramChannelRuntime } from "../modules/channels/telegram-runtime.js";
 import type { MemoryV1Dal } from "../modules/memory/v1-dal.js";
 import { recordMemoryV1SystemEpisode } from "../modules/memory/v1-episode-recorder.js";
 import type { Logger } from "../modules/observability/logger.js";
@@ -21,6 +23,7 @@ import { DEFAULT_TENANT_ID } from "../modules/identity/scope.js";
 import { safeDetail } from "../utils/safe-detail.js";
 
 export interface IngressDeps {
+  telegramRuntime?: TelegramChannelRuntime;
   telegramBot?: TelegramBot;
   telegramWebhookSecret?: string;
   telegramAllowedUserIds?: string[];
@@ -33,12 +36,90 @@ export interface IngressDeps {
 
 const TELEGRAM_SECRET_HEADER = "x-telegram-bot-api-secret-token";
 
+function matchTelegramAccountByWebhookSecret(
+  accounts: readonly StoredTelegramChannelConfig[],
+  providedSecret: string,
+): StoredTelegramChannelConfig | undefined {
+  const normalizedSecret = providedSecret.trim();
+  if (!normalizedSecret) return undefined;
+
+  let matched: StoredTelegramChannelConfig | undefined;
+  for (const account of accounts) {
+    const webhookSecret = account.webhook_secret?.trim();
+    if (!webhookSecret) continue;
+    if (secureStringEqual(webhookSecret, normalizedSecret) && !matched) {
+      matched = account;
+    }
+  }
+  return matched;
+}
+
 export function createIngressRoutes(deps: IngressDeps = {}): Hono {
   const ingressRouter = new Hono();
 
   ingressRouter.post("/ingress/telegram", async (c) => {
-    // When Telegram integration is enabled, require Telegram webhook secret validation.
-    if (deps.telegramBot) {
+    let telegramBot = deps.telegramBot;
+    let telegramAllowedUserIds = deps.telegramAllowedUserIds ?? [];
+    let telegramAccountKey = "default";
+    let telegramPipelineEnabled = true;
+
+    if (deps.telegramRuntime) {
+      const accounts = await deps.telegramRuntime.listTelegramAccounts(DEFAULT_TENANT_ID);
+      const botBackedAccounts = accounts.filter((account) => Boolean(account.bot_token?.trim()));
+      const botBackedAccountsWithSecret = botBackedAccounts.filter((account) =>
+        Boolean(account.webhook_secret?.trim()),
+      );
+
+      if (botBackedAccounts.length === 0) {
+        return c.json(
+          {
+            error: "misconfigured",
+            message: "Telegram bot token must be configured when Telegram ingress is enabled.",
+          },
+          503,
+        );
+      }
+
+      if (botBackedAccountsWithSecret.length === 0) {
+        return c.json(
+          {
+            error: "misconfigured",
+            message: "Telegram webhook secret must be configured when Telegram ingress is enabled.",
+          },
+          503,
+        );
+      }
+
+      const providedSecret = c.req.header(TELEGRAM_SECRET_HEADER);
+      if (!providedSecret) {
+        return c.json({ error: "unauthorized", message: "invalid telegram webhook secret" }, 401);
+      }
+
+      const matchedAccount = matchTelegramAccountByWebhookSecret(accounts, providedSecret);
+      if (!matchedAccount || !matchedAccount.webhook_secret) {
+        return c.json({ error: "unauthorized", message: "invalid telegram webhook secret" }, 401);
+      }
+
+      const matchedBot = deps.telegramRuntime.getBotForTelegramAccount({
+        tenantId: DEFAULT_TENANT_ID,
+        account: matchedAccount,
+      });
+      if (!matchedBot) {
+        return c.json(
+          {
+            error: "misconfigured",
+            message: "Telegram bot token must be configured when Telegram ingress is enabled.",
+          },
+          503,
+        );
+      }
+
+      telegramBot = matchedBot;
+      telegramAllowedUserIds = matchedAccount.allowed_user_ids;
+      telegramAccountKey = matchedAccount.account_key;
+      telegramPipelineEnabled = matchedAccount.pipeline_enabled ?? true;
+    } else if (deps.telegramBot) {
+      // When Telegram integration is enabled, require Telegram webhook secret validation.
       const expectedSecret = deps.telegramWebhookSecret?.trim();
       if (!expectedSecret) {
         return c.json(
@@ -72,20 +153,20 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
       throw err;
     }
 
-    const allowedUserIds = deps.telegramAllowedUserIds ?? [];
-    if (allowedUserIds.length > 0) {
+    if (telegramAllowedUserIds.length > 0) {
       const senderId = normalized.message.sender?.id?.trim();
-      if (!senderId || !allowedUserIds.includes(senderId)) {
+      if (!senderId || !telegramAllowedUserIds.includes(senderId)) {
         deps.logger?.info("ingress.telegram.sender_blocked", {
           sender_id: senderId ?? "unknown",
           reason: "telegram_user_not_allowlisted",
+          account_key: telegramAccountKey,
         });
         return c.json({ ok: true, ignored: true, reason: "sender_not_allowlisted" }, 200);
       }
     }
 
     // If no agent runtime, return normalized message (legacy behavior)
-    if (!deps.agents || !deps.telegramBot) {
+    if (!deps.agents || !telegramBot) {
       return c.json(normalized);
     }
 
@@ -109,12 +190,14 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
     }
     const routing = durable?.config ?? { v: 1 };
     const routedAgentId =
-      c.req.query("agent_key")?.trim() || resolveTelegramAgentId(routing, chatId);
+      c.req.query("agent_key")?.trim() ||
+      resolveTelegramAgentId(routing, telegramAccountKey, chatId);
 
-    if (deps.telegramQueue) {
+    if (deps.telegramQueue && telegramPipelineEnabled) {
       try {
         const enqueued = await deps.telegramQueue.enqueue(normalized, {
           agentId: routedAgentId,
+          accountId: telegramAccountKey,
         });
         return c.json({
           ok: true,
@@ -145,7 +228,7 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
         delivery: {
           ...envelope.delivery,
           channel: "telegram",
-          account: "default",
+          account: telegramAccountKey,
         },
       };
       const result = await runtime.turn({
@@ -204,17 +287,18 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
       }
 
       for (const chunk of chunks) {
-        await deps.telegramBot.sendMessage(chatId, chunk, { parse_mode: "HTML" });
+        await telegramBot.sendMessage(chatId, chunk, { parse_mode: "HTML" });
       }
       return c.json({ ok: true, session_id: result.session_id });
     } catch (err) {
       deps.logger?.warn("ingress.telegram.agent_turn_failed", {
         agent_id: routedAgentId,
         thread_id: chatId,
+        account_key: telegramAccountKey,
         error: safeDetail(err) ?? "unknown_error",
       });
       try {
-        await deps.telegramBot.sendMessage(
+        await telegramBot.sendMessage(
           chatId,
           "Sorry, something went wrong. Please try again later.",
           { parse_mode: "HTML" },
@@ -223,6 +307,7 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
         deps.logger?.warn("ingress.telegram.error_message_send_failed", {
           agent_id: routedAgentId,
           thread_id: chatId,
+          account_key: telegramAccountKey,
           error: safeDetail(sendErr) ?? "unknown_error",
         });
       }
