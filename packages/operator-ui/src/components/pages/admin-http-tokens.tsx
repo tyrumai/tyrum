@@ -232,6 +232,7 @@ export function AuthTokensCard({ core }: { core: OperatorCore }): React.ReactEle
         {issuedToken ? (
           <IssuedTokenNotice
             token={issuedToken}
+            gatewayHttpBaseUrl={core.httpBaseUrl}
             onDismiss={() => {
               setIssuedToken(null);
             }}

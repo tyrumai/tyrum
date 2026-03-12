@@ -11,6 +11,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { useClipboard } from "../../utils/clipboard.js";
 import { formatRelativeTime } from "../../utils/format-relative-time.js";
 import { ApprovalActions } from "./approval-actions.js";
 import { Badge } from "../ui/badge.js";
@@ -185,15 +186,6 @@ export function buildTranscriptDisplayItems(
   return displayItems;
 }
 
-async function copyToClipboard(text: string): Promise<void> {
-  try {
-    await globalThis.navigator.clipboard.writeText(text);
-    toast.success("Copied to clipboard");
-  } catch {
-    toast.error("Failed to copy to clipboard");
-  }
-}
-
 export function ChatTextItem({
   item,
   renderMode,
@@ -201,6 +193,8 @@ export function ChatTextItem({
   item: SessionTranscriptTextItem;
   renderMode: "markdown" | "text";
 }) {
+  const clipboard = useClipboard();
+
   return (
     <div
       className={
@@ -222,7 +216,14 @@ export function ChatTextItem({
           variant="ghost"
           className="h-6 w-6 p-0 text-fg-muted opacity-0 transition-opacity hover:text-fg group-hover:opacity-100"
           onClick={() => {
-            void copyToClipboard(item.content);
+            void clipboard
+              .writeText(item.content)
+              .then(() => {
+                toast.success("Copied to clipboard");
+              })
+              .catch(() => {
+                toast.error("Failed to copy to clipboard");
+              });
           }}
           title="Copy message"
         >

@@ -8,22 +8,44 @@ import type { MobileConnectionConfig } from "../src/mobile-config.js";
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const {
+  capturedClientOptions,
   MockTyrumClient,
   autoExecuteMock,
+  clipboardWriteMock,
   connectMock,
+  deviceInfoMock,
   disconnectMock,
   isNativePlatformMock,
+  loadOrCreateDeviceIdentityMock,
   updateConfigMock,
 } = vi.hoisted(() => {
+  const capturedClientOptionsInner: unknown[] = [];
   const autoExecuteMockInner = vi.fn();
+  const clipboardWriteMockInner = vi.fn(async () => {});
   const connectMockInner = vi.fn();
+  const deviceInfoMockInner = vi.fn(async () => ({
+    name: "Ron phone",
+    manufacturer: "Virtunet",
+    model: "Ty-Phone",
+    operatingSystem: "ios",
+    osVersion: "18.1",
+  }));
   const disconnectMockInner = vi.fn();
   const isNativePlatformMockInner = vi.fn(() => true);
+  const loadOrCreateDeviceIdentityMockInner = vi.fn(async () => ({
+    deviceId: "mobile-node-device-1",
+    publicKey: "public",
+    privateKey: "private",
+  }));
 
   class MockTyrumClientInner {
     private readonly listeners = new Map<string, Set<() => void>>();
 
     capabilityReady = vi.fn(async () => {});
+
+    constructor(options: unknown) {
+      capturedClientOptionsInner.push(options);
+    }
 
     connect() {
       connectMockInner();
@@ -50,14 +72,24 @@ const {
   }
 
   return {
+    capturedClientOptions: capturedClientOptionsInner,
     MockTyrumClient: MockTyrumClientInner,
     autoExecuteMock: autoExecuteMockInner,
+    clipboardWriteMock: clipboardWriteMockInner,
     connectMock: connectMockInner,
+    deviceInfoMock: deviceInfoMockInner,
     disconnectMock: disconnectMockInner,
     isNativePlatformMock: isNativePlatformMockInner,
+    loadOrCreateDeviceIdentityMock: loadOrCreateDeviceIdentityMockInner,
     updateConfigMock: vi.fn(async () => null),
   };
 });
+
+vi.mock("@capacitor/clipboard", () => ({
+  Clipboard: {
+    write: clipboardWriteMock,
+  },
+}));
 
 vi.mock("@capacitor/core", () => ({
   Capacitor: {
@@ -66,16 +98,18 @@ vi.mock("@capacitor/core", () => ({
   },
 }));
 
+vi.mock("@capacitor/device", () => ({
+  Device: {
+    getInfo: deviceInfoMock,
+  },
+}));
+
 vi.mock("@tyrum/client/browser", () => ({
   autoExecute: autoExecuteMock,
   formatDeviceIdentityError: vi.fn((error: unknown) =>
     error instanceof Error ? error.message : String(error),
   ),
-  loadOrCreateDeviceIdentity: vi.fn(async () => ({
-    deviceId: "mobile-node-device-1",
-    publicKey: "public",
-    privateKey: "private",
-  })),
+  loadOrCreateDeviceIdentity: loadOrCreateDeviceIdentityMock,
   TyrumClient: MockTyrumClient,
 }));
 
@@ -104,9 +138,21 @@ async function flushMicrotasks(count = 4) {
   }
 }
 
+function createDeferred<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+} {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
 describe("useMobileNode", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    capturedClientOptions.length = 0;
     isNativePlatformMock.mockReturnValue(true);
   });
 
@@ -155,6 +201,117 @@ describe("useMobileNode", () => {
     });
 
     expect(disconnectMock).toHaveBeenCalledTimes(1);
+    container.remove();
+  });
+
+  it("enriches the node descriptor with native device info and exposes clipboard writes", async () => {
+    const { useMobileNode } = await import("../src/use-mobile-node.js");
+    const { container, root } = createTestRoot();
+
+    const config: MobileConnectionConfig = {
+      httpBaseUrl: "http://127.0.0.1:8788",
+      wsUrl: "ws://127.0.0.1:8788/ws",
+      nodeEnabled: true,
+      actionSettings: {
+        "location.get_current": true,
+        "camera.capture_photo": true,
+        "audio.record_clip": true,
+      },
+    };
+
+    let latestResult: ReturnType<typeof useMobileNode> | null = null;
+
+    const Probe = () => {
+      latestResult = useMobileNode({
+        config,
+        token: "token-1",
+        updateConfig: updateConfigMock,
+      });
+      return null;
+    };
+
+    await act(async () => {
+      root.render(React.createElement(Probe));
+      await flushMicrotasks();
+    });
+
+    const clientOptions = capturedClientOptions.at(0) as
+      | {
+          device?: {
+            label?: string;
+            platform?: string;
+            version?: string;
+          };
+        }
+      | undefined;
+
+    expect(deviceInfoMock).toHaveBeenCalledTimes(1);
+    expect(clientOptions?.device?.label).toBe("Tyrum Mobile (Ron phone)");
+    expect(clientOptions?.device?.platform).toBe("ios");
+    expect(clientOptions?.device?.version).toBe("18.1");
+
+    await latestResult?.hostApi.clipboard?.writeText("hello from mobile");
+    expect(clipboardWriteMock).toHaveBeenCalledWith({ string: "hello from mobile" });
+
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+  });
+
+  it("does not create a device identity after the effect is disposed during device info load", async () => {
+    const { useMobileNode } = await import("../src/use-mobile-node.js");
+    const { container, root } = createTestRoot();
+    const deferredDeviceInfo = createDeferred<{
+      name: string;
+      manufacturer: string;
+      model: string;
+      operatingSystem: string;
+      osVersion: string;
+    }>();
+    deviceInfoMock.mockImplementationOnce(() => deferredDeviceInfo.promise);
+
+    const config: MobileConnectionConfig = {
+      httpBaseUrl: "http://127.0.0.1:8788",
+      wsUrl: "ws://127.0.0.1:8788/ws",
+      nodeEnabled: true,
+      actionSettings: {
+        "location.get_current": true,
+        "camera.capture_photo": true,
+        "audio.record_clip": true,
+      },
+    };
+
+    const Probe = () => {
+      useMobileNode({
+        config,
+        token: "token-1",
+        updateConfig: updateConfigMock,
+      });
+      return null;
+    };
+
+    await act(async () => {
+      root.render(React.createElement(Probe));
+      await flushMicrotasks();
+    });
+
+    act(() => {
+      root.unmount();
+    });
+
+    await act(async () => {
+      deferredDeviceInfo.resolve({
+        name: "Ron phone",
+        manufacturer: "Virtunet",
+        model: "Ty-Phone",
+        operatingSystem: "ios",
+        osVersion: "18.1",
+      });
+      await flushMicrotasks();
+    });
+
+    expect(loadOrCreateDeviceIdentityMock).not.toHaveBeenCalled();
     container.remove();
   });
 });

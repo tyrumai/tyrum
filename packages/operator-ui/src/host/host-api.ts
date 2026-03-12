@@ -29,6 +29,9 @@ export interface MobileHostApi {
     setEnabled: (enabled: boolean) => Promise<MobileHostState>;
     setActionEnabled: (action: MobileHostActionName, enabled: boolean) => Promise<MobileHostState>;
   };
+  clipboard?: {
+    writeText: (text: string) => Promise<void>;
+  };
   onStateChange?: (cb: (state: MobileHostState) => void) => () => void;
   onNavigationRequest?: (cb: (request: unknown) => void) => () => void;
 }

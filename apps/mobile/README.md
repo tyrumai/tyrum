@@ -7,7 +7,7 @@ Capacitor mobile shell for Tyrum operator UI and the local iOS/Android node runt
 - Repo toolchain: Node `24` and pnpm `10`
 - Shared workspace install: `pnpm install`
 - iOS: macOS with Xcode and the iOS Simulator toolchain
-- Android: Android Studio, Android SDK Platform `36`, Build Tools `36.0.0`, and JDK `21`
+- Android: Android Studio, Android SDK Platform `36`, Build Tools `36.0.0`, JDK `21`, and Android `8.0` / API `26` or newer
 
 ## Commands
 
@@ -133,3 +133,4 @@ Capacitor mobile shell for Tyrum operator UI and the local iOS/Android node runt
   - `audio.record_clip`
 - Local mobile node support is only enabled on Capacitor iOS and Android targets, not the browser `vite` dev server.
 - Manual QA checklist: [`QA.md`](./QA.md)
+- Keep the `tyrum://bootstrap` deep-link scheme, Android intent filter, and camera permission strings in sync when updating native QR onboarding support.
