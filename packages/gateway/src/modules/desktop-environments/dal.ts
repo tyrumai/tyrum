@@ -331,6 +331,7 @@ export class DesktopEnvironmentDal {
         ? parsed.filter((entry): entry is string => typeof entry === "string")
         : [];
     } catch {
+      // Intentional: malformed historical log payloads should not break the logs view.
       return [];
     }
   }

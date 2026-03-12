@@ -14,7 +14,10 @@ import {
   DesktopEnvironmentDal,
   DesktopEnvironmentHostDal,
 } from "../modules/desktop-environments/dal.js";
-import type { DesktopEnvironmentLifecycle } from "../modules/desktop-environments/lifecycle-service.js";
+import {
+  DesktopEnvironmentLifecycleUnavailableError,
+  type DesktopEnvironmentLifecycle,
+} from "../modules/desktop-environments/lifecycle-service.js";
 import { requireAuthClaims, requireTenantId } from "../modules/auth/claims.js";
 
 const DEFAULT_DESKTOP_ENVIRONMENT_IMAGE = "tyrum-desktop-sandbox:latest";
@@ -105,10 +108,18 @@ export function createDesktopEnvironmentRoutes(deps: {
   app.delete("/desktop-environments/:environmentId", async (c) => {
     requireAdmin(c);
     const tenantId = requireTenantId(c);
-    const deleted = await deps.lifecycleService.deleteEnvironment({
-      tenantId,
-      environmentId: c.req.param("environmentId"),
-    });
+    let deleted: boolean;
+    try {
+      deleted = await deps.lifecycleService.deleteEnvironment({
+        tenantId,
+        environmentId: c.req.param("environmentId"),
+      });
+    } catch (error) {
+      if (error instanceof DesktopEnvironmentLifecycleUnavailableError) {
+        return c.json({ error: "conflict", message: error.message }, 409);
+      }
+      throw error;
+    }
     return c.json(DesktopEnvironmentDeleteResponse.parse({ status: "ok", deleted }));
   });
 

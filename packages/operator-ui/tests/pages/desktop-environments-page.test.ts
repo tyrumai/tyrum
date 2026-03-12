@@ -93,6 +93,7 @@ describe("DesktopEnvironmentsPage", () => {
       '[data-testid="desktop-environment-delete-env-1"]',
     );
     expect(deleteButton).not.toBeNull();
+    const listCallsBeforeDelete = http.desktopEnvironments.list.mock.calls.length;
     await act(async () => {
       click(deleteButton!);
       await Promise.resolve();
@@ -103,6 +104,7 @@ describe("DesktopEnvironmentsPage", () => {
     expect(desktopEnvironmentsApi.logs).toHaveBeenCalledTimes(1);
     expect(desktopEnvironmentsApi.start).toHaveBeenCalledTimes(1);
     expect(desktopEnvironmentsApi.remove).toHaveBeenCalledTimes(1);
+    expect(http.desktopEnvironments.list).toHaveBeenCalledTimes(listCallsBeforeDelete + 1);
 
     cleanupTestRoot(testRoot);
     core.dispose();

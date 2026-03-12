@@ -20,6 +20,8 @@ export const MIGRATION_FILENAME_ALIASES: Readonly<Record<string, readonly string
   "113_provider_model_config.sql": ["108_provider_model_config.sql"],
   "114_provider_model_config_indexes.sql": ["109_provider_model_config_indexes.sql"],
   "117_ws_events.sql": ["116_ws_events.sql"],
+  "132_desktop_environments.sql": ["131_desktop_environments.sql"],
+  "133_desktop_environment_boolean_columns.sql": ["132_desktop_environment_boolean_columns.sql"],
 };
 
 export function findAppliedMigrationAlias(

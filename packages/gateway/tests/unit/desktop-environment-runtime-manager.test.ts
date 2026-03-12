@@ -208,4 +208,57 @@ describe("DesktopEnvironmentRuntimeManager", () => {
       }),
     );
   });
+
+  it("does not retry errored environments by issuing fresh tokens on every tick", async () => {
+    inspectContainerMock.mockResolvedValue(null);
+
+    const environmentDal = {
+      listByHost: vi.fn(async () => [
+        {
+          tenant_id: "tenant-1",
+          environment_id: "env-1",
+          host_id: "host-1",
+          label: "Broken",
+          image_ref: "ghcr.io/tyrum/desktop:latest",
+          managed_kind: "docker",
+          status: "error",
+          desired_running: true,
+          node_id: null,
+          takeover_url: null,
+          last_seen_at: null,
+          last_error: "image pull failed",
+          created_at: "2026-03-12T00:00:00.000Z",
+          updated_at: "2026-03-12T00:00:00.000Z",
+        },
+      ]),
+      updateRuntime: vi.fn(async () => {}),
+    };
+    const nodePairingDal = {
+      getByNodeId: vi.fn(),
+      resolve: vi.fn(),
+    };
+    const authTokens = {
+      issueToken: vi.fn(),
+    };
+    const logger = { error: vi.fn() };
+
+    const runtimeManager = new DesktopEnvironmentRuntimeManager(
+      environmentDal as never,
+      nodePairingDal as never,
+      authTokens as never,
+      logger as never,
+      {
+        hostId: "host-1",
+        tyrumHome,
+        gatewayPort: 8788,
+      },
+    );
+
+    await runtimeManager.reconcileAll();
+
+    expect(authTokens.issueToken).not.toHaveBeenCalled();
+    expect(runDockerMock).not.toHaveBeenCalled();
+    expect(environmentDal.updateRuntime).not.toHaveBeenCalled();
+    expect(nodePairingDal.getByNodeId).not.toHaveBeenCalled();
+  });
 });

@@ -103,4 +103,45 @@ describe("desktop environment routes", () => {
       environmentId,
     });
   });
+
+  it("returns a conflict when delete is requested from an edge-only gateway without a lifecycle implementation", async () => {
+    const { app, container } = await createTestApp({ runtimeRole: "edge" });
+    const hostDal = new DesktopEnvironmentHostDal(container.db);
+    const environmentDal = new DesktopEnvironmentDal(container.db);
+
+    await hostDal.upsert({
+      hostId: "host-1",
+      label: "Primary runtime",
+      version: "0.1.0",
+      dockerAvailable: true,
+      healthy: true,
+      lastSeenAt: "2026-01-01T00:00:00.000Z",
+      lastError: null,
+    });
+
+    const environment = await environmentDal.create({
+      tenantId: DEFAULT_TENANT_ID,
+      hostId: "host-1",
+      label: "Research desktop",
+      imageRef: "registry.example.test/desktop:latest",
+      desiredRunning: false,
+    });
+
+    const deleteRes = await app.request(`/desktop-environments/${environment.environment_id}`, {
+      method: "DELETE",
+    });
+
+    expect(deleteRes.status).toBe(409);
+    await expect(deleteRes.json()).resolves.toMatchObject({
+      error: "conflict",
+      message: expect.stringContaining("role=all"),
+    });
+
+    await expect(
+      environmentDal.get({
+        tenantId: DEFAULT_TENANT_ID,
+        environmentId: environment.environment_id,
+      }),
+    ).resolves.toBeTruthy();
+  });
 });

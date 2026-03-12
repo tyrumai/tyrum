@@ -5,6 +5,13 @@ export interface DesktopEnvironmentLifecycle {
   deleteEnvironment(input: { tenantId: string; environmentId: string }): Promise<boolean>;
 }
 
+export class DesktopEnvironmentLifecycleUnavailableError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "DesktopEnvironmentLifecycleUnavailableError";
+  }
+}
+
 export class DesktopEnvironmentLifecycleService implements DesktopEnvironmentLifecycle {
   constructor(
     private readonly environmentDal: Pick<DesktopEnvironmentDal, "get" | "delete">,
@@ -18,5 +25,13 @@ export class DesktopEnvironmentLifecycleService implements DesktopEnvironmentLif
     if (!environment) return false;
     await this.removeRuntimeResources(environment.environment_id);
     return await this.environmentDal.delete(input);
+  }
+}
+
+export class UnsupportedDesktopEnvironmentLifecycleService implements DesktopEnvironmentLifecycle {
+  async deleteEnvironment(): Promise<boolean> {
+    throw new DesktopEnvironmentLifecycleUnavailableError(
+      "desktop environment deletion requires a gateway instance running role=all or a custom desktop environment lifecycle service",
+    );
   }
 }

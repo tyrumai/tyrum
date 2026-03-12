@@ -167,6 +167,7 @@ export interface TestAppOptions {
   isLocalOnly?: boolean;
   languageModel?: LanguageModel;
   tyrumHome?: string;
+  runtimeRole?: string;
   authRateLimiter?: SlidingWindowRateLimiter;
   deploymentConfig?: Partial<DeploymentConfigT>;
   enableAgents?: boolean;
@@ -253,7 +254,7 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<
     runtime: {
       version: VERSION,
       instanceId: "test-instance",
-      role: "all",
+      role: opts.runtimeRole ?? "all",
       otelEnabled: false,
     },
   });

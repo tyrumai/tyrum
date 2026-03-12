@@ -480,7 +480,6 @@ export function DesktopEnvironmentsPage({ core }: { core: OperatorCore }) {
                           await mutationHttp.desktopEnvironments.remove(
                             selectedEnvironment.environment_id,
                           );
-                          await core.desktopEnvironmentsStore.refresh();
                           setSelectedEnvironmentId(null);
                         });
                       }}

@@ -1,0 +1,1 @@
+-- No-op on SQLite: desktop environment booleans are stored as INTEGER columns.

@@ -36,4 +36,19 @@ describe("migration aliases", () => {
       "116_ws_events.sql",
     );
   });
+
+  it("treats the renumbered desktop-environment migrations as already applied", () => {
+    expect(
+      findAppliedMigrationAlias(
+        "132_desktop_environments.sql",
+        new Set(["131_desktop_environments.sql"]),
+      ),
+    ).toBe("131_desktop_environments.sql");
+    expect(
+      findAppliedMigrationAlias(
+        "133_desktop_environment_boolean_columns.sql",
+        new Set(["132_desktop_environment_boolean_columns.sql"]),
+      ),
+    ).toBe("132_desktop_environment_boolean_columns.sql");
+  });
 });

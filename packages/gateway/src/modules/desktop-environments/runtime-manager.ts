@@ -111,6 +111,10 @@ export class DesktopEnvironmentRuntimeManager {
       inspect = null;
     }
 
+    if (!inspect && environment.status === "error") {
+      return;
+    }
+
     if (!inspect) {
       const issuedToken = await this.authTokens.issueToken({
         tenantId: environment.tenant_id,
