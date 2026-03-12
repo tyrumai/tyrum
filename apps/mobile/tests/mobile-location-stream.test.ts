@@ -290,6 +290,38 @@ describe("createMobileLocationBeaconStream", () => {
     expect(locationBeacon).toHaveBeenCalledTimes(2);
   });
 
+  it("resets the baseline when start is called with a new streaming config", async () => {
+    const locationBeacon = vi.fn(async () => ({ sample: {}, events: [] }));
+    const { createMobileLocationBeaconStream } = await import("../src/mobile-location-stream.js");
+    const stream = createMobileLocationBeaconStream({
+      client: { locationBeacon } as never,
+    });
+
+    await stream.start({
+      streamEnabled: true,
+      distanceFilterM: 100,
+      maxIntervalMs: 900_000,
+      maxAccuracyM: 100,
+      backgroundEnabled: true,
+    });
+
+    emit(buildPosition(52.3676, 4.9041, "2026-03-11T12:00:00Z"));
+    await flushMicrotasks();
+    expect(locationBeacon).toHaveBeenCalledTimes(1);
+
+    await stream.start({
+      streamEnabled: true,
+      distanceFilterM: 250,
+      maxIntervalMs: 900_000,
+      maxAccuracyM: 100,
+      backgroundEnabled: true,
+    });
+
+    emit(buildPosition(52.36765, 4.90415, "2026-03-11T12:01:00Z"));
+    await flushMicrotasks();
+    expect(locationBeacon).toHaveBeenCalledTimes(2);
+  });
+
   it("clears a stale native watch when stop and restart overlap an in-flight start", async () => {
     const firstWatch = createDeferred<string>();
     watchPositionMock

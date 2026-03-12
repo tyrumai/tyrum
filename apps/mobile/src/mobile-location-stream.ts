@@ -30,6 +30,20 @@ type NativeWatchOptions = {
   maximumAge: number;
 };
 
+function sameStreamingConfig(
+  left: MobileLocationStreamingConfig | null,
+  right: MobileLocationStreamingConfig,
+): boolean {
+  return (
+    left !== null &&
+    left.streamEnabled === right.streamEnabled &&
+    left.distanceFilterM === right.distanceFilterM &&
+    left.maxIntervalMs === right.maxIntervalMs &&
+    left.maxAccuracyM === right.maxAccuracyM &&
+    left.backgroundEnabled === right.backgroundEnabled
+  );
+}
+
 function isBackgroundBlocked(config: MobileLocationStreamingConfig): boolean {
   return !config.backgroundEnabled && typeof document !== "undefined" && document.hidden;
 }
@@ -222,6 +236,9 @@ export function createMobileLocationBeaconStream(
       if (!config.streamEnabled || !Capacitor.isNativePlatform()) {
         await stop();
         return;
+      }
+      if (!sameStreamingConfig(activeConfig, config)) {
+        resetSamples();
       }
       desiredConfig = { ...config };
       desiredConfigRevision += 1;
