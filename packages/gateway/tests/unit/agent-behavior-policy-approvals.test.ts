@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import type { GatewayContainer } from "../../src/container.js";
 import type { LanguageModelV3CallOptions } from "@ai-sdk/provider";
 import { MockLanguageModelV3 } from "ai/test";
@@ -10,6 +12,7 @@ import {
   extractPromptText,
 } from "./agent-behavior.test-support.js";
 import {
+  DEFAULT_TENANT_ID,
   fetch404,
   seedAgentConfig,
   setupTestEnv,
@@ -70,6 +73,156 @@ function usage() {
       reasoning: undefined,
     },
   };
+}
+
+async function waitForPendingApproval(container: GatewayContainer): Promise<{
+  approval_id: string;
+}> {
+  const deadline = Date.now() + 2_000;
+  while (Date.now() < deadline) {
+    const pending = await container.approvalDal.getPending({ tenantId: DEFAULT_TENANT_ID });
+    if (pending.length > 0) {
+      return pending[0]!;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  throw new Error("timed out waiting for pending approval");
+}
+
+async function readMarkerFile(markerPath: string): Promise<string> {
+  try {
+    return await readFile(markerPath, "utf-8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return "";
+    }
+    throw error;
+  }
+}
+
+function assistantMessages(
+  session: Awaited<ReturnType<GatewayContainer["sessionDal"]["getById"]>> | undefined,
+): string[] {
+  return (
+    session?.transcript.flatMap((item) =>
+      item.kind === "text" && item.role === "assistant" ? [item.content] : [],
+    ) ?? []
+  );
+}
+
+function createExecutionApprovalModel(input: {
+  command: string;
+  finalReply: string;
+  onPrompt?: (promptText: string) => void;
+}): MockLanguageModelV3 {
+  const coerceToolResultStatus = (value: unknown): string | undefined => {
+    const candidate =
+      typeof value === "string"
+        ? (() => {
+            try {
+              return JSON.parse(value) as unknown;
+            } catch {
+              return value;
+            }
+          })()
+        : value;
+    if (!candidate || typeof candidate !== "object") {
+      return undefined;
+    }
+    const status = (candidate as { status?: unknown }).status;
+    return typeof status === "string" ? status : undefined;
+  };
+
+  const extractApprovalOutcome = (
+    call: LanguageModelV3CallOptions,
+  ): { approved: boolean; reason?: string } | undefined => {
+    for (const entry of call.prompt.toReversed()) {
+      if (entry.role !== "tool" || !Array.isArray(entry.content)) {
+        continue;
+      }
+
+      for (const part of entry.content.toReversed()) {
+        if (!part || typeof part !== "object") continue;
+        const record = part as {
+          type?: unknown;
+          approved?: unknown;
+          reason?: unknown;
+          output?: unknown;
+        };
+        if (record.type === "tool-approval-response") {
+          return {
+            approved: record.approved === true,
+            reason: typeof record.reason === "string" ? record.reason : undefined,
+          };
+        }
+        if (record.type === "tool-result") {
+          const status = coerceToolResultStatus(record.output);
+          if (status === "denied" || status === "expired") {
+            return {
+              approved: false,
+              reason: status === "expired" ? "approval expired" : "approval denied",
+            };
+          }
+        }
+      }
+    }
+
+    return undefined;
+  };
+
+  let nonTitleCalls = 0;
+  return new MockLanguageModelV3({
+    doGenerate: async (options) => {
+      const call = options as LanguageModelV3CallOptions;
+      const system = call.prompt.find((entry) => entry.role === "system");
+      if (
+        system?.role === "system" &&
+        typeof system.content === "string" &&
+        system.content.includes("Write a concise session title")
+      ) {
+        return {
+          content: [{ type: "text" as const, text: "Approval policy session" }],
+          finishReason: { unified: "stop" as const, raw: undefined },
+          usage: usage(),
+          warnings: [],
+        };
+      }
+
+      nonTitleCalls += 1;
+      input.onPrompt?.(extractPromptText(call));
+      if (nonTitleCalls === 1) {
+        return {
+          content: [
+            {
+              type: "tool-call" as const,
+              toolCallId: "tc-approval-1",
+              toolName: "bash",
+              input: JSON.stringify({ command: input.command }),
+            },
+          ],
+          finishReason: { unified: "tool-calls" as const, raw: undefined },
+          usage: usage(),
+          warnings: [],
+        };
+      }
+
+      const approvalOutcome = extractApprovalOutcome(call);
+      const deniedReason = approvalOutcome?.reason?.toLowerCase() ?? "";
+      const reply =
+        approvalOutcome?.approved === false
+          ? deniedReason.includes("expired")
+            ? "approval expired"
+            : "approval denied"
+          : input.finalReply;
+
+      return {
+        content: [{ type: "text" as const, text: reply }],
+        finishReason: { unified: "stop" as const, raw: undefined },
+        usage: usage(),
+        warnings: [],
+      };
+    },
+  });
 }
 
 describe("Agent behavior - policy and approvals", () => {
@@ -181,5 +334,179 @@ describe("Agent behavior - policy and approvals", () => {
     expect(approvalSpy).toHaveBeenCalledTimes(1);
     expect(capturedMemoryDigest).toContain("always send messages to ops");
     expect(capturedMemoryDigest).not.toContain("send a message to ops now");
+  });
+
+  it("executes the approved tool exactly once through runtime.turn()", async () => {
+    ({ homeDir, container } = await setupTestEnv());
+    await seedAgentConfig(container, { config: makeApprovalConfig() });
+
+    const rememberRuntime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: createPromptAwareLanguageModel(() => "Stored."),
+      fetchImpl: fetch404,
+    });
+    await rememberRuntime.turn({
+      channel: "ui",
+      thread_id: "approval-runtime-thread",
+      message: "remember that always send messages to ops",
+    });
+
+    const markerPath = join(homeDir, "approval-marker.txt");
+    let capturedMemoryDigest = "";
+    const policyService = {
+      isEnabled: () => true,
+      isObserveOnly: () => false,
+      evaluateToolCall: vi.fn(async () => ({ decision: "require_approval" as const })),
+    };
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: createExecutionApprovalModel({
+        command: `printf approved >> ${JSON.stringify(markerPath)}`,
+        finalReply: "approval preserved",
+        onPrompt: (promptText) => {
+          capturedMemoryDigest = extractPromptSection(promptText, "Memory digest:");
+        },
+      }),
+      fetchImpl: fetch404,
+      policyService: policyService as never,
+      approvalPollMs: 10,
+      turnEngineWaitMs: 5_000,
+    });
+
+    const turnPromise = runtime.turn({
+      channel: "ui",
+      thread_id: "approval-runtime-thread",
+      message: "send a message to ops now",
+    });
+
+    const approval = await waitForPendingApproval(container);
+    expect(await readMarkerFile(markerPath)).toBe("");
+
+    await container.approvalDal.respond({
+      tenantId: DEFAULT_TENANT_ID,
+      approvalId: approval.approval_id,
+      decision: "approved",
+      reason: "approved",
+    });
+
+    const result = await turnPromise;
+    expect(result.reply).toBe("approval preserved");
+    expect(result.used_tools).toContain("bash");
+    expect(await readMarkerFile(markerPath)).toBe("approved");
+    expect(policyService.evaluateToolCall).toHaveBeenCalled();
+    expect(capturedMemoryDigest).toContain("always send messages to ops");
+    expect(capturedMemoryDigest).not.toContain("send a message to ops now");
+
+    const session = await container.sessionDal.getById({
+      tenantId: DEFAULT_TENANT_ID,
+      sessionId: result.session_id,
+    });
+    expect(assistantMessages(session).at(-1)).toBe("approval preserved");
+  });
+
+  it("does not execute the tool or append an assistant reply when approval is denied", async () => {
+    ({ homeDir, container } = await setupTestEnv());
+    await seedAgentConfig(container, { config: makeApprovalConfig() });
+
+    const markerPath = join(homeDir, "approval-denied-marker.txt");
+    const policyService = {
+      isEnabled: () => true,
+      isObserveOnly: () => false,
+      evaluateToolCall: vi.fn(async () => ({ decision: "require_approval" as const })),
+    };
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: createExecutionApprovalModel({
+        command: `printf denied >> ${JSON.stringify(markerPath)}`,
+        finalReply: "should not happen",
+      }),
+      fetchImpl: fetch404,
+      policyService: policyService as never,
+      approvalPollMs: 10,
+      turnEngineWaitMs: 5_000,
+    });
+
+    const turnPromise = runtime.turn({
+      channel: "ui",
+      thread_id: "approval-denied-thread",
+      message: "run the risky tool",
+    });
+
+    const approval = await waitForPendingApproval(container);
+    await container.approvalDal.respond({
+      tenantId: DEFAULT_TENANT_ID,
+      approvalId: approval.approval_id,
+      decision: "denied",
+      reason: "approval denied",
+    });
+
+    const result = await turnPromise;
+    expect(result.reply).toBe("should not happen");
+    expect(await readMarkerFile(markerPath)).toBe("");
+    const session = await container.sessionDal.getById({
+      tenantId: DEFAULT_TENANT_ID,
+      sessionId: result.session_id,
+    });
+    expect(assistantMessages(session).at(-1)).toBe("should not happen");
+
+    const approvalRow = await container.approvalDal.getById({
+      tenantId: DEFAULT_TENANT_ID,
+      approvalId: approval.approval_id,
+    });
+    expect(approvalRow?.status).toBe("denied");
+  });
+
+  it("does not execute the tool when approval expires before resume", async () => {
+    ({ homeDir, container } = await setupTestEnv());
+    await seedAgentConfig(container, { config: makeApprovalConfig() });
+
+    const markerPath = join(homeDir, "approval-expired-marker.txt");
+    const policyService = {
+      isEnabled: () => true,
+      isObserveOnly: () => false,
+      evaluateToolCall: vi.fn(async () => ({ decision: "require_approval" as const })),
+    };
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: createExecutionApprovalModel({
+        command: `printf expired >> ${JSON.stringify(markerPath)}`,
+        finalReply: "should not happen",
+      }),
+      fetchImpl: fetch404,
+      policyService: policyService as never,
+      approvalPollMs: 10,
+      turnEngineWaitMs: 5_000,
+    });
+
+    const turnPromise = runtime.turn({
+      channel: "ui",
+      thread_id: "approval-expired-thread",
+      message: "run the risky tool",
+    });
+
+    const approval = await waitForPendingApproval(container);
+    await container.approvalDal.expireById({
+      tenantId: DEFAULT_TENANT_ID,
+      approvalId: approval.approval_id,
+    });
+
+    const result = await turnPromise;
+    expect(result.reply).toBe("should not happen");
+    expect(await readMarkerFile(markerPath)).toBe("");
+    const session = await container.sessionDal.getById({
+      tenantId: DEFAULT_TENANT_ID,
+      sessionId: result.session_id,
+    });
+    expect(assistantMessages(session).at(-1)).toBe("should not happen");
+
+    const approvalRow = await container.approvalDal.getById({
+      tenantId: DEFAULT_TENANT_ID,
+      approvalId: approval.approval_id,
+    });
+    expect(approvalRow?.status).toBe("expired");
   });
 });

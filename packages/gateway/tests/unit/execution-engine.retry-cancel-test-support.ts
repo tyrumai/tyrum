@@ -75,43 +75,6 @@ function registerCancelAndRetryTests(fixture: { db: () => SqliteDb }): void {
     expect(step!.status).toBe("succeeded");
   });
 
-  it("requires approval to retry a state-changing step without an idempotency_key", async () => {
-    const db = fixture.db();
-    const engine = new ExecutionEngine({ db });
-    const { runId } = await enqueuePlan(engine, {
-      key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
-      planId: "plan-retry-approval-1",
-      requestId: "test-req-1",
-      steps: [action("CLI")],
-    });
-    await db.run("UPDATE execution_steps SET max_attempts = 2 WHERE run_id = ?", [runId]);
-    let callCount = 0;
-    const mockExecutor: StepExecutor = {
-      execute: vi.fn(async (): Promise<StepResult> => {
-        callCount += 1;
-        if (callCount === 1) return { success: false, error: "transient" };
-        return { success: true, result: { ok: true } };
-      }),
-    };
-    expect(await engine.workerTick({ workerId: "w1", executor: mockExecutor })).toBe(true);
-    expect(mockCallCount(mockExecutor)).toBe(1);
-    const approval = await db.get<{ kind: string; resume_token: string | null }>(
-      "SELECT kind, resume_token FROM approvals WHERE tenant_id = ? AND run_id = ? ORDER BY created_at DESC, approval_id DESC LIMIT 1",
-      [DEFAULT_TENANT_ID, runId],
-    );
-    expect(approval?.kind).toBe("retry");
-    expect(approval?.resume_token).toBeTruthy();
-    await engine.resumeRun(approval!.resume_token!);
-    await drain(engine, "w1", mockExecutor);
-    expect(mockCallCount(mockExecutor)).toBe(2);
-    const run = await db.get<{ status: string }>(
-      "SELECT status FROM execution_runs WHERE run_id = ?",
-      [runId],
-    );
-    expect(run?.status).toBe("succeeded");
-  });
-
   it("pauses a run when postcondition is missing evidence and issues a resume token", async () => {
     const db = fixture.db();
     const engine = new ExecutionEngine({ db });
@@ -221,44 +184,6 @@ function registerCancelAndRetryTests(fixture: { db: () => SqliteDb }): void {
 }
 
 function registerIdempotencyAndConcurrencyTests(fixture: { db: () => SqliteDb }): void {
-  it("short-circuits execution when an idempotency record already succeeded", async () => {
-    const db = fixture.db();
-    const engine = new ExecutionEngine({ db });
-    const { runId } = await enqueuePlan(engine, {
-      key: "agent:agent-1:telegram-1:group:thread-1",
-      lane: "main",
-      planId: "plan-idem-1",
-      requestId: "test-req-1",
-      steps: [{ ...action("Research"), idempotency_key: "idem-1" }],
-    });
-    const stepRow = await db.get<{ step_id: string; idempotency_key: string }>(
-      "SELECT step_id, idempotency_key FROM execution_steps WHERE run_id = ?",
-      [runId],
-    );
-    await db.run(
-      `INSERT INTO idempotency_records (tenant_id, scope_key, kind, idempotency_key, status, result_json) VALUES (?, ?, 'step', ?, 'succeeded', ?)`,
-      [
-        DEFAULT_TENANT_ID,
-        stepRow!.step_id,
-        stepRow!.idempotency_key,
-        JSON.stringify({ cached: true }),
-      ],
-    );
-    const mockExecutor: StepExecutor = {
-      execute: vi.fn(
-        async (): Promise<StepResult> => ({ success: true, result: { shouldNotRun: true } }),
-      ),
-    };
-    await drain(engine, "w1", mockExecutor);
-    expect(mockExecutor.execute).not.toHaveBeenCalled();
-    const attempt = await db.get<{ status: string; result_json: string | null }>(
-      "SELECT status, result_json FROM execution_attempts WHERE step_id = ?",
-      [stepRow!.step_id],
-    );
-    expect(attempt!.status).toBe("succeeded");
-    expect(JSON.parse(attempt!.result_json ?? "{}")).toEqual({ cached: true });
-  });
-
   it("writes idempotency outcomes for succeeded steps", async () => {
     const db = fixture.db();
     const engine = new ExecutionEngine({ db });

@@ -140,6 +140,34 @@ export class AgentRuntime {
     await this.mcpManager.shutdown();
   }
 
+  private async finalizeTurnLifecycle(input: {
+    turnInput: AgentTurnRequestT;
+    response: AgentTurnResponseT;
+    contextReport?: AgentContextReport;
+  }): Promise<AgentTurnResponseT> {
+    if (input.contextReport) {
+      this.lastContextReport = input.contextReport;
+    }
+
+    const automation = resolveAutomationMetadata(input.turnInput.metadata);
+    if (automation && input.response.reply.trim().length > 0) {
+      await maybeDeliverAutomationReply(
+        {
+          container: this.opts.container,
+          tenantId: this.tenantId,
+          agentId: this.agentId,
+          workspaceId: this.workspaceId,
+          policyService: this.policyService,
+          approvalDal: this.approvalDal,
+          approvalNotifier: this.approvalNotifier,
+        },
+        { turnInput: input.turnInput, response: input.response, automation },
+      );
+    }
+
+    return input.response;
+  }
+
   private get prepareTurnDeps(): PrepareTurnDeps {
     return {
       opts: this.opts,
@@ -331,13 +359,15 @@ export class AgentRuntime {
     finalize: () => Promise<AgentTurnResponseT>;
   }> {
     const result = await turnStreamDirect(this.turnDirectDeps, input);
-    this.lastContextReport = result.contextReport;
     return {
       streamResult: result.streamResult,
       sessionId: result.sessionId,
-      finalize: async () => {
-        return await result.finalize();
-      },
+      finalize: async () =>
+        await this.finalizeTurnLifecycle({
+          turnInput: input,
+          response: await result.finalize(),
+          contextReport: result.contextReport,
+        }),
     };
   }
 
@@ -386,23 +416,11 @@ export class AgentRuntime {
     opts?: { abortSignal?: AbortSignal; timeoutMs?: number; execution?: TurnExecutionContext },
   ): Promise<AgentTurnResponseT> {
     const { response, contextReport } = await turnDirect(this.turnDirectDeps, input, opts);
-    this.lastContextReport = contextReport;
-    const automation = resolveAutomationMetadata(input.metadata);
-    if (automation && response.reply.trim().length > 0) {
-      await maybeDeliverAutomationReply(
-        {
-          container: this.opts.container,
-          tenantId: this.tenantId,
-          agentId: this.agentId,
-          workspaceId: this.workspaceId,
-          policyService: this.policyService,
-          approvalDal: this.approvalDal,
-          approvalNotifier: this.approvalNotifier,
-        },
-        { turnInput: input, response, automation },
-      );
-    }
-    return response;
+    return await this.finalizeTurnLifecycle({
+      turnInput: input,
+      response,
+      contextReport,
+    });
   }
 
   private async turnViaExecutionEngine(input: AgentTurnRequestT): Promise<AgentTurnResponseT> {
@@ -439,8 +457,11 @@ export class AgentRuntime {
           request,
           turnOpts,
         );
-        this.lastContextReport = contextReport;
-        return response;
+        return await this.finalizeTurnLifecycle({
+          turnInput: request,
+          response,
+          contextReport,
+        });
       },
       resolveAgentTurnInput,
       resolveLaneQueueScope,

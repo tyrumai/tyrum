@@ -139,6 +139,32 @@ describe("AgentRuntime automation replies", () => {
     expect(outboxCount?.count).toBe(0);
   });
 
+  it("delivers and dedupes automation replies through runtime.turn()", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
+    container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
+    await seedNotificationRoute(container);
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: createStubLanguageModel("notify operator"),
+      fetchImpl: fetch404,
+    });
+
+    const first = await runtime.turn(makeAutomationRequest());
+    const second = await runtime.turn(makeAutomationRequest());
+
+    expect(first.reply).toBe("notify operator");
+    expect(second.reply).toBe("notify operator");
+
+    const outbox = await container.db.get<{ count: number; source: string | null }>(
+      `SELECT COUNT(*) AS count, MAX(source) AS source
+       FROM channel_outbox`,
+    );
+    expect(outbox?.count).toBe(1);
+    expect(outbox?.source).toBe("telegram:default");
+  });
+
   it("approval-gates automation replies when connector policy requires approval", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
@@ -160,6 +186,42 @@ describe("AgentRuntime automation replies", () => {
     });
 
     await runtime.executeDecideAction(makeAutomationRequest());
+
+    const pending = await container.approvalDal.getPending({ tenantId: DEFAULT_TENANT_ID });
+    expect(pending).toHaveLength(1);
+    expect(notify).toHaveBeenCalledTimes(1);
+
+    const outbox = await container.db.get<{ count: number; approval_id: string | null }>(
+      `SELECT COUNT(*) AS count, MAX(approval_id) AS approval_id
+       FROM channel_outbox`,
+    );
+    expect(outbox?.count).toBe(1);
+    expect(outbox?.approval_id).toBeTruthy();
+  });
+
+  it("approval-gates automation replies when turnStream().finalize() completes", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
+    container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
+    await seedNotificationRoute(container);
+
+    const notify = vi.fn();
+    vi.spyOn(container.policyService, "evaluateConnectorAction").mockResolvedValue({
+      decision: "require_approval",
+      policy_snapshot: { policy_snapshot_id: "snapshot-1" },
+      applied_override_ids: [],
+    } as never);
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: createStubLanguageModel("notify operator"),
+      fetchImpl: fetch404,
+      approvalNotifier: { notify },
+    });
+
+    const handle = await runtime.turnStream(makeAutomationRequest());
+    const response = await handle.finalize();
+    expect(response.reply).toBe("notify operator");
 
     const pending = await container.approvalDal.getPending({ tenantId: DEFAULT_TENANT_ID });
     expect(pending).toHaveLength(1);

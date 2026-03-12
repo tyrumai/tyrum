@@ -27,6 +27,7 @@ import {
   loadTurnResultFromRun,
   maybeResolvePausedRun,
 } from "./turn-engine-bridge-run-state.js";
+import { resolveAutomationMetadata } from "./automation-delivery.js";
 
 export {
   loadTurnFailureFromRun,
@@ -151,6 +152,7 @@ export async function turnViaExecutionEngine(
     deliveryAccount: resolvedInput.envelope?.delivery.account,
   });
   const laneQueueScope = deps.resolveLaneQueueScope(resolvedInput.metadata);
+  const automation = resolveAutomationMetadata(resolvedInput.metadata);
   const canOverride =
     laneQueueScope &&
     laneQueueScope.lane === "subagent" &&
@@ -173,11 +175,13 @@ export async function turnViaExecutionEngine(
         agent_id: scopeIds.agentId,
         workspace_id: scopeIds.workspaceId,
       };
-      await new WorkboardDal(deps.db).upsertScopeActivity({
-        scope: workScope,
-        last_active_session_key: key,
-        updated_at_ms: Date.now(),
-      });
+      if (!automation) {
+        await new WorkboardDal(deps.db).upsertScopeActivity({
+          scope: workScope,
+          last_active_session_key: key,
+          updated_at_ms: Date.now(),
+        });
+      }
       await deps.sessionLaneNodeAttachmentDal.upsert({
         tenantId: workScope.tenant_id,
         key,
