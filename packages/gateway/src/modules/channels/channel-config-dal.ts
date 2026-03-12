@@ -8,6 +8,7 @@ import type { SqlDb } from "../../statestore/types.js";
 import { DeploymentConfigDal } from "../config/deployment-config-dal.js";
 import { safeJsonParse } from "../../utils/json.js";
 import { secureStringEqual } from "../../utils/secure-string-equal.js";
+import { isUniqueViolation } from "../../utils/sql-errors.js";
 
 function canonicalizeTelegramAllowedUserIds(userIds: readonly string[]): string[] {
   const seen = new Set<string>();
@@ -149,7 +150,7 @@ export class ChannelConfigDal {
     const configs = await this.listTelegram(input.tenantId);
     let matched: StoredTelegramChannelConfig | undefined;
     for (const config of configs) {
-      if (webhookSecretsEqual(config.webhook_secret, secret)) {
+      if (webhookSecretsEqual(config.webhook_secret, secret) && !matched) {
         matched = config;
       }
     }
@@ -179,17 +180,29 @@ export class ChannelConfigDal {
       accountKey: undefined,
     });
 
-    const inserted = await this.db.run(
-      `INSERT INTO channel_configs (
-         tenant_id,
-         connector_key,
-         account_key,
-         config_json
-       )
-       VALUES (?, 'telegram', ?, ?)
-       ON CONFLICT (tenant_id, connector_key, account_key) DO NOTHING`,
-      [input.tenantId, config.account_key, JSON.stringify(config)],
-    );
+    let inserted;
+    try {
+      inserted = await this.db.run(
+        `INSERT INTO channel_configs (
+           tenant_id,
+           connector_key,
+           account_key,
+           config_json
+         )
+         VALUES (?, 'telegram', ?, ?)
+         ON CONFLICT (tenant_id, connector_key, account_key) DO NOTHING`,
+        [input.tenantId, config.account_key, JSON.stringify(config)],
+      );
+    } catch (err) {
+      if (config.webhook_secret && isUniqueViolation(err)) {
+        throw await this.createTelegramWebhookSecretConflictError({
+          tenantId: input.tenantId,
+          webhookSecret: config.webhook_secret,
+          accountKey: config.account_key,
+        });
+      }
+      throw err;
+    }
     if (inserted.changes !== 1) {
       throw new Error(`channel config telegram:${config.account_key} already exists`);
     }
@@ -239,15 +252,26 @@ export class ChannelConfigDal {
       accountKey: next.account_key,
     });
 
-    await this.db.run(
-      `UPDATE channel_configs
-       SET config_json = ?,
-           updated_at = ?
-       WHERE tenant_id = ?
-         AND connector_key = 'telegram'
-         AND account_key = ?`,
-      [JSON.stringify(next), new Date().toISOString(), input.tenantId, next.account_key],
-    );
+    try {
+      await this.db.run(
+        `UPDATE channel_configs
+         SET config_json = ?,
+             updated_at = ?
+         WHERE tenant_id = ?
+           AND connector_key = 'telegram'
+           AND account_key = ?`,
+        [JSON.stringify(next), new Date().toISOString(), input.tenantId, next.account_key],
+      );
+    } catch (err) {
+      if (next.webhook_secret && isUniqueViolation(err)) {
+        throw await this.createTelegramWebhookSecretConflictError({
+          tenantId: input.tenantId,
+          webhookSecret: next.webhook_secret,
+          accountKey: next.account_key,
+        });
+      }
+      throw err;
+    }
     return next;
   }
 
@@ -346,19 +370,42 @@ export class ChannelConfigDal {
     webhookSecret?: string;
     accountKey?: string;
   }): Promise<void> {
+    const conflict = await this.findTelegramWebhookSecretConflict(input);
+    if (conflict) {
+      throw this.formatTelegramWebhookSecretConflictError(conflict.account_key);
+    }
+  }
+
+  private async findTelegramWebhookSecretConflict(input: {
+    tenantId: string;
+    webhookSecret?: string;
+    accountKey?: string;
+  }): Promise<StoredTelegramChannelConfig | undefined> {
     const secret = input.webhookSecret?.trim();
-    if (!secret) return;
+    if (!secret) return undefined;
 
     const configs = await this.listTelegram(input.tenantId);
-    const conflict = configs.find(
+    return configs.find(
       (config) =>
         config.account_key !== input.accountKey &&
         webhookSecretsEqual(config.webhook_secret, secret),
     );
-    if (conflict) {
-      throw new Error(
-        `telegram webhook secret is already used by account '${conflict.account_key}'`,
-      );
-    }
+  }
+
+  private async createTelegramWebhookSecretConflictError(input: {
+    tenantId: string;
+    webhookSecret: string;
+    accountKey?: string;
+  }): Promise<Error> {
+    const conflict = await this.findTelegramWebhookSecretConflict(input);
+    return this.formatTelegramWebhookSecretConflictError(conflict?.account_key);
+  }
+
+  private formatTelegramWebhookSecretConflictError(accountKey?: string): Error {
+    return new Error(
+      accountKey
+        ? `telegram webhook secret is already used by account '${accountKey}'`
+        : "telegram webhook secret is already used by another account",
+    );
   }
 }

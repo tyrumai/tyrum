@@ -51,50 +51,57 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
         Boolean(account.webhook_secret?.trim()),
       );
 
-      if (botBackedAccounts.length > 0) {
-        if (botBackedAccountsWithSecret.length === 0) {
-          return c.json(
-            {
-              error: "misconfigured",
-              message:
-                "Telegram webhook secret must be configured when Telegram ingress is enabled.",
-            },
-            503,
-          );
-        }
-
-        const providedSecret = c.req.header(TELEGRAM_SECRET_HEADER);
-        if (!providedSecret) {
-          return c.json({ error: "unauthorized", message: "invalid telegram webhook secret" }, 401);
-        }
-
-        const matchedAccount = await deps.telegramRuntime.getTelegramAccountByWebhookSecret({
-          tenantId: DEFAULT_TENANT_ID,
-          webhookSecret: providedSecret,
-        });
-        if (!matchedAccount || !matchedAccount.webhook_secret) {
-          return c.json({ error: "unauthorized", message: "invalid telegram webhook secret" }, 401);
-        }
-
-        const matchedBot = await deps.telegramRuntime.getBotForAccount({
-          tenantId: DEFAULT_TENANT_ID,
-          accountKey: matchedAccount.account_key,
-        });
-        if (!matchedBot) {
-          return c.json(
-            {
-              error: "misconfigured",
-              message: "Telegram bot token must be configured when Telegram ingress is enabled.",
-            },
-            503,
-          );
-        }
-
-        telegramBot = matchedBot;
-        telegramAllowedUserIds = matchedAccount.allowed_user_ids;
-        telegramAccountKey = matchedAccount.account_key;
-        telegramPipelineEnabled = matchedAccount.pipeline_enabled ?? true;
+      if (botBackedAccounts.length === 0) {
+        return c.json(
+          {
+            error: "misconfigured",
+            message: "Telegram bot token must be configured when Telegram ingress is enabled.",
+          },
+          503,
+        );
       }
+
+      if (botBackedAccountsWithSecret.length === 0) {
+        return c.json(
+          {
+            error: "misconfigured",
+            message: "Telegram webhook secret must be configured when Telegram ingress is enabled.",
+          },
+          503,
+        );
+      }
+
+      const providedSecret = c.req.header(TELEGRAM_SECRET_HEADER);
+      if (!providedSecret) {
+        return c.json({ error: "unauthorized", message: "invalid telegram webhook secret" }, 401);
+      }
+
+      const matchedAccount = await deps.telegramRuntime.getTelegramAccountByWebhookSecret({
+        tenantId: DEFAULT_TENANT_ID,
+        webhookSecret: providedSecret,
+      });
+      if (!matchedAccount || !matchedAccount.webhook_secret) {
+        return c.json({ error: "unauthorized", message: "invalid telegram webhook secret" }, 401);
+      }
+
+      const matchedBot = await deps.telegramRuntime.getBotForAccount({
+        tenantId: DEFAULT_TENANT_ID,
+        accountKey: matchedAccount.account_key,
+      });
+      if (!matchedBot) {
+        return c.json(
+          {
+            error: "misconfigured",
+            message: "Telegram bot token must be configured when Telegram ingress is enabled.",
+          },
+          503,
+        );
+      }
+
+      telegramBot = matchedBot;
+      telegramAllowedUserIds = matchedAccount.allowed_user_ids;
+      telegramAccountKey = matchedAccount.account_key;
+      telegramPipelineEnabled = matchedAccount.pipeline_enabled ?? true;
     } else if (deps.telegramBot) {
       // When Telegram integration is enabled, require Telegram webhook secret validation.
       const expectedSecret = deps.telegramWebhookSecret?.trim();

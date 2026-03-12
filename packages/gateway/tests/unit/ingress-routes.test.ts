@@ -119,4 +119,49 @@ describe("Ingress routes", () => {
     expect(enqueue).toHaveBeenCalledOnce();
     expect(getTelegramAccountByAccountKey).not.toHaveBeenCalled();
   });
+
+  it("rejects runtime ingress when no bot-backed telegram accounts are configured", async () => {
+    const getTelegramAccountByWebhookSecret = vi.fn(async () => undefined);
+    const app = new Hono().route(
+      "/",
+      createIngressRoutes({
+        telegramRuntime: {
+          listTelegramAccounts: vi.fn(async () => [
+            {
+              account_key: "work",
+              webhook_secret: "secret-work",
+              allowed_user_ids: [],
+              pipeline_enabled: true,
+            },
+          ]),
+          getTelegramAccountByWebhookSecret,
+          getBotForAccount: vi.fn(async () => undefined),
+        } as any,
+      }),
+    );
+
+    const res = await app.request("/ingress/telegram", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-telegram-bot-api-secret-token": "secret-work",
+      },
+      body: JSON.stringify({
+        update_id: 1,
+        message: {
+          message_id: 1,
+          date: 1_700_000_000,
+          chat: { id: 123, type: "private" },
+          text: "hi",
+        },
+      }),
+    });
+
+    expect(res.status).toBe(503);
+    await expect(res.json()).resolves.toMatchObject({
+      error: "misconfigured",
+      message: "Telegram bot token must be configured when Telegram ingress is enabled.",
+    });
+    expect(getTelegramAccountByWebhookSecret).not.toHaveBeenCalled();
+  });
 });

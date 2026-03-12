@@ -216,4 +216,67 @@ describe("JSON column integrity (sqlite vs postgres)", () => {
       await close();
     }
   });
+
+  it("enforces tenant-scoped unique telegram webhook secrets", async () => {
+    const firstConfigJson = JSON.stringify({
+      channel: "telegram",
+      account_key: "work",
+      webhook_secret: "shared-secret",
+      allowed_user_ids: [],
+      pipeline_enabled: true,
+    });
+    const secondConfigJson = JSON.stringify({
+      channel: "telegram",
+      account_key: "personal",
+      webhook_secret: "shared-secret",
+      allowed_user_ids: [],
+      pipeline_enabled: true,
+    });
+
+    const sqlite = createDatabase(":memory:");
+    try {
+      migrate(sqlite, sqliteMigrationsDir);
+
+      expect(() =>
+        sqlite
+          .prepare(
+            `INSERT INTO channel_configs (tenant_id, connector_key, account_key, config_json)
+             VALUES (?, 'telegram', ?, ?)`,
+          )
+          .run(DEFAULT_TENANT_ID, "work", firstConfigJson),
+      ).not.toThrow();
+
+      expect(() =>
+        sqlite
+          .prepare(
+            `INSERT INTO channel_configs (tenant_id, connector_key, account_key, config_json)
+             VALUES (?, 'telegram', ?, ?)`,
+          )
+          .run(DEFAULT_TENANT_ID, "personal", secondConfigJson),
+      ).toThrow();
+    } finally {
+      sqlite.close();
+    }
+
+    const { db, close } = await openTestPostgresDb();
+    try {
+      await expect(
+        db.run(
+          `INSERT INTO channel_configs (tenant_id, connector_key, account_key, config_json)
+           VALUES (?, 'telegram', ?, ?)`,
+          [DEFAULT_TENANT_ID, "work", firstConfigJson],
+        ),
+      ).resolves.toBeDefined();
+
+      await expect(
+        db.run(
+          `INSERT INTO channel_configs (tenant_id, connector_key, account_key, config_json)
+           VALUES (?, 'telegram', ?, ?)`,
+          [DEFAULT_TENANT_ID, "personal", secondConfigJson],
+        ),
+      ).rejects.toThrow();
+    } finally {
+      await close();
+    }
+  });
 });

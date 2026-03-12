@@ -114,6 +114,33 @@ describe("ChannelConfigDal", () => {
     expect(secureStringEqual).toHaveBeenCalledWith("exact-secret", "exact-secret");
   });
 
+  it("returns the first matching telegram account while still checking all secrets", async () => {
+    vi.spyOn(dal, "listTelegram").mockResolvedValue([
+      {
+        channel: "telegram",
+        account_key: "alpha",
+        webhook_secret: "shared-secret",
+        allowed_user_ids: [],
+        pipeline_enabled: true,
+      },
+      {
+        channel: "telegram",
+        account_key: "omega",
+        webhook_secret: "shared-secret",
+        allowed_user_ids: [],
+        pipeline_enabled: true,
+      },
+    ]);
+
+    await expect(
+      dal.getTelegramByWebhookSecret({
+        tenantId: DEFAULT_TENANT_ID,
+        webhookSecret: "shared-secret",
+      }),
+    ).resolves.toMatchObject({ account_key: "alpha" });
+    expect(secureStringEqual).toHaveBeenCalledTimes(2);
+  });
+
   it("imports the legacy singleton telegram deployment config into the default account once", async () => {
     await db.run(
       `INSERT INTO deployment_configs (config_json, created_by_json, reason)
