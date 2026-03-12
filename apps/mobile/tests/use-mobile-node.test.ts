@@ -481,4 +481,43 @@ describe("useMobileNode", () => {
     expect(disconnectMock).toHaveBeenCalledTimes(2);
     container.remove();
   });
+
+  it("does not crash when location streaming config is missing at runtime", async () => {
+    const { useMobileNode } = await import("../src/use-mobile-node.js");
+    const { container, root } = createTestRoot();
+
+    const malformedConfig = {
+      httpBaseUrl: "http://127.0.0.1:8788",
+      wsUrl: "ws://127.0.0.1:8788/ws",
+      nodeEnabled: true,
+      actionSettings: {
+        "location.get_current": true,
+        "camera.capture_photo": true,
+        "audio.record_clip": true,
+      },
+    } as unknown as MobileConnectionConfig;
+
+    const Probe = () => {
+      useMobileNode({
+        config: malformedConfig,
+        token: "token-1",
+        updateConfig: updateConfigMock,
+      });
+      return null;
+    };
+
+    await act(async () => {
+      root.render(React.createElement(Probe));
+      await flushMicrotasks();
+    });
+
+    expect(connectMock).toHaveBeenCalledTimes(1);
+    expect(locationStreamStartMock).not.toHaveBeenCalled();
+
+    act(() => {
+      root.unmount();
+    });
+
+    container.remove();
+  });
 });

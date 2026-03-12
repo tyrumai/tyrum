@@ -45,7 +45,7 @@ export { DesktopDisplayTarget, DesktopElementRef, DesktopWindowRef, DesktopBacke
 // prettier-ignore
 export { BrowserGeolocationGetArgs, BrowserCameraFacingMode, BrowserCameraCapturePhotoFormat, BrowserCameraCapturePhotoArgs, BrowserMicrophoneRecordArgs, BrowserActionArgs, BrowserGeolocationCoords, BrowserGeolocationGetResult, BrowserCameraCapturePhotoResult, BrowserMicrophoneRecordResult, BrowserActionResult } from "./browser.js";
 // prettier-ignore
-export { LocationPlaceId, LocationSampleId, LocationEventId, LocationTriggerId, LocationPoint, LocationCoords, LocationSampleSource, LocationPoiProviderKind, LocationProfile, LocationProfileUpdateRequest, LocationPlaceSource, LocationPlace, LocationPlaceCreateRequest, LocationPlacePatchRequest, LocationSample, LocationBeacon, LocationEventType, LocationEventTransition, LocationEvent, LocationBeaconResult } from "./location.js";
+export { LocationPlaceId, LocationSampleId, LocationEventId, LocationTriggerId, LocationPoint, LocationCoords, haversineDistanceMeters, LocationSampleSource, LocationPoiProviderKind, LocationProfile, LocationProfileUpdateRequest, LocationPlaceSource, LocationPlace, LocationPlaceCreateRequest, LocationPlacePatchRequest, LocationSample, LocationBeacon, LocationEventType, LocationEventTransition, LocationEvent, LocationBeaconResult } from "./location.js";
 // prettier-ignore
 export { WsLocationBeaconPayload, WsLocationBeaconRequest, WsLocationBeaconResult, WsLocationBeaconResponseOkEnvelope, WsLocationBeaconResponseErrEnvelope, WsLocationBeaconResponseEnvelope } from "./protocol/location.js";
 // prettier-ignore

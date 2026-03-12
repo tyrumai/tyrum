@@ -73,19 +73,22 @@ export function useMobileNode(options: UseMobileNodeOptions): {
   const [reloadVersion, setReloadVersion] = useState(0);
   const enabled = config?.nodeEnabled ?? false;
   const wsUrl = config?.wsUrl ?? null;
+  const actionSettings = config?.actionSettings;
+  const locationStreaming = config?.locationStreaming;
+  const locationActionEnabled = actionSettings?.["location.get_current"] ?? false;
   const actionStates = useMemo(
     () =>
       resolveMobileActionStates(
-        config?.actionSettings ?? {
+        actionSettings ?? {
           "location.get_current": true,
           "camera.capture_photo": true,
           "audio.record_clip": true,
         },
       ),
     [
-      config?.actionSettings["audio.record_clip"],
-      config?.actionSettings["camera.capture_photo"],
-      config?.actionSettings["location.get_current"],
+      actionSettings?.["audio.record_clip"],
+      actionSettings?.["camera.capture_photo"],
+      actionSettings?.["location.get_current"],
     ],
   );
 
@@ -260,8 +263,6 @@ export function useMobileNode(options: UseMobileNodeOptions): {
     const locationStream = locationStreamRef.current;
     if (!locationStream) return;
 
-    const locationStreaming = config?.locationStreaming;
-    const locationActionEnabled = config?.actionSettings["location.get_current"] ?? false;
     if (
       status !== "connected" ||
       !enabled ||
@@ -278,12 +279,12 @@ export function useMobileNode(options: UseMobileNodeOptions): {
       void locationStream.stop();
     };
   }, [
-    config?.actionSettings["location.get_current"],
-    config?.locationStreaming.backgroundEnabled,
-    config?.locationStreaming.distanceFilterM,
-    config?.locationStreaming.maxAccuracyM,
-    config?.locationStreaming.maxIntervalMs,
-    config?.locationStreaming.streamEnabled,
+    locationActionEnabled,
+    locationStreaming?.backgroundEnabled,
+    locationStreaming?.distanceFilterM,
+    locationStreaming?.maxAccuracyM,
+    locationStreaming?.maxIntervalMs,
+    locationStreaming?.streamEnabled,
     enabled,
     status,
   ]);
