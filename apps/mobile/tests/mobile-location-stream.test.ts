@@ -236,6 +236,60 @@ describe("createMobileLocationBeaconStream", () => {
     );
   });
 
+  it("restores the last sent baseline when a queued beacon is blocked in background", async () => {
+    let resolveFirstBeacon: (() => void) | null = null;
+    const locationBeacon = vi
+      .fn<() => Promise<{ sample: object; events: never[] }>>()
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFirstBeacon = () => resolve({ sample: {}, events: [] });
+          }),
+      )
+      .mockResolvedValue({ sample: {}, events: [] });
+    const { createMobileLocationBeaconStream } = await import("../src/mobile-location-stream.js");
+    const stream = createMobileLocationBeaconStream({
+      client: { locationBeacon } as never,
+    });
+
+    await stream.start({
+      streamEnabled: true,
+      distanceFilterM: 100,
+      maxIntervalMs: 900_000,
+      maxAccuracyM: 100,
+      backgroundEnabled: false,
+    });
+
+    Object.defineProperty(document, "hidden", {
+      configurable: true,
+      value: false,
+    });
+    emit(buildPosition(52.3676, 4.9041, "2026-03-11T12:00:00Z"));
+    await flushMicrotasks();
+    expect(locationBeacon).toHaveBeenCalledTimes(1);
+
+    emit(buildPosition(52.3698, 4.9078, "2026-03-11T12:01:00Z"));
+    await flushMicrotasks();
+    expect(locationBeacon).toHaveBeenCalledTimes(1);
+
+    Object.defineProperty(document, "hidden", {
+      configurable: true,
+      value: true,
+    });
+    resolveFirstBeacon?.();
+    await flushMicrotasks(20);
+    expect(locationBeacon).toHaveBeenCalledTimes(1);
+
+    Object.defineProperty(document, "hidden", {
+      configurable: true,
+      value: false,
+    });
+    emit(buildPosition(52.36985, 4.90785, "2026-03-11T12:02:00Z"));
+    await flushMicrotasks(20);
+
+    expect(locationBeacon).toHaveBeenCalledTimes(2);
+  });
+
   it("clears a stale native watch when stop and restart overlap an in-flight start", async () => {
     const firstWatch = createDeferred<string>();
     watchPositionMock

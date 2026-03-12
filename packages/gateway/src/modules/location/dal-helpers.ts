@@ -134,10 +134,10 @@ function toCoords(
     latitude: raw.latitude,
     longitude: raw.longitude,
     accuracy_m: raw.accuracy_m,
-    altitude_m: raw.altitude_m ?? undefined,
-    altitude_accuracy_m: raw.altitude_accuracy_m ?? undefined,
-    heading_deg: raw.heading_deg ?? undefined,
-    speed_mps: raw.speed_mps ?? undefined,
+    altitude_m: raw.altitude_m,
+    altitude_accuracy_m: raw.altitude_accuracy_m,
+    heading_deg: raw.heading_deg,
+    speed_mps: raw.speed_mps,
   };
 }
 
@@ -218,7 +218,7 @@ export function toLocationEvent(
     place_name: row.place_name,
     provider_place_id: row.provider_place_id,
     category_key: row.category_key,
-    distance_m: row.distance_m ?? undefined,
+    distance_m: row.distance_m,
     coords: toCoords(row),
     metadata: parseObject(row.metadata_json, "location_events", "metadata_json", observer),
   };

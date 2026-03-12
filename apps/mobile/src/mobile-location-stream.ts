@@ -69,6 +69,12 @@ export function createMobileLocationBeaconStream(
     lastQueuedSample = null;
   };
 
+  const restoreQueuedBaseline = (sample: SentSample): void => {
+    if (lastQueuedSample === sample) {
+      lastQueuedSample = lastSentSample;
+    }
+  };
+
   const buildNativeWatchOptions = (config: MobileLocationStreamingConfig): NativeWatchOptions => ({
     timeout: config.maxIntervalMs,
     maximumAge: Math.min(config.maxIntervalMs, 60_000),
@@ -198,14 +204,13 @@ export function createMobileLocationBeaconStream(
       .catch(() => {})
       .then(async () => {
         if (!activeConfig || isBackgroundBlocked(activeConfig)) {
+          restoreQueuedBaseline(nextSample);
           return;
         }
         try {
           await emitBeacon(nextSample);
         } catch (sendError) {
-          if (lastQueuedSample === nextSample) {
-            lastQueuedSample = lastSentSample;
-          }
+          restoreQueuedBaseline(nextSample);
           throw sendError;
         }
       })
