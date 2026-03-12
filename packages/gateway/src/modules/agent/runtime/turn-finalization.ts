@@ -183,7 +183,7 @@ async function writeTurnSignalMemory(input: {
                 kind: "procedure",
                 title: memory.title,
                 body_md: memory.body_md,
-                confidence: memory.confidence,
+                confidence: memory.confidence ?? 1,
                 tags,
                 sensitivity: "private",
                 provenance,

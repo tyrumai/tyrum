@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { asSchema } from "ai";
 import type { GatewayContainer } from "../../src/container.js";
+import { createTurnMemoryDecisionCollector } from "../../src/modules/agent/runtime/turn-memory-policy.js";
 import {
   createToolSetBuilder,
   makeContextReport,
@@ -191,5 +193,44 @@ describe("ToolSetBuilder webfetch extraction", () => {
 
     expect(String(result)).toContain("prompt-only summary");
     expect(String(result)).not.toContain("raw crawl body");
+  });
+
+  it("publishes memory_turn_decision with an object-root input schema", async () => {
+    ({ homeDir, container } = await setupTestEnv());
+
+    const toolSetBuilder = createToolSetBuilder({
+      home: homeDir,
+      container,
+      policyService: {
+        isEnabled: () => false,
+        isObserveOnly: () => false,
+      },
+    });
+
+    const toolSet = toolSetBuilder.buildToolSet(
+      [],
+      { execute: vi.fn() } as never,
+      new Set<string>(),
+      {
+        planId: "plan-1",
+        sessionId: "session-1",
+        channel: "test",
+        threadId: "thread-1",
+      },
+      makeContextReport() as never,
+      undefined,
+      undefined,
+      undefined,
+      createTurnMemoryDecisionCollector(),
+    );
+
+    const inputSchema = await asSchema(toolSet["memory_turn_decision"]?.inputSchema).jsonSchema;
+
+    expect(inputSchema).toEqual(
+      expect.objectContaining({
+        type: "object",
+        oneOf: expect.any(Array),
+      }),
+    );
   });
 });
