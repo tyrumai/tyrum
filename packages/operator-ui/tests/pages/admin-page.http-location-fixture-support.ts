@@ -20,7 +20,7 @@ export function createLocationFixture(testTimestamp: string): {
         status: "ok",
         profile: {
           primary_node_id: "mobile-node-1",
-          poi_provider_key: "geoapify",
+          poi_provider_key: "osm_overpass",
           updated_at: testTimestamp,
         },
       }) as unknown,
@@ -102,7 +102,7 @@ export function createLocationFixture(testTimestamp: string): {
             status: "ok",
             profile: {
               primary_node_id: "mobile-node-1",
-              poi_provider_key: "geoapify",
+              poi_provider_key: "osm_overpass",
               updated_at: testTimestamp,
             },
           }) as unknown,

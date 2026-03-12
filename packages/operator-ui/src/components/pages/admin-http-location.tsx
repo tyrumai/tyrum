@@ -12,6 +12,7 @@ import {
   type LocationHttpApi,
   type LocationPlace,
   type LocationProfile,
+  normalizeOptionalPoiProviderKey,
   normalizeOptionalText,
   parseTags,
   toPlaceDraft,
@@ -94,7 +95,7 @@ export function AdminHttpLocationPanel({ core }: { core: OperatorCore }) {
     try {
       const response = await locationHttp.updateProfile({
         primary_node_id: normalizeOptionalText(profileDraft.primaryNodeId),
-        poi_provider_key: normalizeOptionalText(profileDraft.poiProviderKey),
+        poi_provider_key: normalizeOptionalPoiProviderKey(profileDraft.poiProviderKey),
       });
       setProfile(response.profile);
       setProfileDraft(toProfileDraft(response.profile));

@@ -28,7 +28,7 @@ function stubLocationFetch() {
   const state = {
     profile: {
       primary_node_id: "mobile-node-1",
-      poi_provider_key: "geoapify",
+      poi_provider_key: "osm_overpass",
       updated_at: "2026-03-01T00:00:00.000Z",
     },
     places: [
@@ -112,7 +112,7 @@ describe("ConfigurePage (HTTP) location", () => {
     expect(page.container.textContent).toContain("Location profile");
     expect(page.container.textContent).toContain("Home");
     expect(getLabeledSelect(page.container, "Primary tracked node").value).toBe("mobile-node-1");
-    expect(getLabeledInput(page.container, "POI provider key").value).toBe("geoapify");
+    expect(getLabeledSelect(page.container, "POI provider").value).toBe("osm_overpass");
 
     cleanupAdminHttpPage(page);
   });
@@ -125,9 +125,7 @@ describe("ConfigurePage (HTTP) location", () => {
     await openLocationTab(page.container);
 
     setSelectValue(getLabeledSelect(page.container, "Primary tracked node"), "mobile-node-2");
-    act(() => {
-      setNativeValue(getLabeledInput(page.container, "POI provider key"), "foursquare");
-    });
+    setSelectValue(getLabeledSelect(page.container, "POI provider"), "osm_overpass");
     await flush();
     await clickAndFlush(getByTestId<HTMLButtonElement>(page.container, "location-profile-save"));
 
@@ -137,7 +135,7 @@ describe("ConfigurePage (HTTP) location", () => {
         method: "PATCH",
         body: JSON.stringify({
           primary_node_id: "mobile-node-2",
-          poi_provider_key: "foursquare",
+          poi_provider_key: "osm_overpass",
         }),
       }),
     );

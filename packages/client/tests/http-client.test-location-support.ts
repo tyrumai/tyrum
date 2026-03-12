@@ -1,5 +1,6 @@
 import { expect, it, vi } from "vitest";
 import type { RequestInit } from "undici";
+import type { LocationProfileUpdateInput } from "../src/http/location.js";
 import { createTestClient, jsonResponse, makeFetchMock } from "./http-client.test-support.js";
 
 export function registerHttpClientLocationTests(): void {
@@ -156,7 +157,7 @@ export function registerHttpClientLocationTests(): void {
         status: "ok",
         profile: {
           primary_node_id: "mobile-node-1",
-          poi_provider_key: "geoapify",
+          poi_provider_key: "osm_overpass",
           updated_at: "2026-03-01T00:00:00.000Z",
         },
       }),
@@ -165,11 +166,11 @@ export function registerHttpClientLocationTests(): void {
 
     const result = await client.location?.updateProfile({
       primary_node_id: "mobile-node-1",
-      poi_provider_key: "geoapify",
+      poi_provider_key: "osm_overpass",
     });
 
     expect(result?.profile.primary_node_id).toBe("mobile-node-1");
-    expect(result?.profile.poi_provider_key).toBe("geoapify");
+    expect(result?.profile.poi_provider_key).toBe("osm_overpass");
 
     const [url, init] = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [
       string,
@@ -179,7 +180,7 @@ export function registerHttpClientLocationTests(): void {
     expect(init.method).toBe("PATCH");
     expect(JSON.parse(String(init.body))).toEqual({
       primary_node_id: "mobile-node-1",
-      poi_provider_key: "geoapify",
+      poi_provider_key: "osm_overpass",
     });
   });
 
@@ -188,6 +189,19 @@ export function registerHttpClientLocationTests(): void {
     const client = createTestClient({ fetch });
 
     await expect(client.location?.updateProfile({ primary_node_id: undefined })).rejects.toThrow(
+      "location profile update request",
+    );
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("rejects an unsupported location profile provider key before sending", async () => {
+    const fetch = makeFetchMock(async () => jsonResponse({ status: "ok" }));
+    const client = createTestClient({ fetch });
+    const invalidInput = {
+      poi_provider_key: "geoapify",
+    } as unknown as LocationProfileUpdateInput;
+
+    await expect(client.location?.updateProfile(invalidInput)).rejects.toThrow(
       "location profile update request",
     );
     expect(fetch).not.toHaveBeenCalled();

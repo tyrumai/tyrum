@@ -14,7 +14,7 @@ const RadiusMeters = z.number().finite().positive().max(100_000);
 const PlaceSource = z.enum(["manual", "provider"]);
 const PlaceId = NonEmptyString;
 const NodeId = NonEmptyString;
-const ProviderKey = NonEmptyString;
+const PoiProviderKey = z.enum(["osm_overpass"]);
 
 const PlaceTags = z.array(NonEmptyString);
 
@@ -35,7 +35,7 @@ const LocationPlace = z
 const LocationProfile = z
   .object({
     primary_node_id: NodeId.nullable(),
-    poi_provider_key: ProviderKey.nullable().optional(),
+    poi_provider_key: PoiProviderKey.nullable().optional(),
     updated_at: DateTimeSchema.nullable().optional(),
   })
   .strict();
@@ -106,7 +106,7 @@ const LocationPlaceUpdateRequest = z
 const LocationProfileUpdateRequest = z
   .object({
     primary_node_id: NodeId.nullable().optional(),
-    poi_provider_key: ProviderKey.nullable().optional(),
+    poi_provider_key: PoiProviderKey.nullable().optional(),
   })
   .strict()
   .superRefine((value, ctx) => {

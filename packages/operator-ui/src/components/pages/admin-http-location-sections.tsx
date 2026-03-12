@@ -30,9 +30,16 @@ export type LocationPlace = {
   updated_at: string;
 };
 
+export type PoiProviderKey = "osm_overpass";
+
+export type ProfileDraft = {
+  primaryNodeId: string;
+  poiProviderKey: "" | PoiProviderKey;
+};
+
 export type LocationProfile = {
   primary_node_id: string | null;
-  poi_provider_key?: string | null;
+  poi_provider_key?: PoiProviderKey | null;
   updated_at?: string | null;
 };
 
@@ -59,7 +66,7 @@ export type LocationHttpApi = {
   getProfile: () => Promise<{ profile: LocationProfile }>;
   updateProfile: (input: {
     primary_node_id: string | null;
-    poi_provider_key: string | null;
+    poi_provider_key: PoiProviderKey | null;
   }) => Promise<{ profile: LocationProfile }>;
 };
 
@@ -93,11 +100,18 @@ export function toPlaceDraft(place: LocationPlace): PlaceDraft {
   };
 }
 
-export function toProfileDraft(profile: LocationProfile | null) {
+export function toProfileDraft(profile: LocationProfile | null): ProfileDraft {
+  const poiProviderKey = profile?.poi_provider_key ?? "";
   return {
     primaryNodeId: profile?.primary_node_id ?? "",
-    poiProviderKey: profile?.poi_provider_key ?? "",
+    poiProviderKey,
   };
+}
+
+export function normalizeOptionalPoiProviderKey(
+  value: ProfileDraft["poiProviderKey"],
+): PoiProviderKey | null {
+  return value === "" ? null : value;
 }
 
 export function validatePlaceDraft(draft: PlaceDraft): string | null {
@@ -132,8 +146,8 @@ export function LocationProfileCard(props: {
   nodes: NodeInventoryEntry[];
   profile: LocationProfile | null;
   profileDirty: boolean;
-  profileDraft: ReturnType<typeof toProfileDraft>;
-  onDraftChange: (patch: Partial<ReturnType<typeof toProfileDraft>>) => void;
+  profileDraft: ProfileDraft;
+  onDraftChange: (patch: Partial<ProfileDraft>) => void;
   onRefresh: () => void;
   onSave: () => void;
 }) {
@@ -142,7 +156,7 @@ export function LocationProfileCard(props: {
       <CardHeader className="pb-2.5">
         <div className="text-sm font-medium text-fg">Location profile</div>
         <div className="text-sm text-fg-muted">
-          Choose the primary tracked node and the external POI/category provider key.
+          Choose the primary tracked node and the POI provider used for category lookups.
         </div>
       </CardHeader>
       <CardContent className="grid gap-4">
@@ -164,16 +178,20 @@ export function LocationProfileCard(props: {
             ))}
           </Select>
 
-          <Input
-            label="POI provider key"
+          <Select
+            label="POI provider"
             data-testid="location-profile-poi-provider"
-            placeholder="geoapify"
             value={props.profileDraft.poiProviderKey}
             disabled={props.loading || props.busyKey !== null}
             onChange={(event) => {
-              props.onDraftChange({ poiProviderKey: event.currentTarget.value });
+              props.onDraftChange({
+                poiProviderKey: event.currentTarget.value as ProfileDraft["poiProviderKey"],
+              });
             }}
-          />
+          >
+            <option value="">Disabled</option>
+            <option value="osm_overpass">OpenStreetMap Overpass</option>
+          </Select>
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3">
