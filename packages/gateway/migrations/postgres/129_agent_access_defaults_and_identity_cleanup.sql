@@ -69,7 +69,32 @@ SET config_json = jsonb_set(
       'default_mode',
       'deny',
       'allow',
-      '["read","write","edit","apply_patch","glob","grep"]'::jsonb,
+      COALESCE(
+        (
+          SELECT jsonb_agg(entry.id ORDER BY entry.order_key)
+          FROM (
+            SELECT expanded.id, MIN(expanded.order_key) AS order_key
+            FROM (
+              SELECT fs.id, (tool.ordinality * 10) + fs.ordinality AS order_key
+              FROM jsonb_array_elements_text(
+                     COALESCE(config_json::jsonb -> 'tools' -> 'allow', '[]'::jsonb)
+                   ) WITH ORDINALITY AS tool(id, ordinality)
+              CROSS JOIN LATERAL jsonb_array_elements_text(
+                '["read","write","edit","apply_patch","glob","grep"]'::jsonb
+              ) WITH ORDINALITY AS fs(id, ordinality)
+              WHERE btrim(tool.id) = 'tool.fs.*'
+              UNION ALL
+              SELECT btrim(tool.id) AS id, tool.ordinality * 10 AS order_key
+              FROM jsonb_array_elements_text(
+                     COALESCE(config_json::jsonb -> 'tools' -> 'allow', '[]'::jsonb)
+                   ) WITH ORDINALITY AS tool(id, ordinality)
+              WHERE btrim(tool.id) <> 'tool.fs.*'
+            ) AS expanded
+            GROUP BY expanded.id
+          ) AS entry
+        ),
+        '[]'::jsonb
+      ),
       'deny',
       '[]'::jsonb
     )

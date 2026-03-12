@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   AgentConfig,
+  AgentCapabilitiesResponse,
   IdentityPack,
   SkillManifest,
   McpServerSpec,
@@ -130,6 +131,34 @@ describe("AgentConfig", () => {
     expect(parsed.tools.default_mode).toBe("allow");
     expect(parsed.tools.allow).toEqual([]);
     expect(parsed.tools.deny).toEqual([]);
+  });
+});
+
+describe("AgentCapabilitiesResponse", () => {
+  it("parses workspace skill trust in capability payloads", () => {
+    const parsed = AgentCapabilitiesResponse.parse({
+      skills: {
+        default_mode: "allow",
+        allow: [],
+        deny: [],
+        workspace_trusted: true,
+        items: [],
+      },
+      mcp: {
+        default_mode: "allow",
+        allow: [],
+        deny: [],
+        items: [],
+      },
+      tools: {
+        default_mode: "allow",
+        allow: [],
+        deny: [],
+        items: [],
+      },
+    });
+
+    expect(parsed.skills.workspace_trusted).toBe(true);
   });
 });
 

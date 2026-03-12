@@ -64,7 +64,34 @@ SET config_json = json_set(
       'default_mode',
       'deny',
       'allow',
-      json('["read","write","edit","apply_patch","glob","grep"]'),
+      json(
+        COALESCE(
+          (
+            SELECT json_group_array(entry.id)
+            FROM (
+              SELECT deduped.id
+              FROM (
+                SELECT expanded.id, MIN(expanded.order_key) AS order_key
+                FROM (
+                  SELECT trim(CAST(fs.value AS TEXT)) AS id,
+                         (CAST(tool.key AS INTEGER) * 10) + CAST(fs.key AS INTEGER) AS order_key
+                  FROM json_each(COALESCE(json_extract(config_json, '$.tools.allow'), '[]')) AS tool
+                  JOIN json_each('["read","write","edit","apply_patch","glob","grep"]') AS fs
+                  WHERE trim(CAST(tool.value AS TEXT)) = 'tool.fs.*'
+                  UNION ALL
+                  SELECT trim(CAST(tool.value AS TEXT)) AS id,
+                         CAST(tool.key AS INTEGER) * 10 AS order_key
+                  FROM json_each(COALESCE(json_extract(config_json, '$.tools.allow'), '[]')) AS tool
+                  WHERE trim(CAST(tool.value AS TEXT)) <> 'tool.fs.*'
+                ) AS expanded
+                GROUP BY expanded.id
+              ) AS deduped
+              ORDER BY deduped.order_key
+            ) AS entry
+          ),
+          '[]'
+        )
+      ),
       'deny',
       json('[]')
     )

@@ -47,6 +47,7 @@ import type { McpManager } from "../mcp-manager.js";
 import type { ApprovalNotifier } from "../../approval/notifier.js";
 import type { PluginRegistry } from "../../plugins/registry.js";
 import type { PolicyService } from "../../policy/service.js";
+import { wildcardMatch } from "../../policy/wildcard.js";
 
 export interface TurnPreparationRuntimeDeps extends PrepareTurnHelperDeps {
   home: string;
@@ -195,6 +196,21 @@ export function assemblePrompts(
   };
 }
 
+function canDiscoverMcpTools(toolConfig: AgentLoadedContext["config"]["tools"]): boolean {
+  if (toolConfig.default_mode === "allow") {
+    return true;
+  }
+
+  return toolConfig.allow.some((entry) => {
+    const normalized = entry.trim();
+    return (
+      normalized === "*" ||
+      normalized.startsWith("mcp.") ||
+      wildcardMatch(normalized, "mcp.calendar.tool")
+    );
+  });
+}
+
 export async function resolveIdentityAndContext(
   deps: TurnPreparationRuntimeDeps,
   input: AgentTurnRequestT,
@@ -284,7 +300,9 @@ export async function resolveToolsAndMemory(
 
   const [memoryDigestResult, mcpTools] = await Promise.all([
     memoryDigestPromise,
-    deps.mcpManager.listToolDescriptors(ctx.mcpServers),
+    canDiscoverMcpTools(ctx.config.tools)
+      ? deps.mcpManager.listToolDescriptors(ctx.mcpServers)
+      : Promise.resolve([]),
   ]);
   const toolSetBuilder = new ToolSetBuilder({
     home: deps.home,

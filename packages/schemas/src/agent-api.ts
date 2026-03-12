@@ -284,20 +284,25 @@ export const AgentToolCapability = z
   .strict();
 export type AgentToolCapability = z.infer<typeof AgentToolCapability>;
 
-function capabilitySection<TItem extends z.ZodTypeAny>(itemSchema: TItem) {
-  return z
-    .object({
-      default_mode: AgentAccessDefaultMode,
-      allow: z.array(z.string().trim().min(1)),
-      deny: z.array(z.string().trim().min(1)),
-      items: z.array(itemSchema),
-    })
-    .strict();
+function capabilitySection<TItem extends z.ZodTypeAny, TExtra extends z.ZodRawShape = {}>(
+  itemSchema: TItem,
+  extraShape?: TExtra,
+) {
+  const baseShape = {
+    default_mode: AgentAccessDefaultMode,
+    allow: z.array(z.string().trim().min(1)),
+    deny: z.array(z.string().trim().min(1)),
+    items: z.array(itemSchema),
+  };
+
+  return z.object(extraShape ? { ...baseShape, ...extraShape } : baseShape).strict();
 }
 
 export const AgentCapabilitiesResponse = z
   .object({
-    skills: capabilitySection(AgentSkillCapability),
+    skills: capabilitySection(AgentSkillCapability, {
+      workspace_trusted: z.boolean(),
+    }),
     mcp: capabilitySection(AgentMcpCapability),
     tools: capabilitySection(AgentToolCapability),
   })
