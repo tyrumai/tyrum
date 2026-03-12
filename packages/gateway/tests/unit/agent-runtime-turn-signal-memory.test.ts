@@ -1,18 +1,33 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { mkdtemp } from "node:fs/promises";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
 import type { GatewayContainer } from "../../src/container.js";
 import { createContainer } from "../../src/container.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
 import { createPromptAwareLanguageModel } from "./agent-behavior.test-support.js";
 import {
+  buildTurnMemoryDedupeKey,
+  buildTurnMemoryDedupeTag,
+} from "../../src/modules/agent/runtime/turn-memory-policy.js";
+import {
+  DEFAULT_TENANT_ID,
   fetch404,
   migrationsDir,
   seedAgentConfig,
   teardownTestEnv,
 } from "./agent-runtime.test-helpers.js";
 import { createMemoryDecisionLanguageModel } from "./stub-language-model.js";
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+const durablePreferenceDecision = {
+  should_store: true as const,
+  reason: "The turn contained a durable user preference.",
+  memory: {
+    kind: "note" as const,
+    body_md: "remember that I prefer tea",
+    tags: ["Durable-Memory"],
+  },
+};
 
 describe("AgentRuntime turn-signal memory finalization", () => {
   let homeDir: string | undefined;
@@ -24,13 +39,12 @@ describe("AgentRuntime turn-signal memory finalization", () => {
     homeDir = undefined;
   });
 
-  it("defaults auto-written procedure confidence to 1", async () => {
-    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
-    container = await createContainer({
+  async function createMemoryEnabledContainer(): Promise<GatewayContainer> {
+    const next = await createContainer({
       dbPath: ":memory:",
       migrationsDir,
     });
-    await seedAgentConfig(container, {
+    await seedAgentConfig(next, {
       config: {
         model: { model: "openai/gpt-4.1" },
         skills: { enabled: [] },
@@ -45,6 +59,12 @@ describe("AgentRuntime turn-signal memory finalization", () => {
         },
       },
     });
+    return next;
+  }
+
+  it("defaults auto-written procedure confidence to 1", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
+    container = await createMemoryEnabledContainer();
 
     const createSpy = vi.spyOn(container.memoryV1Dal, "create");
 
@@ -131,5 +151,96 @@ describe("AgentRuntime turn-signal memory finalization", () => {
 
     expect(response.memory_written).toBe(false);
     expect(createSpy).not.toHaveBeenCalled();
+  }, 10_000);
+
+  it("stores bounded auto-turn dedupe tags for turn signal memories", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
+    container = await createMemoryEnabledContainer();
+
+    const createSpy = vi.spyOn(container.memoryV1Dal, "create");
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: createMemoryDecisionLanguageModel({
+        decision: durablePreferenceDecision,
+        reply: "ok",
+      }),
+      fetchImpl: fetch404,
+    });
+
+    await runtime.turn({
+      channel: "test",
+      thread_id: "thread-1",
+      message: "remember that I prefer tea",
+    });
+
+    const noteCall = createSpy.mock.calls.find(([input]) => input?.kind === "note");
+    const dedupeTag = noteCall?.[0]?.tags.find((tag: string) => tag.startsWith("at:"));
+
+    expect(dedupeTag).toBeTruthy();
+    expect(dedupeTag?.length).toBeLessThanOrEqual(32);
+    expect(noteCall?.[0]?.tags.some((tag: string) => tag.startsWith("auto-turn:"))).toBe(false);
+  }, 10_000);
+
+  it("dedupes against legacy long auto-turn tags", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
+    container = await createMemoryEnabledContainer();
+
+    const dedupeKey = buildTurnMemoryDedupeKey(durablePreferenceDecision, "interaction");
+    const legacyDedupeTag = `auto-turn:${dedupeKey}`;
+    const agentId = await container.identityScopeDal.ensureAgentId(DEFAULT_TENANT_ID, "default");
+
+    await container.memoryV1Dal.create(
+      {
+        kind: "note",
+        body_md: durablePreferenceDecision.memory.body_md,
+        tags: ["agent-turn", "auto-turn", "durable-memory", legacyDedupeTag],
+        sensitivity: "private",
+        provenance: {
+          source_kind: "system",
+          channel: "test",
+          thread_id: "thread-1",
+          session_id: "seed-session",
+          refs: [],
+          metadata: {
+            kind: "turn_signal",
+            auto_turn: true,
+            turn_origin: "interaction",
+            reason: durablePreferenceDecision.reason,
+            dedupe_key: dedupeKey,
+          },
+        },
+      },
+      { tenantId: DEFAULT_TENANT_ID, agentId },
+    );
+
+    const createSpy = vi.spyOn(container.memoryV1Dal, "create");
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: createMemoryDecisionLanguageModel({
+        decision: durablePreferenceDecision,
+        reply: "ok",
+      }),
+      fetchImpl: fetch404,
+    });
+
+    await runtime.turn({
+      channel: "test",
+      thread_id: "thread-1",
+      message: "remember that I prefer tea",
+    });
+
+    expect(createSpy).not.toHaveBeenCalled();
+
+    const noteItems = await container.memoryV1Dal.list({
+      tenantId: DEFAULT_TENANT_ID,
+      agentId,
+      filter: { tags: [legacyDedupeTag, buildTurnMemoryDedupeTag(dedupeKey)] },
+      limit: 10,
+    });
+    expect(noteItems.items).toHaveLength(1);
   }, 10_000);
 });

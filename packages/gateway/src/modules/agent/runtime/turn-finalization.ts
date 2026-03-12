@@ -10,6 +10,7 @@ import type { SessionDal, SessionRow } from "../session-dal.js";
 import type { ResolvedAgentTurnInput } from "./turn-helpers.js";
 import type { AgentContextReport, AgentLoadedContext } from "./types.js";
 import {
+  buildTurnMemoryDedupeTag,
   buildTurnMemoryDedupeKey,
   isTurnMemoryAutoWriteEnabled,
   normalizeTurnMemoryTags,
@@ -109,13 +110,14 @@ function buildSignalMemoryTags(input: {
 async function hasExistingSignalMemory(input: {
   container: FinalizeContainer;
   session: SessionRow;
-  dedupeTag: string;
+  dedupeTags: readonly string[];
 }): Promise<boolean> {
+  if (input.dedupeTags.length === 0) return false;
   const existing = await input.container.memoryV1Dal.list({
     tenantId: input.session.tenant_id,
     agentId: input.session.agent_id,
     limit: 1,
-    filter: { tags: [input.dedupeTag] },
+    filter: { tags: [...input.dedupeTags] },
   });
   return existing.items.length > 0;
 }
@@ -129,12 +131,13 @@ async function writeTurnSignalMemory(input: {
 }): Promise<boolean> {
   const turnOrigin = resolveTurnMemoryOrigin(input.resolved.metadata);
   const dedupeKey = buildTurnMemoryDedupeKey(input.decision, turnOrigin);
-  const dedupeTag = `auto-turn:${dedupeKey}`;
+  const dedupeTag = buildTurnMemoryDedupeTag(dedupeKey);
+  const legacyDedupeTag = `auto-turn:${dedupeKey}`;
   if (
     await hasExistingSignalMemory({
       container: input.container,
       session: input.session,
-      dedupeTag,
+      dedupeTags: [dedupeTag, legacyDedupeTag],
     })
   ) {
     return false;

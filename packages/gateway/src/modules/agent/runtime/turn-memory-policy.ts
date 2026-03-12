@@ -1,7 +1,12 @@
 import { stableJsonStringify, sha256HexFromString } from "../../policy/canonical-json.js";
 import { z } from "zod";
 
-const TurnMemoryTagSchema = z.string().trim().min(1).max(32);
+export const TURN_MEMORY_TAG_MAX_LENGTH = 32;
+const TURN_MEMORY_DEDUPE_TAG_PREFIX = "at:";
+const TURN_MEMORY_DEDUPE_TAG_HASH_LENGTH =
+  TURN_MEMORY_TAG_MAX_LENGTH - TURN_MEMORY_DEDUPE_TAG_PREFIX.length;
+
+const TurnMemoryTagSchema = z.string().trim().min(1).max(TURN_MEMORY_TAG_MAX_LENGTH);
 const TurnMemoryReasonSchema = z.string().trim().min(1).max(240);
 
 const TurnMemoryFactSchema = z
@@ -173,4 +178,8 @@ export function buildTurnMemoryDedupeKey(
       memory: decision.memory,
     }),
   );
+}
+
+export function buildTurnMemoryDedupeTag(dedupeKey: string): string {
+  return `${TURN_MEMORY_DEDUPE_TAG_PREFIX}${dedupeKey.slice(0, TURN_MEMORY_DEDUPE_TAG_HASH_LENGTH)}`;
 }

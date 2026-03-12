@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildTurnMemoryDedupeTag,
   buildTurnMemoryDedupeKey,
   buildTurnMemoryProtocolPrompt,
   createTurnMemoryDecisionCollector,
@@ -96,6 +97,13 @@ describe("turn memory policy helpers", () => {
     );
 
     expect(left).toBe(right);
+  });
+
+  it("builds bounded dedupe tags from the canonical dedupe key", () => {
+    const dedupeTag = buildTurnMemoryDedupeTag("a".repeat(64));
+
+    expect(dedupeTag).toBe(`at:${"a".repeat(29)}`);
+    expect(dedupeTag.length).toBeLessThanOrEqual(32);
   });
 
   it("mentions automation no-op guidance in the protocol prompt", () => {
