@@ -22,4 +22,22 @@ describe("agent behavior test support", () => {
     expect(extractPromptSection(promptText, "Memory digest:")).toBe("my name is Ron");
     expect(extractPromptSection(promptText, "Memory digest:")).not.toContain("what is my name");
   });
+
+  it("stops section extraction at the next prompt content part within one role", () => {
+    const promptText = extractPromptText({
+      prompt: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "Memory digest:\nmy name is Ron" },
+            { type: "text", text: "what is my name" },
+          ],
+        },
+      ],
+    } as LanguageModelV3CallOptions);
+
+    expect(promptIncludes(promptText, "what is my name")).toBe(true);
+    expect(extractPromptSection(promptText, "Memory digest:")).toBe("my name is Ron");
+    expect(extractPromptSection(promptText, "Memory digest:")).not.toContain("what is my name");
+  });
 });

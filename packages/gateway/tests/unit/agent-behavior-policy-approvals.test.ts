@@ -7,6 +7,7 @@ import { awaitApprovalForToolExecution } from "../../src/modules/agent/runtime/t
 import {
   createPromptAwareLanguageModel,
   extractPromptSection,
+  extractPromptText,
 } from "./agent-behavior.test-support.js";
 import {
   fetch404,
@@ -133,26 +134,7 @@ describe("Agent behavior - policy and approvals", () => {
         }
 
         nonTitleCalls += 1;
-        capturedMemoryDigest = extractPromptSection(
-          call.prompt
-            .map((entry) =>
-              typeof entry.content === "string"
-                ? entry.content
-                : Array.isArray(entry.content)
-                  ? entry.content
-                      .map((part) =>
-                        typeof part === "string"
-                          ? part
-                          : part && typeof part === "object" && part.type === "text"
-                            ? String(part.text ?? "")
-                            : "",
-                      )
-                      .join("\n")
-                  : "",
-            )
-            .join("\n\n"),
-          "Memory digest:",
-        );
+        capturedMemoryDigest = extractPromptSection(extractPromptText(call), "Memory digest:");
 
         if (nonTitleCalls === 1) {
           return {
@@ -198,5 +180,6 @@ describe("Agent behavior - policy and approvals", () => {
     expect(policyService.evaluateToolCall).toHaveBeenCalledTimes(1);
     expect(approvalSpy).toHaveBeenCalledTimes(1);
     expect(capturedMemoryDigest).toContain("always send messages to ops");
+    expect(capturedMemoryDigest).not.toContain("send a message to ops now");
   });
 });

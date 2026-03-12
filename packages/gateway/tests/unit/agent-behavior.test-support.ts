@@ -9,6 +9,7 @@ import type { NormalizedThreadMessage } from "@tyrum/schemas";
 
 export const TITLE_PROMPT_TEXT = "Write a concise session title.";
 const PROMPT_ROLE_MARKER_PREFIX = "[[role:";
+const PROMPT_PART_MARKER_PREFIX = "[[part:";
 
 const PROMPT_SECTION_LABELS = [
   "Enabled skills:",
@@ -20,45 +21,61 @@ const PROMPT_SECTION_LABELS = [
   "Automation digest:",
 ] as const;
 
+function flattenPromptPart(part: unknown): string {
+  if (typeof part === "string") return part;
+  if (!part || typeof part !== "object") return "";
+
+  const type = (part as { type?: unknown }).type;
+  if (type === "text") {
+    return typeof (part as { text?: unknown }).text === "string"
+      ? (part as { text: string }).text
+      : "";
+  }
+  if (type === "tool-call") {
+    const toolName =
+      typeof (part as { toolName?: unknown }).toolName === "string"
+        ? (part as { toolName: string }).toolName
+        : "unknown";
+    return `[tool-call ${toolName}]`;
+  }
+  if (type === "tool-result") {
+    const toolName =
+      typeof (part as { toolName?: unknown }).toolName === "string"
+        ? (part as { toolName: string }).toolName
+        : "unknown";
+    return `[tool-result ${toolName}]`;
+  }
+  return "";
+}
+
 function flattenPromptContent(content: unknown): string {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return "";
 
   return content
-    .map((part) => {
-      if (typeof part === "string") return part;
-      if (!part || typeof part !== "object") return "";
-
-      const type = (part as { type?: unknown }).type;
-      if (type === "text") {
-        return typeof (part as { text?: unknown }).text === "string"
-          ? (part as { text: string }).text
-          : "";
-      }
-      if (type === "tool-call") {
-        const toolName =
-          typeof (part as { toolName?: unknown }).toolName === "string"
-            ? (part as { toolName: string }).toolName
-            : "unknown";
-        return `[tool-call ${toolName}]`;
-      }
-      if (type === "tool-result") {
-        const toolName =
-          typeof (part as { toolName?: unknown }).toolName === "string"
-            ? (part as { toolName: string }).toolName
-            : "unknown";
-        return `[tool-result ${toolName}]`;
-      }
-      return "";
-    })
+    .map(flattenPromptPart)
     .filter((value) => value.length > 0)
     .join("\n");
+}
+
+function serializePromptEntryContent(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+
+  return content
+    .map((part, index) => {
+      const text = flattenPromptPart(part);
+      if (text.length === 0) return "";
+      return `${PROMPT_PART_MARKER_PREFIX}${index}]]\n${text}`;
+    })
+    .filter((value) => value.length > 0)
+    .join("\n\n");
 }
 
 export function extractPromptText(options: LanguageModelV3CallOptions): string {
   return (options.prompt ?? [])
     .map((entry) => {
-      const content = flattenPromptContent(entry.content);
+      const content = serializePromptEntryContent(entry.content);
       if (content.length === 0) return "";
       return `${PROMPT_ROLE_MARKER_PREFIX}${entry.role}]]\n${content}`;
     })
@@ -78,8 +95,9 @@ export function extractPromptSection(
     .map(escapeRegex)
     .join("|");
   const roleBoundary = `${escapeRegex(PROMPT_ROLE_MARKER_PREFIX)}[^\\]]+\\]\\]`;
+  const partBoundary = `${escapeRegex(PROMPT_PART_MARKER_PREFIX)}\\d+\\]\\]`;
   const pattern = new RegExp(
-    `${escapeRegex(label)}\\n([\\s\\S]*?)(?=\\n(?:${nextLabels})\\n|\\n\\n${roleBoundary}\\n|$)`,
+    `${escapeRegex(label)}\\n([\\s\\S]*?)(?=\\n(?:${nextLabels})\\n|\\n\\n(?:${partBoundary}|${roleBoundary})\\n|$)`,
     "u",
   );
   return promptText.match(pattern)?.[1]?.trim() ?? "";
