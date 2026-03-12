@@ -5,6 +5,7 @@ import {
   type DesktopEnvironmentHost as DesktopEnvironmentHostT,
 } from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
+import { sqlBoolParam } from "../../statestore/sql.js";
 import { requireTenantIdValue } from "../identity/scope.js";
 import { randomUUID } from "node:crypto";
 
@@ -37,10 +38,6 @@ type RawEnvironmentRow = {
 
 function toBoolean(value: boolean | number): boolean {
   return value === true || value === 1;
-}
-
-function toSqliteBoolean(value: boolean): number {
-  return value ? 1 : 0;
 }
 
 function toIso(value: string | Date | null): string | null {
@@ -154,8 +151,8 @@ export class DesktopEnvironmentHostDal {
         input.hostId,
         input.label,
         input.version ?? null,
-        toSqliteBoolean(input.dockerAvailable),
-        toSqliteBoolean(input.healthy),
+        sqlBoolParam(this.db, input.dockerAvailable),
+        sqlBoolParam(this.db, input.healthy),
         input.lastSeenAt ?? nowIso,
         input.lastError ?? null,
         nowIso,
@@ -219,7 +216,7 @@ export class DesktopEnvironmentDal {
         input.label ?? null,
         input.imageRef,
         input.desiredRunning ? "starting" : "stopped",
-        toSqliteBoolean(input.desiredRunning),
+        sqlBoolParam(this.db, input.desiredRunning),
         nowIso,
         nowIso,
       ],
@@ -260,7 +257,7 @@ export class DesktopEnvironmentDal {
       [
         input.label ?? existing.label ?? null,
         input.imageRef ?? existing.image_ref,
-        toSqliteBoolean(desiredRunning),
+        sqlBoolParam(this.db, desiredRunning),
         status,
         new Date().toISOString(),
         this.requireTenantId(input.tenantId),
@@ -300,7 +297,7 @@ export class DesktopEnvironmentDal {
     const row = await this.db.get<RawEnvironmentRow>(
       `UPDATE desktop_environments
        SET status = 'pending',
-           desired_running = 1,
+           desired_running = ?,
            node_id = NULL,
            takeover_url = NULL,
            last_seen_at = NULL,
@@ -310,7 +307,12 @@ export class DesktopEnvironmentDal {
        WHERE tenant_id = ? AND environment_id = ?
        RETURNING environment_id, host_id, label, image_ref, managed_kind, status, desired_running,
                  node_id, takeover_url, last_seen_at, last_error, logs_json, created_at, updated_at`,
-      [new Date().toISOString(), this.requireTenantId(input.tenantId), input.environmentId],
+      [
+        sqlBoolParam(this.db, true),
+        new Date().toISOString(),
+        this.requireTenantId(input.tenantId),
+        input.environmentId,
+      ],
     );
     return row ? toEnvironment(row) : undefined;
   }
