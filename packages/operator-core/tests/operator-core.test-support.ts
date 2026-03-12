@@ -128,6 +128,7 @@ export function sampleStatusResponse(): StatusResponse {
     db_kind: "sqlite",
     is_exposed: false,
     otel_enabled: false,
+    auth: { enabled: true },
     ws: null,
     policy: null,
     model_auth: null,

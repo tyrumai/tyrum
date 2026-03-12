@@ -12,6 +12,7 @@ import type { PolicyService } from "../modules/policy/service.js";
 import type { ModelsDevService } from "../modules/models/models-dev-service.js";
 import type { AgentRegistry } from "../modules/agent/registry.js";
 import { buildStatusDetails } from "../modules/observability/status-details.js";
+import type { SandboxHardeningProfile } from "../modules/sandbox/hardening.js";
 import { requireTenantId } from "../modules/auth/claims.js";
 
 export interface StatusRouteDeps {
@@ -22,6 +23,8 @@ export interface StatusRouteDeps {
   db: SqlDb;
   isLocalOnly: boolean;
   otelEnabled: boolean;
+  authEnabled: boolean;
+  toolrunnerHardeningProfile: SandboxHardeningProfile;
   connectionManager?: ConnectionManager;
   policyService?: PolicyService;
   modelsDev?: ModelsDevService;
@@ -45,6 +48,7 @@ export function createStatusRoutes(deps: StatusRouteDeps): Hono {
             effective_sha256: policy.effective_sha256,
           }
         : undefined,
+      toolrunnerHardeningProfile: deps.toolrunnerHardeningProfile,
       agents: deps.agents,
       modelsDev: deps.modelsDev,
     });
@@ -57,6 +61,7 @@ export function createStatusRoutes(deps: StatusRouteDeps): Hono {
       db_kind: deps.dbKind,
       is_exposed: !deps.isLocalOnly,
       otel_enabled: deps.otelEnabled,
+      auth: { enabled: deps.authEnabled },
       ws: deps.connectionManager?.getStats() ?? null,
       policy,
       model_auth: details.model_auth,

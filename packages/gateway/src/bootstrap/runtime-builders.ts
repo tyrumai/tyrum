@@ -128,6 +128,8 @@ export async function createProtocolRuntime(
       dbKind: context.container.db.kind,
       isExposed: !context.isLocalOnly,
       otelEnabled: otel.enabled,
+      authEnabled: Boolean(context.authTokens),
+      toolrunnerHardeningProfile: context.deploymentConfig.toolrunner.hardeningProfile,
     },
     approvalDal: context.container.approvalDal,
     presenceDal: context.container.presenceDal,

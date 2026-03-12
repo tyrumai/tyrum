@@ -74,6 +74,37 @@ const ConfigHealthStatus = z
   })
   .strict();
 
+const AuthStatus = z
+  .object({
+    enabled: z.boolean(),
+  })
+  .strict();
+
+const PolicyStatus = z
+  .object({
+    enabled: z.boolean(),
+    observe_only: z.boolean(),
+    effective_sha256: z.string().trim().min(1),
+    sources: z
+      .object({
+        deployment: z.string().trim().min(1),
+        agent: z.string().trim().min(1).nullable(),
+      })
+      .strict(),
+  })
+  .strict();
+
+const SandboxStatus = z
+  .object({
+    mode: z.enum(["disabled", "observe", "enforce"]),
+    policy_enabled: z.boolean(),
+    policy_observe_only: z.boolean(),
+    effective_policy_sha256: z.string().trim().min(1),
+    hardening_profile: z.enum(["baseline", "hardened"]),
+    elevated_execution_available: z.boolean().nullable(),
+  })
+  .strict();
+
 const StatusResponse = z
   .object({
     status: z.literal("ok"),
@@ -83,8 +114,9 @@ const StatusResponse = z
     db_kind: z.string().trim().min(1),
     is_exposed: z.boolean(),
     otel_enabled: z.boolean(),
+    auth: AuthStatus,
     ws: z.unknown().nullable(),
-    policy: z.unknown().nullable(),
+    policy: PolicyStatus.nullable(),
     model_auth: z
       .object({
         active_model: ActiveModelStatus.nullable(),
@@ -95,7 +127,7 @@ const StatusResponse = z
     catalog_freshness: z.unknown().nullable(),
     session_lanes: z.unknown().nullable(),
     queue_depth: z.unknown().nullable(),
-    sandbox: z.unknown().nullable(),
+    sandbox: SandboxStatus.nullable(),
     config_health: ConfigHealthStatus,
   })
   .passthrough();

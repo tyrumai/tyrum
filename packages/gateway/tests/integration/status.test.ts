@@ -16,6 +16,7 @@ describe("GET /status", () => {
     expect(body["db_kind"]).toBe("sqlite");
     expect(body["is_exposed"]).toBe(false);
     expect(body["otel_enabled"]).toBe(false);
+    expect(body["auth"]).toEqual({ enabled: true });
     expect(body["ws"]).toBeNull();
     expect("auth_profiles" in body).toBe(false);
     expect(body["model_auth"]).toBeTypeOf("object");

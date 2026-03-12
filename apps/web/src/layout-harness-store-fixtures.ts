@@ -1,3 +1,4 @@
+import type { StatusResponse } from "@tyrum/client";
 import { createStore } from "../../../packages/operator-core/src/store.js";
 import { AgentConfig, IdentityPack } from "../../../packages/schemas/src/index.js";
 
@@ -31,19 +32,35 @@ export function createEventWsStub() {
 }
 
 export function createStatusStore() {
-  return createStore({
-    status: {
-      session_lanes: {
-        default: {
-          agent_id: "default",
-          active_session_ids: ["session-1"],
-        },
-      },
-      queue_depth: {
-        pending: 1,
-        running: 1,
+  const status: StatusResponse = {
+    status: "ok",
+    version: "1.0.0",
+    instance_id: "layout-harness",
+    role: "all",
+    db_kind: "sqlite",
+    is_exposed: false,
+    otel_enabled: false,
+    auth: { enabled: true },
+    ws: null,
+    policy: null,
+    model_auth: null,
+    catalog_freshness: null,
+    session_lanes: {
+      default: {
+        agent_id: "default",
+        active_session_ids: ["session-1"],
       },
     },
+    queue_depth: {
+      pending: 1,
+      running: 1,
+    },
+    sandbox: null,
+    config_health: { status: "ok", issues: [] },
+  };
+
+  return createStore({
+    status,
     usage: null,
     presenceByInstanceId: {},
     loading: { status: false, usage: false, presence: false },

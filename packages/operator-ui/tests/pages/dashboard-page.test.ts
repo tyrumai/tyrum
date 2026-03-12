@@ -112,7 +112,7 @@ describe("DashboardPage", () => {
     expect(source).not.toContain('value={typeof tokensUsed === "number" ? tokensUsedText : "-"}');
   });
 
-  it("uses a responsive KPI grid layout with system status and usage cards", () => {
+  it("uses a responsive KPI grid layout with system status and security cards", () => {
     const source = readFileSync(
       join(process.cwd(), "packages/operator-ui/src/components/pages/dashboard-page.tsx"),
       "utf8",
@@ -122,7 +122,7 @@ describe("DashboardPage", () => {
     expect(source).toContain("sm:grid-cols-4");
     expect(source).toContain("sm:grid-cols-2");
     expect(source).toContain("System Status");
-    expect(source).toContain("Token Usage");
+    expect(source).toContain("Security");
   });
 
   it("pulses the connection dot only while connecting", () => {
@@ -216,6 +216,31 @@ describe("DashboardPage", () => {
     cleanupTestRoot({ container, root });
   });
 
+  it("renders the security card without crashing when auth status is absent", () => {
+    const { store: statusStore } = createStore({
+      status: {
+        version: "1.0.0",
+        db_kind: "sqlite",
+        is_exposed: false,
+        sandbox: null,
+        config_health: { status: "ok", issues: [] },
+      },
+      usage: null,
+      presenceByInstanceId: {},
+      loading: { status: false, usage: false, presence: false },
+      error: { status: null, usage: null, presence: null },
+      lastSyncedAt: "2026-03-08T00:00:00.000Z",
+    });
+    const { core } = createMockCore({ statusStore });
+
+    const { container, root } = renderIntoDocument(React.createElement(DashboardPage, { core }));
+
+    expect(container.textContent).toContain("Security");
+    expect(container.textContent).toContain("Auth");
+
+    cleanupTestRoot({ container, root });
+  });
+
   it("shows the connection banner when disconnected", () => {
     const { core } = createMockCore();
 
@@ -230,7 +255,14 @@ describe("DashboardPage", () => {
   it("counts connected nodes from live node inventory instead of presence entries", async () => {
     const liveInventory = sampleNodeInventoryResponse();
     const { store: statusStore } = createStore({
-      status: { version: "1.0.0", db_kind: "sqlite", sandbox: false },
+      status: {
+        version: "1.0.0",
+        db_kind: "sqlite",
+        is_exposed: false,
+        auth: { enabled: true },
+        sandbox: null,
+        config_health: { status: "ok", issues: [] },
+      },
       usage: null,
       presenceByInstanceId: {
         gateway: { instance_id: "gateway", role: "gateway", last_seen_at: "2026-03-08T00:00:00Z" },
@@ -302,7 +334,9 @@ describe("DashboardPage", () => {
       status: {
         version: "1.0.0",
         db_kind: "sqlite",
-        sandbox: false,
+        is_exposed: false,
+        auth: { enabled: true },
+        sandbox: null,
         config_health: {
           status: "issues",
           issues: [
@@ -357,7 +391,7 @@ describe("DashboardPage", () => {
     cleanupTestRoot({ container, root });
   });
 
-  it("renders work distribution, token usage, and activity feed with data", () => {
+  it("renders work distribution, security posture, and activity feed with data", () => {
     const { store: workboardStore } = createStore({
       items: [
         { work_item_id: "wi-1", status: "doing", title: "A", kind: "task", priority: 1 },
@@ -372,7 +406,27 @@ describe("DashboardPage", () => {
     });
 
     const { store: statusStore } = createStore({
-      status: { version: "1.0.0", db_kind: "sqlite", sandbox: false },
+      status: {
+        version: "1.0.0",
+        db_kind: "sqlite",
+        is_exposed: false,
+        auth: { enabled: true },
+        policy: {
+          enabled: true,
+          observe_only: false,
+          effective_sha256: "policy-sha",
+          sources: { deployment: "default", agent: null },
+        },
+        sandbox: {
+          mode: "enforce",
+          policy_enabled: true,
+          policy_observe_only: false,
+          effective_policy_sha256: "policy-sha",
+          hardening_profile: "hardened",
+          elevated_execution_available: false,
+        },
+        config_health: { status: "ok", issues: [] },
+      },
       usage: {
         local: {
           totals: {
@@ -448,11 +502,13 @@ describe("DashboardPage", () => {
     expect(container.textContent).toContain("Done (1)");
     expect(container.textContent).toContain("Backlog (1)");
 
-    // Token usage bar rendered
-    expect(container.textContent).toContain("50,000");
-    expect(container.textContent).toContain("Input: 30,000");
-    expect(container.textContent).toContain("Output: 20,000");
-    expect(container.textContent).toContain("$0.42");
+    // Security card rendered
+    expect(container.textContent).toContain("Security");
+    expect(container.textContent).toContain("local only");
+    expect(container.textContent).toContain("enabled");
+    expect(container.textContent).toContain("enforce");
+    expect(container.textContent).toContain("hardened");
+    expect(container.textContent).toContain("unavailable");
 
     // Activity feed rendered
     expect(container.textContent).toContain("Scout");

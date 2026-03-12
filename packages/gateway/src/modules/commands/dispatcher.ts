@@ -30,6 +30,8 @@ export interface CommandDeps {
     dbKind: StateStoreKind;
     isExposed: boolean;
     otelEnabled: boolean;
+    authEnabled?: boolean;
+    toolrunnerHardeningProfile?: "baseline" | "hardened";
   };
   commandContext?: {
     agentId?: string;

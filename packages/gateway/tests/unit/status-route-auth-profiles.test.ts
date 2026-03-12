@@ -22,6 +22,8 @@ describe("GET /status model_auth.auth_profiles", () => {
       db,
       isLocalOnly: true,
       otelEnabled: false,
+      authEnabled: true,
+      toolrunnerHardeningProfile: "baseline",
     });
 
     const app = new Hono();
@@ -40,6 +42,7 @@ describe("GET /status model_auth.auth_profiles", () => {
     const res = await app.request("/status");
     expect(res.status).toBe(200);
     const body = (await res.json()) as Record<string, unknown>;
+    expect(body["auth"]).toEqual({ enabled: true });
     expect("auth_profiles" in body).toBe(false);
     const modelAuth = body["model_auth"] as Record<string, unknown>;
     expect(modelAuth["auth_profiles"]).toBeTypeOf("object");

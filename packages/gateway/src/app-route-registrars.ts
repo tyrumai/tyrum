@@ -81,12 +81,7 @@ export interface AppRouteContext {
   app: Hono;
   container: GatewayContainer;
   opts: AppOptions;
-  runtime: {
-    version: string;
-    instanceId: string;
-    role: string;
-    otelEnabled: boolean;
-  };
+  runtime: { version: string; instanceId: string; role: string; otelEnabled: boolean };
   isLocalOnly: boolean;
   wsMaxBufferedBytes?: number;
   engine: AppOptions["engine"];
@@ -152,6 +147,8 @@ export function registerSystemAndPublicRoutes(context: AppRouteContext): void {
       db: context.container.db,
       isLocalOnly: context.isLocalOnly,
       otelEnabled: context.runtime.otelEnabled,
+      authEnabled: Boolean(context.opts.authTokens),
+      toolrunnerHardeningProfile: context.container.deploymentConfig.toolrunner.hardeningProfile,
       connectionManager: context.opts.connectionManager,
       policyService: context.container.policyService,
       modelsDev: context.container.modelsDev,
