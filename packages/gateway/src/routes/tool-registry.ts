@@ -81,6 +81,7 @@ function toBaseEntry(
   source: ToolRegistryEntry["source"],
   effectiveExposure: ToolEffectiveExposure,
 ): Omit<ToolRegistryEntry, "backing_server" | "plugin"> {
+  const validatedSchema = validateToolDescriptorInputSchema(descriptor);
   return {
     source,
     canonical_id: descriptor.id,
@@ -90,7 +91,7 @@ function toBaseEntry(
     effective_exposure: effectiveExposure,
     family: descriptor.family,
     keywords: descriptor.keywords.length > 0 ? [...descriptor.keywords] : undefined,
-    input_schema: descriptor.inputSchema,
+    input_schema: validatedSchema.ok ? validatedSchema.schema : undefined,
   };
 }
 

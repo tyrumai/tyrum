@@ -428,14 +428,17 @@ export async function resolveToolsAndMemory(
   const filteredTools = toolCandidates
     .filter((tool) => isToolAllowed(executionProfile.profile.tool_allowlist, tool.id))
     .filter((tool) => ctx.config.memory.v1.enabled || !tool.id.startsWith("memory."))
-    .filter((tool) => {
+    .flatMap((tool) => {
       const validated = validateToolDescriptorInputSchema(tool);
-      if (validated.ok) return true;
-      deps.opts.container.logger.warn("agent.tool_schema_invalid", {
-        tool_id: tool.id,
-        error: validated.error,
-      });
-      return false;
+      if (!validated.ok) {
+        deps.opts.container.logger.warn("agent.tool_schema_invalid", {
+          tool_id: tool.id,
+          error: validated.error,
+        });
+        return [];
+      }
+
+      return [{ ...tool, inputSchema: validated.schema }];
     });
 
   return { memoryDigestResult, toolSetBuilder, filteredTools };

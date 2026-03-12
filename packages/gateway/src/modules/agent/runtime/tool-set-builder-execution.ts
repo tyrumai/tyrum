@@ -4,6 +4,7 @@ import type { LanguageModel, ModelMessage, Tool, ToolExecutionOptions, ToolSet }
 import type { ToolDescriptor } from "../tools.js";
 import { buildModelToolNameMap, registerModelTool } from "../tools.js";
 import type { ToolExecutor, ToolResult } from "../tool-executor.js";
+import { validateToolDescriptorInputSchema } from "../tool-schema.js";
 import { tagContent } from "../provenance.js";
 import { containsInjectionPatterns, sanitizeForModel } from "../sanitizer.js";
 import type { PluginRegistry } from "../../plugins/registry.js";
@@ -64,13 +65,18 @@ export function buildRuntimeToolSet(input: BuildRuntimeToolSetInput): ToolSet {
   });
 
   for (const toolDesc of input.tools) {
+    const validatedSchema = validateToolDescriptorInputSchema(toolDesc);
+    if (!validatedSchema.ok) {
+      throw new Error(`invalid input schema for tool '${toolDesc.id}': ${validatedSchema.error}`);
+    }
+
     registerModelTool(
       result,
       toolDesc.id,
       createModelTool({
         ...input,
         toolDesc,
-        inputSchema: toolDesc.inputSchema!,
+        inputSchema: validatedSchema.schema,
         policyRuntime,
         executionState,
       }),

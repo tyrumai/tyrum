@@ -107,6 +107,13 @@ describe("tool registry routes", () => {
                   oneOf: [{ type: "object", properties: {} }],
                 },
               },
+              {
+                id: "plugin.echo.optional",
+                description: "Echo text back without an explicit schema.",
+                risk: "low" as const,
+                requires_confirmation: false,
+                keywords: ["echo"],
+              },
             ],
             getTool: (toolId: string) =>
               toolId === "plugin.echo.say"
@@ -194,6 +201,16 @@ describe("tool registry routes", () => {
           id: "echo",
           name: "Echo",
           version: "0.0.1",
+        },
+      }),
+    );
+    expect(body.tools).toContainEqual(
+      expect.objectContaining({
+        source: "plugin",
+        canonical_id: "plugin.echo.optional",
+        input_schema: {
+          type: "object",
+          additionalProperties: true,
         },
       }),
     );

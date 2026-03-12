@@ -60,6 +60,21 @@ describe("selectToolDirectory", () => {
 });
 
 describe("model tool naming", () => {
+  it("applies the permissive object fallback when a tool omits inputSchema", () => {
+    expect(
+      validateToolDescriptorInputSchema({
+        id: "plugin.echo.say",
+        inputSchema: undefined,
+      }),
+    ).toEqual({
+      ok: true,
+      schema: {
+        type: "object",
+        additionalProperties: true,
+      },
+    });
+  });
+
   it("sanitizes dotted tool ids for model-facing names", () => {
     const names = buildModelToolNameMap(["mcp.calendar.events_list", "plugin.echo.danger"]);
 
