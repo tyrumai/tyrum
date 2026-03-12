@@ -199,4 +199,47 @@ describe("IssuedTokenNotice", () => {
       cleanupTestRoot(testRoot);
     }
   });
+
+  it("keeps rendering when the gateway base URL cannot produce a bootstrap link", () => {
+    const writeText = vi.fn(async () => {});
+    Object.defineProperty(globalThis.navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+
+    const testRoot = renderIntoDocument(
+      React.createElement(IssuedTokenNotice, {
+        token: {
+          token: "tyrum-token.v1.secret",
+          token_id: "token-1",
+          tenant_id: "11111111-1111-4111-8111-111111111111",
+          display_name: "Mobile bootstrap token",
+          role: "client",
+          device_id: "phone-1",
+          scopes: [],
+          issued_at: "2026-03-01T00:00:00.000Z",
+          updated_at: "2026-03-01T00:00:00.000Z",
+        },
+        gatewayHttpBaseUrl: "gateway.example",
+        onDismiss: vi.fn(),
+      }),
+    );
+
+    try {
+      const qrButton = testRoot.container.querySelector<HTMLButtonElement>(
+        '[data-testid="admin-http-token-mobile-qr"]',
+      );
+      const copyLinkButton = testRoot.container.querySelector<HTMLButtonElement>(
+        '[data-testid="admin-http-token-mobile-link-copy"]',
+      );
+
+      expect(testRoot.container.textContent).toContain("Mobile bootstrap unavailable");
+      expect(testRoot.container.textContent).toContain("Expected an http:// or https:// URL.");
+      expect(qrButton?.disabled).toBe(true);
+      expect(copyLinkButton?.disabled).toBe(true);
+      expect(writeText).not.toHaveBeenCalled();
+    } finally {
+      cleanupTestRoot(testRoot);
+    }
+  });
 });

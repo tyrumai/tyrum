@@ -180,6 +180,7 @@ export function useMobileNode(options: UseMobileNodeOptions): {
     void (async () => {
       let identity: Awaited<ReturnType<typeof loadOrCreateDeviceIdentity>>;
       const deviceInfo = await loadNativeDeviceInfo();
+      if (disposed) return;
       try {
         identity = await loadOrCreateDeviceIdentity(createNodeIdentityStorage());
       } catch (loadError) {

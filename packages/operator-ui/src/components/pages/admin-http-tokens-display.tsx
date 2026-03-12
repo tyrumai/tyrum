@@ -108,16 +108,25 @@ export function IssuedTokenNotice({
 }): React.ReactElement {
   const clipboard = useClipboard();
   const [qrOpen, setQrOpen] = useState(false);
-  const mobileBootstrapUrl = useMemo(
-    () =>
-      createMobileBootstrapUrl({
-        v: 1,
-        httpBaseUrl: normalizeGatewayHttpBaseUrl(gatewayHttpBaseUrl),
-        wsUrl: inferGatewayWsUrl(gatewayHttpBaseUrl),
-        token: token.token,
-      }),
-    [gatewayHttpBaseUrl, token.token],
-  );
+  const mobileBootstrap = useMemo(() => {
+    try {
+      return {
+        url: createMobileBootstrapUrl({
+          v: 1,
+          httpBaseUrl: normalizeGatewayHttpBaseUrl(gatewayHttpBaseUrl),
+          wsUrl: inferGatewayWsUrl(gatewayHttpBaseUrl),
+          token: token.token,
+        }),
+        errorMessage: null,
+      };
+    } catch (error) {
+      return {
+        url: null,
+        errorMessage:
+          error instanceof Error ? error.message : "Failed to create a mobile bootstrap link.",
+      };
+    }
+  }, [gatewayHttpBaseUrl, token.token]);
 
   return (
     <div
@@ -163,6 +172,7 @@ export function IssuedTokenNotice({
           size="sm"
           variant="outline"
           data-testid="admin-http-token-mobile-qr"
+          disabled={mobileBootstrap.url === null}
           onClick={() => {
             setQrOpen(true);
           }}
@@ -174,10 +184,11 @@ export function IssuedTokenNotice({
           size="sm"
           variant="outline"
           data-testid="admin-http-token-mobile-link-copy"
-          disabled={!clipboard.canWrite}
+          disabled={!clipboard.canWrite || mobileBootstrap.url === null}
           onClick={() => {
+            if (mobileBootstrap.url === null) return;
             void clipboard
-              .writeText(mobileBootstrapUrl)
+              .writeText(mobileBootstrap.url)
               .then(() => {
                 toast.success("Copied mobile link");
               })
@@ -189,6 +200,14 @@ export function IssuedTokenNotice({
           Copy mobile link
         </Button>
       </div>
+
+      {mobileBootstrap.errorMessage ? (
+        <Alert
+          variant="warning"
+          title="Mobile bootstrap unavailable"
+          description={mobileBootstrap.errorMessage}
+        />
+      ) : null}
 
       <Input
         label="Token secret"
@@ -220,11 +239,13 @@ export function IssuedTokenNotice({
         }
       />
 
-      <MobileBootstrapQrDialog
-        open={qrOpen}
-        bootstrapUrl={mobileBootstrapUrl}
-        onOpenChange={setQrOpen}
-      />
+      {mobileBootstrap.url ? (
+        <MobileBootstrapQrDialog
+          open={qrOpen}
+          bootstrapUrl={mobileBootstrap.url}
+          onOpenChange={setQrOpen}
+        />
+      ) : null}
     </div>
   );
 }
