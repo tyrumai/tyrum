@@ -261,4 +261,202 @@ describe("DesktopEnvironmentRuntimeManager", () => {
     expect(environmentDal.updateRuntime).not.toHaveBeenCalled();
     expect(nodePairingDal.getByNodeId).not.toHaveBeenCalled();
   });
+
+  it("falls back to empty logs when failure log collection fails and continues reconciling", async () => {
+    runDockerMock
+      .mockResolvedValueOnce({ status: 1, stdout: "", stderr: "boom" })
+      .mockResolvedValue({ status: 0, stdout: "started\n", stderr: "" });
+    readContainerLogsMock.mockImplementation(async (containerName: string) => {
+      if (containerName === "container-env-1") {
+        throw new Error("logs unavailable");
+      }
+      return ["desktop runtime ready"];
+    });
+
+    const environmentDal = {
+      listByHost: vi.fn(async () => [
+        {
+          tenant_id: "tenant-1",
+          environment_id: "env-1",
+          host_id: "host-1",
+          label: "Broken",
+          image_ref: "ghcr.io/tyrum/desktop:latest",
+          managed_kind: "docker",
+          status: "running",
+          desired_running: true,
+          node_id: null,
+          takeover_url: "http://127.0.0.1:6080/vnc.html?autoconnect=true",
+          last_seen_at: null,
+          last_error: null,
+          created_at: "2026-03-12T00:00:00.000Z",
+          updated_at: "2026-03-12T00:00:00.000Z",
+        },
+        {
+          tenant_id: "tenant-1",
+          environment_id: "env-2",
+          host_id: "host-1",
+          label: "Healthy",
+          image_ref: "ghcr.io/tyrum/desktop:latest",
+          managed_kind: "docker",
+          status: "starting",
+          desired_running: true,
+          node_id: null,
+          takeover_url: null,
+          last_seen_at: null,
+          last_error: null,
+          created_at: "2026-03-12T00:00:00.000Z",
+          updated_at: "2026-03-12T00:00:00.000Z",
+        },
+      ]),
+      updateRuntime: vi.fn(async () => {}),
+    };
+    const nodePairingDal = {
+      getByNodeId: vi.fn(async () => ({ pairing_id: 202, status: "pending" })),
+      resolve: vi.fn(async () => ({ pairing: { status: "approved" } })),
+    };
+    const authTokens = {
+      issueToken: vi.fn(async ({ deviceId }: { deviceId: string }) => ({
+        token: `token-${deviceId}`,
+      })),
+    };
+    const logger = { error: vi.fn() };
+
+    const runtimeManager = new DesktopEnvironmentRuntimeManager(
+      environmentDal as never,
+      nodePairingDal as never,
+      authTokens as never,
+      logger as never,
+      {
+        hostId: "host-1",
+        tyrumHome,
+        gatewayPort: 8788,
+      },
+    );
+
+    await expect(runtimeManager.reconcileAll()).resolves.toBeUndefined();
+
+    expect(environmentDal.updateRuntime).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        tenantId: "tenant-1",
+        environmentId: "env-1",
+        status: "error",
+        logs: [],
+      }),
+    );
+    expect(environmentDal.updateRuntime).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        tenantId: "tenant-1",
+        environmentId: "env-2",
+        status: "running",
+        logs: ["desktop runtime ready"],
+      }),
+    );
+    expect(logger.error).toHaveBeenCalledWith(
+      "desktop_environment.reconcile_failure_logs_failed",
+      expect.objectContaining({
+        environment_id: "env-1",
+        host_id: "host-1",
+        error: "logs unavailable",
+      }),
+    );
+  });
+
+  it("continues reconciling later environments when persisting an error state fails", async () => {
+    runDockerMock
+      .mockResolvedValueOnce({ status: 1, stdout: "", stderr: "boom" })
+      .mockResolvedValue({ status: 0, stdout: "started\n", stderr: "" });
+
+    const environmentDal = {
+      listByHost: vi.fn(async () => [
+        {
+          tenant_id: "tenant-1",
+          environment_id: "env-1",
+          host_id: "host-1",
+          label: "Broken",
+          image_ref: "ghcr.io/tyrum/desktop:latest",
+          managed_kind: "docker",
+          status: "starting",
+          desired_running: true,
+          node_id: null,
+          takeover_url: null,
+          last_seen_at: null,
+          last_error: null,
+          created_at: "2026-03-12T00:00:00.000Z",
+          updated_at: "2026-03-12T00:00:00.000Z",
+        },
+        {
+          tenant_id: "tenant-1",
+          environment_id: "env-2",
+          host_id: "host-1",
+          label: "Healthy",
+          image_ref: "ghcr.io/tyrum/desktop:latest",
+          managed_kind: "docker",
+          status: "starting",
+          desired_running: true,
+          node_id: null,
+          takeover_url: null,
+          last_seen_at: null,
+          last_error: null,
+          created_at: "2026-03-12T00:00:00.000Z",
+          updated_at: "2026-03-12T00:00:00.000Z",
+        },
+      ]),
+      updateRuntime: vi.fn(async (input: { environmentId: string; status: string }) => {
+        if (input.environmentId === "env-1" && input.status === "error") {
+          throw new Error("write failed");
+        }
+      }),
+    };
+    const nodePairingDal = {
+      getByNodeId: vi.fn(async () => ({ pairing_id: 202, status: "pending" })),
+      resolve: vi.fn(async () => ({ pairing: { status: "approved" } })),
+    };
+    const authTokens = {
+      issueToken: vi.fn(async ({ deviceId }: { deviceId: string }) => ({
+        token: `token-${deviceId}`,
+      })),
+    };
+    const logger = { error: vi.fn() };
+
+    const runtimeManager = new DesktopEnvironmentRuntimeManager(
+      environmentDal as never,
+      nodePairingDal as never,
+      authTokens as never,
+      logger as never,
+      {
+        hostId: "host-1",
+        tyrumHome,
+        gatewayPort: 8788,
+      },
+    );
+
+    await expect(runtimeManager.reconcileAll()).resolves.toBeUndefined();
+
+    expect(environmentDal.updateRuntime).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        tenantId: "tenant-1",
+        environmentId: "env-1",
+        status: "error",
+      }),
+    );
+    expect(environmentDal.updateRuntime).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        tenantId: "tenant-1",
+        environmentId: "env-2",
+        status: "running",
+      }),
+    );
+    expect(logger.error).toHaveBeenCalledWith(
+      "desktop_environment.reconcile_failure_persist_failed",
+      expect.objectContaining({
+        environment_id: "env-1",
+        host_id: "host-1",
+        error: "write failed",
+      }),
+    );
+  });
 });

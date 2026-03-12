@@ -52,24 +52,7 @@ export class DesktopEnvironmentRuntimeManager {
       try {
         await this.reconcileEnvironment(environment);
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        this.logger.error("desktop_environment.reconcile_failed", {
-          environment_id: environment.environment_id,
-          host_id: this.options.hostId,
-          error: message,
-        });
-        await this.environmentDal.updateRuntime({
-          tenantId: environment.tenant_id,
-          environmentId: environment.environment_id,
-          status: "error",
-          nodeId: environment.node_id,
-          takeoverUrl: environment.takeover_url,
-          lastError: message,
-          logs:
-            environment.status === "running"
-              ? await readContainerLogs(containerNameForEnvironment(environment.environment_id))
-              : [],
-        });
+        await this.recordReconcileFailure(environment, error);
       }
     }
   }
@@ -192,6 +175,57 @@ export class DesktopEnvironmentRuntimeManager {
     const override = this.options.gatewayWsUrl?.trim();
     if (override) return override;
     return `ws://host.containers.internal:${String(this.options.gatewayPort)}/ws`;
+  }
+
+  private async recordReconcileFailure(
+    environment: DesktopEnvironment & { tenant_id: string },
+    error: unknown,
+  ): Promise<void> {
+    const message = error instanceof Error ? error.message : String(error);
+    this.logger.error("desktop_environment.reconcile_failed", {
+      environment_id: environment.environment_id,
+      host_id: this.options.hostId,
+      error: message,
+    });
+
+    const logs = await this.readFailureLogs(environment);
+
+    try {
+      await this.environmentDal.updateRuntime({
+        tenantId: environment.tenant_id,
+        environmentId: environment.environment_id,
+        status: "error",
+        nodeId: environment.node_id,
+        takeoverUrl: environment.takeover_url,
+        lastError: message,
+        logs,
+      });
+    } catch (persistError) {
+      this.logger.error("desktop_environment.reconcile_failure_persist_failed", {
+        environment_id: environment.environment_id,
+        host_id: this.options.hostId,
+        error: persistError instanceof Error ? persistError.message : String(persistError),
+      });
+    }
+  }
+
+  private async readFailureLogs(
+    environment: DesktopEnvironment & { tenant_id: string },
+  ): Promise<string[]> {
+    if (environment.status !== "running") {
+      return [];
+    }
+
+    try {
+      return await readContainerLogs(containerNameForEnvironment(environment.environment_id));
+    } catch (error) {
+      this.logger.error("desktop_environment.reconcile_failure_logs_failed", {
+        environment_id: environment.environment_id,
+        host_id: this.options.hostId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return [];
+    }
   }
 
   private async approveManagedPairing(tenantId: string, nodeId: string): Promise<void> {

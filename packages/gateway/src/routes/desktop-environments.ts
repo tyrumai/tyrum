@@ -21,12 +21,30 @@ import {
 import { requireAuthClaims, requireTenantId } from "../modules/auth/claims.js";
 
 const DEFAULT_DESKTOP_ENVIRONMENT_IMAGE = "tyrum-desktop-sandbox:latest";
+const TRUSTED_TAKEOVER_HOSTNAMES = new Set(["127.0.0.1", "localhost", "[::1]"]);
+const TRUSTED_TAKEOVER_PATH = "/vnc.html";
 
 function requireAdmin(c: { get: (key: string) => unknown }): void {
   const claims = requireAuthClaims(c);
   if (claims.role !== "admin") {
     throw new HTTPException(403, { message: "admin token required" });
   }
+}
+
+function readTrustedTakeoverUrl(value: string | null): string | null {
+  if (!value) return null;
+
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return null;
+  }
+
+  if (parsed.protocol !== "http:") return null;
+  if (!TRUSTED_TAKEOVER_HOSTNAMES.has(parsed.hostname)) return null;
+  if (parsed.pathname !== TRUSTED_TAKEOVER_PATH) return null;
+  return parsed.toString();
 }
 
 export function createDesktopEnvironmentRoutes(deps: {
@@ -169,10 +187,11 @@ export function createDesktopEnvironmentRoutes(deps: {
     if (!environment) {
       return c.json({ error: "not_found", message: "desktop environment not found" }, 404);
     }
-    if (!environment.takeover_url) {
+    const takeoverUrl = readTrustedTakeoverUrl(environment.takeover_url);
+    if (!takeoverUrl) {
       return c.json({ error: "conflict", message: "takeover unavailable" }, 409);
     }
-    return c.redirect(environment.takeover_url, 302);
+    return c.redirect(takeoverUrl, 302);
   });
 
   return app;
