@@ -73,8 +73,15 @@ export function createMobileLocationBeaconStream(
     maximumAge: Math.min(config.maxIntervalMs, 60_000),
   });
 
-  const watchOptionsMatch = (left: NativeWatchOptions | null, right: NativeWatchOptions): boolean =>
-    left?.timeout === right.timeout && left.maximumAge === right.maximumAge;
+  const watchOptionsMatch = (
+    left: NativeWatchOptions | null,
+    right: NativeWatchOptions,
+  ): boolean => {
+    if (!left) {
+      return false;
+    }
+    return left.timeout === right.timeout && left.maximumAge === right.maximumAge;
+  };
 
   const clearActiveWatch = async (): Promise<void> => {
     if (!watchId) {
