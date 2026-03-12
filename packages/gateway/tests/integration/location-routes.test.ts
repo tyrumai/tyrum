@@ -75,4 +75,16 @@ describe("location routes", () => {
       message: "limit must be a positive integer",
     });
   });
+
+  it("rejects zero event limits", async () => {
+    const { request } = await createTestApp();
+
+    const response = await request("/location/events?limit=0");
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: "invalid_request",
+      message: "limit must be a positive integer",
+    });
+  });
 });

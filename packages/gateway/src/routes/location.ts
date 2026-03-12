@@ -130,9 +130,11 @@ export function createLocationRoutes(service: LocationService): Hono {
     const tenantId = requireTenantId(c);
     const agentKey = c.req.query("agent_key")?.trim() || "default";
     const limitRaw = c.req.query("limit");
+    const parsedLimit =
+      typeof limitRaw === "string" && /^[0-9]+$/.test(limitRaw.trim()) ? Number(limitRaw) : null;
     const limit =
-      typeof limitRaw === "string" && /^[0-9]+$/.test(limitRaw.trim())
-        ? Number(limitRaw)
+      parsedLimit !== null && Number.isInteger(parsedLimit) && parsedLimit > 0
+        ? parsedLimit
         : limitRaw === undefined
           ? 50
           : null;

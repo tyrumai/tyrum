@@ -15,6 +15,7 @@ import type { MemoryV1Dal } from "../memory/v1-dal.js";
 import type { ExecutionEngine } from "../execution/engine.js";
 import type { PolicyService } from "../policy/service.js";
 import { PlaybookRunner } from "../playbook/runner.js";
+import { Logger } from "../observability/logger.js";
 import { createPoiProvider, type PoiProvider } from "./poi-provider.js";
 import { haversineDistanceMeters } from "./geo.js";
 import { LocationDal } from "./dal.js";
@@ -30,6 +31,8 @@ import type {
   LocationAutomationTriggerPatchRequest,
   LocationAutomationTriggerRecord,
 } from "./types.js";
+
+const logger = new Logger({ base: { module: "location.service" } });
 
 export interface LocationServiceOptions {
   identityScopeDal: IdentityScopeDal;
@@ -371,17 +374,28 @@ export class LocationService {
       }
     }
 
-    const categoryEvents = await this.evaluateCategoryTriggers({
-      tenantId: input.tenantId,
-      agentId,
-      agentKey,
-      nodeId: input.nodeId,
-      payload: input.payload,
-      profile,
-      stateMap,
-      automationTriggers,
-    });
-    events.push(...categoryEvents);
+    try {
+      const categoryEvents = await this.evaluateCategoryTriggers({
+        tenantId: input.tenantId,
+        agentId,
+        agentKey,
+        nodeId: input.nodeId,
+        payload: input.payload,
+        profile,
+        stateMap,
+        automationTriggers,
+      });
+      events.push(...categoryEvents);
+    } catch (error) {
+      logger.warn("location.poi_category_evaluation_failed", {
+        tenant_id: input.tenantId,
+        agent_id: agentId,
+        agent_key: agentKey,
+        node_id: input.nodeId,
+        poi_provider_kind: profile.poi_provider_kind,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
 
     return { sample, events };
   }

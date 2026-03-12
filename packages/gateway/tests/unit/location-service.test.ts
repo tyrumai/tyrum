@@ -255,6 +255,73 @@ describe("LocationService", () => {
     expect(provider.findNearestCategoryMatch).toHaveBeenCalledTimes(2);
   });
 
+  it("returns saved-place events when POI category evaluation fails", async () => {
+    const tenantId = "00000000-0000-4000-8000-000000000001";
+    const provider = {
+      findNearestCategoryMatch: vi.fn().mockRejectedValue(new Error("provider unavailable")),
+    };
+    vi.spyOn(poiProviderModule, "createPoiProvider").mockReturnValue(provider);
+
+    await service.createPlace({
+      tenantId,
+      agentKey: "default",
+      body: {
+        name: "Home",
+        latitude: 52.3702,
+        longitude: 4.8952,
+        radius_m: 120,
+        tags: ["home"],
+        source: "manual",
+        metadata: {},
+      },
+    });
+    await service.updateProfile({
+      tenantId,
+      agentKey: "default",
+      patch: { poi_provider_kind: "osm_overpass" },
+    });
+    await service.createAutomationTrigger({
+      tenantId,
+      agentKey: "default",
+      body: {
+        workspace_key: "default",
+        enabled: true,
+        delivery_mode: "notify",
+        condition: {
+          type: "poi_category",
+          category_key: "cafe",
+          transition: "enter",
+        },
+        execution: {
+          kind: "agent_turn",
+          instruction: "Check in",
+        },
+      },
+    });
+
+    const result = await service.ingestBeacon({
+      tenantId,
+      nodeId: "node-mobile-1",
+      payload: {
+        sample_id: "77777777-7777-4777-8777-777777777777",
+        recorded_at: "2026-03-11T12:10:00.000Z",
+        coords: {
+          latitude: 52.3702,
+          longitude: 4.8952,
+          accuracy_m: 8,
+        },
+        source: "gps",
+        is_background: false,
+      },
+    });
+
+    expect(result.events.map((event) => event.type)).toEqual(["saved_place.enter"]);
+    expect(provider.findNearestCategoryMatch).toHaveBeenCalledTimes(1);
+    await expect(
+      service.listEvents({ tenantId, agentKey: "default", limit: 10 }),
+    ).resolves.toMatchObject([{ type: "saved_place.enter" }]);
+  });
+
   it("applies a workspace filter even when no agent filter is provided", async () => {
     const tenantId = "00000000-0000-4000-8000-000000000001";
 
