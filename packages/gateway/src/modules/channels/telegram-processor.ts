@@ -134,6 +134,7 @@ export class TelegramChannelProcessor {
     if (this.ticking) return;
     this.ticking = true;
     try {
+      const egressConnectorsCache = new Map<string, ReadonlyMap<string, ChannelEgressConnector>>();
       const nowMs = Date.now();
       const claimed = await this.inbox.claimNext({
         owner: this.owner,
@@ -154,7 +155,10 @@ export class TelegramChannelProcessor {
         } else {
           try {
             const batch = await this.claimDebouncedBatch(claimed);
-            const egressConnectors = await this.loadEgressConnectors(claimed.tenant_id);
+            const egressConnectors = await this.loadEgressConnectorsCached(
+              egressConnectorsCache,
+              claimed.tenant_id,
+            );
             await processTelegramBatch(
               {
                 db: this.db,
@@ -185,7 +189,7 @@ export class TelegramChannelProcessor {
       }
 
       for (let i = 0; i < 3; i += 1) {
-        const didWork = await this.processOutboxOnce();
+        const didWork = await this.processOutboxOnce(egressConnectorsCache);
         if (!didWork) break;
       }
     } finally {
@@ -193,9 +197,11 @@ export class TelegramChannelProcessor {
     }
   }
 
-  private async processOutboxOnce(): Promise<boolean> {
+  private async processOutboxOnce(
+    egressConnectorsCache: Map<string, ReadonlyMap<string, ChannelEgressConnector>>,
+  ): Promise<boolean> {
     if (!this.approvalDal) {
-      return await this.sendNextOutbox();
+      return await this.sendNextOutbox(egressConnectorsCache);
     }
 
     const pending = await this.db.get<{ tenant_id: string; approval_id: string; inbox_id: number }>(
@@ -251,10 +257,12 @@ export class TelegramChannelProcessor {
       }
     }
 
-    return await this.sendNextOutbox();
+    return await this.sendNextOutbox(egressConnectorsCache);
   }
 
-  private async sendNextOutbox(): Promise<boolean> {
+  private async sendNextOutbox(
+    egressConnectorsCache: Map<string, ReadonlyMap<string, ChannelEgressConnector>>,
+  ): Promise<boolean> {
     const next = await this.outbox.claimNextGlobal({
       owner: this.owner,
       now_ms: Date.now(),
@@ -276,7 +284,10 @@ export class TelegramChannelProcessor {
 
     const address = parseChannelSourceKey(next.source);
     const sourceKey = buildChannelSourceKey(address);
-    const egressConnectors = await this.loadEgressConnectors(next.tenant_id);
+    const egressConnectors = await this.loadEgressConnectorsCached(
+      egressConnectorsCache,
+      next.tenant_id,
+    );
     const connector = egressConnectors.get(sourceKey) ?? egressConnectors.get(address.connector);
     if (!connector) {
       const message = `no egress connector registered for source '${address.connector}'`;
@@ -375,6 +386,17 @@ export class TelegramChannelProcessor {
         connector,
       ]),
     );
+  }
+
+  private async loadEgressConnectorsCached(
+    cache: Map<string, ReadonlyMap<string, ChannelEgressConnector>>,
+    tenantId: string,
+  ): Promise<ReadonlyMap<string, ChannelEgressConnector>> {
+    const existing = cache.get(tenantId);
+    if (existing) return existing;
+    const loaded = await this.loadEgressConnectors(tenantId);
+    cache.set(tenantId, loaded);
+    return loaded;
   }
 
   private async enqueueDeliveryReceiptEvent(input: {
