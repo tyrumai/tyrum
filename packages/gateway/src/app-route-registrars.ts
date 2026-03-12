@@ -88,6 +88,7 @@ export interface AppRouteContext {
   opts: AppOptions;
   runtime: { version: string; instanceId: string; role: string; otelEnabled: boolean };
   isLocalOnly: boolean;
+  channelPipelineEnabled: boolean;
   wsMaxBufferedBytes?: number;
   engine: AppOptions["engine"];
   secretProviderForTenant: AppOptions["secretProviderForTenant"];
@@ -170,11 +171,7 @@ export function registerSystemAndPublicRoutes(context: AppRouteContext): void {
       policyService: context.container.policyService,
       policyOverrideDal: context.container.policyOverrideDal,
       wsEventDal: context.routeDeps.wsEventDal,
-      ws: createWsRouteOptions({
-        connectionManager: context.opts.connectionManager,
-        wsCluster: context.opts.wsCluster,
-        wsMaxBufferedBytes: context.wsMaxBufferedBytes,
-      }),
+      ws: createWsRouteOptions(context),
     }),
   );
 }
@@ -220,11 +217,7 @@ export function registerAuthAndSecurityRoutes(context: AppRouteContext): void {
       logger: context.container.logger,
       policyOverrideDal: context.container.policyOverrideDal,
       wsEventDal: context.routeDeps.wsEventDal,
-      ws: createWsRouteOptions({
-        connectionManager: context.opts.connectionManager,
-        wsCluster: context.opts.wsCluster,
-        wsMaxBufferedBytes: context.wsMaxBufferedBytes,
-      }),
+      ws: createWsRouteOptions(context),
     }),
   );
 
@@ -314,11 +307,7 @@ export function registerModelsAndConfigRoutes(context: AppRouteContext): void {
       logger: context.container.logger,
       routingConfigDal: context.routeDeps.routingConfigDal,
       channelThreadDal: context.routeDeps.channelThreadDal,
-      ws: createWsRouteOptions({
-        connectionManager: context.opts.connectionManager,
-        wsCluster: context.opts.wsCluster,
-        wsMaxBufferedBytes: context.wsMaxBufferedBytes,
-      }),
+      ws: createWsRouteOptions(context),
     }),
   );
 }
@@ -380,12 +369,7 @@ export function registerAgentsAndWorkspaceRoutes(context: AppRouteContext): void
       logger: context.container.logger,
       nodePairingDal: context.container.nodePairingDal,
       wsEventDal: context.routeDeps.wsEventDal,
-      ws: createClusterWsRouteOptions({
-        connectionDirectory: context.opts.connectionDirectory,
-        connectionManager: context.opts.connectionManager,
-        wsCluster: context.opts.wsCluster,
-        wsMaxBufferedBytes: context.wsMaxBufferedBytes,
-      }),
+      ws: createClusterWsRouteOptions(context),
     }),
   );
 
@@ -398,11 +382,7 @@ export function registerAgentsAndWorkspaceRoutes(context: AppRouteContext): void
           ? new TelegramChannelQueue(context.container.db, {
               sessionDal: context.container.sessionDal,
               logger: context.container.logger,
-              ws: createWsRouteOptions({
-                connectionManager: context.opts.connectionManager,
-                wsCluster: context.opts.wsCluster,
-                wsMaxBufferedBytes: context.wsMaxBufferedBytes,
-              }),
+              ws: createWsRouteOptions(context),
             })
           : undefined,
       agents: context.opts.agents,
