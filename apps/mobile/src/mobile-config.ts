@@ -47,7 +47,7 @@ const DEFAULT_LOCATION_STREAMING_CONFIG: MobileLocationStreamingConfig = {
   distanceFilterM: 100,
   maxIntervalMs: 900_000,
   maxAccuracyM: 100,
-  backgroundEnabled: true,
+  backgroundEnabled: false,
 };
 
 let storageReadyPromise: Promise<void> | null = null;

@@ -85,7 +85,27 @@ describe("mobile-config", () => {
         distanceFilterM: 100,
         maxIntervalMs: 900_000,
         maxAccuracyM: 100,
-        backgroundEnabled: true,
+        backgroundEnabled: false,
+      },
+    });
+  });
+
+  it("bootstraps mobile config without background location tracking enabled", async () => {
+    const { mobileBootstrapConfigFromPayload } = await import("../src/mobile-config.js");
+
+    expect(
+      mobileBootstrapConfigFromPayload({
+        httpBaseUrl: "https://gateway.example/",
+        wsUrl: "wss://gateway.example/ws",
+        token: "token-1",
+      }),
+    ).toMatchObject({
+      httpBaseUrl: "https://gateway.example",
+      wsUrl: "wss://gateway.example/ws",
+      token: "token-1",
+      locationStreaming: {
+        streamEnabled: true,
+        backgroundEnabled: false,
       },
     });
   });
