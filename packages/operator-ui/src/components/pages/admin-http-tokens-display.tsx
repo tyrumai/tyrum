@@ -1,4 +1,4 @@
-import { createMobileBootstrapUrl } from "@tyrum/schemas";
+import { createMobileBootstrapUrl, inferGatewayWsUrl } from "@tyrum/schemas";
 import type * as React from "react";
 import QRCode from "qrcode";
 import { useEffect, useMemo, useState } from "react";
@@ -17,17 +17,6 @@ import {
 import { Input } from "../ui/input.js";
 import type { AuthTokenIssueResult } from "./admin-http-tokens-shared.js";
 import { formatTimestamp } from "./admin-http-tokens-shared.js";
-
-function inferWsUrl(httpBaseUrl: string): string {
-  const normalized = httpBaseUrl.trim().replace(/\/+$/, "");
-  if (normalized.startsWith("https://")) {
-    return `${normalized.replace(/^https:\/\//, "wss://")}/ws`;
-  }
-  if (normalized.startsWith("http://")) {
-    return `${normalized.replace(/^http:\/\//, "ws://")}/ws`;
-  }
-  return normalized;
-}
 
 function MobileBootstrapQrDialog({
   open,
@@ -118,7 +107,7 @@ export function IssuedTokenNotice({
       createMobileBootstrapUrl({
         v: 1,
         httpBaseUrl: gatewayHttpBaseUrl.trim().replace(/\/+$/, ""),
-        wsUrl: inferWsUrl(gatewayHttpBaseUrl),
+        wsUrl: inferGatewayWsUrl(gatewayHttpBaseUrl),
         token: token.token,
       }),
     [gatewayHttpBaseUrl, token.token],

@@ -1,4 +1,4 @@
-import type { MobileBootstrapPayload } from "@tyrum/schemas";
+import { inferGatewayWsUrl, type MobileBootstrapPayload } from "@tyrum/schemas";
 import { SecureStorage } from "@aparajita/capacitor-secure-storage";
 import { Preferences } from "@capacitor/preferences";
 import type { DeviceIdentity, DeviceIdentityStorage } from "@tyrum/client";
@@ -38,17 +38,7 @@ export function normalizeHttpBaseUrl(value: string): string {
 export function normalizeWsUrl(value: string): string {
   return value.trim();
 }
-
-export function inferGatewayWsUrl(httpBaseUrl: string): string {
-  const normalized = normalizeHttpBaseUrl(httpBaseUrl);
-  if (normalized.startsWith("https://")) {
-    return `${normalized.replace(/^https:\/\//, "wss://")}/ws`;
-  }
-  if (normalized.startsWith("http://")) {
-    return `${normalized.replace(/^http:\/\//, "ws://")}/ws`;
-  }
-  return normalized;
-}
+export { inferGatewayWsUrl };
 
 function ensureStorageReady(): Promise<void> {
   if (storageReadyPromise) return storageReadyPromise;

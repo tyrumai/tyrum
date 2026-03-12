@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   MobileBootstrapPayload,
   createMobileBootstrapUrl,
+  inferGatewayWsUrl,
   parseMobileBootstrapUrl,
 } from "../src/index.js";
 import { expectRejects } from "./test-helpers.js";
@@ -22,6 +23,12 @@ describe("mobile bootstrap payload", () => {
     const url = createMobileBootstrapUrl(payload);
     expect(url.startsWith("tyrum://bootstrap?payload=")).toBe(true);
     expect(parseMobileBootstrapUrl(url)).toEqual(payload);
+  });
+
+  it("infers a websocket URL from the gateway HTTP base URL", () => {
+    expect(inferGatewayWsUrl("https://gateway.example/")).toBe("wss://gateway.example/ws");
+    expect(inferGatewayWsUrl("http://gateway.example")).toBe("ws://gateway.example/ws");
+    expect(inferGatewayWsUrl("wss://gateway.example/ws")).toBe("wss://gateway.example/ws");
   });
 
   it("rejects payloads with non-http gateway URLs", () => {

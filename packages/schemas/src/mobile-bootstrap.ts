@@ -62,6 +62,17 @@ export const MobileBootstrapWsUrl = z
 
 export const MobileBootstrapToken = z.string().trim().min(1);
 
+export function inferGatewayWsUrl(httpBaseUrl: string): string {
+  const normalized = httpBaseUrl.trim().replace(/\/+$/, "");
+  if (normalized.startsWith("https://")) {
+    return `${normalized.replace(/^https:\/\//, "wss://")}/ws`;
+  }
+  if (normalized.startsWith("http://")) {
+    return `${normalized.replace(/^http:\/\//, "ws://")}/ws`;
+  }
+  return normalized;
+}
+
 export const MobileBootstrapPayload = z
   .object({
     v: z.literal(MOBILE_BOOTSTRAP_VERSION),

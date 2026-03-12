@@ -47,7 +47,7 @@ export { BrowserGeolocationGetArgs, BrowserCameraFacingMode, BrowserCameraCaptur
 // prettier-ignore
 export { MobileLocationGetCurrentArgs, MobileCameraTarget, MobileCameraCapturePhotoFormat, MobileCameraCapturePhotoArgs, MobileAudioRecordClipArgs, MobileActionArgs, MobileLocationCoords, MobileLocationGetCurrentResult, MobileCameraCapturePhotoResult, MobileAudioRecordClipResult, MobileActionResult } from "./mobile.js";
 // prettier-ignore
-export { MobileBootstrapHttpBaseUrl, MobileBootstrapWsUrl, MobileBootstrapToken, MobileBootstrapPayload, createMobileBootstrapUrl, parseMobileBootstrapUrl } from "./mobile-bootstrap.js";
+export { MobileBootstrapHttpBaseUrl, MobileBootstrapWsUrl, MobileBootstrapToken, MobileBootstrapPayload, inferGatewayWsUrl, createMobileBootstrapUrl, parseMobileBootstrapUrl } from "./mobile-bootstrap.js";
 // prettier-ignore
 export { IosLocationGetCurrentArgs, IosCameraTarget, IosCameraCapturePhotoFormat, IosCameraCapturePhotoArgs, IosAudioRecordClipArgs, IosActionArgs, IosLocationCoords, IosLocationGetCurrentResult, IosCameraCapturePhotoResult, IosAudioRecordClipResult, IosActionResult } from "./ios.js";
 // prettier-ignore

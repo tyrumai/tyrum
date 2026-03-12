@@ -124,4 +124,46 @@ describe("useMobileRuntimeSignals", () => {
     });
     container.remove();
   });
+
+  it("keeps native listeners stable while using the latest reconnect callback", async () => {
+    const initialReconnect = vi.fn();
+    const nextReconnect = vi.fn();
+    const { useMobileRuntimeSignals } = await import("../src/use-mobile-runtime-signals.js");
+    const { container, root } = createTestRoot();
+
+    const Probe = ({ onReconnect }: { onReconnect: () => void }) => {
+      useMobileRuntimeSignals(onReconnect);
+      return null;
+    };
+
+    await act(async () => {
+      root.render(React.createElement(Probe, { onReconnect: initialReconnect }));
+      await flushMicrotasks();
+    });
+
+    expect(addAppListenerMock).toHaveBeenCalledTimes(1);
+    expect(addNetworkListenerMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      root.render(React.createElement(Probe, { onReconnect: nextReconnect }));
+      await flushMicrotasks();
+    });
+
+    expect(addAppListenerMock).toHaveBeenCalledTimes(1);
+    expect(addNetworkListenerMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      appListeners.get("appStateChange")?.({ isActive: true });
+      networkListeners.get("networkStatusChange")?.({ connected: true, connectionType: "wifi" });
+      await flushMicrotasks();
+    });
+
+    expect(initialReconnect).not.toHaveBeenCalled();
+    expect(nextReconnect).toHaveBeenCalledTimes(2);
+
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+  });
 });

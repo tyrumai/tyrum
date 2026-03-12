@@ -1,7 +1,7 @@
 import { App } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import { Network, type ConnectionStatus } from "@capacitor/network";
-import { useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 
 export function useMobileRuntimeSignals(onReconnect: () => void): {
   appActive: boolean;
@@ -9,6 +9,9 @@ export function useMobileRuntimeSignals(onReconnect: () => void): {
 } {
   const [appActive, setAppActive] = useState(true);
   const [networkStatus, setNetworkStatus] = useState<ConnectionStatus | null>(null);
+  const reconnect = useEffectEvent(() => {
+    onReconnect();
+  });
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) {
@@ -33,7 +36,7 @@ export function useMobileRuntimeSignals(onReconnect: () => void): {
     void App.addListener("appStateChange", (state) => {
       setAppActive(state.isActive);
       if (state.isActive) {
-        onReconnect();
+        reconnect();
       }
     }).then((listener) => {
       if (disposed) {
@@ -48,7 +51,7 @@ export function useMobileRuntimeSignals(onReconnect: () => void): {
     void Network.addListener("networkStatusChange", (status) => {
       setNetworkStatus(status);
       if (status.connected) {
-        onReconnect();
+        reconnect();
       }
     }).then((listener) => {
       if (disposed) {
@@ -66,7 +69,7 @@ export function useMobileRuntimeSignals(onReconnect: () => void): {
         removeListener();
       }
     };
-  }, [onReconnect]);
+  }, []);
 
   return { appActive, networkStatus };
 }
