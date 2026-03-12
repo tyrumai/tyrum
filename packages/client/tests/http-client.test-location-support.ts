@@ -84,6 +84,22 @@ export function registerHttpClientLocationTests(): void {
     });
   });
 
+  it("rejects saved-place source aliases that the gateway cannot round-trip", async () => {
+    const fetch = makeFetchMock(async () => jsonResponse({ status: "ok" }));
+    const client = createTestClient({ fetch });
+
+    await expect(
+      client.location?.createPlace({
+        name: "Imported",
+        latitude: 52.3676,
+        longitude: 4.9041,
+        radius_m: 80,
+        source: "memory",
+      }),
+    ).rejects.toThrow("location place create request");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("updates a saved place without defaulting missing tags", async () => {
     const fetch = makeFetchMock(async () =>
       jsonResponse({

@@ -286,6 +286,7 @@ describe("useMobileNode", () => {
     expect(connectMock).toHaveBeenCalledTimes(1);
     expect(disconnectMock).not.toHaveBeenCalled();
     expect(locationStreamStartMock).toHaveBeenCalledTimes(2);
+    expect(locationStreamStopMock).toHaveBeenCalledTimes(1);
     act(() => {
       root.unmount();
     });

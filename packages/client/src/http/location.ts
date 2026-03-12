@@ -10,7 +10,8 @@ import {
 const Latitude = z.number().finite().min(-90).max(90);
 const Longitude = z.number().finite().min(-180).max(180);
 const RadiusMeters = z.number().finite().positive().max(100_000);
-const PlaceSource = z.enum(["manual", "memory", "provider", "import"]);
+// The HTTP API only round-trips canonical saved-place sources.
+const PlaceSource = z.enum(["manual", "provider"]);
 const PlaceId = NonEmptyString;
 const NodeId = NonEmptyString;
 const ProviderKey = NonEmptyString;
