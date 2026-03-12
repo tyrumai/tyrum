@@ -8,6 +8,7 @@ import { secureStringEqual } from "../utils/secure-string-equal.js";
 import type { TelegramBot } from "../modules/ingress/telegram-bot.js";
 import type { AgentRegistry } from "../modules/agent/registry.js";
 import type { TelegramChannelQueue } from "../modules/channels/telegram.js";
+import type { StoredTelegramChannelConfig } from "../modules/channels/channel-config-dal.js";
 import {
   renderMarkdownForTelegram,
   type TelegramFormattingFallbackEvent,
@@ -34,6 +35,24 @@ export interface IngressDeps {
 }
 
 const TELEGRAM_SECRET_HEADER = "x-telegram-bot-api-secret-token";
+
+function matchTelegramAccountByWebhookSecret(
+  accounts: readonly StoredTelegramChannelConfig[],
+  providedSecret: string,
+): StoredTelegramChannelConfig | undefined {
+  const normalizedSecret = providedSecret.trim();
+  if (!normalizedSecret) return undefined;
+
+  let matched: StoredTelegramChannelConfig | undefined;
+  for (const account of accounts) {
+    const webhookSecret = account.webhook_secret?.trim();
+    if (!webhookSecret) continue;
+    if (secureStringEqual(webhookSecret, normalizedSecret) && !matched) {
+      matched = account;
+    }
+  }
+  return matched;
+}
 
 export function createIngressRoutes(deps: IngressDeps = {}): Hono {
   const ingressRouter = new Hono();
@@ -76,17 +95,14 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
         return c.json({ error: "unauthorized", message: "invalid telegram webhook secret" }, 401);
       }
 
-      const matchedAccount = await deps.telegramRuntime.getTelegramAccountByWebhookSecret({
-        tenantId: DEFAULT_TENANT_ID,
-        webhookSecret: providedSecret,
-      });
+      const matchedAccount = matchTelegramAccountByWebhookSecret(accounts, providedSecret);
       if (!matchedAccount || !matchedAccount.webhook_secret) {
         return c.json({ error: "unauthorized", message: "invalid telegram webhook secret" }, 401);
       }
 
-      const matchedBot = await deps.telegramRuntime.getBotForAccount({
+      const matchedBot = deps.telegramRuntime.getBotForTelegramAccount({
         tenantId: DEFAULT_TENANT_ID,
-        accountKey: matchedAccount.account_key,
+        account: matchedAccount,
       });
       if (!matchedBot) {
         return c.json(

@@ -43,6 +43,13 @@ export class TelegramChannelRuntime {
     return this.getBot(config, input.tenantId);
   }
 
+  getBotForTelegramAccount(input: {
+    tenantId: string;
+    account: StoredTelegramChannelConfig;
+  }): TelegramBot | undefined {
+    return this.getBot(input.account, input.tenantId);
+  }
+
   async listEgressConnectors(tenantId: string): Promise<ChannelEgressConnector[]> {
     const configs = await this.listTelegramAccounts(tenantId);
     this.pruneTenantBots(

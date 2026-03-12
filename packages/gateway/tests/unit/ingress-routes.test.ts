@@ -58,13 +58,15 @@ describe("Ingress routes", () => {
     );
   });
 
-  it("reuses matched account pipeline state without a second account lookup", async () => {
+  it("reuses preloaded account state without extra runtime lookups", async () => {
     const enqueue = vi.fn(async () => ({
       inbox: { status: "queued", inbox_id: "inbox-1" },
       deduped: false,
       message_text: "hi",
     }));
+    const getTelegramAccountByWebhookSecret = vi.fn(async () => undefined);
     const getTelegramAccountByAccountKey = vi.fn(async () => undefined);
+    const getBotForAccount = vi.fn(async () => undefined);
     const telegramRuntime = {
       listTelegramAccounts: vi.fn(async () => [
         {
@@ -75,14 +77,9 @@ describe("Ingress routes", () => {
           pipeline_enabled: true,
         },
       ]),
-      getTelegramAccountByWebhookSecret: vi.fn(async () => ({
-        account_key: "work",
-        bot_token: "bot-token",
-        webhook_secret: "secret-work",
-        allowed_user_ids: [],
-        pipeline_enabled: true,
-      })),
-      getBotForAccount: vi.fn(async () => ({ sendMessage: vi.fn(async () => undefined) })),
+      getTelegramAccountByWebhookSecret,
+      getBotForAccount,
+      getBotForTelegramAccount: vi.fn(() => ({ sendMessage: vi.fn(async () => undefined) })),
       getTelegramAccountByAccountKey,
     } as any;
 
@@ -117,7 +114,9 @@ describe("Ingress routes", () => {
 
     expect(res.status).toBe(200);
     expect(enqueue).toHaveBeenCalledOnce();
+    expect(getTelegramAccountByWebhookSecret).not.toHaveBeenCalled();
     expect(getTelegramAccountByAccountKey).not.toHaveBeenCalled();
+    expect(getBotForAccount).not.toHaveBeenCalled();
   });
 
   it("rejects runtime ingress when no bot-backed telegram accounts are configured", async () => {

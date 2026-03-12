@@ -93,4 +93,27 @@ describe("TelegramChannelRuntime", () => {
     expect(recreated).toBeDefined();
     expect(recreated).not.toBe(first);
   });
+
+  it("reuses cached bots for a preloaded telegram account config", async () => {
+    const configs = new Map<string, StoredTelegramChannelConfig>([
+      ["work", createConfig("work", "token-a")],
+    ]);
+    const runtime = new TelegramChannelRuntime(createDal(configs));
+    const account = configs.get("work");
+
+    expect(account).toBeDefined();
+    if (!account) return;
+
+    const first = runtime.getBotForTelegramAccount({
+      tenantId: DEFAULT_TENANT_ID,
+      account,
+    });
+    const second = runtime.getBotForTelegramAccount({
+      tenantId: DEFAULT_TENANT_ID,
+      account,
+    });
+
+    expect(first).toBeDefined();
+    expect(second).toBe(first);
+  });
 });
