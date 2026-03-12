@@ -4,6 +4,7 @@ import { LocationService } from "../../src/modules/location/service.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import type { LocationDal } from "../../src/modules/location/dal.js";
+import * as poiProviderModule from "../../src/modules/location/poi-provider.js";
 
 describe("LocationService", () => {
   let db: SqliteDb;
@@ -24,6 +25,7 @@ describe("LocationService", () => {
   });
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     await db.close();
   });
 
@@ -146,6 +148,111 @@ describe("LocationService", () => {
       "saved_place.enter",
     ]);
     expect(listAutomationTriggersSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("updates a place without reloading the full place list and preserves explicit null clears", async () => {
+    const tenantId = "00000000-0000-4000-8000-000000000001";
+    const created = await service.createPlace({
+      tenantId,
+      agentKey: "default",
+      body: {
+        name: "Home",
+        latitude: 52.3702,
+        longitude: 4.8952,
+        radius_m: 120,
+        tags: ["home"],
+        source: "poi_provider",
+        provider_place_id: "osm:123",
+        metadata: { floor: 3 },
+      },
+    });
+
+    const dal = (service as unknown as { dal: LocationDal }).dal;
+    const listPlacesSpy = vi.spyOn(dal, "listPlaces");
+
+    const updated = await service.updatePlace({
+      tenantId,
+      agentKey: "default",
+      placeId: created.place_id,
+      patch: {
+        name: "Home Base",
+        provider_place_id: null,
+      },
+    });
+
+    expect(updated.name).toBe("Home Base");
+    expect(updated.provider_place_id).toBeNull();
+    expect(updated.tags).toEqual(["home"]);
+    expect(updated.metadata).toEqual({ floor: 3 });
+    expect(listPlacesSpy).not.toHaveBeenCalled();
+  });
+
+  it("reuses the same POI provider across beacon ingestions for the same provider kind", async () => {
+    const tenantId = "00000000-0000-4000-8000-000000000001";
+    const provider = {
+      findNearestCategoryMatch: vi.fn().mockResolvedValue(null),
+    };
+    const createPoiProviderSpy = vi
+      .spyOn(poiProviderModule, "createPoiProvider")
+      .mockReturnValue(provider);
+
+    await service.updateProfile({
+      tenantId,
+      agentKey: "default",
+      patch: { poi_provider_kind: "osm_overpass" },
+    });
+    await service.createAutomationTrigger({
+      tenantId,
+      agentKey: "default",
+      body: {
+        workspace_key: "default",
+        enabled: true,
+        delivery_mode: "notify",
+        condition: {
+          type: "poi_category",
+          category_key: "cafe",
+          transition: "enter",
+        },
+        execution: {
+          kind: "agent_turn",
+          instruction: "Check in",
+        },
+      },
+    });
+
+    await service.ingestBeacon({
+      tenantId,
+      nodeId: "node-mobile-1",
+      payload: {
+        sample_id: "55555555-5555-4555-8555-555555555555",
+        recorded_at: "2026-03-11T12:00:00.000Z",
+        coords: {
+          latitude: 52.3702,
+          longitude: 4.8952,
+          accuracy_m: 8,
+        },
+        source: "gps",
+        is_background: false,
+      },
+    });
+    await service.ingestBeacon({
+      tenantId,
+      nodeId: "node-mobile-1",
+      payload: {
+        sample_id: "66666666-6666-4666-8666-666666666666",
+        recorded_at: "2026-03-11T12:05:00.000Z",
+        coords: {
+          latitude: 52.3704,
+          longitude: 4.8954,
+          accuracy_m: 8,
+        },
+        source: "gps",
+        is_background: false,
+      },
+    });
+
+    expect(createPoiProviderSpy).toHaveBeenCalledTimes(1);
+    expect(provider.findNearestCategoryMatch).toHaveBeenCalledTimes(2);
   });
 
   it("applies a workspace filter even when no agent filter is provided", async () => {

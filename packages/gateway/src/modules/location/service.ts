@@ -15,7 +15,7 @@ import type { MemoryV1Dal } from "../memory/v1-dal.js";
 import type { ExecutionEngine } from "../execution/engine.js";
 import type { PolicyService } from "../policy/service.js";
 import { PlaybookRunner } from "../playbook/runner.js";
-import { createPoiProvider } from "./poi-provider.js";
+import { createPoiProvider, type PoiProvider } from "./poi-provider.js";
 import { haversineDistanceMeters } from "./geo.js";
 import { LocationDal } from "./dal.js";
 import {
@@ -44,6 +44,10 @@ export class LocationService {
   private readonly dal: LocationDal;
   private readonly playbooksById: Map<string, Playbook>;
   private readonly playbookRunner: PlaybookRunner;
+  private readonly poiProvidersByKind = new Map<
+    LocationProfile["poi_provider_kind"],
+    PoiProvider
+  >();
   private readonly db: ConstructorParameters<typeof LocationDal>[0];
 
   constructor(
@@ -132,45 +136,13 @@ export class LocationService {
     patch: LocationPlacePatchRequest;
   }): Promise<LocationPlace> {
     const agentId = await this.opts.identityScopeDal.ensureAgentId(input.tenantId, input.agentKey);
-    const places = await this.dal.listPlaces({
+    return await this.dal.updatePlace({
       tenantId: input.tenantId,
       agentId,
       agentKey: input.agentKey,
-    });
-    const current = places.find((place) => place.place_id === input.placeId);
-    if (!current) throw new Error("place not found");
-    await this.dal.updatePlace({
-      tenantId: input.tenantId,
-      agentId,
       placeId: input.placeId,
-      patch: {
-        ...current,
-        ...(input.patch.name ? { name: input.patch.name } : {}),
-        ...(input.patch.latitude !== undefined || input.patch.longitude !== undefined
-          ? {
-              point: {
-                latitude: input.patch.latitude ?? current.point.latitude,
-                longitude: input.patch.longitude ?? current.point.longitude,
-              },
-            }
-          : {}),
-        ...(input.patch.radius_m !== undefined ? { radius_m: input.patch.radius_m } : {}),
-        ...(input.patch.tags ? { tags: input.patch.tags } : {}),
-        ...(input.patch.source ? { source: input.patch.source } : {}),
-        ...(input.patch.provider_place_id !== undefined
-          ? { provider_place_id: input.patch.provider_place_id ?? null }
-          : {}),
-        ...(input.patch.metadata ? { metadata: input.patch.metadata } : {}),
-      },
+      patch: input.patch,
     });
-    const updated = await this.dal.listPlaces({
-      tenantId: input.tenantId,
-      agentId,
-      agentKey: input.agentKey,
-    });
-    const resolved = updated.find((place) => place.place_id === input.placeId);
-    if (!resolved) throw new Error("place not found");
-    return resolved;
   }
 
   async deletePlace(input: {
@@ -436,7 +408,7 @@ export class LocationService {
     if (categoryKeys.length === 0 || input.profile.poi_provider_kind === "none") {
       return [];
     }
-    const provider = createPoiProvider(input.profile.poi_provider_kind);
+    const provider = this.getPoiProvider(input.profile.poi_provider_kind);
     const events: LocationEvent[] = [];
 
     for (const categoryKey of categoryKeys) {
@@ -498,5 +470,15 @@ export class LocationService {
     }
 
     return events;
+  }
+
+  private getPoiProvider(kind: LocationProfile["poi_provider_kind"]): PoiProvider {
+    const cached = this.poiProvidersByKind.get(kind);
+    if (cached) {
+      return cached;
+    }
+    const provider = createPoiProvider(kind);
+    this.poiProvidersByKind.set(kind, provider);
+    return provider;
   }
 }

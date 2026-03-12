@@ -5,7 +5,13 @@ import {
 } from "../observability/persisted-json.js";
 import { gatewayMetrics } from "../observability/metrics.js";
 import { Logger } from "../observability/logger.js";
-import type { LocationBeacon, LocationEvent, LocationPlace, LocationProfile } from "@tyrum/schemas";
+import type {
+  LocationBeacon,
+  LocationEvent,
+  LocationPlace,
+  LocationPlacePatchRequest,
+  LocationProfile,
+} from "@tyrum/schemas";
 import type {
   LocationAutomationTriggerCreateRequest,
   LocationAutomationTriggerPatchRequest,
@@ -158,9 +164,10 @@ export class LocationDal {
   async updatePlace(input: {
     tenantId: string;
     agentId: string;
+    agentKey: string;
     placeId: string;
-    patch: Partial<LocationPlace>;
-  }): Promise<void> {
+    patch: LocationPlacePatchRequest;
+  }): Promise<LocationPlace> {
     const current = await this.db.get<RawPlaceRow>(
       `SELECT place_id, name, latitude, longitude, radius_m, tags_json, source, provider_place_id,
               metadata_json, created_at, updated_at
@@ -169,6 +176,26 @@ export class LocationDal {
       [input.tenantId, input.agentId, input.placeId],
     );
     if (!current) throw new Error("place not found");
+    const nextTags = input.patch.tags ?? parseStringArray(current.tags_json, this.observer);
+    const nextMetadata =
+      input.patch.metadata ??
+      parseObject(current.metadata_json, "location_places", "metadata_json", this.observer);
+    const nextProviderPlaceId = Object.hasOwn(input.patch, "provider_place_id")
+      ? (input.patch.provider_place_id ?? null)
+      : current.provider_place_id;
+    const updatedAt = new Date().toISOString();
+    const tagsJson = stringifyPersistedJson({
+      value: nextTags,
+      table: "location_places",
+      column: "tags_json",
+      shape: "array",
+    });
+    const metadataJson = stringifyPersistedJson({
+      value: nextMetadata,
+      table: "location_places",
+      column: "metadata_json",
+      shape: "object",
+    });
     await this.db.run(
       `UPDATE location_places
           SET name = ?, latitude = ?, longitude = ?, radius_m = ?, tags_json = ?, source = ?,
@@ -176,30 +203,34 @@ export class LocationDal {
         WHERE tenant_id = ? AND agent_id = ? AND place_id = ?`,
       [
         input.patch.name ?? current.name,
-        input.patch.point?.latitude ?? current.latitude,
-        input.patch.point?.longitude ?? current.longitude,
+        input.patch.latitude ?? current.latitude,
+        input.patch.longitude ?? current.longitude,
         input.patch.radius_m ?? current.radius_m,
-        stringifyPersistedJson({
-          value: input.patch.tags ?? parseStringArray(current.tags_json, this.observer),
-          table: "location_places",
-          column: "tags_json",
-          shape: "array",
-        }),
+        tagsJson,
         input.patch.source ?? current.source,
-        input.patch.provider_place_id ?? current.provider_place_id,
-        stringifyPersistedJson({
-          value:
-            input.patch.metadata ??
-            parseObject(current.metadata_json, "location_places", "metadata_json", this.observer),
-          table: "location_places",
-          column: "metadata_json",
-          shape: "object",
-        }),
-        new Date().toISOString(),
+        nextProviderPlaceId,
+        metadataJson,
+        updatedAt,
         input.tenantId,
         input.agentId,
         input.placeId,
       ],
+    );
+    return toLocationPlace(
+      {
+        ...current,
+        name: input.patch.name ?? current.name,
+        latitude: input.patch.latitude ?? current.latitude,
+        longitude: input.patch.longitude ?? current.longitude,
+        radius_m: input.patch.radius_m ?? current.radius_m,
+        tags_json: tagsJson,
+        source: input.patch.source ?? current.source,
+        provider_place_id: nextProviderPlaceId,
+        metadata_json: metadataJson,
+        updated_at: updatedAt,
+      },
+      input.agentKey,
+      this.observer,
     );
   }
 
