@@ -14,6 +14,7 @@ vi.mock("node:child_process", async () => {
 
 import {
   buildRuntimePrompt,
+  canPatternMatchMcpToolId,
   resetGitRootCacheForTests,
   resolveGitRoot,
 } from "../../src/modules/agent/runtime/turn-preparation-runtime.js";
@@ -98,5 +99,12 @@ describe("turn preparation runtime helpers", () => {
 
     expect(prompt).toContain("Git repo root: /repo-root");
     expect(prompt).not.toContain("Approval workflow available:");
+  });
+
+  it("accepts wildcard allow-list patterns that can match an MCP tool id", () => {
+    expect(canPatternMatchMcpToolId("*.weather.*")).toBe(true);
+    expect(canPatternMatchMcpToolId("m?p.weather.*")).toBe(true);
+    expect(canPatternMatchMcpToolId("mcp*")).toBe(true);
+    expect(canPatternMatchMcpToolId("calendar.*")).toBe(false);
   });
 });

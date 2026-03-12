@@ -124,4 +124,88 @@ describe("AgentRuntime shared context scopes", () => {
       },
     ]);
   });
+
+  it("keeps source-less non-builtin tools in shared mode while excluding blocked builtins", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-shared-tools-"));
+    container = createContainer(
+      { dbPath: ":memory:", migrationsDir, tyrumHome: homeDir },
+      { deploymentConfig: { state: { mode: "shared" } } },
+    );
+
+    const tenantId = await container.identityScopeDal.ensureTenantId("tenant-shared-tools");
+    const resolvedAgentId = await container.identityScopeDal.ensureAgentId(tenantId, "default");
+    const resolvedWorkspaceId = await container.identityScopeDal.ensureWorkspaceId(
+      tenantId,
+      DEFAULT_WORKSPACE_KEY,
+    );
+    await container.identityScopeDal.ensureMembership(
+      tenantId,
+      resolvedAgentId,
+      resolvedWorkspaceId,
+    );
+
+    await new AgentConfigDal(container.db).set({
+      tenantId,
+      agentId: resolvedAgentId,
+      config: AgentConfig.parse({
+        model: { model: "openai/gpt-4.1" },
+        skills: { enabled: [] },
+        mcp: { enabled: [] },
+        tools: {
+          default_mode: "deny",
+          allow: ["read", "mcp.weather.forecast", "custom.plugin.echo"],
+          deny: [],
+        },
+        sessions: { ttl_days: 30, max_turns: 20 },
+        memory: { v1: { enabled: false } },
+      }),
+      createdBy: { kind: "test" },
+      reason: "shared status tool filter regression",
+    });
+
+    const contextStore = {
+      ensureAgentContext: async () => {},
+      getIdentity: async () => ({
+        meta: { name: "Shared Agent", description: "shared identity" },
+        body: "You are a shared agent.",
+      }),
+      getEnabledSkills: async () => [],
+      getEnabledMcpServers: async () => [],
+    };
+
+    const runtime = new AgentRuntime({
+      container,
+      tenantId,
+      home: homeDir,
+      contextStore,
+      mcpManager: {
+        listToolDescriptors: async () => [
+          {
+            id: "mcp.weather.forecast",
+            description: "Weather forecast",
+            risk: "medium",
+            requires_confirmation: true,
+            keywords: ["weather"],
+          },
+        ],
+        callTool: async () => ({ content: [] }),
+        shutdown: async () => {},
+      } as never,
+      plugins: {
+        getToolDescriptors: () => [
+          {
+            id: "custom.plugin.echo",
+            description: "Echo text",
+            risk: "low" as const,
+            requires_confirmation: false,
+            keywords: ["echo"],
+          },
+        ],
+      } as never,
+    });
+
+    await expect(runtime.status(true)).resolves.toMatchObject({
+      tools: ["mcp.weather.forecast", "custom.plugin.echo"],
+    });
+  });
 });

@@ -1,5 +1,5 @@
 import type { OperatorCore } from "@tyrum/operator-core";
-import type { ManagedAgentDetail } from "@tyrum/schemas";
+import type { AgentCapabilitiesResponse, ManagedAgentDetail } from "@tyrum/schemas";
 import * as React from "react";
 import { useApiAction } from "../../hooks/use-api-action.js";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
@@ -23,6 +23,8 @@ type AgentEditorProps = {
   onSaved: (agentKey: string) => void;
   onCancelCreate: () => void;
 };
+
+const CREATE_CAPABILITIES_DEBOUNCE_MS = 250;
 
 function sortJsonValue(value: unknown): unknown {
   if (Array.isArray(value)) {
@@ -70,6 +72,9 @@ export function AgentsPageEditor({
   const [form, setForm] = React.useState<AgentEditorFormState>(createBlankForm());
   const [loading, setLoading] = React.useState(mode === "edit");
   const [loadError, setLoadError] = React.useState<string | null>(null);
+  const [capabilities, setCapabilities] = React.useState<AgentCapabilitiesResponse | null>(null);
+  const [capabilitiesLoading, setCapabilitiesLoading] = React.useState(true);
+  const [capabilitiesError, setCapabilitiesError] = React.useState<string | null>(null);
   const [modelPresets, setModelPresets] = React.useState<ModelPreset[]>([]);
   const [modelPresetsLoading, setModelPresetsLoading] = React.useState(true);
   const [modelPresetsError, setModelPresetsError] = React.useState<string | null>(null);
@@ -77,6 +82,28 @@ export function AgentsPageEditor({
     {},
   );
   const saveAction = useApiAction<ManagedAgentDetail>();
+  const deferredCreateCapabilitiesAgentKey = React.useDeferredValue(
+    form.agentKey.trim() || "default",
+  );
+  const [debouncedCreateCapabilitiesAgentKey, setDebouncedCreateCapabilitiesAgentKey] =
+    React.useState("default");
+  const capabilitiesAgentKey =
+    mode === "create" ? debouncedCreateCapabilitiesAgentKey : agentKey?.trim() || "default";
+
+  React.useEffect(() => {
+    if (mode !== "create") return;
+    if (deferredCreateCapabilitiesAgentKey === "default") {
+      setDebouncedCreateCapabilitiesAgentKey("default");
+      return;
+    }
+
+    const timeoutId = globalThis.setTimeout(() => {
+      setDebouncedCreateCapabilitiesAgentKey(deferredCreateCapabilitiesAgentKey);
+    }, CREATE_CAPABILITIES_DEBOUNCE_MS);
+    return () => {
+      globalThis.clearTimeout(timeoutId);
+    };
+  }, [createNonce, deferredCreateCapabilitiesAgentKey, mode]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -156,6 +183,33 @@ export function AgentsPageEditor({
     };
   }, [agentKey, core.http.agents, core.http.modelConfig, createNonce, mode]);
 
+  React.useEffect(() => {
+    let cancelled = false;
+
+    async function loadCapabilities(): Promise<void> {
+      setCapabilitiesLoading(true);
+      setCapabilitiesError(null);
+      try {
+        const result = await core.http.agents.capabilities(capabilitiesAgentKey);
+        if (cancelled) return;
+        setCapabilities(result);
+      } catch (error) {
+        if (cancelled) return;
+        setCapabilities(null);
+        setCapabilitiesError(formatErrorMessage(error));
+      } finally {
+        if (!cancelled) {
+          setCapabilitiesLoading(false);
+        }
+      }
+    }
+
+    void loadCapabilities();
+    return () => {
+      cancelled = true;
+    };
+  }, [capabilitiesAgentKey, core.http.agents]);
+
   const selectedPrimaryPreset = React.useMemo(
     () =>
       resolveSelectedPrimaryPreset({
@@ -212,7 +266,6 @@ export function AgentsPageEditor({
       const targetKey = agentKey ?? payload.agent_key;
       return await core.http.agents.update(targetKey, {
         config: payload.config,
-        identity: payload.identity,
       });
     });
     onSaved(updated.agent_key);
@@ -236,7 +289,7 @@ export function AgentsPageEditor({
         <div className="text-sm text-fg-muted">
           {mode === "create"
             ? "Create a managed agent and persist its configuration."
-            : "Edit the selected agent's persisted configuration and identity."}
+            : "Edit the selected agent's persisted configuration."}
         </div>
         <div className="flex flex-wrap gap-2">
           {mode === "create" ? (
@@ -284,6 +337,9 @@ export function AgentsPageEditor({
         onSelectPrimaryPreset={selectPrimaryPreset}
         onClearPrimaryModel={clearPrimaryModel}
         unsupportedModelOptions={unsupportedModelOptions}
+        capabilities={capabilities}
+        capabilitiesLoading={capabilitiesLoading}
+        capabilitiesError={capabilitiesError}
       />
     </div>
   );

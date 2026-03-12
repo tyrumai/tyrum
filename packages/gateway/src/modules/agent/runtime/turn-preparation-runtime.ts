@@ -26,9 +26,15 @@ import {
 import type { ResolvedExecutionProfile } from "./intake-delegation.js";
 import type { AgentLoadedContext } from "./types.js";
 import type { AgentContextStore } from "../context-store.js";
+import { materializeAllowedAgentIds } from "../access-config.js";
 import { loadCurrentAgentContext } from "../load-context.js";
 import type { SessionRow } from "../session-dal.js";
-import { isToolAllowed, selectToolDirectory, type ToolDescriptor } from "../tools.js";
+import {
+  isToolAllowed,
+  listBuiltinToolDescriptors,
+  selectToolDirectory,
+  type ToolDescriptor,
+} from "../tools.js";
 import { tagContent } from "../provenance.js";
 import { sanitizeForModel } from "../sanitizer.js";
 import { parseChannelSourceKey } from "../../channels/interface.js";
@@ -189,6 +195,104 @@ export function assemblePrompts(
   };
 }
 
+function canDiscoverMcpTools(toolConfig: AgentLoadedContext["config"]["tools"]): boolean {
+  if (toolConfig.default_mode === "allow") {
+    return true;
+  }
+
+  return toolConfig.allow.some((entry) => {
+    const normalized = entry.trim();
+    return (
+      normalized === "*" || normalized.startsWith("mcp.") || canPatternMatchMcpToolId(normalized)
+    );
+  });
+}
+
+const MCP_TOOL_SHAPE_CHARS = ["m", "c", "p", ".", "x"] as const;
+const MCP_TOOL_ACCEPTING_STATE = 7;
+
+function nextMcpToolShapeState(state: number, char: string): number | undefined {
+  switch (state) {
+    case 0:
+      return char === "m" ? 1 : undefined;
+    case 1:
+      return char === "c" ? 2 : undefined;
+    case 2:
+      return char === "p" ? 3 : undefined;
+    case 3:
+      return char === "." ? 4 : undefined;
+    case 4:
+      return char === "." ? undefined : 5;
+    case 5:
+      return char === "." ? 6 : 5;
+    case 6:
+      return char === "." ? undefined : 7;
+    case 7:
+      return 7;
+    default:
+      return undefined;
+  }
+}
+
+export function canPatternMatchMcpToolId(pattern: string): boolean {
+  const normalized = pattern.trim();
+  if (normalized.length === 0) {
+    return false;
+  }
+
+  // Match against the structural language mcp.<server>.<tool...> instead of a single sample id.
+  const memo = new Map<string, boolean>();
+  const visiting = new Set<string>();
+  const visit = (patternIndex: number, shapeState: number): boolean => {
+    const key = `${String(patternIndex)}:${String(shapeState)}`;
+    const cached = memo.get(key);
+    if (cached !== undefined) {
+      return cached;
+    }
+    if (visiting.has(key)) {
+      return false;
+    }
+
+    if (patternIndex >= normalized.length) {
+      const matches = shapeState === MCP_TOOL_ACCEPTING_STATE;
+      memo.set(key, matches);
+      return matches;
+    }
+
+    const token = normalized[patternIndex];
+    if (token === undefined) {
+      memo.set(key, false);
+      return false;
+    }
+
+    visiting.add(key);
+    let matches = false;
+    if (token === "*") {
+      matches = visit(patternIndex + 1, shapeState);
+      if (!matches) {
+        matches = MCP_TOOL_SHAPE_CHARS.some((char) => {
+          const nextState = nextMcpToolShapeState(shapeState, char);
+          return nextState !== undefined && visit(patternIndex, nextState);
+        });
+      }
+    } else if (token === "?") {
+      matches = MCP_TOOL_SHAPE_CHARS.some((char) => {
+        const nextState = nextMcpToolShapeState(shapeState, char);
+        return nextState !== undefined && visit(patternIndex + 1, nextState);
+      });
+    } else {
+      const nextState = nextMcpToolShapeState(shapeState, token);
+      matches = nextState !== undefined && visit(patternIndex + 1, nextState);
+    }
+
+    visiting.delete(key);
+    memo.set(key, matches);
+    return matches;
+  };
+
+  return visit(0, 0);
+}
+
 export async function resolveIdentityAndContext(
   deps: TurnPreparationRuntimeDeps,
   input: AgentTurnRequestT,
@@ -265,9 +369,6 @@ export async function resolveToolsAndMemory(
   toolSetBuilder: ToolSetBuilder;
   filteredTools: ToolDescriptor[];
 }> {
-  const wantsMcpTools = ctx.config.tools.allow.some(
-    (entry) => entry === "*" || entry === "mcp*" || entry.startsWith("mcp."),
-  );
   const memoryDigestPromise =
     isStatusQuery(resolved.message) || parseIntakeModeDecision(resolved.message)
       ? Promise.resolve({
@@ -281,9 +382,9 @@ export async function resolveToolsAndMemory(
 
   const [memoryDigestResult, mcpTools] = await Promise.all([
     memoryDigestPromise,
-    wantsMcpTools
+    canDiscoverMcpTools(ctx.config.tools)
       ? deps.mcpManager.listToolDescriptors(ctx.mcpServers)
-      : deps.mcpManager.listToolDescriptors([]),
+      : Promise.resolve([]),
   ]);
   const toolSetBuilder = new ToolSetBuilder({
     home: deps.home,
@@ -303,10 +404,16 @@ export async function resolveToolsAndMemory(
     plugins: deps.plugins,
     redactionEngine: deps.opts.container.redactionEngine,
   });
+  const builtinTools = listBuiltinToolDescriptors();
   const pluginToolsRaw = deps.plugins?.getToolDescriptors() ?? [];
+  const baseToolAllowlist = materializeAllowedAgentIds(ctx.config.tools, [
+    ...builtinTools,
+    ...mcpTools,
+    ...pluginToolsRaw,
+  ]).map((tool) => tool.id);
   const { allowlist: toolAllowlist, pluginTools } =
     await toolSetBuilder.resolvePolicyGatedPluginToolExposure({
-      allowlist: ctx.config.tools.allow,
+      allowlist: baseToolAllowlist,
       pluginTools: pluginToolsRaw,
     });
   const toolCandidates = selectToolDirectory(

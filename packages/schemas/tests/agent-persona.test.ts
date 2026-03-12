@@ -4,7 +4,6 @@ import {
   PERSONA_CHARACTERS,
   PERSONA_PALETTES,
   PERSONA_TONES,
-  buildPersonaDescription,
   randomizePersona,
 } from "../src/index.js";
 
@@ -20,7 +19,6 @@ describe("agent persona helpers", () => {
     const randomized = randomizePersona({
       current: {
         name: "Alpha",
-        description: "Alpha operator persona",
         tone: "direct",
         palette: "graphite",
         character: "operator",
@@ -32,6 +30,5 @@ describe("agent persona helpers", () => {
     expect(randomized.tone).toBe("curious");
     expect(randomized.palette).toBe("moss");
     expect(randomized.character).toBe("researcher");
-    expect(randomized.description).toBe(buildPersonaDescription("researcher", "curious"));
   });
 });

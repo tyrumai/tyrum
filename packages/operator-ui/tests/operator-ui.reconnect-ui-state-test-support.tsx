@@ -116,7 +116,6 @@ function createAgentsCore(): OperatorCore {
           can_delete: false,
           persona: {
             name: "Default Agent",
-            description: "Managed agent",
             tone: "direct",
             palette: "graphite",
             character: "architect",
@@ -125,7 +124,6 @@ function createAgentsCore(): OperatorCore {
             model: { model: "openai/gpt-4.1" },
             persona: {
               name: "Default Agent",
-              description: "Managed agent",
               tone: "direct",
               palette: "graphite",
               character: "architect",
@@ -134,10 +132,8 @@ function createAgentsCore(): OperatorCore {
           identity: IdentityPack.parse({
             meta: {
               name: "Default Agent",
-              description: "Managed agent",
               style: { tone: "direct" },
             },
-            body: "",
           }),
           config_revision: 1,
           identity_revision: 1,
@@ -147,6 +143,17 @@ function createAgentsCore(): OperatorCore {
         create: vi.fn(),
         update: vi.fn(),
         delete: vi.fn(),
+        capabilities: vi.fn(async () => ({
+          skills: {
+            default_mode: "allow",
+            allow: [],
+            deny: [],
+            workspace_trusted: true,
+            items: [],
+          },
+          mcp: { default_mode: "allow", allow: [], deny: [], items: [] },
+          tools: { default_mode: "allow", allow: [], deny: [], items: [] },
+        })),
       },
       modelConfig,
     },

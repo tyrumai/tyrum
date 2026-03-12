@@ -5,6 +5,7 @@ import {
   type ManagedExtensionSummary,
 } from "@tyrum/schemas";
 import { RuntimePackageDal, type RuntimePackageRevision } from "../agent/runtime-package-dal.js";
+import { isAgentAccessAllowed } from "../agent/access-config.js";
 import {
   ensureManagedExtensionMaterialized,
   parseManagedMcpPackage,
@@ -42,9 +43,10 @@ export function countAssignments(
   kind: ExtensionKind,
   key: string,
 ): number {
-  return configs.filter((config) =>
-    kind === "skill" ? config.skills.enabled.includes(key) : config.mcp.enabled.includes(key),
-  ).length;
+  return configs.filter((config) => {
+    const accessConfig = kind === "skill" ? config.skills : config.mcp;
+    return isAgentAccessAllowed({ ...accessConfig, default_mode: "deny" }, key);
+  }).length;
 }
 
 function sourceDescriptorForSkill(

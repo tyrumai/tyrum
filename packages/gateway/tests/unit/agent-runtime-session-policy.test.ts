@@ -146,8 +146,7 @@ describe("AgentRuntime - session lifecycle and policy", () => {
       message: "hello again",
     });
 
-    expect(mcpManager.listToolDescriptors).toHaveBeenCalledTimes(2);
-    expect(mcpManager.listToolDescriptors).toHaveBeenNthCalledWith(2, []);
+    expect(mcpManager.listToolDescriptors).toHaveBeenCalledTimes(1);
   });
 
   it("shutdown calls McpManager.shutdown()", async () => {

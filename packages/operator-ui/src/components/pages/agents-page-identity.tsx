@@ -68,6 +68,18 @@ function OutlineBadgeList({ emptyText, items }: { emptyText: string; items: stri
   );
 }
 
+function summarizeToolAccess(status: AgentStatusResponse): string[] {
+  if (!status.tool_access) {
+    return [];
+  }
+
+  return [
+    `default:${status.tool_access.default_mode}`,
+    ...status.tool_access.allow.map((toolId) => `allow:${toolId}`),
+    ...status.tool_access.deny.map((toolId) => `deny:${toolId}`),
+  ];
+}
+
 function SkillsCard({ status }: { status: AgentStatusResponse }) {
   const detailedSkills = status.skills_detailed ?? [];
   return (
@@ -225,9 +237,6 @@ export function AgentIdentityPanel({
 
   const overviewFields: Array<{ label: string; value: ReactNode; valueClassName?: string }> = [
     { label: "Name", value: status.identity.name, valueClassName: "text-base font-medium" },
-    ...(status.identity.description
-      ? [{ label: "Description", value: status.identity.description }]
-      : []),
     {
       label: "Home",
       value: (
@@ -335,7 +344,11 @@ export function AgentIdentityPanel({
             <div className="text-sm font-medium text-fg">Tools</div>
           </CardHeader>
           <CardContent className="grid gap-3 text-sm">
-            <OutlineBadgeList emptyText="No tools configured." items={status.tools} />
+            <OutlineBadgeList
+              emptyText="No tool access rules configured."
+              items={summarizeToolAccess(status)}
+            />
+            <OutlineBadgeList emptyText="No tools currently available." items={status.tools} />
           </CardContent>
         </Card>
 

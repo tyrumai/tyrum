@@ -68,6 +68,7 @@ export type {
 export type {
   ManagedAgentListResult,
   ManagedAgentGetResult,
+  AgentCapabilitiesResult,
   ManagedAgentCreateInput,
   ManagedAgentUpdateInput,
   ManagedAgentDeleteResult,

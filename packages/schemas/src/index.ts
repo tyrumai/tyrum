@@ -53,13 +53,12 @@ export { IosLocationGetCurrentArgs, IosCameraTarget, IosCameraCapturePhotoFormat
 // prettier-ignore
 export { AndroidLocationGetCurrentArgs, AndroidCameraTarget, AndroidCameraCapturePhotoFormat, AndroidCameraCapturePhotoArgs, AndroidAudioRecordClipArgs, AndroidActionArgs, AndroidLocationCoords, AndroidLocationGetCurrentResult, AndroidCameraCapturePhotoResult, AndroidAudioRecordClipResult, AndroidActionResult } from "./android.js";
 // prettier-ignore
-export { AgentModelConfig, AgentSkillConfig, AgentMcpConfig, AgentToolConfig, AgentSessionConfig, AgentMemoryConfig, AgentPersona, AgentConfig, IdentityStyle, IdentityFrontmatter, IdentityPack, SkillRequires, SkillFrontmatter, SkillManifest, SkillProvenanceSource, SkillStatus, McpServerSpec, AgentTurnRequest, AgentTurnResponse, AgentListItem, AgentListResponse, AgentConfigListItem, AgentConfigListResponse, AgentConfigGetResponse, AgentConfigUpdateRequest, AgentConfigUpdateResponse, ManagedAgentSummary, ManagedAgentListResponse, ManagedAgentDetail, ManagedAgentGetResponse, ManagedAgentCreateRequest, ManagedAgentUpdateRequest, ManagedAgentDeleteResponse, AgentStatusResponse } from "./agent.js";
+export { AgentAccessDefaultMode, AgentModelConfig, AgentSkillConfig, AgentMcpConfig, AgentToolConfig, AgentSessionConfig, AgentMemoryConfig, AgentPersona, AgentConfig, IdentityStyle, IdentityFrontmatter, IdentityPack, SkillRequires, SkillFrontmatter, SkillManifest, SkillProvenanceSource, SkillStatus, McpServerSpec, AgentTurnRequest, AgentTurnResponse, AgentListItem, AgentListResponse, AgentConfigListItem, AgentConfigListResponse, AgentConfigGetResponse, AgentConfigUpdateRequest, AgentConfigUpdateResponse, ManagedAgentSummary, ManagedAgentListResponse, ManagedAgentDetail, ManagedAgentGetResponse, ManagedAgentCreateRequest, ManagedAgentUpdateRequest, ManagedAgentDeleteResponse, AgentStatusResponse, AgentSkillCapability, AgentMcpCapabilitySource, AgentMcpCapability, AgentToolCapability, AgentCapabilitiesResponse } from "./agent.js";
 export {
   CODEX_AGENT_NAMES,
   PERSONA_CHARACTERS,
   PERSONA_PALETTES,
   PERSONA_TONES,
-  buildPersonaDescription,
   randomizePersona,
 } from "./agent-persona.js";
 // prettier-ignore
@@ -120,7 +119,7 @@ export { WorkArtifactId, WorkArtifactKind, WorkArtifact } from "./work-artifacts
 // prettier-ignore
 export { ToolIntentCostBudget, ToolIntentV1, ToolIntent } from "./tool-intent.js";
 // prettier-ignore
-export { canonicalizeToolId, canonicalizeToolIdList } from "./tool-id.js";
+export { canonicalizeToolId, canonicalizeToolIdList, canonicalizeExactToolIdList } from "./tool-id.js";
 // prettier-ignore
 export { DecisionRecordId, DecisionRecord } from "./work-decisions.js";
 // prettier-ignore

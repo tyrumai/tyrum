@@ -5,8 +5,9 @@ import { describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
 import type { OperatorCore } from "../../../operator-core/src/index.js";
 import { createStore } from "../../../operator-core/src/store.js";
+import { AgentsPageEditor } from "../../src/components/pages/agents-page-editor.js";
 import { AgentsPage } from "../../src/components/pages/agents-page.js";
-import { cleanupTestRoot, click, renderIntoDocument } from "../test-utils.js";
+import { cleanupTestRoot, click, renderIntoDocument, setNativeValue } from "../test-utils.js";
 
 function sampleManagedAgentDetail(agentKey: string) {
   return {
@@ -22,7 +23,6 @@ function sampleManagedAgentDetail(agentKey: string) {
     can_delete: agentKey !== "default",
     persona: {
       name: agentKey === "default" ? "Default Agent" : "Agent One",
-      description: "Managed agent",
       tone: "direct",
       palette: "graphite",
       character: "architect",
@@ -31,7 +31,6 @@ function sampleManagedAgentDetail(agentKey: string) {
       model: { model: "openai/gpt-5.4" },
       persona: {
         name: agentKey === "default" ? "Default Agent" : "Agent One",
-        description: "Managed agent",
         tone: "direct",
         palette: "graphite",
         character: "architect",
@@ -40,10 +39,8 @@ function sampleManagedAgentDetail(agentKey: string) {
     identity: IdentityPack.parse({
       meta: {
         name: agentKey === "default" ? "Default Agent" : "Agent One",
-        description: "Managed agent",
         style: { tone: "direct" },
       },
-      body: "",
     }),
   };
 }
@@ -87,6 +84,7 @@ function samplePresets() {
 function createCore(
   list: ReturnType<typeof vi.fn>,
   get: ReturnType<typeof vi.fn>,
+  capabilities: ReturnType<typeof vi.fn>,
   update: ReturnType<typeof vi.fn>,
   listPresets = vi.fn().mockResolvedValue(samplePresets()),
 ) {
@@ -135,7 +133,7 @@ function createCore(
       refresh: vi.fn().mockResolvedValue(undefined),
     },
     http: {
-      agents: { list, get, create: vi.fn(), update, delete: vi.fn() },
+      agents: { list, get, capabilities, create: vi.fn(), update, delete: vi.fn() },
       modelConfig: {
         listPresets,
       },
@@ -174,8 +172,13 @@ describe("AgentsPage editor", () => {
       ],
     }));
     const get = vi.fn().mockResolvedValue(sampleManagedAgentDetail("agent-1"));
+    const capabilities = vi.fn(async () => ({
+      skills: { default_mode: "allow", allow: [], deny: [], workspace_trusted: true, items: [] },
+      mcp: { default_mode: "allow", allow: [], deny: [], items: [] },
+      tools: { default_mode: "allow", allow: [], deny: [], items: [] },
+    }));
     const update = vi.fn().mockResolvedValue(sampleManagedAgentDetail("agent-1"));
-    const core = createCore(list, get, update);
+    const core = createCore(list, get, capabilities, update);
 
     const testRoot = renderIntoDocument(React.createElement(AgentsPage, { core }));
     await flush();
@@ -210,7 +213,7 @@ describe("AgentsPage editor", () => {
 
     expect(update).toHaveBeenCalledWith(
       "agent-1",
-      expect.objectContaining({ config: expect.any(Object), identity: expect.any(Object) }),
+      expect.objectContaining({ config: expect.any(Object) }),
     );
     cleanupTestRoot(testRoot);
   });
@@ -227,9 +230,14 @@ describe("AgentsPage editor", () => {
       ],
     }));
     const get = vi.fn().mockResolvedValue(sampleManagedAgentDetail("default"));
+    const capabilities = vi.fn(async () => ({
+      skills: { default_mode: "allow", allow: [], deny: [], workspace_trusted: true, items: [] },
+      mcp: { default_mode: "allow", allow: [], deny: [], items: [] },
+      tools: { default_mode: "allow", allow: [], deny: [], items: [] },
+    }));
     const update = vi.fn().mockResolvedValue(sampleManagedAgentDetail("default"));
     const listPresets = vi.fn().mockResolvedValue(samplePresets());
-    const core = createCore(list, get, update, listPresets);
+    const core = createCore(list, get, capabilities, update, listPresets);
 
     const testRoot = renderIntoDocument(React.createElement(AgentsPage, { core }));
     await flush();
@@ -286,5 +294,64 @@ describe("AgentsPage editor", () => {
     );
 
     cleanupTestRoot(testRoot);
+  });
+
+  it("debounces capability lookups while typing a new agent key", async () => {
+    vi.useFakeTimers();
+    try {
+      const capabilities = vi.fn(async () => ({
+        skills: { default_mode: "allow", allow: [], deny: [], workspace_trusted: true, items: [] },
+        mcp: { default_mode: "allow", allow: [], deny: [], items: [] },
+        tools: { default_mode: "allow", allow: [], deny: [], items: [] },
+      }));
+      const core = createCore(vi.fn(), vi.fn(), capabilities, vi.fn());
+
+      const testRoot = renderIntoDocument(
+        React.createElement(AgentsPageEditor, {
+          core,
+          mode: "create",
+          createNonce: 1,
+          onSaved: vi.fn(),
+          onCancelCreate: vi.fn(),
+        }),
+      );
+      await flush();
+
+      expect(capabilities).toHaveBeenCalledTimes(1);
+      expect(capabilities).toHaveBeenLastCalledWith("default");
+
+      const agentKeyInput = testRoot.container.querySelector<HTMLInputElement>(
+        '[data-testid="agents-editor-agent-key"]',
+      );
+      expect(agentKeyInput).not.toBeNull();
+
+      act(() => {
+        if (agentKeyInput) {
+          setNativeValue(agentKeyInput, "agent-draft");
+        }
+      });
+      await flush();
+
+      expect(capabilities).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        vi.advanceTimersByTime(249);
+        await Promise.resolve();
+      });
+      expect(capabilities).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        vi.advanceTimersByTime(1);
+        await Promise.resolve();
+      });
+      await flush();
+
+      expect(capabilities).toHaveBeenCalledTimes(2);
+      expect(capabilities).toHaveBeenLastCalledWith("agent-draft");
+
+      cleanupTestRoot(testRoot);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

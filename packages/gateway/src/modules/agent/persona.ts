@@ -10,7 +10,6 @@ import {
   PERSONA_CHARACTERS,
   PERSONA_PALETTES,
   PERSONA_TONES,
-  buildPersonaDescription,
 } from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
 import { safeJsonParse } from "../../utils/json.js";
@@ -112,7 +111,6 @@ function buildSeededPersonaRecord(params: {
 
   return AgentPersona.parse({
     name: params.name,
-    description: buildPersonaDescription(character, tone),
     tone,
     palette,
     character,
@@ -158,12 +156,9 @@ export function resolveAgentPersona(params: {
 
   const tone = params.identity?.meta.style?.tone?.trim() || "direct";
   const name = params.identity?.meta.name?.trim() || humanizeAgentKey(params.agentKey) || "Agent";
-  const description =
-    params.identity?.meta.description?.trim() || buildPersonaDescription("architect", tone);
 
   return AgentPersona.parse({
     name,
-    description,
     tone,
     palette: "graphite",
     character: "architect",
@@ -179,7 +174,6 @@ export function applyPersonaToIdentity(
     meta: {
       ...identity.meta,
       name: persona.name,
-      description: persona.description,
       style: {
         ...identity.meta.style,
         tone: persona.tone,

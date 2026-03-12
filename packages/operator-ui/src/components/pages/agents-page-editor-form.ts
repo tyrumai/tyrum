@@ -1,39 +1,33 @@
-import { AgentConfig, IdentityPack } from "@tyrum/schemas";
+import { AgentConfig } from "@tyrum/schemas";
 import type { AgentConfig as AgentConfigT, IdentityPack as IdentityPackT } from "@tyrum/schemas";
 
 const DEFAULT_CONFIG = AgentConfig.parse({
   model: { model: null },
 });
 
-const DEFAULT_IDENTITY = IdentityPack.parse({
-  meta: {
-    name: "New Agent",
-    description: "Managed agent",
-    style: {
-      tone: "direct",
-    },
-  },
-  body: "",
-});
+function sortIds(values: readonly string[] | undefined): string[] {
+  return [...(values ?? [])].toSorted((left, right) => left.localeCompare(right));
+}
 
 export type AgentEditorFormState = {
   agentKey: string;
   name: string;
-  description: string;
   tone: string;
   palette: string;
   character: string;
-  emoji: string;
-  verbosity: string;
-  format: string;
-  identityBody: string;
   model: string;
   variant: string;
   fallbacks: string;
-  skillsEnabled: string;
+  skillsDefaultMode: "allow" | "deny";
+  skillsAllow: string[];
+  skillsDeny: string[];
   workspaceSkillsTrusted: boolean;
-  mcpEnabled: string;
-  toolsAllowed: string;
+  mcpDefaultMode: "allow" | "deny";
+  mcpAllow: string[];
+  mcpDeny: string[];
+  toolsDefaultMode: "allow" | "deny";
+  toolsAllow: string[];
+  toolsDeny: string[];
   ttlDays: string;
   maxTurns: string;
   pruningMaxMessages: string;
@@ -92,30 +86,30 @@ export function joinList(values: string[] | undefined): string {
 export function snapshotToForm(snapshot: {
   agentKey: string;
   config: AgentConfigT;
-  identity: IdentityPackT;
+  identity?: IdentityPackT;
 }): AgentEditorFormState {
   const config = snapshot.config;
-  const identity = snapshot.identity;
   const budgets = config.memory.v1.budgets;
   const perKind = budgets.per_kind;
   return {
     agentKey: snapshot.agentKey,
-    name: config.persona?.name ?? identity.meta.name,
-    description: config.persona?.description ?? identity.meta.description ?? "",
-    tone: config.persona?.tone ?? identity.meta.style?.tone ?? "direct",
+    name: config.persona?.name ?? snapshot.identity?.meta.name ?? "New Agent",
+    tone: config.persona?.tone ?? snapshot.identity?.meta.style?.tone ?? "direct",
     palette: config.persona?.palette ?? "graphite",
     character: config.persona?.character ?? "architect",
-    emoji: identity.meta.emoji ?? "",
-    verbosity: identity.meta.style?.verbosity ?? "",
-    format: identity.meta.style?.format ?? "",
-    identityBody: identity.body,
     model: config.model.model ?? "",
     variant: config.model.variant ?? "",
     fallbacks: joinList(config.model.fallback),
-    skillsEnabled: joinList(config.skills.enabled),
+    skillsDefaultMode: config.skills.default_mode,
+    skillsAllow: sortIds(config.skills.allow),
+    skillsDeny: sortIds(config.skills.deny),
     workspaceSkillsTrusted: config.skills.workspace_trusted,
-    mcpEnabled: joinList(config.mcp.enabled),
-    toolsAllowed: joinList(config.tools.allow),
+    mcpDefaultMode: config.mcp.default_mode,
+    mcpAllow: sortIds(config.mcp.allow),
+    mcpDeny: sortIds(config.mcp.deny),
+    toolsDefaultMode: config.tools.default_mode,
+    toolsAllow: sortIds(config.tools.allow),
+    toolsDeny: sortIds(config.tools.deny),
     ttlDays: String(config.sessions.ttl_days),
     maxTurns: String(config.sessions.max_turns),
     pruningMaxMessages: String(config.sessions.context_pruning.max_messages),
@@ -170,14 +164,12 @@ export function createBlankForm(): AgentEditorFormState {
   return snapshotToForm({
     agentKey: "",
     config: DEFAULT_CONFIG,
-    identity: DEFAULT_IDENTITY,
   });
 }
 
 function readPersonaFromForm(form: AgentEditorFormState): NonNullable<AgentConfigT["persona"]> {
   return {
     name: form.name.trim(),
-    description: form.description.trim(),
     tone: form.tone.trim(),
     palette: form.palette.trim(),
     character: form.character.trim(),
@@ -221,14 +213,20 @@ export function buildPayload(
         ...readPersonaFromForm(form),
       },
       skills: {
-        enabled: splitList(form.skillsEnabled),
+        default_mode: form.skillsDefaultMode,
+        allow: form.skillsAllow,
+        deny: form.skillsDeny,
         workspace_trusted: form.workspaceSkillsTrusted,
       },
       mcp: {
-        enabled: splitList(form.mcpEnabled),
+        default_mode: form.mcpDefaultMode,
+        allow: form.mcpAllow,
+        deny: form.mcpDeny,
       },
       tools: {
-        allow: splitList(form.toolsAllowed),
+        default_mode: form.toolsDefaultMode,
+        allow: form.toolsAllow,
+        deny: form.toolsDeny,
       },
       sessions: {
         ttl_days: Number(form.ttlDays),
@@ -307,19 +305,6 @@ export function buildPayload(
           },
         },
       },
-    }),
-    identity: IdentityPack.parse({
-      meta: {
-        name: form.name.trim(),
-        ...(form.emoji.trim() ? { emoji: form.emoji.trim() } : {}),
-        ...(form.description.trim() ? { description: form.description.trim() } : {}),
-        style: {
-          tone: form.tone.trim(),
-          ...(form.verbosity.trim() ? { verbosity: form.verbosity.trim() } : {}),
-          ...(form.format.trim() ? { format: form.format.trim() } : {}),
-        },
-      },
-      body: form.identityBody,
     }),
   };
 

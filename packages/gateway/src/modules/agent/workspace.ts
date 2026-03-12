@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { SkillManifest, McpServerSpec } from "@tyrum/schemas";
@@ -14,6 +14,7 @@ import {
   resolveBundledSkillsDir,
   resolveMcpDir,
 } from "./home.js";
+import { isAgentAccessAllowed } from "./access-config.js";
 import { parseFrontmatterDocument } from "./frontmatter.js";
 import type { Logger } from "../observability/logger.js";
 
@@ -27,6 +28,34 @@ function readYamlObject(contents: string): Record<string, unknown> {
     return {};
   }
   return parsed as Record<string, unknown>;
+}
+
+async function listDirectoryNames(dir: string): Promise<string[]> {
+  try {
+    return (await readdir(dir, { withFileTypes: true }))
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .toSorted((left, right) => left.localeCompare(right));
+  } catch {
+    // Intentional: missing skills/MCP directories are treated as empty inventories.
+    return [];
+  }
+}
+
+export async function listSkillsFromDir(
+  skillsDir: string,
+  source: SkillProvenanceSource,
+  logger?: Logger,
+): Promise<LoadedSkillManifest[]> {
+  const skillIds = await listDirectoryNames(skillsDir);
+  const loaded: LoadedSkillManifest[] = [];
+
+  for (const skillId of skillIds) {
+    const manifest = await loadSkillFromDir(skillsDir, skillId, source, logger);
+    if (manifest) loaded.push(manifest);
+  }
+
+  return loaded;
 }
 
 export async function loadSkillFromDir(
@@ -62,23 +91,36 @@ export async function loadEnabledSkills(
   config: AgentConfigT,
   opts?: { logger?: Logger; userSkillsDir?: string; bundledSkillsDir?: string },
 ): Promise<LoadedSkillManifest[]> {
-  const loaded: LoadedSkillManifest[] = [];
-
   const userSkillsDir = opts?.userSkillsDir ?? resolveUserSkillsDir();
   const bundledSkillsDir = opts?.bundledSkillsDir ?? resolveBundledSkillsDir();
   const workspaceSkillsDir = resolveSkillsDir(home);
   const workspaceTrusted = config.skills.workspace_trusted === true;
+  const orderedSkillIds = [
+    ...(workspaceTrusted ? await listDirectoryNames(workspaceSkillsDir) : []),
+    ...(await listDirectoryNames(userSkillsDir)),
+    ...(await listDirectoryNames(bundledSkillsDir)),
+  ];
+  const loaded: LoadedSkillManifest[] = [];
+  const seen = new Set<string>();
 
-  for (const skillId of config.skills.enabled) {
+  for (const skillId of orderedSkillIds) {
+    const normalizedSkillId = skillId.trim();
+    if (
+      normalizedSkillId.length === 0 ||
+      seen.has(normalizedSkillId) ||
+      !isAgentAccessAllowed(config.skills, normalizedSkillId)
+    ) {
+      continue;
+    }
+    seen.add(normalizedSkillId);
+
     const manifest =
       (workspaceTrusted
-        ? await loadSkillFromDir(workspaceSkillsDir, skillId, "workspace", opts?.logger)
+        ? await loadSkillFromDir(workspaceSkillsDir, normalizedSkillId, "workspace", opts?.logger)
         : undefined) ??
-      (await loadSkillFromDir(userSkillsDir, skillId, "user", opts?.logger)) ??
-      (await loadSkillFromDir(bundledSkillsDir, skillId, "bundled", opts?.logger));
-    if (manifest) {
-      loaded.push(manifest);
-    }
+      (await loadSkillFromDir(userSkillsDir, normalizedSkillId, "user", opts?.logger)) ??
+      (await loadSkillFromDir(bundledSkillsDir, normalizedSkillId, "bundled", opts?.logger));
+    if (manifest) loaded.push(manifest);
   }
 
   return loaded;
@@ -122,20 +164,28 @@ async function loadMcpServerFromDir(
   }
 }
 
+export async function listMcpServersFromDir(
+  mcpDir: string,
+  logger?: Logger,
+): Promise<McpServerSpecT[]> {
+  const serverIds = await listDirectoryNames(mcpDir);
+  const loaded: McpServerSpecT[] = [];
+
+  for (const serverId of serverIds) {
+    const spec = await loadMcpServerFromDir(mcpDir, serverId, logger);
+    if (spec) loaded.push(spec);
+  }
+
+  return loaded;
+}
+
 export async function loadEnabledMcpServers(
   home: string,
   config: AgentConfigT,
   opts?: { logger?: Logger },
 ): Promise<McpServerSpecT[]> {
   const mcpDir = resolveMcpDir(home);
-  const loaded: McpServerSpecT[] = [];
-
-  for (const serverId of config.mcp.enabled) {
-    const spec = await loadMcpServerFromDir(mcpDir, serverId, opts?.logger);
-    if (spec) {
-      loaded.push(spec);
-    }
-  }
-
-  return loaded;
+  return (await listMcpServersFromDir(mcpDir, opts?.logger)).filter((spec) =>
+    isAgentAccessAllowed(config.mcp, spec.id),
+  );
 }

@@ -20,7 +20,6 @@ import type { RunsState } from "./runs-store.js";
 const MAIN_LANE = "main";
 const MAX_RECENT_EVENTS = 10;
 const DEFAULT_PERSONA: Omit<AgentPersona, "name"> = {
-  description: "Legacy agent persona fallback.",
   tone: "direct",
   palette: "graphite",
   character: "operator",

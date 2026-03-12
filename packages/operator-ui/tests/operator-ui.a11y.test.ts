@@ -151,7 +151,6 @@ function sampleAgentStatusResponse() {
     home: "/tmp/agents/default",
     identity: {
       name: "Default Agent",
-      description: "Primary operator agent",
     },
     model: {
       model: "openai/gpt-5.4",

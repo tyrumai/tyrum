@@ -45,18 +45,10 @@ export function formatSessionContext(summary: string, transcript: SessionTranscr
 export function formatIdentityPrompt(identity: IdentityPackT): string {
   const styleParts: string[] = [];
   if (identity.meta.style?.tone) styleParts.push(`tone=${identity.meta.style.tone}`);
-  if (identity.meta.style?.verbosity) {
-    styleParts.push(`verbosity=${identity.meta.style.verbosity}`);
-  }
-  if (identity.meta.style?.format) styleParts.push(`format=${identity.meta.style.format}`);
 
   const styleLine = styleParts.length > 0 ? `Style: ${styleParts.join(", ")}` : "Style: default";
 
-  const description = identity.meta.description
-    ? `Description: ${identity.meta.description}`
-    : "Description: none";
-
-  return [`Identity: ${identity.meta.name}`, description, styleLine, identity.body]
+  return [`Identity: ${identity.meta.name}`, styleLine]
     .filter((line) => line.trim().length > 0)
     .join("\n\n");
 }

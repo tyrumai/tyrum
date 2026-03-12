@@ -1,99 +1,21 @@
-import * as React from "react";
+import type { AgentCapabilitiesResponse } from "@tyrum/schemas";
+import { PERSONA_CHARACTERS, PERSONA_PALETTES, PERSONA_TONES } from "@tyrum/schemas";
 import type { AgentEditorFormState, AgentEditorSetField } from "./agents-page-editor-form.js";
+import { AccessTransferField } from "./agents-page-editor-access-transfer.js";
 import type { ModelPreset } from "./admin-http-models.shared.js";
 import { AgentEditorModelFields } from "./agents-page-editor-models.js";
-import { Card, CardContent, CardHeader } from "../ui/card.js";
-import { Checkbox } from "../ui/checkbox.js";
+import { BudgetInputs, FieldGroup, ToggleField } from "./agents-page-editor-shared.js";
 import { Input } from "../ui/input.js";
+import { Select } from "../ui/select.js";
 import { Textarea } from "../ui/textarea.js";
-
-function FieldGroup({
-  title,
-  description,
-  children,
-}: {
-  title: string;
-  description: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <Card>
-      <CardHeader className="pb-2.5">
-        <div className="text-sm font-medium text-fg">{title}</div>
-        <div className="text-sm text-fg-muted">{description}</div>
-      </CardHeader>
-      <CardContent className="grid gap-4">{children}</CardContent>
-    </Card>
-  );
-}
-
-function ToggleField({
-  label,
-  checked,
-  onCheckedChange,
-}: {
-  label: string;
-  checked: boolean;
-  onCheckedChange: (checked: boolean) => void;
-}) {
-  return (
-    <label className="flex items-center gap-3 text-sm text-fg">
-      <Checkbox
-        checked={checked}
-        onCheckedChange={(nextChecked) => {
-          onCheckedChange(Boolean(nextChecked));
-        }}
-      />
-      <span>{label}</span>
-    </label>
-  );
-}
-
-function BudgetInputs({
-  prefix,
-  itemsValue,
-  charsValue,
-  tokensValue,
-  onChange,
-}: {
-  prefix: string;
-  itemsValue: string;
-  charsValue: string;
-  tokensValue: string;
-  onChange: (field: string, value: string) => void;
-}) {
-  return (
-    <div className="grid gap-3 sm:grid-cols-3">
-      <Input
-        label={`${prefix} items`}
-        value={itemsValue}
-        onChange={(event) => {
-          onChange("items", event.currentTarget.value);
-        }}
-      />
-      <Input
-        label={`${prefix} chars`}
-        value={charsValue}
-        onChange={(event) => {
-          onChange("chars", event.currentTarget.value);
-        }}
-      />
-      <Input
-        label={`${prefix} tokens`}
-        value={tokensValue}
-        helperText="Leave blank to keep unset."
-        onChange={(event) => {
-          onChange("tokens", event.currentTarget.value);
-        }}
-      />
-    </div>
-  );
-}
 
 export function AgentEditorSections({
   form,
   mode,
   setField,
+  capabilities,
+  capabilitiesLoading,
+  capabilitiesError,
   modelPresets,
   modelPresetsLoading,
   modelPresetsError,
@@ -106,6 +28,9 @@ export function AgentEditorSections({
   form: AgentEditorFormState;
   mode: "create" | "edit";
   setField: AgentEditorSetField;
+  capabilities: AgentCapabilitiesResponse | null;
+  capabilitiesLoading: boolean;
+  capabilitiesError: string | null;
   modelPresets: ModelPreset[];
   modelPresetsLoading: boolean;
   modelPresetsError: string | null;
@@ -117,10 +42,7 @@ export function AgentEditorSections({
 }) {
   return (
     <>
-      <FieldGroup
-        title="Profile"
-        description="Operator-facing identity and authored instructions for this agent."
-      >
+      <FieldGroup title="Profile" description="Operator-facing persona settings for this agent.">
         <div className="grid gap-3 sm:grid-cols-2">
           <Input
             data-testid="agents-editor-agent-key"
@@ -139,65 +61,46 @@ export function AgentEditorSections({
               setField("name", event.currentTarget.value);
             }}
           />
-          <Input
+          <Select
             label="Tone"
             value={form.tone}
             onChange={(event) => {
               setField("tone", event.currentTarget.value);
             }}
-          />
-          <Input
+          >
+            {PERSONA_TONES.map((tone) => (
+              <option key={tone} value={tone}>
+                {tone}
+              </option>
+            ))}
+          </Select>
+          <Select
             label="Palette"
             value={form.palette}
             onChange={(event) => {
               setField("palette", event.currentTarget.value);
             }}
-          />
-          <Input
+          >
+            {PERSONA_PALETTES.map((palette) => (
+              <option key={palette} value={palette}>
+                {palette}
+              </option>
+            ))}
+          </Select>
+          <Select
             label="Character"
             value={form.character}
             onChange={(event) => {
               setField("character", event.currentTarget.value);
             }}
-          />
-          <Input
-            label="Emoji"
-            value={form.emoji}
-            onChange={(event) => {
-              setField("emoji", event.currentTarget.value);
-            }}
-          />
-          <Input
-            label="Verbosity"
-            value={form.verbosity}
-            onChange={(event) => {
-              setField("verbosity", event.currentTarget.value);
-            }}
-          />
-          <Input
-            label="Format"
-            value={form.format}
-            onChange={(event) => {
-              setField("format", event.currentTarget.value);
-            }}
-          />
+          >
+            {PERSONA_CHARACTERS.map((character) => (
+              <option key={character} value={character}>
+                {character}
+              </option>
+            ))}
+          </Select>
         </div>
-        <Textarea
-          label="Description"
-          rows={3}
-          value={form.description}
-          onChange={(event) => {
-            setField("description", event.currentTarget.value);
-          }}
-        />
-        <Textarea
-          label="Identity body"
-          rows={8}
-          value={form.identityBody}
-          onChange={(event) => {
-            setField("identityBody", event.currentTarget.value);
-          }}
-        />
       </FieldGroup>
 
       <FieldGroup title="Model" description="Primary model assignment and fallbacks.">
@@ -224,7 +127,10 @@ export function AgentEditorSections({
         ) : null}
       </FieldGroup>
 
-      <FieldGroup title="Skills and Tools" description="Enabled runtime capabilities.">
+      <FieldGroup
+        title="Skills"
+        description="Workspace, bundled, user, and managed skills available to this agent."
+      >
         <ToggleField
           label="Trust workspace skills"
           checked={form.workspaceSkillsTrusted}
@@ -232,31 +138,121 @@ export function AgentEditorSections({
             setField("workspaceSkillsTrusted", checked);
           }}
         />
-        <Textarea
-          label="Enabled skills"
-          rows={4}
-          helperText="One skill ID per line."
-          value={form.skillsEnabled}
-          onChange={(event) => {
-            setField("skillsEnabled", event.currentTarget.value);
+        <AccessTransferField
+          title="skills"
+          defaultLabel="Default for new skills"
+          helperText={
+            capabilitiesError
+              ? capabilitiesError
+              : capabilitiesLoading
+                ? "Loading discoverable skills..."
+                : "New skills follow the selected default automatically."
+          }
+          items={(capabilities?.skills.items ?? []).map((item) => ({
+            id: item.id,
+            label: `${item.name} (${item.id})`,
+          }))}
+          state={{
+            defaultMode: form.skillsDefaultMode,
+            allow: form.skillsAllow,
+            deny: form.skillsDeny,
+          }}
+          disabled={capabilitiesLoading}
+          onDefaultModeChange={(modeValue) => {
+            setField("skillsDefaultMode", modeValue);
+            if (modeValue === "allow") {
+              setField("skillsAllow", []);
+            } else {
+              setField("skillsDeny", []);
+            }
+          }}
+          onAllowChange={(ids) => {
+            setField("skillsAllow", ids);
+          }}
+          onDenyChange={(ids) => {
+            setField("skillsDeny", ids);
           }}
         />
-        <Textarea
-          label="Enabled MCP servers"
-          rows={4}
-          helperText="One MCP server ID per line."
-          value={form.mcpEnabled}
-          onChange={(event) => {
-            setField("mcpEnabled", event.currentTarget.value);
+      </FieldGroup>
+
+      <FieldGroup
+        title="MCP"
+        description="Enabled MCP servers follow the selected default for new discoveries."
+      >
+        <AccessTransferField
+          title="mcp"
+          defaultLabel="Default for new MCP servers"
+          helperText={
+            capabilitiesError
+              ? capabilitiesError
+              : capabilitiesLoading
+                ? "Loading discoverable MCP servers..."
+                : "New MCP servers follow the selected default automatically."
+          }
+          items={(capabilities?.mcp.items ?? []).map((item) => ({
+            id: item.id,
+            label: `${item.name} (${item.id})`,
+          }))}
+          state={{
+            defaultMode: form.mcpDefaultMode,
+            allow: form.mcpAllow,
+            deny: form.mcpDeny,
+          }}
+          disabled={capabilitiesLoading}
+          onDefaultModeChange={(modeValue) => {
+            setField("mcpDefaultMode", modeValue);
+            if (modeValue === "allow") {
+              setField("mcpAllow", []);
+            } else {
+              setField("mcpDeny", []);
+            }
+          }}
+          onAllowChange={(ids) => {
+            setField("mcpAllow", ids);
+          }}
+          onDenyChange={(ids) => {
+            setField("mcpDeny", ids);
           }}
         />
-        <Textarea
-          label="Allowed tools"
-          rows={4}
-          helperText="One tool pattern per line."
-          value={form.toolsAllowed}
-          onChange={(event) => {
-            setField("toolsAllowed", event.currentTarget.value);
+      </FieldGroup>
+
+      <FieldGroup
+        title="Tools"
+        description="Builtin, MCP, and plugin tools available to this agent."
+      >
+        <AccessTransferField
+          title="tools"
+          defaultLabel="Default for new tools"
+          helperText={
+            capabilitiesError
+              ? capabilitiesError
+              : capabilitiesLoading
+                ? "Loading discoverable tools..."
+                : "New tools follow the selected default automatically."
+          }
+          items={(capabilities?.tools.items ?? []).map((item) => ({
+            id: item.id,
+            label: item.id,
+          }))}
+          state={{
+            defaultMode: form.toolsDefaultMode,
+            allow: form.toolsAllow,
+            deny: form.toolsDeny,
+          }}
+          disabled={capabilitiesLoading}
+          onDefaultModeChange={(modeValue) => {
+            setField("toolsDefaultMode", modeValue);
+            if (modeValue === "allow") {
+              setField("toolsAllow", []);
+            } else {
+              setField("toolsDeny", []);
+            }
+          }}
+          onAllowChange={(ids) => {
+            setField("toolsAllow", ids);
+          }}
+          onDenyChange={(ids) => {
+            setField("toolsDeny", ids);
           }}
         />
       </FieldGroup>

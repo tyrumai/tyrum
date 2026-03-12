@@ -6,13 +6,15 @@ import { AgentConfigDal, type AgentConfigRevision } from "../config/agent-config
 import { buildSeededAgentPersona } from "./persona.js";
 
 export function buildDefaultAgentConfig(
-  stateMode: GatewayStateMode,
+  _stateMode: GatewayStateMode,
   persona?: AgentConfigT["persona"],
 ): AgentConfigT {
   return AgentConfig.parse({
     model: { model: null },
     ...(persona ? { persona } : {}),
-    tools: { allow: stateMode === "local" ? ["read"] : [] },
+    skills: { default_mode: "allow", workspace_trusted: true },
+    mcp: { default_mode: "allow" },
+    tools: { default_mode: "allow" },
   });
 }
 

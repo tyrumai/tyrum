@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { AgentConfig } from "@tyrum/schemas";
 import { loadEnabledSkills } from "../../src/modules/agent/workspace.js";
 
 function skillDoc(body: string): string {
@@ -43,9 +44,15 @@ describe("skills load order", () => {
     // (Gateway runtime no longer reads TYRUM_USER_HOME.)
     const skills = await loadEnabledSkills(
       workspaceHome,
-      {
-        skills: { enabled: ["example"], workspace_trusted: true },
-      } as unknown as { skills: { enabled: string[]; workspace_trusted: boolean } },
+      AgentConfig.parse({
+        model: { model: null },
+        skills: {
+          default_mode: "deny",
+          allow: ["example"],
+          deny: [],
+          workspace_trusted: true,
+        },
+      }),
       { userSkillsDir: join(userHome, "skills") },
     );
     expect(skills).toHaveLength(1);
@@ -62,9 +69,15 @@ describe("skills load order", () => {
 
     const skills = await loadEnabledSkills(
       workspaceHome,
-      {
-        skills: { enabled: ["example"], workspace_trusted: false },
-      } as unknown as { skills: { enabled: string[]; workspace_trusted: boolean } },
+      AgentConfig.parse({
+        model: { model: null },
+        skills: {
+          default_mode: "deny",
+          allow: ["example"],
+          deny: [],
+          workspace_trusted: false,
+        },
+      }),
       { userSkillsDir: join(userHome, "skills") },
     );
 
@@ -85,9 +98,15 @@ describe("skills load order", () => {
 
     const skills = await loadEnabledSkills(
       workspaceHome,
-      {
-        skills: { enabled: ["example"], workspace_trusted: false },
-      } as unknown as { skills: { enabled: string[]; workspace_trusted: boolean } },
+      AgentConfig.parse({
+        model: { model: null },
+        skills: {
+          default_mode: "deny",
+          allow: ["example"],
+          deny: [],
+          workspace_trusted: false,
+        },
+      }),
       { userSkillsDir: join(userHome, "skills") },
     );
 
@@ -105,9 +124,15 @@ describe("skills load order", () => {
 
     const skills = await loadEnabledSkills(
       workspaceHome,
-      {
-        skills: { enabled: ["example"], workspace_trusted: false },
-      } as unknown as { skills: { enabled: string[]; workspace_trusted: boolean } },
+      AgentConfig.parse({
+        model: { model: null },
+        skills: {
+          default_mode: "deny",
+          allow: ["example"],
+          deny: [],
+          workspace_trusted: false,
+        },
+      }),
       { userSkillsDir: join(userHome, "skills") },
     );
 

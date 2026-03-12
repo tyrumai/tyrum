@@ -174,6 +174,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
     runtime,
     isLocalOnly,
     wsMaxBufferedBytes,
+    channelPipelineEnabled: true,
     engine,
     secretProviderForTenant,
     routeDeps,

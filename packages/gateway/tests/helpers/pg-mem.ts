@@ -10,6 +10,13 @@ const SESSION_TRANSCRIPT_MIGRATION_MARKERS = [
   "SET turns_json = COALESCE(",
   "jsonb_array_elements(sessions.turns_json::jsonb)",
 ] as const;
+const AGENT_ACCESS_DEFAULTS_TOOLS_MIGRATION_MARKERS = [
+  "UPDATE agent_configs",
+  "config_json::jsonb - 'tools'",
+  "jsonb_array_elements_text",
+  '\'["read","write","edit","apply_patch","glob","grep"]\'::jsonb',
+] as const;
+const FILESYSTEM_TOOL_IDS = ["read", "write", "edit", "apply_patch", "glob", "grep"] as const;
 
 type SessionTitleMigrationRow = {
   tenant_id: string;
@@ -25,6 +32,9 @@ type SessionTranscriptMigrationRow = {
   turns_json: string;
   created_at: string;
 };
+type AgentAccessDefaultsMigrationRow = {
+  config_json: string;
+};
 
 function isSessionTitlesMigration(sql: string): boolean {
   return SESSION_TITLES_MIGRATION_MARKERS.every((marker) => sql.includes(marker));
@@ -32,6 +42,10 @@ function isSessionTitlesMigration(sql: string): boolean {
 
 function isSessionTranscriptMigration(sql: string): boolean {
   return SESSION_TRANSCRIPT_MIGRATION_MARKERS.every((marker) => sql.includes(marker));
+}
+
+function isAgentAccessDefaultsToolsMigration(sql: string): boolean {
+  return AGENT_ACCESS_DEFAULTS_TOOLS_MIGRATION_MARKERS.every((marker) => sql.includes(marker));
 }
 
 function toSqlTextLiteral(value: string): string {
@@ -145,6 +159,164 @@ function applySessionTranscriptMigration(mem: ReturnType<typeof newDb>): void {
   }
 }
 
+function toJsonText(value: unknown): string {
+  if (typeof value === "string") return value;
+  return JSON.stringify(value);
+}
+
+function buildExpandedFilesystemAllowList(entries: readonly string[]): string[] {
+  const orderById = new Map<string, number>();
+  entries.forEach((entry, index) => {
+    const ordinality = (index + 1) * 10;
+    if (entry === "tool.fs.*") {
+      FILESYSTEM_TOOL_IDS.forEach((toolId, fsIndex) => {
+        const orderKey = ordinality + fsIndex + 1;
+        const current = orderById.get(toolId);
+        if (current === undefined || orderKey < current) {
+          orderById.set(toolId, orderKey);
+        }
+      });
+      return;
+    }
+
+    const current = orderById.get(entry);
+    if (current === undefined || ordinality < current) {
+      orderById.set(entry, ordinality);
+    }
+  });
+
+  return [...orderById.entries()]
+    .toSorted((left, right) => left[1] - right[1])
+    .map(([toolId]) => toolId);
+}
+
+function migrateAgentAccessDefaultsToolsConfig(configJson: string): string {
+  const parsed = JSON.parse(configJson) as Record<string, unknown>;
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return configJson;
+  }
+
+  const tools =
+    parsed["tools"] && typeof parsed["tools"] === "object" && !Array.isArray(parsed["tools"])
+      ? (parsed["tools"] as Record<string, unknown>)
+      : undefined;
+  if (!tools || !Array.isArray(tools["allow"])) {
+    return configJson;
+  }
+  if (tools["default_mode"] !== undefined || tools["deny"] !== undefined) {
+    return configJson;
+  }
+
+  const allowEntries = (tools["allow"] as unknown[]).map((entry) => toJsonText(entry).trim());
+  const nextTools = allowEntries.some((entry) => entry === "*" || entry === "tool.*")
+    ? { default_mode: "allow", allow: [], deny: [] }
+    : allowEntries.some((entry) => entry === "tool.fs.*")
+      ? {
+          default_mode: "deny",
+          allow: buildExpandedFilesystemAllowList(allowEntries),
+          deny: [],
+        }
+      : {
+          default_mode: "deny",
+          allow: tools["allow"],
+          deny: [],
+        };
+
+  return JSON.stringify({
+    ...parsed,
+    tools: nextTools,
+  });
+}
+
+function applyAgentAccessDefaultsToolsMigration(mem: ReturnType<typeof newDb>): void {
+  const configs = mem.public.many<AgentAccessDefaultsMigrationRow>(
+    "SELECT config_json FROM agent_configs",
+  );
+  for (const config of configs) {
+    const migrated = migrateAgentAccessDefaultsToolsConfig(config.config_json);
+    if (migrated === config.config_json) continue;
+    mem.public.none(
+      `UPDATE agent_configs
+          SET config_json = ${toSqlTextLiteral(migrated)}
+        WHERE config_json = ${toSqlTextLiteral(config.config_json)}`,
+    );
+  }
+}
+
+function parseJsonbSetPath(pathText: string): string[] {
+  const trimmed = pathText.trim();
+  if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return [];
+  const inner = trimmed.slice(1, -1).trim();
+  if (!inner) return [];
+  return inner.split(",").map((segment) => segment.trim().replace(/^"(.*)"$/, "$1"));
+}
+
+function parseJsonbBuildObjectValue(value: string | null): unknown {
+  if (value === null) return null;
+  const trimmed = value.trim();
+  if (
+    trimmed === "true" ||
+    trimmed === "false" ||
+    trimmed === "null" ||
+    trimmed.startsWith("[") ||
+    trimmed.startsWith("{")
+  ) {
+    try {
+      return JSON.parse(trimmed);
+    } catch {
+      return value;
+    }
+  }
+  return value;
+}
+
+function buildJsonbObjectFromTextArgs(args: readonly (string | null)[]): Record<string, unknown> {
+  if (args.length % 2 !== 0) {
+    throw new Error("jsonb_build_object requires alternating key/value pairs");
+  }
+
+  const result: Record<string, unknown> = {};
+  for (let index = 0; index < args.length; index += 2) {
+    const key = args[index];
+    if (typeof key !== "string") {
+      throw new Error("jsonb_build_object keys must be text");
+    }
+    result[key] = parseJsonbBuildObjectValue(args[index + 1] ?? null);
+  }
+  return result;
+}
+
+function setJsonbPath(
+  value: unknown,
+  path: readonly string[],
+  replacement: unknown,
+  createMissing: boolean,
+): unknown {
+  if (path.length === 0) {
+    return structuredClone(value);
+  }
+
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    if (!createMissing) return structuredClone(value);
+    value = {};
+  }
+
+  const clone = structuredClone(value as Record<string, unknown>);
+  let cursor = clone as Record<string, unknown>;
+
+  for (const segment of path.slice(0, -1)) {
+    const next = cursor[segment];
+    if (!next || typeof next !== "object" || Array.isArray(next)) {
+      if (!createMissing) return clone;
+      cursor[segment] = {};
+    }
+    cursor = cursor[segment] as Record<string, unknown>;
+  }
+
+  cursor[path.at(-1) ?? ""] = structuredClone(replacement);
+  return clone;
+}
+
 function registerCommonPgFunctions(mem: ReturnType<typeof newDb>): void {
   mem.public.registerFunction({
     name: "trim",
@@ -208,6 +380,29 @@ function registerCommonPgFunctions(mem: ReturnType<typeof newDb>): void {
   });
 
   mem.public.registerFunction({
+    name: "jsonb_set",
+    args: [DataType.jsonb, DataType.text, DataType.jsonb, DataType.bool],
+    returns: DataType.jsonb,
+    implementation: (
+      value: unknown,
+      pathText: string,
+      replacement: unknown,
+      createMissing: boolean,
+    ) => {
+      const path = parseJsonbSetPath(pathText);
+      if (path.length === 0) return structuredClone(value);
+      return setJsonbPath(value, path, replacement, createMissing);
+    },
+  });
+
+  mem.public.registerFunction({
+    name: "jsonb_build_object",
+    argsVariadic: DataType.text,
+    returns: DataType.jsonb,
+    implementation: (...args: Array<string | null>) => buildJsonbObjectFromTextArgs(args),
+  });
+
+  mem.public.registerFunction({
     name: "pg_input_is_valid",
     args: [DataType.text, DataType.text],
     returns: DataType.bool,
@@ -252,6 +447,10 @@ export function createPgMemDb(): ReturnType<typeof newDb> {
     }
     if (isSessionTranscriptMigration(sql)) {
       applySessionTranscriptMigration(mem);
+      return [];
+    }
+    if (isAgentAccessDefaultsToolsMigration(sql)) {
+      applyAgentAccessDefaultsToolsMigration(mem);
       return [];
     }
     return null;

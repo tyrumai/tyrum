@@ -14,7 +14,6 @@ function sampleAgentStatus() {
     home: "/tmp/agents/default",
     identity: {
       name: "Default Agent",
-      description: "Primary operator agent",
     },
     model: {
       model: "openai/gpt-5.4",
@@ -69,7 +68,6 @@ function sampleManagedAgentDetail() {
     can_delete: false,
     persona: {
       name: "Default Agent",
-      description: "Managed agent",
       tone: "direct",
       palette: "graphite",
       character: "architect",
@@ -78,7 +76,6 @@ function sampleManagedAgentDetail() {
       model: { model: "openai/gpt-5.4" },
       persona: {
         name: "Default Agent",
-        description: "Managed agent",
         tone: "direct",
         palette: "graphite",
         character: "architect",
@@ -87,10 +84,8 @@ function sampleManagedAgentDetail() {
     identity: IdentityPack.parse({
       meta: {
         name: "Default Agent",
-        description: "Managed agent",
         style: { tone: "direct" },
       },
-      body: "",
     }),
   };
 }
@@ -193,6 +188,17 @@ function createCore(): OperatorCore {
           ],
         })),
         get: vi.fn().mockResolvedValue(sampleManagedAgentDetail()),
+        capabilities: vi.fn(async () => ({
+          skills: {
+            default_mode: "allow",
+            allow: [],
+            deny: [],
+            workspace_trusted: true,
+            items: [],
+          },
+          mcp: { default_mode: "allow", allow: [], deny: [], items: [] },
+          tools: { default_mode: "allow", allow: [], deny: [], items: [] },
+        })),
         create: vi.fn(),
         update: vi.fn(),
         delete: vi.fn(),

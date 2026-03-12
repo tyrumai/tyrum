@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   AgentConfig,
+  AgentCapabilitiesResponse,
   IdentityPack,
   SkillManifest,
   McpServerSpec,
@@ -17,10 +18,16 @@ describe("AgentConfig", () => {
     });
 
     expect(parsed.model.model).toBe("openai/gpt-5.4");
-    expect(parsed.skills.enabled).toEqual([]);
-    expect(parsed.skills.workspace_trusted).toBe(false);
-    expect(parsed.mcp.enabled).toEqual([]);
+    expect(parsed.skills.default_mode).toBe("allow");
+    expect(parsed.skills.allow).toEqual([]);
+    expect(parsed.skills.deny).toEqual([]);
+    expect(parsed.skills.workspace_trusted).toBe(true);
+    expect(parsed.mcp.default_mode).toBe("allow");
+    expect(parsed.mcp.allow).toEqual([]);
+    expect(parsed.mcp.deny).toEqual([]);
+    expect(parsed.tools.default_mode).toBe("allow");
     expect(parsed.tools.allow).toEqual([]);
+    expect(parsed.tools.deny).toEqual([]);
     expect(parsed.sessions.ttl_days).toBe(365);
     expect(parsed.sessions.max_turns).toBe(0);
     expect(parsed.sessions.compaction.auto).toBe(true);
@@ -56,7 +63,6 @@ describe("AgentConfig", () => {
       },
       persona: {
         name: "Hypatia",
-        description: "Calm systems thinker.",
         tone: "direct",
         palette: "graphite",
         character: "architect",
@@ -65,7 +71,6 @@ describe("AgentConfig", () => {
 
     expect(parsed.persona).toEqual({
       name: "Hypatia",
-      description: "Calm systems thinker.",
       tone: "direct",
       palette: "graphite",
       character: "architect",
@@ -109,6 +114,52 @@ describe("AgentConfig", () => {
 
     expect(parsed.tools.allow).toEqual(["read", "bash"]);
   });
+
+  it("rejects overlapping access overrides", () => {
+    expectRejects(AgentConfig, {
+      model: { model: "openai/gpt-5.4" },
+      tools: { allow: ["read"], deny: ["read"] },
+    });
+  });
+
+  it("normalizes legacy allow-all wildcards to default allow", () => {
+    const parsed = AgentConfig.parse({
+      model: { model: "openai/gpt-5.4" },
+      tools: { allow: ["tool.*"] },
+    });
+
+    expect(parsed.tools.default_mode).toBe("allow");
+    expect(parsed.tools.allow).toEqual([]);
+    expect(parsed.tools.deny).toEqual([]);
+  });
+});
+
+describe("AgentCapabilitiesResponse", () => {
+  it("parses workspace skill trust in capability payloads", () => {
+    const parsed = AgentCapabilitiesResponse.parse({
+      skills: {
+        default_mode: "allow",
+        allow: [],
+        deny: [],
+        workspace_trusted: true,
+        items: [],
+      },
+      mcp: {
+        default_mode: "allow",
+        allow: [],
+        deny: [],
+        items: [],
+      },
+      tools: {
+        default_mode: "allow",
+        allow: [],
+        deny: [],
+        items: [],
+      },
+    });
+
+    expect(parsed.skills.workspace_trusted).toBe(true);
+  });
 });
 
 describe("IdentityPack", () => {
@@ -118,29 +169,34 @@ describe("IdentityPack", () => {
         name: "Tyrum",
         style: {
           tone: "direct",
-          verbosity: "concise",
         },
       },
-      body: "You are Tyrum.",
     });
 
     expect(parsed.meta.name).toBe("Tyrum");
-    expect(parsed.body).toContain("Tyrum");
+    expect(parsed.meta.style?.tone).toBe("direct");
   });
 
-  it("rejects identity payload missing body", () => {
-    expectRejects(IdentityPack, {
+  it("strips legacy identity body fields", () => {
+    const parsed = IdentityPack.parse({
       meta: {
         name: "Tyrum",
-        style: { tone: "direct", verbosity: "concise" },
+        style: { tone: "direct" },
+      },
+      body: "You are Tyrum.",
+    });
+
+    expect(parsed).toEqual({
+      meta: {
+        name: "Tyrum",
+        style: { tone: "direct" },
       },
     });
   });
 
-  it("rejects identity payload with blank verbosity", () => {
+  it("rejects identity payload with blank tone", () => {
     expectRejects(IdentityPack, {
-      meta: { name: "Tyrum", style: { tone: "direct", verbosity: "   " } },
-      body: "You are Tyrum.",
+      meta: { name: "Tyrum", style: { tone: "   " } },
     });
   });
 });

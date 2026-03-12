@@ -46,8 +46,13 @@ import {
   resolveRuntimeCompactionContext,
   type SessionCompactionResult,
 } from "./session-compaction-service.js";
+import { materializeAllowedAgentIds } from "../access-config.js";
 import { applyPersonaToIdentity, resolveAgentPersona } from "../persona.js";
-import { listBuiltinToolDescriptors, type ToolDescriptor } from "../tools.js";
+import {
+  isBuiltinToolAvailableInStateMode,
+  listBuiltinToolDescriptors,
+  type ToolDescriptor,
+} from "../tools.js";
 
 const DEFAULT_MAX_STEPS = 20;
 const DEFAULT_APPROVAL_WAIT_MS = 120_000;
@@ -217,11 +222,12 @@ export class AgentRuntime {
         enabled: false,
         home: this.home,
         persona,
-        identity: { name: persona.name, description: persona.description },
+        identity: { name: persona.name },
         model: { model: "disabled/disabled" },
         skills: [],
         mcp: [],
         tools: [],
+        tool_access: { default_mode: "allow", allow: [], deny: [] },
         sessions: { ttl_days: 365, max_turns: 0 },
       });
     }
@@ -266,13 +272,30 @@ export class AgentRuntime {
       ...loaded,
       identity: applyPersonaToIdentity(loaded.identity, persona),
     };
+    const stateMode = resolveGatewayStateMode(this.opts.container.deploymentConfig);
+    const builtinTools = listBuiltinToolDescriptors();
+    const builtinToolIds = new Set(builtinTools.map((tool) => tool.id));
+    const mcpTools = await this.mcpManager.listToolDescriptors(ctx.mcpServers);
+    const pluginTools = this.plugins?.getToolDescriptors() ?? [];
+    const availableTools = Array.from(
+      new Map(
+        [...builtinTools, ...mcpTools, ...pluginTools]
+          .filter((tool) => {
+            const isBuiltinTool =
+              tool.source === "builtin" ||
+              tool.source === "builtin_mcp" ||
+              (tool.source === undefined && builtinToolIds.has(tool.id));
+            return !isBuiltinTool || isBuiltinToolAvailableInStateMode(tool.id, stateMode);
+          })
+          .map((tool) => [tool.id, tool] as const),
+      ).values(),
+    );
     const status = {
       enabled: true,
       home: this.home,
       persona,
       identity: {
         name: ctx.identity.meta.name,
-        description: ctx.identity.meta.description,
       },
       model: ctx.config.model,
       skills: ctx.skills.map((skill) => skill.meta.id),
@@ -289,7 +312,8 @@ export class AgentRuntime {
         enabled: server.enabled,
         transport: server.transport,
       })),
-      tools: ctx.config.tools.allow,
+      tools: materializeAllowedAgentIds(ctx.config.tools, availableTools).map((tool) => tool.id),
+      tool_access: ctx.config.tools,
       sessions: ctx.config.sessions,
     };
 
@@ -343,7 +367,9 @@ export class AgentRuntime {
     }
 
     return {
-      allowlist: [...ctx.config.tools.allow],
+      allowlist: materializeAllowedAgentIds(ctx.config.tools, Array.from(byId.values())).map(
+        (tool) => tool.id,
+      ),
       tools: Array.from(byId.values()).toSorted((left, right) => left.id.localeCompare(right.id)),
       mcpServers: ctx.mcpServers.map((server) => server.id),
     };
