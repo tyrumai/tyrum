@@ -80,6 +80,10 @@ const LocationPlaceCreateRequest = z
   })
   .strict();
 
+function hasDefinedUpdateField(value: Record<string, unknown>): boolean {
+  return Object.values(value).some((field) => field !== undefined);
+}
+
 const LocationPlaceUpdateRequest = z
   .object({
     name: NonEmptyString.optional(),
@@ -91,7 +95,7 @@ const LocationPlaceUpdateRequest = z
   })
   .strict()
   .superRefine((value, ctx) => {
-    if (Object.keys(value).length > 0) return;
+    if (hasDefinedUpdateField(value)) return;
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: "location place update request must include at least one field",
@@ -106,7 +110,7 @@ const LocationProfileUpdateRequest = z
   })
   .strict()
   .superRefine((value, ctx) => {
-    if (Object.keys(value).length > 0) return;
+    if (hasDefinedUpdateField(value)) return;
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: "location profile update request must include at least one field",

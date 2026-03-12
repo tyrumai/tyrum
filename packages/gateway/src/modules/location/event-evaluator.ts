@@ -89,7 +89,7 @@ export function evaluateSavedPlaceEvent(input: {
       state: {
         status: "outside",
         enteredAt: null,
-        dwellEmittedAt: input.currentState.dwell_emitted_at,
+        dwellEmittedAt: null,
       },
     };
   }
@@ -180,7 +180,7 @@ export function evaluateCategoryEvent(input: {
       state: {
         status: "outside",
         enteredAt: null,
-        dwellEmittedAt: input.currentState.dwell_emitted_at,
+        dwellEmittedAt: null,
       },
     };
   }

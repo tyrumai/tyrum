@@ -140,6 +140,16 @@ export function registerHttpClientLocationTests(): void {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("rejects a saved place update payload with only undefined fields", async () => {
+    const fetch = makeFetchMock(async () => jsonResponse({ status: "ok" }));
+    const client = createTestClient({ fetch });
+
+    await expect(client.location?.updatePlace("place-home", { name: undefined })).rejects.toThrow(
+      "location place update request",
+    );
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("updates the location profile with the primary node and provider key", async () => {
     const fetch = makeFetchMock(async () =>
       jsonResponse({
@@ -171,5 +181,15 @@ export function registerHttpClientLocationTests(): void {
       primary_node_id: "mobile-node-1",
       poi_provider_key: "geoapify",
     });
+  });
+
+  it("rejects a location profile update payload with only undefined fields", async () => {
+    const fetch = makeFetchMock(async () => jsonResponse({ status: "ok" }));
+    const client = createTestClient({ fetch });
+
+    await expect(client.location?.updateProfile({ primary_node_id: undefined })).rejects.toThrow(
+      "location profile update request",
+    );
+    expect(fetch).not.toHaveBeenCalled();
   });
 }

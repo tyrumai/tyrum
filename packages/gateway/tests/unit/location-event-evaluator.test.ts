@@ -73,6 +73,7 @@ describe("evaluateCategoryEvent", () => {
     expect(result?.event.place_name).toBe("Corner Market");
     expect(result?.event.distance_m).toBe(180);
     expect(result?.state.status).toBe("outside");
+    expect(result?.state.dwellEmittedAt).toBeNull();
   });
 });
 
@@ -118,5 +119,48 @@ describe("evaluateSavedPlaceEvent", () => {
     expect(result?.event.transition).toBe("dwell");
     expect(result?.state.status).toBe("inside");
     expect(result?.state.dwellEmittedAt).toBe("2026-03-11T10:11:00.000Z");
+  });
+
+  it("clears stale dwell state when a saved place exit is emitted", () => {
+    const result = evaluateSavedPlaceEvent({
+      agentKey: "default",
+      nodeId: "node-mobile-1",
+      payload: {
+        sample_id: "22222222-2222-4222-8222-222222222222",
+        recorded_at: "2026-03-11T10:12:00.000Z",
+        coords: {
+          latitude: 52.3676,
+          longitude: 4.9041,
+          accuracy_m: 12,
+        },
+        source: "gps",
+        is_background: false,
+      },
+      place: {
+        place_id: "place-home",
+        agent_key: "default",
+        name: "Home",
+        latitude: 52.3676,
+        longitude: 4.9041,
+        radius_m: 100,
+        tags: ["home"],
+        source: "manual",
+        provider_place_id: null,
+        metadata: {},
+        created_at: "2026-03-11T09:00:00.000Z",
+        updated_at: "2026-03-11T09:00:00.000Z",
+      },
+      distanceM: 180,
+      currentState: {
+        status: "inside",
+        entered_at: "2026-03-11T10:00:00.000Z",
+        dwell_emitted_at: "2026-03-11T10:11:00.000Z",
+      },
+    });
+
+    expect(result?.event.type).toBe("saved_place.exit");
+    expect(result?.event.transition).toBe("exit");
+    expect(result?.state.status).toBe("outside");
+    expect(result?.state.dwellEmittedAt).toBeNull();
   });
 });
