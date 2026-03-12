@@ -256,32 +256,3 @@ export function ActivityFeedItem({
     </li>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Token Usage Bar
-// ---------------------------------------------------------------------------
-
-export function TokenUsageBar({
-  inputTokens,
-  outputTokens,
-}: {
-  inputTokens: number;
-  outputTokens: number;
-}) {
-  const total = inputTokens + outputTokens;
-  if (total === 0) return null;
-  const inputPct = (inputTokens / total) * 100;
-
-  return (
-    <div className="space-y-1">
-      <div className="flex h-2 w-full overflow-hidden rounded-full bg-bg-subtle">
-        <div className="bg-primary transition-all" style={{ width: `${inputPct}%` }} />
-        <div className="bg-primary/40 transition-all" style={{ width: `${100 - inputPct}%` }} />
-      </div>
-      <div className="flex justify-between text-xs text-fg-muted">
-        <span>Input: {inputTokens.toLocaleString()}</span>
-        <span>Output: {outputTokens.toLocaleString()}</span>
-      </div>
-    </div>
-  );
-}

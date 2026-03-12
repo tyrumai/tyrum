@@ -76,6 +76,7 @@ export function registerHttpClientOpsCoreTests(): void {
         db_kind: "sqlite",
         is_exposed: false,
         otel_enabled: true,
+        auth: { enabled: true },
         ws: null,
         policy: null,
         model_auth: null,

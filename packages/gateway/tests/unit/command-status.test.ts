@@ -375,6 +375,8 @@ describe("/status command", () => {
         dbKind: "sqlite",
         isExposed: false,
         otelEnabled: false,
+        authEnabled: true,
+        toolrunnerHardeningProfile: "hardened",
       },
       db,
       policyService: {
@@ -409,14 +411,19 @@ describe("/status command", () => {
     expect(catalog["provider_count"]).toBe(1);
     expect(catalog["model_count"]).toBe(1);
 
+    const auth = payload["auth"] as Record<string, unknown>;
+    expect(auth["enabled"]).toBe(true);
+
     const modelAuth = payload["model_auth"] as Record<string, unknown>;
-    const auth = modelAuth["auth_profiles"] as Record<string, unknown>;
-    expect(auth["total"]).toBe(2);
-    expect(auth["active"]).toBe(1);
-    expect(auth["disabled"]).toBe(1);
-    expect(auth["cooldown_active"]).toBe(0);
-    expect(auth["oauth_expiring_within_24h"]).toBe(0);
-    expect((auth["selected"] as Record<string, unknown>)["profile_id"]).toBe(activeProfileId);
+    const authProfiles = modelAuth["auth_profiles"] as Record<string, unknown>;
+    expect(authProfiles["total"]).toBe(2);
+    expect(authProfiles["active"]).toBe(1);
+    expect(authProfiles["disabled"]).toBe(1);
+    expect(authProfiles["cooldown_active"]).toBe(0);
+    expect(authProfiles["oauth_expiring_within_24h"]).toBe(0);
+    expect((authProfiles["selected"] as Record<string, unknown>)["profile_id"]).toBe(
+      activeProfileId,
+    );
 
     const sessionLanes = payload["session_lanes"] as Array<Record<string, unknown>>;
     const mainLaneRow = sessionLanes.find(
@@ -438,6 +445,6 @@ describe("/status command", () => {
     const sandbox = payload["sandbox"] as Record<string, unknown>;
     expect(sandbox["mode"]).toBe("enforce");
     expect(sandbox["elevated_execution_available"]).toBe(true);
-    expect(sandbox["hardening_profile"]).toBe("baseline");
+    expect(sandbox["hardening_profile"]).toBe("hardened");
   });
 });

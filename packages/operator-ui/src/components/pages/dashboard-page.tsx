@@ -9,7 +9,6 @@ import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { EmptyState } from "../ui/empty-state.js";
 import { LiveRegion } from "../ui/live-region.js";
-import { Skeleton } from "../ui/skeleton.js";
 import { StatusDot } from "../ui/status-dot.js";
 import { cn } from "../../lib/cn.js";
 import { getConnectionDisplay } from "../../lib/connection-display.js";
@@ -23,7 +22,6 @@ import {
   ActivityFeedItem,
   KpiCard,
   StatusRow,
-  TokenUsageBar,
   WorkDistributionBar,
   type WorkSegment,
 } from "./dashboard-page.parts.js";
@@ -39,6 +37,23 @@ function getConfigHealthAction(issue: ConfigHealthIssue): {
     return { label: "Agents", routeId: "agents" };
   }
   return { label: "Configure", routeId: "configure" };
+}
+
+function getPolicyModeLabel(status: StatusResponse | null): string {
+  if (status?.sandbox) return status.sandbox.mode;
+  if (!status?.policy) return "-";
+  if (!status.policy.enabled) return "disabled";
+  return status.policy.observe_only ? "observe" : "enforce";
+}
+
+function getSandboxHardeningLabel(status: StatusResponse | null): string {
+  return status?.sandbox?.hardening_profile ?? "-";
+}
+
+function getElevatedExecutionLabel(status: StatusResponse | null): string {
+  const value = status?.sandbox?.elevated_execution_available;
+  if (value === null || value === undefined) return "unknown";
+  return value ? "available" : "unavailable";
 }
 
 export interface DashboardPageProps {
@@ -136,9 +151,9 @@ export function DashboardPage({
   const activeRunsCount = getActiveExecutionRunsCountFromQueueDepth(status.status?.queue_depth);
   const connectionDisplay = getConnectionDisplay(connection.status);
   const connectedNodesCount = nodeInventory.nodes.filter((node) => node.connected).length;
-  const usage = status.usage;
   const configHealth = status.status?.config_health ?? null;
   const configHealthIssues = configHealth?.issues ?? [];
+  const statusLoading = status.loading.status && status.status === null;
 
   // -- Derived: recent activity
   const recentEvents = React.useMemo(() => {
@@ -295,7 +310,7 @@ export function DashboardPage({
         />
       </div>
 
-      {/* System Status + Usage */}
+      {/* System Status + Security */}
       <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
         <Card>
           <CardHeader className="pb-0">
@@ -319,12 +334,12 @@ export function DashboardPage({
             />
             <StatusRow
               label="Version"
-              loading={status.loading.status && status.status === null}
+              loading={statusLoading}
               value={status.status?.version ?? "-"}
             />
             <StatusRow
               label="Database"
-              loading={status.loading.status && status.status === null}
+              loading={statusLoading}
               value={status.status?.db_kind ?? "-"}
             />
             <StatusRow
@@ -347,53 +362,42 @@ export function DashboardPage({
             />
             <StatusRow
               label="Sandbox"
-              loading={status.loading.status && status.status === null}
-              value={
-                status.status?.sandbox
-                  ? typeof status.status.sandbox === "object" &&
-                    status.status.sandbox !== null &&
-                    "profile" in status.status.sandbox
-                    ? String((status.status.sandbox as { profile: string }).profile)
-                    : "enabled"
-                  : "disabled"
-              }
+              loading={statusLoading}
+              value={status.status?.sandbox?.mode ?? "disabled"}
             />
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-0">
-            <h3 className="text-sm font-semibold">Token Usage</h3>
+            <h3 className="text-sm font-semibold">Security</h3>
           </CardHeader>
-          <CardContent>
-            {status.loading.usage && usage === null ? (
-              <div className="space-y-3 py-2">
-                <Skeleton className="h-5 w-32" />
-                <Skeleton className="h-2 w-full" />
-                <Skeleton className="h-5 w-24" />
-              </div>
-            ) : usage === null ? (
-              <div className="py-4 text-center text-sm text-fg-muted">Usage unavailable</div>
-            ) : (
-              <div className="space-y-3">
-                <StatusRow
-                  label="Total tokens"
-                  value={usage.local.totals.total_tokens.toLocaleString()}
-                />
-                <TokenUsageBar
-                  inputTokens={usage.local.totals.input_tokens}
-                  outputTokens={usage.local.totals.output_tokens}
-                />
-                <StatusRow
-                  label="Est. cost"
-                  value={`$${(usage.local.totals.usd_micros / 1_000_000).toFixed(2)}`}
-                />
-                <StatusRow
-                  label="Attempts"
-                  value={usage.local.attempts.total_with_cost.toLocaleString()}
-                />
-              </div>
-            )}
+          <CardContent className="divide-y divide-border">
+            <StatusRow
+              label="Exposure"
+              loading={statusLoading}
+              value={status.status ? (status.status.is_exposed ? "exposed" : "local only") : "-"}
+            />
+            <StatusRow
+              label="Auth"
+              loading={statusLoading}
+              value={status.status ? (status.status.auth.enabled ? "enabled" : "disabled") : "-"}
+            />
+            <StatusRow
+              label="Policy"
+              loading={statusLoading}
+              value={getPolicyModeLabel(status.status)}
+            />
+            <StatusRow
+              label="Sandbox hardening"
+              loading={statusLoading}
+              value={getSandboxHardeningLabel(status.status)}
+            />
+            <StatusRow
+              label="Elevated execution"
+              loading={statusLoading}
+              value={getElevatedExecutionLabel(status.status)}
+            />
           </CardContent>
         </Card>
       </div>

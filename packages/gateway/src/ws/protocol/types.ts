@@ -62,6 +62,8 @@ export interface ProtocolDeps {
     dbKind: StateStoreKind;
     isExposed: boolean;
     otelEnabled: boolean;
+    authEnabled?: boolean;
+    toolrunnerHardeningProfile?: "baseline" | "hardened";
   };
   approvalDal?: ApprovalDal;
   presenceDal?: PresenceDal;

@@ -62,6 +62,8 @@ describe("status details missing tables", () => {
       db,
       isLocalOnly: true,
       otelEnabled: false,
+      authEnabled: true,
+      toolrunnerHardeningProfile: "baseline",
     });
 
     const app = new Hono();
@@ -81,6 +83,7 @@ describe("status details missing tables", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as Record<string, unknown>;
     expect(body["status"]).toBe("ok");
+    expect(body["auth"]).toEqual({ enabled: true });
     expect(body["queue_depth"]).toBeNull();
     expect(body["config_health"]).toEqual({ status: "ok", issues: [] });
   });

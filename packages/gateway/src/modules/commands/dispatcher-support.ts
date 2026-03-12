@@ -457,6 +457,7 @@ export async function computeUsageTotals(
 export async function buildStatusPayload(deps: CommandDeps): Promise<{
   status: string;
   runtime: CommandDeps["runtime"] | null;
+  auth: { enabled: boolean };
   ws: ReturnType<NonNullable<CommandDeps["connectionManager"]>["getStats"]> | null;
   policy: Awaited<ReturnType<NonNullable<CommandDeps["policyService"]>["getStatus"]>> | null;
   model_auth: unknown;
@@ -479,12 +480,14 @@ export async function buildStatusPayload(deps: CommandDeps): Promise<{
           effective_sha256: policy.effective_sha256,
         }
       : undefined,
+    toolrunnerHardeningProfile: deps.runtime?.toolrunnerHardeningProfile,
     agents: deps.agents,
     modelsDev: deps.modelsDev,
   });
   return {
     status: "ok",
     runtime: deps.runtime ?? null,
+    auth: { enabled: deps.runtime?.authEnabled ?? false },
     ws: deps.connectionManager?.getStats() ?? null,
     policy,
     model_auth: details.model_auth,
