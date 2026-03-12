@@ -69,7 +69,7 @@ export type PreparedTurn = {
   contextReport: AgentContextReport;
   systemPrompt: string;
   resolved: ResolvedAgentTurnInput;
-  turnMemoryDecisionCollector: ReturnType<typeof createTurnMemoryDecisionCollector>;
+  turnMemoryDecisionCollector?: ReturnType<typeof createTurnMemoryDecisionCollector>;
 };
 export type PrepareTurnDeps = {
   opts: AgentRuntimeOptions;
@@ -188,11 +188,21 @@ export async function prepareTurn(
   } = assemblePrompts(ctx, session, memoryDigestResult, filteredTools, automation, runtimePrompt);
 
   const sandboxPrompt = buildSandboxPrompt();
-  const turnMemoryDecisionCollector = createTurnMemoryDecisionCollector();
-  const turnMemoryPrompt = buildTurnMemoryProtocolPrompt(automation);
-  const systemPrompt =
-    `${identityPrompt}\n\n${runtimePromptText}\n\n${safetyPrompt}\n\n${sandboxPrompt}\n\n` +
-    turnMemoryPrompt;
+  const turnMemoryDecisionCollector = ctx.config.memory.v1.enabled
+    ? createTurnMemoryDecisionCollector()
+    : undefined;
+  const turnMemoryPrompt = ctx.config.memory.v1.enabled
+    ? buildTurnMemoryProtocolPrompt(automation)
+    : undefined;
+  const systemPrompt = [
+    identityPrompt,
+    runtimePromptText,
+    safetyPrompt,
+    sandboxPrompt,
+    turnMemoryPrompt,
+  ]
+    .filter((value) => typeof value === "string" && value.length > 0)
+    .join("\n\n");
 
   const automationDigestText = automation
     ? await buildAutomationDigest({

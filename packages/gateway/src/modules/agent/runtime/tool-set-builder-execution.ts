@@ -30,7 +30,6 @@ import {
   recordTurnMemoryDecision,
   type TurnMemoryDecisionCollector,
 } from "./turn-memory-policy.js";
-import { validateToolDescriptorInputSchema } from "../tool-schema.js";
 
 type BuildRuntimeToolSetInput = {
   deps: ToolSetBuilderDeps;
@@ -65,21 +64,13 @@ export function buildRuntimeToolSet(input: BuildRuntimeToolSetInput): ToolSet {
   });
 
   for (const toolDesc of input.tools) {
-    const validated = validateToolDescriptorInputSchema(toolDesc);
-    if (!validated.ok) {
-      input.deps.logger.warn("agent.tool_schema_invalid", {
-        tool_id: toolDesc.id,
-        error: validated.error,
-      });
-      continue;
-    }
     registerModelTool(
       result,
       toolDesc.id,
       createModelTool({
         ...input,
         toolDesc,
-        inputSchema: validated.schema,
+        inputSchema: toolDesc.inputSchema,
         policyRuntime,
         executionState,
       }),

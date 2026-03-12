@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { MockLanguageModelV3 } from "ai/test";
 import type { GatewayContainer } from "../../src/container.js";
 import {
   teardownTestEnv,
