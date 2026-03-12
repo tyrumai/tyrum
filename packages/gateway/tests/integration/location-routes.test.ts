@@ -63,4 +63,16 @@ describe("location routes", () => {
       listed.places.some((place) => place.name === "Office" && place.source === "provider"),
     ).toBe(true);
   });
+
+  it("rejects invalid event limits before querying the database", async () => {
+    const { request } = await createTestApp();
+
+    const response = await request("/location/events?limit=abc");
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: "invalid_request",
+      message: "limit must be a positive integer",
+    });
+  });
 });

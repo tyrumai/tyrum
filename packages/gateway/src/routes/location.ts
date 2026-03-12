@@ -130,7 +130,15 @@ export function createLocationRoutes(service: LocationService): Hono {
     const tenantId = requireTenantId(c);
     const agentKey = c.req.query("agent_key")?.trim() || "default";
     const limitRaw = c.req.query("limit");
-    const limit = limitRaw ? Number.parseInt(limitRaw, 10) : 50;
+    const limit =
+      typeof limitRaw === "string" && /^[0-9]+$/.test(limitRaw.trim())
+        ? Number(limitRaw)
+        : limitRaw === undefined
+          ? 50
+          : null;
+    if (limit === null) {
+      return c.json({ error: "invalid_request", message: "limit must be a positive integer" }, 400);
+    }
     return c.json({
       status: "ok",
       events: await service.listEvents({ tenantId, agentKey, limit }),
