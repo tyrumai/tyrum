@@ -1,6 +1,5 @@
 import type { AgentListResult, ObservedTelegramThreadListResult } from "@tyrum/client";
 import type { OperatorCore } from "@tyrum/operator-core";
-import type { RoutingConfig, RoutingConfigRevisionSummary } from "@tyrum/schemas";
 import { History, Pencil, Plus, RefreshCw, Search, Trash2, Undo2, Waypoints } from "lucide-react";
 import * as React from "react";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
@@ -13,9 +12,18 @@ import { ConfirmDangerDialog } from "../ui/confirm-danger-dialog.js";
 import { EmptyState } from "../ui/empty-state.js";
 import { Input } from "../ui/input.js";
 import { useAdminHttpClient, useAdminMutationAccess } from "./admin-http-shared.js";
-import { AdminHttpTelegramConnectionPanel } from "./admin-http-telegram-connection.js";
+import {
+  asChannelRoutingApi,
+  getTelegramAccounts,
+  isTelegramChannelConfig,
+  type ChannelRoutingConfig,
+  type ChannelRoutingRevisionSummary,
+  type TelegramChannelConfig,
+} from "./admin-http-channels.shared.js";
+import { AdminHttpChannelConfigsPanel } from "./admin-http-telegram-connection.js";
 import { RoutingRuleDialog, type RoutingAgentOption } from "./admin-http-routing-config-dialog.js";
 import {
+  buildTelegramThreadKey,
   buildRoutingRuleRows,
   countRoutingRules,
   filterRoutingRuleRows,
@@ -54,7 +62,7 @@ function formatTimestamp(value?: string): string {
 
 function describeRule(row: RoutingRuleRow): string {
   if (row.kind === "default") {
-    return "All unmatched Telegram chats";
+    return `All unmatched Telegram chats on ${row.accountKey}`;
   }
   return row.sessionTitle ?? row.threadId ?? "Unknown thread";
 }
@@ -66,21 +74,22 @@ export function AdminHttpRoutingConfigPanel({ core }: { core: OperatorCore }): R
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
-  const [config, setConfig] = React.useState<RoutingConfig>({ v: 1 });
-  const [revisions, setRevisions] = React.useState<RoutingConfigRevisionSummary[]>([]);
+  const [config, setConfig] = React.useState<ChannelRoutingConfig>({ v: 1 });
+  const [revisions, setRevisions] = React.useState<ChannelRoutingRevisionSummary[]>([]);
   const [observedThreads, setObservedThreads] = React.useState<
     ObservedTelegramThreadListResult["threads"]
   >([]);
+  const [channelConfigs, setChannelConfigs] = React.useState<TelegramChannelConfig[]>([]);
   const [agentOptions, setAgentOptions] = React.useState<RoutingAgentOption[]>([]);
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [editingRow, setEditingRow] = React.useState<RoutingRuleRow | null>(null);
   const [deletingRow, setDeletingRow] = React.useState<RoutingRuleRow | null>(null);
   const [revertingRevision, setRevertingRevision] =
-    React.useState<RoutingConfigRevisionSummary | null>(null);
+    React.useState<ChannelRoutingRevisionSummary | null>(null);
 
   const loadPanelData = async (busyState: "loading" | "refreshing"): Promise<void> => {
-    const routingApi = core.http.routingConfig;
-    if (!routingApi) {
+    const routingApi = asChannelRoutingApi(core.http.routingConfig);
+    if (!routingApi?.listChannelConfigs) {
       setErrorMessage("Channels config API unavailable.");
       setLoading(false);
       setRefreshing(false);
@@ -95,15 +104,18 @@ export function AdminHttpRoutingConfigPanel({ core }: { core: OperatorCore }): R
     setErrorMessage(null);
 
     try {
-      const [current, revisionResult, observedThreadResult, agents] = await Promise.all([
-        routingApi.get(),
-        routingApi.listRevisions({ limit: 20 }),
-        routingApi.listObservedTelegramThreads({ limit: 200 }),
-        loadAgentOptions(core),
-      ]);
-      setConfig(current.config);
-      setRevisions(revisionResult.revisions);
+      const [current, revisionResult, observedThreadResult, channelConfigResult, agents] =
+        await Promise.all([
+          routingApi.get(),
+          routingApi.listRevisions({ limit: 20 }),
+          routingApi.listObservedTelegramThreads({ limit: 200 }),
+          routingApi.listChannelConfigs(),
+          loadAgentOptions(core),
+        ]);
+      setConfig(current.config as ChannelRoutingConfig);
+      setRevisions(revisionResult.revisions as ChannelRoutingRevisionSummary[]);
       setObservedThreads(observedThreadResult.threads);
+      setChannelConfigs(channelConfigResult.channels.filter(isTelegramChannelConfig));
       setAgentOptions(agents);
     } catch (error) {
       setErrorMessage(formatErrorMessage(error));
@@ -120,15 +132,37 @@ export function AdminHttpRoutingConfigPanel({ core }: { core: OperatorCore }): R
 
   const allRows = buildRoutingRuleRows(config, observedThreads);
   const rows = filterRoutingRuleRows(allRows, filterValue);
-  const configuredThreadIds = new Set(Object.keys(config.telegram?.threads ?? {}));
+  const configuredTelegramAccounts = channelConfigs
+    .map((channelConfig) => channelConfig.account_key)
+    .toSorted((left, right) => left.localeCompare(right));
+  const configuredThreadIds = new Set(
+    Object.entries(getTelegramAccounts(config)).flatMap(([accountKey, accountConfig]) =>
+      Object.keys(accountConfig.threads ?? {}).map((threadId) =>
+        buildTelegramThreadKey(accountKey, threadId),
+      ),
+    ),
+  );
+  const editingThreadKey =
+    editingRow?.kind === "thread" && editingRow.threadId
+      ? buildTelegramThreadKey(editingRow.accountKey, editingRow.threadId)
+      : null;
   const availableThreads = observedThreads.filter(
     (thread) =>
-      !configuredThreadIds.has(thread.thread_id) || thread.thread_id === editingRow?.threadId,
+      !configuredThreadIds.has(buildTelegramThreadKey(thread.account_key, thread.thread_id)) ||
+      buildTelegramThreadKey(thread.account_key, thread.thread_id) === editingThreadKey,
   );
-  const defaultAvailable = !config.telegram?.default_agent_key || editingRow?.kind === "default";
+  const defaultAccountOptions = configuredTelegramAccounts.filter((accountKey) => {
+    const hasDefault = Boolean(getTelegramAccounts(config)[accountKey]?.default_agent_key);
+    return !hasDefault || (editingRow?.kind === "default" && editingRow.accountKey === accountKey);
+  });
+  const canCreateRules = configuredTelegramAccounts.length > 0;
 
   const refresh = (): void => {
     void loadPanelData("refreshing");
+  };
+
+  const handleChannelConfigsChanged = (): void => {
+    refresh();
   };
 
   const openCreateDialog = (): void => {
@@ -150,7 +184,7 @@ export function AdminHttpRoutingConfigPanel({ core }: { core: OperatorCore }): R
   };
 
   const saveRule = async (draft: RoutingRuleDraft): Promise<void> => {
-    const routingApi = mutationHttp.routingConfig;
+    const routingApi = asChannelRoutingApi(mutationHttp.routingConfig);
     if (!routingApi) {
       throw new Error("Channels config API unavailable.");
     }
@@ -163,7 +197,7 @@ export function AdminHttpRoutingConfigPanel({ core }: { core: OperatorCore }): R
 
   const removeRule = async (): Promise<void> => {
     if (!deletingRow) return;
-    const routingApi = mutationHttp.routingConfig;
+    const routingApi = asChannelRoutingApi(mutationHttp.routingConfig);
     if (!routingApi) {
       throw new Error("Channels config API unavailable.");
     }
@@ -176,7 +210,7 @@ export function AdminHttpRoutingConfigPanel({ core }: { core: OperatorCore }): R
 
   const revertRevision = async (): Promise<void> => {
     if (!revertingRevision) return;
-    const routingApi = mutationHttp.routingConfig;
+    const routingApi = asChannelRoutingApi(mutationHttp.routingConfig);
     if (!routingApi) {
       throw new Error("Channels config API unavailable.");
     }
@@ -189,7 +223,10 @@ export function AdminHttpRoutingConfigPanel({ core }: { core: OperatorCore }): R
     <section className="grid gap-4" data-testid="admin-http-routing-config">
       <div className="text-sm font-medium text-fg">Channels</div>
 
-      <AdminHttpTelegramConnectionPanel core={core} />
+      <AdminHttpChannelConfigsPanel
+        core={core}
+        onChannelConfigsChanged={handleChannelConfigsChanged}
+      />
 
       <Card>
         <CardHeader className="pb-2.5">
@@ -197,7 +234,8 @@ export function AdminHttpRoutingConfigPanel({ core }: { core: OperatorCore }): R
             <div className="grid gap-1">
               <div className="text-sm font-medium text-fg">Telegram routing rules</div>
               <div className="text-sm text-fg-muted">
-                Configure which agent handles Telegram chats using structured routing rules only.
+                Configure which agent handles Telegram chats using account-aware structured routing
+                rules.
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -211,7 +249,11 @@ export function AdminHttpRoutingConfigPanel({ core }: { core: OperatorCore }): R
                 Refresh
               </Button>
               <ElevatedModeTooltip canMutate={canMutate} requestEnter={requestEnter}>
-                <Button data-testid="channels-add-open" onClick={openCreateDialog}>
+                <Button
+                  data-testid="channels-add-open"
+                  disabled={!canCreateRules}
+                  onClick={openCreateDialog}
+                >
                   <Plus className="h-4 w-4" />
                   Add rule
                 </Button>
@@ -246,8 +288,12 @@ export function AdminHttpRoutingConfigPanel({ core }: { core: OperatorCore }): R
             <EmptyState
               icon={Waypoints}
               title="No Telegram routing rules configured"
-              description="Add a default route or a thread override to make Telegram routing explicit."
-              action={{ label: "Add rule", onClick: openCreateDialog }}
+              description={
+                canCreateRules
+                  ? "Add a default route or a thread override to make Telegram routing explicit."
+                  : "Add a Telegram channel first, then create a default route or thread override."
+              }
+              action={canCreateRules ? { label: "Add rule", onClick: openCreateDialog } : undefined}
             />
           ) : rows.length === 0 ? (
             <Alert
@@ -261,6 +307,7 @@ export function AdminHttpRoutingConfigPanel({ core }: { core: OperatorCore }): R
                 <thead className="bg-bg-subtle text-fg-muted">
                   <tr>
                     <th className="px-3 py-2 font-medium">Channel</th>
+                    <th className="px-3 py-2 font-medium">Account</th>
                     <th className="px-3 py-2 font-medium">Rule</th>
                     <th className="px-3 py-2 font-medium">Thread</th>
                     <th className="px-3 py-2 font-medium">Container</th>
@@ -275,13 +322,11 @@ export function AdminHttpRoutingConfigPanel({ core }: { core: OperatorCore }): R
                       <td className="px-3 py-3 align-top">
                         <Badge variant="outline">telegram</Badge>
                       </td>
+                      <td className="px-3 py-3 align-top text-fg">{row.accountKey}</td>
                       <td className="px-3 py-3 align-top">
                         <div className="font-medium text-fg">
                           {row.kind === "default" ? "Default route" : "Thread override"}
                         </div>
-                        {row.accountKey ? (
-                          <div className="text-xs text-fg-muted">Account: {row.accountKey}</div>
-                        ) : null}
                       </td>
                       <td className="px-3 py-3 align-top">
                         <div className="font-medium text-fg">{describeRule(row)}</div>
@@ -422,7 +467,7 @@ export function AdminHttpRoutingConfigPanel({ core }: { core: OperatorCore }): R
           }
         }}
         row={editingRow}
-        defaultAvailable={defaultAvailable}
+        defaultAccountOptions={defaultAccountOptions}
         agents={agentOptions}
         observedThreads={availableThreads}
         onSubmit={saveRule}

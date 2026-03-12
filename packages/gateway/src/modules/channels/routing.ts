@@ -1,6 +1,10 @@
-export type TelegramRoutingConfig = {
+export type TelegramAccountRoutingConfig = {
   default_agent_key?: string;
   threads?: Record<string, string>;
+};
+
+export type TelegramRoutingConfig = {
+  accounts?: Record<string, TelegramAccountRoutingConfig>;
 };
 
 export type RoutingConfig = {
@@ -8,11 +12,15 @@ export type RoutingConfig = {
   telegram?: TelegramRoutingConfig;
 };
 
-export function resolveTelegramAgentId(config: RoutingConfig, threadId: string): string {
+export function resolveTelegramAgentId(
+  config: RoutingConfig,
+  accountKey: string,
+  threadId: string,
+): string {
   const t = threadId.trim();
-  const telegram = config.telegram;
-  if (telegram?.threads && t && telegram.threads[t]) {
-    return String(telegram.threads[t]).trim() || telegram.default_agent_key?.trim() || "default";
+  const account = config.telegram?.accounts?.[accountKey.trim() || "default"];
+  if (account?.threads && t && account.threads[t]) {
+    return String(account.threads[t]).trim() || account.default_agent_key?.trim() || "default";
   }
-  return telegram?.default_agent_key?.trim() || "default";
+  return account?.default_agent_key?.trim() || "default";
 }

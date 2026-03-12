@@ -102,6 +102,16 @@ describe("JSON column integrity (sqlite vs postgres)", () => {
           bundleJson: invalidJson,
         }),
       ).toThrow();
+
+      const insertChannelConfig = (configJson: string) =>
+        sqlite
+          .prepare(
+            "INSERT INTO channel_configs (tenant_id, connector_key, account_key, config_json) VALUES (?, 'telegram', ?, ?)",
+          )
+          .run(DEFAULT_TENANT_ID, "work", configJson);
+
+      expect(() => insertChannelConfig(validJson)).not.toThrow();
+      expect(() => insertChannelConfig(invalidJson)).toThrow();
     } finally {
       sqlite.close();
     }
@@ -184,6 +194,22 @@ describe("JSON column integrity (sqlite vs postgres)", () => {
           `INSERT INTO policy_snapshots (tenant_id, policy_snapshot_id, sha256, bundle_json)
            VALUES (?, ?, ?, ?)`,
           [DEFAULT_TENANT_ID, "00000000-0000-4000-8000-000000000021", "sha-invalid", invalidJson],
+        ),
+      ).rejects.toThrow();
+
+      await expect(
+        db.run(
+          `INSERT INTO channel_configs (tenant_id, connector_key, account_key, config_json)
+           VALUES (?, 'telegram', ?, ?)`,
+          [DEFAULT_TENANT_ID, "work", validJson],
+        ),
+      ).resolves.toBeDefined();
+
+      await expect(
+        db.run(
+          `INSERT INTO channel_configs (tenant_id, connector_key, account_key, config_json)
+           VALUES (?, 'telegram', ?, ?)`,
+          [DEFAULT_TENANT_ID, "personal", invalidJson],
         ),
       ).rejects.toThrow();
     } finally {

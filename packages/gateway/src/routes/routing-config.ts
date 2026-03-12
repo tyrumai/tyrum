@@ -5,20 +5,23 @@
 import { Hono } from "hono";
 import { randomUUID } from "node:crypto";
 import {
-  DeploymentConfig,
+  ChannelConfigCreateRequest,
+  ChannelConfigCreateResponse,
+  ChannelConfigDeleteResponse,
+  ChannelConfigListResponse,
+  ChannelConfigUpdateResponse,
   RoutingConfigRevertRequest,
   RoutingConfigUpdateRequest,
-  TelegramConnectionConfigResponse,
-  TelegramConnectionConfigUpdateRequest,
   WsRoutingConfigUpdatedEvent,
   type WsEventEnvelope,
+  TelegramChannelConfigUpdateRequest,
 } from "@tyrum/schemas";
 import type { SqlDb } from "../statestore/types.js";
 import type { ConnectionManager } from "../ws/connection-manager.js";
 import type { OutboxDal } from "../modules/backplane/outbox-dal.js";
+import { ChannelConfigDal, toChannelConfigView } from "../modules/channels/channel-config-dal.js";
 import type { RoutingConfigDal } from "../modules/channels/routing-config-dal.js";
 import type { ChannelThreadDal } from "../modules/channels/thread-dal.js";
-import { DeploymentConfigDal } from "../modules/config/deployment-config-dal.js";
 import type { Logger } from "../modules/observability/logger.js";
 import { getClientIp } from "../modules/auth/client-ip.js";
 import type { WsBroadcastAudience } from "../ws/audience.js";
@@ -58,24 +61,9 @@ function parseLimit(raw: string | undefined, fallback: number, max: number): num
   return Math.max(1, Math.min(max, Number(raw)));
 }
 
-function toTelegramConnectionConfig(config: DeploymentConfig): {
-  bot_token_configured: boolean;
-  webhook_secret_configured: boolean;
-  allowed_user_ids: string[];
-  pipeline_enabled: boolean;
-} {
-  const channels = config.channels;
-  return {
-    bot_token_configured: Boolean(channels.telegramBotToken?.trim()),
-    webhook_secret_configured: Boolean(channels.telegramWebhookSecret?.trim()),
-    allowed_user_ids: channels.telegramAllowedUserIds ?? [],
-    pipeline_enabled: channels.pipelineEnabled ?? true,
-  };
-}
-
 export function createRoutingConfigRoutes(deps: RoutingConfigRouteDeps): Hono {
   const app = new Hono();
-  const deploymentConfigDal = new DeploymentConfigDal(deps.db);
+  const channelConfigDal = new ChannelConfigDal(deps.db);
 
   app.get("/routing/config", async (c) => {
     try {
@@ -251,88 +239,100 @@ export function createRoutingConfigRoutes(deps: RoutingConfigRouteDeps): Hono {
     );
   });
 
-  app.get("/routing/channels/telegram/config", async (c) => {
-    requireTenantId(c);
-    const revision = await deploymentConfigDal.ensureSeeded({
-      defaultConfig: DeploymentConfig.parse({}),
-      createdBy: { kind: "bootstrap" },
-      reason: "seed",
-    });
-
+  app.get("/routing/channels/configs", async (c) => {
+    const tenantId = requireTenantId(c);
+    const channels = await channelConfigDal.list(tenantId);
     return c.json(
-      TelegramConnectionConfigResponse.parse({
-        revision: revision.revision,
-        config: toTelegramConnectionConfig(revision.config),
-        created_at: revision.createdAt,
-        created_by: revision.createdBy,
-        reason: revision.reason,
-        reverted_from_revision: revision.revertedFromRevision,
+      ChannelConfigListResponse.parse({
+        channels: channels.map((config) => toChannelConfigView(config)),
       }),
       200,
     );
   });
 
-  app.put("/routing/channels/telegram/config", async (c) => {
-    requireTenantId(c);
+  app.post("/routing/channels/configs", async (c) => {
+    const tenantId = requireTenantId(c);
     const body = (await c.req.json().catch(() => undefined)) as unknown;
-    const parsed = TelegramConnectionConfigUpdateRequest.safeParse(body);
+    const parsed = ChannelConfigCreateRequest.safeParse(body);
     if (!parsed.success) {
       return c.json({ error: "invalid_request", message: parsed.error.message }, 400);
     }
 
-    const current = await deploymentConfigDal.ensureSeeded({
-      defaultConfig: DeploymentConfig.parse({}),
-      createdBy: { kind: "bootstrap" },
-      reason: "seed",
+    switch (parsed.data.channel) {
+      case "telegram": {
+        const created = await channelConfigDal.createTelegram({
+          tenantId,
+          accountKey: parsed.data.account_key,
+          botToken: parsed.data.bot_token,
+          webhookSecret: parsed.data.webhook_secret,
+          allowedUserIds: parsed.data.allowed_user_ids,
+          pipelineEnabled: parsed.data.pipeline_enabled,
+        });
+        return c.json(
+          ChannelConfigCreateResponse.parse({
+            config: toChannelConfigView(created),
+          }),
+          201,
+        );
+      }
+    }
+  });
+
+  app.patch("/routing/channels/configs/:channel/:accountKey", async (c) => {
+    const tenantId = requireTenantId(c);
+    const channel = c.req.param("channel");
+    const accountKey = c.req.param("accountKey");
+    if (channel !== "telegram") {
+      return c.json({ error: "not_found", message: "channel config not found" }, 404);
+    }
+
+    const body = (await c.req.json().catch(() => undefined)) as unknown;
+    const parsed = TelegramChannelConfigUpdateRequest.safeParse(body);
+    if (!parsed.success) {
+      return c.json({ error: "invalid_request", message: parsed.error.message }, 400);
+    }
+
+    const updated = await channelConfigDal.updateTelegram({
+      tenantId,
+      accountKey,
+      botToken: parsed.data.bot_token,
+      clearBotToken: parsed.data.clear_bot_token,
+      webhookSecret: parsed.data.webhook_secret,
+      clearWebhookSecret: parsed.data.clear_webhook_secret,
+      allowedUserIds: parsed.data.allowed_user_ids,
+      pipelineEnabled: parsed.data.pipeline_enabled,
     });
-    const nextChannels = {
-      ...current.config.channels,
-    };
-
-    if (parsed.data.clear_bot_token) {
-      delete nextChannels.telegramBotToken;
-    } else if (parsed.data.bot_token !== undefined) {
-      nextChannels.telegramBotToken = parsed.data.bot_token;
+    if (!updated) {
+      return c.json({ error: "not_found", message: "channel config not found" }, 404);
     }
-
-    if (parsed.data.clear_webhook_secret) {
-      delete nextChannels.telegramWebhookSecret;
-    } else if (parsed.data.webhook_secret !== undefined) {
-      nextChannels.telegramWebhookSecret = parsed.data.webhook_secret;
-    }
-
-    if (parsed.data.allowed_user_ids !== undefined) {
-      nextChannels.telegramAllowedUserIds = parsed.data.allowed_user_ids;
-    }
-
-    if (parsed.data.pipeline_enabled !== undefined) {
-      nextChannels.pipelineEnabled = parsed.data.pipeline_enabled;
-    }
-
-    const createdBy = {
-      kind: "http",
-      ip: getClientIp(c),
-      user_agent: c.req.header("user-agent") ?? undefined,
-    };
-    const persisted = await deploymentConfigDal.set({
-      config: {
-        ...current.config,
-        channels: nextChannels,
-      },
-      createdBy,
-      reason: parsed.data.reason,
-    });
 
     return c.json(
-      TelegramConnectionConfigResponse.parse({
-        revision: persisted.revision,
-        config: toTelegramConnectionConfig(persisted.config),
-        created_at: persisted.createdAt,
-        created_by: persisted.createdBy,
-        reason: persisted.reason,
-        reverted_from_revision: persisted.revertedFromRevision,
+      ChannelConfigUpdateResponse.parse({
+        config: toChannelConfigView(updated),
       }),
       200,
+    );
+  });
+
+  app.delete("/routing/channels/configs/:channel/:accountKey", async (c) => {
+    const tenantId = requireTenantId(c);
+    const channel = c.req.param("channel");
+    const accountKey = c.req.param("accountKey");
+    if (channel !== "telegram") {
+      return c.json({ error: "not_found", message: "channel config not found" }, 404);
+    }
+    const deleted = await channelConfigDal.delete({
+      tenantId,
+      connectorKey: channel,
+      accountKey,
+    });
+    return c.json(
+      ChannelConfigDeleteResponse.parse({
+        deleted,
+        channel: "telegram",
+        account_key: accountKey,
+      }),
+      deleted ? 200 : 404,
     );
   });
 

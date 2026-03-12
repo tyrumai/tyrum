@@ -12,7 +12,9 @@ import { WsNotifier } from "../modules/approval/notifier.js";
 import { ConnectionDirectoryDal } from "../modules/backplane/connection-directory.js";
 import { OutboxDal } from "../modules/backplane/outbox-dal.js";
 import { OutboxPoller } from "../modules/backplane/outbox-poller.js";
+import { ChannelConfigDal } from "../modules/channels/channel-config-dal.js";
 import { TelegramChannelProcessor } from "../modules/channels/telegram.js";
+import { TelegramChannelRuntime } from "../modules/channels/telegram-runtime.js";
 import { type StepExecutor as ExecutionStepExecutor } from "../modules/execution/engine.js";
 import { createGatewayStepExecutor } from "../modules/execution/gateway-step-executor.js";
 import { createKubernetesToolRunnerStepExecutor } from "../modules/execution/kubernetes-toolrunner-step-executor.js";
@@ -354,23 +356,24 @@ export async function startEdgeRuntime(
   });
   outboxPoller.start();
 
-  const telegramProcessor =
-    agents && context.container.telegramBot && context.deploymentConfig.channels.pipelineEnabled
-      ? new TelegramChannelProcessor({
-          db: context.container.db,
-          sessionDal: context.container.sessionDal,
-          agents,
-          telegramBot: context.container.telegramBot,
-          owner: context.instanceId,
-          logger: context.logger,
-          typingMode: context.deploymentConfig.channels.typingMode,
-          typingRefreshMs: context.deploymentConfig.channels.typingRefreshMs,
-          typingAutomationEnabled: context.deploymentConfig.channels.typingAutomationEnabled,
-          memoryV1Dal: context.container.memoryV1Dal,
-          approvalDal: context.container.approvalDal,
-          approvalNotifier: protocol.approvalNotifier,
-        })
-      : undefined;
+  const telegramRuntime = new TelegramChannelRuntime(new ChannelConfigDal(context.container.db));
+  const telegramProcessor = agents
+    ? new TelegramChannelProcessor({
+        db: context.container.db,
+        sessionDal: context.container.sessionDal,
+        agents,
+        owner: context.instanceId,
+        logger: context.logger,
+        typingMode: context.deploymentConfig.channels.typingMode,
+        typingRefreshMs: context.deploymentConfig.channels.typingRefreshMs,
+        typingAutomationEnabled: context.deploymentConfig.channels.typingAutomationEnabled,
+        memoryV1Dal: context.container.memoryV1Dal,
+        approvalDal: context.container.approvalDal,
+        approvalNotifier: protocol.approvalNotifier,
+        listEgressConnectors: async (tenantId) =>
+          await telegramRuntime.listEgressConnectors(tenantId),
+      })
+    : undefined;
   telegramProcessor?.start();
 
   const server = await createGatewayServer(context, app, wsHandler);

@@ -34,7 +34,8 @@ export class TelegramChannelProcessor {
   private readonly inbox: ChannelInboxDal;
   private readonly outbox: ChannelOutboxDal;
   private readonly agents: AgentRegistry;
-  private readonly egressConnectors: Map<string, ChannelEgressConnector>;
+  private readonly staticEgressConnectors: ReadonlyMap<string, ChannelEgressConnector>;
+  private readonly listEgressConnectors?: (tenantId: string) => Promise<ChannelEgressConnector[]>;
   private readonly owner: string;
   private readonly logger?: Logger;
   private readonly memoryV1Dal?: MemoryV1Dal;
@@ -57,7 +58,7 @@ export class TelegramChannelProcessor {
     sessionDal: SessionDal;
     inboxConfig?: ChannelInboxConfig;
     agents: AgentRegistry;
-    telegramBot: TelegramBot;
+    telegramBot?: TelegramBot;
     owner: string;
     logger?: Logger;
     memoryV1Dal?: MemoryV1Dal;
@@ -67,6 +68,7 @@ export class TelegramChannelProcessor {
     typingRefreshMs?: number;
     typingAutomationEnabled?: boolean;
     egressConnectors?: ChannelEgressConnector[];
+    listEgressConnectors?: (tenantId: string) => Promise<ChannelEgressConnector[]>;
     pollIntervalMs?: number;
     inboxLeaseTtlMs?: number;
     outboxLeaseTtlMs?: number;
@@ -78,11 +80,13 @@ export class TelegramChannelProcessor {
     this.inbox = new ChannelInboxDal(opts.db, opts.sessionDal, opts.inboxConfig);
     this.outbox = new ChannelOutboxDal(opts.db);
     this.agents = opts.agents;
-    this.egressConnectors = new Map(
-      (opts.egressConnectors ?? [createTelegramEgressConnector(opts.telegramBot)]).map(
-        (connector) => [connectorBindingKey(connector), connector],
-      ),
+    this.staticEgressConnectors = new Map(
+      (
+        opts.egressConnectors ??
+        (opts.telegramBot ? [createTelegramEgressConnector(opts.telegramBot)] : [])
+      ).map((connector) => [connectorBindingKey(connector), connector]),
     );
+    this.listEgressConnectors = opts.listEgressConnectors;
     this.owner = opts.owner;
     this.logger = opts.logger;
     this.memoryV1Dal = opts.memoryV1Dal;
@@ -150,13 +154,14 @@ export class TelegramChannelProcessor {
         } else {
           try {
             const batch = await this.claimDebouncedBatch(claimed);
+            const egressConnectors = await this.loadEgressConnectors(claimed.tenant_id);
             await processTelegramBatch(
               {
                 db: this.db,
                 inbox: this.inbox,
                 outbox: this.outbox,
                 agents: this.agents,
-                egressConnectors: this.egressConnectors,
+                egressConnectors,
                 owner: this.owner,
                 logger: this.logger,
                 memoryV1Dal: this.memoryV1Dal,
@@ -271,8 +276,8 @@ export class TelegramChannelProcessor {
 
     const address = parseChannelSourceKey(next.source);
     const sourceKey = buildChannelSourceKey(address);
-    const connector =
-      this.egressConnectors.get(sourceKey) ?? this.egressConnectors.get(address.connector);
+    const egressConnectors = await this.loadEgressConnectors(next.tenant_id);
+    const connector = egressConnectors.get(sourceKey) ?? egressConnectors.get(address.connector);
     if (!connector) {
       const message = `no egress connector registered for source '${address.connector}'`;
       const marked = await this.outbox.markFailed(next.outbox_id, this.owner, message);
@@ -356,6 +361,20 @@ export class TelegramChannelProcessor {
     }
 
     return true;
+  }
+
+  private async loadEgressConnectors(
+    tenantId: string,
+  ): Promise<ReadonlyMap<string, ChannelEgressConnector>> {
+    if (!this.listEgressConnectors) {
+      return this.staticEgressConnectors;
+    }
+    return new Map(
+      (await this.listEgressConnectors(tenantId)).map((connector) => [
+        connectorBindingKey(connector),
+        connector,
+      ]),
+    );
   }
 
   private async enqueueDeliveryReceiptEvent(input: {

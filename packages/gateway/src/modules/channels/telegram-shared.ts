@@ -188,9 +188,13 @@ export function telegramThreadKey(
   });
 }
 
-export function createTelegramEgressConnector(telegramBot: TelegramBot): ChannelEgressConnector {
+export function createTelegramEgressConnector(
+  telegramBot: TelegramBot,
+  accountId?: string,
+): ChannelEgressConnector {
   return {
     connector: "telegram",
+    ...(accountId?.trim() ? { accountId } : {}),
     sendMessage: async (input) => {
       const parseMode = toTelegramParseMode(input.parseMode);
       return await telegramBot.sendMessage(

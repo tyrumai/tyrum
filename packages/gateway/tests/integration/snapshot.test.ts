@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createTestApp } from "./helpers.js";
 import { ScheduleService } from "../../src/modules/automation/schedule-service.js";
+import { ChannelConfigDal } from "../../src/modules/channels/channel-config-dal.js";
 import { RoutingConfigDal } from "../../src/modules/channels/routing-config-dal.js";
 import { seedPausedExecutionRun } from "../helpers/execution-fixtures.js";
 import {
@@ -320,14 +321,26 @@ describe("snapshot routes", () => {
       config: {
         v: 1,
         telegram: {
-          default_agent_key: "default",
-          threads: {
-            "123": "agent-b",
+          accounts: {
+            default: {
+              default_agent_key: "default",
+              threads: {
+                "123": "agent-b",
+              },
+            },
           },
         },
       },
       reason: "snapshot-seed",
       createdBy: { kind: "test" },
+    });
+    await new ChannelConfigDal(container.db).createTelegram({
+      tenantId: auth.tenantId,
+      accountKey: "default",
+      botToken: "snapshot-bot-token",
+      webhookSecret: "snapshot-webhook-secret",
+      allowedUserIds: ["123"],
+      pipelineEnabled: false,
     });
 
     const exportRes = await app.request("/snapshot/export");
@@ -355,8 +368,26 @@ describe("snapshot routes", () => {
 
     const latest = await new RoutingConfigDal(container2.db).getLatest(auth2.tenantId);
     expect(latest?.config).toMatchObject({
-      telegram: { threads: { "123": "agent-b" } },
+      telegram: {
+        accounts: {
+          default: {
+            threads: { "123": "agent-b" },
+          },
+        },
+      },
     });
+    await expect(
+      new ChannelConfigDal(container2.db).listTelegram(auth2.tenantId),
+    ).resolves.toMatchObject([
+      {
+        channel: "telegram",
+        account_key: "default",
+        bot_token: "snapshot-bot-token",
+        webhook_secret: "snapshot-webhook-secret",
+        allowed_user_ids: ["123"],
+        pipeline_enabled: false,
+      },
+    ]);
 
     await container.db.close();
     await container2.db.close();

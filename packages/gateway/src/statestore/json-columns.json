@@ -189,6 +189,13 @@
     "default": null
   },
   {
+    "table": "channel_configs",
+    "column": "config_json",
+    "shape": "object",
+    "nullable": false,
+    "default": null
+  },
+  {
     "table": "connections",
     "column": "capabilities_json",
     "shape": "array",

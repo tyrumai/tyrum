@@ -1,11 +1,15 @@
 import {
+  ChannelConfigCreateRequest,
+  ChannelConfigCreateResponse,
+  ChannelConfigDeleteResponse,
+  ChannelConfigListResponse,
+  ChannelConfigUpdateResponse,
   ObservedTelegramThreadListResponse,
   RoutingConfigGetResponse,
   RoutingConfigRevisionListResponse,
   RoutingConfigRevertRequest,
   RoutingConfigRevertResponse,
-  TelegramConnectionConfigResponse,
-  TelegramConnectionConfigUpdateRequest,
+  TelegramChannelConfigUpdateRequest,
   RoutingConfigUpdateRequest,
   RoutingConfigUpdateResponse,
 } from "@tyrum/schemas";
@@ -25,10 +29,12 @@ export type RoutingConfigRevertInput = z.input<typeof RoutingConfigRevertRequest
 export type RoutingConfigRevertResult = z.output<typeof RoutingConfigRevertResponse>;
 export type RoutingConfigRevisionListResult = z.output<typeof RoutingConfigRevisionListResponse>;
 export type ObservedTelegramThreadListResult = z.output<typeof ObservedTelegramThreadListResponse>;
-export type TelegramConnectionConfigResult = z.output<typeof TelegramConnectionConfigResponse>;
-export type TelegramConnectionConfigUpdateInput = z.input<
-  typeof TelegramConnectionConfigUpdateRequest
->;
+export type ChannelConfigListResult = z.output<typeof ChannelConfigListResponse>;
+export type ChannelConfigCreateInput = z.input<typeof ChannelConfigCreateRequest>;
+export type ChannelConfigCreateResult = z.output<typeof ChannelConfigCreateResponse>;
+export type TelegramChannelConfigUpdateInput = z.input<typeof TelegramChannelConfigUpdateRequest>;
+export type ChannelConfigUpdateResult = z.output<typeof ChannelConfigUpdateResponse>;
+export type ChannelConfigDeleteResult = z.output<typeof ChannelConfigDeleteResponse>;
 export type RoutingConfigListQuery = z.input<typeof RoutingConfigListQuery>;
 
 export interface RoutingConfigApi {
@@ -41,15 +47,26 @@ export interface RoutingConfigApi {
     query?: RoutingConfigListQuery,
     options?: TyrumRequestOptions,
   ): Promise<ObservedTelegramThreadListResult>;
-  getTelegramConfig(options?: TyrumRequestOptions): Promise<TelegramConnectionConfigResult>;
+  listChannelConfigs(options?: TyrumRequestOptions): Promise<ChannelConfigListResult>;
+  createChannelConfig(
+    input: ChannelConfigCreateInput,
+    options?: TyrumRequestOptions,
+  ): Promise<ChannelConfigCreateResult>;
   update(
     input: RoutingConfigUpdateInput,
     options?: TyrumRequestOptions,
   ): Promise<RoutingConfigUpdateResult>;
-  updateTelegramConfig(
-    input: TelegramConnectionConfigUpdateInput,
+  updateChannelConfig(
+    channel: "telegram",
+    accountKey: string,
+    input: TelegramChannelConfigUpdateInput,
     options?: TyrumRequestOptions,
-  ): Promise<TelegramConnectionConfigResult>;
+  ): Promise<ChannelConfigUpdateResult>;
+  deleteChannelConfig(
+    channel: "telegram",
+    accountKey: string,
+    options?: TyrumRequestOptions,
+  ): Promise<ChannelConfigDeleteResult>;
   revert(
     input: RoutingConfigRevertInput,
     options?: TyrumRequestOptions,
@@ -97,11 +114,27 @@ export function createRoutingConfigApi(transport: HttpTransport): RoutingConfigA
       });
     },
 
-    async getTelegramConfig(options) {
+    async listChannelConfigs(options) {
       return await transport.request({
         method: "GET",
-        path: "/routing/channels/telegram/config",
-        response: TelegramConnectionConfigResponse,
+        path: "/routing/channels/configs",
+        response: ChannelConfigListResponse,
+        signal: options?.signal,
+      });
+    },
+
+    async createChannelConfig(input, options) {
+      const body = validateOrThrow(
+        ChannelConfigCreateRequest,
+        input,
+        "channel config create request",
+      );
+      return await transport.request({
+        method: "POST",
+        path: "/routing/channels/configs",
+        body,
+        response: ChannelConfigCreateResponse,
+        expectedStatus: 201,
         signal: options?.signal,
       });
     },
@@ -122,18 +155,28 @@ export function createRoutingConfigApi(transport: HttpTransport): RoutingConfigA
       });
     },
 
-    async updateTelegramConfig(input, options) {
+    async updateChannelConfig(channel, accountKey, input, options) {
       const body = validateOrThrow(
-        TelegramConnectionConfigUpdateRequest,
+        TelegramChannelConfigUpdateRequest,
         input,
-        "telegram connection config update request",
+        "telegram channel config update request",
       );
       return await transport.request({
-        method: "PUT",
-        path: "/routing/channels/telegram/config",
+        method: "PATCH",
+        path: `/routing/channels/configs/${encodeURIComponent(channel)}/${encodeURIComponent(accountKey)}`,
         body,
-        response: TelegramConnectionConfigResponse,
+        response: ChannelConfigUpdateResponse,
         expectedStatus: 200,
+        signal: options?.signal,
+      });
+    },
+
+    async deleteChannelConfig(channel, accountKey, options) {
+      return await transport.request({
+        method: "DELETE",
+        path: `/routing/channels/configs/${encodeURIComponent(channel)}/${encodeURIComponent(accountKey)}`,
+        response: ChannelConfigDeleteResponse,
+        expectedStatus: [200, 404],
         signal: options?.signal,
       });
     },
