@@ -136,6 +136,7 @@ describe("/context", () => {
         thread_id: string;
         system_prompt: { chars: number; sections?: Array<{ id: string; chars: number }> };
         user_parts: Array<{ id: string; chars: number }>;
+        selected_tools: string[];
         tool_schema_total_chars?: number;
         tool_schema_top?: Array<{ id: string; chars: number }>;
         tool_calls?: Array<{ tool_call_id: string; tool_id: string; injected_chars: number }>;
@@ -161,8 +162,9 @@ describe("/context", () => {
     expect(messagePart).toEqual({ id: "message", chars: "hello".length });
 
     expect(ctxPayload.report!.system_prompt.sections?.length).toBeGreaterThan(0);
+    expect(ctxPayload.report!.selected_tools).toContain("read");
     expect(ctxPayload.report!.tool_schema_total_chars).toBeGreaterThan(0);
-    expect(ctxPayload.report!.tool_schema_top?.some((p) => p.id === "read")).toBe(true);
+    expect(ctxPayload.report!.tool_schema_top?.length).toBeGreaterThan(0);
 
     const fileReport = ctxPayload.report!.injected_files?.find((f) => f.path === "big.txt");
     expect(fileReport).toBeTruthy();
