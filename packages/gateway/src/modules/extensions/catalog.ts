@@ -43,9 +43,10 @@ export function countAssignments(
   kind: ExtensionKind,
   key: string,
 ): number {
-  return configs.filter((config) =>
-    isAgentAccessAllowed(kind === "skill" ? config.skills : config.mcp, key),
-  ).length;
+  return configs.filter((config) => {
+    const accessConfig = kind === "skill" ? config.skills : config.mcp;
+    return isAgentAccessAllowed({ ...accessConfig, default_mode: "deny" }, key);
+  }).length;
 }
 
 function sourceDescriptorForSkill(
