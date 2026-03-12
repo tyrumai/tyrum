@@ -76,6 +76,10 @@ import {
   DesktopEnvironmentLifecycleService,
   UnsupportedDesktopEnvironmentLifecycleService,
 } from "./modules/desktop-environments/lifecycle-service.js";
+import type {
+  DesktopEnvironmentDal,
+  DesktopEnvironmentHostDal,
+} from "./modules/desktop-environments/dal.js";
 
 export interface AppRouteDependencies {
   authProfileDal: AuthProfileDal;
@@ -85,6 +89,8 @@ export interface AppRouteDependencies {
   routingConfigDal: RoutingConfigDal;
   channelThreadDal: ChannelThreadDal;
   wsEventDal: WsEventDal;
+  desktopEnvironmentDal: DesktopEnvironmentDal;
+  desktopEnvironmentHostDal: DesktopEnvironmentHostDal;
 }
 
 export interface AppRouteContext {
