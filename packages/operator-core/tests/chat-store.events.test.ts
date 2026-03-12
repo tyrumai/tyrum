@@ -210,6 +210,51 @@ describe("chatStore event handling", () => {
     ]);
   });
 
+  it("lets message.final replace a longer streamed delta for the same message id", async () => {
+    const ws = createFakeWs();
+    ws.sessionGet.mockResolvedValue({ session: sampleGetSession("session-1") });
+    const http = createFakeHttp();
+    const chat = createChatStore(ws as any, http as any);
+
+    await chat.openSession("session-1");
+
+    ws.emit("message.delta", {
+      occurred_at: "2026-01-01T00:00:01.000Z",
+      payload: {
+        thread_id: "ui-session-1",
+        message_id: "assistant-1",
+        role: "assistant",
+        delta: "Hello there",
+      },
+    });
+    ws.emit("message.final", {
+      occurred_at: "2026-01-01T00:00:02.000Z",
+      payload: {
+        thread_id: "ui-session-1",
+        message_id: "assistant-1",
+        role: "assistant",
+        content: "Hello",
+      },
+    });
+
+    expect(chat.getSnapshot().active.session?.transcript).toEqual([
+      {
+        kind: "text",
+        id: "session-1-user-1",
+        role: "user",
+        content: "hello",
+        created_at: "2026-01-01T00:00:00.000Z",
+      },
+      {
+        kind: "text",
+        id: "assistant-1",
+        role: "assistant",
+        content: "Hello",
+        created_at: "2026-01-01T00:00:01.000Z",
+      },
+    ]);
+  });
+
   it("buffers matching live updates while openSession is still loading", async () => {
     const ws = createFakeWs();
     const pendingGet = deferred<{ session: ReturnType<typeof sampleGetSession> }>();

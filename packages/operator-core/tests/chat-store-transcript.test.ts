@@ -84,7 +84,7 @@ describe("chat-store transcript helpers", () => {
     expect(merged.map((item) => item.id)).toEqual(["old-text", "new-text", "tool-local"]);
   });
 
-  it("prefers newer local streamed text when a fetched snapshot is stale", () => {
+  it("prefers fetched text when the server returns authoritative content for the same id", () => {
     const merged = mergeFetchedTranscript(
       [
         {
@@ -111,7 +111,37 @@ describe("chat-store transcript helpers", () => {
         kind: "text",
         id: "assistant-1",
         role: "assistant",
+        content: "Hello",
+        created_at: "2026-03-09T00:00:02.000Z",
+      },
+    ]);
+  });
+
+  it("upserts authoritative text replacements even when the new content is shorter", () => {
+    const session = sessionWithTranscript([
+      {
+        kind: "text",
+        id: "assistant-1",
+        role: "assistant",
         content: "Hello there",
+        created_at: "2026-03-09T00:00:02.000Z",
+      },
+    ]);
+
+    const updated = upsertTranscriptItem(session, {
+      kind: "text",
+      id: "assistant-1",
+      role: "assistant",
+      content: "Hello",
+      created_at: "2026-03-09T00:00:02.000Z",
+    });
+
+    expect(updated.transcript).toEqual([
+      {
+        kind: "text",
+        id: "assistant-1",
+        role: "assistant",
+        content: "Hello",
         created_at: "2026-03-09T00:00:02.000Z",
       },
     ]);

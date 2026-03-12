@@ -7,6 +7,7 @@ import type {
 import type { ChatReasoningTranscriptItem, ChatSession } from "./chat-store.types.js";
 
 type ChatTranscriptItem = ChatSession["transcript"][number];
+type TextContentPreference = "primary" | "overlay";
 
 function earliestIso(left: string, right: string): string {
   return left.localeCompare(right) <= 0 ? left : right;
@@ -24,17 +25,16 @@ export function transcriptDisplayOrderTimestamp(item: ChatTranscriptItem): strin
   return item.created_at;
 }
 
-export function transcriptActivityTimestamp(item: ChatTranscriptItem): string {
-  return item.kind === "text" ? item.created_at : item.updated_at;
-}
-
 function mergeTextItems(
   primary: SessionTranscriptTextItem,
   overlay: SessionTranscriptTextItem,
+  textContentPreference: TextContentPreference,
 ): SessionTranscriptTextItem {
+  const winner = textContentPreference === "overlay" ? overlay : primary;
   return {
     ...primary,
-    content: preferLongerString(primary.content, overlay.content),
+    ...winner,
+    content: winner.content,
     created_at: earliestIso(primary.created_at, overlay.created_at),
   };
 }
@@ -91,11 +91,18 @@ function mergeApprovalItems(
 function mergeTranscriptItem(
   primary: ChatTranscriptItem,
   overlay: ChatTranscriptItem,
+  input: {
+    textContentPreference: TextContentPreference;
+  },
 ): ChatTranscriptItem {
   if (primary.kind !== overlay.kind) return primary;
   switch (primary.kind) {
     case "text":
-      return mergeTextItems(primary, overlay as SessionTranscriptTextItem);
+      return mergeTextItems(
+        primary,
+        overlay as SessionTranscriptTextItem,
+        input.textContentPreference,
+      );
     case "reasoning":
       return mergeReasoningItems(primary, overlay as ChatReasoningTranscriptItem);
     case "tool":
@@ -119,10 +126,14 @@ export function sortTranscriptItems(
 export function mergeTranscriptEntries(
   primary: readonly ChatTranscriptItem[],
   overlay: readonly ChatTranscriptItem[],
+  input: {
+    textContentPreference?: TextContentPreference;
+  } = {},
 ): ChatTranscriptItem[] {
   if (primary.length === 0 && overlay.length === 0) return [];
   const merged = [...primary];
   const indexById = new Map<string, number>();
+  const textContentPreference = input.textContentPreference ?? "overlay";
 
   for (const [index, item] of merged.entries()) {
     indexById.set(item.id, index);
@@ -137,7 +148,9 @@ export function mergeTranscriptEntries(
     }
     const existing = merged[existingIndex];
     if (!existing) continue;
-    merged[existingIndex] = mergeTranscriptItem(existing, item);
+    merged[existingIndex] = mergeTranscriptItem(existing, item, {
+      textContentPreference,
+    });
   }
 
   return sortTranscriptItems(merged);
@@ -147,7 +160,9 @@ export function mergeFetchedTranscript(
   previous: readonly ChatTranscriptItem[] | undefined,
   fetched: readonly ChatTranscriptItem[],
 ): ChatTranscriptItem[] {
-  return mergeTranscriptEntries(fetched, previous ?? []);
+  return mergeTranscriptEntries(fetched, previous ?? [], {
+    textContentPreference: "primary",
+  });
 }
 
 export function upsertTranscriptEntries(
