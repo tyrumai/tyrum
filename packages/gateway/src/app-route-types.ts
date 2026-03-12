@@ -7,10 +7,6 @@ import { ConfiguredModelPresetDal } from "./modules/models/configured-model-pres
 import { ExecutionProfileModelAssignmentDal } from "./modules/models/execution-profile-model-assignment-dal.js";
 import { ChannelThreadDal } from "./modules/channels/thread-dal.js";
 import { RoutingConfigDal } from "./modules/channels/routing-config-dal.js";
-import {
-  DesktopEnvironmentDal,
-  DesktopEnvironmentHostDal,
-} from "./modules/desktop-environments/dal.js";
 import { WsEventDal } from "./modules/ws-event/dal.js";
 
 export interface AppRouteDependencies {
@@ -21,8 +17,6 @@ export interface AppRouteDependencies {
   routingConfigDal: RoutingConfigDal;
   channelThreadDal: ChannelThreadDal;
   wsEventDal: WsEventDal;
-  desktopEnvironmentDal: DesktopEnvironmentDal;
-  desktopEnvironmentHostDal: DesktopEnvironmentHostDal;
 }
 
 export interface AppRouteContext {
