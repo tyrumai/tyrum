@@ -21,10 +21,10 @@ export function hostStatusVariant(host: {
 }
 
 export function environmentStatusVariant(
-  status: "pending" | "starting" | "running" | "stopped" | "error",
+  status: "pending" | "starting" | "running" | "stopped" | "stopping" | "error",
 ): BadgeVariant {
   if (status === "error") return "danger";
   if (status === "running") return "success";
-  if (status === "starting" || status === "pending") return "warning";
+  if (status === "starting" || status === "pending" || status === "stopping") return "warning";
   return "outline";
 }
