@@ -15,8 +15,6 @@ import type { ModelMessage } from "ai";
 import { coerceModelMessages } from "../../ai-sdk/message-utils.js";
 import { coerceRecord } from "../../util/coerce.js";
 import { buildAgentTurnKey } from "../turn-key.js";
-import type { PolicyService } from "../../policy/service.js";
-import { deriveElevatedExecutionAvailableFromPolicyBundle } from "../../sandbox/elevated-execution.js";
 import { renderEnvelopeMessageText } from "../session-message-text.js";
 import type { LaneQueueScope } from "./turn-engine-bridge.js";
 
@@ -113,36 +111,8 @@ export function extractToolApprovalResumeState(
   return { approval_id: approvalId, messages, used_tools: usedTools, steps_used: stepsUsed };
 }
 
-export async function deriveElevatedExecutionAvailable(
-  policyService: PolicyService,
-  scope: { tenantId: string; agentId?: string },
-): Promise<boolean | null> {
-  try {
-    const effective = await policyService.loadEffectiveBundle(scope);
-    return deriveElevatedExecutionAvailableFromPolicyBundle(effective.bundle);
-  } catch {
-    // Intentional: policy bundle may be unavailable; treat elevated execution as unknown.
-    return null;
-  }
-}
-
-export async function buildSandboxPrompt(input: {
-  policyService: PolicyService;
-  hardeningProfile: string;
-  tenantId: string;
-  agentId?: string;
-}): Promise<string> {
-  const elevatedExecutionAvailable = await deriveElevatedExecutionAvailable(input.policyService, {
-    tenantId: input.tenantId,
-    agentId: input.agentId,
-  });
-  return [
-    "Sandbox:",
-    `Hardening profile: ${input.hardeningProfile}`,
-    `Elevated execution available: ${
-      elevatedExecutionAvailable === null ? "unknown" : String(elevatedExecutionAvailable)
-    }`,
-  ].join("\n");
+export function buildSandboxPrompt(): string {
+  return ["Sandbox:", "Execution constraints are enforced by the gateway."].join("\n");
 }
 
 export function resolveAgentId(): string {

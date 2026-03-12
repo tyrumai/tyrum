@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatSkillsPrompt } from "../../src/modules/agent/runtime/prompts.js";
+import { formatSkillsPrompt, formatToolPrompt } from "../../src/modules/agent/runtime/prompts.js";
 
 describe("formatSkillsPrompt", () => {
   it("includes inline skill instructions with provenance metadata", () => {
@@ -47,5 +47,21 @@ describe("formatSkillsPrompt", () => {
     expect(prompt).toContain("DB Skill (skill-db@2.0.0)");
     expect(prompt).toContain("file=db://runtime-packages/skill/skill-db");
     expect(prompt).toContain("Escalate approval requests before running deploy actions.");
+  });
+
+  it("omits risk and confirmation metadata from tool summaries", () => {
+    const prompt = formatToolPrompt([
+      {
+        id: "bash",
+        description: "Execute shell commands on the local machine.",
+        risk: "high",
+        requires_confirmation: true,
+        keywords: [],
+      },
+    ]);
+
+    expect(prompt).toBe("bash: Execute shell commands on the local machine.");
+    expect(prompt).not.toContain("risk=");
+    expect(prompt).not.toContain("confirmation=");
   });
 });

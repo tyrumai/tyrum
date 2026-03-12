@@ -45,6 +45,45 @@ type NodeDispatchAudit = {
   policy_snapshot_id?: string;
 };
 
+function stripNodeListControlState(payload: ReturnType<typeof NodeInventoryResponse.parse>) {
+  return {
+    status: payload.status,
+    generated_at: payload.generated_at,
+    ...(payload.key ? { key: payload.key } : {}),
+    ...(payload.lane ? { lane: payload.lane } : {}),
+    nodes: payload.nodes.map((node) => ({
+      node_id: node.node_id,
+      ...(node.label ? { label: node.label } : {}),
+      ...(node.mode ? { mode: node.mode } : {}),
+      ...(node.version ? { version: node.version } : {}),
+      connected: node.connected,
+      ...(node.last_seen_at ? { last_seen_at: node.last_seen_at } : {}),
+      capabilities: node.capabilities.map((capabilitySummary) => ({
+        capability: capabilitySummary.capability,
+        capability_version: capabilitySummary.capability_version,
+        connected: capabilitySummary.connected,
+        supported_action_count: capabilitySummary.supported_action_count,
+        enabled_action_count: capabilitySummary.enabled_action_count,
+        available_action_count: capabilitySummary.available_action_count,
+        unknown_action_count: capabilitySummary.unknown_action_count,
+      })),
+    })),
+  };
+}
+
+function stripNodeInspectionControlState(payload: NodeCapabilityInspectionResponseT) {
+  return {
+    status: payload.status,
+    generated_at: payload.generated_at,
+    node_id: payload.node_id,
+    capability: payload.capability,
+    capability_version: payload.capability_version,
+    connected: payload.connected,
+    source_of_truth: payload.source_of_truth,
+    actions: payload.actions,
+  };
+}
+
 type DispatchExecutionContext = {
   tenantId: string;
   nodeDispatchService: NodeDispatchService;
@@ -260,12 +299,14 @@ export async function executeNodeInspectTool(
   }
 
   try {
-    const payload = await context.inspectionService.inspect({
-      tenantId,
-      nodeId,
-      capabilityId: capability,
-      includeDisabled: false,
-    });
+    const payload = stripNodeInspectionControlState(
+      await context.inspectionService.inspect({
+        tenantId,
+        nodeId,
+        capabilityId: capability,
+        includeDisabled: false,
+      }),
+    );
     const tagged = tagContent(JSON.stringify(payload), "tool");
     return {
       tool_call_id: toolCallId,
@@ -317,18 +358,19 @@ export async function executeNodeListTool(
     };
   }
 
-  const payload = NodeInventoryResponse.parse({
-    status: "ok",
-    generated_at: new Date().toISOString(),
-    ...(await context.nodeInventoryService.list({
-      tenantId,
-      capability,
-      dispatchableOnly,
-      key,
-      lane,
-    })),
-  });
-
+  const payload = stripNodeListControlState(
+    NodeInventoryResponse.parse({
+      generated_at: new Date().toISOString(),
+      status: "ok",
+      ...(await context.nodeInventoryService.list({
+        tenantId,
+        capability,
+        dispatchableOnly,
+        key,
+        lane,
+      })),
+    }),
+  );
   const tagged = tagContent(JSON.stringify(payload), "tool");
   return {
     tool_call_id: toolCallId,
