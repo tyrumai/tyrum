@@ -96,6 +96,77 @@ describe("MobileSetupPage", () => {
     }
   });
 
+  it("prevents concurrent replace submissions while the confirmation save is in flight", async () => {
+    let resolveSubmit: (() => void) | null = null;
+    const onSubmit = vi.fn(
+      async () =>
+        await new Promise<void>((resolve) => {
+          resolveSubmit = resolve;
+        }),
+    );
+
+    const testRoot = renderIntoDocument(
+      React.createElement(MobileSetupPage, {
+        initialConfig: {
+          httpBaseUrl: "https://next.example",
+          wsUrl: "wss://next.example/ws",
+          token: "next-token",
+          nodeEnabled: true,
+          actionSettings: {
+            "location.get_current": true,
+            "camera.capture_photo": true,
+            "audio.record_clip": true,
+          },
+        },
+        existingConfig: {
+          httpBaseUrl: "https://saved.example",
+          wsUrl: "wss://saved.example/ws",
+          token: "saved-token",
+          nodeEnabled: true,
+          actionSettings: {
+            "location.get_current": true,
+            "camera.capture_photo": true,
+            "audio.record_clip": true,
+          },
+        },
+        onSubmit,
+      }),
+    );
+
+    try {
+      const saveButton = getButton(testRoot.container, "Save and connect");
+      expect(saveButton).not.toBeNull();
+
+      await act(async () => {
+        saveButton?.click();
+        await Promise.resolve();
+      });
+
+      const replaceButton = getButton(document.body, "Replace and connect");
+      expect(replaceButton).not.toBeNull();
+
+      await act(async () => {
+        replaceButton?.click();
+        replaceButton?.click();
+        await Promise.resolve();
+      });
+
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+
+      const disabledReplaceButton = getButton(document.body, "Replace and connect");
+      const disabledCancelButton = getButton(document.body, "Cancel");
+      expect(disabledReplaceButton?.disabled).toBe(true);
+      expect(disabledCancelButton?.disabled).toBe(true);
+
+      await act(async () => {
+        resolveSubmit?.();
+        await flushMicrotasks();
+      });
+    } finally {
+      cleanupTestRoot(testRoot);
+    }
+  });
+
   it("fills the WebSocket field from the HTTP base URL when the field is empty", async () => {
     const onSubmit = vi.fn(async () => {});
 

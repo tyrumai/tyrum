@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Alert,
   Button,
@@ -56,6 +56,7 @@ export function MobileSetupPage({
   const [saving, setSaving] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingSubmit, setPendingSubmit] = useState<MobileBootstrapConfig | null>(null);
+  const submitInFlightRef = useRef(false);
   const initialHttpBaseUrl = initialConfig?.httpBaseUrl ?? "";
   const initialWsUrl = initialConfig?.wsUrl ?? "";
   const initialToken = initialConfig?.token ?? "";
@@ -72,6 +73,11 @@ export function MobileSetupPage({
   const disabled = busy || saving || scanQrBusy;
 
   const submitConfig = async (config: MobileBootstrapConfig): Promise<void> => {
+    if (submitInFlightRef.current) {
+      return;
+    }
+
+    submitInFlightRef.current = true;
     setSaving(true);
     setSaveError(null);
     try {
@@ -79,6 +85,7 @@ export function MobileSetupPage({
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : String(error));
     } finally {
+      submitInFlightRef.current = false;
       setSaving(false);
       setPendingSubmit(null);
       setConfirmOpen(false);
@@ -244,6 +251,7 @@ export function MobileSetupPage({
             <Button
               type="button"
               variant="outline"
+              disabled={disabled}
               onClick={() => {
                 setConfirmOpen(false);
                 setPendingSubmit(null);
@@ -253,6 +261,8 @@ export function MobileSetupPage({
             </Button>
             <Button
               type="button"
+              isLoading={saving}
+              disabled={disabled || !pendingSubmit}
               onClick={() => {
                 if (!pendingSubmit) return;
                 void submitConfig(pendingSubmit);
