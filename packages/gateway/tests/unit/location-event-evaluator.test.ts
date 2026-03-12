@@ -117,6 +117,7 @@ describe("evaluateSavedPlaceEvent", () => {
 
     expect(result?.event.type).toBe("saved_place.dwell");
     expect(result?.event.transition).toBe("dwell");
+    expect(result?.event.provider_place_id).toBeNull();
     expect(result?.state.status).toBe("inside");
     expect(result?.state.dwellEmittedAt).toBe("2026-03-11T10:11:00.000Z");
   });
@@ -160,7 +161,45 @@ describe("evaluateSavedPlaceEvent", () => {
 
     expect(result?.event.type).toBe("saved_place.exit");
     expect(result?.event.transition).toBe("exit");
+    expect(result?.event.provider_place_id).toBeNull();
     expect(result?.state.status).toBe("outside");
     expect(result?.state.dwellEmittedAt).toBeNull();
+  });
+
+  it("preserves a null provider place id on saved place enter events", () => {
+    const result = evaluateSavedPlaceEvent({
+      agentKey: "default",
+      nodeId: "node-mobile-1",
+      payload: {
+        sample_id: "33333333-3333-4333-8333-333333333333",
+        recorded_at: "2026-03-11T10:13:00.000Z",
+        coords: {
+          latitude: 52.3676,
+          longitude: 4.9041,
+          accuracy_m: 12,
+        },
+        source: "gps",
+        is_background: false,
+      },
+      place: {
+        place_id: "place-home",
+        agent_key: "default",
+        name: "Home",
+        latitude: 52.3676,
+        longitude: 4.9041,
+        radius_m: 100,
+        tags: ["home"],
+        source: "manual",
+        provider_place_id: null,
+        metadata: {},
+        created_at: "2026-03-11T09:00:00.000Z",
+        updated_at: "2026-03-11T09:00:00.000Z",
+      },
+      distanceM: 90,
+      currentState: { status: "outside", entered_at: null, dwell_emitted_at: null },
+    });
+
+    expect(result?.event.type).toBe("saved_place.enter");
+    expect(result?.event.provider_place_id).toBeNull();
   });
 });

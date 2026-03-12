@@ -1,6 +1,10 @@
 import { expect, it, vi } from "vitest";
 import type { RequestInit } from "undici";
-import type { LocationProfileUpdateInput } from "../src/http/location.js";
+import type {
+  LocationPlaceCreateInput,
+  LocationPlaceUpdateInput,
+  LocationProfileUpdateInput,
+} from "../src/http/location.js";
 import { createTestClient, jsonResponse, makeFetchMock } from "./http-client.test-support.js";
 
 export function registerHttpClientLocationTests(): void {
@@ -101,6 +105,22 @@ export function registerHttpClientLocationTests(): void {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("rejects a fractional saved-place radius on create before sending", async () => {
+    const fetch = makeFetchMock(async () => jsonResponse({ status: "ok" }));
+    const client = createTestClient({ fetch });
+    const invalidInput = {
+      name: "Work",
+      latitude: 52.08,
+      longitude: 4.31,
+      radius_m: 120.5,
+    } as unknown as LocationPlaceCreateInput;
+
+    await expect(client.location?.createPlace(invalidInput)).rejects.toThrow(
+      "location place create request",
+    );
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("updates a saved place without defaulting missing tags", async () => {
     const fetch = makeFetchMock(async () =>
       jsonResponse({
@@ -146,6 +166,19 @@ export function registerHttpClientLocationTests(): void {
     const client = createTestClient({ fetch });
 
     await expect(client.location?.updatePlace("place-home", { name: undefined })).rejects.toThrow(
+      "location place update request",
+    );
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("rejects a fractional saved-place radius on update before sending", async () => {
+    const fetch = makeFetchMock(async () => jsonResponse({ status: "ok" }));
+    const client = createTestClient({ fetch });
+    const invalidInput = {
+      radius_m: 50.5,
+    } as unknown as LocationPlaceUpdateInput;
+
+    await expect(client.location?.updatePlace("place-home", invalidInput)).rejects.toThrow(
       "location place update request",
     );
     expect(fetch).not.toHaveBeenCalled();

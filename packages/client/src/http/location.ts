@@ -9,7 +9,7 @@ import {
 
 const Latitude = z.number().finite().min(-90).max(90);
 const Longitude = z.number().finite().min(-180).max(180);
-const RadiusMeters = z.number().finite().positive().max(100_000);
+const RadiusMeters = z.number().int().finite().positive().max(100_000);
 // The HTTP API only round-trips canonical saved-place sources.
 const PlaceSource = z.enum(["manual", "provider"]);
 const PlaceId = NonEmptyString;
