@@ -131,7 +131,6 @@ export async function buildRuntimePrompt(input: {
   home: string;
   stateMode: "local" | "shared";
   model: string;
-  approvalWorkflowAvailable: boolean;
 }): Promise<string> {
   return formatRuntimePrompt({
     ...input,
@@ -320,8 +319,7 @@ export async function resolveToolsAndMemory(
   );
   const filteredTools = toolCandidates
     .filter((tool) => isToolAllowed(executionProfile.profile.tool_allowlist, tool.id))
-    .filter((tool) => ctx.config.memory.v1.enabled || !tool.id.startsWith("memory."))
-    .slice(0, 8);
+    .filter((tool) => ctx.config.memory.v1.enabled || !tool.id.startsWith("memory."));
 
   return { memoryDigestResult, toolSetBuilder, filteredTools };
 }

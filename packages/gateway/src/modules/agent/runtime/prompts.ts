@@ -74,7 +74,6 @@ export function formatRuntimePrompt(input: {
   gitRoot?: string;
   stateMode: string;
   model: string;
-  approvalWorkflowAvailable: boolean;
 }): string {
   return [
     "Runtime:",
@@ -87,7 +86,6 @@ export function formatRuntimePrompt(input: {
     `Gateway cwd: ${input.cwd}`,
     `Workspace path: ${input.home}`,
     `Git repo root: ${input.gitRoot ?? "none detected"}`,
-    `Approval workflow available: ${String(input.approvalWorkflowAvailable)}`,
     `Agent id: ${input.agentId}`,
     `Workspace id: ${input.workspaceId}`,
     `Session id: ${input.sessionId}`,
@@ -127,9 +125,5 @@ export function formatToolPrompt(tools: readonly ToolDescriptor[]): string {
     return "No tools are allowed for this agent configuration.";
   }
 
-  return tools
-    .map((tool) => {
-      return `${tool.id}: ${tool.description} (risk=${tool.risk}, confirmation=${tool.requires_confirmation})`;
-    })
-    .join("\n");
+  return tools.map((tool) => `${tool.id}: ${tool.description}`).join("\n");
 }

@@ -346,6 +346,7 @@ export function registerToolExecutorNodeDispatchTests(home: HomeDirState): void 
               connected: true,
               paired_status: "approved",
               attached_to_requested_lane: true,
+              source_client_device_id: "client-1",
               capabilities: [
                 {
                   capability: "tyrum.desktop.snapshot",
@@ -387,7 +388,11 @@ export function registerToolExecutorNodeDispatchTests(home: HomeDirState): void 
       });
       expect(result.error).toBeUndefined();
       expect(result.output).toContain('"status":"ok"');
-      expect(result.output).toContain('"attached_to_requested_lane":true');
+      expect(result.output).not.toContain('"attached_to_requested_lane":true');
+      expect(result.output).not.toContain('"paired_status":"approved"');
+      expect(result.output).not.toContain('"source_client_device_id":"client-1"');
+      expect(result.output).not.toContain('"dispatchable":true');
+      expect(result.output).not.toContain('"paired":true');
     } finally {
       await db.close();
     }

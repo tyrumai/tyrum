@@ -140,4 +140,67 @@ describe("AgentRuntime (execution profiles)", () => {
     expect(executorTools).toContain("write");
     expect(executorTools).toContain("bash");
   });
+
+  it("exposes the full post-gating tool set without truncation", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-tools-"));
+    container = await createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+    });
+
+    await new AgentConfigDal(container.db).set({
+      tenantId: DEFAULT_TENANT_ID,
+      agentId: DEFAULT_AGENT_ID,
+      config: AgentConfig.parse({
+        model: { model: "openai/gpt-4.1" },
+        skills: { enabled: [] },
+        mcp: { enabled: [] },
+        tools: {
+          allow: [
+            "read",
+            "write",
+            "edit",
+            "apply_patch",
+            "bash",
+            "glob",
+            "grep",
+            "websearch",
+            "webfetch",
+            "codesearch",
+          ],
+        },
+        sessions: { ttl_days: 30, max_turns: 20 },
+        memory: { v1: { enabled: false } },
+      }),
+      createdBy: { kind: "test" },
+      reason: "test",
+    });
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: createStubLanguageModel("ok"),
+      fetchImpl: fetch404,
+      turnEngineWaitMs: 30_000,
+    });
+
+    await runtime.turn({
+      channel: "test",
+      thread_id: "thread-tools",
+      message: "hello",
+    });
+
+    expect(runtime.getLastContextReport()?.selected_tools).toEqual([
+      "glob",
+      "grep",
+      "read",
+      "apply_patch",
+      "bash",
+      "codesearch",
+      "edit",
+      "webfetch",
+      "websearch",
+      "write",
+    ]);
+  });
 });

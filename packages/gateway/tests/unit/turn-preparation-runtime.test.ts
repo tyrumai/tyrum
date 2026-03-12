@@ -94,9 +94,9 @@ describe("turn preparation runtime helpers", () => {
       home: "/workspace-prompt",
       stateMode: "local",
       model: "model-1",
-      approvalWorkflowAvailable: true,
     });
 
     expect(prompt).toContain("Git repo root: /repo-root");
+    expect(prompt).not.toContain("Approval workflow available:");
   });
 });

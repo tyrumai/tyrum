@@ -32,7 +32,6 @@ import { NodeDispatchService } from "../node-dispatch-service.js";
 import { ToolExecutor } from "../tool-executor.js";
 import { NodeCapabilityInspectionService } from "../../node/capability-inspection-service.js";
 import { NodeInventoryService } from "../../node/inventory-service.js";
-import { resolveSandboxHardeningProfile } from "../../sandbox/hardening.js";
 import { LaneQueueSignalDal } from "../../lanes/queue-signal-dal.js";
 import { resolveGatewayStateMode } from "../../runtime-state/mode.js";
 import type { SecretProvider } from "../../secret/provider.js";
@@ -160,9 +159,6 @@ export async function prepareTurn(
           },
         });
   const workFocusText = `Work focus digest:\n${workFocusDigest}`;
-  const hardeningProfile = resolveSandboxHardeningProfile(
-    deps.opts.container.deploymentConfig.toolrunner.hardeningProfile,
-  );
   const runtimePrompt = await buildRuntimePrompt({
     nowIso: new Date().toISOString(),
     agentId: session.agent_id,
@@ -173,7 +169,6 @@ export async function prepareTurn(
     home: deps.home,
     stateMode: resolveGatewayStateMode(deps.opts.container.deploymentConfig),
     model: executionProfile.profile.model_id ?? executionProfile.id,
-    approvalWorkflowAvailable: true,
   });
 
   const {
@@ -187,12 +182,7 @@ export async function prepareTurn(
     automationTriggerText,
   } = assemblePrompts(ctx, session, memoryDigestResult, filteredTools, automation, runtimePrompt);
 
-  const sandboxPrompt = await buildSandboxPrompt({
-    policyService: deps.policyService,
-    hardeningProfile,
-    tenantId: deps.tenantId,
-    agentId: session.agent_id,
-  });
+  const sandboxPrompt = buildSandboxPrompt();
   const systemPrompt = `${identityPrompt}\n\n${runtimePromptText}\n\n${safetyPrompt}\n\n${sandboxPrompt}`;
 
   const automationDigestText = automation

@@ -25,7 +25,7 @@ describe("AgentRuntime system prompt sandbox section", () => {
     }
   });
 
-  it("includes hardening profile and elevated execution availability", async () => {
+  it("uses a neutral sandbox prompt", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-sandbox-prompt-"));
     container = createContainer(
       {
@@ -110,13 +110,12 @@ describe("AgentRuntime system prompt sandbox section", () => {
 
     expect(result.reply).toBe("hello");
     expect(capturedSystem).toContain("Sandbox:");
-    expect(capturedSystem).toContain("Hardening profile: hardened");
-    expect(capturedSystem).toContain("Elevated execution available: true");
-    expect(capturedSystem?.match(/Elevated execution available:/g)).toHaveLength(1);
-    expect(capturedSystem?.match(/Hardening profile:/g)).toHaveLength(1);
+    expect(capturedSystem).toContain("Execution constraints are enforced by the gateway.");
+    expect(capturedSystem).not.toContain("Hardening profile:");
+    expect(capturedSystem).not.toContain("Elevated execution available:");
   });
 
-  it("reports unknown elevated execution availability when policy resolution fails", async () => {
+  it("keeps the sandbox prompt stable when policy resolution fails", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-sandbox-prompt-unknown-"));
     container = createContainer(
       {
@@ -194,7 +193,8 @@ describe("AgentRuntime system prompt sandbox section", () => {
 
     expect(result.reply).toBe("hello");
     expect(capturedSystem).toContain("Sandbox:");
-    expect(capturedSystem).toContain("Hardening profile: hardened");
-    expect(capturedSystem).toContain("Elevated execution available: unknown");
+    expect(capturedSystem).toContain("Execution constraints are enforced by the gateway.");
+    expect(capturedSystem).not.toContain("Hardening profile:");
+    expect(capturedSystem).not.toContain("Elevated execution available:");
   });
 });
