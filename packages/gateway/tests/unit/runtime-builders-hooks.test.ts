@@ -125,4 +125,57 @@ describe("createProtocolRuntime hooks gating", () => {
       await container.db.close();
     }
   });
+
+  it("derives protocol auth status from auth token availability", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-hooks-runtime-auth-"));
+    const container = createContainer(
+      {
+        dbPath: ":memory:",
+        migrationsDir: SQLITE_MIGRATIONS_DIR,
+        tyrumHome: homeDir,
+      },
+      {
+        deploymentConfig: DeploymentConfig.parse({ state: { mode: "local" } }),
+      },
+    );
+
+    const logger = container.logger.child({ test: "runtime-builders-auth-status" });
+    const context: GatewayBootContext = {
+      instanceId: "test-instance",
+      role: "edge",
+      tyrumHome: homeDir,
+      host: "127.0.0.1",
+      port: 8788,
+      dbPath: ":memory:",
+      migrationsDir: SQLITE_MIGRATIONS_DIR,
+      isLocalOnly: true,
+      shouldRunEdge: true,
+      shouldRunWorker: false,
+      deploymentConfig: container.deploymentConfig,
+      container,
+      logger,
+      authTokens: undefined as unknown as GatewayBootContext["authTokens"],
+      secretProviderForTenant: (() => ({
+        list: async () => [],
+        resolve: async () => null,
+        store: async () => {
+          throw new Error("not implemented");
+        },
+        revoke: async () => false,
+      })) as GatewayBootContext["secretProviderForTenant"],
+      lifecycleHooks: [],
+    };
+
+    try {
+      const protocol = await createProtocolRuntime(context, {
+        enabled: false,
+        shutdown: async () => undefined,
+      });
+
+      expect(protocol.protocolDeps.runtime?.authEnabled).toBe(false);
+      protocol.approvalEngineActionProcessor?.stop();
+    } finally {
+      await container.db.close();
+    }
+  });
 });
