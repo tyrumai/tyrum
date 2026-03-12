@@ -70,6 +70,7 @@ import { PolicyBundleConfigDal } from "./modules/policy/config-dal.js";
 import { NodeInventoryService } from "./modules/node/inventory-service.js";
 import { NodeCapabilityInspectionService } from "./modules/node/capability-inspection-service.js";
 import { NodeDispatchService } from "./modules/agent/node-dispatch-service.js";
+import { DesktopEnvironmentLifecycleService } from "./modules/desktop-environments/lifecycle-service.js";
 import { isSharedStateMode, resolveGatewayStateMode } from "./modules/runtime-state/mode.js";
 import type { WsEventDal } from "./modules/ws-event/dal.js";
 
@@ -170,6 +171,9 @@ export function registerSystemAndPublicRoutes(context: AppRouteContext): void {
     createDesktopEnvironmentRoutes({
       hostDal: context.routeDeps.desktopEnvironmentHostDal,
       environmentDal: context.routeDeps.desktopEnvironmentDal,
+      lifecycleService:
+        context.opts.desktopEnvironmentLifecycle ??
+        new DesktopEnvironmentLifecycleService(context.routeDeps.desktopEnvironmentDal),
     }),
   );
   context.app.route(

@@ -14,6 +14,7 @@ import {
   DesktopEnvironmentDal,
   DesktopEnvironmentHostDal,
 } from "../modules/desktop-environments/dal.js";
+import type { DesktopEnvironmentLifecycle } from "../modules/desktop-environments/lifecycle-service.js";
 import { requireAuthClaims, requireTenantId } from "../modules/auth/claims.js";
 
 const DEFAULT_DESKTOP_ENVIRONMENT_IMAGE = "tyrum-desktop-sandbox:latest";
@@ -28,6 +29,7 @@ function requireAdmin(c: { get: (key: string) => unknown }): void {
 export function createDesktopEnvironmentRoutes(deps: {
   hostDal: DesktopEnvironmentHostDal;
   environmentDal: DesktopEnvironmentDal;
+  lifecycleService: DesktopEnvironmentLifecycle;
 }): Hono {
   const app = new Hono();
 
@@ -103,7 +105,7 @@ export function createDesktopEnvironmentRoutes(deps: {
   app.delete("/desktop-environments/:environmentId", async (c) => {
     requireAdmin(c);
     const tenantId = requireTenantId(c);
-    const deleted = await deps.environmentDal.delete({
+    const deleted = await deps.lifecycleService.deleteEnvironment({
       tenantId,
       environmentId: c.req.param("environmentId"),
     });

@@ -96,7 +96,7 @@ export function DesktopEnvironmentsPage({ core }: { core: OperatorCore }) {
           core.desktopEnvironmentsStore.refresh(),
         ]);
       } catch {
-        if (!cancelled) return;
+        if (cancelled) return;
       }
     };
     void load();

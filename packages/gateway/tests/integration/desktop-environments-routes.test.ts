@@ -1,16 +1,25 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   DesktopEnvironmentDal,
   DesktopEnvironmentHostDal,
 } from "../../src/modules/desktop-environments/dal.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { createTestApp } from "./helpers.js";
+import { type DesktopEnvironmentLifecycle } from "../../src/modules/desktop-environments/lifecycle-service.js";
 
 describe("desktop environment routes", () => {
   it("creates, lists, mutates, and reads logs for desktop environments", async () => {
-    const { app, container } = await createTestApp();
+    let environmentDal: DesktopEnvironmentDal;
+    const deleteEnvironment = vi.fn<DesktopEnvironmentLifecycle["deleteEnvironment"]>(
+      async (input) => await environmentDal.delete(input),
+    );
+    const { app, container } = await createTestApp({
+      desktopEnvironmentLifecycle: {
+        deleteEnvironment,
+      },
+    });
     const hostDal = new DesktopEnvironmentHostDal(container.db);
-    const environmentDal = new DesktopEnvironmentDal(container.db);
+    environmentDal = new DesktopEnvironmentDal(container.db);
 
     await hostDal.upsert({
       hostId: "host-1",
@@ -89,5 +98,9 @@ describe("desktop environment routes", () => {
     });
     expect(deleteRes.status).toBe(200);
     await expect(deleteRes.json()).resolves.toMatchObject({ deleted: true });
+    expect(deleteEnvironment).toHaveBeenCalledWith({
+      tenantId: DEFAULT_TENANT_ID,
+      environmentId,
+    });
   });
 });

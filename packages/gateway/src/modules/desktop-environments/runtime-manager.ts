@@ -1,4 +1,3 @@
-import { spawnSync } from "node:child_process";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import {
@@ -10,116 +9,21 @@ import type { NodePairingDal } from "../node/pairing-dal.js";
 import type { Logger } from "../observability/logger.js";
 import { DesktopEnvironmentDal, type DesktopEnvironment } from "./dal.js";
 import { loadOrCreateDesktopEnvironmentIdentity } from "./device-identity.js";
+import {
+  combineDockerError,
+  containerNameForEnvironment,
+  inspectContainer,
+  readContainerLogs,
+  readTakeoverUrl,
+  removeContainer,
+  runDocker,
+} from "./docker-cli.js";
 
-const CONTAINER_NAME_PREFIX = "tyrum-desktop-env";
 const DEFAULT_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 30;
-const DEFAULT_DOCKER_TIMEOUT_MS = 30_000;
-const DEFAULT_DOCKER_MAX_BUFFER_BYTES = 16 * 1024 * 1024;
 const DESKTOP_ALLOWLIST = descriptorIdsForClientCapability("desktop").map((id) => ({
   id,
   version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
 }));
-
-type DockerResult = {
-  status: number | null;
-  stdout: string;
-  stderr: string;
-  error?: string;
-};
-
-type DockerInspectContainer = {
-  Config?: { Image?: string };
-  State?: { Status?: string };
-  NetworkSettings?: {
-    Ports?: Record<string, Array<{ HostIp?: string; HostPort?: string }> | null>;
-  };
-};
-
-function runDocker(
-  args: string[],
-  options?: { timeoutMs?: number; maxBufferBytes?: number },
-): DockerResult {
-  const result = spawnSync("docker", args, {
-    encoding: "utf8",
-    timeout: options?.timeoutMs ?? DEFAULT_DOCKER_TIMEOUT_MS,
-    maxBuffer: options?.maxBufferBytes ?? DEFAULT_DOCKER_MAX_BUFFER_BYTES,
-  });
-  return {
-    status: result.status,
-    stdout: result.stdout ?? "",
-    stderr: result.stderr ?? "",
-    error: result.error?.message,
-  };
-}
-
-export function probeDockerAvailability(): { ok: boolean; error?: string } {
-  const result = runDocker(["info"], { timeoutMs: 15_000 });
-  if (result.status === 0) return { ok: true };
-  const message = [result.error, result.stderr, result.stdout]
-    .filter((entry) => typeof entry === "string" && entry.trim().length > 0)
-    .join("\n")
-    .trim();
-  return { ok: false, error: message || "docker unavailable" };
-}
-
-function containerNameForEnvironment(environmentId: string): string {
-  const normalized = environmentId.replace(/[^a-zA-Z0-9_.-]+/g, "-").slice(0, 40);
-  return `${CONTAINER_NAME_PREFIX}-${normalized}`;
-}
-
-function splitLogLines(raw: string): string[] {
-  return raw
-    .split(/\r?\n/u)
-    .map((line) => line.trimEnd())
-    .filter((line) => line.length > 0)
-    .slice(-200);
-}
-
-function combineDockerError(hint: string, result: DockerResult): string {
-  return [hint, result.error, result.stderr, result.stdout]
-    .filter((entry) => typeof entry === "string" && entry.trim().length > 0)
-    .join("\n")
-    .trim();
-}
-
-function readPublishedPort(
-  inspect: DockerInspectContainer,
-  containerPort: "6080/tcp" | "5900/tcp",
-): number | null {
-  const portBinding = inspect.NetworkSettings?.Ports?.[containerPort];
-  const hostPort = Array.isArray(portBinding) ? portBinding[0]?.HostPort : undefined;
-  if (!hostPort) return null;
-  const parsed = Number.parseInt(hostPort, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-}
-
-function readTakeoverUrl(inspect: DockerInspectContainer): string | null {
-  const port = readPublishedPort(inspect, "6080/tcp");
-  if (!port) return null;
-  return `http://127.0.0.1:${String(port)}/vnc.html?autoconnect=true`;
-}
-
-function inspectContainer(containerName: string): DockerInspectContainer | null {
-  const result = runDocker(["inspect", containerName]);
-  if (result.status !== 0) return null;
-  const parsed = JSON.parse(result.stdout) as unknown;
-  if (!Array.isArray(parsed) || parsed.length === 0) return null;
-  const first = parsed[0];
-  if (!first || typeof first !== "object") return null;
-  return first as DockerInspectContainer;
-}
-
-function readContainerLogs(containerName: string): string[] {
-  const result = runDocker(["logs", "--tail", "200", containerName], {
-    timeoutMs: 15_000,
-    maxBufferBytes: 8 * 1024 * 1024,
-  });
-  return splitLogLines(`${result.stdout}${result.stderr}`);
-}
-
-function removeContainer(containerName: string): void {
-  runDocker(["rm", "-f", containerName], { timeoutMs: 15_000 });
-}
 
 async function ensureNodeIdentity(baseDir: string): Promise<{ deviceId: string }> {
   const identityPath = join(baseDir, "desktop-node", "device-identity.json");
@@ -163,7 +67,7 @@ export class DesktopEnvironmentRuntimeManager {
           lastError: message,
           logs:
             environment.status === "running"
-              ? readContainerLogs(containerNameForEnvironment(environment.environment_id))
+              ? await readContainerLogs(containerNameForEnvironment(environment.environment_id))
               : [],
         });
       }
@@ -184,8 +88,10 @@ export class DesktopEnvironmentRuntimeManager {
     const { deviceId } = await ensureNodeIdentity(stateDir);
 
     if (!environment.desired_running) {
-      const logs = inspectContainer(containerName) ? readContainerLogs(containerName) : [];
-      removeContainer(containerName);
+      const logs = (await inspectContainer(containerName))
+        ? await readContainerLogs(containerName)
+        : [];
+      await removeContainer(containerName);
       await this.environmentDal.updateRuntime({
         tenantId: environment.tenant_id,
         environmentId: environment.environment_id,
@@ -198,10 +104,10 @@ export class DesktopEnvironmentRuntimeManager {
       return;
     }
 
-    let inspect = inspectContainer(containerName);
+    let inspect = await inspectContainer(containerName);
     const currentImage = inspect?.Config?.Image?.trim();
     if (inspect && currentImage && currentImage !== environment.image_ref) {
-      removeContainer(containerName);
+      await removeContainer(containerName);
       inspect = null;
     }
 
@@ -214,7 +120,7 @@ export class DesktopEnvironmentRuntimeManager {
         ttlSeconds: this.options.tokenTtlSeconds ?? DEFAULT_TOKEN_TTL_SECONDS,
         displayName: `desktop-environment:${environment.environment_id}`,
       });
-      const runResult = runDocker([
+      const runResult = await runDocker([
         "run",
         "--detach",
         "--name",
@@ -248,7 +154,7 @@ export class DesktopEnvironmentRuntimeManager {
           combineDockerError("failed to start desktop environment container", runResult),
         );
       }
-      inspect = inspectContainer(containerName);
+      inspect = await inspectContainer(containerName);
     }
 
     if (!inspect) {
@@ -256,13 +162,13 @@ export class DesktopEnvironmentRuntimeManager {
     }
 
     if (inspect.State?.Status !== "running") {
-      const startResult = runDocker(["start", containerName], { timeoutMs: 15_000 });
+      const startResult = await runDocker(["start", containerName], { timeoutMs: 15_000 });
       if (startResult.status !== 0) {
         throw new Error(
           combineDockerError("failed to start existing desktop environment container", startResult),
         );
       }
-      inspect = inspectContainer(containerName) ?? inspect;
+      inspect = (await inspectContainer(containerName)) ?? inspect;
     }
 
     await this.approveManagedPairing(environment.tenant_id, deviceId);
@@ -274,7 +180,7 @@ export class DesktopEnvironmentRuntimeManager {
       nodeId: deviceId,
       takeoverUrl: readTakeoverUrl(inspect),
       lastError: null,
-      logs: readContainerLogs(containerName),
+      logs: await readContainerLogs(containerName),
     });
   }
 

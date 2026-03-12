@@ -23,6 +23,7 @@ import type { Hono } from "hono";
 import type { LanguageModel } from "ai";
 import { AuthTokenService } from "../../src/modules/auth/auth-token-service.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
+import type { DesktopEnvironmentLifecycle } from "../../src/modules/desktop-environments/lifecycle-service.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -171,6 +172,7 @@ export interface TestAppOptions {
   enableAgents?: boolean;
   operatorUiAssetsDir?: string;
   provisionedTenantAdminToken?: string;
+  desktopEnvironmentLifecycle?: DesktopEnvironmentLifecycle;
 }
 
 export async function createTestApp(opts: TestAppOptions = {}): Promise<
@@ -247,6 +249,7 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<
     isLocalOnly: opts.isLocalOnly,
     authRateLimiter: opts.authRateLimiter,
     operatorUiAssetsDir: opts.operatorUiAssetsDir,
+    desktopEnvironmentLifecycle: opts.desktopEnvironmentLifecycle,
     runtime: {
       version: VERSION,
       instanceId: "test-instance",
