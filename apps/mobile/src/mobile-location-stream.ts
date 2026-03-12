@@ -12,6 +12,7 @@ import {
 type SentSample = {
   recordedAtMs: number;
   coords: LocationCoords;
+  isBackground: boolean;
 };
 
 type MobileLocationBeaconStreamOptions = {
@@ -167,7 +168,7 @@ export function createMobileLocationBeaconStream(
       recorded_at: new Date(sample.recordedAtMs).toISOString(),
       coords: sample.coords,
       source: "unknown",
-      is_background: typeof document !== "undefined" ? document.hidden : false,
+      is_background: sample.isBackground,
     };
     await options.client.locationBeacon(payload);
     lastSentSample = sample;
@@ -186,6 +187,7 @@ export function createMobileLocationBeaconStream(
     const nextSample: SentSample = {
       recordedAtMs: position.timestamp,
       coords: mapLocationCoords(position.coords),
+      isBackground: typeof document !== "undefined" ? document.hidden : false,
     };
     if (!shouldSendSample(activeConfig, nextSample, lastQueuedSample)) {
       return;

@@ -185,6 +185,57 @@ describe("createMobileLocationBeaconStream", () => {
     expect(locationBeacon).toHaveBeenCalledTimes(1);
   });
 
+  it("preserves the recorded background state for queued beacons", async () => {
+    let resolveFirstBeacon: (() => void) | null = null;
+    const locationBeacon = vi
+      .fn<() => Promise<{ sample: object; events: never[] }>>()
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFirstBeacon = () => resolve({ sample: {}, events: [] });
+          }),
+      )
+      .mockResolvedValue({ sample: {}, events: [] });
+    const { createMobileLocationBeaconStream } = await import("../src/mobile-location-stream.js");
+    const stream = createMobileLocationBeaconStream({
+      client: { locationBeacon } as never,
+    });
+
+    await stream.start({
+      streamEnabled: true,
+      distanceFilterM: 10,
+      maxIntervalMs: 900_000,
+      maxAccuracyM: 100,
+      backgroundEnabled: true,
+    });
+
+    Object.defineProperty(document, "hidden", {
+      configurable: true,
+      value: false,
+    });
+    emit(buildPosition(52.3676, 4.9041, "2026-03-11T12:00:00Z"));
+    await flushMicrotasks();
+
+    emit(buildPosition(52.369, 4.91, "2026-03-11T12:01:00Z"));
+    await flushMicrotasks();
+    expect(locationBeacon).toHaveBeenCalledTimes(1);
+
+    Object.defineProperty(document, "hidden", {
+      configurable: true,
+      value: true,
+    });
+    resolveFirstBeacon?.();
+    await flushMicrotasks(20);
+
+    expect(locationBeacon).toHaveBeenCalledTimes(2);
+    expect(locationBeacon).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        is_background: false,
+      }),
+    );
+  });
+
   it("clears a stale native watch when stop and restart overlap an in-flight start", async () => {
     const firstWatch = createDeferred<string>();
     watchPositionMock
