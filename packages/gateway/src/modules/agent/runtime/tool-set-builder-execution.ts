@@ -70,7 +70,7 @@ export function buildRuntimeToolSet(input: BuildRuntimeToolSetInput): ToolSet {
       createModelTool({
         ...input,
         toolDesc,
-        inputSchema: toolDesc.inputSchema,
+        inputSchema: toolDesc.inputSchema!,
         policyRuntime,
         executionState,
       }),
