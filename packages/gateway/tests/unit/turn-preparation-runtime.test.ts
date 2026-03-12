@@ -104,6 +104,7 @@ describe("turn preparation runtime helpers", () => {
   it("accepts wildcard allow-list patterns that can match an MCP tool id", () => {
     expect(canPatternMatchMcpToolId("*.weather.*")).toBe(true);
     expect(canPatternMatchMcpToolId("m?p.weather.*")).toBe(true);
+    expect(canPatternMatchMcpToolId("mcp*")).toBe(true);
     expect(canPatternMatchMcpToolId("calendar.*")).toBe(false);
   });
 });

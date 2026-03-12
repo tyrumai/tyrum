@@ -242,11 +242,15 @@ export function canPatternMatchMcpToolId(pattern: string): boolean {
 
   // Match against the structural language mcp.<server>.<tool...> instead of a single sample id.
   const memo = new Map<string, boolean>();
+  const visiting = new Set<string>();
   const visit = (patternIndex: number, shapeState: number): boolean => {
     const key = `${String(patternIndex)}:${String(shapeState)}`;
     const cached = memo.get(key);
     if (cached !== undefined) {
       return cached;
+    }
+    if (visiting.has(key)) {
+      return false;
     }
 
     if (patternIndex >= normalized.length) {
@@ -260,6 +264,8 @@ export function canPatternMatchMcpToolId(pattern: string): boolean {
       memo.set(key, false);
       return false;
     }
+
+    visiting.add(key);
     let matches = false;
     if (token === "*") {
       matches = visit(patternIndex + 1, shapeState);
@@ -279,6 +285,7 @@ export function canPatternMatchMcpToolId(pattern: string): boolean {
       matches = nextState !== undefined && visit(patternIndex + 1, nextState);
     }
 
+    visiting.delete(key);
     memo.set(key, matches);
     return matches;
   };
