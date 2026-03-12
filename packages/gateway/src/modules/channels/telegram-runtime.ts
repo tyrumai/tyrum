@@ -3,8 +3,13 @@ import { ChannelConfigDal, type StoredTelegramChannelConfig } from "./channel-co
 import { TelegramBot } from "../ingress/telegram-bot.js";
 import { createTelegramEgressConnector } from "./telegram-shared.js";
 
+type CachedTelegramBot = {
+  token: string;
+  bot: TelegramBot;
+};
+
 export class TelegramChannelRuntime {
-  private readonly botCache = new Map<string, TelegramBot>();
+  private readonly botCache = new Map<string, Map<string, CachedTelegramBot>>();
 
   constructor(private readonly channelConfigDal: ChannelConfigDal) {}
 
@@ -31,11 +36,19 @@ export class TelegramChannelRuntime {
     accountKey: string;
   }): Promise<TelegramBot | undefined> {
     const config = await this.getTelegramAccountByAccountKey(input);
-    return config ? this.getBot(config, input.tenantId) : undefined;
+    if (!config) {
+      this.deleteCachedBot(input.tenantId, input.accountKey);
+      return undefined;
+    }
+    return this.getBot(config, input.tenantId);
   }
 
   async listEgressConnectors(tenantId: string): Promise<ChannelEgressConnector[]> {
     const configs = await this.listTelegramAccounts(tenantId);
+    this.pruneTenantBots(
+      tenantId,
+      new Set(configs.flatMap((config) => (config.bot_token?.trim() ? [config.account_key] : []))),
+    );
     return configs.flatMap((config) => {
       const bot = this.getBot(config, tenantId);
       return bot ? [createTelegramEgressConnector(bot, config.account_key)] : [];
@@ -44,12 +57,45 @@ export class TelegramChannelRuntime {
 
   private getBot(config: StoredTelegramChannelConfig, tenantId: string): TelegramBot | undefined {
     const token = config.bot_token?.trim();
-    if (!token) return undefined;
-    const key = `${tenantId}:${config.account_key}:${token}`;
-    const existing = this.botCache.get(key);
-    if (existing) return existing;
+    if (!token) {
+      this.deleteCachedBot(tenantId, config.account_key);
+      return undefined;
+    }
+    const tenantCache = this.getTenantCache(tenantId);
+    const existing = tenantCache.get(config.account_key);
+    if (existing?.token === token) return existing.bot;
     const bot = new TelegramBot(token);
-    this.botCache.set(key, bot);
+    tenantCache.set(config.account_key, { token, bot });
     return bot;
+  }
+
+  private getTenantCache(tenantId: string): Map<string, CachedTelegramBot> {
+    const existing = this.botCache.get(tenantId);
+    if (existing) return existing;
+    const cache = new Map<string, CachedTelegramBot>();
+    this.botCache.set(tenantId, cache);
+    return cache;
+  }
+
+  private deleteCachedBot(tenantId: string, accountKey: string): void {
+    const tenantCache = this.botCache.get(tenantId);
+    if (!tenantCache) return;
+    tenantCache.delete(accountKey);
+    if (tenantCache.size === 0) {
+      this.botCache.delete(tenantId);
+    }
+  }
+
+  private pruneTenantBots(tenantId: string, activeAccountKeys: Set<string>): void {
+    const tenantCache = this.botCache.get(tenantId);
+    if (!tenantCache) return;
+    for (const accountKey of tenantCache.keys()) {
+      if (!activeAccountKeys.has(accountKey)) {
+        tenantCache.delete(accountKey);
+      }
+    }
+    if (tenantCache.size === 0) {
+      this.botCache.delete(tenantId);
+    }
   }
 }

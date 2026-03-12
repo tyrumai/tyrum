@@ -142,7 +142,6 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
     );
   }
 
-  const channelPipelineEnabled = container.deploymentConfig.channels.pipelineEnabled ?? true;
   const wsMaxBufferedBytes = container.deploymentConfig.websocket.maxBufferedBytes;
 
   // Apply auth middleware if a token store is provided
@@ -173,7 +172,6 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
     runtime,
     isLocalOnly,
     wsMaxBufferedBytes,
-    channelPipelineEnabled,
     engine,
     secretProviderForTenant,
     routeDeps,

@@ -1,6 +1,14 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
+const { secureStringEqual } = vi.hoisted(() => ({
+  secureStringEqual: vi.fn((left: string, right: string) => left === right),
+}));
+
+vi.mock("../../src/utils/secure-string-equal.js", () => ({
+  secureStringEqual,
+}));
+
 import {
   ChannelConfigDal,
   toChannelConfigView,
@@ -20,6 +28,7 @@ describe("ChannelConfigDal", () => {
   });
 
   afterEach(async () => {
+    secureStringEqual.mockClear();
     if (!didOpenDb) return;
     didOpenDb = false;
     await db.close();
@@ -89,6 +98,22 @@ describe("ChannelConfigDal", () => {
     ).rejects.toThrow(/already used/);
   });
 
+  it("uses secure string comparison when resolving telegram webhook secrets", async () => {
+    await dal.createTelegram({
+      tenantId: DEFAULT_TENANT_ID,
+      accountKey: "work",
+      webhookSecret: "exact-secret",
+    });
+
+    await expect(
+      dal.getTelegramByWebhookSecret({
+        tenantId: DEFAULT_TENANT_ID,
+        webhookSecret: " exact-secret ",
+      }),
+    ).resolves.toMatchObject({ account_key: "work" });
+    expect(secureStringEqual).toHaveBeenCalledWith("exact-secret", "exact-secret");
+  });
+
   it("imports the legacy singleton telegram deployment config into the default account once", async () => {
     await db.run(
       `INSERT INTO deployment_configs (config_json, created_by_json, reason)
@@ -124,9 +149,37 @@ describe("ChannelConfigDal", () => {
     expect(secondList).toEqual(firstList);
 
     const rowCount = await db.get<{ count: number }>(
-      "SELECT COUNT(*) AS count FROM channel_configs WHERE tenant_id = ?",
+      "SELECT COUNT(*) AS count FROM channel_configs WHERE tenant_id = ? AND connector_key = 'telegram'",
       [DEFAULT_TENANT_ID],
     );
     expect(rowCount?.count).toBe(1);
+  });
+
+  it("does not re-import the legacy singleton after the imported config is deleted", async () => {
+    await db.run(
+      `INSERT INTO deployment_configs (config_json, created_by_json, reason)
+       VALUES (?, ?, ?)`,
+      [
+        JSON.stringify({
+          v: 1,
+          channels: {
+            telegramBotToken: "legacy-bot-token",
+            telegramWebhookSecret: "legacy-webhook-secret",
+          },
+        }),
+        "{}",
+        "legacy",
+      ],
+    );
+
+    await expect(dal.listTelegram(DEFAULT_TENANT_ID)).resolves.toHaveLength(1);
+    await expect(
+      dal.delete({
+        tenantId: DEFAULT_TENANT_ID,
+        connectorKey: "telegram",
+        accountKey: "default",
+      }),
+    ).resolves.toBe(true);
+    await expect(dal.listTelegram(DEFAULT_TENANT_ID)).resolves.toEqual([]);
   });
 });

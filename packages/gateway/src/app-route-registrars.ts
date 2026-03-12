@@ -89,7 +89,6 @@ export interface AppRouteContext {
   };
   isLocalOnly: boolean;
   wsMaxBufferedBytes?: number;
-  channelPipelineEnabled: boolean;
   engine: AppOptions["engine"];
   secretProviderForTenant: AppOptions["secretProviderForTenant"];
   routeDeps: AppRouteDependencies;

@@ -31,12 +31,11 @@ describe("createApp channel pipeline wiring", () => {
     telegramQueueCtor.mockClear();
   });
 
-  it("uses config.channels.pipelineEnabled when deciding to construct TelegramChannelQueue", async () => {
+  it("constructs TelegramChannelQueue even when the legacy deployment pipeline flag is false", async () => {
     container = createContainer(
       { dbPath: ":memory:", migrationsDir },
       { deploymentConfig: DeploymentConfig.parse({ channels: { pipelineEnabled: false } }) },
     );
-    container.telegramBot = {} as any;
 
     const agents = {
       getRuntime: async () => {
@@ -47,6 +46,6 @@ describe("createApp channel pipeline wiring", () => {
     const { createApp } = await import("../../src/app.js");
     createApp(container, { agents });
 
-    expect(telegramQueueCtor).not.toHaveBeenCalled();
+    expect(telegramQueueCtor).toHaveBeenCalledOnce();
   });
 });
