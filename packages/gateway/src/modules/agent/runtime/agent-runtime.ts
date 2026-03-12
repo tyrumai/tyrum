@@ -359,6 +359,7 @@ export class AgentRuntime {
     finalize: () => Promise<AgentTurnResponseT>;
   }> {
     const result = await turnStreamDirect(this.turnDirectDeps, input);
+    this.lastContextReport = result.contextReport;
     return {
       streamResult: result.streamResult,
       sessionId: result.sessionId,
