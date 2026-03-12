@@ -10,11 +10,20 @@ import type { MobileHostActionName } from "@tyrum/operator-ui";
 
 export type MobileActionSettings = Record<MobileHostActionName, boolean>;
 
+export type MobileLocationStreamingConfig = {
+  streamEnabled: boolean;
+  distanceFilterM: number;
+  maxIntervalMs: number;
+  maxAccuracyM: number;
+  backgroundEnabled: boolean;
+};
+
 export type MobileConnectionConfig = {
   httpBaseUrl: string;
   wsUrl: string;
   nodeEnabled: boolean;
   actionSettings: MobileActionSettings;
+  locationStreaming: MobileLocationStreamingConfig;
 };
 
 export type MobileBootstrapConfig = MobileConnectionConfig & {
@@ -31,6 +40,14 @@ const DEFAULT_ACTION_SETTINGS: MobileActionSettings = {
   "location.get_current": true,
   "camera.capture_photo": true,
   "audio.record_clip": true,
+};
+
+const DEFAULT_LOCATION_STREAMING_CONFIG: MobileLocationStreamingConfig = {
+  streamEnabled: true,
+  distanceFilterM: 100,
+  maxIntervalMs: 900_000,
+  maxAccuracyM: 100,
+  backgroundEnabled: false,
 };
 
 let storageReadyPromise: Promise<void> | null = null;
@@ -65,6 +82,10 @@ function parseConnectionConfig(raw: unknown): MobileConnectionConfig | null {
     record["actionSettings"] && typeof record["actionSettings"] === "object"
       ? (record["actionSettings"] as Record<string, unknown>)
       : {};
+  const streamingRecord =
+    record["locationStreaming"] && typeof record["locationStreaming"] === "object"
+      ? (record["locationStreaming"] as Record<string, unknown>)
+      : {};
 
   return {
     httpBaseUrl,
@@ -83,6 +104,34 @@ function parseConnectionConfig(raw: unknown): MobileConnectionConfig | null {
         typeof actionRecord["audio.record_clip"] === "boolean"
           ? actionRecord["audio.record_clip"]
           : DEFAULT_ACTION_SETTINGS["audio.record_clip"],
+    },
+    locationStreaming: {
+      streamEnabled:
+        typeof streamingRecord["streamEnabled"] === "boolean"
+          ? streamingRecord["streamEnabled"]
+          : DEFAULT_LOCATION_STREAMING_CONFIG.streamEnabled,
+      distanceFilterM:
+        typeof streamingRecord["distanceFilterM"] === "number" &&
+        Number.isFinite(streamingRecord["distanceFilterM"]) &&
+        streamingRecord["distanceFilterM"] > 0
+          ? Math.round(streamingRecord["distanceFilterM"])
+          : DEFAULT_LOCATION_STREAMING_CONFIG.distanceFilterM,
+      maxIntervalMs:
+        typeof streamingRecord["maxIntervalMs"] === "number" &&
+        Number.isFinite(streamingRecord["maxIntervalMs"]) &&
+        streamingRecord["maxIntervalMs"] > 0
+          ? Math.round(streamingRecord["maxIntervalMs"])
+          : DEFAULT_LOCATION_STREAMING_CONFIG.maxIntervalMs,
+      maxAccuracyM:
+        typeof streamingRecord["maxAccuracyM"] === "number" &&
+        Number.isFinite(streamingRecord["maxAccuracyM"]) &&
+        streamingRecord["maxAccuracyM"] > 0
+          ? Math.round(streamingRecord["maxAccuracyM"])
+          : DEFAULT_LOCATION_STREAMING_CONFIG.maxAccuracyM,
+      backgroundEnabled:
+        typeof streamingRecord["backgroundEnabled"] === "boolean"
+          ? streamingRecord["backgroundEnabled"]
+          : DEFAULT_LOCATION_STREAMING_CONFIG.backgroundEnabled,
     },
   };
 }
@@ -119,12 +168,17 @@ export function getDefaultActionSettings(): MobileActionSettings {
   return { ...DEFAULT_ACTION_SETTINGS };
 }
 
+export function getDefaultLocationStreamingConfig(): MobileLocationStreamingConfig {
+  return { ...DEFAULT_LOCATION_STREAMING_CONFIG };
+}
+
 export function getDefaultConnectionConfig(): MobileConnectionConfig {
   return {
     httpBaseUrl: "",
     wsUrl: "",
     nodeEnabled: true,
     actionSettings: getDefaultActionSettings(),
+    locationStreaming: getDefaultLocationStreamingConfig(),
   };
 }
 
@@ -137,6 +191,7 @@ export function mobileBootstrapConfigFromPayload(
     token: payload.token.trim(),
     nodeEnabled: true,
     actionSettings: getDefaultActionSettings(),
+    locationStreaming: getDefaultLocationStreamingConfig(),
   };
 }
 
@@ -167,6 +222,7 @@ export async function saveMobileBootstrapConfig(input: MobileBootstrapConfig): P
     wsUrl: normalizeWsUrl(input.wsUrl),
     nodeEnabled: input.nodeEnabled,
     actionSettings: { ...input.actionSettings },
+    locationStreaming: { ...input.locationStreaming },
   };
   await Promise.all([
     setPreferencesJson(PREFS_CONFIG_KEY, config),
@@ -192,6 +248,9 @@ export async function updateMobileConnectionConfig(
     actionSettings: next.actionSettings
       ? { ...next.actionSettings }
       : { ...current.actionSettings },
+    locationStreaming: next.locationStreaming
+      ? { ...next.locationStreaming }
+      : { ...current.locationStreaming },
   };
   await saveMobileBootstrapConfig(updated);
   return updated;

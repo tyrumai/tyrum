@@ -24,6 +24,7 @@ import type { WsEventDal } from "../../modules/ws-event/dal.js";
 import type { TaskResultRegistry } from "./task-result-registry.js";
 import type { AgentConfig, WsMessageEnvelope } from "@tyrum/schemas";
 import type { IdentityScopeDal } from "../../modules/identity/scope.js";
+import type { LocationService } from "../../modules/location/service.js";
 
 export type ProtocolRequestEnvelope = Extract<
   WsMessageEnvelope,
@@ -47,6 +48,7 @@ export interface ProtocolDeps {
   db?: SqlDb;
   wsEventDal?: WsEventDal;
   identityScopeDal?: IdentityScopeDal;
+  locationService?: LocationService;
   redactionEngine?: RedactionEngine;
   memoryV1Dal?: MemoryV1Dal;
   memoryV1BudgetsProvider?: (

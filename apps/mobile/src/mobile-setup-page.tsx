@@ -16,6 +16,7 @@ import {
 import type { MobileBootstrapConfig } from "./mobile-config.js";
 import {
   getDefaultActionSettings,
+  getDefaultLocationStreamingConfig,
   inferGatewayWsUrl,
   normalizeHttpBaseUrl,
   normalizeWsUrl,
@@ -107,6 +108,7 @@ export function MobileSetupPage({
       token: normalizedToken,
       nodeEnabled: initialConfig?.nodeEnabled ?? true,
       actionSettings: initialConfig?.actionSettings ?? getDefaultActionSettings(),
+      locationStreaming: initialConfig?.locationStreaming ?? getDefaultLocationStreamingConfig(),
     };
 
     if (existingConfig && !sameMobileBootstrapConfig(existingConfig, nextConfig)) {

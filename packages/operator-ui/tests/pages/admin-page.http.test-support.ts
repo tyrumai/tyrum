@@ -77,6 +77,10 @@ export function getLabeledInput(root: ParentNode, labelPrefix: string): HTMLInpu
   return expectPresent(findLabeledElement<HTMLInputElement>(root, "input", labelPrefix));
 }
 
+export function getLabeledSelect(root: ParentNode, labelPrefix: string): HTMLSelectElement {
+  return expectPresent(findLabeledElement<HTMLSelectElement>(root, "select", labelPrefix));
+}
+
 export async function flush(): Promise<void> {
   await act(async () => {
     await Promise.resolve();
@@ -122,6 +126,11 @@ export async function switchHttpTab(
 
 export async function openModelsTab(container: HTMLElement): Promise<void> {
   await switchHttpTab(container, "admin-http-tab-models");
+  await flush();
+}
+
+export async function openLocationTab(container: HTMLElement): Promise<void> {
+  await switchHttpTab(container, "admin-http-tab-location");
   await flush();
 }
 

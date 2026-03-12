@@ -60,6 +60,8 @@ export type {
   WsSessionCompactResult,
   WsSessionDeletePayload,
   WsSessionDeleteResult,
+  WsLocationBeaconPayload,
+  WsLocationBeaconResult,
   WsConnectRequest,
   WsConnectResult,
   WsTaskExecuteRequest,

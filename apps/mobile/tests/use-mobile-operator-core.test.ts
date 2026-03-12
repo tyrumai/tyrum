@@ -46,6 +46,9 @@ const {
           actionSettings: next.actionSettings
             ? { ...next.actionSettings }
             : { ...current.actionSettings },
+          locationStreaming: next.locationStreaming
+            ? { ...next.locationStreaming }
+            : { ...current.locationStreaming },
         };
         return bootstrapState;
       },
@@ -104,6 +107,13 @@ describe("useMobileOperatorCore", () => {
         "location.get_current": true,
         "camera.capture_photo": true,
         "audio.record_clip": true,
+      },
+      locationStreaming: {
+        streamEnabled: true,
+        distanceFilterM: 100,
+        maxIntervalMs: 900_000,
+        maxAccuracyM: 100,
+        backgroundEnabled: true,
       },
     });
   });

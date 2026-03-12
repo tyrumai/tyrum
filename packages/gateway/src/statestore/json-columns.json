@@ -315,6 +315,20 @@
     "default": null
   },
   {
+    "table": "automation_triggers",
+    "column": "condition_json",
+    "shape": "object",
+    "nullable": false,
+    "default": null
+  },
+  {
+    "table": "automation_triggers",
+    "column": "execution_json",
+    "shape": "object",
+    "nullable": false,
+    "default": null
+  },
+  {
     "table": "execution_jobs",
     "column": "trigger_json",
     "shape": "object",
@@ -376,6 +390,27 @@
     "shape": "any",
     "nullable": false,
     "default": null
+  },
+  {
+    "table": "location_events",
+    "column": "metadata_json",
+    "shape": "object",
+    "nullable": false,
+    "default": "{}"
+  },
+  {
+    "table": "location_places",
+    "column": "metadata_json",
+    "shape": "object",
+    "nullable": false,
+    "default": "{}"
+  },
+  {
+    "table": "location_places",
+    "column": "tags_json",
+    "shape": "array",
+    "nullable": false,
+    "default": "[]"
   },
   {
     "table": "node_pairings",

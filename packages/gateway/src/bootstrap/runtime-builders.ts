@@ -25,9 +25,12 @@ import {
   type ExecutionWorkerLoop,
 } from "../modules/execution/worker-loop.js";
 import { LifecycleHooksRuntime } from "../modules/hooks/runtime.js";
+import { LocationService } from "../modules/location/service.js";
 import { createMemoryV1BudgetsProvider } from "../modules/memory/v1-budgets-provider.js";
 import type { OtelRuntime } from "../modules/observability/otel.js";
 import { createPluginCatalogProvider } from "../modules/plugins/catalog-provider.js";
+import { loadAllPlaybooks } from "../modules/playbook/loader.js";
+import { PlaybookRunner } from "../modules/playbook/runner.js";
 import { ensureSelfSignedTlsMaterial } from "../modules/tls/self-signed.js";
 import { WsEventDal } from "../modules/ws-event/dal.js";
 import { WorkSignalScheduler } from "../modules/workboard/signal-scheduler.js";
@@ -111,6 +114,8 @@ export async function createProtocolRuntime(
 
   const taskResults = new TaskResultRegistry();
   const wsEventDal = new WsEventDal(context.container.db);
+  const playbookHome = context.container.config?.tyrumHome;
+  const playbooks = playbookHome ? loadAllPlaybooks(`${playbookHome}/playbooks`) : [];
   const protocolDeps: ProtocolDeps = {
     connectionManager,
     logger: context.logger,
@@ -137,6 +142,14 @@ export async function createProtocolRuntime(
     nodePairingDal: context.container.nodePairingDal,
     engine: edgeEngine,
     policyService: context.container.policyService,
+    locationService: new LocationService(context.container.db, {
+      identityScopeDal: context.container.identityScopeDal,
+      memoryV1Dal: context.container.memoryV1Dal,
+      engine: edgeEngine,
+      policyService: context.container.policyService,
+      playbooks,
+      playbookRunner: new PlaybookRunner(),
+    }),
     modelsDev: context.container.modelsDev,
     modelCatalog: context.container.modelCatalog,
     maxBufferedBytes: wsMaxBufferedBytes,

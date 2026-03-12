@@ -9,6 +9,8 @@ import {
   type WsCapabilityReadyPayload,
   type WsCommandExecutePayload as WsCommandExecutePayloadT,
   type WsCommandExecuteResult as WsCommandExecuteResultT,
+  type WsLocationBeaconPayload,
+  type WsLocationBeaconResult as WsLocationBeaconResultT,
   type WsMemoryCreatePayload,
   type WsMemoryCreateResult as WsMemoryCreateResultT,
   type WsMemoryDeletePayload,
@@ -102,6 +104,7 @@ import {
   WsApprovalListResult,
   WsApprovalResolveResult,
   WsCommandExecuteResult,
+  WsLocationBeaconResult,
   WsMemoryCreateResult,
   WsMemoryDeleteResult,
   WsMemoryExportResult,
@@ -223,6 +226,9 @@ export class TyrumClient extends TyrumClientTransportCore {
   }
   presenceBeacon(payload: WsPresenceBeaconPayload): Promise<WsPresenceBeaconResultT> {
     return this.request("presence.beacon", payload, WsPresenceBeaconResult);
+  }
+  locationBeacon(payload: WsLocationBeaconPayload): Promise<WsLocationBeaconResultT> {
+    return this.request("location.beacon", payload, WsLocationBeaconResult);
   }
   capabilityReady(payload: WsCapabilityReadyPayload): Promise<void> {
     return this.requestVoid("capability.ready", payload);

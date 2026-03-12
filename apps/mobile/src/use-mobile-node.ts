@@ -13,6 +13,7 @@ import type { MobileHostApi, MobileHostState } from "@tyrum/operator-ui";
 import type { MobileConnectionConfig } from "./mobile-config.js";
 import { createNodeIdentityStorage } from "./mobile-config.js";
 import { createMobileCapabilityProvider } from "./mobile-capability-provider.js";
+import { createMobileLocationBeaconStream } from "./mobile-location-stream.js";
 import {
   buildMobileHostState,
   resolveMobileActionStates,
@@ -70,37 +71,25 @@ export function useMobileNode(options: UseMobileNodeOptions): {
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reloadVersion, setReloadVersion] = useState(0);
-  const connectionConfig = useMemo(
-    () =>
-      config
-        ? {
-            httpBaseUrl: config.httpBaseUrl,
-            wsUrl: config.wsUrl,
-            nodeEnabled: config.nodeEnabled,
-            actionSettings: config.actionSettings,
-          }
-        : null,
-    [
-      config?.actionSettings["audio.record_clip"],
-      config?.actionSettings["camera.capture_photo"],
-      config?.actionSettings["location.get_current"],
-      config?.httpBaseUrl,
-      config?.nodeEnabled,
-      config?.wsUrl,
-    ],
-  );
-
-  const enabled = connectionConfig?.nodeEnabled ?? false;
+  const enabled = config?.nodeEnabled ?? false;
+  const wsUrl = config?.wsUrl ?? null;
+  const actionSettings = config?.actionSettings;
+  const locationStreaming = config?.locationStreaming;
+  const locationActionEnabled = actionSettings?.["location.get_current"] ?? false;
   const actionStates = useMemo(
     () =>
       resolveMobileActionStates(
-        connectionConfig?.actionSettings ?? {
+        actionSettings ?? {
           "location.get_current": true,
           "camera.capture_photo": true,
           "audio.record_clip": true,
         },
       ),
-    [connectionConfig?.actionSettings],
+    [
+      actionSettings?.["audio.record_clip"],
+      actionSettings?.["camera.capture_photo"],
+      actionSettings?.["location.get_current"],
+    ],
   );
 
   const actionStatesRef = useRef(actionStates);
@@ -132,6 +121,9 @@ export function useMobileNode(options: UseMobileNodeOptions): {
   const retry = useCallback(() => {
     setReloadVersion((current) => current + 1);
   }, []);
+  const locationStreamRef = useRef<ReturnType<typeof createMobileLocationBeaconStream> | null>(
+    null,
+  );
 
   const publishCapabilityState = useCallback(
     async (client: TyrumClient) => {
@@ -151,7 +143,7 @@ export function useMobileNode(options: UseMobileNodeOptions): {
   }, [actionStates, enabled, publishCapabilityState, status]);
 
   useEffect(() => {
-    if (!connectionConfig || !token || !enabled) {
+    if (!wsUrl || !token || !enabled) {
       clientRef.current?.disconnect();
       clientRef.current = null;
       setStatus("disconnected");
@@ -193,7 +185,7 @@ export function useMobileNode(options: UseMobileNodeOptions): {
 
       setDeviceId(identity.deviceId);
       const client = new TyrumClient({
-        url: connectionConfig.wsUrl,
+        url: wsUrl,
         token,
         role: "node",
         capabilities: [platform],
@@ -211,6 +203,14 @@ export function useMobileNode(options: UseMobileNodeOptions): {
       clientRef.current = client;
 
       const provider = createMobileCapabilityProvider(platform);
+      const locationStream = createMobileLocationBeaconStream({
+        client,
+        onWatchError: (message) => {
+          if (disposed) return;
+          setError(message);
+        },
+      });
+      locationStreamRef.current = locationStream;
       autoExecute(client, [provider]);
 
       const onConnected = () => {
@@ -221,6 +221,7 @@ export function useMobileNode(options: UseMobileNodeOptions): {
       };
       const onDisconnected = () => {
         if (disposed) return;
+        void locationStream.stop();
         setStatus("disconnected");
       };
       const onTransportError = (event: unknown) => {
@@ -243,16 +244,50 @@ export function useMobileNode(options: UseMobileNodeOptions): {
         client.off("connected", onConnected);
         client.off("disconnected", onDisconnected);
         client.off("transport_error", onTransportError);
+        void locationStream.stop();
         client.disconnect();
+        locationStreamRef.current = null;
       }
     })();
 
     return () => {
       disposed = true;
+      void locationStreamRef.current?.stop();
       clientRef.current?.disconnect();
       clientRef.current = null;
+      locationStreamRef.current = null;
     };
-  }, [connectionConfig, enabled, platform, publishCapabilityState, reloadVersion, token]);
+  }, [enabled, platform, publishCapabilityState, reloadVersion, token, wsUrl]);
+
+  useEffect(() => {
+    const locationStream = locationStreamRef.current;
+    if (!locationStream) return;
+
+    if (
+      status !== "connected" ||
+      !enabled ||
+      !locationActionEnabled ||
+      !locationStreaming?.streamEnabled
+    ) {
+      void locationStream.stop();
+      return;
+    }
+
+    void locationStream.start(locationStreaming);
+
+    return () => {
+      void locationStream.stop();
+    };
+  }, [
+    locationActionEnabled,
+    locationStreaming?.backgroundEnabled,
+    locationStreaming?.distanceFilterM,
+    locationStreaming?.maxAccuracyM,
+    locationStreaming?.maxIntervalMs,
+    locationStreaming?.streamEnabled,
+    enabled,
+    status,
+  ]);
 
   const hostApi = useMemo<MobileHostApi>(
     () => ({
@@ -276,7 +311,7 @@ export function useMobileNode(options: UseMobileNodeOptions): {
           });
         },
         setActionEnabled: async (action, nextEnabled) => {
-          const current = connectionConfig?.actionSettings ?? {
+          const current = config?.actionSettings ?? {
             "location.get_current": true,
             "camera.capture_photo": true,
             "audio.record_clip": true,
@@ -313,9 +348,9 @@ export function useMobileNode(options: UseMobileNodeOptions): {
       },
     }),
     [
-      connectionConfig?.actionSettings["audio.record_clip"],
-      connectionConfig?.actionSettings["camera.capture_photo"],
-      connectionConfig?.actionSettings["location.get_current"],
+      config?.actionSettings["audio.record_clip"],
+      config?.actionSettings["camera.capture_photo"],
+      config?.actionSettings["location.get_current"],
       platform,
       updateConfig,
     ],

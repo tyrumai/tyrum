@@ -84,6 +84,15 @@ export type {
   McpImportInput,
   ExtensionsToggleInput,
   ExtensionsRevertInput,
+  LocationPlace,
+  LocationProfile,
+  LocationPlaceListResult,
+  LocationPlaceMutateResult,
+  LocationPlaceDeleteResult,
+  LocationProfileResult,
+  LocationPlaceCreateInput,
+  LocationPlaceUpdateInput,
+  LocationProfileUpdateInput,
 } from "./http/index.js";
 export type {
   Approval,

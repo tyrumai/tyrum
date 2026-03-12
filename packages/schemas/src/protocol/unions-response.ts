@@ -56,6 +56,10 @@ import {
   WsPairingRevokeResponseOkEnvelope,
 } from "./pairing.js";
 import {
+  WsLocationBeaconResponseErrEnvelope,
+  WsLocationBeaconResponseOkEnvelope,
+} from "./location.js";
+import {
   WsPresenceBeaconResponseErrEnvelope,
   WsPresenceBeaconResponseOkEnvelope,
 } from "./presence.js";
@@ -167,6 +171,8 @@ export const WsResponse = z.union([
   WsPairingDenyResponseErrEnvelope,
   WsPairingRevokeResponseOkEnvelope,
   WsPairingRevokeResponseErrEnvelope,
+  WsLocationBeaconResponseOkEnvelope,
+  WsLocationBeaconResponseErrEnvelope,
   WsPresenceBeaconResponseOkEnvelope,
   WsPresenceBeaconResponseErrEnvelope,
   WsPingResponseOkEnvelope,

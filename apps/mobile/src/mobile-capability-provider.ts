@@ -4,11 +4,7 @@ import { Capacitor } from "@capacitor/core";
 import { Geolocation } from "@capacitor/geolocation";
 import { AndroidActionArgs, IosActionArgs, type ActionPrimitive } from "@tyrum/schemas";
 import type { MobileHostPlatform } from "@tyrum/operator-ui";
-
-function formatUnknownError(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  return String(error);
-}
+import { formatUnknownError, mapLocationCoords } from "./mobile-location-utils.js";
 
 function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -30,20 +26,6 @@ function blobToBase64(blob: Blob): Promise<string> {
     });
     reader.readAsDataURL(blob);
   });
-}
-
-type NativeLocationCoords = Awaited<ReturnType<typeof Geolocation.getCurrentPosition>>["coords"];
-
-function mapLocationCoords(coords: NativeLocationCoords) {
-  return {
-    latitude: coords.latitude,
-    longitude: coords.longitude,
-    accuracy_m: coords.accuracy,
-    altitude_m: coords.altitude,
-    altitude_accuracy_m: coords.altitudeAccuracy,
-    heading_deg: coords.heading,
-    speed_mps: coords.speed,
-  };
 }
 
 async function measureBase64Image(

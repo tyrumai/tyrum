@@ -34,6 +34,7 @@ const METHOD_SCOPED_OPERATOR_ROUTE_PREFIXES = [
   "/memory",
   "/metrics",
   "/models",
+  "/location",
   "/plan",
   "/playbooks",
   "/presence",

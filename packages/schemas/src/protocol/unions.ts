@@ -71,6 +71,7 @@ import {
   WsPairingResolvedEvent,
   WsPairingRevokeRequest,
 } from "./pairing.js";
+import { WsLocationBeaconRequest } from "./location.js";
 import {
   WsPresenceBeaconRequest,
   WsPresencePrunedEvent,
@@ -157,6 +158,7 @@ export const WsRequest = z.discriminatedUnion("type", [
   WsConnectInitRequest,
   WsConnectProofRequest,
   WsConnectRequest,
+  WsLocationBeaconRequest,
   WsPresenceBeaconRequest,
   WsPingRequest,
   WsSessionSendRequest,
