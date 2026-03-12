@@ -8,6 +8,7 @@ import { simulateReadableStream } from "ai";
 import type { NormalizedThreadMessage } from "@tyrum/schemas";
 
 export const TITLE_PROMPT_TEXT = "Write a concise session title.";
+const PROMPT_ROLE_MARKER_PREFIX = "[[role:";
 
 const PROMPT_SECTION_LABELS = [
   "Enabled skills:",
@@ -56,7 +57,11 @@ function flattenPromptContent(content: unknown): string {
 
 export function extractPromptText(options: LanguageModelV3CallOptions): string {
   return (options.prompt ?? [])
-    .map((entry) => flattenPromptContent(entry.content))
+    .map((entry) => {
+      const content = flattenPromptContent(entry.content);
+      if (content.length === 0) return "";
+      return `${PROMPT_ROLE_MARKER_PREFIX}${entry.role}]]\n${content}`;
+    })
     .filter((value) => value.length > 0)
     .join("\n\n");
 }
@@ -72,8 +77,9 @@ export function extractPromptSection(
   const nextLabels = PROMPT_SECTION_LABELS.filter((candidate) => candidate !== label)
     .map(escapeRegex)
     .join("|");
+  const roleBoundary = `${escapeRegex(PROMPT_ROLE_MARKER_PREFIX)}[^\\]]+\\]\\]`;
   const pattern = new RegExp(
-    `${escapeRegex(label)}\\n([\\s\\S]*?)(?=\\n(?:${nextLabels})\\n|$)`,
+    `${escapeRegex(label)}\\n([\\s\\S]*?)(?=\\n(?:${nextLabels})\\n|\\n\\n${roleBoundary}\\n|$)`,
     "u",
   );
   return promptText.match(pattern)?.[1]?.trim() ?? "";
