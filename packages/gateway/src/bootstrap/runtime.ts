@@ -258,6 +258,19 @@ export async function main(input?: GatewayRole | GatewayStartOptions): Promise<v
   if (otel.enabled) {
     context.logger.info("otel.started");
   }
+
+  let pendingShutdownSignal: string | undefined;
+  let shutdownHandler: ((signal: string) => void) | undefined;
+  const queueOrRunShutdown = (signal: string) => {
+    if (shutdownHandler) {
+      shutdownHandler(signal);
+      return;
+    }
+    pendingShutdownSignal ??= signal;
+  };
+  process.once("SIGINT", () => queueOrRunShutdown("SIGINT"));
+  process.once("SIGTERM", () => queueOrRunShutdown("SIGTERM"));
+
   const protocol = await createProtocolRuntime(context, otel);
   const edge = await startEdgeRuntime(context, protocol, otel);
   const workerLoop = createWorkerLoop(context, protocol);
@@ -290,7 +303,7 @@ export async function main(input?: GatewayRole | GatewayStartOptions): Promise<v
 
   fireGatewayStartHook(context, protocol);
 
-  const shutdown = createShutdownHandler(context, {
+  shutdownHandler = createShutdownHandler(context, {
     background,
     protocol,
     edge,
@@ -298,6 +311,9 @@ export async function main(input?: GatewayRole | GatewayStartOptions): Promise<v
     desktopHostRuntime,
     otel,
   });
-  process.once("SIGINT", () => shutdown("SIGINT"));
-  process.once("SIGTERM", () => shutdown("SIGTERM"));
+  if (pendingShutdownSignal) {
+    const signal = pendingShutdownSignal;
+    pendingShutdownSignal = undefined;
+    shutdownHandler(signal);
+  }
 }
