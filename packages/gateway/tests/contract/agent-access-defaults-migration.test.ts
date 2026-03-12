@@ -7,11 +7,11 @@ import { createPgMemDb } from "../helpers/pg-mem.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const sqliteMigrationSql = readFileSync(
-  join(__dirname, "../../migrations/sqlite/129_agent_access_defaults_and_identity_cleanup.sql"),
+  join(__dirname, "../../migrations/sqlite/131_agent_access_defaults_and_identity_cleanup.sql"),
   "utf8",
 );
 const postgresMigrationSql = readFileSync(
-  join(__dirname, "../../migrations/postgres/129_agent_access_defaults_and_identity_cleanup.sql"),
+  join(__dirname, "../../migrations/postgres/131_agent_access_defaults_and_identity_cleanup.sql"),
   "utf8",
 );
 
