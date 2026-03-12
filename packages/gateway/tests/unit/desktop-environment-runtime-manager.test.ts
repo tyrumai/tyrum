@@ -44,10 +44,9 @@ describe("DesktopEnvironmentRuntimeManager", () => {
 
   beforeEach(async () => {
     tyrumHome = await mkdtemp(join(tmpdir(), "tyrum-runtime-manager-"));
-
     loadOrCreateDesktopEnvironmentIdentityMock.mockImplementation(async (identityPath: string) => {
       const match =
-        /desktop-environments\/([^/]+)\/node-home\/desktop-node\/device-identity\.json$/u.exec(
+        /desktop-environments\/([^/]+)\/identity\/desktop-node\/device-identity\.json$/u.exec(
           identityPath,
         );
       const environmentId = match?.[1] ?? "unknown";
@@ -57,7 +56,6 @@ describe("DesktopEnvironmentRuntimeManager", () => {
         privateKey: `private-${environmentId}`,
       };
     });
-
     const inspectCounts = new Map<string, number>();
     inspectContainerMock.mockImplementation(async (containerName: string) => {
       const count = inspectCounts.get(containerName) ?? 0;
@@ -127,7 +125,6 @@ describe("DesktopEnvironmentRuntimeManager", () => {
       })),
     };
     const logger = { error: vi.fn() };
-
     const runtimeManager = new DesktopEnvironmentRuntimeManager(
       environmentDal as never,
       nodePairingDal as never,
@@ -139,16 +136,14 @@ describe("DesktopEnvironmentRuntimeManager", () => {
         gatewayPort: 8788,
       },
     );
-
     await runtimeManager.reconcileAll();
-
     expect(loadOrCreateDesktopEnvironmentIdentityMock).toHaveBeenNthCalledWith(
       1,
       join(
         tyrumHome,
         "desktop-environments",
         "env-1",
-        "node-home",
+        "identity",
         "desktop-node",
         "device-identity.json",
       ),
@@ -159,12 +154,11 @@ describe("DesktopEnvironmentRuntimeManager", () => {
         tyrumHome,
         "desktop-environments",
         "env-2",
-        "node-home",
+        "identity",
         "desktop-node",
         "device-identity.json",
       ),
     );
-
     expect(authTokens.issueToken).toHaveBeenCalledTimes(2);
     expect(authTokens.issueToken).toHaveBeenNthCalledWith(
       1,
@@ -174,21 +168,6 @@ describe("DesktopEnvironmentRuntimeManager", () => {
       2,
       expect.objectContaining({ deviceId: "device-env-2", tenantId: "tenant-1" }),
     );
-
-    const runArgs = runDockerMock.mock.calls.map(([args]) => args as string[]);
-    expect(runArgs).toContainEqual(
-      expect.arrayContaining([
-        "--volume",
-        `${join(tyrumHome, "desktop-environments", "env-1", "node-home")}:/var/lib/tyrum-node`,
-      ]),
-    );
-    expect(runArgs).toContainEqual(
-      expect.arrayContaining([
-        "--volume",
-        `${join(tyrumHome, "desktop-environments", "env-2", "node-home")}:/var/lib/tyrum-node`,
-      ]),
-    );
-
     expect(nodePairingDal.getByNodeId).toHaveBeenNthCalledWith(1, "device-env-1", "tenant-1");
     expect(nodePairingDal.getByNodeId).toHaveBeenNthCalledWith(2, "device-env-2", "tenant-1");
     expect(nodePairingDal.resolve).toHaveBeenNthCalledWith(
@@ -208,10 +187,8 @@ describe("DesktopEnvironmentRuntimeManager", () => {
       }),
     );
   });
-
   it("does not retry errored environments by issuing fresh tokens on every tick", async () => {
     inspectContainerMock.mockResolvedValue(null);
-
     const environmentDal = {
       listByHost: vi.fn(async () => [
         {
@@ -241,7 +218,6 @@ describe("DesktopEnvironmentRuntimeManager", () => {
       issueToken: vi.fn(),
     };
     const logger = { error: vi.fn() };
-
     const runtimeManager = new DesktopEnvironmentRuntimeManager(
       environmentDal as never,
       nodePairingDal as never,

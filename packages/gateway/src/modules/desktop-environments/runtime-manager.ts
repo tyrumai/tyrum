@@ -1,4 +1,4 @@
-import { mkdir } from "node:fs/promises";
+import { chmod, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
@@ -20,15 +20,44 @@ import {
 } from "./docker-cli.js";
 
 const DEFAULT_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 30;
+const CONTAINER_NODE_HOME = "/var/lib/tyrum-node";
+const CONTAINER_IDENTITY_PATH = `${CONTAINER_NODE_HOME}/desktop-node/device-identity.json`;
+const CONTAINER_GATEWAY_TOKEN_PATH = "/run/tyrum/gateway-token";
 const DESKTOP_ALLOWLIST = descriptorIdsForClientCapability("desktop").map((id) => ({
   id,
   version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
 }));
 
-async function ensureNodeIdentity(baseDir: string): Promise<{ deviceId: string }> {
-  const identityPath = join(baseDir, "desktop-node", "device-identity.json");
+type DesktopEnvironmentPaths = {
+  runtimeHomeDir: string;
+  runtimeIdentityDir: string;
+  identityPath: string;
+  secretsDir: string;
+  gatewayTokenPath: string;
+};
+
+function resolveEnvironmentPaths(
+  tyrumHome: string,
+  environmentId: string,
+): DesktopEnvironmentPaths {
+  const environmentDir = join(tyrumHome, "desktop-environments", environmentId);
+  return {
+    runtimeHomeDir: join(environmentDir, "runtime-home"),
+    runtimeIdentityDir: join(environmentDir, "runtime-home", "desktop-node"),
+    identityPath: join(environmentDir, "identity", "desktop-node", "device-identity.json"),
+    secretsDir: join(environmentDir, "secrets"),
+    gatewayTokenPath: join(environmentDir, "secrets", "gateway-token"),
+  };
+}
+
+async function ensureNodeIdentity(identityPath: string): Promise<{ deviceId: string }> {
   const identity = await loadOrCreateDesktopEnvironmentIdentity(identityPath);
   return { deviceId: identity.deviceId };
+}
+
+async function writeGatewayToken(tokenPath: string, token: string): Promise<void> {
+  await writeFile(tokenPath, `${token}\n`, { mode: 0o600 });
+  await chmod(tokenPath, 0o600);
 }
 
 export class DesktopEnvironmentRuntimeManager {
@@ -61,14 +90,11 @@ export class DesktopEnvironmentRuntimeManager {
     environment: DesktopEnvironment & { tenant_id: string },
   ): Promise<void> {
     const containerName = containerNameForEnvironment(environment.environment_id);
-    const stateDir = join(
-      this.options.tyrumHome,
-      "desktop-environments",
-      environment.environment_id,
-      "node-home",
-    );
-    await mkdir(stateDir, { recursive: true, mode: 0o700 });
-    const { deviceId } = await ensureNodeIdentity(stateDir);
+    const paths = resolveEnvironmentPaths(this.options.tyrumHome, environment.environment_id);
+    await mkdir(paths.runtimeHomeDir, { recursive: true, mode: 0o700 });
+    await mkdir(paths.runtimeIdentityDir, { recursive: true, mode: 0o700 });
+    await mkdir(paths.secretsDir, { recursive: true, mode: 0o700 });
+    const { deviceId } = await ensureNodeIdentity(paths.identityPath);
 
     if (!environment.desired_running) {
       const logs = (await inspectContainer(containerName))
@@ -107,6 +133,7 @@ export class DesktopEnvironmentRuntimeManager {
         ttlSeconds: this.options.tokenTtlSeconds ?? DEFAULT_TOKEN_TTL_SECONDS,
         displayName: `desktop-environment:${environment.environment_id}`,
       });
+      await writeGatewayToken(paths.gatewayTokenPath, issuedToken.token);
       const runResult = await runDocker([
         "run",
         "--detach",
@@ -119,15 +146,19 @@ export class DesktopEnvironmentRuntimeManager {
         "--label",
         `tyrum.desktop_environment_host_id=${this.options.hostId}`,
         "--volume",
-        `${stateDir}:/var/lib/tyrum-node`,
+        `${paths.runtimeHomeDir}:${CONTAINER_NODE_HOME}`,
+        "--volume",
+        `${paths.identityPath}:${CONTAINER_IDENTITY_PATH}:ro`,
+        "--volume",
+        `${paths.gatewayTokenPath}:${CONTAINER_GATEWAY_TOKEN_PATH}:ro`,
         "--publish",
         "127.0.0.1::5900",
         "--publish",
         "127.0.0.1::6080",
         "--env",
-        "TYRUM_HOME=/var/lib/tyrum-node",
+        `TYRUM_HOME=${CONTAINER_NODE_HOME}`,
         "--env",
-        `TYRUM_GATEWAY_TOKEN=${issuedToken.token}`,
+        `TYRUM_GATEWAY_TOKEN_PATH=${CONTAINER_GATEWAY_TOKEN_PATH}`,
         "--env",
         `TYRUM_GATEWAY_WS_URL=${this.resolveGatewayWsUrl()}`,
         "--env",
