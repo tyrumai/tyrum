@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import {
+  DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF,
   DesktopEnvironmentCreateRequest,
   DesktopEnvironmentDeleteResponse,
   DesktopEnvironmentGetResponse,
@@ -20,7 +21,6 @@ import {
 } from "../modules/desktop-environments/lifecycle-service.js";
 import { requireAuthClaims, requireTenantId } from "../modules/auth/claims.js";
 
-const DEFAULT_DESKTOP_ENVIRONMENT_IMAGE = "tyrum-desktop-sandbox:latest";
 const TRUSTED_TAKEOVER_HOSTNAMES = new Set(["127.0.0.1", "localhost", "[::1]"]);
 const TRUSTED_TAKEOVER_PATH = "/vnc.html";
 
@@ -84,7 +84,7 @@ export function createDesktopEnvironmentRoutes(deps: {
       tenantId,
       hostId: parsed.data.host_id,
       label: parsed.data.label,
-      imageRef: parsed.data.image_ref ?? DEFAULT_DESKTOP_ENVIRONMENT_IMAGE,
+      imageRef: parsed.data.image_ref ?? DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF,
       desiredRunning: parsed.data.desired_running ?? false,
     });
     return c.json(DesktopEnvironmentMutateResponse.parse({ status: "ok", environment }), 201);

@@ -2,6 +2,7 @@
 
 import React, { act } from "react";
 import { describe, expect, it, vi } from "vitest";
+import { DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF } from "@tyrum/schemas";
 import { createBearerTokenAuth, createOperatorCore } from "../../../operator-core/src/index.js";
 import { DesktopEnvironmentsPage } from "../../src/components/pages/desktop-environments-page.js";
 import { cleanupTestRoot, click, renderIntoDocument } from "../test-utils.js";
@@ -134,6 +135,12 @@ describe("DesktopEnvironmentsPage", () => {
 
     const desktopEnvironmentsApi = http.desktopEnvironments;
     expect(desktopEnvironmentsApi.create).toHaveBeenCalledTimes(1);
+    expect(desktopEnvironmentsApi.create).toHaveBeenCalledWith({
+      host_id: "host-1",
+      label: undefined,
+      image_ref: DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF,
+      desired_running: false,
+    });
     expect(desktopEnvironmentsApi.logs).toHaveBeenCalledTimes(1);
     expect(desktopEnvironmentsApi.start).toHaveBeenCalledTimes(1);
     expect(desktopEnvironmentsApi.remove).toHaveBeenCalledTimes(1);

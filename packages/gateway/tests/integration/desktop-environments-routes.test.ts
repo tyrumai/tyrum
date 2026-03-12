@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF } from "@tyrum/schemas";
 const { removeEnvironmentContainerMock } = vi.hoisted(() => ({
   removeEnvironmentContainerMock: vi.fn(async () => {}),
 }));
@@ -21,6 +22,38 @@ import { createTestApp } from "./helpers.js";
 import { type DesktopEnvironmentLifecycle } from "../../src/modules/desktop-environments/lifecycle-service.js";
 
 describe("desktop environment routes", () => {
+  it("uses the shared default image when image_ref is omitted", async () => {
+    const { app, container } = await createTestApp();
+    const hostDal = new DesktopEnvironmentHostDal(container.db);
+
+    await hostDal.upsert({
+      hostId: "host-1",
+      label: "Primary runtime",
+      version: "0.1.0",
+      dockerAvailable: true,
+      healthy: true,
+      lastSeenAt: "2026-01-01T00:00:00.000Z",
+      lastError: null,
+    });
+
+    const createRes = await app.request("/desktop-environments", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        host_id: "host-1",
+        label: "Research desktop",
+        desired_running: false,
+      }),
+    });
+
+    expect(createRes.status).toBe(201);
+    await expect(createRes.json()).resolves.toMatchObject({
+      environment: {
+        image_ref: DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF,
+      },
+    });
+  });
+
   it("creates, lists, mutates, and reads logs for desktop environments", async () => {
     let environmentDal: DesktopEnvironmentDal;
     const deleteEnvironment = vi.fn<DesktopEnvironmentLifecycle["deleteEnvironment"]>(

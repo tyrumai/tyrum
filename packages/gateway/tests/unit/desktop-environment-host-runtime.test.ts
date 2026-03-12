@@ -55,4 +55,46 @@ describe("DesktopEnvironmentHostRuntime", () => {
     await Promise.resolve();
     await runtime.stop();
   });
+
+  it("logs and survives background tick failures from host persistence", async () => {
+    vi.useFakeTimers();
+    probeDockerAvailabilityMock.mockResolvedValue({ ok: true });
+
+    const hostDal = {
+      upsert: vi
+        .fn<() => Promise<void>>()
+        .mockResolvedValueOnce()
+        .mockRejectedValueOnce(new Error("db unavailable"))
+        .mockResolvedValueOnce(),
+    };
+    const runtimeManager = {
+      reconcileAll: vi.fn(async () => {}),
+    };
+    const logger = {
+      error: vi.fn(),
+    };
+
+    const runtime = new DesktopEnvironmentHostRuntime(hostDal as never, runtimeManager as never, {
+      hostId: "host-1",
+      label: "Primary runtime",
+      intervalMs: 1_000,
+      logger: logger as never,
+    });
+
+    await runtime.start();
+    expect(hostDal.upsert).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(1_000);
+    await Promise.resolve();
+    expect(logger.error).toHaveBeenCalledWith("desktop_environment.host_tick_failed", {
+      host_id: "host-1",
+      error: "db unavailable",
+    });
+
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(hostDal.upsert).toHaveBeenCalledTimes(3);
+    expect(runtimeManager.reconcileAll).toHaveBeenCalledTimes(2);
+
+    await runtime.stop();
+  });
 });

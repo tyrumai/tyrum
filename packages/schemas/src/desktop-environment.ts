@@ -2,6 +2,8 @@ import { z } from "zod";
 import { DateTimeSchema } from "./common.js";
 import { NodeId } from "./keys.js";
 
+export const DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF = "tyrum-desktop-sandbox:latest";
+
 export const DesktopEnvironmentId = z.string().trim().min(1);
 export const DesktopEnvironmentHostId = z.string().trim().min(1);
 const DesktopEnvironmentLabel = z.string().trim().min(1);

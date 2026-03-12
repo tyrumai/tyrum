@@ -1,7 +1,8 @@
+import { DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF } from "@tyrum/schemas";
 import type { BadgeVariant } from "../ui/badge.js";
 import { normalizeHttpUrl } from "../../utils/normalize-http-url.js";
 
-export const DEFAULT_IMAGE_REF = "tyrum-desktop-sandbox:latest";
+export const DEFAULT_IMAGE_REF = DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF;
 
 export function buildTakeoverHref(httpBaseUrl: string, environmentId: string): string | undefined {
   const normalizedBaseUrl = normalizeHttpUrl(httpBaseUrl);

@@ -23,7 +23,12 @@ export class DesktopEnvironmentHostRuntime {
     await this.runTick();
     const intervalMs = Math.max(1_000, this.options.intervalMs ?? 10_000);
     this.timer = setInterval(() => {
-      void this.runTick();
+      void this.runTick().catch((error) => {
+        this.options.logger?.error("desktop_environment.host_tick_failed", {
+          host_id: this.options.hostId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
     }, intervalMs);
     this.timer.unref();
   }
