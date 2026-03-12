@@ -56,6 +56,16 @@ async function flushMicrotasks(count = 4) {
   }
 }
 
+function createDeferred<T>() {
+  let resolve: (value: T | PromiseLike<T>) => void = () => {};
+  let reject: (reason?: unknown) => void = () => {};
+  const promise = new Promise<T>((nextResolve, nextReject) => {
+    resolve = nextResolve;
+    reject = nextReject;
+  });
+  return { promise, resolve, reject };
+}
+
 function buildPosition(latitude: number, longitude: number, timestamp: string, accuracy = 10) {
   return {
     coords: {
@@ -173,5 +183,42 @@ describe("createMobileLocationBeaconStream", () => {
     resolveBeacon?.();
     await flushMicrotasks();
     expect(locationBeacon).toHaveBeenCalledTimes(1);
+  });
+
+  it("clears a stale native watch when stop and restart overlap an in-flight start", async () => {
+    const firstWatch = createDeferred<string>();
+    watchPositionMock
+      .mockImplementationOnce(async () => await firstWatch.promise)
+      .mockImplementationOnce(async () => "watch-2");
+
+    const { createMobileLocationBeaconStream } = await import("../src/mobile-location-stream.js");
+    const stream = createMobileLocationBeaconStream({
+      client: { locationBeacon: vi.fn(async () => ({ sample: {}, events: [] })) } as never,
+    });
+    const config = {
+      streamEnabled: true,
+      distanceFilterM: 100,
+      maxIntervalMs: 900_000,
+      maxAccuracyM: 100,
+      backgroundEnabled: true,
+    } satisfies Parameters<typeof stream.start>[0];
+
+    const firstStart = stream.start(config);
+    await flushMicrotasks();
+    expect(watchPositionMock).toHaveBeenCalledTimes(1);
+
+    const stopPromise = stream.stop();
+    const secondStart = stream.start(config);
+
+    firstWatch.resolve("watch-1");
+    await Promise.all([firstStart, stopPromise, secondStart]);
+
+    expect(requestPermissionsMock).toHaveBeenCalledTimes(2);
+    expect(watchPositionMock).toHaveBeenCalledTimes(2);
+    expect(clearWatchMock).toHaveBeenNthCalledWith(1, { id: "watch-1" });
+
+    await stream.stop();
+
+    expect(clearWatchMock).toHaveBeenNthCalledWith(2, { id: "watch-2" });
   });
 });

@@ -208,10 +208,9 @@ export class LocationService {
     const agentId = input.agentKey
       ? await this.opts.identityScopeDal.ensureAgentId(input.tenantId, input.agentKey)
       : undefined;
-    const workspaceId =
-      input.workspaceKey && agentId
-        ? await this.opts.identityScopeDal.ensureWorkspaceId(input.tenantId, input.workspaceKey)
-        : undefined;
+    const workspaceId = input.workspaceKey
+      ? await this.opts.identityScopeDal.ensureWorkspaceId(input.tenantId, input.workspaceKey)
+      : undefined;
     if (agentId && workspaceId) {
       await this.opts.identityScopeDal.ensureMembership(input.tenantId, agentId, workspaceId);
     }

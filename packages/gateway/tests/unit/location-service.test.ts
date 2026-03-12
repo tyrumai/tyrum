@@ -147,4 +147,57 @@ describe("LocationService", () => {
     ]);
     expect(listAutomationTriggersSpy).toHaveBeenCalledTimes(1);
   });
+
+  it("applies a workspace filter even when no agent filter is provided", async () => {
+    const tenantId = "00000000-0000-4000-8000-000000000001";
+
+    await service.createAutomationTrigger({
+      tenantId,
+      agentKey: "default",
+      body: {
+        workspace_key: "default",
+        enabled: true,
+        delivery_mode: "notify",
+        condition: {
+          type: "poi_category",
+          category_key: "coffee",
+          transition: "enter",
+        },
+        execution: {
+          kind: "agent_turn",
+          instruction: "Check in",
+        },
+      },
+    });
+    await service.createAutomationTrigger({
+      tenantId,
+      agentKey: "default",
+      body: {
+        workspace_key: "travel",
+        enabled: true,
+        delivery_mode: "notify",
+        condition: {
+          type: "poi_category",
+          category_key: "airport",
+          transition: "enter",
+        },
+        execution: {
+          kind: "agent_turn",
+          instruction: "Boarding soon",
+        },
+      },
+    });
+
+    const triggers = await service.listAutomationTriggers({
+      tenantId,
+      workspaceKey: "travel",
+    });
+
+    expect(triggers).toHaveLength(1);
+    expect(triggers[0]?.workspace_key).toBe("travel");
+    expect(triggers[0]?.condition).toMatchObject({
+      type: "poi_category",
+      category_key: "airport",
+    });
+  });
 });

@@ -24,6 +24,11 @@ type MobileLocationBeaconStream = {
   stop: () => Promise<void>;
 };
 
+type NativeWatchOptions = {
+  timeout: number;
+  maximumAge: number;
+};
+
 function isBackgroundBlocked(config: MobileLocationStreamingConfig): boolean {
   return !config.backgroundEnabled && typeof document !== "undefined" && document.hidden;
 }
@@ -49,21 +54,104 @@ export function createMobileLocationBeaconStream(
   options: MobileLocationBeaconStreamOptions,
 ): MobileLocationBeaconStream {
   let activeConfig: MobileLocationStreamingConfig | null = null;
+  let desiredConfig: MobileLocationStreamingConfig | null = null;
+  let desiredConfigRevision = 0;
   let watchId: Awaited<ReturnType<typeof Geolocation.watchPosition>> | null = null;
+  let activeWatchOptions: NativeWatchOptions | null = null;
   let lastSentSample: SentSample | null = null;
   let lastQueuedSample: SentSample | null = null;
   let sendChain: Promise<void> = Promise.resolve();
+  let lifecycleChain: Promise<void> = Promise.resolve();
 
-  const stop = async (): Promise<void> => {
-    activeConfig = null;
+  const resetSamples = (): void => {
     lastSentSample = null;
     lastQueuedSample = null;
+  };
+
+  const buildNativeWatchOptions = (config: MobileLocationStreamingConfig): NativeWatchOptions => ({
+    timeout: config.maxIntervalMs,
+    maximumAge: Math.min(config.maxIntervalMs, 60_000),
+  });
+
+  const watchOptionsMatch = (left: NativeWatchOptions | null, right: NativeWatchOptions): boolean =>
+    left?.timeout === right.timeout && left.maximumAge === right.maximumAge;
+
+  const clearActiveWatch = async (): Promise<void> => {
     if (!watchId) {
+      activeWatchOptions = null;
       return;
     }
     const currentWatchId = watchId;
     watchId = null;
+    activeWatchOptions = null;
     await Geolocation.clearWatch({ id: currentWatchId });
+  };
+
+  const isStartStillDesired = (
+    revision: number,
+    nativeWatchOptions: NativeWatchOptions,
+  ): boolean => {
+    if (revision !== desiredConfigRevision) {
+      return false;
+    }
+    if (!desiredConfig?.streamEnabled || !Capacitor.isNativePlatform()) {
+      return false;
+    }
+    return watchOptionsMatch(buildNativeWatchOptions(desiredConfig), nativeWatchOptions);
+  };
+
+  const reconcileWatchLifecycle = async (): Promise<void> => {
+    if (!desiredConfig?.streamEnabled || !Capacitor.isNativePlatform()) {
+      await clearActiveWatch();
+      return;
+    }
+
+    const nextWatchOptions = buildNativeWatchOptions(desiredConfig);
+    if (watchId && watchOptionsMatch(activeWatchOptions, nextWatchOptions)) {
+      return;
+    }
+
+    await clearActiveWatch();
+    const revision = desiredConfigRevision;
+    try {
+      await Geolocation.requestPermissions();
+      if (!isStartStillDesired(revision, nextWatchOptions)) {
+        return;
+      }
+
+      const nextWatchId = await Geolocation.watchPosition(
+        {
+          enableHighAccuracy: false,
+          ...nextWatchOptions,
+        },
+        handlePosition,
+      );
+      if (!isStartStillDesired(revision, nextWatchOptions)) {
+        await Geolocation.clearWatch({ id: nextWatchId });
+        return;
+      }
+
+      watchId = nextWatchId;
+      activeWatchOptions = nextWatchOptions;
+    } catch (error) {
+      if (revision !== desiredConfigRevision) {
+        return;
+      }
+      options.onWatchError?.(formatUnknownError(error));
+    }
+  };
+
+  const enqueueLifecycleReconcile = (): Promise<void> => {
+    lifecycleChain = lifecycleChain.then(reconcileWatchLifecycle, reconcileWatchLifecycle);
+    return lifecycleChain;
+  };
+
+  const stop = async (): Promise<void> => {
+    desiredConfig = null;
+    desiredConfigRevision += 1;
+    activeConfig = null;
+    resetSamples();
+    await enqueueLifecycleReconcile();
   };
 
   const emitBeacon = async (sample: SentSample): Promise<void> => {
@@ -117,27 +205,14 @@ export function createMobileLocationBeaconStream(
 
   return {
     async start(config: MobileLocationStreamingConfig): Promise<void> {
-      activeConfig = { ...config };
       if (!config.streamEnabled || !Capacitor.isNativePlatform()) {
         await stop();
         return;
       }
-      if (watchId) {
-        return;
-      }
-      try {
-        await Geolocation.requestPermissions();
-        watchId = await Geolocation.watchPosition(
-          {
-            enableHighAccuracy: false,
-            timeout: config.maxIntervalMs,
-            maximumAge: Math.min(config.maxIntervalMs, 60_000),
-          },
-          handlePosition,
-        );
-      } catch (error) {
-        options.onWatchError?.(formatUnknownError(error));
-      }
+      desiredConfig = { ...config };
+      desiredConfigRevision += 1;
+      activeConfig = desiredConfig;
+      await enqueueLifecycleReconcile();
     },
     stop,
   };
