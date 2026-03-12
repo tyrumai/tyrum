@@ -11,6 +11,7 @@ import type { ResolvedAgentTurnInput } from "./turn-helpers.js";
 import type { AgentContextReport, AgentLoadedContext } from "./types.js";
 import {
   buildTurnMemoryDedupeKey,
+  isTurnMemoryAutoWriteEnabled,
   normalizeTurnMemoryTags,
   resolveTurnMemoryOrigin,
   type StoredTurnMemoryDecision,
@@ -337,7 +338,7 @@ export async function finalizeTurn(input: {
   const turnKind = input.turnKind ?? "normal";
   let memoryWritten = false;
 
-  if (input.ctx.config.memory.v1.enabled) {
+  if (isTurnMemoryAutoWriteEnabled(input.ctx.config.memory.v1)) {
     logTurnSignalProtocolState({
       container: input.container,
       session: input.session,

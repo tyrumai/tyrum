@@ -155,4 +155,48 @@ describe("AgentRuntime (Memory v1 digest injection)", () => {
     expect(call?.system).not.toContain("memory_turn_decision");
     expect(call?.tools).not.toHaveProperty("memory_turn_decision");
   });
+
+  it("does not inject the turn-memory protocol or tool when auto-write is disabled", async () => {
+    generateTextMock.mockResolvedValueOnce({ text: "ok", steps: [] });
+
+    const { createContainer } = await import("../../src/container.js");
+    const { AgentRuntime } = await import("../../src/modules/agent/runtime.js");
+
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
+    container = await createContainer({ dbPath: ":memory:", migrationsDir });
+
+    await seedAgentConfig(container, {
+      config: {
+        model: { model: "openai/gpt-4.1" },
+        skills: { enabled: [] },
+        mcp: { enabled: [] },
+        tools: { allow: [] },
+        sessions: { ttl_days: 30, max_turns: 20 },
+        memory: {
+          v1: {
+            enabled: true,
+            auto_write: { enabled: false },
+          },
+        },
+      },
+    });
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: createStubLanguageModel("unused"),
+      fetchImpl: fetch404,
+    } as ConstructorParameters<typeof AgentRuntime>[0]);
+
+    const res = await runtime.turn({ channel: "test", thread_id: "thread-1", message: "hello" });
+    expect(res.reply).toBe("ok");
+
+    const call = generateTextMock.mock.calls[0]?.[0] as
+      | { system?: string; tools?: Record<string, unknown> }
+      | undefined;
+
+    expect(call?.system).not.toContain("Turn memory protocol:");
+    expect(call?.system).not.toContain("memory_turn_decision");
+    expect(call?.tools).not.toHaveProperty("memory_turn_decision");
+  });
 });

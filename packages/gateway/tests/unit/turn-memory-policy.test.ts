@@ -3,6 +3,7 @@ import {
   buildTurnMemoryDedupeKey,
   buildTurnMemoryProtocolPrompt,
   createTurnMemoryDecisionCollector,
+  isTurnMemoryAutoWriteEnabled,
   recordTurnMemoryDecision,
   resolveTurnMemoryOrigin,
 } from "../../src/modules/agent/runtime/turn-memory-policy.js";
@@ -105,5 +106,26 @@ describe("turn memory policy helpers", () => {
     expect(prompt).toContain("memory_turn_decision");
     expect(prompt).toContain("should_store=false");
     expect(prompt).toContain("automation-origin turn");
+  });
+
+  it("requires both memory v1 and auto-write to be enabled", () => {
+    expect(
+      isTurnMemoryAutoWriteEnabled({
+        enabled: true,
+        auto_write: { enabled: true },
+      }),
+    ).toBe(true);
+    expect(
+      isTurnMemoryAutoWriteEnabled({
+        enabled: true,
+        auto_write: { enabled: false },
+      }),
+    ).toBe(false);
+    expect(
+      isTurnMemoryAutoWriteEnabled({
+        enabled: false,
+        auto_write: { enabled: true },
+      }),
+    ).toBe(false);
   });
 });

@@ -67,6 +67,12 @@ export const TurnMemoryDecisionSchema = z.discriminatedUnion("should_store", [
 export type TurnMemoryDecision = z.infer<typeof TurnMemoryDecisionSchema>;
 export type StoredTurnMemoryDecision = Extract<TurnMemoryDecision, { should_store: true }>;
 export type TurnMemoryOrigin = "interaction" | "automation_quiet" | "automation_notify";
+export type TurnMemoryAutoWriteConfig = {
+  enabled: boolean;
+  auto_write: {
+    enabled: boolean;
+  };
+};
 
 export type TurnMemoryDecisionCollector = {
   calls: number;
@@ -101,6 +107,10 @@ export function normalizeTurnMemoryTags(tags: readonly string[] | undefined): st
 
 export function createTurnMemoryDecisionCollector(): TurnMemoryDecisionCollector {
   return { calls: 0, invalidCalls: 0 };
+}
+
+export function isTurnMemoryAutoWriteEnabled(config: TurnMemoryAutoWriteConfig): boolean {
+  return config.enabled && config.auto_write.enabled;
 }
 
 export function recordTurnMemoryDecision(

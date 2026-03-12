@@ -46,6 +46,7 @@ import { resolveEmbeddingPipeline } from "./embedding-pipeline-resolution.js";
 import {
   buildTurnMemoryProtocolPrompt,
   createTurnMemoryDecisionCollector,
+  isTurnMemoryAutoWriteEnabled,
 } from "./turn-memory-policy.js";
 export type TurnExecutionContext = {
   planId: string;
@@ -188,10 +189,11 @@ export async function prepareTurn(
   } = assemblePrompts(ctx, session, memoryDigestResult, filteredTools, automation, runtimePrompt);
 
   const sandboxPrompt = buildSandboxPrompt();
-  const turnMemoryDecisionCollector = ctx.config.memory.v1.enabled
+  const turnMemoryAutoWriteEnabled = isTurnMemoryAutoWriteEnabled(ctx.config.memory.v1);
+  const turnMemoryDecisionCollector = turnMemoryAutoWriteEnabled
     ? createTurnMemoryDecisionCollector()
     : undefined;
-  const turnMemoryPrompt = ctx.config.memory.v1.enabled
+  const turnMemoryPrompt = turnMemoryAutoWriteEnabled
     ? buildTurnMemoryProtocolPrompt(automation)
     : undefined;
   const systemPrompt = [
