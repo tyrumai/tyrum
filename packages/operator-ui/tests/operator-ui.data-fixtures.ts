@@ -121,7 +121,10 @@ export function samplePairingRequestPendingWithNodeCapabilities() {
     ...pending,
     node: {
       ...pending.node,
-      capabilities: ["cli", "http"],
+      capabilities: [
+        { id: "tyrum.cli", version: "1.0.0" },
+        { id: "tyrum.http", version: "1.0.0" },
+      ],
     },
     capability_allowlist: [],
   } as const;

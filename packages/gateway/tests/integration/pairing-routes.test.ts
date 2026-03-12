@@ -126,6 +126,42 @@ describe("Pairing routes", () => {
     expect(body.pairing?.capability_allowlist).toEqual([]);
   });
 
+  it("rejects approving with a legacy umbrella capability descriptor", async () => {
+    const pairingId = await seedPendingPairing();
+    const res = await app.request(`/pairings/${String(pairingId)}/approve`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        reason: "ok",
+        trust_level: "remote",
+        capability_allowlist: [{ id: "tyrum.desktop", version: "1.0.0" }],
+      }),
+    });
+
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error?: string; message?: string };
+    expect(body.error).toBe("invalid_request");
+    expect(body.message).toContain("legacy umbrella capability 'tyrum.desktop'");
+  });
+
+  it("rejects approve when capability_allowlist contains a legacy umbrella descriptor", async () => {
+    const pairingId = await seedPendingPairing();
+    const res = await app.request(`/pairings/${String(pairingId)}/approve`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        reason: "ok",
+        trust_level: "remote",
+        capability_allowlist: [{ id: "tyrum.desktop", version: "1.0.0" }],
+      }),
+    });
+
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error?: string; message?: string };
+    expect(body.error).toBe("invalid_request");
+    expect(body.message).toContain("legacy umbrella capability");
+  });
+
   it("does not return scoped_token in the approve response body", async () => {
     const pairingId = await seedPendingPairing();
     const res = await app.request(`/pairings/${String(pairingId)}/approve`, {

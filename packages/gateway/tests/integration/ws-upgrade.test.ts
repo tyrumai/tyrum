@@ -13,6 +13,7 @@ import { createServer } from "node:http";
 import type { Server } from "node:http";
 import { getRequestListener } from "@hono/node-server";
 import { Hono } from "hono";
+import { descriptorIdForClientCapability } from "@tyrum/schemas";
 import { createWsHandler } from "../../src/routes/ws.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { TyrumClient } from "../../../client/src/ws-client.js";
@@ -123,8 +124,8 @@ describe("WebSocket upgrade", () => {
 
     const stats = srv.connectionManager.getStats();
     expect(stats.totalClients).toBe(1);
-    expect(stats.capabilityCounts["playwright"]).toBe(1);
-    expect(stats.capabilityCounts["http"]).toBe(1);
+    expect(stats.capabilityCounts[descriptorIdForClientCapability("playwright")]).toBe(1);
+    expect(stats.capabilityCounts[descriptorIdForClientCapability("http")]).toBe(1);
   });
 
   it("registers client capabilities correctly in ConnectionManager", async () => {
@@ -150,12 +151,19 @@ describe("WebSocket upgrade", () => {
     await delay(50);
 
     // Verify capability-based lookup works
-    const cliClient = srv.connectionManager.getClientForCapability("cli");
+    const cliClient = srv.connectionManager.getClientForCapability(
+      descriptorIdForClientCapability("cli"),
+    );
     expect(cliClient).toBeDefined();
-    expect(cliClient!.capabilities).toContain("cli");
+    expect(cliClient!.capabilities).toContainEqual({
+      id: descriptorIdForClientCapability("cli"),
+      version: "1.0.0",
+    });
 
     // Should NOT find a "playwright" client
-    const pwClient = srv.connectionManager.getClientForCapability("playwright");
+    const pwClient = srv.connectionManager.getClientForCapability(
+      descriptorIdForClientCapability("playwright"),
+    );
     expect(pwClient).toBeUndefined();
   });
 

@@ -4,9 +4,9 @@ import {
   WsPairingDenyRequest,
   WsPairingResolveResult,
   WsPairingRevokeRequest,
-  clientCapabilityFromDescriptorId,
+  normalizeCapabilityDescriptors,
 } from "@tyrum/schemas";
-import type { CapabilityDescriptor, ClientCapability, WsResponseEnvelope } from "@tyrum/schemas";
+import type { CapabilityDescriptor, WsResponseEnvelope } from "@tyrum/schemas";
 import { resolveNodePairing } from "../../modules/node/pairing-resolve-service.js";
 import { PAIRING_WS_AUDIENCE } from "../audience.js";
 import { emitPairingApprovedEvent } from "../pairing-approved.js";
@@ -212,16 +212,15 @@ function handleCapabilityReadyMessage(
     });
   }
 
-  const readyLegacyCaps = parsedReq.data.payload.capabilities
-    .map((capability) => clientCapabilityFromDescriptorId(capability.id))
-    .filter((capability): capability is ClientCapability => capability !== undefined)
-    .filter((capability) => client.capabilities.includes(capability));
+  const advertisedIds = new Set(client.capabilities.map((capability) => capability.id));
+  const readyCapabilities = normalizeCapabilityDescriptors(
+    parsedReq.data.payload.capabilities,
+  ).filter((capability) => advertisedIds.has(capability.id));
   const capabilityStates = parsedReq.data.payload.capability_states.filter((state) => {
-    const capability = clientCapabilityFromDescriptorId(state.capability.id);
-    return capability !== undefined && client.capabilities.includes(capability);
+    return advertisedIds.has(state.capability.id);
   });
 
-  deps.connectionManager.setReadyCapabilities(client.id, readyLegacyCaps);
+  deps.connectionManager.setReadyCapabilities(client.id, readyCapabilities);
   deps.connectionManager.setCapabilityStates(client.id, capabilityStates);
 
   if (deps.cluster) {
@@ -229,7 +228,9 @@ function handleCapabilityReadyMessage(
       .setReadyCapabilities({
         tenantId,
         connectionId: client.id,
-        readyCapabilities: [...client.readyCapabilities].toSorted(),
+        readyCapabilities: [...client.readyCapabilities].toSorted((a, b) =>
+          a.id.localeCompare(b.id),
+        ),
       })
       .catch((err) => {
         const message = err instanceof Error ? err.message : String(err);
@@ -267,7 +268,7 @@ function handleCapabilityReadyMessage(
       scope: { kind: "node", node_id: nodeId },
       payload: {
         node_id: nodeId,
-        capabilities: parsedReq.data.payload.capabilities,
+        capabilities: readyCapabilities,
         capability_states: capabilityStates,
       },
     },

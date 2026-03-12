@@ -5,7 +5,8 @@ import type { ProtocolDeps } from "../../src/ws/protocol.js";
 import { TaskResultRegistry } from "../../src/ws/protocol/task-result-registry.js";
 import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-  descriptorIdForClientCapability,
+  capabilityDescriptorsForClientCapability,
+  descriptorIdsForClientCapability,
 } from "@tyrum/schemas";
 
 interface MockWebSocket {
@@ -43,15 +44,21 @@ function toTaskResult(
 }
 
 describe("WS task.execute result plumbing", () => {
+  const screenshotDescriptorId = "tyrum.desktop.screenshot";
+
   it("plumbs task.execute result + evidence to onTaskResult", async () => {
     const cm = new ConnectionManager();
     const nodeWs = createMockWs();
-    const connectionId = cm.addClient(nodeWs as never, ["desktop"], {
-      id: "conn-1",
-      role: "node",
-      deviceId: "node-1",
-      protocolRev: 2,
-    });
+    const connectionId = cm.addClient(
+      nodeWs as never,
+      capabilityDescriptorsForClientCapability("desktop"),
+      {
+        id: "conn-1",
+        role: "node",
+        deviceId: "node-1",
+        protocolRev: 2,
+      },
+    );
 
     const onTaskResult = vi.fn();
     const deps: ProtocolDeps = {
@@ -85,15 +92,16 @@ describe("WS task.execute result plumbing", () => {
   it("dispatches task.execute and resolves the awaiting caller exactly once", async () => {
     const cm = new ConnectionManager();
     const nodeWs = createMockWs();
-    const connectionId = cm.addClient(nodeWs as never, ["desktop"], {
-      id: "conn-1",
-      role: "node",
-      deviceId: "node-1",
-      protocolRev: 2,
-    });
-
-    const desktopDescriptorId = descriptorIdForClientCapability("desktop");
-    expect(desktopDescriptorId).toBeDefined();
+    const connectionId = cm.addClient(
+      nodeWs as never,
+      capabilityDescriptorsForClientCapability("desktop"),
+      {
+        id: "conn-1",
+        role: "node",
+        deviceId: "node-1",
+        protocolRev: 2,
+      },
+    );
 
     const registry = new TaskResultRegistry();
     const resolveSpy = vi.spyOn(registry, "resolve");
@@ -105,9 +113,10 @@ describe("WS task.execute result plumbing", () => {
         getByNodeId: async () => {
           return {
             status: "approved",
-            capability_allowlist: [
-              { id: desktopDescriptorId, version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION },
-            ],
+            capability_allowlist: descriptorIdsForClientCapability("desktop").map((id) => ({
+              id,
+              version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+            })),
           };
         },
       } as never,
@@ -120,7 +129,7 @@ describe("WS task.execute result plumbing", () => {
     };
 
     const taskId = await dispatchTask(
-      { type: "Desktop", args: {} },
+      { type: "Desktop", args: { op: "screenshot" } },
       { runId: "run-1", stepId: "step-1", attemptId: "attempt-1" },
       deps,
     );
@@ -169,15 +178,16 @@ describe("WS task.execute result plumbing", () => {
   it("rejects awaiting tasks when the dispatched connection closes", async () => {
     const cm = new ConnectionManager();
     const nodeWs = createMockWs();
-    const connectionId = cm.addClient(nodeWs as never, ["desktop"], {
-      id: "conn-1",
-      role: "node",
-      deviceId: "node-1",
-      protocolRev: 2,
-    });
-
-    const desktopDescriptorId = descriptorIdForClientCapability("desktop");
-    expect(desktopDescriptorId).toBeDefined();
+    const connectionId = cm.addClient(
+      nodeWs as never,
+      capabilityDescriptorsForClientCapability("desktop"),
+      {
+        id: "conn-1",
+        role: "node",
+        deviceId: "node-1",
+        protocolRev: 2,
+      },
+    );
 
     const registry = new TaskResultRegistry();
 
@@ -189,7 +199,7 @@ describe("WS task.execute result plumbing", () => {
           return {
             status: "approved",
             capability_allowlist: [
-              { id: desktopDescriptorId, version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION },
+              { id: screenshotDescriptorId, version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION },
             ],
           };
         },
@@ -203,7 +213,7 @@ describe("WS task.execute result plumbing", () => {
     };
 
     const taskId = await dispatchTask(
-      { type: "Desktop", args: {} },
+      { type: "Desktop", args: { op: "screenshot" } },
       { runId: "run-1", stepId: "step-1", attemptId: "attempt-1" },
       deps,
     );

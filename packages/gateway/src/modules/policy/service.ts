@@ -18,6 +18,7 @@ import type { PolicySnapshotDal, PolicySnapshotRow } from "./snapshot-dal.js";
 import type { PolicyOverrideDal } from "./override-dal.js";
 import { sha256HexFromString, stableJsonStringify } from "./canonical-json.js";
 import { mergePolicyBundles } from "./bundle-merge.js";
+import { expandLegacyNodeDispatchOverridePatterns } from "./node-dispatch-override-patterns.js";
 import type { GatewayConfigStore } from "../runtime-state/gateway-config-store.js";
 
 export interface PolicyEvaluation {
@@ -340,7 +341,11 @@ export class PolicyService {
         toolId: params.toolId,
       });
       for (const override of overrides) {
-        if (wildcardMatch(override.pattern, params.toolMatchTarget)) {
+        if (
+          expandLegacyNodeDispatchOverridePatterns(override.pattern).some((pattern) =>
+            wildcardMatch(pattern, params.toolMatchTarget),
+          )
+        ) {
           appliedOverrides.push(override.policy_override_id);
         }
       }

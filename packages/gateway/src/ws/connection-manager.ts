@@ -7,7 +7,7 @@
 
 import type { WebSocket } from "ws";
 import type {
-  ClientCapability,
+  CapabilityDescriptor,
   NodeCapabilityState,
   WsEventEnvelope,
   WsRequestEnvelope,
@@ -26,8 +26,8 @@ export interface ConnectedClient {
   readonly device_id?: string;
   readonly auth_claims?: AuthTokenClaims;
   readonly protocol_rev: number;
-  readonly capabilities: readonly ClientCapability[];
-  readyCapabilities: Set<ClientCapability>;
+  readonly capabilities: readonly CapabilityDescriptor[];
+  readyCapabilities: CapabilityDescriptor[];
   capabilityStates: Map<string, NodeCapabilityState>;
   lastWsPongAt: number;
 }
@@ -65,7 +65,7 @@ export class ConnectionManager {
    */
   addClient(
     ws: WebSocket,
-    capabilities: readonly ClientCapability[],
+    capabilities: readonly CapabilityDescriptor[],
     opts?: {
       id?: string;
       role?: "client" | "node";
@@ -76,7 +76,7 @@ export class ConnectionManager {
   ): string {
     const id = opts?.id ?? crypto.randomUUID();
     const role = opts?.role ?? "client";
-    const readyCapabilities = new Set<ClientCapability>(capabilities);
+    const readyCapabilities = [...capabilities];
     const client: ConnectedClient = {
       id,
       ws,
@@ -126,10 +126,10 @@ export class ConnectionManager {
   }
 
   /** Replace the ready capabilities set for a connected peer. */
-  setReadyCapabilities(id: string, capabilities: readonly ClientCapability[]): void {
+  setReadyCapabilities(id: string, capabilities: readonly CapabilityDescriptor[]): void {
     const client = this.clients.get(id);
     if (!client) return;
-    client.readyCapabilities = new Set<ClientCapability>(capabilities);
+    client.readyCapabilities = [...capabilities];
   }
 
   setCapabilityStates(id: string, capabilityStates: readonly NodeCapabilityState[]): void {
@@ -179,9 +179,9 @@ export class ConnectionManager {
   }
 
   /** Return the first connected client that advertises the given capability. */
-  getClientForCapability(capability: ClientCapability): ConnectedClient | undefined {
+  getClientForCapability(capabilityId: string): ConnectedClient | undefined {
     for (const client of this.clients.values()) {
-      if (client.capabilities.includes(capability)) {
+      if (client.capabilities.some((capability) => capability.id === capabilityId)) {
         return client;
       }
     }
@@ -189,13 +189,10 @@ export class ConnectionManager {
   }
 
   /** Send a message to every client that advertises `capability`. */
-  broadcastToCapable(
-    capability: ClientCapability,
-    message: WsRequestEnvelope | WsEventEnvelope,
-  ): void {
+  broadcastToCapable(capabilityId: string, message: WsRequestEnvelope | WsEventEnvelope): void {
     const payload = JSON.stringify(message);
     for (const client of this.clients.values()) {
-      if (client.capabilities.includes(capability)) {
+      if (client.capabilities.some((capability) => capability.id === capabilityId)) {
         client.ws.send(payload);
       }
     }
@@ -253,7 +250,7 @@ export class ConnectionManager {
     const capabilityCounts: Record<string, number> = {};
     for (const client of this.clients.values()) {
       for (const cap of client.capabilities) {
-        capabilityCounts[cap] = (capabilityCounts[cap] ?? 0) + 1;
+        capabilityCounts[cap.id] = (capabilityCounts[cap.id] ?? 0) + 1;
       }
     }
     return { totalClients: this.clients.size, capabilityCounts };

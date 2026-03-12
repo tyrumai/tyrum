@@ -1,8 +1,19 @@
 import { defineConfig } from "vitest/config";
+import { readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const pnpmStoreDir = resolve(__dirname, "node_modules/.pnpm");
+
+function resolvePnpmPackageDir(packageName: string): string {
+  const packagePrefix = `${packageName.replaceAll("/", "+")}@`;
+  const entry = readdirSync(pnpmStoreDir).find((candidate) => candidate.startsWith(packagePrefix));
+  if (!entry) {
+    throw new Error(`Unable to resolve pnpm package dir for ${packageName}`);
+  }
+  return resolve(pnpmStoreDir, entry, "node_modules", packageName);
+}
 
 const enforceCoverageThresholds = process.env.VITEST_SHARD_RUN !== "1";
 const coverageThresholds = {
@@ -82,6 +93,25 @@ export default defineConfig({
       "@tyrum/operator-ui": resolve(__dirname, "packages/operator-ui/src/index.ts"),
       "@tyrum/cli": resolve(__dirname, "packages/cli/src/index.ts"),
       "@tyrum/tui": resolve(__dirname, "packages/tui/src/index.ts"),
+      react: resolvePnpmPackageDir("react"),
+      "react/jsx-runtime": resolve(resolvePnpmPackageDir("react"), "jsx-runtime.js"),
+      "react/jsx-dev-runtime": resolve(resolvePnpmPackageDir("react"), "jsx-dev-runtime.js"),
+      "react-dom": resolvePnpmPackageDir("react-dom"),
+      "react-dom/client": resolve(resolvePnpmPackageDir("react-dom"), "client.js"),
+      "@capacitor/camera": resolve(__dirname, "apps/mobile/tests/stubs/capacitor-camera.ts"),
+      "@capacitor/core": resolve(__dirname, "apps/mobile/tests/stubs/capacitor-core.ts"),
+      "@capacitor/geolocation": resolve(
+        __dirname,
+        "apps/mobile/tests/stubs/capacitor-geolocation.ts",
+      ),
+      "@capacitor/preferences": resolve(
+        __dirname,
+        "apps/mobile/tests/stubs/capacitor-preferences.ts",
+      ),
+      "@aparajita/capacitor-secure-storage": resolve(
+        __dirname,
+        "apps/mobile/tests/stubs/capacitor-secure-storage.ts",
+      ),
     },
   },
   test: {

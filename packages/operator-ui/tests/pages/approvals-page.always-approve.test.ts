@@ -20,12 +20,12 @@ describe("ApprovalsPage always approve", () => {
           suggested_overrides: [
             {
               tool_id: "tool.node.dispatch",
-              pattern: "capability:tyrum.desktop;action:Desktop;op:act;act:ui",
+              pattern: "capability:tyrum.desktop.act;action:Desktop;op:act;act:ui",
               workspace_id: "22222222-2222-4222-8222-222222222222",
             },
             {
               tool_id: "tool.node.dispatch",
-              pattern: "capability:tyrum.desktop;action:Desktop;op:act*",
+              pattern: "capability:tyrum.desktop.act;action:Desktop;op:act*",
               workspace_id: "22222222-2222-4222-8222-222222222222",
             },
           ],
@@ -45,7 +45,7 @@ describe("ApprovalsPage always approve", () => {
           agent_id: "44444444-4444-4444-8444-444444444444",
           workspace_id: "22222222-2222-4222-8222-222222222222",
           tool_id: "tool.node.dispatch",
-          pattern: "capability:tyrum.desktop;action:Desktop;op:act;act:ui",
+          pattern: "capability:tyrum.desktop.act;action:Desktop;op:act;act:ui",
           created_from_approval_id: approval.approval_id,
         },
       ],
@@ -127,7 +127,7 @@ describe("ApprovalsPage always approve", () => {
         overrides: [
           {
             tool_id: "tool.node.dispatch",
-            pattern: "capability:tyrum.desktop;action:Desktop;op:act;act:ui",
+            pattern: "capability:tyrum.desktop.act;action:Desktop;op:act;act:ui",
             workspace_id: "22222222-2222-4222-8222-222222222222",
           },
         ],

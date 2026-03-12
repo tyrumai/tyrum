@@ -12,10 +12,13 @@ import {
   authProtocols,
   completeHandshake,
   createAuthTokens,
+  descriptorIdForClientCapability,
   waitForClose,
   waitForOpen,
   waitForUnexpectedResponse,
 } from "./ws-handler.test-support.js";
+
+const playwrightDescriptorId = descriptorIdForClientCapability("playwright");
 
 function registerConnectionTests(ctx: TestContext): void {
   it("accepts connection, completes connect.init/connect.proof handshake, and registers client", async () => {
@@ -62,10 +65,10 @@ function registerConnectionTests(ctx: TestContext): void {
     // After connect, client should be registered with the right capability
     const stats = connectionManager.getStats();
     expect(stats.totalClients).toBe(1);
-    expect(stats.capabilityCounts["playwright"]).toBe(1);
+    expect(stats.capabilityCounts[playwrightDescriptorId]).toBe(1);
 
     // Verify we can find a client for the playwright capability
-    const client = connectionManager.getClientForCapability("playwright");
+    const client = connectionManager.getClientForCapability(playwrightDescriptorId);
     expect(client).toBeDefined();
 
     stopHeartbeat();
@@ -163,7 +166,7 @@ function registerConnectionTests(ctx: TestContext): void {
 
     const stats = connectionManager.getStats();
     expect(stats.totalClients).toBe(1);
-    expect(stats.capabilityCounts["playwright"]).toBe(1);
+    expect(stats.capabilityCounts[playwrightDescriptorId]).toBe(1);
 
     stopHeartbeat();
   });
@@ -257,7 +260,7 @@ function registerCookieAndRejectTests(ctx: TestContext): void {
 
     const stats = connectionManager.getStats();
     expect(stats.totalClients).toBe(1);
-    expect(stats.capabilityCounts["playwright"]).toBe(1);
+    expect(stats.capabilityCounts[playwrightDescriptorId]).toBe(1);
 
     stopHeartbeat();
   });
@@ -307,7 +310,7 @@ function registerCookieAndRejectTests(ctx: TestContext): void {
 
     const stats = connectionManager.getStats();
     expect(stats.totalClients).toBe(1);
-    expect(stats.capabilityCounts["playwright"]).toBe(1);
+    expect(stats.capabilityCounts[playwrightDescriptorId]).toBe(1);
 
     stopHeartbeat();
   });

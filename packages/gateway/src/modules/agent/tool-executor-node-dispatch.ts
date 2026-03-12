@@ -1,4 +1,5 @@
 import {
+  isLegacyUmbrellaCapabilityDescriptorId,
   NodeActionDispatchRequest,
   NodeActionDispatchResponse,
   NodeCapabilityInspectionResponse,
@@ -52,11 +53,22 @@ type DispatchExecutionContext = {
   workspaceLease?: WorkspaceLeaseConfig;
 };
 
+function legacyCapabilityError(capability: string): string {
+  return `legacy umbrella capability '${capability}' is not supported; use an exact split capability descriptor`;
+}
+
 async function performNodeDispatch(
   context: DispatchExecutionContext,
   request: NodeActionDispatchRequestT,
   audit?: NodeDispatchAudit,
 ): Promise<NodeActionDispatchResponseT> {
+  if (isLegacyUmbrellaCapabilityDescriptorId(request.capability)) {
+    return preflightFailure(
+      request,
+      dispatchError("invalid_input", legacyCapabilityError(request.capability)),
+    );
+  }
+
   let normalizedInspection: NodeCapabilityInspectionResponseT;
   try {
     const inspection = await context.inspectionService.inspect({
@@ -239,6 +251,13 @@ export async function executeNodeInspectTool(
       error: "missing required argument: capability",
     };
   }
+  if (isLegacyUmbrellaCapabilityDescriptorId(capability)) {
+    return {
+      tool_call_id: toolCallId,
+      output: "",
+      error: legacyCapabilityError(capability),
+    };
+  }
 
   try {
     const payload = await context.inspectionService.inspect({
@@ -290,6 +309,13 @@ export async function executeNodeListTool(
     typeof parsed?.["lane"] === "string" && parsed["lane"].trim().length > 0
       ? parsed["lane"].trim()
       : audit?.work_lane?.trim() || undefined;
+  if (capability && isLegacyUmbrellaCapabilityDescriptorId(capability)) {
+    return {
+      tool_call_id: toolCallId,
+      output: "",
+      error: legacyCapabilityError(capability),
+    };
+  }
 
   const payload = NodeInventoryResponse.parse({
     status: "ok",
@@ -342,6 +368,18 @@ export async function executeNodeDispatchTool(
       tool_call_id: toolCallId,
       output: "",
       error: `invalid node dispatch request: ${message}`,
+    };
+  }
+  if (isLegacyUmbrellaCapabilityDescriptorId(request.capability)) {
+    const response = preflightFailure(
+      request,
+      dispatchError("invalid_input", legacyCapabilityError(request.capability)),
+    );
+    const tagged = tagContent(serializeToolDispatchResponse(response), "tool");
+    return {
+      tool_call_id: toolCallId,
+      output: sanitizeForModel(tagged),
+      provenance: tagged,
     };
   }
 

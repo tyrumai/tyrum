@@ -1,11 +1,7 @@
 import { createServer, type Server } from "node:http";
 import { createHash, generateKeyPairSync, sign } from "node:crypto";
 import { WebSocket } from "ws";
-import {
-  CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-  descriptorIdForClientCapability,
-  deviceIdFromSha256Digest,
-} from "@tyrum/schemas";
+import { capabilityDescriptorsForClientCapability, deviceIdFromSha256Digest } from "@tyrum/schemas";
 import { expect } from "vitest";
 
 import { createWsHandler } from "../../src/routes/ws.js";
@@ -129,10 +125,9 @@ export async function connectClientWithProof(input: {
         protocol_rev: 2,
         role: input.role,
         device: { device_id: deviceId, pubkey, label: "test" },
-        capabilities: input.capabilities.map((capability) => ({
-          id: descriptorIdForClientCapability(capability),
-          version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-        })),
+        capabilities: input.capabilities.flatMap((capability) =>
+          capabilityDescriptorsForClientCapability(capability),
+        ),
       },
     }),
   );

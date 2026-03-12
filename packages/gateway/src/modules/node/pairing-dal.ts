@@ -1,7 +1,7 @@
 import {
   CapabilityDescriptor as CapabilityDescriptorSchema,
   type CapabilityDescriptor,
-  type ClientCapability,
+  normalizeCapabilityDescriptors,
   type NodePairingRequest as NodePairingRequestT,
   type NodePairingTrustLevel,
 } from "@tyrum/schemas";
@@ -9,6 +9,7 @@ import { NodePairingRequest } from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
 import { createHash, randomBytes } from "node:crypto";
 import { requireTenantIdValue } from "../identity/scope.js";
+import { parseStoredCapabilityDescriptors } from "./stored-capability-descriptors.js";
 
 type NodePairingStatus = "pending" | "approved" | "denied" | "revoked";
 
@@ -43,14 +44,10 @@ function parseJsonOrEmpty(raw: string): unknown {
   }
 }
 
-function parseCapabilities(raw: string): ClientCapability[] {
+function parseCapabilities(raw: string): CapabilityDescriptor[] {
   try {
     const parsed = JSON.parse(raw) as unknown;
-    if (Array.isArray(parsed)) {
-      return parsed.filter(
-        (v): v is ClientCapability => typeof v === "string",
-      ) as ClientCapability[];
-    }
+    return parseStoredCapabilityDescriptors(parsed);
   } catch {
     // Intentional: treat invalid JSON columns as empty capabilities.
   }
@@ -61,10 +58,12 @@ function parseAllowlist(raw: string): CapabilityDescriptor[] {
   try {
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
-    return parsed
-      .map((entry) => CapabilityDescriptorSchema.safeParse(entry))
-      .filter((res) => res.success)
-      .map((res) => res.data);
+    return normalizeCapabilityDescriptors(
+      parsed
+        .map((entry) => CapabilityDescriptorSchema.safeParse(entry))
+        .filter((res) => res.success)
+        .map((res) => res.data),
+    );
   } catch {
     // Intentional: treat invalid JSON columns as empty allowlists.
     return [];
@@ -214,13 +213,15 @@ export class NodePairingDal {
     nodeId: string;
     pubkey?: string | null;
     label?: string | null;
-    capabilities: readonly ClientCapability[];
+    capabilities: readonly CapabilityDescriptor[];
     metadata?: unknown;
     nowIso?: string;
   }): Promise<NodePairingRequestT> {
     const tenantId = this.requireTenantId(params.tenantId);
     const nowIso = params.nowIso ?? new Date().toISOString();
-    const capabilitiesJson = JSON.stringify(params.capabilities ?? []);
+    const capabilitiesJson = JSON.stringify(
+      normalizeCapabilityDescriptors(params.capabilities ?? []),
+    );
     const metadataJson = JSON.stringify(params.metadata ?? {});
 
     const existing = await this.db.get<RawNodePairingRow>(
@@ -395,7 +396,7 @@ export class NodePairingDal {
 
     const allowlist =
       params.decision === "approved"
-        ? params.capabilityAllowlist
+        ? normalizeCapabilityDescriptors(params.capabilityAllowlist)
         : parseAllowlist(existing.capability_allowlist_json);
 
     const scopedToken = params.decision === "approved" ? generateScopedToken() : undefined;

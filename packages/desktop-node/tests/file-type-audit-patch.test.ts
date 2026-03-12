@@ -11,7 +11,10 @@ describe("file-type audit patch", () => {
       import { dirname } from "node:path";
 
       const require = createRequire(import.meta.url);
-      const nutJsPackageJson = require.resolve("@nut-tree-fork/nut-js/package.json");
+      const desktopNodePackageJson = require.resolve("./packages/desktop-node/package.json");
+      const nutJsPackageJson = require.resolve("@nut-tree-fork/nut-js/package.json", {
+        paths: [dirname(desktopNodePackageJson)],
+      });
       const jimpPackageJson = require.resolve("jimp/package.json", { paths: [dirname(nutJsPackageJson)] });
       const jimpCorePackageJson = require.resolve("@jimp/core/package.json", { paths: [dirname(jimpPackageJson)] });
       const fileTypePath = require.resolve("file-type", { paths: [dirname(jimpCorePackageJson)] });

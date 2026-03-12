@@ -30,7 +30,7 @@ import { CliProvider } from "../../src/main/providers/cli-provider.js";
 import { resolvePermissions } from "../../src/main/config/permissions.js";
 import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-  descriptorIdForClientCapability,
+  descriptorIdsForClientCapability,
 } from "@tyrum/schemas";
 import { AuthTokenService } from "../../../../packages/gateway/src/modules/auth/auth-token-service.js";
 import { DEFAULT_TENANT_ID } from "../../../../packages/gateway/src/modules/identity/scope.js";
@@ -43,15 +43,12 @@ const approvedNodePairingDal = {
     ({
       status: "approved",
       capability_allowlist: [
-        {
-          id: descriptorIdForClientCapability("desktop"),
-          version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-        },
-        {
-          id: descriptorIdForClientCapability("cli"),
-          version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-        },
-      ],
+        ...descriptorIdsForClientCapability("desktop"),
+        ...descriptorIdsForClientCapability("cli"),
+      ].map((id) => ({
+        id,
+        version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+      })),
     }) as never,
 } as never;
 
@@ -68,12 +65,14 @@ async function waitForCapabilities(
   capabilities: ReadonlyArray<"desktop" | "cli" | "playwright" | "http" | "ios" | "android">,
   timeoutMs = 2_000,
 ): Promise<void> {
-  const required = [...new Set(capabilities)];
+  const required = [
+    ...new Set(capabilities.flatMap((capability) => descriptorIdsForClientCapability(capability))),
+  ];
   const deadline = Date.now() + timeoutMs;
 
   while (Date.now() <= deadline) {
     const stats = connectionManager.getStats();
-    const ready = required.every((capability) => (stats.capabilityCounts[capability] ?? 0) > 0);
+    const ready = required.every((capabilityId) => (stats.capabilityCounts[capabilityId] ?? 0) > 0);
     if (ready) {
       return;
     }
@@ -267,7 +266,7 @@ describe("e2e: gateway dispatches task to desktop node", () => {
     // Verify connection was registered
     const stats = srv.connectionManager.getStats();
     expect(stats.totalClients).toBe(1);
-    expect(stats.capabilityCounts["desktop"]).toBe(1);
+    expect(stats.capabilityCounts["tyrum.desktop.screenshot"]).toBe(1);
 
     // Dispatch a Desktop.screenshot task.
     // dispatchTask sends the task_dispatch to the client over WS.

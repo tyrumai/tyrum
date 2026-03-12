@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { type CapabilityDescriptor, descriptorIdsForClientCapability } from "@tyrum/schemas";
 import type { McpManager } from "../../src/modules/agent/mcp-manager.js";
 import {
   DEFAULT_AGENT_ID,
@@ -158,16 +159,29 @@ export function stubMcpManager(): McpManager {
 
 export async function waitForPendingDesktopPairing(params: {
   listPending: () => Promise<
-    Array<{ pairing_id: number; node: { node_id: string; capabilities: string[] } }>
+    Array<{
+      pairing_id: number;
+      node: { node_id: string; capabilities: Array<CapabilityDescriptor | string> };
+    }>
   >;
   timeoutMs?: number;
-}): Promise<{ pairing_id: number; node: { node_id: string; capabilities: string[] } }> {
+}): Promise<{
+  pairing_id: number;
+  node: { node_id: string; capabilities: Array<CapabilityDescriptor | string> };
+}> {
+  const desktopCapabilityIds = new Set(descriptorIdsForClientCapability("desktop"));
   const deadlineMs = Date.now() + Math.max(1, Math.floor(params.timeoutMs ?? 60_000));
   while (Date.now() < deadlineMs) {
     const pairings = await params.listPending();
     const pairing = pairings.find(
       (pending) =>
-        Array.isArray(pending.node.capabilities) && pending.node.capabilities.includes("desktop"),
+        Array.isArray(pending.node.capabilities) &&
+        pending.node.capabilities.some((capability) => {
+          if (typeof capability === "string") {
+            return capability === "desktop" || desktopCapabilityIds.has(capability);
+          }
+          return desktopCapabilityIds.has(capability.id);
+        }),
     );
     if (pairing) return pairing;
     await delay(250);

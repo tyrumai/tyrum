@@ -127,7 +127,7 @@ describe("tool.node.dispatch desktop evidence artifacts", () => {
       "call-1",
       {
         node_id: NODE_ID,
-        capability: "tyrum.desktop",
+        capability: "tyrum.desktop.screenshot",
         action_name: "screenshot",
         input: { display: "primary" },
       },
@@ -234,7 +234,7 @@ describe("tool.node.dispatch desktop evidence artifacts", () => {
       "call-3",
       {
         node_id: NODE_ID,
-        capability: "tyrum.desktop",
+        capability: "tyrum.desktop.snapshot",
         action_name: "snapshot",
         input: { include_tree: true },
       },
@@ -332,7 +332,7 @@ describe("tool.node.dispatch desktop evidence artifacts", () => {
       "call-2",
       {
         node_id: NODE_ID,
-        capability: "tyrum.desktop",
+        capability: "tyrum.desktop.snapshot",
         action_name: "snapshot",
         input: { include_tree: true },
       },
@@ -443,7 +443,7 @@ describe("tool.node.dispatch desktop evidence artifacts", () => {
       "call-4",
       {
         node_id: nodeId,
-        capability: "tyrum.desktop",
+        capability: "tyrum.desktop.screenshot",
         action_name: "screenshot",
         input: { display: "primary" },
       },

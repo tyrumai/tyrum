@@ -6,7 +6,7 @@ import {
   TyrumClient,
   type TaskResult,
 } from "@tyrum/client/browser";
-import { BrowserActionArgs } from "@tyrum/schemas";
+import { BrowserActionArgs, capabilityDescriptorsForClientCapability } from "@tyrum/schemas";
 import {
   createContext,
   useCallback,
@@ -37,7 +37,7 @@ import {
   readCapabilitySettingsFromStorage,
   readEnabledFromStorage,
   resolveBrowserCapabilityStates,
-  toNodeCapabilityState,
+  toNodeCapabilityStates,
   writeCapabilitySettingsToStorage,
   writeEnabledToStorage,
   type BrowserCapabilityName,
@@ -153,10 +153,10 @@ export function BrowserNodeProvider({
   const clientRef = useRef<TyrumClient | null>(null);
   const providerRef = useRef<ReturnType<typeof createBrowserCapabilityProvider> | null>(null);
   const publishCapabilityState = useCallback(async (client: TyrumClient) => {
-    const capabilityState = toNodeCapabilityState(capabilityStatesRef.current);
+    const nodeCapabilityStates = toNodeCapabilityStates(capabilityStatesRef.current);
     await client.capabilityReady({
-      capabilities: [capabilityState.capability],
-      capability_states: [capabilityState],
+      capabilities: nodeCapabilityStates.map((capabilityState) => capabilityState.capability),
+      capability_states: nodeCapabilityStates,
     });
   }, []);
 
@@ -214,6 +214,7 @@ export function BrowserNodeProvider({
         token: "",
         role: "node",
         capabilities: ["browser"],
+        advertisedCapabilities: capabilityDescriptorsForClientCapability("browser"),
         device: {
           deviceId: identity.deviceId,
           publicKey: identity.publicKey,

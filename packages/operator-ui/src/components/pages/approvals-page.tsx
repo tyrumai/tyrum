@@ -1,5 +1,6 @@
 import type { ExecutionAttempt } from "@tyrum/client";
 import type { OperatorCore, ResolveApprovalInput, RunsState } from "@tyrum/operator-core";
+import { clientCapabilityFromDescriptorId } from "@tyrum/schemas";
 import { CircleCheck } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -38,7 +39,10 @@ function describeDesktopApprovalContext(context: unknown): DesktopApprovalSummar
 
   const args = isRecord(ctx["args"]) ? (ctx["args"] as Record<string, unknown>) : null;
   if (!args) return null;
-  if (args["capability"] !== "tyrum.desktop") return null;
+  const capability = typeof args["capability"] === "string" ? args["capability"].trim() : undefined;
+  if (!capability || clientCapabilityFromDescriptorId(capability) !== "desktop") {
+    return null;
+  }
   const op = typeof args["action_name"] === "string" ? args["action_name"].trim() : "";
   if (!op) return null;
 
@@ -132,7 +136,13 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
     .filter((pairing) => pairing.status === "approved")
     .map((pairing) => {
       const capabilities = pairing.node.capabilities;
-      if (!capabilities.includes("desktop")) return null;
+      if (
+        !capabilities.some(
+          (capability) => clientCapabilityFromDescriptorId(capability.id) === "desktop",
+        )
+      ) {
+        return null;
+      }
       const url = extractTakeoverUrlFromNodeIdentity(pairing.node);
       if (!url) return null;
       return {

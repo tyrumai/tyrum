@@ -1,6 +1,5 @@
 import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-  descriptorIdForClientCapability,
   type NodeCapabilityActionState,
   type NodeCapabilityState,
 } from "@tyrum/schemas";
@@ -24,6 +23,12 @@ export const BROWSER_CAPABILITY_NAMES: BrowserCapabilityName[] = [
   "camera.capture_photo",
   "microphone.record",
 ];
+
+const BROWSER_CAPABILITY_DESCRIPTOR_IDS: Record<BrowserCapabilityName, string> = {
+  "geolocation.get": "tyrum.browser.geolocation.get",
+  "camera.capture_photo": "tyrum.browser.camera.capture-photo",
+  "microphone.record": "tyrum.browser.microphone.record",
+};
 
 const ENABLED_STORAGE_KEY = "tyrum.operator-ui.browserNode.enabled";
 const CAPABILITY_SETTINGS_STORAGE_KEY = "tyrum.operator-ui.browserNode.capabilities";
@@ -155,16 +160,14 @@ function toNodeCapabilityActionState(
   return actionState;
 }
 
-export function toNodeCapabilityState(
+export function toNodeCapabilityStates(
   capabilityStates: Record<BrowserCapabilityName, BrowserCapabilityState>,
-): NodeCapabilityState {
-  return {
+): NodeCapabilityState[] {
+  return BROWSER_CAPABILITY_NAMES.map((name) => ({
     capability: {
-      id: descriptorIdForClientCapability("browser"),
+      id: BROWSER_CAPABILITY_DESCRIPTOR_IDS[name],
       version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
     },
-    actions: BROWSER_CAPABILITY_NAMES.map((name) =>
-      toNodeCapabilityActionState(name, capabilityStates[name]),
-    ),
-  };
+    actions: [toNodeCapabilityActionState(name, capabilityStates[name])],
+  }));
 }

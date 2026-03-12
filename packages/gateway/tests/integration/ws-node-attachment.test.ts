@@ -4,10 +4,7 @@ import { WebSocket } from "ws";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-  descriptorIdForClientCapability,
-} from "@tyrum/schemas";
+import { CAPABILITY_DESCRIPTOR_DEFAULT_VERSION } from "@tyrum/schemas";
 import { createApp } from "../../src/app.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { createWsHandler } from "../../src/routes/ws.js";
@@ -138,7 +135,7 @@ describe("WS session lane node attachment", () => {
       tenantId: DEFAULT_TENANT_ID,
       nodeId: "node-1",
       label: "node-1",
-      capabilities: ["desktop"],
+      capabilities: [{ id: "tyrum.desktop.snapshot", version: "1.0.0" }],
       metadata: { mode: "desktop", version: "1.0.0" },
     });
     await container.nodePairingDal.resolve({
@@ -148,7 +145,7 @@ describe("WS session lane node attachment", () => {
       trustLevel: "local",
       capabilityAllowlist: [
         {
-          id: descriptorIdForClientCapability("desktop"),
+          id: "tyrum.desktop.snapshot",
           version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
         },
       ],

@@ -3,7 +3,11 @@ import type {
   PolicyOverrideStatus as PolicyOverrideStatusT,
   WsEventEnvelope,
 } from "@tyrum/schemas";
-import { PolicyOverride, canonicalizeToolId } from "@tyrum/schemas";
+import {
+  PolicyOverride,
+  canonicalizeToolId,
+  isLegacyUmbrellaCapabilityDescriptorId,
+} from "@tyrum/schemas";
 import { randomUUID } from "node:crypto";
 import type { SqlDb } from "../../statestore/types.js";
 import { POLICY_WS_AUDIENCE } from "../../ws/audience.js";
@@ -48,6 +52,30 @@ function parseJsonOrEmpty(raw: string | null): unknown {
   }
 }
 
+function normalizePolicyOverridePattern(toolId: string, pattern: string): string {
+  const normalizedToolId = canonicalizeToolId(toolId);
+  const trimmedPattern = pattern.trim();
+  if (normalizedToolId !== "tool.node.dispatch" || trimmedPattern.length === 0) {
+    return trimmedPattern;
+  }
+
+  const capabilityMarker = "capability:";
+  const capabilityStart = trimmedPattern.indexOf(capabilityMarker);
+  if (capabilityStart === -1) {
+    return trimmedPattern;
+  }
+
+  const valueStart = capabilityStart + capabilityMarker.length;
+  const delimiterIndex = trimmedPattern.indexOf(";", valueStart);
+  const capabilityEnd = delimiterIndex === -1 ? trimmedPattern.length : delimiterIndex;
+  const capabilityId = trimmedPattern.slice(valueStart, capabilityEnd).trim();
+  if (!isLegacyUmbrellaCapabilityDescriptorId(capabilityId)) {
+    return trimmedPattern;
+  }
+
+  return `${trimmedPattern.slice(0, valueStart)}${capabilityId}.*${trimmedPattern.slice(capabilityEnd)}`;
+}
+
 function toOverrideRow(raw: RawPolicyOverrideRow): PolicyOverrideRow {
   const status: PolicyOverrideStatusT =
     raw.status === "revoked" || raw.status === "expired" ? raw.status : "active";
@@ -63,7 +91,7 @@ function toOverrideRow(raw: RawPolicyOverrideRow): PolicyOverrideRow {
     agent_id: raw.agent_id,
     workspace_id: raw.workspace_id ?? undefined,
     tool_id: raw.tool_id,
-    pattern: raw.pattern,
+    pattern: normalizePolicyOverridePattern(raw.tool_id, raw.pattern),
     created_from_approval_id: raw.created_from_approval_id ?? undefined,
     created_from_policy_snapshot_id: raw.created_from_policy_snapshot_id ?? undefined,
     expires_at: expiresAt ?? undefined,
@@ -141,6 +169,7 @@ export class PolicyOverrideDal {
     const id = randomUUID();
     const overrideKey = `override:${id}`;
     const nowIso = isoNow();
+    const pattern = normalizePolicyOverridePattern(params.toolId, params.pattern);
     const row = await this.db.get<RawPolicyOverrideRow>(
       `INSERT INTO policy_overrides (
          tenant_id,
@@ -166,7 +195,7 @@ export class PolicyOverrideDal {
         params.agentId,
         params.workspaceId ?? null,
         canonicalizeToolId(params.toolId),
-        params.pattern,
+        pattern,
         params.createdFromApprovalId ?? null,
         params.createdFromPolicySnapshotId ?? null,
         JSON.stringify(params.createdBy ?? {}),

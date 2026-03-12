@@ -1,5 +1,9 @@
 import { expect, vi } from "vitest";
 import type { RequestInit } from "undici";
+import {
+  CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+  descriptorIdForClientCapability,
+} from "@tyrum/schemas";
 import { createTyrumHttpClient, type TyrumHttpFetch } from "../src/index.js";
 
 const clientApiPaths = [
@@ -153,10 +157,20 @@ export function samplePairing(): Record<string, unknown> {
     node: {
       node_id: "node-1",
       label: "Node 1",
-      capabilities: ["http"],
+      capabilities: [
+        {
+          id: descriptorIdForClientCapability("http"),
+          version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+        },
+      ],
       last_seen_at: now,
     },
-    capability_allowlist: [{ id: "tyrum.http", version: "1.0.0" }],
+    capability_allowlist: [
+      {
+        id: descriptorIdForClientCapability("http"),
+        version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+      },
+    ],
     resolution: {
       decision: "approved",
       resolved_at: now,

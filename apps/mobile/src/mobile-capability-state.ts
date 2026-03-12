@@ -1,6 +1,5 @@
 import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-  descriptorIdForClientCapability,
   type NodeCapabilityActionState,
   type NodeCapabilityState,
 } from "@tyrum/schemas";
@@ -18,6 +17,22 @@ export const MOBILE_ACTION_NAMES: MobileHostActionName[] = [
   "camera.capture_photo",
   "audio.record_clip",
 ];
+
+const MOBILE_CAPABILITY_DESCRIPTOR_IDS: Record<
+  MobileHostPlatform,
+  Record<MobileHostActionName, string>
+> = {
+  ios: {
+    "location.get_current": "tyrum.ios.location.get-current",
+    "camera.capture_photo": "tyrum.ios.camera.capture-photo",
+    "audio.record_clip": "tyrum.ios.audio.record-clip",
+  },
+  android: {
+    "location.get_current": "tyrum.android.location.get-current",
+    "camera.capture_photo": "tyrum.android.camera.capture-photo",
+    "audio.record_clip": "tyrum.android.audio.record-clip",
+  },
+};
 
 export function resolveMobilePlatform(): MobileHostPlatform {
   return Capacitor.getPlatform() === "ios" ? "ios" : "android";
@@ -68,17 +83,17 @@ function toNodeActionState(
   };
 }
 
-export function toNodeCapabilityState(
+export function toNodeCapabilityStates(
   platform: MobileHostPlatform,
   actions: Record<MobileHostActionName, MobileHostActionState>,
-): NodeCapabilityState {
-  return {
+): NodeCapabilityState[] {
+  return MOBILE_ACTION_NAMES.map((name) => ({
     capability: {
-      id: descriptorIdForClientCapability(platform),
+      id: MOBILE_CAPABILITY_DESCRIPTOR_IDS[platform][name],
       version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
     },
-    actions: MOBILE_ACTION_NAMES.map((name) => toNodeActionState(name, actions[name])),
-  };
+    actions: [toNodeActionState(name, actions[name])],
+  }));
 }
 
 export function buildMobileHostState(input: {

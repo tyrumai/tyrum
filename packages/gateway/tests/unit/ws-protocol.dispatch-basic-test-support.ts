@@ -15,6 +15,29 @@ import {
 } from "../../src/modules/identity/scope.js";
 import { createMockWs, makeDeps, makeClient } from "./ws-protocol.test-support.js";
 
+const cliDescriptor = {
+  id: descriptorIdForClientCapability("cli"),
+  version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+} as const;
+const playwrightDescriptor = {
+  id: descriptorIdForClientCapability("playwright"),
+  version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+} as const;
+const desktopSnapshotDescriptor = {
+  id: "tyrum.desktop.snapshot",
+  version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+} as const;
+const defaultDispatchScope = {
+  tenantId: DEFAULT_TENANT_ID,
+  runId: "550e8400-e29b-41d4-a716-446655440000",
+  stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+  attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+} as const;
+const cliCommandAction: ActionPrimitive = {
+  type: "CLI",
+  args: { command: "echo hi" },
+};
+
 /**
  * Basic dispatchTask tests — pairing, readiness, metadata persistence, and cluster filtering.
  * Must be called inside a `describe("dispatchTask")` block.
@@ -22,32 +45,18 @@ import { createMockWs, makeDeps, makeClient } from "./ws-protocol.test-support.j
 function registerSelectionTests(): void {
   it("never selects a capability-providing client for task.execute", async () => {
     const cm = new ConnectionManager();
-    const { ws } = makeClient(cm, ["cli"], { protocolRev: 2 });
+    const { ws } = makeClient(cm, [cliDescriptor], { protocolRev: 2 });
     const deps = makeDeps(cm);
 
-    const action: ActionPrimitive = {
-      type: "CLI",
-      args: { command: "echo hi" },
-    };
-
-    await expect(
-      dispatchTask(
-        action,
-        {
-          tenantId: DEFAULT_TENANT_ID,
-          runId: "550e8400-e29b-41d4-a716-446655440000",
-          stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
-          attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
-        },
-        deps,
-      ),
-    ).rejects.toBeInstanceOf(NoCapableNodeError);
+    await expect(dispatchTask(cliCommandAction, defaultDispatchScope, deps)).rejects.toBeInstanceOf(
+      NoCapableNodeError,
+    );
     expect(ws.send).not.toHaveBeenCalled();
   });
 
   it("sends task.execute request to a paired capable node", async () => {
     const cm = new ConnectionManager();
-    const { ws } = makeClient(cm, ["playwright"], {
+    const { ws } = makeClient(cm, [playwrightDescriptor], {
       role: "node",
       deviceId: "dev_web_test",
       protocolRev: 2,
@@ -59,8 +68,8 @@ function registerSelectionTests(): void {
             status: "approved",
             capability_allowlist: [
               {
-                id: descriptorIdForClientCapability("playwright"),
-                version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+                id: playwrightDescriptor.id,
+                version: playwrightDescriptor.version,
               },
             ],
           }) as never,
@@ -72,16 +81,7 @@ function registerSelectionTests(): void {
       args: { url: "https://example.com" },
     };
 
-    const taskId = await dispatchTask(
-      action,
-      {
-        tenantId: DEFAULT_TENANT_ID,
-        runId: "550e8400-e29b-41d4-a716-446655440000",
-        stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
-        attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
-      },
-      deps,
-    );
+    const taskId = await dispatchTask(action, defaultDispatchScope, deps);
     expect(taskId).toMatch(/^task-[0-9a-f-]{36}$/);
 
     expect(ws.send).toHaveBeenCalledOnce();
@@ -101,7 +101,7 @@ function registerSelectionTests(): void {
   it("dispatches to a paired node before it signals readiness (backward-compatible)", async () => {
     const cm = new ConnectionManager();
     const nodeWs = createMockWs();
-    cm.addClient(nodeWs as never, ["cli"] as never, {
+    cm.addClient(nodeWs as never, [cliDescriptor] as never, {
       id: "node-1",
       role: "node",
       deviceId: "dev_test",
@@ -123,29 +123,15 @@ function registerSelectionTests(): void {
             status: "approved",
             capability_allowlist: [
               {
-                id: descriptorIdForClientCapability("cli"),
-                version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+                id: cliDescriptor.id,
+                version: cliDescriptor.version,
               },
             ],
           }) as never,
       } as never,
     });
 
-    const action: ActionPrimitive = {
-      type: "CLI",
-      args: { command: "echo hi" },
-    };
-
-    const taskId = await dispatchTask(
-      action,
-      {
-        tenantId: DEFAULT_TENANT_ID,
-        runId: "550e8400-e29b-41d4-a716-446655440000",
-        stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
-        attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
-      },
-      deps,
-    );
+    const taskId = await dispatchTask(cliCommandAction, defaultDispatchScope, deps);
     expect(taskId).toMatch(/^task-[0-9a-f-]{36}$/);
     expect(nodeWs.send).toHaveBeenCalledOnce();
     expect(cm.getDispatchedAttemptExecutor("0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e")).toBe(
@@ -220,7 +206,7 @@ function registerMetadataPersistenceTests(): void {
 
       const cm = new ConnectionManager();
       const nodeWs = createMockWs();
-      cm.addClient(nodeWs as never, ["cli"] as never, {
+      cm.addClient(nodeWs as never, [cliDescriptor] as never, {
         id: "node-1",
         role: "node",
         deviceId: "dev_test",
@@ -243,24 +229,15 @@ function registerMetadataPersistenceTests(): void {
               status: "approved",
               capability_allowlist: [
                 {
-                  id: descriptorIdForClientCapability("cli"),
-                  version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+                  id: cliDescriptor.id,
+                  version: cliDescriptor.version,
                 },
               ],
             }) as never,
         } as never,
       });
 
-      await dispatchTask(
-        { type: "CLI", args: { command: "echo hi" } },
-        {
-          tenantId: DEFAULT_TENANT_ID,
-          runId: "550e8400-e29b-41d4-a716-446655440000",
-          stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
-          attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
-        },
-        deps,
-      );
+      await dispatchTask(cliCommandAction, defaultDispatchScope, deps);
 
       const row = await db.get<{ metadata_json: string | null }>(
         "SELECT metadata_json FROM execution_attempts WHERE attempt_id = ?",
@@ -282,7 +259,7 @@ function registerMetadataPersistenceTests(): void {
 function registerReadinessAndClusterTests(): void {
   it("stops dispatching to a paired node when it reports readiness removed", async () => {
     const cm = new ConnectionManager();
-    const { ws: nodeWs } = makeClient(cm, ["cli"], {
+    const { ws: nodeWs } = makeClient(cm, [cliDescriptor], {
       id: "node-1",
       role: "node",
       deviceId: "dev_test",
@@ -296,8 +273,8 @@ function registerReadinessAndClusterTests(): void {
             status: "approved",
             capability_allowlist: [
               {
-                id: descriptorIdForClientCapability("cli"),
-                version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+                id: cliDescriptor.id,
+                version: cliDescriptor.version,
               },
             ],
           }) as never,
@@ -312,8 +289,8 @@ function registerReadinessAndClusterTests(): void {
         payload: {
           capabilities: [
             {
-              id: descriptorIdForClientCapability("cli"),
-              version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+              id: cliDescriptor.id,
+              version: cliDescriptor.version,
             },
           ],
         },
@@ -331,23 +308,9 @@ function registerReadinessAndClusterTests(): void {
     );
     nodeWs.send.mockClear();
 
-    const action: ActionPrimitive = {
-      type: "CLI",
-      args: { command: "echo hi" },
-    };
-
-    await expect(
-      dispatchTask(
-        action,
-        {
-          tenantId: DEFAULT_TENANT_ID,
-          runId: "550e8400-e29b-41d4-a716-446655440000",
-          stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
-          attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
-        },
-        deps,
-      ),
-    ).rejects.toBeInstanceOf(NoCapableNodeError);
+    await expect(dispatchTask(cliCommandAction, defaultDispatchScope, deps)).rejects.toBeInstanceOf(
+      NoCapableNodeError,
+    );
     expect(nodeWs.send).not.toHaveBeenCalled();
   });
 
@@ -367,8 +330,8 @@ function registerReadinessAndClusterTests(): void {
             label: null,
             version: null,
             mode: null,
-            capabilities: ["cli"],
-            ready_capabilities: ["cli"],
+            capabilities: [cliDescriptor],
+            ready_capabilities: [cliDescriptor],
             connected_at_ms: 0,
             last_seen_at_ms: 0,
             expires_at_ms: 10_000,
@@ -383,8 +346,8 @@ function registerReadinessAndClusterTests(): void {
             label: null,
             version: null,
             mode: null,
-            capabilities: ["cli"],
-            ready_capabilities: ["cli"],
+            capabilities: [cliDescriptor],
+            ready_capabilities: [cliDescriptor],
             connected_at_ms: 0,
             last_seen_at_ms: 0,
             expires_at_ms: 10_000,
@@ -400,8 +363,8 @@ function registerReadinessAndClusterTests(): void {
             status: "approved",
             capability_allowlist: [
               {
-                id: descriptorIdForClientCapability("cli"),
-                version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+                id: cliDescriptor.id,
+                version: cliDescriptor.version,
               },
             ],
           }) as never,
@@ -413,18 +376,7 @@ function registerReadinessAndClusterTests(): void {
       },
     });
 
-    const action: ActionPrimitive = { type: "CLI", args: {} };
-
-    await dispatchTask(
-      action,
-      {
-        tenantId: DEFAULT_TENANT_ID,
-        runId: "550e8400-e29b-41d4-a716-446655440000",
-        stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
-        attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
-      },
-      deps,
-    );
+    await dispatchTask({ type: "CLI", args: {} }, defaultDispatchScope, deps);
 
     expect(outboxDal.enqueue).toHaveBeenCalledOnce();
     const payload = outboxDal.enqueue.mock.calls[0]![2] as {
@@ -436,7 +388,7 @@ function registerReadinessAndClusterTests(): void {
   it("does not dispatch to an unpaired node", async () => {
     const cm = new ConnectionManager();
     const nodeWs = createMockWs();
-    cm.addClient(nodeWs as never, ["cli"] as never, {
+    cm.addClient(nodeWs as never, [cliDescriptor] as never, {
       id: "node-1",
       role: "node",
       deviceId: "dev_test",
@@ -457,30 +409,16 @@ function registerReadinessAndClusterTests(): void {
       } as never,
     });
 
-    const action: ActionPrimitive = {
-      type: "CLI",
-      args: { command: "echo hi" },
-    };
-
-    await expect(
-      dispatchTask(
-        action,
-        {
-          tenantId: DEFAULT_TENANT_ID,
-          runId: "550e8400-e29b-41d4-a716-446655440000",
-          stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
-          attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
-        },
-        deps,
-      ),
-    ).rejects.toBeInstanceOf(NodeNotPairedError);
+    await expect(dispatchTask(cliCommandAction, defaultDispatchScope, deps)).rejects.toBeInstanceOf(
+      NodeNotPairedError,
+    );
     expect(nodeWs.send).not.toHaveBeenCalled();
   });
 
   it("throws NodeNotPairedError when local node is unpaired and cluster has no candidates", async () => {
     const cm = new ConnectionManager();
     const nodeWs = createMockWs();
-    cm.addClient(nodeWs as never, ["desktop"] as never, {
+    cm.addClient(nodeWs as never, [desktopSnapshotDescriptor] as never, {
       id: "node-1",
       role: "node",
       deviceId: "dev_test",
@@ -513,7 +451,7 @@ function registerReadinessAndClusterTests(): void {
 
     await expect(
       dispatchTask(
-        { type: "Desktop", args: {} },
+        { type: "Desktop", args: { op: "snapshot" } },
         {
           tenantId: DEFAULT_TENANT_ID,
           runId: "550e8400-e29b-41d4-a716-446655440000",

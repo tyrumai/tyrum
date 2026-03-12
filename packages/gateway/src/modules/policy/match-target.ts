@@ -1,5 +1,9 @@
 import { posix as pathPosix, win32 as pathWin32 } from "node:path";
-import { ActionPrimitiveKind, canonicalizeToolId } from "@tyrum/schemas";
+import {
+  ActionPrimitiveKind,
+  canonicalizeToolId,
+  clientCapabilityFromDescriptorId,
+} from "@tyrum/schemas";
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
@@ -238,6 +242,24 @@ function inferPrimitiveFromUnknownCapability(
   return "Desktop";
 }
 
+function inferPrimitiveFromNodeDispatchCapability(
+  capability: string,
+): ActionPrimitiveKind | undefined {
+  const family = clientCapabilityFromDescriptorId(capability);
+  switch (family) {
+    case "android":
+      return "Android";
+    case "ios":
+      return "IOS";
+    case "browser":
+      return "Browser";
+    case "desktop":
+      return "Desktop";
+    default:
+      return undefined;
+  }
+}
+
 function normalizeScheduleExecutionKind(
   parsed: Record<string, unknown> | null,
 ): ScheduleExecutionKind {
@@ -406,15 +428,8 @@ export function canonicalizeToolMatchTarget(
     const input = asRecord(parsed?.["input"]);
 
     const inferredPrimitive =
-      capability === "tyrum.browser"
-        ? "Browser"
-        : capability === "tyrum.ios"
-          ? "IOS"
-          : capability === "tyrum.android"
-            ? "Android"
-            : capability === "tyrum.desktop"
-              ? "Desktop"
-              : inferPrimitiveFromUnknownCapability(capability, actionName, input);
+      inferPrimitiveFromNodeDispatchCapability(capability) ??
+      inferPrimitiveFromUnknownCapability(capability, actionName, input);
     const parsedAction = ActionPrimitiveKind.safeParse(inferredPrimitive);
 
     if (!parsedAction.success) return `capability:${capability};action:${actionName}`;

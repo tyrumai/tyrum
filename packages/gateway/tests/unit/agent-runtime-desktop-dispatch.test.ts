@@ -15,12 +15,14 @@ import { AgentRuntime } from "../../src/modules/agent/runtime.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { TaskResultRegistry } from "../../src/ws/protocol/task-result-registry.js";
 import { MockLanguageModelV3 } from "ai/test";
-import {
-  CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-  descriptorIdForClientCapability,
-} from "@tyrum/schemas";
+import { CAPABILITY_DESCRIPTOR_DEFAULT_VERSION } from "@tyrum/schemas";
 
 describe("AgentRuntime - desktop dispatch", () => {
+  const desktopSnapshotDescriptor = {
+    id: "tyrum.desktop.snapshot",
+    version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+  } as const;
+
   let homeDir: string | undefined;
   let container: GatewayContainer | undefined;
 
@@ -117,7 +119,7 @@ describe("AgentRuntime - desktop dispatch", () => {
       readyState: 1,
     };
 
-    connectionManager.addClient(nodeWs as never, ["desktop"], {
+    connectionManager.addClient(nodeWs as never, [desktopSnapshotDescriptor], {
       id: "conn-1",
       role: "node",
       deviceId: nodeId,
@@ -137,21 +139,15 @@ describe("AgentRuntime - desktop dispatch", () => {
       nodeId,
       pubkey: "pubkey-1",
       label: "node-1",
-      capabilities: ["desktop"],
+      capabilities: [desktopSnapshotDescriptor],
       nowIso: new Date().toISOString(),
     });
-    const desktopDescriptorId = descriptorIdForClientCapability("desktop");
     await container.nodePairingDal.resolve({
       tenantId: DEFAULT_TENANT_ID,
       pairingId: pending.pairing_id,
       decision: "approved",
       trustLevel: "local",
-      capabilityAllowlist: [
-        {
-          id: desktopDescriptorId,
-          version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-        },
-      ],
+      capabilityAllowlist: [desktopSnapshotDescriptor],
     });
 
     const usage = () => ({
@@ -181,7 +177,7 @@ describe("AgentRuntime - desktop dispatch", () => {
                 toolName: "tool.node.dispatch",
                 input: JSON.stringify({
                   node_id: nodeId,
-                  capability: "tyrum.desktop",
+                  capability: "tyrum.desktop.snapshot",
                   action_name: "snapshot",
                   input: { include_tree: false },
                 }),

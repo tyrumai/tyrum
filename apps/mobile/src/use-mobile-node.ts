@@ -5,6 +5,7 @@ import {
   TyrumClient,
 } from "@tyrum/client/browser";
 import { Capacitor } from "@capacitor/core";
+import { capabilityDescriptorsForClientCapability } from "@tyrum/schemas";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MobileHostApi, MobileHostState } from "@tyrum/operator-ui";
 import type { MobileConnectionConfig } from "./mobile-config.js";
@@ -14,7 +15,7 @@ import {
   buildMobileHostState,
   resolveMobileActionStates,
   resolveMobilePlatform,
-  toNodeCapabilityState,
+  toNodeCapabilityStates,
 } from "./mobile-capability-state.js";
 
 type UseMobileNodeOptions = {
@@ -96,9 +97,10 @@ export function useMobileNode(options: UseMobileNodeOptions): {
 
   const publishCapabilityState = useCallback(
     async (client: TyrumClient) => {
+      const capabilityStates = toNodeCapabilityStates(platform, actionStatesRef.current);
       await client.capabilityReady({
-        capabilities: [toNodeCapabilityState(platform, actionStatesRef.current).capability],
-        capability_states: [toNodeCapabilityState(platform, actionStatesRef.current)],
+        capabilities: capabilityStates.map((capabilityState) => capabilityState.capability),
+        capability_states: capabilityStates,
       });
     },
     [platform],
@@ -155,6 +157,7 @@ export function useMobileNode(options: UseMobileNodeOptions): {
         token,
         role: "node",
         capabilities: [platform],
+        advertisedCapabilities: capabilityDescriptorsForClientCapability(platform),
         device: {
           deviceId: identity.deviceId,
           publicKey: identity.publicKey,

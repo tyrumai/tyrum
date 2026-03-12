@@ -19,6 +19,7 @@ import type { ConnectionManager } from "../ws/connection-manager.js";
 import type { OutboxDal } from "../modules/backplane/outbox-dal.js";
 import type { Logger } from "../modules/observability/logger.js";
 import type { PolicyOverrideDal } from "../modules/policy/override-dal.js";
+import { hasLegacyUmbrellaNodeDispatchPattern } from "../modules/policy/node-dispatch-override-patterns.js";
 import type { PolicyService } from "../modules/policy/service.js";
 import type { WsEventDal } from "../modules/ws-event/dal.js";
 import { getClientIp } from "../modules/auth/client-ip.js";
@@ -102,6 +103,19 @@ export function createPolicyBundleRoutes(deps: PolicyBundleRouteDeps): Hono {
     const parsed = PolicyOverrideCreateRequest.safeParse(body);
     if (!parsed.success) {
       return c.json({ error: "invalid_request", message: parsed.error.message }, 400);
+    }
+    if (
+      parsed.data.tool_id === "tool.node.dispatch" &&
+      hasLegacyUmbrellaNodeDispatchPattern(parsed.data.pattern)
+    ) {
+      return c.json(
+        {
+          error: "invalid_request",
+          message:
+            "tool.node.dispatch override patterns must use exact split descriptors or family wildcards such as 'tyrum.desktop.*'",
+        },
+        400,
+      );
     }
 
     const createdBy = parsed.data.created_by ?? {
