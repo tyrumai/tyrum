@@ -43,6 +43,10 @@ import { buildContextReport } from "./turn-context-report.js";
 import { AgentMemoryToolRuntime } from "../../memory/agent-tool-runtime.js";
 import { createMemoryV1BudgetsProvider } from "../../memory/v1-budgets-provider.js";
 import { resolveEmbeddingPipeline } from "./embedding-pipeline-resolution.js";
+import {
+  buildTurnMemoryProtocolPrompt,
+  createTurnMemoryDecisionCollector,
+} from "./turn-memory-policy.js";
 export type TurnExecutionContext = {
   planId: string;
   runId: string;
@@ -65,6 +69,7 @@ export type PreparedTurn = {
   contextReport: AgentContextReport;
   systemPrompt: string;
   resolved: ResolvedAgentTurnInput;
+  turnMemoryDecisionCollector: ReturnType<typeof createTurnMemoryDecisionCollector>;
 };
 export type PrepareTurnDeps = {
   opts: AgentRuntimeOptions;
@@ -183,7 +188,11 @@ export async function prepareTurn(
   } = assemblePrompts(ctx, session, memoryDigestResult, filteredTools, automation, runtimePrompt);
 
   const sandboxPrompt = buildSandboxPrompt();
-  const systemPrompt = `${identityPrompt}\n\n${runtimePromptText}\n\n${safetyPrompt}\n\n${sandboxPrompt}`;
+  const turnMemoryDecisionCollector = createTurnMemoryDecisionCollector();
+  const turnMemoryPrompt = buildTurnMemoryProtocolPrompt(automation);
+  const systemPrompt =
+    `${identityPrompt}\n\n${runtimePromptText}\n\n${safetyPrompt}\n\n${sandboxPrompt}\n\n` +
+    turnMemoryPrompt;
 
   const automationDigestText = automation
     ? await buildAutomationDigest({
@@ -345,6 +354,7 @@ export async function prepareTurn(
     laneQueue,
     toolCallPolicyStates,
     model,
+    turnMemoryDecisionCollector,
   );
 
   const userContent: Array<{ type: "text"; text: string }> = [
@@ -372,5 +382,6 @@ export async function prepareTurn(
     contextReport: validatedReport,
     systemPrompt,
     resolved,
+    turnMemoryDecisionCollector,
   };
 }

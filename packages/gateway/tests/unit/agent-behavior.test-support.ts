@@ -110,28 +110,107 @@ export type PromptAwareModelInput = {
   options: LanguageModelV3CallOptions;
 };
 
+type PromptAwareMemoryDecision =
+  | {
+      should_store: false;
+      reason: string;
+    }
+  | {
+      should_store: true;
+      reason: string;
+      memory:
+        | {
+            kind: "fact";
+            key: string;
+            value: unknown;
+            confidence?: number;
+            tags?: string[];
+          }
+        | {
+            kind: "note";
+            title?: string;
+            body_md: string;
+            tags?: string[];
+          }
+        | {
+            kind: "procedure";
+            title?: string;
+            body_md: string;
+            confidence?: number;
+            tags?: string[];
+          }
+        | {
+            kind: "episode";
+            summary_md: string;
+            tags?: string[];
+          };
+    };
+
 export function promptIncludes(promptText: string, needle: string): boolean {
   return promptText.toLowerCase().includes(needle.trim().toLowerCase());
 }
 
+function buildPromptAwareInput(options: LanguageModelV3CallOptions): PromptAwareModelInput {
+  const prompt = options.prompt ?? [];
+  const systemEntry = prompt.find((entry) => entry.role === "system");
+  const systemText = flattenPromptContent(systemEntry?.content);
+  return {
+    promptText: extractPromptText(options),
+    systemText,
+    isTitlePrompt: systemText.includes(TITLE_PROMPT_TEXT),
+    options,
+  };
+}
+
+function hasToolResult(options: LanguageModelV3CallOptions, toolName: string): boolean {
+  return (options.prompt ?? []).some(
+    (entry) =>
+      entry.role === "tool" &&
+      Array.isArray(entry.content) &&
+      entry.content.some(
+        (part) =>
+          Boolean(part) &&
+          typeof part === "object" &&
+          (part as { type?: unknown }).type === "tool-result" &&
+          (part as { toolName?: unknown }).toolName === toolName,
+      ),
+  );
+}
+
 export function createPromptAwareLanguageModel(
   responder: (input: PromptAwareModelInput) => string,
-  opts?: { modelId?: string; defaultTitle?: string },
+  opts?: {
+    modelId?: string;
+    defaultTitle?: string;
+    memoryDecision?: (input: PromptAwareModelInput) => PromptAwareMemoryDecision | undefined;
+  },
 ): LanguageModelV3 {
-  const buildResponse = (options: LanguageModelV3CallOptions): string => {
-    const prompt = options.prompt ?? [];
-    const systemEntry = prompt.find((entry) => entry.role === "system");
-    const systemText = flattenPromptContent(systemEntry?.content);
-    const isTitlePrompt = systemText.includes(TITLE_PROMPT_TEXT);
-    if (isTitlePrompt) {
-      return opts?.defaultTitle?.trim() || "Behavior Test Session";
+  const buildResponse = (
+    options: LanguageModelV3CallOptions,
+  ):
+    | { kind: "text"; text: string }
+    | { kind: "tool-call"; toolName: "memory_turn_decision"; input: string } => {
+    const input = buildPromptAwareInput(options);
+    if (input.isTitlePrompt) {
+      return { kind: "text", text: opts?.defaultTitle?.trim() || "Behavior Test Session" };
     }
-    return responder({
-      promptText: extractPromptText(options),
-      systemText,
-      isTitlePrompt,
-      options,
-    });
+
+    if (
+      opts?.memoryDecision &&
+      input.systemText.includes("memory_turn_decision") &&
+      !hasToolResult(options, "memory_turn_decision")
+    ) {
+      const decision = opts.memoryDecision(input);
+      if (decision) {
+        return {
+          kind: "tool-call",
+          toolName: "memory_turn_decision",
+          input: JSON.stringify(decision),
+        };
+      }
+    }
+
+    return { kind: "text", text: responder(input) };
   };
 
   return {
@@ -140,10 +219,23 @@ export function createPromptAwareLanguageModel(
     modelId: opts?.modelId?.trim() || "prompt-aware",
     supportedUrls: {},
     async doGenerate(options): Promise<LanguageModelV3GenerateResult> {
-      const text = buildResponse(options);
+      const response = buildResponse(options);
       return {
-        content: [{ type: "text" as const, text }],
-        finishReason: { unified: "stop" as const, raw: undefined },
+        content:
+          response.kind === "tool-call"
+            ? [
+                {
+                  type: "tool-call" as const,
+                  toolCallId: "tc-memory-decision",
+                  toolName: response.toolName,
+                  input: response.input,
+                },
+              ]
+            : [{ type: "text" as const, text: response.text }],
+        finishReason: {
+          unified: response.kind === "tool-call" ? ("tool-calls" as const) : ("stop" as const),
+          raw: undefined,
+        },
         usage: {
           inputTokens: { total: 10, noCache: 10, cacheRead: undefined, cacheWrite: undefined },
           outputTokens: { total: 5, text: 5, reasoning: undefined },
@@ -152,32 +244,60 @@ export function createPromptAwareLanguageModel(
       };
     },
     async doStream(options): Promise<LanguageModelV3StreamResult> {
-      const text = buildResponse(options);
+      const response = buildResponse(options);
       return {
         stream: simulateReadableStream({
-          chunks: [
-            { type: "text-start" as const, id: "text-1" },
-            { type: "text-delta" as const, id: "text-1", delta: text },
-            { type: "text-end" as const, id: "text-1" },
-            {
-              type: "finish" as const,
-              finishReason: { unified: "stop" as const, raw: undefined },
-              logprobs: undefined,
-              usage: {
-                inputTokens: {
-                  total: 10,
-                  noCache: 10,
-                  cacheRead: undefined,
-                  cacheWrite: undefined,
-                },
-                outputTokens: {
-                  total: 5,
-                  text: 5,
-                  reasoning: undefined,
-                },
-              },
-            },
-          ],
+          chunks:
+            response.kind === "tool-call"
+              ? [
+                  {
+                    type: "tool-call" as const,
+                    toolCallId: "tc-memory-decision",
+                    toolName: response.toolName,
+                    input: response.input,
+                  },
+                  {
+                    type: "finish" as const,
+                    finishReason: { unified: "tool-calls" as const, raw: undefined },
+                    logprobs: undefined,
+                    usage: {
+                      inputTokens: {
+                        total: 10,
+                        noCache: 10,
+                        cacheRead: undefined,
+                        cacheWrite: undefined,
+                      },
+                      outputTokens: {
+                        total: 5,
+                        text: 5,
+                        reasoning: undefined,
+                      },
+                    },
+                  },
+                ]
+              : [
+                  { type: "text-start" as const, id: "text-1" },
+                  { type: "text-delta" as const, id: "text-1", delta: response.text },
+                  { type: "text-end" as const, id: "text-1" },
+                  {
+                    type: "finish" as const,
+                    finishReason: { unified: "stop" as const, raw: undefined },
+                    logprobs: undefined,
+                    usage: {
+                      inputTokens: {
+                        total: 10,
+                        noCache: 10,
+                        cacheRead: undefined,
+                        cacheWrite: undefined,
+                      },
+                      outputTokens: {
+                        total: 5,
+                        text: 5,
+                        reasoning: undefined,
+                      },
+                    },
+                  },
+                ],
         }),
         warnings: [],
       };

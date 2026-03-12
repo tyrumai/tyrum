@@ -15,6 +15,7 @@ import type { PluginRegistry } from "../../plugins/registry.js";
 import type { PolicyService } from "../../policy/service.js";
 import type { SecretProvider } from "../../secret/provider.js";
 import type { ProtocolDeps } from "../../../ws/protocol.js";
+import type { TurnMemoryDecisionCollector } from "./turn-memory-policy.js";
 
 export interface AgentRuntimeOptions {
   container: GatewayContainer;
@@ -110,3 +111,5 @@ export interface AgentContextReport {
   tool_calls: AgentContextToolCallReport[];
   injected_files: AgentContextInjectedFileReport[];
 }
+
+export interface AgentTurnMemoryDecisionReport extends TurnMemoryDecisionCollector {}

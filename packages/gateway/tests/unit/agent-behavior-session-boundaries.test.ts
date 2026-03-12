@@ -39,7 +39,7 @@ function makeRuntimeConfig(input?: { memoryEnabled?: boolean }): Record<string, 
             keyword: { enabled: true, limit: 20 },
             semantic: { enabled: false, limit: 1 },
             structured: { fact_keys: [], tags: [] },
-            auto_write: { enabled: true, classifier: "rule_based" },
+            auto_write: { enabled: true },
             budgets: {
               max_total_items: 10,
               max_total_chars: 4000,
@@ -58,6 +58,17 @@ function makeRuntimeConfig(input?: { memoryEnabled?: boolean }): Record<string, 
 
 function sessionContext(promptText: string): string {
   return extractPromptSection(promptText, "Session context:");
+}
+
+function noteDecision(body_md: string) {
+  return {
+    should_store: true as const,
+    reason: "Durable user-provided information.",
+    memory: {
+      kind: "note" as const,
+      body_md,
+    },
+  };
 }
 
 describe("Agent behavior - session boundaries", () => {
@@ -460,14 +471,22 @@ describe("Agent behavior - session boundaries", () => {
       config: makeRuntimeConfig({ memoryEnabled: true }),
     });
 
-    const model = createPromptAwareLanguageModel(({ promptText }) => {
-      if (promptIncludes(promptText, "what is my name")) {
-        return /my name is alice/iu.test(extractPromptSection(promptText, "Memory digest:"))
-          ? "Alice"
-          : "UNKNOWN";
-      }
-      return "Stored.";
-    });
+    const model = createPromptAwareLanguageModel(
+      ({ promptText }) => {
+        if (promptIncludes(promptText, "what is my name")) {
+          return /my name is alice/iu.test(extractPromptSection(promptText, "Memory digest:"))
+            ? "Alice"
+            : "UNKNOWN";
+        }
+        return "Stored.";
+      },
+      {
+        memoryDecision: ({ promptText }) =>
+          promptIncludes(promptText, "remember that my name is alice")
+            ? noteDecision("remember that my name is Alice")
+            : undefined,
+      },
+    );
 
     const runtimeA = new AgentRuntime({
       container,

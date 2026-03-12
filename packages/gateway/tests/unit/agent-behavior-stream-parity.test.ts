@@ -29,7 +29,7 @@ function makeMemoryConfig(): Record<string, unknown> {
         keyword: { enabled: true, limit: 20 },
         semantic: { enabled: false, limit: 1 },
         structured: { fact_keys: [], tags: [] },
-        auto_write: { enabled: true, classifier: "rule_based" },
+        auto_write: { enabled: true },
         budgets: {
           max_total_items: 10,
           max_total_chars: 4000,
@@ -41,6 +41,17 @@ function makeMemoryConfig(): Record<string, unknown> {
           },
         },
       },
+    },
+  };
+}
+
+function noteDecision(body_md: string) {
+  return {
+    should_store: true as const,
+    reason: "Durable user preference.",
+    memory: {
+      kind: "note" as const,
+      body_md,
     },
   };
 }
@@ -108,7 +119,12 @@ describe("Agent behavior - stream parity", () => {
     await seedAgentConfig(containerA, { config: makeMemoryConfig() });
     await seedAgentConfig(containerB, { config: makeMemoryConfig() });
 
-    const model = createPromptAwareLanguageModel(() => "Stored mango.");
+    const model = createPromptAwareLanguageModel(() => "Stored mango.", {
+      memoryDecision: ({ promptText }) =>
+        promptText.toLowerCase().includes("remember that my favorite fruit is mango")
+          ? noteDecision("remember that my favorite fruit is mango")
+          : undefined,
+    });
     const turnRuntime = new AgentRuntime({
       container: containerA,
       home: homeDirA,

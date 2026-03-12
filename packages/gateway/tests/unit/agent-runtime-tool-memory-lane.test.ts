@@ -16,8 +16,10 @@ import { ChannelInboxDal } from "../../src/modules/channels/inbox-dal.js";
 import { LaneQueueSignalDal } from "../../src/modules/lanes/queue-signal-dal.js";
 import { WorkboardDal } from "../../src/modules/workboard/dal.js";
 import { resolveExecutionProfile } from "../../src/modules/agent/runtime/intake-delegation.js";
-import { createStubLanguageModel } from "./stub-language-model.js";
-import { MockLanguageModelV3 } from "ai/test";
+import {
+  createMemoryDecisionLanguageModel,
+  createStubLanguageModel,
+} from "./stub-language-model.js";
 
 describe("AgentRuntime - tool tracking, memory, and lane signals", () => {
   let homeDir: string | undefined;
@@ -69,7 +71,7 @@ describe("AgentRuntime - tool tracking, memory, and lane signals", () => {
         memory: {
           v1: {
             enabled: true,
-            auto_write: { classifier: "rule_based" },
+            auto_write: { enabled: true },
           },
         },
       },
@@ -80,9 +82,17 @@ describe("AgentRuntime - tool tracking, memory, and lane signals", () => {
     const runtime = new AgentRuntime({
       container,
       home: homeDir,
-      languageModel: createStubLanguageModel(
-        "Fixed the failing workflow by updating the agent config.",
-      ),
+      languageModel: createMemoryDecisionLanguageModel({
+        decision: {
+          should_store: true,
+          reason: "The turn resolved a reusable failure.",
+          memory: {
+            kind: "episode",
+            summary_md: "Fixed the failing workflow by updating the agent config.",
+          },
+        },
+        reply: "Fixed the failing workflow by updating the agent config.",
+      }),
       fetchImpl: fetch404,
     });
 
@@ -96,7 +106,7 @@ describe("AgentRuntime - tool tracking, memory, and lane signals", () => {
 
     const agentTurnEpisode = createSpy.mock.calls.find(([input]) => {
       const meta = input?.provenance?.metadata as Record<string, unknown> | undefined;
-      return input?.kind === "episode" && meta?.["event_type"] === "agent_turn";
+      return input?.kind === "episode" && meta?.["kind"] === "turn_signal";
     });
 
     expect(agentTurnEpisode).toBeDefined();
@@ -123,7 +133,7 @@ describe("AgentRuntime - tool tracking, memory, and lane signals", () => {
         memory: {
           v1: {
             enabled: true,
-            auto_write: { classifier: "rule_based" },
+            auto_write: { enabled: true },
           },
         },
       },
@@ -134,7 +144,18 @@ describe("AgentRuntime - tool tracking, memory, and lane signals", () => {
     const runtime = new AgentRuntime({
       container,
       home: homeDir,
-      languageModel: createStubLanguageModel("ok"),
+      languageModel: createMemoryDecisionLanguageModel({
+        decision: {
+          should_store: true,
+          reason: "The turn contained a durable user preference.",
+          memory: {
+            kind: "note",
+            body_md: "remember that I prefer tea",
+            tags: ["Durable-Memory"],
+          },
+        },
+        reply: "ok",
+      }),
       fetchImpl: fetch404,
     });
 
@@ -147,7 +168,7 @@ describe("AgentRuntime - tool tracking, memory, and lane signals", () => {
     const noteCall = createSpy.mock.calls.find(([input]) => input?.kind === "note");
     expect(noteCall?.[0]).toEqual(
       expect.objectContaining({
-        tags: ["agent-turn", "durable-memory"],
+        tags: expect.arrayContaining(["agent-turn", "auto-turn", "durable-memory"]),
       }),
     );
   }, 10_000);

@@ -38,6 +38,7 @@ export type ToolCallPolicyState = {
 
 export type ToolSetBuilderLogger = {
   info: (message: string, fields?: Record<string, unknown>) => void;
+  warn: (message: string, fields?: Record<string, unknown>) => void;
 };
 
 export type ToolSetBuilderRedactionEngine = { redactText: (text: string) => { redacted: string } };

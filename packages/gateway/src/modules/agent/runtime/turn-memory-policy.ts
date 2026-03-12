@@ -1,271 +1,166 @@
-import { generateText } from "ai";
-import type { LanguageModel } from "ai";
-import type { AgentConfig } from "@tyrum/schemas";
+import { stableJsonStringify, sha256HexFromString } from "../../policy/canonical-json.js";
 import { z } from "zod";
-import type { ResolvedAgentTurnInput } from "./turn-helpers.js";
-import { isStatusQuery, parseIntakeModeDecision } from "./turn-helpers.js";
-import { looksLikeSecretText, redactSecretLikeText } from "./secrets.js";
-import { safeJsonParse } from "../../../utils/json.js";
 
-type AutoWriteConfig = AgentConfig["memory"]["v1"]["auto_write"];
+const TurnMemoryTagSchema = z.string().trim().min(1).max(32);
+const TurnMemoryReasonSchema = z.string().trim().min(1).max(240);
 
-const TurnMemoryClassifierSchema = z.object({
-  action: z.enum(["none", "note", "episode", "note_and_episode"]),
-  reason_code: z
-    .enum([
-      "none",
-      "explicit_preference",
-      "explicit_remember",
-      "durable_constraint",
-      "durable_fact",
-      "task_outcome",
-      "tool_outcome",
-      "failure_lesson",
-      "approval_or_policy",
-      "delegation_or_milestone",
-    ])
-    .default("none"),
-  title: z.string().trim().min(1).max(120).optional(),
-  body_md: z.string().trim().min(1).max(800).optional(),
-  summary_md: z.string().trim().min(1).max(320).optional(),
-  tags: z.array(z.string().trim().min(1).max(32)).max(5).default([]),
-});
+const TurnMemoryFactSchema = z
+  .object({
+    kind: z.literal("fact"),
+    key: z.string().trim().min(1).max(160),
+    value: z.unknown(),
+    confidence: z.number().min(0).max(1).optional(),
+    tags: z.array(TurnMemoryTagSchema).max(8).optional(),
+  })
+  .strict();
 
-export type TurnMemoryDecision =
-  | { action: "none"; reasonCode: string }
-  | {
-      action: "note";
-      reasonCode: string;
-      title: string;
-      bodyMd: string;
-      tags: string[];
-    }
-  | {
-      action: "episode";
-      reasonCode: string;
-      summaryMd: string;
-      tags: string[];
-    }
-  | {
-      action: "note_and_episode";
-      reasonCode: string;
-      title: string;
-      bodyMd: string;
-      summaryMd: string;
-      tags: string[];
-    };
+const TurnMemoryNoteSchema = z
+  .object({
+    kind: z.literal("note"),
+    title: z.string().trim().min(1).max(120).optional(),
+    body_md: z.string().trim().min(1).max(1_600),
+    tags: z.array(TurnMemoryTagSchema).max(8).optional(),
+  })
+  .strict();
 
-export type TurnMemoryPolicyInput = {
-  model: LanguageModel;
-  config: AutoWriteConfig;
-  resolved: ResolvedAgentTurnInput;
-  reply: string;
-  usedTools: ReadonlySet<string>;
-  turnKind: "normal" | "skip";
-  logger?: { warn: (msg: string, fields?: Record<string, unknown>) => void };
+const TurnMemoryProcedureSchema = z
+  .object({
+    kind: z.literal("procedure"),
+    title: z.string().trim().min(1).max(120).optional(),
+    body_md: z.string().trim().min(1).max(1_600),
+    confidence: z.number().min(0).max(1).optional(),
+    tags: z.array(TurnMemoryTagSchema).max(8).optional(),
+  })
+  .strict();
+
+const TurnMemoryEpisodeSchema = z
+  .object({
+    kind: z.literal("episode"),
+    summary_md: z.string().trim().min(1).max(600),
+    tags: z.array(TurnMemoryTagSchema).max(8).optional(),
+  })
+  .strict();
+
+const TurnMemoryPayloadSchema = z.discriminatedUnion("kind", [
+  TurnMemoryFactSchema,
+  TurnMemoryNoteSchema,
+  TurnMemoryProcedureSchema,
+  TurnMemoryEpisodeSchema,
+]);
+
+export const TurnMemoryDecisionSchema = z.discriminatedUnion("should_store", [
+  z
+    .object({
+      should_store: z.literal(false),
+      reason: TurnMemoryReasonSchema,
+    })
+    .strict(),
+  z
+    .object({
+      should_store: z.literal(true),
+      reason: TurnMemoryReasonSchema,
+      memory: TurnMemoryPayloadSchema,
+    })
+    .strict(),
+]);
+
+export type TurnMemoryDecision = z.infer<typeof TurnMemoryDecisionSchema>;
+export type StoredTurnMemoryDecision = Extract<TurnMemoryDecision, { should_store: true }>;
+export type TurnMemoryOrigin = "interaction" | "automation_quiet" | "automation_notify";
+
+export type TurnMemoryDecisionCollector = {
+  calls: number;
+  invalidCalls: number;
+  lastDecision?: TurnMemoryDecision;
+  lastError?: string;
 };
 
-type CandidateKind = "note" | "episode";
+type AutomationPromptInput = {
+  schedule_kind?: string | null;
+  delivery_mode?: string | null;
+};
 
-function normalize(value: string): string {
-  return value.replace(/\s+/g, " ").trim();
+function normalizeTagValue(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._:-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
-function truncate(value: string, maxChars: number): string {
-  if (maxChars <= 0) return "";
-  if (value.length <= maxChars) return value;
-  if (maxChars <= 3) return value.slice(0, maxChars);
-  return `${value.slice(0, maxChars - 3)}...`;
-}
-
-function normalizeTags(tags: readonly string[]): string[] {
+export function normalizeTurnMemoryTags(tags: readonly string[] | undefined): string[] {
   const next = new Set<string>();
-  for (const raw of tags) {
-    const value = raw
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9._-]+/g, "-")
-      .replace(/^-+|-+$/g, "");
-    if (!value) continue;
-    next.add(value);
-    if (next.size >= 5) break;
+  for (const raw of tags ?? []) {
+    const normalized = normalizeTagValue(raw);
+    if (!normalized) continue;
+    next.add(normalized);
+    if (next.size >= 12) break;
   }
   return Array.from(next);
 }
 
-function noteCandidateKind(message: string): CandidateKind | undefined {
-  const normalized = message.toLowerCase();
-  if (normalized.includes("i prefer")) return "note";
-  if (normalized.includes("remember this") || normalized.includes("remember that")) return "note";
-  if (normalized.includes("for future reference")) return "note";
-  if (normalized.includes("always ") || normalized.includes("never ")) return "note";
-  if (normalized.includes("by default")) return "note";
-  if (normalized.includes("we use ") || normalized.includes("our repo")) return "note";
-  return undefined;
+export function createTurnMemoryDecisionCollector(): TurnMemoryDecisionCollector {
+  return { calls: 0, invalidCalls: 0 };
 }
 
-function episodeCandidateKind(
-  message: string,
-  reply: string,
-  usedTools: ReadonlySet<string>,
-): CandidateKind | undefined {
-  if (usedTools.size > 0) return "episode";
-  const combined = `${message}\n${reply}`.toLowerCase();
-  if (
-    /(?:fixed|resolved|failed|failure|completed|blocked|approved|denied|root cause|rolled back|updated|opened pr|merged|deployed)/u.test(
-      combined,
-    )
-  ) {
-    return "episode";
+export function recordTurnMemoryDecision(
+  collector: TurnMemoryDecisionCollector,
+  args: unknown,
+): { ok: boolean; error?: string } {
+  collector.calls += 1;
+  const parsed = TurnMemoryDecisionSchema.safeParse(args);
+  if (!parsed.success) {
+    collector.invalidCalls += 1;
+    const error = parsed.error.issues[0]?.message ?? "invalid memory turn decision";
+    collector.lastError = error;
+    return { ok: false, error };
   }
-  return undefined;
+  collector.lastDecision = parsed.data;
+  collector.lastError = undefined;
+  return { ok: true };
 }
 
-function deterministicNote(message: string): TurnMemoryDecision {
-  const normalized = message.toLowerCase();
-  const title = normalized.includes("i prefer")
-    ? "User preference"
-    : normalized.includes("always ") || normalized.includes("never ")
-      ? "Durable constraint"
-      : "Remembered fact";
-  return {
-    action: "note",
-    reasonCode: normalized.includes("i prefer") ? "explicit_preference" : "explicit_remember",
-    title,
-    bodyMd: truncate(message, 600),
-    tags: normalizeTags(["durable-memory"]),
-  };
+export function resolveTurnMemoryOrigin(
+  metadata: Record<string, unknown> | undefined,
+): TurnMemoryOrigin {
+  const automation = metadata?.["automation"];
+  if (!automation || typeof automation !== "object" || Array.isArray(automation)) {
+    return "interaction";
+  }
+  const deliveryMode = (automation as Record<string, unknown>)["delivery_mode"];
+  return deliveryMode === "quiet" ? "automation_quiet" : "automation_notify";
 }
 
-function deterministicEpisode(
-  reply: string,
-  channel: string,
-  usedTools: ReadonlySet<string>,
-): TurnMemoryDecision {
-  const prefix = usedTools.size > 0 ? "Tool outcome" : "Turn outcome";
-  return {
-    action: "episode",
-    reasonCode: usedTools.size > 0 ? "tool_outcome" : "task_outcome",
-    summaryMd: truncate(`${prefix}: ${reply} (${channel})`, 280),
-    tags: normalizeTags(["episode", usedTools.size > 0 ? "tool-outcome" : "task-outcome"]),
-  };
+export function buildTurnMemoryProtocolPrompt(
+  automation: AutomationPromptInput | null | undefined,
+): string {
+  const lines = [
+    "Turn memory protocol:",
+    "You must call `memory_turn_decision` exactly once on every normal turn.",
+    "Default to should_store=false.",
+    "Set should_store=true only when this turn yields durable, reusable, high-value information worth long-term memory.",
+    "Do not store transcripts, generic acknowledgements, scheduler boilerplate, cadence metadata, or no-op status updates.",
+    "When should_store=true, provide the full kind-specific memory payload under `memory`.",
+  ];
+
+  if (automation?.schedule_kind) {
+    lines.push(
+      "This is an automation-origin turn. Heartbeat/cron boilerplate and empty maintenance turns are usually should_store=false.",
+    );
+  }
+
+  return lines.join("\n");
 }
 
-function extractJsonObject(text: string): string | undefined {
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/iu)?.[1];
-  const candidate = fenced ?? text;
-  const start = candidate.indexOf("{");
-  const end = candidate.lastIndexOf("}");
-  if (start < 0 || end <= start) return undefined;
-  return candidate.slice(start, end + 1);
-}
-
-function toDecision(
-  parsed: z.infer<typeof TurnMemoryClassifierSchema>,
-): TurnMemoryDecision | undefined {
-  const tags = normalizeTags(parsed.tags);
-  if (parsed.action === "none") return { action: "none", reasonCode: parsed.reason_code };
-  if (parsed.action === "note" && parsed.title && parsed.body_md) {
-    return {
-      action: "note",
-      reasonCode: parsed.reason_code,
-      title: parsed.title,
-      bodyMd: parsed.body_md,
-      tags,
-    };
-  }
-  if (parsed.action === "episode" && parsed.summary_md) {
-    return {
-      action: "episode",
-      reasonCode: parsed.reason_code,
-      summaryMd: parsed.summary_md,
-      tags,
-    };
-  }
-  if (parsed.action === "note_and_episode" && parsed.title && parsed.body_md && parsed.summary_md) {
-    return {
-      action: "note_and_episode",
-      reasonCode: parsed.reason_code,
-      title: parsed.title,
-      bodyMd: parsed.body_md,
-      summaryMd: parsed.summary_md,
-      tags,
-    };
-  }
-  return undefined;
-}
-
-export async function classifyTurnMemory(
-  input: TurnMemoryPolicyInput,
-): Promise<TurnMemoryDecision> {
-  if (!input.config.enabled) return { action: "none", reasonCode: "none" };
-  if (input.turnKind !== "normal") return { action: "none", reasonCode: "none" };
-  if (isStatusQuery(input.resolved.message) || parseIntakeModeDecision(input.resolved.message)) {
-    return { action: "none", reasonCode: "none" };
-  }
-
-  const message = normalize(redactSecretLikeText(input.resolved.message));
-  const reply = normalize(redactSecretLikeText(input.reply));
-  if (!message && !reply) return { action: "none", reasonCode: "none" };
-
-  const noteCandidate = noteCandidateKind(message);
-  const episodeCandidate = noteCandidate
-    ? undefined
-    : episodeCandidateKind(message, reply, input.usedTools);
-  if (!noteCandidate && !episodeCandidate) {
-    return { action: "none", reasonCode: "none" };
-  }
-  if (looksLikeSecretText(`${input.resolved.message}\n${input.reply}`) && noteCandidate) {
-    return { action: "none", reasonCode: "none" };
-  }
-
-  const fallback =
-    noteCandidate === "note"
-      ? deterministicNote(message)
-      : input.config.classifier === "rule_based"
-        ? deterministicEpisode(reply, input.resolved.channel, input.usedTools)
-        : ({ action: "none", reasonCode: "none" } as const);
-  if (input.config.classifier === "rule_based") return fallback;
-
-  try {
-    const result = await generateText({
-      model: input.model,
-      system:
-        "Classify whether this conversational turn should be stored in long-term memory. " +
-        "Memory is sparse and not a transcript store. Return JSON only.",
-      messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "text",
-              text:
-                `Candidate kind: ${noteCandidate ?? episodeCandidate}\n` +
-                `Channel: ${input.resolved.channel}\n` +
-                `Thread: ${input.resolved.thread_id}\n` +
-                `Used tools: ${Array.from(input.usedTools).join(", ") || "(none)"}\n` +
-                `User: ${truncate(message, 500)}\n` +
-                `Assistant: ${truncate(reply, 500)}\n\n` +
-                "Return one JSON object with fields action, reason_code, title, body_md, summary_md, tags. " +
-                "Prefer action=none unless the turn contains durable preferences/facts/constraints or a meaningful reusable outcome.",
-            },
-          ],
-        },
-      ],
-    });
-    const rawJson = extractJsonObject(result.text);
-    const parsed = TurnMemoryClassifierSchema.safeParse(safeJsonParse(rawJson, null));
-    if (parsed.success) {
-      const decision = toDecision(parsed.data);
-      if (decision) return decision;
-    }
-  } catch (error) {
-    input.logger?.warn("memory.turn_classifier_failed", {
-      channel: input.resolved.channel,
-      thread_id: input.resolved.thread_id,
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
-
-  return fallback;
+export function buildTurnMemoryDedupeKey(
+  decision: StoredTurnMemoryDecision,
+  origin: TurnMemoryOrigin,
+): string {
+  return sha256HexFromString(
+    stableJsonStringify({
+      origin,
+      reason: decision.reason,
+      memory: decision.memory,
+    }),
+  );
 }

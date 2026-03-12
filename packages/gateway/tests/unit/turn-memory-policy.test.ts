@@ -1,131 +1,109 @@
 import { describe, expect, it } from "vitest";
-import { MockLanguageModelV3 } from "ai/test";
-import { AgentConfig } from "@tyrum/schemas";
-import { classifyTurnMemory } from "../../src/modules/agent/runtime/turn-memory-policy.js";
-import { createStubLanguageModel } from "./stub-language-model.js";
+import {
+  buildTurnMemoryDedupeKey,
+  buildTurnMemoryProtocolPrompt,
+  createTurnMemoryDecisionCollector,
+  recordTurnMemoryDecision,
+  resolveTurnMemoryOrigin,
+} from "../../src/modules/agent/runtime/turn-memory-policy.js";
 
-function autoWriteConfig(overrides?: Partial<AgentConfig["memory"]["v1"]["auto_write"]>) {
-  return AgentConfig.parse({
-    model: { model: "openai/gpt-4.1" },
-    memory: { v1: { auto_write: overrides ?? {} } },
-  }).memory.v1.auto_write;
-}
-
-function resolved(message: string) {
-  return {
-    channel: "test",
-    thread_id: "thread-1",
-    message,
-  };
-}
-
-describe("classifyTurnMemory", () => {
-  it("writes nothing for low-signal conversational turns", async () => {
-    const decision = await classifyTurnMemory({
-      model: createStubLanguageModel("ignored"),
-      config: autoWriteConfig(),
-      resolved: resolved("hi"),
-      reply: "hello",
-      usedTools: new Set(),
-      turnKind: "normal",
+describe("turn memory policy helpers", () => {
+  it("records a valid false decision", () => {
+    const collector = createTurnMemoryDecisionCollector();
+    const result = recordTurnMemoryDecision(collector, {
+      should_store: false,
+      reason: "No durable information.",
     });
 
-    expect(decision).toEqual({ action: "none", reasonCode: "none" });
+    expect(result).toEqual({ ok: true });
+    expect(collector.calls).toBe(1);
+    expect(collector.invalidCalls).toBe(0);
+    expect(collector.lastDecision).toEqual({
+      should_store: false,
+      reason: "No durable information.",
+    });
   });
 
-  it("uses deterministic note classification in rule-based mode", async () => {
-    const decision = await classifyTurnMemory({
-      model: createStubLanguageModel("ignored"),
-      config: autoWriteConfig({ classifier: "rule_based" }),
-      resolved: resolved("I prefer terse answers."),
-      reply: "Understood.",
-      usedTools: new Set(),
-      turnKind: "normal",
+  it("records the last valid decision and tracks invalid calls", () => {
+    const collector = createTurnMemoryDecisionCollector();
+
+    const invalid = recordTurnMemoryDecision(collector, {
+      should_store: true,
+      reason: "missing payload",
+    });
+    const valid = recordTurnMemoryDecision(collector, {
+      should_store: true,
+      reason: "Contains a durable preference.",
+      memory: {
+        kind: "note",
+        body_md: "User prefers terse answers.",
+      },
     });
 
-    expect(decision).toEqual(
-      expect.objectContaining({
-        action: "note",
-        title: "User preference",
+    expect(invalid.ok).toBe(false);
+    expect(valid).toEqual({ ok: true });
+    expect(collector.calls).toBe(2);
+    expect(collector.invalidCalls).toBe(1);
+    expect(collector.lastDecision).toEqual({
+      should_store: true,
+      reason: "Contains a durable preference.",
+      memory: {
+        kind: "note",
+        body_md: "User prefers terse answers.",
+      },
+    });
+  });
+
+  it("resolves automation origins from metadata", () => {
+    expect(resolveTurnMemoryOrigin(undefined)).toBe("interaction");
+    expect(
+      resolveTurnMemoryOrigin({
+        automation: { schedule_kind: "heartbeat", delivery_mode: "quiet" },
       }),
-    );
-  });
-
-  it("does not drop explicit durable memory when the reply is generic", async () => {
-    const decision = await classifyTurnMemory({
-      model: createStubLanguageModel("ok"),
-      config: autoWriteConfig(),
-      resolved: resolved("remember that I prefer tea"),
-      reply: "ok",
-      usedTools: new Set(),
-      turnKind: "normal",
-    });
-
-    expect(decision).toEqual(
-      expect.objectContaining({
-        action: "note",
-        title: "User preference",
+    ).toBe("automation_quiet");
+    expect(
+      resolveTurnMemoryOrigin({
+        automation: { schedule_kind: "cron", delivery_mode: "notify" },
       }),
-    );
+    ).toBe("automation_notify");
   });
 
-  it("accepts structured model-assisted note decisions", async () => {
-    const model = new MockLanguageModelV3({
-      doGenerate: async () => ({
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify({
-              action: "note",
-              reason_code: "explicit_preference",
-              title: "User preference",
-              body_md: "User prefers terse answers.",
-              tags: ["Preference"],
-            }),
-          },
-        ],
-        finishReason: { unified: "stop" as const, raw: undefined },
-        usage: {
-          inputTokens: { total: 10, noCache: 10, cacheRead: undefined, cacheWrite: undefined },
-          outputTokens: { total: 5, text: 5, reasoning: undefined },
+  it("builds stable dedupe keys for identical decisions", () => {
+    const left = buildTurnMemoryDedupeKey(
+      {
+        should_store: true,
+        reason: "Durable name preference.",
+        memory: {
+          kind: "fact",
+          key: "user.name",
+          value: { name: "Ron" },
         },
-        warnings: [],
-      }),
-    });
+      },
+      "interaction",
+    );
+    const right = buildTurnMemoryDedupeKey(
+      {
+        should_store: true,
+        reason: "Durable name preference.",
+        memory: {
+          kind: "fact",
+          key: "user.name",
+          value: { name: "Ron" },
+        },
+      },
+      "interaction",
+    );
 
-    const decision = await classifyTurnMemory({
-      model,
-      config: autoWriteConfig(),
-      resolved: resolved("I prefer terse answers."),
-      reply: "Understood.",
-      usedTools: new Set(),
-      turnKind: "normal",
-    });
-
-    expect(decision).toEqual({
-      action: "note",
-      reasonCode: "explicit_preference",
-      title: "User preference",
-      bodyMd: "User prefers terse answers.",
-      tags: ["preference"],
-    });
+    expect(left).toBe(right);
   });
 
-  it("falls back to deterministic notes when model-assisted note classification is invalid", async () => {
-    const decision = await classifyTurnMemory({
-      model: createStubLanguageModel("not json"),
-      config: autoWriteConfig(),
-      resolved: resolved("remember that our repo default branch is main"),
-      reply: "I'll keep that in mind.",
-      usedTools: new Set(),
-      turnKind: "normal",
+  it("mentions automation no-op guidance in the protocol prompt", () => {
+    const prompt = buildTurnMemoryProtocolPrompt({
+      schedule_kind: "heartbeat",
+      delivery_mode: "quiet",
     });
-
-    expect(decision).toEqual(
-      expect.objectContaining({
-        action: "note",
-        title: "Remembered fact",
-      }),
-    );
+    expect(prompt).toContain("memory_turn_decision");
+    expect(prompt).toContain("should_store=false");
+    expect(prompt).toContain("automation-origin turn");
   });
 });

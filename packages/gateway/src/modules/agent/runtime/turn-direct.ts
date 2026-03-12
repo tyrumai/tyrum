@@ -77,6 +77,7 @@ export async function turnDirect(
     contextReport,
     systemPrompt,
     resolved,
+    turnMemoryDecisionCollector,
   } = prepared;
 
   const workScope: WorkScope = {
@@ -101,6 +102,7 @@ export async function turnDirect(
       usedTools,
       contextReport,
       turnKind: params.turnKind,
+      turnMemoryDecisionCollector,
     });
     await maybeAutoCompactSession({
       deps,
@@ -313,6 +315,7 @@ export async function turnStreamDirect(
     contextReport,
     systemPrompt,
     resolved,
+    turnMemoryDecisionCollector,
   } = prepared;
 
   const intake = await resolveIntakeDecision(
@@ -346,6 +349,7 @@ export async function turnStreamDirect(
       usedTools,
       contextReport,
       turnKind: "skip",
+      turnMemoryDecisionCollector,
     });
     await maybeAutoCompactSession({
       deps,
@@ -419,6 +423,7 @@ export async function turnStreamDirect(
       model,
       usedTools,
       contextReport,
+      turnMemoryDecisionCollector,
     });
     await maybeAutoCompactSession({
       deps,

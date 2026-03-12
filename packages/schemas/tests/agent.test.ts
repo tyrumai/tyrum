@@ -44,7 +44,6 @@ describe("AgentConfig", () => {
     expect(parsed.memory.v1.enabled).toBe(true);
     expect(parsed.memory.v1.auto_write.enabled).toBe(true);
     expect(parsed.memory.v1.auto_write.mode).toBe("sparse");
-    expect(parsed.memory.v1.auto_write.classifier).toBe("model_assisted");
     expect(parsed.memory.v1.allow_sensitivities).toEqual(["public", "private"]);
     expect(parsed.memory.v1.semantic.enabled).toBe(true);
     expect(parsed.memory.v1.budgets.max_total_items).toBeGreaterThan(0);
@@ -54,6 +53,26 @@ describe("AgentConfig", () => {
     expect(parsed.memory.v1.budgets.per_kind.procedure.max_items).toBeGreaterThan(0);
     expect(parsed.memory.v1.budgets.per_kind.episode.max_items).toBeGreaterThan(0);
     expect(parsed.persona).toBeUndefined();
+  });
+
+  it("ignores the legacy auto_write.classifier field", () => {
+    const parsed = AgentConfig.parse({
+      model: { model: "openai/gpt-5.4" },
+      memory: {
+        v1: {
+          auto_write: {
+            enabled: true,
+            mode: "sparse",
+            classifier: "rule_based",
+          },
+        },
+      },
+    });
+
+    expect(parsed.memory.v1.auto_write).toEqual({
+      enabled: true,
+      mode: "sparse",
+    });
   });
 
   it("parses persisted persona fields", () => {

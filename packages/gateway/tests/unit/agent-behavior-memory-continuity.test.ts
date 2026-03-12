@@ -52,10 +52,7 @@ function makeMemoryConfig(input?: {
           fact_keys: input?.structuredFactKeys ?? [],
           tags: input?.structuredTags ?? [],
         },
-        auto_write: {
-          enabled: true,
-          classifier: "rule_based",
-        },
+        auto_write: { enabled: true },
         budgets: input?.budgets ?? {
           max_total_items: 10,
           max_total_chars: 4000,
@@ -73,6 +70,18 @@ function makeMemoryConfig(input?: {
 
 function memorySection(promptText: string): string {
   return extractPromptSection(promptText, "Memory digest:");
+}
+
+function noteDecision(body_md: string, tags?: string[]) {
+  return {
+    should_store: true as const,
+    reason: "Durable user-provided information.",
+    memory: {
+      kind: "note" as const,
+      body_md,
+      tags,
+    },
+  };
 }
 
 describe("Agent behavior - memory continuity", () => {
@@ -94,12 +103,20 @@ describe("Agent behavior - memory continuity", () => {
     const runtime = new AgentRuntime({
       container,
       home: homeDir,
-      languageModel: createPromptAwareLanguageModel(({ promptText }) => {
-        if (promptIncludes(promptText, "what is my name")) {
-          return /my name is ron/iu.test(memorySection(promptText)) ? "Ron" : "UNKNOWN";
-        }
-        return "Stored.";
-      }),
+      languageModel: createPromptAwareLanguageModel(
+        ({ promptText }) => {
+          if (promptIncludes(promptText, "what is my name")) {
+            return /my name is ron/iu.test(memorySection(promptText)) ? "Ron" : "UNKNOWN";
+          }
+          return "Stored.";
+        },
+        {
+          memoryDecision: ({ promptText }) =>
+            promptIncludes(promptText, "remember that my name is ron")
+              ? noteDecision("remember that my name is Ron")
+              : undefined,
+        },
+      ),
       fetchImpl: fetch404,
     });
 
@@ -125,7 +142,7 @@ describe("Agent behavior - memory continuity", () => {
     expect(notes.items[0]).toMatchObject({
       kind: "note",
       provenance: {
-        source_kind: "user",
+        source_kind: "system",
         channel: "ui",
         thread_id: "memory-name-thread",
         session_id: remembered.session_id,
@@ -143,12 +160,20 @@ describe("Agent behavior - memory continuity", () => {
     let runtime = new AgentRuntime({
       container,
       home: homeDir,
-      languageModel: createPromptAwareLanguageModel(({ promptText }) => {
-        if (promptIncludes(promptText, "what is my name")) {
-          return /my name is ron/iu.test(memorySection(promptText)) ? "Ron" : "UNKNOWN";
-        }
-        return "Stored.";
-      }),
+      languageModel: createPromptAwareLanguageModel(
+        ({ promptText }) => {
+          if (promptIncludes(promptText, "what is my name")) {
+            return /my name is ron/iu.test(memorySection(promptText)) ? "Ron" : "UNKNOWN";
+          }
+          return "Stored.";
+        },
+        {
+          memoryDecision: ({ promptText }) =>
+            promptIncludes(promptText, "remember that my name is ron")
+              ? noteDecision("remember that my name is Ron")
+              : undefined,
+        },
+      ),
       fetchImpl: fetch404,
     });
 
@@ -162,12 +187,20 @@ describe("Agent behavior - memory continuity", () => {
     runtime = new AgentRuntime({
       container,
       home: homeDir,
-      languageModel: createPromptAwareLanguageModel(({ promptText }) => {
-        if (promptIncludes(promptText, "what is my name")) {
-          return /my name is ron/iu.test(memorySection(promptText)) ? "Ron" : "UNKNOWN";
-        }
-        return "Stored.";
-      }),
+      languageModel: createPromptAwareLanguageModel(
+        ({ promptText }) => {
+          if (promptIncludes(promptText, "what is my name")) {
+            return /my name is ron/iu.test(memorySection(promptText)) ? "Ron" : "UNKNOWN";
+          }
+          return "Stored.";
+        },
+        {
+          memoryDecision: ({ promptText }) =>
+            promptIncludes(promptText, "remember that my name is ron")
+              ? noteDecision("remember that my name is Ron")
+              : undefined,
+        },
+      ),
       fetchImpl: fetch404,
     });
 
@@ -187,12 +220,20 @@ describe("Agent behavior - memory continuity", () => {
     const runtime = new AgentRuntime({
       container,
       home: homeDir,
-      languageModel: createPromptAwareLanguageModel(({ promptText }) => {
-        if (promptIncludes(promptText, "which tea should you pick")) {
-          return /i prefer tea/iu.test(memorySection(promptText)) ? "tea" : "UNKNOWN";
-        }
-        return "Stored.";
-      }),
+      languageModel: createPromptAwareLanguageModel(
+        ({ promptText }) => {
+          if (promptIncludes(promptText, "which tea should you pick")) {
+            return /i prefer tea/iu.test(memorySection(promptText)) ? "tea" : "UNKNOWN";
+          }
+          return "Stored.";
+        },
+        {
+          memoryDecision: ({ promptText }) =>
+            promptIncludes(promptText, "remember that i prefer tea")
+              ? noteDecision("remember that I prefer tea")
+              : undefined,
+        },
+      ),
       fetchImpl: fetch404,
     });
 
@@ -219,7 +260,7 @@ describe("Agent behavior - memory continuity", () => {
     expect(original).toMatchObject({
       kind: "note",
       provenance: {
-        source_kind: "user",
+        source_kind: "system",
         channel: "ui",
         thread_id: "pref-ui-thread",
       },
@@ -233,12 +274,20 @@ describe("Agent behavior - memory continuity", () => {
     const runtime = new AgentRuntime({
       container,
       home: homeDir,
-      languageModel: createPromptAwareLanguageModel(({ promptText }) => {
-        if (promptIncludes(promptText, "which tea should you choose for me")) {
-          return /jasmine tea/iu.test(memorySection(promptText)) ? "jasmine tea" : "UNKNOWN";
-        }
-        return "ok";
-      }),
+      languageModel: createPromptAwareLanguageModel(
+        ({ promptText }) => {
+          if (promptIncludes(promptText, "which tea should you choose for me")) {
+            return /jasmine tea/iu.test(memorySection(promptText)) ? "jasmine tea" : "UNKNOWN";
+          }
+          return "ok";
+        },
+        {
+          memoryDecision: ({ promptText }) =>
+            promptIncludes(promptText, "remember that i prefer jasmine tea")
+              ? noteDecision("remember that I prefer jasmine tea")
+              : undefined,
+        },
+      ),
       fetchImpl: fetch404,
     });
 
@@ -286,19 +335,32 @@ describe("Agent behavior - memory continuity", () => {
       new AgentRuntime({
         container: currentContainer,
         home: homeDir,
-        languageModel: createPromptAwareLanguageModel(({ promptText }) => {
-          if (promptIncludes(promptText, "what is my name now")) {
-            capturedMemoryDigest = memorySection(promptText);
-            if (/my name is robert/iu.test(capturedMemoryDigest)) {
-              return "Robert";
+        languageModel: createPromptAwareLanguageModel(
+          ({ promptText }) => {
+            if (promptIncludes(promptText, "what is my name now")) {
+              capturedMemoryDigest = memorySection(promptText);
+              if (/my name is robert/iu.test(capturedMemoryDigest)) {
+                return "Robert";
+              }
+              if (/my name is ron/iu.test(capturedMemoryDigest)) {
+                return "Ron";
+              }
+              return "UNKNOWN";
             }
-            if (/my name is ron/iu.test(capturedMemoryDigest)) {
-              return "Ron";
-            }
-            return "UNKNOWN";
-          }
-          return "Stored.";
-        }),
+            return "Stored.";
+          },
+          {
+            memoryDecision: ({ promptText }) => {
+              if (promptIncludes(promptText, "remember that my name is robert")) {
+                return noteDecision("remember that my name is Robert");
+              }
+              if (promptIncludes(promptText, "remember that my name is ron")) {
+                return noteDecision("remember that my name is Ron");
+              }
+              return undefined;
+            },
+          },
+        ),
         fetchImpl: fetch404,
       });
 
