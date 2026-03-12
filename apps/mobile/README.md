@@ -7,7 +7,7 @@ Capacitor mobile shell for Tyrum operator UI and the local iOS/Android node runt
 - Repo toolchain: Node `24` and pnpm `10`
 - Shared workspace install: `pnpm install`
 - iOS: macOS with Xcode and the iOS Simulator toolchain
-- Android: Android Studio, Android SDK Platform `36`, Build Tools `36.0.0`, and JDK `21`
+- Android: Android Studio, Android SDK Platform `36`, Build Tools `36.0.0`, JDK `21`, and Android `8.0` / API `26` or newer
 
 ## Commands
 

@@ -3,6 +3,7 @@ import {
   MobileBootstrapPayload,
   createMobileBootstrapUrl,
   inferGatewayWsUrl,
+  normalizeGatewayHttpBaseUrl,
   parseMobileBootstrapUrl,
 } from "../src/index.js";
 import { expectRejects } from "./test-helpers.js";
@@ -29,6 +30,15 @@ describe("mobile bootstrap payload", () => {
     expect(inferGatewayWsUrl("https://gateway.example/")).toBe("wss://gateway.example/ws");
     expect(inferGatewayWsUrl("http://gateway.example")).toBe("ws://gateway.example/ws");
     expect(inferGatewayWsUrl("wss://gateway.example/ws")).toBe("wss://gateway.example/ws");
+  });
+
+  it("normalizes the gateway HTTP base URL without regex backtracking", () => {
+    expect(normalizeGatewayHttpBaseUrl("https://gateway.example///")).toBe(
+      "https://gateway.example",
+    );
+    expect(normalizeGatewayHttpBaseUrl(" https://gateway.example/path ")).toBe(
+      "https://gateway.example/path",
+    );
   });
 
   it("rejects payloads with non-http gateway URLs", () => {

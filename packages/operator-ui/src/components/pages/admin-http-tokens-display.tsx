@@ -1,4 +1,8 @@
-import { createMobileBootstrapUrl, inferGatewayWsUrl } from "@tyrum/schemas";
+import {
+  createMobileBootstrapUrl,
+  inferGatewayWsUrl,
+  normalizeGatewayHttpBaseUrl,
+} from "@tyrum/schemas";
 import type * as React from "react";
 import QRCode from "qrcode";
 import { useEffect, useMemo, useState } from "react";
@@ -106,7 +110,7 @@ export function IssuedTokenNotice({
     () =>
       createMobileBootstrapUrl({
         v: 1,
-        httpBaseUrl: gatewayHttpBaseUrl.trim().replace(/\/+$/, ""),
+        httpBaseUrl: normalizeGatewayHttpBaseUrl(gatewayHttpBaseUrl),
         wsUrl: inferGatewayWsUrl(gatewayHttpBaseUrl),
         token: token.token,
       }),

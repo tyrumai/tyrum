@@ -44,6 +44,14 @@ function decodeBase64UrlUtf8(value: string): string {
   return new TextDecoder().decode(bytes);
 }
 
+function trimTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 47) {
+    end -= 1;
+  }
+  return end === value.length ? value : value.slice(0, end);
+}
+
 export const MobileBootstrapHttpBaseUrl = z
   .string()
   .trim()
@@ -62,8 +70,12 @@ export const MobileBootstrapWsUrl = z
 
 export const MobileBootstrapToken = z.string().trim().min(1);
 
+export function normalizeGatewayHttpBaseUrl(httpBaseUrl: string): string {
+  return trimTrailingSlashes(httpBaseUrl.trim());
+}
+
 export function inferGatewayWsUrl(httpBaseUrl: string): string {
-  const normalized = httpBaseUrl.trim().replace(/\/+$/, "");
+  const normalized = normalizeGatewayHttpBaseUrl(httpBaseUrl);
   if (normalized.startsWith("https://")) {
     return `${normalized.replace(/^https:\/\//, "wss://")}/ws`;
   }

@@ -122,4 +122,65 @@ describe("MobileSetupPage", () => {
       cleanupTestRoot(testRoot);
     }
   });
+
+  it("keeps unsaved form edits when initialConfig is recreated with the same visible values", async () => {
+    const onSubmit = vi.fn(async () => {});
+    const initialConfig = {
+      httpBaseUrl: "https://saved.example",
+      wsUrl: "wss://saved.example/ws",
+      token: "saved-token",
+      nodeEnabled: true,
+      actionSettings: {
+        "location.get_current": true,
+        "camera.capture_photo": true,
+        "audio.record_clip": true,
+      },
+    } as const;
+
+    const testRoot = renderIntoDocument(
+      React.createElement(MobileSetupPage, {
+        initialConfig,
+        onSubmit,
+      }),
+    );
+
+    try {
+      const inputs = Array.from(testRoot.container.querySelectorAll<HTMLInputElement>("input"));
+      const httpInput = inputs[0] ?? null;
+      expect(httpInput).not.toBeNull();
+
+      act(() => {
+        setNativeValue(httpInput!, "https://edited.example");
+      });
+
+      await act(async () => {
+        testRoot.root.render(
+          React.createElement(MobileSetupPage, {
+            initialConfig: { ...initialConfig },
+            onSubmit,
+          }),
+        );
+        await flushMicrotasks();
+      });
+
+      expect(httpInput?.value).toBe("https://edited.example");
+
+      await act(async () => {
+        testRoot.root.render(
+          React.createElement(MobileSetupPage, {
+            initialConfig: {
+              ...initialConfig,
+              httpBaseUrl: "https://replaced.example",
+            },
+            onSubmit,
+          }),
+        );
+        await flushMicrotasks();
+      });
+
+      expect(httpInput?.value).toBe("https://replaced.example");
+    } finally {
+      cleanupTestRoot(testRoot);
+    }
+  });
 });

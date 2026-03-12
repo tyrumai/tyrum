@@ -11,7 +11,7 @@ import {
 } from "@tyrum/operator-ui";
 import "@tyrum/operator-ui/globals.css";
 import { MobileSetupPage } from "./mobile-setup-page.js";
-import { sameMobileBootstrapConfig } from "./mobile-config.js";
+import { normalizeHttpBaseUrl, sameMobileBootstrapConfig } from "./mobile-config.js";
 import { useMobileBootstrapIntents } from "./use-mobile-bootstrap-intents.js";
 import { useMobileNode } from "./use-mobile-node.js";
 import { useMobileOperatorCore } from "./use-mobile-operator-core.js";
@@ -197,7 +197,7 @@ function MobileRoot() {
             if (!bootstrap) return;
             void operator.saveConfig({
               ...bootstrap,
-              httpBaseUrl: httpUrl.trim().replace(/\/+$/, ""),
+              httpBaseUrl: normalizeHttpBaseUrl(httpUrl),
               wsUrl: wsUrl.trim(),
             });
           }}

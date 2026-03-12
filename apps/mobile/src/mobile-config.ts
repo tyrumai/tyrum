@@ -1,4 +1,8 @@
-import { inferGatewayWsUrl, type MobileBootstrapPayload } from "@tyrum/schemas";
+import {
+  inferGatewayWsUrl,
+  normalizeGatewayHttpBaseUrl,
+  type MobileBootstrapPayload,
+} from "@tyrum/schemas";
 import { SecureStorage } from "@aparajita/capacitor-secure-storage";
 import { Preferences } from "@capacitor/preferences";
 import type { DeviceIdentity, DeviceIdentityStorage } from "@tyrum/client";
@@ -32,7 +36,7 @@ const DEFAULT_ACTION_SETTINGS: MobileActionSettings = {
 let storageReadyPromise: Promise<void> | null = null;
 
 export function normalizeHttpBaseUrl(value: string): string {
-  return value.trim().replace(/\/+$/, "");
+  return normalizeGatewayHttpBaseUrl(value);
 }
 
 export function normalizeWsUrl(value: string): string {

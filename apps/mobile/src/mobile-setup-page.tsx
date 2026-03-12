@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Alert,
   Button,
@@ -36,14 +36,6 @@ type MobileSetupPageProps = {
   onSubmit: (config: MobileBootstrapConfig) => Promise<void>;
 };
 
-function seedForConfig(config: Partial<MobileBootstrapConfig> | null | undefined): string {
-  return JSON.stringify({
-    httpBaseUrl: config?.httpBaseUrl ?? "",
-    wsUrl: config?.wsUrl ?? "",
-    token: config?.token ?? "",
-  });
-}
-
 export function MobileSetupPage({
   initialConfig,
   existingConfig,
@@ -64,17 +56,18 @@ export function MobileSetupPage({
   const [saving, setSaving] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingSubmit, setPendingSubmit] = useState<MobileBootstrapConfig | null>(null);
-
-  const formSeed = useMemo(() => seedForConfig(initialConfig), [initialConfig]);
+  const initialHttpBaseUrl = initialConfig?.httpBaseUrl ?? "";
+  const initialWsUrl = initialConfig?.wsUrl ?? "";
+  const initialToken = initialConfig?.token ?? "";
 
   useEffect(() => {
-    setHttpBaseUrl(initialConfig?.httpBaseUrl ?? "");
-    setWsUrl(initialConfig?.wsUrl ?? "");
-    setToken(initialConfig?.token ?? "");
+    setHttpBaseUrl(initialHttpBaseUrl);
+    setWsUrl(initialWsUrl);
+    setToken(initialToken);
     setSaveError(null);
     setConfirmOpen(false);
     setPendingSubmit(null);
-  }, [formSeed, initialConfig]);
+  }, [initialHttpBaseUrl, initialToken, initialWsUrl]);
 
   const disabled = busy || saving || scanQrBusy;
 
@@ -116,6 +109,13 @@ export function MobileSetupPage({
     }
 
     void submitConfig(nextConfig);
+  };
+
+  const handleConfirmOpenChange = (open: boolean): void => {
+    setConfirmOpen(open);
+    if (!open) {
+      setPendingSubmit(null);
+    }
   };
 
   return (
@@ -230,7 +230,7 @@ export function MobileSetupPage({
         </Card>
       </div>
 
-      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+      <Dialog open={confirmOpen} onOpenChange={handleConfirmOpenChange}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Replace saved mobile config?</DialogTitle>
