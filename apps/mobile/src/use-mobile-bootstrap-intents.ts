@@ -37,6 +37,20 @@ export function useMobileBootstrapIntents(): {
   const lastHandledUrlRef = useRef<string | null>(null);
   const canScanQr = Capacitor.isNativePlatform();
 
+  const clearQueuedBootstrapState = useCallback(() => {
+    lastHandledUrlRef.current = null;
+    setDraftConfig(null);
+    setNoticeMessage(null);
+  }, []);
+
+  const handleBootstrapImportError = useCallback(
+    (error: unknown) => {
+      clearQueuedBootstrapState();
+      setErrorMessage(formatUnknownError(error));
+    },
+    [clearQueuedBootstrapState],
+  );
+
   const queueBootstrapUrl = useCallback((url: string, source: BootstrapSource) => {
     const trimmedUrl = url.trim();
     if (!trimmedUrl || lastHandledUrlRef.current === trimmedUrl) {
@@ -51,11 +65,9 @@ export function useMobileBootstrapIntents(): {
   }, []);
 
   const clearDraft = useCallback(() => {
-    lastHandledUrlRef.current = null;
-    setDraftConfig(null);
-    setNoticeMessage(null);
+    clearQueuedBootstrapState();
     setErrorMessage(null);
-  }, []);
+  }, [clearQueuedBootstrapState]);
 
   const scanQrCode = useCallback(async () => {
     if (!canScanQr) {
@@ -70,13 +82,17 @@ export function useMobileBootstrapIntents(): {
         scanInstructions: "Scan the Tyrum Mobile bootstrap QR code.",
         scanButton: false,
       });
-      queueBootstrapUrl(result.ScanResult, "qr");
+      try {
+        queueBootstrapUrl(result.ScanResult, "qr");
+      } catch (error) {
+        handleBootstrapImportError(error);
+      }
     } catch (error) {
       setErrorMessage(formatUnknownError(error));
     } finally {
       setScanBusy(false);
     }
-  }, [canScanQr, queueBootstrapUrl]);
+  }, [canScanQr, handleBootstrapImportError, queueBootstrapUrl]);
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) {
@@ -92,7 +108,7 @@ export function useMobileBootstrapIntents(): {
         try {
           queueBootstrapUrl(result.url, "deep-link");
         } catch (error) {
-          setErrorMessage(formatUnknownError(error));
+          handleBootstrapImportError(error);
         }
       })
       .catch((error) => {
@@ -105,7 +121,7 @@ export function useMobileBootstrapIntents(): {
       try {
         queueBootstrapUrl(event.url, "deep-link");
       } catch (error) {
-        setErrorMessage(formatUnknownError(error));
+        handleBootstrapImportError(error);
       }
     }).then((listener) => {
       if (disposed) {
@@ -123,7 +139,7 @@ export function useMobileBootstrapIntents(): {
         removeListener();
       }
     };
-  }, [queueBootstrapUrl]);
+  }, [handleBootstrapImportError, queueBootstrapUrl]);
 
   return {
     canScanQr,

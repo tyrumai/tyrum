@@ -30,12 +30,13 @@ export async function writeTextToClipboard(
 
 export function useClipboard() {
   const host = useHostApiOptional();
+  const canWrite = canWriteTextToClipboard(host);
 
   return useMemo(
     () => ({
-      canWrite: canWriteTextToClipboard(host),
+      canWrite,
       writeText: async (text: string) => await writeTextToClipboard(text, host),
     }),
-    [host],
+    [canWrite, host],
   );
 }

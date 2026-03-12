@@ -164,6 +164,57 @@ describe("useMobileBootstrapIntents", () => {
     container.remove();
   });
 
+  it("clears a previously loaded draft when a scanned bootstrap URL is malformed", async () => {
+    const scannedUrl = createMobileBootstrapUrl({
+      v: 1,
+      httpBaseUrl: "https://gateway.example",
+      wsUrl: "wss://gateway.example/ws",
+      token: "token-qr",
+    });
+    scanBarcodeMock.mockResolvedValueOnce({ ScanResult: scannedUrl });
+    scanBarcodeMock.mockResolvedValueOnce({ ScanResult: "tyrum://bootstrap?payload=%%%" });
+
+    const { useMobileBootstrapIntents } = await import("../src/use-mobile-bootstrap-intents.js");
+    const { container, root } = createTestRoot();
+
+    let latestState: ReturnType<typeof useMobileBootstrapIntents> | null = null;
+    const Probe = () => {
+      latestState = useMobileBootstrapIntents();
+      return null;
+    };
+
+    await act(async () => {
+      root.render(React.createElement(Probe));
+      await flushMicrotasks();
+    });
+
+    await act(async () => {
+      await latestState?.scanQrCode();
+      await flushMicrotasks();
+    });
+
+    expect(latestState?.draftConfig).toMatchObject({
+      httpBaseUrl: "https://gateway.example",
+      wsUrl: "wss://gateway.example/ws",
+      token: "token-qr",
+    });
+    expect(latestState?.noticeMessage).toContain("scanned QR code");
+
+    await act(async () => {
+      await latestState?.scanQrCode();
+      await flushMicrotasks();
+    });
+
+    expect(latestState?.draftConfig).toBeNull();
+    expect(latestState?.noticeMessage).toBeNull();
+    expect(latestState?.errorMessage).toMatch(/base64url/i);
+
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+  });
+
   it("surfaces bootstrap import errors from malformed deep links", async () => {
     getLaunchUrlMock.mockResolvedValue({ url: "tyrum://bootstrap?payload=%%%" });
 
@@ -183,6 +234,63 @@ describe("useMobileBootstrapIntents", () => {
 
     expect(latestState?.draftConfig).toBeNull();
     expect(latestState?.errorMessage).toMatch(/base64url/i);
+
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+  });
+
+  it("clears prior imports for malformed deep links and allows the same link to load again", async () => {
+    const launchUrl = createMobileBootstrapUrl({
+      v: 1,
+      httpBaseUrl: "https://gateway.example",
+      wsUrl: "wss://gateway.example/ws",
+      token: "token-link",
+    });
+    getLaunchUrlMock.mockResolvedValue({ url: launchUrl });
+
+    const { useMobileBootstrapIntents } = await import("../src/use-mobile-bootstrap-intents.js");
+    const { container, root } = createTestRoot();
+
+    let latestState: ReturnType<typeof useMobileBootstrapIntents> | null = null;
+    const Probe = () => {
+      latestState = useMobileBootstrapIntents();
+      return null;
+    };
+
+    await act(async () => {
+      root.render(React.createElement(Probe));
+      await flushMicrotasks();
+    });
+
+    expect(latestState?.draftConfig).toMatchObject({
+      httpBaseUrl: "https://gateway.example",
+      wsUrl: "wss://gateway.example/ws",
+      token: "token-link",
+    });
+
+    await act(async () => {
+      listeners.get("appUrlOpen")?.({ url: "tyrum://bootstrap?payload=%%%" });
+      await flushMicrotasks();
+    });
+
+    expect(latestState?.draftConfig).toBeNull();
+    expect(latestState?.noticeMessage).toBeNull();
+    expect(latestState?.errorMessage).toMatch(/base64url/i);
+
+    await act(async () => {
+      listeners.get("appUrlOpen")?.({ url: launchUrl });
+      await flushMicrotasks();
+    });
+
+    expect(latestState?.draftConfig).toMatchObject({
+      httpBaseUrl: "https://gateway.example",
+      wsUrl: "wss://gateway.example/ws",
+      token: "token-link",
+    });
+    expect(latestState?.noticeMessage).toContain("mobile link");
+    expect(latestState?.errorMessage).toBeNull();
 
     act(() => {
       root.unmount();
