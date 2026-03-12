@@ -5,8 +5,9 @@ import { describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
 import type { OperatorCore } from "../../../operator-core/src/index.js";
 import { createStore } from "../../../operator-core/src/store.js";
+import { AgentsPageEditor } from "../../src/components/pages/agents-page-editor.js";
 import { AgentsPage } from "../../src/components/pages/agents-page.js";
-import { cleanupTestRoot, click, renderIntoDocument } from "../test-utils.js";
+import { cleanupTestRoot, click, renderIntoDocument, setNativeValue } from "../test-utils.js";
 
 function sampleManagedAgentDetail(agentKey: string) {
   return {
@@ -293,5 +294,64 @@ describe("AgentsPage editor", () => {
     );
 
     cleanupTestRoot(testRoot);
+  });
+
+  it("debounces capability lookups while typing a new agent key", async () => {
+    vi.useFakeTimers();
+    try {
+      const capabilities = vi.fn(async () => ({
+        skills: { default_mode: "allow", allow: [], deny: [], workspace_trusted: true, items: [] },
+        mcp: { default_mode: "allow", allow: [], deny: [], items: [] },
+        tools: { default_mode: "allow", allow: [], deny: [], items: [] },
+      }));
+      const core = createCore(vi.fn(), vi.fn(), capabilities, vi.fn());
+
+      const testRoot = renderIntoDocument(
+        React.createElement(AgentsPageEditor, {
+          core,
+          mode: "create",
+          createNonce: 1,
+          onSaved: vi.fn(),
+          onCancelCreate: vi.fn(),
+        }),
+      );
+      await flush();
+
+      expect(capabilities).toHaveBeenCalledTimes(1);
+      expect(capabilities).toHaveBeenLastCalledWith("default");
+
+      const agentKeyInput = testRoot.container.querySelector<HTMLInputElement>(
+        '[data-testid="agents-editor-agent-key"]',
+      );
+      expect(agentKeyInput).not.toBeNull();
+
+      act(() => {
+        if (agentKeyInput) {
+          setNativeValue(agentKeyInput, "agent-draft");
+        }
+      });
+      await flush();
+
+      expect(capabilities).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        vi.advanceTimersByTime(249);
+        await Promise.resolve();
+      });
+      expect(capabilities).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        vi.advanceTimersByTime(1);
+        await Promise.resolve();
+      });
+      await flush();
+
+      expect(capabilities).toHaveBeenCalledTimes(2);
+      expect(capabilities).toHaveBeenLastCalledWith("agent-draft");
+
+      cleanupTestRoot(testRoot);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

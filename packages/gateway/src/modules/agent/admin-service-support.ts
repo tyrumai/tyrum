@@ -77,6 +77,7 @@ function parseIdentityJson(row: LatestIdentityRow): IdentityPackT | undefined {
     const identity = IdentityPack.safeParse(parsed);
     return identity.success ? identity.data : undefined;
   } catch {
+    // Intentional: invalid persisted identity JSON should be treated as absent so listing can continue.
     return undefined;
   }
 }

@@ -1,4 +1,4 @@
-import type { AgentMcpConfig, AgentSkillConfig, AgentToolConfig } from "@tyrum/schemas";
+import type { AgentSkillConfig } from "@tyrum/schemas";
 import { wildcardMatch } from "../policy/wildcard.js";
 
 type AgentAccessConfig = Pick<AgentSkillConfig, "default_mode" | "allow" | "deny">;
@@ -41,18 +41,4 @@ export function materializeAllowedAgentIds<T extends { id: string }>(
   }
 
   return allowed;
-}
-
-export function countAllowedAgentIds(
-  config: AgentSkillConfig | AgentMcpConfig | AgentToolConfig,
-  ids: readonly string[],
-): number {
-  return ids.filter((id, index) => {
-    const normalizedId = normalizeId(id);
-    return (
-      normalizedId.length > 0 &&
-      ids.findIndex((candidate) => normalizeId(candidate) === normalizedId) === index &&
-      isAgentAccessAllowed(config, normalizedId)
-    );
-  }).length;
 }

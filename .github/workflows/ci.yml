@@ -561,6 +561,10 @@ jobs:
         shell: bash
         run: git diff --exit-code -- apps/mobile/ios
 
+      - name: Reset SwiftPM binary artifact cache
+        shell: bash
+        run: rm -rf ~/Library/Caches/org.swift.swiftpm/artifacts
+
       - name: Build iOS simulator target
         run: pnpm --filter @tyrum/mobile exec node ./scripts/build-ios.mjs
 

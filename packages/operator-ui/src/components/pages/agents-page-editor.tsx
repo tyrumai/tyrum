@@ -24,6 +24,8 @@ type AgentEditorProps = {
   onCancelCreate: () => void;
 };
 
+const CREATE_CAPABILITIES_DEBOUNCE_MS = 250;
+
 function sortJsonValue(value: unknown): unknown {
   if (Array.isArray(value)) {
     return value.map(sortJsonValue);
@@ -80,9 +82,28 @@ export function AgentsPageEditor({
     {},
   );
   const saveAction = useApiAction<ManagedAgentDetail>();
-  const capabilitiesAgentKey = React.useDeferredValue(
-    (mode === "create" ? form.agentKey : agentKey)?.trim() || "default",
+  const deferredCreateCapabilitiesAgentKey = React.useDeferredValue(
+    form.agentKey.trim() || "default",
   );
+  const [debouncedCreateCapabilitiesAgentKey, setDebouncedCreateCapabilitiesAgentKey] =
+    React.useState("default");
+  const capabilitiesAgentKey =
+    mode === "create" ? debouncedCreateCapabilitiesAgentKey : agentKey?.trim() || "default";
+
+  React.useEffect(() => {
+    if (mode !== "create") return;
+    if (deferredCreateCapabilitiesAgentKey === "default") {
+      setDebouncedCreateCapabilitiesAgentKey("default");
+      return;
+    }
+
+    const timeoutId = globalThis.setTimeout(() => {
+      setDebouncedCreateCapabilitiesAgentKey(deferredCreateCapabilitiesAgentKey);
+    }, CREATE_CAPABILITIES_DEBOUNCE_MS);
+    return () => {
+      globalThis.clearTimeout(timeoutId);
+    };
+  }, [createNonce, deferredCreateCapabilitiesAgentKey, mode]);
 
   React.useEffect(() => {
     let cancelled = false;
