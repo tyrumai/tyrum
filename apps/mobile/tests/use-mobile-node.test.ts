@@ -405,6 +405,7 @@ describe("useMobileNode", () => {
       root.unmount();
     });
 
+    expect(connectMock).toHaveBeenCalledTimes(1);
     await act(async () => {
       deferredDeviceInfo.resolve({
         name: "Ron phone",
@@ -417,6 +418,67 @@ describe("useMobileNode", () => {
     });
 
     expect(loadOrCreateDeviceIdentityMock).not.toHaveBeenCalled();
+    container.remove();
+  });
+
+  it("restarts location streaming after reconnecting with a new websocket URL", async () => {
+    const { useMobileNode } = await import("../src/use-mobile-node.js");
+    const { container, root } = createTestRoot();
+
+    let currentConfig: MobileConnectionConfig = {
+      httpBaseUrl: "http://127.0.0.1:8788",
+      wsUrl: "ws://127.0.0.1:8788/ws",
+      nodeEnabled: true,
+      actionSettings: {
+        "location.get_current": true,
+        "camera.capture_photo": true,
+        "audio.record_clip": true,
+      },
+      locationStreaming: {
+        streamEnabled: true,
+        distanceFilterM: 100,
+        maxIntervalMs: 900_000,
+        maxAccuracyM: 100,
+        backgroundEnabled: true,
+      },
+    };
+
+    const Probe = () => {
+      useMobileNode({
+        config: currentConfig,
+        token: "token-1",
+        updateConfig: updateConfigMock,
+      });
+      return null;
+    };
+
+    await act(async () => {
+      root.render(React.createElement(Probe));
+      await flushMicrotasks();
+    });
+
+    expect(connectMock).toHaveBeenCalledTimes(1);
+    expect(locationStreamStartMock).toHaveBeenCalledTimes(1);
+
+    currentConfig = {
+      ...currentConfig,
+      wsUrl: "ws://127.0.0.1:9999/ws",
+    };
+
+    await act(async () => {
+      root.render(React.createElement(Probe));
+      await flushMicrotasks();
+    });
+
+    expect(connectMock).toHaveBeenCalledTimes(2);
+    expect(disconnectMock).toHaveBeenCalledTimes(1);
+    expect(locationStreamStartMock).toHaveBeenCalledTimes(2);
+
+    act(() => {
+      root.unmount();
+    });
+
+    expect(disconnectMock).toHaveBeenCalledTimes(2);
     container.remove();
   });
 });
