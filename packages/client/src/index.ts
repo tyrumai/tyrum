@@ -70,6 +70,7 @@ export type {
   AuditVerifyResult,
   AuditForgetInput,
   AuditForgetResult,
+  AgentCapabilitiesResult,
   ContextGetResponse,
   ContextListResponse,
   ContextDetailResponse,

@@ -1,7 +1,9 @@
-import type { Playbook } from "@tyrum/schemas";
-import { Hono } from "hono";
-import type { AppOptions } from "./app.js";
-import type { GatewayContainer } from "./container.js";
+import {
+  createClusterWsRouteOptions,
+  createWsRouteOptions,
+  resolvePlaybooks,
+} from "./app-route-helpers.js";
+import type { AppRouteContext } from "./app-route-types.js";
 import { createAgentsRoutes } from "./routes/agents.js";
 import { createAgentConfigRoutes } from "./routes/agent-config.js";
 import { createAgentRoutes } from "./routes/agent.js";
@@ -49,16 +51,8 @@ import { createWorkflowRoutes } from "./routes/workflow.js";
 import { ChannelConfigDal } from "./modules/channels/channel-config-dal.js";
 import { TelegramChannelQueue } from "./modules/channels/telegram.js";
 import { TelegramChannelRuntime } from "./modules/channels/telegram-runtime.js";
-import { ChannelThreadDal } from "./modules/channels/thread-dal.js";
-import { RoutingConfigDal } from "./modules/channels/routing-config-dal.js";
 import { LifecycleHookConfigDal } from "./modules/hooks/config-dal.js";
-import { AuthProfileDal } from "./modules/models/auth-profile-dal.js";
-import { SessionProviderPinDal } from "./modules/models/session-pin-dal.js";
-import { ConfiguredModelPresetDal } from "./modules/models/configured-model-preset-dal.js";
-import { ExecutionProfileModelAssignmentDal } from "./modules/models/execution-profile-model-assignment-dal.js";
 import { PlaybookRunner } from "./modules/playbook/runner.js";
-import { loadAllPlaybooks } from "./modules/playbook/loader.js";
-import { WsEventDal } from "./modules/ws-event/dal.js";
 import { isAuthProfilesEnabled } from "./modules/models/auth-profiles-enabled.js";
 import { gatewayMetrics } from "./modules/observability/metrics.js";
 import { PolicyBundleConfigDal } from "./modules/policy/config-dal.js";
@@ -67,72 +61,8 @@ import { NodeCapabilityInspectionService } from "./modules/node/capability-inspe
 import { NodeDispatchService } from "./modules/agent/node-dispatch-service.js";
 import { isSharedStateMode, resolveGatewayStateMode } from "./modules/runtime-state/mode.js";
 
-export interface AppRouteDependencies {
-  authProfileDal: AuthProfileDal;
-  pinDal: SessionProviderPinDal;
-  configuredModelPresetDal: ConfiguredModelPresetDal;
-  executionProfileModelAssignmentDal: ExecutionProfileModelAssignmentDal;
-  routingConfigDal: RoutingConfigDal;
-  channelThreadDal: ChannelThreadDal;
-  wsEventDal: WsEventDal;
-}
-
-export interface AppRouteContext {
-  app: Hono;
-  container: GatewayContainer;
-  opts: AppOptions;
-  runtime: { version: string; instanceId: string; role: string; otelEnabled: boolean };
-  isLocalOnly: boolean;
-  wsMaxBufferedBytes?: number;
-  engine: AppOptions["engine"];
-  secretProviderForTenant: AppOptions["secretProviderForTenant"];
-  routeDeps: AppRouteDependencies;
-}
-
-export function createAppRouteDependencies(container: GatewayContainer): AppRouteDependencies {
-  return {
-    authProfileDal: new AuthProfileDal(container.db),
-    pinDal: new SessionProviderPinDal(container.db),
-    configuredModelPresetDal: new ConfiguredModelPresetDal(container.db),
-    executionProfileModelAssignmentDal: new ExecutionProfileModelAssignmentDal(container.db),
-    routingConfigDal: new RoutingConfigDal(container.db),
-    channelThreadDal: new ChannelThreadDal(container.db),
-    wsEventDal: new WsEventDal(container.db),
-  };
-}
-
-function createWsRouteOptions(context: AppRouteContext) {
-  if (!context.opts.connectionManager) return undefined;
-
-  return {
-    connectionManager: context.opts.connectionManager,
-    maxBufferedBytes: context.wsMaxBufferedBytes,
-    cluster: context.opts.wsCluster,
-  };
-}
-
-function createClusterWsRouteOptions(context: AppRouteContext) {
-  if (!context.opts.connectionManager) return undefined;
-
-  return {
-    connectionManager: context.opts.connectionManager,
-    maxBufferedBytes: context.wsMaxBufferedBytes,
-    cluster:
-      context.opts.wsCluster && context.opts.connectionDirectory
-        ? {
-            ...context.opts.wsCluster,
-            connectionDirectory: context.opts.connectionDirectory,
-          }
-        : undefined,
-  };
-}
-
-function resolvePlaybooks(context: AppRouteContext): Playbook[] {
-  const playbookHome = context.container.config?.tyrumHome;
-  return (
-    context.opts.playbooks ?? (playbookHome ? loadAllPlaybooks(`${playbookHome}/playbooks`) : [])
-  );
-}
+export { createAppRouteDependencies } from "./app-route-helpers.js";
+export type { AppRouteContext, AppRouteDependencies } from "./app-route-types.js";
 
 export function registerSystemAndPublicRoutes(context: AppRouteContext): void {
   context.app.route("/", createHealthRoute({ isLocalOnly: context.isLocalOnly }));
@@ -210,7 +140,11 @@ export function registerSystemAndPublicRoutes(context: AppRouteContext): void {
       policyService: context.container.policyService,
       policyOverrideDal: context.container.policyOverrideDal,
       wsEventDal: context.routeDeps.wsEventDal,
-      ws: createWsRouteOptions(context),
+      ws: createWsRouteOptions({
+        connectionManager: context.opts.connectionManager,
+        wsCluster: context.opts.wsCluster,
+        wsMaxBufferedBytes: context.wsMaxBufferedBytes,
+      }),
     }),
   );
 }
@@ -256,7 +190,11 @@ export function registerAuthAndSecurityRoutes(context: AppRouteContext): void {
       logger: context.container.logger,
       policyOverrideDal: context.container.policyOverrideDal,
       wsEventDal: context.routeDeps.wsEventDal,
-      ws: createWsRouteOptions(context),
+      ws: createWsRouteOptions({
+        connectionManager: context.opts.connectionManager,
+        wsCluster: context.opts.wsCluster,
+        wsMaxBufferedBytes: context.wsMaxBufferedBytes,
+      }),
     }),
   );
 
@@ -346,7 +284,11 @@ export function registerModelsAndConfigRoutes(context: AppRouteContext): void {
       logger: context.container.logger,
       routingConfigDal: context.routeDeps.routingConfigDal,
       channelThreadDal: context.routeDeps.channelThreadDal,
-      ws: createWsRouteOptions(context),
+      ws: createWsRouteOptions({
+        connectionManager: context.opts.connectionManager,
+        wsCluster: context.opts.wsCluster,
+        wsMaxBufferedBytes: context.wsMaxBufferedBytes,
+      }),
     }),
   );
 }
@@ -386,7 +328,10 @@ export function registerExecutionAndWorkflowRoutes(context: AppRouteContext): vo
   context.app.route(
     "/",
     createPlaybookRoutes({
-      playbooks: resolvePlaybooks(context),
+      playbooks: resolvePlaybooks({
+        playbooks: context.opts.playbooks,
+        tyrumHome: context.container.config?.tyrumHome,
+      }),
       runner: playbookRunner,
       engine: context.engine,
       policyService: context.container.policyService,
@@ -406,7 +351,12 @@ export function registerAgentsAndWorkspaceRoutes(context: AppRouteContext): void
       logger: context.container.logger,
       nodePairingDal: context.container.nodePairingDal,
       wsEventDal: context.routeDeps.wsEventDal,
-      ws: createClusterWsRouteOptions(context),
+      ws: createClusterWsRouteOptions({
+        connectionDirectory: context.opts.connectionDirectory,
+        connectionManager: context.opts.connectionManager,
+        wsCluster: context.opts.wsCluster,
+        wsMaxBufferedBytes: context.wsMaxBufferedBytes,
+      }),
     }),
   );
 
@@ -414,13 +364,18 @@ export function registerAgentsAndWorkspaceRoutes(context: AppRouteContext): void
     "/",
     createIngressRoutes({
       telegramRuntime,
-      telegramQueue: context.opts.agents
-        ? new TelegramChannelQueue(context.container.db, {
-            sessionDal: context.container.sessionDal,
-            logger: context.container.logger,
-            ws: createWsRouteOptions(context),
-          })
-        : undefined,
+      telegramQueue:
+        context.channelPipelineEnabled && context.opts.agents
+          ? new TelegramChannelQueue(context.container.db, {
+              sessionDal: context.container.sessionDal,
+              logger: context.container.logger,
+              ws: createWsRouteOptions({
+                connectionManager: context.opts.connectionManager,
+                wsCluster: context.opts.wsCluster,
+                wsMaxBufferedBytes: context.wsMaxBufferedBytes,
+              }),
+            })
+          : undefined,
       agents: context.opts.agents,
       memoryV1Dal: context.container.memoryV1Dal,
       routingConfigDal: context.routeDeps.routingConfigDal,
@@ -434,6 +389,9 @@ export function registerAgentsAndWorkspaceRoutes(context: AppRouteContext): void
       db: context.container.db,
       identityScopeDal: context.container.identityScopeDal,
       stateMode: resolveGatewayStateMode(context.container.deploymentConfig),
+      logger: context.container.logger,
+      pluginCatalogProvider: context.opts.pluginCatalogProvider,
+      plugins: context.opts.plugins,
     }),
   );
   context.app.route(

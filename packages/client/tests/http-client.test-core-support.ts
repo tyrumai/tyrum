@@ -30,7 +30,6 @@ export function registerHttpClientCoreTests(): void {
             agent_id: "11111111-1111-4111-8111-111111111111",
             persona: {
               name: "Hypatia",
-              description: "Calm systems thinker.",
               tone: "direct",
               palette: "graphite",
               character: "architect",
@@ -42,7 +41,6 @@ export function registerHttpClientCoreTests(): void {
             home: "/tmp/agent-1",
             persona: {
               name: "Ada",
-              description: "Methodical builder.",
               tone: "direct",
               palette: "moss",
               character: "builder",

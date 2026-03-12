@@ -14,7 +14,6 @@ function sampleAgentStatus() {
     home: "/tmp/agents/default",
     identity: {
       name: "Default Agent",
-      description: "Primary operator agent",
     },
     model: {
       model: "openai/gpt-5.4",
@@ -72,7 +71,6 @@ function sampleManagedAgentDetail(agentKey: string) {
     can_delete: agentKey !== "default",
     persona: {
       name: agentKey === "default" ? "Default Agent" : "Agent One",
-      description: "Managed agent",
       tone: "direct",
       palette: "graphite",
       character: "architect",
@@ -81,7 +79,6 @@ function sampleManagedAgentDetail(agentKey: string) {
       model: { model: "openai/gpt-5.4" },
       persona: {
         name: agentKey === "default" ? "Default Agent" : "Agent One",
-        description: "Managed agent",
         tone: "direct",
         palette: "graphite",
         character: "architect",
@@ -90,12 +87,10 @@ function sampleManagedAgentDetail(agentKey: string) {
     identity: IdentityPack.parse({
       meta: {
         name: agentKey === "default" ? "Default Agent" : "Agent One",
-        description: "Managed agent",
         style: {
           tone: "direct",
         },
       },
-      body: "",
     }),
     config_revision: 1,
     identity_revision: 1,
@@ -197,6 +192,17 @@ function createCore(options?: {
       agents: {
         list: options?.list ?? vi.fn().mockResolvedValue({ agents: [] }),
         get: options?.get ?? vi.fn().mockResolvedValue(sampleManagedAgentDetail("default")),
+        capabilities: vi.fn(async () => ({
+          skills: {
+            default_mode: "allow",
+            allow: [],
+            deny: [],
+            workspace_trusted: true,
+            items: [],
+          },
+          mcp: { default_mode: "allow", allow: [], deny: [], items: [] },
+          tools: { default_mode: "allow", allow: [], deny: [], items: [] },
+        })),
         create: options?.create ?? vi.fn().mockResolvedValue(sampleManagedAgentDetail("default")),
         update: options?.update ?? vi.fn().mockResolvedValue(sampleManagedAgentDetail("default")),
         delete: options?.remove ?? vi.fn().mockResolvedValue({ deleted: true }),

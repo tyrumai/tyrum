@@ -43,7 +43,6 @@ describe("createAgentRoutes", () => {
           has_config: false,
           persona: {
             name: "Helper",
-            description: "Autonomous architect with a direct tone.",
             tone: "direct",
             palette: "graphite",
             character: "architect",

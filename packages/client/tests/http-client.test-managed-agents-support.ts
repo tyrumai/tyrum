@@ -19,7 +19,6 @@ export function registerHttpClientManagedAgentTests(): void {
               can_delete: false,
               persona: {
                 name: "Default Agent",
-                description: "Managed default agent.",
                 tone: "direct",
                 palette: "graphite",
                 character: "architect",
@@ -39,7 +38,6 @@ export function registerHttpClientManagedAgentTests(): void {
         can_delete: true,
         persona: {
           name: "Agent One",
-          description: "Managed agent.",
           tone: "direct",
           palette: "graphite",
           character: "architect",
@@ -48,7 +46,6 @@ export function registerHttpClientManagedAgentTests(): void {
           model: { model: "openai/gpt-4.1" },
           persona: {
             name: "Agent One",
-            description: "Managed agent.",
             tone: "direct",
             palette: "graphite",
             character: "architect",
@@ -57,10 +54,8 @@ export function registerHttpClientManagedAgentTests(): void {
         identity: {
           meta: {
             name: "Agent One",
-            description: "Managed agent.",
             style: { tone: "direct" },
           },
-          body: "",
         },
         config_revision: 1,
         identity_revision: 1,
@@ -100,7 +95,6 @@ export function registerHttpClientManagedAgentTests(): void {
             can_delete: true,
             persona: {
               name: "Agent Two",
-              description: "Managed agent.",
               tone: "direct",
               palette: "graphite",
               character: "architect",
@@ -109,7 +103,6 @@ export function registerHttpClientManagedAgentTests(): void {
               model: { model: "openai/gpt-4.1" },
               persona: {
                 name: "Agent Two",
-                description: "Managed agent.",
                 tone: "direct",
                 palette: "graphite",
                 character: "architect",
@@ -118,10 +111,8 @@ export function registerHttpClientManagedAgentTests(): void {
             identity: {
               meta: {
                 name: "Agent Two",
-                description: "Managed agent.",
                 style: { tone: "direct" },
               },
-              body: "",
             },
             config_revision: 1,
             identity_revision: 1,
@@ -143,7 +134,6 @@ export function registerHttpClientManagedAgentTests(): void {
           can_delete: true,
           persona: {
             name: "Agent Two",
-            description: "Updated managed agent.",
             tone: "direct",
             palette: "graphite",
             character: "architect",
@@ -152,7 +142,6 @@ export function registerHttpClientManagedAgentTests(): void {
             model: { model: "openai/gpt-4.1" },
             persona: {
               name: "Agent Two",
-              description: "Updated managed agent.",
               tone: "direct",
               palette: "graphite",
               character: "architect",
@@ -161,10 +150,8 @@ export function registerHttpClientManagedAgentTests(): void {
           identity: {
             meta: {
               name: "Agent Two",
-              description: "Updated managed agent.",
               style: { tone: "direct" },
             },
-            body: "updated",
           },
           config_revision: 2,
           identity_revision: 2,
@@ -187,19 +174,10 @@ export function registerHttpClientManagedAgentTests(): void {
         model: { model: "openai/gpt-4.1" },
         persona: {
           name: "Agent Two",
-          description: "Managed agent.",
           tone: "direct",
           palette: "graphite",
           character: "architect",
         },
-      },
-      identity: {
-        meta: {
-          name: "Agent Two",
-          description: "Managed agent.",
-          style: { tone: "direct" },
-        },
-        body: "",
       },
     });
     expect(created.agent_key).toBe("agent-2");
@@ -209,22 +187,13 @@ export function registerHttpClientManagedAgentTests(): void {
         model: { model: "openai/gpt-4.1" },
         persona: {
           name: "Agent Two",
-          description: "Updated managed agent.",
           tone: "direct",
           palette: "graphite",
           character: "architect",
         },
       },
-      identity: {
-        meta: {
-          name: "Agent Two",
-          description: "Updated managed agent.",
-          style: { tone: "direct" },
-        },
-        body: "updated",
-      },
     });
-    expect(updated.identity.body).toBe("updated");
+    expect(updated.identity.meta.name).toBe("Agent Two");
 
     const deleted = await client.agents.delete("agent-2");
     expect(deleted.deleted).toBe(true);
@@ -239,5 +208,52 @@ export function registerHttpClientManagedAgentTests(): void {
     expect(updateInit.method).toBe("PUT");
     expect(deleteUrl).toBe("https://gateway.example/agents/agent-2");
     expect(deleteInit.method).toBe("DELETE");
+  });
+
+  it("agents.capabilities reads capability catalogs", async () => {
+    const fetch = makeFetchMock(async () =>
+      jsonResponse({
+        skills: {
+          default_mode: "allow",
+          allow: [],
+          deny: [],
+          workspace_trusted: true,
+          items: [{ id: "review", name: "Review", version: "1.0.0", source: "bundled" }],
+        },
+        mcp: {
+          default_mode: "allow",
+          allow: [],
+          deny: [],
+          items: [
+            { id: "filesystem", name: "Filesystem", transport: "stdio", source: "workspace" },
+          ],
+        },
+        tools: {
+          default_mode: "allow",
+          allow: [],
+          deny: [],
+          items: [
+            {
+              id: "read",
+              description: "Read files from disk.",
+              source: "builtin",
+              family: "fs",
+              backing_server_id: null,
+            },
+          ],
+        },
+      }),
+    );
+    const client = createTestClient({ fetch });
+
+    const result = await client.agents.capabilities("agent-2");
+    expect(result.skills.items[0]?.id).toBe("review");
+
+    const [url, init] = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [
+      string,
+      RequestInit,
+    ];
+    expect(url).toBe("https://gateway.example/agents/agent-2/capabilities");
+    expect(init.method).toBe("GET");
   });
 }

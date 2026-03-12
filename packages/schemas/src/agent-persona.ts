@@ -126,10 +126,6 @@ function nextItem<T>(items: readonly T[], current: T, skip: Set<T>): T {
   return items[0]!;
 }
 
-export function buildPersonaDescription(character: string, tone: string): string {
-  return `Autonomous ${character} with a ${tone} tone.`;
-}
-
 export function randomizePersona(input: {
   current: AgentPersona;
   usedNames?: Iterable<string>;
@@ -150,6 +146,5 @@ export function randomizePersona(input: {
     tone,
     palette,
     character,
-    description: buildPersonaDescription(character, tone),
   };
 }

@@ -9,12 +9,19 @@ import {
   ensureWorkspaceInitialized,
   DEFAULT_IDENTITY_MD,
   resolveBundledSkillsDir,
+  resolveMcpDir,
   resolveSkillsDir,
   resolveUserSkillsDir,
 } from "./home.js";
 import { AgentIdentityDal } from "./identity-dal.js";
 import { RuntimePackageDal } from "./runtime-package-dal.js";
-import { loadSkillFromDir, loadEnabledMcpServers, type LoadedSkillManifest } from "./workspace.js";
+import { isAgentAccessAllowed } from "./access-config.js";
+import {
+  listMcpServersFromDir,
+  listSkillsFromDir,
+  loadSkillFromDir,
+  type LoadedSkillManifest,
+} from "./workspace.js";
 import { parseFrontmatterDocument } from "./frontmatter.js";
 import type { Logger } from "../observability/logger.js";
 import type { SqlDb } from "../../statestore/types.js";
@@ -155,29 +162,53 @@ class LocalAgentContextStore implements AgentContextStore {
     const managedSkills = await this.runtimePackageDal.listLatest({
       tenantId: scope.tenantId,
       packageKind: "skill",
-      packageKeys: config.skills.enabled,
       enabledOnly: true,
     });
     const managedById = new Map(managedSkills.map((item) => [item.packageKey, item]));
-    const loaded: LoadedSkillManifest[] = [];
     const workspaceSkillsDir = resolveSkillsDir(this.home);
     const userSkillsDir = resolveUserSkillsDir();
     const bundledSkillsDir = resolveBundledSkillsDir();
     const workspaceTrusted = config.skills.workspace_trusted === true;
+    const orderedSkillIds = [
+      ...(workspaceTrusted
+        ? (await listSkillsFromDir(workspaceSkillsDir, "workspace", this.logger)).map(
+            (skill) => skill.meta.id,
+          )
+        : []),
+      ...managedSkills.map((skill) => skill.packageKey),
+      ...(await listSkillsFromDir(userSkillsDir, "user", this.logger)).map(
+        (skill) => skill.meta.id,
+      ),
+      ...(await listSkillsFromDir(bundledSkillsDir, "bundled", this.logger)).map(
+        (skill) => skill.meta.id,
+      ),
+    ];
+    const loaded: LoadedSkillManifest[] = [];
+    const seen = new Set<string>();
 
-    for (const skillId of config.skills.enabled) {
+    for (const skillId of orderedSkillIds) {
+      const normalizedSkillId = skillId.trim();
+      if (
+        normalizedSkillId.length === 0 ||
+        seen.has(normalizedSkillId) ||
+        !isAgentAccessAllowed(config.skills, normalizedSkillId)
+      ) {
+        continue;
+      }
+      seen.add(normalizedSkillId);
+
       const workspaceSkill = workspaceTrusted
-        ? await loadSkillFromDir(workspaceSkillsDir, skillId, "workspace", this.logger)
+        ? await loadSkillFromDir(workspaceSkillsDir, normalizedSkillId, "workspace", this.logger)
         : undefined;
       if (workspaceSkill) {
         loaded.push(workspaceSkill);
         continue;
       }
 
-      const managed = managedById.get(skillId);
+      const managed = managedById.get(normalizedSkillId);
       if (managed) {
         try {
-          const pkg = parseManagedSkillPackage(managed.packageData, skillId);
+          const pkg = parseManagedSkillPackage(managed.packageData, normalizedSkillId);
           const materializedPath = await ensureManagedExtensionMaterialized({
             home: this.home,
             tenantId: scope.tenantId,
@@ -190,7 +221,8 @@ class LocalAgentContextStore implements AgentContextStore {
             provenance: {
               source: "managed",
               path:
-                materializedPath ?? `db://runtime-packages/skill/${skillId}@${managed.revision}`,
+                materializedPath ??
+                `db://runtime-packages/skill/${normalizedSkillId}@${managed.revision}`,
             },
           });
           continue;
@@ -198,7 +230,7 @@ class LocalAgentContextStore implements AgentContextStore {
           this.logger?.warn("agent.managed_skill_invalid", {
             tenant_id: scope.tenantId,
             agent_id: scope.agentId,
-            skill_id: skillId,
+            skill_id: normalizedSkillId,
             revision: managed.revision,
             error: error instanceof Error ? error.message : String(error),
           });
@@ -206,8 +238,8 @@ class LocalAgentContextStore implements AgentContextStore {
       }
 
       const fallback =
-        (await loadSkillFromDir(userSkillsDir, skillId, "user", this.logger)) ??
-        (await loadSkillFromDir(bundledSkillsDir, skillId, "bundled", this.logger));
+        (await loadSkillFromDir(userSkillsDir, normalizedSkillId, "user", this.logger)) ??
+        (await loadSkillFromDir(bundledSkillsDir, normalizedSkillId, "bundled", this.logger));
       if (fallback) loaded.push(fallback);
     }
 
@@ -221,26 +253,38 @@ class LocalAgentContextStore implements AgentContextStore {
     const managedServers = await this.runtimePackageDal.listLatest({
       tenantId: scope.tenantId,
       packageKind: "mcp",
-      packageKeys: config.mcp.enabled,
       enabledOnly: true,
     });
     const managedById = new Map(managedServers.map((item) => [item.packageKey, item]));
-    const localServers = await loadEnabledMcpServers(this.home, config, {
-      logger: this.logger,
-    });
+    const localServers = await listMcpServersFromDir(resolveMcpDir(this.home), this.logger);
     const localById = new Map(localServers.map((item) => [item.id, item]));
     const loaded: McpServerSpecT[] = [];
+    const seen = new Set<string>();
+    const orderedServerIds = [
+      ...localServers.map((server) => server.id),
+      ...managedServers.map((server) => server.packageKey),
+    ];
 
-    for (const serverId of config.mcp.enabled) {
-      const local = localById.get(serverId);
+    for (const serverId of orderedServerIds) {
+      const normalizedServerId = serverId.trim();
+      if (
+        normalizedServerId.length === 0 ||
+        seen.has(normalizedServerId) ||
+        !isAgentAccessAllowed(config.mcp, normalizedServerId)
+      ) {
+        continue;
+      }
+      seen.add(normalizedServerId);
+
+      const local = localById.get(normalizedServerId);
       if (local) {
         loaded.push(local);
         continue;
       }
-      const managed = managedById.get(serverId);
+      const managed = managedById.get(normalizedServerId);
       if (!managed) continue;
       try {
-        const pkg = parseManagedMcpPackage(managed.packageData, serverId);
+        const pkg = parseManagedMcpPackage(managed.packageData, normalizedServerId);
         const materializedPath = await ensureManagedExtensionMaterialized({
           home: this.home,
           tenantId: scope.tenantId,
@@ -249,12 +293,12 @@ class LocalAgentContextStore implements AgentContextStore {
           revision: managed,
         });
         const spec = normalizeManagedMcpSpec(pkg.spec, materializedPath);
-        loaded.push(spec.id === serverId ? spec : { ...spec, id: serverId });
+        loaded.push(spec.id === normalizedServerId ? spec : { ...spec, id: normalizedServerId });
       } catch (error) {
         this.logger?.warn("agent.managed_mcp_invalid", {
           tenant_id: scope.tenantId,
           agent_id: scope.agentId,
-          server_id: serverId,
+          server_id: normalizedServerId,
           revision: managed.revision,
           error: error instanceof Error ? error.message : String(error),
         });
@@ -278,7 +322,6 @@ function parseDefaultIdentity(): IdentityPackT {
   const parsed = parseFrontmatterDocument(DEFAULT_IDENTITY_MD);
   return IdentityPack.parse({
     meta: parsed.frontmatter,
-    body: parsed.body.trim(),
   });
 }
 
@@ -326,17 +369,32 @@ class SharedAgentContextStore implements AgentContextStore {
     const sharedSkills = await this.runtimePackageDal.listLatest({
       tenantId: scope.tenantId,
       packageKind: "skill",
-      packageKeys: config.skills.enabled,
       enabledOnly: true,
     });
     const sharedById = new Map(sharedSkills.map((item) => [item.packageKey, item]));
     const loaded: LoadedSkillManifest[] = [];
+    const bundledSkills = await listSkillsFromDir(this.bundledSkillsDir, "bundled", this.logger);
+    const seen = new Set<string>();
+    const orderedSkillIds = [
+      ...sharedSkills.map((skill) => skill.packageKey),
+      ...bundledSkills.map((skill) => skill.meta.id),
+    ];
 
-    for (const skillId of config.skills.enabled) {
-      const shared = sharedById.get(skillId);
+    for (const skillId of orderedSkillIds) {
+      const normalizedSkillId = skillId.trim();
+      if (
+        normalizedSkillId.length === 0 ||
+        seen.has(normalizedSkillId) ||
+        !isAgentAccessAllowed(config.skills, normalizedSkillId)
+      ) {
+        continue;
+      }
+      seen.add(normalizedSkillId);
+
+      const shared = sharedById.get(normalizedSkillId);
       if (shared) {
         try {
-          const pkg = parseManagedSkillPackage(shared.packageData, skillId);
+          const pkg = parseManagedSkillPackage(shared.packageData, normalizedSkillId);
           const path = await ensureManagedExtensionMaterialized({
             home: this.home,
             tenantId: scope.tenantId,
@@ -348,7 +406,7 @@ class SharedAgentContextStore implements AgentContextStore {
             ...pkg.manifest,
             provenance: {
               source: "shared",
-              path: path ?? `db://runtime-packages/skill/${skillId}@${shared.revision}`,
+              path: path ?? `db://runtime-packages/skill/${normalizedSkillId}@${shared.revision}`,
             },
           });
           continue;
@@ -356,7 +414,7 @@ class SharedAgentContextStore implements AgentContextStore {
           this.logger?.warn("agent.shared_skill_invalid", {
             tenant_id: scope.tenantId,
             agent_id: scope.agentId,
-            skill_id: skillId,
+            skill_id: normalizedSkillId,
             revision: shared.revision,
             error: error instanceof Error ? error.message : String(error),
           });
@@ -365,7 +423,7 @@ class SharedAgentContextStore implements AgentContextStore {
 
       const bundled = await loadSkillFromDir(
         this.bundledSkillsDir,
-        skillId,
+        normalizedSkillId,
         "bundled",
         this.logger,
       );
@@ -384,17 +442,27 @@ class SharedAgentContextStore implements AgentContextStore {
     const sharedServers = await this.runtimePackageDal.listLatest({
       tenantId: scope.tenantId,
       packageKind: "mcp",
-      packageKeys: config.mcp.enabled,
       enabledOnly: true,
     });
     const sharedById = new Map(sharedServers.map((item) => [item.packageKey, item]));
     const loaded: McpServerSpecT[] = [];
+    const seen = new Set<string>();
 
-    for (const serverId of config.mcp.enabled) {
-      const shared = sharedById.get(serverId);
+    for (const serverId of sharedServers.map((server) => server.packageKey)) {
+      const normalizedServerId = serverId.trim();
+      if (
+        normalizedServerId.length === 0 ||
+        seen.has(normalizedServerId) ||
+        !isAgentAccessAllowed(config.mcp, normalizedServerId)
+      ) {
+        continue;
+      }
+      seen.add(normalizedServerId);
+
+      const shared = sharedById.get(normalizedServerId);
       if (!shared) continue;
       try {
-        const pkg = parseManagedMcpPackage(shared.packageData, serverId);
+        const pkg = parseManagedMcpPackage(shared.packageData, normalizedServerId);
         const materializedPath = await ensureManagedExtensionMaterialized({
           home: this.home,
           tenantId: scope.tenantId,
@@ -403,12 +471,12 @@ class SharedAgentContextStore implements AgentContextStore {
           revision: shared,
         });
         const spec = normalizeManagedMcpSpec(pkg.spec, materializedPath);
-        loaded.push(spec.id === serverId ? spec : { ...spec, id: serverId });
+        loaded.push(spec.id === normalizedServerId ? spec : { ...spec, id: normalizedServerId });
       } catch (error) {
         this.logger?.warn("agent.shared_mcp_invalid", {
           tenant_id: scope.tenantId,
           agent_id: scope.agentId,
-          server_id: serverId,
+          server_id: normalizedServerId,
           revision: shared.revision,
           error: error instanceof Error ? error.message : String(error),
         });

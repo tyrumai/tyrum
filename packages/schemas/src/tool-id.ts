@@ -10,6 +10,12 @@ const LEGACY_TOOL_ID_LIST_MAP = new Map<string, readonly string[]>([
   ["tool.fs.*", ["read", "write", "edit", "apply_patch", "glob", "grep"]],
 ]);
 
+function pushUnique(result: string[], seen: Set<string>, toolId: string): void {
+  if (seen.has(toolId)) return;
+  seen.add(toolId);
+  result.push(toolId);
+}
+
 export function canonicalizeToolId(toolId: string): string {
   const normalized = toolId.trim();
   return LEGACY_TOOL_ID_MAP.get(normalized) ?? normalized;
@@ -25,10 +31,35 @@ export function canonicalizeToolIdList(toolIds: readonly string[]): string[] {
 
     const expanded = LEGACY_TOOL_ID_LIST_MAP.get(normalized) ?? [canonicalizeToolId(normalized)];
     for (const toolId of expanded) {
-      if (seen.has(toolId)) continue;
-      seen.add(toolId);
-      result.push(toolId);
+      pushUnique(result, seen, toolId);
     }
+  }
+
+  return result;
+}
+
+export function normalizeStringIdList(toolIds: readonly string[]): string[] {
+  const result: string[] = [];
+  const seen = new Set<string>();
+
+  for (const rawToolId of toolIds) {
+    const normalized = rawToolId.trim();
+    if (normalized.length === 0) continue;
+    pushUnique(result, seen, normalized);
+  }
+
+  return result;
+}
+
+export function canonicalizeExactToolIdList(toolIds: readonly string[]): string[] {
+  const result: string[] = [];
+  const seen = new Set<string>();
+
+  for (const rawToolId of toolIds) {
+    const toolId = canonicalizeToolId(rawToolId);
+    if (toolId.length === 0 || seen.has(toolId)) continue;
+    seen.add(toolId);
+    result.push(toolId);
   }
 
   return result;

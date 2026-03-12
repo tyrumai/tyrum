@@ -26,9 +26,15 @@ import {
 import type { ResolvedExecutionProfile } from "./intake-delegation.js";
 import type { AgentLoadedContext } from "./types.js";
 import type { AgentContextStore } from "../context-store.js";
+import { materializeAllowedAgentIds } from "../access-config.js";
 import { loadCurrentAgentContext } from "../load-context.js";
 import type { SessionRow } from "../session-dal.js";
-import { isToolAllowed, selectToolDirectory, type ToolDescriptor } from "../tools.js";
+import {
+  isToolAllowed,
+  listBuiltinToolDescriptors,
+  selectToolDirectory,
+  type ToolDescriptor,
+} from "../tools.js";
 import { tagContent } from "../provenance.js";
 import { sanitizeForModel } from "../sanitizer.js";
 import { parseChannelSourceKey } from "../../channels/interface.js";
@@ -265,9 +271,6 @@ export async function resolveToolsAndMemory(
   toolSetBuilder: ToolSetBuilder;
   filteredTools: ToolDescriptor[];
 }> {
-  const wantsMcpTools = ctx.config.tools.allow.some(
-    (entry) => entry === "*" || entry === "mcp*" || entry.startsWith("mcp."),
-  );
   const memoryDigestPromise =
     isStatusQuery(resolved.message) || parseIntakeModeDecision(resolved.message)
       ? Promise.resolve({
@@ -281,9 +284,7 @@ export async function resolveToolsAndMemory(
 
   const [memoryDigestResult, mcpTools] = await Promise.all([
     memoryDigestPromise,
-    wantsMcpTools
-      ? deps.mcpManager.listToolDescriptors(ctx.mcpServers)
-      : deps.mcpManager.listToolDescriptors([]),
+    deps.mcpManager.listToolDescriptors(ctx.mcpServers),
   ]);
   const toolSetBuilder = new ToolSetBuilder({
     home: deps.home,
@@ -303,10 +304,16 @@ export async function resolveToolsAndMemory(
     plugins: deps.plugins,
     redactionEngine: deps.opts.container.redactionEngine,
   });
+  const builtinTools = listBuiltinToolDescriptors();
   const pluginToolsRaw = deps.plugins?.getToolDescriptors() ?? [];
+  const baseToolAllowlist = materializeAllowedAgentIds(ctx.config.tools, [
+    ...builtinTools,
+    ...mcpTools,
+    ...pluginToolsRaw,
+  ]).map((tool) => tool.id);
   const { allowlist: toolAllowlist, pluginTools } =
     await toolSetBuilder.resolvePolicyGatedPluginToolExposure({
-      allowlist: ctx.config.tools.allow,
+      allowlist: baseToolAllowlist,
       pluginTools: pluginToolsRaw,
     });
   const toolCandidates = selectToolDirectory(

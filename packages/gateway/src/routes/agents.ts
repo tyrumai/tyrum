@@ -10,11 +10,17 @@ import {
 } from "../modules/agent/admin-service.js";
 import type { GatewayStateMode } from "../modules/runtime-state/mode.js";
 import { normalizeAgentKey } from "./config-key-utils.js";
+import type { Logger } from "../modules/observability/logger.js";
+import type { PluginCatalogProvider } from "../modules/plugins/catalog-provider.js";
+import type { PluginRegistry } from "../modules/plugins/registry.js";
 
 export interface AgentsRouteDeps {
   db: SqlDb;
   identityScopeDal: IdentityScopeDal;
   stateMode: GatewayStateMode;
+  logger?: Logger;
+  pluginCatalogProvider?: PluginCatalogProvider;
+  plugins?: PluginRegistry;
 }
 
 export function createAgentsRoutes(deps: AgentsRouteDeps): Hono {
@@ -49,7 +55,6 @@ export function createAgentsRoutes(deps: AgentsRouteDeps): Hono {
         tenantId,
         agentKey: parsed.data.agent_key,
         config: parsed.data.config,
-        identity: parsed.data.identity,
         createdBy: { kind: "tenant.token", token_id: claims.token_id },
         reason: parsed.data.reason,
       });
@@ -75,6 +80,17 @@ export function createAgentsRoutes(deps: AgentsRouteDeps): Hono {
       return c.json({ error: "not_found", message: `agent '${agentKey}' not found` }, 404);
     }
     return c.json(detail, 200);
+  });
+
+  app.get("/agents/:key/capabilities", async (c) => {
+    const tenantId = requireTenantId(c);
+    let agentKey: string;
+    try {
+      agentKey = normalizeAgentKey(c.req.param("key"));
+    } catch (error) {
+      return c.json({ error: "invalid_request", message: toErrorMessage(error) }, 400);
+    }
+    return c.json(await service.getCapabilities(tenantId, agentKey), 200);
   });
 
   app.put("/agents/:key", async (c) => {
@@ -104,7 +120,6 @@ export function createAgentsRoutes(deps: AgentsRouteDeps): Hono {
       tenantId,
       agentKey,
       config: parsed.data.config,
-      identity: parsed.data.identity,
       createdBy: { kind: "tenant.token", token_id: claims.token_id },
       reason: parsed.data.reason,
     });

@@ -12,10 +12,8 @@ describe("agent persona helpers", () => {
     const identity: IdentityPack = {
       meta: {
         name: "Tyrum Local",
-        description: "Local identity",
-        style: { tone: "measured", verbosity: "concise" },
+        style: { tone: "measured" },
       },
-      body: "You are a precise local assistant.",
     };
     const config = AgentConfig.parse({
       model: { model: "openai/gpt-4.1" },
@@ -29,7 +27,6 @@ describe("agent persona helpers", () => {
       }),
     ).toEqual({
       name: "Tyrum Local",
-      description: "Local identity",
       tone: "measured",
       palette: "graphite",
       character: "architect",
@@ -40,16 +37,13 @@ describe("agent persona helpers", () => {
     const identity: IdentityPack = {
       meta: {
         name: "Tyrum Local",
-        description: "Local identity",
-        style: { tone: "measured", verbosity: "concise" },
+        style: { tone: "measured" },
       },
-      body: "You are a precise local assistant.",
     };
 
     expect(
       applyPersonaToIdentity(identity, {
         name: "Hypatia",
-        description: "Calm systems thinker.",
         tone: "direct",
         palette: "graphite",
         character: "architect",
@@ -57,13 +51,10 @@ describe("agent persona helpers", () => {
     ).toEqual({
       meta: {
         name: "Hypatia",
-        description: "Calm systems thinker.",
         style: {
           tone: "direct",
-          verbosity: "concise",
         },
       },
-      body: "You are a precise local assistant.",
     });
   });
 

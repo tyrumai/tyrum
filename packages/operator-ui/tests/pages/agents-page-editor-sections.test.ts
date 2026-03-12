@@ -9,18 +9,48 @@ import { cleanupTestRoot, click, renderIntoDocument, setNativeValue } from "../t
 function findLabeledControl(
   container: HTMLElement,
   labelText: string,
-): HTMLInputElement | HTMLTextAreaElement {
+): HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement {
   const label = Array.from(container.querySelectorAll("label")).find(
     (element) => element.textContent?.trim() === labelText,
   );
   if (!(label instanceof HTMLLabelElement) || !label.htmlFor) {
     throw new Error(`Missing label: ${labelText}`);
   }
-  const control = container.ownerDocument.getElementById(label.htmlFor);
-  if (!(control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement)) {
+  const control =
+    container.ownerDocument.getElementById(label.htmlFor) ??
+    label.parentElement?.querySelector("input, textarea, select");
+  if (
+    !(
+      control instanceof HTMLInputElement ||
+      control instanceof HTMLTextAreaElement ||
+      control instanceof HTMLSelectElement
+    )
+  ) {
     throw new Error(`Missing control for label: ${labelText}`);
   }
   return control;
+}
+
+function setLabeledValue(container: HTMLElement, labelText: string, value: string): void {
+  const control = findLabeledControl(container, labelText);
+  if (control instanceof HTMLSelectElement) {
+    const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set;
+    if (setter) {
+      setter.call(control, value);
+    }
+    control.dispatchEvent(new Event("input", { bubbles: true }));
+    control.dispatchEvent(new Event("change", { bubbles: true }));
+    return;
+  }
+  setNativeValue(control, value);
+}
+
+function setMultiSelectValues(element: HTMLSelectElement, values: readonly string[]): void {
+  const selected = new Set(values);
+  for (const option of element.options) {
+    option.selected = selected.has(option.value);
+  }
+  element.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
 function findToggle(container: HTMLElement, labelText: string): HTMLElement {
@@ -59,6 +89,48 @@ function sampleModelPresets() {
   ];
 }
 
+function sampleCapabilities() {
+  return {
+    skills: {
+      default_mode: "allow" as const,
+      allow: [],
+      deny: [],
+      workspace_trusted: true,
+      items: [
+        { id: "review", name: "Review", version: "1.0.0", source: "bundled" as const },
+        { id: "triage", name: "Triage", version: "1.0.0", source: "managed" as const },
+      ],
+    },
+    mcp: {
+      default_mode: "allow" as const,
+      allow: [],
+      deny: [],
+      items: [
+        {
+          id: "filesystem",
+          name: "Filesystem",
+          transport: "stdio" as const,
+          source: "workspace" as const,
+        },
+      ],
+    },
+    tools: {
+      default_mode: "allow" as const,
+      allow: [],
+      deny: [],
+      items: [
+        {
+          id: "read",
+          description: "Read files",
+          source: "builtin" as const,
+          family: null,
+          backing_server_id: null,
+        },
+      ],
+    },
+  };
+}
+
 describe("AgentEditorSections", () => {
   it("wires profile, runtime, session, and memory controls into setField", () => {
     const setField = vi.fn();
@@ -73,6 +145,9 @@ describe("AgentEditorSections", () => {
           setForm((current) => ({ ...current, [key]: value }));
         },
         modelPresets: sampleModelPresets(),
+        capabilities: sampleCapabilities(),
+        capabilitiesLoading: false,
+        capabilitiesError: null,
         modelPresetsLoading: false,
         modelPresetsError: null,
         selectedPrimaryPreset: null,
@@ -100,9 +175,6 @@ describe("AgentEditorSections", () => {
       ["Tone", "measured"],
       ["Palette", "ember"],
       ["Character", "analyst"],
-      ["Emoji", "R"],
-      ["Verbosity", "low"],
-      ["Format", "markdown"],
       ["Variant", "fast"],
       ["TTL days", "45"],
       ["Max turns", "18"],
@@ -135,25 +207,42 @@ describe("AgentEditorSections", () => {
 
     for (const [label, value] of inputUpdates) {
       act(() => {
-        setNativeValue(findLabeledControl(container, label), value);
+        setLabeledValue(container, label, value);
       });
     }
 
     const textAreaUpdates = [
-      ["Description", "Managed reviewer"],
-      ["Identity body", "Be concise and rigorous."],
-      ["Enabled skills", "review\ntriage"],
-      ["Enabled MCP servers", "filesystem"],
-      ["Allowed tools", "shell.read"],
       ["Structured fact keys", "owner\nrepo"],
       ["Structured tags", "ops\nui"],
     ] as const;
 
     for (const [label, value] of textAreaUpdates) {
       act(() => {
-        setNativeValue(findLabeledControl(container, label), value);
+        setLabeledValue(container, label, value);
       });
     }
+
+    act(() => {
+      setLabeledValue(container, "Default for new skills", "deny");
+      setLabeledValue(container, "Default for new MCP servers", "deny");
+      setLabeledValue(container, "Default for new tools", "deny");
+    });
+
+    const accessLists = Array.from(container.querySelectorAll("select[multiple]"));
+    expect(accessLists).toHaveLength(6);
+    const moveToAllowButtons = Array.from(container.querySelectorAll("button")).filter(
+      (element) => element.textContent?.trim() === "Move to allow",
+    );
+    expect(moveToAllowButtons).toHaveLength(3);
+
+    act(() => {
+      setMultiSelectValues(accessLists[0] as HTMLSelectElement, ["review"]);
+      click(moveToAllowButtons[0] as HTMLElement);
+      setMultiSelectValues(accessLists[2] as HTMLSelectElement, ["filesystem"]);
+      click(moveToAllowButtons[1] as HTMLElement);
+      setMultiSelectValues(accessLists[4] as HTMLSelectElement, ["read"]);
+      click(moveToAllowButtons[2] as HTMLElement);
+    });
 
     const primaryToggle = container.querySelector<HTMLElement>(
       '[data-testid="agents-editor-primary-model-toggle"]',
@@ -164,7 +253,7 @@ describe("AgentEditorSections", () => {
     });
 
     act(() => {
-      setNativeValue(findLabeledControl(container, "Filter configured models"), "mini");
+      setLabeledValue(container, "Filter configured models", "mini");
     });
 
     const primaryOption = container.querySelector<HTMLElement>(
@@ -224,14 +313,18 @@ describe("AgentEditorSections", () => {
     const calls = setField.mock.calls as Array<[string, unknown]>;
     expect(calls).toContainEqual(["agentKey", "agent-review"]);
     expect(calls).toContainEqual(["name", "Agent Review"]);
-    expect(calls).toContainEqual(["description", "Managed reviewer"]);
-    expect(calls).toContainEqual(["identityBody", "Be concise and rigorous."]);
+    expect(calls).toContainEqual(["tone", "measured"]);
+    expect(calls).toContainEqual(["palette", "ember"]);
+    expect(calls).toContainEqual(["character", "analyst"]);
     expect(calls).toContainEqual(["model", "openai/gpt-4.1-mini"]);
     expect(calls).toContainEqual(["fallbacks", "openai/gpt-4.1"]);
     expect(calls).toContainEqual(["fallbacks", "openai/gpt-4.1\nopenai/gpt-4.1-mini"]);
-    expect(calls).toContainEqual(["skillsEnabled", "review\ntriage"]);
-    expect(calls).toContainEqual(["mcpEnabled", "filesystem"]);
-    expect(calls).toContainEqual(["toolsAllowed", "shell.read"]);
+    expect(calls).toContainEqual(["skillsDefaultMode", "deny"]);
+    expect(calls).toContainEqual(["skillsAllow", ["review"]]);
+    expect(calls).toContainEqual(["mcpDefaultMode", "deny"]);
+    expect(calls).toContainEqual(["mcpAllow", ["filesystem"]]);
+    expect(calls).toContainEqual(["toolsDefaultMode", "deny"]);
+    expect(calls).toContainEqual(["toolsAllow", ["read"]]);
     expect(calls).toContainEqual(["ttlDays", "45"]);
     expect(calls).toContainEqual(["withinTurnConsecutiveLimit", "4"]);
     expect(calls).toContainEqual(["crossTurnSimilarityThreshold", "0.99"]);
@@ -277,6 +370,9 @@ describe("AgentEditorSections", () => {
         mode: "edit",
         setField,
         modelPresets: sampleModelPresets(),
+        capabilities: sampleCapabilities(),
+        capabilitiesLoading: false,
+        capabilitiesError: null,
         modelPresetsLoading: false,
         modelPresetsError: null,
         selectedPrimaryPreset: null,

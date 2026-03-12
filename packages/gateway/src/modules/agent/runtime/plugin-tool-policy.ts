@@ -57,11 +57,14 @@ export async function resolvePolicyGatedPluginToolExposure(input: {
     const gatedPluginTools = pluginTools.filter(
       (tool) => !isSideEffectingPluginTool(tool) || isOptedIn(tool.id),
     );
-    const allowlist = new Set<string>(input.allowlist);
-    for (const tool of gatedPluginTools)
-      if (isSideEffectingPluginTool(tool)) allowlist.add(tool.id);
+    const gatedAllowlist = new Set(input.allowlist);
+    for (const tool of gatedPluginTools) {
+      if (isSideEffectingPluginTool(tool) && isOptedIn(tool.id)) {
+        gatedAllowlist.add(tool.id);
+      }
+    }
 
-    return { allowlist: [...allowlist], pluginTools: gatedPluginTools };
+    return { allowlist: [...gatedAllowlist], pluginTools: gatedPluginTools };
   } catch {
     // Intentional: fail closed; side-effecting plugin tools are opt-in and require a readable policy bundle.
     return {

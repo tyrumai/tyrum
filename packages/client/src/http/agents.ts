@@ -1,4 +1,5 @@
 import {
+  AgentCapabilitiesResponse,
   ManagedAgentCreateRequest,
   ManagedAgentDeleteResponse,
   ManagedAgentGetResponse,
@@ -10,6 +11,7 @@ import { HttpTransport, type TyrumRequestOptions, validateOrThrow } from "./shar
 
 export type ManagedAgentListResult = z.output<typeof ManagedAgentListResponse>;
 export type ManagedAgentGetResult = z.output<typeof ManagedAgentGetResponse>;
+export type AgentCapabilitiesResult = z.output<typeof AgentCapabilitiesResponse>;
 export type ManagedAgentCreateInput = z.input<typeof ManagedAgentCreateRequest>;
 export type ManagedAgentUpdateInput = z.input<typeof ManagedAgentUpdateRequest>;
 export type ManagedAgentDeleteResult = z.output<typeof ManagedAgentDeleteResponse>;
@@ -17,6 +19,7 @@ export type ManagedAgentDeleteResult = z.output<typeof ManagedAgentDeleteRespons
 export interface AgentsApi {
   list(options?: TyrumRequestOptions): Promise<ManagedAgentListResult>;
   get(agentKey: string, options?: TyrumRequestOptions): Promise<ManagedAgentGetResult>;
+  capabilities(agentKey: string, options?: TyrumRequestOptions): Promise<AgentCapabilitiesResult>;
   create(
     input: ManagedAgentCreateInput,
     options?: TyrumRequestOptions,
@@ -45,6 +48,15 @@ export function createAgentsApi(transport: HttpTransport): AgentsApi {
         method: "GET",
         path: `/agents/${encodeURIComponent(agentKey)}`,
         response: ManagedAgentGetResponse,
+        signal: options?.signal,
+      });
+    },
+
+    async capabilities(agentKey, options) {
+      return await transport.request({
+        method: "GET",
+        path: `/agents/${encodeURIComponent(agentKey)}/capabilities`,
+        response: AgentCapabilitiesResponse,
         signal: options?.signal,
       });
     },

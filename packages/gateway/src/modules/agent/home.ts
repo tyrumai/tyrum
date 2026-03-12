@@ -83,14 +83,9 @@ export function resolveMcpDir(home = resolveTyrumHome()): string {
 
 export const DEFAULT_IDENTITY_MD = `---
 name: Tyrum
-description: Local single-user assistant identity.
 style:
   tone: direct
-  verbosity: concise
 ---
-You are Tyrum.
-
-Respond directly, be explicit about assumptions, and preserve safety guardrails.
 `;
 
 export async function ensureWorkspaceInitialized(home = resolveTyrumHome()): Promise<void> {
