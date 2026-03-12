@@ -191,6 +191,7 @@ export function mobileBootstrapConfigFromPayload(
     token: payload.token.trim(),
     nodeEnabled: true,
     actionSettings: getDefaultActionSettings(),
+    locationStreaming: getDefaultLocationStreamingConfig(),
   };
 }
 
