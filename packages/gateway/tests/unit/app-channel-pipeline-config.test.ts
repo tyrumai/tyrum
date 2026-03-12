@@ -9,6 +9,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
 
 const telegramQueueCtor = vi.fn();
+const telegramRuntimeCtor = vi.fn();
 
 vi.mock("../../src/modules/channels/telegram.js", async (importOriginal) => {
   const original = await importOriginal<typeof import("../../src/modules/channels/telegram.js")>();
@@ -22,6 +23,20 @@ vi.mock("../../src/modules/channels/telegram.js", async (importOriginal) => {
   };
 });
 
+vi.mock("../../src/modules/channels/telegram-runtime.js", async (importOriginal) => {
+  const original =
+    await importOriginal<typeof import("../../src/modules/channels/telegram-runtime.js")>();
+
+  function TelegramChannelRuntime(...args: unknown[]) {
+    telegramRuntimeCtor(...args);
+  }
+
+  return {
+    ...original,
+    TelegramChannelRuntime,
+  };
+});
+
 describe("createApp channel pipeline wiring", () => {
   let container: GatewayContainer | undefined;
 
@@ -29,6 +44,7 @@ describe("createApp channel pipeline wiring", () => {
     await container?.db.close();
     container = undefined;
     telegramQueueCtor.mockClear();
+    telegramRuntimeCtor.mockClear();
   });
 
   it("constructs TelegramChannelQueue even when the legacy deployment pipeline flag is false", async () => {
@@ -47,5 +63,21 @@ describe("createApp channel pipeline wiring", () => {
     createApp(container, { agents });
 
     expect(telegramQueueCtor).toHaveBeenCalledOnce();
+  });
+
+  it("reuses an injected TelegramChannelRuntime instead of constructing another one", async () => {
+    container = createContainer({ dbPath: ":memory:", migrationsDir });
+
+    const agents = {
+      getRuntime: async () => {
+        throw new Error("not implemented");
+      },
+    } as unknown as AgentRegistry;
+
+    const { createApp } = await import("../../src/app.js");
+    createApp(container, { agents, telegramRuntime: {} as any });
+
+    expect(telegramQueueCtor).toHaveBeenCalledOnce();
+    expect(telegramRuntimeCtor).not.toHaveBeenCalled();
   });
 });

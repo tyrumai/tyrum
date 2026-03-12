@@ -42,6 +42,7 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
     let telegramBot = deps.telegramBot;
     let telegramAllowedUserIds = deps.telegramAllowedUserIds ?? [];
     let telegramAccountKey = "default";
+    let telegramPipelineEnabled = true;
 
     if (deps.telegramRuntime) {
       const accounts = await deps.telegramRuntime.listTelegramAccounts(DEFAULT_TENANT_ID);
@@ -92,6 +93,7 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
         telegramBot = matchedBot;
         telegramAllowedUserIds = matchedAccount.allowed_user_ids;
         telegramAccountKey = matchedAccount.account_key;
+        telegramPipelineEnabled = matchedAccount.pipeline_enabled ?? true;
       }
     } else if (deps.telegramBot) {
       // When Telegram integration is enabled, require Telegram webhook secret validation.
@@ -168,16 +170,7 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
       c.req.query("agent_key")?.trim() ||
       resolveTelegramAgentId(routing, telegramAccountKey, chatId);
 
-    const pipelineEnabled = deps.telegramRuntime
-      ? ((
-          await deps.telegramRuntime.getTelegramAccountByAccountKey({
-            tenantId: DEFAULT_TENANT_ID,
-            accountKey: telegramAccountKey,
-          })
-        )?.pipeline_enabled ?? true)
-      : true;
-
-    if (deps.telegramQueue && pipelineEnabled) {
+    if (deps.telegramQueue && telegramPipelineEnabled) {
       try {
         const enqueued = await deps.telegramQueue.enqueue(normalized, {
           agentId: routedAgentId,

@@ -314,9 +314,11 @@ export async function startEdgeRuntime(
     windowMs: authRateLimitWindowS * 1_000,
     max: wsUpgradeRateLimitMax,
   });
+  const telegramRuntime = new TelegramChannelRuntime(new ChannelConfigDal(context.container.db));
 
   const app = createApp(context.container, {
     agents,
+    telegramRuntime,
     plugins,
     pluginCatalogProvider,
     authTokens: context.authTokens,
@@ -356,7 +358,6 @@ export async function startEdgeRuntime(
   });
   outboxPoller.start();
 
-  const telegramRuntime = new TelegramChannelRuntime(new ChannelConfigDal(context.container.db));
   const telegramProcessor = agents
     ? new TelegramChannelProcessor({
         db: context.container.db,

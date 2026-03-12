@@ -57,4 +57,66 @@ describe("Ingress routes", () => {
       expect.objectContaining({ error: "db down" }),
     );
   });
+
+  it("reuses matched account pipeline state without a second account lookup", async () => {
+    const enqueue = vi.fn(async () => ({
+      inbox: { status: "queued", inbox_id: "inbox-1" },
+      deduped: false,
+      message_text: "hi",
+    }));
+    const getTelegramAccountByAccountKey = vi.fn(async () => undefined);
+    const telegramRuntime = {
+      listTelegramAccounts: vi.fn(async () => [
+        {
+          account_key: "work",
+          bot_token: "bot-token",
+          webhook_secret: "secret-work",
+          allowed_user_ids: [],
+          pipeline_enabled: true,
+        },
+      ]),
+      getTelegramAccountByWebhookSecret: vi.fn(async () => ({
+        account_key: "work",
+        bot_token: "bot-token",
+        webhook_secret: "secret-work",
+        allowed_user_ids: [],
+        pipeline_enabled: true,
+      })),
+      getBotForAccount: vi.fn(async () => ({ sendMessage: vi.fn(async () => undefined) })),
+      getTelegramAccountByAccountKey,
+    } as any;
+
+    const app = new Hono().route(
+      "/",
+      createIngressRoutes({
+        telegramRuntime,
+        agents: {} as any,
+        telegramQueue: { enqueue } as any,
+      }),
+    );
+
+    const update = {
+      update_id: 1,
+      message: {
+        message_id: 1,
+        date: 1_700_000_000,
+        from: { id: 123, is_bot: false, first_name: "Alice" },
+        chat: { id: 123, type: "private" },
+        text: "hi",
+      },
+    };
+
+    const res = await app.request("/ingress/telegram", {
+      method: "POST",
+      headers: {
+        "x-telegram-bot-api-secret-token": "secret-work",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(update),
+    });
+
+    expect(res.status).toBe(200);
+    expect(enqueue).toHaveBeenCalledOnce();
+    expect(getTelegramAccountByAccountKey).not.toHaveBeenCalled();
+  });
 });

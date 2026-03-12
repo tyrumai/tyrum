@@ -400,7 +400,9 @@ export function registerExecutionAndWorkflowRoutes(context: AppRouteContext): vo
 }
 
 export function registerAgentsAndWorkspaceRoutes(context: AppRouteContext): void {
-  const telegramRuntime = new TelegramChannelRuntime(new ChannelConfigDal(context.container.db));
+  const telegramRuntime =
+    context.opts.telegramRuntime ??
+    new TelegramChannelRuntime(new ChannelConfigDal(context.container.db));
   context.app.route(
     "/",
     createPairingRoutes({
