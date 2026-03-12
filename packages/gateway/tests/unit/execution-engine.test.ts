@@ -7,6 +7,7 @@ import { registerPolicyEvaluationTests } from "./execution-engine.policy-intent-
 import { registerIntentGuardrailTests } from "./execution-engine.intent-guardrail-test-support.js";
 import { registerPersistenceTests } from "./execution-engine.persistence-retry-test-support.js";
 import { registerRetryCancelTests } from "./execution-engine.retry-cancel-test-support.js";
+import { registerRetrySideEffectTests } from "./execution-engine.retry-side-effects-test-support.js";
 
 describe("ExecutionEngine (normalized)", () => {
   let db: SqliteDb | undefined;
@@ -29,4 +30,5 @@ describe("ExecutionEngine (normalized)", () => {
   registerIntentGuardrailTests(fixture);
   registerPersistenceTests(fixture);
   registerRetryCancelTests(fixture);
+  registerRetrySideEffectTests(fixture);
 });

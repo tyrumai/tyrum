@@ -75,4 +75,61 @@ describe("AgentRuntime.turnStream", () => {
     expect(result.reply).toBe("hello");
     expect(result.used_tools).toEqual([]);
   }, 10_000);
+
+  it("publishes the context report before stream finalization", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-stream-"));
+    container = await createContainer({ dbPath: ":memory:", migrationsDir });
+
+    await writeFile(
+      join(homeDir, "agent.yml"),
+      [
+        "model:",
+        "  model: openai/gpt-4.1",
+        "skills:",
+        "  enabled: []",
+        "mcp:",
+        "  enabled: []",
+        "tools:",
+        "  allow: []",
+        "sessions:",
+        "  ttl_days: 30",
+        "  max_turns: 20",
+        "  loop_detection:",
+        "    within_turn:",
+        "      enabled: true",
+        "      consecutive_repeat_limit: 3",
+        "      cycle_repeat_limit: 3",
+        "    cross_turn:",
+        "      enabled: false",
+        "      window_assistant_messages: 3",
+        "      similarity_threshold: 0.97",
+        "      min_chars: 120",
+        "      cooldown_assistant_messages: 6",
+        "memory:",
+        "  v1: { enabled: false }",
+      ].join("\n"),
+      "utf-8",
+    );
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: createStubLanguageModel("hello"),
+    });
+
+    const handle = await runtime.turnStream({
+      channel: "test",
+      thread_id: "thread-stream-context",
+      message: "hi",
+    });
+
+    expect(handle.sessionId).toBeTruthy();
+    expect(runtime.getLastContextReport()).toMatchObject({
+      session_id: handle.sessionId,
+      thread_id: "thread-stream-context",
+      channel: "test",
+    });
+
+    await handle.finalize();
+  }, 10_000);
 });

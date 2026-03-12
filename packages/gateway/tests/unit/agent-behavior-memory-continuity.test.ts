@@ -277,6 +277,93 @@ describe("Agent behavior - memory continuity", () => {
     expect(recalled.reply).toBe("jasmine tea");
   });
 
+  it("prefers the corrected memory after compaction, restart, and cross-channel recall", async () => {
+    ({ homeDir, container, dbPath } = await setupFileBackedTestEnv());
+    await seedAgentConfig(container, { config: makeMemoryConfig({ maxTurns: 6 }) });
+
+    let capturedMemoryDigest = "";
+    const createRuntime = (currentContainer: GatewayContainer) =>
+      new AgentRuntime({
+        container: currentContainer,
+        home: homeDir,
+        languageModel: createPromptAwareLanguageModel(({ promptText }) => {
+          if (promptIncludes(promptText, "what is my name now")) {
+            capturedMemoryDigest = memorySection(promptText);
+            if (/my name is robert/iu.test(capturedMemoryDigest)) {
+              return "Robert";
+            }
+            if (/my name is ron/iu.test(capturedMemoryDigest)) {
+              return "Ron";
+            }
+            return "UNKNOWN";
+          }
+          return "Stored.";
+        }),
+        fetchImpl: fetch404,
+      });
+
+    let runtime = createRuntime(container);
+    const original = await runtime.turn({
+      channel: "ui",
+      thread_id: "correction-thread",
+      message: "remember that my name is Ron",
+    });
+    const corrected = await runtime.turn({
+      channel: "ui",
+      thread_id: "correction-thread",
+      message: "remember that my name is Robert",
+    });
+
+    expect(original.memory_written).toBe(true);
+    expect(corrected.memory_written).toBe(true);
+
+    for (let index = 0; index < 8; index += 1) {
+      await runtime.turn({
+        channel: "ui",
+        thread_id: "correction-thread",
+        message: `filler correction turn ${String(index)}`,
+      });
+    }
+
+    const compacted = await container.sessionDal.compact({
+      tenantId: DEFAULT_TENANT_ID,
+      sessionId: original.session_id,
+      keepLastMessages: 2,
+    });
+    expect(compacted.droppedMessages).toBeGreaterThan(0);
+
+    container = await restartFileBackedContainer({ homeDir, dbPath, container });
+    runtime = createRuntime(container);
+
+    const recalled = await runtime.turn({
+      channel: "telegram",
+      thread_id: "correction-cross-channel",
+      message: "what is my name now?",
+    });
+
+    expect(recalled.reply).toBe("Robert");
+    expect(capturedMemoryDigest).toContain("my name is Robert");
+    expect(capturedMemoryDigest).toContain("my name is Ron");
+    expect(capturedMemoryDigest.indexOf("my name is Robert")).toBeLessThan(
+      capturedMemoryDigest.indexOf("my name is Ron"),
+    );
+
+    const items = await container.memoryV1Dal.list({
+      tenantId: DEFAULT_TENANT_ID,
+      agentId: DEFAULT_AGENT_ID,
+    });
+    const nameNotes = items.items.filter(
+      (item) => item.kind === "note" && /my name is (robert|ron)/iu.test(item.body_md),
+    );
+    expect(nameNotes.length).toBeGreaterThanOrEqual(2);
+    expect(nameNotes[0]?.kind === "note" ? nameNotes[0].body_md : "").toContain(
+      "my name is Robert",
+    );
+    expect(
+      nameNotes.some((item) => item.kind === "note" && item.body_md.includes("my name is Ron")),
+    ).toBe(true);
+  });
+
   it("does not store secret-like content in durable memory", async () => {
     ({ homeDir, container } = await setupTestEnv());
     await seedAgentConfig(container, { config: makeMemoryConfig() });
