@@ -83,7 +83,7 @@ export function containerNameForEnvironment(environmentId: string): string {
   return `${CONTAINER_NAME_PREFIX}-${normalized}`;
 }
 
-export function splitLogLines(raw: string): string[] {
+function splitLogLines(raw: string): string[] {
   return raw
     .split(/\r?\n/u)
     .map((line) => line.trimEnd())
@@ -98,7 +98,7 @@ export function combineDockerError(hint: string, result: DockerResult): string {
     .trim();
 }
 
-export function readPublishedPort(
+function readPublishedPort(
   inspect: DockerInspectContainer,
   containerPort: "6080/tcp" | "5900/tcp",
 ): number | null {
