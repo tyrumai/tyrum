@@ -47,7 +47,6 @@ import type { McpManager } from "../mcp-manager.js";
 import type { ApprovalNotifier } from "../../approval/notifier.js";
 import type { PluginRegistry } from "../../plugins/registry.js";
 import type { PolicyService } from "../../policy/service.js";
-import { wildcardMatch } from "../../policy/wildcard.js";
 
 export interface TurnPreparationRuntimeDeps extends PrepareTurnHelperDeps {
   home: string;
@@ -204,11 +203,87 @@ function canDiscoverMcpTools(toolConfig: AgentLoadedContext["config"]["tools"]):
   return toolConfig.allow.some((entry) => {
     const normalized = entry.trim();
     return (
-      normalized === "*" ||
-      normalized.startsWith("mcp.") ||
-      wildcardMatch(normalized, "mcp.calendar.tool")
+      normalized === "*" || normalized.startsWith("mcp.") || canPatternMatchMcpToolId(normalized)
     );
   });
+}
+
+const MCP_TOOL_SHAPE_CHARS = ["m", "c", "p", ".", "x"] as const;
+const MCP_TOOL_ACCEPTING_STATE = 7;
+
+function nextMcpToolShapeState(state: number, char: string): number | undefined {
+  switch (state) {
+    case 0:
+      return char === "m" ? 1 : undefined;
+    case 1:
+      return char === "c" ? 2 : undefined;
+    case 2:
+      return char === "p" ? 3 : undefined;
+    case 3:
+      return char === "." ? 4 : undefined;
+    case 4:
+      return char === "." ? undefined : 5;
+    case 5:
+      return char === "." ? 6 : 5;
+    case 6:
+      return char === "." ? undefined : 7;
+    case 7:
+      return 7;
+    default:
+      return undefined;
+  }
+}
+
+export function canPatternMatchMcpToolId(pattern: string): boolean {
+  const normalized = pattern.trim();
+  if (normalized.length === 0) {
+    return false;
+  }
+
+  // Match against the structural language mcp.<server>.<tool...> instead of a single sample id.
+  const memo = new Map<string, boolean>();
+  const visit = (patternIndex: number, shapeState: number): boolean => {
+    const key = `${String(patternIndex)}:${String(shapeState)}`;
+    const cached = memo.get(key);
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    if (patternIndex >= normalized.length) {
+      const matches = shapeState === MCP_TOOL_ACCEPTING_STATE;
+      memo.set(key, matches);
+      return matches;
+    }
+
+    const token = normalized[patternIndex];
+    if (token === undefined) {
+      memo.set(key, false);
+      return false;
+    }
+    let matches = false;
+    if (token === "*") {
+      matches = visit(patternIndex + 1, shapeState);
+      if (!matches) {
+        matches = MCP_TOOL_SHAPE_CHARS.some((char) => {
+          const nextState = nextMcpToolShapeState(shapeState, char);
+          return nextState !== undefined && visit(patternIndex, nextState);
+        });
+      }
+    } else if (token === "?") {
+      matches = MCP_TOOL_SHAPE_CHARS.some((char) => {
+        const nextState = nextMcpToolShapeState(shapeState, char);
+        return nextState !== undefined && visit(patternIndex + 1, nextState);
+      });
+    } else {
+      const nextState = nextMcpToolShapeState(shapeState, token);
+      matches = nextState !== undefined && visit(patternIndex + 1, nextState);
+    }
+
+    memo.set(key, matches);
+    return matches;
+  };
+
+  return visit(0, 0);
 }
 
 export async function resolveIdentityAndContext(

@@ -273,15 +273,19 @@ export class AgentRuntime {
       identity: applyPersonaToIdentity(loaded.identity, persona),
     };
     const stateMode = resolveGatewayStateMode(this.opts.container.deploymentConfig);
+    const builtinTools = listBuiltinToolDescriptors();
+    const builtinToolIds = new Set(builtinTools.map((tool) => tool.id));
     const mcpTools = await this.mcpManager.listToolDescriptors(ctx.mcpServers);
     const pluginTools = this.plugins?.getToolDescriptors() ?? [];
     const availableTools = Array.from(
       new Map(
-        [...listBuiltinToolDescriptors(), ...mcpTools, ...pluginTools]
+        [...builtinTools, ...mcpTools, ...pluginTools]
           .filter((tool) => {
-            return (
-              tool.source !== undefined || isBuiltinToolAvailableInStateMode(tool.id, stateMode)
-            );
+            const isBuiltinTool =
+              tool.source === "builtin" ||
+              tool.source === "builtin_mcp" ||
+              (tool.source === undefined && builtinToolIds.has(tool.id));
+            return !isBuiltinTool || isBuiltinToolAvailableInStateMode(tool.id, stateMode);
           })
           .map((tool) => [tool.id, tool] as const),
       ).values(),
