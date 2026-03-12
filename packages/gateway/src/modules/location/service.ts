@@ -339,17 +339,17 @@ export class LocationService {
           subjectKind: "saved_place",
           subjectRef: place.place_id,
         });
-        await this.dal.upsertState({
-          tenantId: input.tenantId,
-          agentId,
-          nodeId: input.nodeId,
-          subjectKind: "saved_place",
-          subjectRef: place.place_id,
-          status: nextEvent.state.status,
-          enteredAt: nextEvent.state.enteredAt,
-          dwellEmittedAt: nextEvent.state.dwellEmittedAt,
-        });
         if (inserted) {
+          await this.dal.upsertState({
+            tenantId: input.tenantId,
+            agentId,
+            nodeId: input.nodeId,
+            subjectKind: "saved_place",
+            subjectRef: place.place_id,
+            status: nextEvent.state.status,
+            enteredAt: nextEvent.state.enteredAt,
+            dwellEmittedAt: nextEvent.state.dwellEmittedAt,
+          });
           events.push(nextEvent.event);
           await recordLocationEpisode(
             this.opts.memoryV1Dal,
@@ -442,17 +442,17 @@ export class LocationService {
         subjectKind: "poi_category",
         subjectRef: categoryKey,
       });
-      await this.dal.upsertState({
-        tenantId: input.tenantId,
-        agentId: input.agentId,
-        nodeId: input.nodeId,
-        subjectKind: "poi_category",
-        subjectRef: categoryKey,
-        status: event.state.status,
-        enteredAt: event.state.enteredAt,
-        dwellEmittedAt: event.state.dwellEmittedAt,
-      });
       if (inserted) {
+        await this.dal.upsertState({
+          tenantId: input.tenantId,
+          agentId: input.agentId,
+          nodeId: input.nodeId,
+          subjectKind: "poi_category",
+          subjectRef: categoryKey,
+          status: event.state.status,
+          enteredAt: event.state.enteredAt,
+          dwellEmittedAt: event.state.dwellEmittedAt,
+        });
         events.push(event.event);
         await recordLocationEpisode(
           this.opts.memoryV1Dal,
