@@ -13,6 +13,12 @@ import { createArtifactsApi, type ArtifactsApi } from "./artifacts.js";
 import { createAuditApi, type AuditApi } from "./audit.js";
 import { createContractsApi, type ContractsApi } from "./contracts.js";
 import { createContextApi, type ContextApi } from "./context.js";
+import {
+  createDesktopEnvironmentHostsApi,
+  createDesktopEnvironmentsApi,
+  type DesktopEnvironmentHostsApi,
+  type DesktopEnvironmentsApi,
+} from "./desktop-environments.js";
 import { createDeviceTokensApi, type DeviceTokensApi } from "./device-tokens.js";
 import { createExtensionsApi, type ExtensionsApi } from "./extensions.js";
 import { createHealthApi, type HealthApi } from "./health.js";
@@ -57,6 +63,8 @@ export interface TyrumHttpClient {
   presence: PresenceApi;
   nodes: NodesApi;
   pairings: PairingsApi;
+  desktopEnvironmentHosts?: DesktopEnvironmentHostsApi;
+  desktopEnvironments?: DesktopEnvironmentsApi;
   /**
    * Operator/admin surfaces.
    *
@@ -92,6 +100,8 @@ export type TyrumHttpClientOperator = TyrumHttpClient & {
   extensions: ExtensionsApi;
   policyConfig: PolicyConfigApi;
   location: LocationApi;
+  desktopEnvironmentHosts: DesktopEnvironmentHostsApi;
+  desktopEnvironments: DesktopEnvironmentsApi;
 };
 
 export function createTyrumHttpClient(options: TyrumHttpClientOptions): TyrumHttpClientOperator {
@@ -114,6 +124,8 @@ export function createTyrumHttpClient(options: TyrumHttpClientOptions): TyrumHtt
     presence: createPresenceApi(transport),
     nodes: createNodesApi(transport),
     pairings: createPairingsApi(transport),
+    desktopEnvironmentHosts: createDesktopEnvironmentHostsApi(transport),
+    desktopEnvironments: createDesktopEnvironmentsApi(transport),
     agents: createAgentsApi(transport),
     agentConfig: createAgentConfigApi(transport),
     agentList: createAgentListApi(transport),

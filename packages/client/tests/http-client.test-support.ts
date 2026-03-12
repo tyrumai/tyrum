@@ -62,6 +62,16 @@ const clientApiPaths = [
   "pairings.approve",
   "pairings.deny",
   "pairings.revoke",
+  "desktopEnvironmentHosts.list",
+  "desktopEnvironments.list",
+  "desktopEnvironments.get",
+  "desktopEnvironments.create",
+  "desktopEnvironments.update",
+  "desktopEnvironments.start",
+  "desktopEnvironments.stop",
+  "desktopEnvironments.reset",
+  "desktopEnvironments.remove",
+  "desktopEnvironments.logs",
 ] as const;
 
 const adminApiPaths = [

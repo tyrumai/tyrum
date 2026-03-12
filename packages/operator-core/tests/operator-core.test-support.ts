@@ -1,6 +1,8 @@
 import { vi } from "vitest";
 import type {
   Approval,
+  DesktopEnvironment,
+  DesktopEnvironmentHost,
   ExecutionAttempt,
   ExecutionRun,
   ExecutionStep,
@@ -28,11 +30,19 @@ type HttpCallCounts = {
   presenceList: number;
   pairingsList: number;
   agentStatusGet: number;
+  desktopEnvironmentHostsList: number;
+  desktopEnvironmentsList: number;
 };
 
 export type FakeHttpClient = Pick<
   TyrumHttpClient,
-  "status" | "usage" | "presence" | "pairings" | "agentStatus"
+  | "status"
+  | "usage"
+  | "presence"
+  | "pairings"
+  | "agentStatus"
+  | "desktopEnvironmentHosts"
+  | "desktopEnvironments"
 > & {
   __calls: HttpCallCounts;
 };
@@ -165,6 +175,36 @@ export function samplePairingListResponse(): PairingListResponse {
   return { status: "ok", pairings: [] };
 }
 
+export function sampleDesktopEnvironmentHost(): DesktopEnvironmentHost {
+  return {
+    host_id: "host-1",
+    label: "Primary runtime",
+    version: "0.1.0",
+    docker_available: true,
+    healthy: true,
+    last_seen_at: "2026-01-01T00:00:00.000Z",
+    last_error: null,
+  };
+}
+
+export function sampleDesktopEnvironment(): DesktopEnvironment {
+  return {
+    environment_id: "env-1",
+    host_id: "host-1",
+    label: "Research desktop",
+    image_ref: "registry.example.test/desktop@sha256:1234",
+    managed_kind: "docker",
+    status: "running",
+    desired_running: true,
+    node_id: "node-desktop-1",
+    takeover_url: "http://127.0.0.1:8788/desktop-environments/env-1/takeover",
+    last_seen_at: "2026-01-01T00:00:00.000Z",
+    last_error: null,
+    created_at: "2026-01-01T00:00:00.000Z",
+    updated_at: "2026-01-01T00:00:00.000Z",
+  };
+}
+
 export function createFakeHttpClient(): FakeHttpClient {
   const calls: HttpCallCounts = {
     statusGet: 0,
@@ -172,6 +212,8 @@ export function createFakeHttpClient(): FakeHttpClient {
     presenceList: 0,
     pairingsList: 0,
     agentStatusGet: 0,
+    desktopEnvironmentHostsList: 0,
+    desktopEnvironmentsList: 0,
   };
 
   return {
@@ -208,6 +250,51 @@ export function createFakeHttpClient(): FakeHttpClient {
         calls.agentStatusGet++;
         return { status: "ok" } as unknown;
       }),
+    },
+    desktopEnvironmentHosts: {
+      list: vi.fn(async () => {
+        calls.desktopEnvironmentHostsList++;
+        return { status: "ok", hosts: [sampleDesktopEnvironmentHost()] } as const;
+      }),
+    },
+    desktopEnvironments: {
+      list: vi.fn(async () => {
+        calls.desktopEnvironmentsList++;
+        return { status: "ok", environments: [sampleDesktopEnvironment()] } as const;
+      }),
+      get: vi.fn(async () => ({ status: "ok", environment: sampleDesktopEnvironment() }) as const),
+      create: vi.fn(
+        async () => ({ status: "ok", environment: sampleDesktopEnvironment() }) as const,
+      ),
+      update: vi.fn(
+        async () => ({ status: "ok", environment: sampleDesktopEnvironment() }) as const,
+      ),
+      start: vi.fn(
+        async () => ({ status: "ok", environment: sampleDesktopEnvironment() }) as const,
+      ),
+      stop: vi.fn(
+        async () =>
+          ({
+            status: "ok",
+            environment: {
+              ...sampleDesktopEnvironment(),
+              status: "stopped",
+              desired_running: false,
+            },
+          }) as const,
+      ),
+      reset: vi.fn(
+        async () => ({ status: "ok", environment: sampleDesktopEnvironment() }) as const,
+      ),
+      remove: vi.fn(async () => ({ status: "ok", deleted: true }) as const),
+      logs: vi.fn(
+        async () =>
+          ({
+            status: "ok",
+            environment_id: "env-1",
+            logs: ["booting runtime", "runtime ready"],
+          }) as const,
+      ),
     },
   };
 }

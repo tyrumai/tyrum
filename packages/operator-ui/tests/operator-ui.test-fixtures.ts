@@ -182,6 +182,36 @@ function sampleManagedAgentDetail(agentKey: string) {
   };
 }
 
+function sampleDesktopEnvironmentHost() {
+  return {
+    host_id: "host-1",
+    label: "Primary runtime",
+    version: "0.1.0",
+    docker_available: true,
+    healthy: true,
+    last_seen_at: "2026-03-10T12:00:00.000Z",
+    last_error: null,
+  } as const;
+}
+
+function sampleDesktopEnvironment() {
+  return {
+    environment_id: "env-1",
+    host_id: "host-1",
+    label: "Research desktop",
+    image_ref: "registry.example.test/desktop@sha256:1234",
+    managed_kind: "docker",
+    status: "running",
+    desired_running: true,
+    node_id: "node-desktop-1",
+    takeover_url: "http://127.0.0.1:8788/desktop-environments/env-1/takeover",
+    last_seen_at: "2026-03-10T12:00:00.000Z",
+    last_error: null,
+    created_at: "2026-03-10T12:00:00.000Z",
+    updated_at: "2026-03-10T12:00:00.000Z",
+  } as const;
+}
+
 export function createFakeHttpClient(): {
   http: OperatorHttpClient;
   authTokensList: ReturnType<typeof vi.fn>;
@@ -226,6 +256,12 @@ export function createFakeHttpClient(): {
   );
   const agentListGet = vi.fn(async () => ({ agents: [{ agent_key: "default" }] }) as const);
   const agentStatusGet = vi.fn(async () => sampleAgentStatusResponse());
+  const desktopEnvironmentHostsList = vi.fn(
+    async () => ({ status: "ok", hosts: [sampleDesktopEnvironmentHost()] }) as const,
+  );
+  const desktopEnvironmentsList = vi.fn(
+    async () => ({ status: "ok", environments: [sampleDesktopEnvironment()] }) as const,
+  );
   const policyGetBundle = vi.fn(
     async () =>
       ({
@@ -380,6 +416,45 @@ export function createFakeHttpClient(): {
     nodes: { list: nodesList },
     agentStatus: { get: agentStatusGet },
     agentList: { get: agentListGet },
+    desktopEnvironmentHosts: {
+      list: desktopEnvironmentHostsList,
+    },
+    desktopEnvironments: {
+      list: desktopEnvironmentsList,
+      get: vi.fn(async () => ({ status: "ok", environment: sampleDesktopEnvironment() }) as const),
+      create: vi.fn(
+        async () => ({ status: "ok", environment: sampleDesktopEnvironment() }) as const,
+      ),
+      update: vi.fn(
+        async () => ({ status: "ok", environment: sampleDesktopEnvironment() }) as const,
+      ),
+      start: vi.fn(
+        async () => ({ status: "ok", environment: sampleDesktopEnvironment() }) as const,
+      ),
+      stop: vi.fn(
+        async () =>
+          ({
+            status: "ok",
+            environment: {
+              ...sampleDesktopEnvironment(),
+              status: "stopped",
+              desired_running: false,
+            },
+          }) as const,
+      ),
+      reset: vi.fn(
+        async () => ({ status: "ok", environment: sampleDesktopEnvironment() }) as const,
+      ),
+      remove: vi.fn(async () => ({ status: "ok", deleted: true }) as const),
+      logs: vi.fn(
+        async () =>
+          ({
+            status: "ok",
+            environment_id: "env-1",
+            logs: ["booting runtime", "runtime ready"],
+          }) as const,
+      ),
+    },
     pairings: {
       list: pairingsList,
       approve: pairingsApprove,

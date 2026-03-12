@@ -4,6 +4,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   Bot,
   Blocks,
+  Boxes,
   Globe,
   LayoutGrid,
   Link2,
@@ -63,6 +64,10 @@ const PairingPage = lazyNamed<{ core: OperatorCore }>(
   () => import("./components/pages/pairing-page.js"),
   "PairingPage",
 );
+const DesktopEnvironmentsPage = lazyNamed<{ core: OperatorCore }>(
+  () => import("./components/pages/desktop-environments-page.js"),
+  "DesktopEnvironmentsPage",
+);
 const ConfigurePage = lazyNamed<{ core: OperatorCore }>(
   () => import("./components/pages/configure-page.js"),
   "ConfigurePage",
@@ -91,6 +96,7 @@ export type OperatorUiRouteId =
   | "extensions"
   | "runs"
   | "pairing"
+  | "desktop-environments"
   | "configure"
   | "desktop"
   | "browser"
@@ -193,6 +199,15 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
     shortcut: true,
     hostKinds: SHARED_HOST_KINDS,
     render: ({ core }) => <PairingPage core={core} />,
+  },
+  {
+    id: "desktop-environments",
+    label: "Desktops",
+    icon: Boxes,
+    navGroup: "sidebar",
+    shortcut: false,
+    hostKinds: SHARED_HOST_KINDS,
+    render: ({ core }) => <DesktopEnvironmentsPage core={core} />,
   },
   {
     id: "configure",

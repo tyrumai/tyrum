@@ -1,0 +1,140 @@
+import { describe, expect, it, vi } from "vitest";
+import type { RequestInit } from "undici";
+import {
+  createTestClient,
+  getHeader,
+  jsonResponse,
+  makeFetchMock,
+} from "./http-client.test-support.js";
+
+describe("desktop environment HTTP client", () => {
+  it("lists hosts and environments", async () => {
+    const fetch = makeFetchMock(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/desktop-environment-hosts")) {
+        return jsonResponse({
+          status: "ok",
+          hosts: [
+            {
+              host_id: "host-1",
+              label: "Primary runtime",
+              version: "0.1.0",
+              docker_available: true,
+              healthy: true,
+              last_seen_at: "2026-01-01T00:00:00.000Z",
+              last_error: null,
+            },
+          ],
+        });
+      }
+      return jsonResponse({
+        status: "ok",
+        environments: [
+          {
+            environment_id: "env-1",
+            host_id: "host-1",
+            label: "Research desktop",
+            image_ref: "registry.example.test/desktop:latest",
+            managed_kind: "docker",
+            status: "running",
+            desired_running: true,
+            node_id: "node-desktop-1",
+            takeover_url: "http://127.0.0.1:6080/vnc.html?autoconnect=true",
+            last_seen_at: "2026-01-01T00:00:00.000Z",
+            last_error: null,
+            created_at: "2026-01-01T00:00:00.000Z",
+            updated_at: "2026-01-01T00:00:00.000Z",
+          },
+        ],
+      });
+    });
+
+    const client = createTestClient({ fetch });
+
+    const [hosts, environments] = await Promise.all([
+      client.desktopEnvironmentHosts.list(),
+      client.desktopEnvironments.list(),
+    ]);
+
+    expect(hosts.hosts[0]?.host_id).toBe("host-1");
+    expect(environments.environments[0]?.environment_id).toBe("env-1");
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("creates, mutates, and fetches logs for a desktop environment", async () => {
+    const fetch = makeFetchMock(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/desktop-environments") && init?.method === "POST") {
+        return jsonResponse(
+          {
+            status: "ok",
+            environment: {
+              environment_id: "env-1",
+              host_id: "host-1",
+              label: "Research desktop",
+              image_ref: "registry.example.test/desktop:latest",
+              managed_kind: "docker",
+              status: "stopped",
+              desired_running: false,
+              node_id: null,
+              takeover_url: null,
+              last_seen_at: null,
+              last_error: null,
+              created_at: "2026-01-01T00:00:00.000Z",
+              updated_at: "2026-01-01T00:00:00.000Z",
+            },
+          },
+          201,
+        );
+      }
+      if (url.endsWith("/start")) {
+        return jsonResponse({
+          status: "ok",
+          environment: {
+            environment_id: "env-1",
+            host_id: "host-1",
+            label: "Research desktop",
+            image_ref: "registry.example.test/desktop:latest",
+            managed_kind: "docker",
+            status: "starting",
+            desired_running: true,
+            node_id: null,
+            takeover_url: null,
+            last_seen_at: null,
+            last_error: null,
+            created_at: "2026-01-01T00:00:00.000Z",
+            updated_at: "2026-01-01T00:00:01.000Z",
+          },
+        });
+      }
+      if (url.endsWith("/logs")) {
+        return jsonResponse({
+          status: "ok",
+          environment_id: "env-1",
+          logs: ["desktop runtime booting", "desktop runtime ready"],
+        });
+      }
+      throw new Error(`unexpected request: ${url}`);
+    });
+    const client = createTestClient({ fetch });
+
+    const created = await client.desktopEnvironments.create({
+      host_id: "host-1",
+      label: "Research desktop",
+      image_ref: "registry.example.test/desktop:latest",
+      desired_running: false,
+    });
+    const started = await client.desktopEnvironments.start("env-1");
+    const logs = await client.desktopEnvironments.logs("env-1");
+
+    expect(created.environment.environment_id).toBe("env-1");
+    expect(started.environment.status).toBe("starting");
+    expect(logs.logs).toEqual(["desktop runtime booting", "desktop runtime ready"]);
+
+    const [createUrl, createInit] = (fetch as unknown as ReturnType<typeof vi.fn>).mock
+      .calls[0] as [string, RequestInit];
+    expect(createUrl).toBe("https://gateway.example/desktop-environments");
+    expect(createInit.method).toBe("POST");
+    expect(getHeader(createInit, "authorization")).toBe("Bearer root-token");
+  });
+});

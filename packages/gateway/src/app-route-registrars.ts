@@ -23,6 +23,7 @@ import { createConnectionsRoute } from "./routes/connections.js";
 import { createContextRoutes } from "./routes/context.js";
 import { createContractRoutes } from "./routes/contracts.js";
 import { createDeviceTokenRoutes } from "./routes/device-token.js";
+import { createDesktopEnvironmentRoutes } from "./routes/desktop-environments.js";
 import { createExtensionsRoutes } from "./routes/extensions.js";
 import { createHealthRoute } from "./routes/health.js";
 import { createIngressRoutes } from "./routes/ingress.js";
@@ -164,6 +165,13 @@ export function registerSystemAndPublicRoutes(context: AppRouteContext): void {
     }),
   );
   context.app.route("/", policy);
+  context.app.route(
+    "/",
+    createDesktopEnvironmentRoutes({
+      hostDal: context.routeDeps.desktopEnvironmentHostDal,
+      environmentDal: context.routeDeps.desktopEnvironmentDal,
+    }),
+  );
   context.app.route(
     "/",
     createPolicyBundleRoutes({

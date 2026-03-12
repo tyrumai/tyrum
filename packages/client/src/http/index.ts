@@ -55,6 +55,16 @@ export type {
   AuthTokenUpdateResult,
 } from "./auth-tokens.js";
 export type { ContractCatalog, ContractJsonSchema } from "./contracts.js";
+export type {
+  DesktopEnvironmentHostListResult,
+  DesktopEnvironmentListResult,
+  DesktopEnvironmentGetResult,
+  DesktopEnvironmentCreateInput,
+  DesktopEnvironmentUpdateInput,
+  DesktopEnvironmentMutateResult,
+  DesktopEnvironmentDeleteResult,
+  DesktopEnvironmentLogsResult,
+} from "./desktop-environments.js";
 export type { PolicyBundleResponse } from "./policy.js";
 export type {
   DeploymentPolicyConfigGetResult,

@@ -28,6 +28,7 @@ import type { GatewayRole } from "./network.js";
 import type { ArtifactLifecycleScheduler } from "../modules/artifact/lifecycle.js";
 import type { OutboxLifecycleScheduler } from "../modules/backplane/outbox-lifecycle.js";
 import type { StateStoreLifecycleScheduler } from "../modules/statestore/lifecycle.js";
+import type { DesktopEnvironmentHostRuntime } from "../modules/desktop-environments/host-runtime.js";
 
 export type GatewayServer = HttpServer | HttpsServer;
 export type SecretProviderForTenant = Awaited<
@@ -46,6 +47,7 @@ export interface GatewayBootContext {
   isLocalOnly: boolean;
   shouldRunEdge: boolean;
   shouldRunWorker: boolean;
+  shouldRunDesktopRuntime: boolean;
   deploymentConfig: GatewayContainer["deploymentConfig"];
   container: GatewayContainer;
   logger: GatewayContainer["logger"];
@@ -92,5 +94,6 @@ export interface GatewayRuntime {
   protocol: ProtocolRuntime;
   edge: EdgeRuntime;
   workerLoop?: ExecutionWorkerLoop;
+  desktopHostRuntime?: DesktopEnvironmentHostRuntime;
   otel: OtelRuntime;
 }

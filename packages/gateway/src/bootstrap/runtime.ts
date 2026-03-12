@@ -1,6 +1,15 @@
 import { wireContainer } from "../container.js";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { hostname } from "node:os";
+import { join } from "node:path";
 import { AuthTokenService } from "../modules/auth/auth-token-service.js";
 import { DeploymentConfigDal } from "../modules/config/deployment-config-dal.js";
+import {
+  DesktopEnvironmentDal,
+  DesktopEnvironmentHostDal,
+} from "../modules/desktop-environments/dal.js";
+import { DesktopEnvironmentHostRuntime } from "../modules/desktop-environments/host-runtime.js";
+import { DesktopEnvironmentRuntimeManager } from "../modules/desktop-environments/runtime-manager.js";
 import { DEFAULT_TENANT_ID } from "../modules/identity/scope.js";
 import { maybeStartOtel } from "../modules/observability/otel.js";
 import { createDbSecretProviderFactory } from "../modules/secret/create-secret-provider.js";
@@ -96,6 +105,23 @@ function logTransportPolicy(policy: NonLoopbackTransportPolicy): void {
     console.log("Configure TLS termination and set deployment config server.tlsReady=true.");
   }
   console.log("---");
+}
+
+async function loadOrCreateDesktopRuntimeHostId(tyrumHome: string): Promise<string> {
+  const stateDir = join(tyrumHome, "runtime-state");
+  const hostIdPath = join(stateDir, "desktop-runtime-host-id");
+  try {
+    const existing = (await readFile(hostIdPath, "utf8")).trim();
+    if (existing.length > 0) return existing;
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException | undefined)?.code;
+    if (code !== "ENOENT") throw error;
+  }
+
+  await mkdir(stateDir, { recursive: true, mode: 0o700 });
+  const created = `desktop-host-${crypto.randomUUID()}`;
+  await writeFile(hostIdPath, `${created}\n`, { mode: 0o600 });
+  return created;
 }
 
 async function createGatewayBootContext(
@@ -208,6 +234,7 @@ async function createGatewayBootContext(
     isLocalOnly,
     shouldRunEdge: role === "all" || role === "edge",
     shouldRunWorker: role === "all" || role === "worker",
+    shouldRunDesktopRuntime: role === "all" || role === "desktop-runtime",
     deploymentConfig,
     container,
     logger,
@@ -234,6 +261,32 @@ export async function main(input?: GatewayRole | GatewayStartOptions): Promise<v
   const protocol = await createProtocolRuntime(context, otel);
   const edge = await startEdgeRuntime(context, protocol, otel);
   const workerLoop = createWorkerLoop(context, protocol);
+  const desktopRuntimeHostId = context.shouldRunDesktopRuntime
+    ? await loadOrCreateDesktopRuntimeHostId(context.tyrumHome)
+    : undefined;
+  const desktopHostRuntime = context.shouldRunDesktopRuntime
+    ? new DesktopEnvironmentHostRuntime(
+        new DesktopEnvironmentHostDal(context.container.db),
+        new DesktopEnvironmentRuntimeManager(
+          new DesktopEnvironmentDal(context.container.db),
+          context.container.nodePairingDal,
+          context.authTokens,
+          context.logger,
+          {
+            hostId: desktopRuntimeHostId!,
+            tyrumHome: context.tyrumHome,
+            gatewayPort: context.port,
+            gatewayWsUrl: process.env["TYRUM_DESKTOP_ENVIRONMENTS_GATEWAY_WS_URL"]?.trim(),
+          },
+        ),
+        {
+          hostId: desktopRuntimeHostId!,
+          label: `desktop-runtime:${hostname()}`,
+          logger: context.logger,
+        },
+      )
+    : undefined;
+  await desktopHostRuntime?.start();
 
   fireGatewayStartHook(context, protocol);
 
@@ -242,6 +295,7 @@ export async function main(input?: GatewayRole | GatewayStartOptions): Promise<v
     protocol,
     edge,
     workerLoop,
+    desktopHostRuntime,
     otel,
   });
   process.once("SIGINT", () => shutdown("SIGINT"));

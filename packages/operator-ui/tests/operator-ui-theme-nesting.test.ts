@@ -68,6 +68,20 @@ const stubHttp: OperatorHttpClient = {
     deny: async () => ({ status: "ok" }) as never,
     revoke: async () => ({ status: "ok" }) as never,
   },
+  desktopEnvironmentHosts: {
+    list: async () => ({ status: "ok", hosts: [] }) as never,
+  },
+  desktopEnvironments: {
+    list: async () => ({ status: "ok", environments: [] }) as never,
+    get: async () => ({ status: "ok", environment: null }) as never,
+    create: async () => ({ status: "ok", environment: null }) as never,
+    update: async () => ({ status: "ok", environment: null }) as never,
+    start: async () => ({ status: "ok", environment: null }) as never,
+    stop: async () => ({ status: "ok", environment: null }) as never,
+    reset: async () => ({ status: "ok", environment: null }) as never,
+    remove: async () => ({ status: "ok", deleted: true }) as never,
+    logs: async () => ({ status: "ok", environment_id: "env-1", logs: [] }) as never,
+  },
 };
 
 function MutateStorageDuringRender({ children }: { children: React.ReactNode }) {

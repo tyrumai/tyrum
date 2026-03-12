@@ -81,6 +81,20 @@ export function createFakeHttpClient(): OperatorHttpClient {
     presence: {
       list: vi.fn(async () => ({ status: "ok", generated_at: "", entries: [] }) as unknown),
     },
+    desktopEnvironmentHosts: {
+      list: vi.fn(async () => ({ status: "ok", hosts: [] }) as unknown),
+    },
+    desktopEnvironments: {
+      list: vi.fn(async () => ({ status: "ok", environments: [] }) as unknown),
+      get: vi.fn(async () => ({ status: "ok", environment: null }) as unknown),
+      create: vi.fn(async () => ({ status: "ok", environment: null }) as unknown),
+      update: vi.fn(async () => ({ status: "ok", environment: null }) as unknown),
+      start: vi.fn(async () => ({ status: "ok", environment: null }) as unknown),
+      stop: vi.fn(async () => ({ status: "ok", environment: null }) as unknown),
+      reset: vi.fn(async () => ({ status: "ok", environment: null }) as unknown),
+      remove: vi.fn(async () => ({ status: "ok", deleted: true }) as unknown),
+      logs: vi.fn(async () => ({ status: "ok", environment_id: "env-1", logs: [] }) as unknown),
+    },
     pairings: {
       list: vi.fn(async () => ({ status: "ok", pairings: [] }) as unknown),
       approve: vi.fn(async () => ({ status: "ok" }) as unknown),
