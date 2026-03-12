@@ -31,7 +31,7 @@ export class DesktopEnvironmentLifecycleService implements DesktopEnvironmentLif
 export class UnsupportedDesktopEnvironmentLifecycleService implements DesktopEnvironmentLifecycle {
   async deleteEnvironment(): Promise<boolean> {
     throw new DesktopEnvironmentLifecycleUnavailableError(
-      "desktop environment deletion requires a gateway instance running role=all or a custom desktop environment lifecycle service",
+      "desktop environment deletion requires a gateway instance running role=all or role=desktop-runtime, or a custom desktop environment lifecycle service",
     );
   }
 }

@@ -1,4 +1,17 @@
 import { describe, expect, it, vi } from "vitest";
+const { removeEnvironmentContainerMock } = vi.hoisted(() => ({
+  removeEnvironmentContainerMock: vi.fn(async () => {}),
+}));
+
+vi.mock("../../src/modules/desktop-environments/docker-cli.js", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../../src/modules/desktop-environments/docker-cli.js")>();
+  return {
+    ...actual,
+    removeEnvironmentContainer: removeEnvironmentContainerMock,
+  };
+});
+
 import {
   DesktopEnvironmentDal,
   DesktopEnvironmentHostDal,
@@ -134,7 +147,7 @@ describe("desktop environment routes", () => {
     expect(deleteRes.status).toBe(409);
     await expect(deleteRes.json()).resolves.toMatchObject({
       error: "conflict",
-      message: expect.stringContaining("role=all"),
+      message: expect.stringContaining("role=desktop-runtime"),
     });
 
     await expect(
@@ -143,6 +156,44 @@ describe("desktop environment routes", () => {
         environmentId: environment.environment_id,
       }),
     ).resolves.toBeTruthy();
+  });
+
+  it("uses the default lifecycle service when running role=desktop-runtime", async () => {
+    const { app, container } = await createTestApp({ runtimeRole: "desktop-runtime" });
+    const hostDal = new DesktopEnvironmentHostDal(container.db);
+    const environmentDal = new DesktopEnvironmentDal(container.db);
+
+    await hostDal.upsert({
+      hostId: "host-1",
+      label: "Primary runtime",
+      version: "0.1.0",
+      dockerAvailable: true,
+      healthy: true,
+      lastSeenAt: "2026-01-01T00:00:00.000Z",
+      lastError: null,
+    });
+
+    const environment = await environmentDal.create({
+      tenantId: DEFAULT_TENANT_ID,
+      hostId: "host-1",
+      label: "Research desktop",
+      imageRef: "registry.example.test/desktop:latest",
+      desiredRunning: false,
+    });
+
+    const deleteRes = await app.request(`/desktop-environments/${environment.environment_id}`, {
+      method: "DELETE",
+    });
+
+    expect(deleteRes.status).toBe(200);
+    await expect(deleteRes.json()).resolves.toMatchObject({ deleted: true });
+    expect(removeEnvironmentContainerMock).toHaveBeenCalledWith(environment.environment_id);
+    await expect(
+      environmentDal.get({
+        tenantId: DEFAULT_TENANT_ID,
+        environmentId: environment.environment_id,
+      }),
+    ).resolves.toBeUndefined();
   });
 
   it("rejects takeover redirects that do not point at a trusted local runtime", async () => {

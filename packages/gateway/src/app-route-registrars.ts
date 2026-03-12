@@ -176,7 +176,7 @@ export function registerSystemAndPublicRoutes(context: AppRouteContext): void {
       environmentDal: context.routeDeps.desktopEnvironmentDal,
       lifecycleService:
         context.opts.desktopEnvironmentLifecycle ??
-        (context.runtime.role === "all"
+        (context.runtime.role === "all" || context.runtime.role === "desktop-runtime"
           ? new DesktopEnvironmentLifecycleService(context.routeDeps.desktopEnvironmentDal)
           : new UnsupportedDesktopEnvironmentLifecycleService()),
     }),
