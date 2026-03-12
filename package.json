@@ -52,6 +52,7 @@
     },
     "patchedDependencies": {
       "@develar/schema-utils@2.6.5": "patches/@develar__schema-utils@2.6.5.patch",
+      "better-sqlite3@12.6.2": "patches/better-sqlite3@12.6.2.patch",
       "dmg-license@1.0.11": "patches/dmg-license@1.0.11.patch",
       "file-type@16.5.4": "patches/file-type@16.5.4.patch",
       "usocket@0.3.0": "patches/usocket@0.3.0.patch"

@@ -28,6 +28,9 @@ patchedDependencies:
   '@develar/schema-utils@2.6.5':
     hash: 0f1765e4a65b1e60ade18bd9a39370acd2167fc81e4b71599eadf783bb16ed9f
     path: patches/@develar__schema-utils@2.6.5.patch
+  better-sqlite3@12.6.2:
+    hash: 9401312d3b6a046ec628d4b28f3d131bb0d976a9ab5018cb3b6113a5d68da36e
+    path: patches/better-sqlite3@12.6.2.patch
   dmg-license@1.0.11:
     hash: 9de5625782d661750c4261c2f5575c217222758f9f5aac99b523818484696f82
     path: patches/dmg-license@1.0.11.patch
@@ -461,7 +464,7 @@ importers:
         version: 8.18.0
       better-sqlite3:
         specifier: ^12.6.2
-        version: 12.6.2
+        version: 12.6.2(patch_hash=9401312d3b6a046ec628d4b28f3d131bb0d976a9ab5018cb3b6113a5d68da36e)
       hono:
         specifier: ^4.12.7
         version: 4.12.7
@@ -18396,7 +18399,7 @@ snapshots:
 
   batch@0.6.1: {}
 
-  better-sqlite3@12.6.2:
+  better-sqlite3@12.6.2(patch_hash=9401312d3b6a046ec628d4b28f3d131bb0d976a9ab5018cb3b6113a5d68da36e):
     dependencies:
       bindings: 1.5.0
       prebuild-install: 7.1.3

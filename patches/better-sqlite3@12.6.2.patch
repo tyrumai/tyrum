@@ -1,0 +1,27 @@
+diff --git a/src/objects/database.cpp b/src/objects/database.cpp
+--- a/src/objects/database.cpp
++++ b/src/objects/database.cpp
+@@ -408,10 +408,10 @@ NODE_METHOD(Database::JS_unsafeMode) {
+ }
+ 
+ NODE_GETTER(Database::JS_open) {
+-	info.GetReturnValue().Set(Unwrap<Database>(info.This())->open);
++	info.GetReturnValue().Set(Unwrap<Database>(info.HolderV2())->open);
+ }
+ 
+ NODE_GETTER(Database::JS_inTransaction) {
+-	Database* db = Unwrap<Database>(info.This());
++	Database* db = Unwrap<Database>(info.HolderV2());
+ 	info.GetReturnValue().Set(db->open && !static_cast<bool>(sqlite3_get_autocommit(db->db_handle)));
+ }
+diff --git a/src/objects/statement.cpp b/src/objects/statement.cpp
+--- a/src/objects/statement.cpp
++++ b/src/objects/statement.cpp
+@@ -378,6 +378,6 @@ NODE_METHOD(Statement::JS_columns) {
+ }
+ 
+ NODE_GETTER(Statement::JS_busy) {
+-	Statement* stmt = Unwrap<Statement>(info.This());
++	Statement* stmt = Unwrap<Statement>(info.HolderV2());
+ 	info.GetReturnValue().Set(stmt->alive && stmt->locked);
+ }
