@@ -1,46 +1,189 @@
 import type {
   SessionTranscriptApprovalItem,
+  SessionTranscriptReasoningItem,
   SessionTranscriptTextItem,
   SessionTranscriptToolItem,
 } from "@tyrum/client";
 import type { ChatReasoningTranscriptItem, ChatSession } from "./chat-store.types.js";
 
 type ChatTranscriptItem = ChatSession["transcript"][number];
+type TextContentPreference = "primary" | "overlay";
 
-export function transcriptTimestamp(item: ChatTranscriptItem): string {
-  return item.kind === "text" ? item.created_at : item.updated_at;
+function earliestIso(left: string, right: string): string {
+  return left.localeCompare(right) <= 0 ? left : right;
+}
+
+function latestIso(left: string, right: string): string {
+  return left.localeCompare(right) >= 0 ? left : right;
+}
+
+function preferLongerString(primary: string, overlay: string): string {
+  return overlay.length > primary.length ? overlay : primary;
+}
+
+export function transcriptDisplayOrderTimestamp(item: ChatTranscriptItem): string {
+  return item.created_at;
+}
+
+function mergeTextItems(
+  primary: SessionTranscriptTextItem,
+  overlay: SessionTranscriptTextItem,
+  textContentPreference: TextContentPreference,
+): SessionTranscriptTextItem {
+  const winner = textContentPreference === "overlay" ? overlay : primary;
+  return {
+    ...primary,
+    ...winner,
+    content: winner.content,
+    created_at: earliestIso(primary.created_at, overlay.created_at),
+  };
+}
+
+function mergeReasoningItems(
+  primary: ChatReasoningTranscriptItem | SessionTranscriptReasoningItem,
+  overlay: ChatReasoningTranscriptItem | SessionTranscriptReasoningItem,
+): ChatReasoningTranscriptItem {
+  const winner = overlay.updated_at.localeCompare(primary.updated_at) > 0 ? overlay : primary;
+  return {
+    ...primary,
+    ...winner,
+    kind: "reasoning",
+    content: preferLongerString(primary.content, overlay.content),
+    created_at: earliestIso(primary.created_at, overlay.created_at),
+    updated_at: latestIso(primary.updated_at, overlay.updated_at),
+  };
+}
+
+function mergeToolItems(
+  primary: SessionTranscriptToolItem,
+  overlay: SessionTranscriptToolItem,
+): SessionTranscriptToolItem {
+  const overlayIsNewer = overlay.updated_at.localeCompare(primary.updated_at) > 0;
+  const winner = overlayIsNewer ? overlay : primary;
+  const loser = overlayIsNewer ? primary : overlay;
+  const nextSummary = winner.summary.trim().length > 0 ? winner.summary : loser.summary;
+  const nextError =
+    winner.error && winner.error.trim().length > 0 ? winner.error : (loser.error ?? "");
+  return {
+    ...primary,
+    ...winner,
+    summary: nextSummary,
+    created_at: earliestIso(primary.created_at, overlay.created_at),
+    updated_at: latestIso(primary.updated_at, overlay.updated_at),
+    ...(nextError ? { error: nextError } : {}),
+  };
+}
+
+function mergeApprovalItems(
+  primary: SessionTranscriptApprovalItem,
+  overlay: SessionTranscriptApprovalItem,
+): SessionTranscriptApprovalItem {
+  const winner = overlay.updated_at.localeCompare(primary.updated_at) > 0 ? overlay : primary;
+  return {
+    ...primary,
+    ...winner,
+    detail: preferLongerString(primary.detail, overlay.detail),
+    created_at: earliestIso(primary.created_at, overlay.created_at),
+    updated_at: latestIso(primary.updated_at, overlay.updated_at),
+  };
+}
+
+function mergeTranscriptItem(
+  primary: ChatTranscriptItem,
+  overlay: ChatTranscriptItem,
+  input: {
+    textContentPreference: TextContentPreference;
+  },
+): ChatTranscriptItem {
+  if (primary.kind !== overlay.kind) return primary;
+  switch (primary.kind) {
+    case "text":
+      return mergeTextItems(
+        primary,
+        overlay as SessionTranscriptTextItem,
+        input.textContentPreference,
+      );
+    case "reasoning":
+      return mergeReasoningItems(primary, overlay as ChatReasoningTranscriptItem);
+    case "tool":
+      return mergeToolItems(primary, overlay as SessionTranscriptToolItem);
+    case "approval":
+      return mergeApprovalItems(primary, overlay as SessionTranscriptApprovalItem);
+  }
 }
 
 export function sortTranscriptItems(
   transcript: readonly ChatTranscriptItem[],
 ): ChatTranscriptItem[] {
   return [...transcript].toSorted((left, right) => {
-    const leftAt = transcriptTimestamp(left);
-    const rightAt = transcriptTimestamp(right);
-    if (leftAt === rightAt) return left.id.localeCompare(right.id);
+    const leftAt = transcriptDisplayOrderTimestamp(left);
+    const rightAt = transcriptDisplayOrderTimestamp(right);
+    if (leftAt === rightAt) return 0;
     return leftAt.localeCompare(rightAt);
   });
+}
+
+export function mergeTranscriptEntries(
+  primary: readonly ChatTranscriptItem[],
+  overlay: readonly ChatTranscriptItem[],
+  input: {
+    textContentPreference?: TextContentPreference;
+  } = {},
+): ChatTranscriptItem[] {
+  if (primary.length === 0 && overlay.length === 0) return [];
+  const merged = [...primary];
+  const indexById = new Map<string, number>();
+  const textContentPreference = input.textContentPreference ?? "overlay";
+
+  for (const [index, item] of merged.entries()) {
+    indexById.set(item.id, index);
+  }
+
+  for (const item of overlay) {
+    const existingIndex = indexById.get(item.id);
+    if (existingIndex === undefined) {
+      indexById.set(item.id, merged.length);
+      merged.push(item);
+      continue;
+    }
+    const existing = merged[existingIndex];
+    if (!existing) continue;
+    merged[existingIndex] = mergeTranscriptItem(existing, item, {
+      textContentPreference,
+    });
+  }
+
+  return sortTranscriptItems(merged);
 }
 
 export function mergeFetchedTranscript(
   previous: readonly ChatTranscriptItem[] | undefined,
   fetched: readonly ChatTranscriptItem[],
 ): ChatTranscriptItem[] {
-  if (!previous || previous.length === 0) return [...fetched];
-  const overlay = previous.filter((item) => item.kind !== "text");
-  if (overlay.length === 0) return [...fetched];
-  const fetchedIds = new Set(fetched.map((item) => item.id));
-  return sortTranscriptItems([...fetched, ...overlay.filter((item) => !fetchedIds.has(item.id))]);
+  return mergeTranscriptEntries(fetched, previous ?? [], {
+    textContentPreference: "primary",
+  });
+}
+
+export function upsertTranscriptEntries(
+  transcript: readonly ChatTranscriptItem[],
+  item: ChatTranscriptItem,
+): ChatTranscriptItem[] {
+  return mergeTranscriptEntries(transcript, [item]);
+}
+
+export function removeTranscriptEntriesById(
+  transcript: readonly ChatTranscriptItem[],
+  ids: ReadonlySet<string>,
+): ChatTranscriptItem[] {
+  if (ids.size === 0) return [...transcript];
+  return transcript.filter((item) => !ids.has(item.id));
 }
 
 export function upsertTranscriptItem(session: ChatSession, item: ChatTranscriptItem): ChatSession {
   return {
     ...session,
-    transcript: sortTranscriptItems(
-      session.transcript.some((entry) => entry.id === item.id)
-        ? session.transcript.map((entry) => (entry.id === item.id ? item : entry))
-        : [...session.transcript, item],
-    ),
+    transcript: upsertTranscriptEntries(session.transcript, item),
   };
 }
 
@@ -142,6 +285,31 @@ export function readApprovalThreadId(payload: Record<string, unknown> | null): s
   return typeof threadId === "string" && threadId.trim().length > 0 ? threadId : null;
 }
 
+function readApprovalRequestContext(
+  payload: Record<string, unknown> | null,
+): Record<string, unknown> | null {
+  const context = payload?.["context"];
+  return context && typeof context === "object" && !Array.isArray(context)
+    ? (context as Record<string, unknown>)
+    : null;
+}
+
+export function readApprovalRequestSessionId(
+  payload: Record<string, unknown> | null,
+): string | null {
+  const context = readApprovalRequestContext(payload);
+  const sessionId = context?.["session_id"];
+  return typeof sessionId === "string" && sessionId.trim().length > 0 ? sessionId : null;
+}
+
+export function readApprovalRequestThreadId(
+  payload: Record<string, unknown> | null,
+): string | null {
+  const context = readApprovalRequestContext(payload);
+  const threadId = context?.["thread_id"];
+  return typeof threadId === "string" && threadId.trim().length > 0 ? threadId : null;
+}
+
 export function toApprovalTranscriptItem(
   payload: Record<string, unknown> | null,
   occurredAt: string,
@@ -181,6 +349,31 @@ export function toApprovalTranscriptItem(
       ? { tool_call_id: context["tool_call_id"] as string }
       : {}),
     ...(typeof scope?.["run_id"] === "string" ? { run_id: scope["run_id"] as string } : {}),
+  };
+}
+
+export function toApprovalRequestTranscriptItem(
+  payload: Record<string, unknown> | null,
+  occurredAt: string,
+): SessionTranscriptApprovalItem | null {
+  if (!payload) return null;
+  const approvalId =
+    typeof payload["approval_id"] === "string" ? payload["approval_id"].trim() : "";
+  const prompt = typeof payload["prompt"] === "string" ? payload["prompt"] : "";
+  const context = readApprovalRequestContext(payload);
+  if (!approvalId || !prompt) return null;
+  return {
+    kind: "approval",
+    id: approvalId,
+    approval_id: approvalId,
+    status: "pending",
+    title: "Approval required",
+    detail: prompt,
+    created_at: occurredAt,
+    updated_at: occurredAt,
+    ...(typeof context?.["tool_call_id"] === "string" && context["tool_call_id"].trim().length > 0
+      ? { tool_call_id: context["tool_call_id"] as string }
+      : {}),
   };
 }
 

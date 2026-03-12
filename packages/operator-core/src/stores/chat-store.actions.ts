@@ -4,6 +4,7 @@ import {
   activeToolCallIdsForSession,
   appendTranscriptTextItem,
   mergeFetchedTranscript,
+  removeTranscriptEntriesById,
 } from "./chat-store.transcript.js";
 
 function createClientMessageId(): string {
@@ -22,6 +23,7 @@ export function setAgentId(ctx: ChatStoreContext, agentId: string): void {
   ctx.runIds.sessions += 1;
   ctx.runIds.open += 1;
   ctx.runIds.send += 1;
+  ctx.pendingOpen = null;
   ctx.setState((prev) => ({
     ...prev,
     agentId: nextAgentId,
@@ -148,7 +150,19 @@ export async function openSession(ctx: ChatStoreContext, sessionId: string): Pro
   const trimmed = sessionId.trim();
   if (!trimmed) return;
 
+  const snapshot = ctx.store.getSnapshot();
+  const knownThreadId =
+    snapshot.active.sessionId === trimmed
+      ? (snapshot.active.session?.thread_id ?? null)
+      : (snapshot.sessions.sessions.find((session) => session.session_id === trimmed)?.thread_id ??
+        null);
   const runId = ++ctx.runIds.open;
+  ctx.pendingOpen = {
+    sessionId: trimmed,
+    threadId: knownThreadId,
+    transcript: [],
+    typing: false,
+  };
   ctx.setState((prev) => ({
     ...prev,
     active: {
@@ -167,10 +181,13 @@ export async function openSession(ctx: ChatStoreContext, sessionId: string): Pro
     const agentId = ctx.store.getSnapshot().agentId;
     const res = await ctx.ws.sessionGet({ agent_id: agentId, session_id: trimmed });
     if (runId !== ctx.runIds.open) return;
+    const pendingOpen =
+      ctx.pendingOpen && ctx.pendingOpen.sessionId === trimmed ? ctx.pendingOpen : null;
+    ctx.pendingOpen = null;
     ctx.setState((prev) => {
       const session = {
         ...res.session,
-        transcript: mergeFetchedTranscript(prev.active.session?.transcript, res.session.transcript),
+        transcript: mergeFetchedTranscript(pendingOpen?.transcript, res.session.transcript),
       };
       return {
         ...prev,
@@ -178,7 +195,7 @@ export async function openSession(ctx: ChatStoreContext, sessionId: string): Pro
           sessionId: trimmed,
           session,
           loading: false,
-          typing: false,
+          typing: pendingOpen?.typing ?? false,
           activeToolCallIds: activeToolCallIdsForSession(session),
           error: null,
         },
@@ -186,6 +203,9 @@ export async function openSession(ctx: ChatStoreContext, sessionId: string): Pro
     });
   } catch (err) {
     if (runId !== ctx.runIds.open) return;
+    if (ctx.pendingOpen?.sessionId === trimmed) {
+      ctx.pendingOpen = null;
+    }
     ctx.setState((prev) => ({
       ...prev,
       active: {
@@ -203,6 +223,10 @@ async function refreshActiveSessionIfCurrent(
     agentId: string;
     sessionId: string;
     sendRunId?: number;
+    optimisticUserMessage?: {
+      id: string;
+      content: string;
+    };
   },
 ): Promise<void> {
   const isCurrent = (): boolean => {
@@ -233,9 +257,22 @@ async function refreshActiveSessionIfCurrent(
         return prev;
       }
 
+      const previousTranscript =
+        input.optimisticUserMessage &&
+        res.session.transcript.some(
+          (item) =>
+            item.kind === "text" &&
+            item.role === "user" &&
+            item.content === input.optimisticUserMessage?.content,
+        )
+          ? removeTranscriptEntriesById(
+              prev.active.session.transcript,
+              new Set([input.optimisticUserMessage.id]),
+            )
+          : prev.active.session.transcript;
       const session = {
         ...res.session,
-        transcript: mergeFetchedTranscript(prev.active.session.transcript, res.session.transcript),
+        transcript: mergeFetchedTranscript(previousTranscript, res.session.transcript),
       };
       return {
         ...prev,
@@ -318,6 +355,10 @@ export async function sendMessage(
       agentId: expectedAgentId,
       sessionId: expectedSessionId,
       sendRunId: runId,
+      optimisticUserMessage: {
+        id: clientMessageId,
+        content: text,
+      },
     });
 
     if (ctx.store.getSnapshot().agentId === expectedAgentId) {
@@ -333,8 +374,9 @@ export async function sendMessage(
                 ...prev.active,
                 session: {
                   ...prev.active.session,
-                  transcript: prev.active.session.transcript.filter(
-                    (item) => !(item.kind === "text" && item.id === clientMessageId),
+                  transcript: removeTranscriptEntriesById(
+                    prev.active.session.transcript,
+                    new Set([clientMessageId]),
                   ),
                 },
               }

@@ -38,9 +38,10 @@ export function createChatStore(ws: OperatorWsClient, http: OperatorHttpClient):
     ws,
     http,
     runIds: { agents: 0, sessions: 0, open: 0, send: 0 },
+    pendingOpen: null,
   };
 
-  registerChatStoreEventHandlers(ws, setState);
+  registerChatStoreEventHandlers(ws, ctx);
 
   return {
     ...store,

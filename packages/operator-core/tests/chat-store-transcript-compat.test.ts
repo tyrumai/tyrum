@@ -60,7 +60,7 @@ describe("chat-store-transcript compatibility helpers", () => {
       textItem("b", "2026-03-09T00:00:01.000Z"),
       textItem("a", "2026-03-09T00:00:01.000Z"),
     ]);
-    expect(sorted.map((item) => item.id)).toEqual(["a", "b", "tool"]);
+    expect(sorted.map((item) => item.id)).toEqual(["b", "a", "tool"]);
 
     const merged = mergeFetchedTranscript(
       [
@@ -69,13 +69,19 @@ describe("chat-store-transcript compatibility helpers", () => {
       ],
       [textItem("fresh", "2026-03-09T00:00:02.000Z")],
     );
-    expect(merged.map((item) => item.id)).toEqual(["fresh", "overlay"]);
+    expect(merged.map((item) => item.id)).toEqual(["old", "fresh", "overlay"]);
 
     const updated = upsertTranscriptItem(
-      sessionWithTranscript([textItem("message", "2026-03-09T00:00:01.000Z")]),
-      toolItem("later", "2026-03-09T00:00:04.000Z", "queued"),
+      sessionWithTranscript([
+        toolItem("tool", "2026-03-09T00:00:01.000Z", "running"),
+        textItem("message", "2026-03-09T00:00:02.000Z"),
+      ]),
+      {
+        ...toolItem("tool", "2026-03-09T00:00:04.000Z", "queued"),
+        summary: "still running",
+      },
     );
-    expect(updated.transcript.map((item) => item.id)).toEqual(["message", "later"]);
+    expect(updated.transcript.map((item) => item.id)).toEqual(["tool", "message"]);
   });
 
   it("tracks active tool calls and falls back occurred_at timestamps", () => {

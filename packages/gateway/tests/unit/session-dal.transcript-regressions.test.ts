@@ -243,4 +243,78 @@ describe("SessionDal transcript regressions", () => {
     expect(toolItem?.updated_at).toBe("2026-03-08T00:00:10Z");
     expect(toolItem?.summary).toBe("Finished");
   });
+
+  it("keeps transcript order stable while session freshness follows tool updates", async () => {
+    const dal = createDal();
+    const session = await dal.getOrCreate({
+      connectorKey: "telegram",
+      providerThreadId: "thread-tool-order",
+      containerKind: "group",
+    });
+
+    await dal.replaceTranscript({
+      tenantId: session.tenant_id,
+      sessionId: session.session_id,
+      transcript: [
+        {
+          kind: "tool",
+          id: "tool-call-1",
+          tool_id: "shell",
+          tool_call_id: "tool-call-1",
+          status: "running",
+          summary: "Started",
+          created_at: "2026-03-08T00:00:00Z",
+          updated_at: "2026-03-08T00:00:01Z",
+          channel: "telegram",
+          thread_id: "thread-tool-order",
+          agent_id: session.agent_id,
+          workspace_id: session.workspace_id,
+        },
+        {
+          kind: "text",
+          id: "turn-1",
+          role: "assistant",
+          content: "Done",
+          created_at: "2026-03-08T00:00:05Z",
+        },
+      ],
+      summary: "",
+    });
+
+    await dal.upsertTranscriptItem({
+      tenantId: session.tenant_id,
+      sessionId: session.session_id,
+      item: {
+        kind: "tool",
+        id: "tool-call-1",
+        tool_id: "shell",
+        tool_call_id: "tool-call-1",
+        status: "completed",
+        summary: "Finished",
+        created_at: "2026-03-08T00:00:09Z",
+        updated_at: "2026-03-08T00:00:10Z",
+        channel: "telegram",
+        thread_id: "thread-tool-order",
+        agent_id: session.agent_id,
+        workspace_id: session.workspace_id,
+      },
+    });
+
+    const updated = await dal.getById({
+      tenantId: session.tenant_id,
+      sessionId: session.session_id,
+    });
+    const toolItem = updated?.transcript.find(
+      (item) => item.kind === "tool" && item.id === "tool-call-1",
+    );
+
+    expect(updated?.transcript.map((item) => item.id)).toEqual(["tool-call-1", "turn-1"]);
+    expect(toolItem).toMatchObject({
+      status: "completed",
+      created_at: "2026-03-08T00:00:00Z",
+      updated_at: "2026-03-08T00:00:10Z",
+      summary: "Finished",
+    });
+    expect(updated?.updated_at).toBe("2026-03-08T00:00:10Z");
+  });
 });

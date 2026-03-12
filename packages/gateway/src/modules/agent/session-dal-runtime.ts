@@ -3,7 +3,11 @@ import type { SqlDb } from "../../statestore/types.js";
 import { stringifyPersistedJson } from "../observability/persisted-json.js";
 import { SESSION_TURNS_JSON_META, isSessionTranscriptArray } from "./session-dal-helpers.js";
 
-function transcriptTimestamp(item: SessionTranscriptItem): string {
+function transcriptDisplayOrderTimestamp(item: SessionTranscriptItem): string {
+  return item.created_at;
+}
+
+function transcriptActivityTimestamp(item: SessionTranscriptItem): string {
   return item.kind === "text" ? item.created_at : item.updated_at;
 }
 
@@ -38,21 +42,23 @@ export function decodeSessionCursor(
 export function latestTranscriptTimestamp(
   transcript: readonly SessionTranscriptItem[],
 ): string | undefined {
-  for (let index = transcript.length - 1; index >= 0; index -= 1) {
-    const item = transcript[index];
-    if (!item) continue;
-    return transcriptTimestamp(item);
+  let latest: string | undefined;
+  for (const item of transcript) {
+    const itemAt = transcriptActivityTimestamp(item);
+    if (!latest || itemAt.localeCompare(latest) > 0) {
+      latest = itemAt;
+    }
   }
-  return undefined;
+  return latest;
 }
 
 export function sortSessionTranscript(
   transcript: readonly SessionTranscriptItem[],
 ): SessionTranscriptItem[] {
   return transcript.toSorted((left, right) => {
-    const leftAt = transcriptTimestamp(left);
-    const rightAt = transcriptTimestamp(right);
-    if (leftAt === rightAt) return left.id.localeCompare(right.id);
+    const leftAt = transcriptDisplayOrderTimestamp(left);
+    const rightAt = transcriptDisplayOrderTimestamp(right);
+    if (leftAt === rightAt) return 0;
     return leftAt.localeCompare(rightAt);
   });
 }

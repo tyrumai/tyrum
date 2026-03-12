@@ -146,8 +146,7 @@ describe("ChatPage send errors", () => {
     try {
       const composer = testRoot.container.querySelector<HTMLTextAreaElement>("textarea");
       const sendButton =
-        composer?.closest("div.flex.items-end.gap-3")?.querySelector<HTMLButtonElement>("button") ??
-        null;
+        composer?.parentElement?.querySelector<HTMLButtonElement>("button") ?? null;
       expect(composer).not.toBeNull();
       expect(sendButton).not.toBeNull();
 

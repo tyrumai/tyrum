@@ -1,21 +1,31 @@
 import type { OperatorWsClient } from "../deps.js";
 import { readPayload } from "../operator-core.event-helpers.js";
-import type { ChatReasoningTranscriptItem, ChatState } from "./chat-store.types.js";
+import type {
+  ChatReasoningTranscriptItem,
+  ChatSession,
+  ChatState,
+  ChatStoreContext,
+} from "./chat-store.types.js";
 import {
   activeToolCallIdsForSession,
   appendTranscriptReasoningDelta,
   appendTranscriptTextDelta,
+  appendTranscriptTextItem,
   eventOccurredAt,
+  readApprovalRequestSessionId,
+  readApprovalRequestThreadId,
   readApprovalSessionId,
   readApprovalThreadId,
+  removeTranscriptEntriesById,
+  toApprovalRequestTranscriptItem,
   toApprovalTranscriptItem,
   toReasoningTranscriptItem,
   toToolTranscriptItem,
-  appendTranscriptTextItem,
+  upsertTranscriptEntries,
   upsertTranscriptItem,
 } from "./chat-store.transcript.js";
 
-type ChatStateSetter = (updater: (prev: ChatState) => ChatState) => void;
+type PendingTranscriptItem = ChatSession["transcript"][number];
 
 function findExistingTextCreatedAt(state: ChatState, messageId: string): string | null {
   const item = state.active.session?.transcript.find(
@@ -49,18 +59,64 @@ function matchesActiveSession(
   return false;
 }
 
-function handleTypingState(setState: ChatStateSetter, data: unknown, typing: boolean): void {
+function matchesPendingOpen(
+  ctx: ChatStoreContext,
+  input: { sessionId?: string | null; threadId?: string | null },
+): boolean {
+  const pending = ctx.pendingOpen;
+  if (!pending) return false;
+  if (input.sessionId && pending.sessionId === input.sessionId) return true;
+  if (input.threadId && pending.threadId === input.threadId) return true;
+  return false;
+}
+
+function updatePendingTyping(
+  ctx: ChatStoreContext,
+  input: { sessionId?: string | null; threadId?: string | null; typing: boolean },
+): boolean {
+  if (!matchesPendingOpen(ctx, input)) return false;
+  if (!ctx.pendingOpen) return false;
+  ctx.pendingOpen.typing = input.typing;
+  return true;
+}
+
+function upsertPendingTranscriptItem(
+  ctx: ChatStoreContext,
+  input: { sessionId?: string | null; threadId?: string | null; item: PendingTranscriptItem },
+): boolean {
+  if (!matchesPendingOpen(ctx, input)) return false;
+  if (!ctx.pendingOpen) return false;
+  ctx.pendingOpen.transcript = upsertTranscriptEntries(ctx.pendingOpen.transcript, input.item);
+  return true;
+}
+
+function removePendingTranscriptEntries(
+  ctx: ChatStoreContext,
+  input: { sessionId?: string | null; threadId?: string | null; removedIds: ReadonlySet<string> },
+): boolean {
+  if (!matchesPendingOpen(ctx, input)) return false;
+  if (!ctx.pendingOpen) return false;
+  ctx.pendingOpen.transcript = removeTranscriptEntriesById(
+    ctx.pendingOpen.transcript,
+    input.removedIds,
+  );
+  return true;
+}
+
+function handleTypingState(ctx: ChatStoreContext, typing: boolean, data: unknown): void {
   const payload = readPayload(data);
   const sessionId = typeof payload?.["session_id"] === "string" ? payload["session_id"] : null;
   const threadId = typeof payload?.["thread_id"] === "string" ? payload["thread_id"] : null;
-  setState((prev) =>
+  if (updatePendingTyping(ctx, { sessionId, threadId, typing })) return;
+
+  ctx.setState((prev) =>
     !matchesActiveSession(prev, { sessionId, threadId })
       ? prev
       : { ...prev, active: { ...prev.active, typing } },
   );
 }
 
-function handleSessionSendFailed(setState: ChatStateSetter, data: unknown): void {
+function handleSessionSendFailed(ctx: ChatStoreContext, data: unknown): void {
   const payload = readPayload(data);
   const sessionId = typeof payload?.["session_id"] === "string" ? payload["session_id"] : null;
   const threadId = typeof payload?.["thread_id"] === "string" ? payload["thread_id"] : null;
@@ -73,15 +129,18 @@ function handleSessionSendFailed(setState: ChatStateSetter, data: unknown): void
     ? payload["reasoning_ids"].filter((value): value is string => typeof value === "string")
     : [];
   if (!userMessageId && messageIds.length === 0 && reasoningIds.length === 0) return;
+
   const removedIds = new Set([
     ...messageIds,
     ...reasoningIds,
     ...(userMessageId ? [userMessageId] : []),
   ]);
-  setState((prev) => {
+  if (removePendingTranscriptEntries(ctx, { sessionId, threadId, removedIds })) return;
+
+  ctx.setState((prev) => {
     const session = prev.active.session;
     if (!session || !matchesActiveSession(prev, { sessionId, threadId })) return prev;
-    const transcript = session.transcript.filter((item) => !removedIds.has(item.id));
+    const transcript = removeTranscriptEntriesById(session.transcript, removedIds);
     if (transcript.length === session.transcript.length) return prev;
     return {
       ...prev,
@@ -96,13 +155,15 @@ function handleSessionSendFailed(setState: ChatStateSetter, data: unknown): void
   });
 }
 
-function handleApprovalEvent(setState: ChatStateSetter, data: unknown): void {
+function handleApprovalEvent(ctx: ChatStoreContext, data: unknown): void {
   const payload = readPayload(data);
   const sessionId = readApprovalSessionId(payload);
   const threadId = readApprovalThreadId(payload);
   const item = toApprovalTranscriptItem(payload, eventOccurredAt(data));
   if (!item) return;
-  setState((prev) => {
+  if (upsertPendingTranscriptItem(ctx, { sessionId, threadId, item })) return;
+
+  ctx.setState((prev) => {
     const activeSession = prev.active.session;
     if (!activeSession || !matchesActiveSession(prev, { sessionId, threadId })) return prev;
     return {
@@ -115,13 +176,37 @@ function handleApprovalEvent(setState: ChatStateSetter, data: unknown): void {
   });
 }
 
-function handleToolLifecycle(setState: ChatStateSetter, data: unknown): void {
+function handleApprovalRequest(ctx: ChatStoreContext, data: unknown): void {
+  const occurredAt = eventOccurredAt(data);
+  const payload = readPayload(data);
+  const item = toApprovalRequestTranscriptItem(payload, occurredAt);
+  if (!item) return;
+  const sessionId = readApprovalRequestSessionId(payload);
+  const threadId = readApprovalRequestThreadId(payload);
+  if (upsertPendingTranscriptItem(ctx, { sessionId, threadId, item })) return;
+
+  ctx.setState((prev) => {
+    const activeSession = prev.active.session;
+    if (!activeSession || !matchesActiveSession(prev, { sessionId, threadId })) return prev;
+    return {
+      ...prev,
+      active: {
+        ...prev.active,
+        session: upsertTranscriptItem(activeSession, item),
+      },
+    };
+  });
+}
+
+function handleToolLifecycle(ctx: ChatStoreContext, data: unknown): void {
   const payload = readPayload(data);
   const sessionId = typeof payload?.["session_id"] === "string" ? payload["session_id"] : null;
   const threadId = typeof payload?.["thread_id"] === "string" ? payload["thread_id"] : null;
   const item = toToolTranscriptItem(payload, eventOccurredAt(data));
   if (!item) return;
-  setState((prev) => {
+  if (upsertPendingTranscriptItem(ctx, { sessionId, threadId, item })) return;
+
+  ctx.setState((prev) => {
     const activeSession = prev.active.session;
     if (!activeSession || !matchesActiveSession(prev, { sessionId, threadId })) return prev;
     const session = upsertTranscriptItem(activeSession, item);
@@ -136,7 +221,7 @@ function handleToolLifecycle(setState: ChatStateSetter, data: unknown): void {
   });
 }
 
-function handleMessageDelta(setState: ChatStateSetter, data: unknown): void {
+function handleMessageDelta(ctx: ChatStoreContext, data: unknown): void {
   const payload = readPayload(data);
   const sessionId = typeof payload?.["session_id"] === "string" ? payload["session_id"] : null;
   const threadId = typeof payload?.["thread_id"] === "string" ? payload["thread_id"] : null;
@@ -149,7 +234,23 @@ function handleMessageDelta(setState: ChatStateSetter, data: unknown): void {
       : null;
   const delta = typeof payload?.["delta"] === "string" ? payload["delta"] : null;
   if (!messageId || !role || delta === null) return;
-  setState((prev) => {
+
+  if (matchesPendingOpen(ctx, { sessionId, threadId }) && ctx.pendingOpen) {
+    const existing = ctx.pendingOpen.transcript.find(
+      (item): item is Extract<PendingTranscriptItem, { kind: "text" }> =>
+        item.kind === "text" && item.id === messageId,
+    );
+    ctx.pendingOpen.transcript = upsertTranscriptEntries(ctx.pendingOpen.transcript, {
+      kind: "text",
+      id: messageId,
+      role,
+      content: `${existing?.content ?? ""}${delta}`,
+      created_at: existing?.created_at ?? eventOccurredAt(data),
+    });
+    return;
+  }
+
+  ctx.setState((prev) => {
     if (!prev.active.session || !matchesActiveSession(prev, { sessionId, threadId })) return prev;
     return {
       ...prev,
@@ -166,7 +267,7 @@ function handleMessageDelta(setState: ChatStateSetter, data: unknown): void {
   });
 }
 
-function handleMessageFinal(setState: ChatStateSetter, data: unknown): void {
+function handleMessageFinal(ctx: ChatStoreContext, data: unknown): void {
   const payload = readPayload(data);
   const sessionId = typeof payload?.["session_id"] === "string" ? payload["session_id"] : null;
   const threadId = typeof payload?.["thread_id"] === "string" ? payload["thread_id"] : null;
@@ -179,7 +280,23 @@ function handleMessageFinal(setState: ChatStateSetter, data: unknown): void {
       : null;
   const content = typeof payload?.["content"] === "string" ? payload["content"] : null;
   if (!messageId || !role || content === null) return;
-  setState((prev) => {
+
+  if (matchesPendingOpen(ctx, { sessionId, threadId }) && ctx.pendingOpen) {
+    const existing = ctx.pendingOpen.transcript.find(
+      (item): item is Extract<PendingTranscriptItem, { kind: "text" }> =>
+        item.kind === "text" && item.id === messageId,
+    );
+    ctx.pendingOpen.transcript = upsertTranscriptEntries(ctx.pendingOpen.transcript, {
+      kind: "text",
+      id: messageId,
+      role,
+      content,
+      created_at: existing?.created_at ?? eventOccurredAt(data),
+    });
+    return;
+  }
+
+  ctx.setState((prev) => {
     if (!prev.active.session || !matchesActiveSession(prev, { sessionId, threadId })) return prev;
     return {
       ...prev,
@@ -196,7 +313,7 @@ function handleMessageFinal(setState: ChatStateSetter, data: unknown): void {
   });
 }
 
-function handleReasoningDelta(setState: ChatStateSetter, data: unknown): void {
+function handleReasoningDelta(ctx: ChatStoreContext, data: unknown): void {
   const payload = readPayload(data);
   const sessionId = typeof payload?.["session_id"] === "string" ? payload["session_id"] : null;
   const threadId = typeof payload?.["thread_id"] === "string" ? payload["thread_id"] : null;
@@ -204,7 +321,23 @@ function handleReasoningDelta(setState: ChatStateSetter, data: unknown): void {
     typeof payload?.["reasoning_id"] === "string" ? payload["reasoning_id"] : null;
   const delta = typeof payload?.["delta"] === "string" ? payload["delta"] : null;
   if (!reasoningId || delta === null) return;
-  setState((prev) => {
+
+  if (matchesPendingOpen(ctx, { sessionId, threadId }) && ctx.pendingOpen) {
+    const existing = ctx.pendingOpen.transcript.find(
+      (item): item is ChatReasoningTranscriptItem =>
+        item.kind === "reasoning" && item.id === reasoningId,
+    );
+    ctx.pendingOpen.transcript = upsertTranscriptEntries(ctx.pendingOpen.transcript, {
+      kind: "reasoning",
+      id: reasoningId,
+      content: `${existing?.content ?? ""}${delta}`,
+      created_at: existing?.created_at ?? eventOccurredAt(data),
+      updated_at: eventOccurredAt(data),
+    });
+    return;
+  }
+
+  ctx.setState((prev) => {
     if (!prev.active.session || !matchesActiveSession(prev, { sessionId, threadId })) return prev;
     return {
       ...prev,
@@ -220,14 +353,17 @@ function handleReasoningDelta(setState: ChatStateSetter, data: unknown): void {
   });
 }
 
-function handleReasoningFinal(setState: ChatStateSetter, data: unknown): void {
+function handleReasoningFinal(ctx: ChatStoreContext, data: unknown): void {
   const payload = readPayload(data);
   const sessionId = typeof payload?.["session_id"] === "string" ? payload["session_id"] : null;
   const threadId = typeof payload?.["thread_id"] === "string" ? payload["thread_id"] : null;
   const occurredAt = eventOccurredAt(data);
   const item = toReasoningTranscriptItem(payload, occurredAt);
   if (!item) return;
-  setState((prev) => {
+
+  if (upsertPendingTranscriptItem(ctx, { sessionId, threadId, item })) return;
+
+  ctx.setState((prev) => {
     if (!prev.active.session || !matchesActiveSession(prev, { sessionId, threadId })) return prev;
     return {
       ...prev,
@@ -239,38 +375,38 @@ function handleReasoningFinal(setState: ChatStateSetter, data: unknown): void {
   });
 }
 
-export function registerChatStoreEventHandlers(
-  ws: OperatorWsClient,
-  setState: ChatStateSetter,
-): void {
+export function registerChatStoreEventHandlers(ws: OperatorWsClient, ctx: ChatStoreContext): void {
   ws.on?.("typing.started", (data) => {
-    handleTypingState(setState, data, true);
+    handleTypingState(ctx, true, data);
   });
   ws.on?.("typing.stopped", (data) => {
-    handleTypingState(setState, data, false);
+    handleTypingState(ctx, false, data);
   });
   ws.on?.("approval.requested", (data) => {
-    handleApprovalEvent(setState, data);
+    handleApprovalEvent(ctx, data);
   });
   ws.on?.("approval.resolved", (data) => {
-    handleApprovalEvent(setState, data);
+    handleApprovalEvent(ctx, data);
+  });
+  ws.on?.("approval_request" as never, (data) => {
+    handleApprovalRequest(ctx, data);
   });
   ws.on?.("tool.lifecycle" as never, (data) => {
-    handleToolLifecycle(setState, data);
+    handleToolLifecycle(ctx, data);
   });
   ws.on?.("message.delta", (data) => {
-    handleMessageDelta(setState, data);
+    handleMessageDelta(ctx, data);
   });
   ws.on?.("message.final", (data) => {
-    handleMessageFinal(setState, data);
+    handleMessageFinal(ctx, data);
   });
   ws.on?.("reasoning.delta" as never, (data) => {
-    handleReasoningDelta(setState, data);
+    handleReasoningDelta(ctx, data);
   });
   ws.on?.("reasoning.final" as never, (data) => {
-    handleReasoningFinal(setState, data);
+    handleReasoningFinal(ctx, data);
   });
   ws.on?.("session.send.failed" as never, (data) => {
-    handleSessionSendFailed(setState, data);
+    handleSessionSendFailed(ctx, data);
   });
 }
