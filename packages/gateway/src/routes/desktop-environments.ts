@@ -37,7 +37,8 @@ function readTrustedTakeoverUrl(value: string | null): string | null {
   let parsed: URL;
   try {
     parsed = new URL(value);
-  } catch {
+  } catch (error) {
+    void error;
     return null;
   }
 

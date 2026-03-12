@@ -212,12 +212,14 @@ export class DesktopEnvironmentRuntimeManager {
   private async readFailureLogs(
     environment: DesktopEnvironment & { tenant_id: string },
   ): Promise<string[]> {
-    if (environment.status !== "running") {
+    const containerName = containerNameForEnvironment(environment.environment_id);
+    const inspect = await inspectContainer(containerName);
+    if (!inspect) {
       return [];
     }
 
     try {
-      return await readContainerLogs(containerNameForEnvironment(environment.environment_id));
+      return await readContainerLogs(containerName);
     } catch (error) {
       this.logger.error("desktop_environment.reconcile_failure_logs_failed", {
         environment_id: environment.environment_id,

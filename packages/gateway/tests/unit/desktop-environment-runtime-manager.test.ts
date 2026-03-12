@@ -363,6 +363,68 @@ describe("DesktopEnvironmentRuntimeManager", () => {
     );
   });
 
+  it("captures failure logs when a starting environment still has a container", async () => {
+    inspectContainerMock.mockResolvedValue({
+      Config: { Image: "ghcr.io/tyrum/desktop:latest" },
+      State: { Status: "exited" },
+    });
+    runDockerMock.mockResolvedValueOnce({ status: 1, stdout: "", stderr: "crashed" });
+    readContainerLogsMock.mockResolvedValue(["container crashed"]);
+
+    const environmentDal = {
+      listByHost: vi.fn(async () => [
+        {
+          tenant_id: "tenant-1",
+          environment_id: "env-1",
+          host_id: "host-1",
+          label: "Broken",
+          image_ref: "ghcr.io/tyrum/desktop:latest",
+          managed_kind: "docker",
+          status: "starting",
+          desired_running: true,
+          node_id: null,
+          takeover_url: null,
+          last_seen_at: null,
+          last_error: null,
+          created_at: "2026-03-12T00:00:00.000Z",
+          updated_at: "2026-03-12T00:00:00.000Z",
+        },
+      ]),
+      updateRuntime: vi.fn(async () => {}),
+    };
+    const nodePairingDal = {
+      getByNodeId: vi.fn(),
+      resolve: vi.fn(),
+    };
+    const authTokens = {
+      issueToken: vi.fn(),
+    };
+    const logger = { error: vi.fn() };
+
+    const runtimeManager = new DesktopEnvironmentRuntimeManager(
+      environmentDal as never,
+      nodePairingDal as never,
+      authTokens as never,
+      logger as never,
+      {
+        hostId: "host-1",
+        tyrumHome,
+        gatewayPort: 8788,
+      },
+    );
+
+    await expect(runtimeManager.reconcileAll()).resolves.toBeUndefined();
+
+    expect(environmentDal.updateRuntime).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenantId: "tenant-1",
+        environmentId: "env-1",
+        status: "error",
+        logs: ["container crashed"],
+      }),
+    );
+  });
+
   it("continues reconciling later environments when persisting an error state fails", async () => {
     runDockerMock
       .mockResolvedValueOnce({ status: 1, stdout: "", stderr: "boom" })

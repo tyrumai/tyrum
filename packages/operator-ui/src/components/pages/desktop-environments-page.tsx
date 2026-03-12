@@ -5,45 +5,27 @@ import type {
 } from "@tyrum/client/browser";
 import { Boxes, Play, RefreshCw, RotateCcw, Square, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import {
+  buildTakeoverHref,
+  DEFAULT_IMAGE_REF,
+  environmentStatusVariant,
+  hostStatusVariant,
+} from "./desktop-environments-page.shared.js";
 import { useApiAction } from "../../hooks/use-api-action.js";
 import { useOperatorStore } from "../../use-operator-store.js";
 import { formatRelativeTime } from "../../utils/format-relative-time.js";
-import { normalizeHttpUrl } from "../../utils/normalize-http-url.js";
 import { AppPage } from "../layout/app-page.js";
 import { useAdminHttpClient, useAdminMutationAccess } from "./admin-http-shared.js";
 import { Alert } from "../ui/alert.js";
-import { Badge, type BadgeVariant } from "../ui/badge.js";
+import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { Input } from "../ui/input.js";
 import { Select } from "../ui/select.js";
 import { Textarea } from "../ui/textarea.js";
 
-const DEFAULT_IMAGE_REF = "tyrum-desktop-sandbox:latest";
-
 type DesktopEnvironment = DesktopEnvironmentGetResult["environment"];
 type DesktopEnvironmentHost = DesktopEnvironmentHostListResult["hosts"][number];
-
-function buildTakeoverHref(httpBaseUrl: string, environmentId: string): string | undefined {
-  const normalizedBaseUrl = normalizeHttpUrl(httpBaseUrl);
-  if (!normalizedBaseUrl) return undefined;
-  return new URL(
-    `/desktop-environments/${encodeURIComponent(environmentId)}/takeover`,
-    normalizedBaseUrl,
-  ).toString();
-}
-
-function hostStatusVariant(host: DesktopEnvironmentHost): BadgeVariant {
-  if (!host.docker_available || !host.healthy) return "danger";
-  return "outline";
-}
-
-function environmentStatusVariant(status: DesktopEnvironment["status"]): BadgeVariant {
-  if (status === "error") return "danger";
-  if (status === "running") return "success";
-  if (status === "starting" || status === "pending") return "warning";
-  return "outline";
-}
 
 export function DesktopEnvironmentsPage({ core }: { core: OperatorCore }) {
   const hostsState = useOperatorStore(core.desktopEnvironmentHostsStore);
@@ -70,22 +52,28 @@ export function DesktopEnvironmentsPage({ core }: { core: OperatorCore }) {
   );
 
   const [selectedEnvironmentId, setSelectedEnvironmentId] = useState<string | null>(null);
+  const [pendingSelectedEnvironmentId, setPendingSelectedEnvironmentId] = useState<string | null>(
+    null,
+  );
   const [createHostId, setCreateHostId] = useState<string>("");
   const [createLabel, setCreateLabel] = useState("");
   const [createImageRef, setCreateImageRef] = useState(DEFAULT_IMAGE_REF);
 
   useEffect(() => {
-    if (createHostId.length > 0) return;
     const firstHostId = hosts[0]?.host_id;
-    if (firstHostId) {
-      setCreateHostId(firstHostId);
-    }
+    if (createHostId.length === 0 && firstHostId) setCreateHostId(firstHostId);
   }, [createHostId, hosts]);
 
   useEffect(() => {
+    if (pendingSelectedEnvironmentId) {
+      if (!environmentsState.byId[pendingSelectedEnvironmentId]) return;
+      setSelectedEnvironmentId(pendingSelectedEnvironmentId);
+      setPendingSelectedEnvironmentId(null);
+      return;
+    }
     if (selectedEnvironmentId && environmentsState.byId[selectedEnvironmentId]) return;
     setSelectedEnvironmentId(environments[0]?.environment_id ?? null);
-  }, [environments, environmentsState.byId, selectedEnvironmentId]);
+  }, [environments, environmentsState.byId, pendingSelectedEnvironmentId, selectedEnvironmentId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -141,9 +129,17 @@ export function DesktopEnvironmentsPage({ core }: { core: OperatorCore }) {
           image_ref: createImageRef.trim() || DEFAULT_IMAGE_REF,
           desired_running: false,
         });
-        setSelectedEnvironmentId(created.environment.environment_id);
+        const createdEnvironmentId = created.environment.environment_id;
+        setPendingSelectedEnvironmentId(createdEnvironmentId);
         setCreateLabel("");
-        await core.desktopEnvironmentsStore.refresh();
+        try {
+          await core.desktopEnvironmentsStore.refresh();
+        } catch (error) {
+          setPendingSelectedEnvironmentId((current) =>
+            current === createdEnvironmentId ? null : current,
+          );
+          throw error;
+        }
         return created.environment;
       });
     });
@@ -332,6 +328,7 @@ export function DesktopEnvironmentsPage({ core }: { core: OperatorCore }) {
                         : "border-border bg-surface-subtle hover:bg-surface"
                     }`}
                     onClick={() => {
+                      setPendingSelectedEnvironmentId(null);
                       setSelectedEnvironmentId(environment.environment_id);
                     }}
                   >
@@ -480,6 +477,7 @@ export function DesktopEnvironmentsPage({ core }: { core: OperatorCore }) {
                           await mutationHttp.desktopEnvironments.remove(
                             selectedEnvironment.environment_id,
                           );
+                          setPendingSelectedEnvironmentId(null);
                           setSelectedEnvironmentId(null);
                         });
                       }}
