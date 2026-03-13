@@ -62,6 +62,7 @@ export type PreparedTurn = {
   toolCallPolicyStates: Map<string, ToolCallPolicyState>;
   laneQueue?: LaneQueueState;
   usedTools: Set<string>;
+  memoryWriteState: { wrote: boolean };
   userContent: Array<{ type: "text"; text: string }>;
   contextReport: AgentContextReport;
   systemPrompt: string;
@@ -362,6 +363,7 @@ export async function prepareTurn(
   });
 
   const usedTools = new Set<string>();
+  const memoryWriteState = { wrote: false };
   const toolCallPolicyStates = new Map<string, ToolCallPolicyState>();
   const toolSet = toolSetBuilder.buildToolSet(
     filteredTools,
@@ -372,6 +374,7 @@ export async function prepareTurn(
     laneQueue,
     toolCallPolicyStates,
     model,
+    memoryWriteState,
   );
 
   const userContent: Array<{ type: "text"; text: string }> = [
@@ -395,6 +398,7 @@ export async function prepareTurn(
     toolCallPolicyStates,
     laneQueue,
     usedTools,
+    memoryWriteState,
     userContent,
     contextReport: validatedReport,
     systemPrompt,

@@ -22,7 +22,7 @@ import {
   createStubLanguageModel,
 } from "./stub-language-model.js";
 
-function makeMemoryToolConfig(): Record<string, unknown> {
+function makeMemoryToolConfig(input?: { memoryEnabled?: boolean }): Record<string, unknown> {
   return {
     model: { model: "openai/gpt-4.1" },
     skills: { default_mode: "deny", workspace_trusted: false },
@@ -31,7 +31,7 @@ function makeMemoryToolConfig(): Record<string, unknown> {
       pre_turn_tools: ["mcp.memory.seed"],
       server_settings: {
         memory: {
-          enabled: true,
+          enabled: input?.memoryEnabled ?? true,
         },
       },
     },
@@ -121,6 +121,43 @@ describe("AgentRuntime - tool tracking, memory, and lane signals", () => {
         }),
       }),
     );
+  }, 10_000);
+
+  it("does not mark memory_written when mcp.memory.write returns an error", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
+    container = await createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+    });
+    await seedAgentConfig(container, {
+      config: makeMemoryToolConfig({ memoryEnabled: false }),
+    });
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: createMemoryDecisionLanguageModel({
+        decision: {
+          should_store: true,
+          reason: "The user shared a durable preference.",
+          memory: {
+            kind: "note",
+            body_md: "remember that I prefer tea",
+          },
+        },
+        reply: "I could not save that preference.",
+      }),
+      fetchImpl: fetch404,
+    });
+
+    const result = await runtime.turn({
+      channel: "test",
+      thread_id: "thread-memory-error",
+      message: "remember that I prefer tea",
+    });
+
+    expect(result.used_tools).toContain("mcp.memory.write");
+    expect(result.memory_written).toBe(false);
   }, 10_000);
 
   it("persists explicit note tags without duplicates", async () => {

@@ -25,6 +25,8 @@ describe("agent access config normalization", () => {
       default_mode: "deny",
       allow: ["mcp.weather.forecast"],
       deny: [],
+      pre_turn_tools: [],
+      server_settings: {},
     });
   });
 

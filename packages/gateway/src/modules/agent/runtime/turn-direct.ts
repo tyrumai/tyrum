@@ -73,6 +73,7 @@ export async function turnDirect(
     toolCallPolicyStates,
     laneQueue,
     usedTools,
+    memoryWriteState,
     userContent,
     contextReport,
     systemPrompt,
@@ -99,6 +100,7 @@ export async function turnDirect(
       reply: params.reply,
       model,
       usedTools,
+      memoryWritten: memoryWriteState.wrote,
       contextReport,
       turnKind: params.turnKind,
     });
@@ -171,6 +173,9 @@ export async function turnDirect(
       if (resumeState) {
         for (const toolId of resumeState.used_tools ?? []) {
           usedTools.add(toolId);
+        }
+        if (resumeState.memory_written) {
+          memoryWriteState.wrote = true;
         }
         stepsUsedSoFar = resumeState.steps_used ?? countAssistantMessages(resumeState.messages);
         messages = appendToolApprovalResponseMessage(resumeState.messages, {
@@ -269,6 +274,7 @@ export async function turnDirect(
       session,
       resolved,
       usedTools,
+      memoryWriteState,
       stepsUsedAfterCall,
       messages,
       result,
@@ -309,6 +315,7 @@ export async function turnStreamDirect(
     toolSet,
     laneQueue,
     usedTools,
+    memoryWriteState,
     userContent,
     contextReport,
     systemPrompt,
@@ -344,6 +351,7 @@ export async function turnStreamDirect(
       reply: delegation.reply,
       model,
       usedTools,
+      memoryWritten: memoryWriteState.wrote,
       contextReport,
       turnKind: "skip",
     });
@@ -418,6 +426,7 @@ export async function turnStreamDirect(
       reply,
       model,
       usedTools,
+      memoryWritten: memoryWriteState.wrote,
       contextReport,
     });
     await maybeAutoCompactSession({

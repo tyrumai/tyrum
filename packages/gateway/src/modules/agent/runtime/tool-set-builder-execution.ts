@@ -32,6 +32,7 @@ type BuildRuntimeToolSetInput = {
   tools: readonly ToolDescriptor[];
   toolExecutor: ToolExecutor;
   usedTools: Set<string>;
+  memoryWriteState?: { wrote: boolean };
   toolExecutionContext: ToolExecutionContext;
   contextReport: AgentContextReport;
   laneQueue?: LaneQueueState;
@@ -226,6 +227,11 @@ function createExecuteHandler(
     });
 
     const finalResult = redactPluginToolResult(input.deps, pluginResult, extractedResult);
+    if (input.toolDesc.id === "mcp.memory.write" && !finalResult.error) {
+      if (input.memoryWriteState) {
+        input.memoryWriteState.wrote = true;
+      }
+    }
     updateDrivingProvenance(input.executionState, finalResult);
 
     const content = buildToolContent(finalResult);

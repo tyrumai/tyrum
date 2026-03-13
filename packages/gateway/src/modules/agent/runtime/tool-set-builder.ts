@@ -25,12 +25,14 @@ export class ToolSetBuilder {
     laneQueue?: LaneQueueState,
     toolCallPolicyStates?: Map<string, ToolCallPolicyState>,
     model?: LanguageModel,
+    memoryWriteState?: { wrote: boolean },
   ): ToolSet {
     return buildRuntimeToolSet({
       deps: this.deps,
       tools,
       toolExecutor,
       usedTools,
+      memoryWriteState,
       toolExecutionContext,
       contextReport,
       laneQueue,

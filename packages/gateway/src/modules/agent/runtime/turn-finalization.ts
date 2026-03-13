@@ -144,15 +144,13 @@ export async function finalizeTurn(input: {
   reply: string;
   model: LanguageModel;
   usedTools: ReadonlySet<string>;
+  memoryWritten: boolean;
   contextReport: AgentContextReport;
   turnKind?: "normal" | "skip";
 }): Promise<AgentTurnResponseT> {
   const nowIso = new Date().toISOString();
   const finalizedReply = applyCrossTurnLoopWarning(input);
-  const memoryWritten =
-    input.turnKind !== "skip" &&
-    (input.usedTools.has("mcp.memory.write") ||
-      input.contextReport.tool_calls.some((call) => call.tool_id === "mcp.memory.write"));
+  const memoryWritten = input.turnKind !== "skip" && input.memoryWritten;
 
   await persistContextReport(input);
   const updatedSession = await input.sessionDal.appendTurn({

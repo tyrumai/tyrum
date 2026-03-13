@@ -79,6 +79,7 @@ type ToolApprovalResumeState = {
   approval_id: string;
   messages: ModelMessage[];
   used_tools?: string[];
+  memory_written?: boolean;
   steps_used?: number;
 };
 
@@ -108,7 +109,13 @@ export function extractToolApprovalResumeState(
       ? stepsUsedRaw
       : undefined;
 
-  return { approval_id: approvalId, messages, used_tools: usedTools, steps_used: stepsUsed };
+  return {
+    approval_id: approvalId,
+    messages,
+    used_tools: usedTools,
+    memory_written: ai["memory_written"] === true,
+    steps_used: stepsUsed,
+  };
 }
 
 export function buildSandboxPrompt(): string {
