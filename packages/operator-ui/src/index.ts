@@ -145,3 +145,5 @@ export { ToastProvider } from "./components/toast/toast-provider.js";
 export { toast } from "sonner";
 
 export { useOperatorStore } from "./use-operator-store.js";
+
+export { AiSdkChatPage } from "./components/pages/chat-page-ai-sdk.js";

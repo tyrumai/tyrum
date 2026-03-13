@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { DateTimeSchema } from "../common.js";
 import { AgentKey, Lane, TyrumKey } from "../keys.js";
+import { ChatMessage, ChatMessagePreview } from "../chat-message.js";
 import { SessionTranscriptItem, SessionTranscriptTextPreview } from "../session-transcript.js";
 import {
   WsError,
@@ -171,6 +172,8 @@ export const WsSessionListItem = z
     thread_id: z.string().trim().min(1),
     title: z.string().default(""),
     summary: z.string().default(""),
+    message_count: z.number().int().nonnegative().optional(),
+    last_message: ChatMessagePreview.nullable().optional(),
     transcript_count: z.number().int().nonnegative(),
     updated_at: DateTimeSchema,
     created_at: DateTimeSchema,
@@ -206,7 +209,8 @@ export const WsSessionGetSession = z
     thread_id: z.string().trim().min(1),
     title: z.string().default(""),
     summary: z.string().default(""),
-    transcript: z.array(SessionTranscriptItem),
+    messages: z.array(ChatMessage).optional(),
+    transcript: z.array(SessionTranscriptItem).default([]),
     updated_at: DateTimeSchema,
     created_at: DateTimeSchema,
   })

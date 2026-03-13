@@ -540,10 +540,17 @@
   },
   {
     "table": "sessions",
-    "column": "transcript_json",
+    "column": "messages_json",
     "shape": "array",
     "nullable": false,
     "default": "[]"
+  },
+  {
+    "table": "sessions",
+    "column": "context_state_json",
+    "shape": "object",
+    "nullable": false,
+    "default": "{}"
   },
   {
     "table": "tenant_configs",

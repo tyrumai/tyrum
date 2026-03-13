@@ -33,7 +33,6 @@ export async function tryExecuteSystemCommand(
   }
   if (input.cmd === "new") return executeNewCommand(input.deps);
   if (input.cmd === "compact") return executeCompactCommand(input.deps);
-  if (input.cmd === "repair") return executeRepairCommand(input.deps);
   if (input.cmd === "stop") return executeStopCommand(input.deps);
   if (input.cmd === "reset") return executeResetCommand(input.deps);
   if (input.cmd === "status") return executeStatusCommand(input.deps);
@@ -116,44 +115,6 @@ async function executeCompactCommand(deps: CommandDeps): Promise<CommandExecuteR
     dropped_messages: compacted.droppedMessages,
     kept_messages: compacted.keptMessages,
   };
-  return { output: jsonBlock(payload), data: payload };
-}
-
-async function executeRepairCommand(deps: CommandDeps): Promise<CommandExecuteResult> {
-  if (!deps.db)
-    return { output: "Sessions are not available on this gateway instance.", data: null };
-
-  const ctx = deps.commandContext;
-  const agentId = resolveAgentId(ctx);
-  const resolved = await resolveChannelThread(deps.db, ctx);
-  if (!resolved) {
-    return {
-      output: "Usage: /repair (requires key or channel/thread context)",
-      data: null,
-    };
-  }
-
-  const keyLane =
-    (await resolveKeyLane(deps.db, ctx)) ?? (await resolveFallbackKeyLane(deps.db, ctx, agentId));
-  const session = await createSessionDal(deps.db).getOrCreate({
-    scopeKeys: { agentKey: agentId, workspaceKey: resolveWorkspaceKey() },
-    connectorKey: resolved.channel,
-    accountKey: resolved.accountKey,
-    providerThreadId: resolved.threadId,
-    containerKind: resolveContainerKindFromSessionKey(keyLane?.key),
-  });
-  const repaired = await createSessionDal(deps.db).repairFromChannelLogs({
-    tenantId: session.tenant_id,
-    sessionId: session.session_id,
-  });
-  if (!repaired) {
-    return {
-      output: "No completed retained channel logs were found for this session.",
-      data: null,
-    };
-  }
-
-  const payload = { agent_id: agentId, session_id: session.session_id, ...repaired };
   return { output: jsonBlock(payload), data: payload };
 }
 

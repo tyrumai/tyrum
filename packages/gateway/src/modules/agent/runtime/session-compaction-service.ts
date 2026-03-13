@@ -1,14 +1,25 @@
-import { generateText, stepCountIs } from "ai";
-import type { LanguageModel, ModelMessage } from "ai";
-import type { AgentConfig as AgentConfigT, SessionTranscriptTextItem } from "@tyrum/schemas";
+import { generateText } from "ai";
+import type { LanguageModel } from "ai";
+import { z } from "zod";
+import type { AgentConfig as AgentConfigT, ChatMessage, CheckpointSummary } from "@tyrum/schemas";
 import type { GatewayContainer } from "../../../container.js";
 import { ensureAgentConfigSeeded } from "../default-config.js";
 import { loadCurrentAgentContext } from "../load-context.js";
 import type { AgentContextStore } from "../context-store.js";
 import type { SessionDal } from "../session-dal.js";
 import type { SessionRow } from "../session-dal.js";
-import { countTextTranscriptItems, splitTranscriptForCompaction } from "../session-dal-helpers.js";
 import { maybeRunPreCompactionMemoryFlush } from "./pre-compaction-memory-flush.js";
+import {
+  buildCheckpointPromptText,
+  buildPromptVisibleMessages,
+  collectPendingApprovals,
+  collectPendingToolStates,
+  estimatePromptTokens,
+  extractCriticalIdentifiers,
+  extractRelevantFiles,
+  renderMessagesForCompaction,
+  splitMessagesForContextCompaction,
+} from "./session-context-state.js";
 import {
   resolveSessionModelDetailed,
   type ResolvedSessionModel,
@@ -18,8 +29,8 @@ import type { AgentLoadedContext } from "./types.js";
 import { resolveGatewayStateMode } from "../../runtime-state/mode.js";
 
 const DEFAULT_RESERVED_INPUT_TOKENS = 20_000;
-const DEFAULT_KEEP_LAST_MESSAGES_AFTER_COMPACTION = 2;
-const DEFAULT_COMPACTION_TIMEOUT_MS = 5_000;
+const DEFAULT_KEEP_LAST_MESSAGES_AFTER_COMPACTION = 12;
+const DEFAULT_COMPACTION_TIMEOUT_MS = 8_000;
 const CONTEXT_OVERFLOW_PATTERNS = [
   /context window/i,
   /context length/i,
@@ -29,44 +40,20 @@ const CONTEXT_OVERFLOW_PATTERNS = [
   /(?:input|prompt|message).{0,40}too large/i,
   /(?:input|prompt|message).{0,40}too long/i,
   /exceeds?.*context/i,
-];
-const COMPACTION_SYSTEM_PROMPT = [
-  "You are a hidden session compaction assistant.",
-  "Produce a detailed but concise summary that lets another agent continue the work safely.",
-  "Focus on the user's goal, instructions, discoveries, work completed, work remaining, and relevant files/directories.",
-  "Do not answer the conversation directly. Output only the summary.",
-].join("\n");
-const COMPACTION_USER_PROMPT = [
-  "Provide a continuation summary for the conversation above.",
-  "Use this template:",
-  "",
-  "## Goal",
-  "",
-  "[What the user is trying to accomplish.]",
-  "",
-  "## Instructions",
-  "",
-  "- [Important user instructions or constraints that must persist]",
-  "- [Important plan/spec details the next agent must follow]",
-  "",
-  "## Discoveries",
-  "",
-  "[Notable technical findings, decisions, and facts learned so far.]",
-  "",
-  "## Accomplished",
-  "",
-  "[What is done, what is in progress, and what remains.]",
-  "",
-  "## Relevant files / directories",
-  "",
-  "[Only the files or directories that matter for continuing the work.]",
-].join("\n");
+] as const;
 
-export type SessionUsageSnapshot = {
-  inputTokens?: number;
-  outputTokens?: number;
-  totalTokens?: number;
-};
+const COMPACTION_JSON_SCHEMA = z.object({
+  goal: z.string().default(""),
+  user_constraints: z.array(z.string()).default([]),
+  decisions: z.array(z.string()).default([]),
+  discoveries: z.array(z.string()).default([]),
+  completed_work: z.array(z.string()).default([]),
+  pending_work: z.array(z.string()).default([]),
+  unresolved_questions: z.array(z.string()).default([]),
+  critical_identifiers: z.array(z.string()).default([]),
+  relevant_files: z.array(z.string()).default([]),
+  handoff_md: z.string().default(""),
+});
 
 type LoggerLike = Pick<GatewayContainer["logger"], "warn">;
 
@@ -76,12 +63,18 @@ type EffectiveModelLimits = {
   context?: number;
 };
 
+export type SessionUsageSnapshot = {
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+};
+
 export type SessionCompactionResult = {
   compacted: boolean;
   droppedMessages: number;
   keptMessages: number;
   summary: string;
-  reason: "model" | "fallback" | "noop";
+  reason: "model" | "noop";
 };
 
 function asPositiveLimit(value: unknown): number | undefined {
@@ -148,67 +141,106 @@ function getReservedInputTokens(config: AgentConfigT): number {
   );
 }
 
-function buildSummaryHistoryMessages(
-  previousSummary: string,
-  droppedTurns: readonly SessionTranscriptTextItem[],
-): ModelMessage[] {
-  const messages: ModelMessage[] = [];
-  const trimmedSummary = previousSummary.trim();
-  if (trimmedSummary.length > 0) {
-    messages.push({
-      role: "assistant",
-      content: [{ type: "text", text: `Summary so far:\n${trimmedSummary}` }],
-    });
+function trimJsonFence(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("```")) {
+    return trimmed;
   }
-  for (const turn of droppedTurns) {
-    const text = `[${turn.created_at}] ${turn.content}`;
-    const content = [{ type: "text" as const, text }];
-    switch (turn.role) {
-      case "assistant":
-        messages.push({ role: "assistant", content });
-        break;
-      case "system":
-        messages.push({ role: "system", content: text });
-        break;
-      case "user":
-      default:
-        messages.push({ role: "user", content });
-        break;
+  const lines = trimmed.split("\n");
+  const inner = lines.slice(1, -1).join("\n").trim();
+  return inner || trimmed;
+}
+
+function buildCompactionInstruction(input: {
+  previousCheckpoint: CheckpointSummary | null;
+  droppedMessages: readonly ChatMessage[];
+  criticalIdentifiers: readonly string[];
+  relevantFiles: readonly string[];
+}): string {
+  const previous = input.previousCheckpoint
+    ? `Existing checkpoint:\n${buildCheckpointPromptText(input.previousCheckpoint)}`
+    : "Existing checkpoint: none";
+  const identifiers =
+    input.criticalIdentifiers.length > 0
+      ? `Identifiers that must be preserved exactly if still relevant: ${input.criticalIdentifiers.join(", ")}`
+      : "Identifiers that must be preserved exactly if still relevant: none";
+  const files =
+    input.relevantFiles.length > 0
+      ? `Likely relevant files/paths: ${input.relevantFiles.join(", ")}`
+      : "Likely relevant files/paths: none";
+
+  return [
+    "You are generating an internal checkpoint summary for another run of the same agent.",
+    "Compress the older session context into a high-signal checkpoint without answering the user directly.",
+    "Prefer concrete facts, exact identifiers, decisions, constraints, pending work, and unresolved questions.",
+    "Return JSON only with this exact shape:",
+    JSON.stringify(COMPACTION_JSON_SCHEMA.parse({}), null, 2),
+    "",
+    previous,
+    "",
+    identifiers,
+    files,
+    "",
+    "Conversation history being compacted:",
+    renderMessagesForCompaction(input.droppedMessages),
+  ].join("\n");
+}
+
+async function generateCheckpointSummary(input: {
+  model: LanguageModel;
+  previousCheckpoint: CheckpointSummary | null;
+  droppedMessages: readonly ChatMessage[];
+  criticalIdentifiers: readonly string[];
+  relevantFiles: readonly string[];
+  abortSignal?: AbortSignal;
+  timeoutMs?: number;
+}): Promise<CheckpointSummary> {
+  let lastError: Error | undefined;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const result = await generateText({
+        model: input.model,
+        system:
+          "Return strict JSON only. Do not wrap the answer in markdown fences or prose. " +
+          "Do not omit any keys; use empty strings or empty arrays when needed.",
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text:
+                  buildCompactionInstruction({
+                    previousCheckpoint: input.previousCheckpoint,
+                    droppedMessages: input.droppedMessages,
+                    criticalIdentifiers: input.criticalIdentifiers,
+                    relevantFiles: input.relevantFiles,
+                  }) +
+                  (attempt === 0
+                    ? ""
+                    : "\n\nYour previous answer was not valid JSON for the required schema. Try again."),
+              },
+            ],
+          },
+        ],
+        abortSignal: input.abortSignal,
+        timeout: input.timeoutMs ?? DEFAULT_COMPACTION_TIMEOUT_MS,
+      });
+      const parsed = COMPACTION_JSON_SCHEMA.parse(JSON.parse(trimJsonFence(result.text ?? "")));
+      const mergedIdentifiers = Array.from(
+        new Set([...input.criticalIdentifiers, ...parsed.critical_identifiers]),
+      );
+      const mergedFiles = Array.from(new Set([...input.relevantFiles, ...parsed.relevant_files]));
+      return {
+        ...parsed,
+        critical_identifiers: mergedIdentifiers,
+        relevant_files: mergedFiles,
+      };
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
     }
   }
-  return messages;
-}
-
-function compactionTimeoutMs(timeoutMs: number | undefined): number | undefined {
-  if (typeof timeoutMs !== "number" || !Number.isFinite(timeoutMs) || timeoutMs <= 0) {
-    return DEFAULT_COMPACTION_TIMEOUT_MS;
-  }
-  const slice = Math.floor(timeoutMs * 0.25);
-  if (slice <= 0) return 0;
-  return Math.min(DEFAULT_COMPACTION_TIMEOUT_MS, slice);
-}
-
-async function runDeterministicFallbackCompaction(input: {
-  sessionDal: SessionDal;
-  session: SessionRow;
-  keepLastMessages: number;
-}): Promise<SessionCompactionResult> {
-  const fallback = await input.sessionDal.compact({
-    tenantId: input.session.tenant_id,
-    sessionId: input.session.session_id,
-    keepLastMessages: input.keepLastMessages,
-  });
-  const updated = await input.sessionDal.getById({
-    tenantId: input.session.tenant_id,
-    sessionId: input.session.session_id,
-  });
-  return {
-    compacted: true,
-    droppedMessages: fallback.droppedMessages,
-    keptMessages: fallback.keptMessages,
-    summary: updated?.summary ?? input.session.summary,
-    reason: "fallback",
-  };
+  throw lastError ?? new Error("failed to generate checkpoint summary");
 }
 
 export function shouldCompactSessionForUsage(input: {
@@ -216,18 +248,31 @@ export function shouldCompactSessionForUsage(input: {
   session: SessionRow;
   modelResolution: ResolvedSessionModel;
   usage: SessionUsageSnapshot | undefined;
+  currentTurnText?: string;
+  systemPrompt?: string;
 }): boolean {
   if (input.config.sessions.compaction?.auto === false) return false;
 
-  const observedTokens = getObservedUsageTokens(input.usage);
   const limits = deriveEffectiveModelLimits(input.modelResolution);
   const reservedInputTokens = getReservedInputTokens(input.config);
+  const observedTokens = getObservedUsageTokens(input.usage);
+  const promptTokens =
+    observedTokens > 0
+      ? observedTokens
+      : estimatePromptTokens({
+          messages: buildPromptVisibleMessages(input.session.messages, input.session.context_state),
+          systemPrompt: input.systemPrompt,
+          userContent: input.currentTurnText
+            ? [{ type: "text", text: input.currentTurnText }]
+            : undefined,
+        });
+
   const usableFromInput =
     limits.input && limits.input > reservedInputTokens
       ? limits.input - reservedInputTokens
       : undefined;
   if (usableFromInput) {
-    return observedTokens >= usableFromInput;
+    return promptTokens >= usableFromInput;
   }
 
   const reservedFromContext = limits.output ?? reservedInputTokens;
@@ -236,14 +281,21 @@ export function shouldCompactSessionForUsage(input: {
       ? limits.context - reservedFromContext
       : undefined;
   if (usableFromContext) {
-    return observedTokens >= usableFromContext;
+    return promptTokens >= usableFromContext;
   }
 
   const maxTurns = Math.floor(input.config.sessions.max_turns);
   if (!Number.isFinite(maxTurns) || maxTurns <= 0) {
     return false;
   }
-  return countTextTranscriptItems(input.session.transcript) >= maxTurns * 2;
+  return input.session.messages.length >= maxTurns * 2;
+}
+
+function compactionTimeoutMs(timeoutMs: number | undefined): number | undefined {
+  if (typeof timeoutMs !== "number" || !Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    return DEFAULT_COMPACTION_TIMEOUT_MS;
+  }
+  return Math.min(DEFAULT_COMPACTION_TIMEOUT_MS, Math.max(1_000, Math.floor(timeoutMs * 0.25)));
 }
 
 export async function compactSessionWithResolvedModel(input: {
@@ -261,19 +313,16 @@ export async function compactSessionWithResolvedModel(input: {
     0,
     input.keepLastMessages ?? getKeepLastMessages(input.ctx.config),
   );
-  const { dropped, kept } = splitTranscriptForCompaction({
-    transcript: input.session.transcript,
+  const { dropped, kept } = splitMessagesForContextCompaction({
+    messages: input.session.messages,
     keepLastMessages,
   });
-  const droppedTurns = dropped.filter(
-    (item): item is SessionTranscriptTextItem => item.kind === "text",
-  );
-  if (droppedTurns.length === 0) {
+  if (dropped.length === 0) {
     return {
       compacted: false,
       droppedMessages: 0,
-      keptMessages: countTextTranscriptItems(input.session.transcript),
-      summary: input.session.summary,
+      keptMessages: kept.length,
+      summary: input.session.context_state.checkpoint?.handoff_md ?? "",
       reason: "noop",
     };
   }
@@ -284,51 +333,45 @@ export async function compactSessionWithResolvedModel(input: {
       ctx: input.ctx,
       session: input.session,
       model: input.model,
-      droppedTurns,
+      droppedMessages: dropped,
       abortSignal: input.abortSignal,
       timeoutMs: input.timeoutMs,
     },
   );
 
-  const timeout = compactionTimeoutMs(input.timeoutMs);
-  if (timeout === 0) {
-    return await runDeterministicFallbackCompaction({
-      sessionDal: input.sessionDal,
-      session: input.session,
-      keepLastMessages,
-    });
-  }
-
   try {
-    const result = await generateText({
+    const criticalIdentifiers = extractCriticalIdentifiers(dropped);
+    const relevantFiles = extractRelevantFiles(criticalIdentifiers);
+    const checkpoint = await generateCheckpointSummary({
       model: input.model,
-      system: COMPACTION_SYSTEM_PROMPT,
-      messages: [
-        ...buildSummaryHistoryMessages(input.session.summary, droppedTurns),
-        { role: "user", content: [{ type: "text", text: COMPACTION_USER_PROMPT }] },
-      ],
-      stopWhen: [stepCountIs(1)],
+      previousCheckpoint: input.session.context_state.checkpoint,
+      droppedMessages: dropped,
+      criticalIdentifiers,
+      relevantFiles,
       abortSignal: input.abortSignal,
-      timeout,
+      timeoutMs: compactionTimeoutMs(input.timeoutMs),
     });
-    const summary = (result.text ?? "").trim();
-    if (summary.length === 0) {
-      throw new Error("empty compaction summary");
-    }
 
-    await input.sessionDal.replaceTranscript({
+    await input.sessionDal.replaceContextState({
       tenantId: input.session.tenant_id,
       sessionId: input.session.session_id,
-      transcript: kept.slice(),
-      title: input.session.title,
-      summary,
+      updatedAt: new Date().toISOString(),
+      contextState: {
+        version: 1,
+        compacted_through_message_id: dropped.at(-1)?.id,
+        recent_message_ids: kept.map((message) => message.id),
+        checkpoint,
+        pending_approvals: collectPendingApprovals(input.session.messages),
+        pending_tool_state: collectPendingToolStates(input.session.messages),
+        updated_at: new Date().toISOString(),
+      },
     });
 
     return {
       compacted: true,
-      droppedMessages: droppedTurns.length,
-      keptMessages: countTextTranscriptItems(kept),
-      summary,
+      droppedMessages: dropped.length,
+      keptMessages: kept.length,
+      summary: checkpoint.handoff_md,
       reason: "model",
     };
   } catch (err) {
@@ -337,11 +380,7 @@ export async function compactSessionWithResolvedModel(input: {
       session_id: input.session.session_id,
       error: message,
     });
-    return await runDeterministicFallbackCompaction({
-      sessionDal: input.sessionDal,
-      session: input.session,
-      keepLastMessages,
-    });
+    throw err;
   }
 }
 

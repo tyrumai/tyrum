@@ -5,32 +5,95 @@ import { WsRequest, WsResponse } from "../src/protocol.js";
 import { expectRejects } from "./test-helpers.js";
 
 describe("Session v1 WS protocol", () => {
-  it("exports session.* WS schemas from @tyrum/schemas", () => {
-    expect("WsSessionSendRequest" in Schemas).toBe(true);
-    expect("WsSessionListRequest" in Schemas).toBe(true);
-    expect("WsSessionGetRequest" in Schemas).toBe(true);
-    expect("WsSessionCreateRequest" in Schemas).toBe(true);
-    expect("WsSessionCompactRequest" in Schemas).toBe(true);
-    expect("WsSessionDeleteRequest" in Schemas).toBe(true);
+  it("exports chat.session.* WS schemas from @tyrum/schemas", () => {
+    expect("WsChatSessionListRequest" in Schemas).toBe(true);
+    expect("WsChatSessionGetRequest" in Schemas).toBe(true);
+    expect("WsChatSessionCreateRequest" in Schemas).toBe(true);
+    expect("WsChatSessionDeleteRequest" in Schemas).toBe(true);
+    expect("WsChatSessionReconnectRequest" in Schemas).toBe(true);
+    expect("WsChatSessionSendRequest" in Schemas).toBe(true);
+    expect("WsAiSdkChatStreamEvent" in Schemas).toBe(true);
+    expect("SessionContextState" in Schemas).toBe(true);
+    expect("CheckpointSummary" in Schemas).toBe(true);
   });
 
-  it("exports session.* WS operation schemas from ../src/protocol.js", () => {
-    expect("WsSessionListRequest" in Protocol).toBe(true);
-    expect("WsSessionGetRequest" in Protocol).toBe(true);
-    expect("WsSessionCreateRequest" in Protocol).toBe(true);
-    expect("WsSessionCompactRequest" in Protocol).toBe(true);
-    expect("WsSessionDeleteRequest" in Protocol).toBe(true);
+  it("exports chat.session.* WS operation schemas from ../src/protocol.js", () => {
+    expect("WsChatSessionListRequest" in Protocol).toBe(true);
+    expect("WsChatSessionGetRequest" in Protocol).toBe(true);
+    expect("WsChatSessionCreateRequest" in Protocol).toBe(true);
+    expect("WsChatSessionDeleteRequest" in Protocol).toBe(true);
+    expect("WsChatSessionReconnectRequest" in Protocol).toBe(true);
+    expect("WsChatSessionSendRequest" in Protocol).toBe(true);
+    expect("WsSessionListRequest" in Protocol).toBe(false);
+    expect("WsSessionGetRequest" in Protocol).toBe(false);
+    expect("WsSessionCreateRequest" in Protocol).toBe(false);
+    expect("WsSessionDeleteRequest" in Protocol).toBe(false);
+    expect("WsSessionCompactRequest" in Protocol).toBe(false);
+    expect("WsSessionSendRequest" in Protocol).toBe(false);
   });
 
-  it("parses session.* requests via WsRequest union", () => {
+  it("parses session context state checkpoints", () => {
+    const parsed = Schemas.SessionContextState.safeParse({
+      version: 1,
+      compacted_through_message_id: "msg-3",
+      recent_message_ids: ["msg-4", "msg-5"],
+      checkpoint: {
+        goal: "Ship the migration cleanly",
+        user_constraints: ["touch schema/client only"],
+        decisions: ["chat.session.* is the public request surface"],
+        discoveries: ["gateway already has a private SessionContextState"],
+        completed_work: ["added chat session transport"],
+        pending_work: ["switch gateway compaction to shared schema"],
+        unresolved_questions: ["whether chat.session.get should expose context_state"],
+        critical_identifiers: ["session-1", "stream-1"],
+        relevant_files: ["packages/schemas/src/session-context.ts"],
+        handoff_md: "Continue from the shared session context state.",
+      },
+      pending_approvals: [
+        {
+          approval_id: "approval-1",
+          approved: true,
+          state: "approved",
+          tool_call_id: "tool-call-1",
+          tool_name: "exec_command",
+        },
+      ],
+      pending_tool_state: [
+        {
+          summary: "Running migration verification",
+          tool_call_id: "tool-call-2",
+          tool_name: "pnpm test",
+        },
+      ],
+      updated_at: "2026-03-13T12:00:00Z",
+    });
+
+    expect(parsed.success).toBe(true);
+  });
+
+  it("parses chat.session.* requests via WsRequest union", () => {
     const sessionId = "550e8400-e29b-41d4-a716-446655440000";
+    const message = {
+      id: "msg-1",
+      role: "user",
+      parts: [{ type: "text", text: "Hello" }],
+    };
 
     const requests: Array<{ type: string; payload: unknown }> = [
-      { type: "session.list", payload: { agent_id: "default", channel: "ui", limit: 50 } },
-      { type: "session.get", payload: { agent_id: "default", session_id: sessionId } },
-      { type: "session.create", payload: { agent_id: "default", channel: "ui" } },
-      { type: "session.compact", payload: { agent_id: "default", session_id: sessionId } },
-      { type: "session.delete", payload: { agent_id: "default", session_id: sessionId } },
+      { type: "chat.session.list", payload: { agent_id: "default", channel: "ui", limit: 50 } },
+      { type: "chat.session.get", payload: { session_id: sessionId } },
+      { type: "chat.session.create", payload: { agent_id: "default", channel: "ui" } },
+      { type: "chat.session.delete", payload: { session_id: sessionId } },
+      { type: "chat.session.reconnect", payload: { session_id: sessionId } },
+      {
+        type: "chat.session.send",
+        payload: {
+          session_id: sessionId,
+          message_id: "msg-1",
+          messages: [message],
+          trigger: "submit-message",
+        },
+      },
     ];
 
     for (const entry of requests) {
@@ -43,68 +106,38 @@ describe("Session v1 WS protocol", () => {
     }
   });
 
-  it("parses session.* responses via WsResponse union", () => {
+  it("parses chat.session.* responses via WsResponse union", () => {
     const sessionId = "550e8400-e29b-41d4-a716-446655440000";
-    const now = "2026-02-19T12:00:00Z";
-
-    const sessionListItem = {
+    const now = "2026-03-13T12:00:00Z";
+    const sessionSummary = {
       session_id: sessionId,
       agent_id: "default",
       channel: "ui",
       thread_id: "ui-550e8400-e29b-41d4-a716-446655440000",
       title: "Hello",
-      summary: "",
-      transcript_count: 2,
+      message_count: 1,
       updated_at: now,
       created_at: now,
-      last_text: { role: "assistant", content: "Hello" },
+      last_message: { role: "user", text: "Hello" },
     };
-
     const session = {
-      session_id: sessionId,
-      agent_id: "default",
-      channel: "ui",
-      thread_id: sessionListItem.thread_id,
-      title: sessionListItem.title,
-      summary: "",
-      transcript: [
+      ...sessionSummary,
+      messages: [
         {
-          kind: "text",
-          id: "t-1",
+          id: "msg-1",
           role: "user",
-          content: "Hi",
-          created_at: now,
-        },
-        {
-          kind: "text",
-          id: "t-2",
-          role: "assistant",
-          content: "Hello",
-          created_at: now,
+          parts: [{ type: "text", text: "Hello" }],
         },
       ],
-      updated_at: now,
-      created_at: now,
     };
 
-    const responses: Array<{ type: string; result?: unknown }> = [
-      { type: "session.list", result: { sessions: [sessionListItem], next_cursor: null } },
-      { type: "session.get", result: { session } },
-      {
-        type: "session.create",
-        result: {
-          session_id: sessionId,
-          agent_id: "default",
-          channel: "ui",
-          thread_id: sessionListItem.thread_id,
-          title: "",
-        },
-      },
-      {
-        type: "session.compact",
-        result: { session_id: sessionId, dropped_messages: 10, kept_messages: 8 },
-      },
-      { type: "session.delete", result: { session_id: sessionId } },
+    const responses: Array<{ type: string; result: unknown }> = [
+      { type: "chat.session.list", result: { sessions: [sessionSummary], next_cursor: null } },
+      { type: "chat.session.get", result: { session } },
+      { type: "chat.session.create", result: { session } },
+      { type: "chat.session.delete", result: { session_id: sessionId } },
+      { type: "chat.session.reconnect", result: { stream_id: "stream-1" } },
+      { type: "chat.session.send", result: { stream_id: "stream-1" } },
     ];
 
     for (const entry of responses) {
@@ -113,24 +146,6 @@ describe("Session v1 WS protocol", () => {
         type: entry.type,
         ok: true,
         result: entry.result,
-      });
-      expect(parsed.success, entry.type).toBe(true);
-    }
-
-    const errorResponses: Array<{ type: string }> = [
-      { type: "session.list" },
-      { type: "session.get" },
-      { type: "session.create" },
-      { type: "session.compact" },
-      { type: "session.delete" },
-    ];
-
-    for (const entry of errorResponses) {
-      const parsed = WsResponse.safeParse({
-        request_id: `r-err-${entry.type}`,
-        type: entry.type,
-        ok: false,
-        error: { code: "bad_request", message: "boom" },
       });
       expect(parsed.success, entry.type).toBe(true);
     }
@@ -186,11 +201,30 @@ describe("Session v1 WS protocol", () => {
     }
   });
 
-  it("rejects session.* request envelopes missing payload", () => {
-    expectRejects(WsRequest, { request_id: "r-missing-payload", type: "session.list" });
+  it("parses AI SDK chat stream events via WsEvent union", () => {
+    const parsed = Protocol.WsEvent.safeParse({
+      event_id: "e-stream-1",
+      type: "chat.ui-message.stream",
+      occurred_at: "2026-03-13T12:00:00Z",
+      scope: { kind: "agent", agent_id: "550e8400-e29b-41d4-a716-446655440000" },
+      payload: {
+        stream_id: "stream-1",
+        stage: "chunk",
+        chunk: { id: "text-1", type: "text-start" },
+      },
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it("rejects chat.session.* request envelopes missing payload", () => {
+    expectRejects(WsRequest, { request_id: "r-missing-payload", type: "chat.session.list" });
   });
 
   it("rejects error responses missing error payload", () => {
-    expectRejects(WsResponse, { request_id: "r-missing-error", type: "session.list", ok: false });
+    expectRejects(WsResponse, {
+      request_id: "r-missing-error",
+      type: "chat.session.list",
+      ok: false,
+    });
   });
 });

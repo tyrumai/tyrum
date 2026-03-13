@@ -11,7 +11,6 @@ import {
   acceptConnect,
   delay,
 } from "./ws-client.test-support.js";
-import { registerControlPlaneSessionTests } from "./ws-client.control-plane-session-test-support.js";
 
 type ControlPlaneFixture = {
   getServer: () => TestServer | undefined;
@@ -432,13 +431,9 @@ function registerControlPlaneErrorTests(fixture: ControlPlaneFixture): void {
     await acceptConnect(ws);
     await delay(10);
 
-    const pending = client.sessionSend({
-      channel: "telegram",
-      thread_id: "thread-1",
-      content: "hello",
-    });
+    const pending = client.commandExecute("/help");
     const req = (await waitForMessage(ws)) as Record<string, unknown>;
-    expect(req["type"]).toBe("session.send");
+    expect(req["type"]).toBe("command.execute");
 
     ws.send(
       JSON.stringify({
@@ -446,8 +441,7 @@ function registerControlPlaneErrorTests(fixture: ControlPlaneFixture): void {
         type: "workflow.run",
         ok: true,
         result: {
-          session_id: "session-1",
-          assistant_message: "ok",
+          job_id: "job-1",
         },
       }),
     );
@@ -489,7 +483,6 @@ function registerControlPlaneErrorTests(fixture: ControlPlaneFixture): void {
 }
 
 export function registerControlPlaneTests(fixture: ControlPlaneFixture): void {
-  registerControlPlaneSessionTests(fixture);
   registerControlPlaneWorkflowTests(fixture);
   registerControlPlaneErrorTests(fixture);
 }

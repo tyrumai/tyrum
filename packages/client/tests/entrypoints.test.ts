@@ -25,15 +25,32 @@ describe("@tyrum/client entrypoints", () => {
   });
 
   it("avoids static entrypoint cycles and browser-facing node transport imports", async () => {
-    const [browserSource, nodeSource, httpSharedSource, wsTransportSource] = await Promise.all([
+    const [
+      indexSource,
+      browserSource,
+      nodeSource,
+      typesSource,
+      httpSharedSource,
+      wsTransportSource,
+    ] = await Promise.all([
+      readFile(resolve(__dirname, "../src/index.ts"), "utf8"),
       readFile(resolve(__dirname, "../src/browser.ts"), "utf8"),
       readFile(resolve(__dirname, "../src/node.ts"), "utf8"),
+      readFile(resolve(__dirname, "../src/types.ts"), "utf8"),
       readFile(resolve(__dirname, "../src/http/shared.ts"), "utf8"),
       readFile(resolve(__dirname, "../src/ws-client.transport.ts"), "utf8"),
     ]);
 
+    expect(indexSource).not.toContain("SessionTranscript");
     expect(browserSource).not.toContain('export { VERSION } from "./index.js";');
+    expect(browserSource).not.toContain("SessionTranscript");
     expect(nodeSource).not.toContain('export { VERSION } from "./index.js";');
+    expect(nodeSource).not.toContain("SessionTranscript");
+    expect(typesSource).not.toContain("SessionTranscript");
+    expect(indexSource).toContain("SessionContextState");
+    expect(browserSource).toContain("SessionContextState");
+    expect(nodeSource).toContain("SessionContextState");
+    expect(typesSource).toContain("SessionContextState");
     expect(httpSharedSource).not.toContain('from "../node/load-pinned-transport.js"');
     expect(wsTransportSource).not.toContain('from "./node/load-pinned-transport.js"');
   });

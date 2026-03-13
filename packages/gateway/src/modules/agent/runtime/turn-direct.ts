@@ -3,6 +3,7 @@ import type { ModelMessage } from "ai";
 import type {
   AgentTurnRequest as AgentTurnRequestT,
   AgentTurnResponse as AgentTurnResponseT,
+  SessionContextState,
   WorkScope,
 } from "@tyrum/schemas";
 import {
@@ -21,8 +22,8 @@ import {
   handleIntakeModeDecision,
 } from "./intake-delegation.js";
 import {
-  compactForOverflow,
   createStopWhenWithWithinTurnLoopDetection,
+  compactForOverflow,
   extractUsageSnapshot,
   makeEventfulAbortSignal,
   maybeAutoCompactSession,
@@ -33,9 +34,12 @@ import {
 import {
   appendToolApprovalResponseMessage,
   countAssistantMessages,
+  sessionMessagesToModelMessages,
 } from "../../ai-sdk/message-utils.js";
 import { prepareTurn, type TurnExecutionContext } from "./turn-preparation.js";
 import { handleStatusQuery, throwToolApprovalError } from "./turn-direct-helpers.js";
+import { applyDeterministicContextCompactionAndToolPruning } from "./context-pruning.js";
+import { buildPromptVisibleMessages } from "./session-context-state.js";
 import { isContextOverflowError } from "./session-compaction-service.js";
 import { GUARDIAN_REVIEW_DECISION_TOOL_ID } from "./tool-set-builder-internal-tools.js";
 
@@ -74,6 +78,26 @@ function createGuardianReviewTurnControl(): {
   };
 }
 
+function hasPromptInjectedSessionContext(
+  contextState: SessionContextState | null | undefined,
+): boolean {
+  return Boolean(
+    contextState?.checkpoint ||
+      contextState?.pending_approvals.length ||
+      contextState?.pending_tool_state.length,
+  );
+}
+
+function stripEmbeddedSessionContext(
+  userContent: ReadonlyArray<{ type: "text"; text: string }>,
+  contextState: SessionContextState | null | undefined,
+): Array<{ type: "text"; text: string }> {
+  if (!hasPromptInjectedSessionContext(contextState)) {
+    return [...userContent];
+  }
+  return userContent.filter((part) => !part.text.startsWith("Session context:\n"));
+}
+
 export async function turnDirect(
   deps: TurnDirectDeps,
   input: AgentTurnRequestT,
@@ -99,6 +123,7 @@ export async function turnDirect(
     resolved,
     guardianReviewDecisionCollector,
   } = prepared;
+  let activeSession = session;
 
   const workScope: WorkScope = {
     tenant_id: session.tenant_id,
@@ -106,41 +131,30 @@ export async function turnDirect(
     workspace_id: session.workspace_id,
   };
 
-  const finalizeAndMaybeCompact = async (params: {
+  const finalizeAndPersist = async (params: {
     reply: string;
     turnKind?: "normal" | "skip";
     usage?: ReturnType<typeof extractUsageSnapshot>;
+    responseMessages?: readonly ModelMessage[];
   }) => {
-    const response = await finalizeTurn({
+    return await finalizeTurn({
       container: deps.opts.container,
       sessionDal: deps.sessionDal,
       ctx,
-      session,
+      session: activeSession,
       resolved,
       reply: params.reply,
       model,
       usedTools,
-      memoryWritten: memoryWriteState.wrote,
       contextReport,
       turnKind: params.turnKind,
+      responseMessages: params.responseMessages,
     });
-    await maybeAutoCompactSession({
-      deps,
-      tenantId: session.tenant_id,
-      ctx,
-      sessionId: response.session_id,
-      model,
-      modelResolution,
-      usage: params.usage,
-      abortSignal,
-      timeoutMs: turnOpts?.timeoutMs,
-    });
-    return response;
   };
 
   if (isStatusQuery(resolved.message)) {
     const reply = await handleStatusQuery(deps.opts.container, workScope);
-    const response = await finalizeAndMaybeCompact({ reply, turnKind: "skip" });
+    const response = await finalizeAndPersist({ reply, turnKind: "skip" });
     return { response, contextReport };
   }
 
@@ -149,7 +163,7 @@ export async function turnDirect(
     { resolved, workScope },
   );
   if (intakeResult) {
-    const response = await finalizeAndMaybeCompact({
+    const response = await finalizeAndPersist({
       reply: intakeResult.reply,
       turnKind: "skip",
     });
@@ -172,20 +186,45 @@ export async function turnDirect(
         createdFromSessionKey: mainLaneSessionKey,
       },
     );
-    const response = await finalizeAndMaybeCompact({
+    const response = await finalizeAndPersist({
       reply: delegation.reply,
       turnKind: "skip",
     });
     return { response, contextReport };
   }
 
-  let messages: ModelMessage[] = [{ role: "user" as const, content: userContent }];
+  await maybeAutoCompactSession({
+    deps,
+    tenantId: activeSession.tenant_id,
+    ctx,
+    sessionId: activeSession.session_id,
+    model,
+    modelResolution,
+    usage: undefined,
+    currentTurnText: resolved.message,
+    systemPrompt,
+    abortSignal,
+    timeoutMs: turnOpts?.timeoutMs,
+  });
+  activeSession =
+    (await deps.sessionDal.getById({
+      tenantId: activeSession.tenant_id,
+      sessionId: activeSession.session_id,
+    })) ?? activeSession;
+  const promptUserContent = stripEmbeddedSessionContext(userContent, activeSession.context_state);
+
+  let messages: ModelMessage[] = [
+    ...(await sessionMessagesToModelMessages(
+      buildPromptVisibleMessages(activeSession.messages, activeSession.context_state),
+    )),
+    { role: "user" as const, content: promptUserContent },
+  ];
   let stepsUsedSoFar = 0;
 
   const stepApprovalId = turnOpts?.execution?.stepApprovalId;
   if (stepApprovalId) {
     const approval = await deps.approvalDal.getById({
-      tenantId: session.tenant_id,
+      tenantId: activeSession.tenant_id,
       approvalId: stepApprovalId,
     });
     if (approval && !isApprovalBlockedStatus(approval.status)) {
@@ -217,9 +256,14 @@ export async function turnDirect(
   if (remainingSteps <= 0) {
     const automation = resolveAutomationMetadata(resolved.metadata);
     const reply = automation?.delivery_mode === "quiet" ? "" : "No assistant response returned.";
-    const response = await finalizeAndMaybeCompact({ reply, turnKind: "skip" });
+    const response = await finalizeAndPersist({ reply, turnKind: "skip" });
     return { response, contextReport };
   }
+
+  messages = applyDeterministicContextCompactionAndToolPruning(
+    messages,
+    ctx.config.sessions.context_pruning,
+  );
 
   const withinTurnCfg = ctx.config.sessions.loop_detection.within_turn;
   const guardianReviewTurnControl = guardianReviewDecisionCollector
@@ -235,7 +279,7 @@ export async function turnDirect(
         threadId: resolved.thread_id,
       });
 
-  let result: Awaited<ReturnType<typeof generateText>>;
+  let result;
   try {
     result = await generateText({
       model,
@@ -249,29 +293,22 @@ export async function turnDirect(
       abortSignal,
       timeout: turnOpts?.timeoutMs,
     });
-  } catch (err) {
-    if (!isContextOverflowError(err)) {
-      throw err;
+  } catch (error) {
+    if (!turnOpts?.compactionRetried && isContextOverflowError(error)) {
+      if (usedTools.size > 0) {
+        throw error;
+      }
+      await compactForOverflow({
+        deps,
+        ctx,
+        session: activeSession,
+        model,
+        abortSignal,
+        timeoutMs: turnOpts?.timeoutMs,
+      });
+      return await turnDirect(deps, input, { ...turnOpts, compactionRetried: true });
     }
-
-    await compactForOverflow({
-      deps,
-      ctx,
-      session,
-      model,
-      abortSignal,
-      timeoutMs: turnOpts?.timeoutMs,
-    });
-
-    if (turnOpts?.compactionRetried || usedTools.size > 0) {
-      throw err;
-    }
-
-    return await turnDirect(deps, input, {
-      ...turnOpts,
-      abortSignal,
-      compactionRetried: true,
-    });
+    throw error;
   }
   const stepsUsedAfterCall = stepsUsedSoFar + result.steps.length;
 
@@ -290,7 +327,7 @@ export async function turnDirect(
       },
       approvalPart,
       toolCallPolicyStates,
-      session,
+      activeSession,
       resolved,
       usedTools,
       memoryWriteState,
@@ -305,10 +342,11 @@ export async function turnDirect(
   const reply = resolveTurnReply(rawReply, withinTurn.withinTurnLoop.value, {
     allowEmpty: automation?.delivery_mode === "quiet" || Boolean(guardianReviewDecisionCollector),
   });
-  const response = await finalizeAndMaybeCompact({
+  const response = await finalizeAndPersist({
     reply,
     turnKind: guardianReviewDecisionCollector ? "skip" : undefined,
     usage: extractUsageSnapshot(result.totalUsage),
+    responseMessages: (result.response?.messages ?? []) as ModelMessage[],
   });
   return {
     response,
@@ -347,6 +385,7 @@ export async function turnStreamDirect(
     resolved,
     guardianReviewDecisionCollector,
   } = prepared;
+  let activeSession = session;
 
   const intake = await resolveIntakeDecision(
     { container: deps.opts.container },
@@ -377,18 +416,8 @@ export async function turnStreamDirect(
       reply: delegation.reply,
       model,
       usedTools,
-      memoryWritten: memoryWriteState.wrote,
       contextReport,
       turnKind: "skip",
-    });
-    await maybeAutoCompactSession({
-      deps,
-      tenantId: session.tenant_id,
-      ctx,
-      sessionId: response.session_id,
-      model,
-      modelResolution,
-      usage: undefined,
     });
 
     const streamResult = streamText({
@@ -407,6 +436,24 @@ export async function turnStreamDirect(
     };
   }
 
+  await maybeAutoCompactSession({
+    deps,
+    tenantId: activeSession.tenant_id,
+    ctx,
+    sessionId: activeSession.session_id,
+    model,
+    modelResolution,
+    usage: undefined,
+    currentTurnText: resolved.message,
+    systemPrompt,
+  });
+  activeSession =
+    (await deps.sessionDal.getById({
+      tenantId: activeSession.tenant_id,
+      sessionId: activeSession.session_id,
+    })) ?? activeSession;
+  const promptUserContent = stripEmbeddedSessionContext(userContent, activeSession.context_state);
+
   const withinTurnCfg = ctx.config.sessions.loop_detection.within_turn;
   const guardianReviewTurnControl = guardianReviewDecisionCollector
     ? createGuardianReviewTurnControl()
@@ -424,7 +471,15 @@ export async function turnStreamDirect(
   const streamResult = streamText({
     model,
     system: systemPrompt,
-    messages: [{ role: "user" as const, content: userContent }],
+    messages: applyDeterministicContextCompactionAndToolPruning(
+      [
+        ...(await sessionMessagesToModelMessages(
+          buildPromptVisibleMessages(activeSession.messages, activeSession.context_state),
+        )),
+        { role: "user" as const, content: promptUserContent },
+      ],
+      ctx.config.sessions.context_pruning,
+    ),
     tools: toolSet,
     toolChoice: guardianReviewTurnControl?.toolChoice,
     stopWhen: withinTurn.stopWhen,
@@ -433,41 +488,25 @@ export async function turnStreamDirect(
   });
 
   const finalize = async (): Promise<AgentTurnResponseT> => {
-    let result: Awaited<typeof streamResult>;
-    try {
-      result = await streamResult;
-    } catch (err) {
-      if (isContextOverflowError(err)) {
-        await compactForOverflow({ deps, ctx, session, model });
-      }
-      throw err;
-    }
+    const result = await streamResult;
     const rawReply = (await result.text) || "";
     const automation = resolveAutomationMetadata(resolved.metadata);
     const reply = resolveTurnReply(rawReply, withinTurn.withinTurnLoop.value, {
       allowEmpty: automation?.delivery_mode === "quiet" || Boolean(guardianReviewDecisionCollector),
     });
+    const modelResponse = await result.response;
     const response = await finalizeTurn({
       container: deps.opts.container,
       sessionDal: deps.sessionDal,
       ctx,
-      session,
+      session: activeSession,
       resolved,
       reply,
       model,
       usedTools,
-      memoryWritten: memoryWriteState.wrote,
       contextReport,
       turnKind: guardianReviewDecisionCollector ? "skip" : undefined,
-    });
-    await maybeAutoCompactSession({
-      deps,
-      tenantId: session.tenant_id,
-      ctx,
-      sessionId: response.session_id,
-      model,
-      modelResolution,
-      usage: extractUsageSnapshot(await result.totalUsage),
+      responseMessages: (modelResponse.messages ?? []) as ModelMessage[],
     });
     return response;
   };

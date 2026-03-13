@@ -1,7 +1,6 @@
 import type { OperatorHttpClient, OperatorWsClient } from "../deps.js";
 import { createStore } from "../store.js";
 import {
-  compactActive,
   deleteActive,
   loadMoreSessions,
   newChat,
@@ -11,7 +10,6 @@ import {
   sendMessage,
   setAgentId,
 } from "./chat-store.actions.js";
-import { registerChatStoreEventHandlers } from "./chat-store.events.js";
 import {
   createInitialChatState,
   type ChatState,
@@ -38,10 +36,7 @@ export function createChatStore(ws: OperatorWsClient, http: OperatorHttpClient):
     ws,
     http,
     runIds: { agents: 0, sessions: 0, open: 0, send: 0 },
-    pendingOpen: null,
   };
-
-  registerChatStoreEventHandlers(ws, ctx);
 
   return {
     ...store,
@@ -52,7 +47,6 @@ export function createChatStore(ws: OperatorWsClient, http: OperatorHttpClient):
     openSession: (sessionId) => openSession(ctx, sessionId),
     newChat: () => newChat(ctx),
     sendMessage: (content, input) => sendMessage(ctx, content, input),
-    compactActive: (input) => compactActive(ctx, input),
     deleteActive: () => deleteActive(ctx),
   };
 }

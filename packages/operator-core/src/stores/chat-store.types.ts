@@ -1,4 +1,4 @@
-import type { WsSessionGetSession, WsSessionListItem } from "@tyrum/client";
+import type { TyrumAiSdkChatSession, TyrumAiSdkChatSessionSummary } from "@tyrum/client/browser";
 import type { AgentPersona } from "@tyrum/schemas";
 import type { OperatorHttpClient, OperatorWsClient } from "../deps.js";
 import type { OperatorCoreError } from "../operator-error.js";
@@ -16,7 +16,7 @@ export interface ChatAgentsState {
 }
 
 export interface ChatSessionsState {
-  sessions: WsSessionListItem[];
+  sessions: TyrumAiSdkChatSessionSummary[];
   nextCursor: string | null;
   loading: boolean;
   error: OperatorCoreError | null;
@@ -24,10 +24,9 @@ export interface ChatSessionsState {
 
 export interface ChatActiveSessionState {
   sessionId: string | null;
-  session: ChatSession | null;
+  session: TyrumAiSdkChatSession | null;
   loading: boolean;
   typing: boolean;
-  activeToolCallIds: string[];
   error: OperatorCoreError | null;
 }
 
@@ -52,21 +51,8 @@ export interface ChatStore extends ExternalStore<ChatState> {
   openSession(sessionId: string): Promise<void>;
   newChat(): Promise<void>;
   sendMessage(content: string, input?: { attachedNodeId?: string | null }): Promise<void>;
-  compactActive(input?: { keepLastMessages?: number }): Promise<void>;
   deleteActive(): Promise<void>;
 }
-
-export type ChatReasoningTranscriptItem = {
-  kind: "reasoning";
-  id: string;
-  content: string;
-  created_at: string;
-  updated_at: string;
-};
-
-export type ChatSession = Omit<WsSessionGetSession, "transcript"> & {
-  transcript: Array<WsSessionGetSession["transcript"][number] | ChatReasoningTranscriptItem>;
-};
 
 export type ChatStoreRunIds = {
   agents: number;
@@ -75,20 +61,12 @@ export type ChatStoreRunIds = {
   send: number;
 };
 
-export type ChatPendingOpenState = {
-  sessionId: string;
-  threadId: string | null;
-  transcript: ChatSession["transcript"];
-  typing: boolean;
-};
-
 export type ChatStoreContext = {
   store: ExternalStore<ChatState>;
   setState: (updater: (prev: ChatState) => ChatState) => void;
   ws: OperatorWsClient;
   http: OperatorHttpClient;
   runIds: ChatStoreRunIds;
-  pendingOpen: ChatPendingOpenState | null;
 };
 
 export function createInitialChatState(): ChatState {
@@ -110,7 +88,6 @@ export function createInitialChatState(): ChatState {
       session: null,
       loading: false,
       typing: false,
-      activeToolCallIds: [],
       error: null,
     },
     send: {

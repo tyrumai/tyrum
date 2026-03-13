@@ -1,10 +1,5 @@
 import { randomUUID } from "node:crypto";
-import {
-  NormalizedThreadMessage as NormalizedThreadMessageSchema,
-  SessionTranscriptTextItem,
-} from "@tyrum/schemas";
-import type { NormalizedContainerKind, SessionTranscriptItem } from "@tyrum/schemas";
-import { safeJsonParse } from "../../utils/json.js";
+import type { ChatMessage, NormalizedContainerKind } from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
 import {
   DEFAULT_CHANNEL_ACCOUNT_ID,
@@ -17,29 +12,23 @@ import { DEFAULT_TENANT_KEY, normalizeScopeKeys } from "../identity/scope.js";
 import { Logger } from "../observability/logger.js";
 import { gatewayMetrics } from "../observability/metrics.js";
 import { type PersistedJsonObserver } from "../observability/persisted-json.js";
-import { renderNormalizedThreadMessageText } from "./session-message-text.js";
 import { buildAgentTurnKey } from "./turn-key.js";
 import type {
-  RawChannelTranscriptRow,
   RawSessionListRow,
   RawSessionRow,
   RawSessionWithDeliveryRow,
+  SessionContextState,
   SessionDalOptions,
   SessionIdentity,
   SessionListRow,
-  SessionRepairResult,
   SessionRow,
   SessionWithDelivery,
-  StoredTranscript,
 } from "./session-dal-helpers.js";
 import {
-  buildStoredTranscript,
-  countTextTranscriptItems,
-  normalizeSessionTitle,
+  createEmptySessionContextState,
   normalizeContainerKind,
-  normalizeRepairTimestamp,
+  normalizeSessionTitle,
   normalizeTime,
-  REPAIR_SESSION_SQL,
   toSessionListRow,
   toSessionRow,
   UPDATE_SESSION_SQL,
@@ -47,32 +36,28 @@ import {
 } from "./session-dal-helpers.js";
 import {
   buildSessionListWhereClause,
+  createSessionContextStateForMessages,
   decodeSessionCursor,
   encodeSessionCursor,
-  latestTranscriptTimestamp,
-  loadOutboxReplyText,
-  stringifySessionTranscript,
-  sortSessionTranscript,
+  stringifySessionContextState,
+  stringifySessionMessages,
 } from "./session-dal-runtime.js";
+import {
+  createTextMessage,
+  deleteExpiredSessions,
+  resetSessionContent,
+  setSessionTitleIfBlank,
+} from "./session-dal-message-helpers.js";
+
 export type {
+  SessionContextState,
   SessionRow,
   SessionListRow,
   SessionWithDelivery,
   SessionDalOptions,
-  SessionRepairResult,
 } from "./session-dal-helpers.js";
 
 const logger = new Logger({ base: { module: "agent.session_dal" } });
-
-function preserveNonTextCreatedAt(
-  existing: SessionTranscriptItem | undefined,
-  next: SessionTranscriptItem,
-): SessionTranscriptItem {
-  if (!existing || existing.kind !== next.kind || next.kind === "text") {
-    return next;
-  }
-  return { ...next, created_at: existing.created_at };
-}
 
 export class SessionDal {
   private readonly jsonObserver: PersistedJsonObserver;
@@ -106,37 +91,66 @@ export class SessionDal {
     return session;
   }
 
-  private async writeSession(
-    input: SessionIdentity & { stored: StoredTranscript; updatedAt?: string },
-  ): Promise<void> {
+  private async writeSession(input: {
+    tenantId: string;
+    sessionId: string;
+    messages: ChatMessage[];
+    title: string;
+    contextState?: SessionContextState;
+    updatedAt?: string;
+  }): Promise<void> {
+    const updatedAt = input.updatedAt ?? new Date().toISOString();
+    const contextState = input.contextState
+      ? { ...input.contextState, updated_at: updatedAt }
+      : createSessionContextStateForMessages(input.messages, updatedAt);
     await this.db.run(UPDATE_SESSION_SQL, [
-      stringifySessionTranscript(input.stored.transcript),
-      input.stored.title,
-      input.stored.summary,
-      input.updatedAt ?? new Date().toISOString(),
+      stringifySessionMessages(input.messages),
+      stringifySessionContextState(contextState),
+      input.title,
+      updatedAt,
       input.tenantId,
       input.sessionId,
     ]);
   }
 
-  async replaceTranscript(
-    input: SessionIdentity & {
-      transcript: SessionTranscriptItem[];
-      summary: string;
-      title?: string;
-      updatedAt?: string;
-    },
+  async replaceMessages(
+    input: SessionIdentity & { messages: ChatMessage[]; updatedAt?: string },
   ): Promise<void> {
+    const session = await this.requireSession({
+      tenantId: input.tenantId,
+      sessionId: input.sessionId,
+    });
     await this.writeSession({
       tenantId: input.tenantId,
       sessionId: input.sessionId,
+      messages: input.messages,
+      title: session.title,
+      contextState: createSessionContextStateForMessages(
+        input.messages,
+        input.updatedAt ?? new Date().toISOString(),
+        session.context_state,
+      ),
       updatedAt: input.updatedAt,
-      stored: {
-        transcript: input.transcript,
-        title: normalizeSessionTitle(input.title ?? ""),
-        summary: input.summary,
-        droppedMessages: 0,
-      },
+    });
+  }
+
+  async replaceContextState(
+    input: SessionIdentity & {
+      contextState: SessionContextState;
+      updatedAt?: string;
+    },
+  ): Promise<void> {
+    const session = await this.requireSession({
+      tenantId: input.tenantId,
+      sessionId: input.sessionId,
+    });
+    await this.writeSession({
+      tenantId: input.tenantId,
+      sessionId: input.sessionId,
+      messages: session.messages,
+      title: session.title,
+      contextState: input.contextState,
+      updatedAt: input.updatedAt,
     });
   }
 
@@ -215,8 +229,18 @@ export class SessionDal {
 
     const nowIso = new Date().toISOString();
     const inserted = await this.db.get<RawSessionRow>(
-      "INSERT INTO sessions (tenant_id, session_id, session_key, agent_id, workspace_id, channel_thread_id, title, summary, transcript_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, '', '', '[]', ?, ?) ON CONFLICT (tenant_id, session_key) DO NOTHING RETURNING *",
-      [tenantId, randomUUID(), sessionKey, agentId, workspaceId, channelThreadId, nowIso, nowIso],
+      "INSERT INTO sessions (tenant_id, session_id, session_key, agent_id, workspace_id, channel_thread_id, title, messages_json, context_state_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, '', '[]', ?, ?, ?) ON CONFLICT (tenant_id, session_key) DO NOTHING RETURNING *",
+      [
+        tenantId,
+        randomUUID(),
+        sessionKey,
+        agentId,
+        workspaceId,
+        channelThreadId,
+        stringifySessionContextState(createEmptySessionContextState(nowIso)),
+        nowIso,
+        nowIso,
+      ],
     );
     if (inserted) return toSessionRow(inserted, this.jsonObserver);
 
@@ -247,7 +271,7 @@ export class SessionDal {
     });
 
     const rows = await this.db.all<RawSessionListRow>(
-      `SELECT s.session_id, s.session_key, ag.agent_key, ca.connector_key, ct.provider_thread_id, s.title, s.summary, s.transcript_json, s.created_at, s.updated_at FROM sessions s JOIN agents ag ON ag.tenant_id = s.tenant_id AND ag.agent_id = s.agent_id JOIN channel_threads ct ON ct.tenant_id = s.tenant_id AND ct.workspace_id = s.workspace_id AND ct.channel_thread_id = s.channel_thread_id JOIN channel_accounts ca ON ca.tenant_id = ct.tenant_id AND ca.workspace_id = ct.workspace_id AND ca.channel_account_id = ct.channel_account_id WHERE ${where.join(" AND ")} ORDER BY s.updated_at DESC, s.session_id DESC LIMIT ?`,
+      `SELECT s.session_id, s.session_key, ag.agent_key, ca.connector_key, ct.provider_thread_id, s.title, s.messages_json, s.context_state_json, s.created_at, s.updated_at FROM sessions s JOIN agents ag ON ag.tenant_id = s.tenant_id AND ag.agent_id = s.agent_id JOIN channel_threads ct ON ct.tenant_id = s.tenant_id AND ct.workspace_id = s.workspace_id AND ct.channel_thread_id = s.channel_thread_id JOIN channel_accounts ca ON ca.tenant_id = ct.tenant_id AND ca.workspace_id = ct.workspace_id AND ca.channel_account_id = ct.channel_account_id WHERE ${where.join(" AND ")} ORDER BY s.updated_at DESC, s.session_id DESC LIMIT ?`,
       [...params, limit + 1],
     );
     const selectedRows = rows.slice(0, limit);
@@ -265,11 +289,12 @@ export class SessionDal {
   }
 
   async reset(input: SessionIdentity): Promise<boolean> {
-    const res = await this.db.run(
-      "UPDATE sessions SET transcript_json = '[]', title = '', summary = '', updated_at = ? WHERE tenant_id = ? AND session_id = ?",
-      [new Date().toISOString(), input.tenantId, input.sessionId],
-    );
-    return res.changes === 1;
+    return await resetSessionContent({
+      db: this.db,
+      sessionId: input.sessionId,
+      tenantId: input.tenantId,
+      updatedAt: new Date().toISOString(),
+    });
   }
 
   async appendTurn(input: {
@@ -277,219 +302,50 @@ export class SessionDal {
     sessionId: string;
     userMessage: string;
     assistantMessage: string;
-    maxTurns?: number;
     timestamp: string;
+    appendMessages?: boolean;
   }): Promise<SessionRow> {
     const session = await this.requireSession({
       tenantId: input.tenantId,
       sessionId: input.sessionId,
     });
-    const transcript: SessionTranscriptItem[] = [
-      ...session.transcript,
-      SessionTranscriptTextItem.parse({
-        kind: "text",
-        id: randomUUID(),
-        role: "user",
-        content: input.userMessage,
-        created_at: input.timestamp,
-      }),
-      SessionTranscriptTextItem.parse({
-        kind: "text",
-        id: randomUUID(),
-        role: "assistant",
-        content: input.assistantMessage,
-        created_at: input.timestamp,
-      }),
-    ];
-    const maxTurns = input.maxTurns ?? 0;
-    if (maxTurns > 0) {
-      const stored = buildStoredTranscript({
-        transcript,
-        keepLastMessages: maxTurns * 2,
-        previousTitle: session.title,
-        previousSummary: session.summary,
-      });
-      await this.writeSession({
-        tenantId: input.tenantId,
-        sessionId: input.sessionId,
-        stored,
-        updatedAt: input.timestamp,
-      });
-    } else {
-      await this.replaceTranscript({
-        tenantId: input.tenantId,
-        sessionId: input.sessionId,
-        transcript,
-        title: session.title,
-        summary: session.summary,
-        updatedAt: input.timestamp,
-      });
-    }
+    const nextMessages: ChatMessage[] =
+      input.appendMessages === false
+        ? session.messages
+        : [
+            ...session.messages,
+            createTextMessage({ role: "user", text: input.userMessage }),
+            createTextMessage({ role: "assistant", text: input.assistantMessage }),
+          ];
+
+    await this.writeSession({
+      tenantId: input.tenantId,
+      sessionId: input.sessionId,
+      messages: nextMessages,
+      title: session.title,
+      contextState: createSessionContextStateForMessages(
+        nextMessages,
+        input.timestamp,
+        session.context_state,
+      ),
+      updatedAt: input.timestamp,
+    });
 
     const updated = await this.getById({ tenantId: input.tenantId, sessionId: input.sessionId });
     if (!updated) throw new Error(`session '${input.sessionId}' missing after update`);
     return updated;
   }
 
-  async upsertTranscriptItem(
-    input: SessionIdentity & {
-      item: SessionTranscriptItem;
-      summary?: string;
-      title?: string;
-      updatedAt?: string;
-    },
-  ): Promise<SessionRow> {
-    const session = await this.requireSession({
-      tenantId: input.tenantId,
-      sessionId: input.sessionId,
-    });
-    const existingItem = session.transcript.find((item) => item.id === input.item.id);
-    const nextItem = preserveNonTextCreatedAt(existingItem, input.item);
-    const nextTranscript = sortSessionTranscript(
-      existingItem
-        ? session.transcript.map((item) => (item.id === nextItem.id ? nextItem : item))
-        : [...session.transcript, nextItem],
-    );
-
-    await this.replaceTranscript({
-      tenantId: input.tenantId,
-      sessionId: input.sessionId,
-      transcript: nextTranscript,
-      title: input.title ?? session.title,
-      summary: input.summary ?? session.summary,
-      updatedAt:
-        input.updatedAt ??
-        (input.item.kind === "text" ? input.item.created_at : input.item.updated_at),
-    });
-
-    const updated = await this.getById({ tenantId: input.tenantId, sessionId: input.sessionId });
-    if (!updated) throw new Error(`session '${input.sessionId}' missing after transcript upsert`);
-    return updated;
-  }
-
-  async compact(
-    input: SessionIdentity & { keepLastMessages: number },
-  ): Promise<{ droppedMessages: number; keptMessages: number }> {
-    const session = await this.requireSession({
-      tenantId: input.tenantId,
-      sessionId: input.sessionId,
-    });
-    const stored = buildStoredTranscript({
-      transcript: session.transcript,
-      keepLastMessages: Math.max(0, input.keepLastMessages),
-      previousTitle: session.title,
-      previousSummary: session.summary,
-    });
-    await this.writeSession({ tenantId: input.tenantId, sessionId: input.sessionId, stored });
-    return {
-      droppedMessages: stored.droppedMessages,
-      keptMessages: countTextTranscriptItems(stored.transcript),
-    };
-  }
-
   async setTitleIfBlank(input: SessionIdentity & { title: string }): Promise<boolean> {
     const title = normalizeSessionTitle(input.title);
     if (!title) return false;
-    const result = await this.db.run(
-      "UPDATE sessions SET title = ?, updated_at = ? WHERE tenant_id = ? AND session_id = ? AND trim(title) = ''",
-      [title, new Date().toISOString(), input.tenantId, input.sessionId],
-    );
-    return result.changes === 1;
-  }
-
-  async repairFromChannelLogs(input: {
-    tenantId: string;
-    sessionId: string;
-    maxTurns?: number;
-  }): Promise<SessionRepairResult | null> {
-    const session = await this.requireSession({
-      tenantId: input.tenantId,
+    return await setSessionTitleIfBlank({
+      db: this.db,
       sessionId: input.sessionId,
-    });
-    const rows = await this.db.all<RawChannelTranscriptRow>(REPAIR_SESSION_SQL, [
-      input.tenantId,
-      input.sessionId,
-    ]);
-    const rebuiltTranscript: SessionTranscriptItem[] = [];
-    let sourceRows = 0;
-
-    for (const row of rows) {
-      const parsed = NormalizedThreadMessageSchema.safeParse(safeJsonParse(row.payload_json, {}));
-      if (!parsed.success) continue;
-
-      const userMessage = renderNormalizedThreadMessageText(parsed.data);
-      if (userMessage.length === 0) continue;
-
-      const assistantMessage =
-        row.reply_text !== null
-          ? row.reply_text
-          : await loadOutboxReplyText(this.db, {
-              tenantId: input.tenantId,
-              inboxId: row.inbox_id,
-            });
-      if (assistantMessage === undefined) continue;
-
-      const timestamp = normalizeRepairTimestamp(
-        row.processed_at,
-        parsed.data.message.envelope?.received_at ?? parsed.data.message.timestamp,
-      );
-      rebuiltTranscript.push(
-        SessionTranscriptTextItem.parse({
-          kind: "text",
-          id: randomUUID(),
-          role: "user",
-          content: userMessage,
-          created_at: timestamp,
-        }),
-        SessionTranscriptTextItem.parse({
-          kind: "text",
-          id: randomUUID(),
-          role: "assistant",
-          content: assistantMessage,
-          created_at: timestamp,
-        }),
-      );
-      sourceRows += 1;
-    }
-
-    if (sourceRows === 0) return null;
-
-    const maxTurns = input.maxTurns ?? 0;
-    if (maxTurns > 0) {
-      const stored = buildStoredTranscript({
-        transcript: rebuiltTranscript,
-        keepLastMessages: maxTurns * 2,
-        previousTitle: session.title,
-        previousSummary: session.summary,
-      });
-      await this.writeSession({
-        tenantId: input.tenantId,
-        sessionId: input.sessionId,
-        stored,
-        updatedAt: latestTranscriptTimestamp(stored.transcript) ?? session.updated_at,
-      });
-      return {
-        source_rows: sourceRows,
-        rebuilt_messages: rebuiltTranscript.length,
-        kept_messages: stored.transcript.length,
-        dropped_messages: stored.droppedMessages,
-      };
-    }
-
-    await this.replaceTranscript({
       tenantId: input.tenantId,
-      sessionId: input.sessionId,
-      transcript: rebuiltTranscript,
-      title: session.title,
-      summary: session.summary,
-      updatedAt: latestTranscriptTimestamp(rebuiltTranscript) ?? session.updated_at,
+      title,
+      updatedAt: new Date().toISOString(),
     });
-    return {
-      source_rows: sourceRows,
-      rebuilt_messages: rebuiltTranscript.length,
-      kept_messages: rebuiltTranscript.length,
-      dropped_messages: 0,
-    };
   }
 
   async deleteExpired(ttlDays: number, agentKey?: string): Promise<number> {
@@ -502,12 +358,11 @@ export class SessionDal {
     const agentId = normalizedAgentKey
       ? await this.identityScopeDal.ensureAgentId(tenantId, normalizedAgentKey)
       : undefined;
-    const agentClause = agentId ? "AND agent_id = ?" : "";
-    const params = agentId ? [tenantId, agentId, cutoffIso] : [tenantId, cutoffIso];
-    const sql =
-      this.db.kind === "sqlite"
-        ? `DELETE FROM sessions WHERE tenant_id = ? ${agentClause} AND datetime(replace(replace(updated_at, 'T', ' '), 'Z', '')) < datetime(replace(replace(?, 'T', ' '), 'Z', ''))`
-        : `DELETE FROM sessions WHERE tenant_id = ? ${agentClause} AND updated_at < ?`;
-    return (await this.db.run(sql, params)).changes;
+    return await deleteExpiredSessions({
+      agentId,
+      cutoffIso,
+      db: this.db,
+      tenantId,
+    });
   }
 }

@@ -55,7 +55,7 @@ const {
   handleSessionMessageMock: vi.fn(async (_client: unknown, msg: unknown) => {
     const type = (msg as { type?: string }).type;
     const requestId = (msg as { request_id?: string }).request_id;
-    if (type !== "session.list") return undefined;
+    if (type !== "chat.session.list") return undefined;
     return {
       request_id: requestId ?? "missing",
       type,
@@ -145,10 +145,10 @@ describe("remaining WS handler extraction", () => {
     });
   });
 
-  it("routes session requests through session-handlers", async () => {
+  it("routes AI SDK chat session requests through session-handlers", async () => {
     const client = createAdminWsClient();
     const deps = {};
-    const raw = serializeWsRequest({ type: "session.list" });
+    const raw = serializeWsRequest({ type: "chat.session.list" });
 
     const { handleClientMessage } = await import("../../src/ws/protocol/handler.js");
     const res = await handleClientMessage(client, raw, deps);
@@ -156,12 +156,12 @@ describe("remaining WS handler extraction", () => {
     expect(handleSessionMessageMock).toHaveBeenCalledTimes(1);
     expect(handleSessionMessageMock).toHaveBeenCalledWith(
       client,
-      expect.objectContaining({ request_id: "req-1", type: "session.list" }),
+      expect.objectContaining({ request_id: "req-1", type: "chat.session.list" }),
       deps,
     );
     expect(res).toEqual({
       request_id: "req-1",
-      type: "session.list",
+      type: "chat.session.list",
       ok: true,
       result: { mocked: "session" },
     });

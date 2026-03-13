@@ -1,26 +1,27 @@
 import type { LanguageModel } from "ai";
 import { generateText, stepCountIs } from "ai";
-import {
-  BuiltinMemoryServerSettings,
-  type AgentConfig as AgentConfigT,
-  type SessionTranscriptTextItem,
-} from "@tyrum/schemas";
+import type { AgentConfig as AgentConfigT, TyrumUIMessage } from "@tyrum/schemas";
 import { sha256HexFromString } from "../../policy/canonical-json.js";
 import { redactSecretLikeText } from "./secrets.js";
 import { MemoryV1Dal } from "../../memory/v1-dal.js";
 import type { SessionRow } from "../session-dal.js";
 import type { SqlDb } from "../../../statestore/types.js";
+import { extractMessageText } from "./session-context-state.js";
 
 const DEFAULT_PRE_COMPACTION_FLUSH_TIMEOUT_MS = 2_500;
 const PRE_COMPACTION_FLUSH_TRUNCATION_MARKER = "...(truncated)";
 const MAX_PRE_COMPACTION_FLUSH_MESSAGE_CHARS = 2_000;
-function formatPreCompactionFlushPrompt(
-  droppedTurns: readonly SessionTranscriptTextItem[],
-): string {
-  const lines = droppedTurns.map((turn) => {
+function formatPreCompactionFlushPrompt(droppedMessages: readonly TyrumUIMessage[]): string {
+  const lines = droppedMessages.map((message) => {
     const role =
-      turn.role === "assistant" ? "Assistant" : turn.role === "system" ? "System" : "User";
-    const redacted = redactSecretLikeText(turn.content.trim());
+      message.role === "assistant"
+        ? "Assistant"
+        : message.role === "system"
+          ? "System"
+          : message.role === "tool"
+            ? "Tool"
+            : "User";
+    const redacted = redactSecretLikeText(extractMessageText(message));
     const content =
       redacted.length <= MAX_PRE_COMPACTION_FLUSH_MESSAGE_CHARS
         ? redacted
@@ -32,7 +33,7 @@ function formatPreCompactionFlushPrompt(
                 PRE_COMPACTION_FLUSH_TRUNCATION_MARKER.length,
             ),
           )}${PRE_COMPACTION_FLUSH_TRUNCATION_MARKER}`;
-    return `${role} (${turn.created_at}): ${content}`;
+    return `${role} (${message.id}): ${content}`;
   });
 
   return [
@@ -56,23 +57,21 @@ export async function maybeRunPreCompactionMemoryFlush(
     ctx: { config: AgentConfigT };
     session: SessionRow;
     model: LanguageModel;
-    droppedTurns: readonly SessionTranscriptTextItem[];
+    droppedMessages: readonly TyrumUIMessage[];
     abortSignal?: AbortSignal;
     timeoutMs?: number;
   },
 ): Promise<void> {
-  const v1Enabled = BuiltinMemoryServerSettings.parse(
-    input.ctx.config.mcp.server_settings.memory ?? {},
-  ).enabled;
+  const v1Enabled = input.ctx.config.memory.v1.enabled;
   if (!v1Enabled) {
     return;
   }
 
-  if (input.droppedTurns.length === 0) {
+  if (input.droppedMessages.length === 0) {
     return;
   }
 
-  const flushPromptText = formatPreCompactionFlushPrompt(input.droppedTurns);
+  const flushPromptText = formatPreCompactionFlushPrompt(input.droppedMessages);
   const flushKey = sha256HexFromString(`${input.session.session_id}\n${flushPromptText}`);
   const flushTag = `preflush:${flushKey}`;
 
@@ -170,7 +169,7 @@ export async function maybeRunPreCompactionMemoryFlush(
               metadata: {
                 kind: "pre_compaction_memory_flush",
                 flush_key: flushKey,
-                dropped_messages: input.droppedTurns.length,
+                dropped_messages: input.droppedMessages.length,
               },
             },
           },

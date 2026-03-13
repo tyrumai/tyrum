@@ -37,8 +37,8 @@ const DashboardPage = lazyNamed<{
   connectionRouteId: "configure" | "desktop" | "mobile";
 }>(() => import("./components/pages/dashboard-page.js"), "DashboardPage");
 const ChatPage = lazyNamed<{ core: OperatorCore }>(
-  () => import("./components/pages/chat-page.js"),
-  "ChatPage",
+  () => import("./components/pages/chat-page-ai-sdk.js"),
+  "AiSdkChatPage",
 );
 const ApprovalsPage = lazyNamed<{ core: OperatorCore }>(
   () => import("./components/pages/approvals-page.js"),

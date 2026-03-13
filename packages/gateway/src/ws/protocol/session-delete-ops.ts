@@ -1,5 +1,8 @@
-import { WsSessionDeleteRequest, WsSessionDeleteResult } from "@tyrum/schemas";
-import type { WsResponseEnvelope } from "@tyrum/schemas";
+import {
+  WsChatSessionDeleteRequest,
+  WsChatSessionDeleteResult,
+  type WsResponseEnvelope,
+} from "@tyrum/schemas";
 import { SessionDal } from "../../modules/agent/session-dal.js";
 import { resolveStoredKeyLaneByChannelThread } from "../../modules/agent/stored-key-lane-resolution.js";
 import { SessionSendPolicyOverrideDal } from "../../modules/channels/send-policy-override-dal.js";
@@ -7,7 +10,7 @@ import { ExecutionEngine } from "../../modules/execution/engine.js";
 import { LaneQueueModeOverrideDal } from "../../modules/lanes/queue-mode-override-dal.js";
 import type { ConnectedClient } from "../connection-manager.js";
 import { errorResponse } from "./helpers.js";
-import { createSessionDal, sessionErrorResponse } from "./session-message-ops.js";
+import { createSessionDal, sessionErrorResponse } from "./session-protocol-shared.js";
 import type { ProtocolDeps, ProtocolRequestEnvelope } from "./types.js";
 
 export async function handleSessionDeleteMessage(
@@ -36,19 +39,17 @@ export async function handleSessionDeleteMessage(
     );
   }
 
-  const parsedReq = WsSessionDeleteRequest.safeParse(msg);
+  const parsedReq = WsChatSessionDeleteRequest.safeParse(msg);
   if (!parsedReq.success) {
     return errorResponse(msg.request_id, msg.type, "invalid_request", parsedReq.error.message, {
       issues: parsedReq.error.issues,
     });
   }
 
-  const agentKey = parsedReq.data.payload.agent_id ?? "default";
   const sessionKey = parsedReq.data.payload.session_id;
   const looked = await lookupSessionForDelete({
     deps,
     tenantId,
-    agentKey,
     sessionKey,
     msg,
     client,
@@ -60,7 +61,6 @@ export async function handleSessionDeleteMessage(
   const keyLane = await resolveDeleteKeyLane({
     deps,
     looked: looked.session,
-    agentKey,
     msg,
     client,
   });
@@ -74,7 +74,7 @@ export async function handleSessionDeleteMessage(
     key: keyLane.key,
     lane: keyLane.lane,
     sessionKey,
-    agentKey,
+    agentKey: looked.session.agent_key,
     msg,
     client,
   });
@@ -86,7 +86,7 @@ export async function handleSessionDeleteMessage(
     key: keyLane.key,
     lane: keyLane.lane,
     sessionKey,
-    agentKey,
+    agentKey: looked.session.agent_key,
     msg,
     client,
   });
@@ -95,7 +95,7 @@ export async function handleSessionDeleteMessage(
   }
 
   try {
-    const result = WsSessionDeleteResult.parse({ session_id: sessionKey });
+    const result = WsChatSessionDeleteResult.parse({ session_id: sessionKey });
     return { request_id: msg.request_id, type: msg.type, ok: true, result };
   } catch (err) {
     return sessionErrorResponse({
@@ -104,7 +104,7 @@ export async function handleSessionDeleteMessage(
       msg,
       client,
       logEvent: "ws.session_delete_parse_failed",
-      logFields: { session_id: sessionKey, agent_id: agentKey },
+      logFields: { session_id: sessionKey, agent_id: looked.session.agent_key },
     });
   }
 }
@@ -112,7 +112,6 @@ export async function handleSessionDeleteMessage(
 async function lookupSessionForDelete(params: {
   deps: ProtocolDeps;
   tenantId: string;
-  agentKey: string;
   sessionKey: string;
   msg: ProtocolRequestEnvelope;
   client: ConnectedClient;
@@ -120,10 +119,10 @@ async function lookupSessionForDelete(params: {
   | { response: WsResponseEnvelope }
   | { session: NonNullable<Awaited<ReturnType<SessionDal["getWithDeliveryByKey"]>>> }
 > {
-  const { deps, tenantId, agentKey, sessionKey, msg, client } = params;
+  const { deps, tenantId, sessionKey, msg, client } = params;
   try {
     const looked = await createSessionDal(deps).getWithDeliveryByKey({ tenantId, sessionKey });
-    if (!looked || looked.agent_key !== agentKey) {
+    if (!looked) {
       return {
         response: errorResponse(msg.request_id, msg.type, "not_found", "session not found"),
       };
@@ -137,7 +136,7 @@ async function lookupSessionForDelete(params: {
         msg,
         client,
         logEvent: "ws.session_delete_lookup_failed",
-        logFields: { session_id: sessionKey, agent_id: agentKey },
+        logFields: { session_id: sessionKey },
       }),
     };
   }
@@ -146,14 +145,13 @@ async function lookupSessionForDelete(params: {
 async function resolveDeleteKeyLane(params: {
   deps: ProtocolDeps;
   looked: NonNullable<Awaited<ReturnType<SessionDal["getWithDeliveryByKey"]>>>;
-  agentKey: string;
   msg: ProtocolRequestEnvelope;
   client: ConnectedClient;
 }): Promise<{ response: WsResponseEnvelope } | { key: string; lane: string }> {
-  const { deps, looked, agentKey, msg, client } = params;
+  const { deps, looked, msg, client } = params;
   try {
     const keyLane = (await resolveStoredKeyLaneByChannelThread(deps.db!, {
-      agentId: agentKey,
+      agentId: looked.agent_key,
       channel: looked.connector_key,
       threadId: looked.provider_thread_id,
     })) ?? { key: looked.session.session_key, lane: "main" };
@@ -167,7 +165,7 @@ async function resolveDeleteKeyLane(params: {
         msg,
         client,
         logEvent: "ws.session_delete_key_resolution_failed",
-        logFields: { session_id: looked.session.session_key, agent_id: agentKey },
+        logFields: { session_id: looked.session.session_key, agent_id: looked.agent_key },
       }),
     };
   }

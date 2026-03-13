@@ -155,7 +155,7 @@ export function assemblePrompts(
   automation: AutomationPromptInput | null | undefined,
   runtimePrompt: string,
 ) {
-  const sessionCtx = formatSessionContext(session.summary, session.transcript);
+  const sessionCtx = formatSessionContext(session.context_state);
   const identityPrompt = formatIdentityPrompt(ctx.identity);
   const skillsText = `Enabled skills:\n${formatSkillsPrompt(ctx.skills)}`;
   const toolsText = `Available tools:\n${formatToolPrompt(filteredTools)}`;

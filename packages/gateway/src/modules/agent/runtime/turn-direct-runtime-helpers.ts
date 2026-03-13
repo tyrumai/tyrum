@@ -143,6 +143,8 @@ export async function maybeAutoCompactSession(input: {
   model: LanguageModel;
   modelResolution: ResolvedSessionModel;
   usage: SessionUsageSnapshot | undefined;
+  currentTurnText?: string;
+  systemPrompt?: string;
   abortSignal?: AbortSignal;
   timeoutMs?: number;
 }): Promise<void> {
@@ -160,6 +162,8 @@ export async function maybeAutoCompactSession(input: {
       session: persisted,
       modelResolution: input.modelResolution,
       usage: input.usage,
+      currentTurnText: input.currentTurnText,
+      systemPrompt: input.systemPrompt,
     })
   ) {
     return;
