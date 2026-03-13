@@ -98,7 +98,7 @@
 
 - Branch naming: `<issue-number>-<slug>` (see `CONTRIBUTING.md`).
 - Before commit: `node scripts/format-changed.mjs --write --staged`, then ensure `pre-commit` passes (`pnpm format:check-staged` + `pnpm lint`).
-- Before push: ensure `pre-push` passes (`pnpm lint && pnpm typecheck && pnpm exec tsc --noEmit --project apps/desktop/tsconfig.json`).
+- Before push: ensure `pre-push` passes (`pnpm lint && pnpm typecheck && pnpm exec tsc --noEmit --project apps/desktop/tsconfig.json && pnpm test`).
 - Before PR: `pnpm typecheck && pnpm exec tsc --noEmit --project apps/desktop/tsconfig.json && pnpm test && pnpm lint && pnpm format:check`.
 - Keep diffs small; update docs/tests alongside behavior changes; ensure workflows in `.github/workflows/` stay green.
 

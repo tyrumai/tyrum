@@ -5,3 +5,4 @@ echo "Running pre-push checks..."
 pnpm lint
 pnpm typecheck
 pnpm exec tsc --noEmit --project apps/desktop/tsconfig.json
+pnpm test
