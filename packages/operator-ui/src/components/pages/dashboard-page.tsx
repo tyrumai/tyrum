@@ -3,6 +3,7 @@ import type { ActivityEvent, ActivityWorkstream, OperatorCore } from "@tyrum/ope
 import * as React from "react";
 import { Bot, Inbox, Play, ShieldCheck, SquareKanban } from "lucide-react";
 import { AppPage } from "../layout/app-page.js";
+import { useAppShellMinWidth } from "../layout/app-shell.js";
 import { Alert } from "../ui/alert.js";
 import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
@@ -28,6 +29,7 @@ import {
 import { useNodeInventory } from "./pairing-page.inventory.js";
 
 type ConfigHealthIssue = NonNullable<StatusResponse["config_health"]>["issues"][number];
+const DASHBOARD_WIDE_CONTENT_WIDTH_PX = 768;
 
 function getConfigHealthAction(issue: ConfigHealthIssue): {
   label: "Configure" | "Agents";
@@ -73,6 +75,7 @@ export function DashboardPage({
   onNavigate,
   connectionRouteId = "configure",
 }: DashboardPageProps) {
+  const wideDashboard = useAppShellMinWidth(DASHBOARD_WIDE_CONTENT_WIDTH_PX);
   const status = useOperatorStore(core.statusStore);
   const connection = useOperatorStore(core.connectionStore);
   const approvals = useOperatorStore(core.approvalsStore);
@@ -276,7 +279,10 @@ export function DashboardPage({
       ) : null}
 
       {/* KPI Grid */}
-      <div className="grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-4">
+      <div
+        data-testid="dashboard-kpi-grid"
+        className={cn("grid min-w-0 gap-3", wideDashboard ? "grid-cols-4" : "grid-cols-2")}
+      >
         <KpiCard
           icon={ShieldCheck}
           value={String(approvals.pendingIds.length)}
@@ -317,7 +323,10 @@ export function DashboardPage({
       </div>
 
       {/* System Status + Security */}
-      <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
+      <div
+        data-testid="dashboard-summary-grid"
+        className={cn("grid min-w-0 gap-3", wideDashboard ? "grid-cols-2" : "grid-cols-1")}
+      >
         <Card>
           <CardHeader className="pb-0">
             <h3 className="text-sm font-semibold">System Status</h3>

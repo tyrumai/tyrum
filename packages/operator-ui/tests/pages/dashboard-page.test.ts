@@ -1,15 +1,21 @@
 // @vitest-environment jsdom
 
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { OperatorCore } from "../../../operator-core/src/index.js";
 import { createStore } from "../../../operator-core/src/store.js";
 import type { ActivityState } from "../../../operator-core/src/stores/activity-store.js";
+import { AppShell } from "../../src/components/layout/app-shell.js";
 import { DashboardPage } from "../../src/components/pages/dashboard-page.js";
 import { sampleNodeInventoryResponse } from "../operator-ui.http-fixture-data.js";
-import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
+import {
+  cleanupTestRoot,
+  renderIntoDocument,
+  stubAppShellContentWidth,
+  stubMatchMedia,
+} from "../test-utils.js";
 
 const emptyActivityState: ActivityState = {
   agentsById: {},
@@ -103,6 +109,10 @@ function createMockCore(overrides?: Partial<Record<string, unknown>>) {
 }
 
 describe("DashboardPage", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("does not use the old precomputed tokens text pattern", () => {
     const source = readFileSync(
       join(process.cwd(), "packages/operator-ui/src/components/pages/dashboard-page.tsx"),
@@ -112,17 +122,52 @@ describe("DashboardPage", () => {
     expect(source).not.toContain('value={typeof tokensUsed === "number" ? tokensUsedText : "-"}');
   });
 
-  it("uses a responsive KPI grid layout with system status and security cards", () => {
-    const source = readFileSync(
-      join(process.cwd(), "packages/operator-ui/src/components/pages/dashboard-page.tsx"),
-      "utf8",
-    );
+  it("reflows the dashboard grids based on app shell content width", () => {
+    const matchMedia = stubMatchMedia("(min-width: 768px)", false);
+    const measurements = stubAppShellContentWidth(700);
+    const { core } = createMockCore();
+    let testRoot: ReturnType<typeof renderIntoDocument> | null = null;
 
-    expect(source).toContain("KpiCard");
-    expect(source).toContain("sm:grid-cols-4");
-    expect(source).toContain("sm:grid-cols-2");
-    expect(source).toContain("System Status");
-    expect(source).toContain("Security");
+    try {
+      testRoot = renderIntoDocument(
+        React.createElement(
+          AppShell,
+          {
+            mode: "desktop",
+            sidebar: React.createElement("div"),
+            mobileNav: null,
+          },
+          React.createElement(DashboardPage, { core }),
+        ),
+      );
+
+      const kpiGrid = testRoot.container.querySelector("[data-testid='dashboard-kpi-grid']");
+      const summaryGrid = testRoot.container.querySelector(
+        "[data-testid='dashboard-summary-grid']",
+      );
+      const layoutContent = testRoot.container.querySelector("[data-layout-content]");
+
+      expect(kpiGrid?.className).toContain("grid-cols-2");
+      expect(kpiGrid?.className).not.toContain("grid-cols-4");
+      expect(summaryGrid?.className).toContain("grid-cols-1");
+      expect(summaryGrid?.className).not.toContain("grid-cols-2");
+      expect(layoutContent?.getAttribute("data-layout-alignment")).toBe("center");
+
+      measurements.setWidth(820);
+      measurements.notifyResize();
+
+      expect(kpiGrid?.className).toContain("grid-cols-4");
+      expect(kpiGrid?.className).not.toContain("grid-cols-2");
+      expect(summaryGrid?.className).toContain("grid-cols-2");
+      expect(summaryGrid?.className).not.toContain("grid-cols-1");
+      expect(layoutContent?.getAttribute("data-layout-alignment")).toBe("center");
+    } finally {
+      if (testRoot) {
+        cleanupTestRoot(testRoot);
+      }
+      matchMedia.cleanup();
+      measurements.cleanup();
+    }
   });
 
   it("pulses the connection dot only while connecting", () => {
