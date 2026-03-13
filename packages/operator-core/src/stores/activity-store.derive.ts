@@ -173,12 +173,7 @@ function buildWorkstreams(
       attentionLevel: priority.level,
       attentionScore: priority.score,
       currentRoom: determineRoom(priority, draft.message, runStatus),
-      bubbleText: determineBubbleText(
-        draft.approvals,
-        latestAttempt,
-        latestRun,
-        draft.message,
-      ),
+      bubbleText: determineBubbleText(draft.approvals, latestAttempt, latestRun, draft.message),
       recentEvents,
     };
   }

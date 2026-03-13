@@ -22,7 +22,10 @@ export type BuiltinMcpToolInfo = McpToolInfo & {
 const MemorySearchArgsSchema = z
   .object({
     query: z.string().trim().min(1),
-    kinds: z.array(z.enum(["fact", "note", "procedure", "episode"])).max(4).optional(),
+    kinds: z
+      .array(z.enum(["fact", "note", "procedure", "episode"]))
+      .max(4)
+      .optional(),
     tags: z.array(z.string().trim().min(1)).max(20).optional(),
     limit: z.number().int().min(1).max(10).optional(),
   })
@@ -211,9 +214,7 @@ export const BUILTIN_MEMORY_MCP_TOOLS: readonly BuiltinMcpToolInfo[] = [
   },
 ];
 
-export function resolveBuiltinMemoryConfig(
-  config: AgentConfigT,
-): BuiltinMemoryServerSettingsT {
+export function resolveBuiltinMemoryConfig(config: AgentConfigT): BuiltinMemoryServerSettingsT {
   return BuiltinMemoryServerSettings.parse(
     config.mcp.server_settings[BUILTIN_MEMORY_SERVER_ID] ?? {},
   );

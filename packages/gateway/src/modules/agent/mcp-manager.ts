@@ -5,10 +5,7 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { ToolListChangedNotificationSchema } from "@modelcontextprotocol/sdk/types.js";
 import type { Logger } from "../observability/logger.js";
-import {
-  BUILTIN_MEMORY_MCP_TOOLS,
-  BUILTIN_MEMORY_SERVER_ID,
-} from "../memory/builtin-mcp.js";
+import { BUILTIN_MEMORY_MCP_TOOLS, BUILTIN_MEMORY_SERVER_ID } from "../memory/builtin-mcp.js";
 
 /**
  * Zod v4 `z.union` with `.default()` on the discriminant doesn't produce a
@@ -167,8 +164,7 @@ function toDescriptor(spec: McpServerSpecT, tool: McpToolInfo): ToolDescriptor {
     id: toolId,
     description,
     risk: override?.risk ?? tool.risk ?? "medium",
-    requires_confirmation:
-      override?.requires_confirmation ?? tool.requiresConfirmation ?? true,
+    requires_confirmation: override?.requires_confirmation ?? tool.requiresConfirmation ?? true,
     keywords: [
       "mcp",
       spec.id.toLowerCase(),

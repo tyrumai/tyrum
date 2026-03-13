@@ -24,22 +24,24 @@ export interface ToolResult {
   meta?: ToolResultMeta;
 }
 
-export type ToolResultMeta = {
-  kind: "fs.read";
-  path: string;
-  offset?: number;
-  limit?: number;
-  raw_chars: number;
-  selected_chars: number;
-  truncated: boolean;
-  truncation_marker?: string;
-} | {
-  kind: "memory.seed";
-  keyword_hit_count: number;
-  semantic_hit_count: number;
-  structured_item_count: number;
-  included_item_ids: string[];
-};
+export type ToolResultMeta =
+  | {
+      kind: "fs.read";
+      path: string;
+      offset?: number;
+      limit?: number;
+      raw_chars: number;
+      selected_chars: number;
+      truncated: boolean;
+      truncation_marker?: string;
+    }
+  | {
+      kind: "memory.seed";
+      keyword_hit_count: number;
+      semantic_hit_count: number;
+      structured_item_count: number;
+      included_item_ids: string[];
+    };
 
 export type WorkspaceLeaseConfig = {
   db: SqlDb;

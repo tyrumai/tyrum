@@ -125,9 +125,9 @@ export const AgentMcpConfig = z.preprocess(
         .array(z.string().trim().min(1))
         .default([])
         .overwrite(canonicalizeToolIdList),
-      server_settings: z.record(z.string().trim().min(1), z.record(z.string(), z.unknown())).default(
-        {},
-      ),
+      server_settings: z
+        .record(z.string().trim().min(1), z.record(z.string(), z.unknown()))
+        .default({}),
     })
     .superRefine(assertNoAccessOverlap),
 );

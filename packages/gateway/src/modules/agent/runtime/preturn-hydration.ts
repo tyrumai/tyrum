@@ -30,7 +30,9 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value as Record<string, unknown>;
 }
 
-function resolvePreferredPromptArgName(schema: Record<string, unknown> | undefined): string | undefined {
+function resolvePreferredPromptArgName(
+  schema: Record<string, unknown> | undefined,
+): string | undefined {
   const properties = asRecord(schema?.["properties"]);
   if (!properties) return undefined;
 
@@ -47,7 +49,9 @@ function resolvePreferredPromptArgName(schema: Record<string, unknown> | undefin
     if (prop?.["type"] === "string") return name;
   }
 
-  const stringProps = Object.entries(properties).filter(([, prop]) => asRecord(prop)?.["type"] === "string");
+  const stringProps = Object.entries(properties).filter(
+    ([, prop]) => asRecord(prop)?.["type"] === "string",
+  );
   return stringProps.length === 1 ? stringProps[0]?.[0] : undefined;
 }
 

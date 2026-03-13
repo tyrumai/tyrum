@@ -141,13 +141,7 @@ export async function prepareTurn(
   );
 
   const { availableTools, toolSetBuilderDeps, toolSetBuilder, filteredTools } =
-    await resolveToolsAndMemory(
-      deps,
-      ctx,
-      session,
-      resolved,
-      executionProfile,
-    );
+    await resolveToolsAndMemory(deps, ctx, session, resolved, executionProfile);
 
   const workFocusDigest =
     isStatusQuery(resolved.message) || parseIntakeModeDecision(resolved.message)

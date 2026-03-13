@@ -252,8 +252,7 @@ export function buildPayload(
   });
   const preservedServerSettings = preservedMcpConfig?.server_settings ?? {};
   const preTurnTools =
-    preservedMcpConfig?.pre_turn_tools ??
-    (form.memoryEnabled ? ["mcp.memory.seed"] : []);
+    preservedMcpConfig?.pre_turn_tools ?? (form.memoryEnabled ? ["mcp.memory.seed"] : []);
   const payload = {
     agent_key: form.agentKey.trim(),
     config: AgentConfig.parse({

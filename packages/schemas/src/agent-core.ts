@@ -185,14 +185,16 @@ export const AgentPersona = z.preprocess(
 );
 export type AgentPersona = z.infer<typeof AgentPersona>;
 
-export const AgentConfig = z.object({
-  model: AgentModelConfig,
-  persona: AgentPersona.optional(),
-  skills: AgentSkillConfig.prefault({}),
-  mcp: AgentMcpConfig.prefault({}),
-  tools: AgentToolConfig.prefault({}),
-  sessions: AgentSessionConfig.prefault({}),
-}).strict();
+export const AgentConfig = z
+  .object({
+    model: AgentModelConfig,
+    persona: AgentPersona.optional(),
+    skills: AgentSkillConfig.prefault({}),
+    mcp: AgentMcpConfig.prefault({}),
+    tools: AgentToolConfig.prefault({}),
+    sessions: AgentSessionConfig.prefault({}),
+  })
+  .strict();
 export type AgentConfig = z.infer<typeof AgentConfig>;
 
 export const SkillRequires = z.object({

@@ -93,8 +93,7 @@ export function extractPromptSection(
   promptText: string,
   label: (typeof PROMPT_SECTION_LABELS)[number],
 ): string {
-  const labelsToTry =
-    label === "Memory digest:" ? [PRETURN_MEMORY_SECTION_LABEL, label] : [label];
+  const labelsToTry = label === "Memory digest:" ? [PRETURN_MEMORY_SECTION_LABEL, label] : [label];
   for (const candidateLabel of labelsToTry) {
     const nextLabels = PROMPT_SECTION_LABELS.filter((candidate) => candidate !== candidateLabel)
       .map(escapeRegex)

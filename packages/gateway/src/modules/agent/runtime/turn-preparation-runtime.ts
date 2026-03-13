@@ -401,7 +401,8 @@ export async function resolveToolsAndMemory(
   const availableTools = [
     ...builtinTools.filter(
       (tool) =>
-        isBuiltinToolAvailableInStateMode(tool.id, stateMode) && isToolAllowed(toolAllowlist, tool.id),
+        isBuiltinToolAvailableInStateMode(tool.id, stateMode) &&
+        isToolAllowed(toolAllowlist, tool.id),
     ),
     ...mcpTools,
     ...pluginTools,

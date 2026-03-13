@@ -53,7 +53,7 @@ export function registerToolExecutorBuiltinCoreTests(home: HomeDirState): void {
     });
 
     expect(result.error).toBeUndefined();
-    expect(result.output).toContain("\"status\": \"ok\"");
+    expect(result.output).toContain('"status": "ok"');
     expect(memoryToolRuntime.write).toHaveBeenCalledWith(
       expect.objectContaining({ kind: "note", body_md: "remember this" }),
       "call-memory-add-1",

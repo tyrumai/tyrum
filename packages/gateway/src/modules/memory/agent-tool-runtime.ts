@@ -258,15 +258,14 @@ export class AgentMemoryToolRuntime {
             }
           : input.kind === "procedure"
             ? {
-              kind:
-                "procedure" as const,
-              title: input.title,
-              body_md: input.body_md,
-              confidence: input.confidence,
-              tags,
-              sensitivity,
-              provenance,
-            }
+                kind: "procedure" as const,
+                title: input.title,
+                body_md: input.body_md,
+                confidence: input.confidence,
+                tags,
+                sensitivity,
+                provenance,
+              }
             : {
                 kind: "episode" as const,
                 occurred_at: input.occurred_at ?? nowIso,

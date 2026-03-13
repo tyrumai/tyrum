@@ -288,35 +288,35 @@ export function PendingPairingCard({
             <div className="grid gap-2">
               {capabilityOptions.map(
                 (capability: Pairing["node"]["capabilities"][number], index: number) => {
-                const checkboxId = `pairing-${pairing.pairing_id}-cap-${capability.id}`;
-                const checked = selectedCapabilityIds.has(capability.id);
-                return (
-                  <div key={checkboxId} className="flex items-start gap-2">
-                    <Checkbox
-                      id={checkboxId}
-                      data-testid={`pairing-capability-${pairing.pairing_id}-${index}`}
-                      checked={checked}
-                      disabled={isBusy}
-                      onCheckedChange={(nextChecked) => {
-                        setSelectedCapabilityIds((prev) => {
-                          const next = new Set(prev);
-                          if (nextChecked === true) {
-                            next.add(capability.id);
-                          } else {
-                            next.delete(capability.id);
-                          }
-                          return next;
-                        });
-                      }}
-                    />
-                    <Label
-                      htmlFor={checkboxId}
-                      className="break-words text-sm font-normal text-fg [overflow-wrap:anywhere]"
-                    >
-                      {capability.id}
-                    </Label>
-                  </div>
-                );
+                  const checkboxId = `pairing-${pairing.pairing_id}-cap-${capability.id}`;
+                  const checked = selectedCapabilityIds.has(capability.id);
+                  return (
+                    <div key={checkboxId} className="flex items-start gap-2">
+                      <Checkbox
+                        id={checkboxId}
+                        data-testid={`pairing-capability-${pairing.pairing_id}-${index}`}
+                        checked={checked}
+                        disabled={isBusy}
+                        onCheckedChange={(nextChecked) => {
+                          setSelectedCapabilityIds((prev) => {
+                            const next = new Set(prev);
+                            if (nextChecked === true) {
+                              next.add(capability.id);
+                            } else {
+                              next.delete(capability.id);
+                            }
+                            return next;
+                          });
+                        }}
+                      />
+                      <Label
+                        htmlFor={checkboxId}
+                        className="break-words text-sm font-normal text-fg [overflow-wrap:anywhere]"
+                      >
+                        {capability.id}
+                      </Label>
+                    </div>
+                  );
                 },
               )}
             </div>

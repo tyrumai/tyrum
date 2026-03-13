@@ -1,9 +1,4 @@
-import type {
-  Approval,
-  ExecutionAttempt,
-  ExecutionRun,
-  ExecutionStep,
-} from "@tyrum/client";
+import type { Approval, ExecutionAttempt, ExecutionRun, ExecutionStep } from "@tyrum/client";
 import { parseTyrumKey, type AgentPersona, type ExecutionRunStatus } from "@tyrum/schemas";
 import type {
   ActivityAttentionLevel,
@@ -55,15 +50,7 @@ export type DraftWorkstream = {
 type Priority = {
   level: ActivityAttentionLevel;
   score: number;
-  reason:
-    | "approval"
-    | "failure"
-    | "paused"
-    | "message"
-    | "running"
-    | "queued"
-    | "lease"
-    | "status";
+  reason: "approval" | "failure" | "paused" | "message" | "running" | "queued" | "lease" | "status";
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {

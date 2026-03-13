@@ -97,8 +97,12 @@ describe("AgentRuntime (memory MCP pre-turn injection)", () => {
 
     const res = await runtime.turn({ channel: "test", thread_id: "thread-1", message: "pizza" });
     expect(res.reply).toBe("ok");
-    const reportRow = (await container.contextReportDal.list({ sessionId: res.session_id, limit: 1 }))[0];
-    const report = reportRow?.report as { pre_turn_tools?: Array<Record<string, unknown>> } | undefined;
+    const reportRow = (
+      await container.contextReportDal.list({ sessionId: res.session_id, limit: 1 })
+    )[0];
+    const report = reportRow?.report as
+      | { pre_turn_tools?: Array<Record<string, unknown>> }
+      | undefined;
 
     const call = generateTextMock.mock.calls[0]?.[0] as
       | { messages?: Array<{ role: string; content: Array<{ type: string; text: string }> }> }
@@ -186,15 +190,13 @@ describe("AgentRuntime (memory MCP pre-turn injection)", () => {
         sessions: { ttl_days: 30, max_turns: 20 },
       },
     });
-    await container.memoryV1Dal.create(
-      {
-        kind: "note",
-        body_md: "remember that I prefer tea",
-        tags: ["prefs"],
-        sensitivity: "private",
-        provenance: { source_kind: "user", refs: [] },
-      },
-    );
+    await container.memoryV1Dal.create({
+      kind: "note",
+      body_md: "remember that I prefer tea",
+      tags: ["prefs"],
+      sensitivity: "private",
+      provenance: { source_kind: "user", refs: [] },
+    });
 
     const runtime = new AgentRuntime({
       container,
@@ -205,8 +207,12 @@ describe("AgentRuntime (memory MCP pre-turn injection)", () => {
 
     const res = await runtime.turn({ channel: "test", thread_id: "thread-1", message: "hello" });
     expect(res.reply).toBe("ok");
-    const reportRow = (await container.contextReportDal.list({ sessionId: res.session_id, limit: 1 }))[0];
-    const report = reportRow?.report as { pre_turn_tools?: Array<Record<string, unknown>> } | undefined;
+    const reportRow = (
+      await container.contextReportDal.list({ sessionId: res.session_id, limit: 1 })
+    )[0];
+    const report = reportRow?.report as
+      | { pre_turn_tools?: Array<Record<string, unknown>> }
+      | undefined;
 
     const call = generateTextMock.mock.calls[0]?.[0] as
       | {
