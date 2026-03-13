@@ -46,6 +46,14 @@ function parsePortFlag(value: string): number {
   return parsed;
 }
 
+function parseNonEmptyStringFlag(flag: string, value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    throw new Error(`${flag} requires a non-empty value`);
+  }
+  return trimmed;
+}
+
 function parseRoleFlag(value: string): GatewayRole {
   const normalized = value.trim().toLowerCase();
   if (
@@ -101,6 +109,9 @@ function parseStartFlags(
   let host: string | undefined;
   let port: number | undefined;
   let role: GatewayRole | undefined;
+  let trustedProxies: string | undefined;
+  let tlsReady: true | undefined;
+  let tlsSelfSigned: true | undefined;
   let allowInsecureHttp: true | undefined;
   let engineApiEnabled: true | undefined;
   let snapshotImportEnabled: true | undefined;
@@ -141,6 +152,24 @@ function parseStartFlags(
       continue;
     }
 
+    if (arg === "--trusted-proxies") {
+      const value = args[index + 1];
+      if (value === undefined) throw new Error("--trusted-proxies requires a value");
+      trustedProxies = parseNonEmptyStringFlag("--trusted-proxies", value);
+      index += 1;
+      continue;
+    }
+
+    if (arg === "--tls-ready") {
+      tlsReady = true;
+      continue;
+    }
+
+    if (arg === "--tls-self-signed") {
+      tlsSelfSigned = true;
+      continue;
+    }
+
     if (arg === "--allow-insecure-http") {
       allowInsecureHttp = true;
       continue;
@@ -165,6 +194,9 @@ function parseStartFlags(
     host,
     port,
     role,
+    trustedProxies,
+    tlsReady,
+    tlsSelfSigned,
     migrationsDir: common.migrationsDir,
     allowInsecureHttp,
     engineApiEnabled,
@@ -240,6 +272,12 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
 
   if (first === "-h" || first === "--help") return { kind: "help" };
   if (first === "-v" || first === "--version" || first === "version") return { kind: "version" };
+
+  if (first.startsWith("-")) {
+    const flags = parseStartFlags(argv);
+    if ("kind" in flags) return flags;
+    return { kind: "start", ...flags };
+  }
 
   if (first === "start") {
     const flags = parseStartFlags(rest);
@@ -475,6 +513,9 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
     db: command.db,
     host: command.host,
     port: command.port,
+    trustedProxies: command.trustedProxies,
+    tlsReady: command.tlsReady,
+    tlsSelfSigned: command.tlsSelfSigned,
     migrationsDir: command.migrationsDir,
     allowInsecureHttp: command.allowInsecureHttp,
     engineApiEnabled: command.engineApiEnabled,

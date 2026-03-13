@@ -37,8 +37,11 @@ describe("reference deployment profiles", () => {
       await expectFile("config/deployments/split-role.env.example"),
     );
 
-    expect(singleHostEnv.get("TYRUM_HOME")).toBeDefined();
-    expect(singleHostEnv.get("GATEWAY_DB_PATH")).toBeDefined();
+    const singleHostToken = singleHostEnv.get("GATEWAY_TOKEN");
+    expect(singleHostToken).toBeDefined();
+    expect(singleHostToken).toBe("");
+    expect(singleHostEnv.get("TYRUM_HOME")).toBeUndefined();
+    expect(singleHostEnv.get("GATEWAY_DB_PATH")).toBeUndefined();
 
     const splitRoleToken = splitRoleEnv.get("GATEWAY_TOKEN");
     expect(splitRoleToken).toBeDefined();
@@ -132,8 +135,14 @@ describe("reference deployment profiles", () => {
     expect(singleValues.mode).toBe("single");
     expect(splitValues.mode).toBe("split");
 
-    expect(splitValues.env?.GATEWAY_DB_PATH).toMatch(/^postgres(ql)?:\/\//u);
-    expect(splitValues.env?.GATEWAY_DB_PATH).toContain("REPLACE_ME");
+    expect(singleValues.runtime?.home).toBe("/var/lib/tyrum");
+    expect(singleValues.runtime?.host).toBe("0.0.0.0");
+    expect(singleValues.runtime?.tlsReady).toBe(true);
+    expect(singleValues.runtime?.enableEngineApi).toBe(true);
+    expect(singleValues.env?.GATEWAY_HOST).toBeUndefined();
+
+    expect(splitValues.runtime?.db).toMatch(/^postgres(ql)?:\/\//u);
+    expect(splitValues.runtime?.db).toContain("REPLACE_ME");
   });
 
   it("documents how to use the profiles", async () => {

@@ -78,13 +78,7 @@ tyrum tokens issue-default-tenant-admin
 
 After login, open `Configure -> Tokens` to manage tenant tokens with a filterable list, structured add/edit/revoke dialogs, and one-time secret reveal on creation. Existing token secrets are not readable from the UI because the gateway stores token secrets hashed at rest; only freshly issued tokens are shown once in the issue result.
 
-Singleton agent routes are enabled by default.
-
-Disable singleton agent routes:
-
-```bash
-TYRUM_AGENT_ENABLED=0 tyrum
-```
+Singleton agent routes are enabled by default. Their durable availability is controlled by deployment config `agent.enabled`, not by a startup environment variable.
 
 ## Option 3: GitHub Releases
 

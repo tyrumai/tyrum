@@ -88,17 +88,23 @@ describe("Helm chart probes", () => {
     expect(countOccurrences(split, "livenessProbe:")).toBe(1);
     expect(countOccurrences(split, "startupProbe:")).toBe(1);
 
+    expect(single).toContain('include "tyrum.startArgs"');
+    expect(single).toContain(".Values.runtime.home");
+
     const docs = split.split(/\n---\n/);
-    const edge = docs.find((doc) => doc.includes("-edge") && doc.includes('args: ["edge"]'));
-    const worker = docs.find((doc) => doc.includes("-worker") && doc.includes('args: ["worker"]'));
+    const edge = docs.find(
+      (doc) => doc.includes("-edge") && doc.includes('include "tyrum.startArgs"'),
+    );
+    const worker = docs.find(
+      (doc) => doc.includes("-worker") && doc.includes('include "tyrum.startArgs"'),
+    );
     const scheduler = docs.find(
-      (doc) => doc.includes("-scheduler") && doc.includes('args: ["scheduler"]'),
+      (doc) => doc.includes("-scheduler") && doc.includes('include "tyrum.startArgs"'),
     );
 
     expect(edge).toContain("startupProbe:");
     expect(edge).toContain("readinessProbe:");
     expect(edge).toContain("livenessProbe:");
-
     expect(worker).not.toContain("startupProbe:");
     expect(worker).not.toContain("readinessProbe:");
     expect(worker).not.toContain("livenessProbe:");
@@ -113,5 +119,18 @@ describe("Helm chart probes", () => {
 
     expect(helpers).toContain(`define "tyrum.probe"`);
     expect(helpers).toContain("path: /healthz");
+    expect(helpers).toContain(`define "tyrum.startArgs"`);
+    expect(helpers).toContain('"--home"');
+    expect(helpers).toContain(".Values.runtime.home");
+    expect(helpers).toContain('"--db"');
+    expect(helpers).toContain(".Values.runtime.db");
+    expect(helpers).toContain('"--host"');
+    expect(helpers).toContain(".Values.runtime.host");
+    expect(helpers).toContain('"--port"');
+    expect(helpers).toContain('"--trusted-proxies"');
+    expect(helpers).toContain('"--tls-ready"');
+    expect(helpers).toContain('"--tls-self-signed"');
+    expect(helpers).toContain('"--allow-insecure-http"');
+    expect(helpers).toContain('"--enable-engine-api"');
   });
 });

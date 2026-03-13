@@ -31,7 +31,8 @@ spec:
           {{- end }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          args: ["all"]
+          args:
+            {{- include "tyrum.startArgs" (dict "root" . "role" "all") | nindent 12 }}
           ports:
             - name: http
               containerPort: {{ .Values.service.port }}
@@ -66,7 +67,7 @@ spec:
           {{- if .Values.persistence.enabled }}
           volumeMounts:
             - name: tyrum-data
-              mountPath: {{ .Values.env.TYRUM_HOME | quote }}
+              mountPath: {{ .Values.runtime.home | quote }}
           {{- end }}
       {{- if .Values.persistence.enabled }}
       volumes:

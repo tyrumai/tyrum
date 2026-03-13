@@ -75,20 +75,35 @@ describe("gateway CLI argument parsing", () => {
     expect(parseCliArgs(["scheduler"])).toEqual({ kind: "start", role: "scheduler" });
   });
 
+  it("parses start flags without an explicit start subcommand", () => {
+    expect(parseCliArgs(["--home", "/tmp/home", "--port", "8789"])).toEqual({
+      kind: "start",
+      home: "/tmp/home",
+      port: 8789,
+    });
+  });
+
   it("parses boolean start flags", () => {
     expect(
       parseCliArgs([
         "all",
+        "--tls-ready",
+        "--tls-self-signed",
         "--allow-insecure-http",
         "--enable-engine-api",
         "--enable-snapshot-import",
+        "--trusted-proxies",
+        "10.0.0.0/8,192.168.0.0/16",
       ]),
     ).toEqual({
       kind: "start",
       role: "all",
+      tlsReady: true,
+      tlsSelfSigned: true,
       allowInsecureHttp: true,
       engineApiEnabled: true,
       snapshotImportEnabled: true,
+      trustedProxies: "10.0.0.0/8,192.168.0.0/16",
     });
   });
 
@@ -212,6 +227,62 @@ describe("snapshot import enablement", () => {
       if (previous === undefined) delete process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"];
       else process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"] = previous;
     }
+  });
+});
+
+describe("startup deployment-config overrides", () => {
+  it("seeds remote bootstrap flags into the initial deployment config", () => {
+    const config = buildStartupDefaultDeploymentConfig({
+      trustedProxies: "10.0.0.0/8,192.168.0.0/16",
+      tlsReady: true,
+      tlsSelfSigned: true,
+      allowInsecureHttp: true,
+      engineApiEnabled: true,
+    });
+
+    expect(config.server.trustedProxies).toBe("10.0.0.0/8,192.168.0.0/16");
+    expect(config.server.tlsReady).toBe(true);
+    expect(config.server.tlsSelfSigned).toBe(true);
+    expect(config.server.allowInsecureHttp).toBe(true);
+    expect(config.execution.engineApiEnabled).toBe(true);
+  });
+
+  it("does not overwrite persisted trusted proxies on restart", () => {
+    const persisted = applyStartCommandDeploymentOverrides(
+      DeploymentConfig.parse({
+        server: { trustedProxies: "203.0.113.0/24" },
+      }),
+      { trustedProxies: "10.0.0.0/8" },
+    );
+    expect(persisted.server.trustedProxies).toBe("203.0.113.0/24");
+  });
+
+  it("fills trusted proxies when the stored deployment config is empty", () => {
+    const persisted = applyStartCommandDeploymentOverrides(DeploymentConfig.parse({}), {
+      trustedProxies: "10.0.0.0/8",
+    });
+    expect(persisted.server.trustedProxies).toBe("10.0.0.0/8");
+  });
+
+  it("allows tls bootstrap flags to raise persisted server settings", () => {
+    const persisted = applyStartCommandDeploymentOverrides(
+      DeploymentConfig.parse({
+        server: {
+          tlsReady: false,
+          tlsSelfSigned: false,
+          allowInsecureHttp: false,
+        },
+      }),
+      {
+        tlsReady: true,
+        tlsSelfSigned: true,
+        allowInsecureHttp: true,
+      },
+    );
+
+    expect(persisted.server.tlsReady).toBe(true);
+    expect(persisted.server.tlsSelfSigned).toBe(true);
+    expect(persisted.server.allowInsecureHttp).toBe(true);
   });
 });
 

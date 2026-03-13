@@ -21,6 +21,7 @@ describe("API reference docs (Issue #842)", () => {
     const wsMessageHeadings = doc.match(/^#### `[^`]+`$/gm) ?? [];
     expect(wsMessageHeadings.length).toBeGreaterThanOrEqual(15);
 
+    expect(doc).toContain("/system/deployment-config");
     expect(doc).toMatch(/future automation/i);
   });
 });

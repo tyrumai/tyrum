@@ -24,6 +24,12 @@ tyrum
 
 By default, Tyrum runs local-first and binds to `127.0.0.1`.
 
+Override startup home/host/port with explicit CLI flags, for example:
+
+```bash
+tyrum --home "$HOME/.tyrum-demo" --port 8789
+```
+
 ## 3. Open the operator UI (`/ui`)
 
 Open:
@@ -48,26 +54,22 @@ After you sign in, open `Configure -> Tokens` to manage tenant-scoped tokens in 
 tyrum
 ```
 
-To disable singleton agent routes:
-
-```bash
-TYRUM_AGENT_ENABLED=0 tyrum
-```
+Singleton agent routes are enabled by default. Their durable availability is controlled by deployment config `agent.enabled`.
 
 ## 5. Common first-time checks
 
 - Verify Node.js 24.x: `node -v`
 - Verify command install path: `command -v tyrum`
-- If a port conflict occurs, set `GATEWAY_PORT`.
+- If a port conflict occurs, restart with `--port`.
 
 Example:
 
 ```bash
-GATEWAY_PORT=8789 tyrum
+tyrum --port 8789
 ```
 
 ## 6. Scaling later
 
-- `single-host` / desktop-style installs use local filesystem state under `TYRUM_HOME`.
+- `single-host` / desktop-style installs use local filesystem state under the gateway home (`~/.tyrum` by default, overridden with `--home`).
 - HA/shared deployments use `state.mode=shared` plus shared Postgres, shared artifact storage, and a shared secret key source.
 - Shared deployments do not provide a filesystem import path; configure durable state through the DB-backed operator/config surfaces before cutover.

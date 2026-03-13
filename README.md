@@ -48,7 +48,6 @@ Prereqs:
 - [Architecture overview](docs/architecture/index.md)
 - [Contributing](CONTRIBUTING.md)
 - [Desktop app](apps/desktop/README.md)
-- [Docs site](apps/docs/README.md)
 
 ## Workspace
 

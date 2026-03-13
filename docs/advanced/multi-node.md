@@ -8,27 +8,27 @@ This guide explains the difference between running multiple independent local no
 
 Run each node with its own state directory and port.
 
-Use a unique `TYRUM_HOME` per node to keep databases and runtime state isolated.
+Use a unique gateway home per node to keep databases and runtime state isolated.
 
 ## Example: two local nodes
 
 Node A:
 
 ```bash
-TYRUM_HOME=$HOME/.tyrum-a GATEWAY_PORT=8788 tyrum
+tyrum --home "$HOME/.tyrum-a" --port 8788
 ```
 
 Node B:
 
 ```bash
-TYRUM_HOME=$HOME/.tyrum-b GATEWAY_PORT=8789 tyrum
+tyrum --home "$HOME/.tyrum-b" --port 8789
 ```
 
 This is still `state.mode=local`. Each node is independent.
 
 ### 2. HA / shared instances
 
-Do not share `TYRUM_HOME` across service instances.
+Do not share the same gateway home across service instances.
 
 For HA, use:
 
@@ -36,7 +36,7 @@ For HA, use:
 - shared Postgres
 - shared artifact storage
 - one shared secret key source across all instances
-- no mutable runtime fallbacks from `TYRUM_HOME`
+- no mutable runtime fallbacks from the local gateway home
 
 If you are moving from a local node, recreate mutable runtime config in the shared DB-backed surfaces before cutover. There is no filesystem import command.
 
@@ -48,8 +48,8 @@ If you are moving from a local node, recreate mutable runtime config in the shar
 
 ## Configuration strategy
 
-- Keep shared defaults in environment templates.
-- Override only per-node values (`TYRUM_HOME`, `GATEWAY_PORT`, host binding) for local-mode nodes.
+- Keep shared defaults in deployment config or explicit service definitions.
+- Override only per-node values (`--home`, `--port`, host binding) for local-mode nodes.
 - For shared mode, keep only instance-local cache/temp paths per node; durable state belongs in shared services.
 - Pin release versions during coordinated upgrades.
 
@@ -61,7 +61,7 @@ If you are moving from a local node, recreate mutable runtime config in the shar
 
 ## Common mistakes
 
-- Reusing the same `TYRUM_HOME` across nodes.
-- Treating `TYRUM_HOME` as shared durable state in HA mode.
+- Reusing the same gateway home across nodes.
+- Treating the local gateway home as shared durable state in HA mode.
 - Port collisions between nodes.
 - Upgrading all nodes at once without a canary.

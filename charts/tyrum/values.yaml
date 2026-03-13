@@ -14,19 +14,22 @@ gatewayToken:
   existingSecret: ""
   value: ""
 
-env:
-  TYRUM_HOME: /var/lib/tyrum
-  GATEWAY_HOST: 0.0.0.0
-  GATEWAY_PORT: "8788"
+runtime:
+  home: /var/lib/tyrum
+  db: /var/lib/tyrum/gateway.db
+  host: 0.0.0.0
   # Remote deployments should be fronted by TLS termination (Ingress/reverse proxy).
-  TYRUM_TLS_READY: "1"
+  tlsReady: true
+  tlsSelfSigned: false
   # Optional: trusted reverse proxy allowlist (comma-separated IPs/CIDRs).
   # When unset, the gateway ignores Forwarded/X-Forwarded-For/X-Real-IP headers
   # and derives the client IP from the socket.
-  GATEWAY_TRUSTED_PROXIES: ""
-  GATEWAY_DB_PATH: /var/lib/tyrum/gateway.db
+  trustedProxies: ""
+  allowInsecureHttp: false
   # Enable durable workflow APIs and engine-backed WS control plane.
-  TYRUM_ENGINE_API_ENABLED: "1"
+  enableEngineApi: true
+
+env:
   # Enterprise default per ADR-0007. Values: env|file|keychain
   TYRUM_SECRET_PROVIDER: env
   # Artifacts: default fs; set to s3 with the S3 env vars below.

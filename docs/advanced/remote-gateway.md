@@ -15,20 +15,18 @@ Use this when Tyrum needs to run on a different machine than your local workstat
 Example (TLS termination in front; recommended for larger deployments):
 
 ```bash
-GATEWAY_HOST=0.0.0.0 GATEWAY_PORT=8788 \
-  GATEWAY_TOKEN="$(openssl rand -hex 32)" \
-  TYRUM_TLS_READY=1 \
-  tyrum start
+GATEWAY_TOKEN="$(openssl rand -hex 32)" \
+  tyrum --host 0.0.0.0 --port 8788 --tls-ready
 ```
 
 Example (single gateway, secure by default via self-signed HTTPS/WSS):
 
 ```bash
-GATEWAY_HOST=0.0.0.0 GATEWAY_PORT=8788 \
-  GATEWAY_TOKEN="$(openssl rand -hex 32)" \
-  TYRUM_TLS_SELF_SIGNED=1 \
-  tyrum start
+GATEWAY_TOKEN="$(openssl rand -hex 32)" \
+  tyrum --host 0.0.0.0 --port 8788 --tls-self-signed
 ```
+
+Startup flags seed the first deployment-config revision. Persisted changes later live under `/system/deployment-config`.
 
 Notes:
 
@@ -44,15 +42,15 @@ Recommended minimum controls:
 - Allowlist source IPs.
 - Use TLS termination in front of the gateway.
 - Optionally configure **TLS certificate fingerprint pinning** for higher-assurance remote access.
-- If running behind a reverse proxy, configure `GATEWAY_TRUSTED_PROXIES` so the gateway only trusts `Forwarded` / `X-Forwarded-For` / `X-Real-IP` from known proxy addresses.
+- If running behind a reverse proxy, set deployment config `server.trustedProxies` so the gateway only trusts `Forwarded` / `X-Forwarded-For` / `X-Real-IP` from known proxy addresses. On first boot, you can seed it with `--trusted-proxies`.
 - Avoid direct internet exposure without access controls.
 - Rotate API keys used by external model providers.
 
-If you are operating in a trusted internal network without TLS (not recommended), you can acknowledge plaintext HTTP by setting `TYRUM_ALLOW_INSECURE_HTTP=1`.
+If you are operating in a trusted internal network without TLS (not recommended), you can acknowledge plaintext HTTP with `--allow-insecure-http` on first boot or by setting deployment config `server.allowInsecureHttp=true`.
 
 ## Operations checklist
 
-- Persist `TYRUM_HOME` on durable storage.
+- Persist the gateway home on durable storage (`~/.tyrum` by default, or the path passed via `--home`).
 - Keep Node.js and Tyrum updated.
 - Monitor process restarts and disk usage.
 
@@ -68,7 +66,7 @@ openssl s_client -connect example.com:443 -servername example.com < /dev/null 2>
   | openssl x509 -noout -fingerprint -sha256
 ```
 
-If you run the gateway with `TYRUM_TLS_SELF_SIGNED=1`, you can also use:
+If you run the gateway with `--tls-self-signed`, you can also use:
 
 ```bash
 tyrum tls fingerprint
@@ -91,5 +89,5 @@ Notes:
 
 ## Troubleshooting
 
-- Gateway unreachable: verify `GATEWAY_HOST`, firewall, and listening port.
+- Gateway unreachable: verify `--host`, firewall, and the listening port.
 - Slow responses: validate upstream model latency and local CPU/memory pressure.

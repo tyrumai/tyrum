@@ -1,6 +1,6 @@
 {{- if ne .Values.mode "single" }}
-{{- if not (regexMatch "(?i)^postgres(ql)?://" (trim (default "" .Values.env.GATEWAY_DB_PATH))) }}
-{{- fail "Split mode requires a PostgreSQL database. Please configure env.GATEWAY_DB_PATH with a postgres:// or postgresql:// URI." }}
+{{- if not (regexMatch "(?i)^postgres(ql)?://" (trim (default "" .Values.runtime.db))) }}
+{{- fail "Split mode requires a PostgreSQL database. Please configure runtime.db with a postgres:// or postgresql:// URI." }}
 {{- end }}
 {{- if not .Values.persistence.enabled }}
 {{- fail "Split mode requires persistence.enabled=true for durable agent workspaces (mounted only by ToolRunner jobs)." }}
@@ -39,7 +39,8 @@ spec:
           {{- end }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          args: ["edge"]
+          args:
+            {{- include "tyrum.startArgs" (dict "root" . "role" "edge") | nindent 12 }}
           ports:
             - name: http
               containerPort: {{ .Values.service.port }}
@@ -106,7 +107,8 @@ spec:
           {{- end }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          args: ["worker"]
+          args:
+            {{- include "tyrum.startArgs" (dict "root" . "role" "worker") | nindent 12 }}
           env:
             {{- range $k, $v := .Values.env }}
             - name: {{ $k }}
@@ -176,7 +178,8 @@ spec:
           {{- end }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          args: ["scheduler"]
+          args:
+            {{- include "tyrum.startArgs" (dict "root" . "role" "scheduler") | nindent 12 }}
           env:
             {{- range $k, $v := .Values.env }}
             - name: {{ $k }}
