@@ -33,7 +33,7 @@ function makeMemoryEnabledConfig(): Record<string, unknown> {
         keyword: { enabled: true, limit: 20 },
         semantic: { enabled: false, limit: 1 },
         structured: { fact_keys: [], tags: [] },
-        auto_write: { enabled: true, classifier: "rule_based" },
+        auto_write: { enabled: true },
         budgets: {
           max_total_items: 10,
           max_total_chars: 4000,
@@ -45,6 +45,17 @@ function makeMemoryEnabledConfig(): Record<string, unknown> {
           },
         },
       },
+    },
+  };
+}
+
+function noteDecision(body_md: string) {
+  return {
+    should_store: true as const,
+    reason: "Durable operational note.",
+    memory: {
+      kind: "note" as const,
+      body_md,
     },
   };
 }
@@ -207,16 +218,24 @@ describe("Agent behavior - WorkBoard and delegation", () => {
     const runtime = new AgentRuntime({
       container,
       home: homeDir,
-      languageModel: createPromptAwareLanguageModel(({ promptText }) => {
-        if (promptIncludes(promptText, "what needs verification")) {
-          return /deployment needs verification/iu.test(
-            extractPromptSection(promptText, "Memory digest:"),
-          )
-            ? "deployment"
-            : "UNKNOWN";
-        }
-        return "Stored.";
-      }),
+      languageModel: createPromptAwareLanguageModel(
+        ({ promptText }) => {
+          if (promptIncludes(promptText, "what needs verification")) {
+            return /deployment needs verification/iu.test(
+              extractPromptSection(promptText, "Memory digest:"),
+            )
+              ? "deployment"
+              : "UNKNOWN";
+          }
+          return "Stored.";
+        },
+        {
+          memoryDecision: ({ promptText }) =>
+            promptIncludes(promptText, "remember that deployment needs verification")
+              ? noteDecision("remember that deployment needs verification")
+              : undefined,
+        },
+      ),
       fetchImpl: fetch404,
     });
 

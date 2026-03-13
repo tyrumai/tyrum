@@ -46,63 +46,50 @@ export const MEMORY_TOOL_DESCRIPTORS: readonly ToolDescriptor[] = [
     source: "builtin",
     family: "memory",
     inputSchema: {
+      type: "object",
+      properties: {
+        kind: {
+          type: "string",
+          enum: ["fact", "note", "procedure"],
+        },
+        key: { type: "string", description: "Stable fact key." },
+        value: { description: "Structured fact value." },
+        title: { type: "string" },
+        body_md: { type: "string", description: "Durable note or procedure body." },
+        confidence: {
+          type: "number",
+          description: "Optional confidence score between 0 and 1.",
+        },
+        observed_at: {
+          type: "string",
+          description: "Optional ISO timestamp. Defaults to now.",
+        },
+        tags: {
+          type: "array",
+          items: { type: "string" },
+        },
+        sensitivity: { type: "string", enum: ["public", "private"] },
+      },
+      required: ["kind"],
+      additionalProperties: false,
       oneOf: [
         {
-          type: "object",
           properties: {
             kind: { type: "string", enum: ["fact"] },
-            key: { type: "string", description: "Stable fact key." },
-            value: { description: "Structured fact value." },
-            confidence: {
-              type: "number",
-              description: "Optional confidence score between 0 and 1. Defaults to 1.",
-            },
-            observed_at: {
-              type: "string",
-              description: "Optional ISO timestamp. Defaults to now.",
-            },
-            tags: {
-              type: "array",
-              items: { type: "string" },
-            },
-            sensitivity: { type: "string", enum: ["public", "private"] },
           },
           required: ["kind", "key", "value"],
-          additionalProperties: false,
         },
         {
-          type: "object",
           properties: {
             kind: { type: "string", enum: ["note"] },
-            title: { type: "string" },
-            body_md: { type: "string", description: "Durable note body." },
-            tags: {
-              type: "array",
-              items: { type: "string" },
-            },
-            sensitivity: { type: "string", enum: ["public", "private"] },
           },
           required: ["kind", "body_md"],
-          additionalProperties: false,
         },
         {
-          type: "object",
           properties: {
             kind: { type: "string", enum: ["procedure"] },
-            title: { type: "string" },
-            body_md: { type: "string", description: "Procedure or strategy body." },
-            confidence: {
-              type: "number",
-              description: "Optional confidence score between 0 and 1.",
-            },
-            tags: {
-              type: "array",
-              items: { type: "string" },
-            },
-            sensitivity: { type: "string", enum: ["public", "private"] },
           },
           required: ["kind", "body_md"],
-          additionalProperties: false,
         },
       ],
     },

@@ -43,7 +43,7 @@ function makeApprovalConfig(): Record<string, unknown> {
         keyword: { enabled: true, limit: 20 },
         semantic: { enabled: false, limit: 1 },
         structured: { fact_keys: [], tags: [] },
-        auto_write: { enabled: true, classifier: "rule_based" },
+        auto_write: { enabled: true },
         budgets: {
           max_total_items: 10,
           max_total_chars: 4000,
@@ -57,6 +57,19 @@ function makeApprovalConfig(): Record<string, unknown> {
       },
     },
   };
+}
+
+function rememberOpsDecision(promptText: string) {
+  return promptText.toLowerCase().includes("remember that always send messages to ops")
+    ? {
+        should_store: true as const,
+        reason: "Durable standing instruction from the user.",
+        memory: {
+          kind: "note" as const,
+          body_md: "remember that always send messages to ops",
+        },
+      }
+    : undefined;
 }
 
 function usage() {
@@ -243,7 +256,9 @@ describe("Agent behavior - policy and approvals", () => {
     const rememberRuntime = new AgentRuntime({
       container,
       home: homeDir,
-      languageModel: createPromptAwareLanguageModel(() => "Stored."),
+      languageModel: createPromptAwareLanguageModel(() => "Stored.", {
+        memoryDecision: ({ promptText }) => rememberOpsDecision(promptText),
+      }),
       fetchImpl: fetch404,
     });
 
@@ -343,7 +358,9 @@ describe("Agent behavior - policy and approvals", () => {
     const rememberRuntime = new AgentRuntime({
       container,
       home: homeDir,
-      languageModel: createPromptAwareLanguageModel(() => "Stored."),
+      languageModel: createPromptAwareLanguageModel(() => "Stored.", {
+        memoryDecision: ({ promptText }) => rememberOpsDecision(promptText),
+      }),
       fetchImpl: fetch404,
     });
     await rememberRuntime.turn({

@@ -11,6 +11,7 @@ import {
   listBuiltinToolDescriptors,
   type ToolDescriptor,
 } from "../modules/agent/tools.js";
+import { validateToolDescriptorInputSchema } from "../modules/agent/tool-schema.js";
 import { requireTenantId } from "../modules/auth/claims.js";
 import type { Logger } from "../modules/observability/logger.js";
 import type { PluginCatalogProvider } from "../modules/plugins/catalog-provider.js";
@@ -20,7 +21,11 @@ import type { SqlDb } from "../statestore/types.js";
 
 type ToolEffectiveExposure = {
   enabled: boolean;
-  reason: "enabled" | "disabled_by_agent_allowlist" | "disabled_by_state_mode";
+  reason:
+    | "enabled"
+    | "disabled_by_agent_allowlist"
+    | "disabled_by_state_mode"
+    | "disabled_invalid_schema";
   agent_key?: string;
 };
 
@@ -76,6 +81,7 @@ function toBaseEntry(
   source: ToolRegistryEntry["source"],
   effectiveExposure: ToolEffectiveExposure,
 ): Omit<ToolRegistryEntry, "backing_server" | "plugin"> {
+  const validatedSchema = validateToolDescriptorInputSchema(descriptor);
   return {
     source,
     canonical_id: descriptor.id,
@@ -85,7 +91,7 @@ function toBaseEntry(
     effective_exposure: effectiveExposure,
     family: descriptor.family,
     keywords: descriptor.keywords.length > 0 ? [...descriptor.keywords] : undefined,
-    input_schema: descriptor.inputSchema,
+    input_schema: validatedSchema.ok ? validatedSchema.schema : undefined,
   };
 }
 
@@ -257,6 +263,16 @@ async function resolveEffectiveExposureByToolId(input: {
   }
 
   const setExposure = (descriptor: ToolDescriptor) => {
+    const validated = validateToolDescriptorInputSchema(descriptor);
+    if (!validated.ok) {
+      effectiveExposureByToolId.set(descriptor.id, {
+        enabled: false,
+        reason: "disabled_invalid_schema",
+        agent_key: input.agentKey,
+      });
+      return;
+    }
+
     if (
       (descriptor.source === undefined || descriptor.source === "builtin") &&
       !isBuiltinToolAvailableInStateMode(descriptor.id, input.deps.stateMode)

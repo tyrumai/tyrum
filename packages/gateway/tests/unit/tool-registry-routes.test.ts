@@ -92,6 +92,27 @@ describe("tool registry routes", () => {
                 risk: "low" as const,
                 requires_confirmation: false,
                 keywords: ["echo"],
+                inputSchema: {
+                  type: "object",
+                  properties: { text: { type: "string" } },
+                },
+              },
+              {
+                id: "plugin.echo.invalid",
+                description: "Invalid schema tool.",
+                risk: "low" as const,
+                requires_confirmation: false,
+                keywords: ["echo"],
+                inputSchema: {
+                  oneOf: [{ type: "object", properties: {} }],
+                },
+              },
+              {
+                id: "plugin.echo.optional",
+                description: "Echo text back without an explicit schema.",
+                risk: "low" as const,
+                requires_confirmation: false,
+                keywords: ["echo"],
               },
             ],
             getTool: (toolId: string) =>
@@ -185,6 +206,16 @@ describe("tool registry routes", () => {
     );
     expect(body.tools).toContainEqual(
       expect.objectContaining({
+        source: "plugin",
+        canonical_id: "plugin.echo.optional",
+        input_schema: {
+          type: "object",
+          additionalProperties: true,
+        },
+      }),
+    );
+    expect(body.tools).toContainEqual(
+      expect.objectContaining({
         source: "mcp",
         canonical_id: "mcp.exa.web_search_exa",
         effective_exposure: expect.objectContaining({
@@ -218,7 +249,19 @@ describe("tool registry routes", () => {
         canonical_id: "memory.add",
         family: "memory",
         input_schema: expect.objectContaining({
+          type: "object",
           oneOf: expect.any(Array),
+        }),
+      }),
+    );
+    expect(body.tools).toContainEqual(
+      expect.objectContaining({
+        source: "plugin",
+        canonical_id: "plugin.echo.invalid",
+        effective_exposure: expect.objectContaining({
+          enabled: false,
+          reason: "disabled_invalid_schema",
+          agent_key: "default",
         }),
       }),
     );

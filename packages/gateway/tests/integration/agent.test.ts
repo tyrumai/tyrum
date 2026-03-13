@@ -4,7 +4,10 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createApp } from "../../src/app.js";
 import { createTestApp, createTestContainer } from "./helpers.js";
-import { createStubLanguageModel } from "../unit/stub-language-model.js";
+import {
+  createMemoryDecisionLanguageModel,
+  createStubLanguageModel,
+} from "../unit/stub-language-model.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { buildAgentTurnKey } from "../../src/modules/agent/turn-key.js";
 import { AgentConfig } from "@tyrum/schemas";
@@ -247,7 +250,19 @@ describe("agent routes", () => {
   it("separates short-term session context per channel/thread and writes Memory v1 records", async () => {
     const { app, container, agents } = await createTestApp({
       tyrumHome: homeDir,
-      languageModel: createStubLanguageModel("ok"),
+      languageModel: createMemoryDecisionLanguageModel({
+        decision: {
+          should_store: true,
+          reason: "The user shared a durable preference.",
+          memory: {
+            kind: "note",
+            title: "Drink preference",
+            body_md: "The user prefers tea.",
+            tags: ["preference"],
+          },
+        },
+        reply: "ok",
+      }),
     });
 
     const first = await app.request("/agent/turn", {

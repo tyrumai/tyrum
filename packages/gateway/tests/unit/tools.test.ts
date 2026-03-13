@@ -6,6 +6,7 @@ import {
   selectToolDirectory,
   type ToolDescriptor,
 } from "../../src/modules/agent/tools.js";
+import { validateToolDescriptorInputSchema } from "../../src/modules/agent/tool-schema.js";
 
 describe("selectToolDirectory", () => {
   it("includes confirmation-required tools by default", () => {
@@ -59,6 +60,21 @@ describe("selectToolDirectory", () => {
 });
 
 describe("model tool naming", () => {
+  it("applies the permissive object fallback when a tool omits inputSchema", () => {
+    expect(
+      validateToolDescriptorInputSchema({
+        id: "plugin.echo.say",
+        inputSchema: undefined,
+      }),
+    ).toEqual({
+      ok: true,
+      schema: {
+        type: "object",
+        additionalProperties: true,
+      },
+    });
+  });
+
   it("sanitizes dotted tool ids for model-facing names", () => {
     const names = buildModelToolNameMap(["mcp.calendar.events_list", "plugin.echo.danger"]);
 
@@ -110,6 +126,14 @@ describe("model tool naming", () => {
     expect(builtinIds).toContain("tool.node.dispatch");
     expect(builtinIds.filter((id) => id === "tool.node.dispatch")).toHaveLength(1);
     expect(builtinIds.filter((id) => id === "tool.node.inspect")).toHaveLength(1);
+  });
+
+  it("publishes object-root input schemas for all builtin model tools", () => {
+    const invalid = listBuiltinToolDescriptors()
+      .map((tool) => ({ tool, validation: validateToolDescriptorInputSchema(tool) }))
+      .filter((entry) => !entry.validation.ok);
+
+    expect(invalid).toEqual([]);
   });
 
   it("throws when alias registration would overwrite another tool", () => {

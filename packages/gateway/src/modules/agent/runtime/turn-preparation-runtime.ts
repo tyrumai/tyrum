@@ -35,6 +35,7 @@ import {
   selectToolDirectory,
   type ToolDescriptor,
 } from "../tools.js";
+import { validateToolDescriptorInputSchema } from "../tool-schema.js";
 import { tagContent } from "../provenance.js";
 import { sanitizeForModel } from "../sanitizer.js";
 import { parseChannelSourceKey } from "../../channels/interface.js";
@@ -426,7 +427,19 @@ export async function resolveToolsAndMemory(
   );
   const filteredTools = toolCandidates
     .filter((tool) => isToolAllowed(executionProfile.profile.tool_allowlist, tool.id))
-    .filter((tool) => ctx.config.memory.v1.enabled || !tool.id.startsWith("memory."));
+    .filter((tool) => ctx.config.memory.v1.enabled || !tool.id.startsWith("memory."))
+    .flatMap((tool) => {
+      const validated = validateToolDescriptorInputSchema(tool);
+      if (!validated.ok) {
+        deps.opts.container.logger.warn("agent.tool_schema_invalid", {
+          tool_id: tool.id,
+          error: validated.error,
+        });
+        return [];
+      }
+
+      return [{ ...tool, inputSchema: validated.schema }];
+    });
 
   return { memoryDigestResult, toolSetBuilder, filteredTools };
 }

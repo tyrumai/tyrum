@@ -54,3 +54,44 @@ export function createStubLanguageModel(reply: string): MockLanguageModelV3 {
     }),
   });
 }
+
+export function createMemoryDecisionLanguageModel(input: {
+  decision: Record<string, unknown>;
+  reply: string;
+}): MockLanguageModelV3 {
+  let callCount = 0;
+
+  return new MockLanguageModelV3({
+    doGenerate: async () => {
+      callCount += 1;
+      if (callCount === 1) {
+        return {
+          content: [
+            {
+              type: "tool-call" as const,
+              toolCallId: "tc-memory-decision",
+              toolName: "memory_turn_decision",
+              input: JSON.stringify(input.decision),
+            },
+          ],
+          finishReason: { unified: "tool-calls" as const, raw: undefined },
+          usage: {
+            inputTokens: { total: 10, noCache: 10, cacheRead: undefined, cacheWrite: undefined },
+            outputTokens: { total: 5, text: 5, reasoning: undefined },
+          },
+          warnings: [],
+        };
+      }
+
+      return {
+        content: [{ type: "text" as const, text: input.reply }],
+        finishReason: { unified: "stop" as const, raw: undefined },
+        usage: {
+          inputTokens: { total: 10, noCache: 10, cacheRead: undefined, cacheWrite: undefined },
+          outputTokens: { total: 5, text: 5, reasoning: undefined },
+        },
+        warnings: [],
+      };
+    },
+  });
+}
