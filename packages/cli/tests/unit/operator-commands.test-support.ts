@@ -1,7 +1,7 @@
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { expect, vi } from "vitest";
+import { afterAll, expect, vi } from "vitest";
 
 const DEFAULT_GATEWAY_URL = "http://127.0.0.1:8788";
 const DEFAULT_DEVICE = {
@@ -80,6 +80,14 @@ const resettableSpies = [
   httpPolicyCreateOverrideSpy,
   httpPolicyRevokeOverrideSpy,
 ] as const;
+
+// Vitest 4.1 can race per-test doUnmock teardown with the next dynamic import.
+// Keep the client mocks active for the file and clean them up once the suite ends.
+afterAll(() => {
+  vi.doUnmock("@tyrum/client");
+  vi.doUnmock("@tyrum/client/node");
+  vi.resetModules();
+});
 
 async function createMockClientModule(
   specifier: MockableClientModule,
@@ -288,8 +296,6 @@ export async function withOperatorCli<T>(
   } finally {
     logSpy.mockRestore();
     errSpy.mockRestore();
-    vi.doUnmock("@tyrum/client");
-    vi.doUnmock("@tyrum/client/node");
     await rm(home, { recursive: true, force: true });
   }
 }
