@@ -5,6 +5,10 @@ import { ConfiguredModelPresetDal } from "./modules/models/configured-model-pres
 import { ExecutionProfileModelAssignmentDal } from "./modules/models/execution-profile-model-assignment-dal.js";
 import { ChannelThreadDal } from "./modules/channels/thread-dal.js";
 import { RoutingConfigDal } from "./modules/channels/routing-config-dal.js";
+import {
+  DesktopEnvironmentDal,
+  DesktopEnvironmentHostDal,
+} from "./modules/desktop-environments/dal.js";
 import { loadAllPlaybooks } from "./modules/playbook/loader.js";
 import { PlaybookRunner } from "./modules/playbook/runner.js";
 import { LocationService } from "./modules/location/service.js";
@@ -20,6 +24,8 @@ export function createAppRouteDependencies(container: GatewayContainer) {
     routingConfigDal: new RoutingConfigDal(container.db),
     channelThreadDal: new ChannelThreadDal(container.db),
     wsEventDal: new WsEventDal(container.db),
+    desktopEnvironmentDal: new DesktopEnvironmentDal(container.db),
+    desktopEnvironmentHostDal: new DesktopEnvironmentHostDal(container.db),
   };
 }
 

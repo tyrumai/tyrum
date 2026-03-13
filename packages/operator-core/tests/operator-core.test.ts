@@ -52,6 +52,19 @@ describe("operator-core wiring", () => {
     ).toBeDefined();
   });
 
+  it("exposes desktop environment stores on the core", () => {
+    const { core } = createTestOperatorCore();
+
+    expect(
+      (core as unknown as { desktopEnvironmentHostsStore?: { getSnapshot: () => unknown } })
+        .desktopEnvironmentHostsStore,
+    ).toBeDefined();
+    expect(
+      (core as unknown as { desktopEnvironmentsStore?: { getSnapshot: () => unknown } })
+        .desktopEnvironmentsStore,
+    ).toBeDefined();
+  });
+
   it("exposes chatStore on the core", () => {
     const { core } = createTestOperatorCore();
 
@@ -85,6 +98,8 @@ describe("operator-core wiring", () => {
     const pairingsListBefore = http.__calls.pairingsList;
     const approvalsListBefore = ws.approvalList.mock.calls.length;
     const runsListBefore = ws.runList.mock.calls.length;
+    const desktopEnvironmentHostsListBefore = http.__calls.desktopEnvironmentHostsList;
+    const desktopEnvironmentsListBefore = http.__calls.desktopEnvironmentsList;
 
     await core.syncAllNow();
     await tick();
@@ -93,6 +108,8 @@ describe("operator-core wiring", () => {
     expect(http.__calls.usageGet).toBe(usageGetBefore + 1);
     expect(http.__calls.presenceList).toBe(presenceListBefore + 1);
     expect(http.__calls.pairingsList).toBe(pairingsListBefore + 1);
+    expect(http.__calls.desktopEnvironmentHostsList).toBe(desktopEnvironmentHostsListBefore + 1);
+    expect(http.__calls.desktopEnvironmentsList).toBe(desktopEnvironmentsListBefore + 1);
     expect(ws.approvalList).toHaveBeenCalledTimes(approvalsListBefore + 1);
     expect(ws.runList).toHaveBeenCalledTimes(runsListBefore + 1);
   });
@@ -124,6 +141,8 @@ describe("operator-core wiring", () => {
     expect(http.__calls.statusGet).toBe(1);
     expect(http.__calls.presenceList).toBe(1);
     expect(http.__calls.pairingsList).toBe(1);
+    expect(http.__calls.desktopEnvironmentHostsList).toBe(1);
+    expect(http.__calls.desktopEnvironmentsList).toBe(1);
     expect(ws.approvalList).toHaveBeenCalledTimes(1);
     expect(ws.runList).toHaveBeenCalledTimes(1);
 

@@ -196,6 +196,20 @@ function createFakeHttpClient(): { http: OperatorHttpClient } {
     presence: { list: vi.fn(async () => samplePresenceResponse()) },
     agentList: { get: vi.fn(async () => ({ agents: [{ agent_key: "default" }] }) as const) },
     agentStatus: { get: vi.fn(async () => sampleAgentStatusResponse()) },
+    desktopEnvironmentHosts: {
+      list: vi.fn(async () => ({ status: "ok", hosts: [] }) as const),
+    },
+    desktopEnvironments: {
+      list: vi.fn(async () => ({ status: "ok", environments: [] }) as const),
+      get: vi.fn(async () => ({ status: "ok", environment: null }) as const),
+      create: vi.fn(async () => ({ status: "ok", environment: null }) as const),
+      update: vi.fn(async () => ({ status: "ok", environment: null }) as const),
+      start: vi.fn(async () => ({ status: "ok", environment: null }) as const),
+      stop: vi.fn(async () => ({ status: "ok", environment: null }) as const),
+      reset: vi.fn(async () => ({ status: "ok", environment: null }) as const),
+      remove: vi.fn(async () => ({ status: "ok", deleted: true }) as const),
+      logs: vi.fn(async () => ({ status: "ok", environment_id: "env-1", logs: [] }) as const),
+    },
     pairings: {
       list: vi.fn(async () => ({ status: "ok", pairings: [] }) as const),
       approve: vi.fn(async () => ({ status: "ok", pairing: null }) as const),
@@ -213,6 +227,7 @@ type OperatorUiA11yRouteId =
   | "approvals"
   | "agents"
   | "pairing"
+  | "desktop-environments"
   | "configure"
   | "desktop"
   | "browser";

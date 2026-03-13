@@ -17,6 +17,10 @@ describe("Operator UI app/page component structure", () => {
         { specifier: "../src/components/pages/agents-page.js", exportName: "AgentsPage" },
         { specifier: "../src/components/pages/pairing-page.js", exportName: "PairingPage" },
         {
+          specifier: "../src/components/pages/desktop-environments-page.js",
+          exportName: "DesktopEnvironmentsPage",
+        },
+        {
           specifier: "../src/components/pages/node-configure-page.js",
           exportName: "NodeConfigurePage",
         },

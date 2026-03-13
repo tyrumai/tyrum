@@ -35,4 +35,31 @@ describe("migration-aliases exports", () => {
       ),
     ).toBe("116_ws_events.sql");
   });
+
+  it("exports the desktop-environment migration aliases", () => {
+    expect(
+      migrationAliases.findAppliedMigrationAlias(
+        "134_desktop_environments.sql",
+        new Set(["131_desktop_environments.sql"]),
+      ),
+    ).toBe("131_desktop_environments.sql");
+    expect(
+      migrationAliases.findAppliedMigrationAlias(
+        "134_desktop_environments.sql",
+        new Set(["132_desktop_environments.sql"]),
+      ),
+    ).toBe("132_desktop_environments.sql");
+    expect(
+      migrationAliases.findAppliedMigrationAlias(
+        "135_desktop_environment_boolean_columns.sql",
+        new Set(["132_desktop_environment_boolean_columns.sql"]),
+      ),
+    ).toBe("132_desktop_environment_boolean_columns.sql");
+    expect(
+      migrationAliases.findAppliedMigrationAlias(
+        "135_desktop_environment_boolean_columns.sql",
+        new Set(["133_desktop_environment_boolean_columns.sql"]),
+      ),
+    ).toBe("133_desktop_environment_boolean_columns.sql");
+  });
 });

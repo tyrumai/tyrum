@@ -2,7 +2,7 @@ import { isIP } from "node:net";
 
 const LOOPBACK_HOSTNAMES = new Set(["localhost"]);
 
-export type GatewayRole = "all" | "edge" | "worker" | "scheduler";
+export type GatewayRole = "all" | "edge" | "worker" | "scheduler" | "desktop-runtime";
 export type NonLoopbackTransportPolicy = "local" | "tls" | "insecure";
 
 function normalizeHostForLoopbackCheck(host: string): string {

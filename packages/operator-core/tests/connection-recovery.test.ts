@@ -40,6 +40,18 @@ function createFakeHttpClient() {
     usage: { get: vi.fn(async () => ({ status: "ok" })) },
     presence: { list: vi.fn(async () => ({ status: "ok", entries: [] })) },
     pairings: { list: vi.fn(async () => ({ status: "ok", pairings: [] })) },
+    desktopEnvironmentHosts: { list: vi.fn(async () => ({ status: "ok", hosts: [] })) },
+    desktopEnvironments: {
+      list: vi.fn(async () => ({ status: "ok", environments: [] })),
+      get: vi.fn(async () => ({ status: "ok", environment: null })),
+      create: vi.fn(async () => ({ status: "ok", environment: null })),
+      update: vi.fn(async () => ({ status: "ok", environment: null })),
+      start: vi.fn(async () => ({ status: "ok", environment: null })),
+      stop: vi.fn(async () => ({ status: "ok", environment: null })),
+      reset: vi.fn(async () => ({ status: "ok", environment: null })),
+      remove: vi.fn(async () => ({ status: "ok", deleted: true })),
+      logs: vi.fn(async () => ({ status: "ok", environment_id: "env-1", logs: [] })),
+    },
   } as any;
 }
 

@@ -67,6 +67,15 @@ export type {
 } from "./stores/activity-store.js";
 export type { AgentStatusState, AgentStatusStore } from "./stores/agent-status-store.js";
 export type { ConnectionState, ConnectionStore } from "./stores/connection-store.js";
+export type {
+  DesktopEnvironmentHostsState,
+  DesktopEnvironmentHostsStore,
+} from "./stores/desktop-environment-hosts-store.js";
+export type {
+  DesktopEnvironmentLogState,
+  DesktopEnvironmentsState,
+  DesktopEnvironmentsStore,
+} from "./stores/desktop-environments-store.js";
 export type { Pairing, PairingState, PairingStore } from "./stores/pairing-store.js";
 export type { RunsState, RunsStore } from "./stores/runs-store.js";
 export type { OperatorPresenceEntry, StatusState, StatusStore } from "./stores/status-store.js";

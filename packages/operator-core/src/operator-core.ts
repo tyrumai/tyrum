@@ -2,7 +2,6 @@ import {
   TyrumClient,
   createTyrumHttpClient,
   type DeviceIdentity,
-  type Approval,
   type ClientCapability,
   type ExecutionAttempt,
   type ExecutionRun,
@@ -11,7 +10,6 @@ import {
   type MemoryItem,
   type MemoryTombstone,
   type TyrumClientEvents,
-  type WsApprovalRequest,
 } from "@tyrum/client/browser";
 import { httpAuthForAuth, wsTokenForAuth, type OperatorAuthStrategy } from "./auth.js";
 import type { OperatorHttpClient, OperatorWsClient } from "./deps.js";
@@ -32,9 +30,24 @@ import { createAutoSyncManager, type AutoSyncState, type AutoSyncTask } from "./
 import { createWorkboardStore, type WorkboardStore } from "./stores/workboard-store.js";
 import { createAgentStatusStore, type AgentStatusStore } from "./stores/agent-status-store.js";
 import { createActivityStore, type ActivityStore } from "./stores/activity-store.js";
+import {
+  readClientId,
+  readDisconnect,
+  readPendingApprovalFromRequest,
+  readReconnectSchedule,
+  readTransportMessage,
+} from "./operator-core.transport-helpers.js";
+import {
+  createDesktopEnvironmentHostsStore,
+  type DesktopEnvironmentHostsStore,
+} from "./stores/desktop-environment-hosts-store.js";
+import {
+  createDesktopEnvironmentsStore,
+  type DesktopEnvironmentsStore,
+} from "./stores/desktop-environments-store.js";
 import { registerActivityWsHandlers } from "./operator-core.activity-events.js";
 import { readOccurredAt, readPayload } from "./operator-core.event-helpers.js";
-import { ApprovalKind, type WorkItem } from "@tyrum/schemas";
+import type { Approval, WorkItem } from "@tyrum/schemas";
 import type { WorkTaskEvent } from "./workboard/workboard-utils.js";
 
 export interface OperatorCoreOptions {
@@ -66,74 +79,14 @@ export interface OperatorCore {
   memoryStore: MemoryStore;
   workboardStore: WorkboardStore;
   agentStatusStore: AgentStatusStore;
+  desktopEnvironmentHostsStore: DesktopEnvironmentHostsStore;
+  desktopEnvironmentsStore: DesktopEnvironmentsStore;
   chatStore: ChatStore;
   activityStore: ActivityStore;
   syncAllNow(): Promise<void>;
   connect(): void;
   disconnect(): void;
   dispose(): void;
-}
-
-function readClientId(data: unknown): string | null {
-  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
-  const raw = (data as Record<string, unknown>)["clientId"];
-  if (typeof raw !== "string") return null;
-  const clientId = raw.trim();
-  return clientId.length > 0 ? clientId : null;
-}
-
-function readDisconnect(data: unknown): { code: number; reason: string } | null {
-  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
-  const rec = data as Record<string, unknown>;
-  const code = rec["code"];
-  const reason = rec["reason"];
-  if (typeof code !== "number") return null;
-  if (typeof reason !== "string") return null;
-  return { code, reason };
-}
-
-function readTransportMessage(data: unknown): string | null {
-  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
-  const raw = (data as Record<string, unknown>)["message"];
-  return typeof raw === "string" ? raw : null;
-}
-
-function readReconnectSchedule(data: unknown): number | null {
-  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
-  const raw = (data as Record<string, unknown>)["nextRetryAtMs"];
-  if (typeof raw !== "number") return null;
-  if (!Number.isFinite(raw)) return null;
-  return raw;
-}
-
-function readPendingApprovalFromRequest(data: unknown): Approval | null {
-  const payload = readPayload(data);
-  if (!payload) return null;
-  const approvalId =
-    typeof payload["approval_id"] === "string" ? payload["approval_id"].trim() : "";
-  const approvalKey =
-    typeof payload["approval_key"] === "string" ? payload["approval_key"].trim() : "";
-  const kind = typeof payload["kind"] === "string" ? payload["kind"].trim() : "";
-  const prompt = typeof payload["prompt"] === "string" ? payload["prompt"] : "";
-  const occurredAt = readOccurredAt(data) ?? new Date().toISOString();
-  const parsedKind = ApprovalKind.safeParse(kind);
-
-  if (!approvalId || !approvalKey || !kind || !prompt) return null;
-
-  return {
-    approval_id: approvalId,
-    approval_key: approvalKey,
-    kind: parsedKind.success ? parsedKind.data : "other",
-    status: "pending",
-    prompt,
-    context: payload["context"],
-    created_at: occurredAt,
-    expires_at:
-      typeof payload["expires_at"] === "string" || payload["expires_at"] === null
-        ? (payload["expires_at"] as WsApprovalRequest["payload"]["expires_at"])
-        : null,
-    resolution: null,
-  };
 }
 
 export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
@@ -172,6 +125,8 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
   const chat = createChatStore(ws, http);
   const workboard = createWorkboardStore(ws);
   const agentStatus = createAgentStatusStore(http);
+  const desktopEnvironmentHosts = createDesktopEnvironmentHostsStore(http);
+  const desktopEnvironments = createDesktopEnvironmentsStore(http);
   const activity = createActivityStore({
     runsStore: runs.store,
     approvalsStore: approvals.store,
@@ -188,6 +143,8 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
     memoryStore: memory.store,
     workboardStore: workboard.store,
     agentStatusStore: agentStatus.store,
+    desktopEnvironmentHostsStore: desktopEnvironmentHosts.store,
+    desktopEnvironmentsStore: desktopEnvironments.store,
   } as const;
 
   const syncRegistry: { [K in keyof typeof warmStores]: AutoSyncTask[] } = {
@@ -274,6 +231,26 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
         run: async () => {
           await agentStatus.store.refresh();
           const error = agentStatus.store.getSnapshot().error;
+          if (error) throw new Error(error);
+        },
+      },
+    ],
+    desktopEnvironmentHostsStore: [
+      {
+        id: "desktopEnvironmentHosts.refresh",
+        run: async () => {
+          await desktopEnvironmentHosts.store.refresh();
+          const error = desktopEnvironmentHosts.store.getSnapshot().error;
+          if (error) throw new Error(error);
+        },
+      },
+    ],
+    desktopEnvironmentsStore: [
+      {
+        id: "desktopEnvironments.refresh",
+        run: async () => {
+          await desktopEnvironments.store.refresh();
+          const error = desktopEnvironments.store.getSnapshot().error;
           if (error) throw new Error(error);
         },
       },
@@ -528,6 +505,8 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
     memoryStore: memory.store,
     workboardStore: workboard.store,
     agentStatusStore: agentStatus.store,
+    desktopEnvironmentHostsStore: desktopEnvironmentHosts.store,
+    desktopEnvironmentsStore: desktopEnvironments.store,
     chatStore: chat,
     activityStore: activity.store,
     syncAllNow: async () => {

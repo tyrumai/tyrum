@@ -245,6 +245,13 @@
     "default": "{}"
   },
   {
+    "table": "desktop_environments",
+    "column": "logs_json",
+    "shape": "array",
+    "nullable": false,
+    "default": "[]"
+  },
+  {
     "table": "execution_artifacts",
     "column": "labels_json",
     "shape": "array",

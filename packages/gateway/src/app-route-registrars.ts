@@ -23,6 +23,7 @@ import { createConnectionsRoute } from "./routes/connections.js";
 import { createContextRoutes } from "./routes/context.js";
 import { createContractRoutes } from "./routes/contracts.js";
 import { createDeviceTokenRoutes } from "./routes/device-token.js";
+import { createDesktopEnvironmentRoutes } from "./routes/desktop-environments.js";
 import { createExtensionsRoutes } from "./routes/extensions.js";
 import { createHealthRoute } from "./routes/health.js";
 import { createIngressRoutes } from "./routes/ingress.js";
@@ -71,6 +72,14 @@ import { NodeCapabilityInspectionService } from "./modules/node/capability-inspe
 import { NodeDispatchService } from "./modules/agent/node-dispatch-service.js";
 import { isSharedStateMode, resolveGatewayStateMode } from "./modules/runtime-state/mode.js";
 import type { WsEventDal } from "./modules/ws-event/dal.js";
+import {
+  DesktopEnvironmentLifecycleService,
+  UnsupportedDesktopEnvironmentLifecycleService,
+} from "./modules/desktop-environments/lifecycle-service.js";
+import type {
+  DesktopEnvironmentDal,
+  DesktopEnvironmentHostDal,
+} from "./modules/desktop-environments/dal.js";
 
 export interface AppRouteDependencies {
   authProfileDal: AuthProfileDal;
@@ -80,6 +89,8 @@ export interface AppRouteDependencies {
   routingConfigDal: RoutingConfigDal;
   channelThreadDal: ChannelThreadDal;
   wsEventDal: WsEventDal;
+  desktopEnvironmentDal: DesktopEnvironmentDal;
+  desktopEnvironmentHostDal: DesktopEnvironmentHostDal;
 }
 
 export interface AppRouteContext {
@@ -164,6 +175,18 @@ export function registerSystemAndPublicRoutes(context: AppRouteContext): void {
     }),
   );
   context.app.route("/", policy);
+  context.app.route(
+    "/",
+    createDesktopEnvironmentRoutes({
+      hostDal: context.routeDeps.desktopEnvironmentHostDal,
+      environmentDal: context.routeDeps.desktopEnvironmentDal,
+      lifecycleService:
+        context.opts.desktopEnvironmentLifecycle ??
+        (context.runtime.role === "all" || context.runtime.role === "desktop-runtime"
+          ? new DesktopEnvironmentLifecycleService(context.routeDeps.desktopEnvironmentDal)
+          : new UnsupportedDesktopEnvironmentLifecycleService()),
+    }),
+  );
   context.app.route(
     "/",
     createPolicyBundleRoutes({

@@ -52,11 +52,14 @@ function parseRoleFlag(value: string): GatewayRole {
     normalized === "all" ||
     normalized === "edge" ||
     normalized === "worker" ||
-    normalized === "scheduler"
+    normalized === "scheduler" ||
+    normalized === "desktop-runtime"
   ) {
     return normalized;
   }
-  throw new Error(`--role must be one of all|edge|worker|scheduler (got '${value}')`);
+  throw new Error(
+    `--role must be one of all|edge|worker|scheduler|desktop-runtime (got '${value}')`,
+  );
 }
 
 function parseCommonDbFlag(
@@ -244,7 +247,13 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
     return { kind: "start", ...flags };
   }
 
-  if (first === "all" || first === "edge" || first === "worker" || first === "scheduler") {
+  if (
+    first === "all" ||
+    first === "edge" ||
+    first === "worker" ||
+    first === "scheduler" ||
+    first === "desktop-runtime"
+  ) {
     const flags = parseStartFlags(rest);
     if ("kind" in flags) return flags;
     return { kind: "start", ...flags, role: flags.role ?? first };

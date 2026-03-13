@@ -33,6 +33,7 @@ import {
 import { createMetricsMiddleware, gatewayMetrics } from "./modules/observability/metrics.js";
 import { requestIdForAudit } from "./modules/observability/request-id.js";
 import type { TelegramChannelRuntime } from "./modules/channels/telegram-runtime.js";
+import type { DesktopEnvironmentLifecycle } from "./modules/desktop-environments/lifecycle-service.js";
 import {
   createAppRouteDependencies,
   registerAgentsAndWorkspaceRoutes,
@@ -62,6 +63,7 @@ export interface AppOptions {
   };
   authRateLimiter?: SlidingWindowRateLimiter;
   operatorUiAssetsDir?: string;
+  desktopEnvironmentLifecycle?: DesktopEnvironmentLifecycle;
   runtime?: {
     version: string;
     instanceId: string;
