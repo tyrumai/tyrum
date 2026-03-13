@@ -203,6 +203,17 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
     [lgUp, sessionClient],
   );
 
+  useEffect(() => {
+    if (!lgUp || active.sessionId || active.loading) {
+      return;
+    }
+    const firstSession = sessions.sessions[0];
+    if (!firstSession) {
+      return;
+    }
+    void openSession(firstSession.session_id);
+  }, [active.loading, active.sessionId, lgUp, openSession, sessions.sessions]);
+
   const startNewChat = useCallback(async (): Promise<void> => {
     if (!sessionClient) {
       return;
@@ -320,6 +331,16 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
     });
   }, []);
 
+  const handleConversationMessages = useCallback(
+    (messages: UIMessage[]) => {
+      if (!activeSession?.session_id) {
+        return;
+      }
+      handleSessionMessages(activeSession.session_id, messages);
+    },
+    [activeSession?.session_id, handleSessionMessages],
+  );
+
   const showThreads = lgUp || mobileView === "threads";
   const showConversation = lgUp || mobileView === "conversation";
 
@@ -338,7 +359,7 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
   return (
     <div
       className="relative flex h-full w-full flex-1 flex-col overflow-hidden bg-bg"
-      data-testid="ai-sdk-chat-page"
+      data-testid="chat-page"
     >
       {agentsError ? (
         <div className="absolute inset-x-0 top-0 z-10 p-4">
@@ -404,9 +425,7 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
               }}
               onRenderModeChange={setRenderMode}
               onReasoningModeChange={setReasoningMode}
-              onSessionMessages={(messages) => {
-                handleSessionMessages(activeSession.session_id, messages);
-              }}
+              onSessionMessages={handleConversationMessages}
               renderMode={renderMode}
               resolvingApproval={resolvingApproval}
               resolveAttachedNodeId={resolveAttachedNodeId}
