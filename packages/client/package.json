@@ -27,7 +27,7 @@
   "dependencies": {
     "@tyrum/schemas": "workspace:*",
     "mitt": "^3.0.1",
-    "undici": "^7.22.0",
+    "undici": "^7.24.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
