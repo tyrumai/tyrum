@@ -43,7 +43,7 @@ function filterPlans(plans: AuditPlanSummary[], rawFilter: string): AuditPlanSum
 
 export function AuditPanel({ core }: { core: OperatorCore }) {
   const { canMutate, requestEnter } = useAdminMutationAccess(core);
-  const adminHttp = useAdminHttpClient();
+  const adminHttp = useAdminHttpClient({ access: "strict" });
   const auditApi = adminHttp?.audit ?? null;
   const exportAction = useApiAction<AuditExportResult>();
   const forgetAction = useApiAction<AuditForgetResult>();
