@@ -152,7 +152,9 @@ function isToolStatus(value: unknown): boolean {
 
 function isApprovalStatus(value: unknown): boolean {
   return (
-    value === "pending" ||
+    value === "queued" ||
+    value === "reviewing" ||
+    value === "awaiting_human" ||
     value === "approved" ||
     value === "denied" ||
     value === "expired" ||

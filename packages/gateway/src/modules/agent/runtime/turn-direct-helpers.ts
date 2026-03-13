@@ -128,13 +128,12 @@ export async function throwToolApprovalError(
 
   throw new ToolExecutionApprovalRequiredError({
     kind: "workflow_step",
-    prompt: `Approve execution of '${state.toolDesc.id}' (risk=${state.toolDesc.risk})`,
-    detail: `approval required for tool '${state.toolDesc.id}' (risk=${state.toolDesc.risk})`,
+    prompt: `Approve execution of '${state.toolDesc.id}'`,
+    detail: `approval required for tool '${state.toolDesc.id}'`,
     expiresAt,
     context: {
       source: "agent-tool-execution",
       tool_id: state.toolDesc.id,
-      tool_risk: state.toolDesc.risk,
       tool_call_id: toolCallId,
       tool_match_target: state.matchTarget,
       approval_step_index: state.approvalStepIndex ?? 0,

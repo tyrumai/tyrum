@@ -110,6 +110,64 @@ describe("PolicyConfigSection", () => {
     cleanupAdminHttpPage(page);
   });
 
+  it("saves the approvals auto-review mode from the editor", async () => {
+    const onSave = vi.fn(async () => true);
+    const page = renderIntoDocument(
+      React.createElement(PolicyConfigSection, {
+        effective: {
+          sha256: "policy-sha-approvals",
+          bundle: {
+            v: 1,
+            approvals: {
+              auto_review: {
+                mode: "auto_review",
+              },
+            },
+          },
+          sources: { deployment: "default", agent: null, playbook: null },
+        },
+        currentRevision: null,
+        revisions: [],
+        loadBusy: false,
+        loadError: null,
+        saveBusy: false,
+        saveError: null,
+        revertBusy: false,
+        revertError: null,
+        canMutate: true,
+        requestEnter: () => {},
+        onRefresh: () => {},
+        onSave,
+        onRevert: async () => undefined,
+      }),
+    );
+
+    await flush();
+
+    setSelectValue(
+      getByTestId<HTMLSelectElement>(page.container, "policy-config-approvals-auto-review-mode"),
+      "manual_only",
+    );
+
+    click(getByTestId<HTMLButtonElement>(page.container, "policy-config-save"));
+    click(getByTestId<HTMLElement>(document.body, "confirm-danger-checkbox"));
+    await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "confirm-danger-confirm"));
+    await flush();
+
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        approvals: {
+          auto_review: {
+            mode: "manual_only",
+          },
+        },
+      }),
+      "",
+    );
+
+    cleanupAdminHttpPage(page);
+  });
+
   it("resets the dirty state after a successful save even before refreshed props arrive", async () => {
     const onSave = vi.fn(async () => true);
     const page = renderIntoDocument(

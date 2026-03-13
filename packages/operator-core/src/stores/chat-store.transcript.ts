@@ -285,31 +285,6 @@ export function readApprovalThreadId(payload: Record<string, unknown> | null): s
   return typeof threadId === "string" && threadId.trim().length > 0 ? threadId : null;
 }
 
-function readApprovalRequestContext(
-  payload: Record<string, unknown> | null,
-): Record<string, unknown> | null {
-  const context = payload?.["context"];
-  return context && typeof context === "object" && !Array.isArray(context)
-    ? (context as Record<string, unknown>)
-    : null;
-}
-
-export function readApprovalRequestSessionId(
-  payload: Record<string, unknown> | null,
-): string | null {
-  const context = readApprovalRequestContext(payload);
-  const sessionId = context?.["session_id"];
-  return typeof sessionId === "string" && sessionId.trim().length > 0 ? sessionId : null;
-}
-
-export function readApprovalRequestThreadId(
-  payload: Record<string, unknown> | null,
-): string | null {
-  const context = readApprovalRequestContext(payload);
-  const threadId = context?.["thread_id"];
-  return typeof threadId === "string" && threadId.trim().length > 0 ? threadId : null;
-}
-
 export function toApprovalTranscriptItem(
   payload: Record<string, unknown> | null,
   occurredAt: string,
@@ -349,31 +324,6 @@ export function toApprovalTranscriptItem(
       ? { tool_call_id: context["tool_call_id"] as string }
       : {}),
     ...(typeof scope?.["run_id"] === "string" ? { run_id: scope["run_id"] as string } : {}),
-  };
-}
-
-export function toApprovalRequestTranscriptItem(
-  payload: Record<string, unknown> | null,
-  occurredAt: string,
-): SessionTranscriptApprovalItem | null {
-  if (!payload) return null;
-  const approvalId =
-    typeof payload["approval_id"] === "string" ? payload["approval_id"].trim() : "";
-  const prompt = typeof payload["prompt"] === "string" ? payload["prompt"] : "";
-  const context = readApprovalRequestContext(payload);
-  if (!approvalId || !prompt) return null;
-  return {
-    kind: "approval",
-    id: approvalId,
-    approval_id: approvalId,
-    status: "pending",
-    title: "Approval required",
-    detail: prompt,
-    created_at: occurredAt,
-    updated_at: occurredAt,
-    ...(typeof context?.["tool_call_id"] === "string" && context["tool_call_id"].trim().length > 0
-      ? { tool_call_id: context["tool_call_id"] as string }
-      : {}),
   };
 }
 

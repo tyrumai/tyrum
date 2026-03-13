@@ -8,7 +8,6 @@ export type OperatorWsClient = Pick<
   | "on"
   | "off"
   | "respondTaskExecute"
-  | "respondApprovalRequest"
   | "approvalList"
   | "runList"
   | "approvalResolve"

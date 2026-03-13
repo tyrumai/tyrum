@@ -238,7 +238,6 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<
         secretProviderForTenant: secrets.secretProviderForTenant,
         defaultPolicyService: container.policyService,
         defaultLanguageModel: opts.languageModel,
-        approvalNotifier: { notify: () => {} },
         logger: container.logger,
       })
     : undefined;

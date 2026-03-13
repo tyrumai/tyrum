@@ -216,6 +216,13 @@ const PairingListResponse = z
   })
   .strict();
 
+const PairingGetResponse = z
+  .object({
+    status: z.literal("ok"),
+    pairing: NodePairingRequest,
+  })
+  .strict();
+
 const PairingMutateResponse = z
   .object({
     status: z.literal("ok"),
@@ -246,6 +253,7 @@ export type NodeCapabilityInspectionResponse = z.infer<
 >;
 export type NodeActionDispatchResponse = z.infer<typeof NodeActionDispatchResponseSchema>;
 export type PairingListResponse = z.infer<typeof PairingListResponse>;
+export type PairingGetResponse = z.infer<typeof PairingGetResponse>;
 export type PairingMutateResponse = z.infer<typeof PairingMutateResponse>;
 
 export interface StatusApi {
@@ -303,6 +311,7 @@ export interface PairingsApi {
     query?: z.input<typeof PairingsListQuery>,
     options?: TyrumRequestOptions,
   ): Promise<PairingListResponse>;
+  get(pairingId: number, options?: TyrumRequestOptions): Promise<PairingGetResponse>;
   approve(
     pairingId: number,
     input: z.input<typeof PairingApproveRequest>,
@@ -428,6 +437,16 @@ export function createPairingsApi(transport: HttpTransport): PairingsApi {
         path: "/pairings",
         query: parsedQuery,
         response: PairingListResponse,
+        signal: options?.signal,
+      });
+    },
+
+    async get(pairingId, options) {
+      const parsedPairingId = validateOrThrow(PairingIdParam, pairingId, "pairing id");
+      return await transport.request({
+        method: "GET",
+        path: `/pairings/${String(parsedPairingId)}`,
+        response: PairingGetResponse,
         signal: options?.signal,
       });
     },

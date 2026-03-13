@@ -91,13 +91,6 @@
     "default": "{}"
   },
   {
-    "table": "approvals",
-    "column": "resolution_json",
-    "shape": "any",
-    "nullable": true,
-    "default": null
-  },
-  {
     "table": "auth_profiles",
     "column": "config_json",
     "shape": "object",
@@ -439,13 +432,6 @@
     "shape": "object",
     "nullable": false,
     "default": "{}"
-  },
-  {
-    "table": "node_pairings",
-    "column": "resolved_by_json",
-    "shape": "object",
-    "nullable": true,
-    "default": null
   },
   {
     "table": "oauth_pending",

@@ -229,7 +229,7 @@ describe("chat-store transcript helpers", () => {
         {
           approval: {
             approval_id: "approval-1",
-            status: "pending",
+            status: "awaiting_human",
             prompt: "Approve deployment?",
             created_at: "2026-03-09T00:00:01.000Z",
             context: {
@@ -247,7 +247,7 @@ describe("chat-store transcript helpers", () => {
       id: "approval-1",
       approval_id: "approval-1",
       tool_call_id: "tool-call-1",
-      status: "pending",
+      status: "awaiting_human",
       title: "Approval required",
       detail: "Approve deployment?",
       created_at: "2026-03-09T00:00:01.000Z",
@@ -260,7 +260,7 @@ describe("chat-store transcript helpers", () => {
         {
           approval: {
             approval_id: "",
-            status: "pending",
+            status: "awaiting_human",
             prompt: "Approve deployment?",
           },
         },

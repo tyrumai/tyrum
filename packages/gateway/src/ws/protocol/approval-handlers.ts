@@ -66,10 +66,8 @@ async function handleApprovalListMessage(
 
   const rows =
     status === undefined
-      ? await deps.approvalDal.getPending({ tenantId })
-      : status === "cancelled"
-        ? []
-        : await deps.approvalDal.getByStatus({ tenantId, status });
+      ? await deps.approvalDal.listBlocked({ tenantId })
+      : await deps.approvalDal.getByStatus({ tenantId, status });
 
   const approvals = rows
     .map(toApprovalContract)

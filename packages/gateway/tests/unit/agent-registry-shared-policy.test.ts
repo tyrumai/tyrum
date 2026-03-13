@@ -57,7 +57,6 @@ describe("AgentRegistry shared policy wiring", () => {
       baseHome: home,
       secretProviderForTenant: () => ({ resolve: async () => undefined }) as never,
       defaultPolicyService: container.policyService,
-      approvalNotifier: { notify: () => undefined } as never,
       logger: container.logger,
     });
 
@@ -87,7 +86,6 @@ describe("AgentRegistry shared policy wiring", () => {
       baseHome: home,
       secretProviderForTenant: () => ({ resolve: async () => undefined }) as never,
       defaultPolicyService: container.policyService,
-      approvalNotifier: { notify: () => undefined } as never,
       pluginCatalogProvider: {
         loadGlobalRegistry: vi.fn(async () => firstPlugins),
         loadTenantRegistry,
@@ -121,7 +119,6 @@ describe("AgentRegistry shared policy wiring", () => {
       baseHome: home,
       secretProviderForTenant: () => ({ resolve: async () => undefined }) as never,
       defaultPolicyService: container.policyService,
-      approvalNotifier: { notify: () => undefined } as never,
       pluginCatalogProvider: {
         loadGlobalRegistry: vi.fn(async () => firstPlugins),
         loadTenantRegistry,

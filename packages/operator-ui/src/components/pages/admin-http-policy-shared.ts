@@ -46,6 +46,9 @@ export type PolicyArtifactsFormState = {
 };
 
 export type PolicyFormState = {
+  approvals: {
+    autoReviewMode: "auto_review" | "manual_only";
+  };
   tools: PolicyDomainFormState;
   networkEgress: PolicyDomainFormState;
   secrets: PolicyDomainFormState;
@@ -249,6 +252,9 @@ export function normalizeToolRows(rows: PolicyStringRow[]): PolicyStringRow[] {
 
 export function policyBundleToFormState(bundle: PolicyBundleT): PolicyFormState {
   return {
+    approvals: {
+      autoReviewMode: bundle.approvals?.auto_review?.mode ?? "auto_review",
+    },
     tools: createDomainFormState(bundle.tools, "deny", "tools"),
     networkEgress: createDomainFormState(bundle.network_egress, "deny", "network-egress"),
     secrets: createDomainFormState(bundle.secrets, "deny", "secrets"),
@@ -319,6 +325,11 @@ export function policyFormStateToBundle(state: PolicyFormState): PolicyBundleT {
 
   return {
     v: 1,
+    approvals: {
+      auto_review: {
+        mode: state.approvals.autoReviewMode,
+      },
+    },
     tools: toDomainBundle(state.tools, true),
     network_egress: toDomainBundle(state.networkEgress),
     secrets: toDomainBundle(state.secrets),

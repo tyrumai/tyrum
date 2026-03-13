@@ -15,6 +15,24 @@ const migrationsDir = join(__dirname, "../../migrations/sqlite");
 const fixturesDir = join(__dirname, "../fixtures/playbooks");
 const runtimeJsonHeaders = { "content-type": "application/json" };
 
+function forceManualOnlyApprovalReview(container: GatewayContainer): void {
+  const original = container.policyService.loadEffectiveBundle.bind(container.policyService);
+  vi.spyOn(container.policyService, "loadEffectiveBundle").mockImplementation(async (params) => {
+    const effective = await original(params);
+    return {
+      ...effective,
+      bundle: {
+        ...effective.bundle,
+        approvals: {
+          auto_review: {
+            mode: "manual_only" as const,
+          },
+        },
+      },
+    };
+  });
+}
+
 function restoreEnv(key: string, value: string | undefined) {
   if (value === undefined) {
     delete process.env[key];
@@ -64,6 +82,7 @@ async function createRuntimeContext(homeDir: string) {
     migrationsDir,
     tyrumHome: homeDir,
   });
+  forceManualOnlyApprovalReview(container);
   const engine = new ExecutionEngine({
     db: container.db,
     redactionEngine: container.redactionEngine,
@@ -154,6 +173,7 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
   });
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     restoreEnv("TYRUM_POLICY_ENABLED", originalEnv.TYRUM_POLICY_ENABLED);
     restoreEnv("TYRUM_POLICY_MODE", originalEnv.TYRUM_POLICY_MODE);
     restoreEnv("TYRUM_POLICY_BUNDLE_PATH", originalEnv.TYRUM_POLICY_BUNDLE_PATH);
@@ -350,20 +370,17 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
     ({ container, engine, app } = await createRuntimeContext(homeDir));
     const { runId, resumeToken } = await startPausedRunForApproval({ app, container, engine });
 
-    const nowIso = new Date().toISOString();
-    await container.db.run(
-      "UPDATE approvals SET status = 'approved', resolved_at = ?, resolution_json = ? WHERE tenant_id = ? AND resume_token = ?",
-      [
-        nowIso,
-        JSON.stringify({
-          decision: "approved",
-          resolved_at: nowIso,
-          reason: "approved concurrently",
-        }),
-        DEFAULT_TENANT_ID,
-        resumeToken,
-      ],
-    );
+    const approval = await container.approvalDal.getByResumeToken({
+      tenantId: DEFAULT_TENANT_ID,
+      resumeToken,
+    });
+    expect(approval?.approval_id).toBeTruthy();
+    await container.approvalDal.resolveWithEngineAction({
+      tenantId: DEFAULT_TENANT_ID,
+      approvalId: approval!.approval_id,
+      decision: "approved",
+      reason: "approved concurrently",
+    });
 
     const resumeRes = await app.request("/playbooks/runtime", {
       method: "POST",

@@ -28,7 +28,7 @@ export function emitPairingApprovedEvent(
 
   const evt = {
     event_id: crypto.randomUUID(),
-    type: "pairing.approved",
+    type: "pairing.updated",
     occurred_at: new Date().toISOString(),
     payload: { pairing: input.pairing, scoped_token: input.scopedToken },
   } satisfies WsEventEnvelope;

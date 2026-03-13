@@ -142,77 +142,6 @@ function registerDedupRequestTests(fixture: DedupFixture): void {
     expect(seen).toHaveLength(3);
     expect(seen.filter((id) => id === "task-1")).toHaveLength(1);
   });
-
-  it("dedupes approval.request retries by request_id across reconnect", async () => {
-    const server = createTestServer();
-    fixture.setServer(server);
-    const client = new TyrumClient({
-      url: server.url,
-      token: "t",
-      capabilities: [],
-      reconnect: true,
-      maxReconnectDelay: 25,
-    });
-    fixture.setClient(client);
-
-    let calls = 0;
-    const firstReceivedP = new Promise<unknown>((resolve) => {
-      client.on("approval_request", (msg) => {
-        calls += 1;
-        resolve(msg);
-      });
-    });
-
-    client.connect();
-    const ws1 = await withTimeout(server.waitForClient(), 2_000, "ws1 connection");
-    await acceptConnect(ws1);
-    await delay(10);
-
-    const confirmMsg = {
-      request_id: "approval-7",
-      type: "approval.request",
-      payload: {
-        approval_id: "550e8400-e29b-41d4-a716-446655440000",
-        approval_key: "approval-7",
-        kind: "other",
-        prompt: "Approve this?",
-        expires_at: null,
-      },
-    };
-    ws1.send(JSON.stringify(confirmMsg));
-
-    const first = await withTimeout(firstReceivedP, 2_000, "approval_request (first)");
-    expect(first).toEqual(confirmMsg);
-    expect(calls).toBe(1);
-
-    client.respondApprovalRequest("approval-7", false, "too risky");
-    const response1 = await withTimeout(
-      waitForMessage(ws1),
-      2_000,
-      "approval.request response (first)",
-    );
-    expect(response1).toEqual({
-      request_id: "approval-7",
-      type: "approval.request",
-      ok: true,
-      result: { approved: false, reason: "too risky" },
-    });
-
-    ws1.terminate();
-
-    const ws2 = await withTimeout(server.waitForClient(), 2_000, "ws2 reconnect");
-    await acceptConnect(ws2, "client-2");
-    await delay(10);
-
-    const response2P = withTimeout(waitForMessage(ws2), 2_000, "approval.request response (retry)");
-    ws2.send(JSON.stringify(confirmMsg));
-
-    await delay(25);
-    expect(calls).toBe(1);
-
-    const response2 = await response2P;
-    expect(response2).toEqual(response1);
-  });
 }
 
 function registerDedupEventTests(fixture: DedupFixture): void {
@@ -431,31 +360,6 @@ function registerDedupEventTests(fixture: DedupFixture): void {
       type: "task.execute",
       ok: true,
       result: { evidence: { status: 200 } },
-    });
-  });
-
-  it("sendHumanResponse sends correct JSON", async () => {
-    const server = createTestServer();
-    fixture.setServer(server);
-    const client = new TyrumClient({
-      url: server.url,
-      token: "t",
-      capabilities: [],
-    });
-    fixture.setClient(client);
-
-    client.connect();
-    const ws = await server.waitForClient();
-    await acceptConnect(ws);
-
-    client.respondApprovalRequest("approval-7", false, "too risky");
-    const response = await waitForMessage(ws);
-
-    expect(response).toEqual({
-      request_id: "approval-7",
-      type: "approval.request",
-      ok: true,
-      result: { approved: false, reason: "too risky" },
     });
   });
 }

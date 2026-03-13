@@ -18,7 +18,6 @@ function computeDeviceId(pubkeyDer: Buffer): string {
 
 export interface NodeRuntimeCallbacks {
   onStatusChange: (status: { connected: boolean; code?: number; reason?: string }) => void;
-  onConsentRequest: (msg: unknown) => void;
   onPlanUpdate: (msg: unknown) => void;
   onLog: (entry: { level: string; message: string; timestamp: string }) => void;
 }
@@ -181,11 +180,7 @@ export class NodeRuntime {
       });
     });
 
-    this.client.on("approval_request", (msg: unknown) => {
-      this.callbacks.onConsentRequest(msg);
-    });
-
-    this.client.on("plan_update", (msg: unknown) => {
+    this.client.on("plan_update", (msg) => {
       this.callbacks.onPlanUpdate(msg);
     });
 
@@ -215,10 +210,6 @@ export class NodeRuntime {
   disconnect(): void {
     this.client?.disconnect();
     this.client = null;
-  }
-
-  respondToConsent(requestId: string, approved: boolean, reason?: string): void {
-    this.client?.respondApprovalRequest(requestId, approved, reason);
   }
 
   private getEnabledCapabilities(): ClientCapability[] {

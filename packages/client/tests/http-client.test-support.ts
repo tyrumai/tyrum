@@ -170,6 +170,7 @@ export function samplePairing(): Record<string, unknown> {
   return {
     pairing_id: 7,
     status: "approved",
+    motivation: "This node requested pairing and passed review.",
     trust_level: "local",
     requested_at: now,
     node: {
@@ -189,12 +190,22 @@ export function samplePairing(): Record<string, unknown> {
         version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
       },
     ],
-    resolution: {
-      decision: "approved",
-      resolved_at: now,
+    latest_review: {
+      review_id: "550e8400-e29b-41d4-a716-446655440007",
+      target_type: "pairing",
+      target_id: "7",
+      reviewer_kind: "human",
+      reviewer_id: "operator-1",
+      state: "approved",
       reason: "approved by operator",
+      risk_level: "low",
+      risk_score: 10,
+      evidence: null,
+      decision_payload: null,
+      created_at: now,
+      started_at: now,
+      completed_at: now,
     },
-    resolved_at: now,
   };
 }
 

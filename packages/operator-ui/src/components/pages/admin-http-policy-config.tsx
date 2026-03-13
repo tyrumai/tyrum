@@ -37,7 +37,14 @@ export type {
   PolicyEffectiveBundle,
 };
 
-const EMPTY_POLICY_BUNDLE: PolicyBundleT = { v: 1 };
+const EMPTY_POLICY_BUNDLE: PolicyBundleT = {
+  v: 1,
+  approvals: {
+    auto_review: {
+      mode: "auto_review",
+    },
+  },
+};
 
 function normalizePolicyBundle(bundle: PolicyBundleT): PolicyBundleT {
   return policyFormStateToBundle(policyBundleToFormState(bundle));
@@ -134,6 +141,39 @@ export function PolicyConfigSection(props: PolicyConfigSectionProps): React.Reac
       ) : null}
 
       <div className="grid gap-4">
+        <Card data-testid="policy-config-approvals">
+          <CardHeader>
+            <SectionHeading
+              title="Approvals"
+              description="Choose whether guardian review runs first or every request goes straight to a human reviewer."
+            />
+          </CardHeader>
+          <CardContent className="grid gap-3">
+            <Select
+              label="Automatic approval review"
+              helperText="`Auto review` is the default and keeps guardian review ahead of human intervention."
+              value={formState.approvals.autoReviewMode}
+              data-testid="policy-config-approvals-auto-review-mode"
+              onChange={(event) => {
+                const next = event.currentTarget.value;
+                if (next !== "auto_review" && next !== "manual_only") return;
+                setFormState((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        approvals: {
+                          autoReviewMode: next,
+                        },
+                      }
+                    : prev,
+                );
+              }}
+            >
+              <option value="auto_review">Auto review</option>
+              <option value="manual_only">Manual only</option>
+            </Select>
+          </CardContent>
+        </Card>
         <DomainEditor
           title="Tools"
           description="Define the baseline tool behavior for the whole deployment."

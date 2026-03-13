@@ -154,6 +154,7 @@ export function createShutdownHandler(
     runtime.background.stateStoreLifecycleScheduler?.stop();
     runtime.protocol.workSignalScheduler?.stop();
     runtime.protocol.approvalEngineActionProcessor?.stop();
+    runtime.protocol.guardianReviewProcessor?.stop();
     runtime.edge.outboxPoller?.stop();
     runtime.edge.telegramProcessor?.stop();
     context.container.modelsDev.stopBackgroundRefresh();

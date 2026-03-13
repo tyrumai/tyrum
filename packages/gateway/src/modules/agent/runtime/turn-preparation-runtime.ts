@@ -37,7 +37,6 @@ import { resolveGatewayStateMode } from "../../runtime-state/mode.js";
 import { applyPersonaToIdentity, resolveAgentPersona } from "../persona.js";
 import { ToolSetBuilder } from "./tool-set-builder.js";
 import type { McpManager } from "../mcp-manager.js";
-import type { ApprovalNotifier } from "../../approval/notifier.js";
 import type { PluginRegistry } from "../../plugins/registry.js";
 import type { PolicyService } from "../../policy/service.js";
 
@@ -49,7 +48,6 @@ export interface TurnPreparationRuntimeDeps extends PrepareTurnHelperDeps {
   mcpManager: McpManager;
   plugins: PluginRegistry | undefined;
   policyService: PolicyService;
-  approvalNotifier: ApprovalNotifier;
   approvalWaitMs: number;
   approvalPollMs: number;
 }
@@ -368,7 +366,7 @@ export async function resolveToolsAndMemory(
     wsEventDb: deps.opts.container.db,
     policyService: deps.policyService,
     approvalDal: deps.opts.container.approvalDal,
-    approvalNotifier: deps.approvalNotifier as { notify: (approval: unknown) => void },
+    protocolDeps: deps.opts.protocolDeps,
     approvalWaitMs: deps.approvalWaitMs,
     approvalPollMs: deps.approvalPollMs,
     logger: deps.opts.container.logger,

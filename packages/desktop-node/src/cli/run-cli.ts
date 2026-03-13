@@ -210,14 +210,21 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
     console.error(`desktop-node: gateway_error: ${msg.payload.message}`);
   });
 
-  client.on("pairing.approved", (evt: { payload?: { scoped_token?: unknown } }) => {
-    const scoped = (evt.payload as { scoped_token?: unknown } | undefined)?.scoped_token;
-    if (typeof scoped === "string" && scoped.trim()) {
-      console.log("desktop-node: pairing approved (scoped token issued)");
-    } else {
-      console.log("desktop-node: pairing approved");
-    }
-  });
+  client.on(
+    "pairing.updated" as never,
+    (evt: { payload?: { pairing?: { status?: unknown }; scoped_token?: unknown } }) => {
+      const payload = evt.payload as
+        | { pairing?: { status?: unknown }; scoped_token?: unknown }
+        | undefined;
+      if (payload?.pairing?.status !== "approved") return;
+      const scoped = payload.scoped_token;
+      if (typeof scoped === "string" && scoped.trim()) {
+        console.log("desktop-node: pairing approved (scoped token issued)");
+      } else {
+        console.log("desktop-node: pairing approved");
+      }
+    },
+  );
 
   const permissions = {
     desktopScreenshot: true,

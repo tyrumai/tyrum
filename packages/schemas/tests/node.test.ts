@@ -13,6 +13,23 @@ describe("Node contracts", () => {
     last_seen_at: "2026-02-19T12:00:00Z",
   } as const;
 
+  const baseReview = {
+    review_id: "550e8400-e29b-41d4-a716-446655440111",
+    target_type: "pairing",
+    target_id: "1",
+    reviewer_kind: "guardian",
+    reviewer_id: "subagent-1",
+    state: "queued",
+    reason: null,
+    risk_level: null,
+    risk_score: null,
+    evidence: null,
+    decision_payload: null,
+    created_at: "2026-02-19T12:00:00Z",
+    started_at: null,
+    completed_at: null,
+  } as const;
+
   it("parses node identity", () => {
     const node = NodeIdentity.parse(baseNode);
     expect(node.node_id).toBe("node-1");
@@ -31,48 +48,36 @@ describe("Node contracts", () => {
   it("parses pairing request", () => {
     const req = NodePairingRequest.parse({
       pairing_id: 1,
-      status: "pending",
+      status: "queued",
+      motivation: "This node connected and needs trust and capability review.",
       requested_at: "2026-02-19T12:00:00Z",
       node: {
         node_id: "node-1",
         capabilities: [{ id: "tyrum.desktop.query", version: "1.0.0" }],
         last_seen_at: "2026-02-19T12:00:00Z",
       },
-      resolution: null,
-      resolved_at: null,
+      latest_review: baseReview,
     });
-    expect(req.status).toBe("pending");
+    expect(req.status).toBe("queued");
   });
 
-  it("rejects pending pairing requests with non-null resolution", () => {
+  it("rejects pairing request missing motivation", () => {
     expectRejects(NodePairingRequest, {
       pairing_id: 1,
-      status: "pending",
+      status: "queued",
       requested_at: "2026-02-19T12:00:00Z",
       node: baseNode,
-      resolution: { decision: "approved", resolved_at: "2026-02-19T12:00:00Z" },
-      resolved_at: null,
-    });
-  });
-
-  it("rejects non-pending pairing requests with resolution: null", () => {
-    expectRejects(NodePairingRequest, {
-      pairing_id: 1,
-      status: "approved",
-      requested_at: "2026-02-19T12:00:00Z",
-      node: baseNode,
-      resolution: null,
-      resolved_at: null,
+      latest_review: baseReview,
     });
   });
 
   it("rejects pairing request missing node", () => {
     const req = {
       pairing_id: 1,
-      status: "pending",
+      status: "queued",
+      motivation: "This node connected and needs trust and capability review.",
       requested_at: "2026-02-19T12:00:00Z",
-      resolution: null,
-      resolved_at: null,
+      latest_review: baseReview,
     } as const;
     expectRejects(NodePairingRequest, req);
   });
@@ -80,11 +85,11 @@ describe("Node contracts", () => {
   it("rejects pairing request with wrong pairing_id type", () => {
     expectRejects(NodePairingRequest, {
       pairing_id: "1",
-      status: "pending",
+      status: "queued",
+      motivation: "This node connected and needs trust and capability review.",
       requested_at: "2026-02-19T12:00:00Z",
       node: baseNode,
-      resolution: null,
-      resolved_at: null,
+      latest_review: baseReview,
     });
   });
 });

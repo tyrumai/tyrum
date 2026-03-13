@@ -31,6 +31,9 @@ describe("resolveApproval", () => {
       workspaceId: DEFAULT_WORKSPACE_ID,
       approvalKey: `approval:${randomUUID()}`,
       prompt: "Allow bash?",
+      motivation: "Human review is required before creating a standing bash override.",
+      kind: "policy",
+      status: "awaiting_human",
       context: {
         policy: {
           suggested_overrides: [
@@ -63,7 +66,24 @@ describe("resolveApproval", () => {
     expect(first.transitioned).toBe(true);
     expect(first.approval.status).toBe("approved");
     expect(first.createdOverrides).toHaveLength(1);
-    expect(emittedTypes).toEqual(["policy_override.created", "approval.resolved"]);
+    expect(emittedTypes).toEqual(["policy_override.created", "approval.updated"]);
+    expect(
+      (
+        await approvalDal.getById({
+          tenantId: DEFAULT_TENANT_ID,
+          approvalId: approval.approval_id,
+          includeReviews: true,
+        })
+      )?.latest_review?.decision_payload,
+    ).toEqual({
+      decision: "approved",
+      reason: null,
+      mode: "always",
+      selected_overrides: [
+        { tool_id: "bash", pattern: "echo hi", workspace_id: DEFAULT_WORKSPACE_ID },
+      ],
+      actor: { kind: "http" },
+    });
 
     const second = await resolveApproval(
       {
@@ -87,7 +107,7 @@ describe("resolveApproval", () => {
     expect(second.transitioned).toBe(false);
     expect(second.approval.status).toBe("approved");
     expect(second.createdOverrides).toBeUndefined();
-    expect(emittedTypes).toEqual(["policy_override.created", "approval.resolved"]);
+    expect(emittedTypes).toEqual(["policy_override.created", "approval.updated"]);
     expect(
       await policyOverrideDal.list({
         tenantId: DEFAULT_TENANT_ID,
@@ -108,6 +128,9 @@ describe("resolveApproval", () => {
       workspaceId: DEFAULT_WORKSPACE_ID,
       approvalKey: `approval:${randomUUID()}`,
       prompt: "Allow bash?",
+      motivation: "Human review is required before creating a standing bash override.",
+      kind: "policy",
+      status: "awaiting_human",
       context: {
         policy: {
           suggested_overrides: [
@@ -142,7 +165,7 @@ describe("resolveApproval", () => {
         tenantId: DEFAULT_TENANT_ID,
         approvalId: approval.approval_id,
       }),
-    ).toMatchObject({ status: "pending" });
+    ).toMatchObject({ status: "awaiting_human" });
     expect(
       await policyOverrideDal.list({
         tenantId: DEFAULT_TENANT_ID,

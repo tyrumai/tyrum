@@ -5,10 +5,10 @@ import type { AgentRegistry } from "../modules/agent/registry.js";
 import type { AuthTokenService } from "../modules/auth/auth-token-service.js";
 import type { SlidingWindowRateLimiter } from "../modules/auth/rate-limiter.js";
 import type { ApprovalEngineActionProcessor } from "../modules/approval/engine-action-processor.js";
-import type { WsNotifier } from "../modules/approval/notifier.js";
 import type { OutboxDal } from "../modules/backplane/outbox-dal.js";
 import type { ConnectionDirectoryDal } from "../modules/backplane/connection-directory.js";
 import type { OutboxPoller } from "../modules/backplane/outbox-poller.js";
+import type { GuardianReviewProcessor } from "../modules/review/guardian-review-processor.js";
 import type { TelegramChannelProcessor } from "../modules/channels/telegram.js";
 import type { ExecutionEngine } from "../modules/execution/engine.js";
 import type { ExecutionWorkerLoop } from "../modules/execution/worker-loop.js";
@@ -72,9 +72,9 @@ export interface ProtocolRuntime {
   edgeEngine?: ExecutionEngine;
   hooksRuntime?: LifecycleHooksRuntime;
   approvalEngineActionProcessor?: ApprovalEngineActionProcessor;
+  guardianReviewProcessor?: GuardianReviewProcessor;
   taskResults: TaskResultRegistry;
   protocolDeps: ProtocolDeps;
-  approvalNotifier: WsNotifier;
 }
 
 export interface EdgeRuntime {

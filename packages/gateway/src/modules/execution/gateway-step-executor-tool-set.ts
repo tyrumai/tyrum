@@ -70,9 +70,14 @@ function createApprovalLoader(input: BuildToolSetInput) {
     const row = await input.container.db.get<{
       status: string;
       context_json: string;
-      resolution_json: string | null;
+      latest_review_reason: string | null;
     }>(
-      "SELECT status, context_json, resolution_json FROM approvals WHERE tenant_id = ? AND approval_id = ?",
+      `SELECT a.status, a.context_json, r.reason AS latest_review_reason
+       FROM approvals a
+       LEFT JOIN review_entries r
+         ON r.tenant_id = a.tenant_id
+        AND r.review_id = a.latest_review_id
+       WHERE a.tenant_id = ? AND a.approval_id = ?`,
       [input.executionContext.tenantId, approvalId],
     );
     if (!row) {
@@ -90,16 +95,7 @@ function createApprovalLoader(input: BuildToolSetInput) {
       });
       context = {};
     }
-    const resolution = row.resolution_json
-      ? ((): { reason?: string } | undefined => {
-          try {
-            return JSON.parse(row.resolution_json) as { reason?: string };
-          } catch {
-            return undefined;
-          }
-        })()
-      : undefined;
-    cachedApproval = { status: row.status, context, reason: resolution?.reason ?? null };
+    cachedApproval = { status: row.status, context, reason: row.latest_review_reason ?? null };
     return cachedApproval;
   };
 }
@@ -282,7 +278,12 @@ export function buildToolSet(input: BuildToolSetInput): ToolSet {
         if (!state.shouldRequireApproval) return false;
 
         const approval = await loadApproval();
-        if (approval && approval.status !== "pending") {
+        if (
+          approval &&
+          approval.status !== "queued" &&
+          approval.status !== "reviewing" &&
+          approval.status !== "awaiting_human"
+        ) {
           const matches = matchesApprovedToolContext({
             context: approval.context,
             toolId: input2.toolId,

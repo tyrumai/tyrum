@@ -40,7 +40,6 @@ describe("ToolSetBuilder shared mode", () => {
         evaluateToolCall: vi.fn(),
       } as never,
       approvalDal: {} as never,
-      approvalNotifier: { notify() {} },
       approvalWaitMs: 120_000,
       approvalPollMs: 500,
       logger: { info() {} },

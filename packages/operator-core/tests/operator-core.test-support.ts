@@ -8,6 +8,7 @@ import type {
   ExecutionStep,
   NodePairingRequest,
   PresenceEntry,
+  ReviewEntry,
 } from "@tyrum/schemas";
 import type {
   PairingListResponse,
@@ -200,6 +201,24 @@ export function sampleDesktopEnvironment(): DesktopEnvironment {
   };
 }
 
+function sampleReview(
+  input: Partial<ReviewEntry> &
+    Pick<ReviewEntry, "review_id" | "target_type" | "target_id" | "reviewer_kind" | "state">,
+): ReviewEntry {
+  return {
+    reviewer_id: null,
+    reason: null,
+    risk_level: null,
+    risk_score: null,
+    evidence: null,
+    decision_payload: null,
+    created_at: "2026-01-01T00:00:00.000Z",
+    started_at: null,
+    completed_at: null,
+    ...input,
+  };
+}
+
 export function createFakeHttpClient(): FakeHttpClient {
   const calls: HttpCallCounts = {
     statusGet: 0,
@@ -296,35 +315,46 @@ export function createFakeHttpClient(): FakeHttpClient {
 
 export function sampleApprovalPending(): Approval {
   return {
-    approval_id: 1,
-    approval_key: "approval:1",
-    kind: "other",
-    status: "pending",
+    approval_id: "11111111-1111-1111-1111-111111111111",
+    approval_key: "approval:11111111-1111-1111-1111-111111111111",
+    kind: "policy",
+    status: "awaiting_human",
     prompt: "Approve?",
+    motivation: "Approval is required before execution can continue.",
     created_at: "2026-01-01T00:00:00.000Z",
-    resolution: null,
+    expires_at: null,
+    latest_review: sampleReview({
+      review_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+      target_type: "approval",
+      target_id: "11111111-1111-1111-1111-111111111111",
+      reviewer_kind: "human",
+      state: "requested_human",
+    }),
   };
 }
 
 export function sampleApprovalApproved(): Approval {
   return {
-    approval_id: 1,
-    approval_key: "approval:1",
-    kind: "other",
+    ...sampleApprovalPending(),
     status: "approved",
-    prompt: "Approve?",
-    created_at: "2026-01-01T00:00:00.000Z",
-    resolution: {
-      decision: "approved",
-      resolved_at: "2026-01-01T00:00:01.000Z",
-    },
+    latest_review: sampleReview({
+      review_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+      target_type: "approval",
+      target_id: "11111111-1111-1111-1111-111111111111",
+      reviewer_kind: "human",
+      state: "approved",
+      reason: "approved",
+      completed_at: "2026-01-01T00:00:01.000Z",
+    }),
   };
 }
 
 export function samplePairingPending(): NodePairingRequest {
   return {
     pairing_id: 10,
-    status: "pending",
+    status: "awaiting_human",
+    motivation: "A new node wants to connect.",
+    trust_level: "local",
     requested_at: "2026-01-01T00:00:00.000Z",
     node: {
       node_id: "node-1",
@@ -333,8 +363,13 @@ export function samplePairingPending(): NodePairingRequest {
       last_seen_at: "2026-01-01T00:00:00.000Z",
     },
     capability_allowlist: [],
-    resolution: null,
-    resolved_at: null,
+    latest_review: sampleReview({
+      review_id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+      target_type: "pairing",
+      target_id: "10",
+      reviewer_kind: "human",
+      state: "requested_human",
+    }),
   };
 }
 
@@ -343,11 +378,15 @@ export function samplePairingApproved(): NodePairingRequest {
     ...samplePairingPending(),
     status: "approved",
     trust_level: "local",
-    resolution: {
-      decision: "approved",
-      resolved_at: "2026-01-01T00:00:01.000Z",
-    },
-    resolved_at: "2026-01-01T00:00:01.000Z",
+    latest_review: sampleReview({
+      review_id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+      target_type: "pairing",
+      target_id: "10",
+      reviewer_kind: "human",
+      state: "approved",
+      reason: "approved",
+      completed_at: "2026-01-01T00:00:01.000Z",
+    }),
   };
 }
 
@@ -355,11 +394,15 @@ export function samplePairingDenied(): NodePairingRequest {
   return {
     ...samplePairingPending(),
     status: "denied",
-    resolution: {
-      decision: "denied",
-      resolved_at: "2026-01-01T00:00:01.000Z",
-    },
-    resolved_at: "2026-01-01T00:00:01.000Z",
+    latest_review: sampleReview({
+      review_id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+      target_type: "pairing",
+      target_id: "10",
+      reviewer_kind: "human",
+      state: "denied",
+      reason: "denied",
+      completed_at: "2026-01-01T00:00:01.000Z",
+    }),
   };
 }
 
@@ -367,11 +410,15 @@ export function samplePairingRevoked(): NodePairingRequest {
   return {
     ...samplePairingPending(),
     status: "revoked",
-    resolution: {
-      decision: "revoked",
-      resolved_at: "2026-01-01T00:00:01.000Z",
-    },
-    resolved_at: "2026-01-01T00:00:01.000Z",
+    latest_review: sampleReview({
+      review_id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+      target_type: "pairing",
+      target_id: "10",
+      reviewer_kind: "human",
+      state: "revoked",
+      reason: "revoked",
+      completed_at: "2026-01-01T00:00:01.000Z",
+    }),
   };
 }
 

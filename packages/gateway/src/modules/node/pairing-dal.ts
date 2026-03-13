@@ -1,20 +1,35 @@
 import {
   CapabilityDescriptor as CapabilityDescriptorSchema,
+  NodePairingRequest,
   type CapabilityDescriptor,
   normalizeCapabilityDescriptors,
   type NodePairingRequest as NodePairingRequestT,
   type NodePairingTrustLevel,
+  type ReviewEntry as ReviewEntryT,
 } from "@tyrum/schemas";
-import { NodePairingRequest } from "@tyrum/schemas";
-import type { SqlDb } from "../../statestore/types.js";
 import { createHash, randomBytes } from "node:crypto";
+import type { SqlDb } from "../../statestore/types.js";
+import { normalizeDbDateTime } from "../../utils/db-time.js";
 import { requireTenantIdValue } from "../identity/scope.js";
 import { parseStoredCapabilityDescriptors } from "./stored-capability-descriptors.js";
+import {
+  type CreateReviewEntryParams,
+  ReviewEntryDal,
+  type ReviewEntryRow,
+  type ReviewerKind,
+} from "../review/dal.js";
 
-type NodePairingStatus = "pending" | "approved" | "denied" | "revoked";
+export type NodePairingStatus =
+  | "queued"
+  | "reviewing"
+  | "awaiting_human"
+  | "approved"
+  | "denied"
+  | "revoked";
 
 interface RawNodePairingRow {
   pairing_id: number;
+  tenant_id: string;
   status: string;
   trust_level: string;
   node_id: string;
@@ -23,23 +38,18 @@ interface RawNodePairingRow {
   capabilities_json: string;
   capability_allowlist_json: string;
   metadata_json: string;
+  motivation: string;
+  latest_review_id: string | null;
   requested_at: string | Date;
   last_seen_at: string | Date;
-  resolved_at: string | Date | null;
-  resolved_by_json: string | null;
-  resolution_reason: string | null;
   updated_at: string | Date;
-}
-
-function normalizeTime(value: string | Date): string {
-  return value instanceof Date ? value.toISOString() : value;
+  scoped_token_sha256: string | null;
 }
 
 function parseJsonOrEmpty(raw: string): unknown {
   try {
     return JSON.parse(raw) as unknown;
   } catch {
-    // Intentional: treat invalid JSON columns as empty metadata.
     return {};
   }
 }
@@ -49,9 +59,8 @@ function parseCapabilities(raw: string): CapabilityDescriptor[] {
     const parsed = JSON.parse(raw) as unknown;
     return parseStoredCapabilityDescriptors(parsed);
   } catch {
-    // Intentional: treat invalid JSON columns as empty capabilities.
+    return [];
   }
-  return [];
 }
 
 function parseAllowlist(raw: string): CapabilityDescriptor[] {
@@ -61,11 +70,10 @@ function parseAllowlist(raw: string): CapabilityDescriptor[] {
     return normalizeCapabilityDescriptors(
       parsed
         .map((entry) => CapabilityDescriptorSchema.safeParse(entry))
-        .filter((res) => res.success)
-        .map((res) => res.data),
+        .filter((result) => result.success)
+        .map((result) => result.data),
     );
   } catch {
-    // Intentional: treat invalid JSON columns as empty allowlists.
     return [];
   }
 }
@@ -73,6 +81,20 @@ function parseAllowlist(raw: string): CapabilityDescriptor[] {
 function parseTrustLevel(raw: string): NodePairingTrustLevel | undefined {
   if (raw === "local" || raw === "remote") return raw;
   return undefined;
+}
+
+function normalizeStatus(raw: string): NodePairingStatus {
+  if (
+    raw === "queued" ||
+    raw === "reviewing" ||
+    raw === "awaiting_human" ||
+    raw === "approved" ||
+    raw === "denied" ||
+    raw === "revoked"
+  ) {
+    return raw;
+  }
+  return "awaiting_human";
 }
 
 function sha256Hex(input: string): string {
@@ -83,49 +105,76 @@ function generateScopedToken(): string {
   return randomBytes(32).toString("hex");
 }
 
-function toPairing(row: RawNodePairingRow): NodePairingRequestT {
-  const status: NodePairingStatus =
-    row.status === "approved" || row.status === "denied" || row.status === "revoked"
-      ? row.status
-      : "pending";
+function toReviewEntryContract(review: ReviewEntryRow): ReviewEntryT {
+  const { tenant_id: _tenantId, ...contract } = review;
+  return contract;
+}
 
-  const requestedAt = normalizeTime(row.requested_at);
-  const lastSeenAt = normalizeTime(row.last_seen_at);
-  const resolvedAt = row.resolved_at ? normalizeTime(row.resolved_at) : null;
+export function isPairingBlockedStatus(status: NodePairingStatus): boolean {
+  return status === "queued" || status === "reviewing" || status === "awaiting_human";
+}
 
-  const resolution =
-    status === "pending"
-      ? null
-      : {
-          decision: status,
-          resolved_at: resolvedAt ?? requestedAt,
-          reason: row.resolution_reason ?? undefined,
-          resolved_by: row.resolved_by_json ? parseJsonOrEmpty(row.resolved_by_json) : undefined,
-        };
-
-  return NodePairingRequest.parse({
-    pairing_id: row.pairing_id,
-    status,
-    trust_level: parseTrustLevel(row.trust_level),
-    requested_at: requestedAt,
-    node: {
-      node_id: row.node_id,
-      label: row.label ?? undefined,
-      capabilities: parseCapabilities(row.capabilities_json),
-      last_seen_at: lastSeenAt,
-      metadata: parseJsonOrEmpty(row.metadata_json),
-    },
-    capability_allowlist: parseAllowlist(row.capability_allowlist_json),
-    resolution,
-    resolved_at: resolvedAt,
-  });
+export function pairingNeedsHumanDecision(status: NodePairingStatus): boolean {
+  return status === "awaiting_human";
 }
 
 export class NodePairingDal {
   constructor(private readonly db: SqlDb) {}
 
+  private get reviewEntries(): ReviewEntryDal {
+    return new ReviewEntryDal(this.db);
+  }
+
   private requireTenantId(tenantId: string | null | undefined): string {
     return requireTenantIdValue(tenantId);
+  }
+
+  private async hydrate(
+    row: RawNodePairingRow,
+    options?: { includeReviews?: boolean },
+  ): Promise<NodePairingRequestT> {
+    const latestReview = row.latest_review_id
+      ? await this.reviewEntries.getById({
+          tenantId: row.tenant_id,
+          reviewId: row.latest_review_id,
+        })
+      : undefined;
+    const reviews = options?.includeReviews
+      ? await this.reviewEntries.listByTarget({
+          tenantId: row.tenant_id,
+          targetType: "pairing",
+          targetId: row.pairing_id,
+        })
+      : undefined;
+    return NodePairingRequest.parse({
+      pairing_id: row.pairing_id,
+      status: normalizeStatus(row.status),
+      motivation: row.motivation,
+      trust_level: parseTrustLevel(row.trust_level),
+      requested_at: normalizeDbDateTime(row.requested_at) ?? new Date().toISOString(),
+      node: {
+        node_id: row.node_id,
+        label: row.label ?? undefined,
+        capabilities: parseCapabilities(row.capabilities_json),
+        last_seen_at: normalizeDbDateTime(row.last_seen_at) ?? new Date().toISOString(),
+        metadata: parseJsonOrEmpty(row.metadata_json),
+      },
+      capability_allowlist: parseAllowlist(row.capability_allowlist_json),
+      latest_review: latestReview ? toReviewEntryContract(latestReview) : null,
+      ...(reviews ? { reviews: reviews.map(toReviewEntryContract) } : {}),
+    });
+  }
+
+  private async getRawById(
+    pairingId: number,
+    tenantId: string,
+  ): Promise<RawNodePairingRow | undefined> {
+    return await this.db.get<RawNodePairingRow>(
+      `SELECT *
+       FROM node_pairings
+       WHERE tenant_id = ? AND pairing_id = ?`,
+      [this.requireTenantId(tenantId), pairingId],
+    );
   }
 
   async getNodeIdForScopedToken(
@@ -141,7 +190,7 @@ export class NodePairingDal {
     tenantId?: string,
   ): Promise<{ tenantId: string; nodeId: string } | undefined> {
     const token = scopedToken.trim();
-    if (token.length === 0) return undefined;
+    if (!token) return undefined;
     const hash = sha256Hex(token);
     const row =
       typeof tenantId === "string"
@@ -171,18 +220,16 @@ export class NodePairingDal {
          AND node_id = ?`,
       [this.requireTenantId(tenantId), nodeId],
     );
-    return row ? toPairing(row) : undefined;
+    return row ? await this.hydrate(row) : undefined;
   }
 
-  async getById(pairingId: number, tenantId: string): Promise<NodePairingRequestT | undefined> {
-    const row = await this.db.get<RawNodePairingRow>(
-      `SELECT *
-       FROM node_pairings
-       WHERE tenant_id = ?
-         AND pairing_id = ?`,
-      [this.requireTenantId(tenantId), pairingId],
-    );
-    return row ? toPairing(row) : undefined;
+  async getById(
+    pairingId: number,
+    tenantId: string,
+    includeReviews = false,
+  ): Promise<NodePairingRequestT | undefined> {
+    const row = await this.getRawById(pairingId, tenantId);
+    return row ? await this.hydrate(row, { includeReviews }) : undefined;
   }
 
   async list(params: {
@@ -191,21 +238,22 @@ export class NodePairingDal {
     limit?: number;
   }): Promise<NodePairingRequestT[]> {
     const tenantId = this.requireTenantId(params.tenantId);
-    const where: string[] = [];
     const values: unknown[] = [tenantId];
-    where.push("tenant_id = ?");
+    const where = ["tenant_id = ?"];
     if (params.status) {
       where.push("status = ?");
       values.push(params.status);
     }
-    const limit = Math.max(1, Math.min(500, params.limit ?? 100));
-    const sql =
-      `SELECT * FROM node_pairings` +
-      (where.length > 0 ? ` WHERE ${where.join(" AND ")}` : "") +
-      ` ORDER BY requested_at DESC LIMIT ?`;
-    values.push(limit);
-    const rows = await this.db.all<RawNodePairingRow>(sql, values);
-    return rows.map(toPairing);
+    values.push(Math.max(1, Math.min(500, params.limit ?? 100)));
+    const rows = await this.db.all<RawNodePairingRow>(
+      `SELECT *
+       FROM node_pairings
+       WHERE ${where.join(" AND ")}
+       ORDER BY requested_at DESC
+       LIMIT ?`,
+      values,
+    );
+    return await Promise.all(rows.map((row) => this.hydrate(row)));
   }
 
   async upsertOnConnect(params: {
@@ -215,6 +263,8 @@ export class NodePairingDal {
     label?: string | null;
     capabilities: readonly CapabilityDescriptor[];
     metadata?: unknown;
+    motivation?: string;
+    initialStatus?: NodePairingStatus;
     nowIso?: string;
   }): Promise<NodePairingRequestT> {
     const tenantId = this.requireTenantId(params.tenantId);
@@ -223,6 +273,9 @@ export class NodePairingDal {
       normalizeCapabilityDescriptors(params.capabilities ?? []),
     );
     const metadataJson = JSON.stringify(params.metadata ?? {});
+    const motivation =
+      params.motivation?.trim() ||
+      "Node requested pairing; evaluate trust level and allowed capabilities before enabling node actions.";
 
     const existing = await this.db.get<RawNodePairingRow>(
       `SELECT *
@@ -242,229 +295,241 @@ export class NodePairingDal {
            label,
            capabilities_json,
            metadata_json,
+           motivation,
+           latest_review_id,
            requested_at,
            last_seen_at,
            updated_at
-         ) VALUES (?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?)
+         )
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)
          RETURNING *`,
         [
           tenantId,
+          params.initialStatus ?? "queued",
           params.nodeId,
           params.pubkey ?? null,
           params.label ?? null,
           capabilitiesJson,
           metadataJson,
+          motivation,
           nowIso,
           nowIso,
           nowIso,
         ],
       );
       if (!inserted) {
-        throw new Error("node pairing insert failed");
+        throw new Error("failed to create node pairing");
       }
-      return toPairing(inserted);
+      return await this.hydrate(inserted);
     }
 
-    const status = existing.status as NodePairingStatus;
-    if (status === "approved") {
-      await this.db.run(
-        `UPDATE node_pairings
-         SET pubkey = COALESCE(?, pubkey),
-             label = COALESCE(?, label),
-             capabilities_json = ?,
-             metadata_json = ?,
-             last_seen_at = ?,
-             updated_at = ?
-         WHERE tenant_id = ?
-           AND node_id = ?`,
-        [
-          params.pubkey ?? null,
-          params.label ?? null,
-          capabilitiesJson,
-          metadataJson,
-          nowIso,
-          nowIso,
-          tenantId,
-          params.nodeId,
-        ],
-      );
-      const updated = await this.getByNodeId(params.nodeId, tenantId);
-      if (!updated) throw new Error("node pairing update failed");
-      return updated;
-    }
+    const existingStatus = normalizeStatus(existing.status);
+    const nextStatus =
+      existingStatus === "denied" || existingStatus === "revoked"
+        ? (params.initialStatus ?? "queued")
+        : existingStatus;
+    const clearApprovalState = existingStatus === "denied" || existingStatus === "revoked";
 
-    if (status === "pending") {
-      await this.db.run(
-        `UPDATE node_pairings
-         SET pubkey = COALESCE(?, pubkey),
-             label = COALESCE(?, label),
-             capabilities_json = ?,
-             metadata_json = ?,
-             last_seen_at = ?,
-             updated_at = ?
-         WHERE tenant_id = ?
-           AND node_id = ?`,
-        [
-          params.pubkey ?? null,
-          params.label ?? null,
-          capabilitiesJson,
-          metadataJson,
-          nowIso,
-          nowIso,
-          tenantId,
-          params.nodeId,
-        ],
-      );
-      const updated = await this.getByNodeId(params.nodeId, tenantId);
-      if (!updated) throw new Error("node pairing pending update failed");
-      return updated;
-    }
-
-    // If the node was denied/revoked, a reconnect re-opens pairing as pending.
-    await this.db.run(
+    const updated = await this.db.get<RawNodePairingRow>(
       `UPDATE node_pairings
-       SET status = 'pending',
-           pubkey = COALESCE(?, pubkey),
-           label = COALESCE(?, label),
+       SET pubkey = ?,
+           label = ?,
            capabilities_json = ?,
            metadata_json = ?,
-           scoped_token_sha256 = NULL,
-           requested_at = ?,
+           motivation = ?,
+           status = ?,
+           latest_review_id = CASE WHEN ? THEN NULL ELSE latest_review_id END,
+           requested_at = CASE WHEN ? THEN ? ELSE requested_at END,
            last_seen_at = ?,
-           resolved_at = NULL,
-           resolved_by_json = NULL,
-           resolution_reason = NULL,
-           updated_at = ?
+           updated_at = ?,
+           trust_level = CASE WHEN ? THEN 'remote' ELSE trust_level END,
+           capability_allowlist_json = CASE WHEN ? THEN '[]' ELSE capability_allowlist_json END,
+           scoped_token_sha256 = CASE WHEN ? THEN NULL ELSE scoped_token_sha256 END
        WHERE tenant_id = ?
-         AND node_id = ?`,
+         AND node_id = ?
+       RETURNING *`,
       [
         params.pubkey ?? null,
         params.label ?? null,
         capabilitiesJson,
         metadataJson,
+        motivation,
+        nextStatus,
+        clearApprovalState ? 1 : 0,
+        clearApprovalState ? 1 : 0,
         nowIso,
         nowIso,
         nowIso,
+        clearApprovalState ? 1 : 0,
+        clearApprovalState ? 1 : 0,
+        clearApprovalState ? 1 : 0,
         tenantId,
         params.nodeId,
       ],
     );
-
-    const updated = await this.getByNodeId(params.nodeId, tenantId);
-    if (!updated) throw new Error("node pairing reset failed");
-    return updated;
+    if (!updated) {
+      throw new Error("failed to update node pairing");
+    }
+    return await this.hydrate(updated);
   }
 
-  async resolve(
-    params:
-      | {
-          tenantId: string;
-          pairingId: number;
-          decision: "approved";
-          reason?: string;
-          resolvedBy?: unknown;
-          trustLevel: NodePairingTrustLevel;
-          capabilityAllowlist: readonly CapabilityDescriptor[];
-          nowIso?: string;
+  async transitionWithReview(input: {
+    tenantId: string;
+    pairingId: number;
+    status: NodePairingStatus;
+    reviewerKind: ReviewerKind;
+    reviewState: CreateReviewEntryParams["state"];
+    reviewerId?: string | null;
+    reason?: string;
+    riskLevel?: CreateReviewEntryParams["riskLevel"];
+    riskScore?: CreateReviewEntryParams["riskScore"];
+    evidence?: unknown;
+    decisionPayload?: unknown;
+    trustLevel?: NodePairingTrustLevel;
+    capabilityAllowlist?: readonly CapabilityDescriptor[];
+    allowedCurrentStatuses?: NodePairingStatus[];
+  }): Promise<
+    { pairing: NodePairingRequestT; transitioned: boolean; scopedToken?: string } | undefined
+  > {
+    return await this.db.transaction(async (tx) => {
+      const current = await tx.get<RawNodePairingRow>(
+        `SELECT *
+         FROM node_pairings
+         WHERE tenant_id = ? AND pairing_id = ?`,
+        [this.requireTenantId(input.tenantId), input.pairingId],
+      );
+      if (!current) return undefined;
+
+      const currentStatus = normalizeStatus(current.status);
+      if (
+        input.allowedCurrentStatuses &&
+        !input.allowedCurrentStatuses.includes(currentStatus) &&
+        currentStatus !== input.status
+      ) {
+        return { pairing: await new NodePairingDal(tx).hydrate(current), transitioned: false };
+      }
+      if (
+        currentStatus === input.status &&
+        (currentStatus === "approved" || currentStatus === "denied" || currentStatus === "revoked")
+      ) {
+        return { pairing: await new NodePairingDal(tx).hydrate(current), transitioned: false };
+      }
+
+      const review = await new ReviewEntryDal(tx).create({
+        tenantId: input.tenantId,
+        targetType: "pairing",
+        targetId: input.pairingId,
+        reviewerKind: input.reviewerKind,
+        reviewerId: input.reviewerId,
+        state: input.reviewState,
+        reason: input.reason,
+        riskLevel: input.riskLevel ?? null,
+        riskScore: input.riskScore ?? null,
+        evidence: input.evidence,
+        decisionPayload: input.decisionPayload,
+        startedAt: input.reviewState === "running" ? new Date().toISOString() : null,
+        completedAt:
+          input.reviewState === "running" || input.reviewState === "queued"
+            ? null
+            : new Date().toISOString(),
+      });
+
+      const shouldMintToken = input.status === "approved" && !current.scoped_token_sha256;
+      const scopedToken = shouldMintToken ? generateScopedToken() : undefined;
+      const scopedTokenSha = scopedToken ? sha256Hex(scopedToken) : current.scoped_token_sha256;
+
+      const updated = await tx.run(
+        `UPDATE node_pairings
+         SET status = ?,
+             latest_review_id = ?,
+             trust_level = COALESCE(?, trust_level),
+             capability_allowlist_json = COALESCE(?, capability_allowlist_json),
+             scoped_token_sha256 = ?,
+             updated_at = ?
+         WHERE tenant_id = ?
+           AND pairing_id = ?`,
+        [
+          input.status,
+          review.review_id,
+          input.trustLevel ?? null,
+          input.capabilityAllowlist
+            ? JSON.stringify(normalizeCapabilityDescriptors(input.capabilityAllowlist))
+            : null,
+          scopedTokenSha ?? null,
+          new Date().toISOString(),
+          this.requireTenantId(input.tenantId),
+          input.pairingId,
+        ],
+      );
+      if (updated.changes !== 1) {
+        throw new Error(`failed to update pairing ${String(input.pairingId)}`);
+      }
+
+      const next = await new NodePairingDal(tx).getById(input.pairingId, input.tenantId, true);
+      if (!next) {
+        throw new Error(`pairing ${String(input.pairingId)} disappeared after update`);
+      }
+      return { pairing: next, transitioned: true, scopedToken };
+    });
+  }
+
+  async resolve(input: {
+    tenantId: string;
+    pairingId: number;
+    decision: "approved" | "denied";
+    reason?: string;
+    resolvedBy?: unknown;
+    decisionPayload?: unknown;
+    reviewerKind?: ReviewerKind;
+    reviewerId?: string | null;
+    trustLevel?: NodePairingTrustLevel;
+    capabilityAllowlist?: readonly CapabilityDescriptor[];
+    allowedCurrentStatuses?: NodePairingStatus[];
+  }): Promise<
+    { pairing: NodePairingRequestT; scopedToken?: string; transitioned: boolean } | undefined
+  > {
+    const result = await this.transitionWithReview({
+      tenantId: input.tenantId,
+      pairingId: input.pairingId,
+      status: input.decision === "approved" ? "approved" : "denied",
+      reviewerKind: input.reviewerKind ?? "human",
+      reviewerId: input.reviewerId,
+      reviewState: input.decision === "approved" ? "approved" : "denied",
+      reason: input.reason,
+      decisionPayload: input.decisionPayload ?? input.resolvedBy,
+      trustLevel: input.trustLevel,
+      capabilityAllowlist: input.capabilityAllowlist,
+      allowedCurrentStatuses: input.allowedCurrentStatuses ?? ["awaiting_human"],
+    });
+    return result
+      ? {
+          pairing: result.pairing,
+          scopedToken: result.scopedToken,
+          transitioned: result.transitioned,
         }
-      | {
-          tenantId: string;
-          pairingId: number;
-          decision: "denied";
-          reason?: string;
-          resolvedBy?: unknown;
-          nowIso?: string;
-        },
-  ): Promise<{ pairing: NodePairingRequestT; scopedToken?: string } | undefined> {
-    const tenantId = this.requireTenantId(params.tenantId);
-    const nowIso = params.nowIso ?? new Date().toISOString();
-
-    const existing = await this.db.get<RawNodePairingRow>(
-      `SELECT *
-       FROM node_pairings
-       WHERE tenant_id = ?
-         AND pairing_id = ?
-         AND status = 'pending'`,
-      [tenantId, params.pairingId],
-    );
-    if (!existing) return undefined;
-
-    const trustLevel =
-      params.decision === "approved"
-        ? params.trustLevel
-        : (parseTrustLevel(existing.trust_level) ?? "remote");
-
-    const allowlist =
-      params.decision === "approved"
-        ? normalizeCapabilityDescriptors(params.capabilityAllowlist)
-        : parseAllowlist(existing.capability_allowlist_json);
-
-    const scopedToken = params.decision === "approved" ? generateScopedToken() : undefined;
-    const scopedTokenSha256 = scopedToken ? sha256Hex(scopedToken) : null;
-
-    const result = await this.db.run(
-      `UPDATE node_pairings
-       SET status = ?,
-           trust_level = ?,
-           capability_allowlist_json = ?,
-           scoped_token_sha256 = ?,
-           resolved_at = ?,
-           resolved_by_json = ?,
-           resolution_reason = ?,
-           updated_at = ?
-       WHERE tenant_id = ?
-         AND pairing_id = ?
-         AND status = 'pending'`,
-      [
-        params.decision,
-        trustLevel,
-        JSON.stringify(allowlist),
-        scopedTokenSha256,
-        nowIso,
-        JSON.stringify(params.resolvedBy ?? {}),
-        params.reason ?? null,
-        nowIso,
-        tenantId,
-        params.pairingId,
-      ],
-    );
-    if (result.changes === 0) return undefined;
-    const pairing = await this.getById(params.pairingId, tenantId);
-    if (!pairing) return undefined;
-    return { pairing, scopedToken };
+      : undefined;
   }
 
-  async revoke(params: {
+  async revoke(input: {
     tenantId: string;
     pairingId: number;
     reason?: string;
     resolvedBy?: unknown;
-    nowIso?: string;
+    decisionPayload?: unknown;
+    reviewerKind?: ReviewerKind;
+    reviewerId?: string | null;
   }): Promise<NodePairingRequestT | undefined> {
-    const tenantId = this.requireTenantId(params.tenantId);
-    const nowIso = params.nowIso ?? new Date().toISOString();
-
-    const result = await this.db.run(
-      `UPDATE node_pairings
-       SET status = 'revoked',
-           scoped_token_sha256 = NULL,
-           resolved_at = ?,
-           resolved_by_json = ?,
-           resolution_reason = ?,
-           updated_at = ?
-       WHERE tenant_id = ?
-         AND pairing_id = ?
-         AND status = 'approved'`,
-      [
-        nowIso,
-        JSON.stringify(params.resolvedBy ?? {}),
-        params.reason ?? null,
-        nowIso,
-        tenantId,
-        params.pairingId,
-      ],
-    );
-    if (result.changes === 0) return undefined;
-    return await this.getById(params.pairingId, tenantId);
+    const result = await this.transitionWithReview({
+      tenantId: input.tenantId,
+      pairingId: input.pairingId,
+      status: "revoked",
+      reviewerKind: input.reviewerKind ?? "human",
+      reviewerId: input.reviewerId,
+      reviewState: "revoked",
+      reason: input.reason,
+      decisionPayload: input.decisionPayload ?? input.resolvedBy,
+      allowedCurrentStatuses: ["approved"],
+    });
+    return result?.pairing;
   }
 }

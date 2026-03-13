@@ -25,7 +25,15 @@ import {
   syncToolLifecycle,
   upsertApprovalTranscript,
 } from "./tool-set-builder-lifecycle.js";
+import {
+  GUARDIAN_REVIEW_DECISION_TOOL_ID,
+  TURN_MEMORY_DECISION_TOOL_ID,
+  createGuardianReviewDecisionTool,
+  createTurnMemoryDecisionTool,
+} from "./tool-set-builder-internal-tools.js";
 import { createToolSetPolicyRuntime } from "./tool-set-builder-policy.js";
+import type { TurnMemoryDecisionCollector } from "./turn-memory-policy.js";
+import { type GuardianReviewDecisionCollector } from "../../review/guardian-review-mode.js";
 
 type BuildRuntimeToolSetInput = {
   deps: ToolSetBuilderDeps;
@@ -38,6 +46,8 @@ type BuildRuntimeToolSetInput = {
   laneQueue?: LaneQueueState;
   toolCallPolicyStates?: Map<string, ToolCallPolicyState>;
   model?: LanguageModel;
+  turnMemoryDecisionCollector?: TurnMemoryDecisionCollector;
+  guardianReviewDecisionCollector?: GuardianReviewDecisionCollector;
 };
 
 type ExecutionState = {
@@ -79,6 +89,16 @@ export function buildRuntimeToolSet(input: BuildRuntimeToolSetInput): ToolSet {
     );
   }
 
+  if (input.turnMemoryDecisionCollector) {
+    result[TURN_MEMORY_DECISION_TOOL_ID] = createTurnMemoryDecisionTool(
+      input.turnMemoryDecisionCollector,
+    );
+  }
+  if (input.guardianReviewDecisionCollector) {
+    result[GUARDIAN_REVIEW_DECISION_TOOL_ID] = createGuardianReviewDecisionTool(
+      input.guardianReviewDecisionCollector,
+    );
+  }
   return result;
 }
 
@@ -311,13 +331,17 @@ async function maybeHandleToolApproval(input: {
         toolCallId: input.toolCallId,
         toolId: input.toolDesc.id,
         status:
-          update.status === "pending"
+          update.status === "queued" ||
+          update.status === "reviewing" ||
+          update.status === "awaiting_human"
             ? "awaiting_approval"
             : update.status === "approved"
               ? "running"
               : "cancelled",
         summary:
-          update.status === "pending"
+          update.status === "queued" ||
+          update.status === "reviewing" ||
+          update.status === "awaiting_human"
             ? "Waiting for approval"
             : update.status === "approved"
               ? "Approval granted"
@@ -354,7 +378,7 @@ async function validateExistingExecutionApproval(input: {
   stepApprovalId?: string;
 }): Promise<string | undefined> {
   if (!input.stepApprovalId) {
-    return notApprovedJson(input.toolDesc.id, "pending");
+    return notApprovedJson(input.toolDesc.id, "awaiting_human");
   }
 
   const approval = await input.deps.approvalDal.getById({
@@ -376,7 +400,7 @@ async function validateExistingExecutionApproval(input: {
     ? undefined
     : notApprovedJson(
         input.toolDesc.id,
-        approval?.status ?? "pending",
+        approval?.status ?? "awaiting_human",
         input.stepApprovalId,
         extractApprovalReason(approval),
       );

@@ -3,7 +3,6 @@ import { readdir } from "node:fs/promises";
 import type { PolicyService } from "../policy/service.js";
 import { PolicyService as PolicyServiceImpl } from "../policy/service.js";
 import type { GatewayContainer } from "../../container.js";
-import type { ApprovalNotifier } from "../approval/notifier.js";
 import type { SecretProvider } from "../secret/provider.js";
 import { join } from "node:path";
 import type { Logger } from "../observability/logger.js";
@@ -48,7 +47,6 @@ export class AgentRegistry {
       defaultPolicyService: PolicyService;
       /** Optional global LanguageModel override (primarily for tests). */
       defaultLanguageModel?: LanguageModel;
-      approvalNotifier: ApprovalNotifier;
       plugins?: PluginRegistry;
       pluginCatalogProvider?: PluginCatalogProvider;
       protocolDeps?: ProtocolDeps;
@@ -178,7 +176,6 @@ export class AgentRegistry {
         agentId,
         languageModel: this.opts.defaultLanguageModel,
         secretProvider,
-        approvalNotifier: this.opts.approvalNotifier,
         plugins,
         policyService,
         protocolDeps: this.opts.protocolDeps,

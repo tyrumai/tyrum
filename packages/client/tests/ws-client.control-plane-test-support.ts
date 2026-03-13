@@ -36,6 +36,7 @@ function registerControlPlaneWorkflowTests(fixture: ControlPlaneFixture): void {
       pairing: {
         pairing_id: 11,
         status: "approved",
+        motivation: "This node was reviewed and approved.",
         trust_level: "remote",
         requested_at: "2026-02-21T12:00:00Z",
         node: {
@@ -54,12 +55,22 @@ function registerControlPlaneWorkflowTests(fixture: ControlPlaneFixture): void {
             version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
           },
         ],
-        resolution: {
-          decision: "approved",
-          resolved_at: "2026-02-21T12:00:10Z",
+        latest_review: {
+          review_id: "550e8400-e29b-41d4-a716-446655440111",
+          target_type: "pairing",
+          target_id: "11",
+          reviewer_kind: "human",
+          reviewer_id: "operator-1",
+          state: "approved",
           reason: "looks good",
+          risk_level: "low",
+          risk_score: 10,
+          evidence: null,
+          decision_payload: null,
+          created_at: "2026-02-21T12:00:10Z",
+          started_at: "2026-02-21T12:00:10Z",
+          completed_at: "2026-02-21T12:00:10Z",
         },
-        resolved_at: "2026-02-21T12:00:10Z",
       },
     };
 
@@ -67,6 +78,7 @@ function registerControlPlaneWorkflowTests(fixture: ControlPlaneFixture): void {
       pairing: {
         pairing_id: 11,
         status: "denied",
+        motivation: "This node was reviewed and denied.",
         requested_at: "2026-02-21T12:00:00Z",
         node: {
           node_id: "node-1",
@@ -79,12 +91,22 @@ function registerControlPlaneWorkflowTests(fixture: ControlPlaneFixture): void {
           last_seen_at: "2026-02-21T12:00:00Z",
         },
         capability_allowlist: [],
-        resolution: {
-          decision: "denied",
-          resolved_at: "2026-02-21T12:00:11Z",
+        latest_review: {
+          review_id: "550e8400-e29b-41d4-a716-446655440112",
+          target_type: "pairing",
+          target_id: "11",
+          reviewer_kind: "human",
+          reviewer_id: "operator-1",
+          state: "denied",
           reason: "not trusted",
+          risk_level: "high",
+          risk_score: 900,
+          evidence: null,
+          decision_payload: null,
+          created_at: "2026-02-21T12:00:11Z",
+          started_at: "2026-02-21T12:00:11Z",
+          completed_at: "2026-02-21T12:00:11Z",
         },
-        resolved_at: "2026-02-21T12:00:11Z",
       },
     };
 
@@ -92,6 +114,7 @@ function registerControlPlaneWorkflowTests(fixture: ControlPlaneFixture): void {
       pairing: {
         pairing_id: 11,
         status: "revoked",
+        motivation: "This node pairing was revoked.",
         requested_at: "2026-02-21T12:00:00Z",
         node: {
           node_id: "node-1",
@@ -104,12 +127,22 @@ function registerControlPlaneWorkflowTests(fixture: ControlPlaneFixture): void {
           last_seen_at: "2026-02-21T12:00:00Z",
         },
         capability_allowlist: [],
-        resolution: {
-          decision: "revoked",
-          resolved_at: "2026-02-21T12:00:12Z",
+        latest_review: {
+          review_id: "550e8400-e29b-41d4-a716-446655440113",
+          target_type: "pairing",
+          target_id: "11",
+          reviewer_kind: "system",
+          reviewer_id: null,
+          state: "revoked",
           reason: "removed",
+          risk_level: null,
+          risk_score: null,
+          evidence: null,
+          decision_payload: null,
+          created_at: "2026-02-21T12:00:12Z",
+          started_at: "2026-02-21T12:00:12Z",
+          completed_at: "2026-02-21T12:00:12Z",
         },
-        resolved_at: "2026-02-21T12:00:12Z",
       },
     };
 

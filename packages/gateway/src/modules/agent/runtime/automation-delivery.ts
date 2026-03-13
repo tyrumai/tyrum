@@ -9,9 +9,11 @@ import { DEFAULT_CHANNEL_ACCOUNT_ID, parseChannelSourceKey } from "../../channel
 import { SessionSendPolicyOverrideDal } from "../../channels/send-policy-override-dal.js";
 import { coerceRecord } from "../../util/coerce.js";
 import type { ApprovalDal } from "../../approval/dal.js";
-import type { ApprovalNotifier } from "../../approval/notifier.js";
+import { broadcastApprovalUpdated } from "../../approval/update-broadcast.js";
 import type { PolicyService } from "../../policy/service.js";
+import { createReviewedApproval } from "../../review/review-init.js";
 import type { GatewayContainer } from "../../../container.js";
+import type { ProtocolDeps } from "../../../ws/protocol.js";
 
 export type AutomationTurnMetadata = {
   schedule_id?: string;
@@ -87,7 +89,7 @@ export async function buildAutomationDigest(input: {
          WHERE tenant_id = ?
            AND agent_id = ?
            AND workspace_id = ?
-           AND status = 'pending'
+           AND status IN ('queued', 'reviewing', 'awaiting_human')
          ORDER BY created_at DESC
          LIMIT 10`,
       [input.scope.tenant_id, input.scope.agent_id, input.scope.workspace_id],
@@ -156,7 +158,7 @@ export async function maybeDeliverAutomationReply(
     workspaceId: string;
     policyService: PolicyService;
     approvalDal: ApprovalDal;
-    approvalNotifier: ApprovalNotifier;
+    protocolDeps?: ProtocolDeps;
   },
   input: {
     turnInput: AgentTurnRequestT;
@@ -256,34 +258,41 @@ export async function maybeDeliverAutomationReply(
 
   let approvalId: string | undefined;
   if (decision === "require_approval") {
-    const approval = await deps.approvalDal.create({
-      tenantId,
-      agentId,
-      workspaceId,
-      approvalKey: `connector:automation.reply:${route.source}:${route.thread_id}:${dedupeKey}`,
-      kind: "connector.send",
-      prompt: `Approve sending an automation reply`,
-      context: {
-        source: route.source,
-        thread_id: route.thread_id,
-        inbox_id: route.inbox_id,
-        key: targetSessionKey,
-        policy_snapshot_id: policySnapshotId,
-        automation: {
-          schedule_id: input.automation.schedule_id,
-          schedule_kind: input.automation.schedule_kind,
-          fired_at: input.automation.fired_at,
-        },
-        preview: input.response.reply,
+    const approval = await createReviewedApproval({
+      approvalDal: deps.approvalDal,
+      policyService: deps.policyService,
+      emitUpdate: async (createdApproval) => {
+        await broadcastApprovalUpdated({
+          tenantId,
+          approval: createdApproval,
+          protocolDeps: deps.protocolDeps,
+        });
       },
-      expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+      params: {
+        tenantId,
+        agentId,
+        workspaceId,
+        approvalKey: `connector:automation.reply:${route.source}:${route.thread_id}:${dedupeKey}`,
+        kind: "connector.send",
+        prompt: `Approve sending an automation reply`,
+        motivation: "The automation wants to send a reply to an external connector thread.",
+        context: {
+          source: route.source,
+          thread_id: route.thread_id,
+          inbox_id: route.inbox_id,
+          key: targetSessionKey,
+          policy_snapshot_id: policySnapshotId,
+          automation: {
+            schedule_id: input.automation.schedule_id,
+            schedule_kind: input.automation.schedule_kind,
+            fired_at: input.automation.fired_at,
+          },
+          preview: input.response.reply,
+        },
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+      },
     });
     approvalId = approval.approval_id;
-    try {
-      deps.approvalNotifier.notify(approval);
-    } catch {
-      // Intentional: approval notification is best-effort.
-    }
   }
 
   await outbox.enqueue({

@@ -155,7 +155,10 @@ export async function resolveApproval(
       return notFound(input.approvalId);
     }
 
-    if (existing.status !== "pending") {
+    if (existing.status !== "awaiting_human") {
+      if (existing.status === "queued" || existing.status === "reviewing") {
+        return invalidRequest("approval is still being reviewed by the guardian");
+      }
       return { ok: true, approval: existing, transitioned: false };
     }
 
@@ -204,6 +207,13 @@ export async function resolveApproval(
     decision: input.decision,
     reason: input.reason,
     resolvedBy: input.resolvedBy,
+    decisionPayload: {
+      decision: input.decision,
+      reason: input.reason ?? null,
+      mode: input.mode ?? "once",
+      selected_overrides: selectedOverrides ?? [],
+      actor: input.resolvedBy ?? null,
+    },
   });
   if (!resolved) {
     return notFound(input.approvalId);

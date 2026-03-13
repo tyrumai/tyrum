@@ -124,42 +124,16 @@ export type WsPairingRevokeResponseEnvelope = z.infer<typeof WsPairingRevokeResp
 // Events (typed) — pairing
 // ---------------------------------------------------------------------------
 
-export const WsPairingRequestedEventPayload = z
+export const WsPairingUpdatedEventPayload = z
   .object({
     pairing: NodePairingRequest,
+    scoped_token: z.string().trim().min(1).optional(),
   })
   .strict();
-export type WsPairingRequestedEventPayload = z.infer<typeof WsPairingRequestedEventPayload>;
+export type WsPairingUpdatedEventPayload = z.infer<typeof WsPairingUpdatedEventPayload>;
 
-export const WsPairingRequestedEvent = WsEventEnvelope.extend({
-  type: z.literal("pairing.requested"),
-  payload: WsPairingRequestedEventPayload,
+export const WsPairingUpdatedEvent = WsEventEnvelope.extend({
+  type: z.literal("pairing.updated"),
+  payload: WsPairingUpdatedEventPayload,
 });
-export type WsPairingRequestedEvent = z.infer<typeof WsPairingRequestedEvent>;
-
-export const WsPairingApprovedEventPayload = z
-  .object({
-    pairing: NodePairingRequest,
-    scoped_token: z.string().trim().min(1),
-  })
-  .strict();
-export type WsPairingApprovedEventPayload = z.infer<typeof WsPairingApprovedEventPayload>;
-
-export const WsPairingApprovedEvent = WsEventEnvelope.extend({
-  type: z.literal("pairing.approved"),
-  payload: WsPairingApprovedEventPayload,
-});
-export type WsPairingApprovedEvent = z.infer<typeof WsPairingApprovedEvent>;
-
-export const WsPairingResolvedEventPayload = z
-  .object({
-    pairing: NodePairingRequest,
-  })
-  .strict();
-export type WsPairingResolvedEventPayload = z.infer<typeof WsPairingResolvedEventPayload>;
-
-export const WsPairingResolvedEvent = WsEventEnvelope.extend({
-  type: z.literal("pairing.resolved"),
-  payload: WsPairingResolvedEventPayload,
-});
-export type WsPairingResolvedEvent = z.infer<typeof WsPairingResolvedEvent>;
+export type WsPairingUpdatedEvent = z.infer<typeof WsPairingUpdatedEvent>;

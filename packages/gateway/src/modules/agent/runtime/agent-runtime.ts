@@ -27,7 +27,6 @@ import type { AgentContextReport, AgentRuntimeOptions } from "./types.js";
 import { resolveAgentHome, resolveTyrumHome } from "../home.js";
 import { SessionDal } from "../session-dal.js";
 import { McpManager } from "../mcp-manager.js";
-import type { ApprovalNotifier } from "../../approval/notifier.js";
 import type { ApprovalDal } from "../../approval/dal.js";
 import type { PluginRegistry } from "../../plugins/registry.js";
 import type { PolicyService } from "../../policy/service.js";
@@ -53,17 +52,12 @@ import {
   listBuiltinToolDescriptors,
   type ToolDescriptor,
 } from "../tools.js";
+import type { GuardianReviewDecision } from "../../review/guardian-review-mode.js";
 
 const DEFAULT_MAX_STEPS = 20;
 const DEFAULT_APPROVAL_WAIT_MS = 120_000;
 const DEFAULT_APPROVAL_POLL_MS = 500;
 const MAX_TURN_ENGINE_WAIT_MS = 60_000;
-
-const NOOP_APPROVAL_NOTIFIER: ApprovalNotifier = {
-  notify(_approval) {
-    // no-op
-  },
-};
 
 export class AgentRuntime {
   private readonly home: string;
@@ -79,7 +73,6 @@ export class AgentRuntime {
   private plugins: PluginRegistry | undefined;
   private readonly policyService: PolicyService;
   private readonly approvalDal: ApprovalDal;
-  private readonly approvalNotifier: ApprovalNotifier;
   private readonly approvalWaitMs: number;
   private readonly approvalPollMs: number;
   private readonly maxSteps: number;
@@ -124,7 +117,6 @@ export class AgentRuntime {
     this.plugins = opts.plugins;
     this.policyService = opts.policyService ?? opts.container.policyService;
     this.approvalDal = opts.approvalDal ?? opts.container.approvalDal;
-    this.approvalNotifier = opts.approvalNotifier ?? NOOP_APPROVAL_NOTIFIER;
     this.approvalWaitMs = Math.max(1_000, opts.approvalWaitMs ?? DEFAULT_APPROVAL_WAIT_MS);
     this.approvalPollMs = Math.max(100, opts.approvalPollMs ?? DEFAULT_APPROVAL_POLL_MS);
     this.maxSteps = opts.maxSteps ?? DEFAULT_MAX_STEPS;
@@ -164,7 +156,7 @@ export class AgentRuntime {
           workspaceId: this.workspaceId,
           policyService: this.policyService,
           approvalDal: this.approvalDal,
-          approvalNotifier: this.approvalNotifier,
+          protocolDeps: this.opts.protocolDeps,
         },
         { turnInput: input.turnInput, response: input.response, automation },
       );
@@ -189,7 +181,6 @@ export class AgentRuntime {
       plugins: this.plugins,
       policyService: this.policyService,
       approvalDal: this.approvalDal,
-      approvalNotifier: this.approvalNotifier,
       approvalWaitMs: this.approvalWaitMs,
       approvalPollMs: this.approvalPollMs,
       secretProvider: this.opts.secretProvider,
@@ -448,6 +439,31 @@ export class AgentRuntime {
       response,
       contextReport,
     });
+  }
+
+  async executeGuardianReview(
+    input: AgentTurnRequestT,
+    opts?: { abortSignal?: AbortSignal; timeoutMs?: number },
+  ): Promise<{
+    response: AgentTurnResponseT;
+    decision?: GuardianReviewDecision;
+    calls: number;
+    invalidCalls: number;
+    error?: string;
+  }> {
+    const result = await turnDirect(this.turnDirectDeps, input, opts);
+    const response = await this.finalizeTurnLifecycle({
+      turnInput: input,
+      response: result.response,
+      contextReport: result.contextReport,
+    });
+    return {
+      response,
+      decision: result.guardianReviewDecisionCollector?.lastDecision,
+      calls: result.guardianReviewDecisionCollector?.calls ?? 0,
+      invalidCalls: result.guardianReviewDecisionCollector?.invalidCalls ?? 0,
+      error: result.guardianReviewDecisionCollector?.lastError,
+    };
   }
 
   private async turnViaExecutionEngine(input: AgentTurnRequestT): Promise<AgentTurnResponseT> {

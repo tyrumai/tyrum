@@ -17,6 +17,7 @@ export type {
   NodeCapabilityInspectionResponse,
   NodeActionDispatchResponse,
   PairingListResponse,
+  PairingGetResponse,
   PairingMutateResponse,
 } from "./observability.js";
 export type {

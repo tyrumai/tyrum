@@ -26,6 +26,7 @@ import {
   type DraftWorkstream,
   type MessageActivity,
 } from "./activity-store.helpers.js";
+import { approvalUpdatedAt } from "../review-status.js";
 
 function resolveApprovalScope(
   approval: Approval,
@@ -143,7 +144,7 @@ function buildWorkstreams(
         toEvent(
           `approval:${approval.approval_id}`,
           "approval.updated",
-          approval.resolution?.resolved_at ?? approval.created_at,
+          approvalUpdatedAt(approval),
           approvalSummary(approval),
         ),
       ),

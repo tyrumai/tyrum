@@ -5,53 +5,21 @@ import React from "react";
 import type { OperatorCore } from "../../../operator-core/src/index.js";
 import { createStore } from "../../../operator-core/src/store.js";
 import { ApprovalsPage } from "../../src/components/pages/approvals-page.js";
+import {
+  createApprovedDesktopPairingFixture,
+  createDesktopApprovalFixture,
+  createDesktopArtifactFixture,
+  createPausedDesktopRunFixture,
+  createPausedDesktopStepFixture,
+  createRunningDesktopAttemptFixture,
+  DESKTOP_TAKEOVER_URL,
+} from "./approvals-page.desktop.test-fixtures.js";
 import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
 
 describe("ApprovalsPage (desktop approvals)", () => {
   it("renders Desktop op summary and takeover link when available", () => {
-    const approval = {
-      approval_id: 1,
-      approval_key: "approval:1",
-      kind: "workflow_step",
-      status: "pending",
-      prompt: "Approve execution of 'tool.node.dispatch' (risk=high)",
-      context: {
-        source: "agent-tool-execution",
-        tool_id: "tool.node.dispatch",
-        tool_call_id: "tc-1",
-        tool_match_target: "tool.node.dispatch.desktop.act",
-        args: {
-          capability: "tyrum.desktop.act",
-          action_name: "act",
-          input: {
-            target: { kind: "a11y", role: "button", name: "Submit", states: [] },
-            action: { kind: "click" },
-          },
-        },
-      },
-      created_at: "2026-01-01T00:00:00.000Z",
-      expires_at: null,
-      resolution: null,
-    } as const;
-
-    const pairing = {
-      pairing_id: 99,
-      status: "approved",
-      trust_level: "local",
-      requested_at: "2026-01-01T00:00:00.000Z",
-      node: {
-        node_id: "node-1",
-        label: "tyrum-desktop-sandbox (takeover: http://localhost:6080/vnc.html?autoconnect=true)",
-        last_seen_at: "2026-01-01T00:00:00.000Z",
-        capabilities: [{ id: "tyrum.desktop.act", version: "1.0.0" }],
-      },
-      capability_allowlist: [{ id: "tyrum.desktop.act", version: "1.0.0" }],
-      resolution: {
-        decision: "approved",
-        resolved_at: "2026-01-01T00:00:01.000Z",
-      },
-      resolved_at: "2026-01-01T00:00:01.000Z",
-    } as const;
+    const approval = createDesktopApprovalFixture();
+    const pairing = createApprovedDesktopPairingFixture();
 
     const { store: approvalsStore } = createStore({
       byId: { 1: approval },
@@ -103,61 +71,20 @@ describe("ApprovalsPage (desktop approvals)", () => {
         '[data-testid="approval-takeover-1"]',
       );
       expect(takeoverLink).not.toBeNull();
-      expect(takeoverLink?.getAttribute("href")).toBe(
-        "http://localhost:6080/vnc.html?autoconnect=true",
-      );
+      expect(takeoverLink?.getAttribute("href")).toBe(DESKTOP_TAKEOVER_URL);
     } finally {
       cleanupTestRoot({ container, root });
     }
   });
 
   it("renders takeover link from node metadata when present", () => {
-    const approval = {
-      approval_id: 1,
-      approval_key: "approval:1",
-      kind: "workflow_step",
-      status: "pending",
-      prompt: "Approve execution of 'tool.node.dispatch' (risk=high)",
-      context: {
-        source: "agent-tool-execution",
-        tool_id: "tool.node.dispatch",
-        tool_call_id: "tc-1",
-        tool_match_target: "tool.node.dispatch.desktop.act",
-        args: {
-          capability: "tyrum.desktop.act",
-          action_name: "act",
-          input: {
-            target: { kind: "a11y", role: "button", name: "Submit", states: [] },
-            action: { kind: "click" },
-          },
-        },
+    const approval = createDesktopApprovalFixture();
+    const pairing = createApprovedDesktopPairingFixture({
+      label: "tyrum-desktop-sandbox",
+      metadata: {
+        takeover_url: DESKTOP_TAKEOVER_URL,
       },
-      created_at: "2026-01-01T00:00:00.000Z",
-      expires_at: null,
-      resolution: null,
-    } as const;
-
-    const pairing = {
-      pairing_id: 99,
-      status: "approved",
-      trust_level: "local",
-      requested_at: "2026-01-01T00:00:00.000Z",
-      node: {
-        node_id: "node-1",
-        label: "tyrum-desktop-sandbox",
-        last_seen_at: "2026-01-01T00:00:00.000Z",
-        capabilities: [{ id: "tyrum.desktop.act", version: "1.0.0" }],
-        metadata: {
-          takeover_url: "http://localhost:6080/vnc.html?autoconnect=true",
-        },
-      },
-      capability_allowlist: [{ id: "tyrum.desktop.act", version: "1.0.0" }],
-      resolution: {
-        decision: "approved",
-        resolved_at: "2026-01-01T00:00:01.000Z",
-      },
-      resolved_at: "2026-01-01T00:00:01.000Z",
-    } as const;
+    });
 
     const { store: approvalsStore } = createStore({
       byId: { 1: approval },
@@ -196,9 +123,80 @@ describe("ApprovalsPage (desktop approvals)", () => {
         '[data-testid="approval-takeover-1"]',
       );
       expect(takeoverLink).not.toBeNull();
-      expect(takeoverLink?.getAttribute("href")).toBe(
-        "http://localhost:6080/vnc.html?autoconnect=true",
+      expect(takeoverLink?.getAttribute("href")).toBe(DESKTOP_TAKEOVER_URL);
+    } finally {
+      cleanupTestRoot({ container, root });
+    }
+  });
+
+  it("renders motivation and latest guardian review context", () => {
+    const approval = createDesktopApprovalFixture({
+      status: "reviewing",
+      context: {},
+      latestReview: {
+        review_id: "11111111-1111-1111-1111-111111111111",
+        target_type: "approval",
+        target_id: "1",
+        reviewer_kind: "guardian",
+        reviewer_id: "guardian-1",
+        state: "running",
+        reason:
+          "The request targets a known desktop node and the scope is limited to one form submission.",
+        risk_level: "medium",
+        risk_score: 42,
+        evidence: null,
+        decision_payload: null,
+        created_at: "2026-01-01T00:00:01.000Z",
+        started_at: "2026-01-01T00:00:01.000Z",
+        completed_at: null,
+      },
+    });
+
+    const { store: approvalsStore } = createStore({
+      byId: { 1: approval },
+      pendingIds: [],
+      blockedIds: [1],
+      loading: false,
+      error: null,
+      lastSyncedAt: null,
+    });
+
+    const { store: pairingStore } = createStore({
+      byId: {},
+      pendingIds: [],
+      blockedIds: [],
+      loading: false,
+      error: null,
+      lastSyncedAt: null,
+    });
+
+    const { store: runsStore } = createStore({
+      runsById: {},
+      stepsById: {},
+      attemptsById: {},
+      stepIdsByRunId: {},
+      attemptIdsByStepId: {},
+    });
+
+    const core = {
+      approvalsStore,
+      pairingStore,
+      runsStore,
+    } as unknown as OperatorCore;
+
+    const { container, root } = renderIntoDocument(React.createElement(ApprovalsPage, { core }));
+
+    try {
+      const motivation = container.querySelector<HTMLDivElement>(
+        '[data-testid="approval-motivation-1"]',
       );
+      expect(motivation).not.toBeNull();
+      expect(motivation?.textContent).toContain("desktop interaction");
+
+      const review = container.querySelector<HTMLDivElement>('[data-testid="approval-review-1"]');
+      expect(review).not.toBeNull();
+      expect(review?.textContent).toContain("known desktop node");
+      expect(review?.textContent).toContain("Risk MEDIUM · score 42");
     } finally {
       cleanupTestRoot({ container, root });
     }
@@ -211,84 +209,37 @@ describe("ApprovalsPage (desktop approvals)", () => {
     const screenshotArtifactId = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
     const treeArtifactId = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
 
-    const approval = {
-      approval_id: 1,
-      approval_key: "approval:1",
-      kind: "workflow_step",
-      status: "pending",
-      prompt: "Approve execution of 'tool.node.dispatch' (risk=high)",
-      context: {
-        source: "agent-tool-execution",
-        tool_id: "tool.node.dispatch",
-        tool_call_id: "tc-1",
-        tool_match_target: "tool.node.dispatch.desktop.act",
-        args: {
-          capability: "tyrum.desktop.act",
-          action_name: "act",
-          input: {
-            target: { kind: "a11y", role: "button", name: "Submit", states: [] },
-            action: { kind: "click" },
-          },
-        },
-      },
+    const approval = createDesktopApprovalFixture({
       scope: { run_id: runId, step_id: stepId },
-      created_at: "2026-01-01T00:00:00.000Z",
-      expires_at: null,
-      resolution: null,
-    } as const;
+    });
 
-    const run = {
-      run_id: runId,
-      job_id: "44444444-4444-4444-4444-444444444444",
-      key: "key-1",
-      lane: "main",
-      status: "paused",
-      attempt: 1,
-      created_at: "2026-01-01T00:00:00.000Z",
-      started_at: "2026-01-01T00:00:00.000Z",
-      finished_at: null,
-      paused_reason: "approval",
-      paused_detail: "approval pending",
-    } as const;
+    const run = createPausedDesktopRunFixture({
+      runId,
+      jobId: "44444444-4444-4444-4444-444444444444",
+    });
 
-    const step = {
-      step_id: stepId,
-      run_id: runId,
-      step_index: 0,
-      status: "paused",
-      action: { type: "Desktop", args: {} },
-      created_at: "2026-01-01T00:00:00.000Z",
-      approval_id: 1,
-    } as const;
+    const step = createPausedDesktopStepFixture({ runId, stepId });
 
-    const screenshotArtifact = {
-      artifact_id: screenshotArtifactId,
-      uri: `artifact://${screenshotArtifactId}`,
+    const screenshotArtifact = createDesktopArtifactFixture({
+      artifactId: screenshotArtifactId,
       kind: "screenshot",
-      created_at: "2026-01-01T00:00:00.000Z",
-      mime_type: "image/png",
+      mimeType: "image/png",
       labels: ["screenshot", "desktop"],
-    } as const;
+    });
 
-    const treeArtifact = {
-      artifact_id: treeArtifactId,
-      uri: `artifact://${treeArtifactId}`,
+    const treeArtifact = createDesktopArtifactFixture({
+      artifactId: treeArtifactId,
       kind: "dom_snapshot",
-      created_at: "2026-01-01T00:00:00.000Z",
-      mime_type: "application/json",
+      mimeType: "application/json",
       labels: ["a11y-tree", "desktop"],
-    } as const;
+    });
 
-    const attempt = {
-      attempt_id: attemptId,
-      step_id: stepId,
+    const attempt = createRunningDesktopAttemptFixture({
+      attemptId,
+      stepId,
       attempt: 1,
-      status: "running",
-      started_at: "2026-01-01T00:00:00.000Z",
-      finished_at: null,
-      error: null,
       artifacts: [screenshotArtifact, treeArtifact],
-    } as const;
+    });
 
     const { store: approvalsStore } = createStore({
       byId: { 1: approval },
@@ -341,95 +292,45 @@ describe("ApprovalsPage (desktop approvals)", () => {
     const screenshotArtifactId = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
     const treeArtifactId = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
 
-    const approval = {
-      approval_id: 1,
-      approval_key: "approval:1",
-      kind: "workflow_step",
-      status: "pending",
-      prompt: "Approve execution of 'tool.node.dispatch' (risk=high)",
-      context: {
-        source: "agent-tool-execution",
-        tool_id: "tool.node.dispatch",
-        tool_call_id: "tc-1",
-        tool_match_target: "tool.node.dispatch.desktop.act",
-        args: {
-          capability: "tyrum.desktop.act",
-          action_name: "act",
-          input: {
-            target: { kind: "a11y", role: "button", name: "Submit", states: [] },
-            action: { kind: "click" },
-          },
-        },
-      },
+    const approval = createDesktopApprovalFixture({
       scope: { run_id: runId, step_id: stepId },
-      created_at: "2026-01-01T00:00:00.000Z",
-      expires_at: null,
-      resolution: null,
-    } as const;
+    });
 
-    const run = {
-      run_id: runId,
-      job_id: "55555555-5555-5555-5555-555555555555",
-      key: "key-1",
-      lane: "main",
-      status: "paused",
+    const run = createPausedDesktopRunFixture({
+      runId,
+      jobId: "55555555-5555-5555-5555-555555555555",
       attempt: 2,
-      created_at: "2026-01-01T00:00:00.000Z",
-      started_at: "2026-01-01T00:00:00.000Z",
-      finished_at: null,
-      paused_reason: "approval",
-      paused_detail: "approval pending",
-    } as const;
+    });
 
-    const step = {
-      step_id: stepId,
-      run_id: runId,
-      step_index: 0,
-      status: "paused",
-      action: { type: "Desktop", args: {} },
-      created_at: "2026-01-01T00:00:00.000Z",
-      approval_id: 1,
-    } as const;
+    const step = createPausedDesktopStepFixture({ runId, stepId });
 
-    const screenshotArtifact = {
-      artifact_id: screenshotArtifactId,
-      uri: `artifact://${screenshotArtifactId}`,
+    const screenshotArtifact = createDesktopArtifactFixture({
+      artifactId: screenshotArtifactId,
       kind: "screenshot",
-      created_at: "2026-01-01T00:00:00.000Z",
-      mime_type: "image/png",
+      mimeType: "image/png",
       labels: ["screenshot", "desktop"],
-    } as const;
+    });
 
-    const treeArtifact = {
-      artifact_id: treeArtifactId,
-      uri: `artifact://${treeArtifactId}`,
+    const treeArtifact = createDesktopArtifactFixture({
+      artifactId: treeArtifactId,
       kind: "dom_snapshot",
-      created_at: "2026-01-01T00:00:00.000Z",
-      mime_type: "application/json",
+      mimeType: "application/json",
       labels: ["a11y-tree", "desktop"],
-    } as const;
+    });
 
-    const attemptWithArtifacts = {
-      attempt_id: attemptIdWithArtifacts,
-      step_id: stepId,
+    const attemptWithArtifacts = createRunningDesktopAttemptFixture({
+      attemptId: attemptIdWithArtifacts,
+      stepId,
       attempt: 1,
-      status: "running",
-      started_at: "2026-01-01T00:00:00.000Z",
-      finished_at: null,
-      error: null,
       artifacts: [screenshotArtifact, treeArtifact],
-    } as const;
+    });
 
-    const attemptWithoutArtifacts = {
-      attempt_id: attemptIdWithoutArtifacts,
-      step_id: stepId,
+    const attemptWithoutArtifacts = createRunningDesktopAttemptFixture({
+      attemptId: attemptIdWithoutArtifacts,
+      stepId,
       attempt: 2,
-      status: "running",
-      started_at: "2026-01-01T00:00:00.000Z",
-      finished_at: null,
-      error: null,
       artifacts: [],
-    } as const;
+    });
 
     const { store: approvalsStore } = createStore({
       byId: { 1: approval },

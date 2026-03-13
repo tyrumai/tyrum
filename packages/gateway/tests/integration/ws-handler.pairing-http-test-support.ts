@@ -25,6 +25,18 @@ import {
   waitForOpen,
 } from "./ws-handler.test-support.js";
 
+const manualOnlyPolicyService = {
+  loadEffectiveBundle: async () => ({
+    bundle: {
+      approvals: {
+        auto_review: {
+          mode: "manual_only" as const,
+        },
+      },
+    },
+  }),
+};
+
 function registerHttpApprovalTests(ctx: TestContext): void {
   it("emits pairing.approved to the node when approval is done via HTTP routes", async () => {
     ctx.setHomeDir(await mkdtemp(join(tmpdir(), "tyrum-ws-")));
@@ -38,7 +50,11 @@ function registerHttpApprovalTests(ctx: TestContext): void {
     const connectionManager = new ConnectionManager();
     const { handleUpgrade, stopHeartbeat } = createWsHandler({
       connectionManager,
-      protocolDeps: { connectionManager, nodePairingDal: container.nodePairingDal },
+      protocolDeps: {
+        connectionManager,
+        nodePairingDal: container.nodePairingDal,
+        policyService: manualOnlyPolicyService as never,
+      },
       authTokens,
       nodePairingDal: container.nodePairingDal,
     });
@@ -113,14 +129,14 @@ function registerHttpApprovalTests(ctx: TestContext): void {
 
     const pairing = await container.nodePairingDal.getByNodeId(deviceId, DEFAULT_TENANT_ID);
     expect(pairing).toBeDefined();
-    expect(pairing!.status).toBe("pending");
+    expect(pairing!.status).toBe("awaiting_human");
 
     const approvedEvtP = waitForJsonMessageMatching(
       node,
       (msg) =>
-        msg["type"] === "pairing.approved" && Object.prototype.hasOwnProperty.call(msg, "event_id"),
+        msg["type"] === "pairing.updated" && Object.prototype.hasOwnProperty.call(msg, "event_id"),
       5_000,
-      "pairing.approved",
+      "pairing.updated",
     );
 
     const app = new Hono();

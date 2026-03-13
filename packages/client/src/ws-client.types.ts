@@ -1,7 +1,6 @@
 import type {
   CapabilityDescriptor,
   ClientCapability,
-  WsApprovalRequest,
   WsEvent as WsEventT,
   WsPeerRole,
   WsPlanUpdateEvent,
@@ -28,7 +27,6 @@ export type TyrumClientEvents = TyrumProtocolEvents & {
   reconnect_scheduled: { delayMs: number; nextRetryAtMs: number; attempt: number };
   transport_error: { message: string };
   task_execute: WsTaskExecuteRequest;
-  approval_request: WsApprovalRequest;
   plan_update: WsPlanUpdateEvent;
 };
 

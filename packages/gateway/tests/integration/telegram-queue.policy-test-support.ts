@@ -90,7 +90,6 @@ async function createPolicyHarness(
     debounceMs: 0,
     maxBatch: 1,
     approvalDal,
-    approvalNotifier: { notify: () => {} },
   });
 
   return {

@@ -10,11 +10,24 @@ describe("approvals-store", () => {
       kind: "workflow_step",
       status: "approved",
       prompt: "Approve execution of 'read' (risk=low)",
+      motivation: "Approval is required before execution can continue.",
       created_at: "2026-03-10T00:00:00.000Z",
       expires_at: null,
-      resolution: {
-        decision: "approved",
-        resolved_at: "2026-03-10T00:00:01.000Z",
+      latest_review: {
+        review_id: "55555555-5555-4555-8555-555555555555",
+        target_type: "approval",
+        target_id: "11111111-1111-1111-1111-111111111111",
+        reviewer_kind: "human",
+        reviewer_id: null,
+        state: "approved",
+        reason: "approved",
+        risk_level: null,
+        risk_score: null,
+        evidence: null,
+        decision_payload: null,
+        created_at: "2026-03-10T00:00:00.000Z",
+        started_at: "2026-03-10T00:00:00.500Z",
+        completed_at: "2026-03-10T00:00:01.000Z",
       },
     } as const;
     const createdOverride = {

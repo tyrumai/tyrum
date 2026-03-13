@@ -13,6 +13,24 @@ import { decorateAppWithDefaultAuth, drainApprovalEngineActions } from "./helper
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
 
+function forceManualOnlyApprovalReview(container: GatewayContainer): void {
+  const original = container.policyService.loadEffectiveBundle.bind(container.policyService);
+  vi.spyOn(container.policyService, "loadEffectiveBundle").mockImplementation(async (params) => {
+    const effective = await original(params);
+    return {
+      ...effective,
+      bundle: {
+        ...effective.bundle,
+        approvals: {
+          auto_review: {
+            mode: "manual_only" as const,
+          },
+        },
+      },
+    };
+  });
+}
+
 describe("ExecutionEngine policy approval scenarios (e2e)", () => {
   let homeDir: string | undefined;
   let container: GatewayContainer | undefined;
@@ -40,6 +58,7 @@ describe("ExecutionEngine policy approval scenarios (e2e)", () => {
   });
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     restoreEnv("TYRUM_POLICY_ENABLED", originalEnv.TYRUM_POLICY_ENABLED);
     restoreEnv("TYRUM_POLICY_MODE", originalEnv.TYRUM_POLICY_MODE);
     restoreEnv("TYRUM_POLICY_BUNDLE_PATH", originalEnv.TYRUM_POLICY_BUNDLE_PATH);
@@ -57,6 +76,7 @@ describe("ExecutionEngine policy approval scenarios (e2e)", () => {
   it("pauses a run for policy approval and resumes when approved", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-perms-engine-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
+    forceManualOnlyApprovalReview(container);
 
     const authTokens = new AuthTokenService(container.db);
     const tenantToken = await authTokens.issueToken({
@@ -119,7 +139,7 @@ describe("ExecutionEngine policy approval scenarios (e2e)", () => {
       approvalId,
     ]);
     expect(approval?.kind).toBe("policy");
-    expect(approval?.status).toBe("pending");
+    expect(approval?.status).toBe("awaiting_human");
     expect(approval?.resume_token).toBeTruthy();
 
     const approveRes = await app.request(`/approvals/${String(approvalId)}/respond`, {
@@ -154,6 +174,7 @@ describe("ExecutionEngine policy approval scenarios (e2e)", () => {
   it("pauses a run for policy approval and cancels when denied", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-perms-engine-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
+    forceManualOnlyApprovalReview(container);
 
     const authTokens = new AuthTokenService(container.db);
     const tenantToken = await authTokens.issueToken({

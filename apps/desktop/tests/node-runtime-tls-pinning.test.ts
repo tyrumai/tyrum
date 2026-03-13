@@ -9,7 +9,6 @@ vi.mock("@tyrum/operator-core/node", () => {
     on = vi.fn();
     connect = vi.fn();
     disconnect = vi.fn();
-    respondApprovalRequest = vi.fn();
 
     constructor(opts: unknown) {
       ctorSpy(opts);

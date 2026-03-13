@@ -60,7 +60,6 @@ export function createToolSetBuilder(input: {
       typeof ToolSetBuilder
     >[0]["policyService"],
     approvalDal: input.container.approvalDal,
-    approvalNotifier: { notify() {} },
     approvalWaitMs: 120_000,
     approvalPollMs: 500,
     logger: input.container.logger,

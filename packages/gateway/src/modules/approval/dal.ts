@@ -1,15 +1,23 @@
-/**
- * Approval queue data access layer.
- *
- * Persists human approval requests to the gateway DB so they survive restarts
- * and can be resolved by the operator UI / WS protocol.
- */
-
+import type { ApprovalKind as ApprovalKindT, ReviewEntry as ReviewEntryT } from "@tyrum/schemas";
 import { randomUUID } from "node:crypto";
 import type { SqlDb } from "../../statestore/types.js";
+import { normalizeDbDateTime } from "../../utils/db-time.js";
+import {
+  type CreateReviewEntryParams,
+  ReviewEntryDal,
+  type ReviewEntryRow,
+  type ReviewerKind,
+} from "../review/dal.js";
 import { ApprovalEngineActionDal } from "./engine-action-dal.js";
 
-export type ApprovalStatus = "pending" | "approved" | "denied" | "expired" | "cancelled";
+export type ApprovalStatus =
+  | "queued"
+  | "reviewing"
+  | "awaiting_human"
+  | "approved"
+  | "denied"
+  | "expired"
+  | "cancelled";
 
 export interface ApprovalRow {
   tenant_id: string;
@@ -17,15 +25,15 @@ export interface ApprovalRow {
   approval_key: string;
   agent_id: string;
   workspace_id: string;
-  kind: string;
+  kind: ApprovalKindT;
   status: ApprovalStatus;
   prompt: string;
+  motivation: string;
   context: unknown;
   created_at: string;
   expires_at: string | null;
-  resolved_at: string | null;
-  resolution: unknown | null;
-
+  latest_review: ReviewEntryT | null;
+  reviews?: ReviewEntryT[];
   session_id: string | null;
   plan_id: string | null;
   run_id: string | null;
@@ -45,12 +53,11 @@ interface RawApprovalRow {
   kind: string;
   status: string;
   prompt: string;
+  motivation: string;
   context_json: string;
   created_at: string | Date;
   expires_at: string | Date | null;
-  resolved_at: string | Date | null;
-  resolution_json: string | null;
-
+  latest_review_id: string | null;
   session_id: string | null;
   plan_id: string | null;
   run_id: string | null;
@@ -61,88 +68,17 @@ interface RawApprovalRow {
   resume_token: string | null;
 }
 
-function normalizeTime(value: string | Date): string {
-  return value instanceof Date ? value.toISOString() : value;
-}
-
-function normalizeMaybeTime(value: string | Date | null): string | null {
-  if (value === null) return null;
-  return value instanceof Date ? value.toISOString() : value;
-}
-
-function parseJsonOrEmpty(raw: string | null): unknown {
-  if (!raw) return {};
-  try {
-    return JSON.parse(raw) as unknown;
-  } catch {
-    // Intentional: tolerate invalid JSON in persisted rows.
-    return {};
-  }
-}
-
-function parseJsonOrNull(raw: string | null): unknown | null {
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as unknown;
-  } catch {
-    // Intentional: tolerate invalid JSON in persisted rows.
-    return null;
-  }
-}
-
-function normalizeStatus(raw: string): ApprovalStatus {
-  if (
-    raw === "pending" ||
-    raw === "approved" ||
-    raw === "denied" ||
-    raw === "expired" ||
-    raw === "cancelled"
-  ) {
-    return raw;
-  }
-  return "pending";
-}
-
-function toApprovalRow(raw: RawApprovalRow): ApprovalRow {
-  return {
-    tenant_id: raw.tenant_id,
-    approval_id: raw.approval_id,
-    approval_key: raw.approval_key,
-    agent_id: raw.agent_id,
-    workspace_id: raw.workspace_id,
-    kind: raw.kind,
-    status: normalizeStatus(raw.status),
-    prompt: raw.prompt,
-    context: parseJsonOrEmpty(raw.context_json),
-    created_at: normalizeTime(raw.created_at),
-    expires_at: normalizeMaybeTime(raw.expires_at),
-    resolved_at: normalizeMaybeTime(raw.resolved_at),
-    resolution: parseJsonOrNull(raw.resolution_json),
-    session_id: raw.session_id,
-    plan_id: raw.plan_id,
-    run_id: raw.run_id,
-    step_id: raw.step_id,
-    attempt_id: raw.attempt_id,
-    work_item_id: raw.work_item_id,
-    work_item_task_id: raw.work_item_task_id,
-    resume_token: raw.resume_token,
-  };
-}
-
-function isoNow(): string {
-  return new Date().toISOString();
-}
-
 export interface CreateApprovalParams {
   tenantId: string;
   agentId: string;
   workspaceId: string;
   approvalKey: string;
   prompt: string;
-  kind?: string;
+  motivation: string;
+  kind: ApprovalKindT;
+  status?: ApprovalStatus;
   context?: unknown;
   expiresAt?: string | null;
-
   sessionId?: string | null;
   planId?: string | null;
   runId?: string | null;
@@ -153,54 +89,143 @@ export interface CreateApprovalParams {
   resumeToken?: string | null;
 }
 
+function toReviewEntryContract(review: ReviewEntryRow): ReviewEntryT {
+  const { tenant_id: _tenantId, ...contract } = review;
+  return contract;
+}
+
+function parseJsonOrEmpty(raw: string | null): unknown {
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw) as unknown;
+  } catch {
+    return {};
+  }
+}
+
+function normalizeStatus(raw: string): ApprovalStatus {
+  if (
+    raw === "queued" ||
+    raw === "reviewing" ||
+    raw === "awaiting_human" ||
+    raw === "approved" ||
+    raw === "denied" ||
+    raw === "expired" ||
+    raw === "cancelled"
+  ) {
+    return raw;
+  }
+  return "awaiting_human";
+}
+
+function normalizeKind(raw: string): ApprovalKindT {
+  if (
+    raw === "workflow_step" ||
+    raw === "intent" ||
+    raw === "retry" ||
+    raw === "policy" ||
+    raw === "budget" ||
+    raw === "takeover" ||
+    raw === "connector.send"
+  ) {
+    return raw;
+  }
+  return "policy";
+}
+
+export function isApprovalBlockedStatus(status: ApprovalStatus): boolean {
+  return status === "queued" || status === "reviewing" || status === "awaiting_human";
+}
+
+export function approvalNeedsHumanDecision(status: ApprovalStatus): boolean {
+  return status === "awaiting_human";
+}
+
+export function isApprovalTerminalStatus(status: ApprovalStatus): boolean {
+  return (
+    status === "approved" || status === "denied" || status === "expired" || status === "cancelled"
+  );
+}
+
 export class ApprovalDal {
   constructor(private readonly db: SqlDb) {}
 
-  protected createTxDal(tx: SqlDb): ApprovalDal {
+  private createTxDal(tx: SqlDb): ApprovalDal {
     return new ApprovalDal(tx);
   }
 
-  async resolveWithEngineAction(input: {
-    tenantId: string;
-    approvalId: string;
-    decision: "approved" | "denied";
-    reason?: string;
-    resolvedBy?: unknown;
-  }): Promise<{ approval: ApprovalRow; transitioned: boolean } | undefined> {
-    return await this.db.transaction(async (tx) => {
-      const approvalDal = tx === this.db ? this : this.createTxDal(tx);
-      const actionDal = new ApprovalEngineActionDal(tx);
-
-      const res = await approvalDal.respondWithTransitionTx(input);
-      if (!res) return undefined;
-
-      if (res.transitioned) {
-        await actionDal.enqueueForResolvedApproval({
-          tenantId: input.tenantId,
-          approval: res.row,
-          reason: input.reason,
-        });
-      }
-
-      return { approval: res.row, transitioned: res.transitioned };
-    });
+  private get reviewEntries(): ReviewEntryDal {
+    return new ReviewEntryDal(this.db);
   }
 
-  /** Create a new pending approval request (idempotent on `approval_key`). */
+  private async hydrate(
+    raw: RawApprovalRow,
+    options?: { includeReviews?: boolean },
+  ): Promise<ApprovalRow> {
+    const latestReview = raw.latest_review_id
+      ? await this.reviewEntries.getById({
+          tenantId: raw.tenant_id,
+          reviewId: raw.latest_review_id,
+        })
+      : undefined;
+    const reviews = options?.includeReviews
+      ? await this.reviewEntries.listByTarget({
+          tenantId: raw.tenant_id,
+          targetType: "approval",
+          targetId: raw.approval_id,
+        })
+      : undefined;
+    return {
+      tenant_id: raw.tenant_id,
+      approval_id: raw.approval_id,
+      approval_key: raw.approval_key,
+      agent_id: raw.agent_id,
+      workspace_id: raw.workspace_id,
+      kind: normalizeKind(raw.kind),
+      status: normalizeStatus(raw.status),
+      prompt: raw.prompt,
+      motivation: raw.motivation,
+      context: parseJsonOrEmpty(raw.context_json),
+      created_at: normalizeDbDateTime(raw.created_at) ?? new Date().toISOString(),
+      expires_at: normalizeDbDateTime(raw.expires_at),
+      latest_review: latestReview ? toReviewEntryContract(latestReview) : null,
+      ...(reviews ? { reviews: reviews.map(toReviewEntryContract) } : {}),
+      session_id: raw.session_id,
+      plan_id: raw.plan_id,
+      run_id: raw.run_id,
+      step_id: raw.step_id,
+      attempt_id: raw.attempt_id,
+      work_item_id: raw.work_item_id,
+      work_item_task_id: raw.work_item_task_id,
+      resume_token: raw.resume_token,
+    };
+  }
+
+  private async getRawById(input: {
+    tenantId: string;
+    approvalId: string;
+  }): Promise<RawApprovalRow | undefined> {
+    return await this.db.get<RawApprovalRow>(
+      `SELECT *
+       FROM approvals
+       WHERE tenant_id = ? AND approval_id = ?`,
+      [input.tenantId, input.approvalId],
+    );
+  }
+
   async create(params: CreateApprovalParams): Promise<ApprovalRow> {
     const tenantId = params.tenantId.trim();
     const agentId = params.agentId.trim();
     const workspaceId = params.workspaceId.trim();
+    const approvalKey = params.approvalKey.trim();
+    const prompt = params.prompt.trim();
+    const motivation = params.motivation.trim();
     if (!tenantId) throw new Error("tenantId is required");
     if (!agentId) throw new Error("agentId is required");
     if (!workspaceId) throw new Error("workspaceId is required");
-
-    const approvalKey = params.approvalKey.trim();
     if (!approvalKey) throw new Error("approvalKey is required");
-
-    const nowIso = isoNow();
-    const contextJson = JSON.stringify(params.context ?? {});
-    const kind = params.kind?.trim() || "other";
+    if (!prompt) throw new Error("prompt is required");
+    if (!motivation) throw new Error("motivation is required");
 
     const inserted = await this.db.get<RawApprovalRow>(
       `INSERT INTO approvals (
@@ -210,34 +235,39 @@ export class ApprovalDal {
          agent_id,
          workspace_id,
          kind,
-	         status,
-	         prompt,
-	         context_json,
-	         created_at,
-	         expires_at,
-	         session_id,
-	         plan_id,
-	         run_id,
+         status,
+         prompt,
+         motivation,
+         context_json,
+         created_at,
+         expires_at,
+         latest_review_id,
+         session_id,
+         plan_id,
+         run_id,
          step_id,
          attempt_id,
          work_item_id,
-	         work_item_task_id,
-	         resume_token
-	       )
-		       VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	       ON CONFLICT (tenant_id, approval_key) DO NOTHING
-	       RETURNING *`,
+         work_item_task_id,
+         resume_token
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (tenant_id, approval_key) DO NOTHING
+       RETURNING *`,
       [
         tenantId,
         randomUUID(),
         approvalKey,
         agentId,
         workspaceId,
-        kind,
-        params.prompt,
-        contextJson,
-        nowIso,
+        params.kind,
+        params.status ?? "queued",
+        prompt,
+        motivation,
+        JSON.stringify(params.context ?? {}),
+        new Date().toISOString(),
         params.expiresAt ?? null,
+        null,
         params.sessionId ?? null,
         params.planId ?? null,
         params.runId ?? null,
@@ -248,8 +278,9 @@ export class ApprovalDal {
         params.resumeToken ?? null,
       ],
     );
-    if (inserted) return toApprovalRow(inserted);
-
+    if (inserted) {
+      return await this.hydrate(inserted);
+    }
     const existing = await this.getByKey({ tenantId, approvalKey });
     if (!existing) {
       throw new Error("failed to create approval");
@@ -257,12 +288,13 @@ export class ApprovalDal {
     return existing;
   }
 
-  async getById(input: { tenantId: string; approvalId: string }): Promise<ApprovalRow | undefined> {
-    const row = await this.db.get<RawApprovalRow>(
-      "SELECT * FROM approvals WHERE tenant_id = ? AND approval_id = ?",
-      [input.tenantId, input.approvalId],
-    );
-    return row ? toApprovalRow(row) : undefined;
+  async getById(input: {
+    tenantId: string;
+    approvalId: string;
+    includeReviews?: boolean;
+  }): Promise<ApprovalRow | undefined> {
+    const row = await this.getRawById(input);
+    return row ? await this.hydrate(row, { includeReviews: input.includeReviews }) : undefined;
   }
 
   async getByKey(input: {
@@ -270,151 +302,206 @@ export class ApprovalDal {
     approvalKey: string;
   }): Promise<ApprovalRow | undefined> {
     const row = await this.db.get<RawApprovalRow>(
-      "SELECT * FROM approvals WHERE tenant_id = ? AND approval_key = ?",
-      [input.tenantId, input.approvalKey],
+      `SELECT *
+       FROM approvals
+       WHERE tenant_id = ? AND approval_key = ?`,
+      [input.tenantId.trim(), input.approvalKey.trim()],
     );
-    return row ? toApprovalRow(row) : undefined;
+    return row ? await this.hydrate(row) : undefined;
   }
 
   async getByStatus(input: { tenantId: string; status: ApprovalStatus }): Promise<ApprovalRow[]> {
     const rows = await this.db.all<RawApprovalRow>(
-      "SELECT * FROM approvals WHERE tenant_id = ? AND status = ? ORDER BY created_at ASC, approval_id ASC",
-      [input.tenantId, input.status],
+      `SELECT *
+       FROM approvals
+       WHERE tenant_id = ? AND status = ?
+       ORDER BY created_at DESC`,
+      [input.tenantId.trim(), input.status],
     );
-    return rows.map(toApprovalRow);
+    return await Promise.all(rows.map((row) => this.hydrate(row)));
   }
 
-  async getPending(input: { tenantId: string }): Promise<ApprovalRow[]> {
-    return await this.getByStatus({ tenantId: input.tenantId, status: "pending" });
+  async listBlocked(input: { tenantId: string }): Promise<ApprovalRow[]> {
+    const rows = await this.db.all<RawApprovalRow>(
+      `SELECT *
+       FROM approvals
+       WHERE tenant_id = ?
+         AND status IN ('queued', 'reviewing', 'awaiting_human')
+       ORDER BY created_at DESC`,
+      [input.tenantId.trim()],
+    );
+    return await Promise.all(rows.map((row) => this.hydrate(row)));
   }
 
   async getByResumeToken(input: {
     tenantId: string;
     resumeToken: string;
+    includeReviews?: boolean;
   }): Promise<ApprovalRow | undefined> {
     const token = input.resumeToken.trim();
     if (!token) return undefined;
     const row = await this.db.get<RawApprovalRow>(
-      "SELECT * FROM approvals WHERE tenant_id = ? AND resume_token = ? ORDER BY created_at DESC LIMIT 1",
-      [input.tenantId, token],
-    );
-    return row ? toApprovalRow(row) : undefined;
-  }
-
-  async respond(input: {
-    tenantId: string;
-    approvalId: string;
-    decision: "approved" | "denied";
-    reason?: string;
-    resolvedBy?: unknown;
-  }): Promise<ApprovalRow | undefined> {
-    const res = await this.respondWithTransition(input);
-    return res?.row;
-  }
-
-  async respondWithTransition(input: {
-    tenantId: string;
-    approvalId: string;
-    decision: "approved" | "denied";
-    reason?: string;
-    resolvedBy?: unknown;
-  }): Promise<{ row: ApprovalRow; transitioned: boolean } | undefined> {
-    return await this.db.transaction(async (tx) => {
-      const dal = tx === this.db ? this : this.createTxDal(tx);
-      return await dal.respondWithTransitionTx(input);
-    });
-  }
-
-  async respondWithTransitionTx(input: {
-    tenantId: string;
-    approvalId: string;
-    decision: "approved" | "denied";
-    reason?: string;
-    resolvedBy?: unknown;
-  }): Promise<{ row: ApprovalRow; transitioned: boolean } | undefined> {
-    const nowIso = isoNow();
-    const resolution = {
-      decision: input.decision,
-      resolved_at: nowIso,
-      resolved_by: input.resolvedBy,
-      reason: input.reason?.trim() || undefined,
-    };
-    const resolutionJson = JSON.stringify(resolution);
-
-    const existing = await this.db.get<RawApprovalRow>(
-      "SELECT * FROM approvals WHERE tenant_id = ? AND approval_id = ?",
-      [input.tenantId, input.approvalId],
-    );
-    if (!existing) return undefined;
-
-    if (existing.status !== "pending") {
-      return { row: toApprovalRow(existing), transitioned: false };
-    }
-
-    const status: ApprovalStatus = input.decision === "approved" ? "approved" : "denied";
-    const result = await this.db.run(
-      `UPDATE approvals
-       SET status = ?, resolved_at = ?, resolution_json = ?
-       WHERE tenant_id = ? AND approval_id = ? AND status = 'pending'`,
-      [status, nowIso, resolutionJson, input.tenantId, input.approvalId],
-    );
-
-    if (result.changes === 0) {
-      const current = await this.db.get<RawApprovalRow>(
-        "SELECT * FROM approvals WHERE tenant_id = ? AND approval_id = ?",
-        [input.tenantId, input.approvalId],
-      );
-      return current ? { row: toApprovalRow(current), transitioned: false } : undefined;
-    }
-
-    const updated = await this.db.get<RawApprovalRow>(
-      "SELECT * FROM approvals WHERE tenant_id = ? AND approval_id = ?",
-      [input.tenantId, input.approvalId],
-    );
-    return updated ? { row: toApprovalRow(updated), transitioned: true } : undefined;
-  }
-
-  /**
-   * Expire stale approvals whose `expires_at` has passed.
-   * @returns the number of approvals expired.
-   */
-  async expireStale(input: { tenantId: string; nowIso?: string }): Promise<number> {
-    const nowIso = input.nowIso ?? isoNow();
-    const resolutionJson = JSON.stringify({
-      decision: "denied",
-      resolved_at: nowIso,
-      reason: "expired",
-    });
-    const result = await this.db.run(
-      `UPDATE approvals
-       SET status = 'expired', resolved_at = ?, resolution_json = ?
+      `SELECT *
+       FROM approvals
        WHERE tenant_id = ?
-         AND status = 'pending'
-         AND expires_at IS NOT NULL
-         AND expires_at <= ?`,
-      [nowIso, resolutionJson, input.tenantId, nowIso],
+         AND resume_token = ?`,
+      [input.tenantId.trim(), token],
     );
-    return result.changes;
+    return row ? await this.hydrate(row, { includeReviews: input.includeReviews }) : undefined;
   }
 
-  /** Expire a single pending approval immediately. */
+  async transitionWithReview(input: {
+    tenantId: string;
+    approvalId: string;
+    status: ApprovalStatus;
+    reviewerKind: ReviewerKind;
+    reviewerId?: string | null;
+    reviewState: CreateReviewEntryParams["state"];
+    reason?: string | null;
+    riskLevel?: CreateReviewEntryParams["riskLevel"];
+    riskScore?: CreateReviewEntryParams["riskScore"];
+    evidence?: unknown;
+    decisionPayload?: unknown;
+    allowedCurrentStatuses?: ApprovalStatus[];
+    includeReviews?: boolean;
+  }): Promise<{ approval: ApprovalRow; transitioned: boolean } | undefined> {
+    return await this.db.transaction(async (tx) => {
+      const approvalDal = tx === this.db ? this : this.createTxDal(tx);
+      const current = await approvalDal.getRawById({
+        tenantId: input.tenantId,
+        approvalId: input.approvalId,
+      });
+      if (!current) return undefined;
+
+      const currentStatus = normalizeStatus(current.status);
+      if (
+        input.allowedCurrentStatuses &&
+        !input.allowedCurrentStatuses.includes(currentStatus) &&
+        !isApprovalTerminalStatus(currentStatus)
+      ) {
+        return { approval: await approvalDal.hydrate(current), transitioned: false };
+      }
+      if (isApprovalTerminalStatus(currentStatus)) {
+        return {
+          approval: await approvalDal.hydrate(current, { includeReviews: input.includeReviews }),
+          transitioned: false,
+        };
+      }
+
+      const review = await new ReviewEntryDal(tx).create({
+        tenantId: input.tenantId,
+        targetType: "approval",
+        targetId: input.approvalId,
+        reviewerKind: input.reviewerKind,
+        reviewerId: input.reviewerId,
+        state: input.reviewState,
+        reason: input.reason,
+        riskLevel: input.riskLevel ?? null,
+        riskScore: input.riskScore ?? null,
+        evidence: input.evidence,
+        decisionPayload: input.decisionPayload,
+        startedAt: input.reviewState === "running" ? new Date().toISOString() : null,
+        completedAt:
+          input.reviewState === "running" || input.reviewState === "queued"
+            ? null
+            : new Date().toISOString(),
+      });
+
+      const updated = await tx.run(
+        `UPDATE approvals
+         SET status = ?,
+             latest_review_id = ?
+         WHERE tenant_id = ? AND approval_id = ?`,
+        [input.status, review.review_id, input.tenantId, input.approvalId],
+      );
+      if (updated.changes !== 1) {
+        throw new Error(`failed to update approval ${input.approvalId}`);
+      }
+
+      const next = await approvalDal.getById({
+        tenantId: input.tenantId,
+        approvalId: input.approvalId,
+        includeReviews: input.includeReviews,
+      });
+      if (!next) {
+        throw new Error(`approval ${input.approvalId} disappeared after update`);
+      }
+      return { approval: next, transitioned: true };
+    });
+  }
+
+  async resolveWithEngineAction(input: {
+    tenantId: string;
+    approvalId: string;
+    decision: "approved" | "denied";
+    reason?: string;
+    reviewerKind?: ReviewerKind;
+    reviewerId?: string | null;
+    allowedCurrentStatuses?: ApprovalStatus[];
+    resolvedBy?: unknown;
+    decisionPayload?: unknown;
+  }): Promise<{ approval: ApprovalRow; transitioned: boolean } | undefined> {
+    return await this.db.transaction(async (tx) => {
+      const approvalDal = tx === this.db ? this : this.createTxDal(tx);
+      const actionDal = new ApprovalEngineActionDal(tx);
+      const transitioned = await approvalDal.transitionWithReview({
+        tenantId: input.tenantId,
+        approvalId: input.approvalId,
+        status: input.decision === "approved" ? "approved" : "denied",
+        reviewerKind: input.reviewerKind ?? "human",
+        reviewerId: input.reviewerId,
+        reviewState: input.decision === "approved" ? "approved" : "denied",
+        reason: input.reason,
+        decisionPayload: input.decisionPayload ?? input.resolvedBy,
+        allowedCurrentStatuses: input.allowedCurrentStatuses ?? ["awaiting_human"],
+      });
+      if (!transitioned) return undefined;
+      if (transitioned.transitioned) {
+        await actionDal.enqueueForResolvedApproval({
+          tenantId: input.tenantId,
+          approval: transitioned.approval,
+          reason: input.reason,
+        });
+      }
+      return transitioned;
+    });
+  }
+
   async expireById(input: {
     tenantId: string;
     approvalId: string;
-    nowIso?: string;
   }): Promise<ApprovalRow | undefined> {
-    const nowIso = input.nowIso ?? isoNow();
-    const resolutionJson = JSON.stringify({
-      decision: "denied",
-      resolved_at: nowIso,
-      reason: "expired",
+    const transitioned = await this.transitionWithReview({
+      tenantId: input.tenantId,
+      approvalId: input.approvalId,
+      status: "expired",
+      reviewerKind: "system",
+      reviewState: "expired",
+      reason: "approval timed out",
+      allowedCurrentStatuses: ["queued", "reviewing", "awaiting_human"],
     });
-    await this.db.run(
-      `UPDATE approvals
-       SET status = 'expired', resolved_at = ?, resolution_json = ?
-       WHERE tenant_id = ? AND approval_id = ? AND status = 'pending'`,
-      [nowIso, resolutionJson, input.tenantId, input.approvalId],
+    return transitioned?.approval;
+  }
+
+  async expireStale(input: { tenantId: string; nowIso?: string }): Promise<number> {
+    const nowIso = input.nowIso ?? new Date().toISOString();
+    const rows = await this.db.all<{ approval_id: string }>(
+      `SELECT approval_id
+       FROM approvals
+       WHERE tenant_id = ?
+         AND expires_at IS NOT NULL
+         AND expires_at <= ?
+         AND status IN ('queued', 'reviewing', 'awaiting_human')`,
+      [input.tenantId, nowIso],
     );
-    return await this.getById({ tenantId: input.tenantId, approvalId: input.approvalId });
+    let expired = 0;
+    for (const row of rows) {
+      const result = await this.expireById({
+        tenantId: input.tenantId,
+        approvalId: row.approval_id,
+      });
+      if (result) expired += 1;
+    }
+    return expired;
   }
 }

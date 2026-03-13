@@ -3,9 +3,11 @@ import type { PolicyOverride } from "@tyrum/schemas";
 import type { OperatorWsClient } from "../deps.js";
 import { ElevatedModeRequiredError } from "../elevated-mode.js";
 import { createStore, type ExternalStore } from "../store.js";
+import { isApprovalBlockedStatus, isApprovalHumanActionableStatus } from "../review-status.js";
 
 export interface ApprovalsState {
   byId: Record<string, Approval>;
+  blockedIds: string[];
   pendingIds: string[];
   loading: boolean;
   error: string | null;
@@ -38,11 +40,34 @@ export interface ResolveApprovalResult {
 
 type GetPrivilegedWsClient = () => OperatorWsClient | null;
 
+function collectApprovalIds(
+  approvals: Approval[],
+): Pick<ApprovalsState, "blockedIds" | "pendingIds"> {
+  return {
+    blockedIds: approvals
+      .filter((approval) => isApprovalBlockedStatus(approval.status))
+      .map((approval) => approval.approval_id),
+    pendingIds: approvals
+      .filter((approval) => isApprovalHumanActionableStatus(approval.status))
+      .map((approval) => approval.approval_id),
+  };
+}
+
 function upsertApproval(state: ApprovalsState, approval: Approval): ApprovalsState {
   const id = approval.approval_id;
   const byId = { ...state.byId, [id]: approval };
 
-  const shouldBePending = approval.status === "pending";
+  const shouldBeBlocked = isApprovalBlockedStatus(approval.status);
+  const isBlocked = state.blockedIds.includes(id);
+  let blockedIds = state.blockedIds;
+
+  if (shouldBeBlocked && !isBlocked) {
+    blockedIds = [...blockedIds, id];
+  } else if (!shouldBeBlocked && isBlocked) {
+    blockedIds = blockedIds.filter((entry) => entry !== id);
+  }
+
+  const shouldBePending = isApprovalHumanActionableStatus(approval.status);
   const isPending = state.pendingIds.includes(id);
   let pendingIds = state.pendingIds;
 
@@ -52,7 +77,7 @@ function upsertApproval(state: ApprovalsState, approval: Approval): ApprovalsSta
     pendingIds = pendingIds.filter((entry) => entry !== id);
   }
 
-  return { ...state, byId, pendingIds };
+  return { ...state, byId, blockedIds, pendingIds };
 }
 
 async function withPrivilegedWsClient<T>(
@@ -112,6 +137,7 @@ export function createApprovalsStore(options: {
   const ws = options.ws;
   const { store, setState } = createStore<ApprovalsState>({
     byId: {},
+    blockedIds: [],
     pendingIds: [],
     loading: false,
     error: null,
@@ -136,18 +162,19 @@ export function createApprovalsStore(options: {
 
     setState((prev) => ({ ...prev, loading: true, error: null }));
     try {
-      const result = await ws.approvalList({ status: "pending", limit: 500 });
+      const result = await ws.approvalList({ limit: 500 });
       if (activeRefreshPendingRunId !== runId) return;
       const buffered = bufferedApprovalUpserts;
+      const activeApprovals = result.approvals;
 
       setState((prev) => {
         let next = prev;
-        for (const approval of result.approvals) {
+        for (const approval of activeApprovals) {
           next = upsertApproval(next, approval);
         }
         next = {
           ...next,
-          pendingIds: result.approvals.map((approval) => approval.approval_id),
+          ...collectApprovalIds(activeApprovals),
         };
         for (const approval of buffered.values()) {
           next = upsertApproval(next, approval);

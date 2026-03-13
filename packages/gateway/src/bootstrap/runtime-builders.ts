@@ -8,7 +8,6 @@ import { AuthAudit } from "../modules/auth/audit.js";
 import { SlidingWindowRateLimiter } from "../modules/auth/rate-limiter.js";
 import { deriveAgentIdFromKey } from "../modules/execution/gateway-step-executor-types.js";
 import { ApprovalEngineActionProcessor } from "../modules/approval/engine-action-processor.js";
-import { WsNotifier } from "../modules/approval/notifier.js";
 import { ConnectionDirectoryDal } from "../modules/backplane/connection-directory.js";
 import { OutboxDal } from "../modules/backplane/outbox-dal.js";
 import { OutboxPoller } from "../modules/backplane/outbox-poller.js";
@@ -28,6 +27,7 @@ import { LifecycleHooksRuntime } from "../modules/hooks/runtime.js";
 import { LocationService } from "../modules/location/service.js";
 import type { OtelRuntime } from "../modules/observability/otel.js";
 import { createPluginCatalogProvider } from "../modules/plugins/catalog-provider.js";
+import { GuardianReviewProcessor } from "../modules/review/guardian-review-processor.js";
 import { loadAllPlaybooks } from "../modules/playbook/loader.js";
 import { PlaybookRunner } from "../modules/playbook/runner.js";
 import { ensureSelfSignedTlsMaterial } from "../modules/tls/self-signed.js";
@@ -158,43 +158,6 @@ export async function createProtocolRuntime(
     onTaskResult: (taskId, success, result, evidence, error) =>
       taskResults.resolve(taskId, toTaskResult(success, result, evidence, error)),
     onConnectionClosed: (connectionId) => taskResults.rejectAllForConnection(connectionId),
-    onApprovalDecision: (
-      tenantId: string,
-      approvalId: string,
-      approved: boolean,
-      reason: string | undefined,
-    ) => {
-      void context.container.approvalDal
-        .resolveWithEngineAction({
-          tenantId,
-          approvalId,
-          decision: approved ? "approved" : "denied",
-          reason,
-          resolvedBy: { kind: "ws.operator" },
-        })
-        .then((res) => {
-          const row = res?.approval;
-          const transitioned = res?.transitioned ?? false;
-          const desiredStatus = approved ? "approved" : "denied";
-          context.logger.info("approval.decided", {
-            approval_id: approvalId,
-            approved,
-            status: row?.status ?? "missing",
-            reason,
-            decision_matches: row?.status === desiredStatus,
-            transitioned,
-          });
-        })
-        .catch((err) => {
-          const message = err instanceof Error ? err.message : String(err);
-          context.logger.error("approval.decide_failed", {
-            approval_id: approvalId,
-            approved,
-            reason,
-            error: message,
-          });
-        });
-    },
   };
 
   const approvalEngineActionProcessor = approvalEngine
@@ -207,6 +170,30 @@ export async function createProtocolRuntime(
     : undefined;
   approvalEngineActionProcessor?.start();
 
+  const guardianReviewProcessor =
+    context.shouldRunEdge || context.shouldRunWorker
+      ? new GuardianReviewProcessor({
+          container: context.container,
+          secretProviderForTenant: context.secretProviderForTenant,
+          owner: context.instanceId,
+          logger: context.logger,
+          wsEventDal,
+          ws: {
+            connectionManager,
+            logger: context.logger,
+            maxBufferedBytes: wsMaxBufferedBytes,
+            cluster: context.shouldRunEdge
+              ? {
+                  edgeId: context.instanceId,
+                  outboxDal,
+                  connectionDirectory,
+                }
+              : undefined,
+          },
+        })
+      : undefined;
+  guardianReviewProcessor?.start();
+
   return {
     connectionManager,
     connectionDirectory,
@@ -216,9 +203,9 @@ export async function createProtocolRuntime(
     edgeEngine,
     hooksRuntime,
     approvalEngineActionProcessor,
+    guardianReviewProcessor,
     taskResults,
     protocolDeps,
-    approvalNotifier: new WsNotifier(protocolDeps),
   };
 }
 
@@ -304,7 +291,6 @@ export async function startEdgeRuntime(
         baseHome: context.tyrumHome,
         secretProviderForTenant: context.secretProviderForTenant,
         defaultPolicyService: context.container.policyService,
-        approvalNotifier: protocol.approvalNotifier,
         plugins,
         pluginCatalogProvider,
         protocolDeps: protocol.protocolDeps,
@@ -381,7 +367,7 @@ export async function startEdgeRuntime(
         typingAutomationEnabled: context.deploymentConfig.channels.typingAutomationEnabled,
         memoryV1Dal: context.container.memoryV1Dal,
         approvalDal: context.container.approvalDal,
-        approvalNotifier: protocol.approvalNotifier,
+        protocolDeps: protocol.protocolDeps,
         listEgressConnectors: async (tenantId) =>
           await telegramRuntime.listEgressConnectors(tenantId),
       })

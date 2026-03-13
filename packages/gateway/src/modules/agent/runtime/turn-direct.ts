@@ -10,6 +10,8 @@ import {
   extractToolApprovalResumeState,
   isStatusQuery,
 } from "./turn-helpers.js";
+import { isApprovalBlockedStatus } from "../../approval/dal.js";
+import { coerceRecord } from "../../util/coerce.js";
 import { finalizeTurn } from "./turn-finalization.js";
 import type { AgentContextReport } from "./types.js";
 import { resolveAutomationMetadata } from "./automation-delivery.js";
@@ -32,7 +34,6 @@ import {
   appendToolApprovalResponseMessage,
   countAssistantMessages,
 } from "../../ai-sdk/message-utils.js";
-import { coerceRecord } from "../../util/coerce.js";
 import { prepareTurn, type TurnExecutionContext } from "./turn-preparation.js";
 import { handleStatusQuery, throwToolApprovalError } from "./turn-direct-helpers.js";
 import { isContextOverflowError } from "./session-compaction-service.js";
@@ -46,6 +47,9 @@ export {
 export interface TurnDirectResult {
   response: AgentTurnResponseT;
   contextReport: AgentContextReport;
+  guardianReviewDecisionCollector?: NonNullable<
+    Awaited<ReturnType<typeof prepareTurn>>["guardianReviewDecisionCollector"]
+  >;
 }
 
 type TurnInvocationOptions = {
@@ -78,6 +82,8 @@ export async function turnDirect(
     contextReport,
     systemPrompt,
     resolved,
+    turnMemoryDecisionCollector,
+    guardianReviewDecisionCollector,
   } = prepared;
 
   const workScope: WorkScope = {
@@ -103,6 +109,7 @@ export async function turnDirect(
       memoryWritten: memoryWriteState.wrote,
       contextReport,
       turnKind: params.turnKind,
+      turnMemoryDecisionCollector,
     });
     await maybeAutoCompactSession({
       deps,
@@ -168,7 +175,7 @@ export async function turnDirect(
       tenantId: session.tenant_id,
       approvalId: stepApprovalId,
     });
-    if (approval && approval.status !== "pending") {
+    if (approval && !isApprovalBlockedStatus(approval.status)) {
       const resumeState = extractToolApprovalResumeState(approval.context);
       if (resumeState) {
         for (const toolId of resumeState.used_tools ?? []) {
@@ -181,17 +188,13 @@ export async function turnDirect(
         messages = appendToolApprovalResponseMessage(resumeState.messages, {
           approvalId: resumeState.approval_id,
           approved: approval.status === "approved",
-          reason: (() => {
-            const resolution = coerceRecord(approval.resolution);
-            const reason =
-              typeof resolution?.["reason"] === "string" ? resolution["reason"].trim() : "";
-            if (reason.length > 0) return reason;
-            return approval.status === "expired"
+          reason:
+            approval.latest_review?.reason ??
+            (approval.status === "expired"
               ? "approval expired"
               : approval.status === "cancelled"
                 ? "approval cancelled"
-                : undefined;
-          })(),
+                : undefined),
         });
       }
     }
@@ -206,16 +209,15 @@ export async function turnDirect(
   }
 
   const withinTurnCfg = ctx.config.sessions.loop_detection.within_turn;
-  const { stopWhen, withinTurnLoop } = createStopWhenWithWithinTurnLoopDetection(
-    deps.opts.container.logger,
-    {
-      stepLimit: remainingSteps,
-      withinTurnCfg,
-      sessionId: session.session_id,
-      channel: resolved.channel,
-      threadId: resolved.thread_id,
-    },
-  );
+  const withinTurn = guardianReviewDecisionCollector
+    ? { stopWhen: [stepCountIs(2)], withinTurnLoop: { value: undefined } }
+    : createStopWhenWithWithinTurnLoopDetection(deps.opts.container.logger, {
+        stepLimit: remainingSteps,
+        withinTurnCfg,
+        sessionId: session.session_id,
+        channel: resolved.channel,
+        threadId: resolved.thread_id,
+      });
 
   let result: Awaited<ReturnType<typeof generateText>>;
   try {
@@ -224,7 +226,7 @@ export async function turnDirect(
       system: systemPrompt,
       messages,
       tools: toolSet,
-      stopWhen,
+      stopWhen: withinTurn.stopWhen,
       prepareStep: ({ messages: stepMessages }) =>
         prepareLaneQueueStep(laneQueue, stepMessages, ctx.config.sessions.context_pruning),
       abortSignal,
@@ -283,14 +285,19 @@ export async function turnDirect(
 
   const rawReply = result.text || "";
   const automation = resolveAutomationMetadata(resolved.metadata);
-  const reply = resolveTurnReply(rawReply, withinTurnLoop.value, {
-    allowEmpty: automation?.delivery_mode === "quiet",
+  const reply = resolveTurnReply(rawReply, withinTurn.withinTurnLoop.value, {
+    allowEmpty: automation?.delivery_mode === "quiet" || Boolean(guardianReviewDecisionCollector),
   });
   const response = await finalizeAndMaybeCompact({
     reply,
+    turnKind: guardianReviewDecisionCollector ? "skip" : undefined,
     usage: extractUsageSnapshot(result.totalUsage),
   });
-  return { response, contextReport };
+  return {
+    response,
+    contextReport,
+    guardianReviewDecisionCollector,
+  };
 }
 
 export interface TurnStreamDirectResult {
@@ -320,6 +327,8 @@ export async function turnStreamDirect(
     contextReport,
     systemPrompt,
     resolved,
+    turnMemoryDecisionCollector,
+    guardianReviewDecisionCollector,
   } = prepared;
 
   const intake = await resolveIntakeDecision(
@@ -381,23 +390,22 @@ export async function turnStreamDirect(
   }
 
   const withinTurnCfg = ctx.config.sessions.loop_detection.within_turn;
-  const { stopWhen, withinTurnLoop } = createStopWhenWithWithinTurnLoopDetection(
-    deps.opts.container.logger,
-    {
-      stepLimit: deps.maxSteps,
-      withinTurnCfg,
-      sessionId: session.session_id,
-      channel: resolved.channel,
-      threadId: resolved.thread_id,
-    },
-  );
+  const withinTurn = guardianReviewDecisionCollector
+    ? { stopWhen: [stepCountIs(2)], withinTurnLoop: { value: undefined } }
+    : createStopWhenWithWithinTurnLoopDetection(deps.opts.container.logger, {
+        stepLimit: deps.maxSteps,
+        withinTurnCfg,
+        sessionId: session.session_id,
+        channel: resolved.channel,
+        threadId: resolved.thread_id,
+      });
 
   const streamResult = streamText({
     model,
     system: systemPrompt,
     messages: [{ role: "user" as const, content: userContent }],
     tools: toolSet,
-    stopWhen,
+    stopWhen: withinTurn.stopWhen,
     prepareStep: ({ messages: stepMessages }) =>
       prepareLaneQueueStep(laneQueue, stepMessages, ctx.config.sessions.context_pruning),
   });
@@ -414,8 +422,8 @@ export async function turnStreamDirect(
     }
     const rawReply = (await result.text) || "";
     const automation = resolveAutomationMetadata(resolved.metadata);
-    const reply = resolveTurnReply(rawReply, withinTurnLoop.value, {
-      allowEmpty: automation?.delivery_mode === "quiet",
+    const reply = resolveTurnReply(rawReply, withinTurn.withinTurnLoop.value, {
+      allowEmpty: automation?.delivery_mode === "quiet" || Boolean(guardianReviewDecisionCollector),
     });
     const response = await finalizeTurn({
       container: deps.opts.container,
@@ -428,6 +436,8 @@ export async function turnStreamDirect(
       usedTools,
       memoryWritten: memoryWriteState.wrote,
       contextReport,
+      turnKind: guardianReviewDecisionCollector ? "skip" : undefined,
+      turnMemoryDecisionCollector,
     });
     await maybeAutoCompactSession({
       deps,

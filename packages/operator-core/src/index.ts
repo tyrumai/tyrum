@@ -8,6 +8,15 @@ export {
 export type { OperatorAuthStrategy } from "./auth.js";
 
 export { createGatewayAuthSession } from "./auth-session.js";
+export {
+  approvalUpdatedAt,
+  isApprovalBlockedStatus,
+  isApprovalHumanActionableStatus,
+  isPairingBlockedStatus,
+  isPairingHumanActionableStatus,
+  pairingUpdatedAt,
+} from "./review-status.js";
+export type { ApprovalStatus, PairingStatus } from "./review-status.js";
 
 export { createAutoSyncManager } from "./auto-sync.js";
 export type {

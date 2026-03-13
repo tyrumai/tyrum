@@ -7,8 +7,12 @@ import {
 
 describe("admin-http-policy-shared", () => {
   it("uses schema-aligned deny defaults for missing policy domains", () => {
-    const formState = policyBundleToFormState({ v: 1 });
+    const formState = policyBundleToFormState({
+      v: 1,
+      approvals: { auto_review: { mode: "auto_review" } },
+    });
 
+    expect(formState.approvals.autoReviewMode).toBe("auto_review");
     expect(formState.tools.defaultDecision).toBe("deny");
     expect(formState.networkEgress.defaultDecision).toBe("deny");
     expect(formState.secrets.defaultDecision).toBe("deny");
@@ -16,8 +20,14 @@ describe("admin-http-policy-shared", () => {
   });
 
   it("round-trips missing policy domains back to deny defaults", () => {
-    const bundle = policyFormStateToBundle(policyBundleToFormState({ v: 1 }));
+    const bundle = policyFormStateToBundle(
+      policyBundleToFormState({
+        v: 1,
+        approvals: { auto_review: { mode: "auto_review" } },
+      }),
+    );
 
+    expect(bundle.approvals.auto_review.mode).toBe("auto_review");
     expect(bundle.tools?.default).toBe("deny");
     expect(bundle.network_egress?.default).toBe("deny");
     expect(bundle.secrets?.default).toBe("deny");
@@ -27,6 +37,9 @@ describe("admin-http-policy-shared", () => {
   it("expands tool group aliases before save to match schema canonicalization", () => {
     const allowRows = normalizeToolRows([{ id: "allow-1", value: "tool.fs.*" }]);
     const bundle = policyFormStateToBundle({
+      approvals: {
+        autoReviewMode: "manual_only",
+      },
       tools: {
         defaultDecision: "deny",
         allow: allowRows,
@@ -75,11 +88,15 @@ describe("admin-http-policy-shared", () => {
       "glob",
       "grep",
     ]);
+    expect(bundle.approvals.auto_review.mode).toBe("manual_only");
     expect(bundle.tools?.allow).toEqual(["read", "write", "edit", "apply_patch", "glob", "grep"]);
   });
 
   it("merges duplicate label sensitivity rows instead of dropping earlier values", () => {
     const bundle = policyFormStateToBundle({
+      approvals: {
+        autoReviewMode: "auto_review",
+      },
       tools: {
         defaultDecision: "deny",
         allow: [],

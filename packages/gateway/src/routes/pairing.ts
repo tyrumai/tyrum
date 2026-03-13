@@ -45,7 +45,9 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
     const tenantId = requireTenantId(c);
     const statusRaw = c.req.query("status")?.trim();
     const status =
-      statusRaw === "pending" ||
+      statusRaw === "queued" ||
+      statusRaw === "reviewing" ||
+      statusRaw === "awaiting_human" ||
       statusRaw === "approved" ||
       statusRaw === "denied" ||
       statusRaw === "revoked"
@@ -53,6 +55,21 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
         : undefined;
     const rows = await deps.nodePairingDal.list({ tenantId, status });
     return c.json({ status: "ok", pairings: rows });
+  });
+
+  app.get("/pairings/:id", async (c) => {
+    const tenantId = requireTenantId(c);
+    const id = Number.parseInt(c.req.param("id"), 10);
+    if (!Number.isInteger(id) || id <= 0) {
+      return c.json({ error: "invalid_request", message: "id must be a positive integer" }, 400);
+    }
+
+    const pairing = await deps.nodePairingDal.getById(id, tenantId, true);
+    if (!pairing) {
+      return c.json({ error: "not_found", message: `pairing ${String(id)} not found` }, 404);
+    }
+
+    return c.json({ status: "ok", pairing });
   });
 
   app.post("/pairings/:id/approve", async (c) => {

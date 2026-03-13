@@ -2,12 +2,14 @@ import type { PairingListResponse, PairingMutateResponse } from "@tyrum/client";
 import type { OperatorHttpClient } from "../deps.js";
 import { ElevatedModeRequiredError } from "../elevated-mode.js";
 import { createStore, type ExternalStore } from "../store.js";
+import { isPairingBlockedStatus, isPairingHumanActionableStatus } from "../review-status.js";
 import { beginRefresh, isRefreshActive, type RefreshRunState } from "./status-store.refresh-run.js";
 
 export type Pairing = PairingListResponse["pairings"][number];
 
 export interface PairingState {
   byId: Record<number, Pairing>;
+  blockedIds: number[];
   pendingIds: number[];
   loading: boolean;
   error: string | null;
@@ -33,11 +35,32 @@ export interface PairingStore extends ExternalStore<PairingState> {
 type SetState<T> = (updater: (prev: T) => T) => void;
 type GetPrivilegedHttpClient = () => OperatorHttpClient | null;
 
+function collectPairingIds(pairings: Pairing[]): Pick<PairingState, "blockedIds" | "pendingIds"> {
+  return {
+    blockedIds: pairings
+      .filter((pairing) => isPairingBlockedStatus(pairing.status))
+      .map((pairing) => pairing.pairing_id),
+    pendingIds: pairings
+      .filter((pairing) => isPairingHumanActionableStatus(pairing.status))
+      .map((pairing) => pairing.pairing_id),
+  };
+}
+
 function upsertPairing(state: PairingState, pairing: Pairing): PairingState {
   const id = pairing.pairing_id;
   const byId = { ...state.byId, [id]: pairing };
 
-  const shouldBePending = pairing.status === "pending";
+  const shouldBeBlocked = isPairingBlockedStatus(pairing.status);
+  const isBlocked = state.blockedIds.includes(id);
+  let blockedIds = state.blockedIds;
+
+  if (shouldBeBlocked && !isBlocked) {
+    blockedIds = [...blockedIds, id];
+  } else if (!shouldBeBlocked && isBlocked) {
+    blockedIds = blockedIds.filter((entry) => entry !== id);
+  }
+
+  const shouldBePending = isPairingHumanActionableStatus(pairing.status);
   const isPending = state.pendingIds.includes(id);
   let pendingIds = state.pendingIds;
 
@@ -47,7 +70,7 @@ function upsertPairing(state: PairingState, pairing: Pairing): PairingState {
     pendingIds = pendingIds.filter((entry) => entry !== id);
   }
 
-  return { ...state, byId, pendingIds };
+  return { ...state, byId, blockedIds, pendingIds };
 }
 
 function pairingFromMutation(result: PairingMutateResponse): Pairing {
@@ -90,15 +113,11 @@ async function refreshImpl(
     const buffered = refreshState.bufferedUpserts;
 
     const byId: Record<number, Pairing> = {};
-    const pendingIds: number[] = [];
     for (const pairing of result.pairings) {
       byId[pairing.pairing_id] = pairing;
-      if (pairing.status === "pending") {
-        pendingIds.push(pairing.pairing_id);
-      }
     }
     setState((prev) => {
-      let next: PairingState = { ...prev, byId, pendingIds };
+      let next: PairingState = { ...prev, byId, ...collectPairingIds(result.pairings) };
       for (const pairing of buffered.values()) {
         next = upsertPairing(next, pairing);
       }
@@ -150,6 +169,7 @@ export function createPairingStore(options: {
 } {
   const { store, setState } = createStore<PairingState>({
     byId: {},
+    blockedIds: [],
     pendingIds: [],
     loading: false,
     error: null,

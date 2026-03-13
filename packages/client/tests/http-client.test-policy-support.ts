@@ -143,6 +143,11 @@ export function registerHttpClientPolicyTests(): void {
     expect(JSON.parse(init.body as string)).toEqual({
       bundle: {
         v: 1,
+        approvals: {
+          auto_review: {
+            mode: "auto_review",
+          },
+        },
         tools: {
           default: "deny",
           allow: ["read"],

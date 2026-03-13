@@ -466,13 +466,15 @@ describe("chatStore", () => {
         status: "running",
       },
     });
-    ws.emit("approval.requested", {
+    ws.emit("approval.updated", {
       occurred_at: "2026-01-01T00:00:03.000Z",
       payload: {
         approval: {
           approval_id: "approval-1",
-          status: "pending",
+          status: "awaiting_human",
           prompt: "Allow tool?",
+          motivation: "Allow tool?",
+          latest_review: null,
           context: {
             session_id: "internal-session-id",
             thread_id: "ui-session-1",

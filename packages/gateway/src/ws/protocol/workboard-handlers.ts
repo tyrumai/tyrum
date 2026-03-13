@@ -75,6 +75,7 @@ async function maybeEnqueueTransitionNotification(params: {
       item: params.item,
       approvalDal: params.ctx.deps.approvalDal,
       policyService: params.ctx.deps.policyService,
+      protocolDeps: params.ctx.deps,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

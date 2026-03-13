@@ -2,9 +2,18 @@ import { z } from "zod";
 import { DateTimeSchema, UuidSchema } from "./common.js";
 import { Lane, TyrumKey } from "./keys.js";
 import { PolicyOverride } from "./policy-bundle.js";
+import { ReviewEntry } from "./review.js";
 import { canonicalizeToolId } from "./tool-id.js";
 
-export const ApprovalStatus = z.enum(["pending", "approved", "denied", "expired", "cancelled"]);
+export const ApprovalStatus = z.enum([
+  "queued",
+  "reviewing",
+  "awaiting_human",
+  "approved",
+  "denied",
+  "expired",
+  "cancelled",
+]);
 export type ApprovalStatus = z.infer<typeof ApprovalStatus>;
 
 export const ApprovalId = UuidSchema;
@@ -14,17 +23,13 @@ export const ApprovalKey = z.string().trim().min(1);
 export type ApprovalKey = z.infer<typeof ApprovalKey>;
 
 export const ApprovalKind = z.enum([
-  "spend",
-  "pii",
   "workflow_step",
   "intent",
   "retry",
   "policy",
   "budget",
-  "pairing",
   "takeover",
   "connector.send",
-  "other",
 ]);
 export type ApprovalKind = z.infer<typeof ApprovalKind>;
 
@@ -44,16 +49,6 @@ export type ApprovalScope = z.infer<typeof ApprovalScope>;
 export const ApprovalDecision = z.enum(["approved", "denied"]);
 export type ApprovalDecision = z.infer<typeof ApprovalDecision>;
 
-export const ApprovalResolution = z
-  .object({
-    decision: ApprovalDecision,
-    resolved_at: DateTimeSchema,
-    resolved_by: z.unknown().optional(),
-    reason: z.string().optional(),
-  })
-  .strict();
-export type ApprovalResolution = z.infer<typeof ApprovalResolution>;
-
 export const Approval = z
   .object({
     approval_id: ApprovalId,
@@ -61,30 +56,15 @@ export const Approval = z
     kind: ApprovalKind,
     status: ApprovalStatus,
     prompt: z.string().trim().min(1),
+    motivation: z.string().trim().min(1),
     context: z.unknown().optional(),
     scope: ApprovalScope.optional(),
     created_at: DateTimeSchema,
     expires_at: DateTimeSchema.nullable().optional(),
-    resolution: ApprovalResolution.nullable(),
+    latest_review: ReviewEntry.nullable(),
+    reviews: z.array(ReviewEntry).optional(),
   })
-  .strict()
-  .superRefine((value, ctx) => {
-    const hasResolution = value.resolution !== null;
-    if (value.status === "pending" && hasResolution) {
-      ctx.addIssue({
-        code: "custom",
-        message: "pending approvals must have resolution: null",
-        path: ["resolution"],
-      });
-    }
-    if (value.status !== "pending" && !hasResolution) {
-      ctx.addIssue({
-        code: "custom",
-        message: "non-pending approvals must include a resolution",
-        path: ["resolution"],
-      });
-    }
-  });
+  .strict();
 export type Approval = z.infer<typeof Approval>;
 
 export const ApprovalListRequest = z

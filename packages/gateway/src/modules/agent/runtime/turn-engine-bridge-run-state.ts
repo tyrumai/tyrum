@@ -67,12 +67,15 @@ export async function maybeResolvePausedRun(
   }
 
   const extractReason = (): string | undefined => {
-    const record = coerceRecord(approval?.resolution);
-    const reason = typeof record?.["reason"] === "string" ? record["reason"].trim() : "";
+    const reason = approval?.latest_review?.reason?.trim() ?? "";
     return reason.length > 0 ? reason : undefined;
   };
 
-  if (approval.status === "pending") {
+  if (
+    approval.status === "queued" ||
+    approval.status === "reviewing" ||
+    approval.status === "awaiting_human"
+  ) {
     const expiresAt = approval.expires_at;
     const expiresAtMs = expiresAt ? Date.parse(expiresAt) : Number.NaN;
     if (Number.isFinite(expiresAtMs) && expiresAtMs <= Date.now()) {

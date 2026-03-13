@@ -182,7 +182,7 @@ export function TuiApp({ runtime, config }: { runtime: TuiRuntime; config: Resol
           return;
         case "approvePairing": {
           const req = currentCore.pairingStore.getSnapshot().byId[command.pairingId];
-          if (!req || req.status !== "pending") return;
+          if (!req || req.status !== "awaiting_human") return;
           void currentCore.pairingStore.approve(command.pairingId, {
             trust_level: "local",
             capability_allowlist: req.capability_allowlist,
@@ -191,7 +191,7 @@ export function TuiApp({ runtime, config }: { runtime: TuiRuntime; config: Resol
         }
         case "denyPairing": {
           const req = currentCore.pairingStore.getSnapshot().byId[command.pairingId];
-          if (!req || req.status !== "pending") return;
+          if (!req || req.status !== "awaiting_human") return;
           void currentCore.pairingStore.deny(command.pairingId);
           return;
         }

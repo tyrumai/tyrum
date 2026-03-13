@@ -1,10 +1,8 @@
 import { z } from "zod";
 import {
   WsApprovalListRequest,
-  WsApprovalRequest,
-  WsApprovalRequestedEvent,
   WsApprovalResolveRequest,
-  WsApprovalResolvedEvent,
+  WsApprovalUpdatedEvent,
 } from "./approvals.js";
 import { WsCapabilityReadyEvent, WsCapabilityReadyRequest } from "./capability-ready.js";
 import {
@@ -49,10 +47,8 @@ import {
 } from "./execution.js";
 import {
   WsPairingApproveRequest,
-  WsPairingApprovedEvent,
   WsPairingDenyRequest,
-  WsPairingRequestedEvent,
-  WsPairingResolvedEvent,
+  WsPairingUpdatedEvent,
   WsPairingRevokeRequest,
 } from "./pairing.js";
 import { WsLocationBeaconRequest } from "./location.js";
@@ -162,7 +158,6 @@ export const WsRequest = z.discriminatedUnion("type", [
   WsTaskExecuteRequest,
   WsAttemptEvidenceRequest,
   WsRunListRequest,
-  WsApprovalRequest,
   WsApprovalListRequest,
   WsApprovalResolveRequest,
   WsSubagentSpawnRequest,
@@ -197,8 +192,7 @@ export const WsEvent = z.discriminatedUnion("type", [
   WsPlanUpdateEvent,
   WsAuthFailedEvent,
   WsAuthzDeniedEvent,
-  WsApprovalRequestedEvent,
-  WsApprovalResolvedEvent,
+  WsApprovalUpdatedEvent,
   WsRunUpdatedEvent,
   WsRunQueuedEvent,
   WsRunStartedEvent,
@@ -214,9 +208,7 @@ export const WsEvent = z.discriminatedUnion("type", [
   WsArtifactFetchedEvent,
   WsCapabilityReadyEvent,
   WsAttemptEvidenceEvent,
-  WsPairingRequestedEvent,
-  WsPairingApprovedEvent,
-  WsPairingResolvedEvent,
+  WsPairingUpdatedEvent,
   WsPresenceUpsertedEvent,
   WsPresencePrunedEvent,
   WsPolicyOverrideCreatedEvent,

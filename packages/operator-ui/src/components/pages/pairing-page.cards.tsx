@@ -1,6 +1,10 @@
-import type { OperatorCore, Pairing } from "@tyrum/operator-core";
-import type { NodeIdentity, NodeInventoryEntry } from "@tyrum/schemas";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  isPairingHumanActionableStatus,
+  type OperatorCore,
+  type Pairing,
+} from "@tyrum/operator-core";
+import type { CapabilityDescriptor, NodeIdentity, NodeInventoryEntry } from "@tyrum/schemas";
+import { type ComponentProps, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
@@ -42,6 +46,74 @@ function extractNodeMeta(metadata: unknown): NodeMeta {
     mode: str("mode"),
     ip: str("ip"),
   };
+}
+
+function getPairingStatusDisplay(status: Pairing["status"]): {
+  label: string;
+  variant: ComponentProps<typeof Badge>["variant"];
+} {
+  switch (status) {
+    case "queued":
+      return { label: "Guardian queued", variant: "outline" };
+    case "reviewing":
+      return { label: "Guardian reviewing", variant: "outline" };
+    case "awaiting_human":
+      return { label: "Awaiting human review", variant: "warning" };
+    case "approved":
+      return { label: "Approved", variant: "success" };
+    case "denied":
+    case "revoked":
+      return { label: status, variant: "danger" };
+  }
+  return { label: status, variant: "outline" };
+}
+
+function formatReviewRisk(review: Pairing["latest_review"]): string | null {
+  if (!review) return null;
+  const parts = [
+    review.risk_level ? review.risk_level.toUpperCase() : null,
+    typeof review.risk_score === "number" ? `score ${String(review.risk_score)}` : null,
+  ].filter((part): part is string => part !== null);
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
+
+function ReviewContext({
+  motivation,
+  review,
+  testIdPrefix,
+}: {
+  motivation: string;
+  review: Pairing["latest_review"];
+  testIdPrefix: string;
+}) {
+  const reviewReason = review?.reason?.trim() ?? "";
+  const reviewRisk = formatReviewRisk(review);
+
+  return (
+    <>
+      <div
+        data-testid={`${testIdPrefix}-motivation`}
+        className="grid gap-0.5 rounded-md border border-border bg-bg-subtle px-3 py-2.5"
+      >
+        <div className="text-xs font-medium text-fg-muted">Motivation</div>
+        <div className="text-sm text-fg break-words [overflow-wrap:anywhere]">{motivation}</div>
+      </div>
+      {reviewReason || reviewRisk ? (
+        <div
+          data-testid={`${testIdPrefix}-review`}
+          className="grid gap-1 rounded-md border border-border bg-bg-subtle px-3 py-2.5"
+        >
+          <div className="text-xs font-medium text-fg-muted">Latest review</div>
+          {reviewReason ? (
+            <div className="text-sm text-fg break-words [overflow-wrap:anywhere]">
+              {reviewReason}
+            </div>
+          ) : null}
+          {reviewRisk ? <div className="text-xs text-fg-muted">Risk {reviewRisk}</div> : null}
+        </div>
+      ) : null}
+    </>
+  );
 }
 
 function NodeDetails({ node, requestedAt }: { node: NodeIdentity; requestedAt?: string }) {
@@ -149,7 +221,7 @@ export function PendingPairingCard({
   const [trustLevel, setTrustLevel] = useState<PairingTrustLevel>(initialTrustLevel);
   const [busy, setBusy] = useState<"approve" | "deny" | null>(null);
 
-  const capabilityOptions = useMemo(() => {
+  const capabilityOptions = useMemo<CapabilityDescriptor[]>(() => {
     if (pairing.capability_allowlist.length > 0) {
       return pairing.capability_allowlist;
     }
@@ -158,15 +230,12 @@ export function PendingPairingCard({
   }, [pairing.capability_allowlist, pairing.node.capabilities]);
 
   const [selectedCapabilityIds, setSelectedCapabilityIds] = useState<Set<string>>(
-    () =>
-      new Set(
-        capabilityOptions.map(
-          (capability: Pairing["node"]["capabilities"][number]) => capability.id,
-        ),
-      ),
+    () => new Set(capabilityOptions.map((capability: CapabilityDescriptor) => capability.id)),
   );
   const reasonRef = useRef<HTMLTextAreaElement | null>(null);
   const isBusy = busy !== null;
+  const actionable = isPairingHumanActionableStatus(pairing.status);
+  const statusDisplay = getPairingStatusDisplay(pairing.status);
   const takeoverUrl = extractTakeoverUrlFromNodeIdentity(pairing.node);
 
   const onApprove = async (): Promise<void> => {
@@ -174,9 +243,8 @@ export function PendingPairingCard({
     setBusy("approve");
     try {
       const trimmedReason = reasonRef.current?.value.trim() ?? "";
-      const capability_allowlist = capabilityOptions.filter(
-        (capability: Pairing["node"]["capabilities"][number]) =>
-          selectedCapabilityIds.has(capability.id),
+      const capability_allowlist = capabilityOptions.filter((capability: CapabilityDescriptor) =>
+        selectedCapabilityIds.has(capability.id),
       );
       await core.pairingStore.approve(pairing.pairing_id, {
         trust_level: trustLevel,
@@ -215,7 +283,10 @@ export function PendingPairingCard({
     >
       <CardHeader className="pb-2.5">
         <div className="grid gap-1">
-          <div className="text-sm font-medium text-fg">Pending node request</div>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="text-sm font-medium text-fg">Node request</div>
+            <Badge variant={statusDisplay.variant}>{statusDisplay.label}</Badge>
+          </div>
           <div className="text-sm text-fg-muted">
             Node <span className="break-all font-medium text-fg">{pairing.node.node_id}</span>
           </div>
@@ -243,118 +314,133 @@ export function PendingPairingCard({
         </div>
       </CardHeader>
       <CardContent className="grid gap-6">
-        <fieldset className="grid gap-3">
-          <legend className="text-sm font-medium leading-none text-fg">
-            Trust level{" "}
-            <span aria-hidden="true" className="text-error">
-              *
-            </span>
-          </legend>
-          <RadioGroup
-            value={trustLevel}
-            onValueChange={(value) => {
-              if (value === "local" || value === "remote") {
-                setTrustLevel(value);
-              }
-            }}
-            className="grid gap-3"
-          >
-            <div className="flex items-center gap-2">
-              <RadioGroupItem
-                id={`pairing-${pairing.pairing_id}-trust-local`}
-                data-testid={`pairing-trust-level-${pairing.pairing_id}-local`}
-                value="local"
-                disabled={isBusy}
-              />
-              <Label htmlFor={`pairing-${pairing.pairing_id}-trust-local`}>Local</Label>
-            </div>
-            <div className="flex items-center gap-2">
-              <RadioGroupItem
-                id={`pairing-${pairing.pairing_id}-trust-remote`}
-                data-testid={`pairing-trust-level-${pairing.pairing_id}-remote`}
-                value="remote"
-                disabled={isBusy}
-              />
-              <Label htmlFor={`pairing-${pairing.pairing_id}-trust-remote`}>Remote</Label>
-            </div>
-          </RadioGroup>
-        </fieldset>
-
-        <fieldset className="grid gap-3">
-          <legend className="text-sm font-medium leading-none text-fg">Capabilities</legend>
-          {capabilityOptions.length === 0 ? (
-            <div className="text-sm text-fg-muted">No capabilities available.</div>
-          ) : (
-            <div className="grid gap-2">
-              {capabilityOptions.map(
-                (capability: Pairing["node"]["capabilities"][number], index: number) => {
-                  const checkboxId = `pairing-${pairing.pairing_id}-cap-${capability.id}`;
-                  const checked = selectedCapabilityIds.has(capability.id);
-                  return (
-                    <div key={checkboxId} className="flex items-start gap-2">
-                      <Checkbox
-                        id={checkboxId}
-                        data-testid={`pairing-capability-${pairing.pairing_id}-${index}`}
-                        checked={checked}
-                        disabled={isBusy}
-                        onCheckedChange={(nextChecked) => {
-                          setSelectedCapabilityIds((prev) => {
-                            const next = new Set(prev);
-                            if (nextChecked === true) {
-                              next.add(capability.id);
-                            } else {
-                              next.delete(capability.id);
-                            }
-                            return next;
-                          });
-                        }}
-                      />
-                      <Label
-                        htmlFor={checkboxId}
-                        className="break-words text-sm font-normal text-fg [overflow-wrap:anywhere]"
-                      >
-                        {capability.id}
-                      </Label>
-                    </div>
-                  );
-                },
-              )}
-            </div>
-          )}
-        </fieldset>
-
-        <Textarea
-          data-testid={`pairing-reason-${pairing.pairing_id}`}
-          label="Reason"
-          rows={3}
-          ref={reasonRef}
-          placeholder="Optional"
-          disabled={isBusy}
+        <ReviewContext
+          motivation={pairing.motivation}
+          review={pairing.latest_review}
+          testIdPrefix={`pairing-${pairing.pairing_id}`}
         />
+        {actionable ? (
+          <>
+            <fieldset className="grid gap-3">
+              <legend className="text-sm font-medium leading-none text-fg">
+                Trust level{" "}
+                <span aria-hidden="true" className="text-error">
+                  *
+                </span>
+              </legend>
+              <RadioGroup
+                value={trustLevel}
+                onValueChange={(value) => {
+                  if (value === "local" || value === "remote") {
+                    setTrustLevel(value);
+                  }
+                }}
+                className="grid gap-3"
+              >
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem
+                    id={`pairing-${pairing.pairing_id}-trust-local`}
+                    data-testid={`pairing-trust-level-${pairing.pairing_id}-local`}
+                    value="local"
+                    disabled={isBusy}
+                  />
+                  <Label htmlFor={`pairing-${pairing.pairing_id}-trust-local`}>Local</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem
+                    id={`pairing-${pairing.pairing_id}-trust-remote`}
+                    data-testid={`pairing-trust-level-${pairing.pairing_id}-remote`}
+                    value="remote"
+                    disabled={isBusy}
+                  />
+                  <Label htmlFor={`pairing-${pairing.pairing_id}-trust-remote`}>Remote</Label>
+                </div>
+              </RadioGroup>
+            </fieldset>
+
+            <fieldset className="grid gap-3">
+              <legend className="text-sm font-medium leading-none text-fg">Capabilities</legend>
+              {capabilityOptions.length === 0 ? (
+                <div className="text-sm text-fg-muted">No capabilities available.</div>
+              ) : (
+                <div className="grid gap-2">
+                  {capabilityOptions.map((capability: CapabilityDescriptor, index: number) => {
+                    const checkboxId = `pairing-${pairing.pairing_id}-cap-${capability.id}`;
+                    const checked = selectedCapabilityIds.has(capability.id);
+                    return (
+                      <div key={checkboxId} className="flex items-start gap-2">
+                        <Checkbox
+                          id={checkboxId}
+                          data-testid={`pairing-capability-${pairing.pairing_id}-${index}`}
+                          checked={checked}
+                          disabled={isBusy}
+                          onCheckedChange={(nextChecked) => {
+                            setSelectedCapabilityIds((prev) => {
+                              const next = new Set(prev);
+                              if (nextChecked === true) {
+                                next.add(capability.id);
+                              } else {
+                                next.delete(capability.id);
+                              }
+                              return next;
+                            });
+                          }}
+                        />
+                        <Label
+                          htmlFor={checkboxId}
+                          className="break-words text-sm font-normal text-fg [overflow-wrap:anywhere]"
+                        >
+                          {capability.id}
+                        </Label>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </fieldset>
+
+            <Textarea
+              data-testid={`pairing-reason-${pairing.pairing_id}`}
+              label="Reason"
+              rows={3}
+              ref={reasonRef}
+              placeholder="Optional"
+              disabled={isBusy}
+            />
+          </>
+        ) : (
+          <div className="text-sm text-fg-muted">
+            {pairing.status === "queued"
+              ? "Queued for guardian review."
+              : "Guardian review is in progress."}
+          </div>
+        )}
       </CardContent>
-      <CardFooter className="gap-2">
-        <Button
-          data-testid={`pairing-approve-${pairing.pairing_id}`}
-          isLoading={busy === "approve"}
-          disabled={isBusy}
-          onClick={() => {
-            void onApprove();
-          }}
-        >
-          Approve
-        </Button>
-        <Button
-          variant="secondary"
-          data-testid={`pairing-deny-${pairing.pairing_id}`}
-          isLoading={busy === "deny"}
-          disabled={isBusy}
-          onClick={() => {
-            void onDeny();
-          }}
-        >
-          Deny
-        </Button>
-      </CardFooter>
+      {actionable ? (
+        <CardFooter className="gap-2">
+          <Button
+            data-testid={`pairing-approve-${pairing.pairing_id}`}
+            isLoading={busy === "approve"}
+            disabled={isBusy}
+            onClick={() => {
+              void onApprove();
+            }}
+          >
+            Approve
+          </Button>
+          <Button
+            variant="secondary"
+            data-testid={`pairing-deny-${pairing.pairing_id}`}
+            isLoading={busy === "deny"}
+            disabled={isBusy}
+            onClick={() => {
+              void onDeny();
+            }}
+          >
+            Deny
+          </Button>
+        </CardFooter>
+      ) : null}
     </Card>
   );
 }
@@ -413,6 +499,13 @@ export function ApprovedPairingCard({
           ) : null}
         </div>
       </CardHeader>
+      <CardContent className="grid gap-6">
+        <ReviewContext
+          motivation={pairing.motivation}
+          review={pairing.latest_review}
+          testIdPrefix={`pairing-${pairing.pairing_id}`}
+        />
+      </CardContent>
       <CardFooter>
         <Button
           variant="danger"

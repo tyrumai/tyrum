@@ -33,7 +33,7 @@ describe("stable ws event builders", () => {
     db = undefined;
   });
 
-  it("reuses the persisted event_id for approval.resolved re-emission", async () => {
+  it("reuses the persisted event_id for approval.updated re-emission", async () => {
     db = openTestSqliteDb();
     const approvalDal = new ApprovalDal(db);
     const wsEventDal = new WsEventDal(db);
@@ -44,8 +44,11 @@ describe("stable ws event builders", () => {
       workspaceId: DEFAULT_WORKSPACE_ID,
       approvalKey: "stable-approval-event",
       prompt: "Approve stable event id?",
+      motivation: "Human review is required before this approval may continue.",
+      kind: "policy",
+      status: "awaiting_human",
     });
-    const resolved = await approvalDal.respondWithTransition({
+    const resolved = await approvalDal.resolveWithEngineAction({
       tenantId: DEFAULT_TENANT_ID,
       approvalId: created.approval_id,
       decision: "approved",
@@ -55,7 +58,7 @@ describe("stable ws event builders", () => {
       throw new Error("expected approval resolution");
     }
 
-    const approval = toApprovalContract(resolved.row);
+    const approval = toApprovalContract(resolved.approval);
     if (!approval) {
       throw new Error("expected approval contract");
     }
@@ -86,6 +89,8 @@ describe("stable ws event builders", () => {
       pubkey: "pubkey-stable-event",
       label: "node-stable-event",
       capabilities: ["cli"],
+      motivation: "Human review is required before pairing this node.",
+      initialStatus: "awaiting_human",
       nowIso: "2026-03-06T12:00:00.000Z",
     });
     const approved = await nodePairingDal.resolve({

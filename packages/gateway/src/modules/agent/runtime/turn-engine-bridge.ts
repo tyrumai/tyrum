@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { ModelMessage } from "ai";
 import type {
   AgentTurnRequest as AgentTurnRequestT,
+  ApprovalKind as ApprovalKindT,
   AgentTurnResponse as AgentTurnResponseT,
   NormalizedContainerKind,
   NormalizedMessageEnvelope as NormalizedMessageEnvelopeT,
@@ -50,7 +51,7 @@ export type LaneQueueState = {
 };
 
 type ToolExecutionApprovalPause = {
-  kind: string;
+  kind: ApprovalKindT;
   prompt: string;
   detail: string;
   context?: unknown;

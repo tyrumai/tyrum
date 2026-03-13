@@ -1,7 +1,6 @@
-import { afterEach, describe, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
+import { afterEach, describe, expect, it } from "vitest";
 import { ApprovalDal } from "../../src/modules/approval/dal.js";
-import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import type { SqlDb } from "../../src/statestore/types.js";
 import {
@@ -9,9 +8,11 @@ import {
   DEFAULT_TENANT_ID,
   DEFAULT_WORKSPACE_ID,
 } from "../../src/modules/identity/scope.js";
+import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 
 describe("ApprovalDal", () => {
   let db: SqliteDb | undefined;
+
   const tenantId = DEFAULT_TENANT_ID;
   const agentId = DEFAULT_AGENT_ID;
   const workspaceId = DEFAULT_WORKSPACE_ID;
@@ -26,224 +27,226 @@ describe("ApprovalDal", () => {
     return new ApprovalDal(db);
   }
 
-  it("creates a pending approval", async () => {
-    const dal = createDal();
-    const approvalKey = `approval:${randomUUID()}`;
-    const approval = await dal.create({
+  async function createApproval(
+    dal: ApprovalDal,
+    input?: {
+      approvalKey?: string;
+      prompt?: string;
+      motivation?: string;
+      kind?: "policy" | "workflow_step";
+      status?: "queued" | "reviewing" | "awaiting_human";
+      expiresAt?: string | null;
+      resumeToken?: string | null;
+    },
+  ) {
+    return await dal.create({
       tenantId,
       agentId,
       workspaceId,
+      approvalKey: input?.approvalKey ?? `approval:${randomUUID()}`,
+      prompt: input?.prompt ?? "Approve?",
+      motivation:
+        input?.motivation ?? "Human or guardian review is required before this action continues.",
+      kind: input?.kind ?? "policy",
+      status: input?.status,
+      expiresAt: input?.expiresAt,
+      resumeToken: input?.resumeToken,
+    });
+  }
+
+  it("creates a queued approval by default", async () => {
+    const dal = createDal();
+    const approvalKey = `approval:${randomUUID()}`;
+
+    const approval = await createApproval(dal, {
       approvalKey,
       prompt: "Allow web scrape of example.com?",
-      context: { url: "https://example.com" },
-      kind: "policy",
+      motivation: "The workflow needs to scrape example.com before it can continue.",
     });
 
     expect(approval.tenant_id).toBe(tenantId);
     expect(approval.approval_key).toBe(approvalKey);
     expect(approval.approval_id).toMatch(/[0-9a-fA-F-]{36}/);
     expect(approval.prompt).toBe("Allow web scrape of example.com?");
-    expect(approval.context).toEqual({ url: "https://example.com" });
-    expect(approval.status).toBe("pending");
-    expect(approval.resolved_at).toBeNull();
-    expect(approval.resolution).toBeNull();
-
-    const second = await dal.create({
-      tenantId,
-      agentId,
-      workspaceId,
-      approvalKey,
-      prompt: "ignored",
-    });
-    expect(second.approval_id).toBe(approval.approval_id);
-    expect(second.prompt).toBe(approval.prompt);
+    expect(approval.motivation).toBe(
+      "The workflow needs to scrape example.com before it can continue.",
+    );
+    expect(approval.context).toEqual({});
+    expect(approval.status).toBe("queued");
+    expect(approval.latest_review).toBeNull();
   });
 
-  it("retrieves approval by id", async () => {
+  it("is idempotent on approval_key", async () => {
     const dal = createDal();
     const approvalKey = `approval:${randomUUID()}`;
-    const created = await dal.create({
-      tenantId,
-      agentId,
-      workspaceId,
+
+    const first = await createApproval(dal, {
       approvalKey,
-      prompt: "Approve?",
+      prompt: "Keep original prompt",
+      motivation: "Keep original motivation",
+    });
+    const second = await createApproval(dal, {
+      approvalKey,
+      prompt: "Ignored prompt",
+      motivation: "Ignored motivation",
     });
 
-    const fetched = await dal.getById({ tenantId, approvalId: created.approval_id });
-    expect(fetched).toBeDefined();
-    expect(fetched!.approval_id).toBe(created.approval_id);
-    expect(fetched!.prompt).toBe("Approve?");
+    expect(second.approval_id).toBe(first.approval_id);
+    expect(second.prompt).toBe(first.prompt);
+    expect(second.motivation).toBe(first.motivation);
   });
 
-  it("returns undefined for non-existent id", async () => {
+  it("retrieves approvals by id and resume token", async () => {
     const dal = createDal();
-    expect(await dal.getById({ tenantId, approvalId: randomUUID() })).toBeUndefined();
+    const resumeToken = `resume-${randomUUID()}`;
+    const created = await createApproval(dal, {
+      kind: "workflow_step",
+      status: "awaiting_human",
+      resumeToken,
+    });
+
+    const fetchedById = await dal.getById({ tenantId, approvalId: created.approval_id });
+    const fetchedByToken = await dal.getByResumeToken({ tenantId, resumeToken });
+
+    expect(fetchedById?.approval_id).toBe(created.approval_id);
+    expect(fetchedByToken?.approval_id).toBe(created.approval_id);
+    expect(fetchedByToken?.status).toBe("awaiting_human");
   });
 
-  it("approves a pending approval", async () => {
+  it("transitions queued approvals into awaiting_human with a review entry", async () => {
     const dal = createDal();
-    const created = await dal.create({
+    const created = await createApproval(dal, { status: "queued" });
+
+    const transitioned = await dal.transitionWithReview({
       tenantId,
-      agentId,
-      workspaceId,
-      approvalKey: `approval:${randomUUID()}`,
-      prompt: "Approve?",
+      approvalId: created.approval_id,
+      status: "awaiting_human",
+      reviewerKind: "guardian",
+      reviewState: "requested_human",
+      reason: "This action needs a human to review the risk.",
+      riskLevel: "high",
+      riskScore: 812,
+      allowedCurrentStatuses: ["queued"],
+      includeReviews: true,
     });
 
-    const updated = await dal.respond({
+    expect(transitioned?.transitioned).toBe(true);
+    expect(transitioned?.approval.status).toBe("awaiting_human");
+    expect(transitioned?.approval.latest_review).toMatchObject({
+      reviewer_kind: "guardian",
+      state: "requested_human",
+      reason: "This action needs a human to review the risk.",
+      risk_level: "high",
+      risk_score: 812,
+    });
+    expect(transitioned?.approval.reviews).toHaveLength(1);
+  });
+
+  it("approves an awaiting_human approval and records the human review", async () => {
+    const dal = createDal();
+    const created = await createApproval(dal, { status: "awaiting_human" });
+
+    const updated = await dal.resolveWithEngineAction({
       tenantId,
       approvalId: created.approval_id,
       decision: "approved",
       reason: "looks safe",
     });
-    expect(updated).toBeDefined();
-    expect(updated!.status).toBe("approved");
-    expect(updated!.resolved_at).toBeTruthy();
-    expect((updated!.resolution as Record<string, unknown>)["decision"]).toBe("approved");
-    expect((updated!.resolution as Record<string, unknown>)["reason"]).toBe("looks safe");
+
+    expect(updated?.transitioned).toBe(true);
+    expect(updated?.approval.status).toBe("approved");
+    expect(updated?.approval.latest_review).toMatchObject({
+      reviewer_kind: "human",
+      state: "approved",
+      reason: "looks safe",
+    });
   });
 
-  it("denies a pending approval", async () => {
+  it("denies an awaiting_human approval and keeps duplicate resolves idempotent", async () => {
     const dal = createDal();
-    const created = await dal.create({
-      tenantId,
-      agentId,
-      workspaceId,
-      approvalKey: `approval:${randomUUID()}`,
-      prompt: "Approve?",
-    });
+    const created = await createApproval(dal, { status: "awaiting_human" });
 
-    const updated = await dal.respond({
+    const first = await dal.resolveWithEngineAction({
       tenantId,
       approvalId: created.approval_id,
       decision: "denied",
       reason: "too risky",
     });
-    expect(updated).toBeDefined();
-    expect(updated!.status).toBe("denied");
-    expect((updated!.resolution as Record<string, unknown>)["decision"]).toBe("denied");
-    expect((updated!.resolution as Record<string, unknown>)["reason"]).toBe("too risky");
-  });
-
-  it("is idempotent when responding to already-responded approval", async () => {
-    const dal = createDal();
-    const created = await dal.create({
-      tenantId,
-      agentId,
-      workspaceId,
-      approvalKey: `approval:${randomUUID()}`,
-      prompt: "Approve?",
-    });
-
-    await dal.respond({ tenantId, approvalId: created.approval_id, decision: "approved" });
-    const second = await dal.respond({
+    const second = await dal.resolveWithEngineAction({
       tenantId,
       approvalId: created.approval_id,
-      decision: "denied",
+      decision: "approved",
+      reason: "should not apply",
     });
-    expect(second).toBeDefined();
-    expect(second!.status).toBe("approved");
 
-    const fetched = await dal.getById({ tenantId, approvalId: created.approval_id });
-    expect(fetched!.status).toBe("approved");
+    expect(first?.transitioned).toBe(true);
+    expect(first?.approval.status).toBe("denied");
+    expect(second?.transitioned).toBe(false);
+    expect(second?.approval.status).toBe("denied");
   });
 
-  it("lists pending approvals in creation order", async () => {
+  it("lists blocked approvals newest first", async () => {
     const dal = createDal();
-    const first = await dal.create({
-      tenantId,
-      agentId,
-      workspaceId,
+    const queued = await createApproval(dal, {
       approvalKey: `approval:${randomUUID()}`,
-      prompt: "First?",
+      prompt: "Queued",
+      status: "queued",
     });
-    const second = await dal.create({
-      tenantId,
-      agentId,
-      workspaceId,
+    const reviewing = await createApproval(dal, {
       approvalKey: `approval:${randomUUID()}`,
-      prompt: "Second?",
+      prompt: "Reviewing",
+      status: "reviewing",
     });
-    const third = await dal.create({
-      tenantId,
-      agentId,
-      workspaceId,
+    const awaitingHuman = await createApproval(dal, {
       approvalKey: `approval:${randomUUID()}`,
-      prompt: "Third?",
+      prompt: "Awaiting human",
+      status: "awaiting_human",
     });
 
     await db!.run("UPDATE approvals SET created_at = ? WHERE tenant_id = ? AND approval_id = ?", [
-      "2020-01-01T00:00:00.000Z",
+      "2026-01-01T00:00:00.000Z",
       tenantId,
-      first.approval_id,
+      queued.approval_id,
     ]);
     await db!.run("UPDATE approvals SET created_at = ? WHERE tenant_id = ? AND approval_id = ?", [
-      "2020-01-01T00:00:01.000Z",
+      "2026-01-01T00:00:01.000Z",
       tenantId,
-      second.approval_id,
+      reviewing.approval_id,
     ]);
     await db!.run("UPDATE approvals SET created_at = ? WHERE tenant_id = ? AND approval_id = ?", [
-      "2020-01-01T00:00:02.000Z",
+      "2026-01-01T00:00:02.000Z",
       tenantId,
-      third.approval_id,
+      awaitingHuman.approval_id,
     ]);
 
-    await dal.respond({ tenantId, approvalId: third.approval_id, decision: "approved" });
-
-    const pending = await dal.getPending({ tenantId });
-    expect(pending).toHaveLength(2);
-    expect(pending[0]!.approval_id).toBe(first.approval_id);
-    expect(pending[1]!.approval_id).toBe(second.approval_id);
+    const blocked = await dal.listBlocked({ tenantId });
+    expect(blocked.map((approval) => approval.prompt)).toEqual([
+      "Awaiting human",
+      "Reviewing",
+      "Queued",
+    ]);
   });
 
-  it("expires stale approvals", async () => {
+  it("expires stale blocked approvals", async () => {
     const dal = createDal();
-    const created = await dal.create({
-      tenantId,
-      agentId,
-      workspaceId,
-      approvalKey: `approval:${randomUUID()}`,
-      prompt: "Approve?",
+    const created = await createApproval(dal, {
+      status: "reviewing",
       expiresAt: "2020-01-01T00:00:00.000Z",
     });
-
-    await dal.create({
-      tenantId,
-      agentId,
-      workspaceId,
-      approvalKey: `approval:${randomUUID()}`,
-      prompt: "Also approve?",
+    await createApproval(dal, {
+      status: "awaiting_human",
       expiresAt: "2099-12-31T23:59:59.000Z",
-    });
-
-    await dal.create({
-      tenantId,
-      agentId,
-      workspaceId,
-      approvalKey: `approval:${randomUUID()}`,
-      prompt: "No expiry?",
     });
 
     const expired = await dal.expireStale({ tenantId, nowIso: "2026-01-01T00:00:00.000Z" });
     expect(expired).toBe(1);
 
     const row = await dal.getById({ tenantId, approvalId: created.approval_id });
-    expect(row!.status).toBe("expired");
-    expect(row!.resolved_at).toBeTruthy();
-  });
-
-  it("creates approval with default empty context when none provided", async () => {
-    const dal = createDal();
-    const approval = await dal.create({
-      tenantId,
-      agentId,
-      workspaceId,
-      approvalKey: `approval:${randomUUID()}`,
-      prompt: "Approve?",
+    expect(row?.status).toBe("expired");
+    expect(row?.latest_review).toMatchObject({
+      reviewer_kind: "system",
+      state: "expired",
     });
-
-    expect(approval.context).toEqual({});
   });
 
   it("normalizes created_at when Postgres returns Date", async () => {
@@ -255,14 +258,14 @@ describe("ApprovalDal", () => {
       approval_key: `approval:${randomUUID()}`,
       agent_id: agentId,
       workspace_id: workspaceId,
-      kind: "other",
-      status: "pending",
+      kind: "policy",
+      status: "queued",
       prompt: "Approve?",
+      motivation: "Motivation",
       context_json: "{}",
       created_at: createdAt,
       expires_at: null,
-      resolved_at: null,
-      resolution_json: null,
+      latest_review_id: null,
       session_id: null,
       plan_id: null,
       run_id: null,
@@ -285,68 +288,8 @@ describe("ApprovalDal", () => {
 
     const dal = new ApprovalDal(stubDb);
     const fetched = await dal.getById({ tenantId, approvalId });
-    expect(fetched).toBeDefined();
-    expect(fetched!.created_at).toBe(createdAt.toISOString());
-  });
-
-  it("uses createTxDal for respondWithTransition transactions", async () => {
-    db = openTestSqliteDb();
-
-    const txDals: SqlDb[] = [];
-
-    class TrackingApprovalDal extends ApprovalDal {
-      constructor(
-        sqlDb: SqlDb,
-        private readonly seenTxDals: SqlDb[],
-      ) {
-        super(sqlDb);
-      }
-
-      protected override createTxDal(tx: SqlDb): ApprovalDal {
-        this.seenTxDals.push(tx);
-        return new TrackingApprovalDal(tx, this.seenTxDals);
-      }
-    }
-
-    const txDb: SqlDb = {
-      kind: db.kind,
-      get: async <T>(sql: string, params?: readonly unknown[]) => await db!.get<T>(sql, params),
-      all: async <T>(sql: string, params?: readonly unknown[]) => await db!.all<T>(sql, params),
-      run: async (sql: string, params?: readonly unknown[]) => await db!.run(sql, params),
-      exec: async (sql: string) => await db!.exec(sql),
-      transaction: async <T>(fn: (tx: SqlDb) => Promise<T>) => await fn(txDb),
-      close: async () => await db!.close(),
-    };
-
-    const rootDb: SqlDb = {
-      kind: db.kind,
-      get: async <T>(sql: string, params?: readonly unknown[]) => await db!.get<T>(sql, params),
-      all: async <T>(sql: string, params?: readonly unknown[]) => await db!.all<T>(sql, params),
-      run: async (sql: string, params?: readonly unknown[]) => await db!.run(sql, params),
-      exec: async (sql: string) => await db!.exec(sql),
-      transaction: async <T>(fn: (tx: SqlDb) => Promise<T>) =>
-        await db!.transaction(async () => await fn(txDb)),
-      close: async () => await db!.close(),
-    };
-
-    const dal = new TrackingApprovalDal(rootDb, txDals);
-    const created = await dal.create({
-      tenantId,
-      agentId,
-      workspaceId,
-      approvalKey: `approval:${randomUUID()}`,
-      prompt: "Approve?",
-    });
-
-    const updated = await dal.respondWithTransition({
-      tenantId,
-      approvalId: created.approval_id,
-      decision: "approved",
-    });
-
-    expect(updated?.row.status).toBe("approved");
-    expect(updated?.transitioned).toBe(true);
-    expect(txDals).toHaveLength(1);
-    expect(txDals[0]).toBe(txDb);
+    expect(fetched?.created_at).toBe(createdAt.toISOString());
+    expect(fetched?.motivation).toBe("Motivation");
+    expect(fetched?.status).toBe("queued");
   });
 });

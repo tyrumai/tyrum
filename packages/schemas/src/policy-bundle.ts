@@ -132,6 +132,18 @@ export const PolicyBundleV1 = z
       })
       .strict()
       .optional(),
+
+    approvals: z
+      .object({
+        auto_review: z
+          .object({
+            mode: z.enum(["auto_review", "manual_only"]).default("auto_review"),
+          })
+          .strict()
+          .default({ mode: "auto_review" }),
+      })
+      .strict()
+      .default({ auto_review: { mode: "auto_review" } }),
   })
   .strict();
 export type PolicyBundleV1 = z.infer<typeof PolicyBundleV1>;

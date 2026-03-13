@@ -25,6 +25,7 @@ import { buildWorkFocusDigest } from "./work-focus-digest.js";
 import type { AgentContextReport, AgentLoadedContext, AgentRuntimeOptions } from "./types.js";
 import { resolveAutomationMetadata, buildAutomationDigest } from "./automation-delivery.js";
 import { resolveExecutionProfile, type ResolvedExecutionProfile } from "./intake-delegation.js";
+import { ToolSetBuilder } from "./tool-set-builder.js";
 import type { AgentContextStore } from "../context-store.js";
 import type { SessionRow } from "../session-dal.js";
 import { SessionDal } from "../session-dal.js";
@@ -38,12 +39,23 @@ import { resolveGatewayStateMode } from "../../runtime-state/mode.js";
 import type { SecretProvider } from "../../secret/provider.js";
 import type { PluginRegistry } from "../../plugins/registry.js";
 import type { PolicyService } from "../../policy/service.js";
-import type { ApprovalNotifier } from "../../approval/notifier.js";
 import type { ApprovalDal } from "../../approval/dal.js";
 import { buildContextReport } from "./turn-context-report.js";
 import { AgentMemoryToolRuntime } from "../../memory/agent-tool-runtime.js";
 import { resolveBuiltinMemoryConfig } from "../../memory/builtin-mcp.js";
 import { resolveEmbeddingPipeline } from "./embedding-pipeline-resolution.js";
+import {
+  buildTurnMemoryProtocolPrompt,
+  createTurnMemoryDecisionCollector,
+  isTurnMemoryAutoWriteEnabled,
+} from "./turn-memory-policy.js";
+import {
+  buildGuardianReviewSystemPrompt,
+  createGuardianReviewDecisionCollector,
+  resolveGuardianReviewRequest,
+  type GuardianReviewDecisionCollector,
+} from "../../review/guardian-review-mode.js";
+
 export type TurnExecutionContext = {
   planId: string;
   runId: string;
@@ -51,6 +63,7 @@ export type TurnExecutionContext = {
   stepId: string;
   stepApprovalId?: string;
 };
+
 export type PreparedTurn = {
   ctx: AgentLoadedContext;
   executionProfile: ResolvedExecutionProfile;
@@ -67,7 +80,10 @@ export type PreparedTurn = {
   contextReport: AgentContextReport;
   systemPrompt: string;
   resolved: ResolvedAgentTurnInput;
+  turnMemoryDecisionCollector?: ReturnType<typeof createTurnMemoryDecisionCollector>;
+  guardianReviewDecisionCollector?: GuardianReviewDecisionCollector;
 };
+
 export type PrepareTurnDeps = {
   opts: AgentRuntimeOptions;
   home: string;
@@ -83,7 +99,6 @@ export type PrepareTurnDeps = {
   plugins: PluginRegistry | undefined;
   policyService: PolicyService;
   approvalDal: ApprovalDal;
-  approvalNotifier: ApprovalNotifier;
   approvalWaitMs: number;
   approvalPollMs: number;
   secretProvider: SecretProvider | undefined;
@@ -141,11 +156,42 @@ export async function prepareTurn(
     { laneQueueScope, metadata: resolved.metadata },
   );
 
-  const { availableTools, toolSetBuilderDeps, toolSetBuilder, filteredTools } =
-    await resolveToolsAndMemory(deps, ctx, session, resolved, executionProfile);
+  const guardianReviewRequest = resolveGuardianReviewRequest(resolved.metadata);
+  const guardianReviewToolSetBuilder = guardianReviewRequest
+    ? new ToolSetBuilder({
+        home: deps.home,
+        stateMode: resolveGatewayStateMode(deps.opts.container.deploymentConfig),
+        tenantId: session.tenant_id,
+        agentId: session.agent_id,
+        workspaceId: session.workspace_id,
+        sessionDal: deps.sessionDal,
+        wsEventDb: deps.opts.container.db,
+        policyService: deps.policyService,
+        approvalDal: deps.opts.container.approvalDal,
+        protocolDeps: deps.opts.protocolDeps,
+        approvalWaitMs: deps.approvalWaitMs,
+        approvalPollMs: deps.approvalPollMs,
+        logger: deps.opts.container.logger,
+        secretProvider: deps.secretProvider,
+        plugins: deps.plugins,
+        redactionEngine: deps.opts.container.redactionEngine,
+      })
+    : undefined;
+  const normalTurnContext = guardianReviewRequest
+    ? undefined
+    : await resolveToolsAndMemory(deps, ctx, session, resolved, executionProfile);
+  const availableTools = normalTurnContext?.availableTools ?? [];
+  const toolSetBuilderDeps = normalTurnContext?.toolSetBuilderDeps;
+  const filteredTools = normalTurnContext?.filteredTools ?? [];
+  const resolvedToolSetBuilder =
+    normalTurnContext?.toolSetBuilder ?? guardianReviewToolSetBuilder;
+  if (!resolvedToolSetBuilder) {
+    throw new Error("tool set builder unavailable for turn preparation");
+  }
 
-  const workFocusDigest =
-    isStatusQuery(resolved.message) || parseIntakeModeDecision(resolved.message)
+  const workFocusDigest = guardianReviewRequest
+    ? "Skipped in guardian review mode."
+    : isStatusQuery(resolved.message) || parseIntakeModeDecision(resolved.message)
       ? "Skipped for command turns."
       : await buildWorkFocusDigest({
           container: deps.opts.container,
@@ -156,17 +202,19 @@ export async function prepareTurn(
           },
         });
   const workFocusText = `Work focus digest:\n${workFocusDigest}`;
-  const runtimePrompt = await buildRuntimePrompt({
-    nowIso: new Date().toISOString(),
-    agentId: session.agent_id,
-    workspaceId: session.workspace_id,
-    sessionId: session.session_id,
-    channel: resolved.channel,
-    threadId: resolved.thread_id,
-    home: deps.home,
-    stateMode: resolveGatewayStateMode(deps.opts.container.deploymentConfig),
-    model: executionProfile.profile.model_id ?? executionProfile.id,
-  });
+  const runtimePrompt = guardianReviewRequest
+    ? undefined
+    : await buildRuntimePrompt({
+        nowIso: new Date().toISOString(),
+        agentId: session.agent_id,
+        workspaceId: session.workspace_id,
+        sessionId: session.session_id,
+        channel: resolved.channel,
+        threadId: resolved.thread_id,
+        home: deps.home,
+        stateMode: resolveGatewayStateMode(deps.opts.container.deploymentConfig),
+        model: executionProfile.profile.model_id ?? executionProfile.id,
+      });
 
   const mcpSpecMap = new Map<string, (typeof ctx.mcpServers)[number]>(
     ctx.mcpServers.map((server: (typeof ctx.mcpServers)[number]) => [server.id, server]),
@@ -281,19 +329,12 @@ export async function prepareTurn(
       : undefined,
   };
   const preTurnHydration =
-    !isStatusQuery(resolved.message) &&
-    !parseIntakeModeDecision(resolved.message) &&
-    ctx.config.mcp.pre_turn_tools.length > 0
-      ? await runPreTurnHydration({
-          toolIds: ctx.config.mcp.pre_turn_tools,
-          availableTools,
-          toolExecutor,
-          toolSetBuilderDeps,
-          toolExecutionContext,
-          session,
-          resolved,
-        })
-      : {
+    guardianReviewRequest ||
+    isStatusQuery(resolved.message) ||
+    parseIntakeModeDecision(resolved.message) ||
+    ctx.config.mcp.pre_turn_tools.length === 0 ||
+    !toolSetBuilderDeps
+      ? {
           sections: [],
           reports: [],
           memory: {
@@ -302,42 +343,87 @@ export async function prepareTurn(
             structured_hits: 0,
             included_items: 0,
           },
-        };
+        }
+      : await runPreTurnHydration({
+          toolIds: ctx.config.mcp.pre_turn_tools,
+          availableTools,
+          toolExecutor,
+          toolSetBuilderDeps,
+          toolExecutionContext,
+          session,
+          resolved,
+        });
 
-  const {
-    identityPrompt,
-    runtimePrompt: runtimePromptText,
-    safetyPrompt,
-    skillsText,
-    toolsText,
-    sessionText,
-    preTurnTexts,
-    automationTriggerText,
-  } = assemblePrompts(
-    ctx,
-    session,
-    filteredTools,
-    preTurnHydration.sections.map((section) => section.text),
-    automation,
-    runtimePrompt,
-  );
-
-  const sandboxPrompt = buildSandboxPrompt();
-  const systemPrompt = [identityPrompt, runtimePromptText, safetyPrompt, sandboxPrompt]
-    .filter((value) => typeof value === "string" && value.length > 0)
-    .join("\n\n");
-
-  const automationDigestText = automation
-    ? await buildAutomationDigest({
-        container: deps.opts.container,
-        scope: {
-          tenant_id: session.tenant_id,
-          agent_id: session.agent_id,
-          workspace_id: session.workspace_id,
-        },
-        automation,
-      })
+  const sandboxPrompt = guardianReviewRequest ? "" : buildSandboxPrompt();
+  const turnMemoryAutoWriteEnabled =
+    !guardianReviewRequest && isTurnMemoryAutoWriteEnabled(ctx.config.memory.v1);
+  const turnMemoryDecisionCollector = turnMemoryAutoWriteEnabled
+    ? createTurnMemoryDecisionCollector()
     : undefined;
+  const guardianReviewDecisionCollector = guardianReviewRequest
+    ? createGuardianReviewDecisionCollector(guardianReviewRequest.subjectType)
+    : undefined;
+  const turnMemoryPrompt = turnMemoryAutoWriteEnabled
+    ? buildTurnMemoryProtocolPrompt(automation)
+    : undefined;
+
+  const promptParts = guardianReviewRequest
+    ? {
+        identityPrompt: "",
+        runtimePromptText: "",
+        safetyPrompt: "",
+        skillsText: "Enabled skills:\nGuardian review mode disabled skills.",
+        toolsText: "Available tools:\nguardian_review_decision",
+        sessionText:
+          "Session context:\nGuardian review mode relies on the supplied review request evidence.",
+        preTurnTexts: [] as string[],
+        automationTriggerText: undefined as string | undefined,
+      }
+    : (() => {
+        const assembled = assemblePrompts(
+          ctx,
+          session,
+          filteredTools,
+          preTurnHydration.sections.map((section) => section.text),
+          automation,
+          runtimePrompt ?? "",
+        );
+        return {
+          identityPrompt: assembled.identityPrompt,
+          runtimePromptText: assembled.runtimePrompt,
+          safetyPrompt: assembled.safetyPrompt,
+          skillsText: assembled.skillsText,
+          toolsText: assembled.toolsText,
+          sessionText: assembled.sessionText,
+          preTurnTexts: assembled.preTurnTexts,
+          automationTriggerText: assembled.automationTriggerText,
+        };
+      })();
+
+  const systemPrompt = guardianReviewRequest
+    ? buildGuardianReviewSystemPrompt(guardianReviewRequest.subjectType)
+    : [
+        promptParts.identityPrompt,
+        promptParts.runtimePromptText,
+        promptParts.safetyPrompt,
+        sandboxPrompt,
+        turnMemoryPrompt,
+      ]
+        .filter((value): value is string => typeof value === "string" && value.length > 0)
+        .join("\n\n");
+
+  const automationDigestText =
+    guardianReviewRequest || !automation
+      ? undefined
+      : await buildAutomationDigest({
+          container: deps.opts.container,
+          scope: {
+            tenant_id: session.tenant_id,
+            agent_id: session.agent_id,
+            workspace_id: session.workspace_id,
+          },
+          automation,
+        });
 
   const validatedReport = buildContextReport({
     session,
@@ -346,16 +432,16 @@ export async function prepareTurn(
     executionProfile,
     filteredTools,
     systemPrompt,
-    identityPrompt,
-    safetyPrompt,
+    identityPrompt: promptParts.identityPrompt,
+    safetyPrompt: promptParts.safetyPrompt,
     sandboxPrompt,
-    skillsText,
-    toolsText,
-    sessionText,
+    skillsText: promptParts.skillsText,
+    toolsText: promptParts.toolsText,
+    sessionText: promptParts.sessionText,
     workFocusText,
-    preTurnTexts,
+    preTurnTexts: [...promptParts.preTurnTexts],
     preTurnReports: preTurnHydration.reports,
-    automationTriggerText,
+    automationTriggerText: promptParts.automationTriggerText,
     automationDigestText,
     memorySummary: preTurnHydration.memory,
     automation,
@@ -365,7 +451,7 @@ export async function prepareTurn(
   const usedTools = new Set<string>();
   const memoryWriteState = { wrote: false };
   const toolCallPolicyStates = new Map<string, ToolCallPolicyState>();
-  const toolSet = toolSetBuilder.buildToolSet(
+  const toolSet = resolvedToolSetBuilder.buildToolSet(
     filteredTools,
     toolExecutor,
     usedTools,
@@ -375,18 +461,25 @@ export async function prepareTurn(
     toolCallPolicyStates,
     model,
     memoryWriteState,
+    turnMemoryDecisionCollector,
+    guardianReviewDecisionCollector,
   );
 
-  const userContent: Array<{ type: "text"; text: string }> = [
-    { type: "text", text: skillsText },
-    { type: "text", text: toolsText },
-    { type: "text", text: sessionText },
-    { type: "text", text: workFocusText },
-    ...preTurnTexts.map((text) => ({ type: "text" as const, text })),
-    ...(automationTriggerText ? [{ type: "text" as const, text: automationTriggerText }] : []),
-    ...(automationDigestText ? [{ type: "text" as const, text: automationDigestText }] : []),
-    { type: "text", text: resolved.message },
-  ];
+  const userContent: Array<{ type: "text"; text: string }> = guardianReviewRequest
+    ? [{ type: "text", text: resolved.message }]
+    : [
+        { type: "text", text: promptParts.skillsText },
+        { type: "text", text: promptParts.toolsText },
+        { type: "text", text: promptParts.sessionText },
+        { type: "text", text: workFocusText },
+        ...promptParts.preTurnTexts.map((text) => ({ type: "text" as const, text })),
+        ...(promptParts.automationTriggerText
+          ? [{ type: "text" as const, text: promptParts.automationTriggerText }]
+          : []),
+        ...(automationDigestText ? [{ type: "text" as const, text: automationDigestText }] : []),
+        { type: "text", text: resolved.message },
+      ];
+
   return {
     ctx,
     executionProfile,
@@ -403,5 +496,7 @@ export async function prepareTurn(
     contextReport: validatedReport,
     systemPrompt,
     resolved,
+    turnMemoryDecisionCollector,
+    guardianReviewDecisionCollector,
   };
 }

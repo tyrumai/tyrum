@@ -10,6 +10,7 @@ import type {
 } from "./activity-store.js";
 import type { ChatState } from "./chat-store.js";
 import type { RunsState } from "./runs-store.js";
+import { isApprovalBlockedStatus } from "../review-status.js";
 
 const MAIN_LANE = "main";
 const MAX_RECENT_EVENTS = 10;
@@ -241,7 +242,7 @@ export function attemptSummary(attempt: ExecutionAttempt): string {
 }
 
 export function approvalSummary(approval: Approval): string {
-  return approval.status === "pending" ? approval.prompt : `Approval ${approval.status}`;
+  return isApprovalBlockedStatus(approval.status) ? approval.prompt : `Approval ${approval.status}`;
 }
 
 export function determinePriority(
@@ -251,7 +252,7 @@ export function determinePriority(
   message: MessageActivity | null,
   lease: ActivityLeaseState,
 ): Priority {
-  if (approvals.some((approval) => approval.status === "pending")) {
+  if (approvals.some((approval) => isApprovalBlockedStatus(approval.status))) {
     return { level: "critical", score: 900, reason: "approval" };
   }
   if (runStatus === "failed") return { level: "high", score: 800, reason: "failure" };
@@ -288,7 +289,7 @@ export function determineBubbleText(
   latestRun: ExecutionRun | null,
   message: MessageActivity | null,
 ): string | null {
-  const pendingApproval = approvals.find((approval) => approval.status === "pending");
+  const pendingApproval = approvals.find((approval) => isApprovalBlockedStatus(approval.status));
   if (pendingApproval) return pendingApproval.prompt;
   if (latestAttempt?.error) return latestAttempt.error;
   if (latestRun?.status === "paused") {
