@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
 import { resolveApproval } from "../../src/modules/approval/resolve-service.js";
-import { ApprovalDal } from "../../src/modules/approval/dal.js";
+import { ApprovalDal, type ApprovalRow } from "../../src/modules/approval/dal.js";
 import {
   DEFAULT_AGENT_ID,
   DEFAULT_TENANT_ID,
@@ -14,9 +14,70 @@ import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 describe("resolveApproval", () => {
   let db: SqliteDb | undefined;
 
+  function makeApprovalRow(overrides?: Partial<ApprovalRow>): ApprovalRow {
+    return {
+      tenant_id: DEFAULT_TENANT_ID,
+      approval_id: randomUUID(),
+      approval_key: `approval:${randomUUID()}`,
+      agent_id: DEFAULT_AGENT_ID,
+      workspace_id: DEFAULT_WORKSPACE_ID,
+      kind: "policy",
+      status: "awaiting_human",
+      prompt: "Allow tool?",
+      motivation: "Human review is required.",
+      context: {},
+      created_at: "2026-01-01T00:00:00.000Z",
+      expires_at: null,
+      latest_review: null,
+      session_id: null,
+      plan_id: null,
+      run_id: null,
+      step_id: null,
+      attempt_id: null,
+      work_item_id: null,
+      work_item_task_id: null,
+      resume_token: null,
+      ...overrides,
+    };
+  }
+
   afterEach(async () => {
     await db?.close();
     db = undefined;
+  });
+
+  it("skips eager approval lookup for once resolutions", async () => {
+    let getByIdCalls = 0;
+    let resolveCalls = 0;
+    const approval = makeApprovalRow({ status: "approved" });
+
+    const result = await resolveApproval(
+      {
+        approvalDal: {
+          getById: async () => {
+            getByIdCalls += 1;
+            return approval;
+          },
+          resolveWithEngineAction: async () => {
+            resolveCalls += 1;
+            return { approval, transitioned: true };
+          },
+        },
+      },
+      {
+        tenantId: DEFAULT_TENANT_ID,
+        approvalId: approval.approval_id,
+        decision: "approved",
+        mode: "once",
+        resolvedBy: { kind: "http" },
+      },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.message);
+    expect(result.transitioned).toBe(true);
+    expect(getByIdCalls).toBe(0);
+    expect(resolveCalls).toBe(1);
   });
 
   it("resolves approve-always once and keeps duplicate resolves idempotent", async () => {

@@ -43,7 +43,22 @@ ALTER TABLE approvals
   ADD COLUMN IF NOT EXISTS latest_review_id TEXT;
 
 UPDATE approvals
-SET motivation = COALESCE(NULLIF(TRIM(CAST((context_json::jsonb ->> 'paused_detail') AS TEXT)), ''), prompt)
+SET motivation = COALESCE(
+  NULLIF(
+    TRIM(
+      CAST(
+        (
+          CASE
+            WHEN pg_input_is_valid(context_json, 'jsonb') THEN context_json::jsonb
+            ELSE '{}'::jsonb
+          END ->> 'paused_detail'
+        ) AS TEXT
+      )
+    ),
+    ''
+  ),
+  prompt
+)
 WHERE motivation IS NULL OR TRIM(motivation) = '';
 
 UPDATE approvals

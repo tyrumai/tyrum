@@ -143,20 +143,6 @@ export async function resolveApproval(
   const overrideDal = deps.policyOverrideDal;
   let selectedOverrides: NormalizedSelectedOverride[] | undefined;
   let policySnapshotId: string | undefined;
-  const existing = deps.approvalDal.getById
-    ? await deps.approvalDal.getById({
-        tenantId: input.tenantId,
-        approvalId: input.approvalId,
-      })
-    : undefined;
-
-  if (existing?.status === "reviewing") {
-    return invalidRequest("approval is still being reviewed by the guardian");
-  }
-
-  if (existing && !isHumanResolvableApprovalStatus(existing.status)) {
-    return { ok: true, approval: existing, transitioned: false };
-  }
 
   if (input.decision === "approved" && input.mode === "always") {
     if (!deps.approvalDal.getById) {
@@ -166,8 +152,18 @@ export async function resolveApproval(
         message: "approval lookup not configured",
       };
     }
+    const existing = await deps.approvalDal.getById({
+      tenantId: input.tenantId,
+      approvalId: input.approvalId,
+    });
     if (!existing) {
       return notFound(input.approvalId);
+    }
+    if (existing.status === "reviewing") {
+      return invalidRequest("approval is still being reviewed by the guardian");
+    }
+    if (!isHumanResolvableApprovalStatus(existing.status)) {
+      return { ok: true, approval: existing, transitioned: false };
     }
 
     if (!overrideDal) {
