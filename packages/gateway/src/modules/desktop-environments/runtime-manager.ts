@@ -114,13 +114,15 @@ export class DesktopEnvironmentRuntimeManager {
     }
 
     let inspect = await inspectContainer(containerName);
+    let removedForImageChange = false;
     const currentImage = inspect?.Config?.Image?.trim();
     if (inspect && currentImage && currentImage !== environment.image_ref) {
       await removeContainer(containerName);
       inspect = null;
+      removedForImageChange = true;
     }
 
-    if (!inspect && environment.status === "error") {
+    if (!inspect && environment.status === "error" && !removedForImageChange) {
       return;
     }
 

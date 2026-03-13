@@ -39,6 +39,32 @@ vi.mock("../../src/modules/desktop-environments/docker-cli.js", () => ({
 
 import { DesktopEnvironmentRuntimeManager } from "../../src/modules/desktop-environments/runtime-manager.js";
 
+const TEST_IMAGE = "ghcr.io/tyrum/desktop:latest";
+const TEST_TIMESTAMP = "2026-03-12T00:00:00.000Z";
+
+function createEnvironment(
+  overrides: Partial<Record<string, unknown>> & {
+    environment_id: string;
+    label: string;
+    status: string;
+  },
+) {
+  return {
+    tenant_id: "tenant-1",
+    host_id: "host-1",
+    image_ref: TEST_IMAGE,
+    managed_kind: "docker",
+    desired_running: true,
+    node_id: null,
+    takeover_url: null,
+    last_seen_at: null,
+    last_error: null,
+    created_at: TEST_TIMESTAMP,
+    updated_at: TEST_TIMESTAMP,
+    ...overrides,
+  };
+}
+
 describe("DesktopEnvironmentRuntimeManager", () => {
   let tyrumHome: string;
 
@@ -63,7 +89,7 @@ describe("DesktopEnvironmentRuntimeManager", () => {
       return count === 0
         ? null
         : {
-            Config: { Image: "ghcr.io/tyrum/desktop:latest" },
+            Config: { Image: TEST_IMAGE },
             State: { Status: "running" },
           };
     });
@@ -74,41 +100,30 @@ describe("DesktopEnvironmentRuntimeManager", () => {
     vi.clearAllMocks();
   });
 
+  function createRuntimeManager(
+    environmentDal: object,
+    nodePairingDal: object,
+    authTokens: object,
+    logger: object,
+  ) {
+    return new DesktopEnvironmentRuntimeManager(
+      environmentDal as never,
+      nodePairingDal as never,
+      authTokens as never,
+      logger as never,
+      {
+        hostId: "host-1",
+        tyrumHome,
+        gatewayPort: 8788,
+      },
+    );
+  }
+
   it("uses separate identity state and pairing approvals per environment", async () => {
     const environmentDal = {
       listByHost: vi.fn(async () => [
-        {
-          tenant_id: "tenant-1",
-          environment_id: "env-1",
-          host_id: "host-1",
-          label: "First",
-          image_ref: "ghcr.io/tyrum/desktop:latest",
-          managed_kind: "docker",
-          status: "starting",
-          desired_running: true,
-          node_id: null,
-          takeover_url: null,
-          last_seen_at: null,
-          last_error: null,
-          created_at: "2026-03-12T00:00:00.000Z",
-          updated_at: "2026-03-12T00:00:00.000Z",
-        },
-        {
-          tenant_id: "tenant-1",
-          environment_id: "env-2",
-          host_id: "host-1",
-          label: "Second",
-          image_ref: "ghcr.io/tyrum/desktop:latest",
-          managed_kind: "docker",
-          status: "starting",
-          desired_running: true,
-          node_id: null,
-          takeover_url: null,
-          last_seen_at: null,
-          last_error: null,
-          created_at: "2026-03-12T00:00:00.000Z",
-          updated_at: "2026-03-12T00:00:00.000Z",
-        },
+        createEnvironment({ environment_id: "env-1", label: "First", status: "starting" }),
+        createEnvironment({ environment_id: "env-2", label: "Second", status: "starting" }),
       ]),
       updateRuntime: vi.fn(async () => {}),
     };
@@ -125,17 +140,7 @@ describe("DesktopEnvironmentRuntimeManager", () => {
       })),
     };
     const logger = { error: vi.fn() };
-    const runtimeManager = new DesktopEnvironmentRuntimeManager(
-      environmentDal as never,
-      nodePairingDal as never,
-      authTokens as never,
-      logger as never,
-      {
-        hostId: "host-1",
-        tyrumHome,
-        gatewayPort: 8788,
-      },
-    );
+    const runtimeManager = createRuntimeManager(environmentDal, nodePairingDal, authTokens, logger);
     await runtimeManager.reconcileAll();
     expect(loadOrCreateDesktopEnvironmentIdentityMock).toHaveBeenNthCalledWith(
       1,
@@ -191,22 +196,12 @@ describe("DesktopEnvironmentRuntimeManager", () => {
     inspectContainerMock.mockResolvedValue(null);
     const environmentDal = {
       listByHost: vi.fn(async () => [
-        {
-          tenant_id: "tenant-1",
+        createEnvironment({
           environment_id: "env-1",
-          host_id: "host-1",
           label: "Broken",
-          image_ref: "ghcr.io/tyrum/desktop:latest",
-          managed_kind: "docker",
           status: "error",
-          desired_running: true,
-          node_id: null,
-          takeover_url: null,
-          last_seen_at: null,
           last_error: "image pull failed",
-          created_at: "2026-03-12T00:00:00.000Z",
-          updated_at: "2026-03-12T00:00:00.000Z",
-        },
+        }),
       ]),
       updateRuntime: vi.fn(async () => {}),
     };
@@ -218,17 +213,7 @@ describe("DesktopEnvironmentRuntimeManager", () => {
       issueToken: vi.fn(),
     };
     const logger = { error: vi.fn() };
-    const runtimeManager = new DesktopEnvironmentRuntimeManager(
-      environmentDal as never,
-      nodePairingDal as never,
-      authTokens as never,
-      logger as never,
-      {
-        hostId: "host-1",
-        tyrumHome,
-        gatewayPort: 8788,
-      },
-    );
+    const runtimeManager = createRuntimeManager(environmentDal, nodePairingDal, authTokens, logger);
 
     await runtimeManager.reconcileAll();
 
@@ -236,6 +221,60 @@ describe("DesktopEnvironmentRuntimeManager", () => {
     expect(runDockerMock).not.toHaveBeenCalled();
     expect(environmentDal.updateRuntime).not.toHaveBeenCalled();
     expect(nodePairingDal.getByNodeId).not.toHaveBeenCalled();
+  });
+
+  it("recreates an errored environment when the desired image changes", async () => {
+    inspectContainerMock
+      .mockResolvedValueOnce({
+        Config: { Image: "ghcr.io/tyrum/desktop:broken" },
+        State: { Status: "exited" },
+      })
+      .mockResolvedValueOnce({
+        Config: { Image: "ghcr.io/tyrum/desktop:fixed" },
+        State: { Status: "running" },
+      });
+
+    const environmentDal = {
+      listByHost: vi.fn(async () => [
+        createEnvironment({
+          environment_id: "env-1",
+          label: "Broken",
+          status: "error",
+          image_ref: "ghcr.io/tyrum/desktop:fixed",
+          last_error: "image pull failed",
+        }),
+      ]),
+      updateRuntime: vi.fn(async () => {}),
+    };
+    const nodePairingDal = {
+      getByNodeId: vi.fn(async () => ({ pairing_id: 101, status: "pending" })),
+      resolve: vi.fn(async () => ({ pairing: { status: "approved" } })),
+    };
+    const authTokens = {
+      issueToken: vi.fn(async ({ deviceId }: { deviceId: string }) => ({
+        token: `token-${deviceId}`,
+      })),
+    };
+    const logger = { error: vi.fn() };
+    const runtimeManager = createRuntimeManager(environmentDal, nodePairingDal, authTokens, logger);
+
+    await runtimeManager.reconcileAll();
+
+    expect(removeContainerMock).toHaveBeenCalledWith("container-env-1");
+    expect(authTokens.issueToken).toHaveBeenCalledWith(
+      expect.objectContaining({ deviceId: "device-env-1", tenantId: "tenant-1" }),
+    );
+    expect(runDockerMock).toHaveBeenCalledWith(
+      expect.arrayContaining(["run", "--detach", "--name", "container-env-1"]),
+    );
+    expect(environmentDal.updateRuntime).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenantId: "tenant-1",
+        environmentId: "env-1",
+        status: "running",
+        lastError: null,
+      }),
+    );
   });
 
   it("falls back to empty logs when failure log collection fails and continues reconciling", async () => {
@@ -251,38 +290,13 @@ describe("DesktopEnvironmentRuntimeManager", () => {
 
     const environmentDal = {
       listByHost: vi.fn(async () => [
-        {
-          tenant_id: "tenant-1",
+        createEnvironment({
           environment_id: "env-1",
-          host_id: "host-1",
           label: "Broken",
-          image_ref: "ghcr.io/tyrum/desktop:latest",
-          managed_kind: "docker",
           status: "running",
-          desired_running: true,
-          node_id: null,
           takeover_url: "http://127.0.0.1:6080/vnc.html?autoconnect=true",
-          last_seen_at: null,
-          last_error: null,
-          created_at: "2026-03-12T00:00:00.000Z",
-          updated_at: "2026-03-12T00:00:00.000Z",
-        },
-        {
-          tenant_id: "tenant-1",
-          environment_id: "env-2",
-          host_id: "host-1",
-          label: "Healthy",
-          image_ref: "ghcr.io/tyrum/desktop:latest",
-          managed_kind: "docker",
-          status: "starting",
-          desired_running: true,
-          node_id: null,
-          takeover_url: null,
-          last_seen_at: null,
-          last_error: null,
-          created_at: "2026-03-12T00:00:00.000Z",
-          updated_at: "2026-03-12T00:00:00.000Z",
-        },
+        }),
+        createEnvironment({ environment_id: "env-2", label: "Healthy", status: "starting" }),
       ]),
       updateRuntime: vi.fn(async () => {}),
     };
@@ -296,18 +310,7 @@ describe("DesktopEnvironmentRuntimeManager", () => {
       })),
     };
     const logger = { error: vi.fn() };
-
-    const runtimeManager = new DesktopEnvironmentRuntimeManager(
-      environmentDal as never,
-      nodePairingDal as never,
-      authTokens as never,
-      logger as never,
-      {
-        hostId: "host-1",
-        tyrumHome,
-        gatewayPort: 8788,
-      },
-    );
+    const runtimeManager = createRuntimeManager(environmentDal, nodePairingDal, authTokens, logger);
 
     await expect(runtimeManager.reconcileAll()).resolves.toBeUndefined();
 
@@ -341,7 +344,7 @@ describe("DesktopEnvironmentRuntimeManager", () => {
 
   it("captures failure logs when a starting environment still has a container", async () => {
     inspectContainerMock.mockResolvedValue({
-      Config: { Image: "ghcr.io/tyrum/desktop:latest" },
+      Config: { Image: TEST_IMAGE },
       State: { Status: "exited" },
     });
     runDockerMock.mockResolvedValueOnce({ status: 1, stdout: "", stderr: "crashed" });
@@ -349,22 +352,7 @@ describe("DesktopEnvironmentRuntimeManager", () => {
 
     const environmentDal = {
       listByHost: vi.fn(async () => [
-        {
-          tenant_id: "tenant-1",
-          environment_id: "env-1",
-          host_id: "host-1",
-          label: "Broken",
-          image_ref: "ghcr.io/tyrum/desktop:latest",
-          managed_kind: "docker",
-          status: "starting",
-          desired_running: true,
-          node_id: null,
-          takeover_url: null,
-          last_seen_at: null,
-          last_error: null,
-          created_at: "2026-03-12T00:00:00.000Z",
-          updated_at: "2026-03-12T00:00:00.000Z",
-        },
+        createEnvironment({ environment_id: "env-1", label: "Broken", status: "starting" }),
       ]),
       updateRuntime: vi.fn(async () => {}),
     };
@@ -376,18 +364,7 @@ describe("DesktopEnvironmentRuntimeManager", () => {
       issueToken: vi.fn(),
     };
     const logger = { error: vi.fn() };
-
-    const runtimeManager = new DesktopEnvironmentRuntimeManager(
-      environmentDal as never,
-      nodePairingDal as never,
-      authTokens as never,
-      logger as never,
-      {
-        hostId: "host-1",
-        tyrumHome,
-        gatewayPort: 8788,
-      },
-    );
+    const runtimeManager = createRuntimeManager(environmentDal, nodePairingDal, authTokens, logger);
 
     await expect(runtimeManager.reconcileAll()).resolves.toBeUndefined();
 
@@ -408,38 +385,8 @@ describe("DesktopEnvironmentRuntimeManager", () => {
 
     const environmentDal = {
       listByHost: vi.fn(async () => [
-        {
-          tenant_id: "tenant-1",
-          environment_id: "env-1",
-          host_id: "host-1",
-          label: "Broken",
-          image_ref: "ghcr.io/tyrum/desktop:latest",
-          managed_kind: "docker",
-          status: "starting",
-          desired_running: true,
-          node_id: null,
-          takeover_url: null,
-          last_seen_at: null,
-          last_error: null,
-          created_at: "2026-03-12T00:00:00.000Z",
-          updated_at: "2026-03-12T00:00:00.000Z",
-        },
-        {
-          tenant_id: "tenant-1",
-          environment_id: "env-2",
-          host_id: "host-1",
-          label: "Healthy",
-          image_ref: "ghcr.io/tyrum/desktop:latest",
-          managed_kind: "docker",
-          status: "starting",
-          desired_running: true,
-          node_id: null,
-          takeover_url: null,
-          last_seen_at: null,
-          last_error: null,
-          created_at: "2026-03-12T00:00:00.000Z",
-          updated_at: "2026-03-12T00:00:00.000Z",
-        },
+        createEnvironment({ environment_id: "env-1", label: "Broken", status: "starting" }),
+        createEnvironment({ environment_id: "env-2", label: "Healthy", status: "starting" }),
       ]),
       updateRuntime: vi.fn(async (input: { environmentId: string; status: string }) => {
         if (input.environmentId === "env-1" && input.status === "error") {
@@ -457,18 +404,7 @@ describe("DesktopEnvironmentRuntimeManager", () => {
       })),
     };
     const logger = { error: vi.fn() };
-
-    const runtimeManager = new DesktopEnvironmentRuntimeManager(
-      environmentDal as never,
-      nodePairingDal as never,
-      authTokens as never,
-      logger as never,
-      {
-        hostId: "host-1",
-        tyrumHome,
-        gatewayPort: 8788,
-      },
-    );
+    const runtimeManager = createRuntimeManager(environmentDal, nodePairingDal, authTokens, logger);
 
     await expect(runtimeManager.reconcileAll()).resolves.toBeUndefined();
 

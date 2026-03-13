@@ -11,13 +11,13 @@ async function getColumnType(
   table: string,
   column: string,
 ): Promise<string | undefined> {
-  const row = await db.get<{ data_type: string }>(
-    `SELECT data_type
+  const row = await db.get<{ udt_name: string }>(
+    `SELECT udt_name
        FROM information_schema.columns
       WHERE table_schema = 'public' AND table_name = ? AND column_name = ?`,
     [table, column],
   );
-  return row?.data_type;
+  return row?.udt_name;
 }
 
 describe("desktop environment DAL (postgres)", () => {
