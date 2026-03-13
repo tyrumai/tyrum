@@ -1,15 +1,10 @@
+import type { TyrumAiSdkChatSessionSummary } from "@tyrum/client/browser";
 import {
   createTyrumAiSdkChatSessionClient,
-  createTyrumAiSdkChatTransport,
   supportsTyrumAiSdkChatSocket,
-  type UIMessage,
 } from "@tyrum/client/browser";
 import { toOperatorCoreError } from "../operator-error.js";
 import type { ChatStoreContext } from "./chat-store.types.js";
-
-function createClientMessageId(): string {
-  return globalThis.crypto?.randomUUID?.() ?? `chat-local-${String(Date.now())}`;
-}
 
 function normalizeAgentId(agentId: string): string {
   const trimmed = agentId.trim();
@@ -25,19 +20,18 @@ function buildSessionClient(ctx: ChatStoreContext) {
   return socket ? createTyrumAiSdkChatSessionClient({ client: socket }) : null;
 }
 
-function buildTransport(ctx: ChatStoreContext) {
-  const socket = requireChatSocket(ctx);
-  return socket ? createTyrumAiSdkChatTransport({ client: socket }) : null;
-}
-
-async function drainStream(stream: ReadableStream<unknown>): Promise<void> {
-  const reader = stream.getReader();
-  while (true) {
-    const result = await reader.read();
-    if (result.done) {
-      return;
-    }
-  }
+function toSessionSummary(session: TyrumAiSdkChatSessionSummary) {
+  return {
+    session_id: session.session_id,
+    agent_id: session.agent_id,
+    channel: session.channel,
+    thread_id: session.thread_id,
+    title: session.title,
+    message_count: session.message_count,
+    updated_at: session.updated_at,
+    created_at: session.created_at,
+    last_message: session.last_message ?? null,
+  };
 }
 
 export function setAgentId(ctx: ChatStoreContext, agentId: string): void {
@@ -46,7 +40,6 @@ export function setAgentId(ctx: ChatStoreContext, agentId: string): void {
 
   ctx.runIds.sessions += 1;
   ctx.runIds.open += 1;
-  ctx.runIds.send += 1;
   ctx.setState((prev) => ({
     ...prev,
     agentId: nextAgentId,
@@ -55,10 +48,8 @@ export function setAgentId(ctx: ChatStoreContext, agentId: string): void {
       sessionId: null,
       session: null,
       loading: false,
-      typing: false,
       error: null,
     },
-    send: { sending: false, error: null },
   }));
 }
 
@@ -199,10 +190,8 @@ export async function openSession(ctx: ChatStoreContext, sessionId: string): Pro
       sessionId: trimmed,
       session: null,
       loading: true,
-      typing: false,
       error: null,
     },
-    send: { ...prev.send, error: null },
   }));
 
   try {
@@ -212,9 +201,8 @@ export async function openSession(ctx: ChatStoreContext, sessionId: string): Pro
       ...prev,
       active: {
         sessionId: trimmed,
-        session,
+        session: toSessionSummary(session),
         loading: false,
-        typing: false,
         error: null,
       },
     }));
@@ -245,15 +233,14 @@ export async function newChat(ctx: ChatStoreContext): Promise<void> {
       sessions: {
         ...prev.sessions,
         sessions: [
-          created,
+          toSessionSummary(created),
           ...prev.sessions.sessions.filter((session) => session.session_id !== created.session_id),
         ],
       },
       active: {
         sessionId: created.session_id,
-        session: created,
+        session: toSessionSummary(created),
         loading: false,
-        typing: false,
         error: null,
       },
     }));
@@ -264,82 +251,6 @@ export async function newChat(ctx: ChatStoreContext): Promise<void> {
         ...prev.sessions,
         error: toOperatorCoreError("ws", "chat.session.create", err),
       },
-    }));
-  }
-}
-
-export async function sendMessage(
-  ctx: ChatStoreContext,
-  content: string,
-  input?: { attachedNodeId?: string | null },
-): Promise<void> {
-  const text = content.trim();
-  if (!text) return;
-
-  const transport = buildTransport(ctx);
-  const sessionClient = buildSessionClient(ctx);
-  const snapshot = ctx.store.getSnapshot();
-  const session = snapshot.active.session;
-  if (!transport || !sessionClient || !session) return;
-
-  const runId = ++ctx.runIds.send;
-  const clientMessageId = createClientMessageId();
-  const optimisticUserMessage: UIMessage = {
-    id: clientMessageId,
-    role: "user",
-    parts: [{ type: "text", text }],
-  };
-
-  ctx.setState((prev) => ({
-    ...prev,
-    active:
-      prev.active.sessionId === session.session_id && prev.active.session
-        ? {
-            ...prev.active,
-            session: {
-              ...prev.active.session,
-              messages: [...prev.active.session.messages, optimisticUserMessage],
-            },
-          }
-        : prev.active,
-    send: { sending: true, error: null },
-  }));
-
-  try {
-    const stream = await transport.sendMessages({
-      abortSignal: undefined,
-      chatId: session.session_id,
-      messageId: clientMessageId,
-      messages: [...session.messages, optimisticUserMessage],
-      trigger: "submit-message",
-      body: input?.attachedNodeId ? { attached_node_id: input.attachedNodeId } : undefined,
-    });
-    await drainStream(stream);
-    if (runId !== ctx.runIds.send) return;
-    await openSession(ctx, session.session_id);
-    if (ctx.store.getSnapshot().agentId === snapshot.agentId) {
-      await refreshSessions(ctx);
-    }
-    if (runId === ctx.runIds.send) {
-      ctx.setState((prev) => ({ ...prev, send: { sending: false, error: null } }));
-    }
-  } catch (err) {
-    if (runId !== ctx.runIds.send) return;
-    ctx.setState((prev) => ({
-      ...prev,
-      active:
-        prev.active.sessionId === session.session_id && prev.active.session
-          ? {
-              ...prev.active,
-              session: {
-                ...prev.active.session,
-                messages: prev.active.session.messages.filter(
-                  (message) => message.id !== clientMessageId,
-                ),
-              },
-            }
-          : prev.active,
-      send: { sending: false, error: toOperatorCoreError("ws", "chat.session.send", err) },
     }));
   }
 }
@@ -365,7 +276,6 @@ export async function deleteActive(ctx: ChatStoreContext): Promise<void> {
               sessionId: null,
               session: null,
               loading: false,
-              typing: false,
               error: null,
             }
           : prev.active,

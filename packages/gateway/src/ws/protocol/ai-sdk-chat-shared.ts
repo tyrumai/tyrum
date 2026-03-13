@@ -1,5 +1,5 @@
 import { getToolName, isTextUIPart, isToolUIPart, type UIMessage, validateUIMessages } from "ai";
-import type { ChatMessage, WsResponseEnvelope } from "@tyrum/schemas";
+import type { TyrumUIMessage, WsResponseEnvelope } from "@tyrum/schemas";
 export {
   WsChatSessionCreateRequest as ChatSessionCreateRequest,
   WsChatSessionDeleteRequest as ChatSessionDeleteRequest,
@@ -13,16 +13,16 @@ import { errorResponse } from "./helpers.js";
 import type { ProtocolRequestEnvelope } from "./types.js";
 import { coerceRecord } from "../../modules/util/coerce.js";
 
-export function toStoredChatMessages(messages: readonly UIMessage[]): ChatMessage[] {
-  const storedMessages: ChatMessage[] = [];
+export function toStoredChatMessages(messages: readonly UIMessage[]): TyrumUIMessage[] {
+  const storedMessages: TyrumUIMessage[] = [];
   for (const message of canonicalizeUiMessages(messages)) {
-    const parts: ChatMessage["parts"] = [];
+    const parts: TyrumUIMessage["parts"] = [];
     for (const part of message.parts) {
       const record = coerceRecord(part);
       if (!record || typeof record["type"] !== "string") {
         continue;
       }
-      parts.push(record as ChatMessage["parts"][number]);
+      parts.push(record as TyrumUIMessage["parts"][number]);
     }
     const metadata =
       typeof message.metadata === "object" && message.metadata !== null
@@ -172,7 +172,7 @@ export function toSessionSummary(input: {
   agentId: string;
   channel: string;
   createdAt: string;
-  messages: ChatMessage[];
+  messages: TyrumUIMessage[];
   sessionId: string;
   threadId: string;
   title: string;

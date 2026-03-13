@@ -223,46 +223,6 @@ function registerConnectionProtocolErrorTests(fixture: ConnectionFixture): void 
     ]);
   });
 
-  it("accepts session.send.failed events that include user_message_id", () => {
-    const client = new TyrumClient({
-      url: "ws://127.0.0.1:65535",
-      token: "t",
-      capabilities: [],
-      reconnect: false,
-    });
-    fixture.setClient(client);
-
-    const received: Array<Record<string, unknown>> = [];
-    client.on("session.send.failed", (event) => {
-      received.push(event as unknown as Record<string, unknown>);
-    });
-
-    handleInboundFrame(
-      client,
-      JSON.stringify({
-        event_id: "evt-1",
-        type: "session.send.failed",
-        occurred_at: "2026-03-11T15:00:00.000Z",
-        payload: {
-          session_id: "session-1",
-          thread_id: "ui-session-1",
-          user_message_id: "user-1",
-          message_ids: ["assistant-1"],
-          reasoning_ids: ["reason-1"],
-        },
-      }),
-    );
-
-    expect(received).toHaveLength(1);
-    expect(received[0]?.["payload"]).toEqual({
-      session_id: "session-1",
-      thread_id: "ui-session-1",
-      user_message_id: "user-1",
-      message_ids: ["assistant-1"],
-      reasoning_ids: ["reason-1"],
-    });
-  });
-
   it("rate limits repeated protocol_error reports and flushes a suppressed count", () => {
     vi.useFakeTimers();
     const onProtocolError = vi.fn();

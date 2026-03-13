@@ -7,7 +7,6 @@ import {
   openSession,
   refreshAgents,
   refreshSessions,
-  sendMessage,
   setAgentId,
 } from "./chat-store.actions.js";
 import {
@@ -22,7 +21,6 @@ export type {
   ChatAgentsState,
   ChatSessionsState,
   ChatActiveSessionState,
-  ChatSendState,
   ChatState,
   ChatStore,
 } from "./chat-store.types.js";
@@ -35,7 +33,7 @@ export function createChatStore(ws: OperatorWsClient, http: OperatorHttpClient):
     setState,
     ws,
     http,
-    runIds: { agents: 0, sessions: 0, open: 0, send: 0 },
+    runIds: { agents: 0, sessions: 0, open: 0 },
   };
 
   return {
@@ -46,7 +44,6 @@ export function createChatStore(ws: OperatorWsClient, http: OperatorHttpClient):
     loadMoreSessions: () => loadMoreSessions(ctx),
     openSession: (sessionId) => openSession(ctx, sessionId),
     newChat: () => newChat(ctx),
-    sendMessage: (content, input) => sendMessage(ctx, content, input),
     deleteActive: () => deleteActive(ctx),
   };
 }

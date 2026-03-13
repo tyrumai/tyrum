@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { LanguageModel } from "ai";
-import { type SessionTranscriptToolStatus, type WsEventEnvelope } from "@tyrum/schemas";
+import { type ToolLifecycleStatus, type WsEventEnvelope } from "@tyrum/schemas";
 import type { ToolDescriptor } from "../tools.js";
 import type { ToolResult } from "../tool-executor.js";
 import { runWebFetchExtractionPass } from "../webfetch-extraction.js";
@@ -64,7 +64,7 @@ export async function syncToolLifecycle(
     context: ToolExecutionContext;
     toolCallId: string;
     toolId: string;
-    status: SessionTranscriptToolStatus;
+    status: ToolLifecycleStatus;
     summary: string;
     error?: string;
     durationMs?: number;

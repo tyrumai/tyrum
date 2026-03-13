@@ -1,13 +1,6 @@
 import type { StatusResponse } from "@tyrum/client";
 import { createStore } from "../../../packages/operator-core/src/store.js";
-import {
-  createLayoutHarnessActiveSession,
-  createLayoutHarnessAgentStatus,
-  createLayoutHarnessApprovedPairing,
-  createLayoutHarnessMemoryItem,
-  createLayoutHarnessPendingPairing,
-  createManagedAgentDetailFixture,
-} from "./layout-harness-store-fixture-builders.js";
+import { AgentConfig, IdentityPack } from "../../../packages/schemas/src/index.js";
 
 export function createConnectionStore() {
   return createStore({
@@ -81,30 +74,14 @@ export function createApprovalsStore() {
     pendingIds: ["approval-1"],
     byId: {
       "approval-1": {
-        approval_id: "00000000-0000-4000-8000-000000000001",
+        approval_id: 1,
         approval_key: "approval:1",
-        kind: "workflow_step",
-        status: "awaiting_human",
+        kind: "other",
+        status: "pending",
         prompt: "Allow the tool call?",
-        motivation: "The workflow needs operator confirmation before running this tool.",
         created_at: "2026-03-08T00:00:00.000Z",
         expires_at: null,
-        latest_review: {
-          review_id: "00000000-0000-4000-8000-000000000011",
-          target_type: "approval",
-          target_id: "00000000-0000-4000-8000-000000000001",
-          reviewer_kind: "system",
-          reviewer_id: null,
-          state: "requested_human",
-          reason: "Awaiting human review.",
-          risk_level: null,
-          risk_score: null,
-          evidence: null,
-          decision_payload: null,
-          created_at: "2026-03-08T00:00:00.000Z",
-          started_at: null,
-          completed_at: "2026-03-08T00:00:00.000Z",
-        },
+        resolution: null,
         scope: {
           key: "agent:default:main",
           lane: "main",
@@ -194,7 +171,32 @@ export function createWorkboardStore() {
 }
 
 export function createChatStore() {
-  const activeSession = createLayoutHarnessActiveSession();
+  const activeSession = {
+    session_id: "session-1",
+    agent_id: "default",
+    channel: "ui",
+    thread_id: "ui-thread-1",
+    title: "Layout regression coverage",
+    message_count: 2,
+    last_message: {
+      role: "assistant" as const,
+      text: "Yes. We can add browser geometry checks.",
+    },
+    messages: [
+      {
+        id: "turn-1",
+        role: "user" as const,
+        parts: [{ type: "text" as const, text: "Can we prevent page overflow regressions?" }],
+      },
+      {
+        id: "turn-2",
+        role: "assistant" as const,
+        parts: [{ type: "text" as const, text: "Yes. We can add browser geometry checks." }],
+      },
+    ],
+    updated_at: "2026-03-08T00:00:00.000Z",
+    created_at: "2026-03-08T00:00:00.000Z",
+  };
 
   const { store, setState } = createStore({
     agentId: "default",
@@ -211,11 +213,10 @@ export function createChatStore() {
           channel: "ui",
           thread_id: "ui-thread-1",
           title: "Layout regression coverage",
-          summary: "Layout regression coverage thread",
-          transcript_count: 2,
-          last_text: {
+          message_count: 2,
+          last_message: {
             role: "assistant",
-            content: "Yes. We can add browser geometry checks.",
+            text: "Yes. We can add browser geometry checks.",
           },
           created_at: "2026-03-08T00:00:00.000Z",
           updated_at: "2026-03-08T00:00:00.000Z",
@@ -229,12 +230,6 @@ export function createChatStore() {
       sessionId: "session-1",
       session: activeSession,
       loading: false,
-      typing: false,
-      activeToolCallIds: [],
-      error: null,
-    },
-    send: {
-      sending: false,
       error: null,
     },
   });
@@ -258,15 +253,47 @@ export function createChatStore() {
       }));
     },
     newChat: async () => {},
-    sendMessage: async () => {},
-    compactActive: async () => {},
     deleteActive: async () => {},
   };
 }
 
 export function createPairingStore() {
-  const pending = createLayoutHarnessPendingPairing();
-  const approved = createLayoutHarnessApprovedPairing();
+  const pending = {
+    pairing_id: 1,
+    status: "pending",
+    trust_level: "local",
+    requested_at: "2026-03-08T00:00:00.000Z",
+    node: {
+      node_id: "node-1",
+      label: "My node",
+      last_seen_at: "2026-03-08T00:00:00.000Z",
+      capabilities: ["desktop", "cli", "http"],
+      metadata: {
+        platform: "darwin",
+        version: "14.0",
+        mode: "local",
+        ip: "127.0.0.1",
+      },
+    },
+    capability_allowlist: [
+      { id: "tyrum.desktop", version: "1.0.0" },
+      { id: "tyrum.cli", version: "1.0.0" },
+    ],
+    resolution: null,
+    resolved_at: null,
+  };
+
+  const approved = {
+    ...pending,
+    pairing_id: 2,
+    status: "approved",
+    resolution: {
+      decision: "approved",
+      resolved_at: "2026-03-08T00:01:00.000Z",
+      reason: "ok",
+    },
+    resolved_at: "2026-03-08T00:01:00.000Z",
+  };
 
   return {
     ...createStore({
@@ -305,7 +332,53 @@ export function createActivityStore() {
 export function createAgentStatusStore() {
   const { store, setState } = createStore({
     agentKey: "default",
-    status: createLayoutHarnessAgentStatus(),
+    status: {
+      enabled: true,
+      home: "/tmp/agents/default",
+      identity: {
+        name: "Default Agent",
+        description: "Primary operator agent",
+      },
+      model: {
+        model: "openai/gpt-5.4",
+        variant: "balanced",
+        fallback: ["openai/gpt-5.4"],
+      },
+      skills: ["review"],
+      skills_detailed: [
+        {
+          id: "review",
+          name: "Review",
+          version: "1.0.0",
+          source: "bundled",
+        },
+      ],
+      workspace_skills_trusted: true,
+      mcp: [],
+      tools: ["shell"],
+      sessions: {
+        ttl_days: 365,
+        max_turns: 0,
+        loop_detection: {
+          within_turn: {
+            enabled: true,
+            consecutive_repeat_limit: 3,
+            cycle_repeat_limit: 3,
+          },
+          cross_turn: {
+            enabled: true,
+            window_assistant_messages: 3,
+            similarity_threshold: 0.97,
+            min_chars: 120,
+            cooldown_assistant_messages: 6,
+          },
+        },
+        context_pruning: {
+          max_messages: 0,
+          tool_prune_keep_last_messages: 4,
+        },
+      },
+    },
     loading: false,
     error: null,
     lastSyncedAt: "2026-03-08T00:00:00.000Z",
@@ -320,51 +393,48 @@ export function createAgentStatusStore() {
   };
 }
 
-export function createMemoryStore() {
-  const item = createLayoutHarnessMemoryItem();
-
-  return {
-    ...createStore({
-      browse: {
-        request: null,
-        results: {
-          kind: "list",
-          items: [item],
-          nextCursor: null,
-        },
-        loading: false,
-        error: null,
-        lastSyncedAt: "2026-03-08T00:00:00.000Z",
-      },
-      inspect: {
-        agentId: "default",
-        memoryItemId: "memory-1",
-        item,
-        loading: false,
-        error: null,
-      },
-      tombstones: {
-        tombstones: [],
-        loading: false,
-        error: null,
-      },
-      export: {
-        running: false,
-        artifactId: "artifact-1",
-        error: null,
-        lastExportedAt: "2026-03-08T00:00:00.000Z",
-      },
-    }).store,
-    list: async () => {},
-    search: async () => {},
-    refreshBrowse: async () => {},
-    loadMore: async () => {},
-    inspect: async () => {},
-    update: async () => {},
-    forget: async () => {},
-    export: async () => {},
-  };
-}
 export function createManagedAgentDetail(agentKey: string) {
-  return createManagedAgentDetailFixture(agentKey);
+  return {
+    agent_id:
+      agentKey === "default"
+        ? "11111111-1111-4111-8111-111111111111"
+        : "22222222-2222-4222-8222-222222222222",
+    agent_key: agentKey,
+    created_at: "2026-03-08T00:00:00.000Z",
+    updated_at: "2026-03-08T00:00:00.000Z",
+    has_config: true,
+    has_identity: true,
+    can_delete: agentKey !== "default",
+    persona: {
+      name: agentKey === "default" ? "Default Agent" : "Agent One",
+      description: "Managed agent",
+      tone: "direct",
+      palette: "graphite",
+      character: "architect",
+    },
+    config: AgentConfig.parse({
+      model: { model: "openai/gpt-5.4" },
+      persona: {
+        name: agentKey === "default" ? "Default Agent" : "Agent One",
+        description: "Managed agent",
+        tone: "direct",
+        palette: "graphite",
+        character: "architect",
+      },
+    }),
+    identity: IdentityPack.parse({
+      meta: {
+        name: agentKey === "default" ? "Default Agent" : "Agent One",
+        description: "Managed agent",
+        style: {
+          tone: "direct",
+        },
+      },
+      body: "",
+    }),
+    config_revision: 1,
+    identity_revision: 1,
+    config_sha256: "a".repeat(64),
+    identity_sha256: "b".repeat(64),
+  };
 }

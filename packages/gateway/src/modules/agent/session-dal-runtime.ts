@@ -1,4 +1,4 @@
-import type { ChatMessage } from "@tyrum/schemas";
+import type { TyrumUIMessage } from "@tyrum/schemas";
 import { stringifyPersistedJson } from "../observability/persisted-json.js";
 import {
   createEmptySessionContextState,
@@ -44,7 +44,7 @@ export function stringifySessionContextState(state: SessionContextState): string
   });
 }
 
-export function stringifySessionMessages(messages: ChatMessage[]): string {
+export function stringifySessionMessages(messages: TyrumUIMessage[]): string {
   return stringifyPersistedJson({
     value: messages,
     ...SESSION_MESSAGES_JSON_META,
@@ -73,7 +73,7 @@ export function buildSessionListWhereClause(input: {
 }
 
 export function createSessionContextStateForMessages(
-  recentMessages: readonly ChatMessage[],
+  recentMessages: readonly TyrumUIMessage[],
   updatedAt: string,
   current?: SessionContextState,
 ): SessionContextState {

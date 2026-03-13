@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { vi } from "vitest";
+import type { SessionContextState, TyrumUIMessage } from "@tyrum/schemas";
 import { SessionDal } from "../../src/modules/agent/session-dal.js";
 import { ChannelInboxDal } from "../../src/modules/channels/inbox-dal.js";
 import { ChannelOutboxDal } from "../../src/modules/channels/outbox-dal.js";
@@ -27,6 +28,12 @@ type SessionStateInput = {
   summary: string;
   turns: unknown[];
   updatedAt?: string;
+};
+
+type StoredTurn = {
+  role: "user" | "assistant";
+  content: string;
+  timestamp?: string;
 };
 
 type RunningExecutionInput = {
@@ -95,6 +102,39 @@ export function buildTurns(count: number, contentPrefix: string, timestampPrefix
   }));
 }
 
+function toStoredMessages(turns: readonly StoredTurn[]): TyrumUIMessage[] {
+  return turns.map((turn, index) => ({
+    id: `turn-${String(index)}`,
+    role: turn.role,
+    parts: [{ type: "text", text: turn.content }],
+    metadata: turn.timestamp ? { timestamp: turn.timestamp } : undefined,
+  }));
+}
+
+function toContextState(summary: string, updatedAt: string): SessionContextState {
+  return {
+    version: 1,
+    recent_message_ids: [],
+    checkpoint: summary
+      ? {
+          goal: "",
+          user_constraints: [],
+          decisions: [],
+          discoveries: [],
+          completed_work: [],
+          pending_work: [],
+          unresolved_questions: [],
+          critical_identifiers: [],
+          relevant_files: [],
+          handoff_md: summary,
+        }
+      : null,
+    pending_approvals: [],
+    pending_tool_state: [],
+    updated_at: updatedAt,
+  };
+}
+
 export async function ensureSession(db: SqliteDb, input: SessionInput): Promise<SessionRecord> {
   return await new SessionDal(db, new IdentityScopeDal(db), new ChannelThreadDal(db)).getOrCreate({
     scopeKeys: { agentKey: input.agentKey, workspaceKey: "default" },
@@ -110,14 +150,15 @@ export async function writeSessionState(
   session: Pick<SessionRecord, "tenant_id" | "session_id">,
   input: SessionStateInput,
 ): Promise<void> {
+  const updatedAt = input.updatedAt ?? new Date().toISOString();
   await db.run(
     `UPDATE sessions
-     SET summary = ?, transcript_json = ?, updated_at = ?
+     SET messages_json = ?, context_state_json = ?, updated_at = ?
      WHERE tenant_id = ? AND session_id = ?`,
     [
-      input.summary,
-      JSON.stringify(input.turns),
-      input.updatedAt ?? new Date().toISOString(),
+      JSON.stringify(toStoredMessages(input.turns as StoredTurn[])),
+      JSON.stringify(toContextState(input.summary, updatedAt)),
+      updatedAt,
       session.tenant_id,
       session.session_id,
     ],
@@ -129,8 +170,8 @@ export async function readSessionRecord(
   sessionId: string,
   tenantId = DEFAULT_TENANT_ID,
 ) {
-  return await db.get<{ session_key: string; summary: string; transcript_json: string }>(
-    `SELECT session_key, summary, transcript_json
+  return await db.get<{ session_key: string; context_state_json: string; messages_json: string }>(
+    `SELECT session_key, context_state_json, messages_json
      FROM sessions
      WHERE tenant_id = ? AND session_id = ?`,
     [tenantId, sessionId],
@@ -142,16 +183,23 @@ export async function readSessionSnapshot(
   sessionId: string,
   tenantId = DEFAULT_TENANT_ID,
 ) {
-  const row = await db.get<{ summary: string; transcript_json: string }>(
-    `SELECT summary, transcript_json
+  const row = await db.get<{ context_state_json: string; messages_json: string }>(
+    `SELECT context_state_json, messages_json
      FROM sessions
      WHERE tenant_id = ? AND session_id = ?`,
     [tenantId, sessionId],
   );
-  const turnContents = row?.transcript_json
-    ? (JSON.parse(row.transcript_json) as Array<{ content: string }>).map((turn) => turn.content)
+  const summary = row?.context_state_json
+    ? ((JSON.parse(row.context_state_json) as SessionContextState).checkpoint?.handoff_md ?? "")
+    : "";
+  const turnContents = row?.messages_json
+    ? (JSON.parse(row.messages_json) as TyrumUIMessage[]).flatMap((message) =>
+        message.parts.flatMap((part) =>
+          part.type === "text" && typeof part.text === "string" ? [part.text] : [],
+        ),
+      )
     : [];
-  return { summary: row?.summary ?? "", turnsJson: row?.transcript_json ?? "[]", turnContents };
+  return { summary, turnsJson: row?.messages_json ?? "[]", turnContents };
 }
 
 export async function readSessionAccountKey(

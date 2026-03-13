@@ -1,11 +1,11 @@
 import type {
-  ChatMessage,
-  ChatMessagePreview,
+  TyrumUIMessage,
+  TyrumUIMessagePreview,
   NormalizedContainerKind,
   SessionContextState,
 } from "@tyrum/schemas";
 import {
-  ChatMessage as ChatMessageSchema,
+  TyrumUIMessage as ChatMessageSchema,
   SessionContextState as SessionContextStateSchema,
 } from "@tyrum/schemas";
 import {
@@ -24,7 +24,7 @@ export interface SessionRow extends RawSessionTimeFields {
   workspace_id: string;
   channel_thread_id: string;
   title: string;
-  messages: ChatMessage[];
+  messages: TyrumUIMessage[];
   context_state: SessionContextState;
   created_at: string;
   updated_at: string;
@@ -37,7 +37,7 @@ export interface SessionListRow extends RawSessionTimeFields {
   thread_id: string;
   title: string;
   message_count: number;
-  last_message: ChatMessagePreview | null;
+  last_message: TyrumUIMessagePreview | null;
   created_at: string;
   updated_at: string;
 }
@@ -107,7 +107,7 @@ export const UPDATE_SESSION_SQL =
 
 export const WITH_DELIVERY_SQL = `SELECT s.*, ag.agent_key, ws.workspace_key, ca.connector_key, ca.account_key, ct.provider_thread_id, ct.container_kind FROM sessions s JOIN agents ag ON ag.tenant_id = s.tenant_id AND ag.agent_id = s.agent_id JOIN workspaces ws ON ws.tenant_id = s.tenant_id AND ws.workspace_id = s.workspace_id JOIN channel_threads ct ON ct.tenant_id = s.tenant_id AND ct.workspace_id = s.workspace_id AND ct.channel_thread_id = s.channel_thread_id JOIN channel_accounts ca ON ca.tenant_id = ct.tenant_id AND ca.workspace_id = ct.workspace_id AND ca.channel_account_id = ct.channel_account_id WHERE s.tenant_id = ? AND s.session_key = ? LIMIT 1`;
 
-function isChatMessage(value: unknown): value is ChatMessage {
+function isChatMessage(value: unknown): value is TyrumUIMessage {
   return ChatMessageSchema.safeParse(value).success;
 }
 
@@ -136,7 +136,7 @@ export function normalizeTime(value: string | Date): string {
     : value;
 }
 
-function firstMessageText(message: ChatMessage): string | undefined {
+function firstMessageText(message: TyrumUIMessage): string | undefined {
   for (const part of message.parts) {
     if (!part || typeof part !== "object") continue;
     if (part.type !== "text") continue;
@@ -151,7 +151,7 @@ function firstMessageText(message: ChatMessage): string | undefined {
 function extractMessageListPreview(
   raw: string,
   observer: PersistedJsonObserver,
-): { messageCount: number; lastMessage: ChatMessagePreview | null } {
+): { messageCount: number; lastMessage: TyrumUIMessagePreview | null } {
   const parsed = parsePersistedJson<unknown[]>({
     raw,
     fallback: [],
@@ -161,7 +161,7 @@ function extractMessageListPreview(
 
   let messageCount = 0;
   let invalidItems = 0;
-  let lastMessage: ChatMessagePreview | null = null;
+  let lastMessage: TyrumUIMessagePreview | null = null;
 
   for (const item of parsed) {
     if (!isChatMessage(item)) {
@@ -191,11 +191,11 @@ function extractMessageListPreview(
   return { messageCount, lastMessage };
 }
 
-export function isChatMessageArray(value: unknown): value is ChatMessage[] {
+export function isChatMessageArray(value: unknown): value is TyrumUIMessage[] {
   return Array.isArray(value) && value.every(isChatMessage);
 }
 
-export function parseMessages(raw: string, observer: PersistedJsonObserver): ChatMessage[] {
+export function parseMessages(raw: string, observer: PersistedJsonObserver): TyrumUIMessage[] {
   const parsed = parsePersistedJson<unknown[]>({
     raw,
     fallback: [],

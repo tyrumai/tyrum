@@ -57,6 +57,7 @@ import {
   WsPresencePrunedEvent,
   WsPresenceUpsertedEvent,
 } from "./presence.js";
+import { WsCommandExecuteRequest } from "./command-execute.js";
 import {
   WsDeliveryReceiptEvent,
   WsFormattingFallbackEvent,
@@ -64,11 +65,9 @@ import {
   WsMessageFinalEvent,
   WsReasoningDeltaEvent,
   WsReasoningFinalEvent,
-  WsSessionSendFailedEvent,
   WsTypingStartedEvent,
   WsTypingStoppedEvent,
-  WsCommandExecuteRequest,
-} from "./session.js";
+} from "./chat-events.js";
 import {
   WsAiSdkChatStreamEvent,
   WsChatSessionCreateRequest,
@@ -228,7 +227,6 @@ export const WsEvent = z.discriminatedUnion("type", [
   WsMessageFinalEvent,
   WsReasoningDeltaEvent,
   WsReasoningFinalEvent,
-  WsSessionSendFailedEvent,
   WsFormattingFallbackEvent,
   WsDeliveryReceiptEvent,
   WsUsageSnapshotEvent,

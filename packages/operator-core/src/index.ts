@@ -93,7 +93,6 @@ export type {
   ChatActiveSessionState,
   ChatAgent,
   ChatAgentsState,
-  ChatSendState,
   ChatSessionsState,
   ChatState,
   ChatStore,

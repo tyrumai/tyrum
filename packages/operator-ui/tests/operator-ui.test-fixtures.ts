@@ -1,8 +1,7 @@
 import { AgentConfig, IdentityPack } from "@tyrum/schemas";
 import { TyrumHttpClientError } from "@tyrum/client/browser";
 import { vi } from "vitest";
-import type { OperatorHttpClient, OperatorWsClient } from "../../operator-core/src/deps.js";
-import type { Handler } from "./operator-ui.test-support.js";
+import type { OperatorHttpClient } from "../../operator-core/src/deps.js";
 import {
   createAuthTokenHttpFixtures,
   createDeviceTokenHttpFixtures,
@@ -27,92 +26,7 @@ import {
 } from "./operator-ui.admin-http-fixtures.js";
 import { sampleNodeInventoryResponse } from "./operator-ui.http-fixture-data.js";
 import { createExtensionsHttpFixtures } from "./operator-ui.extensions-http-fixtures.js";
-
-export class FakeWsClient implements OperatorWsClient {
-  connected: boolean;
-
-  constructor(initiallyConnected = true) {
-    this.connected = initiallyConnected;
-  }
-
-  connect = vi.fn(() => {
-    if (this.connected) {
-      this.emit("connected", { clientId: null });
-    }
-  });
-
-  disconnect = vi.fn(() => {
-    this.emit("disconnected", { code: 1000, reason: "client disconnect" });
-  });
-
-  approvalList = vi.fn(async () => ({ approvals: [], next_cursor: undefined }));
-  runList = vi.fn(async () => ({ runs: [], steps: [], attempts: [] }));
-  approvalResolve = vi.fn(async () => {
-    throw new Error("not implemented");
-  });
-  workList = vi.fn(async () => ({ items: [] }) as unknown);
-  sessionList = vi.fn(async () => ({ sessions: [], next_cursor: null }));
-  sessionGet = vi.fn(async () => ({
-    session: {
-      session_id: "session-1",
-      agent_id: "default",
-      channel: "ui",
-      thread_id: "ui-session-1",
-      title: "",
-      summary: "",
-      transcript: [],
-      updated_at: "2026-01-01T00:00:00.000Z",
-      created_at: "2026-01-01T00:00:00.000Z",
-    },
-  }));
-  sessionCreate = vi.fn(async () => ({
-    session_id: "session-1",
-    agent_id: "default",
-    channel: "ui",
-    thread_id: "ui-session-1",
-    title: "",
-  }));
-  sessionCompact = vi.fn(async () => ({
-    session_id: "session-1",
-    dropped_messages: 0,
-    kept_messages: 0,
-  }));
-  sessionDelete = vi.fn(async () => ({ session_id: "session-1" }));
-  sessionSend = vi.fn(async () => ({ session_id: "session-1", assistant_message: "" }));
-  commandExecute = vi.fn(async () => ({}));
-
-  private readonly handlers = new Map<string, Set<Handler>>();
-
-  on(event: string, handler: Handler): void {
-    const existing = this.handlers.get(event);
-    if (existing) {
-      existing.add(handler);
-      if (event === "connected" && this.connected) {
-        handler({ clientId: null });
-      }
-      return;
-    }
-    this.handlers.set(event, new Set([handler]));
-    if (event === "connected" && this.connected) {
-      handler({ clientId: null });
-    }
-  }
-
-  off(event: string, handler: Handler): void {
-    const existing = this.handlers.get(event);
-    if (!existing) return;
-    existing.delete(handler);
-    if (existing.size === 0) {
-      this.handlers.delete(event);
-    }
-  }
-
-  emit(event: string, data: unknown): void {
-    for (const handler of this.handlers.get(event) ?? []) {
-      handler(data);
-    }
-  }
-}
+export { FakeWsClient } from "./operator-ui.ws-test-fixtures.js";
 
 export type {
   SampleExecutionAttemptStatus,

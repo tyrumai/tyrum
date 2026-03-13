@@ -1,5 +1,5 @@
 import type {
-  ChatMessage,
+  TyrumUIMessage,
   CheckpointSummary,
   PendingApprovalState,
   PendingToolState,
@@ -22,7 +22,7 @@ function coerceRecord(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
-export function extractMessageText(message: ChatMessage): string {
+export function extractMessageText(message: TyrumUIMessage): string {
   return message.parts
     .flatMap((part) =>
       part.type === "text" && typeof part["text"] === "string" ? [part["text"].trim()] : [],
@@ -97,7 +97,10 @@ function normalizePendingToolState(
   if (TOOL_STATE_FINAL.has(state)) {
     return null;
   }
-  const toolName = rawType.slice("tool-".length).trim() || "tool";
+  const toolName =
+    (typeof part["toolName"] === "string" ? part["toolName"].trim() : "") ||
+    rawType.slice("tool-".length).trim() ||
+    "tool";
   return {
     summary: fallbackSummary || state,
     tool_call_id: toolCallId,
@@ -105,7 +108,9 @@ function normalizePendingToolState(
   };
 }
 
-export function collectPendingApprovals(messages: readonly ChatMessage[]): PendingApprovalState[] {
+export function collectPendingApprovals(
+  messages: readonly TyrumUIMessage[],
+): PendingApprovalState[] {
   const approvals = new Map<string, PendingApprovalState>();
   for (const message of messages) {
     for (const part of message.parts) {
@@ -119,7 +124,7 @@ export function collectPendingApprovals(messages: readonly ChatMessage[]): Pendi
   return Array.from(approvals.values()).filter((approval) => approval.state === "pending");
 }
 
-export function collectPendingToolStates(messages: readonly ChatMessage[]): PendingToolState[] {
+export function collectPendingToolStates(messages: readonly TyrumUIMessage[]): PendingToolState[] {
   const tools = new Map<string, PendingToolState>();
   for (const message of messages) {
     const fallbackSummary = extractMessageText(message);
@@ -135,9 +140,9 @@ export function collectPendingToolStates(messages: readonly ChatMessage[]): Pend
 }
 
 export function splitMessagesForContextCompaction(input: {
-  messages: readonly ChatMessage[];
+  messages: readonly TyrumUIMessage[];
   keepLastMessages: number;
-}): { dropped: ChatMessage[]; kept: ChatMessage[] } {
+}): { dropped: TyrumUIMessage[]; kept: TyrumUIMessage[] } {
   const keepLastMessages = Math.max(0, input.keepLastMessages);
   if (input.messages.length <= keepLastMessages) {
     return { dropped: [], kept: input.messages.slice() };
@@ -176,7 +181,7 @@ export function splitMessagesForContextCompaction(input: {
 }
 
 export function estimatePromptTokens(input: {
-  messages: readonly ChatMessage[];
+  messages: readonly TyrumUIMessage[];
   systemPrompt?: string;
   userContent?: readonly { text: string; type: "text" }[];
 }): number {
@@ -272,9 +277,9 @@ function buildPendingStateText(contextState: SessionContextState): string {
 }
 
 export function buildPromptVisibleMessages(
-  messages: readonly ChatMessage[],
+  messages: readonly TyrumUIMessage[],
   contextState: SessionContextState,
-): ChatMessage[] {
+): TyrumUIMessage[] {
   if (
     !contextState.checkpoint &&
     contextState.pending_approvals.length === 0 &&
@@ -321,7 +326,7 @@ export function buildPromptVisibleMessages(
   ];
 }
 
-export function extractCriticalIdentifiers(messages: readonly ChatMessage[]): string[] {
+export function extractCriticalIdentifiers(messages: readonly TyrumUIMessage[]): string[] {
   const values = new Set<string>();
   for (const message of messages) {
     const text = extractMessageText(message);
@@ -346,7 +351,7 @@ export function extractRelevantFiles(identifiers: readonly string[]): string[] {
     .slice(0, 20);
 }
 
-export function renderMessagesForCompaction(messages: readonly ChatMessage[]): string {
+export function renderMessagesForCompaction(messages: readonly TyrumUIMessage[]): string {
   return messages
     .map((message) => {
       const label =

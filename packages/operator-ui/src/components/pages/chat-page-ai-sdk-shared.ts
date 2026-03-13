@@ -15,20 +15,12 @@ function deriveSessionTitle(session: TyrumAiSdkChatSessionSummary): string {
 }
 
 export function toThreadSummary(session: TyrumAiSdkChatSessionSummary): ChatThreadSummary {
-  const lastText = session.last_message
-    ? {
-        role: session.last_message.role,
-        content: session.last_message.text,
-      }
-    : null;
   return {
     agent_id: session.agent_id,
     session_id: session.session_id,
     channel: session.channel,
     thread_id: session.thread_id,
     title: deriveSessionTitle(session),
-    summary: "",
-    last_text: lastText,
     created_at: session.created_at,
     updated_at: session.updated_at,
     preview: deriveSessionPreview(session),

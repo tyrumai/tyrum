@@ -1,7 +1,11 @@
 import { generateText } from "ai";
 import type { LanguageModel } from "ai";
 import { z } from "zod";
-import type { AgentConfig as AgentConfigT, ChatMessage, CheckpointSummary } from "@tyrum/schemas";
+import type {
+  AgentConfig as AgentConfigT,
+  TyrumUIMessage,
+  CheckpointSummary,
+} from "@tyrum/schemas";
 import type { GatewayContainer } from "../../../container.js";
 import { ensureAgentConfigSeeded } from "../default-config.js";
 import { loadCurrentAgentContext } from "../load-context.js";
@@ -153,9 +157,10 @@ function trimJsonFence(value: string): string {
 
 function buildCompactionInstruction(input: {
   previousCheckpoint: CheckpointSummary | null;
-  droppedMessages: readonly ChatMessage[];
+  droppedMessages: readonly TyrumUIMessage[];
   criticalIdentifiers: readonly string[];
   relevantFiles: readonly string[];
+  auditFeedback?: readonly string[];
 }): string {
   const previous = input.previousCheckpoint
     ? `Existing checkpoint:\n${buildCheckpointPromptText(input.previousCheckpoint)}`
@@ -180,22 +185,73 @@ function buildCompactionInstruction(input: {
     "",
     identifiers,
     files,
+    input.auditFeedback && input.auditFeedback.length > 0
+      ? `Correctness requirements for this retry:\n${input.auditFeedback.map((item) => `- ${item}`).join("\n")}`
+      : "",
     "",
     "Conversation history being compacted:",
     renderMessagesForCompaction(input.droppedMessages),
   ].join("\n");
 }
 
+function checkpointTextIndex(checkpoint: CheckpointSummary): string {
+  return [
+    checkpoint.goal,
+    ...checkpoint.user_constraints,
+    ...checkpoint.decisions,
+    ...checkpoint.discoveries,
+    ...checkpoint.completed_work,
+    ...checkpoint.pending_work,
+    ...checkpoint.unresolved_questions,
+    ...checkpoint.critical_identifiers,
+    ...checkpoint.relevant_files,
+    checkpoint.handoff_md,
+  ]
+    .join("\n")
+    .toLowerCase();
+}
+
+function findCheckpointDeficiencies(input: {
+  checkpoint: CheckpointSummary;
+  criticalIdentifiers: readonly string[];
+  droppedMessages: readonly TyrumUIMessage[];
+}): string[] {
+  const deficiencies: string[] = [];
+  const textIndex = checkpointTextIndex(input.checkpoint);
+  const missingIdentifiers = input.criticalIdentifiers.filter(
+    (identifier) => identifier.trim().length > 0 && !textIndex.includes(identifier.toLowerCase()),
+  );
+  if (missingIdentifiers.length > 0) {
+    deficiencies.push(
+      `Preserve these identifiers exactly if they are still relevant: ${missingIdentifiers.join(", ")}`,
+    );
+  }
+
+  const droppedText = input.droppedMessages
+    .map((message) => renderMessagesForCompaction([message]))
+    .join("\n")
+    .trim();
+  const hasSignal = checkpointTextIndex(input.checkpoint).replace(/\s+/g, "").length > 0;
+  if (droppedText.length > 0 && !hasSignal) {
+    deficiencies.push(
+      "The checkpoint is empty. Capture goals, decisions, discoveries, pending work, or unresolved questions.",
+    );
+  }
+
+  return deficiencies;
+}
+
 async function generateCheckpointSummary(input: {
   model: LanguageModel;
   previousCheckpoint: CheckpointSummary | null;
-  droppedMessages: readonly ChatMessage[];
+  droppedMessages: readonly TyrumUIMessage[];
   criticalIdentifiers: readonly string[];
   relevantFiles: readonly string[];
   abortSignal?: AbortSignal;
   timeoutMs?: number;
 }): Promise<CheckpointSummary> {
   let lastError: Error | undefined;
+  let auditFeedback: string[] | undefined;
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
       const result = await generateText({
@@ -215,10 +271,11 @@ async function generateCheckpointSummary(input: {
                     droppedMessages: input.droppedMessages,
                     criticalIdentifiers: input.criticalIdentifiers,
                     relevantFiles: input.relevantFiles,
+                    auditFeedback,
                   }) +
                   (attempt === 0
                     ? ""
-                    : "\n\nYour previous answer was not valid JSON for the required schema. Try again."),
+                    : "\n\nYour previous answer failed validation. Fix every listed issue and return strict JSON only."),
               },
             ],
           },
@@ -231,13 +288,25 @@ async function generateCheckpointSummary(input: {
         new Set([...input.criticalIdentifiers, ...parsed.critical_identifiers]),
       );
       const mergedFiles = Array.from(new Set([...input.relevantFiles, ...parsed.relevant_files]));
-      return {
+      const checkpoint: CheckpointSummary = {
         ...parsed,
         critical_identifiers: mergedIdentifiers,
         relevant_files: mergedFiles,
       };
+      const deficiencies = findCheckpointDeficiencies({
+        checkpoint,
+        criticalIdentifiers: input.criticalIdentifiers,
+        droppedMessages: input.droppedMessages,
+      });
+      if (deficiencies.length > 0) {
+        auditFeedback = deficiencies;
+        lastError = new Error(deficiencies.join(" "));
+        continue;
+      }
+      return checkpoint;
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
+      auditFeedback ??= ["Return strict JSON that matches the required schema exactly."];
     }
   }
   throw lastError ?? new Error("failed to generate checkpoint summary");
@@ -420,8 +489,22 @@ export async function resolveRuntimeCompactionContext(input: {
     workspaceId: input.workspaceId,
     config: revision.config,
   });
+  const compactionModel = ctx.config.sessions.compaction?.model;
+  const compactionConfig =
+    compactionModel &&
+    compactionModel.provider_id.trim().length > 0 &&
+    compactionModel.model_id.trim().length > 0
+      ? {
+          ...ctx.config,
+          model: {
+            ...ctx.config.model,
+            model: `${compactionModel.provider_id}/${compactionModel.model_id}`,
+            fallback: [],
+          },
+        }
+      : ctx.config;
   const modelResolution = await resolveSessionModelDetailed(input.resolveModelDeps, {
-    config: ctx.config,
+    config: compactionConfig,
     tenantId: input.tenantId,
     sessionId: input.sessionId,
   });

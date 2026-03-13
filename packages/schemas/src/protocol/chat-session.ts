@@ -1,18 +1,17 @@
 import { z } from "zod";
-import { ChatMessage } from "../chat-message.js";
 import { DateTimeSchema } from "../common.js";
 import { AgentKey } from "../keys.js";
+import { TyrumUIMessage, TyrumUIMessageRole } from "../ui-message.js";
 import {
   WsEventEnvelope,
   WsRequestEnvelope,
   WsResponseErrEnvelope,
   WsResponseOkEnvelope,
 } from "./envelopes.js";
-import { WsMessageRole } from "./session.js";
 
 export const WsChatSessionPreview = z
   .object({
-    role: WsMessageRole,
+    role: TyrumUIMessageRole,
     text: z.string(),
   })
   .strict();
@@ -36,7 +35,7 @@ export type WsChatSessionSummary = z.infer<typeof WsChatSessionSummary>;
 export const WsChatSession = z
   .object({
     ...WsChatSessionSummary.shape,
-    messages: z.array(ChatMessage),
+    messages: z.array(TyrumUIMessage),
   })
   .strict();
 export type WsChatSession = z.infer<typeof WsChatSession>;
@@ -133,7 +132,7 @@ export const WsChatSessionSendPayload = z
   .object({
     session_id: z.string().trim().min(1),
     message_id: z.string().trim().min(1).optional(),
-    messages: z.array(ChatMessage).optional(),
+    messages: z.array(TyrumUIMessage).optional(),
     trigger: WsChatSessionSendTrigger,
     headers: z.record(z.string(), z.string()).optional(),
     body: z.record(z.string(), z.unknown()).optional(),

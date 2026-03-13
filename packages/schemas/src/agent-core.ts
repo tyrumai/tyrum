@@ -95,6 +95,13 @@ export const AgentSessionConfig = z.object({
       auto: z.boolean().default(true),
       reserved_input_tokens: z.number().int().min(0).max(400_000).default(20_000),
       keep_last_messages_after_compaction: z.number().int().min(0).max(200).default(2),
+      model: z
+        .object({
+          provider_id: z.string().trim().min(1),
+          model_id: z.string().trim().min(1),
+        })
+        .strict()
+        .optional(),
     })
     .prefault({}),
   loop_detection: AgentSessionLoopDetectionConfig.prefault({}),

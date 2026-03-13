@@ -1,13 +1,13 @@
 import { randomUUID } from "node:crypto";
-import { ChatMessage as ChatMessageSchema } from "@tyrum/schemas";
-import type { ChatMessage } from "@tyrum/schemas";
+import { TyrumUIMessage as ChatMessageSchema } from "@tyrum/schemas";
+import type { TyrumUIMessage } from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
 
 export function createTextMessage(input: {
   id?: string;
-  role: ChatMessage["role"];
+  role: TyrumUIMessage["role"];
   text: string;
-}): ChatMessage {
+}): TyrumUIMessage {
   return ChatMessageSchema.parse({
     id: input.id ?? randomUUID(),
     role: input.role,

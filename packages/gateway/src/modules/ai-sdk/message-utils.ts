@@ -1,17 +1,17 @@
 import { randomUUID } from "node:crypto";
 import { convertToModelMessages, type ModelMessage, type UIMessage } from "ai";
-import type { ChatMessage } from "@tyrum/schemas";
+import type { TyrumUIMessage } from "@tyrum/schemas";
 import { coerceRecord } from "../util/coerce.js";
 
-function toTextPart(text: string): ChatMessage["parts"][number] {
+function toTextPart(text: string): TyrumUIMessage["parts"][number] {
   return { type: "text", text };
 }
 
 export function createTextChatMessage(input: {
   id?: string;
-  role: Extract<ChatMessage["role"], "system" | "user" | "assistant">;
+  role: Extract<TyrumUIMessage["role"], "system" | "user" | "assistant">;
   text: string;
-}): ChatMessage {
+}): TyrumUIMessage {
   return {
     id: input.id ?? randomUUID(),
     role: input.role,
@@ -19,7 +19,7 @@ export function createTextChatMessage(input: {
   };
 }
 
-function normalizeChatParts(content: unknown): ChatMessage["parts"] {
+function normalizeChatParts(content: unknown): TyrumUIMessage["parts"] {
   if (typeof content === "string") {
     return [toTextPart(content)];
   }
@@ -27,16 +27,16 @@ function normalizeChatParts(content: unknown): ChatMessage["parts"] {
     return [];
   }
 
-  const parts: ChatMessage["parts"] = [];
+  const parts: TyrumUIMessage["parts"] = [];
   for (const part of content) {
     const record = coerceRecord(part);
     if (!record || typeof record["type"] !== "string") continue;
-    parts.push(record as ChatMessage["parts"][number]);
+    parts.push(record as TyrumUIMessage["parts"][number]);
   }
   return parts;
 }
 
-export function modelMessageToChatMessage(message: ModelMessage): ChatMessage | undefined {
+export function modelMessageToChatMessage(message: ModelMessage): TyrumUIMessage | undefined {
   if (
     message.role !== "system" &&
     message.role !== "user" &&
@@ -53,8 +53,8 @@ export function modelMessageToChatMessage(message: ModelMessage): ChatMessage | 
   };
 }
 
-export function modelMessagesToChatMessages(messages: readonly ModelMessage[]): ChatMessage[] {
-  const out: ChatMessage[] = [];
+export function modelMessagesToChatMessages(messages: readonly ModelMessage[]): TyrumUIMessage[] {
+  const out: TyrumUIMessage[] = [];
   for (const message of messages) {
     const converted = modelMessageToChatMessage(message);
     if (converted) out.push(converted);
@@ -63,7 +63,7 @@ export function modelMessagesToChatMessages(messages: readonly ModelMessage[]): 
 }
 
 function normalizeModelContent(
-  message: ChatMessage,
+  message: TyrumUIMessage,
 ): string | Array<Record<string, unknown>> | undefined {
   if (message.role === "system") {
     return message.parts
@@ -84,7 +84,7 @@ function normalizeModelContent(
   return content;
 }
 
-export function chatMessageToModelMessage(message: ChatMessage): ModelMessage | undefined {
+export function chatMessageToModelMessage(message: TyrumUIMessage): ModelMessage | undefined {
   if (
     message.role !== "system" &&
     message.role !== "user" &&
@@ -107,7 +107,7 @@ export function chatMessageToModelMessage(message: ChatMessage): ModelMessage | 
   } as ModelMessage;
 }
 
-export function chatMessagesToModelMessages(messages: readonly ChatMessage[]): ModelMessage[] {
+export function chatMessagesToModelMessages(messages: readonly TyrumUIMessage[]): ModelMessage[] {
   const out: ModelMessage[] = [];
   for (const message of messages) {
     const converted = chatMessageToModelMessage(message);
@@ -117,7 +117,7 @@ export function chatMessagesToModelMessages(messages: readonly ChatMessage[]): M
 }
 
 export async function sessionMessagesToModelMessages(
-  messages: readonly ChatMessage[],
+  messages: readonly TyrumUIMessage[],
 ): Promise<ModelMessage[]> {
   const hasUnsupportedRole = messages.some((message) => message.role === "tool");
   if (!hasUnsupportedRole) {
@@ -131,9 +131,9 @@ export async function sessionMessagesToModelMessages(
 }
 
 export function applyFinalAssistantReply(
-  messages: readonly ChatMessage[],
+  messages: readonly TyrumUIMessage[],
   reply: string,
-): ChatMessage[] {
+): TyrumUIMessage[] {
   const next = messages.slice();
   for (let index = next.length - 1; index >= 0; index -= 1) {
     const message = next[index];

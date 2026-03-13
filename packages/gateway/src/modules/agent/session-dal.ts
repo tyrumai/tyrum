@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { ChatMessage, NormalizedContainerKind } from "@tyrum/schemas";
+import type { TyrumUIMessage, NormalizedContainerKind } from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
 import {
   DEFAULT_CHANNEL_ACCOUNT_ID,
@@ -94,7 +94,7 @@ export class SessionDal {
   private async writeSession(input: {
     tenantId: string;
     sessionId: string;
-    messages: ChatMessage[];
+    messages: TyrumUIMessage[];
     title: string;
     contextState?: SessionContextState;
     updatedAt?: string;
@@ -114,7 +114,7 @@ export class SessionDal {
   }
 
   async replaceMessages(
-    input: SessionIdentity & { messages: ChatMessage[]; updatedAt?: string },
+    input: SessionIdentity & { messages: TyrumUIMessage[]; updatedAt?: string },
   ): Promise<void> {
     const session = await this.requireSession({
       tenantId: input.tenantId,
@@ -309,7 +309,7 @@ export class SessionDal {
       tenantId: input.tenantId,
       sessionId: input.sessionId,
     });
-    const nextMessages: ChatMessage[] =
+    const nextMessages: TyrumUIMessage[] =
       input.appendMessages === false
         ? session.messages
         : [
