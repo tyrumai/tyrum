@@ -49,7 +49,7 @@ describe("scope normalization", () => {
         token_id: "test-token",
         tenant_id: DEFAULT_TENANT_ID,
         role: "client",
-        scopes: [" operator.approvals "],
+        scopes: [" operator.read "],
       },
       protocol_rev: 1,
       capabilities: [],

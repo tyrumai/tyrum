@@ -30,7 +30,7 @@ describe("approvals-store", () => {
       })),
     };
 
-    const { store } = createApprovalsStore(ws as never);
+    const { store } = createApprovalsStore({ ws: ws as never });
     await store.refreshPending();
 
     expect(store.getSnapshot().blockedIds).toEqual([
