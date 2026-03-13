@@ -48,6 +48,25 @@ describe("Input", () => {
     cleanupTestRoot({ container, root });
   });
 
+  it("limits transitions to border and ring styles", () => {
+    const Input = (operatorUi as Record<string, unknown>)["Input"];
+    expect(Input).toBeDefined();
+
+    const { container, root } = renderIntoDocument(
+      React.createElement(Input as React.ComponentType, {
+        id: "focus-target",
+        label: "Focus target",
+      }),
+    );
+
+    const input = container.querySelector<HTMLInputElement>("input#focus-target");
+    expect(input).not.toBeNull();
+    expect(input?.className).toContain("transition-[border-color,box-shadow]");
+    expect(input?.className).not.toContain("transition-colors");
+
+    cleanupTestRoot({ container, root });
+  });
+
   it("renders helper text when error is an empty string", () => {
     const Input = (operatorUi as Record<string, unknown>)["Input"];
     expect(Input).toBeDefined();

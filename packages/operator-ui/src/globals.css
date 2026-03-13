@@ -30,6 +30,23 @@
     cursor: pointer;
   }
 
+  input:is(
+    [type="email"],
+    [type="password"],
+    [type="search"],
+    [type="tel"],
+    [type="text"],
+    [type="url"],
+    :not([type])
+  ),
+  textarea {
+    appearance: none;
+    -webkit-appearance: none;
+    background-color: transparent;
+    color: inherit;
+    font: inherit;
+  }
+
   ::view-transition-old(root) {
     animation: tyrum-fade-out 200ms ease-in both;
   }

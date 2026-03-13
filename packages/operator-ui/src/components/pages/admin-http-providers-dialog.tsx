@@ -263,7 +263,7 @@ export function ProviderAccountDialog({
                       setProviderFilter(event.currentTarget.value);
                     }}
                     className={cn(
-                      "box-border flex h-8 w-full rounded-md border border-border bg-bg px-2.5 py-1 text-sm text-fg transition-colors duration-150",
+                      "box-border flex h-8 w-full rounded-md border border-border bg-bg px-2.5 py-1 text-sm text-fg transition-[border-color,box-shadow] duration-150",
                       "placeholder:text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-0",
                     )}
                   />
