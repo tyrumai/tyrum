@@ -137,6 +137,7 @@ export async function turnDirect(
     usage?: ReturnType<typeof extractUsageSnapshot>;
     responseMessages?: readonly ModelMessage[];
   }) => {
+    const memoryWritten = memoryWriteState?.wrote ?? false;
     return await finalizeTurn({
       container: deps.opts.container,
       sessionDal: deps.sessionDal,
@@ -146,6 +147,7 @@ export async function turnDirect(
       reply: params.reply,
       model,
       usedTools,
+      memoryWritten,
       contextReport,
       turnKind: params.turnKind,
       responseMessages: params.responseMessages,
@@ -416,6 +418,7 @@ export async function turnStreamDirect(
       reply: delegation.reply,
       model,
       usedTools,
+      memoryWritten: memoryWriteState?.wrote ?? false,
       contextReport,
       turnKind: "skip",
     });
@@ -504,6 +507,7 @@ export async function turnStreamDirect(
       reply,
       model,
       usedTools,
+      memoryWritten: memoryWriteState?.wrote ?? false,
       contextReport,
       turnKind: guardianReviewDecisionCollector ? "skip" : undefined,
       responseMessages: (modelResponse.messages ?? []) as ModelMessage[],

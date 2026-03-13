@@ -12,18 +12,9 @@ import {
   createTextChatMessage,
   modelMessagesToChatMessages,
 } from "../../ai-sdk/message-utils.js";
-import {
-  buildTurnMemoryDedupeTag,
-  buildTurnMemoryDedupeKey,
-  isTurnMemoryAutoWriteEnabled,
-  normalizeTurnMemoryTags,
-  resolveTurnMemoryOrigin,
-  type StoredTurnMemoryDecision,
-  type TurnMemoryDecisionCollector,
-} from "./turn-memory-policy.js";
 import { normalizeSessionTitle } from "../session-dal-helpers.js";
 
-type FinalizeContainer = Pick<GatewayContainer, "contextReportDal" | "logger" | "memoryV1Dal">;
+type FinalizeContainer = Pick<GatewayContainer, "contextReportDal" | "logger">;
 
 function isAssistantTextMessage(message: TyrumUIMessage): boolean {
   return (
@@ -109,167 +100,6 @@ async function persistContextReport(input: {
   }
 }
 
-function buildSignalMemoryTags(input: {
-  decision: StoredTurnMemoryDecision;
-  dedupeTag: string;
-}): string[] {
-  const payloadTags = normalizeTurnMemoryTags(input.decision.memory.tags);
-  const prefix =
-    input.decision.memory.kind === "episode"
-      ? ["agent", "turn", "auto-turn"]
-      : ["agent-turn", "auto-turn"];
-  return normalizeTurnMemoryTags([...prefix, ...payloadTags, input.dedupeTag]);
-}
-
-async function hasExistingSignalMemory(input: {
-  container: FinalizeContainer;
-  session: SessionRow;
-  dedupeTags: readonly string[];
-}): Promise<boolean> {
-  if (input.dedupeTags.length === 0) return false;
-  const existing = await input.container.memoryV1Dal.list({
-    tenantId: input.session.tenant_id,
-    agentId: input.session.agent_id,
-    limit: 1,
-    filter: { tags: [...input.dedupeTags] },
-  });
-  return existing.items.length > 0;
-}
-
-async function writeTurnSignalMemory(input: {
-  container: FinalizeContainer;
-  session: SessionRow;
-  resolved: ResolvedAgentTurnInput;
-  decision: StoredTurnMemoryDecision;
-  nowIso: string;
-}): Promise<boolean> {
-  const turnOrigin = resolveTurnMemoryOrigin(input.resolved.metadata);
-  const dedupeKey = buildTurnMemoryDedupeKey(input.decision, turnOrigin);
-  const dedupeTag = buildTurnMemoryDedupeTag(dedupeKey);
-  const legacyDedupeTag = `auto-turn:${dedupeKey}`;
-  if (
-    await hasExistingSignalMemory({
-      container: input.container,
-      session: input.session,
-      dedupeTags: [dedupeTag, legacyDedupeTag],
-    })
-  ) {
-    return false;
-  }
-
-  const provenance = {
-    source_kind: "system" as const,
-    channel: input.resolved.channel,
-    thread_id: input.resolved.thread_id,
-    session_id: input.session.session_id,
-    refs: [],
-    metadata: {
-      kind: "turn_signal",
-      auto_turn: true,
-      turn_origin: turnOrigin,
-      reason: input.decision.reason,
-      dedupe_key: dedupeKey,
-    },
-  };
-  const tags = buildSignalMemoryTags({ decision: input.decision, dedupeTag });
-  const memory = input.decision.memory;
-
-  try {
-    await input.container.memoryV1Dal.create(
-      memory.kind === "fact"
-        ? {
-            kind: "fact",
-            key: memory.key,
-            value: memory.value,
-            confidence: memory.confidence ?? 1,
-            observed_at: input.nowIso,
-            tags,
-            sensitivity: "private",
-            provenance,
-          }
-        : memory.kind === "note"
-          ? {
-              kind: "note",
-              title: memory.title,
-              body_md: memory.body_md,
-              tags,
-              sensitivity: "private",
-              provenance,
-            }
-          : memory.kind === "procedure"
-            ? {
-                kind: "procedure",
-                title: memory.title,
-                body_md: memory.body_md,
-                confidence: memory.confidence ?? 1,
-                tags,
-                sensitivity: "private",
-                provenance,
-              }
-            : {
-                kind: "episode",
-                occurred_at: input.nowIso,
-                summary_md: memory.summary_md,
-                tags,
-                sensitivity: "private",
-                provenance,
-              },
-      { tenantId: input.session.tenant_id, agentId: input.session.agent_id },
-    );
-    return true;
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    input.container.logger.warn("memory.turn_signal_write_failed", {
-      session_id: input.session.session_id,
-      channel: input.resolved.channel,
-      thread_id: input.resolved.thread_id,
-      error: message,
-    });
-    return false;
-  }
-}
-
-function logTurnSignalProtocolState(input: {
-  container: FinalizeContainer;
-  session: SessionRow;
-  resolved: ResolvedAgentTurnInput;
-  collector: TurnMemoryDecisionCollector | undefined;
-  turnKind: "normal" | "skip";
-}): void {
-  if (input.turnKind !== "normal") return;
-  if (!input.collector) {
-    input.container.logger.info("memory.turn_signal_missing", {
-      session_id: input.session.session_id,
-      channel: input.resolved.channel,
-      thread_id: input.resolved.thread_id,
-      reason: "collector_unavailable",
-    });
-    return;
-  }
-
-  if (!input.collector.lastDecision) {
-    input.container.logger.info("memory.turn_signal_missing", {
-      session_id: input.session.session_id,
-      channel: input.resolved.channel,
-      thread_id: input.resolved.thread_id,
-      calls: input.collector.calls,
-      invalid_calls: input.collector.invalidCalls,
-      error: input.collector.lastError,
-    });
-    return;
-  }
-
-  if (input.collector.calls > 1 || input.collector.invalidCalls > 0) {
-    input.container.logger.info("memory.turn_signal_protocol_violation", {
-      session_id: input.session.session_id,
-      channel: input.resolved.channel,
-      thread_id: input.resolved.thread_id,
-      calls: input.collector.calls,
-      invalid_calls: input.collector.invalidCalls,
-    });
-  }
-}
-
 async function maybeGenerateSessionTitle(input: {
   container: FinalizeContainer;
   sessionDal: SessionDal;
@@ -328,13 +158,14 @@ export async function finalizeTurn(input: {
   reply: string;
   model: LanguageModel;
   usedTools: ReadonlySet<string>;
+  memoryWritten: boolean;
   contextReport: AgentContextReport;
   turnKind?: "normal" | "skip";
-  turnMemoryDecisionCollector?: TurnMemoryDecisionCollector;
   responseMessages?: readonly ModelMessage[];
 }): Promise<AgentTurnResponseT> {
   const nowIso = new Date().toISOString();
   const finalizedReply = applyCrossTurnLoopWarning(input);
+  const memoryWritten = input.turnKind !== "skip" && input.memoryWritten;
 
   await persistContextReport(input);
   let updatedSession: SessionRow;
@@ -385,30 +216,6 @@ export async function finalizeTurn(input: {
     reply: finalizedReply,
     model: input.model,
   });
-
-  const turnKind = input.turnKind ?? "normal";
-  let memoryWritten = false;
-
-  if (isTurnMemoryAutoWriteEnabled(input.ctx.config.memory.v1)) {
-    logTurnSignalProtocolState({
-      container: input.container,
-      session: input.session,
-      resolved: input.resolved,
-      collector: input.turnMemoryDecisionCollector,
-      turnKind,
-    });
-
-    const decision = input.turnMemoryDecisionCollector?.lastDecision;
-    if (turnKind === "normal" && decision?.should_store) {
-      memoryWritten = await writeTurnSignalMemory({
-        container: input.container,
-        session: input.session,
-        resolved: input.resolved,
-        decision,
-        nowIso,
-      });
-    }
-  }
 
   return AgentTurnResponse.parse({
     reply: finalizedReply,

@@ -1,6 +1,10 @@
 import type { LanguageModel } from "ai";
 import { generateText, stepCountIs } from "ai";
-import type { AgentConfig as AgentConfigT, TyrumUIMessage } from "@tyrum/schemas";
+import {
+  BuiltinMemoryServerSettings,
+  type AgentConfig as AgentConfigT,
+  type TyrumUIMessage,
+} from "@tyrum/schemas";
 import { sha256HexFromString } from "../../policy/canonical-json.js";
 import { redactSecretLikeText } from "./secrets.js";
 import { MemoryV1Dal } from "../../memory/v1-dal.js";
@@ -51,6 +55,18 @@ type LoggerLike = {
   warn: (message: string, fields?: Record<string, unknown>) => void;
 };
 
+function resolvePreCompactionMemoryEnabled(config: AgentConfigT): boolean {
+  const rawMcp =
+    typeof config.mcp === "object" && config.mcp !== null
+      ? (config.mcp as Record<string, unknown>)
+      : undefined;
+  const rawServerSettings =
+    rawMcp && typeof rawMcp["server_settings"] === "object" && rawMcp["server_settings"] !== null
+      ? (rawMcp["server_settings"] as Record<string, unknown>)
+      : undefined;
+  return BuiltinMemoryServerSettings.parse(rawServerSettings?.["memory"] ?? {}).enabled;
+}
+
 export async function maybeRunPreCompactionMemoryFlush(
   deps: { db: SqlDb; logger: LoggerLike; agentId: string },
   input: {
@@ -62,7 +78,7 @@ export async function maybeRunPreCompactionMemoryFlush(
     timeoutMs?: number;
   },
 ): Promise<void> {
-  const v1Enabled = input.ctx.config.memory.v1.enabled;
+  const v1Enabled = resolvePreCompactionMemoryEnabled(input.ctx.config);
   if (!v1Enabled) {
     return;
   }
