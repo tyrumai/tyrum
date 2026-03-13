@@ -233,6 +233,27 @@ async function assertNoInternalHorizontalClipping(page: Page, selectors: string[
   }
 }
 
+async function assertDashboardLayout(
+  page: Page,
+  expected: {
+    kpiColumns: "grid-cols-2" | "grid-cols-4";
+    summaryColumns: "grid-cols-1" | "grid-cols-2";
+  },
+): Promise<void> {
+  await page.waitForFunction(({ kpiColumns, summaryColumns }) => {
+    const kpiGrid = document.querySelector<HTMLElement>('[data-testid="dashboard-kpi-grid"]');
+    const summaryGrid = document.querySelector<HTMLElement>(
+      '[data-testid="dashboard-summary-grid"]',
+    );
+    const layoutContent = document.querySelector<HTMLElement>("[data-layout-content]");
+    return (
+      kpiGrid?.className.includes(kpiColumns) &&
+      summaryGrid?.className.includes(summaryColumns) &&
+      layoutContent?.getAttribute("data-layout-alignment") === "center"
+    );
+  }, expected);
+}
+
 describe("layout regression harness", () => {
   beforeAll(async () => {
     process.chdir(APP_ROOT);
@@ -333,6 +354,30 @@ describe("layout regression harness", () => {
         '[data-testid="chat-threads-panel"]',
         '[data-testid="chat-conversation-panel"]',
       ]);
+    } finally {
+      await page.close();
+    }
+  });
+
+  it("reflows dashboard when the sidebar collapses", { timeout: 30_000 }, async () => {
+    const page = await browser.newPage({ viewport: { width: 900, height: 700 } });
+    try {
+      await page.goto(`${baseUrl}?route=dashboard`, { waitUntil: "load" });
+      await page.waitForSelector('[data-testid="dashboard-kpi-grid"]');
+
+      await assertDashboardLayout(page, {
+        kpiColumns: "grid-cols-2",
+        summaryColumns: "grid-cols-1",
+      });
+      await assertNoHorizontalOverflow(page, ["[data-layout-content]"]);
+
+      await page.click('[data-testid="sidebar-collapse-toggle"]');
+
+      await assertDashboardLayout(page, {
+        kpiColumns: "grid-cols-4",
+        summaryColumns: "grid-cols-2",
+      });
+      await assertNoHorizontalOverflow(page, ["[data-layout-content]"]);
     } finally {
       await page.close();
     }
