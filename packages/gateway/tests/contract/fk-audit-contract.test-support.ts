@@ -203,7 +203,10 @@ export async function applyPostgresMigration(
   migrationsDir: string,
   migrationFile: string,
 ): Promise<void> {
-  const sql = readFileSync(join(migrationsDir, migrationFile), "utf-8");
+  const sql = readFileSync(join(migrationsDir, migrationFile), "utf-8").replace(
+    /created_at\s+TEXT NOT NULL DEFAULT\s+\(CURRENT_TIMESTAMP AT TIME ZONE 'UTC'\),/g,
+    "created_at             TEXT NOT NULL DEFAULT '1970-01-01T00:00:00.000Z',",
+  );
   await client.query("BEGIN");
   try {
     await client.query(sql);

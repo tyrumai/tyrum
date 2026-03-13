@@ -4,7 +4,7 @@
 -- - unified review history lives in review_entries
 
 CREATE TABLE IF NOT EXISTS review_entries (
-  tenant_id              TEXT NOT NULL,
+  tenant_id              UUID NOT NULL,
   review_id              TEXT NOT NULL,
   target_type            TEXT NOT NULL CHECK (target_type IN ('approval', 'pairing')),
   target_id              TEXT NOT NULL,

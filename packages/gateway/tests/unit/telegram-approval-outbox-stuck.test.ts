@@ -83,14 +83,16 @@ describe("TelegramChannelProcessor approval-gated outbox robustness", () => {
          workspace_id,
          kind,
          status,
-         prompt
-       ) VALUES (?, ?, ?, ?, ?, 'connector.send', 'pending', ?)`,
+         prompt,
+         motivation
+       ) VALUES (?, ?, ?, ?, ?, 'connector.send', 'queued', ?, ?)`,
       [
         session.tenant_id,
         approvalId,
         `approval:${approvalId}`,
         session.agent_id,
         session.workspace_id,
+        "Approve outbound Telegram send",
         "Approve outbound Telegram send",
       ],
     );

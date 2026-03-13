@@ -27,12 +27,9 @@ import {
 } from "./tool-set-builder-lifecycle.js";
 import {
   GUARDIAN_REVIEW_DECISION_TOOL_ID,
-  TURN_MEMORY_DECISION_TOOL_ID,
   createGuardianReviewDecisionTool,
-  createTurnMemoryDecisionTool,
 } from "./tool-set-builder-internal-tools.js";
 import { createToolSetPolicyRuntime } from "./tool-set-builder-policy.js";
-import type { TurnMemoryDecisionCollector } from "./turn-memory-policy.js";
 import { type GuardianReviewDecisionCollector } from "../../review/guardian-review-mode.js";
 
 type BuildRuntimeToolSetInput = {
@@ -46,7 +43,6 @@ type BuildRuntimeToolSetInput = {
   laneQueue?: LaneQueueState;
   toolCallPolicyStates?: Map<string, ToolCallPolicyState>;
   model?: LanguageModel;
-  turnMemoryDecisionCollector?: TurnMemoryDecisionCollector;
   guardianReviewDecisionCollector?: GuardianReviewDecisionCollector;
 };
 
@@ -89,11 +85,6 @@ export function buildRuntimeToolSet(input: BuildRuntimeToolSetInput): ToolSet {
     );
   }
 
-  if (input.turnMemoryDecisionCollector) {
-    result[TURN_MEMORY_DECISION_TOOL_ID] = createTurnMemoryDecisionTool(
-      input.turnMemoryDecisionCollector,
-    );
-  }
   if (input.guardianReviewDecisionCollector) {
     result[GUARDIAN_REVIEW_DECISION_TOOL_ID] = createGuardianReviewDecisionTool(
       input.guardianReviewDecisionCollector,

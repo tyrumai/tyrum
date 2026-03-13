@@ -185,17 +185,33 @@ for (;;) {
       throw new Error(`[smoke] run ${runId} paused unexpectedly: reason=${pausedReason ?? "<none>"}`);
     }
 
-	    const approvalRes = await client.query(
-	      "SELECT approval_id FROM approvals WHERE run_id = $1 AND status = $2 AND kind = $3 ORDER BY created_at ASC, approval_id ASC LIMIT 1",
-	      [runId, "pending", "policy"],
-	    );
-	    const approvalId = approvalRes.rows[0]?.approval_id;
-	    if (typeof approvalId !== "string" || approvalId.length === 0) {
-	      throw new Error(`[smoke] run ${runId} paused for policy but no pending approval found`);
-	    }
+    const approvalRes = await client.query(
+      "SELECT approval_id, status FROM approvals WHERE run_id = $1 AND kind = $2 ORDER BY created_at ASC, approval_id ASC LIMIT 1",
+      [runId, "policy"],
+    );
+    const approvalId = approvalRes.rows[0]?.approval_id;
+    const approvalStatus = approvalRes.rows[0]?.status;
+    if (approvalStatus === "reviewing") {
+      await new Promise((r) => setTimeout(r, 1000));
+      continue;
+    }
+    if (approvalStatus === "denied" || approvalStatus === "expired" || approvalStatus === "cancelled") {
+      throw new Error(
+        `[smoke] run ${runId} paused for policy but approval ${approvalId ?? "<missing>"} is terminal with status=${approvalStatus}`,
+      );
+    }
+    if (
+      (approvalStatus !== "queued" && approvalStatus !== "awaiting_human") ||
+      typeof approvalId !== "string" ||
+      approvalId.length === 0
+    ) {
+      throw new Error(
+        `[smoke] run ${runId} paused for policy but no human-resolvable approval found (status=${approvalStatus ?? "<missing>"})`,
+      );
+    }
 
-	    const approveRes = await fetch(
-	      `http://tyrum-edge:8788/approvals/${approvalId}/respond`,
+    const approveRes = await fetch(
+      `http://tyrum-edge:8788/approvals/${approvalId}/respond`,
       {
         method: "POST",
         headers: {

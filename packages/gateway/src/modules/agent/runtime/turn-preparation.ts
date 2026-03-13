@@ -45,11 +45,6 @@ import { AgentMemoryToolRuntime } from "../../memory/agent-tool-runtime.js";
 import { resolveBuiltinMemoryConfig } from "../../memory/builtin-mcp.js";
 import { resolveEmbeddingPipeline } from "./embedding-pipeline-resolution.js";
 import {
-  buildTurnMemoryProtocolPrompt,
-  createTurnMemoryDecisionCollector,
-  isTurnMemoryAutoWriteEnabled,
-} from "./turn-memory-policy.js";
-import {
   buildGuardianReviewSystemPrompt,
   createGuardianReviewDecisionCollector,
   resolveGuardianReviewRequest,
@@ -80,7 +75,6 @@ export type PreparedTurn = {
   contextReport: AgentContextReport;
   systemPrompt: string;
   resolved: ResolvedAgentTurnInput;
-  turnMemoryDecisionCollector?: ReturnType<typeof createTurnMemoryDecisionCollector>;
   guardianReviewDecisionCollector?: GuardianReviewDecisionCollector;
 };
 
@@ -183,8 +177,7 @@ export async function prepareTurn(
   const availableTools = normalTurnContext?.availableTools ?? [];
   const toolSetBuilderDeps = normalTurnContext?.toolSetBuilderDeps;
   const filteredTools = normalTurnContext?.filteredTools ?? [];
-  const resolvedToolSetBuilder =
-    normalTurnContext?.toolSetBuilder ?? guardianReviewToolSetBuilder;
+  const resolvedToolSetBuilder = normalTurnContext?.toolSetBuilder ?? guardianReviewToolSetBuilder;
   if (!resolvedToolSetBuilder) {
     throw new Error("tool set builder unavailable for turn preparation");
   }
@@ -355,16 +348,8 @@ export async function prepareTurn(
         });
 
   const sandboxPrompt = guardianReviewRequest ? "" : buildSandboxPrompt();
-  const turnMemoryAutoWriteEnabled =
-    !guardianReviewRequest && isTurnMemoryAutoWriteEnabled(ctx.config.memory.v1);
-  const turnMemoryDecisionCollector = turnMemoryAutoWriteEnabled
-    ? createTurnMemoryDecisionCollector()
-    : undefined;
   const guardianReviewDecisionCollector = guardianReviewRequest
     ? createGuardianReviewDecisionCollector(guardianReviewRequest.subjectType)
-    : undefined;
-  const turnMemoryPrompt = turnMemoryAutoWriteEnabled
-    ? buildTurnMemoryProtocolPrompt(automation)
     : undefined;
 
   const promptParts = guardianReviewRequest
@@ -407,7 +392,6 @@ export async function prepareTurn(
         promptParts.runtimePromptText,
         promptParts.safetyPrompt,
         sandboxPrompt,
-        turnMemoryPrompt,
       ]
         .filter((value): value is string => typeof value === "string" && value.length > 0)
         .join("\n\n");
@@ -461,7 +445,6 @@ export async function prepareTurn(
     toolCallPolicyStates,
     model,
     memoryWriteState,
-    turnMemoryDecisionCollector,
     guardianReviewDecisionCollector,
   );
 
@@ -496,7 +479,6 @@ export async function prepareTurn(
     contextReport: validatedReport,
     systemPrompt,
     resolved,
-    turnMemoryDecisionCollector,
     guardianReviewDecisionCollector,
   };
 }

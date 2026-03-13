@@ -227,6 +227,82 @@ describe("ApprovalDal", () => {
     ]);
   });
 
+  it("lists queued approvals oldest first so guardian claims stay FIFO", async () => {
+    const dal = createDal();
+    const oldest = await createApproval(dal, {
+      approvalKey: `approval:${randomUUID()}`,
+      prompt: "Oldest",
+      status: "queued",
+    });
+    const middle = await createApproval(dal, {
+      approvalKey: `approval:${randomUUID()}`,
+      prompt: "Middle",
+      status: "queued",
+    });
+    const newest = await createApproval(dal, {
+      approvalKey: `approval:${randomUUID()}`,
+      prompt: "Newest",
+      status: "queued",
+    });
+
+    await db!.run("UPDATE approvals SET created_at = ? WHERE tenant_id = ? AND approval_id = ?", [
+      "2026-01-01T00:00:00.000Z",
+      tenantId,
+      oldest.approval_id,
+    ]);
+    await db!.run("UPDATE approvals SET created_at = ? WHERE tenant_id = ? AND approval_id = ?", [
+      "2026-01-01T00:00:01.000Z",
+      tenantId,
+      middle.approval_id,
+    ]);
+    await db!.run("UPDATE approvals SET created_at = ? WHERE tenant_id = ? AND approval_id = ?", [
+      "2026-01-01T00:00:02.000Z",
+      tenantId,
+      newest.approval_id,
+    ]);
+
+    const queued = await dal.getByStatus({ tenantId, status: "queued" });
+    expect(queued.map((approval) => approval.prompt)).toEqual(["Oldest", "Middle", "Newest"]);
+  });
+
+  it("lists pending human approvals oldest first without returning reviewing rows", async () => {
+    const dal = createDal();
+    const queued = await createApproval(dal, {
+      approvalKey: `approval:${randomUUID()}`,
+      prompt: "Queued",
+      status: "queued",
+    });
+    const reviewing = await createApproval(dal, {
+      approvalKey: `approval:${randomUUID()}`,
+      prompt: "Reviewing",
+      status: "reviewing",
+    });
+    const awaitingHuman = await createApproval(dal, {
+      approvalKey: `approval:${randomUUID()}`,
+      prompt: "Awaiting human",
+      status: "awaiting_human",
+    });
+
+    await db!.run("UPDATE approvals SET created_at = ? WHERE tenant_id = ? AND approval_id = ?", [
+      "2026-01-01T00:00:00.000Z",
+      tenantId,
+      queued.approval_id,
+    ]);
+    await db!.run("UPDATE approvals SET created_at = ? WHERE tenant_id = ? AND approval_id = ?", [
+      "2026-01-01T00:00:01.000Z",
+      tenantId,
+      reviewing.approval_id,
+    ]);
+    await db!.run("UPDATE approvals SET created_at = ? WHERE tenant_id = ? AND approval_id = ?", [
+      "2026-01-01T00:00:02.000Z",
+      tenantId,
+      awaitingHuman.approval_id,
+    ]);
+
+    const pending = await dal.getPending({ tenantId });
+    expect(pending.map((approval) => approval.prompt)).toEqual(["Queued", "Awaiting human"]);
+  });
+
   it("expires stale blocked approvals", async () => {
     const dal = createDal();
     const created = await createApproval(dal, {

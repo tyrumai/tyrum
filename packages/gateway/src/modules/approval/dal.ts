@@ -9,15 +9,17 @@ import {
   type ReviewerKind,
 } from "../review/dal.js";
 import { ApprovalEngineActionDal } from "./engine-action-dal.js";
+import {
+  type ApprovalStatus,
+  approvalNeedsHumanDecision,
+  isApprovalBlockedStatus,
+  isApprovalTerminalStatus,
+  normalizeApprovalKind,
+  normalizeApprovalStatus,
+} from "./status.js";
 
-export type ApprovalStatus =
-  | "queued"
-  | "reviewing"
-  | "awaiting_human"
-  | "approved"
-  | "denied"
-  | "expired"
-  | "cancelled";
+export type { ApprovalStatus } from "./status.js";
+export { approvalNeedsHumanDecision, isApprovalBlockedStatus, isApprovalTerminalStatus };
 
 export interface ApprovalRow {
   tenant_id: string;
@@ -103,50 +105,6 @@ function parseJsonOrEmpty(raw: string | null): unknown {
   }
 }
 
-function normalizeStatus(raw: string): ApprovalStatus {
-  if (
-    raw === "queued" ||
-    raw === "reviewing" ||
-    raw === "awaiting_human" ||
-    raw === "approved" ||
-    raw === "denied" ||
-    raw === "expired" ||
-    raw === "cancelled"
-  ) {
-    return raw;
-  }
-  return "awaiting_human";
-}
-
-function normalizeKind(raw: string): ApprovalKindT {
-  if (
-    raw === "workflow_step" ||
-    raw === "intent" ||
-    raw === "retry" ||
-    raw === "policy" ||
-    raw === "budget" ||
-    raw === "takeover" ||
-    raw === "connector.send"
-  ) {
-    return raw;
-  }
-  return "policy";
-}
-
-export function isApprovalBlockedStatus(status: ApprovalStatus): boolean {
-  return status === "queued" || status === "reviewing" || status === "awaiting_human";
-}
-
-export function approvalNeedsHumanDecision(status: ApprovalStatus): boolean {
-  return status === "awaiting_human";
-}
-
-export function isApprovalTerminalStatus(status: ApprovalStatus): boolean {
-  return (
-    status === "approved" || status === "denied" || status === "expired" || status === "cancelled"
-  );
-}
-
 export class ApprovalDal {
   constructor(private readonly db: SqlDb) {}
 
@@ -181,8 +139,8 @@ export class ApprovalDal {
       approval_key: raw.approval_key,
       agent_id: raw.agent_id,
       workspace_id: raw.workspace_id,
-      kind: normalizeKind(raw.kind),
-      status: normalizeStatus(raw.status),
+      kind: normalizeApprovalKind(raw.kind),
+      status: normalizeApprovalStatus(raw.status),
       prompt: raw.prompt,
       motivation: raw.motivation,
       context: parseJsonOrEmpty(raw.context_json),
@@ -315,8 +273,20 @@ export class ApprovalDal {
       `SELECT *
        FROM approvals
        WHERE tenant_id = ? AND status = ?
-       ORDER BY created_at DESC`,
+       ORDER BY created_at ASC, approval_id ASC`,
       [input.tenantId.trim(), input.status],
+    );
+    return await Promise.all(rows.map((row) => this.hydrate(row)));
+  }
+
+  async getPending(input: { tenantId: string }): Promise<ApprovalRow[]> {
+    const rows = await this.db.all<RawApprovalRow>(
+      `SELECT *
+       FROM approvals
+       WHERE tenant_id = ?
+         AND status IN ('queued', 'awaiting_human')
+       ORDER BY created_at ASC, approval_id ASC`,
+      [input.tenantId.trim()],
     );
     return await Promise.all(rows.map((row) => this.hydrate(row)));
   }
@@ -373,7 +343,7 @@ export class ApprovalDal {
       });
       if (!current) return undefined;
 
-      const currentStatus = normalizeStatus(current.status);
+      const currentStatus = normalizeApprovalStatus(current.status);
       if (
         input.allowedCurrentStatuses &&
         !input.allowedCurrentStatuses.includes(currentStatus) &&
@@ -465,6 +435,21 @@ export class ApprovalDal {
       }
       return transitioned;
     });
+  }
+
+  async respond(input: {
+    tenantId: string;
+    approvalId: string;
+    decision: "approved" | "denied";
+    reason?: string;
+    reviewerKind?: ReviewerKind;
+    reviewerId?: string | null;
+  }): Promise<ApprovalRow | undefined> {
+    const resolved = await this.resolveWithEngineAction({
+      ...input,
+      allowedCurrentStatuses: ["queued", "awaiting_human"],
+    });
+    return resolved?.approval;
   }
 
   async expireById(input: {

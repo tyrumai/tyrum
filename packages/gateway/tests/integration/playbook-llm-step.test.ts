@@ -223,7 +223,7 @@ describe("Playbook LLM step executor", () => {
       "SELECT prompt, status FROM approvals WHERE run_id = ? ORDER BY created_at DESC LIMIT 1",
       [runId],
     );
-    expect(approval?.status).toBe("pending");
+    expect(approval?.status).toBe("queued");
     expect(approval?.prompt ?? "").toContain("bash");
   });
 
@@ -318,7 +318,7 @@ describe("Playbook LLM step executor", () => {
       "SELECT prompt, status FROM approvals WHERE run_id = ? ORDER BY created_at DESC LIMIT 1",
       [runId],
     );
-    expect(approval?.status).toBe("pending");
+    expect(approval?.status).toBe("queued");
     expect(approval?.prompt ?? "").toContain("webfetch");
   });
 

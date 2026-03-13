@@ -82,7 +82,6 @@ export async function turnDirect(
     contextReport,
     systemPrompt,
     resolved,
-    turnMemoryDecisionCollector,
     guardianReviewDecisionCollector,
   } = prepared;
 
@@ -109,7 +108,6 @@ export async function turnDirect(
       memoryWritten: memoryWriteState.wrote,
       contextReport,
       turnKind: params.turnKind,
-      turnMemoryDecisionCollector,
     });
     await maybeAutoCompactSession({
       deps,
@@ -327,7 +325,6 @@ export async function turnStreamDirect(
     contextReport,
     systemPrompt,
     resolved,
-    turnMemoryDecisionCollector,
     guardianReviewDecisionCollector,
   } = prepared;
 
@@ -437,7 +434,6 @@ export async function turnStreamDirect(
       memoryWritten: memoryWriteState.wrote,
       contextReport,
       turnKind: guardianReviewDecisionCollector ? "skip" : undefined,
-      turnMemoryDecisionCollector,
     });
     await maybeAutoCompactSession({
       deps,

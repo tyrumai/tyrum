@@ -42,6 +42,7 @@ const DEFAULT_TABLES = [
   // Automation + approvals
   "watchers",
   "watcher_firings",
+  "review_entries",
   "approvals",
   // Canvas
   "canvas_artifacts",
@@ -82,6 +83,7 @@ const IMPORT_ORDER = [
   "vector_metadata",
   "watchers",
   "watcher_firings",
+  "review_entries",
   "approvals",
   "canvas_artifacts",
   "policy_snapshots",

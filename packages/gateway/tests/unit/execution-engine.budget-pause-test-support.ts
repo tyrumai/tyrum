@@ -36,7 +36,7 @@ function registerBudgetTests(fixture: { db: () => SqliteDb }): void {
     expect(before?.started_at).toBe(startedAtIso);
     expect(await engine.workerTick({ workerId: "w1", executor })).toBe(true);
     const approval = await db.get<{ resume_token: string | null }>(
-      "SELECT resume_token FROM approvals WHERE tenant_id = ? AND status = 'pending' ORDER BY created_at ASC, approval_id ASC LIMIT 1",
+      "SELECT resume_token FROM approvals WHERE tenant_id = ? AND status = 'queued' ORDER BY created_at ASC, approval_id ASC LIMIT 1",
       [DEFAULT_TENANT_ID],
     );
     expect(approval?.resume_token).toBeTruthy();
@@ -103,7 +103,7 @@ function registerBudgetTests(fixture: { db: () => SqliteDb }): void {
       kind: string;
       resume_token: string | null;
     }>(
-      "SELECT approval_id, kind, resume_token FROM approvals WHERE tenant_id = ? AND status = 'pending' ORDER BY created_at ASC, approval_id ASC LIMIT 1",
+      "SELECT approval_id, kind, resume_token FROM approvals WHERE tenant_id = ? AND status = 'queued' ORDER BY created_at ASC, approval_id ASC LIMIT 1",
       [DEFAULT_TENANT_ID],
     );
     expect(approval?.kind).toBe("budget");
@@ -159,7 +159,7 @@ function registerBudgetTests(fixture: { db: () => SqliteDb }): void {
       kind: string;
       resume_token: string | null;
     }>(
-      "SELECT approval_id, kind, resume_token FROM approvals WHERE tenant_id = ? AND status = 'pending' ORDER BY created_at ASC, approval_id ASC LIMIT 1",
+      "SELECT approval_id, kind, resume_token FROM approvals WHERE tenant_id = ? AND status = 'queued' ORDER BY created_at ASC, approval_id ASC LIMIT 1",
       [DEFAULT_TENANT_ID],
     );
     expect(approval?.kind).toBe("budget");
@@ -242,7 +242,7 @@ function registerApprovalResumeTests(fixture: { db: () => SqliteDb }): void {
       [DEFAULT_TENANT_ID],
     );
     expect(approval?.kind).toBe("policy");
-    expect(approval?.status).toBe("pending");
+    expect(approval?.status).toBe("queued");
     expect(approval?.resume_token).toBeTruthy();
     const approvalOutbox = await db.all<{ payload_json: string }>(
       "SELECT payload_json FROM outbox WHERE topic = ? ORDER BY id ASC",
@@ -253,17 +253,10 @@ function registerApprovalResumeTests(fixture: { db: () => SqliteDb }): void {
         (row) =>
           JSON.parse(row.payload_json) as { message?: { type?: string }; audience?: unknown },
       )
-      .filter(
-        (row) =>
-          row.message?.type === "approval.requested" || row.message?.type === "approval.request",
-      );
+      .filter((row) => row.message?.type === "approval.updated");
     expect(approvalMessages).toEqual([
       expect.objectContaining({
-        message: expect.objectContaining({ type: "approval.requested" }),
-        audience: { roles: ["client"], required_scopes: ["operator.read", "operator.approvals"] },
-      }),
-      expect.objectContaining({
-        message: expect.objectContaining({ type: "approval.request" }),
+        message: expect.objectContaining({ type: "approval.updated" }),
         audience: { roles: ["client"], required_scopes: ["operator.approvals"] },
       }),
     ]);

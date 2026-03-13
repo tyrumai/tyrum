@@ -143,7 +143,7 @@ describe("ExecutionEngine intent guardrail scenarios (issues #632 / #599)", () =
       [runId],
     );
     expect(approval?.kind).toBe("intent");
-    expect(approval?.status).toBe("pending");
+    expect(approval?.status).toBe("queued");
 
     const artifact = await container.db.get<{ kind: string; body_md: string | null }>(
       "SELECT kind, body_md FROM work_artifacts WHERE work_item_id = ? AND kind = 'verification_report' ORDER BY created_at DESC LIMIT 1",
@@ -265,7 +265,7 @@ describe("ExecutionEngine intent guardrail scenarios (issues #632 / #599)", () =
       [runId],
     );
     expect(approval?.kind).toBe("policy");
-    expect(approval?.status).toBe("pending");
+    expect(approval?.status).toBe("queued");
 
     const decisionCount = await container.db.get<{ n: number }>(
       "SELECT COUNT(*) AS n FROM work_decisions WHERE work_item_id = ?",

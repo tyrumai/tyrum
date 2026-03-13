@@ -68,7 +68,7 @@ export function registerIntentGuardrailTests(fixture: { db: () => SqliteDb }): v
     expect(run?.status).toBe("paused");
     expect(run?.paused_reason).toBe("approval");
     const approval = await db.get<{ kind: string }>(
-      "SELECT kind FROM approvals WHERE tenant_id = ? AND status = 'pending' ORDER BY created_at ASC, approval_id ASC LIMIT 1",
+      "SELECT kind FROM approvals WHERE tenant_id = ? AND status = 'queued' ORDER BY created_at ASC, approval_id ASC LIMIT 1",
       [DEFAULT_TENANT_ID],
     );
     expect(approval?.kind).toBe("intent");
@@ -123,7 +123,7 @@ export function registerIntentGuardrailTests(fixture: { db: () => SqliteDb }): v
       kind: string;
       resume_token: string | null;
     }>(
-      "SELECT approval_id, kind, resume_token FROM approvals WHERE tenant_id = ? AND status = 'pending' ORDER BY created_at ASC, approval_id ASC LIMIT 1",
+      "SELECT approval_id, kind, resume_token FROM approvals WHERE tenant_id = ? AND status = 'queued' ORDER BY created_at ASC, approval_id ASC LIMIT 1",
       [DEFAULT_TENANT_ID],
     );
     expect(approval?.kind).toBe("intent");
@@ -207,7 +207,7 @@ export function registerIntentGuardrailTests(fixture: { db: () => SqliteDb }): v
       [DEFAULT_TENANT_ID, runId],
     );
     expect(approvalRow?.kind).toBe("intent");
-    expect(approvalRow?.status).toBe("pending");
+    expect(approvalRow?.status).toBe("queued");
   });
 
   it("pauses when ToolIntent intent_graph_sha256 does not match the current work item intent graph", async () => {
@@ -274,7 +274,7 @@ export function registerIntentGuardrailTests(fixture: { db: () => SqliteDb }): v
     expect(run?.status).toBe("paused");
     expect(run?.paused_reason).toBe("approval");
     const approval = await db.get<{ kind: string }>(
-      "SELECT kind FROM approvals WHERE tenant_id = ? AND run_id = ? AND status = 'pending' ORDER BY created_at ASC, approval_id ASC LIMIT 1",
+      "SELECT kind FROM approvals WHERE tenant_id = ? AND run_id = ? AND status = 'queued' ORDER BY created_at ASC, approval_id ASC LIMIT 1",
       [DEFAULT_TENANT_ID, runId],
     );
     expect(approval?.kind).toBe("intent");
@@ -359,7 +359,7 @@ export function registerIntentGuardrailTests(fixture: { db: () => SqliteDb }): v
     );
     expect(run?.status).toBe("succeeded");
     const pendingApprovals = await db.get<{ n: number }>(
-      "SELECT COUNT(*) AS n FROM approvals WHERE tenant_id = ? AND run_id = ? AND status = 'pending'",
+      "SELECT COUNT(*) AS n FROM approvals WHERE tenant_id = ? AND run_id = ? AND status = 'queued'",
       [DEFAULT_TENANT_ID, runId],
     );
     expect(pendingApprovals?.n).toBe(0);

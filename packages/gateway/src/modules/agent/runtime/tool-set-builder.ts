@@ -3,7 +3,6 @@ import type { ToolDescriptor } from "../tools.js";
 import type { ToolExecutor } from "../tool-executor.js";
 import { resolvePolicyGatedPluginToolExposure } from "./plugin-tool-policy.js";
 import type { AgentContextReport } from "./types.js";
-import type { TurnMemoryDecisionCollector } from "./turn-memory-policy.js";
 import type { LaneQueueState } from "./turn-engine-bridge.js";
 import type { GuardianReviewDecisionCollector } from "../../review/guardian-review-mode.js";
 import type {
@@ -28,7 +27,6 @@ export class ToolSetBuilder {
     toolCallPolicyStates?: Map<string, ToolCallPolicyState>,
     model?: LanguageModel,
     memoryWriteState?: { wrote: boolean },
-    turnMemoryDecisionCollector?: TurnMemoryDecisionCollector,
     guardianReviewDecisionCollector?: GuardianReviewDecisionCollector,
   ): ToolSet {
     return buildRuntimeToolSet({
@@ -42,7 +40,6 @@ export class ToolSetBuilder {
       laneQueue,
       toolCallPolicyStates,
       model,
-      turnMemoryDecisionCollector,
       guardianReviewDecisionCollector,
     });
   }

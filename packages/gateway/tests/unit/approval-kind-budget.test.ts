@@ -29,10 +29,36 @@ describe("approval kind normalization", () => {
       approvalKey: `approval:${randomUUID()}`,
       kind: "budget",
       prompt: "Budget exceeded — continue?",
+      motivation: "Budget approvals should round-trip through the public contract.",
     });
 
     const contract = toApprovalContract(row);
     expect(contract?.kind).toBe("budget");
+  });
+
+  it("restores scope key and lane from approval context", async () => {
+    db = openTestSqliteDb();
+    const approvalDal = new ApprovalDal(db);
+
+    const row = await approvalDal.create({
+      tenantId: DEFAULT_TENANT_ID,
+      agentId: DEFAULT_AGENT_ID,
+      workspaceId: DEFAULT_WORKSPACE_ID,
+      approvalKey: `approval:${randomUUID()}`,
+      kind: "policy",
+      prompt: "Restore scope metadata",
+      motivation: "Context scope metadata should survive public serialization.",
+      context: {
+        key: "agent:default:main",
+        lane: "main",
+      },
+    });
+
+    const contract = toApprovalContract(row);
+    expect(contract?.scope).toEqual({
+      key: "agent:default:main",
+      lane: "main",
+    });
   });
 
   it("allows writing cancelled status in the database", async () => {
@@ -44,7 +70,9 @@ describe("approval kind normalization", () => {
       agentId: DEFAULT_AGENT_ID,
       workspaceId: DEFAULT_WORKSPACE_ID,
       approvalKey: `approval:${randomUUID()}`,
+      kind: "policy",
       prompt: "Cancel me",
+      motivation: "Cancelled approvals should remain writable in the database.",
     });
 
     await expect(

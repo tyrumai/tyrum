@@ -210,7 +210,7 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
 
     const pending = await waitForPendingApproval(container);
     expect(pending.prompt).toContain("bash");
-    expect(pending.status).toBe("pending");
+    expect(pending.status).toBe("queued");
 
     let resumed = false;
     const expiryTimer = setInterval(() => {
@@ -295,7 +295,7 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
 
     const pending = await waitForPendingApproval(container);
     expect(pending.prompt).toContain("bash");
-    expect(pending.status).toBe("pending");
+    expect(pending.status).toBe("queued");
 
     await container.approvalDal.respond({
       tenantId: DEFAULT_TENANT_ID,
