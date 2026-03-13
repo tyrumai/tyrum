@@ -44,6 +44,25 @@ describe("Textarea", () => {
     cleanupTestRoot({ container, root });
   });
 
+  it("limits transitions to border and ring styles", () => {
+    const Textarea = (operatorUi as Record<string, unknown>)["Textarea"];
+    expect(Textarea).toBeDefined();
+
+    const { container, root } = renderIntoDocument(
+      React.createElement(Textarea as React.ComponentType, {
+        id: "focus-target",
+        label: "Focus target",
+      }),
+    );
+
+    const textarea = container.querySelector<HTMLTextAreaElement>("textarea#focus-target");
+    expect(textarea).not.toBeNull();
+    expect(textarea?.className).toContain("transition-[border-color,box-shadow]");
+    expect(textarea?.className).not.toContain("transition-colors");
+
+    cleanupTestRoot({ container, root });
+  });
+
   it("renders helper text when error is an empty string", () => {
     const Textarea = (operatorUi as Record<string, unknown>)["Textarea"];
     expect(Textarea).toBeDefined();

@@ -35,7 +35,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
             aria-invalid={error ? "true" : undefined}
             aria-describedby={describedById}
             className={cn(
-              "box-border flex h-8 w-full rounded-lg border border-border bg-bg px-2.5 py-1 text-sm text-fg transition-colors duration-150",
+              "box-border flex h-8 w-full rounded-lg border border-border bg-bg px-2.5 py-1 text-sm text-fg transition-[border-color,box-shadow] duration-150",
               "placeholder:text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-0",
               "disabled:cursor-not-allowed disabled:opacity-50",
               error ? "border-error focus-visible:ring-error" : null,

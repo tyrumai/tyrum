@@ -292,7 +292,7 @@ export function ChatConversationPanel({
               }
             }}
             placeholder="Send a message…"
-            className="min-h-[44px] flex-1 resize-none rounded-lg border border-border bg-bg px-2.5 py-2 text-sm text-fg outline-none transition focus:border-focus-ring"
+            className="min-h-[44px] flex-1 resize-none rounded-lg border border-border bg-bg px-2.5 py-2 text-sm text-fg outline-none transition-[border-color,box-shadow] duration-150 focus:border-focus-ring"
           />
           <Button
             className="h-[44px] rounded-lg px-4"
