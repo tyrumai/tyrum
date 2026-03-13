@@ -47,6 +47,7 @@
       "svgo": "3.3.3",
       "tar": "7.5.11",
       "tmp": ">=0.2.4",
+      "yauzl": "3.2.1",
       "url-loader>schema-utils": "4.3.3",
       "usocket>node-gyp": "11.5.0"
     },
@@ -55,6 +56,7 @@
       "better-sqlite3@12.6.2": "patches/better-sqlite3@12.6.2.patch",
       "dmg-license@1.0.11": "patches/dmg-license@1.0.11.patch",
       "file-type@16.5.4": "patches/file-type@16.5.4.patch",
+      "native-run@2.0.3": "patches/native-run@2.0.3.patch",
       "usocket@0.3.0": "patches/usocket@0.3.0.patch"
     },
     "allowUnusedPatches": true,

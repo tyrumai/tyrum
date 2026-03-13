@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const generateTextMock = vi.hoisted(() => vi.fn());
+const streamTextMock = vi.hoisted(() => vi.fn());
 const prepareTurnMock = vi.hoisted(() => vi.fn());
 const finalizeTurnMock = vi.hoisted(() => vi.fn());
 const compactForOverflowMock = vi.hoisted(() => vi.fn());
@@ -11,6 +12,7 @@ vi.mock("ai", async (importOriginal) => {
   return {
     ...actual,
     generateText: generateTextMock,
+    streamText: streamTextMock,
   };
 });
 
@@ -164,6 +166,7 @@ function sampleDeps() {
 describe("turnDirect overflow retry", () => {
   beforeEach(() => {
     generateTextMock.mockReset();
+    streamTextMock.mockReset();
     prepareTurnMock.mockReset();
     finalizeTurnMock.mockReset();
     compactForOverflowMock.mockReset();
@@ -208,5 +211,34 @@ describe("turnDirect overflow retry", () => {
     expect(compactForOverflowMock).toHaveBeenCalledOnce();
     expect(generateTextMock).toHaveBeenCalledTimes(2);
     expect(result.response).toEqual({ reply: "ok" });
+  });
+});
+
+describe("turnStreamDirect overflow handling", () => {
+  beforeEach(() => {
+    streamTextMock.mockReset();
+    prepareTurnMock.mockReset();
+    finalizeTurnMock.mockReset();
+    compactForOverflowMock.mockReset();
+    maybeAutoCompactSessionMock.mockReset();
+  });
+
+  it("compacts and rethrows when stream finalization hits context overflow", async () => {
+    prepareTurnMock.mockResolvedValue(samplePreparedTurn(new Set()));
+    const overflow = new Error("This model's maximum context length is 128000 tokens.");
+    const rejected = Promise.reject(overflow);
+    rejected.catch(() => undefined);
+    streamTextMock.mockReturnValue(rejected as never);
+
+    const { turnStreamDirect } = await import("../../src/modules/agent/runtime/turn-direct.js");
+    const result = await turnStreamDirect(sampleDeps(), {
+      channel: "ui",
+      thread_id: "thread-1",
+      message: "hello",
+    } as never);
+
+    await expect(result.finalize()).rejects.toThrow(/maximum context length/);
+    expect(compactForOverflowMock).toHaveBeenCalledOnce();
+    expect(finalizeTurnMock).not.toHaveBeenCalled();
   });
 });

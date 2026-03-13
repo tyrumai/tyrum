@@ -21,6 +21,7 @@ overrides:
   svgo: 3.3.3
   tar: 7.5.11
   tmp: '>=0.2.4'
+  yauzl: 3.2.1
   url-loader>schema-utils: 4.3.3
   usocket>node-gyp: 11.5.0
 
@@ -37,6 +38,9 @@ patchedDependencies:
   file-type@16.5.4:
     hash: 0d09dc6d3110dbc84a8478ef36ae203aa4e2d52b69db53c77abe527907b62cc8
     path: patches/file-type@16.5.4.patch
+  native-run@2.0.3:
+    hash: 6cc8df39bcf500935900ca3d102613b5e8c1d1508bfe4a828ce77a2f049de5ad
+    path: patches/native-run@2.0.3.patch
   usocket@0.3.0:
     hash: 350501ab4a37805654ff8b4c3af9735d12894fc93b7aa26f58b7813486af5f2f
     path: patches/usocket@0.3.0.patch
@@ -508,7 +512,7 @@ importers:
         specifier: ^2.8.2
         version: 2.8.2
       yauzl:
-        specifier: ^3.2.1
+        specifier: 3.2.1
         version: 3.2.1
       zod:
         specifier: ^4.3.6
@@ -6990,9 +6994,6 @@ packages:
     resolution: {integrity: sha512-CzbClwlXAuiRQAlUyfqPgvPoNKTckTPGfwZV4ZdAhVcP2lh9KUxJg2b5GkE7XbjKQ3YJnQ9z6D9ntLAlB+tP8g==}
     engines: {node: '>=0.8.0'}
 
-  fd-slicer@1.1.0:
-    resolution: {integrity: sha512-cE1qsB/VwyQozZ+q1dGxR8LBYNZeofhEdUNGSMbQD3Gw2lAzX9Zb3uIU6Ebc/Fmyjo9AWWfnn0AUCHqtevs/8g==}
-
   fdir@6.5.0:
     resolution: {integrity: sha512-tIbYtZbucOs0BRGqPJkshJUYdL+SDH7dVM8gjy+ERp3WAUjLEFJE+02kanyHtwjWOnwrKYBiwAmM0p4kLJAnXg==}
     engines: {node: '>=12.0.0'}
@@ -11521,9 +11522,6 @@ packages:
     resolution: {integrity: sha512-7dSzzRQ++CKnNI/krKnYRV7JKKPUXMEh61soaHKg9mrWEhzFWhFnxPxGl+69cD1Ou63C13NUPCnmIcrvqCuM6w==}
     engines: {node: '>=12'}
 
-  yauzl@2.10.0:
-    resolution: {integrity: sha512-p4a9I6X6nu6IhoGmBqAcbJy1mlC4j27vEPZX9F4L4/vZT3Lyq1VkFHw/V/PUcB9Buo+DG3iHkT0x3Qya58zc3g==}
-
   yauzl@3.2.1:
     resolution: {integrity: sha512-k1isifdbpNSFEHFJ1ZY4YDewv0IH9FR61lDetaRMD3j2ae3bIXGV+7c+LHCqtQGofSd8PIyV4X6+dHMAnSr60A==}
     engines: {node: '>=12'}
@@ -13178,7 +13176,7 @@ snapshots:
       env-paths: 2.2.1
       fs-extra: 11.3.4
       kleur: 4.1.5
-      native-run: 2.0.3
+      native-run: 2.0.3(patch_hash=6cc8df39bcf500935900ca3d102613b5e8c1d1508bfe4a828ce77a2f049de5ad)
       open: 8.4.2
       plist: 3.1.0
       prompts: 2.4.2
@@ -20027,7 +20025,7 @@ snapshots:
     dependencies:
       debug: 4.4.3
       get-stream: 5.2.0
-      yauzl: 2.10.0
+      yauzl: 3.2.1
     optionalDependencies:
       '@types/yauzl': 2.10.3
     transitivePeerDependencies:
@@ -20064,10 +20062,6 @@ snapshots:
   faye-websocket@0.11.4:
     dependencies:
       websocket-driver: 0.7.4
-
-  fd-slicer@1.1.0:
-    dependencies:
-      pend: 1.2.0
 
   fdir@6.5.0(picomatch@4.0.3):
     optionalDependencies:
@@ -22172,7 +22166,7 @@ snapshots:
 
   napi-build-utils@2.0.0: {}
 
-  native-run@2.0.3:
+  native-run@2.0.3(patch_hash=6cc8df39bcf500935900ca3d102613b5e8c1d1508bfe4a828ce77a2f049de5ad):
     dependencies:
       '@ionic/utils-fs': 3.1.7
       '@ionic/utils-terminal': 2.3.5
@@ -22184,7 +22178,7 @@ snapshots:
       split2: 4.2.0
       through2: 4.0.2
       tslib: 2.8.1
-      yauzl: 2.10.0
+      yauzl: 3.2.1
     transitivePeerDependencies:
       - supports-color
 
@@ -25242,11 +25236,6 @@ snapshots:
       string-width: 4.2.3
       y18n: 5.0.8
       yargs-parser: 21.1.1
-
-  yauzl@2.10.0:
-    dependencies:
-      buffer-crc32: 0.2.13
-      fd-slicer: 1.1.0
 
   yauzl@3.2.1:
     dependencies:

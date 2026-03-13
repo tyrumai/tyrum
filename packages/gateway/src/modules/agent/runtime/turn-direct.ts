@@ -471,27 +471,53 @@ export async function turnStreamDirect(
         threadId: resolved.thread_id,
       });
 
-  const streamResult = streamText({
-    model,
-    system: systemPrompt,
-    messages: applyDeterministicContextCompactionAndToolPruning(
-      [
-        ...(await sessionMessagesToModelMessages(
-          buildPromptVisibleMessages(activeSession.messages, activeSession.context_state),
-        )),
-        { role: "user" as const, content: promptUserContent },
-      ],
-      ctx.config.sessions.context_pruning,
-    ),
-    tools: toolSet,
-    toolChoice: guardianReviewTurnControl?.toolChoice,
-    stopWhen: withinTurn.stopWhen,
-    prepareStep: ({ messages: stepMessages }) =>
-      prepareLaneQueueStep(laneQueue, stepMessages, ctx.config.sessions.context_pruning),
-  });
+  let streamResult: ReturnType<typeof streamText>;
+  try {
+    streamResult = streamText({
+      model,
+      system: systemPrompt,
+      messages: applyDeterministicContextCompactionAndToolPruning(
+        [
+          ...(await sessionMessagesToModelMessages(
+            buildPromptVisibleMessages(activeSession.messages, activeSession.context_state),
+          )),
+          { role: "user" as const, content: promptUserContent },
+        ],
+        ctx.config.sessions.context_pruning,
+      ),
+      tools: toolSet,
+      toolChoice: guardianReviewTurnControl?.toolChoice,
+      stopWhen: withinTurn.stopWhen,
+      prepareStep: ({ messages: stepMessages }) =>
+        prepareLaneQueueStep(laneQueue, stepMessages, ctx.config.sessions.context_pruning),
+    });
+  } catch (error) {
+    if (isContextOverflowError(error)) {
+      await compactForOverflow({
+        deps,
+        ctx,
+        session: activeSession,
+        model,
+      });
+    }
+    throw error;
+  }
 
   const finalize = async (): Promise<AgentTurnResponseT> => {
-    const result = await streamResult;
+    let result: Awaited<typeof streamResult>;
+    try {
+      result = await streamResult;
+    } catch (error) {
+      if (isContextOverflowError(error)) {
+        await compactForOverflow({
+          deps,
+          ctx,
+          session: activeSession,
+          model,
+        });
+      }
+      throw error;
+    }
     const rawReply = (await result.text) || "";
     const automation = resolveAutomationMetadata(resolved.metadata);
     const reply = resolveTurnReply(rawReply, withinTurn.withinTurnLoop.value, {
