@@ -110,7 +110,7 @@ function rowToRevision(
   row: RawAgentConfigRow,
   parsed: ReturnType<typeof parseAgentConfigOrThrow> = parseAgentConfigOrThrow(row),
 ): AgentConfigRevision {
-  const configSha256 = createHash("sha256").update(row.config_json).digest("hex");
+  const configSha256 = createHash("sha256").update(JSON.stringify(parsed.config)).digest("hex");
   return {
     revision: row.revision,
     tenantId: row.tenant_id,

@@ -23,6 +23,10 @@ type PreTurnHydrationResult = {
   };
 };
 
+function formatPreTurnHydrationError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return undefined;
@@ -133,54 +137,63 @@ export async function runPreTurnHydration(params: {
       continue;
     }
 
-    const toolCallId = `preturn-${randomUUID()}`;
-    const policyState = await policyRuntime.resolveToolCallPolicyState({
-      toolDesc: { ...tool, requires_confirmation: false },
-      toolCallId,
-      args,
-      inputProvenance: { source: "system", trusted: true },
-    });
-    if (policyState.shouldRequireApproval) {
+    try {
+      const toolCallId = `preturn-${randomUUID()}`;
+      const policyState = await policyRuntime.resolveToolCallPolicyState({
+        toolDesc: { ...tool, requires_confirmation: false },
+        toolCallId,
+        args,
+        inputProvenance: { source: "system", trusted: true },
+      });
+      if (policyState.shouldRequireApproval) {
+        reports.push({
+          tool_id: tool.id,
+          status: "skipped",
+          injected_chars: 0,
+          error: "policy requires approval",
+        });
+        continue;
+      }
+
+      const result = await params.toolExecutor.execute(tool.id, toolCallId, args, {
+        agent_id: params.session.agent_id,
+        workspace_id: params.session.workspace_id,
+        session_id: params.session.session_id,
+        channel: params.resolved.channel,
+        thread_id: params.resolved.thread_id,
+      });
+
+      if (result.error) {
+        reports.push({
+          tool_id: tool.id,
+          status: "failed",
+          injected_chars: 0,
+          error: result.error,
+        });
+        continue;
+      }
+
+      const text = `Pre-turn context (${tool.id}):\n${result.output}`;
+      sections.push({ toolId: tool.id, text });
       reports.push({
         tool_id: tool.id,
-        status: "skipped",
-        injected_chars: 0,
-        error: "policy requires approval",
+        status: "succeeded",
+        injected_chars: text.length,
       });
-      continue;
-    }
 
-    const result = await params.toolExecutor.execute(tool.id, toolCallId, args, {
-      agent_id: params.session.agent_id,
-      workspace_id: params.session.workspace_id,
-      session_id: params.session.session_id,
-      channel: params.resolved.channel,
-      thread_id: params.resolved.thread_id,
-    });
-
-    if (result.error) {
+      if (result.meta?.kind === "memory.seed") {
+        memory.keyword_hits += result.meta.keyword_hit_count;
+        memory.semantic_hits += result.meta.semantic_hit_count;
+        memory.structured_hits += result.meta.structured_item_count;
+        memory.included_items += result.meta.included_item_ids.length;
+      }
+    } catch (error) {
       reports.push({
         tool_id: tool.id,
         status: "failed",
         injected_chars: 0,
-        error: result.error,
+        error: formatPreTurnHydrationError(error),
       });
-      continue;
-    }
-
-    const text = `Pre-turn context (${tool.id}):\n${result.output}`;
-    sections.push({ toolId: tool.id, text });
-    reports.push({
-      tool_id: tool.id,
-      status: "succeeded",
-      injected_chars: text.length,
-    });
-
-    if (result.meta?.kind === "memory.seed") {
-      memory.keyword_hits += result.meta.keyword_hit_count;
-      memory.semantic_hits += result.meta.semantic_hit_count;
-      memory.structured_hits += result.meta.structured_item_count;
-      memory.included_items += result.meta.included_item_ids.length;
     }
   }
 

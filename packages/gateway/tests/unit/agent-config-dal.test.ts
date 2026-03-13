@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -110,6 +111,15 @@ describe("AgentConfigDal", () => {
         allow_sensitivities: ["public"],
         keyword: { enabled: false, limit: 25 },
       });
+      expect(original?.configSha256).toBe(
+        createHash("sha256").update(JSON.stringify(original?.config)).digest("hex"),
+      );
+
+      const revisions = await dal.listRevisions({ tenantId, agentId, limit: 5 });
+      const legacyRevision = revisions.find((revision) => revision.revision === 1);
+      expect(legacyRevision?.configSha256).toBe(
+        createHash("sha256").update(JSON.stringify(legacyRevision?.config)).digest("hex"),
+      );
     } finally {
       await container.db.close();
     }
