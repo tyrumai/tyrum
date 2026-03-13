@@ -15,13 +15,7 @@ vi.mock("@tyrum/operator-core/browser", () => ({
 }));
 
 vi.mock("@tyrum/operator-ui", () => ({
-  ADMIN_ACCESS_SCOPES: [
-    "operator.read",
-    "operator.write",
-    "operator.approvals",
-    "operator.pairing",
-    "operator.admin",
-  ],
+  ADMIN_ACCESS_SCOPES: ["operator.approvals", "operator.pairing", "operator.admin"],
   createAdminAccessController: vi.fn(() => ({
     enter: vi.fn(async () => {}),
     exit: vi.fn(async () => {}),

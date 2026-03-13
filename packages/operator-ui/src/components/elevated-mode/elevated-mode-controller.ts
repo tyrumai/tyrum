@@ -1,8 +1,6 @@
 import type { ElevatedModeStore, OperatorHttpClient } from "@tyrum/operator-core";
 
 export const ELEVATED_MODE_SCOPES = [
-  "operator.read",
-  "operator.write",
   "operator.approvals",
   "operator.pairing",
   "operator.admin",

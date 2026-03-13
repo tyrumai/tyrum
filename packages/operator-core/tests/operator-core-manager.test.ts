@@ -45,17 +45,11 @@ describe("createOperatorCoreManager", () => {
     elevatedModeStore.dispose();
   });
 
-  it("recreates the core when elevated mode enters or exits and reconnects active sessions", () => {
+  it("keeps the same core instance when elevated mode enters or exits", () => {
     const elevatedModeStore = createElevatedModeStore({ tickIntervalMs: 0 });
     const baselineAuth = createBearerTokenAuth("baseline");
     const baselineCore = createFakeCore("connected");
-    const elevatedCore = createFakeCore("connected");
-    const restoredCore = createFakeCore();
-    const createCore = vi
-      .fn()
-      .mockReturnValueOnce(baselineCore as never)
-      .mockReturnValueOnce(elevatedCore as never)
-      .mockReturnValueOnce(restoredCore as never);
+    const createCore = vi.fn().mockReturnValue(baselineCore as never);
 
     const manager = createOperatorCoreManager({
       wsUrl: "ws://example",
@@ -73,49 +67,31 @@ describe("createOperatorCoreManager", () => {
       expiresAt: new Date(Date.now() + 60_000).toISOString(),
     });
 
-    expect(createCore).toHaveBeenCalledTimes(2);
-    expect(createCore).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        auth: createBearerTokenAuth("elevated"),
-        elevatedModeStore,
-      }),
-    );
-    expect(manager.getCore()).toBe(elevatedCore);
-    expect(baselineCore.dispose).toHaveBeenCalledTimes(1);
-    expect(elevatedCore.connect).toHaveBeenCalledTimes(1);
-    expect(listener).toHaveBeenCalledTimes(1);
+    expect(createCore).toHaveBeenCalledTimes(1);
+    expect(manager.getCore()).toBe(baselineCore);
+    expect(baselineCore.dispose).not.toHaveBeenCalled();
+    expect(baselineCore.connect).not.toHaveBeenCalled();
+    expect(listener).not.toHaveBeenCalled();
 
     elevatedModeStore.exit();
 
-    expect(createCore).toHaveBeenCalledTimes(3);
-    expect(createCore).toHaveBeenNthCalledWith(
-      3,
-      expect.objectContaining({
-        auth: baselineAuth,
-        elevatedModeStore,
-      }),
-    );
-    expect(manager.getCore()).toBe(restoredCore);
-    expect(elevatedCore.dispose).toHaveBeenCalledTimes(1);
-    expect(restoredCore.connect).toHaveBeenCalledTimes(1);
-    expect(listener).toHaveBeenCalledTimes(2);
+    expect(createCore).toHaveBeenCalledTimes(1);
+    expect(manager.getCore()).toBe(baselineCore);
+    expect(listener).not.toHaveBeenCalled();
 
     unsubscribe();
     manager.dispose();
-    expect(restoredCore.dispose).toHaveBeenCalledTimes(1);
+    expect(baselineCore.dispose).toHaveBeenCalledTimes(1);
     elevatedModeStore.dispose();
   });
 
-  it("switches browser-cookie baselines to the elevated bearer token when admin mode activates", () => {
+  it("keeps browser-cookie baselines on the original auth when admin mode activates", () => {
     const elevatedModeStore = createElevatedModeStore({ tickIntervalMs: 0 });
     const baselineAuth = createBrowserCookieAuth({ credentials: "include" });
     const baselineCore = createFakeCore();
-    const elevatedCore = createFakeCore();
     const createCore = vi
       .fn<(input: { auth: OperatorAuthStrategy }) => never>()
-      .mockReturnValueOnce(baselineCore as never)
-      .mockReturnValueOnce(elevatedCore as never);
+      .mockReturnValue(baselineCore as never);
 
     const manager = createOperatorCoreManager({
       wsUrl: "ws://example",
@@ -137,14 +113,8 @@ describe("createOperatorCoreManager", () => {
       expiresAt: new Date(Date.now() + 60_000).toISOString(),
     });
 
-    expect(createCore).toHaveBeenCalledTimes(2);
-    expect(createCore).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        auth: createBearerTokenAuth("elevated"),
-      }),
-    );
-    expect(manager.getCore()).toBe(elevatedCore);
+    expect(createCore).toHaveBeenCalledTimes(1);
+    expect(manager.getCore()).toBe(baselineCore);
 
     manager.dispose();
     elevatedModeStore.dispose();

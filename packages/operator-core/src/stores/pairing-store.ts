@@ -1,5 +1,6 @@
 import type { PairingListResponse, PairingMutateResponse } from "@tyrum/client";
 import type { OperatorHttpClient } from "../deps.js";
+import { ElevatedModeRequiredError } from "../elevated-mode.js";
 import { createStore, type ExternalStore } from "../store.js";
 import { beginRefresh, isRefreshActive, type RefreshRunState } from "./status-store.refresh-run.js";
 
@@ -30,6 +31,7 @@ export interface PairingStore extends ExternalStore<PairingState> {
 }
 
 type SetState<T> = (updater: (prev: T) => T) => void;
+type GetPrivilegedHttpClient = () => OperatorHttpClient | null;
 
 function upsertPairing(state: PairingState, pairing: Pairing): PairingState {
   const id = pairing.pairing_id;
@@ -122,17 +124,27 @@ async function refreshImpl(
 }
 
 async function mutatePairingImpl(
-  mutate: () => Promise<PairingMutateResponse>,
+  mutate: (http: OperatorHttpClient) => Promise<PairingMutateResponse>,
+  http: OperatorHttpClient,
+  getPrivilegedHttp: GetPrivilegedHttpClient | undefined,
   setState: SetState<PairingState>,
   refreshState: PairingRefreshState,
 ): Promise<Pairing> {
-  const result = await mutate();
+  const mutationHttp = getPrivilegedHttp?.();
+  if (getPrivilegedHttp && !mutationHttp) {
+    throw new ElevatedModeRequiredError("Authorize admin access to manage device pairings.");
+  }
+
+  const result = await mutate(mutationHttp ?? http);
   const pairing = pairingFromMutation(result);
   handlePairingUpsertImpl(setState, refreshState, pairing);
   return pairing;
 }
 
-export function createPairingStore(http: OperatorHttpClient): {
+export function createPairingStore(options: {
+  http: OperatorHttpClient;
+  getPrivilegedHttp?: GetPrivilegedHttpClient;
+}): {
   store: PairingStore;
   handlePairingUpsert: (pairing: Pairing) => void;
 } {
@@ -153,13 +165,31 @@ export function createPairingStore(http: OperatorHttpClient): {
   return {
     store: {
       ...store,
-      refresh: () => refreshImpl(http, setState, refreshState),
+      refresh: () => refreshImpl(options.http, setState, refreshState),
       approve: (pairingId, input) =>
-        mutatePairingImpl(() => http.pairings.approve(pairingId, input), setState, refreshState),
+        mutatePairingImpl(
+          (http) => http.pairings.approve(pairingId, input),
+          options.http,
+          options.getPrivilegedHttp,
+          setState,
+          refreshState,
+        ),
       deny: (pairingId, input) =>
-        mutatePairingImpl(() => http.pairings.deny(pairingId, input), setState, refreshState),
+        mutatePairingImpl(
+          (http) => http.pairings.deny(pairingId, input),
+          options.http,
+          options.getPrivilegedHttp,
+          setState,
+          refreshState,
+        ),
       revoke: (pairingId, input) =>
-        mutatePairingImpl(() => http.pairings.revoke(pairingId, input), setState, refreshState),
+        mutatePairingImpl(
+          (http) => http.pairings.revoke(pairingId, input),
+          options.http,
+          options.getPrivilegedHttp,
+          setState,
+          refreshState,
+        ),
     },
     handlePairingUpsert: (pairing) => handlePairingUpsertImpl(setState, refreshState, pairing),
   };

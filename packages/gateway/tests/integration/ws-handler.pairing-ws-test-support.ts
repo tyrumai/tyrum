@@ -157,6 +157,15 @@ function registerPairingRequestTests(ctx: TestContext): void {
       "pairing.requested",
     );
     expect(pairingEvt["type"]).toBe("pairing.requested");
+    const observerPairingEvt = await waitForJsonMessageMatching(
+      observer,
+      (msg) =>
+        msg["type"] === "pairing.requested" &&
+        Object.prototype.hasOwnProperty.call(msg, "event_id"),
+      5_000,
+      "observer.pairing.requested",
+    );
+    expect(observerPairingEvt["type"]).toBe("pairing.requested");
 
     const pairing = await container.nodePairingDal.getByNodeId(deviceId, DEFAULT_TENANT_ID);
     expect(pairing).toBeDefined();
@@ -201,8 +210,12 @@ function registerPairingRequestTests(ctx: TestContext): void {
       () => operatorMessages.some((msg) => msg["type"] === "pairing.resolved"),
       { description: "operator pairing.resolved event" },
     );
+    await waitForCondition(
+      () => observerMessages.some((msg) => msg["type"] === "pairing.resolved"),
+      { description: "observer pairing.resolved event" },
+    );
     await new Promise<void>((resolve) => setTimeout(resolve, 200));
-    expect(observerMessages.some((msg) => msg["type"] === "pairing.resolved")).toBe(false);
+    expect(observerMessages.some((msg) => msg["type"] === "pairing.resolved")).toBe(true);
     expect(nodeMessages.some((msg) => msg["type"] === "pairing.resolved")).toBe(false);
 
     stopHeartbeat();

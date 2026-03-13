@@ -319,7 +319,7 @@ describe("Approval routes (with DAL access)", () => {
     });
   });
 
-  it("broadcasts approval.resolved to approval-scoped operators but not read-only clients or nodes", async () => {
+  it("broadcasts approval.resolved to read-capable operator clients but not nodes", async () => {
     const approval = await container.approvalDal.create({
       ...approvalScope,
       approvalKey: "approval-test-node-audience",
@@ -391,7 +391,10 @@ describe("Approval routes (with DAL access)", () => {
     expect(JSON.parse(String(operatorWs.send.mock.calls[0]?.[0] ?? "{}"))).toMatchObject({
       type: "approval.resolved",
     });
-    expect(readOnlyWs.send).not.toHaveBeenCalled();
+    expect(readOnlyWs.send).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(String(readOnlyWs.send.mock.calls[0]?.[0] ?? "{}"))).toMatchObject({
+      type: "approval.resolved",
+    });
     expect(nodeWs.send).not.toHaveBeenCalled();
   });
 
@@ -502,7 +505,9 @@ describe("Approval routes (with DAL access)", () => {
     expect(
       policyAdminWs.send.mock.calls.map((call) => JSON.parse(String(call[0]))["type"]),
     ).toEqual(["policy_override.created"]);
-    expect(readOnlyWs.send).not.toHaveBeenCalled();
+    expect(readOnlyWs.send.mock.calls.map((call) => JSON.parse(String(call[0]))["type"])).toEqual([
+      "approval.resolved",
+    ]);
     expect(nodeWs.send).not.toHaveBeenCalled();
   });
 });

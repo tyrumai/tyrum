@@ -58,6 +58,10 @@ function isMethodScopedOperatorRoute(routePath: string): boolean {
   );
 }
 
+function isReadOnlyMethod(method: string): boolean {
+  return method === "GET" || method === "HEAD" || method === "OPTIONS";
+}
+
 export function resolveHttpRouteRequiredScopes(input: {
   method: string;
   routePath: string;
@@ -84,12 +88,12 @@ export function resolveHttpRouteRequiredScopes(input: {
 
   // Dedicated approval surface.
   if (matchesPathPrefixSegment(routePath, "/approvals")) {
-    return ["operator.approvals"];
+    return isReadOnlyMethod(method) ? ["operator.read"] : ["operator.approvals"];
   }
 
   // Pairing / device enrollment surface.
   if (matchesPathPrefixSegment(routePath, "/pairings")) {
-    return ["operator.pairing"];
+    return isReadOnlyMethod(method) ? ["operator.read"] : ["operator.pairing"];
   }
 
   if (!isMethodScopedOperatorRoute(routePath)) {
@@ -97,7 +101,7 @@ export function resolveHttpRouteRequiredScopes(input: {
   }
 
   // Default operator surface scopes by method.
-  if (method === "GET" || method === "HEAD" || method === "OPTIONS") {
+  if (isReadOnlyMethod(method)) {
     return ["operator.read"];
   }
   if (method === "POST" || method === "PUT" || method === "PATCH" || method === "DELETE") {

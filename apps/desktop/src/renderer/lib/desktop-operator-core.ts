@@ -6,6 +6,7 @@ import {
   createOperatorCore,
   createOperatorCoreManager,
   httpAuthForAuth,
+  isElevatedModeActive,
   type ElevatedModeStore,
   type OperatorCore,
   type OperatorCoreManager,
@@ -117,7 +118,22 @@ function createDesktopOperatorCoreManager({
         auth: coreOptions.auth,
         deviceIdentity,
         elevatedModeStore: coreOptions.elevatedModeStore,
-        deps: { http },
+        deps: {
+          http,
+          createPrivilegedHttp() {
+            const elevatedMode = coreOptions.elevatedModeStore.getSnapshot();
+            const token = elevatedMode.elevatedToken?.trim();
+            if (!isElevatedModeActive(elevatedMode) || !token) {
+              return null;
+            }
+
+            return createTyrumHttpClient({
+              baseUrl: coreOptions.httpBaseUrl,
+              auth: { type: "bearer", token },
+              fetch: ipcFetch,
+            });
+          },
+        },
       });
     },
   });
