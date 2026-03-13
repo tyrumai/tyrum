@@ -20,6 +20,7 @@ export interface PolicyConfigSectionProps {
   effective: PolicyEffectiveBundle | null;
   currentRevision: PolicyConfigDeployment | null;
   revisions: PolicyConfigRevision[];
+  configUnavailable: boolean;
   loadBusy: boolean;
   loadError: unknown;
   saveBusy: boolean;

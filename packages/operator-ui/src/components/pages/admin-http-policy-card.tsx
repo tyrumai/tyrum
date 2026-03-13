@@ -91,6 +91,23 @@ function loadOptionalAuxiliary<T>(loader: (() => Promise<T>) | undefined, fallba
     .catch(() => fallback);
 }
 
+async function loadOptionalPolicyConfig<T>(
+  loader: (() => Promise<T>) | undefined,
+  fallback: T,
+): Promise<{ value: T; unavailable: boolean }> {
+  if (!loader) {
+    return { value: fallback, unavailable: true };
+  }
+  try {
+    return { value: await loader(), unavailable: false };
+  } catch (error) {
+    if (isNotFoundError(error)) {
+      return { value: fallback, unavailable: true };
+    }
+    throw error;
+  }
+}
+
 export function AdminHttpPolicyCard({
   core,
   canMutate,
@@ -104,6 +121,7 @@ export function AdminHttpPolicyCard({
   const [effective, setEffective] = React.useState<PolicyEffectiveBundle | null>(null);
   const [currentRevision, setCurrentRevision] = React.useState<PolicyConfigDeployment | null>(null);
   const [revisions, setRevisions] = React.useState<PolicyConfigRevision[]>([]);
+  const [configUnavailable, setConfigUnavailable] = React.useState(false);
   const [overrides, setOverrides] = React.useState<PolicyOverrideRecord[]>([]);
   const [agents, setAgents] = React.useState<PolicyAgentOption[]>([]);
   const [tools, setTools] = React.useState<PolicyToolOption[]>([]);
@@ -140,18 +158,16 @@ export function AdminHttpPolicyCard({
         toolResult,
       ] = await Promise.all([
         http.policy.getBundle(),
-        http.policyConfig.getDeployment().catch((error) => {
-          if (isNotFoundError(error)) return null;
-          throw error;
-        }),
-        http.policyConfig.listDeploymentRevisions(),
+        loadOptionalPolicyConfig(http.policyConfig?.getDeployment, null),
+        loadOptionalPolicyConfig(http.policyConfig?.listDeploymentRevisions, { revisions: [] }),
         http.policy.listOverrides({ limit: 500 }),
         loadOptionalAuxiliary(http.agents?.list, { agents: [] }),
         loadOptionalAuxiliary(http.toolRegistry?.list, { status: "ok" as const, tools: [] }),
       ]);
       setEffective(effectiveResult.effective);
-      setCurrentRevision(revisionResult);
-      setRevisions(revisionsResult.revisions);
+      setCurrentRevision(revisionResult.value);
+      setRevisions(revisionsResult.value.revisions);
+      setConfigUnavailable(revisionResult.unavailable || revisionsResult.unavailable);
       setOverrides(overridesResult.overrides);
       setAgents(normalizeAgentOptions(agentResult.agents));
       setTools(normalizeToolOptions(toolResult.tools));
@@ -172,6 +188,7 @@ export function AdminHttpPolicyCard({
         effective={effective}
         currentRevision={currentRevision}
         revisions={revisions}
+        configUnavailable={configUnavailable}
         loadBusy={loadBusy}
         loadError={loadError}
         saveBusy={saveBusy}

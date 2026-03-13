@@ -92,6 +92,7 @@ export function OverviewCard(props: {
 
 export function RevisionHistoryCard(props: {
   revisions: PolicyConfigRevision[];
+  configUnavailable: boolean;
   busy: boolean;
   error: unknown;
   canMutate: boolean;
@@ -107,6 +108,13 @@ export function RevisionHistoryCard(props: {
         />
       </CardHeader>
       <CardContent className="grid gap-4">
+        {props.configUnavailable ? (
+          <Alert
+            variant="info"
+            title="Revision history unavailable"
+            description="This gateway is not exposing deployment policy revision routes, so this view is read-only."
+          />
+        ) : null}
         {props.error ? (
           <Alert
             variant="error"
@@ -114,7 +122,7 @@ export function RevisionHistoryCard(props: {
             description={formatErrorMessage(props.error)}
           />
         ) : null}
-        {!props.error && props.revisions.length === 0 ? (
+        {!props.configUnavailable && !props.error && props.revisions.length === 0 ? (
           <Alert
             variant="info"
             title="No saved revisions yet"

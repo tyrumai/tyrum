@@ -17,6 +17,7 @@ import {
 import {
   matchMutation,
   policyPageGetResponse,
+  policyPageWritableConfigGetResponse,
   requestUrl,
 } from "./admin-page.http.policy.test-support.js";
 
@@ -29,6 +30,8 @@ describe("ConfigurePage (HTTP) policy elevated mode prompts", () => {
   it("re-prompts for Elevated Mode if policy save is confirmed after elevated access expires", async () => {
     const { core } = createAdminHttpTestCore();
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const writableConfigResponse = policyPageWritableConfigGetResponse(input, init);
+      if (writableConfigResponse) return writableConfigResponse;
       const getResponse = policyPageGetResponse(input, init);
       if (getResponse) return getResponse;
       throw new Error(`Unexpected mutation request to ${requestUrl(input)}`);
@@ -76,9 +79,7 @@ describe("ConfigurePage (HTTP) policy elevated mode prompts", () => {
     expect(document.body.textContent).not.toContain("Policy save failed");
     expect(document.body.textContent).not.toContain("Action failed");
     expect(page.container.textContent).toContain("Unsaved changes ready");
-    expect(getByTestId<HTMLButtonElement>(page.container, "policy-config-save").disabled).toBe(
-      false,
-    );
+    expect(page.container.querySelector("[data-elevated-mode-guard]")).not.toBeNull();
     expect(getByTestId<HTMLInputElement>(page.container, "policy-config-save-reason").value).toBe(
       "Still pending approval",
     );
