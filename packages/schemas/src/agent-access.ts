@@ -121,6 +121,13 @@ export const AgentMcpConfig = z.preprocess(
       default_mode: AgentAccessDefaultMode.default("allow"),
       allow: z.array(z.string().trim().min(1)).default([]).overwrite(uniqueStringList),
       deny: z.array(z.string().trim().min(1)).default([]).overwrite(uniqueStringList),
+      pre_turn_tools: z
+        .array(z.string().trim().min(1))
+        .default([])
+        .overwrite(canonicalizeToolIdList),
+      server_settings: z.record(z.string().trim().min(1), z.record(z.string(), z.unknown())).default(
+        {},
+      ),
     })
     .superRefine(assertNoAccessOverlap),
 );

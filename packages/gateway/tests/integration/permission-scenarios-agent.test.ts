@@ -138,10 +138,12 @@ async function seedAgentConfig(
     config: AgentConfig.parse({
       model: { model: "openai/gpt-4.1" },
       skills: { enabled: [] },
-      mcp: { enabled: [] },
+      mcp: {
+        enabled: [],
+        server_settings: { memory: { enabled: false } },
+      },
       tools: { allow: params.toolsAllow },
       sessions: { ttl_days: 30, max_turns: 20 },
-      memory: { v1: { enabled: false } },
     }),
     createdBy: { kind: "test" },
     reason: "permission scenarios test seed",

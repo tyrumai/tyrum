@@ -15,14 +15,9 @@ import {
   ensureDefaultHeartbeatSchedule,
   loadAgentConfigFromDb,
   maybeCleanupSessions,
-  semanticSearch,
   type PrepareTurnHelperDeps,
 } from "./turn-preparation-helpers.js";
-import {
-  isStatusQuery,
-  parseIntakeModeDecision,
-  type ResolvedAgentTurnInput,
-} from "./turn-helpers.js";
+import { type ResolvedAgentTurnInput } from "./turn-helpers.js";
 import type { ResolvedExecutionProfile } from "./intake-delegation.js";
 import type { AgentLoadedContext } from "./types.js";
 import type { AgentContextStore } from "../context-store.js";
@@ -31,16 +26,13 @@ import { loadCurrentAgentContext } from "../load-context.js";
 import type { SessionRow } from "../session-dal.js";
 import {
   isToolAllowed,
+  isBuiltinToolAvailableInStateMode,
   listBuiltinToolDescriptors,
   selectToolDirectory,
   type ToolDescriptor,
 } from "../tools.js";
 import { validateToolDescriptorInputSchema } from "../tool-schema.js";
-import { tagContent } from "../provenance.js";
-import { sanitizeForModel } from "../sanitizer.js";
 import { parseChannelSourceKey } from "../../channels/interface.js";
-import { MemoryV1Dal } from "../../memory/v1-dal.js";
-import { buildMemoryV1Digest } from "../../memory/v1-digest.js";
 import { resolveGatewayStateMode } from "../../runtime-state/mode.js";
 import { applyPersonaToIdentity, resolveAgentPersona } from "../persona.js";
 import { ToolSetBuilder } from "./tool-set-builder.js";
@@ -159,8 +151,8 @@ type AutomationPromptInput = {
 export function assemblePrompts(
   ctx: AgentLoadedContext,
   session: SessionRow,
-  memoryDigestResult: { digest: string },
   filteredTools: readonly ToolDescriptor[],
+  preTurnTexts: readonly string[],
   automation: AutomationPromptInput | null | undefined,
   runtimePrompt: string,
 ) {
@@ -169,8 +161,6 @@ export function assemblePrompts(
   const skillsText = `Enabled skills:\n${formatSkillsPrompt(ctx.skills)}`;
   const toolsText = `Available tools:\n${formatToolPrompt(filteredTools)}`;
   const sessionText = `Session context:\n${sessionCtx}`;
-  const memoryTagged = tagContent(memoryDigestResult.digest, "memory", false);
-  const memoryText = `Memory digest:\n${sanitizeForModel(memoryTagged)}`;
   const automationTriggerText = automation
     ? `Automation trigger:\n${[
         `Schedule kind: ${automation.schedule_kind ?? "unknown"}`,
@@ -191,7 +181,7 @@ export function assemblePrompts(
     skillsText,
     toolsText,
     sessionText,
-    memoryText,
+    preTurnTexts: [...preTurnTexts],
     automationTriggerText,
   };
 }
@@ -360,34 +350,15 @@ export async function resolveToolsAndMemory(
   resolved: ResolvedAgentTurnInput,
   executionProfile: ResolvedExecutionProfile,
 ): Promise<{
-  memoryDigestResult: {
-    digest: string;
-    included_item_ids: string[];
-    keyword_hit_count: number;
-    semantic_hit_count: number;
-    structured_item_count: number;
-  };
+  availableTools: ToolDescriptor[];
+  toolSetBuilderDeps: ConstructorParameters<typeof ToolSetBuilder>[0];
   toolSetBuilder: ToolSetBuilder;
   filteredTools: ToolDescriptor[];
 }> {
-  const memoryDigestPromise =
-    isStatusQuery(resolved.message) || parseIntakeModeDecision(resolved.message)
-      ? Promise.resolve({
-          digest: "Skipped for command turns.",
-          included_item_ids: [],
-          keyword_hit_count: 0,
-          semantic_hit_count: 0,
-          structured_item_count: 0,
-        })
-      : buildMemoryDigest(deps, ctx, session, resolved);
-
-  const [memoryDigestResult, mcpTools] = await Promise.all([
-    memoryDigestPromise,
-    canDiscoverMcpTools(ctx.config.tools)
-      ? deps.mcpManager.listToolDescriptors(ctx.mcpServers)
-      : Promise.resolve([]),
-  ]);
-  const toolSetBuilder = new ToolSetBuilder({
+  const mcpTools = canDiscoverMcpTools(ctx.config.tools)
+    ? await deps.mcpManager.listToolDescriptors(ctx.mcpServers)
+    : [];
+  const toolSetBuilderDeps = {
     home: deps.home,
     stateMode: resolveGatewayStateMode(deps.opts.container.deploymentConfig),
     tenantId: session.tenant_id,
@@ -404,7 +375,8 @@ export async function resolveToolsAndMemory(
     secretProvider: deps.secretProvider,
     plugins: deps.plugins,
     redactionEngine: deps.opts.container.redactionEngine,
-  });
+  };
+  const toolSetBuilder = new ToolSetBuilder(toolSetBuilderDeps);
   const builtinTools = listBuiltinToolDescriptors();
   const pluginToolsRaw = deps.plugins?.getToolDescriptors() ?? [];
   const baseToolAllowlist = materializeAllowedAgentIds(ctx.config.tools, [
@@ -417,17 +389,38 @@ export async function resolveToolsAndMemory(
       allowlist: baseToolAllowlist,
       pluginTools: pluginToolsRaw,
     });
+  const stateMode = resolveGatewayStateMode(deps.opts.container.deploymentConfig);
   const toolCandidates = selectToolDirectory(
     resolved.message,
     toolAllowlist,
     [...mcpTools, ...pluginTools],
     Number.POSITIVE_INFINITY,
     true,
-    resolveGatewayStateMode(deps.opts.container.deploymentConfig),
+    stateMode,
   );
+  const availableTools = [
+    ...builtinTools.filter(
+      (tool) =>
+        isBuiltinToolAvailableInStateMode(tool.id, stateMode) && isToolAllowed(toolAllowlist, tool.id),
+    ),
+    ...mcpTools,
+    ...pluginTools,
+  ]
+    .filter((tool) => isToolAllowed(executionProfile.profile.tool_allowlist, tool.id))
+    .flatMap((tool) => {
+      const validated = validateToolDescriptorInputSchema(tool);
+      if (!validated.ok) {
+        deps.opts.container.logger.warn("agent.tool_schema_invalid", {
+          tool_id: tool.id,
+          error: validated.error,
+        });
+        return [];
+      }
+
+      return [{ ...tool, inputSchema: validated.schema }];
+    });
   const filteredTools = toolCandidates
     .filter((tool) => isToolAllowed(executionProfile.profile.tool_allowlist, tool.id))
-    .filter((tool) => ctx.config.memory.v1.enabled || !tool.id.startsWith("memory."))
     .flatMap((tool) => {
       const validated = validateToolDescriptorInputSchema(tool);
       if (!validated.ok) {
@@ -441,53 +434,5 @@ export async function resolveToolsAndMemory(
       return [{ ...tool, inputSchema: validated.schema }];
     });
 
-  return { memoryDigestResult, toolSetBuilder, filteredTools };
-}
-
-async function buildMemoryDigest(
-  deps: TurnPreparationRuntimeDeps,
-  ctx: AgentLoadedContext,
-  session: SessionRow,
-  resolved: ResolvedAgentTurnInput,
-): Promise<{
-  digest: string;
-  included_item_ids: string[];
-  keyword_hit_count: number;
-  semantic_hit_count: number;
-  structured_item_count: number;
-}> {
-  try {
-    return await buildMemoryV1Digest({
-      dal: new MemoryV1Dal(deps.opts.container.db),
-      tenantId: session.tenant_id,
-      agentId: session.agent_id,
-      query: resolved.message,
-      config: ctx.config.memory.v1,
-      semanticSearch: ctx.config.memory.v1.semantic.enabled
-        ? (query, limit) =>
-            semanticSearch(
-              deps,
-              query,
-              limit,
-              ctx.config.model.model,
-              session.session_id,
-              session.tenant_id,
-              session.agent_id,
-            )
-        : undefined,
-    });
-  } catch (error) {
-    deps.opts.container.logger.warn("memory.v1.digest_failed", {
-      session_id: session.session_id,
-      agent_id: session.agent_id,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return {
-      digest: "Memory digest unavailable.",
-      included_item_ids: [],
-      keyword_hit_count: 0,
-      semantic_hit_count: 0,
-      structured_item_count: 0,
-    };
-  }
+  return { availableTools, toolSetBuilderDeps, toolSetBuilder, filteredTools };
 }

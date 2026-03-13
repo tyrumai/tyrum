@@ -1,8 +1,9 @@
-import type { AgentConfig, MemoryItem, MemoryItemKind } from "@tyrum/schemas";
+import type { BuiltinMemoryServerSettings, MemoryItem, MemoryItemKind } from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
 import type { MemoryV1Dal } from "./v1-dal.js";
 import { retrieveMemoryV1, buildMemoryV1Preview } from "./v1-retrieval.js";
 import { MemoryV1SemanticIndex } from "./v1-semantic-index.js";
+import { buildMemoryV1Digest } from "./v1-digest.js";
 
 type MemorySearchToolInput = {
   query: string;
@@ -35,7 +36,18 @@ type MemoryAddToolInput =
       confidence?: number;
       tags?: string[];
       sensitivity?: "public" | "private";
+    }
+  | {
+      kind: "episode";
+      summary_md: string;
+      occurred_at?: string;
+      tags?: string[];
+      sensitivity?: "public" | "private";
     };
+
+type MemorySeedToolInput = {
+  query: string;
+};
 
 type MemoryToolEmbeddingPipeline = {
   embed(text: string): Promise<number[]>;
@@ -49,8 +61,8 @@ export interface AgentMemoryToolRuntimeOptions {
   sessionId: string;
   channel: string;
   threadId: string;
-  config: AgentConfig["memory"]["v1"];
-  budgetsProvider: () => Promise<AgentConfig["memory"]["v1"]["budgets"]>;
+  config: BuiltinMemoryServerSettings;
+  budgetsProvider: () => Promise<BuiltinMemoryServerSettings["budgets"]>;
   resolveEmbeddingPipeline?: () => Promise<MemoryToolEmbeddingPipeline | undefined>;
 }
 
@@ -181,10 +193,48 @@ export class AgentMemoryToolRuntime {
     };
   }
 
-  async add(input: MemoryAddToolInput, toolCallId: string): Promise<Record<string, unknown>> {
+  async seed(input: MemorySeedToolInput): Promise<Record<string, unknown>> {
+    const semanticIndex = await this.createSemanticIndex().catch(() => undefined);
+    const semanticSearch =
+      semanticIndex &&
+      (async (query: string, semanticLimit: number) => {
+        await semanticIndex.ensureFresh();
+        return await semanticIndex.search(query, semanticLimit);
+      });
+
+    const digest = await buildMemoryV1Digest({
+      dal: this.opts.dal,
+      tenantId: this.scope.tenantId,
+      agentId: this.scope.agentId,
+      query: input.query.trim(),
+      config: this.opts.config,
+      semanticSearch,
+    });
+
+    return {
+      status: "ok",
+      query: input.query.trim(),
+      ...digest,
+    };
+  }
+
+  async add(
+    input: MemoryAddToolInput,
+    toolCallId: string,
+    sourceToolId = "mcp.memory.write",
+  ): Promise<Record<string, unknown>> {
     const nowIso = new Date().toISOString();
     const tags = normalizeTags(input.tags);
     const sensitivity = input.sensitivity ?? "private";
+    const provenance = {
+      source_kind: "tool" as const,
+      channel: this.opts.channel,
+      thread_id: this.opts.threadId,
+      session_id: this.opts.sessionId,
+      tool_call_id: toolCallId,
+      refs: [],
+      metadata: { tool_id: sourceToolId },
+    };
     const created = await this.opts.dal.create(
       input.kind === "fact"
         ? {
@@ -195,15 +245,7 @@ export class AgentMemoryToolRuntime {
             observed_at: input.observed_at ?? nowIso,
             tags,
             sensitivity,
-            provenance: {
-              source_kind: "tool",
-              channel: this.opts.channel,
-              thread_id: this.opts.threadId,
-              session_id: this.opts.sessionId,
-              tool_call_id: toolCallId,
-              refs: [],
-              metadata: { tool_id: "memory.add" },
-            },
+            provenance,
           }
         : input.kind === "note"
           ? {
@@ -212,33 +254,27 @@ export class AgentMemoryToolRuntime {
               body_md: input.body_md,
               tags,
               sensitivity,
-              provenance: {
-                source_kind: "tool",
-                channel: this.opts.channel,
-                thread_id: this.opts.threadId,
-                session_id: this.opts.sessionId,
-                tool_call_id: toolCallId,
-                refs: [],
-                metadata: { tool_id: "memory.add" },
-              },
+              provenance,
             }
-          : {
-              kind: "procedure",
+          : input.kind === "procedure"
+            ? {
+              kind:
+                "procedure" as const,
               title: input.title,
               body_md: input.body_md,
               confidence: input.confidence,
               tags,
               sensitivity,
-              provenance: {
-                source_kind: "tool",
-                channel: this.opts.channel,
-                thread_id: this.opts.threadId,
-                session_id: this.opts.sessionId,
-                tool_call_id: toolCallId,
-                refs: [],
-                metadata: { tool_id: "memory.add" },
+              provenance,
+            }
+            : {
+                kind: "episode" as const,
+                occurred_at: input.occurred_at ?? nowIso,
+                summary_md: input.summary_md,
+                tags,
+                sensitivity,
+                provenance,
               },
-            },
       this.scope,
     );
 
@@ -263,5 +299,9 @@ export class AgentMemoryToolRuntime {
       item: created,
       semantic_indexed: semanticIndexed,
     };
+  }
+
+  async write(input: MemoryAddToolInput, toolCallId: string): Promise<Record<string, unknown>> {
+    return await this.add(input, toolCallId, "mcp.memory.write");
   }
 }

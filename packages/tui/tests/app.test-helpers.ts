@@ -77,90 +77,6 @@ export async function waitFor(
   throw new Error("Timed out waiting for condition");
 }
 
-export function createMemorySnapshot(
-  overrides: Partial<{
-    browse: unknown;
-    inspect: unknown;
-    tombstones: unknown;
-    export: unknown;
-  }> = {},
-): {
-  browse: unknown;
-  inspect: unknown;
-  tombstones: unknown;
-  export: unknown;
-} {
-  return {
-    browse: {
-      request: { kind: "list", filter: undefined, limit: undefined },
-      results: { kind: "list", items: [], nextCursor: null },
-      loading: false,
-      error: null,
-      lastSyncedAt: null,
-      ...(overrides.browse as Record<string, unknown> | undefined),
-    },
-    inspect: {
-      memoryItemId: null,
-      item: null,
-      loading: false,
-      error: null,
-      ...(overrides.inspect as Record<string, unknown> | undefined),
-    },
-    tombstones: {
-      tombstones: [],
-      loading: false,
-      error: null,
-      ...(overrides.tombstones as Record<string, unknown> | undefined),
-    },
-    export: {
-      running: false,
-      artifactId: null,
-      error: null,
-      lastExportedAt: null,
-      ...(overrides.export as Record<string, unknown> | undefined),
-    },
-  };
-}
-
-export const DEFAULT_MEMORY_ITEM = {
-  v: 1,
-  memory_item_id: "mem-1",
-  agent_id: "agent-1",
-  kind: "note",
-  tags: [],
-  sensitivity: "private",
-  provenance: { source_kind: "operator", refs: [] },
-  created_at: "2026-02-26T00:00:00.000Z",
-  body_md: "hello",
-} as const;
-
-export function createMemoryStore(
-  snapshot = createMemorySnapshot(),
-  overrides: Partial<
-    Record<"list" | "search" | "loadMore" | "inspect" | "forget" | "export", unknown>
-  > = {},
-) {
-  return {
-    ...createStore(snapshot),
-    list: vi.fn(async () => {}),
-    search: vi.fn(async (_input: { query: string }) => {}),
-    loadMore: vi.fn(async () => {}),
-    inspect: vi.fn(async (_memoryItemId: string) => {}),
-    forget: vi.fn(async (_selectors: unknown[]) => {}),
-    export: vi.fn(async () => {}),
-    ...overrides,
-  };
-}
-
-export async function openMemory(
-  io: ReturnType<typeof createTestStreams>,
-  memoryStore: { list: ReturnType<typeof vi.fn> },
-) {
-  io.stdin.write("6");
-  await waitFor(() => memoryStore.list.mock.calls.length === 1);
-  memoryStore.list.mockClear();
-}
-
 export const DEFAULT_CONFIG = {
   httpBaseUrl: "http://127.0.0.1:8788",
   wsUrl: "ws://127.0.0.1:8788/ws",
@@ -172,7 +88,7 @@ export const DEFAULT_CONFIG = {
 } as const;
 
 export function createEmptyApprovalsStore(
-  overrides: Partial<{ pendingIds: number[]; byId: Record<number, unknown> }> = {},
+  overrides: Partial<{ pendingIds: string[]; byId: Record<string, unknown> }> = {},
 ) {
   return {
     ...createStore({
@@ -272,7 +188,6 @@ export function createConnectionStore(
 export function createCore({
   connect,
   disconnect,
-  memoryStore,
   elevatedModeStore,
   connectionStore,
   approvalsStore = createEmptyApprovalsStore(),
@@ -280,7 +195,6 @@ export function createCore({
 }: {
   connect: ReturnType<typeof vi.fn>;
   disconnect: ReturnType<typeof vi.fn>;
-  memoryStore: unknown;
   elevatedModeStore: ReturnType<typeof createStore>;
   connectionStore: ReturnType<typeof createStore>;
   approvalsStore?: ReturnType<typeof createEmptyApprovalsStore>;
@@ -295,7 +209,6 @@ export function createCore({
     pairingStore,
     statusStore: createStatusStore(),
     runsStore: createRunsStore(),
-    memoryStore,
   };
 }
 

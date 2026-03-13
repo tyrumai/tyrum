@@ -1,17 +1,11 @@
 import { isElevatedModeActive } from "@tyrum/operator-core";
-import { Box, useApp, useInput } from "ink";
+import { Box, Text, useApp, useInput } from "ink";
 import { useEffect, useRef, useState } from "react";
 import type { ResolvedTuiConfig } from "./config.js";
 import type { TuiRuntime } from "./core.js";
 import {
-  ElevatedModeDialog,
-  MemoryForgetDialog,
-  MemoryScreen,
-  MemorySearchDialog,
-} from "./app-memory.js";
-import {
-  getMemoryBrowseIds,
   getPairingIds,
+  maskToken,
   MAX_RUNS_VISIBLE,
   toErrorMessage,
   toTuiKey,
@@ -36,31 +30,28 @@ type ElevatedDialogState = {
   error: string | null;
 };
 
-type MemorySearchDialogState = {
-  open: boolean;
-  query: string;
-  busy: boolean;
-  error: string | null;
-};
-
-type MemoryForgetDialogState = {
-  open: boolean;
-  memoryItemId: string | null;
-  confirmText: string;
-  busy: boolean;
-  error: string | null;
-};
-
 function createClosedElevatedDialog(): ElevatedDialogState {
   return { open: false, token: "", busy: false, error: null };
 }
 
-function createClosedMemorySearchDialog(): MemorySearchDialogState {
-  return { open: false, query: "", busy: false, error: null };
-}
-
-function createClosedMemoryForgetDialog(): MemoryForgetDialogState {
-  return { open: false, memoryItemId: null, confirmText: "", busy: false, error: null };
+function ElevatedModeDialog(props: { token: string; busy: boolean; error: string | null }) {
+  return (
+    <Box
+      flexDirection="column"
+      borderStyle="round"
+      borderColor="yellow"
+      padding={1}
+      marginBottom={1}
+    >
+      <Text bold>Enter Elevated Mode</Text>
+      <Text dimColor>Paste elevated access token and press Enter. Esc cancels.</Text>
+      <Text>
+        Access token: <Text color="yellow">{maskToken(props.token)}</Text>
+      </Text>
+      {props.busy ? <Text dimColor>Entering...</Text> : null}
+      {props.error ? <Text color="red">Error: {props.error}</Text> : null}
+    </Box>
+  );
 }
 
 export function TuiApp({ runtime, config }: { runtime: TuiRuntime; config: ResolvedTuiConfig }) {
@@ -106,87 +97,6 @@ export function TuiApp({ runtime, config }: { runtime: TuiRuntime; config: Resol
     }
   };
 
-  const [memorySearchDialog, setMemorySearchDialog] = useState(createClosedMemorySearchDialog);
-  const memorySearchDialogRef = useRef(memorySearchDialog);
-  memorySearchDialogRef.current = memorySearchDialog;
-
-  const openMemorySearchDialog = (): void => {
-    const snapshot = coreRef.current.memoryStore.getSnapshot();
-    setMemorySearchDialog({
-      open: true,
-      query:
-        snapshot.browse.request?.kind === "search" && snapshot.browse.request.query
-          ? snapshot.browse.request.query
-          : "",
-      busy: false,
-      error: null,
-    });
-  };
-
-  const closeMemorySearchDialog = (): void => {
-    if (memorySearchDialogRef.current.busy) return;
-    setMemorySearchDialog(createClosedMemorySearchDialog());
-  };
-
-  const submitMemorySearchDialog = async (): Promise<void> => {
-    const snapshot = memorySearchDialogRef.current;
-    if (!snapshot.open || snapshot.busy) return;
-
-    const query = snapshot.query.trim();
-    setMemorySearchDialog((prev) => ({ ...prev, busy: true, error: null }));
-    try {
-      if (!query) {
-        await coreRef.current.memoryStore.list();
-      } else {
-        await coreRef.current.memoryStore.search({ query });
-      }
-      setMemorySearchDialog(createClosedMemorySearchDialog());
-    } catch (error) {
-      setMemorySearchDialog((prev) => ({ ...prev, busy: false, error: toErrorMessage(error) }));
-    }
-  };
-
-  const [memoryForgetDialog, setMemoryForgetDialog] = useState(createClosedMemoryForgetDialog);
-  const memoryForgetDialogRef = useRef(memoryForgetDialog);
-  memoryForgetDialogRef.current = memoryForgetDialog;
-
-  const openMemoryForgetDialog = (memoryItemId: string): void => {
-    setMemoryForgetDialog({ ...createClosedMemoryForgetDialog(), open: true, memoryItemId });
-  };
-
-  const closeMemoryForgetDialog = (): void => {
-    if (memoryForgetDialogRef.current.busy) return;
-    setMemoryForgetDialog(createClosedMemoryForgetDialog());
-  };
-
-  const submitMemoryForgetDialog = async (): Promise<void> => {
-    const snapshot = memoryForgetDialogRef.current;
-    if (!snapshot.open || snapshot.busy) return;
-    if (!snapshot.memoryItemId) return;
-
-    if (snapshot.confirmText !== "FORGET") {
-      setMemoryForgetDialog((prev) => ({ ...prev, error: "Type FORGET to confirm" }));
-      return;
-    }
-
-    setMemoryForgetDialog((prev) => ({ ...prev, busy: true, error: null }));
-    try {
-      await coreRef.current.memoryStore.forget([
-        { kind: "id", memory_item_id: snapshot.memoryItemId },
-      ]);
-
-      const storeError = coreRef.current.memoryStore.getSnapshot().tombstones.error;
-      if (storeError) {
-        setMemoryForgetDialog((prev) => ({ ...prev, busy: false, error: storeError.message }));
-        return;
-      }
-
-      setMemoryForgetDialog(createClosedMemoryForgetDialog());
-    } catch (error) {
-      setMemoryForgetDialog((prev) => ({ ...prev, busy: false, error: toErrorMessage(error) }));
-    }
-  };
-
   useInput((input, key) => {
     const rawKey = key as unknown as Record<string, unknown>;
 
@@ -218,68 +128,15 @@ export function TuiApp({ runtime, config }: { runtime: TuiRuntime; config: Resol
       return;
     }
 
-    if (memorySearchDialogRef.current.open) {
-      if (rawKey["escape"] === true) {
-        closeMemorySearchDialog();
-        return;
-      }
-      if (rawKey["return"] === true || rawKey["enter"] === true) {
-        void submitMemorySearchDialog();
-        return;
-      }
-      if (rawKey["backspace"] === true || rawKey["delete"] === true) {
-        setMemorySearchDialog((prev) => ({
-          ...prev,
-          query: prev.query.length > 0 ? prev.query.slice(0, -1) : prev.query,
-          error: null,
-        }));
-        return;
-      }
-      if (input) {
-        setMemorySearchDialog((prev) => ({ ...prev, query: prev.query + input, error: null }));
-      }
-      return;
-    }
-
-    if (memoryForgetDialogRef.current.open) {
-      if (rawKey["escape"] === true) {
-        closeMemoryForgetDialog();
-        return;
-      }
-      if (rawKey["return"] === true || rawKey["enter"] === true) {
-        void submitMemoryForgetDialog();
-        return;
-      }
-      if (rawKey["backspace"] === true || rawKey["delete"] === true) {
-        setMemoryForgetDialog((prev) => ({
-          ...prev,
-          confirmText:
-            prev.confirmText.length > 0 ? prev.confirmText.slice(0, -1) : prev.confirmText,
-          error: null,
-        }));
-        return;
-      }
-      if (input) {
-        setMemoryForgetDialog((prev) => ({
-          ...prev,
-          confirmText: prev.confirmText + input,
-          error: null,
-        }));
-      }
-      return;
-    }
-
     const currentCore = coreRef.current;
     const approvals = currentCore.approvalsStore.getSnapshot();
     const pairing = currentCore.pairingStore.getSnapshot();
     const runs = currentCore.runsStore.getSnapshot();
-    const memory = currentCore.memoryStore.getSnapshot();
 
     const pairingIds = getPairingIds(pairing);
     const runIds = getRunList(runs)
       .slice(0, MAX_RUNS_VISIBLE)
       .map((run) => run.run_id);
-    const memoryItemIds = getMemoryBrowseIds(memory);
 
     const reduced = reduceTuiInput({
       state: uiStateRef.current,
@@ -289,7 +146,6 @@ export function TuiApp({ runtime, config }: { runtime: TuiRuntime; config: Resol
       approvalsPendingIds: approvals.pendingIds,
       pairingIds,
       runIds,
-      memoryItemIds,
     });
 
     uiStateRef.current = reduced.state;
@@ -311,29 +167,6 @@ export function TuiApp({ runtime, config }: { runtime: TuiRuntime; config: Resol
           return;
         case "exitElevatedMode":
           runtime.exitElevatedMode();
-          return;
-        case "refreshMemory":
-          if (memory.browse.request?.kind === "search") {
-            void currentCore.memoryStore.search({
-              query: memory.browse.request.query,
-              filter: memory.browse.request.filter,
-              limit: memory.browse.request.limit,
-            });
-            return;
-          }
-          void currentCore.memoryStore.list({
-            filter: memory.browse.request?.filter,
-            limit: memory.browse.request?.limit,
-          });
-          return;
-        case "openMemorySearch":
-          openMemorySearchDialog();
-          return;
-        case "openMemoryForget":
-          openMemoryForgetDialog(command.memoryItemId);
-          return;
-        case "exportMemory":
-          void currentCore.memoryStore.export().catch(() => {});
           return;
         case "refreshApprovals":
           void currentCore.approvalsStore.refreshPending();
@@ -390,21 +223,6 @@ export function TuiApp({ runtime, config }: { runtime: TuiRuntime; config: Resol
           error={elevatedDialog.error}
         />
       ) : null}
-      {memorySearchDialog.open ? (
-        <MemorySearchDialog
-          query={memorySearchDialog.query}
-          busy={memorySearchDialog.busy}
-          error={memorySearchDialog.error}
-        />
-      ) : null}
-      {memoryForgetDialog.open && memoryForgetDialog.memoryItemId ? (
-        <MemoryForgetDialog
-          memoryItemId={memoryForgetDialog.memoryItemId}
-          confirmText={memoryForgetDialog.confirmText}
-          busy={memoryForgetDialog.busy}
-          error={memoryForgetDialog.error}
-        />
-      ) : null}
       {uiState.route === "connect" ? <ConnectScreen core={core} config={config} /> : null}
       {uiState.route === "status" ? <StatusScreen core={core} /> : null}
       {uiState.route === "approvals" ? (
@@ -423,13 +241,6 @@ export function TuiApp({ runtime, config }: { runtime: TuiRuntime; config: Resol
       ) : null}
       {uiState.route === "runs" ? (
         <RunsScreen core={core} cursor={uiState.runsCursor} selectedId={uiState.runsSelectedId} />
-      ) : null}
-      {uiState.route === "memory" ? (
-        <MemoryScreen
-          core={core}
-          cursor={uiState.memoryCursor}
-          selectedId={uiState.memorySelectedId}
-        />
       ) : null}
     </Box>
   );

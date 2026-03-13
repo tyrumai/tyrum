@@ -34,20 +34,6 @@ export type CliCommand =
   | { kind: "workflow_resume"; token: string }
   | { kind: "workflow_cancel"; run_id: string; reason?: string }
   | {
-      kind: "memory_search";
-      query: string;
-      filter?: Record<string, unknown>;
-      limit?: number;
-      cursor?: string;
-    }
-  | { kind: "memory_list"; filter?: Record<string, unknown>; limit?: number; cursor?: string }
-  | { kind: "memory_read"; id: string }
-  | { kind: "memory_create"; item: Record<string, unknown> }
-  | { kind: "memory_update"; id: string; patch: Record<string, unknown> }
-  | { kind: "memory_delete"; id: string; reason?: string }
-  | { kind: "memory_forget"; selectors: unknown[] }
-  | { kind: "memory_export"; filter?: Record<string, unknown>; include_tombstones: boolean }
-  | {
       kind: "pairing_approve";
       pairing_id: number;
       trust_level: "local" | "remote";

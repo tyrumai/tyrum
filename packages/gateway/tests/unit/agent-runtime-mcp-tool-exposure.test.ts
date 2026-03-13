@@ -34,10 +34,12 @@ describe("AgentRuntime MCP tool exposure", () => {
       config: {
         model: { model: "openai/gpt-4.1" },
         skills: { enabled: [] },
-        mcp: { enabled: ["calendar"] },
+        mcp: {
+          enabled: ["calendar"],
+          server_settings: { memory: { enabled: false } },
+        },
         tools: { allow: ["read", "mcp.*"] },
         sessions: { ttl_days: 30, max_turns: 20 },
-        memory: { v1: { enabled: false } },
       },
     });
     await writeFile(

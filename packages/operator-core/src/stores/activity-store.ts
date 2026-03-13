@@ -12,7 +12,6 @@ import {
 import { buildActivityState } from "./activity-store.derive.js";
 import type { ApprovalsState } from "./approvals-store.js";
 import type { ChatState } from "./chat-store.js";
-import type { MemoryState } from "./memory-store.js";
 import type { RunsState } from "./runs-store.js";
 import type { StatusState } from "./status-store.js";
 
@@ -40,7 +39,6 @@ export interface ActivityEvent {
     | "step.updated"
     | "attempt.updated"
     | "approval.updated"
-    | "memory.item.updated"
     | "typing.started"
     | "typing.stopped"
     | "message.delta"
@@ -92,7 +90,6 @@ export interface ActivityStoreDeps {
   runsStore: ExternalStore<RunsState>;
   approvalsStore: ExternalStore<ApprovalsState>;
   statusStore: ExternalStore<StatusState>;
-  memoryStore: ExternalStore<MemoryState>;
   chatStore: ExternalStore<ChatState>;
 }
 
@@ -153,7 +150,6 @@ export function createActivityStore(deps: ActivityStoreDeps): ActivityStoreBindi
     deps.runsStore.subscribe(recompute),
     deps.approvalsStore.subscribe(recompute),
     deps.statusStore.subscribe(recompute),
-    deps.memoryStore.subscribe(recompute),
     deps.chatStore.subscribe(recompute),
   ];
 

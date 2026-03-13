@@ -107,78 +107,70 @@ export const AgentSessionConfig = z.object({
 });
 export type AgentSessionConfig = z.infer<typeof AgentSessionConfig>;
 
-export const AgentMemoryConfig = z.object({
-  v1: z
-    .object({
-      enabled: z.boolean().default(true),
-      auto_write: z
-        .object({
-          enabled: z.boolean().default(true),
-          mode: z.literal("sparse").default("sparse"),
-        })
-        .prefault({}),
-      allow_sensitivities: z.array(MemorySensitivity).default(["public", "private"]),
-      structured: z
-        .object({
-          fact_keys: z.array(z.string().trim().min(1)).default([]),
-          tags: z.array(z.string().trim().min(1)).default([]),
-        })
-        .prefault({}),
-      keyword: z
-        .object({
-          enabled: z.boolean().default(true),
-          limit: z.number().int().min(1).max(200).default(60),
-        })
-        .prefault({}),
-      semantic: z
-        .object({
-          enabled: z.boolean().default(true),
-          limit: z.number().int().min(1).max(200).default(20),
-        })
-        .prefault({}),
-      budgets: z
-        .object({
-          max_total_items: z.number().int().min(0).max(1000).default(12),
-          max_total_chars: z.number().int().min(0).max(200_000).default(2400),
-          max_total_tokens: z.number().int().min(0).max(400_000).optional(),
-          per_kind: z
-            .object({
-              fact: z
-                .object({
-                  max_items: z.number().int().min(0).max(1000).default(6),
-                  max_chars: z.number().int().min(0).max(200_000).default(800),
-                  max_tokens: z.number().int().min(0).max(400_000).optional(),
-                })
-                .prefault({}),
-              note: z
-                .object({
-                  max_items: z.number().int().min(0).max(1000).default(4),
-                  max_chars: z.number().int().min(0).max(200_000).default(1200),
-                  max_tokens: z.number().int().min(0).max(400_000).optional(),
-                })
-                .prefault({}),
-              procedure: z
-                .object({
-                  max_items: z.number().int().min(0).max(1000).default(3),
-                  max_chars: z.number().int().min(0).max(200_000).default(1200),
-                  max_tokens: z.number().int().min(0).max(400_000).optional(),
-                })
-                .prefault({}),
-              episode: z
-                .object({
-                  max_items: z.number().int().min(0).max(1000).default(2),
-                  max_chars: z.number().int().min(0).max(200_000).default(800),
-                  max_tokens: z.number().int().min(0).max(400_000).optional(),
-                })
-                .prefault({}),
-            })
-            .prefault({}),
-        })
-        .prefault({}),
-    })
-    .prefault({}),
-});
-export type AgentMemoryConfig = z.infer<typeof AgentMemoryConfig>;
+export const BuiltinMemoryServerSettings = z
+  .object({
+    enabled: z.boolean().default(true),
+    allow_sensitivities: z.array(MemorySensitivity).default(["public", "private"]),
+    structured: z
+      .object({
+        fact_keys: z.array(z.string().trim().min(1)).default([]),
+        tags: z.array(z.string().trim().min(1)).default([]),
+      })
+      .prefault({}),
+    keyword: z
+      .object({
+        enabled: z.boolean().default(true),
+        limit: z.number().int().min(1).max(200).default(60),
+      })
+      .prefault({}),
+    semantic: z
+      .object({
+        enabled: z.boolean().default(true),
+        limit: z.number().int().min(1).max(200).default(20),
+      })
+      .prefault({}),
+    budgets: z
+      .object({
+        max_total_items: z.number().int().min(0).max(1000).default(12),
+        max_total_chars: z.number().int().min(0).max(200_000).default(2400),
+        max_total_tokens: z.number().int().min(0).max(400_000).optional(),
+        per_kind: z
+          .object({
+            fact: z
+              .object({
+                max_items: z.number().int().min(0).max(1000).default(6),
+                max_chars: z.number().int().min(0).max(200_000).default(800),
+                max_tokens: z.number().int().min(0).max(400_000).optional(),
+              })
+              .prefault({}),
+            note: z
+              .object({
+                max_items: z.number().int().min(0).max(1000).default(4),
+                max_chars: z.number().int().min(0).max(200_000).default(1200),
+                max_tokens: z.number().int().min(0).max(400_000).optional(),
+              })
+              .prefault({}),
+            procedure: z
+              .object({
+                max_items: z.number().int().min(0).max(1000).default(3),
+                max_chars: z.number().int().min(0).max(200_000).default(1200),
+                max_tokens: z.number().int().min(0).max(400_000).optional(),
+              })
+              .prefault({}),
+            episode: z
+              .object({
+                max_items: z.number().int().min(0).max(1000).default(2),
+                max_chars: z.number().int().min(0).max(200_000).default(800),
+                max_tokens: z.number().int().min(0).max(400_000).optional(),
+              })
+              .prefault({}),
+          })
+          .prefault({}),
+      })
+      .prefault({}),
+  })
+  .prefault({});
+export type BuiltinMemoryServerSettings = z.infer<typeof BuiltinMemoryServerSettings>;
 
 export const AgentPersona = z.preprocess(
   stripLegacyPersonaFields,
@@ -200,8 +192,7 @@ export const AgentConfig = z.object({
   mcp: AgentMcpConfig.prefault({}),
   tools: AgentToolConfig.prefault({}),
   sessions: AgentSessionConfig.prefault({}),
-  memory: AgentMemoryConfig.prefault({}),
-});
+}).strict();
 export type AgentConfig = z.infer<typeof AgentConfig>;
 
 export const SkillRequires = z.object({
@@ -240,12 +231,32 @@ export const SkillStatus = z
   .strict();
 export type SkillStatus = z.infer<typeof SkillStatus>;
 
+export const McpToolMetadataOverride = z
+  .object({
+    description_override: z.string().trim().min(1).optional(),
+    description_append: z.string().trim().min(1).optional(),
+    risk: z.enum(["low", "medium", "high"]).optional(),
+    requires_confirmation: z.boolean().optional(),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.description_override && value.description_append) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "use either description_override or description_append",
+        path: ["description_append"],
+      });
+    }
+  });
+export type McpToolMetadataOverride = z.infer<typeof McpToolMetadataOverride>;
+
 const McpServerBase = z.object({
   id: z.string().trim().min(1),
   name: z.string().trim().min(1),
   enabled: z.boolean(),
   timeout_ms: z.number().int().min(100).max(600_000).optional(),
   scopes: z.array(z.string().trim().min(1)).optional(),
+  tool_overrides: z.record(z.string().trim().min(1), McpToolMetadataOverride).optional(),
 });
 
 const McpServerStdio = McpServerBase.extend({

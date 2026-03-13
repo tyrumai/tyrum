@@ -1,4 +1,4 @@
-export type TuiRouteId = "connect" | "status" | "approvals" | "runs" | "pairing" | "memory";
+export type TuiRouteId = "connect" | "status" | "approvals" | "runs" | "pairing";
 
 export type TuiKey = {
   ctrl?: boolean;
@@ -14,8 +14,6 @@ export type TuiUiState = {
   pairingSelectedId: number | null;
   runsCursor: number;
   runsSelectedId: string | null;
-  memoryCursor: number;
-  memorySelectedId: string | null;
 };
 
 export type TuiCommand =
@@ -24,10 +22,6 @@ export type TuiCommand =
   | { type: "disconnect" }
   | { type: "openElevatedMode" }
   | { type: "exitElevatedMode" }
-  | { type: "refreshMemory" }
-  | { type: "openMemorySearch" }
-  | { type: "openMemoryForget"; memoryItemId: string }
-  | { type: "exportMemory" }
   | { type: "refreshApprovals" }
   | { type: "resolveApproval"; approvalId: string; decision: "approved" | "denied" }
   | { type: "refreshPairing" }
@@ -44,8 +38,6 @@ export function createInitialTuiUiState(): TuiUiState {
     pairingSelectedId: null,
     runsCursor: 0,
     runsSelectedId: null,
-    memoryCursor: 0,
-    memorySelectedId: null,
   };
 }
 
@@ -70,7 +62,7 @@ export function getEffectiveCursor<T>(params: {
   return clampCursor(params.cursor, params.ids.length);
 }
 
-export function reduceTuiInput(_params: {
+export function reduceTuiInput(params: {
   state: TuiUiState;
   input: string;
   key: TuiKey;
@@ -78,24 +70,22 @@ export function reduceTuiInput(_params: {
   approvalsPendingIds: string[];
   pairingIds: number[];
   runIds: string[];
-  memoryItemIds: string[];
 }): { state: TuiUiState; commands: TuiCommand[] } {
   const commands: TuiCommand[] = [];
-  const input = _params.input;
-  const key = _params.key;
+  const { input, key } = params;
 
   if (key.ctrl && input === "c") {
     commands.push({ type: "exit" });
-    return { state: _params.state, commands };
+    return { state: params.state, commands };
   }
 
   if (input === "q") {
     commands.push({ type: "exit" });
-    return { state: _params.state, commands };
+    return { state: params.state, commands };
   }
 
   const setRoute = (route: TuiRouteId): TuiUiState => ({
-    ..._params.state,
+    ...params.state,
     route,
     approvalsCursor: 0,
     approvalsSelectedId: null,
@@ -103,8 +93,6 @@ export function reduceTuiInput(_params: {
     pairingSelectedId: null,
     runsCursor: 0,
     runsSelectedId: null,
-    memoryCursor: 0,
-    memorySelectedId: null,
   });
 
   switch (input) {
@@ -118,50 +106,49 @@ export function reduceTuiInput(_params: {
       return { state: setRoute("runs"), commands };
     case "5":
       return { state: setRoute("pairing"), commands };
-    case "6":
-      return { state: setRoute("memory"), commands };
     case "c":
       commands.push({ type: "connect" });
-      return { state: _params.state, commands };
+      return { state: params.state, commands };
     case "d":
       commands.push({ type: "disconnect" });
-      return { state: _params.state, commands };
+      return { state: params.state, commands };
     case "m":
       commands.push({ type: "openElevatedMode" });
-      return { state: _params.state, commands };
+      return { state: params.state, commands };
     case "e":
       commands.push({ type: "exitElevatedMode" });
-      return { state: _params.state, commands };
+      return { state: params.state, commands };
     default:
       break;
   }
 
-  if (_params.state.route === "approvals") {
+  if (params.state.route === "approvals") {
     const cursor = getEffectiveCursor({
-      ids: _params.approvalsPendingIds,
-      selectedId: _params.state.approvalsSelectedId,
-      cursor: _params.state.approvalsCursor,
+      ids: params.approvalsPendingIds,
+      selectedId: params.state.approvalsSelectedId,
+      cursor: params.state.approvalsCursor,
     });
-    const max = Math.max(0, _params.approvalsPendingIds.length - 1);
+    const max = Math.max(0, params.approvalsPendingIds.length - 1);
 
     if (key.downArrow) {
       const nextCursor = Math.min(cursor + 1, max);
       return {
         state: {
-          ..._params.state,
+          ...params.state,
           approvalsCursor: nextCursor,
-          approvalsSelectedId: _params.approvalsPendingIds[nextCursor] ?? null,
+          approvalsSelectedId: params.approvalsPendingIds[nextCursor] ?? null,
         },
         commands,
       };
     }
+
     if (key.upArrow) {
       const nextCursor = Math.max(cursor - 1, 0);
       return {
         state: {
-          ..._params.state,
+          ...params.state,
           approvalsCursor: nextCursor,
-          approvalsSelectedId: _params.approvalsPendingIds[nextCursor] ?? null,
+          approvalsSelectedId: params.approvalsPendingIds[nextCursor] ?? null,
         },
         commands,
       };
@@ -169,13 +156,13 @@ export function reduceTuiInput(_params: {
 
     if (input === "r") {
       commands.push({ type: "refreshApprovals" });
-      return { state: { ..._params.state, approvalsCursor: cursor }, commands };
+      return { state: { ...params.state, approvalsCursor: cursor }, commands };
     }
 
     if (input === "a" || input === "x") {
-      const approvalId = _params.approvalsPendingIds[cursor];
+      const approvalId = params.approvalsPendingIds[cursor];
       if (typeof approvalId === "string") {
-        if (!_params.elevatedModeActive) {
+        if (!params.elevatedModeActive) {
           commands.push({ type: "openElevatedMode" });
         } else {
           commands.push({
@@ -187,7 +174,7 @@ export function reduceTuiInput(_params: {
       }
       return {
         state: {
-          ..._params.state,
+          ...params.state,
           approvalsCursor: cursor,
           approvalsSelectedId: typeof approvalId === "string" ? approvalId : null,
         },
@@ -196,32 +183,33 @@ export function reduceTuiInput(_params: {
     }
   }
 
-  if (_params.state.route === "pairing") {
+  if (params.state.route === "pairing") {
     const cursor = getEffectiveCursor({
-      ids: _params.pairingIds,
-      selectedId: _params.state.pairingSelectedId,
-      cursor: _params.state.pairingCursor,
+      ids: params.pairingIds,
+      selectedId: params.state.pairingSelectedId,
+      cursor: params.state.pairingCursor,
     });
-    const max = Math.max(0, _params.pairingIds.length - 1);
+    const max = Math.max(0, params.pairingIds.length - 1);
 
     if (key.downArrow) {
       const nextCursor = Math.min(cursor + 1, max);
       return {
         state: {
-          ..._params.state,
+          ...params.state,
           pairingCursor: nextCursor,
-          pairingSelectedId: _params.pairingIds[nextCursor] ?? null,
+          pairingSelectedId: params.pairingIds[nextCursor] ?? null,
         },
         commands,
       };
     }
+
     if (key.upArrow) {
       const nextCursor = Math.max(cursor - 1, 0);
       return {
         state: {
-          ..._params.state,
+          ...params.state,
           pairingCursor: nextCursor,
-          pairingSelectedId: _params.pairingIds[nextCursor] ?? null,
+          pairingSelectedId: params.pairingIds[nextCursor] ?? null,
         },
         commands,
       };
@@ -229,150 +217,83 @@ export function reduceTuiInput(_params: {
 
     if (input === "r") {
       commands.push({ type: "refreshPairing" });
-      return { state: { ..._params.state, pairingCursor: cursor }, commands };
+      return { state: { ...params.state, pairingCursor: cursor }, commands };
     }
 
-    const pairingId = _params.pairingIds[cursor];
+    const pairingId = params.pairingIds[cursor];
     if (typeof pairingId === "number") {
       if (input === "a") {
-        if (!_params.elevatedModeActive) {
+        if (!params.elevatedModeActive) {
           commands.push({ type: "openElevatedMode" });
         } else {
           commands.push({ type: "approvePairing", pairingId });
         }
         return {
-          state: { ..._params.state, pairingCursor: cursor, pairingSelectedId: pairingId },
+          state: { ...params.state, pairingCursor: cursor, pairingSelectedId: pairingId },
           commands,
         };
       }
+
       if (input === "x") {
-        if (!_params.elevatedModeActive) {
+        if (!params.elevatedModeActive) {
           commands.push({ type: "openElevatedMode" });
         } else {
           commands.push({ type: "denyPairing", pairingId });
         }
         return {
-          state: { ..._params.state, pairingCursor: cursor, pairingSelectedId: pairingId },
+          state: { ...params.state, pairingCursor: cursor, pairingSelectedId: pairingId },
           commands,
         };
       }
+
       if (input === "v") {
-        if (!_params.elevatedModeActive) {
+        if (!params.elevatedModeActive) {
           commands.push({ type: "openElevatedMode" });
         } else {
           commands.push({ type: "revokePairing", pairingId });
         }
         return {
-          state: { ..._params.state, pairingCursor: cursor, pairingSelectedId: pairingId },
+          state: { ...params.state, pairingCursor: cursor, pairingSelectedId: pairingId },
           commands,
         };
       }
     }
   }
 
-  if (_params.state.route === "runs") {
+  if (params.state.route === "runs") {
     const cursor = getEffectiveCursor({
-      ids: _params.runIds,
-      selectedId: _params.state.runsSelectedId,
-      cursor: _params.state.runsCursor,
+      ids: params.runIds,
+      selectedId: params.state.runsSelectedId,
+      cursor: params.state.runsCursor,
     });
-    const max = Math.max(0, _params.runIds.length - 1);
-    if (key.downArrow) {
-      const nextCursor = Math.min(cursor + 1, max);
-      return {
-        state: {
-          ..._params.state,
-          runsCursor: nextCursor,
-          runsSelectedId: _params.runIds[nextCursor] ?? null,
-        },
-        commands,
-      };
-    }
-    if (key.upArrow) {
-      const nextCursor = Math.max(cursor - 1, 0);
-      return {
-        state: {
-          ..._params.state,
-          runsCursor: nextCursor,
-          runsSelectedId: _params.runIds[nextCursor] ?? null,
-        },
-        commands,
-      };
-    }
-    return { state: { ..._params.state, runsCursor: cursor }, commands };
-  }
-
-  if (_params.state.route === "memory") {
-    const cursor = getEffectiveCursor({
-      ids: _params.memoryItemIds,
-      selectedId: _params.state.memorySelectedId,
-      cursor: _params.state.memoryCursor,
-    });
-    const max = Math.max(0, _params.memoryItemIds.length - 1);
+    const max = Math.max(0, params.runIds.length - 1);
 
     if (key.downArrow) {
       const nextCursor = Math.min(cursor + 1, max);
       return {
         state: {
-          ..._params.state,
-          memoryCursor: nextCursor,
-          memorySelectedId: _params.memoryItemIds[nextCursor] ?? null,
+          ...params.state,
+          runsCursor: nextCursor,
+          runsSelectedId: params.runIds[nextCursor] ?? null,
         },
         commands,
       };
     }
+
     if (key.upArrow) {
       const nextCursor = Math.max(cursor - 1, 0);
       return {
         state: {
-          ..._params.state,
-          memoryCursor: nextCursor,
-          memorySelectedId: _params.memoryItemIds[nextCursor] ?? null,
+          ...params.state,
+          runsCursor: nextCursor,
+          runsSelectedId: params.runIds[nextCursor] ?? null,
         },
         commands,
       };
     }
 
-    if (input === "r") {
-      commands.push({ type: "refreshMemory" });
-      return { state: { ..._params.state, memoryCursor: cursor }, commands };
-    }
-
-    if (input === "/") {
-      commands.push({ type: "openMemorySearch" });
-      return { state: { ..._params.state, memoryCursor: cursor }, commands };
-    }
-
-    if (input === "p") {
-      if (!_params.elevatedModeActive) {
-        commands.push({ type: "openElevatedMode" });
-      } else {
-        commands.push({ type: "exportMemory" });
-      }
-      return { state: { ..._params.state, memoryCursor: cursor }, commands };
-    }
-
-    if (input === "f") {
-      const memoryItemId = _params.memoryItemIds[cursor];
-      if (typeof memoryItemId === "string") {
-        if (!_params.elevatedModeActive) {
-          commands.push({ type: "openElevatedMode" });
-        } else {
-          commands.push({ type: "openMemoryForget", memoryItemId });
-        }
-      }
-      return {
-        state: {
-          ..._params.state,
-          memoryCursor: cursor,
-          memorySelectedId: typeof memoryItemId === "string" ? memoryItemId : null,
-        },
-        commands,
-      };
-    }
-
-    return { state: { ..._params.state, memoryCursor: cursor }, commands };
+    return { state: { ...params.state, runsCursor: cursor }, commands };
   }
 
-  return { state: _params.state, commands };
+  return { state: params.state, commands };
 }

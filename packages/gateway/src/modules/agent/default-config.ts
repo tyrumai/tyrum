@@ -13,7 +13,7 @@ export function buildDefaultAgentConfig(
     model: { model: null },
     ...(persona ? { persona } : {}),
     skills: { default_mode: "allow", workspace_trusted: true },
-    mcp: { default_mode: "allow" },
+    mcp: { default_mode: "allow", pre_turn_tools: ["mcp.memory.seed"] },
     tools: { default_mode: "allow" },
   });
 }

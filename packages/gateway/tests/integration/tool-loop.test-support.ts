@@ -39,8 +39,8 @@ type SeedAgentConfigParams = {
   workspaceKey?: string;
   config: {
     model?: { model?: string };
-    skills?: { enabled?: string[] };
-    mcp?: { enabled?: string[] };
+    skills?: Record<string, unknown>;
+    mcp?: Record<string, unknown>;
     tools: { allow: string[] };
     sessions?: {
       ttl_days?: number;
@@ -51,7 +51,6 @@ type SeedAgentConfigParams = {
       };
       context_pruning?: { max_messages?: number; tool_prune_keep_last_messages?: number };
     };
-    memory?: { v1?: { enabled?: boolean } };
   };
 };
 
@@ -265,7 +264,7 @@ export async function seedAgentConfig(
     config: {
       model: { model: "openai/gpt-4.1", ...params.config.model },
       skills: { enabled: [], ...params.config.skills },
-      mcp: { enabled: [], ...params.config.mcp },
+      mcp: { enabled: [], pre_turn_tools: ["mcp.memory.seed"], ...params.config.mcp },
       tools: params.config.tools,
       sessions: {
         ttl_days: 30,
@@ -276,7 +275,6 @@ export async function seedAgentConfig(
           cross_turn: { enabled: true, ...params.config.sessions?.loop_detection?.cross_turn },
         },
       },
-      memory: { v1: { enabled: false }, ...params.config.memory },
     },
     createdBy: { kind: "test" },
     reason: "test seed",

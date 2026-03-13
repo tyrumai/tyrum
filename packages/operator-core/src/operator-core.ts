@@ -6,9 +6,6 @@ import {
   type ExecutionAttempt,
   type ExecutionRun,
   type ExecutionStep,
-  type MemoryItemId,
-  type MemoryItem,
-  type MemoryTombstone,
   type TyrumClientEvents,
 } from "@tyrum/client/browser";
 import { httpAuthForAuth, wsTokenForAuth, type OperatorAuthStrategy } from "./auth.js";
@@ -24,7 +21,6 @@ import {
   type OperatorPresenceEntry,
   type StatusStore,
 } from "./stores/status-store.js";
-import { createMemoryStore, type MemoryStore } from "./stores/memory-store.js";
 import { createChatStore, type ChatStore } from "./stores/chat-store.js";
 import { createAutoSyncManager, type AutoSyncState, type AutoSyncTask } from "./auto-sync.js";
 import { createWorkboardStore, type WorkboardStore } from "./stores/workboard-store.js";
@@ -76,7 +72,6 @@ export interface OperatorCore {
   runsStore: RunsStore;
   pairingStore: PairingStore;
   statusStore: StatusStore;
-  memoryStore: MemoryStore;
   workboardStore: WorkboardStore;
   agentStatusStore: AgentStatusStore;
   desktopEnvironmentHostsStore: DesktopEnvironmentHostsStore;
@@ -121,7 +116,6 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
   const pairing = createPairingStore(http);
   const status = createStatusStore(http);
   const runs = createRunsStore(ws);
-  const memory = createMemoryStore(ws);
   const chat = createChatStore(ws, http);
   const workboard = createWorkboardStore(ws);
   const agentStatus = createAgentStatusStore(http);
@@ -131,7 +125,6 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
     runsStore: runs.store,
     approvalsStore: approvals.store,
     statusStore: status.store,
-    memoryStore: memory.store,
     chatStore: chat,
   });
 
@@ -140,7 +133,6 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
     pairingStore: pairing.store,
     runsStore: runs.store,
     statusStore: status.store,
-    memoryStore: memory.store,
     workboardStore: workboard.store,
     agentStatusStore: agentStatus.store,
     desktopEnvironmentHostsStore: desktopEnvironmentHosts.store,
@@ -199,18 +191,6 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
           await status.store.refreshUsage();
           const error = status.store.getSnapshot().error.usage;
           if (error) throw new Error(error);
-        },
-      },
-    ],
-    memoryStore: [
-      {
-        id: "memory.refreshBrowse",
-        run: async () => {
-          await memory.store.refreshBrowse();
-          const snapshot = memory.store.getSnapshot();
-          if (!snapshot.browse.request) return;
-          const error = snapshot.browse.error;
-          if (error) throw new Error(error.message);
         },
       },
     ],
@@ -366,59 +346,6 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
     }
   });
 
-  on("memory.item.created", (data) => {
-    const payload = readPayload(data);
-    const item = payload?.["item"];
-    if (item) {
-      memory.handleMemoryItemUpsert(item as MemoryItem);
-    }
-  });
-
-  on("memory.item.updated", (data) => {
-    const payload = readPayload(data);
-    const item = payload?.["item"];
-    if (item) {
-      memory.handleMemoryItemUpsert(item as MemoryItem);
-    }
-  });
-
-  on("memory.item.consolidated", (data) => {
-    const payload = readPayload(data);
-    const fromIds = payload?.["from_memory_item_ids"];
-    const item = payload?.["item"];
-    if (item && Array.isArray(fromIds) && fromIds.every((id) => typeof id === "string")) {
-      memory.handleMemoryConsolidated(fromIds as MemoryItemId[], item as MemoryItem);
-      return;
-    }
-    if (item) {
-      memory.handleMemoryItemUpsert(item as MemoryItem);
-    }
-  });
-
-  on("memory.item.deleted", (data) => {
-    const payload = readPayload(data);
-    const tombstone = payload?.["tombstone"];
-    if (tombstone) {
-      memory.handleMemoryTombstone(tombstone as MemoryTombstone);
-    }
-  });
-
-  on("memory.item.forgotten", (data) => {
-    const payload = readPayload(data);
-    const tombstone = payload?.["tombstone"];
-    if (tombstone) {
-      memory.handleMemoryTombstone(tombstone as MemoryTombstone);
-    }
-  });
-
-  on("memory.export.completed", (data) => {
-    const payload = readPayload(data);
-    const artifactId = payload?.["artifact_id"];
-    if (typeof artifactId === "string") {
-      memory.handleMemoryExportCompleted(artifactId);
-    }
-  });
-
   on("run.updated", (data) => {
     const payload = readPayload(data);
     const run = payload?.["run"];
@@ -502,7 +429,6 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
     pairingStore: pairing.store,
     statusStore: status.store,
     runsStore: runs.store,
-    memoryStore: memory.store,
     workboardStore: workboard.store,
     agentStatusStore: agentStatus.store,
     desktopEnvironmentHostsStore: desktopEnvironmentHosts.store,

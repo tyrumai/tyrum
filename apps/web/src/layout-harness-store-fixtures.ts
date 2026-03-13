@@ -402,61 +402,6 @@ export function createAgentStatusStore() {
   };
 }
 
-export function createMemoryStore() {
-  const item = {
-    memory_item_id: "memory-1",
-    kind: "note",
-    body_md: "Keep layout wrappers box-sized.",
-    tags: ["layout", "regression"],
-    sensitivity: "private",
-    created_at: "2026-03-08T00:00:00.000Z",
-    updated_at: "2026-03-08T00:00:00.000Z",
-    provenance: undefined,
-  };
-
-  return {
-    ...createStore({
-      browse: {
-        request: null,
-        results: {
-          kind: "list",
-          items: [item],
-          nextCursor: null,
-        },
-        loading: false,
-        error: null,
-        lastSyncedAt: "2026-03-08T00:00:00.000Z",
-      },
-      inspect: {
-        agentId: "default",
-        memoryItemId: "memory-1",
-        item,
-        loading: false,
-        error: null,
-      },
-      tombstones: {
-        tombstones: [],
-        loading: false,
-        error: null,
-      },
-      export: {
-        running: false,
-        artifactId: "artifact-1",
-        error: null,
-        lastExportedAt: "2026-03-08T00:00:00.000Z",
-      },
-    }).store,
-    list: async () => {},
-    search: async () => {},
-    refreshBrowse: async () => {},
-    loadMore: async () => {},
-    inspect: async () => {},
-    update: async () => {},
-    forget: async () => {},
-    export: async () => {},
-  };
-}
-
 export function createManagedAgentDetail(agentKey: string) {
   return {
     agent_id:

@@ -28,9 +28,9 @@ import {
 function makeRuntimeConfig(input?: { memoryEnabled?: boolean }): Record<string, unknown> {
   return {
     model: { model: "openai/gpt-4.1" },
-    skills: { enabled: [] },
-    mcp: { enabled: [] },
-    tools: { allow: [] },
+    skills: { default_mode: "deny", workspace_trusted: false },
+    mcp: { default_mode: "allow", pre_turn_tools: ["mcp.memory.seed"] },
+    tools: { default_mode: "allow" },
     sessions: { ttl_days: 30, max_turns: 20 },
     memory: input?.memoryEnabled
       ? {
@@ -39,7 +39,6 @@ function makeRuntimeConfig(input?: { memoryEnabled?: boolean }): Record<string, 
             keyword: { enabled: true, limit: 20 },
             semantic: { enabled: false, limit: 1 },
             structured: { fact_keys: [], tags: [] },
-            auto_write: { enabled: true },
             budgets: {
               max_total_items: 10,
               max_total_chars: 4000,
@@ -481,8 +480,8 @@ describe("Agent behavior - session boundaries", () => {
         return "Stored.";
       },
       {
-        memoryDecision: ({ promptText }) =>
-          promptIncludes(promptText, "remember that my name is alice")
+        memoryDecision: ({ latestUserText }) =>
+          promptIncludes(latestUserText, "remember that my name is alice")
             ? noteDecision("remember that my name is Alice")
             : undefined,
       },

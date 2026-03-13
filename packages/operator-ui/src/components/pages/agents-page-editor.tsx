@@ -9,6 +9,7 @@ import { Button } from "../ui/button.js";
 import { Card, CardContent } from "../ui/card.js";
 import {
   type AgentEditorFormState,
+  type PreservedMcpConfig,
   buildPayload,
   createBlankForm,
   snapshotToForm,
@@ -25,6 +26,13 @@ type AgentEditorProps = {
 };
 
 const CREATE_CAPABILITIES_DEBOUNCE_MS = 250;
+
+function createEmptyPreservedMcpConfig(): PreservedMcpConfig {
+  return {
+    pre_turn_tools: [],
+    server_settings: {},
+  };
+}
 
 function sortJsonValue(value: unknown): unknown {
   if (Array.isArray(value)) {
@@ -81,6 +89,9 @@ export function AgentsPageEditor({
   const [preservedModelOptions, setPreservedModelOptions] = React.useState<Record<string, unknown>>(
     {},
   );
+  const [preservedMcpConfig, setPreservedMcpConfig] = React.useState<PreservedMcpConfig>(
+    createEmptyPreservedMcpConfig(),
+  );
   const saveAction = useApiAction<ManagedAgentDetail>();
   const deferredCreateCapabilitiesAgentKey = React.useDeferredValue(
     form.agentKey.trim() || "default",
@@ -115,6 +126,7 @@ export function AgentsPageEditor({
       if (mode === "create") {
         setForm(createBlankForm());
         setPreservedModelOptions({});
+        setPreservedMcpConfig(createEmptyPreservedMcpConfig());
         setLoadError(null);
         setLoading(false);
         try {
@@ -158,6 +170,10 @@ export function AgentsPageEditor({
             }),
           );
           setPreservedModelOptions(detailResult.value.config.model.options ?? {});
+          setPreservedMcpConfig({
+            pre_turn_tools: detailResult.value.config.mcp.pre_turn_tools,
+            server_settings: detailResult.value.config.mcp.server_settings,
+          });
         } else {
           setLoadError(formatErrorMessage(detailResult.reason));
         }
@@ -254,7 +270,7 @@ export function AgentsPageEditor({
   const save = async (): Promise<void> => {
     if (mode === "create") {
       const created = await saveAction.runAndThrow(async () => {
-        const payload = buildPayload(form, preservedModelOptions);
+        const payload = buildPayload(form, preservedModelOptions, preservedMcpConfig);
         return await core.http.agents.create(payload);
       });
       onSaved(created.agent_key);
@@ -262,7 +278,7 @@ export function AgentsPageEditor({
     }
 
     const updated = await saveAction.runAndThrow(async () => {
-      const payload = buildPayload(form, preservedModelOptions);
+      const payload = buildPayload(form, preservedModelOptions, preservedMcpConfig);
       const targetKey = agentKey ?? payload.agent_key;
       return await core.http.agents.update(targetKey, {
         config: payload.config,

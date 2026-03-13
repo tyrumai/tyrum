@@ -19,9 +19,9 @@ import {
 function makeMemoryConfig(): Record<string, unknown> {
   return {
     model: { model: "openai/gpt-4.1" },
-    skills: { enabled: [] },
-    mcp: { enabled: [] },
-    tools: { allow: [] },
+    skills: { default_mode: "deny", workspace_trusted: false },
+    mcp: { default_mode: "allow", pre_turn_tools: ["mcp.memory.seed"] },
+    tools: { default_mode: "allow" },
     sessions: { ttl_days: 30, max_turns: 20 },
     memory: {
       v1: {
@@ -29,7 +29,6 @@ function makeMemoryConfig(): Record<string, unknown> {
         keyword: { enabled: true, limit: 20 },
         semantic: { enabled: false, limit: 1 },
         structured: { fact_keys: [], tags: [] },
-        auto_write: { enabled: true },
         budgets: {
           max_total_items: 10,
           max_total_chars: 4000,
@@ -120,8 +119,8 @@ describe("Agent behavior - stream parity", () => {
     await seedAgentConfig(containerB, { config: makeMemoryConfig() });
 
     const model = createPromptAwareLanguageModel(() => "Stored mango.", {
-      memoryDecision: ({ promptText }) =>
-        promptText.toLowerCase().includes("remember that my favorite fruit is mango")
+      memoryDecision: ({ latestUserText }) =>
+        latestUserText.toLowerCase().includes("remember that my favorite fruit is mango")
           ? noteDecision("remember that my favorite fruit is mango")
           : undefined,
     });

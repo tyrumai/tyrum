@@ -23,9 +23,9 @@ import {
 function makeMemoryEnabledConfig(): Record<string, unknown> {
   return {
     model: { model: "openai/gpt-4.1" },
-    skills: { enabled: [] },
-    mcp: { enabled: [] },
-    tools: { allow: [] },
+    skills: { default_mode: "deny", workspace_trusted: false },
+    mcp: { default_mode: "allow", pre_turn_tools: ["mcp.memory.seed"] },
+    tools: { default_mode: "allow" },
     sessions: { ttl_days: 30, max_turns: 20 },
     memory: {
       v1: {
@@ -33,7 +33,6 @@ function makeMemoryEnabledConfig(): Record<string, unknown> {
         keyword: { enabled: true, limit: 20 },
         semantic: { enabled: false, limit: 1 },
         structured: { fact_keys: [], tags: [] },
-        auto_write: { enabled: true },
         budgets: {
           max_total_items: 10,
           max_total_chars: 4000,
@@ -214,7 +213,21 @@ describe("Agent behavior - WorkBoard and delegation", () => {
     ({ homeDir, container } = await setupTestEnv());
     await seedAgentConfig(container, { config: makeMemoryEnabledConfig() });
 
+    const scope = {
+      tenant_id: DEFAULT_TENANT_ID,
+      agent_id: DEFAULT_AGENT_ID,
+      workspace_id: DEFAULT_WORKSPACE_ID,
+    } as const;
+    const workboard = new WorkboardDal(container.db);
     const subagentKey = "agent:default:subagent:subagent-1";
+    await workboard.createSubagent({
+      scope,
+      subagentId: "subagent-1",
+      subagent: {
+        execution_profile: "executor",
+        session_key: subagentKey,
+      },
+    });
     const runtime = new AgentRuntime({
       container,
       home: homeDir,
@@ -230,8 +243,8 @@ describe("Agent behavior - WorkBoard and delegation", () => {
           return "Stored.";
         },
         {
-          memoryDecision: ({ promptText }) =>
-            promptIncludes(promptText, "remember that deployment needs verification")
+          memoryDecision: ({ latestUserText }) =>
+            promptIncludes(latestUserText, "remember that deployment needs verification")
               ? noteDecision("remember that deployment needs verification")
               : undefined,
         },

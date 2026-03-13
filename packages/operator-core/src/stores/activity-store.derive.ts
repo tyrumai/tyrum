@@ -16,7 +16,6 @@ import {
   findLatestRun,
   findLatestStep,
   makeDraftWorkstream,
-  memorySummary,
   normalizeLane,
   parseStatusLanes,
   runSummary,
@@ -63,7 +62,6 @@ function buildWorkstreams(
   const runsState = deps.runsStore.getSnapshot();
   const approvalsState = deps.approvalsStore.getSnapshot();
   const statusState = deps.statusStore.getSnapshot();
-  const memoryState = deps.memoryStore.getSnapshot();
   const chatState = deps.chatStore.getSnapshot();
 
   const sessionAgents = createSessionAgentMap(chatState);
@@ -89,22 +87,6 @@ function buildWorkstreams(
     const scope = resolveApprovalScope(approval, runsState);
     if (!scope) continue;
     addDraft(drafts, scope.key, scope.lane, sessionAgents).approvals.push(approval);
-  }
-
-  const memoryResults = memoryState.browse.results;
-  if (memoryResults?.kind === "list") {
-    for (const item of memoryResults.items) {
-      const sessionId = item.provenance.session_id?.trim();
-      if (!sessionId) continue;
-      addDraft(drafts, sessionId, "main", sessionAgents).memoryEvents.push(
-        toEvent(
-          `memory:${item.memory_item_id}`,
-          "memory.item.updated",
-          item.updated_at ?? item.created_at,
-          memorySummary(item),
-        ),
-      );
-    }
   }
 
   for (const message of messageActivityById.values()) {
@@ -165,7 +147,6 @@ function buildWorkstreams(
           approvalSummary(approval),
         ),
       ),
-      ...draft.memoryEvents,
       ...(draft.message?.recentEvents ?? []),
     ]
       .toSorted(compareEvents)
@@ -176,7 +157,6 @@ function buildWorkstreams(
       runStatus,
       queuedRunCount,
       draft.message,
-      draft.memoryEvents,
       lease,
     );
 
@@ -192,13 +172,12 @@ function buildWorkstreams(
       lease,
       attentionLevel: priority.level,
       attentionScore: priority.score,
-      currentRoom: determineRoom(priority, draft.message, draft.memoryEvents, runStatus),
+      currentRoom: determineRoom(priority, draft.message, runStatus),
       bubbleText: determineBubbleText(
         draft.approvals,
         latestAttempt,
         latestRun,
         draft.message,
-        draft.memoryEvents,
       ),
       recentEvents,
     };

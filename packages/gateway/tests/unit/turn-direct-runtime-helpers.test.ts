@@ -69,7 +69,7 @@ describe("maybeAutoCompactSession", () => {
               reserved_input_tokens: 20_000,
             },
           },
-          memory: { v1: { enabled: false } },
+          mcp: { server_settings: { memory: { enabled: false } } },
         },
       } as never,
       sessionId: "session-1",

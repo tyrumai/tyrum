@@ -298,28 +298,6 @@ function registerEventsAdvancedTests(fixture: EventsFixture): void {
           revision: 2,
         },
       },
-      {
-        type: "memory.item.created",
-        payload: {
-          item: {
-            v: 1,
-            memory_item_id: "123e4567-e89b-12d3-a456-426614174000",
-            agent_id: "22222222-2222-4222-8222-222222222222",
-            kind: "note",
-            tags: ["demo"],
-            sensitivity: "private",
-            provenance: { source_kind: "operator", refs: [] },
-            created_at: "2026-02-19T12:00:00Z",
-            body_md: "Remember this.",
-          },
-        },
-      },
-      {
-        type: "memory.export.completed",
-        payload: {
-          artifact_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
-        },
-      },
     ] as const;
 
     for (let i = 0; i < cases.length; i++) {

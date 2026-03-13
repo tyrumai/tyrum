@@ -27,6 +27,16 @@ export const ContextToolCallReport = z
   .passthrough();
 export type ContextToolCallReport = z.infer<typeof ContextToolCallReport>;
 
+export const ContextPreTurnToolReport = z
+  .object({
+    tool_id: z.string().trim().min(1),
+    status: z.enum(["succeeded", "failed", "skipped"]),
+    injected_chars: z.number().int().nonnegative(),
+    error: z.string().trim().min(1).optional(),
+  })
+  .passthrough();
+export type ContextPreTurnToolReport = z.infer<typeof ContextPreTurnToolReport>;
+
 export const ContextInjectedFileReport = z
   .object({
     tool_call_id: z.string().trim().min(1),
@@ -65,6 +75,7 @@ export const ContextReport = z
       })
       .passthrough()
       .default({ keyword_hits: 0, semantic_hits: 0 }),
+    pre_turn_tools: z.array(ContextPreTurnToolReport).default([]),
     tool_calls: z.array(ContextToolCallReport).default([]),
     injected_files: z.array(ContextInjectedFileReport).default([]),
   })

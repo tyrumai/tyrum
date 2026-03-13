@@ -1,19 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAdminWsClient, serializeWsRequest } from "../helpers/ws-protocol-test-helpers.js";
 
-describe("memory and subagent WS handler extraction", () => {
-  const { handleMemoryMessageMock, handleSubagentMessageMock } = vi.hoisted(() => ({
-    handleMemoryMessageMock: vi.fn(async (_client: unknown, msg: unknown) => {
-      const type = (msg as { type?: string }).type;
-      const requestId = (msg as { request_id?: string }).request_id;
-      if (!type?.startsWith("memory.")) return undefined;
-      return {
-        request_id: requestId ?? "missing",
-        type,
-        ok: true as const,
-        result: { mocked: true },
-      };
-    }),
+describe("subagent WS handler extraction", () => {
+  const { handleSubagentMessageMock } = vi.hoisted(() => ({
     handleSubagentMessageMock: vi.fn(async (_client: unknown, msg: unknown) => {
       const type = (msg as { type?: string }).type;
       const requestId = (msg as { request_id?: string }).request_id;
@@ -27,40 +16,14 @@ describe("memory and subagent WS handler extraction", () => {
     }),
   }));
 
-  vi.mock("../../src/ws/protocol/memory-handlers.js", () => {
-    return { handleMemoryMessage: handleMemoryMessageMock };
-  });
   vi.mock("../../src/ws/protocol/subagent-handlers.js", () => {
     return { handleSubagentMessage: handleSubagentMessageMock };
   });
 
   afterEach(() => {
-    handleMemoryMessageMock.mockClear();
     handleSubagentMessageMock.mockClear();
     vi.resetModules();
     vi.restoreAllMocks();
-  });
-
-  it("routes memory.* requests through memory-handlers", async () => {
-    const client = createAdminWsClient();
-    const deps = {};
-    const raw = serializeWsRequest({ type: "memory.search" });
-
-    const { handleClientMessage } = await import("../../src/ws/protocol/handler.js");
-    const res = await handleClientMessage(client, raw, deps);
-
-    expect(handleMemoryMessageMock).toHaveBeenCalledTimes(1);
-    expect(handleMemoryMessageMock).toHaveBeenCalledWith(
-      client,
-      expect.objectContaining({ request_id: "req-1", type: "memory.search" }),
-      deps,
-    );
-    expect(res).toEqual({
-      request_id: "req-1",
-      type: "memory.search",
-      ok: true,
-      result: { mocked: true },
-    });
   });
 
   it("routes subagent.* requests through subagent-handlers", async () => {

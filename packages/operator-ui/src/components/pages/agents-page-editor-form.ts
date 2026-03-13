@@ -1,4 +1,4 @@
-import { AgentConfig } from "@tyrum/schemas";
+import { AgentConfig, BuiltinMemoryServerSettings } from "@tyrum/schemas";
 import type { AgentConfig as AgentConfigT, IdentityPack as IdentityPackT } from "@tyrum/schemas";
 
 const DEFAULT_CONFIG = AgentConfig.parse({
@@ -72,6 +72,8 @@ export type AgentEditorSetField = <K extends keyof AgentEditorFormState>(
   value: AgentEditorFormState[K],
 ) => void;
 
+export type PreservedMcpConfig = Pick<AgentConfigT["mcp"], "pre_turn_tools" | "server_settings">;
+
 export function splitList(value: string): string[] {
   return value
     .split(/[\n,]/u)
@@ -89,7 +91,8 @@ export function snapshotToForm(snapshot: {
   identity?: IdentityPackT;
 }): AgentEditorFormState {
   const config = snapshot.config;
-  const budgets = config.memory.v1.budgets;
+  const memory = BuiltinMemoryServerSettings.parse(config.mcp.server_settings["memory"] ?? {});
+  const budgets = memory.budgets;
   const perKind = budgets.per_kind;
   return {
     agentKey: snapshot.agentKey,
@@ -130,16 +133,16 @@ export function snapshotToForm(snapshot: {
     crossTurnCooldownMessages: String(
       config.sessions.loop_detection.cross_turn.cooldown_assistant_messages,
     ),
-    memoryEnabled: config.memory.v1.enabled,
-    allowPublic: config.memory.v1.allow_sensitivities.includes("public"),
-    allowPrivate: config.memory.v1.allow_sensitivities.includes("private"),
-    allowSensitive: config.memory.v1.allow_sensitivities.includes("sensitive"),
-    factKeys: joinList(config.memory.v1.structured.fact_keys),
-    memoryTags: joinList(config.memory.v1.structured.tags),
-    keywordEnabled: config.memory.v1.keyword.enabled,
-    keywordLimit: String(config.memory.v1.keyword.limit),
-    semanticEnabled: config.memory.v1.semantic.enabled,
-    semanticLimit: String(config.memory.v1.semantic.limit),
+    memoryEnabled: memory.enabled,
+    allowPublic: memory.allow_sensitivities.includes("public"),
+    allowPrivate: memory.allow_sensitivities.includes("private"),
+    allowSensitive: memory.allow_sensitivities.includes("sensitive"),
+    factKeys: joinList(memory.structured.fact_keys),
+    memoryTags: joinList(memory.structured.tags),
+    keywordEnabled: memory.keyword.enabled,
+    keywordLimit: String(memory.keyword.limit),
+    semanticEnabled: memory.semantic.enabled,
+    semanticLimit: String(memory.semantic.limit),
     totalItems: String(budgets.max_total_items),
     totalChars: String(budgets.max_total_chars),
     totalTokens: budgets.max_total_tokens === undefined ? "" : String(budgets.max_total_tokens),
@@ -185,6 +188,7 @@ function parseOptionalInt(value: string): number | undefined {
 export function buildPayload(
   form: AgentEditorFormState,
   preservedModelOptions?: Record<string, unknown>,
+  preservedMcpConfig?: PreservedMcpConfig,
 ) {
   const primaryModel = form.model.trim();
   const allowSensitivities = [
@@ -193,6 +197,63 @@ export function buildPayload(
     form.allowSensitive ? "sensitive" : null,
   ].filter((value): value is "public" | "private" | "sensitive" => value !== null);
 
+  const memorySettings = BuiltinMemoryServerSettings.parse({
+    enabled: form.memoryEnabled,
+    allow_sensitivities: allowSensitivities,
+    structured: {
+      fact_keys: splitList(form.factKeys),
+      tags: splitList(form.memoryTags),
+    },
+    keyword: {
+      enabled: form.keywordEnabled,
+      limit: Number(form.keywordLimit),
+    },
+    semantic: {
+      enabled: form.semanticEnabled,
+      limit: Number(form.semanticLimit),
+    },
+    budgets: {
+      max_total_items: Number(form.totalItems),
+      max_total_chars: Number(form.totalChars),
+      ...(parseOptionalInt(form.totalTokens) !== undefined
+        ? { max_total_tokens: parseOptionalInt(form.totalTokens) }
+        : {}),
+      per_kind: {
+        fact: {
+          max_items: Number(form.factItems),
+          max_chars: Number(form.factChars),
+          ...(parseOptionalInt(form.factTokens) !== undefined
+            ? { max_tokens: parseOptionalInt(form.factTokens) }
+            : {}),
+        },
+        note: {
+          max_items: Number(form.noteItems),
+          max_chars: Number(form.noteChars),
+          ...(parseOptionalInt(form.noteTokens) !== undefined
+            ? { max_tokens: parseOptionalInt(form.noteTokens) }
+            : {}),
+        },
+        procedure: {
+          max_items: Number(form.procedureItems),
+          max_chars: Number(form.procedureChars),
+          ...(parseOptionalInt(form.procedureTokens) !== undefined
+            ? { max_tokens: parseOptionalInt(form.procedureTokens) }
+            : {}),
+        },
+        episode: {
+          max_items: Number(form.episodeItems),
+          max_chars: Number(form.episodeChars),
+          ...(parseOptionalInt(form.episodeTokens) !== undefined
+            ? { max_tokens: parseOptionalInt(form.episodeTokens) }
+            : {}),
+        },
+      },
+    },
+  });
+  const preservedServerSettings = preservedMcpConfig?.server_settings ?? {};
+  const preTurnTools =
+    preservedMcpConfig?.pre_turn_tools ??
+    (form.memoryEnabled ? ["mcp.memory.seed"] : []);
   const payload = {
     agent_key: form.agentKey.trim(),
     config: AgentConfig.parse({
@@ -222,6 +283,11 @@ export function buildPayload(
         default_mode: form.mcpDefaultMode,
         allow: form.mcpAllow,
         deny: form.mcpDeny,
+        ...(preTurnTools.length ? { pre_turn_tools: preTurnTools } : {}),
+        server_settings: {
+          ...preservedServerSettings,
+          memory: memorySettings,
+        },
       },
       tools: {
         default_mode: form.toolsDefaultMode,
@@ -247,61 +313,6 @@ export function buildPayload(
             similarity_threshold: Number(form.crossTurnSimilarityThreshold),
             min_chars: Number(form.crossTurnMinChars),
             cooldown_assistant_messages: Number(form.crossTurnCooldownMessages),
-          },
-        },
-      },
-      memory: {
-        v1: {
-          enabled: form.memoryEnabled,
-          allow_sensitivities: allowSensitivities,
-          structured: {
-            fact_keys: splitList(form.factKeys),
-            tags: splitList(form.memoryTags),
-          },
-          keyword: {
-            enabled: form.keywordEnabled,
-            limit: Number(form.keywordLimit),
-          },
-          semantic: {
-            enabled: form.semanticEnabled,
-            limit: Number(form.semanticLimit),
-          },
-          budgets: {
-            max_total_items: Number(form.totalItems),
-            max_total_chars: Number(form.totalChars),
-            ...(parseOptionalInt(form.totalTokens) !== undefined
-              ? { max_total_tokens: parseOptionalInt(form.totalTokens) }
-              : {}),
-            per_kind: {
-              fact: {
-                max_items: Number(form.factItems),
-                max_chars: Number(form.factChars),
-                ...(parseOptionalInt(form.factTokens) !== undefined
-                  ? { max_tokens: parseOptionalInt(form.factTokens) }
-                  : {}),
-              },
-              note: {
-                max_items: Number(form.noteItems),
-                max_chars: Number(form.noteChars),
-                ...(parseOptionalInt(form.noteTokens) !== undefined
-                  ? { max_tokens: parseOptionalInt(form.noteTokens) }
-                  : {}),
-              },
-              procedure: {
-                max_items: Number(form.procedureItems),
-                max_chars: Number(form.procedureChars),
-                ...(parseOptionalInt(form.procedureTokens) !== undefined
-                  ? { max_tokens: parseOptionalInt(form.procedureTokens) }
-                  : {}),
-              },
-              episode: {
-                max_items: Number(form.episodeItems),
-                max_chars: Number(form.episodeChars),
-                ...(parseOptionalInt(form.episodeTokens) !== undefined
-                  ? { max_tokens: parseOptionalInt(form.episodeTokens) }
-                  : {}),
-              },
-            },
           },
         },
       },

@@ -158,7 +158,12 @@ export function PendingPairingCard({
   }, [pairing.capability_allowlist, pairing.node.capabilities]);
 
   const [selectedCapabilityIds, setSelectedCapabilityIds] = useState<Set<string>>(
-    () => new Set(capabilityOptions.map((capability) => capability.id)),
+    () =>
+      new Set(
+        capabilityOptions.map(
+          (capability: Pairing["node"]["capabilities"][number]) => capability.id,
+        ),
+      ),
   );
   const reasonRef = useRef<HTMLTextAreaElement | null>(null);
   const isBusy = busy !== null;
@@ -169,8 +174,9 @@ export function PendingPairingCard({
     setBusy("approve");
     try {
       const trimmedReason = reasonRef.current?.value.trim() ?? "";
-      const capability_allowlist = capabilityOptions.filter((capability) =>
-        selectedCapabilityIds.has(capability.id),
+      const capability_allowlist = capabilityOptions.filter(
+        (capability: Pairing["node"]["capabilities"][number]) =>
+          selectedCapabilityIds.has(capability.id),
       );
       await core.pairingStore.approve(pairing.pairing_id, {
         trust_level: trustLevel,
@@ -280,7 +286,8 @@ export function PendingPairingCard({
             <div className="text-sm text-fg-muted">No capabilities available.</div>
           ) : (
             <div className="grid gap-2">
-              {capabilityOptions.map((capability, index) => {
+              {capabilityOptions.map(
+                (capability: Pairing["node"]["capabilities"][number], index: number) => {
                 const checkboxId = `pairing-${pairing.pairing_id}-cap-${capability.id}`;
                 const checked = selectedCapabilityIds.has(capability.id);
                 return (
@@ -310,7 +317,8 @@ export function PendingPairingCard({
                     </Label>
                   </div>
                 );
-              })}
+                },
+              )}
             </div>
           )}
         </fieldset>

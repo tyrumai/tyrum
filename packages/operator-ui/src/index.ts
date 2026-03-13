@@ -144,7 +144,4 @@ export { ToastProvider } from "./components/toast/toast-provider.js";
 
 export { toast } from "sonner";
 
-export type { MemoryInspectorProps } from "./components/memory/memory-inspector.js";
-export { MemoryInspector } from "./components/memory/memory-inspector.js";
-
 export { useOperatorStore } from "./use-operator-store.js";

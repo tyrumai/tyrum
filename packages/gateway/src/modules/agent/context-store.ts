@@ -33,6 +33,7 @@ import {
   parseManagedMcpPackage,
   parseManagedSkillPackage,
 } from "../extensions/managed.js";
+import { buildBuiltinMemoryServerSpec } from "../memory/builtin-mcp.js";
 
 export interface AgentContextScope {
   tenantId: string;
@@ -261,6 +262,7 @@ class LocalAgentContextStore implements AgentContextStore {
     const loaded: McpServerSpecT[] = [];
     const seen = new Set<string>();
     const orderedServerIds = [
+      buildBuiltinMemoryServerSpec().id,
       ...localServers.map((server) => server.id),
       ...managedServers.map((server) => server.packageKey),
     ];
@@ -275,6 +277,11 @@ class LocalAgentContextStore implements AgentContextStore {
         continue;
       }
       seen.add(normalizedServerId);
+
+      if (normalizedServerId === buildBuiltinMemoryServerSpec().id) {
+        loaded.push(buildBuiltinMemoryServerSpec());
+        continue;
+      }
 
       const local = localById.get(normalizedServerId);
       if (local) {
@@ -447,8 +454,10 @@ class SharedAgentContextStore implements AgentContextStore {
     const sharedById = new Map(sharedServers.map((item) => [item.packageKey, item]));
     const loaded: McpServerSpecT[] = [];
     const seen = new Set<string>();
-
-    for (const serverId of sharedServers.map((server) => server.packageKey)) {
+    for (const serverId of [
+      buildBuiltinMemoryServerSpec().id,
+      ...sharedServers.map((server) => server.packageKey),
+    ]) {
       const normalizedServerId = serverId.trim();
       if (
         normalizedServerId.length === 0 ||
@@ -458,6 +467,11 @@ class SharedAgentContextStore implements AgentContextStore {
         continue;
       }
       seen.add(normalizedServerId);
+
+      if (normalizedServerId === buildBuiltinMemoryServerSpec().id) {
+        loaded.push(buildBuiltinMemoryServerSpec());
+        continue;
+      }
 
       const shared = sharedById.get(normalizedServerId);
       if (!shared) continue;

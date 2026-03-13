@@ -11,7 +11,6 @@ import {
   createConnectionStore,
   createEventWsStub,
   createManagedAgentDetail,
-  createMemoryStore,
   createPairingStore,
   createRunsStore,
   createStatusStore,
@@ -65,7 +64,6 @@ export function createAgentsCore(): OperatorCore {
     connectionStore: createConnectionStore(),
     statusStore: createStatusStore(),
     agentStatusStore: createAgentStatusStore(),
-    memoryStore: createMemoryStore(),
     runsStore: createRunsStore(),
     http: createHarnessAgentHttpFixtures(createManagedAgentDetail),
   } as unknown as OperatorCore;

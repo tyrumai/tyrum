@@ -26,7 +26,6 @@ import {
 } from "../modules/execution/worker-loop.js";
 import { LifecycleHooksRuntime } from "../modules/hooks/runtime.js";
 import { LocationService } from "../modules/location/service.js";
-import { createMemoryV1BudgetsProvider } from "../modules/memory/v1-budgets-provider.js";
 import type { OtelRuntime } from "../modules/observability/otel.js";
 import { createPluginCatalogProvider } from "../modules/plugins/catalog-provider.js";
 import { loadAllPlaybooks } from "../modules/playbook/loader.js";
@@ -122,8 +121,6 @@ export async function createProtocolRuntime(
     db: context.container.db,
     wsEventDal,
     redactionEngine: context.container.redactionEngine,
-    memoryV1Dal: context.container.memoryV1Dal,
-    artifactStore: context.container.artifactStore,
     authAudit: new AuthAudit({ eventLog: context.container.eventLog, logger: context.logger }),
     contextReportDal: context.container.contextReportDal,
     runtime: {
@@ -200,7 +197,6 @@ export async function createProtocolRuntime(
     },
   };
 
-  protocolDeps.memoryV1BudgetsProvider = createMemoryV1BudgetsProvider(context.container.db);
   const approvalEngineActionProcessor = approvalEngine
     ? new ApprovalEngineActionProcessor({
         db: context.container.db,

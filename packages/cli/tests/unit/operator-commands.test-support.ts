@@ -30,14 +30,6 @@ export const wsApprovalResolveSpy = vi.fn();
 export const wsWorkflowRunSpy = vi.fn();
 export const wsWorkflowResumeSpy = vi.fn();
 export const wsWorkflowCancelSpy = vi.fn();
-export const wsMemorySearchSpy = vi.fn();
-export const wsMemoryListSpy = vi.fn();
-export const wsMemoryGetSpy = vi.fn();
-export const wsMemoryCreateSpy = vi.fn();
-export const wsMemoryUpdateSpy = vi.fn();
-export const wsMemoryDeleteSpy = vi.fn();
-export const wsMemoryForgetSpy = vi.fn();
-export const wsMemoryExportSpy = vi.fn();
 export const httpCtorSpy = vi.fn();
 export const httpPairingsApproveSpy = vi.fn();
 export const httpPairingsDenySpy = vi.fn();
@@ -59,14 +51,6 @@ const resettableSpies = [
   wsWorkflowRunSpy,
   wsWorkflowResumeSpy,
   wsWorkflowCancelSpy,
-  wsMemorySearchSpy,
-  wsMemoryListSpy,
-  wsMemoryGetSpy,
-  wsMemoryCreateSpy,
-  wsMemoryUpdateSpy,
-  wsMemoryDeleteSpy,
-  wsMemoryForgetSpy,
-  wsMemoryExportSpy,
   httpCtorSpy,
   httpPairingsApproveSpy,
   httpPairingsDenySpy,
@@ -151,38 +135,6 @@ async function createMockClientModule(
 
     workflowCancel(payload: unknown): Promise<unknown> {
       return wsWorkflowCancelSpy(payload);
-    }
-
-    memorySearch(payload: unknown): Promise<unknown> {
-      return wsMemorySearchSpy(payload);
-    }
-
-    memoryList(payload: unknown): Promise<unknown> {
-      return wsMemoryListSpy(payload);
-    }
-
-    memoryGet(payload: unknown): Promise<unknown> {
-      return wsMemoryGetSpy(payload);
-    }
-
-    memoryCreate(payload: unknown): Promise<unknown> {
-      return wsMemoryCreateSpy(payload);
-    }
-
-    memoryUpdate(payload: unknown): Promise<unknown> {
-      return wsMemoryUpdateSpy(payload);
-    }
-
-    memoryDelete(payload: unknown): Promise<unknown> {
-      return wsMemoryDeleteSpy(payload);
-    }
-
-    memoryForget(payload: unknown): Promise<unknown> {
-      return wsMemoryForgetSpy(payload);
-    }
-
-    memoryExport(payload: unknown): Promise<unknown> {
-      return wsMemoryExportSpy(payload);
     }
   }
 

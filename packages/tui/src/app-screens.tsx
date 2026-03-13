@@ -17,8 +17,8 @@ export function AppHeader(props: { title: string; elevatedMode: ElevatedModeStat
     <Box flexDirection="column" paddingBottom={1}>
       <Text bold>{props.title}</Text>
       <Text dimColor>
-        Keys: c=connect d=disconnect 1=connect 2=status 3=approvals 4=runs 5=pairing 6=memory
-        m=elevated q=quit
+        Keys: c=connect d=disconnect 1=connect 2=status 3=approvals 4=runs 5=pairing m=elevated
+        q=quit
       </Text>
       {elevatedModeActive ? (
         <Text color="yellow">

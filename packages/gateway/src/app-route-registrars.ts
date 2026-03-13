@@ -27,7 +27,6 @@ import { createDesktopEnvironmentRoutes } from "./routes/desktop-environments.js
 import { createExtensionsRoutes } from "./routes/extensions.js";
 import { createHealthRoute } from "./routes/health.js";
 import { createIngressRoutes } from "./routes/ingress.js";
-import { createMemoryExportRoutes } from "./routes/memory-export.js";
 import { createMetricsRoutes } from "./routes/metrics.js";
 import { createModelConfigRoutes } from "./routes/model-config.js";
 import { createModelsDevRoutes } from "./routes/models-dev.js";
@@ -477,10 +476,6 @@ export function registerAgentsAndWorkspaceRoutes(context: AppRouteContext): void
 }
 
 export function registerArtifactsAuditAndUiRoutes(context: AppRouteContext): void {
-  context.app.route(
-    "/",
-    createMemoryExportRoutes({ artifactStore: context.container.artifactStore }),
-  );
   context.app.route(
     "/",
     createExtensionsRoutes({

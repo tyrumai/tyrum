@@ -13,20 +13,20 @@ import {
 } from "./tool-executor.shared-test-support.js";
 
 export function registerToolExecutorBuiltinCoreTests(home: HomeDirState): void {
-  it("memory.search delegates to the agent memory runtime", async () => {
+  it("mcp.memory.search delegates to the agent memory runtime", async () => {
     const memoryToolRuntime = {
       search: vi.fn(async () => ({
         status: "ok",
         query: "pizza",
         hits: [{ memory_item_id: "mem-1", kind: "note", preview: "pizza note" }],
       })),
-      add: vi.fn(),
+      write: vi.fn(),
     };
 
     const result = await createToolExecutor({
       homeDir: requireHomeDir(home),
       memoryToolRuntime: memoryToolRuntime as never,
-    }).execute("memory.search", "call-memory-search-1", {
+    }).execute("mcp.memory.search", "call-memory-search-1", {
       query: "pizza",
       limit: 1,
     });
@@ -38,23 +38,26 @@ export function registerToolExecutorBuiltinCoreTests(home: HomeDirState): void {
     );
   });
 
-  it("memory.add rejects unsupported writable kinds before runtime execution", async () => {
+  it("mcp.memory.write accepts supported writable kinds", async () => {
     const memoryToolRuntime = {
       search: vi.fn(),
-      add: vi.fn(),
+      write: vi.fn(async () => ({ status: "ok", item: { memory_item_id: "mem-1" } })),
     };
 
     const result = await createToolExecutor({
       homeDir: requireHomeDir(home),
       memoryToolRuntime: memoryToolRuntime as never,
-    }).execute("memory.add", "call-memory-add-1", {
-      kind: "episode",
-      summary_md: "episode body",
+    }).execute("mcp.memory.write", "call-memory-add-1", {
+      kind: "note",
+      body_md: "remember this",
     });
 
-    expect(result.output).toBe("");
-    expect(result.error).toContain("Invalid input");
-    expect(memoryToolRuntime.add).not.toHaveBeenCalled();
+    expect(result.error).toBeUndefined();
+    expect(result.output).toContain("\"status\": \"ok\"");
+    expect(memoryToolRuntime.write).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "note", body_md: "remember this" }),
+      "call-memory-add-1",
+    );
   });
 
   it("fs.read returns file content", async () => {

@@ -8,6 +8,7 @@ import { simulateReadableStream } from "ai";
 import type { NormalizedThreadMessage } from "@tyrum/schemas";
 
 export const TITLE_PROMPT_TEXT = "Write a concise session title.";
+export const PRETURN_MEMORY_SECTION_LABEL = "Pre-turn context (mcp.memory.seed):";
 const PROMPT_ROLE_MARKER_PREFIX = "[[role:";
 const PROMPT_PART_MARKER_PREFIX = "[[part:";
 
@@ -17,6 +18,7 @@ const PROMPT_SECTION_LABELS = [
   "Session context:",
   "Work focus digest:",
   "Memory digest:",
+  PRETURN_MEMORY_SECTION_LABEL,
   "Automation trigger:",
   "Automation digest:",
 ] as const;
@@ -91,21 +93,31 @@ export function extractPromptSection(
   promptText: string,
   label: (typeof PROMPT_SECTION_LABELS)[number],
 ): string {
-  const nextLabels = PROMPT_SECTION_LABELS.filter((candidate) => candidate !== label)
-    .map(escapeRegex)
-    .join("|");
-  const roleBoundary = `${escapeRegex(PROMPT_ROLE_MARKER_PREFIX)}[^\\]]+\\]\\]`;
-  const partBoundary = `${escapeRegex(PROMPT_PART_MARKER_PREFIX)}\\d+\\]\\]`;
-  const pattern = new RegExp(
-    `${escapeRegex(label)}\\n([\\s\\S]*?)(?=\\n(?:${nextLabels})\\n|\\n\\n(?:${partBoundary}|${roleBoundary})\\n|$)`,
-    "u",
-  );
-  return promptText.match(pattern)?.[1]?.trim() ?? "";
+  const labelsToTry =
+    label === "Memory digest:" ? [PRETURN_MEMORY_SECTION_LABEL, label] : [label];
+  for (const candidateLabel of labelsToTry) {
+    const nextLabels = PROMPT_SECTION_LABELS.filter((candidate) => candidate !== candidateLabel)
+      .map(escapeRegex)
+      .join("|");
+    const roleBoundary = `${escapeRegex(PROMPT_ROLE_MARKER_PREFIX)}[^\\]]+\\]\\]`;
+    const partBoundary = `${escapeRegex(PROMPT_PART_MARKER_PREFIX)}\\d+\\]\\]`;
+    const pattern = new RegExp(
+      `${escapeRegex(candidateLabel)}\\n([\\s\\S]*?)(?=\\n(?:${nextLabels})\\n|\\n\\n(?:${partBoundary}|${roleBoundary})\\n|$)`,
+      "u",
+    );
+    const section = promptText.match(pattern)?.[1]?.trim() ?? "";
+    if (section.length > 0) {
+      return section;
+    }
+  }
+
+  return "";
 }
 
 export type PromptAwareModelInput = {
   promptText: string;
   systemText: string;
+  latestUserText: string;
   isTitlePrompt: boolean;
   options: LanguageModelV3CallOptions;
 };
@@ -146,6 +158,33 @@ type PromptAwareMemoryDecision =
           };
     };
 
+type PromptAwareMemoryWriteInput =
+  | {
+      kind: "fact";
+      key: string;
+      value: unknown;
+      confidence?: number;
+      tags?: string[];
+    }
+  | {
+      kind: "note";
+      title?: string;
+      body_md: string;
+      tags?: string[];
+    }
+  | {
+      kind: "procedure";
+      title?: string;
+      body_md: string;
+      confidence?: number;
+      tags?: string[];
+    }
+  | {
+      kind: "episode";
+      summary_md: string;
+      tags?: string[];
+    };
+
 export function promptIncludes(promptText: string, needle: string): boolean {
   return promptText.toLowerCase().includes(needle.trim().toLowerCase());
 }
@@ -153,10 +192,25 @@ export function promptIncludes(promptText: string, needle: string): boolean {
 function buildPromptAwareInput(options: LanguageModelV3CallOptions): PromptAwareModelInput {
   const prompt = options.prompt ?? [];
   const systemEntry = prompt.find((entry) => entry.role === "system");
+  const latestUserEntry = prompt.findLast((entry) => entry.role === "user");
+  const latestUserText = (() => {
+    if (typeof latestUserEntry?.content === "string") {
+      return latestUserEntry.content;
+    }
+    if (!Array.isArray(latestUserEntry?.content)) {
+      return "";
+    }
+
+    const latestUserPart = latestUserEntry.content.findLast(
+      (part) => flattenPromptPart(part).length > 0,
+    );
+    return latestUserPart ? flattenPromptPart(latestUserPart) : "";
+  })();
   const systemText = flattenPromptContent(systemEntry?.content);
   return {
     promptText: extractPromptText(options),
     systemText,
+    latestUserText,
     isTitlePrompt: systemText.includes(TITLE_PROMPT_TEXT),
     options,
   };
@@ -177,6 +231,12 @@ function hasToolResult(options: LanguageModelV3CallOptions, toolName: string): b
   );
 }
 
+function resolveMemoryWriteInput(
+  decision: PromptAwareMemoryDecision | undefined,
+): PromptAwareMemoryWriteInput | undefined {
+  return decision?.should_store ? decision.memory : undefined;
+}
+
 export function createPromptAwareLanguageModel(
   responder: (input: PromptAwareModelInput) => string,
   opts?: {
@@ -189,23 +249,19 @@ export function createPromptAwareLanguageModel(
     options: LanguageModelV3CallOptions,
   ):
     | { kind: "text"; text: string }
-    | { kind: "tool-call"; toolName: "memory_turn_decision"; input: string } => {
+    | { kind: "tool-call"; toolName: "mcp.memory.write"; input: string } => {
     const input = buildPromptAwareInput(options);
     if (input.isTitlePrompt) {
       return { kind: "text", text: opts?.defaultTitle?.trim() || "Behavior Test Session" };
     }
 
-    if (
-      opts?.memoryDecision &&
-      input.systemText.includes("memory_turn_decision") &&
-      !hasToolResult(options, "memory_turn_decision")
-    ) {
-      const decision = opts.memoryDecision(input);
-      if (decision) {
+    if (opts?.memoryDecision && !hasToolResult(options, "mcp.memory.write")) {
+      const writeInput = resolveMemoryWriteInput(opts.memoryDecision(input));
+      if (writeInput) {
         return {
           kind: "tool-call",
-          toolName: "memory_turn_decision",
-          input: JSON.stringify(decision),
+          toolName: "mcp.memory.write",
+          input: JSON.stringify(writeInput),
         };
       }
     }

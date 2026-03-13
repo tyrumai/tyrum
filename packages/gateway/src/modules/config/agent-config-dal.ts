@@ -31,7 +31,51 @@ interface RawAgentConfigRow {
   reverted_from_revision: number | null;
 }
 
-function parseAgentConfigOrThrow(row: RawAgentConfigRow): AgentConfig {
+function asPlainObject(value: unknown): Record<string, unknown> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  return value as Record<string, unknown>;
+}
+
+function normalizeLegacyAgentConfig(value: unknown): AgentConfig | undefined {
+  const parsed = asPlainObject(value);
+  if (!parsed) return undefined;
+
+  const legacyMemory = asPlainObject(parsed["memory"]);
+  const legacyV1 = asPlainObject(legacyMemory?.["v1"]);
+  if (!legacyV1) return undefined;
+
+  const mcp = asPlainObject(parsed["mcp"]) ?? {};
+  const serverSettings = asPlainObject(mcp["server_settings"]) ?? {};
+  const normalizedMcp: Record<string, unknown> = {
+    ...mcp,
+    server_settings:
+      serverSettings["memory"] === undefined
+        ? { ...serverSettings, memory: legacyV1 }
+        : { ...serverSettings },
+  };
+
+  if (
+    !Array.isArray(mcp["pre_turn_tools"]) &&
+    (legacyV1["enabled"] === undefined || legacyV1["enabled"] === true)
+  ) {
+    normalizedMcp["pre_turn_tools"] = ["mcp.memory.seed"];
+  }
+
+  const normalized: Record<string, unknown> = {
+    ...parsed,
+    mcp: normalizedMcp,
+  };
+  delete normalized["memory"];
+  const config = AgentConfigSchema.safeParse(normalized);
+  return config.success ? config.data : undefined;
+}
+
+function parseAgentConfigOrThrow(row: RawAgentConfigRow): {
+  config: AgentConfig;
+  migratedFromLegacy: boolean;
+} {
   let parsed: unknown;
   try {
     parsed = JSON.parse(row.config_json) as unknown;
@@ -42,17 +86,28 @@ function parseAgentConfigOrThrow(row: RawAgentConfigRow): AgentConfig {
   }
 
   const config = AgentConfigSchema.safeParse(parsed);
-  if (!config.success) {
-    throw new Error(
-      `agent config revision ${String(row.revision)} failed schema validation: ${config.error.message}`,
-    );
+  if (config.success) {
+    return {
+      config: config.data,
+      migratedFromLegacy: false,
+    };
   }
 
-  return config.data;
+  const migrated = normalizeLegacyAgentConfig(parsed);
+  if (migrated) {
+    return {
+      config: migrated,
+      migratedFromLegacy: true,
+    };
+  }
+
+  throw new Error(
+    `agent config revision ${String(row.revision)} failed schema validation: ${config.error.message}`,
+  );
 }
 
 function rowToRevision(row: RawAgentConfigRow): AgentConfigRevision {
-  const config = parseAgentConfigOrThrow(row);
+  const { config } = parseAgentConfigOrThrow(row);
   const configSha256 = createHash("sha256").update(row.config_json).digest("hex");
   return {
     revision: row.revision,
@@ -110,7 +165,24 @@ export class AgentConfigDal {
        LIMIT 1`,
       [params.tenantId, params.agentId],
     );
-    return row ? rowToRevision(row) : undefined;
+    if (!row) return undefined;
+
+    const parsed = parseAgentConfigOrThrow(row);
+    if (!parsed.migratedFromLegacy) {
+      return rowToRevision(row);
+    }
+
+    return await this.set({
+      tenantId: row.tenant_id,
+      agentId: row.agent_id,
+      config: parsed.config,
+      createdBy: {
+        kind: "system",
+        subsystem: "agent-config-dal",
+      },
+      reason: "migrate legacy memory.v1 config",
+      occurredAtIso: new Date().toISOString(),
+    });
   }
 
   async getByRevision(params: {

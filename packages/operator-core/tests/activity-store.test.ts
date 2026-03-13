@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { Approval, AgentPersona, ExecutionRun, MemoryItem } from "@tyrum/client";
-import type { ApprovalsState, ChatState, MemoryState, StatusState } from "../src/index.js";
+import type { Approval, AgentPersona, ExecutionRun } from "@tyrum/client";
+import type { ApprovalsState, ChatState, StatusState } from "../src/index.js";
 import { createStore } from "../src/store.js";
 import { createActivityStore } from "../src/stores/activity-store.js";
 import { createRunsStore } from "../src/stores/runs-store.js";
@@ -32,15 +32,6 @@ function createChatState(): ChatState {
     sessions: { sessions: [], nextCursor: null, loading: false, error: null },
     active: { sessionId: null, session: null, loading: false, error: null },
     send: { sending: false, error: null },
-  };
-}
-
-function createMemoryState(): MemoryState {
-  return {
-    browse: { request: null, results: null, loading: false, error: null, lastSyncedAt: null },
-    inspect: { agentId: null, memoryItemId: null, item: null, loading: false, error: null },
-    tombstones: { tombstones: [], loading: false, error: null },
-    export: { running: false, artifactId: null, error: null, lastExportedAt: null },
   };
 }
 
@@ -79,36 +70,21 @@ function sampleApproval(
   } satisfies Approval;
 }
 
-function sampleMemoryItem(
-  input: Partial<MemoryItem> & Pick<MemoryItem, "memory_item_id" | "agent_id" | "kind">,
-) {
-  return {
-    v: 1,
-    tags: [],
-    sensitivity: "private",
-    provenance: { source_kind: "system", refs: [] },
-    created_at: "2026-01-01T00:00:00.000Z",
-    ...input,
-  } satisfies MemoryItem;
-}
-
 function createHarness() {
   const runs = createRunsStore({
     runList: async () => ({ runs: [], steps: [], attempts: [] }),
   } as never);
   const approvals = createStore(createApprovalsState());
   const status = createStore(createStatusState());
-  const memory = createStore(createMemoryState());
   const chat = createStore(createChatState());
   const activity = createActivityStore({
     runsStore: runs.store,
     approvalsStore: approvals.store,
     statusStore: status.store,
-    memoryStore: memory.store,
     chatStore: chat.store,
   });
 
-  return { runs, approvals, status, memory, chat, activity };
+  return { runs, approvals, status, chat, activity };
 }
 
 describe("activityStore", () => {
@@ -365,8 +341,8 @@ describe("activityStore", () => {
     });
   });
 
-  it("records message and memory activity on the matching key + lane workstream", () => {
-    const { memory, activity } = createHarness();
+  it("records message activity on the matching key + lane workstream", () => {
+    const { activity } = createHarness();
 
     activity.handleTypingStarted({
       sessionId: "agent:alpha:main",
@@ -381,36 +357,10 @@ describe("activityStore", () => {
       delta: "Drafting plan",
       occurredAt: "2026-01-01T00:00:02.000Z",
     });
-    memory.setState((prev) => ({
-      ...prev,
-      browse: {
-        ...prev.browse,
-        results: {
-          kind: "list",
-          items: [
-            sampleMemoryItem({
-              memory_item_id: "memory-1",
-              agent_id: "agent-uuid-1",
-              kind: "note",
-              body_md: "Remember the deployment checklist",
-              provenance: {
-                source_kind: "system",
-                session_id: "agent:alpha:main",
-                refs: [],
-              },
-              updated_at: "2026-01-01T00:00:03.000Z",
-            }),
-          ],
-          nextCursor: null,
-        },
-      },
-    }));
-
     const workstream = activity.store.getSnapshot().workstreamsById["agent:alpha:main::main"];
     expect(workstream?.currentRoom).toBe("mail-room");
     expect(workstream?.bubbleText).toBe("Drafting plan");
     expect(workstream?.recentEvents.map((event) => event.type)).toEqual([
-      "memory.item.updated",
       "message.delta",
       "typing.started",
     ]);

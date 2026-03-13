@@ -5,6 +5,10 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { ToolListChangedNotificationSchema } from "@modelcontextprotocol/sdk/types.js";
 import type { Logger } from "../observability/logger.js";
+import {
+  BUILTIN_MEMORY_MCP_TOOLS,
+  BUILTIN_MEMORY_SERVER_ID,
+} from "../memory/builtin-mcp.js";
 
 /**
  * Zod v4 `z.union` with `.default()` on the discriminant doesn't produce a
@@ -20,6 +24,15 @@ interface McpRemoteSpec {
   headers?: Record<string, string>;
   timeout_ms?: number;
   scopes?: string[];
+  tool_overrides?: Record<
+    string,
+    {
+      description_override?: string;
+      description_append?: string;
+      risk?: ToolDescriptor["risk"];
+      requires_confirmation?: boolean;
+    }
+  >;
 }
 
 function asRemote(spec: McpServerSpecT): McpRemoteSpec | undefined {
@@ -38,6 +51,15 @@ interface McpStdioSpec {
   cwd?: string;
   timeout_ms?: number;
   scopes?: string[];
+  tool_overrides?: Record<
+    string,
+    {
+      description_override?: string;
+      description_append?: string;
+      risk?: ToolDescriptor["risk"];
+      requires_confirmation?: boolean;
+    }
+  >;
 }
 
 function asStdio(spec: McpServerSpecT): McpStdioSpec {
@@ -48,6 +70,9 @@ export interface McpToolInfo {
   name: string;
   description?: string;
   inputSchema?: unknown;
+  risk?: ToolDescriptor["risk"];
+  requiresConfirmation?: boolean;
+  keywords?: string[];
 }
 
 interface McpClientEntry {
@@ -82,6 +107,11 @@ function stableFingerprint(spec: McpServerSpecT): string {
         : [],
       timeout_ms: remote.timeout_ms ?? null,
       scopes: remote.scopes ?? [],
+      tool_overrides: remote.tool_overrides
+        ? Object.entries(remote.tool_overrides)
+            .toSorted((a, b) => a[0].localeCompare(b[0]))
+            .map(([toolName, override]) => [toolName, override])
+        : [],
     });
   }
 
@@ -98,21 +128,54 @@ function stableFingerprint(spec: McpServerSpecT): string {
     cwd: stdio.cwd ?? "",
     timeout_ms: stdio.timeout_ms ?? null,
     scopes: stdio.scopes ?? [],
+    tool_overrides: stdio.tool_overrides
+      ? Object.entries(stdio.tool_overrides)
+          .toSorted((a, b) => a[0].localeCompare(b[0]))
+          .map(([toolName, override]) => [toolName, override])
+      : [],
   });
+}
+
+function applyDescriptionOverride(
+  baseDescription: string,
+  override:
+    | {
+        description_override?: string;
+        description_append?: string;
+      }
+    | undefined,
+): string {
+  if (override?.description_override?.trim()) {
+    return override.description_override.trim();
+  }
+  if (override?.description_append?.trim()) {
+    return `${baseDescription} ${override.description_append.trim()}`.trim();
+  }
+  return baseDescription;
 }
 
 function toDescriptor(spec: McpServerSpecT, tool: McpToolInfo): ToolDescriptor {
   const toolId = `mcp.${spec.id}.${tool.name}`;
-  const description = tool.description?.trim().length
+  const baseDescription = tool.description?.trim().length
     ? `${tool.description.trim()} (server=${spec.name})`
     : `MCP tool '${tool.name}' from server '${spec.name}'.`;
+  const override =
+    asRemote(spec)?.tool_overrides?.[tool.name] ?? asStdio(spec).tool_overrides?.[tool.name];
+  const description = applyDescriptionOverride(baseDescription, override);
 
   return {
     id: toolId,
     description,
-    risk: "medium",
-    requires_confirmation: true,
-    keywords: ["mcp", spec.id.toLowerCase(), spec.name.toLowerCase(), tool.name.toLowerCase()],
+    risk: override?.risk ?? tool.risk ?? "medium",
+    requires_confirmation:
+      override?.requires_confirmation ?? tool.requiresConfirmation ?? true,
+    keywords: [
+      "mcp",
+      spec.id.toLowerCase(),
+      spec.name.toLowerCase(),
+      tool.name.toLowerCase(),
+      ...(tool.keywords ?? []),
+    ],
     source: "mcp",
     family: "mcp",
     backingServerId: spec.id,
@@ -282,6 +345,9 @@ export class McpManager {
 
   async listServerToolDescriptors(server: McpServerSpecT): Promise<readonly ToolDescriptor[]> {
     if (!server.enabled) return [];
+    if (server.id === BUILTIN_MEMORY_SERVER_ID) {
+      return BUILTIN_MEMORY_MCP_TOOLS.map((tool) => toDescriptor(server, tool));
+    }
     const entry = this.ensureEntry(server);
 
     if (entry.descriptorCache) {
@@ -362,6 +428,12 @@ export class McpManager {
   ): Promise<{ content: unknown[]; isError?: boolean }> {
     if (!server.enabled) {
       return { content: [], isError: true };
+    }
+    if (server.id === BUILTIN_MEMORY_SERVER_ID) {
+      return {
+        content: [`Built-in memory MCP tool '${toolName}' must be executed via the local runtime.`],
+        isError: true,
+      };
     }
     const entry = this.ensureEntry(server);
     try {

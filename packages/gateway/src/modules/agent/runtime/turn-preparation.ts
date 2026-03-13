@@ -20,6 +20,7 @@ import {
   resolveIdentityAndContext,
   resolveToolsAndMemory,
 } from "./turn-preparation-runtime.js";
+import { runPreTurnHydration } from "./preturn-hydration.js";
 import { buildWorkFocusDigest } from "./work-focus-digest.js";
 import type { AgentContextReport, AgentLoadedContext, AgentRuntimeOptions } from "./types.js";
 import { resolveAutomationMetadata, buildAutomationDigest } from "./automation-delivery.js";
@@ -41,13 +42,8 @@ import type { ApprovalNotifier } from "../../approval/notifier.js";
 import type { ApprovalDal } from "../../approval/dal.js";
 import { buildContextReport } from "./turn-context-report.js";
 import { AgentMemoryToolRuntime } from "../../memory/agent-tool-runtime.js";
-import { createMemoryV1BudgetsProvider } from "../../memory/v1-budgets-provider.js";
+import { resolveBuiltinMemoryConfig } from "../../memory/builtin-mcp.js";
 import { resolveEmbeddingPipeline } from "./embedding-pipeline-resolution.js";
-import {
-  buildTurnMemoryProtocolPrompt,
-  createTurnMemoryDecisionCollector,
-  isTurnMemoryAutoWriteEnabled,
-} from "./turn-memory-policy.js";
 export type TurnExecutionContext = {
   planId: string;
   runId: string;
@@ -70,7 +66,6 @@ export type PreparedTurn = {
   contextReport: AgentContextReport;
   systemPrompt: string;
   resolved: ResolvedAgentTurnInput;
-  turnMemoryDecisionCollector?: ReturnType<typeof createTurnMemoryDecisionCollector>;
 };
 export type PrepareTurnDeps = {
   opts: AgentRuntimeOptions;
@@ -145,13 +140,14 @@ export async function prepareTurn(
     { laneQueueScope, metadata: resolved.metadata },
   );
 
-  const { memoryDigestResult, toolSetBuilder, filteredTools } = await resolveToolsAndMemory(
-    deps,
-    ctx,
-    session,
-    resolved,
-    executionProfile,
-  );
+  const { availableTools, toolSetBuilderDeps, toolSetBuilder, filteredTools } =
+    await resolveToolsAndMemory(
+      deps,
+      ctx,
+      session,
+      resolved,
+      executionProfile,
+    );
 
   const workFocusDigest =
     isStatusQuery(resolved.message) || parseIntakeModeDecision(resolved.message)
@@ -175,69 +171,6 @@ export async function prepareTurn(
     home: deps.home,
     stateMode: resolveGatewayStateMode(deps.opts.container.deploymentConfig),
     model: executionProfile.profile.model_id ?? executionProfile.id,
-  });
-
-  const {
-    identityPrompt,
-    runtimePrompt: runtimePromptText,
-    safetyPrompt,
-    skillsText,
-    toolsText,
-    sessionText,
-    memoryText,
-    automationTriggerText,
-  } = assemblePrompts(ctx, session, memoryDigestResult, filteredTools, automation, runtimePrompt);
-
-  const sandboxPrompt = buildSandboxPrompt();
-  const turnMemoryAutoWriteEnabled = isTurnMemoryAutoWriteEnabled(ctx.config.memory.v1);
-  const turnMemoryDecisionCollector = turnMemoryAutoWriteEnabled
-    ? createTurnMemoryDecisionCollector()
-    : undefined;
-  const turnMemoryPrompt = turnMemoryAutoWriteEnabled
-    ? buildTurnMemoryProtocolPrompt(automation)
-    : undefined;
-  const systemPrompt = [
-    identityPrompt,
-    runtimePromptText,
-    safetyPrompt,
-    sandboxPrompt,
-    turnMemoryPrompt,
-  ]
-    .filter((value) => typeof value === "string" && value.length > 0)
-    .join("\n\n");
-
-  const automationDigestText = automation
-    ? await buildAutomationDigest({
-        container: deps.opts.container,
-        scope: {
-          tenant_id: session.tenant_id,
-          agent_id: session.agent_id,
-          workspace_id: session.workspace_id,
-        },
-        automation,
-      })
-    : undefined;
-
-  const validatedReport = buildContextReport({
-    session,
-    resolved,
-    ctx,
-    executionProfile,
-    filteredTools,
-    systemPrompt,
-    identityPrompt,
-    safetyPrompt,
-    sandboxPrompt,
-    skillsText,
-    toolsText,
-    sessionText,
-    workFocusText,
-    memoryText,
-    automationTriggerText,
-    automationDigestText,
-    memoryDigestResult,
-    automation,
-    logger: deps.opts.container.logger,
   });
 
   const mcpSpecMap = new Map<string, (typeof ctx.mcpServers)[number]>(
@@ -281,7 +214,8 @@ export async function prepareTurn(
     },
   );
   const model = modelResolution.model;
-  const memoryToolRuntime = ctx.config.memory.v1.enabled
+  const memoryConfig = resolveBuiltinMemoryConfig(ctx.config);
+  const memoryToolRuntime = memoryConfig.enabled
     ? new AgentMemoryToolRuntime({
         db: deps.opts.container.db,
         dal: deps.opts.container.memoryV1Dal,
@@ -290,12 +224,8 @@ export async function prepareTurn(
         sessionId: session.session_id,
         channel: resolved.channel,
         threadId: resolved.thread_id,
-        config: ctx.config.memory.v1,
-        budgetsProvider: async () =>
-          await createMemoryV1BudgetsProvider(deps.opts.container.db)(
-            session.tenant_id,
-            session.agent_id,
-          ),
+        config: memoryConfig,
+        budgetsProvider: async () => memoryConfig.budgets,
         resolveEmbeddingPipeline: async () =>
           await resolveEmbeddingPipeline({
             container: deps.opts.container,
@@ -332,6 +262,110 @@ export async function prepareTurn(
     nodeCapabilityInspectionService,
     memoryToolRuntime,
   );
+  const toolExecutionContext = {
+    tenantId: session.tenant_id,
+    planId: exec?.planId ?? `agent-turn-${session.session_id}-${randomUUID()}`,
+    sessionId: session.session_id,
+    channel: resolved.channel,
+    threadId: resolved.thread_id,
+    workSessionKey:
+      typeof resolved.metadata?.["work_session_key"] === "string"
+        ? resolved.metadata["work_session_key"]
+        : undefined,
+    workLane:
+      typeof resolved.metadata?.["work_lane"] === "string"
+        ? resolved.metadata["work_lane"]
+        : undefined,
+    execution: exec
+      ? {
+          runId: exec.runId,
+          stepIndex: exec.stepIndex,
+          stepId: exec.stepId,
+          stepApprovalId: exec.stepApprovalId,
+        }
+      : undefined,
+  };
+  const preTurnHydration =
+    !isStatusQuery(resolved.message) &&
+    !parseIntakeModeDecision(resolved.message) &&
+    ctx.config.mcp.pre_turn_tools.length > 0
+      ? await runPreTurnHydration({
+          toolIds: ctx.config.mcp.pre_turn_tools,
+          availableTools,
+          toolExecutor,
+          toolSetBuilderDeps,
+          toolExecutionContext,
+          session,
+          resolved,
+        })
+      : {
+          sections: [],
+          reports: [],
+          memory: {
+            keyword_hits: 0,
+            semantic_hits: 0,
+            structured_hits: 0,
+            included_items: 0,
+          },
+        };
+
+  const {
+    identityPrompt,
+    runtimePrompt: runtimePromptText,
+    safetyPrompt,
+    skillsText,
+    toolsText,
+    sessionText,
+    preTurnTexts,
+    automationTriggerText,
+  } = assemblePrompts(
+    ctx,
+    session,
+    filteredTools,
+    preTurnHydration.sections.map((section) => section.text),
+    automation,
+    runtimePrompt,
+  );
+
+  const sandboxPrompt = buildSandboxPrompt();
+  const systemPrompt = [identityPrompt, runtimePromptText, safetyPrompt, sandboxPrompt]
+    .filter((value) => typeof value === "string" && value.length > 0)
+    .join("\n\n");
+
+  const automationDigestText = automation
+    ? await buildAutomationDigest({
+        container: deps.opts.container,
+        scope: {
+          tenant_id: session.tenant_id,
+          agent_id: session.agent_id,
+          workspace_id: session.workspace_id,
+        },
+        automation,
+      })
+    : undefined;
+
+  const validatedReport = buildContextReport({
+    session,
+    resolved,
+    ctx,
+    executionProfile,
+    filteredTools,
+    systemPrompt,
+    identityPrompt,
+    safetyPrompt,
+    sandboxPrompt,
+    skillsText,
+    toolsText,
+    sessionText,
+    workFocusText,
+    preTurnTexts,
+    preTurnReports: preTurnHydration.reports,
+    automationTriggerText,
+    automationDigestText,
+    memorySummary: preTurnHydration.memory,
+    automation,
+    logger: deps.opts.container.logger,
+  });
 
   const usedTools = new Set<string>();
   const toolCallPolicyStates = new Map<string, ToolCallPolicyState>();
@@ -339,34 +373,11 @@ export async function prepareTurn(
     filteredTools,
     toolExecutor,
     usedTools,
-    {
-      tenantId: session.tenant_id,
-      planId: exec?.planId ?? `agent-turn-${session.session_id}-${randomUUID()}`,
-      sessionId: session.session_id,
-      channel: resolved.channel,
-      threadId: resolved.thread_id,
-      workSessionKey:
-        typeof resolved.metadata?.["work_session_key"] === "string"
-          ? resolved.metadata["work_session_key"]
-          : undefined,
-      workLane:
-        typeof resolved.metadata?.["work_lane"] === "string"
-          ? resolved.metadata["work_lane"]
-          : undefined,
-      execution: exec
-        ? {
-            runId: exec.runId,
-            stepIndex: exec.stepIndex,
-            stepId: exec.stepId,
-            stepApprovalId: exec.stepApprovalId,
-          }
-        : undefined,
-    },
+    toolExecutionContext,
     validatedReport,
     laneQueue,
     toolCallPolicyStates,
     model,
-    turnMemoryDecisionCollector,
   );
 
   const userContent: Array<{ type: "text"; text: string }> = [
@@ -374,7 +385,7 @@ export async function prepareTurn(
     { type: "text", text: toolsText },
     { type: "text", text: sessionText },
     { type: "text", text: workFocusText },
-    { type: "text", text: memoryText },
+    ...preTurnTexts.map((text) => ({ type: "text" as const, text })),
     ...(automationTriggerText ? [{ type: "text" as const, text: automationTriggerText }] : []),
     ...(automationDigestText ? [{ type: "text" as const, text: automationDigestText }] : []),
     { type: "text", text: resolved.message },
@@ -394,6 +405,5 @@ export async function prepareTurn(
     contextReport: validatedReport,
     systemPrompt,
     resolved,
-    turnMemoryDecisionCollector,
   };
 }

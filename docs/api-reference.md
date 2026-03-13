@@ -665,19 +665,6 @@ Provider-account `secrets` stores managed secret slots defined by the provider r
   - `500` import refused (non-empty tables) or internal failures
   - `401`, `403`
 
-### Memory exports (artifact bytes)
-
-#### GET /memory/exports/:id
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.read`
-- Request: `:id` is an `ArtifactId` (`@tyrum/schemas`)
-- Response:
-  - `200` bytes (download) with `Content-Disposition: attachment; filename="tyrum-memory-export-<id>.json"`
-  - `404` not found (or not a memory export artifact)
-  - `400` invalid artifact id
-  - `401`, `403`
-
 ### Models.dev catalog
 
 #### GET /models/status
@@ -1442,62 +1429,6 @@ Client-sent events are rejected.
 - Scope (device tokens): `operator.write`
 - Schema: `WsWorkflowCancelRequest`
 - Result: `WsWorkflowCancelResult`
-
-#### `memory.search`
-
-- Direction: client → gateway (request)
-- Scope (device tokens): `operator.read`
-- Schema: `WsMemorySearchRequest`
-- Result: `WsMemorySearchResult`
-
-#### `memory.list`
-
-- Direction: client → gateway (request)
-- Scope (device tokens): `operator.read`
-- Schema: `WsMemoryListRequest`
-- Result: `WsMemoryListResult`
-
-#### `memory.get`
-
-- Direction: client → gateway (request)
-- Scope (device tokens): `operator.read`
-- Schema: `WsMemoryGetRequest`
-- Result: `WsMemoryGetResult`
-
-#### `memory.create`
-
-- Direction: client → gateway (request)
-- Scope (device tokens): `operator.write`
-- Schema: `WsMemoryCreateRequest`
-- Result: `WsMemoryCreateResult`
-
-#### `memory.update`
-
-- Direction: client → gateway (request)
-- Scope (device tokens): `operator.write`
-- Schema: `WsMemoryUpdateRequest`
-- Result: `WsMemoryUpdateResult`
-
-#### `memory.delete`
-
-- Direction: client → gateway (request)
-- Scope (device tokens): `operator.write`
-- Schema: `WsMemoryDeleteRequest`
-- Result: `WsMemoryDeleteResult`
-
-#### `memory.forget`
-
-- Direction: client → gateway (request)
-- Scope (device tokens): `operator.write`
-- Schema: `WsMemoryForgetRequest`
-- Result: `WsMemoryForgetResult`
-
-#### `memory.export`
-
-- Direction: client → gateway (request)
-- Scope (device tokens): `operator.write`
-- Schema: `WsMemoryExportRequest`
-- Result: `WsMemoryExportResult`
 
 #### `presence.beacon`
 

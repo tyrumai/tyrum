@@ -22,6 +22,21 @@ import {
   createStubLanguageModel,
 } from "./stub-language-model.js";
 
+function makeMemoryToolConfig(): Record<string, unknown> {
+  return {
+    model: { model: "openai/gpt-4.1" },
+    skills: { default_mode: "deny", workspace_trusted: false },
+    mcp: { default_mode: "allow", pre_turn_tools: ["mcp.memory.seed"] },
+    tools: { default_mode: "allow" },
+    sessions: { ttl_days: 30, max_turns: 20 },
+    memory: {
+      v1: {
+        enabled: true,
+      },
+    },
+  };
+}
+
 describe("AgentRuntime - tool tracking, memory, and lane signals", () => {
   let homeDir: string | undefined;
   let container: GatewayContainer | undefined;
@@ -62,21 +77,7 @@ describe("AgentRuntime - tool tracking, memory, and lane signals", () => {
       dbPath: ":memory:",
       migrationsDir,
     });
-    await seedAgentConfig(container, {
-      config: {
-        model: { model: "openai/gpt-4.1" },
-        skills: { enabled: [] },
-        mcp: { enabled: [] },
-        tools: { allow: [] },
-        sessions: { ttl_days: 30, max_turns: 20 },
-        memory: {
-          v1: {
-            enabled: true,
-            auto_write: { enabled: true },
-          },
-        },
-      },
-    });
+    await seedAgentConfig(container, { config: makeMemoryToolConfig() });
 
     const createSpy = vi.spyOn(container.memoryV1Dal, "create");
 
@@ -105,40 +106,27 @@ describe("AgentRuntime - tool tracking, memory, and lane signals", () => {
 
     expect(createSpy).toHaveBeenCalled();
 
-    const agentTurnEpisode = createSpy.mock.calls.find(([input]) => {
-      const meta = input?.provenance?.metadata as Record<string, unknown> | undefined;
-      return input?.kind === "episode" && meta?.["kind"] === "turn_signal";
-    });
+    const agentTurnEpisode = createSpy.mock.calls.find(([input]) => input?.kind === "episode");
 
     expect(agentTurnEpisode).toBeDefined();
     expect(agentTurnEpisode?.[0]).toEqual(
       expect.objectContaining({
         summary_md: expect.stringContaining("Fixed the failing workflow"),
+        provenance: expect.objectContaining({
+          source_kind: "tool",
+          metadata: { tool_id: "mcp.memory.write" },
+        }),
       }),
     );
   }, 10_000);
 
-  it("persists canonical note tags without duplicates", async () => {
+  it("persists explicit note tags without duplicates", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
     container = await createContainer({
       dbPath: ":memory:",
       migrationsDir,
     });
-    await seedAgentConfig(container, {
-      config: {
-        model: { model: "openai/gpt-4.1" },
-        skills: { enabled: [] },
-        mcp: { enabled: [] },
-        tools: { allow: [] },
-        sessions: { ttl_days: 30, max_turns: 20 },
-        memory: {
-          v1: {
-            enabled: true,
-            auto_write: { enabled: true },
-          },
-        },
-      },
-    });
+    await seedAgentConfig(container, { config: makeMemoryToolConfig() });
 
     const createSpy = vi.spyOn(container.memoryV1Dal, "create");
 
@@ -152,7 +140,7 @@ describe("AgentRuntime - tool tracking, memory, and lane signals", () => {
           memory: {
             kind: "note",
             body_md: "remember that I prefer tea",
-            tags: ["Durable-Memory"],
+            tags: ["Durable-Memory", "Durable-Memory", " prefs "],
           },
         },
         reply: "ok",
@@ -169,7 +157,7 @@ describe("AgentRuntime - tool tracking, memory, and lane signals", () => {
     const noteCall = createSpy.mock.calls.find(([input]) => input?.kind === "note");
     expect(noteCall?.[0]).toEqual(
       expect.objectContaining({
-        tags: expect.arrayContaining(["agent-turn", "auto-turn", "durable-memory"]),
+        tags: ["Durable-Memory", "prefs"],
       }),
     );
   }, 10_000);

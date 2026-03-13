@@ -136,7 +136,6 @@ function createCore(options?: {
   core: OperatorCore;
   setAgentKey: ReturnType<typeof vi.fn>;
   refresh: ReturnType<typeof vi.fn>;
-  memoryList: ReturnType<typeof vi.fn>;
 } {
   const { store: connectionStore } = createStore({
     status: "connected",
@@ -167,18 +166,11 @@ function createCore(options?: {
     stepIdsByRunId: {},
     attemptIdsByStepId: {},
   });
-  const { store: memoryStore } = createStore({
-    browse: { request: null, results: null, loading: false, error: null, lastSyncedAt: null },
-    inspect: { agentId: null, memoryItemId: null, item: null, loading: false, error: null },
-    tombstones: { tombstones: [], loading: false, error: null },
-    export: { running: false, artifactId: null, error: null, lastExportedAt: null },
-  });
 
   const setAgentKey = vi.fn((agentKey: string) => {
     setAgentStatusState((prev) => ({ ...prev, agentKey }));
   });
   const refresh = vi.fn().mockResolvedValue(undefined);
-  const memoryList = vi.fn().mockResolvedValue(undefined);
 
   const core = {
     connectionStore,
@@ -211,21 +203,10 @@ function createCore(options?: {
         listPresets: options?.listPresets ?? vi.fn().mockResolvedValue(samplePresets()),
       },
     },
-    memoryStore: {
-      ...memoryStore,
-      list: memoryList,
-      search: vi.fn().mockResolvedValue(undefined),
-      refreshBrowse: vi.fn().mockResolvedValue(undefined),
-      loadMore: vi.fn().mockResolvedValue(undefined),
-      inspect: vi.fn().mockResolvedValue(undefined),
-      update: vi.fn(),
-      forget: vi.fn().mockResolvedValue(undefined),
-      export: vi.fn().mockResolvedValue(undefined),
-    },
     runsStore,
   } as unknown as OperatorCore;
 
-  return { core, setAgentKey, refresh, memoryList };
+  return { core, setAgentKey, refresh };
 }
 
 describe("AgentsPage", () => {
@@ -286,70 +267,6 @@ describe("AgentsPage", () => {
 
     expect(setAgentKey).toHaveBeenLastCalledWith("agent-1");
     expect(refresh).toHaveBeenCalledTimes(2);
-
-    cleanupTestRoot(testRoot);
-  });
-
-  it("waits for a managed agent scope before loading memory", async () => {
-    let resolveAgentList:
-      | ((value: {
-          agents: Array<{
-            agent_key: string;
-            agent_id: string;
-            can_delete: boolean;
-            persona?: { name?: string };
-          }>;
-        }) => void)
-      | null = null;
-    const list = vi.fn(
-      () =>
-        new Promise<{
-          agents: Array<{
-            agent_key: string;
-            agent_id: string;
-            can_delete: boolean;
-            persona?: { name?: string };
-          }>;
-        }>((resolve) => {
-          resolveAgentList = resolve;
-        }),
-    );
-    const { core, memoryList } = createCore({ list });
-
-    const testRoot = renderIntoDocument(React.createElement(AgentsPage, { core }));
-
-    const memoryTab = testRoot.container.querySelector<HTMLButtonElement>(
-      '[data-testid="agents-tab-memory"]',
-    );
-    expect(memoryTab).not.toBeNull();
-
-    await act(async () => {
-      if (memoryTab) click(memoryTab);
-      await Promise.resolve();
-    });
-
-    expect(memoryList).not.toHaveBeenCalled();
-
-    await act(async () => {
-      resolveAgentList?.({
-        agents: [
-          {
-            agent_key: "default",
-            agent_id: "11111111-1111-4111-8111-111111111111",
-            can_delete: false,
-            persona: { name: "Feynman" },
-          },
-        ],
-      });
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    expect(memoryList).toHaveBeenCalledTimes(1);
-    expect(memoryList).toHaveBeenCalledWith({
-      agentId: "11111111-1111-4111-8111-111111111111",
-      limit: 50,
-    });
 
     cleanupTestRoot(testRoot);
   });

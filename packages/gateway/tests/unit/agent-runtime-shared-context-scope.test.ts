@@ -60,10 +60,12 @@ describe("AgentRuntime shared context scopes", () => {
       config: AgentConfig.parse({
         model: { model: "openai/gpt-4.1" },
         skills: { enabled: [] },
-        mcp: { enabled: [] },
+        mcp: {
+          enabled: [],
+          server_settings: { memory: { enabled: false } },
+        },
         tools: { allow: [] },
         sessions: { ttl_days: 30, max_turns: 20 },
-        memory: { v1: { enabled: false } },
       }),
       createdBy: { kind: "test" },
       reason: "shared-context-scope regression",
@@ -150,14 +152,16 @@ describe("AgentRuntime shared context scopes", () => {
       config: AgentConfig.parse({
         model: { model: "openai/gpt-4.1" },
         skills: { enabled: [] },
-        mcp: { enabled: [] },
+        mcp: {
+          enabled: [],
+          server_settings: { memory: { enabled: false } },
+        },
         tools: {
           default_mode: "deny",
           allow: ["read", "mcp.weather.forecast", "custom.plugin.echo"],
           deny: [],
         },
         sessions: { ttl_days: 30, max_turns: 20 },
-        memory: { v1: { enabled: false } },
       }),
       createdBy: { kind: "test" },
       reason: "shared status tool filter regression",

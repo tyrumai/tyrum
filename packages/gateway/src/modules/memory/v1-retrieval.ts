@@ -1,4 +1,9 @@
-import type { AgentConfig, MemoryItem, MemoryItemFilter, MemorySensitivity } from "@tyrum/schemas";
+import type {
+  BuiltinMemoryServerSettings,
+  MemoryItem,
+  MemoryItemFilter,
+  MemorySensitivity,
+} from "@tyrum/schemas";
 import { normalizeSnippet, truncate } from "./v1-dal-helpers.js";
 import type { MemoryV1SemanticSearchHit } from "./v1-semantic-index.js";
 import type { MemoryV1Dal } from "./v1-dal.js";
@@ -55,7 +60,7 @@ async function loadStructuredItems(params: {
   tenantId: string;
   agentId: string;
   allow_sensitivities: readonly MemorySensitivity[];
-  structured: AgentConfig["memory"]["v1"]["structured"];
+  structured: BuiltinMemoryServerSettings["structured"];
   maxItems: number;
 }): Promise<MemoryItem[]> {
   const factKeys = params.structured.fact_keys ?? [];
@@ -165,7 +170,7 @@ export async function retrieveMemoryV1(params: {
   query: string;
   allow_sensitivities: readonly MemorySensitivity[];
   filter?: MemoryItemFilter;
-  structured?: AgentConfig["memory"]["v1"]["structured"];
+  structured?: BuiltinMemoryServerSettings["structured"];
   structuredMaxItems?: number;
   keywordLimit?: number;
   semanticLimit?: number;

@@ -216,10 +216,12 @@ describe("AgentRuntime - engine isolation and backoff", () => {
       config: {
         model: { model: "openai/gpt-4.1" },
         skills: { enabled: [] },
-        mcp: { enabled: [] },
+        mcp: {
+          enabled: [],
+          server_settings: { memory: { enabled: false } },
+        },
         tools: { allow: ["bash"] },
         sessions: { ttl_days: 30, max_turns: 20 },
-        memory: { v1: { enabled: false } },
       },
     });
 

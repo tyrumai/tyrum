@@ -1,5 +1,5 @@
 import type {
-  AgentConfig,
+  BuiltinMemoryServerSettings,
   MemoryItemFilter,
   MemoryItemKind,
   MemoryItemPatch,
@@ -60,7 +60,7 @@ export function normalizeSnippet(value: string): string {
 }
 
 export function normalizeBudgets(
-  budgets: AgentConfig["memory"]["v1"]["budgets"],
+  budgets: BuiltinMemoryServerSettings["budgets"],
 ): MemoryV1BudgetLimits {
   const maxTotalItems = Math.max(0, Math.floor(budgets.max_total_items));
   const maxTotalChars = Math.max(0, Math.floor(budgets.max_total_chars));

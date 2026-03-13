@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AgentConfig } from "@tyrum/schemas";
+import { BuiltinMemoryServerSettings } from "@tyrum/schemas";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { MemoryV1Dal } from "../../src/modules/memory/v1-dal.js";
 import { buildMemoryV1Digest } from "../../src/modules/memory/v1-digest.js";
@@ -15,7 +15,7 @@ describe("buildMemoryV1Digest", () => {
     const db = openTestSqliteDb();
     try {
       const dal = new MemoryV1Dal(db);
-      const config = AgentConfig.parse({ model: { model: "openai/gpt-4.1" } }).memory.v1;
+      const config = BuiltinMemoryServerSettings.parse({});
 
       vi.useFakeTimers();
       vi.setSystemTime(new Date("2026-02-27T00:00:00.000Z"));
@@ -57,7 +57,7 @@ describe("buildMemoryV1Digest", () => {
     const db = openTestSqliteDb();
     try {
       const dal = new MemoryV1Dal(db);
-      const base = AgentConfig.parse({ model: { model: "openai/gpt-4.1" } }).memory.v1;
+      const base = BuiltinMemoryServerSettings.parse({});
       const config = { ...base, allow_sensitivities: [] } satisfies typeof base;
 
       vi.useFakeTimers();
@@ -90,7 +90,7 @@ describe("buildMemoryV1Digest", () => {
     const db = openTestSqliteDb();
     try {
       const dal = new MemoryV1Dal(db);
-      const base = AgentConfig.parse({ model: { model: "openai/gpt-4.1" } }).memory.v1;
+      const base = BuiltinMemoryServerSettings.parse({});
       const config = {
         ...base,
         budgets: {
@@ -159,7 +159,7 @@ describe("buildMemoryV1Digest", () => {
     const db = openTestSqliteDb();
     try {
       const dal = new MemoryV1Dal(db);
-      const config = AgentConfig.parse({ model: { model: "openai/gpt-4.1" } }).memory.v1;
+      const config = BuiltinMemoryServerSettings.parse({});
 
       vi.useFakeTimers();
       vi.setSystemTime(new Date("2026-02-27T00:00:00.000Z"));
@@ -216,7 +216,7 @@ describe("buildMemoryV1Digest", () => {
     const db = openTestSqliteDb();
     try {
       const dal = new MemoryV1Dal(db);
-      const base = AgentConfig.parse({ model: { model: "openai/gpt-4.1" } }).memory.v1;
+      const base = BuiltinMemoryServerSettings.parse({});
       const config = {
         ...base,
         structured: {
@@ -261,7 +261,7 @@ describe("buildMemoryV1Digest", () => {
     const db = openTestSqliteDb();
     try {
       const dal = new MemoryV1Dal(db);
-      const base = AgentConfig.parse({ model: { model: "openai/gpt-4.1" } }).memory.v1;
+      const base = BuiltinMemoryServerSettings.parse({});
       const config = {
         ...base,
         structured: {
@@ -311,7 +311,7 @@ describe("buildMemoryV1Digest", () => {
         structured: {
           fact_keys: undefined,
           tags: undefined,
-        } as unknown as AgentConfig["memory"]["v1"]["structured"],
+        } as unknown as BuiltinMemoryServerSettings["structured"],
       });
 
       expect(res.hits).toEqual([]);
@@ -325,7 +325,7 @@ describe("buildMemoryV1Digest", () => {
     const db = openTestSqliteDb();
     try {
       const dal = new MemoryV1Dal(db);
-      const base = AgentConfig.parse({ model: { model: "openai/gpt-4.1" } }).memory.v1;
+      const base = BuiltinMemoryServerSettings.parse({});
       const config = {
         ...base,
         structured: {
@@ -387,7 +387,7 @@ describe("buildMemoryV1Digest", () => {
     const db = openTestSqliteDb();
     try {
       const dal = new MemoryV1Dal(db);
-      const config = AgentConfig.parse({ model: { model: "openai/gpt-4.1" } }).memory.v1;
+      const config = BuiltinMemoryServerSettings.parse({});
 
       vi.useFakeTimers();
       vi.setSystemTime(new Date("2026-02-27T00:00:00.000Z"));

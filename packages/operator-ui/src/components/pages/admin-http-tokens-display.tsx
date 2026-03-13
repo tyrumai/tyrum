@@ -46,7 +46,7 @@ function MobileBootstrapQrDialog({
       margin: 1,
       width: 256,
     })
-      .then((nextSvg) => {
+      .then((nextSvg: string) => {
         if (!active) return;
         setSvg(nextSvg);
         setErrorMessage(null);
