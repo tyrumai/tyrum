@@ -2,7 +2,7 @@ import type { Approval } from "@tyrum/schemas";
 import type { ApprovalRow } from "./dal.js";
 import { toApprovalContract } from "./to-contract.js";
 import type { ProtocolDeps } from "../../ws/protocol.js";
-import { ensureApprovalResolvedEvent } from "../../ws/stable-events.js";
+import { ensureApprovalUpdatedEvent } from "../../ws/stable-events.js";
 import { APPROVAL_WS_AUDIENCE } from "../../ws/audience.js";
 import { broadcastWsEvent } from "../../ws/broadcast.js";
 
@@ -19,7 +19,7 @@ export async function broadcastApprovalUpdated(input: {
     return approval;
   }
 
-  const persisted = await ensureApprovalResolvedEvent({
+  const persisted = await ensureApprovalUpdatedEvent({
     tenantId: input.tenantId,
     approval,
     wsEventDal: input.protocolDeps.wsEventDal,

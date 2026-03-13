@@ -72,6 +72,10 @@ function normalizeTargetId(value: string | number): string {
   return typeof value === "number" ? String(value) : value.trim();
 }
 
+function joinPlaceholders(count: number): string {
+  return Array.from({ length: count }, () => "?").join(", ");
+}
+
 function toReviewEntryRow(raw: RawReviewEntryRow): ReviewEntryRow {
   return {
     tenant_id: raw.tenant_id,
@@ -159,6 +163,24 @@ export class ReviewEntryDal {
     return row ? toReviewEntryRow(row) : undefined;
   }
 
+  async getByIds(input: { tenantId: string; reviewIds: string[] }): Promise<ReviewEntryRow[]> {
+    const reviewIds = [
+      ...new Set(input.reviewIds.map((reviewId) => reviewId.trim()).filter(Boolean)),
+    ];
+    if (reviewIds.length === 0) {
+      return [];
+    }
+
+    const rows = await this.db.all<RawReviewEntryRow>(
+      `SELECT *
+       FROM review_entries
+       WHERE tenant_id = ?
+         AND review_id IN (${joinPlaceholders(reviewIds.length)})`,
+      [input.tenantId.trim(), ...reviewIds],
+    );
+    return rows.map(toReviewEntryRow);
+  }
+
   async listByTarget(input: {
     tenantId: string;
     targetType: ReviewTargetType;
@@ -172,6 +194,30 @@ export class ReviewEntryDal {
          AND target_id = ?
        ORDER BY created_at ASC, review_id ASC`,
       [input.tenantId.trim(), input.targetType, normalizeTargetId(input.targetId)],
+    );
+    return rows.map(toReviewEntryRow);
+  }
+
+  async listByTargets(input: {
+    tenantId: string;
+    targetType: ReviewTargetType;
+    targetIds: Array<string | number>;
+  }): Promise<ReviewEntryRow[]> {
+    const targetIds = [
+      ...new Set(input.targetIds.map((targetId) => normalizeTargetId(targetId)).filter(Boolean)),
+    ];
+    if (targetIds.length === 0) {
+      return [];
+    }
+
+    const rows = await this.db.all<RawReviewEntryRow>(
+      `SELECT *
+       FROM review_entries
+       WHERE tenant_id = ?
+         AND target_type = ?
+         AND target_id IN (${joinPlaceholders(targetIds.length)})
+       ORDER BY target_id ASC, created_at ASC, review_id ASC`,
+      [input.tenantId.trim(), input.targetType, ...targetIds],
     );
     return rows.map(toReviewEntryRow);
   }

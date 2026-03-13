@@ -7,7 +7,7 @@ import { NodePairingDal } from "../../src/modules/node/pairing-dal.js";
 import { PolicyOverrideDal } from "../../src/modules/policy/override-dal.js";
 import { WsEventDal } from "../../src/modules/ws-event/dal.js";
 import {
-  ensureApprovalResolvedEvent,
+  ensureApprovalUpdatedEvent,
   ensurePairingResolvedEvent,
   ensurePolicyOverrideCreatedEvent,
 } from "../../src/ws/stable-events.js";
@@ -63,12 +63,12 @@ describe("stable ws event builders", () => {
       throw new Error("expected approval contract");
     }
 
-    const first = await ensureApprovalResolvedEvent({
+    const first = await ensureApprovalUpdatedEvent({
       tenantId: DEFAULT_TENANT_ID,
       approval,
       wsEventDal,
     });
-    const second = await ensureApprovalResolvedEvent({
+    const second = await ensureApprovalUpdatedEvent({
       tenantId: DEFAULT_TENANT_ID,
       approval,
       wsEventDal,
@@ -76,6 +76,54 @@ describe("stable ws event builders", () => {
 
     expect(second.event.event_id).toBe(first.event.event_id);
     expect(second.event.occurred_at).toBe(first.event.occurred_at);
+  });
+
+  it("uses approval.updated semantics for unresolved approvals with initialized reviews", async () => {
+    db = openTestSqliteDb();
+    const approvalDal = new ApprovalDal(db);
+    const wsEventDal = new WsEventDal(db);
+
+    const created = await approvalDal.create({
+      tenantId: DEFAULT_TENANT_ID,
+      agentId: DEFAULT_AGENT_ID,
+      workspaceId: DEFAULT_WORKSPACE_ID,
+      approvalKey: "stable-approval-pending-event",
+      prompt: "Queue this approval for review?",
+      motivation: "Guardian review is required before this approval may continue.",
+      kind: "policy",
+      status: "queued",
+    });
+    const initialized = await approvalDal.transitionWithReview({
+      tenantId: DEFAULT_TENANT_ID,
+      approvalId: created.approval_id,
+      status: "queued",
+      reviewerKind: "guardian",
+      reviewState: "queued",
+      reason: "Queued for guardian review.",
+      allowedCurrentStatuses: ["queued"],
+    });
+    if (!initialized?.approval) {
+      throw new Error("expected initialized approval");
+    }
+
+    const approval = toApprovalContract(initialized.approval);
+    if (!approval) {
+      throw new Error("expected approval contract");
+    }
+
+    const first = await ensureApprovalUpdatedEvent({
+      tenantId: DEFAULT_TENANT_ID,
+      approval,
+      wsEventDal,
+    });
+    const second = await ensureApprovalUpdatedEvent({
+      tenantId: DEFAULT_TENANT_ID,
+      approval,
+      wsEventDal,
+    });
+
+    expect(first.event.type).toBe("approval.updated");
+    expect(second.event.event_id).toBe(first.event.event_id);
   });
 
   it("reuses the persisted event_id for the same pairing transition and changes it for revoke", async () => {

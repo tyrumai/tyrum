@@ -11,7 +11,7 @@ import {
   type WsBroadcastAudience,
 } from "../../ws/audience.js";
 import {
-  ensureApprovalResolvedEvent,
+  ensureApprovalUpdatedEvent,
   ensurePolicyOverrideCreatedEvent,
 } from "../../ws/stable-events.js";
 
@@ -272,7 +272,7 @@ export async function resolveApproval(
   if (resolved.transitioned && deps.emitEvent) {
     const approval = toApprovalContract(resolved.approval);
     if (approval) {
-      const persistedEvent = await ensureApprovalResolvedEvent({
+      const persistedEvent = await ensureApprovalUpdatedEvent({
         tenantId: input.tenantId,
         approval,
         wsEventDal: deps.wsEventDal,

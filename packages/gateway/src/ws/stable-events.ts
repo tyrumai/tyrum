@@ -34,7 +34,7 @@ async function ensureStableWsEvent(input: {
   });
 }
 
-export async function ensureApprovalResolvedEvent(input: {
+export async function ensureApprovalUpdatedEvent(input: {
   tenantId: string;
   approval: Approval;
   wsEventDal?: WsEventDal;
@@ -48,6 +48,8 @@ export async function ensureApprovalResolvedEvent(input: {
     wsEventDal: input.wsEventDal,
   });
 }
+
+export const ensureApprovalResolvedEvent = ensureApprovalUpdatedEvent;
 
 export async function ensurePairingResolvedEvent(input: {
   tenantId: string;

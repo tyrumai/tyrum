@@ -11,7 +11,7 @@ import type { WorkboardDal } from "../workboard/dal.js";
 import { APPROVAL_WS_AUDIENCE, PAIRING_WS_AUDIENCE } from "../../ws/audience.js";
 import { broadcastWsEvent } from "../../ws/broadcast.js";
 import type { PairingApprovedDeliveryDeps } from "../../ws/pairing-approved.js";
-import { ensureApprovalResolvedEvent, ensurePairingResolvedEvent } from "../../ws/stable-events.js";
+import { ensureApprovalUpdatedEvent, ensurePairingResolvedEvent } from "../../ws/stable-events.js";
 import type { WsEventDal } from "../ws-event/dal.js";
 import type { SecretProvider } from "../secret/provider.js";
 import type { ApprovalGuardianDecision, PairingGuardianDecision } from "./guardian-review-mode.js";
@@ -298,7 +298,7 @@ export async function emitApprovalUpdate(input: {
 }): Promise<void> {
   const contract = toApprovalContract(input.approval);
   if (!contract || !input.deps.ws) return;
-  const persisted = await ensureApprovalResolvedEvent({
+  const persisted = await ensureApprovalUpdatedEvent({
     tenantId: input.approval.tenant_id,
     approval: contract as Approval,
     wsEventDal: input.deps.wsEventDal,
