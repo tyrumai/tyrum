@@ -136,7 +136,11 @@ export async function createReviewedApproval(input: {
   });
   const next = initialized?.approval ?? approval;
   if (initialized?.transitioned) {
-    await input.emitUpdate?.(next);
+    try {
+      await input.emitUpdate?.(next);
+    } catch {
+      // Intentional: approval update notifications are best-effort and must not roll back creation.
+    }
   }
   return next;
 }
