@@ -410,8 +410,13 @@ describe("tool.node.dispatch desktop evidence artifacts", () => {
       ],
     );
     await container.db.run(
-      "INSERT INTO node_pairings (tenant_id, status, node_id, metadata_json) VALUES (?, 'approved', ?, ?)",
-      [DEFAULT_TENANT_ID, nodeId, JSON.stringify({ mode: "desktop-sandbox" })],
+      "INSERT INTO node_pairings (tenant_id, status, node_id, metadata_json, motivation) VALUES (?, 'approved', ?, ?, ?)",
+      [
+        DEFAULT_TENANT_ID,
+        nodeId,
+        JSON.stringify({ mode: "desktop-sandbox" }),
+        "Desktop sandbox evidence access was approved for this node.",
+      ],
     );
 
     const pngBytes = Buffer.from("fake-sandbox-bytes", "utf8");

@@ -59,10 +59,10 @@ describe("Trusted proxies", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
       status?: string;
-      pairing?: { latest_review?: { decision_payload?: { ip?: string } } };
+      pairing?: { latest_review?: { decision_payload?: { actor?: { ip?: string } } } };
     };
     expect(body.status).toBe("ok");
-    expect(body.pairing?.latest_review?.decision_payload?.ip).toBe("127.0.0.1");
+    expect(body.pairing?.latest_review?.decision_payload?.actor?.ip).toBe("127.0.0.1");
 
     await container.db.close();
   });
@@ -106,10 +106,10 @@ describe("Trusted proxies", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
       status?: string;
-      pairing?: { latest_review?: { decision_payload?: { ip?: string } } };
+      pairing?: { latest_review?: { decision_payload?: { actor?: { ip?: string } } } };
     };
     expect(body.status).toBe("ok");
-    expect(body.pairing?.latest_review?.decision_payload?.ip).toBe("203.0.113.9");
+    expect(body.pairing?.latest_review?.decision_payload?.actor?.ip).toBe("203.0.113.9");
 
     await container.db.close();
   });
@@ -153,10 +153,10 @@ describe("Trusted proxies", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
       status?: string;
-      pairing?: { latest_review?: { decision_payload?: { ip?: string } } };
+      pairing?: { latest_review?: { decision_payload?: { actor?: { ip?: string } } } };
     };
     expect(body.status).toBe("ok");
-    expect(body.pairing?.latest_review?.decision_payload?.ip).toBe("127.0.0.1");
+    expect(body.pairing?.latest_review?.decision_payload?.actor?.ip).toBe("127.0.0.1");
 
     await container.db.close();
   });
@@ -200,10 +200,10 @@ describe("Trusted proxies", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
       status?: string;
-      pairing?: { latest_review?: { decision_payload?: { ip?: string } } };
+      pairing?: { latest_review?: { decision_payload?: { actor?: { ip?: string } } } };
     };
     expect(body.status).toBe("ok");
-    expect(body.pairing?.latest_review?.decision_payload?.ip).toBe("203.0.113.11");
+    expect(body.pairing?.latest_review?.decision_payload?.actor?.ip).toBe("203.0.113.11");
 
     await container.db.close();
   });
@@ -247,10 +247,10 @@ describe("Trusted proxies", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
       status?: string;
-      pairing?: { latest_review?: { decision_payload?: { ip?: string } } };
+      pairing?: { latest_review?: { decision_payload?: { actor?: { ip?: string } } } };
     };
     expect(body.status).toBe("ok");
-    expect(body.pairing?.latest_review?.decision_payload?.ip).toBe("198.51.100.10");
+    expect(body.pairing?.latest_review?.decision_payload?.actor?.ip).toBe("198.51.100.10");
 
     await container.db.close();
   });

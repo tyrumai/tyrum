@@ -39,11 +39,13 @@ function formatReviewRisk(review: Approval["latest_review"]): string | null {
   return parts.length > 0 ? parts.join(" · ") : null;
 }
 
-function getApprovalStatusDisplay(status: Approval["status"]): {
+function getApprovalStatusDisplay(status: Approval["status"] | "pending"): {
   label: string;
   variant: ComponentProps<typeof Badge>["variant"];
 } {
   switch (status) {
+    case "pending":
+      return { label: "Awaiting human review", variant: "warning" };
     case "queued":
       return { label: "Guardian queued", variant: "outline" };
     case "reviewing":

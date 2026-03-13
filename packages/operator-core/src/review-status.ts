@@ -18,11 +18,16 @@ function readReviewLikeUpdatedAt(review: unknown): string | null {
 }
 
 export function isApprovalBlockedStatus(status: ApprovalLikeStatus): boolean {
-  return status === "queued" || status === "reviewing" || status === "awaiting_human";
+  return (
+    status === "pending" ||
+    status === "queued" ||
+    status === "reviewing" ||
+    status === "awaiting_human"
+  );
 }
 
 export function isApprovalHumanActionableStatus(status: ApprovalLikeStatus): boolean {
-  return status === "queued" || status === "awaiting_human";
+  return status === "pending" || status === "queued" || status === "awaiting_human";
 }
 
 export function approvalUpdatedAt(approval: Approval): string {

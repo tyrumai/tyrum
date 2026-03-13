@@ -470,23 +470,31 @@ export class ApprovalDal {
 
   async expireStale(input: { tenantId: string; nowIso?: string }): Promise<number> {
     const nowIso = input.nowIso ?? new Date().toISOString();
-    const rows = await this.db.all<{ approval_id: string }>(
-      `SELECT approval_id
-       FROM approvals
-       WHERE tenant_id = ?
-         AND expires_at IS NOT NULL
-         AND expires_at <= ?
-         AND status IN ('queued', 'reviewing', 'awaiting_human')`,
-      [input.tenantId, nowIso],
-    );
-    let expired = 0;
-    for (const row of rows) {
-      const result = await this.expireById({
-        tenantId: input.tenantId,
-        approvalId: row.approval_id,
-      });
-      if (result) expired += 1;
-    }
-    return expired;
+    return await this.db.transaction(async (tx) => {
+      const approvalDal = tx === this.db ? this : this.createTxDal(tx);
+      const rows = await tx.all<{ approval_id: string }>(
+        `SELECT approval_id
+         FROM approvals
+         WHERE tenant_id = ?
+           AND expires_at IS NOT NULL
+           AND expires_at <= ?
+           AND status IN ('queued', 'reviewing', 'awaiting_human')`,
+        [input.tenantId, nowIso],
+      );
+      let expired = 0;
+      for (const row of rows) {
+        const result = await approvalDal.transitionWithReview({
+          tenantId: input.tenantId,
+          approvalId: row.approval_id,
+          status: "expired",
+          reviewerKind: "system",
+          reviewState: "expired",
+          reason: "approval timed out",
+          allowedCurrentStatuses: ["queued", "reviewing", "awaiting_human"],
+        });
+        if (result?.transitioned) expired += 1;
+      }
+      return expired;
+    });
   }
 }

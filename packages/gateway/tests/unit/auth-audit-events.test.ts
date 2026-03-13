@@ -189,7 +189,7 @@ describe("auth audit events", () => {
     expect(action["required_scopes"]).toEqual(["operator.write"]);
   });
 
-  it("records authz.denied for WS approval.request when scoped token lacks operator.approvals", async () => {
+  it("records authz.denied for WS approval.list when scoped token lacks operator.approvals", async () => {
     const eventLog = new EventLog(db);
     const audit = new AuthAudit({
       eventLog,
@@ -226,9 +226,8 @@ describe("auth audit events", () => {
       client,
       JSON.stringify({
         request_id: "approval-123",
-        type: "approval.request",
-        ok: true,
-        result: { approved: true },
+        type: "approval.list",
+        payload: {},
       }),
       { connectionManager: cm, authAudit: audit },
     );

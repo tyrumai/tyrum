@@ -33,10 +33,11 @@ describe("scope normalization", () => {
   });
 
   it("WS protocol trims token scopes before comparison", async () => {
-    const onApprovalDecision = vi.fn();
     const deps: ProtocolDeps = {
       connectionManager: new ConnectionManager(),
-      onApprovalDecision,
+      approvalDal: {
+        listBlocked: vi.fn(async () => []),
+      } as ProtocolDeps["approvalDal"],
     };
 
     const client = {
@@ -56,19 +57,20 @@ describe("scope normalization", () => {
       lastWsPongAt: 0,
     } satisfies ConnectedClient;
 
-    const approvalId = randomUUID();
     const response = await handleClientMessage(
       client,
       JSON.stringify({
-        request_id: `approval-${approvalId}`,
-        type: "approval.request",
-        ok: true,
-        result: { approved: true },
+        request_id: `approval-${randomUUID()}`,
+        type: "approval.list",
+        payload: {},
       }),
       deps,
     );
 
-    expect(response).toBeUndefined();
-    expect(onApprovalDecision).toHaveBeenCalledWith(DEFAULT_TENANT_ID, approvalId, true, undefined);
+    expect(response).toMatchObject({
+      ok: true,
+      type: "approval.list",
+      result: { approvals: [], next_cursor: undefined },
+    });
   });
 });

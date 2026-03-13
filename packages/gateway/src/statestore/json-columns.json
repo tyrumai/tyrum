@@ -497,6 +497,20 @@
     "default": null
   },
   {
+    "table": "review_entries",
+    "column": "decision_payload_json",
+    "shape": "any",
+    "nullable": true,
+    "default": null
+  },
+  {
+    "table": "review_entries",
+    "column": "evidence_json",
+    "shape": "any",
+    "nullable": true,
+    "default": null
+  },
+  {
     "table": "presence_entries",
     "column": "metadata_json",
     "shape": "object",

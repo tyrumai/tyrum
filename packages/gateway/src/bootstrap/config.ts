@@ -71,12 +71,21 @@ export function ensureDatabaseDirectory(dbPath: string): void {
 
 export function resolveGatewayHome(homeOverride?: string): string {
   const trimmed = homeOverride?.trim();
-  return trimmed && trimmed.length > 0 ? trimmed : join(homedir(), ".tyrum");
+  if (trimmed && trimmed.length > 0) return trimmed;
+
+  const fromEnv = process.env["TYRUM_HOME"]?.trim();
+  if (fromEnv && fromEnv.length > 0) return fromEnv;
+
+  return join(homedir(), ".tyrum");
 }
 
 export function resolveGatewayDbPath(home: string, dbOverride?: string): string {
   const trimmed = dbOverride?.trim();
   if (trimmed && trimmed.length > 0) return trimmed;
+
+  const fromEnv = process.env["GATEWAY_DB_PATH"]?.trim();
+  if (fromEnv && fromEnv.length > 0) return fromEnv;
+
   return join(home, "gateway.db");
 }
 

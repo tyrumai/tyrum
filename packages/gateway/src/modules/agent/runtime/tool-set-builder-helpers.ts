@@ -238,7 +238,11 @@ export async function awaitApprovalForToolExecution(
         reason,
       };
     }
-    if (current.status === "denied" || current.status === "expired") {
+    if (
+      current.status === "denied" ||
+      current.status === "expired" ||
+      current.status === "cancelled"
+    ) {
       const reason = extractApprovalReason(current);
       await onStatusUpdate?.({
         approvalId: current.approval_id,
