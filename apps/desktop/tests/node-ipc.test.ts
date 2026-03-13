@@ -382,11 +382,12 @@ describe("node-ipc", () => {
 
     const statusHandler = registeredHandlers.get("node:get-status");
     expect(statusHandler).toBeDefined();
-    expect((statusHandler as () => { status: string; connected: boolean; deviceId: string | null })())
-      .toEqual({
-        status: "disconnected",
-        connected: false,
-        deviceId: null,
-      });
+    expect(
+      (statusHandler as () => { status: string; connected: boolean; deviceId: string | null })(),
+    ).toEqual({
+      status: "disconnected",
+      connected: false,
+      deviceId: null,
+    });
   });
 });
