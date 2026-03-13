@@ -2,6 +2,10 @@ import * as React from "react";
 import { cn } from "../../lib/cn.js";
 import { ScrollArea } from "../ui/scroll-area.js";
 
+function contentFitsViewport(element: HTMLElement): boolean {
+  return element.scrollWidth - element.clientWidth <= 1;
+}
+
 export interface AppPageToolbarProps extends Omit<React.HTMLAttributes<HTMLDivElement>, "title"> {
   title?: React.ReactNode;
   actions?: React.ReactNode;
@@ -38,13 +42,45 @@ export function AppPageContent({
   scrollAreaRef,
   ...props
 }: AppPageContentProps) {
+  const contentRef = React.useRef<HTMLDivElement>(null);
+  const [centerContent, setCenterContent] = React.useState(true);
+
+  const updateAlignment = React.useCallback(() => {
+    const element = contentRef.current;
+    if (!element) return;
+    const nextCentered = contentFitsViewport(element);
+    setCenterContent((current) => (current === nextCentered ? current : nextCentered));
+  }, []);
+
+  React.useLayoutEffect(() => {
+    updateAlignment();
+  });
+
+  React.useLayoutEffect(() => {
+    const element = contentRef.current;
+    if (!element || typeof ResizeObserver !== "function") {
+      return;
+    }
+
+    const observer = new ResizeObserver(() => {
+      updateAlignment();
+    });
+    observer.observe(element);
+    return () => {
+      observer.disconnect();
+    };
+  }, [updateAlignment]);
+
   return (
     <div className={cn("min-h-0 flex-1 overflow-hidden", className)} {...props}>
       <ScrollArea ref={scrollAreaRef} className={cn("h-full", scrollAreaClassName)}>
         <div
+          ref={contentRef}
           data-layout-content=""
+          data-layout-alignment={centerContent ? "center" : "start"}
           className={cn(
-            "mx-auto grid box-border w-full max-w-5xl gap-5 px-4 py-4 md:px-5 md:py-5",
+            "grid box-border w-full max-w-5xl gap-5 px-4 py-4 md:px-5 md:py-5",
+            centerContent ? "mx-auto" : "ml-0 mr-auto",
             contentClassName,
           )}
         >
