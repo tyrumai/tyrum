@@ -31,6 +31,9 @@ interface RawAgentConfigRow {
   reverted_from_revision: number | null;
 }
 
+const SELECT_AGENT_CONFIG_REVISION_SQL = `SELECT revision, tenant_id, agent_id, config_json, created_at, created_by_json, reason, reverted_from_revision
+       FROM agent_configs`;
+
 function asPlainObject(value: unknown): Record<string, unknown> | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return undefined;
@@ -110,7 +113,7 @@ function rowToRevision(
   row: RawAgentConfigRow,
   parsed: ReturnType<typeof parseAgentConfigOrThrow> = parseAgentConfigOrThrow(row),
 ): AgentConfigRevision {
-  const configSha256 = createHash("sha256").update(JSON.stringify(parsed.config)).digest("hex");
+  const configSha256 = createHash("sha256").update(row.config_json).digest("hex");
   return {
     revision: row.revision,
     tenantId: row.tenant_id,
@@ -126,6 +129,49 @@ function rowToRevision(
 
 export class AgentConfigDal {
   constructor(private readonly db: SqlDb) {}
+
+  private async selectLatestRow(
+    db: SqlDb,
+    params: {
+      tenantId: string;
+      agentId: string;
+    },
+  ): Promise<RawAgentConfigRow | undefined> {
+    return await db.get<RawAgentConfigRow>(
+      `${SELECT_AGENT_CONFIG_REVISION_SQL}
+       WHERE tenant_id = ? AND agent_id = ?
+       ORDER BY revision DESC
+       LIMIT 1`,
+      [params.tenantId, params.agentId],
+    );
+  }
+
+  private async lockAgentScope(
+    db: SqlDb,
+    params: {
+      tenantId: string;
+      agentId: string;
+    },
+  ): Promise<boolean> {
+    if (db.kind === "postgres") {
+      const locked = await db.get<{ agent_id: string }>(
+        `SELECT agent_id
+         FROM agents
+         WHERE tenant_id = ? AND agent_id = ?
+         FOR UPDATE`,
+        [params.tenantId, params.agentId],
+      );
+      return Boolean(locked);
+    }
+
+    const result = await db.run(
+      `UPDATE agents
+       SET updated_at = updated_at
+       WHERE tenant_id = ? AND agent_id = ?`,
+      [params.tenantId, params.agentId],
+    );
+    return result.changes > 0;
+  }
 
   private async resolveDefaultConfig(defaultConfig: AgentConfigFactory): Promise<AgentConfig> {
     if (typeof defaultConfig === "function") {
@@ -145,8 +191,7 @@ export class AgentConfigDal {
         : 50;
 
     const rows = await this.db.all<RawAgentConfigRow>(
-      `SELECT revision, tenant_id, agent_id, config_json, created_at, created_by_json, reason, reverted_from_revision
-       FROM agent_configs
+      `${SELECT_AGENT_CONFIG_REVISION_SQL}
        WHERE tenant_id = ? AND agent_id = ?
        ORDER BY revision DESC
        LIMIT ?`,
@@ -159,14 +204,7 @@ export class AgentConfigDal {
     tenantId: string;
     agentId: string;
   }): Promise<AgentConfigRevision | undefined> {
-    const row = await this.db.get<RawAgentConfigRow>(
-      `SELECT revision, tenant_id, agent_id, config_json, created_at, created_by_json, reason, reverted_from_revision
-       FROM agent_configs
-       WHERE tenant_id = ? AND agent_id = ?
-       ORDER BY revision DESC
-       LIMIT 1`,
-      [params.tenantId, params.agentId],
-    );
+    const row = await this.selectLatestRow(this.db, params);
     if (!row) return undefined;
 
     const parsed = parseAgentConfigOrThrow(row);
@@ -174,16 +212,40 @@ export class AgentConfigDal {
       return rowToRevision(row, parsed);
     }
 
-    return await this.set({
-      tenantId: row.tenant_id,
-      agentId: row.agent_id,
-      config: parsed.config,
-      createdBy: {
-        kind: "system",
-        subsystem: "agent-config-dal",
-      },
-      reason: "migrate legacy memory.v1 config",
-      occurredAtIso: new Date().toISOString(),
+    return await this.db.transaction(async (tx) => {
+      if (
+        !(await this.lockAgentScope(tx, {
+          tenantId: row.tenant_id,
+          agentId: row.agent_id,
+        }))
+      ) {
+        return undefined;
+      }
+
+      const latestRow = await this.selectLatestRow(tx, {
+        tenantId: row.tenant_id,
+        agentId: row.agent_id,
+      });
+      if (!latestRow) {
+        return undefined;
+      }
+
+      const latestParsed = parseAgentConfigOrThrow(latestRow);
+      if (!latestParsed.migratedFromLegacy) {
+        return rowToRevision(latestRow, latestParsed);
+      }
+
+      return await new AgentConfigDal(tx).set({
+        tenantId: latestRow.tenant_id,
+        agentId: latestRow.agent_id,
+        config: latestParsed.config,
+        createdBy: {
+          kind: "system",
+          subsystem: "agent-config-dal",
+        },
+        reason: "migrate legacy memory.v1 config",
+        occurredAtIso: new Date().toISOString(),
+      });
     });
   }
 
@@ -193,8 +255,7 @@ export class AgentConfigDal {
     revision: number;
   }): Promise<AgentConfigRevision | undefined> {
     const row = await this.db.get<RawAgentConfigRow>(
-      `SELECT revision, tenant_id, agent_id, config_json, created_at, created_by_json, reason, reverted_from_revision
-       FROM agent_configs
+      `${SELECT_AGENT_CONFIG_REVISION_SQL}
        WHERE tenant_id = ? AND agent_id = ? AND revision = ?
        LIMIT 1`,
       [params.tenantId, params.agentId, params.revision],

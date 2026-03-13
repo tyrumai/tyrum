@@ -398,6 +398,27 @@ export async function resolveToolsAndMemory(
     true,
     stateMode,
   );
+  const validatedToolCache = new Map<string, ToolDescriptor | null>();
+  const validateTool = (tool: ToolDescriptor): ToolDescriptor | undefined => {
+    const cached = validatedToolCache.get(tool.id);
+    if (cached !== undefined) {
+      return cached ?? undefined;
+    }
+
+    const validated = validateToolDescriptorInputSchema(tool);
+    if (!validated.ok) {
+      deps.opts.container.logger.warn("agent.tool_schema_invalid", {
+        tool_id: tool.id,
+        error: validated.error,
+      });
+      validatedToolCache.set(tool.id, null);
+      return undefined;
+    }
+
+    const normalized = { ...tool, inputSchema: validated.schema };
+    validatedToolCache.set(tool.id, normalized);
+    return normalized;
+  };
   const availableTools = [
     ...builtinTools.filter(
       (tool) =>
@@ -409,30 +430,14 @@ export async function resolveToolsAndMemory(
   ]
     .filter((tool) => isToolAllowed(executionProfile.profile.tool_allowlist, tool.id))
     .flatMap((tool) => {
-      const validated = validateToolDescriptorInputSchema(tool);
-      if (!validated.ok) {
-        deps.opts.container.logger.warn("agent.tool_schema_invalid", {
-          tool_id: tool.id,
-          error: validated.error,
-        });
-        return [];
-      }
-
-      return [{ ...tool, inputSchema: validated.schema }];
+      const validated = validateTool(tool);
+      return validated ? [validated] : [];
     });
   const filteredTools = toolCandidates
     .filter((tool) => isToolAllowed(executionProfile.profile.tool_allowlist, tool.id))
     .flatMap((tool) => {
-      const validated = validateToolDescriptorInputSchema(tool);
-      if (!validated.ok) {
-        deps.opts.container.logger.warn("agent.tool_schema_invalid", {
-          tool_id: tool.id,
-          error: validated.error,
-        });
-        return [];
-      }
-
-      return [{ ...tool, inputSchema: validated.schema }];
+      const validated = validateTool(tool);
+      return validated ? [validated] : [];
     });
 
   return { availableTools, toolSetBuilderDeps, toolSetBuilder, filteredTools };
