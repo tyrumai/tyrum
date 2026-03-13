@@ -251,6 +251,7 @@ class LocalAgentContextStore implements AgentContextStore {
     scope: AgentContextScope,
     config: AgentConfigT,
   ): Promise<McpServerSpecT[]> {
+    const builtinMemoryServer = buildBuiltinMemoryServerSpec();
     const managedServers = await this.runtimePackageDal.listLatest({
       tenantId: scope.tenantId,
       packageKind: "mcp",
@@ -262,7 +263,7 @@ class LocalAgentContextStore implements AgentContextStore {
     const loaded: McpServerSpecT[] = [];
     const seen = new Set<string>();
     const orderedServerIds = [
-      buildBuiltinMemoryServerSpec().id,
+      builtinMemoryServer.id,
       ...localServers.map((server) => server.id),
       ...managedServers.map((server) => server.packageKey),
     ];
@@ -278,8 +279,8 @@ class LocalAgentContextStore implements AgentContextStore {
       }
       seen.add(normalizedServerId);
 
-      if (normalizedServerId === buildBuiltinMemoryServerSpec().id) {
-        loaded.push(buildBuiltinMemoryServerSpec());
+      if (normalizedServerId === builtinMemoryServer.id) {
+        loaded.push(builtinMemoryServer);
         continue;
       }
 
@@ -446,6 +447,7 @@ class SharedAgentContextStore implements AgentContextStore {
     scope: AgentContextScope,
     config: AgentConfigT,
   ): Promise<McpServerSpecT[]> {
+    const builtinMemoryServer = buildBuiltinMemoryServerSpec();
     const sharedServers = await this.runtimePackageDal.listLatest({
       tenantId: scope.tenantId,
       packageKind: "mcp",
@@ -455,7 +457,7 @@ class SharedAgentContextStore implements AgentContextStore {
     const loaded: McpServerSpecT[] = [];
     const seen = new Set<string>();
     for (const serverId of [
-      buildBuiltinMemoryServerSpec().id,
+      builtinMemoryServer.id,
       ...sharedServers.map((server) => server.packageKey),
     ]) {
       const normalizedServerId = serverId.trim();
@@ -468,8 +470,8 @@ class SharedAgentContextStore implements AgentContextStore {
       }
       seen.add(normalizedServerId);
 
-      if (normalizedServerId === buildBuiltinMemoryServerSpec().id) {
-        loaded.push(buildBuiltinMemoryServerSpec());
+      if (normalizedServerId === builtinMemoryServer.id) {
+        loaded.push(builtinMemoryServer);
         continue;
       }
 

@@ -146,7 +146,6 @@ export class ToolExecutor {
       mcpManager: this.mcpManager,
       mcpServerSpecs: this.mcpServerSpecs,
       secretProvider: this.secretProvider,
-      memoryToolRuntime: this.memoryToolRuntime,
       assertSandboxed: (filePath: string) => this.assertSandboxed(filePath),
       withWorkspaceLease: <T>(
         callId: string,

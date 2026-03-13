@@ -26,14 +26,17 @@ function makeMemoryToolConfig(): Record<string, unknown> {
   return {
     model: { model: "openai/gpt-4.1" },
     skills: { default_mode: "deny", workspace_trusted: false },
-    mcp: { default_mode: "allow", pre_turn_tools: ["mcp.memory.seed"] },
-    tools: { default_mode: "allow" },
-    sessions: { ttl_days: 30, max_turns: 20 },
-    memory: {
-      v1: {
-        enabled: true,
+    mcp: {
+      default_mode: "allow",
+      pre_turn_tools: ["mcp.memory.seed"],
+      server_settings: {
+        memory: {
+          enabled: true,
+        },
       },
     },
+    tools: { default_mode: "allow" },
+    sessions: { ttl_days: 30, max_turns: 20 },
   };
 }
 

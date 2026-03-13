@@ -106,14 +106,16 @@ function parseAgentConfigOrThrow(row: RawAgentConfigRow): {
   );
 }
 
-function rowToRevision(row: RawAgentConfigRow): AgentConfigRevision {
-  const { config } = parseAgentConfigOrThrow(row);
+function rowToRevision(
+  row: RawAgentConfigRow,
+  parsed: ReturnType<typeof parseAgentConfigOrThrow> = parseAgentConfigOrThrow(row),
+): AgentConfigRevision {
   const configSha256 = createHash("sha256").update(row.config_json).digest("hex");
   return {
     revision: row.revision,
     tenantId: row.tenant_id,
     agentId: row.agent_id,
-    config,
+    config: parsed.config,
     configSha256,
     createdAt: normalizeDbDateTime(row.created_at),
     createdBy: safeJsonParse(row.created_by_json, {}),
@@ -150,7 +152,7 @@ export class AgentConfigDal {
        LIMIT ?`,
       [params.tenantId, params.agentId, limit],
     );
-    return rows.map(rowToRevision);
+    return rows.map((row) => rowToRevision(row));
   }
 
   async getLatest(params: {
@@ -169,7 +171,7 @@ export class AgentConfigDal {
 
     const parsed = parseAgentConfigOrThrow(row);
     if (!parsed.migratedFromLegacy) {
-      return rowToRevision(row);
+      return rowToRevision(row, parsed);
     }
 
     return await this.set({
