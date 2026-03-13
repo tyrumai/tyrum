@@ -64,7 +64,6 @@ export function registerHttpClientOpsAdminTests(): void {
             mcp: { default_mode: "allow", allow: [], deny: [] },
             tools: { default_mode: "allow", allow: [], deny: [] },
             sessions: { ttl_days: 30, max_turns: 20 },
-            memory: { markdown_enabled: true },
           },
           persona: {
             name: "Ada",
@@ -97,7 +96,6 @@ export function registerHttpClientOpsAdminTests(): void {
           mcp: { default_mode: "allow", allow: [], deny: [] },
           tools: { default_mode: "allow", allow: [], deny: [] },
           sessions: { ttl_days: 30, max_turns: 20 },
-          memory: { markdown_enabled: true },
         },
         persona: {
           name: "Hypatia",

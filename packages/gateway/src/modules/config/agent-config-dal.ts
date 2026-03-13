@@ -31,7 +31,54 @@ interface RawAgentConfigRow {
   reverted_from_revision: number | null;
 }
 
-function parseAgentConfigOrThrow(row: RawAgentConfigRow): AgentConfig {
+const SELECT_AGENT_CONFIG_REVISION_SQL = `SELECT revision, tenant_id, agent_id, config_json, created_at, created_by_json, reason, reverted_from_revision
+       FROM agent_configs`;
+
+function asPlainObject(value: unknown): Record<string, unknown> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  return value as Record<string, unknown>;
+}
+
+function normalizeLegacyAgentConfig(value: unknown): AgentConfig | undefined {
+  const parsed = asPlainObject(value);
+  if (!parsed) return undefined;
+
+  const legacyMemory = asPlainObject(parsed["memory"]);
+  const legacyV1 = asPlainObject(legacyMemory?.["v1"]);
+  if (!legacyV1) return undefined;
+
+  const mcp = asPlainObject(parsed["mcp"]) ?? {};
+  const serverSettings = asPlainObject(mcp["server_settings"]) ?? {};
+  const normalizedMcp: Record<string, unknown> = {
+    ...mcp,
+    server_settings:
+      serverSettings["memory"] === undefined
+        ? { ...serverSettings, memory: legacyV1 }
+        : { ...serverSettings },
+  };
+
+  if (
+    !Array.isArray(mcp["pre_turn_tools"]) &&
+    (legacyV1["enabled"] === undefined || legacyV1["enabled"] === true)
+  ) {
+    normalizedMcp["pre_turn_tools"] = ["mcp.memory.seed"];
+  }
+
+  const normalized: Record<string, unknown> = {
+    ...parsed,
+    mcp: normalizedMcp,
+  };
+  delete normalized["memory"];
+  const config = AgentConfigSchema.safeParse(normalized);
+  return config.success ? config.data : undefined;
+}
+
+function parseAgentConfigOrThrow(row: RawAgentConfigRow): {
+  config: AgentConfig;
+  migratedFromLegacy: boolean;
+} {
   let parsed: unknown;
   try {
     parsed = JSON.parse(row.config_json) as unknown;
@@ -42,23 +89,36 @@ function parseAgentConfigOrThrow(row: RawAgentConfigRow): AgentConfig {
   }
 
   const config = AgentConfigSchema.safeParse(parsed);
-  if (!config.success) {
-    throw new Error(
-      `agent config revision ${String(row.revision)} failed schema validation: ${config.error.message}`,
-    );
+  if (config.success) {
+    return {
+      config: config.data,
+      migratedFromLegacy: false,
+    };
   }
 
-  return config.data;
+  const migrated = normalizeLegacyAgentConfig(parsed);
+  if (migrated) {
+    return {
+      config: migrated,
+      migratedFromLegacy: true,
+    };
+  }
+
+  throw new Error(
+    `agent config revision ${String(row.revision)} failed schema validation: ${config.error.message}`,
+  );
 }
 
-function rowToRevision(row: RawAgentConfigRow): AgentConfigRevision {
-  const config = parseAgentConfigOrThrow(row);
+function rowToRevision(
+  row: RawAgentConfigRow,
+  parsed: ReturnType<typeof parseAgentConfigOrThrow> = parseAgentConfigOrThrow(row),
+): AgentConfigRevision {
   const configSha256 = createHash("sha256").update(row.config_json).digest("hex");
   return {
     revision: row.revision,
     tenantId: row.tenant_id,
     agentId: row.agent_id,
-    config,
+    config: parsed.config,
     configSha256,
     createdAt: normalizeDbDateTime(row.created_at),
     createdBy: safeJsonParse(row.created_by_json, {}),
@@ -69,6 +129,49 @@ function rowToRevision(row: RawAgentConfigRow): AgentConfigRevision {
 
 export class AgentConfigDal {
   constructor(private readonly db: SqlDb) {}
+
+  private async selectLatestRow(
+    db: SqlDb,
+    params: {
+      tenantId: string;
+      agentId: string;
+    },
+  ): Promise<RawAgentConfigRow | undefined> {
+    return await db.get<RawAgentConfigRow>(
+      `${SELECT_AGENT_CONFIG_REVISION_SQL}
+       WHERE tenant_id = ? AND agent_id = ?
+       ORDER BY revision DESC
+       LIMIT 1`,
+      [params.tenantId, params.agentId],
+    );
+  }
+
+  private async lockAgentScope(
+    db: SqlDb,
+    params: {
+      tenantId: string;
+      agentId: string;
+    },
+  ): Promise<boolean> {
+    if (db.kind === "postgres") {
+      const locked = await db.get<{ agent_id: string }>(
+        `SELECT agent_id
+         FROM agents
+         WHERE tenant_id = ? AND agent_id = ?
+         FOR UPDATE`,
+        [params.tenantId, params.agentId],
+      );
+      return Boolean(locked);
+    }
+
+    const result = await db.run(
+      `UPDATE agents
+       SET updated_at = updated_at
+       WHERE tenant_id = ? AND agent_id = ?`,
+      [params.tenantId, params.agentId],
+    );
+    return result.changes > 0;
+  }
 
   private async resolveDefaultConfig(defaultConfig: AgentConfigFactory): Promise<AgentConfig> {
     if (typeof defaultConfig === "function") {
@@ -88,29 +191,62 @@ export class AgentConfigDal {
         : 50;
 
     const rows = await this.db.all<RawAgentConfigRow>(
-      `SELECT revision, tenant_id, agent_id, config_json, created_at, created_by_json, reason, reverted_from_revision
-       FROM agent_configs
+      `${SELECT_AGENT_CONFIG_REVISION_SQL}
        WHERE tenant_id = ? AND agent_id = ?
        ORDER BY revision DESC
        LIMIT ?`,
       [params.tenantId, params.agentId, limit],
     );
-    return rows.map(rowToRevision);
+    return rows.map((row) => rowToRevision(row));
   }
 
   async getLatest(params: {
     tenantId: string;
     agentId: string;
   }): Promise<AgentConfigRevision | undefined> {
-    const row = await this.db.get<RawAgentConfigRow>(
-      `SELECT revision, tenant_id, agent_id, config_json, created_at, created_by_json, reason, reverted_from_revision
-       FROM agent_configs
-       WHERE tenant_id = ? AND agent_id = ?
-       ORDER BY revision DESC
-       LIMIT 1`,
-      [params.tenantId, params.agentId],
-    );
-    return row ? rowToRevision(row) : undefined;
+    const row = await this.selectLatestRow(this.db, params);
+    if (!row) return undefined;
+
+    const parsed = parseAgentConfigOrThrow(row);
+    if (!parsed.migratedFromLegacy) {
+      return rowToRevision(row, parsed);
+    }
+
+    return await this.db.transaction(async (tx) => {
+      if (
+        !(await this.lockAgentScope(tx, {
+          tenantId: row.tenant_id,
+          agentId: row.agent_id,
+        }))
+      ) {
+        return undefined;
+      }
+
+      const latestRow = await this.selectLatestRow(tx, {
+        tenantId: row.tenant_id,
+        agentId: row.agent_id,
+      });
+      if (!latestRow) {
+        return undefined;
+      }
+
+      const latestParsed = parseAgentConfigOrThrow(latestRow);
+      if (!latestParsed.migratedFromLegacy) {
+        return rowToRevision(latestRow, latestParsed);
+      }
+
+      return await new AgentConfigDal(tx).set({
+        tenantId: latestRow.tenant_id,
+        agentId: latestRow.agent_id,
+        config: latestParsed.config,
+        createdBy: {
+          kind: "system",
+          subsystem: "agent-config-dal",
+        },
+        reason: "migrate legacy memory.v1 config",
+        occurredAtIso: new Date().toISOString(),
+      });
+    });
   }
 
   async getByRevision(params: {
@@ -119,8 +255,7 @@ export class AgentConfigDal {
     revision: number;
   }): Promise<AgentConfigRevision | undefined> {
     const row = await this.db.get<RawAgentConfigRow>(
-      `SELECT revision, tenant_id, agent_id, config_json, created_at, created_by_json, reason, reverted_from_revision
-       FROM agent_configs
+      `${SELECT_AGENT_CONFIG_REVISION_SQL}
        WHERE tenant_id = ? AND agent_id = ? AND revision = ?
        LIMIT 1`,
       [params.tenantId, params.agentId, params.revision],

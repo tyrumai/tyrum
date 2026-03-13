@@ -11,22 +11,6 @@ import {
   type WsCommandExecuteResult as WsCommandExecuteResultT,
   type WsLocationBeaconPayload,
   type WsLocationBeaconResult as WsLocationBeaconResultT,
-  type WsMemoryCreatePayload,
-  type WsMemoryCreateResult as WsMemoryCreateResultT,
-  type WsMemoryDeletePayload,
-  type WsMemoryDeleteResult as WsMemoryDeleteResultT,
-  type WsMemoryExportPayload,
-  type WsMemoryExportResult as WsMemoryExportResultT,
-  type WsMemoryForgetPayload,
-  type WsMemoryForgetResult as WsMemoryForgetResultT,
-  type WsMemoryGetPayload,
-  type WsMemoryGetResult as WsMemoryGetResultT,
-  type WsMemoryListPayload,
-  type WsMemoryListResult as WsMemoryListResultT,
-  type WsMemorySearchPayload,
-  type WsMemorySearchResult as WsMemorySearchResultT,
-  type WsMemoryUpdatePayload,
-  type WsMemoryUpdateResult as WsMemoryUpdateResultT,
   type WsPairingApprovePayload,
   type WsPairingDenyPayload,
   type WsPairingResolveResult as WsPairingResolveResultT,
@@ -105,14 +89,6 @@ import {
   WsApprovalResolveResult,
   WsCommandExecuteResult,
   WsLocationBeaconResult,
-  WsMemoryCreateResult,
-  WsMemoryDeleteResult,
-  WsMemoryExportResult,
-  WsMemoryForgetResult,
-  WsMemoryGetResult,
-  WsMemoryListResult,
-  WsMemorySearchResult,
-  WsMemoryUpdateResult,
   WsPairingResolveResult,
   WsPresenceBeaconResult,
   WsRunListResult,
@@ -295,30 +271,6 @@ export class TyrumClient extends TyrumClientTransportCore {
   }
   workStateKvSet(payload: WsWorkStateKvSetPayload): Promise<WsWorkStateKvSetResultT> {
     return this.request("work.state_kv.set", payload, WsWorkStateKvSetResult);
-  }
-  memorySearch(payload: WsMemorySearchPayload): Promise<WsMemorySearchResultT> {
-    return this.request("memory.search", payload, WsMemorySearchResult);
-  }
-  memoryList(payload: WsMemoryListPayload): Promise<WsMemoryListResultT> {
-    return this.request("memory.list", payload, WsMemoryListResult);
-  }
-  memoryGet(payload: WsMemoryGetPayload): Promise<WsMemoryGetResultT> {
-    return this.request("memory.get", payload, WsMemoryGetResult);
-  }
-  memoryCreate(payload: WsMemoryCreatePayload): Promise<WsMemoryCreateResultT> {
-    return this.request("memory.create", payload, WsMemoryCreateResult);
-  }
-  memoryUpdate(payload: WsMemoryUpdatePayload): Promise<WsMemoryUpdateResultT> {
-    return this.request("memory.update", payload, WsMemoryUpdateResult);
-  }
-  memoryDelete(payload: WsMemoryDeletePayload): Promise<WsMemoryDeleteResultT> {
-    return this.request("memory.delete", payload, WsMemoryDeleteResult);
-  }
-  memoryForget(payload: WsMemoryForgetPayload): Promise<WsMemoryForgetResultT> {
-    return this.request("memory.forget", payload, WsMemoryForgetResult);
-  }
-  memoryExport(payload: WsMemoryExportPayload): Promise<WsMemoryExportResultT> {
-    return this.request("memory.export", payload, WsMemoryExportResult);
   }
   async subagentSpawn(payload: WsSubagentSpawnPayload): Promise<WsSubagentSpawnResultT> {
     return this.request(

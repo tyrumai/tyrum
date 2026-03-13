@@ -28,31 +28,33 @@ import {
 function makeRuntimeConfig(input?: { memoryEnabled?: boolean }): Record<string, unknown> {
   return {
     model: { model: "openai/gpt-4.1" },
-    skills: { enabled: [] },
-    mcp: { enabled: [] },
-    tools: { allow: [] },
-    sessions: { ttl_days: 30, max_turns: 20 },
-    memory: input?.memoryEnabled
-      ? {
-          v1: {
-            enabled: true,
-            keyword: { enabled: true, limit: 20 },
-            semantic: { enabled: false, limit: 1 },
-            structured: { fact_keys: [], tags: [] },
-            auto_write: { enabled: true },
-            budgets: {
-              max_total_items: 10,
-              max_total_chars: 4000,
-              per_kind: {
-                fact: { max_items: 4, max_chars: 1200 },
-                note: { max_items: 6, max_chars: 2400 },
-                procedure: { max_items: 2, max_chars: 1200 },
-                episode: { max_items: 4, max_chars: 1600 },
+    skills: { default_mode: "deny", workspace_trusted: false },
+    mcp: {
+      default_mode: "allow",
+      pre_turn_tools: ["mcp.memory.seed"],
+      server_settings: {
+        memory: input?.memoryEnabled
+          ? {
+              enabled: true,
+              keyword: { enabled: true, limit: 20 },
+              semantic: { enabled: false, limit: 1 },
+              structured: { fact_keys: [], tags: [] },
+              budgets: {
+                max_total_items: 10,
+                max_total_chars: 4000,
+                per_kind: {
+                  fact: { max_items: 4, max_chars: 1200 },
+                  note: { max_items: 6, max_chars: 2400 },
+                  procedure: { max_items: 2, max_chars: 1200 },
+                  episode: { max_items: 4, max_chars: 1600 },
+                },
               },
-            },
-          },
-        }
-      : { v1: { enabled: false } },
+            }
+          : { enabled: false },
+      },
+    },
+    tools: { default_mode: "allow" },
+    sessions: { ttl_days: 30, max_turns: 20 },
   };
 }
 
@@ -481,8 +483,8 @@ describe("Agent behavior - session boundaries", () => {
         return "Stored.";
       },
       {
-        memoryDecision: ({ promptText }) =>
-          promptIncludes(promptText, "remember that my name is alice")
+        memoryDecision: ({ latestUserText }) =>
+          promptIncludes(latestUserText, "remember that my name is alice")
             ? noteDecision("remember that my name is Alice")
             : undefined,
       },

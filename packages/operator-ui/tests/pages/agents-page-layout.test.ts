@@ -146,12 +146,6 @@ function createCore(): OperatorCore {
     stepIdsByRunId: {},
     attemptIdsByStepId: {},
   });
-  const { store: memoryStore } = createStore({
-    browse: { request: null, results: null, loading: false, error: null, lastSyncedAt: null },
-    inspect: { agentId: null, memoryItemId: null, item: null, loading: false, error: null },
-    tombstones: { tombstones: [], loading: false, error: null },
-    export: { running: false, artifactId: null, error: null, lastExportedAt: null },
-  });
 
   return {
     connectionStore,
@@ -164,17 +158,6 @@ function createCore(): OperatorCore {
       refresh: vi.fn().mockResolvedValue(undefined),
     },
     runsStore,
-    memoryStore: {
-      ...memoryStore,
-      list: vi.fn().mockResolvedValue(undefined),
-      search: vi.fn().mockResolvedValue(undefined),
-      refreshBrowse: vi.fn().mockResolvedValue(undefined),
-      loadMore: vi.fn().mockResolvedValue(undefined),
-      inspect: vi.fn().mockResolvedValue(undefined),
-      update: vi.fn(),
-      forget: vi.fn().mockResolvedValue(undefined),
-      export: vi.fn().mockResolvedValue(undefined),
-    },
     http: {
       agents: {
         list: vi.fn(async () => ({

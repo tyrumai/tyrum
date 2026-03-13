@@ -33,6 +33,7 @@ import {
   parseManagedMcpPackage,
   parseManagedSkillPackage,
 } from "../extensions/managed.js";
+import { buildBuiltinMemoryServerSpec } from "../memory/builtin-mcp.js";
 
 export interface AgentContextScope {
   tenantId: string;
@@ -250,6 +251,7 @@ class LocalAgentContextStore implements AgentContextStore {
     scope: AgentContextScope,
     config: AgentConfigT,
   ): Promise<McpServerSpecT[]> {
+    const builtinMemoryServer = buildBuiltinMemoryServerSpec();
     const managedServers = await this.runtimePackageDal.listLatest({
       tenantId: scope.tenantId,
       packageKind: "mcp",
@@ -261,6 +263,7 @@ class LocalAgentContextStore implements AgentContextStore {
     const loaded: McpServerSpecT[] = [];
     const seen = new Set<string>();
     const orderedServerIds = [
+      builtinMemoryServer.id,
       ...localServers.map((server) => server.id),
       ...managedServers.map((server) => server.packageKey),
     ];
@@ -275,6 +278,11 @@ class LocalAgentContextStore implements AgentContextStore {
         continue;
       }
       seen.add(normalizedServerId);
+
+      if (normalizedServerId === builtinMemoryServer.id) {
+        loaded.push(builtinMemoryServer);
+        continue;
+      }
 
       const local = localById.get(normalizedServerId);
       if (local) {
@@ -439,6 +447,7 @@ class SharedAgentContextStore implements AgentContextStore {
     scope: AgentContextScope,
     config: AgentConfigT,
   ): Promise<McpServerSpecT[]> {
+    const builtinMemoryServer = buildBuiltinMemoryServerSpec();
     const sharedServers = await this.runtimePackageDal.listLatest({
       tenantId: scope.tenantId,
       packageKind: "mcp",
@@ -447,8 +456,10 @@ class SharedAgentContextStore implements AgentContextStore {
     const sharedById = new Map(sharedServers.map((item) => [item.packageKey, item]));
     const loaded: McpServerSpecT[] = [];
     const seen = new Set<string>();
-
-    for (const serverId of sharedServers.map((server) => server.packageKey)) {
+    for (const serverId of [
+      builtinMemoryServer.id,
+      ...sharedServers.map((server) => server.packageKey),
+    ]) {
       const normalizedServerId = serverId.trim();
       if (
         normalizedServerId.length === 0 ||
@@ -458,6 +469,11 @@ class SharedAgentContextStore implements AgentContextStore {
         continue;
       }
       seen.add(normalizedServerId);
+
+      if (normalizedServerId === builtinMemoryServer.id) {
+        loaded.push(builtinMemoryServer);
+        continue;
+      }
 
       const shared = sharedById.get(normalizedServerId);
       if (!shared) continue;

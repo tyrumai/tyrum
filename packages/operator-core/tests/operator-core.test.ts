@@ -44,14 +44,6 @@ describe("operator-core wiring", () => {
     expect(core.httpBaseUrl).toBe("http://127.0.0.1:8788");
   });
 
-  it("exposes memoryStore on the core", () => {
-    const { core } = createTestOperatorCore();
-
-    expect(
-      (core as unknown as { memoryStore?: { getSnapshot: () => unknown } }).memoryStore,
-    ).toBeDefined();
-  });
-
   it("exposes desktop environment stores on the core", () => {
     const { core } = createTestOperatorCore();
 

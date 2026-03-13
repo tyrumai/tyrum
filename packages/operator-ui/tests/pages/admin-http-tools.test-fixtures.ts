@@ -61,47 +61,6 @@ export const DETAILED_TOOL_REGISTRY_FIXTURE = {
       },
     },
     {
-      source: "builtin",
-      canonical_id: "memory.add",
-      description: "Write durable memory for this agent.",
-      risk: "medium",
-      requires_confirmation: false,
-      effective_exposure: {
-        enabled: true,
-        reason: "enabled",
-        agent_key: "default",
-      },
-      family: "memory",
-      keywords: ["memory", "store"],
-      input_schema: {
-        oneOf: [
-          {
-            type: "object",
-            properties: {
-              kind: { type: "string", enum: ["fact"] },
-              key: { type: "string", description: "Stable fact key." },
-              value: { description: "Structured fact value." },
-            },
-            required: ["kind", "key", "value"],
-            additionalProperties: false,
-          },
-          {
-            type: "object",
-            properties: {
-              kind: { type: "string", enum: ["note"] },
-              body_md: { type: "string", description: "Durable note body." },
-              tags: {
-                type: "array",
-                items: { type: "string" },
-              },
-            },
-            required: ["kind", "body_md"],
-            additionalProperties: false,
-          },
-        ],
-      },
-    },
-    {
       source: "mcp",
       canonical_id: "mcp.exa.web_search_exa",
       description: "Search via a shared MCP server.",

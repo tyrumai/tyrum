@@ -15,6 +15,12 @@ import {
   switchHttpTab,
 } from "./admin-page.http.test-support.js";
 
+vi.mock("qrcode", () => ({
+  default: {
+    toString: async () => "<svg />",
+  },
+}));
+
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
@@ -76,24 +82,24 @@ describe("ConfigurePage (HTTP) tools", () => {
     act(() => {
       setNativeValue(
         getByTestId<HTMLInputElement>(page.container, "admin-http-tools-filter"),
-        "memory",
+        "read",
       );
     });
     await flush();
 
-    expect(page.container.textContent).toContain("memory.add");
+    expect(page.container.textContent).toContain("read");
     expect(page.container.textContent).not.toContain("plugin.echo.say");
 
     await clickAndFlush(
-      getByTestId<HTMLButtonElement>(page.container, "admin-http-tools-toggle-memory.add"),
+      getByTestId<HTMLButtonElement>(page.container, "admin-http-tools-toggle-read"),
     );
 
-    const details = getByTestId<HTMLElement>(page.container, "admin-http-tools-details-memory.add");
+    const details = getByTestId<HTMLElement>(page.container, "admin-http-tools-details-read");
     expect(details.textContent).toContain("Input fields");
-    expect(details.textContent).toContain("fact");
-    expect(details.textContent).toContain("note");
-    expect(details.textContent).toContain("body_md");
-    expect(details.textContent).toContain("array<string>");
+    expect(details.textContent).toContain("path");
+    expect(details.textContent).toContain("options");
+    expect(details.textContent).toContain("offset");
+    expect(details.textContent).toContain("boolean");
     expect(details.textContent).not.toContain("root");
 
     cleanupAdminHttpPage(page);

@@ -1,7 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { OPERATOR_ROUTE_DEFINITIONS } from "../src/operator-routes.js";
 
 const TEST_TIMEOUT_MS = 15_000;
+
+vi.mock("qrcode", () => ({
+  default: {
+    toString: async () => "<svg />",
+  },
+}));
 
 describe("Operator UI app/page component structure", () => {
   it(
@@ -11,7 +17,6 @@ describe("Operator UI app/page component structure", () => {
         { specifier: "../src/components/pages/connect-page.js", exportName: "ConnectPage" },
         { specifier: "../src/components/pages/dashboard-page.js", exportName: "DashboardPage" },
         { specifier: "../src/components/pages/chat-page.js", exportName: "ChatPage" },
-        { specifier: "../src/components/pages/memory-page.js", exportName: "MemoryPage" },
         { specifier: "../src/components/pages/approvals-page.js", exportName: "ApprovalsPage" },
         { specifier: "../src/components/pages/runs-page.js", exportName: "RunsPage" },
         { specifier: "../src/components/pages/agents-page.js", exportName: "AgentsPage" },

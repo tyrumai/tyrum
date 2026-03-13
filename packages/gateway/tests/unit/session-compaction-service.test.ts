@@ -133,7 +133,7 @@ describe("shouldCompactSessionForUsage", () => {
               keep_last_messages_after_compaction: 0,
             },
           },
-          memory: { v1: { enabled: false } },
+          mcp: { server_settings: { memory: { enabled: false } } },
         },
       } as never,
       session: {
@@ -211,7 +211,7 @@ describe("shouldCompactSessionForUsage", () => {
               keep_last_messages_after_compaction: 2,
             },
           },
-          memory: { v1: { enabled: false } },
+          mcp: { server_settings: { memory: { enabled: false } } },
         },
       } as never,
       session: {

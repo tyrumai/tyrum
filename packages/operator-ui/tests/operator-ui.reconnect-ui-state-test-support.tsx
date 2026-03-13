@@ -77,12 +77,6 @@ function createAgentsCore(): OperatorCore {
     attemptIdsByStepId: {},
     agentKeyByRunId: {},
   });
-  const { store: memoryStore } = createStore({
-    browse: { request: null, results: null, loading: false, error: null, lastSyncedAt: null },
-    inspect: { agentId: null, memoryItemId: null, item: null, loading: false, error: null },
-    tombstones: { tombstones: [], loading: false, error: null },
-    export: { running: false, artifactId: null, error: null, lastExportedAt: null },
-  });
 
   return {
     connectionStore,
@@ -156,17 +150,6 @@ function createAgentsCore(): OperatorCore {
         })),
       },
       modelConfig,
-    },
-    memoryStore: {
-      ...memoryStore,
-      list: vi.fn().mockResolvedValue(undefined),
-      search: vi.fn().mockResolvedValue(undefined),
-      refreshBrowse: vi.fn().mockResolvedValue(undefined),
-      loadMore: vi.fn().mockResolvedValue(undefined),
-      inspect: vi.fn().mockResolvedValue(undefined),
-      update: vi.fn().mockResolvedValue(undefined),
-      forget: vi.fn().mockResolvedValue(undefined),
-      export: vi.fn().mockResolvedValue(undefined),
     },
     runsStore,
   } as unknown as OperatorCore;
@@ -297,12 +280,12 @@ export function registerReconnectUiStateTests(): void {
       });
       await flush();
 
-      const memoryTab = await waitForSelector<HTMLButtonElement>(
+      const runsTab = await waitForSelector<HTMLButtonElement>(
         container,
-        '[data-testid="agents-tab-memory"]',
+        '[data-testid="agents-tab-runs"]',
       );
       await act(async () => {
-        memoryTab.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
+        runsTab.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
         await Promise.resolve();
       });
 
@@ -326,7 +309,7 @@ export function registerReconnectUiStateTests(): void {
 
       await waitForSelector<HTMLElement>(
         container,
-        '[data-testid="agents-tab-memory"][data-state="active"]',
+        '[data-testid="agents-tab-runs"][data-state="active"]',
       );
       const restoredViewport = await waitForSelector<HTMLElement>(
         container,

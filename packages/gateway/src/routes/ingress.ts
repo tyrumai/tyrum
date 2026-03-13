@@ -274,7 +274,7 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
           const outcome = settled[index];
           if (outcome?.status !== "rejected") continue;
           const fallback = formattingFallbacks[index];
-          deps.logger?.warn("memory.v1.system_episode_record_failed", {
+          deps.logger?.warn("memory.system_episode_record_failed", {
             agent_id: routedAgentId,
             session_id: result.session_id,
             event_type: "channel_formatting_fallback",

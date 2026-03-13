@@ -1,10 +1,4 @@
-import type {
-  Approval,
-  ExecutionAttempt,
-  ExecutionRun,
-  ExecutionStep,
-  MemoryItem,
-} from "@tyrum/client";
+import type { Approval, ExecutionAttempt, ExecutionRun, ExecutionStep } from "@tyrum/client";
 import { parseTyrumKey, type AgentPersona, type ExecutionRunStatus } from "@tyrum/schemas";
 import type {
   ActivityAttentionLevel,
@@ -50,23 +44,13 @@ export type DraftWorkstream = {
   latestRun: ExecutionRun | null;
   statusLane: ParsedStatusLane | null;
   approvals: Approval[];
-  memoryEvents: ActivityEvent[];
   message: MessageActivity | null;
 };
 
 type Priority = {
   level: ActivityAttentionLevel;
   score: number;
-  reason:
-    | "approval"
-    | "failure"
-    | "paused"
-    | "message"
-    | "running"
-    | "queued"
-    | "memory"
-    | "lease"
-    | "status";
+  reason: "approval" | "failure" | "paused" | "message" | "running" | "queued" | "lease" | "status";
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -260,20 +244,11 @@ export function approvalSummary(approval: Approval): string {
   return approval.status === "pending" ? approval.prompt : `Approval ${approval.status}`;
 }
 
-export function memorySummary(item: MemoryItem): string {
-  if (item.kind === "note" || item.kind === "procedure") {
-    return trimText(item.title) ?? item.body_md.slice(0, 80);
-  }
-  if (item.kind === "episode") return item.summary_md.slice(0, 80);
-  return `${item.key}: ${String(item.value).slice(0, 60)}`;
-}
-
 export function determinePriority(
   approvals: Approval[],
   runStatus: ExecutionRunStatus | null,
   queuedRunCount: number,
   message: MessageActivity | null,
-  memoryEvents: ActivityEvent[],
   lease: ActivityLeaseState,
 ): Priority {
   if (approvals.some((approval) => approval.status === "pending")) {
@@ -288,7 +263,6 @@ export function determinePriority(
   if (queuedRunCount > 0 || runStatus === "queued") {
     return { level: "low", score: 500, reason: "queued" };
   }
-  if (memoryEvents.length > 0) return { level: "low", score: 400, reason: "memory" };
   if (lease.active) return { level: "low", score: 300, reason: "lease" };
   return { level: "idle", score: 100, reason: "status" };
 }
@@ -296,12 +270,10 @@ export function determinePriority(
 export function determineRoom(
   priority: Priority,
   message: MessageActivity | null,
-  memoryEvents: ActivityEvent[],
   runStatus: ExecutionRunStatus | null,
 ): ActivityRoom {
   if (priority.reason === "approval") return "approval-desk";
   if (message && message.recentEvents.length > 0) return "mail-room";
-  if (memoryEvents.length > 0) return "library";
   if (runStatus === "failed" || runStatus === "succeeded" || runStatus === "cancelled") {
     return "archive";
   }
@@ -315,7 +287,6 @@ export function determineBubbleText(
   latestAttempt: ExecutionAttempt | null,
   latestRun: ExecutionRun | null,
   message: MessageActivity | null,
-  memoryEvents: ActivityEvent[],
 ): string | null {
   const pendingApproval = approvals.find((approval) => approval.status === "pending");
   if (pendingApproval) return pendingApproval.prompt;
@@ -325,7 +296,7 @@ export function determineBubbleText(
     if (pausedBubble) return pausedBubble;
   }
   if (message?.bubbleText) return message.bubbleText;
-  return memoryEvents[0]?.summary ?? null;
+  return null;
 }
 
 export function compareWorkstreamIds(
@@ -395,7 +366,6 @@ export function makeDraftWorkstream(
     latestRun: null,
     statusLane: null,
     approvals: [],
-    memoryEvents: [],
     message: null,
   };
 }

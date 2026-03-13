@@ -1,5 +1,5 @@
 import type { ExecutionAttempt } from "@tyrum/client";
-import type { OperatorCore, ResolveApprovalInput, RunsState } from "@tyrum/operator-core";
+import type { OperatorCore, Pairing, ResolveApprovalInput, RunsState } from "@tyrum/operator-core";
 import { clientCapabilityFromDescriptorId } from "@tyrum/schemas";
 import { CircleCheck } from "lucide-react";
 import { useState } from "react";
@@ -138,7 +138,8 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
       const capabilities = pairing.node.capabilities;
       if (
         !capabilities.some(
-          (capability) => clientCapabilityFromDescriptorId(capability.id) === "desktop",
+          (capability: Pairing["node"]["capabilities"][number]) =>
+            clientCapabilityFromDescriptorId(capability.id) === "desktop",
         )
       ) {
         return null;

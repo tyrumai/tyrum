@@ -69,6 +69,13 @@ export interface AgentContextToolCallReport {
   injected_chars: number;
 }
 
+export interface AgentContextPreTurnToolReport {
+  tool_id: string;
+  status: "succeeded" | "failed" | "skipped";
+  injected_chars: number;
+  error?: string;
+}
+
 export interface AgentContextInjectedFileReport {
   tool_call_id: string;
   path: string;
@@ -107,6 +114,7 @@ export interface AgentContextReport {
     structured_hits?: number;
     included_items?: number;
   };
+  pre_turn_tools: AgentContextPreTurnToolReport[];
   tool_calls: AgentContextToolCallReport[];
   injected_files: AgentContextInjectedFileReport[];
 }

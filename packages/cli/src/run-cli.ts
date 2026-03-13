@@ -12,16 +12,6 @@ import {
 } from "./handlers/elevated-mode.js";
 import { handleIdentityInit, handleIdentityShow } from "./handlers/identity.js";
 import {
-  handleMemoryCreate,
-  handleMemoryDelete,
-  handleMemoryExport,
-  handleMemoryForget,
-  handleMemoryList,
-  handleMemoryRead,
-  handleMemorySearch,
-  handleMemoryUpdate,
-} from "./handlers/memory.js";
-import {
   handlePairingApprove,
   handlePairingDeny,
   handlePairingRevoke,
@@ -80,14 +70,6 @@ const commandHandlers: CliHandlers = {
   workflow_run: handleWorkflowRun,
   workflow_resume: handleWorkflowResume,
   workflow_cancel: handleWorkflowCancel,
-  memory_search: handleMemorySearch,
-  memory_list: handleMemoryList,
-  memory_read: handleMemoryRead,
-  memory_create: handleMemoryCreate,
-  memory_update: handleMemoryUpdate,
-  memory_delete: handleMemoryDelete,
-  memory_forget: handleMemoryForget,
-  memory_export: handleMemoryExport,
   config_show: handleConfigShow,
   config_set: handleConfigSet,
   identity_show: handleIdentityShow,

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   AgentConfig,
   AgentCapabilitiesResponse,
+  BuiltinMemoryServerSettings,
   IdentityPack,
   SkillManifest,
   McpServerSpec,
@@ -25,6 +26,8 @@ describe("AgentConfig", () => {
     expect(parsed.mcp.default_mode).toBe("allow");
     expect(parsed.mcp.allow).toEqual([]);
     expect(parsed.mcp.deny).toEqual([]);
+    expect(parsed.mcp.pre_turn_tools).toEqual([]);
+    expect(parsed.mcp.server_settings).toEqual({});
     expect(parsed.tools.default_mode).toBe("allow");
     expect(parsed.tools.allow).toEqual([]);
     expect(parsed.tools.deny).toEqual([]);
@@ -41,37 +44,40 @@ describe("AgentConfig", () => {
     expect(parsed.sessions.loop_detection.cross_turn.similarity_threshold).toBe(0.97);
     expect(parsed.sessions.loop_detection.cross_turn.min_chars).toBe(120);
     expect(parsed.sessions.loop_detection.cross_turn.cooldown_assistant_messages).toBe(6);
-    expect(parsed.memory.v1.enabled).toBe(true);
-    expect(parsed.memory.v1.auto_write.enabled).toBe(true);
-    expect(parsed.memory.v1.auto_write.mode).toBe("sparse");
-    expect(parsed.memory.v1.allow_sensitivities).toEqual(["public", "private"]);
-    expect(parsed.memory.v1.semantic.enabled).toBe(true);
-    expect(parsed.memory.v1.budgets.max_total_items).toBeGreaterThan(0);
-    expect(parsed.memory.v1.budgets.max_total_chars).toBeGreaterThan(0);
-    expect(parsed.memory.v1.budgets.per_kind.fact.max_items).toBeGreaterThan(0);
-    expect(parsed.memory.v1.budgets.per_kind.note.max_items).toBeGreaterThan(0);
-    expect(parsed.memory.v1.budgets.per_kind.procedure.max_items).toBeGreaterThan(0);
-    expect(parsed.memory.v1.budgets.per_kind.episode.max_items).toBeGreaterThan(0);
     expect(parsed.persona).toBeUndefined();
   });
 
-  it("ignores the legacy auto_write.classifier field", () => {
+  it("parses MCP-native built-in memory settings", () => {
     const parsed = AgentConfig.parse({
       model: { model: "openai/gpt-5.4" },
-      memory: {
-        v1: {
-          auto_write: {
+      mcp: {
+        pre_turn_tools: ["mcp.memory.seed"],
+        server_settings: {
+          memory: {
             enabled: true,
-            mode: "sparse",
-            classifier: "rule_based",
+            allow_sensitivities: ["public"],
+            keyword: { enabled: false, limit: 25 },
           },
         },
       },
     });
 
-    expect(parsed.memory.v1.auto_write).toEqual({
+    expect(parsed.mcp.pre_turn_tools).toEqual(["mcp.memory.seed"]);
+    expect(BuiltinMemoryServerSettings.parse(parsed.mcp.server_settings["memory"])).toMatchObject({
       enabled: true,
-      mode: "sparse",
+      allow_sensitivities: ["public"],
+      keyword: { enabled: false, limit: 25 },
+    });
+  });
+
+  it("rejects legacy memory.v1 config", () => {
+    expectRejects(AgentConfig, {
+      model: { model: "openai/gpt-5.4" },
+      memory: {
+        v1: {
+          enabled: true,
+        },
+      },
     });
   });
 
@@ -266,6 +272,45 @@ describe("McpServerSpec", () => {
 
     expect(parsed.transport).toBe("stdio");
     expect(parsed.command).toBe("node");
+  });
+
+  it("parses MCP tool metadata overrides", () => {
+    const parsed = McpServerSpec.parse({
+      id: "calendar",
+      name: "Calendar MCP",
+      enabled: true,
+      transport: "stdio",
+      command: "node",
+      tool_overrides: {
+        sync: {
+          description_append: "Use for durable calendar hydration.",
+          risk: "low",
+          requires_confirmation: false,
+        },
+      },
+    });
+
+    expect(parsed.tool_overrides?.["sync"]).toEqual({
+      description_append: "Use for durable calendar hydration.",
+      risk: "low",
+      requires_confirmation: false,
+    });
+  });
+
+  it("rejects MCP tool overrides with conflicting description fields", () => {
+    expectRejects(McpServerSpec, {
+      id: "calendar",
+      name: "Calendar MCP",
+      enabled: true,
+      transport: "stdio",
+      command: "node",
+      tool_overrides: {
+        sync: {
+          description_override: "Override",
+          description_append: "Append",
+        },
+      },
+    });
   });
 
   it("rejects stdio server config missing command", () => {

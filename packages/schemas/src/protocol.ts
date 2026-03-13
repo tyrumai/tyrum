@@ -23,7 +23,6 @@ export * from "./protocol/envelopes.js";
 export * from "./protocol/execution.js";
 export * from "./protocol/execution-events.js";
 export * from "./protocol/location.js";
-export * from "./protocol/memory.js";
 export * from "./protocol/pairing.js";
 export * from "./protocol/presence.js";
 export * from "./protocol/session.js";

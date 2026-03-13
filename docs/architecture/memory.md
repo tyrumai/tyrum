@@ -58,47 +58,31 @@ The architecture supports multiple kinds of memory items, all scoped to `agent_i
 - **Procedures (procedural):** durable strategy records (“this approach works for capability X”) with success/failure signals.
 - **Episodes (episodic):** stored as events plus optional summaries; episodes are the raw material for consolidation.
 
-## Interfaces (agent vs operator)
+## Interfaces (agent vs provider)
 
-Memory v1 is stored in the StateStore and is **agent-scoped** (`agent_id`). The runtime uses it to build a safe, budgeted recall context for model turns, while operators use the Gateway’s operator surfaces to inspect/manage durable state.
+Memory is now an **MCP-native capability**. Tyrum ships a built-in MCP server with id `memory`, and operators can replace it with other MCP-backed providers without changing the agent runtime.
 
-### Agent read path (Memory v1 digest)
+### Agent read path (pre-turn hydration)
 
-- Agents do not call the operator memory APIs directly.
-- During turn preparation, the runtime builds a **Memory v1 digest** (bounded + attributed + sensitivity-aware) and injects it into the model’s context.
+- Before a normal model turn, the runtime executes the ordered list in `config.mcp.pre_turn_tools`.
+- The built-in memory provider defaults that list to `["mcp.memory.seed"]`.
+- Pre-turn MCP calls receive the latest user query plus turn metadata (`agent_id`, `workspace_id`, `session_id`, `channel`, `thread_id`) so providers can produce prompt-ready recall context.
+- Successful pre-turn tool output is injected into the system prompt as bounded, attributed recall context.
+- Pre-turn hydration is best-effort: failures or timeouts skip the injected section but do not fail the user turn.
 
-### Operator APIs (WebSocket + HTTP)
+### In-turn memory tools
 
-- WebSocket requests (typed, operator surface):
-  - `memory.list`, `memory.search`, `memory.get` (require `operator.read`)
-  - `memory.create`, `memory.update`, `memory.delete`, `memory.forget`, `memory.export` (require `operator.write`)
-- HTTP download route (resource plane):
-  - `GET /memory/exports/:id` (requires `operator.read`) downloads the JSON export created by `memory.export`.
+- Agents use ordinary MCP tools for durable recall and writes:
+  - `mcp.memory.search`
+  - `mcp.memory.write`
+- Tool descriptions, not hidden runtime prompts, teach the model when to recall prior context and when to persist stable information.
+- Provider-specific configuration lives under `config.mcp.server_settings.<server_id>`. For the built-in provider, that is `config.mcp.server_settings.memory`.
 
-## Operator workflows (Memory v1)
+### Provider/admin workflows
 
-These workflows are intentionally operator-scoped: they’re designed for audit/debug/compliance, not for in-prompt agent self-modification.
-
-### Inspect (list/search/get)
-
-- **List recent items:** call `memory.list` and page with `next_cursor`.
-- **Search:** call `memory.search` with a query (and optional filters).
-- **Inspect a specific item:** use the returned `memory_item_id` and call `memory.get` to view the full item + provenance.
-- These operations require `operator.read`.
-
-### Export (artifact)
-
-- Run `memory.export` (requires `operator.write`) to produce an export artifact and return an `artifact_id`.
-- Download the bytes via `GET /memory/exports/:id` (requires `operator.read`).
-- Treat exports as sensitive operational data; store and share them accordingly.
-
-### Forget + tombstones
-
-Forgetting is permanent deletion of canonical content, with audit-friendly proof:
-
-- Use `memory.forget` (requires `operator.write`) with one or more selectors; it requires an explicit `confirm: "FORGET"`.
-- Forgetting returns **tombstones** that preserve stable ids + deletion metadata (who/when, plus an optional reason when available) without retaining the deleted content.
-- Tombstones can be exported (via `memory.export` with `include_tombstones: true`) to support compliance workflows.
+- Tyrum no longer exposes a generic gateway-owned Memory v1 CRUD/export API.
+- If a memory provider wants operator/admin workflows such as inspect/export/forget, it must expose them through provider-defined MCP tools and/or provider-specific product surfaces.
+- The built-in `memory` MCP is the default prompt-seeding provider, not a generic operator CRUD plane.
 
 ## Encoding (write path)
 
@@ -186,6 +170,6 @@ For auditability, forgetting produces **tombstones**:
 ## Safety expectations (hard requirements)
 
 - Do not store secrets in memory.
-- Memory must be inspectable and user-controllable (view, export, forget).
+- Memory must be inspectable and user-controllable through provider-defined admin workflows.
 - Retrieval must never bypass policy/approvals; memory is supportive context, not an authority to perform risky actions.
 - All memory operations are policy-gated and observable (events + audit logs).

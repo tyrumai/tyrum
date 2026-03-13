@@ -308,7 +308,6 @@ function registerNavShortcutTests(): void {
     });
 
     expect(container.querySelector('[data-testid="configure-page"]')).not.toBeNull();
-    expect(container.querySelector('[data-testid="nav-memory"]')).toBeNull();
     expect(container.querySelector('[data-testid="nav-runs"]')).toBeNull();
     expect(container.querySelector('[data-testid="nav-settings"]')).toBeNull();
 
@@ -354,8 +353,6 @@ function registerNavShortcutTests(): void {
     });
 
     expect(container.querySelector('[data-testid="dashboard-card-connection"]')).not.toBeNull();
-    expect(container.querySelector('[data-testid="memory-inspector"]')).toBeNull();
-
     act(() => {
       root?.unmount();
     });

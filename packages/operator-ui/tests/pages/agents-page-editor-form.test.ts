@@ -21,4 +21,38 @@ describe("agents-page-editor-form", () => {
     const payload = buildPayload(form);
     expect(payload.config.model).toEqual({ model: null });
   });
+
+  it("preserves hidden MCP settings when building a payload", () => {
+    const form = createBlankForm();
+    form.agentKey = "agent-mcp-preserve";
+    form.mcpDefaultMode = "deny";
+    form.mcpAllow = ["filesystem"];
+    form.mcpDeny = ["secrets"];
+
+    const payload = buildPayload(form, undefined, {
+      pre_turn_tools: ["mcp.memory.seed"],
+      server_settings: {
+        filesystem: {
+          namespace: "agents",
+        },
+      },
+    });
+
+    expect(payload.config.mcp).toEqual(
+      expect.objectContaining({
+        default_mode: "deny",
+        allow: ["filesystem"],
+        deny: ["secrets"],
+        pre_turn_tools: ["mcp.memory.seed"],
+        server_settings: expect.objectContaining({
+          filesystem: {
+            namespace: "agents",
+          },
+          memory: expect.objectContaining({
+            enabled: true,
+          }),
+        }),
+      }),
+    );
+  });
 });

@@ -6,9 +6,9 @@ describe("HTTP scope middleware route mapping", () => {
     expect(resolveHttpRouteRequiredScopes({ method: "GET", routePath: "/status" })).toEqual([
       "operator.read",
     ]);
-    expect(
-      resolveHttpRouteRequiredScopes({ method: "GET", routePath: "/memory/exports/:id" }),
-    ).toEqual(["operator.read"]);
+    expect(resolveHttpRouteRequiredScopes({ method: "GET", routePath: "/watchers" })).toEqual([
+      "operator.read",
+    ]);
   });
 
   it("maps write operator surfaces to operator.write", () => {

@@ -31,36 +31,37 @@ vi.mock("../../src/modules/agent/runtime/tool-set-builder-helpers.js", async (im
 });
 
 function makeApprovalConfig(): Record<string, unknown> {
-  return {
-    model: { model: "openai/gpt-4.1" },
-    skills: { enabled: [] },
-    mcp: { enabled: [] },
-    tools: { allow: ["bash"] },
-    sessions: { ttl_days: 30, max_turns: 20 },
-    memory: {
-      v1: {
-        enabled: true,
-        keyword: { enabled: true, limit: 20 },
-        semantic: { enabled: false, limit: 1 },
-        structured: { fact_keys: [], tags: [] },
-        auto_write: { enabled: true },
-        budgets: {
-          max_total_items: 10,
-          max_total_chars: 4000,
-          per_kind: {
-            fact: { max_items: 4, max_chars: 1200 },
-            note: { max_items: 6, max_chars: 2400 },
-            procedure: { max_items: 2, max_chars: 1200 },
-            episode: { max_items: 4, max_chars: 1600 },
-          },
-        },
+  const memorySettings = {
+    enabled: true,
+    keyword: { enabled: true, limit: 20 },
+    semantic: { enabled: false, limit: 1 },
+    structured: { fact_keys: [], tags: [] },
+    budgets: {
+      max_total_items: 10,
+      max_total_chars: 4000,
+      per_kind: {
+        fact: { max_items: 4, max_chars: 1200 },
+        note: { max_items: 6, max_chars: 2400 },
+        procedure: { max_items: 2, max_chars: 1200 },
+        episode: { max_items: 4, max_chars: 1600 },
       },
     },
   };
+  return {
+    model: { model: "openai/gpt-4.1" },
+    skills: { default_mode: "deny", workspace_trusted: false },
+    mcp: {
+      default_mode: "allow",
+      pre_turn_tools: ["mcp.memory.seed"],
+      server_settings: { memory: memorySettings },
+    },
+    tools: { default_mode: "allow", allow: ["bash"] },
+    sessions: { ttl_days: 30, max_turns: 20 },
+  };
 }
 
-function rememberOpsDecision(promptText: string) {
-  return promptText.toLowerCase().includes("remember that always send messages to ops")
+function rememberOpsDecision(latestUserText: string) {
+  return latestUserText.toLowerCase().includes("remember that always send messages to ops")
     ? {
         should_store: true as const,
         reason: "Durable standing instruction from the user.",
@@ -257,7 +258,7 @@ describe("Agent behavior - policy and approvals", () => {
       container,
       home: homeDir,
       languageModel: createPromptAwareLanguageModel(() => "Stored.", {
-        memoryDecision: ({ promptText }) => rememberOpsDecision(promptText),
+        memoryDecision: ({ latestUserText }) => rememberOpsDecision(latestUserText),
       }),
       fetchImpl: fetch404,
     });
@@ -279,7 +280,9 @@ describe("Agent behavior - policy and approvals", () => {
     const policyService = {
       isEnabled: () => true,
       isObserveOnly: () => false,
-      evaluateToolCall: vi.fn(async () => ({ decision: "require_approval" as const })),
+      evaluateToolCall: vi.fn(async ({ toolId }: { toolId: string }) => ({
+        decision: toolId === "bash" ? ("require_approval" as const) : ("allow" as const),
+      })),
     };
 
     let capturedMemoryDigest = "";
@@ -302,7 +305,10 @@ describe("Agent behavior - policy and approvals", () => {
         }
 
         nonTitleCalls += 1;
-        capturedMemoryDigest = extractPromptSection(extractPromptText(call), "Memory digest:");
+        const memoryDigest = extractPromptSection(extractPromptText(call), "Memory digest:");
+        if (memoryDigest.length > 0) {
+          capturedMemoryDigest = memoryDigest;
+        }
 
         if (nonTitleCalls === 1) {
           return {
@@ -345,7 +351,15 @@ describe("Agent behavior - policy and approvals", () => {
 
     expect(result.reply).toBe("approval preserved");
     expect(result.used_tools).toContain("bash");
-    expect(policyService.evaluateToolCall).toHaveBeenCalledTimes(1);
+    expect(policyService.evaluateToolCall).toHaveBeenCalledTimes(2);
+    expect(policyService.evaluateToolCall).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ toolId: "mcp.memory.seed" }),
+    );
+    expect(policyService.evaluateToolCall).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ toolId: "bash" }),
+    );
     expect(approvalSpy).toHaveBeenCalledTimes(1);
     expect(capturedMemoryDigest).toContain("always send messages to ops");
     expect(capturedMemoryDigest).not.toContain("send a message to ops now");
@@ -359,7 +373,7 @@ describe("Agent behavior - policy and approvals", () => {
       container,
       home: homeDir,
       languageModel: createPromptAwareLanguageModel(() => "Stored.", {
-        memoryDecision: ({ promptText }) => rememberOpsDecision(promptText),
+        memoryDecision: ({ latestUserText }) => rememberOpsDecision(latestUserText),
       }),
       fetchImpl: fetch404,
     });
@@ -374,7 +388,9 @@ describe("Agent behavior - policy and approvals", () => {
     const policyService = {
       isEnabled: () => true,
       isObserveOnly: () => false,
-      evaluateToolCall: vi.fn(async () => ({ decision: "require_approval" as const })),
+      evaluateToolCall: vi.fn(async ({ toolId }: { toolId: string }) => ({
+        decision: toolId === "bash" ? ("require_approval" as const) : ("allow" as const),
+      })),
     };
     const runtime = new AgentRuntime({
       container,
@@ -383,7 +399,10 @@ describe("Agent behavior - policy and approvals", () => {
         command: `printf approved >> ${JSON.stringify(markerPath)}`,
         finalReply: "approval preserved",
         onPrompt: (promptText) => {
-          capturedMemoryDigest = extractPromptSection(promptText, "Memory digest:");
+          const memoryDigest = extractPromptSection(promptText, "Memory digest:");
+          if (memoryDigest.length > 0) {
+            capturedMemoryDigest = memoryDigest;
+          }
         },
       }),
       fetchImpl: fetch404,

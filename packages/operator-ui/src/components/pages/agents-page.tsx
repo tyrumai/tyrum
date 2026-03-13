@@ -10,7 +10,6 @@ import {
 } from "../../lib/status-session-lanes.js";
 import { useOperatorStore } from "../../use-operator-store.js";
 import { AppPageToolbar } from "../layout/app-page.js";
-import { MemoryInspector } from "../memory/memory-inspector.js";
 import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent } from "../ui/card.js";
@@ -30,7 +29,7 @@ type AgentOption = {
   canDelete: boolean;
   displayName: string;
 };
-type AgentsPageTab = "identity" | "editor" | "memory" | "runs";
+type AgentsPageTab = "identity" | "editor" | "runs";
 
 function trimAgentKey(value: string): string {
   const trimmed = value.trim();
@@ -104,7 +103,6 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
     () => agentOptions.find((agent) => agent.agentKey === selectedAgentKey) ?? null,
     [agentOptions, selectedAgentKey],
   );
-  const selectedAgentScopeId = selectedAgentOption?.agentId;
 
   const activeAgentIds = useMemo(() => {
     const ids = new Set<string>();
@@ -424,9 +422,6 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
                     <TabsTrigger value="editor" data-testid="agents-tab-editor">
                       Editor
                     </TabsTrigger>
-                    <TabsTrigger value="memory" data-testid="agents-tab-memory">
-                      Memory
-                    </TabsTrigger>
                     <TabsTrigger value="runs" data-testid="agents-tab-runs">
                       Runs
                     </TabsTrigger>
@@ -464,18 +459,6 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
                       <Card data-testid="agents-editor-placeholder">
                         <CardContent className="py-10 text-sm text-fg-muted">
                           Select an agent or create a managed agent to configure it here.
-                        </CardContent>
-                      </Card>
-                    )}
-                  </TabsContent>
-
-                  <TabsContent value="memory">
-                    {selectedAgentScopeId ? (
-                      <MemoryInspector core={core} agentId={selectedAgentScopeId} />
-                    ) : (
-                      <Card data-testid="agents-memory-resolving">
-                        <CardContent className="py-10 text-sm text-fg-muted">
-                          Resolving agent memory scope…
                         </CardContent>
                       </Card>
                     )}

@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { jsonSchema, tool as aiTool, zodSchema } from "ai";
+import { jsonSchema, tool as aiTool } from "ai";
 import type { LanguageModel, ModelMessage, Tool, ToolExecutionOptions, ToolSet } from "ai";
 import type { ToolDescriptor } from "../tools.js";
 import { buildModelToolNameMap, registerModelTool } from "../tools.js";
 import type { ToolExecutor, ToolResult } from "../tool-executor.js";
-import { validateModelToolInputSchema, validateToolDescriptorInputSchema } from "../tool-schema.js";
+import { validateToolDescriptorInputSchema } from "../tool-schema.js";
 import { tagContent } from "../provenance.js";
 import { containsInjectionPatterns, sanitizeForModel } from "../sanitizer.js";
 import type { PluginRegistry } from "../../plugins/registry.js";
@@ -26,26 +26,18 @@ import {
   upsertApprovalTranscript,
 } from "./tool-set-builder-lifecycle.js";
 import { createToolSetPolicyRuntime } from "./tool-set-builder-policy.js";
-import {
-  TurnMemoryDecisionSchema,
-  recordTurnMemoryDecision,
-  type TurnMemoryDecision,
-  type TurnMemoryDecisionCollector,
-} from "./turn-memory-policy.js";
-
-const TURN_MEMORY_DECISION_TOOL_ID = "memory_turn_decision";
 
 type BuildRuntimeToolSetInput = {
   deps: ToolSetBuilderDeps;
   tools: readonly ToolDescriptor[];
   toolExecutor: ToolExecutor;
   usedTools: Set<string>;
+  memoryWriteState?: { wrote: boolean };
   toolExecutionContext: ToolExecutionContext;
   contextReport: AgentContextReport;
   laneQueue?: LaneQueueState;
   toolCallPolicyStates?: Map<string, ToolCallPolicyState>;
   model?: LanguageModel;
-  turnMemoryDecisionCollector?: TurnMemoryDecisionCollector;
 };
 
 type ExecutionState = {
@@ -87,12 +79,6 @@ export function buildRuntimeToolSet(input: BuildRuntimeToolSetInput): ToolSet {
     );
   }
 
-  if (input.turnMemoryDecisionCollector) {
-    result[TURN_MEMORY_DECISION_TOOL_ID] = createTurnMemoryDecisionTool(
-      input.turnMemoryDecisionCollector,
-    );
-  }
-
   return result;
 }
 
@@ -112,43 +98,6 @@ function createModelTool(
       : undefined,
     execute: createExecuteHandler(input),
   });
-}
-
-function createTurnMemoryDecisionTool(collector: TurnMemoryDecisionCollector): Tool {
-  return aiTool({
-    description:
-      "Internal tool. Call exactly once on every normal turn to report whether this turn should be stored in memory.",
-    inputSchema: createTurnMemoryDecisionInputSchema(),
-    execute: async (args) => {
-      const recorded = recordTurnMemoryDecision(collector, args);
-      return JSON.stringify(
-        recorded.ok ? { status: "ok" } : { status: "invalid", error: recorded.error },
-      );
-    },
-  });
-}
-
-function createTurnMemoryDecisionInputSchema() {
-  return jsonSchema<TurnMemoryDecision>(
-    async () => {
-      const schema = await zodSchema(TurnMemoryDecisionSchema).jsonSchema;
-      const validatedSchema = validateModelToolInputSchema({ ...schema, type: "object" });
-      if (!validatedSchema.ok) {
-        throw new Error(
-          `invalid input schema for tool '${TURN_MEMORY_DECISION_TOOL_ID}': ${validatedSchema.error}`,
-        );
-      }
-      return validatedSchema.schema;
-    },
-    {
-      validate: async (value) => {
-        const parsed = await TurnMemoryDecisionSchema.safeParseAsync(value);
-        return parsed.success
-          ? { success: true, value: parsed.data }
-          : { success: false, error: parsed.error };
-      },
-    },
-  );
 }
 
 function createNeedsApprovalHandler(
@@ -278,6 +227,11 @@ function createExecuteHandler(
     });
 
     const finalResult = redactPluginToolResult(input.deps, pluginResult, extractedResult);
+    if (input.toolDesc.id === "mcp.memory.write" && !finalResult.error) {
+      if (input.memoryWriteState) {
+        input.memoryWriteState.wrote = true;
+      }
+    }
     updateDrivingProvenance(input.executionState, finalResult);
 
     const content = buildToolContent(finalResult);

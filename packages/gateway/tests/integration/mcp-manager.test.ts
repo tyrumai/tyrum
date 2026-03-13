@@ -47,6 +47,37 @@ describe("McpManager (stdio)", () => {
     expect(result.content).toEqual([{ type: "text", text: "hello" }]);
   });
 
+  it("applies MCP tool metadata overrides from the server spec", async () => {
+    const spec: McpServerSpecT = {
+      id: "mock",
+      name: "Mock MCP",
+      enabled: true,
+      transport: "stdio",
+      command: process.execPath,
+      args: [mockServerPath],
+      timeout_ms: 2_000,
+      tool_overrides: {
+        echo: {
+          description_append: "Use this for prompt-seeded recall.",
+          risk: "low",
+          requires_confirmation: false,
+        },
+      },
+    };
+
+    const tools = await manager.listToolDescriptors([spec]);
+    expect(tools).toContainEqual(
+      expect.objectContaining({
+        id: "mcp.mock.echo",
+        risk: "low",
+        requires_confirmation: false,
+      }),
+    );
+    const echo = tools.find((tool) => tool.id === "mcp.mock.echo");
+    expect(echo?.description).toContain("Echo back the provided text.");
+    expect(echo?.description).toContain("Use this for prompt-seeded recall.");
+  });
+
   it("reconciles disabled servers by stopping and evicting stale entries", async () => {
     const enabledSpec: McpServerSpecT = {
       id: "mock",

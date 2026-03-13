@@ -74,20 +74,20 @@ describe("canonicalizeToolMatchTarget", () => {
     ).toBe("https://example.com/a");
   });
 
-  it("canonicalizes memory tool targets without leaking memory content", () => {
+  it("canonicalizes builtin memory MCP tool targets without leaking memory content", () => {
     expect(
-      canonicalizeToolMatchTarget("memory.search", {
+      canonicalizeToolMatchTarget("mcp.memory.search", {
         query: "remember my pizza order",
       }),
-    ).toBe("memory.search");
+    ).toBe("mcp.memory.search");
 
     expect(
-      canonicalizeToolMatchTarget("memory.add", {
+      canonicalizeToolMatchTarget("mcp.memory.write", {
         kind: "note",
         body_md: "super secret content",
         sensitivity: "private",
       }),
-    ).toBe("memory.add:kind=note:sensitivity=private");
+    ).toBe("mcp.memory.write");
   });
 
   it("canonicalizes messaging destinations without matching on message body", () => {

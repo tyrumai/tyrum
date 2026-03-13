@@ -48,10 +48,12 @@ describe("AgentRuntime lane queue modes", () => {
       config: AgentConfig.parse({
         model: { model: "openai/gpt-4.1" },
         skills: { enabled: [] },
-        mcp: { enabled: [] },
+        mcp: {
+          enabled: [],
+          server_settings: { memory: { enabled: false } },
+        },
         tools: { allow: ["tool.test"] },
         sessions: { ttl_days: 30, max_turns: 20 },
-        memory: { v1: { enabled: false } },
       }),
       createdBy: { kind: "test" },
       reason: "lane queue steer test",
@@ -156,10 +158,12 @@ describe("AgentRuntime lane queue modes", () => {
       config: AgentConfig.parse({
         model: { model: "openai/gpt-4.1" },
         skills: { enabled: [] },
-        mcp: { enabled: [] },
+        mcp: {
+          enabled: [],
+          server_settings: { memory: { enabled: false } },
+        },
         tools: { allow: ["tool.test"] },
         sessions: { ttl_days: 30, max_turns: 20 },
-        memory: { v1: { enabled: false } },
       }),
       createdBy: { kind: "test" },
       reason: "lane queue interrupt test",

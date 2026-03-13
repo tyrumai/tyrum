@@ -48,22 +48,6 @@ import {
   WsUsageSnapshotEvent,
 } from "./execution.js";
 import {
-  WsMemoryCreateRequest,
-  WsMemoryDeleteRequest,
-  WsMemoryExportCompletedEvent,
-  WsMemoryExportRequest,
-  WsMemoryForgetRequest,
-  WsMemoryItemConsolidatedEvent,
-  WsMemoryItemCreatedEvent,
-  WsMemoryItemDeletedEvent,
-  WsMemoryItemForgottenEvent,
-  WsMemoryItemUpdatedEvent,
-  WsMemoryListRequest,
-  WsMemoryGetRequest,
-  WsMemorySearchRequest,
-  WsMemoryUpdateRequest,
-} from "./memory.js";
-import {
   WsPairingApproveRequest,
   WsPairingApprovedEvent,
   WsPairingDenyRequest,
@@ -206,14 +190,6 @@ export const WsRequest = z.discriminatedUnion("type", [
   WsWorkStateKvGetRequest,
   WsWorkStateKvListRequest,
   WsWorkStateKvSetRequest,
-  WsMemorySearchRequest,
-  WsMemoryListRequest,
-  WsMemoryGetRequest,
-  WsMemoryCreateRequest,
-  WsMemoryUpdateRequest,
-  WsMemoryDeleteRequest,
-  WsMemoryForgetRequest,
-  WsMemoryExportRequest,
 ]);
 export type WsRequest = z.infer<typeof WsRequest>;
 
@@ -284,12 +260,6 @@ export const WsEvent = z.discriminatedUnion("type", [
   WsSubagentUpdatedEvent,
   WsSubagentClosedEvent,
   WsSubagentOutputEvent,
-  WsMemoryItemCreatedEvent,
-  WsMemoryItemUpdatedEvent,
-  WsMemoryItemDeletedEvent,
-  WsMemoryItemForgottenEvent,
-  WsMemoryItemConsolidatedEvent,
-  WsMemoryExportCompletedEvent,
   WsErrorEvent,
 ]);
 export type WsEvent = z.infer<typeof WsEvent>;

@@ -42,7 +42,16 @@ const PROFILES: Record<ExecutionProfileId, ExecutionProfile> = {
   explorer_ro: {
     id: "explorer_ro",
     allowed_lanes: ["subagent"],
-    tool_allowlist: ["read", "webfetch", "websearch", "codesearch", "glob", "grep"],
+    tool_allowlist: [
+      "read",
+      "webfetch",
+      "websearch",
+      "codesearch",
+      "glob",
+      "grep",
+      "mcp.memory.seed",
+      "mcp.memory.search",
+    ],
     capabilities: [],
     reasoning_effort: "low",
     budgets: {
@@ -53,7 +62,16 @@ const PROFILES: Record<ExecutionProfileId, ExecutionProfile> = {
   reviewer_ro: {
     id: "reviewer_ro",
     allowed_lanes: ["subagent"],
-    tool_allowlist: ["read", "webfetch", "websearch", "codesearch", "glob", "grep"],
+    tool_allowlist: [
+      "read",
+      "webfetch",
+      "websearch",
+      "codesearch",
+      "glob",
+      "grep",
+      "mcp.memory.seed",
+      "mcp.memory.search",
+    ],
     capabilities: [],
     reasoning_effort: "low",
     budgets: {
@@ -64,7 +82,16 @@ const PROFILES: Record<ExecutionProfileId, ExecutionProfile> = {
   planner: {
     id: "planner",
     allowed_lanes: ["subagent"],
-    tool_allowlist: ["read", "webfetch", "websearch", "codesearch", "glob", "grep"],
+    tool_allowlist: [
+      "read",
+      "webfetch",
+      "websearch",
+      "codesearch",
+      "glob",
+      "grep",
+      "mcp.memory.seed",
+      "mcp.memory.search",
+    ],
     capabilities: ["subagent.spawn", "work.write"],
     reasoning_effort: "high",
     budgets: {
@@ -78,7 +105,16 @@ const PROFILES: Record<ExecutionProfileId, ExecutionProfile> = {
   jury: {
     id: "jury",
     allowed_lanes: ["subagent"],
-    tool_allowlist: ["read", "webfetch", "websearch", "codesearch", "glob", "grep"],
+    tool_allowlist: [
+      "read",
+      "webfetch",
+      "websearch",
+      "codesearch",
+      "glob",
+      "grep",
+      "mcp.memory.seed",
+      "mcp.memory.search",
+    ],
     capabilities: [],
     reasoning_effort: "medium",
     budgets: {
@@ -100,6 +136,9 @@ const PROFILES: Record<ExecutionProfileId, ExecutionProfile> = {
       "websearch",
       "webfetch",
       "codesearch",
+      "mcp.memory.seed",
+      "mcp.memory.search",
+      "mcp.memory.write",
       "plugin.*",
     ],
     capabilities: ["work.write"],
@@ -123,6 +162,9 @@ const PROFILES: Record<ExecutionProfileId, ExecutionProfile> = {
       "websearch",
       "webfetch",
       "codesearch",
+      "mcp.memory.seed",
+      "mcp.memory.search",
+      "mcp.memory.write",
       "plugin.*",
     ],
     capabilities: ["work.write"],

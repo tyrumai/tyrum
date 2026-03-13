@@ -1,5 +1,5 @@
 import type {
-  AgentConfig,
+  BuiltinMemoryServerSettings,
   MemoryDeletedBy,
   MemoryForgetSelector,
   MemoryItem,
@@ -492,7 +492,7 @@ export class MemoryV1Dal {
   async consolidateToBudgets(params: {
     tenantId?: string;
     agentId?: string;
-    budgets: AgentConfig["memory"]["v1"]["budgets"];
+    budgets: BuiltinMemoryServerSettings["budgets"];
   }): Promise<MemoryV1ConsolidationResult> {
     return consolidateMemoryToBudgets(this.db, this.normalizeScope(params), params.budgets, this);
   }

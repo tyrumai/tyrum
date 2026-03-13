@@ -19,14 +19,6 @@ import {
   wsApprovalListSpy,
   wsApprovalResolveSpy,
   wsDisconnectSpy,
-  wsMemoryCreateSpy,
-  wsMemoryDeleteSpy,
-  wsMemoryExportSpy,
-  wsMemoryForgetSpy,
-  wsMemoryGetSpy,
-  wsMemoryListSpy,
-  wsMemorySearchSpy,
-  wsMemoryUpdateSpy,
   wsWorkflowCancelSpy,
   wsWorkflowResumeSpy,
   wsWorkflowRunSpy,
@@ -53,9 +45,7 @@ type FailureCase = {
 };
 
 const APPROVAL_ID = "550e8400-e29b-41d4-a716-446655440000";
-const MEMORY_ITEM_ID = "00000000-0000-0000-0000-000000000001";
-const MEMORY_SELECTORS = [{ kind: "id", memory_item_id: MEMORY_ITEM_ID }],
-  WORKFLOW_STEPS = '[{"type":"Message","args":{"text":"hi"}}]';
+const WORKFLOW_STEPS = '[{"type":"Message","args":{"text":"hi"}}]';
 
 function wsSuccessCase(
   name: string,
@@ -100,96 +90,6 @@ const wsSuccessCases = [
     ["approvals", "list", "--limit", "10"],
     [{ limit: 10 }],
     "tkn",
-  ),
-  wsSuccessCase(
-    "runs `memory search` via @tyrum/client WS",
-    wsMemorySearchSpy,
-    { v: 1, hits: [] },
-    ["memory", "search", "--query", "hello"],
-    [{ v: 1, query: "hello" }],
-  ),
-  wsSuccessCase(
-    "passes optional flags to `memory search` via @tyrum/client WS",
-    wsMemorySearchSpy,
-    { v: 1, hits: [] },
-    [
-      "memory",
-      "search",
-      "--query",
-      "hello",
-      "--limit",
-      "5",
-      "--cursor",
-      "cur",
-      "--filter",
-      JSON.stringify({ kinds: ["note"] }),
-    ],
-    [{ v: 1, query: "hello", limit: 5, cursor: "cur", filter: { kinds: ["note"] } }],
-  ),
-  wsSuccessCase(
-    "runs `memory list` via @tyrum/client WS",
-    wsMemoryListSpy,
-    { v: 1, items: [] },
-    ["memory", "list", "--limit", "10"],
-    [{ v: 1, limit: 10 }],
-  ),
-  wsSuccessCase(
-    "runs `memory read` via @tyrum/client WS",
-    wsMemoryGetSpy,
-    { v: 1, item: { kind: "note" } },
-    ["memory", "read", "--id", MEMORY_ITEM_ID],
-    [{ v: 1, memory_item_id: MEMORY_ITEM_ID }],
-  ),
-  wsSuccessCase(
-    "runs `memory create` via @tyrum/client WS",
-    wsMemoryCreateSpy,
-    { v: 1, item: { kind: "note" } },
-    ["memory", "create", "--item", JSON.stringify({ kind: "note", body_md: "hello" })],
-    [
-      {
-        v: 1,
-        item: {
-          kind: "note",
-          body_md: "hello",
-          provenance: { source_kind: "operator", channel: "cli" },
-        },
-      },
-    ],
-  ),
-  wsSuccessCase(
-    "runs `memory update` via @tyrum/client WS",
-    wsMemoryUpdateSpy,
-    { v: 1, item: { kind: "note" } },
-    ["memory", "update", "--id", MEMORY_ITEM_ID, "--patch", JSON.stringify({ tags: ["a"] })],
-    [{ v: 1, memory_item_id: MEMORY_ITEM_ID, patch: { tags: ["a"] } }],
-  ),
-  wsSuccessCase(
-    "runs `memory delete` via @tyrum/client WS",
-    wsMemoryDeleteSpy,
-    { v: 1, tombstone: { memory_item_id: "m1" } },
-    ["memory", "delete", "--id", MEMORY_ITEM_ID, "--reason", "cleanup"],
-    [{ v: 1, memory_item_id: MEMORY_ITEM_ID, reason: "cleanup" }],
-  ),
-  wsSuccessCase(
-    "runs `memory forget` via @tyrum/client WS",
-    wsMemoryForgetSpy,
-    { v: 1, deleted_count: 1, tombstones: [] },
-    ["memory", "forget", "--selectors", JSON.stringify(MEMORY_SELECTORS), "--confirm", "FORGET"],
-    [{ v: 1, confirm: "FORGET", selectors: MEMORY_SELECTORS }],
-  ),
-  wsSuccessCase(
-    "runs `memory export` via @tyrum/client WS",
-    wsMemoryExportSpy,
-    { v: 1, artifact_id: "art_1" },
-    ["memory", "export", "--include-tombstones"],
-    [{ v: 1, include_tombstones: true }],
-  ),
-  wsSuccessCase(
-    "passes filter to `memory export` via @tyrum/client WS",
-    wsMemoryExportSpy,
-    { v: 1, artifact_id: "art_1" },
-    ["memory", "export", "--filter", JSON.stringify({ tags: ["t"] })],
-    [{ v: 1, filter: { tags: ["t"] }, include_tombstones: false }],
   ),
   wsSuccessCase(
     "runs `approvals resolve` via @tyrum/client WS",
@@ -244,20 +144,6 @@ const wsSuccessCases = [
 ] as const;
 
 const wsFailureCases = [
-  failureCase(
-    "rejects `memory search` with invalid --filter JSON",
-    wsMemorySearchSpy,
-    { v: 1, hits: [] },
-    ["memory", "search", "--query", "hello", "--filter", "{nope"],
-    true,
-  ),
-  failureCase(
-    "rejects `memory forget` when --confirm is missing",
-    wsMemoryForgetSpy,
-    { v: 1, deleted_count: 1, tombstones: [] },
-    ["memory", "forget", "--selectors", JSON.stringify(MEMORY_SELECTORS)],
-    true,
-  ),
   failureCase(
     "rejects `workflow run` with an invalid --lane",
     wsWorkflowRunSpy,

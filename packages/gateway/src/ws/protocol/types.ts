@@ -17,12 +17,10 @@ import type { SqlDb, StateStoreKind } from "../../statestore/types.js";
 import type { ModelsDevService } from "../../modules/models/models-dev-service.js";
 import type { ModelCatalogService } from "../../modules/models/model-catalog-service.js";
 import type { AuthAudit } from "../../modules/auth/audit.js";
-import type { MemoryV1Dal } from "../../modules/memory/v1-dal.js";
-import type { ArtifactStore } from "../../modules/artifact/store.js";
 import type { RedactionEngine } from "../../modules/redaction/engine.js";
 import type { WsEventDal } from "../../modules/ws-event/dal.js";
 import type { TaskResultRegistry } from "./task-result-registry.js";
-import type { AgentConfig, WsMessageEnvelope } from "@tyrum/schemas";
+import type { WsMessageEnvelope } from "@tyrum/schemas";
 import type { IdentityScopeDal } from "../../modules/identity/scope.js";
 import type { LocationService } from "../../modules/location/service.js";
 
@@ -50,12 +48,6 @@ export interface ProtocolDeps {
   identityScopeDal?: IdentityScopeDal;
   locationService?: LocationService;
   redactionEngine?: RedactionEngine;
-  memoryV1Dal?: MemoryV1Dal;
-  memoryV1BudgetsProvider?: (
-    tenantId: string,
-    agentId?: string,
-  ) => Promise<AgentConfig["memory"]["v1"]["budgets"]>;
-  artifactStore?: ArtifactStore;
   contextReportDal?: ContextReportDal;
   runtime?: {
     version: string;

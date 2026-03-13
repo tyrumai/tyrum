@@ -1,6 +1,10 @@
 import type { LanguageModel } from "ai";
 import { generateText, stepCountIs } from "ai";
-import type { AgentConfig as AgentConfigT, SessionTranscriptTextItem } from "@tyrum/schemas";
+import {
+  BuiltinMemoryServerSettings,
+  type AgentConfig as AgentConfigT,
+  type SessionTranscriptTextItem,
+} from "@tyrum/schemas";
 import { sha256HexFromString } from "../../policy/canonical-json.js";
 import { redactSecretLikeText } from "./secrets.js";
 import { MemoryV1Dal } from "../../memory/v1-dal.js";
@@ -57,7 +61,9 @@ export async function maybeRunPreCompactionMemoryFlush(
     timeoutMs?: number;
   },
 ): Promise<void> {
-  const v1Enabled = input.ctx.config.memory.v1.enabled;
+  const v1Enabled = BuiltinMemoryServerSettings.parse(
+    input.ctx.config.mcp.server_settings.memory ?? {},
+  ).enabled;
   if (!v1Enabled) {
     return;
   }

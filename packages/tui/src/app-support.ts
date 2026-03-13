@@ -61,14 +61,3 @@ export function getPairingIds(
   });
   return ids;
 }
-
-export function getMemoryBrowseIds(
-  memory: ReturnType<OperatorCore["memoryStore"]["getSnapshot"]>,
-): string[] {
-  const browseResults = memory.browse.results;
-  if (!browseResults) return [];
-  if (browseResults.kind === "list") {
-    return browseResults.items.map((item) => item.memory_item_id);
-  }
-  return browseResults.hits.map((hit) => hit.memory_item_id);
-}

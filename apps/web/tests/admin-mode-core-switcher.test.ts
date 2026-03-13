@@ -32,7 +32,6 @@ function createFakeCore(options: {
     runsStore: {} as unknown as OperatorCore["runsStore"],
     pairingStore: {} as unknown as OperatorCore["pairingStore"],
     statusStore: {} as unknown as OperatorCore["statusStore"],
-    memoryStore: {} as unknown as OperatorCore["memoryStore"],
     connect: vi.fn(() => {}),
     disconnect: vi.fn(() => {}),
     dispose: vi.fn(() => {}),

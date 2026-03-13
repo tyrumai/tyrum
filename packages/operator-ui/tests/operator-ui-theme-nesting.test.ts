@@ -44,12 +44,6 @@ class StubWsClient implements OperatorWsClient {
   approvalList = async () => ({ approvals: [], next_cursor: undefined });
   runList = async () => ({ runs: [], steps: [], attempts: [] });
   approvalResolve = async () => ({ approval: {} as never });
-  memorySearch = async () => ({ v: 1, hits: [], next_cursor: undefined }) as never;
-  memoryList = async () => ({ v: 1, items: [], next_cursor: undefined }) as never;
-  memoryGet = async () => ({ v: 1, item: {} }) as never;
-  memoryUpdate = async () => ({ v: 1, item: {} }) as never;
-  memoryForget = async () => ({ v: 1, deleted_count: 0, tombstones: [] }) as never;
-  memoryExport = async () => ({ v: 1, artifact_id: "artifact-1" }) as never;
 }
 
 const stubHttp: OperatorHttpClient = {

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { MemoryV1Dal } from "../../src/modules/memory/v1-dal.js";
 import { VectorDal } from "../../src/modules/memory/vector-dal.js";
-import type { AgentConfig } from "@tyrum/schemas";
+import type { BuiltinMemoryServerSettings } from "@tyrum/schemas";
 import { DEFAULT_AGENT_ID, DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 describe("Memory v1 consolidation pipeline", () => {
@@ -116,7 +116,7 @@ describe("Memory v1 consolidation pipeline", () => {
         ],
       );
 
-      const budgets: AgentConfig["memory"]["v1"]["budgets"] = {
+      const budgets: BuiltinMemoryServerSettings["budgets"] = {
         max_total_items: 3,
         max_total_chars: 50_000,
         per_kind: {
@@ -242,7 +242,7 @@ describe("Memory v1 consolidation pipeline", () => {
         ],
       );
 
-      const budgets: AgentConfig["memory"]["v1"]["budgets"] = {
+      const budgets: BuiltinMemoryServerSettings["budgets"] = {
         max_total_items: 1,
         max_total_chars: 50_000,
         per_kind: {

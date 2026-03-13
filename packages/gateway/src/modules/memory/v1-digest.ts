@@ -1,4 +1,4 @@
-import type { AgentConfig, MemoryItem, MemoryItemKind } from "@tyrum/schemas";
+import type { BuiltinMemoryServerSettings, MemoryItem, MemoryItemKind } from "@tyrum/schemas";
 import { normalizeSnippet, truncate } from "./v1-dal-helpers.js";
 import type { MemoryV1SemanticSearchHit } from "./v1-semantic-index.js";
 import type { MemoryV1Dal } from "./v1-dal.js";
@@ -73,7 +73,7 @@ function itemSnippet(item: MemoryItem): string | undefined {
 }
 
 function resolveKindBudget(
-  config: AgentConfig["memory"]["v1"]["budgets"]["per_kind"],
+  config: BuiltinMemoryServerSettings["budgets"]["per_kind"],
   kind: MemoryItemKind,
 ): { max_items: number; max_chars: number; max_tokens?: number } {
   const budget = config[kind];
@@ -105,7 +105,7 @@ export async function buildMemoryV1Digest(params: {
   tenantId: string;
   agentId: string;
   query: string;
-  config: AgentConfig["memory"]["v1"];
+  config: BuiltinMemoryServerSettings;
   semanticSearch?: (query: string, limit: number) => Promise<MemoryV1SemanticSearchHit[]>;
 }): Promise<MemoryV1DigestResult> {
   const config = params.config;

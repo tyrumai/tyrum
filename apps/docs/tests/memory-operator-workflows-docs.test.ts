@@ -7,25 +7,23 @@ import { listMarkdownFiles } from "./markdown-utils.js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "../../..");
 
-describe("Memory operator workflow docs (Issue #666)", () => {
-  it("documents Memory v1 operator workflows (inspect/export/forget)", async () => {
+describe("Memory architecture docs (Issue #666)", () => {
+  it("documents MCP-native memory prompt seeding and in-turn tools", async () => {
     const memoryDoc = await readFile(resolve(repoRoot, "docs/architecture/memory.md"), "utf8");
 
-    expect(memoryDoc).toMatch(/## Operator workflows/i);
-    expect(memoryDoc).toMatch(/memory\.list\b/);
-    expect(memoryDoc).toMatch(/memory\.search\b/);
-    expect(memoryDoc).toMatch(/memory\.get\b/);
-    expect(memoryDoc).toMatch(/memory\.export\b/);
-    expect(memoryDoc).toMatch(/\/memory\/exports\/:id\b/);
-    expect(memoryDoc).toMatch(/memory\.forget\b/);
+    expect(memoryDoc).toMatch(/MCP-native capability/i);
+    expect(memoryDoc).toMatch(/mcp\.memory\.seed\b/);
+    expect(memoryDoc).toMatch(/mcp\.memory\.search\b/);
+    expect(memoryDoc).toMatch(/mcp\.memory\.write\b/);
+    expect(memoryDoc).toMatch(/pre_turn_tools/i);
+    expect(memoryDoc).toMatch(/server_settings\.memory/i);
     expect(memoryDoc).toMatch(/tombstone/i);
-    expect(memoryDoc).toMatch(/operator\.read\b/);
-    expect(memoryDoc).toMatch(/operator\.write\b/);
   });
 
-  it("does not document legacy /memory HTTP CRUD endpoints", async () => {
+  it("does not document legacy Memory v1 operator APIs", async () => {
     const mdFiles = await listMarkdownFiles(resolve(repoRoot, "docs"));
-    const legacyEndpointPattern = /\/memory\/(facts|events|capabilities|forget)\b/i;
+    const legacyEndpointPattern =
+      /(^|[^.\w])(memory\.(list|search|get|create|update|delete|forget|export)|\/memory\/exports\/:id)\b/i;
 
     for (const file of mdFiles) {
       const content = await readFile(file, "utf8");

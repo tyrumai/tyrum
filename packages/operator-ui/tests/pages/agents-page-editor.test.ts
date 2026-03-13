@@ -117,12 +117,6 @@ function createCore(
     stepIdsByRunId: {},
     attemptIdsByStepId: {},
   });
-  const { store: memoryStore } = createStore({
-    browse: { request: null, results: null, loading: false, error: null, lastSyncedAt: null },
-    inspect: { agentId: null, memoryItemId: null, item: null, loading: false, error: null },
-    tombstones: { tombstones: [], loading: false, error: null },
-    export: { running: false, artifactId: null, error: null, lastExportedAt: null },
-  });
 
   return {
     connectionStore,
@@ -137,17 +131,6 @@ function createCore(
       modelConfig: {
         listPresets,
       },
-    },
-    memoryStore: {
-      ...memoryStore,
-      list: vi.fn(),
-      search: vi.fn(),
-      refreshBrowse: vi.fn(),
-      loadMore: vi.fn(),
-      inspect: vi.fn(),
-      update: vi.fn(),
-      forget: vi.fn(),
-      export: vi.fn(),
     },
     runsStore,
   } as unknown as OperatorCore;
@@ -215,6 +198,104 @@ describe("AgentsPage editor", () => {
       "agent-1",
       expect.objectContaining({ config: expect.any(Object) }),
     );
+    cleanupTestRoot(testRoot);
+  });
+
+  it("preserves hidden MCP settings when saving an existing agent", async () => {
+    const list = vi.fn(async () => ({
+      agents: [
+        {
+          agent_key: "default",
+          agent_id: "11111111-1111-4111-8111-111111111111",
+          can_delete: false,
+          persona: { name: "Feynman" },
+        },
+      ],
+    }));
+    const existingDetail = {
+      ...sampleManagedAgentDetail("default"),
+      config: AgentConfig.parse({
+        ...sampleManagedAgentDetail("default").config,
+        mcp: {
+          default_mode: "deny",
+          allow: ["filesystem"],
+          deny: ["secrets"],
+          pre_turn_tools: ["mcp.memory.seed"],
+          server_settings: {
+            filesystem: {
+              namespace: "shared",
+            },
+            memory: {
+              enabled: true,
+            },
+          },
+        },
+      }),
+    };
+    const get = vi.fn().mockResolvedValue(existingDetail);
+    const capabilities = vi.fn(async () => ({
+      skills: { default_mode: "allow", allow: [], deny: [], workspace_trusted: true, items: [] },
+      mcp: {
+        default_mode: "deny",
+        allow: ["filesystem"],
+        deny: ["secrets"],
+        items: [
+          {
+            id: "filesystem",
+            name: "Filesystem",
+            transport: "stdio" as const,
+            source: "workspace" as const,
+          },
+        ],
+      },
+      tools: { default_mode: "allow", allow: [], deny: [], items: [] },
+    }));
+    const update = vi.fn().mockResolvedValue(existingDetail);
+    const core = createCore(list, get, capabilities, update);
+
+    const testRoot = renderIntoDocument(React.createElement(AgentsPage, { core }));
+    await flush();
+
+    const editorTab = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="agents-tab-editor"]',
+    );
+    const saveButton = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="agents-editor-save"]',
+    );
+
+    expect(editorTab).not.toBeNull();
+    expect(saveButton).not.toBeNull();
+
+    await act(async () => {
+      if (editorTab) click(editorTab);
+      if (saveButton) click(saveButton);
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(update).toHaveBeenCalledWith(
+      "default",
+      expect.objectContaining({
+        config: expect.objectContaining({
+          mcp: expect.objectContaining({
+            default_mode: "deny",
+            allow: ["filesystem"],
+            deny: ["secrets"],
+            pre_turn_tools: ["mcp.memory.seed"],
+            server_settings: expect.objectContaining({
+              filesystem: expect.objectContaining({
+                namespace: "shared",
+              }),
+              memory: expect.objectContaining({
+                enabled: true,
+              }),
+            }),
+          }),
+        }),
+      }),
+    );
+
     cleanupTestRoot(testRoot);
   });
 

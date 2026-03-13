@@ -220,7 +220,6 @@ const EVENT_DOT_VARIANT: Record<ActivityEvent["type"], StatusDotVariant> = {
   "step.updated": "primary",
   "attempt.updated": "primary",
   "approval.updated": "warning",
-  "memory.item.updated": "neutral",
   "typing.started": "success",
   "typing.stopped": "neutral",
   "message.delta": "success",

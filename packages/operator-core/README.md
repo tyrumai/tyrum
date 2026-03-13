@@ -124,24 +124,6 @@ const connection = useSyncExternalStore(
 - `refreshUsage(query?)`
 - `refreshPresence()`
 
-### `memoryStore` (Memory v1)
-
-**State:** `MemoryState`
-
-- `browse`: current list/search request + results + pagination cursor
-- `inspect`: selected item + loading/error
-- `tombstones`: recent tombstones (delete/forget)
-- `export`: export job state (artifact id)
-
-**Actions:**
-
-- `list({ filter?, limit? }?)`
-- `search({ query, filter?, limit? })`
-- `loadMore()`
-- `inspect(memoryItemId)`
-- `forget(selectors)` — selectors are Memory v1 forget selectors
-- `export({ filter?, includeTombstones? }?)`
-
 ## Reconnect semantics
 
 On WS `connected`, operator-core triggers a best-effort re-sync:

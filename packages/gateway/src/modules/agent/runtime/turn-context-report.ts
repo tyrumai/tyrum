@@ -20,14 +20,15 @@ export interface ContextReportInput {
   toolsText: string;
   sessionText: string;
   workFocusText: string;
-  memoryText: string;
+  preTurnTexts: string[];
+  preTurnReports: AgentContextReport["pre_turn_tools"];
   automationTriggerText: string | undefined;
   automationDigestText: string | undefined;
-  memoryDigestResult: {
-    keyword_hit_count: number;
-    semantic_hit_count: number;
-    structured_item_count: number;
-    included_item_ids: string[];
+  memorySummary: {
+    keyword_hits: number;
+    semantic_hits: number;
+    structured_hits: number;
+    included_items: number;
   };
   automation:
     | {
@@ -54,10 +55,11 @@ export function buildContextReport(input: ContextReportInput): AgentContextRepor
     toolsText,
     sessionText,
     workFocusText,
-    memoryText,
+    preTurnTexts,
+    preTurnReports,
     automationTriggerText,
     automationDigestText,
-    memoryDigestResult,
+    memorySummary,
     automation,
     logger,
   } = input;
@@ -98,7 +100,10 @@ export function buildContextReport(input: ContextReportInput): AgentContextRepor
       { id: "tools", chars: toolsText.length },
       { id: "session_context", chars: sessionText.length },
       { id: "work_focus_digest", chars: workFocusText.length },
-      { id: "memory_digest", chars: memoryText.length },
+      ...preTurnTexts.map((text, index) => ({
+        id: `pre_turn_context_${String(index + 1)}`,
+        chars: text.length,
+      })),
       ...(automationTriggerText
         ? [{ id: "automation_trigger", chars: automationTriggerText.length }]
         : []),
@@ -123,12 +128,8 @@ export function buildContextReport(input: ContextReportInput): AgentContextRepor
           },
         }
       : {}),
-    memory: {
-      keyword_hits: memoryDigestResult.keyword_hit_count,
-      semantic_hits: memoryDigestResult.semantic_hit_count,
-      structured_hits: memoryDigestResult.structured_item_count,
-      included_items: memoryDigestResult.included_item_ids.length,
-    },
+    memory: memorySummary,
+    pre_turn_tools: preTurnReports,
     tool_calls: [],
     injected_files: [],
   };

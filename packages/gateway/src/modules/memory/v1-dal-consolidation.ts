@@ -1,5 +1,5 @@
 import type {
-  AgentConfig,
+  BuiltinMemoryServerSettings,
   MemoryDeletedBy,
   MemoryItem,
   MemoryItemCreateInput,
@@ -280,7 +280,7 @@ async function evictLowUtilityItems(
 export async function consolidateMemoryToBudgets(
   db: SqlDb,
   scope: Scope,
-  budgets: AgentConfig["memory"]["v1"]["budgets"],
+  budgets: BuiltinMemoryServerSettings["budgets"],
   dal: DalLike,
 ): Promise<MemoryV1ConsolidationResult> {
   const limits = normalizeBudgets(budgets);

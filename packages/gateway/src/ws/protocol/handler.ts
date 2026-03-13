@@ -13,7 +13,6 @@ import type { ConnectedClient } from "../connection-manager.js";
 import { handleApprovalMessage } from "./approval-handlers.js";
 import { handleControlPlaneMessage } from "./control-plane-handlers.js";
 import { errorEvent, errorResponse } from "./helpers.js";
-import { handleMemoryMessage } from "./memory-handlers.js";
 import { handleNodeMessage } from "./node-handlers.js";
 import { handleResponseMessage } from "./response-handlers.js";
 import { handleSessionMessage } from "./session-handlers.js";
@@ -182,7 +181,6 @@ async function routeRequest(
     async () => handleSessionMessage(client, msg, deps),
     async () => handleSubagentMessage(client, msg, deps),
     async () => handleWorkboardMessage(client, msg, deps),
-    async () => handleMemoryMessage(client, msg, deps),
   ];
 
   for (const handler of handlers) {

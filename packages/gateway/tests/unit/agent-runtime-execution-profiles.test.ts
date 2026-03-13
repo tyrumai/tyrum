@@ -47,10 +47,12 @@ describe("AgentRuntime (execution profiles)", () => {
       config: AgentConfig.parse({
         model: { model: "openai/gpt-4.1" },
         skills: { enabled: [] },
-        mcp: { enabled: [] },
+        mcp: {
+          enabled: [],
+          server_settings: { memory: { enabled: false } },
+        },
         tools: { allow: ["read", "write", "bash"] },
         sessions: { ttl_days: 30, max_turns: 20 },
-        memory: { v1: { enabled: false } },
       }),
       createdBy: { kind: "test" },
       reason: "test",
@@ -154,7 +156,10 @@ describe("AgentRuntime (execution profiles)", () => {
       config: AgentConfig.parse({
         model: { model: "openai/gpt-4.1" },
         skills: { enabled: [] },
-        mcp: { enabled: [] },
+        mcp: {
+          enabled: [],
+          server_settings: { memory: { enabled: false } },
+        },
         tools: {
           allow: [
             "read",
@@ -170,7 +175,6 @@ describe("AgentRuntime (execution profiles)", () => {
           ],
         },
         sessions: { ttl_days: 30, max_turns: 20 },
-        memory: { v1: { enabled: false } },
       }),
       createdBy: { kind: "test" },
       reason: "test",

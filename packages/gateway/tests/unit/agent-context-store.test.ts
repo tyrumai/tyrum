@@ -76,8 +76,11 @@ args:
     const config = AgentConfig.parse({
       model: { model: "openai/gpt-4.1" },
       skills: { enabled: ["file-reader"], workspace_trusted: true },
-      mcp: { enabled: ["calendar"] },
-      memory: { v1: { enabled: true } },
+      mcp: {
+        enabled: ["calendar"],
+        pre_turn_tools: ["mcp.memory.seed"],
+        server_settings: { memory: { enabled: true } },
+      },
     });
 
     await store.ensureAgentContext(scope);
@@ -192,8 +195,11 @@ Prefer the managed skill.
     const config = AgentConfig.parse({
       model: { model: "openai/gpt-4.1" },
       skills: { enabled: ["db-skill"], workspace_trusted: true },
-      mcp: { enabled: ["calendar"] },
-      memory: { v1: { enabled: true } },
+      mcp: {
+        enabled: ["calendar"],
+        pre_turn_tools: ["mcp.memory.seed"],
+        server_settings: { memory: { enabled: true } },
+      },
     });
 
     const skills = await store.getEnabledSkills(scope, config);
@@ -278,8 +284,11 @@ cwd: .
     const config = AgentConfig.parse({
       model: { model: "openai/gpt-4.1" },
       skills: { enabled: [], workspace_trusted: true },
-      mcp: { enabled: ["stdio-calendar"] },
-      memory: { v1: { enabled: true } },
+      mcp: {
+        enabled: ["stdio-calendar"],
+        pre_turn_tools: ["mcp.memory.seed"],
+        server_settings: { memory: { enabled: true } },
+      },
     });
 
     const [server] = await store.getEnabledMcpServers({ tenantId, agentId, workspaceId }, config);
@@ -347,8 +356,11 @@ describe("SharedAgentContextStore", () => {
     const config = AgentConfig.parse({
       model: { model: "openai/gpt-4.1" },
       skills: { enabled: ["db-skill"], workspace_trusted: false },
-      mcp: { enabled: ["calendar"] },
-      memory: { v1: { enabled: true } },
+      mcp: {
+        enabled: ["calendar"],
+        pre_turn_tools: ["mcp.memory.seed"],
+        server_settings: { memory: { enabled: true } },
+      },
     });
 
     await container.db.run(

@@ -14,6 +14,7 @@ import {
   type OperatorCore,
   type OperatorCoreFactory,
   type OperatorCoreManager,
+  type OperatorWsClient,
 } from "@tyrum/operator-core";
 
 export type TuiCoreOptions = {
@@ -70,7 +71,8 @@ export async function createTuiCore(options: TuiCoreOptions): Promise<TuiRuntime
       httpBaseUrl: coreOptions.httpBaseUrl,
       auth: coreOptions.auth,
       elevatedModeStore: coreOptions.elevatedModeStore,
-      deps: { ws, http },
+      // Operator core still types the legacy memory methods on its WS client.
+      deps: { ws: ws as unknown as OperatorWsClient, http },
     });
   };
 

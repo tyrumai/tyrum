@@ -9,6 +9,7 @@ import type { SecretProvider } from "../secret/provider.js";
 import type { SecretResolutionAuditDal } from "../secret/resolution-audit-dal.js";
 import { acquireWorkspaceLease, releaseWorkspaceLease } from "../workspace/lease.js";
 import type { AgentMemoryToolRuntime } from "../memory/agent-tool-runtime.js";
+import { executeBuiltinMemoryMcpTool } from "../memory/builtin-mcp.js";
 import { executeCoreTool, executeMcpTool } from "./tool-executor-core-tools.js";
 import {
   executeNodeDispatchTool,
@@ -145,7 +146,6 @@ export class ToolExecutor {
       mcpManager: this.mcpManager,
       mcpServerSpecs: this.mcpServerSpecs,
       secretProvider: this.secretProvider,
-      memoryToolRuntime: this.memoryToolRuntime,
       assertSandboxed: (filePath: string) => this.assertSandboxed(filePath),
       withWorkspaceLease: <T>(
         callId: string,
@@ -155,6 +155,15 @@ export class ToolExecutor {
     };
 
     if (toolId.startsWith("mcp.")) {
+      const builtinMemoryResult = await executeBuiltinMemoryMcpTool({
+        runtime: this.memoryToolRuntime,
+        toolId,
+        toolCallId,
+        args,
+      });
+      if (builtinMemoryResult) {
+        return builtinMemoryResult;
+      }
       return await executeMcpTool(coreContext, toolId, toolCallId, args);
     }
     if (toolId === "tool.node.dispatch") {

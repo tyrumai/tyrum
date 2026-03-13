@@ -65,16 +65,30 @@ export function createMemoryDecisionLanguageModel(input: {
     doGenerate: async () => {
       callCount += 1;
       if (callCount === 1) {
+        const shouldStore = input.decision["should_store"] === true;
+        const memory =
+          shouldStore &&
+          input.decision["memory"] &&
+          typeof input.decision["memory"] === "object" &&
+          !Array.isArray(input.decision["memory"])
+            ? input.decision["memory"]
+            : undefined;
         return {
-          content: [
-            {
-              type: "tool-call" as const,
-              toolCallId: "tc-memory-decision",
-              toolName: "memory_turn_decision",
-              input: JSON.stringify(input.decision),
-            },
-          ],
-          finishReason: { unified: "tool-calls" as const, raw: undefined },
+          content:
+            shouldStore && memory
+              ? [
+                  {
+                    type: "tool-call" as const,
+                    toolCallId: "tc-memory-write",
+                    toolName: "mcp.memory.write",
+                    input: JSON.stringify(memory),
+                  },
+                ]
+              : [{ type: "text" as const, text: input.reply }],
+          finishReason: {
+            unified: shouldStore && memory ? ("tool-calls" as const) : ("stop" as const),
+            raw: undefined,
+          },
           usage: {
             inputTokens: { total: 10, noCache: 10, cacheRead: undefined, cacheWrite: undefined },
             outputTokens: { total: 5, text: 5, reasoning: undefined },

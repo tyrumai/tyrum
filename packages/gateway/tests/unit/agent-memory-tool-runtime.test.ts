@@ -1,15 +1,12 @@
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
-import { AgentConfig } from "@tyrum/schemas";
+import { BuiltinMemoryServerSettings } from "@tyrum/schemas";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { MemoryV1Dal } from "../../src/modules/memory/v1-dal.js";
 import { AgentMemoryToolRuntime } from "../../src/modules/memory/agent-tool-runtime.js";
 import { DEFAULT_AGENT_ID, DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 function buildMemoryConfig() {
-  return AgentConfig.parse({
-    model: { model: "openai/gpt-5.4" },
-    tools: { allow: [] },
-  }).memory.v1;
+  return BuiltinMemoryServerSettings.parse({});
 }
 
 function embedDeterministic(text: string): number[] {

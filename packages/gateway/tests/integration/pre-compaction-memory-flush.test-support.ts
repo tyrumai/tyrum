@@ -76,10 +76,13 @@ export async function seedAgentConfig(
     config: AgentConfig.parse({
       model: { model: "openai/gpt-4.1" },
       skills: { enabled: [] },
-      mcp: { enabled: [] },
+      mcp: {
+        enabled: [],
+        pre_turn_tools: ["mcp.memory.seed"],
+        server_settings: { memory: { enabled: true } },
+      },
       tools: { allow: [] },
       sessions: { ttl_days: 30, max_turns: opts?.maxTurns ?? 1 },
-      memory: { v1: { enabled: true } },
     }),
     createdBy: { kind: "test" },
     reason: "pre-compaction flush test",

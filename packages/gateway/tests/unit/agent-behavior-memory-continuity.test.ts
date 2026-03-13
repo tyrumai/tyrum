@@ -34,36 +34,37 @@ function makeMemoryConfig(input?: {
   structuredTags?: string[];
   budgets?: MemoryBudgets;
 }): Record<string, unknown> {
+  const memorySettings = {
+    enabled: true,
+    keyword: { enabled: true, limit: 20 },
+    semantic: { enabled: false, limit: 1 },
+    structured: {
+      fact_keys: input?.structuredFactKeys ?? [],
+      tags: input?.structuredTags ?? [],
+    },
+    budgets: input?.budgets ?? {
+      max_total_items: 10,
+      max_total_chars: 4000,
+      per_kind: {
+        fact: { max_items: 4, max_chars: 1200 },
+        note: { max_items: 6, max_chars: 2400 },
+        procedure: { max_items: 2, max_chars: 1200 },
+        episode: { max_items: 4, max_chars: 1600 },
+      },
+    },
+  };
   return {
     model: { model: "openai/gpt-4.1" },
-    skills: { enabled: [] },
-    mcp: { enabled: [] },
-    tools: { allow: [] },
+    skills: { default_mode: "deny", workspace_trusted: false },
+    mcp: {
+      default_mode: "allow",
+      pre_turn_tools: ["mcp.memory.seed"],
+      server_settings: { memory: memorySettings },
+    },
+    tools: { default_mode: "allow" },
     sessions: {
       ttl_days: 30,
       max_turns: input?.maxTurns ?? 20,
-    },
-    memory: {
-      v1: {
-        enabled: true,
-        keyword: { enabled: true, limit: 20 },
-        semantic: { enabled: false, limit: 1 },
-        structured: {
-          fact_keys: input?.structuredFactKeys ?? [],
-          tags: input?.structuredTags ?? [],
-        },
-        auto_write: { enabled: true },
-        budgets: input?.budgets ?? {
-          max_total_items: 10,
-          max_total_chars: 4000,
-          per_kind: {
-            fact: { max_items: 4, max_chars: 1200 },
-            note: { max_items: 6, max_chars: 2400 },
-            procedure: { max_items: 2, max_chars: 1200 },
-            episode: { max_items: 4, max_chars: 1600 },
-          },
-        },
-      },
     },
   };
 }
@@ -111,8 +112,8 @@ describe("Agent behavior - memory continuity", () => {
           return "Stored.";
         },
         {
-          memoryDecision: ({ promptText }) =>
-            promptIncludes(promptText, "remember that my name is ron")
+          memoryDecision: ({ latestUserText }) =>
+            promptIncludes(latestUserText, "remember that my name is ron")
               ? noteDecision("remember that my name is Ron")
               : undefined,
         },
@@ -142,7 +143,7 @@ describe("Agent behavior - memory continuity", () => {
     expect(notes.items[0]).toMatchObject({
       kind: "note",
       provenance: {
-        source_kind: "system",
+        source_kind: "tool",
         channel: "ui",
         thread_id: "memory-name-thread",
         session_id: remembered.session_id,
@@ -168,8 +169,8 @@ describe("Agent behavior - memory continuity", () => {
           return "Stored.";
         },
         {
-          memoryDecision: ({ promptText }) =>
-            promptIncludes(promptText, "remember that my name is ron")
+          memoryDecision: ({ latestUserText }) =>
+            promptIncludes(latestUserText, "remember that my name is ron")
               ? noteDecision("remember that my name is Ron")
               : undefined,
         },
@@ -195,8 +196,8 @@ describe("Agent behavior - memory continuity", () => {
           return "Stored.";
         },
         {
-          memoryDecision: ({ promptText }) =>
-            promptIncludes(promptText, "remember that my name is ron")
+          memoryDecision: ({ latestUserText }) =>
+            promptIncludes(latestUserText, "remember that my name is ron")
               ? noteDecision("remember that my name is Ron")
               : undefined,
         },
@@ -228,8 +229,8 @@ describe("Agent behavior - memory continuity", () => {
           return "Stored.";
         },
         {
-          memoryDecision: ({ promptText }) =>
-            promptIncludes(promptText, "remember that i prefer tea")
+          memoryDecision: ({ latestUserText }) =>
+            promptIncludes(latestUserText, "remember that i prefer tea")
               ? noteDecision("remember that I prefer tea")
               : undefined,
         },
@@ -260,7 +261,7 @@ describe("Agent behavior - memory continuity", () => {
     expect(original).toMatchObject({
       kind: "note",
       provenance: {
-        source_kind: "system",
+        source_kind: "tool",
         channel: "ui",
         thread_id: "pref-ui-thread",
       },
@@ -282,8 +283,8 @@ describe("Agent behavior - memory continuity", () => {
           return "ok";
         },
         {
-          memoryDecision: ({ promptText }) =>
-            promptIncludes(promptText, "remember that i prefer jasmine tea")
+          memoryDecision: ({ latestUserText }) =>
+            promptIncludes(latestUserText, "remember that i prefer jasmine tea")
               ? noteDecision("remember that I prefer jasmine tea")
               : undefined,
         },
@@ -350,11 +351,11 @@ describe("Agent behavior - memory continuity", () => {
             return "Stored.";
           },
           {
-            memoryDecision: ({ promptText }) => {
-              if (promptIncludes(promptText, "remember that my name is robert")) {
+            memoryDecision: ({ latestUserText }) => {
+              if (promptIncludes(latestUserText, "remember that my name is robert")) {
                 return noteDecision("remember that my name is Robert");
               }
-              if (promptIncludes(promptText, "remember that my name is ron")) {
+              if (promptIncludes(latestUserText, "remember that my name is ron")) {
                 return noteDecision("remember that my name is Ron");
               }
               return undefined;
