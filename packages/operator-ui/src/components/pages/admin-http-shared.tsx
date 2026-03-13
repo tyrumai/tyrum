@@ -1,4 +1,9 @@
-import { isElevatedModeActive, type OperatorCore } from "@tyrum/operator-core";
+import {
+  isElevatedModeActive,
+  type ElevatedModeState,
+  type ExternalStore,
+  type OperatorCore,
+} from "@tyrum/operator-core";
 import { TyrumClient, createTyrumHttpClient } from "@tyrum/client/browser";
 import { useMemo, type ReactNode } from "react";
 import { useOperatorStore } from "../../use-operator-store.js";
@@ -9,6 +14,33 @@ import { Card, CardContent, CardFooter } from "../ui/card.js";
 import { Alert } from "../ui/alert.js";
 
 export type AdminHttpClient = OperatorCore["http"];
+
+const INACTIVE_ELEVATED_MODE_STATE: ElevatedModeState = {
+  status: "inactive",
+  elevatedToken: null,
+  enteredAt: null,
+  expiresAt: null,
+  remainingMs: null,
+};
+
+const INACTIVE_ELEVATED_MODE_STORE: ExternalStore<ElevatedModeState> = {
+  subscribe: () => () => {},
+  getSnapshot: () => INACTIVE_ELEVATED_MODE_STATE,
+};
+
+function createElevatedAdminHttpClient(input: {
+  core: OperatorCore;
+  mode: ReturnType<typeof useElevatedModeUiContext>["mode"];
+  elevatedMode: ElevatedModeState;
+}): AdminHttpClient | null {
+  if (input.elevatedMode.status !== "active" || !input.elevatedMode.elevatedToken) return null;
+
+  return createTyrumHttpClient({
+    baseUrl: input.core.httpBaseUrl,
+    auth: { type: "bearer", token: input.elevatedMode.elevatedToken },
+    fetch: resolveTyrumHttpFetch(input.mode),
+  });
+}
 
 export function toSafeJsonDownloadFileName(rawName: string, fallback: string): string {
   const trimmed = rawName.trim();
@@ -28,27 +60,27 @@ export function useAdminHttpClient(options?: { access?: "read" }): AdminHttpClie
 export function useAdminHttpClient(options?: {
   access?: "read" | "strict";
 }): AdminHttpClient | null {
-  const { core } = useElevatedModeUiContext();
-  const mutationHttp = useAdminMutationHttpClient();
-  if (options?.access === "strict") {
-    return mutationHttp;
-  }
-  return core.http;
+  const { core, mode } = useElevatedModeUiContext();
+  const access = options?.access ?? "read";
+  const elevatedMode = useOperatorStore(
+    access === "strict" ? core.elevatedModeStore : INACTIVE_ELEVATED_MODE_STORE,
+  );
+  const strictHttp = useMemo(() => {
+    if (access !== "strict") return null;
+    return createElevatedAdminHttpClient({ core, mode, elevatedMode });
+  }, [access, core, elevatedMode, mode]);
+
+  return access === "strict" ? strictHttp : core.http;
 }
 
 export function useAdminMutationHttpClient(): AdminHttpClient | null {
   const { core, mode } = useElevatedModeUiContext();
   const elevatedMode = useOperatorStore(core.elevatedModeStore);
 
-  return useMemo(() => {
-    if (elevatedMode.status !== "active" || !elevatedMode.elevatedToken) return null;
-
-    return createTyrumHttpClient({
-      baseUrl: core.httpBaseUrl,
-      auth: { type: "bearer", token: elevatedMode.elevatedToken },
-      fetch: resolveTyrumHttpFetch(mode),
-    });
-  }, [elevatedMode.elevatedToken, elevatedMode.status, core.httpBaseUrl, mode]);
+  return useMemo(
+    () => createElevatedAdminHttpClient({ core, mode, elevatedMode }),
+    [core, elevatedMode, mode],
+  );
 }
 
 export function useAdminMutationAccess(core: OperatorCore): {

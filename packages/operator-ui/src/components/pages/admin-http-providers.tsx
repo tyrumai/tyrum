@@ -19,7 +19,7 @@ import type {
 
 export function AdminHttpProvidersPanel({ core }: { core: OperatorCore }): React.ReactElement {
   const { canMutate, requestEnter } = useAdminMutationAccess(core);
-  const adminHttp = useAdminHttpClient();
+  const readHttp = useAdminHttpClient();
   const mutationHttp = useAdminMutationHttpClient();
   const [registry, setRegistry] = React.useState<ProviderRegistryEntry[]>([]);
   const [providers, setProviders] = React.useState<ConfiguredProviderGroup[]>([]);
@@ -38,20 +38,12 @@ export function AdminHttpProvidersPanel({ core }: { core: OperatorCore }): React
   const [actionKey, setActionKey] = React.useState<string | null>(null);
 
   const refresh = React.useCallback(async (): Promise<void> => {
-    if (!adminHttp) {
-      setRegistry([]);
-      setProviders([]);
-      setErrorMessage("Admin access is required to load provider configuration.");
-      setLoading(false);
-      setRefreshing(false);
-      return;
-    }
     setRefreshing(true);
     setErrorMessage(null);
     try {
       const [registryResult, providerResult] = await Promise.all([
-        adminHttp.providerConfig.listRegistry(),
-        adminHttp.providerConfig.listProviders(),
+        readHttp.providerConfig.listRegistry(),
+        readHttp.providerConfig.listProviders(),
       ]);
       setRegistry(registryResult.providers);
       setProviders(providerResult.providers);
@@ -61,7 +53,7 @@ export function AdminHttpProvidersPanel({ core }: { core: OperatorCore }): React
       setLoading(false);
       setRefreshing(false);
     }
-  }, [adminHttp]);
+  }, [readHttp]);
 
   React.useEffect(() => {
     void refresh();
@@ -116,7 +108,7 @@ export function AdminHttpProvidersPanel({ core }: { core: OperatorCore }): React
     );
 
     if ("error" in result) {
-      const presets = await adminHttp.modelConfig.listPresets();
+      const presets = await readHttp.modelConfig.listPresets();
       setDeletingProvider((current) =>
         current
           ? {
