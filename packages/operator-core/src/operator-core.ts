@@ -248,7 +248,7 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
     }
   });
 
-  on("approval.updated" as never, (data) => {
+  on("approval.updated", (data) => {
     const payload = readPayload(data);
     const approval = payload?.["approval"];
     if (approval) {
@@ -256,7 +256,7 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
     }
   });
 
-  on("pairing.updated" as never, (data) => {
+  on("pairing.updated", (data) => {
     const payload = readPayload(data);
     const pairingReq = payload?.["pairing"];
     if (pairingReq) {

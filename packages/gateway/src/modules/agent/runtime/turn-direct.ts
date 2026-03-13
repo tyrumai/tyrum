@@ -37,6 +37,7 @@ import {
 import { prepareTurn, type TurnExecutionContext } from "./turn-preparation.js";
 import { handleStatusQuery, throwToolApprovalError } from "./turn-direct-helpers.js";
 import { isContextOverflowError } from "./session-compaction-service.js";
+import { GUARDIAN_REVIEW_DECISION_TOOL_ID } from "./tool-set-builder-internal-tools.js";
 
 export {
   handleStatusQuery,
@@ -58,6 +59,18 @@ type TurnInvocationOptions = {
   execution?: TurnExecutionContext;
   compactionRetried?: boolean;
 };
+
+function createGuardianReviewTurnControl(): {
+  stopWhen: Array<ReturnType<typeof stepCountIs>>;
+  toolChoice: { type: "tool"; toolName: typeof GUARDIAN_REVIEW_DECISION_TOOL_ID };
+  withinTurnLoop: { value: undefined };
+} {
+  return {
+    stopWhen: [stepCountIs(1)],
+    toolChoice: { type: "tool", toolName: GUARDIAN_REVIEW_DECISION_TOOL_ID },
+    withinTurnLoop: { value: undefined },
+  };
+}
 
 export async function turnDirect(
   deps: TurnDirectDeps,
@@ -207,8 +220,11 @@ export async function turnDirect(
   }
 
   const withinTurnCfg = ctx.config.sessions.loop_detection.within_turn;
-  const withinTurn = guardianReviewDecisionCollector
-    ? { stopWhen: [stepCountIs(2)], withinTurnLoop: { value: undefined } }
+  const guardianReviewTurnControl = guardianReviewDecisionCollector
+    ? createGuardianReviewTurnControl()
+    : undefined;
+  const withinTurn = guardianReviewTurnControl
+    ? guardianReviewTurnControl
     : createStopWhenWithWithinTurnLoopDetection(deps.opts.container.logger, {
         stepLimit: remainingSteps,
         withinTurnCfg,
@@ -224,6 +240,7 @@ export async function turnDirect(
       system: systemPrompt,
       messages,
       tools: toolSet,
+      toolChoice: guardianReviewTurnControl?.toolChoice,
       stopWhen: withinTurn.stopWhen,
       prepareStep: ({ messages: stepMessages }) =>
         prepareLaneQueueStep(laneQueue, stepMessages, ctx.config.sessions.context_pruning),
@@ -387,8 +404,11 @@ export async function turnStreamDirect(
   }
 
   const withinTurnCfg = ctx.config.sessions.loop_detection.within_turn;
-  const withinTurn = guardianReviewDecisionCollector
-    ? { stopWhen: [stepCountIs(2)], withinTurnLoop: { value: undefined } }
+  const guardianReviewTurnControl = guardianReviewDecisionCollector
+    ? createGuardianReviewTurnControl()
+    : undefined;
+  const withinTurn = guardianReviewTurnControl
+    ? guardianReviewTurnControl
     : createStopWhenWithWithinTurnLoopDetection(deps.opts.container.logger, {
         stepLimit: deps.maxSteps,
         withinTurnCfg,
@@ -402,6 +422,7 @@ export async function turnStreamDirect(
     system: systemPrompt,
     messages: [{ role: "user" as const, content: userContent }],
     tools: toolSet,
+    toolChoice: guardianReviewTurnControl?.toolChoice,
     stopWhen: withinTurn.stopWhen,
     prepareStep: ({ messages: stepMessages }) =>
       prepareLaneQueueStep(laneQueue, stepMessages, ctx.config.sessions.context_pruning),
