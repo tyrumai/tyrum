@@ -78,14 +78,15 @@ jobs:
           set -euo pipefail
           LOG_FILE="$RUNNER_TEMP/tyrum.log"
           TYRUM_HOME="$RUNNER_TEMP/.tyrum-home"
+          PORT=18980
           mkdir -p "$TYRUM_HOME"
 
-          GATEWAY_PORT=18980 GATEWAY_HOST=127.0.0.1 TYRUM_HOME="$TYRUM_HOME" tyrum >"$LOG_FILE" 2>&1 &
+          tyrum --home "$TYRUM_HOME" --host 127.0.0.1 --port "$PORT" >"$LOG_FILE" 2>&1 &
           gateway_pid=$!
 
           ready=0
           for _ in $(seq 1 20); do
-            if grep -q "Gateway v" "$LOG_FILE"; then
+            if curl -fsS "http://127.0.0.1:$PORT/healthz" >/dev/null 2>&1; then
               ready=1
               break
             fi
@@ -97,7 +98,7 @@ jobs:
 
           if [[ "$ready" -ne 1 ]]; then
             cat "$LOG_FILE"
-            echo "Gateway did not start successfully."
+            echo "Gateway did not become healthy on the requested port."
             exit 1
           fi
 

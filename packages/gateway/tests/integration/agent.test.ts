@@ -49,13 +49,11 @@ args:
 describe("agent routes", () => {
   let homeDir: string | undefined;
   const originalTyrumHome = process.env["TYRUM_HOME"];
-  const originalAgentFlag = process.env["TYRUM_AGENT_ENABLED"];
 
   beforeEach(async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-"));
     await writeWorkspace(join(homeDir, "agents/default"));
     process.env["TYRUM_HOME"] = homeDir;
-    process.env["TYRUM_AGENT_ENABLED"] = "1";
   });
 
   afterEach(async () => {
@@ -64,12 +62,6 @@ describe("agent routes", () => {
       delete process.env["TYRUM_HOME"];
     } else {
       process.env["TYRUM_HOME"] = originalTyrumHome;
-    }
-
-    if (originalAgentFlag === undefined) {
-      delete process.env["TYRUM_AGENT_ENABLED"];
-    } else {
-      process.env["TYRUM_AGENT_ENABLED"] = originalAgentFlag;
     }
 
     if (homeDir) {

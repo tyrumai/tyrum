@@ -153,6 +153,9 @@ async function createGatewayBootContext(
   const db = await openGatewayDb({ dbPath, migrationsDir });
   const deploymentConfigDal = new DeploymentConfigDal(db);
   const startupOverrides: StartCommandOverrides = {
+    trustedProxies: params.trustedProxies,
+    tlsReady: params.tlsReady,
+    tlsSelfSigned: params.tlsSelfSigned,
     allowInsecureHttp: params.allowInsecureHttp,
     engineApiEnabled: params.engineApiEnabled,
     snapshotImportEnabled: params.snapshotImportEnabled,

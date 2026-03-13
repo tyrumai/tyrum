@@ -135,6 +135,37 @@ For device tokens, each WS request `type` is scope-checked via `packages/gateway
   - `200` Prometheus text format (content-type set by registry)
   - `401`, `403`
 
+### System administration
+
+These routes require a **system admin token** (`tenant_id === null`). Deployment config is revisioned and is the durable source of truth for server, execution, and agent feature gates.
+
+#### GET /system/deployment-config
+
+- Auth: Required (system token)
+- Request: None
+- Response:
+  - `200` JSON `{ revision, config, created_at, created_by, reason?, reverted_from_revision? }`
+  - Seeds the default revision on first read if the gateway has never stored deployment config before.
+  - `401`, `403`
+
+#### PUT /system/deployment-config
+
+- Auth: Required (system token)
+- Request: JSON `{ config, reason? }`
+- Response:
+  - `200` JSON `{ revision, config, created_at, created_by, reason?, reverted_from_revision? }`
+  - `400` invalid request
+  - `401`, `403`
+
+#### POST /system/deployment-config/revert
+
+- Auth: Required (system token)
+- Request: JSON `{ revision, reason? }`
+- Response:
+  - `200` JSON `{ revision, config, created_at, created_by, reason?, reverted_from_revision? }`
+  - `400` invalid request
+  - `401`, `403`
+
 #### GET /connections
 
 - Auth: Required (unless gateway auth is disabled)
@@ -772,7 +803,7 @@ Additional plugin-defined routers may be mounted under:
 
 - Auth: Required (unless gateway auth is disabled)
 - Device scope: `operator.write`
-- Availability: Only when `TYRUM_ENGINE_API_ENABLED=1`
+- Availability: Only when deployment config `execution.engineApiEnabled=true` (fresh installs can seed this with `--enable-engine-api`)
 - Request: JSON `{ key, lane?, plan_id?, request_id?, steps: ActionPrimitive[], budgets? }`
 - Response:
   - `200` JSON `{ status: "ok", job_id, run_id, plan_id, request_id, key, lane, steps_count }`
@@ -783,7 +814,7 @@ Additional plugin-defined routers may be mounted under:
 
 - Auth: Required (unless gateway auth is disabled)
 - Device scope: `operator.write`
-- Availability: Only when `TYRUM_ENGINE_API_ENABLED=1`
+- Availability: Only when deployment config `execution.engineApiEnabled=true`
 - Request: JSON `{ token: string }`
 - Response:
   - `200` JSON `{ status: "ok", run_id }`
@@ -794,7 +825,7 @@ Additional plugin-defined routers may be mounted under:
 
 - Auth: Required (unless gateway auth is disabled)
 - Device scope: `operator.write`
-- Availability: Only when `TYRUM_ENGINE_API_ENABLED=1`
+- Availability: Only when deployment config `execution.engineApiEnabled=true`
 - Request: JSON `{ run_id: string, reason?: string }`
 - Response:
   - `200` JSON `{ status: "ok", run_id, cancelled: boolean }`
@@ -846,7 +877,7 @@ Additional plugin-defined routers may be mounted under:
 
 - Auth: Required (unless gateway auth is disabled)
 - Device scope: `operator.write`
-- Availability: Only when `TYRUM_ENGINE_API_ENABLED=1`
+- Availability: Only when deployment config `execution.engineApiEnabled=true`
 - Request: JSON (optional overrides): `{ key?, lane?, plan_id?, request_id?, budgets? }`
 - Response:
   - `200` JSON `{ status: "ok", job_id, run_id, playbook_id, plan_id, request_id, key, lane, steps_count }`
@@ -1085,7 +1116,7 @@ User-facing automation should prefer schedules over raw watchers. Schedule APIs 
 
 - Auth: Required (unless gateway auth is disabled)
 - Device scope: `operator.read`
-- Availability: Only when `TYRUM_AGENT_ENABLED=1`
+- Availability: Only when deployment config `agent.enabled=true` (default: enabled)
 - Request: Optional query param `include_default` (default: `true`)
 - Response:
   - `200` JSON `{ agents: [{ agent_id, home?, has_config? }] }`
@@ -1095,7 +1126,7 @@ User-facing automation should prefer schedules over raw watchers. Schedule APIs 
 
 - Auth: Required (unless gateway auth is disabled)
 - Device scope: `operator.read`
-- Availability: Only when `TYRUM_AGENT_ENABLED=1`
+- Availability: Only when deployment config `agent.enabled=true` (default: enabled)
 - Request: Optional query param `agent_key` (default: `default`)
 - Response:
   - `200` JSON agent runtime status
@@ -1106,7 +1137,7 @@ User-facing automation should prefer schedules over raw watchers. Schedule APIs 
 
 - Auth: Required (unless gateway auth is disabled)
 - Device scope: `operator.write`
-- Availability: Only when `TYRUM_AGENT_ENABLED=1`
+- Availability: Only when deployment config `agent.enabled=true` (default: enabled)
 - Request: JSON `AgentTurnRequest`
 - Response:
   - `200` JSON agent turn result
@@ -1120,7 +1151,7 @@ User-facing automation should prefer schedules over raw watchers. Schedule APIs 
 
 - Auth: Required (unless gateway auth is disabled)
 - Device scope: `operator.read`
-- Availability: Only when `TYRUM_AGENT_ENABLED=1`
+- Availability: Only when deployment config `agent.enabled=true` (default: enabled)
 - Request: Optional query param `agent_key` (default: `default`)
 - Response:
   - `200` JSON `{ status: "ok", report }`
@@ -1131,7 +1162,7 @@ User-facing automation should prefer schedules over raw watchers. Schedule APIs 
 
 - Auth: Required (unless gateway auth is disabled)
 - Device scope: `operator.read`
-- Availability: Only when `TYRUM_AGENT_ENABLED=1`
+- Availability: Only when deployment config `agent.enabled=true` (default: enabled)
 - Request: Optional query params: `session_id`, `run_id`, `limit`
 - Response:
   - `200` JSON `{ status: "ok", reports: [...] }`
@@ -1141,7 +1172,7 @@ User-facing automation should prefer schedules over raw watchers. Schedule APIs 
 
 - Auth: Required (unless gateway auth is disabled)
 - Device scope: `operator.read`
-- Availability: Only when `TYRUM_AGENT_ENABLED=1`
+- Availability: Only when deployment config `agent.enabled=true` (default: enabled)
 - Request: Path param `:id`
 - Response:
   - `200` JSON `{ status: "ok", report }`

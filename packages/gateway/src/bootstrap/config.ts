@@ -22,6 +22,9 @@ export type GatewayStartOptions = {
   host?: string;
   port?: number;
   migrationsDir?: string;
+  trustedProxies?: string;
+  tlsReady?: boolean;
+  tlsSelfSigned?: boolean;
   allowInsecureHttp?: boolean;
   engineApiEnabled?: boolean;
   snapshotImportEnabled?: boolean;
@@ -29,7 +32,12 @@ export type GatewayStartOptions = {
 
 export type StartCommandOverrides = Pick<
   GatewayStartOptions,
-  "allowInsecureHttp" | "engineApiEnabled" | "snapshotImportEnabled"
+  | "trustedProxies"
+  | "tlsReady"
+  | "tlsSelfSigned"
+  | "allowInsecureHttp"
+  | "engineApiEnabled"
+  | "snapshotImportEnabled"
 >;
 
 export function assertSplitRoleUsesPostgres(role: GatewayRole, dbPath: string): void {
@@ -132,6 +140,11 @@ function resolveTruthyEnvFlag(name: string): boolean {
   }
 }
 
+function resolveOptionalCliString(value?: string): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : undefined;
+}
+
 export function resolveSnapshotImportEnabled(snapshotImportOverride?: boolean): boolean {
   return Boolean(snapshotImportOverride) || resolveTruthyEnvFlag("TYRUM_SNAPSHOT_IMPORT_ENABLED");
 }
@@ -141,6 +154,9 @@ export function buildStartupDefaultDeploymentConfig(
 ): DeploymentConfig {
   return DeploymentConfig.parse({
     server: {
+      trustedProxies: resolveOptionalCliString(overrides.trustedProxies),
+      tlsReady: Boolean(overrides.tlsReady),
+      tlsSelfSigned: Boolean(overrides.tlsSelfSigned),
       allowInsecureHttp: Boolean(overrides.allowInsecureHttp),
     },
     execution: {
@@ -156,10 +172,14 @@ export function applyStartCommandDeploymentOverrides(
   deploymentConfig: DeploymentConfig,
   overrides: StartCommandOverrides,
 ): DeploymentConfig {
+  const trustedProxies = resolveOptionalCliString(overrides.trustedProxies);
   return DeploymentConfig.parse({
     ...deploymentConfig,
     server: {
       ...deploymentConfig.server,
+      trustedProxies: deploymentConfig.server.trustedProxies ?? trustedProxies,
+      tlsReady: deploymentConfig.server.tlsReady || Boolean(overrides.tlsReady),
+      tlsSelfSigned: deploymentConfig.server.tlsSelfSigned || Boolean(overrides.tlsSelfSigned),
       allowInsecureHttp:
         deploymentConfig.server.allowInsecureHttp || Boolean(overrides.allowInsecureHttp),
     },

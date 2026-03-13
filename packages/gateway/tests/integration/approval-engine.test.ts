@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { createApp } from "../../src/app.js";
 import {
   createTestContainer,
@@ -15,20 +15,6 @@ import { AuthTokenService } from "../../src/modules/auth/auth-token-service.js";
 import { ExecutionEngine } from "../../src/modules/execution/engine.js";
 
 describe("approval routes (engine integration)", () => {
-  const originalFlag = process.env["TYRUM_ENGINE_API_ENABLED"];
-
-  beforeEach(() => {
-    process.env["TYRUM_ENGINE_API_ENABLED"] = "1";
-  });
-
-  afterEach(() => {
-    if (originalFlag === undefined) {
-      delete process.env["TYRUM_ENGINE_API_ENABLED"];
-    } else {
-      process.env["TYRUM_ENGINE_API_ENABLED"] = originalFlag;
-    }
-  });
-
   it("resumes an engine-scoped paused run when an approval is approved", async () => {
     const container = await createTestContainer();
     const authTokens = new AuthTokenService(container.db);

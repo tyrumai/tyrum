@@ -7,7 +7,7 @@ Tyrum supports two operator-visible deployment profiles:
 
 Storage behavior is controlled by a separate runtime state profile:
 
-- `state.mode=local`: mutable runtime state lives under `TYRUM_HOME`
+- `state.mode=local`: mutable runtime state lives under the gateway home (`~/.tyrum` by default; override with `--home`)
 - `state.mode=shared`: mutable runtime state moves to shared stores (DB / artifacts / shared secret source)
 
 Recommended mapping:
@@ -59,11 +59,14 @@ For HA/shared cutover from an existing local home:
 4. Provide one shared secret key source for all instances (for example `TYRUM_SHARED_MASTER_KEY_B64` or an equivalent external secret source).
 5. Recreate mutable runtime config in the shared DB-backed operator/config surfaces before switching traffic. There is no filesystem import command.
 
-In shared mode, mutable runtime state must not depend on `TYRUM_HOME`. Bundled read-only assets remain valid.
+In shared mode, mutable runtime state must not depend on the local gateway home. Bundled read-only assets remain valid.
 
 ## Kubernetes deployments (Helm)
 
 The repo ships a Helm chart in `charts/tyrum`.
+
+Helm bootstrap settings live under `runtime.*`. Environment variables under `env.*` only cover process env inputs that the runtime still consumes.
+After first boot, persistent server/execution/agent changes live under `/system/deployment-config`.
 
 ### Single-host
 
@@ -79,6 +82,6 @@ Split-role requires Postgres:
 helm install tyrum charts/tyrum -f config/deployments/helm-split-role.values.yaml
 ```
 
-Replace `REPLACE_ME` in `config/deployments/helm-split-role.values.yaml` with your Postgres password (or set `env.GATEWAY_DB_PATH` to your full Postgres URI).
+Replace `REPLACE_ME` in `config/deployments/helm-split-role.values.yaml` with your Postgres password (or set `runtime.db` to your full Postgres URI).
 
-Once `env.GATEWAY_DB_PATH` contains real credentials, treat the resulting Helm values as sensitive (avoid committing it; prefer an untracked values file or a secret manager workflow).
+Once `runtime.db` contains real credentials, treat the resulting Helm values as sensitive (avoid committing it; prefer an untracked values file or a secret manager workflow).

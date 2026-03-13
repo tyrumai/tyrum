@@ -46,7 +46,9 @@
   - `--migrations-dir` (override migrations directory for checks/tooling)
   - `--host` (default: `127.0.0.1`)
   - `--port` (default: `8788`)
-  - `--role` (`all|edge|worker|scheduler`)
+  - `--role` (`all|edge|worker|scheduler|desktop-runtime`)
+  - `--trusted-proxies`, `--tls-ready`, `--tls-self-signed`
+  - `--allow-insecure-http`, `--enable-engine-api`, `--enable-snapshot-import`
 
 ## Common commands
 
