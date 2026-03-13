@@ -257,7 +257,7 @@ function registerApprovalResumeTests(fixture: { db: () => SqliteDb }): void {
     expect(approvalMessages).toEqual([
       expect.objectContaining({
         message: expect.objectContaining({ type: "approval.updated" }),
-        audience: { roles: ["client"], required_scopes: ["operator.approvals"] },
+        audience: { roles: ["client"], required_scopes: ["operator.read", "operator.approvals"] },
       }),
     ]);
     const approvalDal = new ApprovalDal(db);

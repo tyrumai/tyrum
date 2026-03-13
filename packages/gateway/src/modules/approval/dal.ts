@@ -187,7 +187,8 @@ export class ApprovalDal {
     const workspaceId = params.workspaceId.trim();
     const approvalKey = params.approvalKey.trim();
     const prompt = params.prompt.trim();
-    const motivation = params.motivation.trim();
+    const kind = params.kind ?? "policy";
+    const motivation = (params.motivation ?? prompt).trim();
     if (!tenantId) throw new Error("tenantId is required");
     if (!agentId) throw new Error("agentId is required");
     if (!workspaceId) throw new Error("workspaceId is required");
@@ -228,7 +229,7 @@ export class ApprovalDal {
         approvalKey,
         agentId,
         workspaceId,
-        params.kind,
+        kind,
         params.status ?? "queued",
         prompt,
         motivation,
