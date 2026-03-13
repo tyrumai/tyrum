@@ -1,5 +1,4 @@
 import { Hono } from "hono";
-import { HTTPException } from "hono/http-exception";
 import {
   DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF,
   DesktopEnvironmentCreateRequest,
@@ -19,16 +18,13 @@ import {
   DesktopEnvironmentLifecycleUnavailableError,
   type DesktopEnvironmentLifecycle,
 } from "../modules/desktop-environments/lifecycle-service.js";
-import { requireAuthClaims, requireTenantId } from "../modules/auth/claims.js";
+import { requireOperatorAdminAccess, requireTenantId } from "../modules/auth/claims.js";
 
 const TRUSTED_TAKEOVER_HOSTNAMES = new Set(["127.0.0.1", "localhost", "[::1]"]);
 const TRUSTED_TAKEOVER_PATH = "/vnc.html";
 
 function requireAdmin(c: { get: (key: string) => unknown }): void {
-  const claims = requireAuthClaims(c);
-  if (claims.role !== "admin") {
-    throw new HTTPException(403, { message: "admin token required" });
-  }
+  requireOperatorAdminAccess(c);
 }
 
 function readTrustedTakeoverUrl(value: string | null): string | null {

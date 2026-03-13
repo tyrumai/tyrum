@@ -56,7 +56,7 @@ export function ModelPresetDialog({
 
   const submit = async (): Promise<void> => {
     if (!canMutate) {
-      throw new Error("Enter Elevated Mode to configure models.");
+      throw new Error("Authorize admin access to configure models.");
     }
     if (!state.displayName.trim()) {
       setErrorMessage("Display name is required.");

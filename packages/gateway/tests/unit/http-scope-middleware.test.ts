@@ -23,18 +23,24 @@ describe("HTTP scope middleware route mapping", () => {
     ]);
   });
 
-  it("maps approval surfaces to operator.approvals", () => {
+  it("maps approval reads to operator.read and mutations to operator.approvals", () => {
     expect(resolveHttpRouteRequiredScopes({ method: "GET", routePath: "/approvals" })).toEqual([
-      "operator.approvals",
+      "operator.read",
     ]);
+    expect(resolveHttpRouteRequiredScopes({ method: "HEAD", routePath: "/approvals/:id" })).toEqual(
+      ["operator.read"],
+    );
     expect(
       resolveHttpRouteRequiredScopes({ method: "POST", routePath: "/approvals/:id/respond" }),
     ).toEqual(["operator.approvals"]);
   });
 
-  it("maps pairing surfaces to operator.pairing", () => {
+  it("maps pairing reads to operator.read and mutations to operator.pairing", () => {
     expect(resolveHttpRouteRequiredScopes({ method: "GET", routePath: "/pairings" })).toEqual([
-      "operator.pairing",
+      "operator.read",
+    ]);
+    expect(resolveHttpRouteRequiredScopes({ method: "OPTIONS", routePath: "/pairings" })).toEqual([
+      "operator.read",
     ]);
     expect(
       resolveHttpRouteRequiredScopes({ method: "POST", routePath: "/pairings/:id/approve" }),

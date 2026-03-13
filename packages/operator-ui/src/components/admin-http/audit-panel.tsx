@@ -43,8 +43,8 @@ function filterPlans(plans: AuditPlanSummary[], rawFilter: string): AuditPlanSum
 
 export function AuditPanel({ core }: { core: OperatorCore }) {
   const { canMutate, requestEnter } = useAdminMutationAccess(core);
-  const http = useAdminHttpClient() ?? core.http;
-  const auditApi = http.audit ?? null;
+  const adminHttp = useAdminHttpClient({ access: "strict" });
+  const auditApi = adminHttp?.audit ?? null;
   const exportAction = useApiAction<AuditExportResult>();
   const forgetAction = useApiAction<AuditForgetResult>();
 
@@ -73,7 +73,8 @@ export function AuditPanel({ core }: { core: OperatorCore }) {
   }, [selectedPlanKey]);
 
   React.useEffect(() => {
-    if (!auditApi) {
+    const api = auditApi;
+    if (!api) {
       setPlans([]);
       setSelectedPlanKey(null);
       setPlansError(new Error("Audit API is unavailable."));
@@ -82,11 +83,11 @@ export function AuditPanel({ core }: { core: OperatorCore }) {
 
     let cancelled = false;
 
-    async function loadPlans(): Promise<void> {
+    async function loadPlans(apiClient: NonNullable<typeof api>): Promise<void> {
       setPlansLoading(true);
       setPlansError(null);
       try {
-        const result = await auditApi.listPlans({ limit: 100 });
+        const result = await apiClient.listPlans({ limit: 100 });
         if (cancelled) return;
         setPlans(result.plans);
         setSelectedPlanKey((current) => resolveSelectedPlanKey(result.plans, current));
@@ -100,7 +101,7 @@ export function AuditPanel({ core }: { core: OperatorCore }) {
       }
     }
 
-    void loadPlans();
+    void loadPlans(api);
 
     return () => {
       cancelled = true;
@@ -108,11 +109,12 @@ export function AuditPanel({ core }: { core: OperatorCore }) {
   }, [auditApi]);
 
   async function refreshPlans(): Promise<void> {
-    if (!auditApi) return;
+    const api = auditApi;
+    if (!api) return;
     setPlansLoading(true);
     setPlansError(null);
     try {
-      const result = await auditApi.listPlans({ limit: 100 });
+      const result = await api.listPlans({ limit: 100 });
       setPlans(result.plans);
       setSelectedPlanKey((current) => resolveSelectedPlanKey(result.plans, current));
     } catch (error) {
@@ -284,7 +286,7 @@ export function AuditPanel({ core }: { core: OperatorCore }) {
         onConfirm={async () => {
           if (!canMutate) {
             requestEnter();
-            throw new Error("Enter Elevated Mode to forget audit receipts.");
+            throw new Error("Authorize admin access to forget audit receipts.");
           }
           if (!selectedPlan) return;
           await forgetAction.run(

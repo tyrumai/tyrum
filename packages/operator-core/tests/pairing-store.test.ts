@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { ElevatedModeRequiredError } from "../src/elevated-mode.js";
 import { createPairingStore, type Pairing } from "../src/stores/pairing-store.js";
 
 function deferred<T>(): {
@@ -58,7 +59,7 @@ describe("pairing-store", () => {
       pairings: [pairing(1, "pending"), pairing(2, "approved")],
     });
 
-    const { store } = createPairingStore(http as never);
+    const { store } = createPairingStore({ http: http as never });
     await store.refresh();
 
     expect(store.getSnapshot()).toMatchObject({
@@ -79,7 +80,7 @@ describe("pairing-store", () => {
     const http = createHttp();
     http.pairings.list.mockImplementation(async () => await pending.promise);
 
-    const { store, handlePairingUpsert } = createPairingStore(http as never);
+    const { store, handlePairingUpsert } = createPairingStore({ http: http as never });
     const refreshPromise = store.refresh();
 
     handlePairingUpsert(pairing(3, "approved"));
@@ -96,7 +97,7 @@ describe("pairing-store", () => {
     const http = createHttp();
     http.pairings.list.mockRejectedValue(new Error("pairing list failed"));
 
-    const { store } = createPairingStore(http as never);
+    const { store } = createPairingStore({ http: http as never });
     await store.refresh();
 
     expect(store.getSnapshot()).toMatchObject({
@@ -111,7 +112,7 @@ describe("pairing-store", () => {
     http.pairings.deny.mockResolvedValue({ pairing: pairing(5, "denied") });
     http.pairings.revoke.mockResolvedValue({ pairing: pairing(6, "revoked") });
 
-    const { store } = createPairingStore(http as never);
+    const { store } = createPairingStore({ http: http as never });
 
     await expect(store.approve(4, { note: "looks good" })).resolves.toEqual(pairing(4, "approved"));
     await expect(store.deny(5, { reason: "mismatch" })).resolves.toEqual(pairing(5, "denied"));
@@ -126,5 +127,38 @@ describe("pairing-store", () => {
       5: pairing(5, "denied"),
       6: pairing(6, "revoked"),
     });
+  });
+
+  it("uses the privileged HTTP client for pairing mutations when provided", async () => {
+    const baselineHttp = createHttp();
+    const privilegedHttp = createHttp();
+    privilegedHttp.pairings.approve.mockResolvedValue({ pairing: pairing(7, "approved") });
+
+    const { store } = createPairingStore({
+      http: baselineHttp as never,
+      getPrivilegedHttp: () => privilegedHttp as never,
+    });
+
+    await expect(store.approve(7, { note: "approved via admin access" })).resolves.toEqual(
+      pairing(7, "approved"),
+    );
+
+    expect(privilegedHttp.pairings.approve).toHaveBeenCalledWith(7, {
+      note: "approved via admin access",
+    });
+    expect(baselineHttp.pairings.approve).not.toHaveBeenCalled();
+  });
+
+  it("requires admin access when pairing mutations are gated on a privileged HTTP client", async () => {
+    const http = createHttp();
+    const { store } = createPairingStore({
+      http: http as never,
+      getPrivilegedHttp: () => null,
+    });
+
+    await expect(store.approve(8, { note: "missing admin" })).rejects.toThrow(
+      ElevatedModeRequiredError,
+    );
+    expect(http.pairings.approve).not.toHaveBeenCalled();
   });
 });

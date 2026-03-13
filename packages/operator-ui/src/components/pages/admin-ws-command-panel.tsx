@@ -1,4 +1,4 @@
-import { isElevatedModeActive, type OperatorCore } from "@tyrum/operator-core";
+import type { OperatorCore } from "@tyrum/operator-core";
 import * as React from "react";
 import { useApiCallState } from "../../hooks/use-api-call-state.js";
 import { ElevatedModeTooltip } from "../elevated-mode/elevated-mode-tooltip.js";
@@ -6,7 +6,7 @@ import { ApiResultCard } from "../ui/api-result-card.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardFooter, CardHeader } from "../ui/card.js";
 import { Input } from "../ui/input.js";
-import { useAdminMutationAccess } from "./admin-http-shared.js";
+import { executeAdminWsCommand, useAdminMutationAccess } from "./admin-http-shared.js";
 
 export function AdminWsCommandPanel({ core }: { core: OperatorCore }): React.ReactElement {
   const { canMutate, requestEnter } = useAdminMutationAccess(core);
@@ -50,11 +50,11 @@ export function AdminWsCommandPanel({ core }: { core: OperatorCore }): React.Rea
                 return;
               }
               void action.run(async () => {
-                if (!isElevatedModeActive(core.elevatedModeStore.getSnapshot())) {
+                if (!canMutate) {
                   requestEnter();
-                  throw new Error("Enter Elevated Mode to run commands.");
+                  throw new Error("Authorize admin access to run commands.");
                 }
-                return await core.ws.commandExecute(trimmed);
+                return await executeAdminWsCommand({ core, command: trimmed });
               });
             }}
           >

@@ -20,6 +20,7 @@ import {
   buildReplacementAssignments,
   useAdminHttpClient,
   useAdminMutationAccess,
+  useAdminMutationHttpClient,
 } from "./admin-http-shared.js";
 
 function normalizeAssignments(assignments: Assignment[]): Assignment[] {
@@ -42,8 +43,8 @@ function normalizeAssignments(assignments: Assignment[]): Assignment[] {
 
 export function AdminHttpModelsPanel({ core }: { core: OperatorCore }): React.ReactElement {
   const { canMutate, requestEnter } = useAdminMutationAccess(core);
-  const mutationHttp = useAdminHttpClient() ?? core.http;
-  const readHttp = core.http;
+  const readHttp = useAdminHttpClient();
+  const mutationHttp = useAdminMutationHttpClient();
   const [presets, setPresets] = React.useState<ModelPreset[]>([]);
   const [availableModels, setAvailableModels] = React.useState<AvailableModel[]>([]);
   const [assignments, setAssignments] = React.useState<Assignment[]>([]);
@@ -139,6 +140,9 @@ export function AdminHttpModelsPanel({ core }: { core: OperatorCore }): React.Re
     setSavingAssignments(true);
     setExecutionProfilesErrorMessage(null);
     try {
+      if (!mutationHttp) {
+        throw new Error("Admin access is required to update model assignments.");
+      }
       await mutationHttp.modelConfig.updateAssignments({ assignments: assignmentDraft });
       await refresh(mutationHttp);
     } catch (error) {
@@ -150,6 +154,9 @@ export function AdminHttpModelsPanel({ core }: { core: OperatorCore }): React.Re
 
   const removePreset = async (): Promise<void> => {
     if (!deletingPreset) return;
+    if (!mutationHttp) {
+      throw new Error("Admin access is required to remove model presets.");
+    }
     const replacementAssignments = buildReplacementAssignments(
       deletingPreset.requiredExecutionProfileIds,
       deletingPreset.replacementAssignments,
@@ -229,22 +236,24 @@ export function AdminHttpModelsPanel({ core }: { core: OperatorCore }): React.Re
         requestEnter={requestEnter}
       />
 
-      <ModelPresetDialog
-        open={dialogOpen}
-        onOpenChange={(open) => {
-          setDialogOpen(open);
-          if (!open) {
-            setEditingPreset(null);
-          }
-        }}
-        preset={editingPreset}
-        availableModels={availableModels}
-        onSaved={async () => {
-          await refresh(mutationHttp);
-        }}
-        canMutate={canMutate}
-        api={mutationHttp.modelConfig}
-      />
+      {mutationHttp ? (
+        <ModelPresetDialog
+          open={dialogOpen}
+          onOpenChange={(open) => {
+            setDialogOpen(open);
+            if (!open) {
+              setEditingPreset(null);
+            }
+          }}
+          preset={editingPreset}
+          availableModels={availableModels}
+          onSaved={async () => {
+            await refresh(mutationHttp);
+          }}
+          canMutate={canMutate}
+          api={mutationHttp.modelConfig}
+        />
+      ) : null}
 
       <ConfirmDangerDialog
         open={deletingPreset !== null}

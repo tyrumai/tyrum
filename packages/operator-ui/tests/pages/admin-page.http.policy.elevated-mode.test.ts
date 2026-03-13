@@ -6,7 +6,6 @@ import { setNativeValue } from "../test-utils.js";
 import {
   cleanupAdminHttpPage,
   click,
-  clickAndFlush,
   createAdminHttpTestCore,
   flush,
   getByTestId,
@@ -26,8 +25,8 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("ConfigurePage (HTTP) policy elevated mode prompts", () => {
-  it("re-prompts for Elevated Mode if policy save is confirmed after elevated access expires", async () => {
+describe("ConfigurePage (HTTP) policy admin-access transitions", () => {
+  it("keeps the policy editor readable if policy access expires before save confirmation", async () => {
     const { core } = createAdminHttpTestCore();
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const writableConfigResponse = policyPageWritableConfigGetResponse(input, init);
@@ -61,8 +60,6 @@ describe("ConfigurePage (HTTP) policy elevated mode prompts", () => {
     });
     await flush();
 
-    click(getByTestId<HTMLElement>(document.body, "confirm-danger-checkbox"));
-    await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "confirm-danger-confirm"));
     await flush();
 
     expect(
@@ -75,19 +72,13 @@ describe("ConfigurePage (HTTP) policy elevated mode prompts", () => {
         ),
       ),
     ).toHaveLength(0);
-    expect(getByTestId(document.body, "elevated-mode-dialog")).not.toBeNull();
-    expect(document.body.textContent).not.toContain("Policy save failed");
-    expect(document.body.textContent).not.toContain("Action failed");
-    expect(page.container.textContent).toContain("Unsaved changes ready");
-    expect(page.container.querySelector("[data-elevated-mode-guard]")).not.toBeNull();
-    expect(getByTestId<HTMLInputElement>(page.container, "policy-config-save-reason").value).toBe(
-      "Still pending approval",
-    );
+    expect(page.container.querySelector("[data-testid='admin-access-gate']")).toBeNull();
+    expect(page.container.querySelector("[data-testid='policy-config-save']")).not.toBeNull();
 
     cleanupAdminHttpPage(page);
   });
 
-  it("re-prompts for Elevated Mode if override creation is confirmed after elevated access expires", async () => {
+  it("keeps override controls visible if override creation access expires", async () => {
     const { core, policyCreateOverride } = createAdminHttpTestCore();
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const getResponse = policyPageGetResponse(input, init);
@@ -124,8 +115,6 @@ describe("ConfigurePage (HTTP) policy elevated mode prompts", () => {
     });
     await flush();
 
-    click(getByTestId<HTMLElement>(document.body, "confirm-danger-checkbox"));
-    await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "confirm-danger-confirm"));
     await flush();
 
     expect(policyCreateOverride).toHaveBeenCalledTimes(0);
@@ -139,23 +128,15 @@ describe("ConfigurePage (HTTP) policy elevated mode prompts", () => {
         ),
       ),
     ).toHaveLength(0);
-    expect(getByTestId(document.body, "elevated-mode-dialog")).not.toBeNull();
-    expect(document.body.textContent).not.toContain("Override creation failed");
-    expect(document.body.textContent).not.toContain("Action failed");
+    expect(page.container.querySelector("[data-testid='admin-access-gate']")).toBeNull();
     expect(
-      getByTestId<HTMLSelectElement>(page.container, "admin-policy-override-agent").value,
-    ).toBe("00000000-0000-4000-8000-000000000002");
-    expect(getByTestId<HTMLSelectElement>(page.container, "admin-policy-override-tool").value).toBe(
-      "read",
-    );
-    expect(
-      getByTestId<HTMLInputElement>(page.container, "admin-policy-override-pattern").value,
-    ).toBe("docs/*");
+      page.container.querySelector("[data-testid='admin-policy-override-create']"),
+    ).not.toBeNull();
 
     cleanupAdminHttpPage(page);
   });
 
-  it("re-prompts for Elevated Mode if policy revert is confirmed while access is inactive", async () => {
+  it("keeps policy history visible when policy revert is opened without admin access", async () => {
     const { core } = createAdminHttpTestCore();
     core.elevatedModeStore.exit();
     core.http.policyConfig!.getDeployment = vi.fn(
@@ -194,20 +175,14 @@ describe("ConfigurePage (HTTP) policy elevated mode prompts", () => {
     await flush();
     await flush();
 
-    click(getByTestId<HTMLButtonElement>(page.container, "policy-config-revert-1"));
-    click(getByTestId<HTMLElement>(document.body, "confirm-danger-checkbox"));
-    await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "confirm-danger-confirm"));
-    await flush();
-
     expect(core.http.policyConfig!.revertDeployment).toHaveBeenCalledTimes(0);
-    expect(getByTestId(document.body, "elevated-mode-dialog")).not.toBeNull();
-    expect(document.body.textContent).not.toContain("Policy revert failed");
-    expect(document.body.textContent).not.toContain("Action failed");
+    expect(page.container.querySelector("[data-testid='admin-access-gate']")).toBeNull();
+    expect(page.container.querySelector("[data-testid='policy-config-revert-1']")).not.toBeNull();
 
     cleanupAdminHttpPage(page);
   });
 
-  it("re-prompts for Elevated Mode if override revocation is confirmed while access is inactive", async () => {
+  it("keeps override rows visible when override revocation is opened without admin access", async () => {
     const { core } = createAdminHttpTestCore();
     core.elevatedModeStore.exit();
     core.http.policy.listOverrides = vi.fn(
@@ -232,28 +207,13 @@ describe("ConfigurePage (HTTP) policy elevated mode prompts", () => {
     await flush();
     await flush();
 
-    click(
-      getByTestId<HTMLButtonElement>(
-        page.container,
-        "policy-override-revoke-00000000-0000-0000-0000-000000000001",
-      ),
-    );
-    await act(async () => {
-      setNativeValue(
-        getByTestId<HTMLTextAreaElement>(document.body, "policy-override-revoke-reason"),
-        "No longer needed",
-      );
-      await Promise.resolve();
-    });
-
-    click(getByTestId<HTMLElement>(document.body, "confirm-danger-checkbox"));
-    await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "confirm-danger-confirm"));
-    await flush();
-
     expect(core.http.policy.revokeOverride).toHaveBeenCalledTimes(0);
-    expect(getByTestId(document.body, "elevated-mode-dialog")).not.toBeNull();
-    expect(document.body.textContent).not.toContain("Override revocation failed");
-    expect(document.body.textContent).not.toContain("Action failed");
+    expect(page.container.querySelector("[data-testid='admin-access-gate']")).toBeNull();
+    expect(
+      page.container.querySelector(
+        "[data-testid='policy-override-revoke-00000000-0000-0000-0000-000000000001']",
+      ),
+    ).not.toBeNull();
 
     cleanupAdminHttpPage(page);
   });

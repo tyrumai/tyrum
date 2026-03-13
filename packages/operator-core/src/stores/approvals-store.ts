@@ -1,6 +1,7 @@
 import type { Approval } from "@tyrum/client";
 import type { PolicyOverride } from "@tyrum/schemas";
 import type { OperatorWsClient } from "../deps.js";
+import { ElevatedModeRequiredError } from "../elevated-mode.js";
 import { createStore, type ExternalStore } from "../store.js";
 
 export interface ApprovalsState {
@@ -35,6 +36,8 @@ export interface ResolveApprovalResult {
   createdOverrides?: PolicyOverride[];
 }
 
+type GetPrivilegedWsClient = () => OperatorWsClient | null;
+
 function upsertApproval(state: ApprovalsState, approval: Approval): ApprovalsState {
   const id = approval.approval_id;
   const byId = { ...state.byId, [id]: approval };
@@ -52,10 +55,61 @@ function upsertApproval(state: ApprovalsState, approval: Approval): ApprovalsSta
   return { ...state, byId, pendingIds };
 }
 
-export function createApprovalsStore(ws: OperatorWsClient): {
+async function withPrivilegedWsClient<T>(
+  getPrivilegedWs: GetPrivilegedWsClient,
+  fn: (ws: OperatorWsClient) => Promise<T>,
+): Promise<T> {
+  const ws = getPrivilegedWs();
+  if (!ws) {
+    throw new ElevatedModeRequiredError("Authorize admin access to resolve approvals.");
+  }
+
+  const alreadyConnected = ws.connected === true;
+  if (!alreadyConnected) {
+    await new Promise<void>((resolve, reject) => {
+      const onConnected = () => {
+        ws.off("connected", onConnected);
+        ws.off("disconnected", onDisconnected);
+        ws.off("transport_error", onTransportError);
+        resolve();
+      };
+      const onDisconnected = () => {
+        ws.off("connected", onConnected);
+        ws.off("disconnected", onDisconnected);
+        ws.off("transport_error", onTransportError);
+        reject(new Error("Admin approval connection closed before it became ready."));
+      };
+      const onTransportError = (event: { message: string }) => {
+        ws.off("connected", onConnected);
+        ws.off("disconnected", onDisconnected);
+        ws.off("transport_error", onTransportError);
+        reject(new Error(event.message));
+      };
+
+      ws.on("connected", onConnected);
+      ws.on("disconnected", onDisconnected);
+      ws.on("transport_error", onTransportError);
+      ws.connect();
+    });
+  }
+
+  try {
+    return await fn(ws);
+  } finally {
+    if (!alreadyConnected) {
+      ws.disconnect();
+    }
+  }
+}
+
+export function createApprovalsStore(options: {
+  ws: OperatorWsClient;
+  getPrivilegedWs?: GetPrivilegedWsClient;
+}): {
   store: ApprovalsStore;
   handleApprovalUpsert: (approval: Approval) => void;
 } {
+  const ws = options.ws;
   const { store, setState } = createStore<ApprovalsState>({
     byId: {},
     pendingIds: [],
@@ -120,13 +174,17 @@ export function createApprovalsStore(ws: OperatorWsClient): {
   }
 
   async function resolve(input: ResolveApprovalInput): Promise<ResolveApprovalResult> {
-    const result = await ws.approvalResolve({
-      approval_id: input.approvalId,
-      decision: input.decision,
-      reason: input.reason,
-      mode: input.mode,
-      overrides: input.overrides,
-    });
+    const resolveWithWs = async (client: OperatorWsClient) =>
+      await client.approvalResolve({
+        approval_id: input.approvalId,
+        decision: input.decision,
+        reason: input.reason,
+        mode: input.mode,
+        overrides: input.overrides,
+      });
+    const result = options.getPrivilegedWs
+      ? await withPrivilegedWsClient(options.getPrivilegedWs, resolveWithWs)
+      : await resolveWithWs(ws);
     const approval = result.approval;
     handleApprovalUpsert(approval);
     return {

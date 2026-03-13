@@ -98,7 +98,7 @@ export function TelegramChannelCard({
     }
     if (!canMutate) {
       requestEnter();
-      throw new Error("Enter Elevated Mode to change channel settings.");
+      throw new Error("Authorize admin access to change channel settings.");
     }
     if (validationError) {
       throw new Error(validationError);
@@ -310,7 +310,7 @@ export function CreateChannelDialog({
     }
     if (!canMutate) {
       requestEnter();
-      throw new Error("Enter Elevated Mode to add a channel.");
+      throw new Error("Authorize admin access to add a channel.");
     }
     if (validationError) {
       throw new Error(validationError);

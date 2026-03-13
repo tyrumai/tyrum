@@ -39,7 +39,7 @@ export function ElevatedModeTooltip({
             </span>
           </span>
         </TooltipTrigger>
-        <TooltipContent side="top">Elevated Mode required</TooltipContent>
+        <TooltipContent side="top">Admin access required</TooltipContent>
       </Tooltip>
     </TooltipProvider>
   );

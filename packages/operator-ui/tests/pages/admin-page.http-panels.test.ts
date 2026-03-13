@@ -54,38 +54,30 @@ describe("ConfigurePage (strict admin tabs)", () => {
     }
   });
 
-  it("keeps admin mutations disabled outside Elevated Mode", async () => {
+  it("keeps mixed admin tabs readable outside admin mode while gating token management", async () => {
     const { core } = createPanelsCore(false);
     const testRoot = renderStrictAdminConfigurePage(core);
 
     try {
       await switchAdminTab(testRoot.container, "admin-http-tab-gateway");
-      const issueButton = testRoot.container.querySelector<HTMLButtonElement>(
-        "[data-testid='admin-http-tokens-issue']",
-      );
-      expect(issueButton).not.toBeNull();
-      expect(issueButton?.closest("[data-elevated-mode-guard]")).not.toBeNull();
+      expect(
+        testRoot.container.querySelector("[data-testid='admin-http-tokens-issue']"),
+      ).toBeNull();
+      expect(testRoot.container.querySelector("[data-testid='admin-access-gate']")).not.toBeNull();
 
       await switchAdminTab(testRoot.container, "admin-http-tab-providers");
-      const addProviderButton = testRoot.container.querySelector<HTMLButtonElement>(
-        "[data-testid='providers-add-open']",
-      );
-      expect(addProviderButton).not.toBeNull();
-      expect(addProviderButton?.closest("[data-elevated-mode-guard]")).not.toBeNull();
+      expect(testRoot.container.querySelector("[data-testid='providers-add-open']")).not.toBeNull();
+      expect(testRoot.container.querySelector("[data-testid='admin-access-gate']")).toBeNull();
 
       await switchAdminTab(testRoot.container, "admin-http-tab-models");
-      const addModelButton = testRoot.container.querySelector<HTMLButtonElement>(
-        "[data-testid='models-add-open']",
-      );
-      expect(addModelButton).not.toBeNull();
-      expect(addModelButton?.closest("[data-elevated-mode-guard]")).not.toBeNull();
+      expect(testRoot.container.querySelector("[data-testid='models-add-open']")).not.toBeNull();
+      expect(testRoot.container.querySelector("[data-testid='admin-access-gate']")).toBeNull();
 
       await switchAdminTab(testRoot.container, "admin-http-tab-policy");
-      const createOverrideButton = testRoot.container.querySelector<HTMLButtonElement>(
-        "[data-testid='admin-policy-override-create']",
-      );
-      expect(createOverrideButton).not.toBeNull();
-      expect(createOverrideButton?.closest("[data-elevated-mode-guard]")).not.toBeNull();
+      expect(
+        testRoot.container.querySelector("[data-testid='admin-policy-override-create']"),
+      ).not.toBeNull();
+      expect(testRoot.container.querySelector("[data-testid='admin-access-gate']")).toBeNull();
     } finally {
       cleanupTestRoot(testRoot);
     }

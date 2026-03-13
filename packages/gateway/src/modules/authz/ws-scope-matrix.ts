@@ -7,7 +7,9 @@
 
 export function resolveWsRequestRequiredScopes(type: string): string[] | null {
   switch (type) {
-    case "approval.list":
+    case "approval.list": {
+      return ["operator.read"];
+    }
     case "approval.resolve": {
       return ["operator.approvals"];
     }

@@ -12,10 +12,10 @@ import {
   httpAuthForAuth,
 } from "@tyrum/operator-core/browser";
 import {
+  createAdminAccessController,
   OperatorUiApp,
   OperatorUiHostProvider,
-  createPersistentElevatedModeController,
-  type ElevatedModeController,
+  type AdminAccessController,
 } from "@tyrum/operator-ui";
 import "@tyrum/operator-ui/globals.css";
 import { reloadPage } from "./reload-page.js";
@@ -90,7 +90,7 @@ async function bootstrap(): Promise<void> {
       });
     },
   });
-  const elevatedModeController: ElevatedModeController = createPersistentElevatedModeController({
+  const adminAccessController: AdminAccessController = createAdminAccessController({
     http: baselineHttp,
     deviceId: deviceIdentity.deviceId,
     elevatedModeStore,
@@ -108,7 +108,7 @@ async function bootstrap(): Promise<void> {
           <OperatorUiApp
             core={manager.getCore()}
             mode="web"
-            elevatedModeController={elevatedModeController}
+            adminAccessController={adminAccessController}
             onReloadPage={reloadPage}
             onReconfigureGateway={(httpUrl, wsUrl) => {
               try {

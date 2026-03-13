@@ -4,7 +4,11 @@ import { Blocks, RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useApiAction } from "../../hooks/use-api-action.js";
 import { AppPage } from "../layout/app-page.js";
-import { useAdminHttpClient, useAdminMutationAccess } from "./admin-http-shared.js";
+import {
+  AdminMutationGate,
+  useAdminHttpClient,
+  useAdminMutationAccess,
+} from "./admin-http-shared.js";
 import {
   ExtensionCard,
   ImportGuard,
@@ -37,12 +41,19 @@ export function ExtensionsPage({ core }: { core: OperatorCore }) {
   const [refreshNonce, setRefreshNonce] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
-  const adminHttp = useAdminHttpClient();
-  const mutationHttp = adminHttp ?? core.http;
-  const extensionsApi = core.http.extensions;
+  const adminHttp = useAdminHttpClient({ access: "strict" });
+  const mutationHttp = adminHttp;
+  const extensionsApi = adminHttp?.extensions;
   const { canMutate, requestEnter } = useAdminMutationAccess(core);
   const mutation = useApiAction<ManagedExtensionDetail>();
   const scrollAreaRef = useReconnectScrollArea(`extensions:${tab}:page`);
+
+  function requireExtensionsMutationApi() {
+    if (!mutationHttp?.extensions) {
+      throw new Error("Admin access is required to manage extensions.");
+    }
+    return mutationHttp.extensions;
+  }
 
   useEffect(() => {
     if (!extensionsApi) return;
@@ -80,15 +91,10 @@ export function ExtensionsPage({ core }: { core: OperatorCore }) {
   const loadingKey = mutation.state.status === "loading" ? selectedKey : null;
   const sortedItems = useMemo(() => sortExtensions(items[tab]), [items, tab]);
 
-  if (!extensionsApi || !mutationHttp.extensions) {
-    return (
-      <AppPage contentClassName="max-w-5xl gap-4">
-        <Alert variant="error" title="Extensions API unavailable" />
-      </AppPage>
-    );
-  }
-
   async function refreshListsAndSelect(nextKind: ExtensionKind, key?: string): Promise<void> {
+    if (!extensionsApi || !mutationHttp?.extensions) {
+      throw new Error("Admin access is required to manage extensions.");
+    }
     const [list, detail] = await Promise.all([
       extensionsApi.list(nextKind),
       key ? mutationHttp.extensions.get(nextKind, key) : Promise.resolve(undefined),
@@ -106,7 +112,10 @@ export function ExtensionsPage({ core }: { core: OperatorCore }) {
   function inspect(kind: ExtensionKind, key: string): void {
     setSelectedKey(key);
     void mutation.run(async () => {
-      const response = await mutationHttp.extensions!.get(kind, key);
+      if (!mutationHttp?.extensions) {
+        throw new Error("Admin access is required to inspect extensions.");
+      }
+      const response = await mutationHttp.extensions.get(kind, key);
       setDetailByKey((current) => ({ ...current, [key]: response.item }));
       return response.item;
     });
@@ -149,7 +158,7 @@ export function ExtensionsPage({ core }: { core: OperatorCore }) {
                 kind,
                 item.key,
                 async () =>
-                  await mutationHttp.extensions!.toggle(kind, item.key, {
+                  await mutationHttp!.extensions!.toggle(kind, item.key, {
                     enabled: !item.enabled,
                   }),
               );
@@ -159,7 +168,7 @@ export function ExtensionsPage({ core }: { core: OperatorCore }) {
               mutateItem(
                 kind,
                 item.key,
-                async () => await mutationHttp.extensions!.refresh(kind, item.key),
+                async () => await mutationHttp!.extensions!.refresh(kind, item.key),
               );
             }}
             onRevert={(revision) => {
@@ -167,7 +176,7 @@ export function ExtensionsPage({ core }: { core: OperatorCore }) {
               mutateItem(
                 kind,
                 item.key,
-                async () => await mutationHttp.extensions!.revert(kind, item.key, { revision }),
+                async () => await mutationHttp!.extensions!.revert(kind, item.key, { revision }),
               );
             }}
           />
@@ -215,68 +224,77 @@ export function ExtensionsPage({ core }: { core: OperatorCore }) {
         </CardContent>
       </Card>
 
-      <ImportGuard canMutate={canMutate} requestEnter={requestEnter}>
-        {tabToKind(tab) === "skill" ? (
-          <SkillImportPanel
-            disabled={!canMutate}
-            isLoading={mutation.isLoading}
-            onImportUrl={(url) => {
-              void mutation.run(async () => {
-                const response = await mutationHttp.extensions!.importSkill({ url });
-                await refreshListsAndSelect("skill", response.item.key);
-                return response.item;
-              });
-            }}
-            onUpload={(file) => {
-              void mutation.run(async () => {
-                const response = await mutationHttp.extensions!.uploadSkill({
-                  filename: file.name,
-                  content_type: file.type || undefined,
-                  content_base64: await encodeFileToBase64(file),
+      {adminHttp ? (
+        <ImportGuard canMutate={canMutate} requestEnter={requestEnter}>
+          {tabToKind(tab) === "skill" ? (
+            <SkillImportPanel
+              disabled={!canMutate}
+              isLoading={mutation.isLoading}
+              onImportUrl={(url) => {
+                void mutation.run(async () => {
+                  const response = await requireExtensionsMutationApi().importSkill({ url });
+                  await refreshListsAndSelect("skill", response.item.key);
+                  return response.item;
                 });
-                await refreshListsAndSelect("skill", response.item.key);
-                return response.item;
-              });
-            }}
-          />
-        ) : (
-          <McpImportPanel
-            disabled={!canMutate}
-            isLoading={mutation.isLoading}
-            onImportRemote={(url) => {
-              void mutation.run(async () => {
-                const response = await mutationHttp.extensions!.importMcp({
-                  source: "direct-url",
-                  url,
+              }}
+              onUpload={(file) => {
+                void mutation.run(async () => {
+                  const response = await requireExtensionsMutationApi().uploadSkill({
+                    filename: file.name,
+                    content_type: file.type || undefined,
+                    content_base64: await encodeFileToBase64(file),
+                  });
+                  await refreshListsAndSelect("skill", response.item.key);
+                  return response.item;
                 });
-                await refreshListsAndSelect("mcp", response.item.key);
-                return response.item;
-              });
-            }}
-            onImportNpm={(npmSpec) => {
-              void mutation.run(async () => {
-                const response = await mutationHttp.extensions!.importMcp({
-                  source: "npm",
-                  npm_spec: npmSpec,
+              }}
+            />
+          ) : (
+            <McpImportPanel
+              disabled={!canMutate}
+              isLoading={mutation.isLoading}
+              onImportRemote={(url) => {
+                void mutation.run(async () => {
+                  const response = await requireExtensionsMutationApi().importMcp({
+                    source: "direct-url",
+                    url,
+                  });
+                  await refreshListsAndSelect("mcp", response.item.key);
+                  return response.item;
                 });
-                await refreshListsAndSelect("mcp", response.item.key);
-                return response.item;
-              });
-            }}
-            onUpload={(file) => {
-              void mutation.run(async () => {
-                const response = await mutationHttp.extensions!.uploadMcp({
-                  filename: file.name,
-                  content_type: file.type || undefined,
-                  content_base64: await encodeFileToBase64(file),
+              }}
+              onImportNpm={(npmSpec) => {
+                void mutation.run(async () => {
+                  const response = await requireExtensionsMutationApi().importMcp({
+                    source: "npm",
+                    npm_spec: npmSpec,
+                  });
+                  await refreshListsAndSelect("mcp", response.item.key);
+                  return response.item;
                 });
-                await refreshListsAndSelect("mcp", response.item.key);
-                return response.item;
-              });
-            }}
-          />
-        )}
-      </ImportGuard>
+              }}
+              onUpload={(file) => {
+                void mutation.run(async () => {
+                  const response = await requireExtensionsMutationApi().uploadMcp({
+                    filename: file.name,
+                    content_type: file.type || undefined,
+                    content_base64: await encodeFileToBase64(file),
+                  });
+                  await refreshListsAndSelect("mcp", response.item.key);
+                  return response.item;
+                });
+              }}
+            />
+          )}
+        </ImportGuard>
+      ) : (
+        <AdminMutationGate
+          core={core}
+          description="Authorizing admin access loads extension inventories and enables import, toggle, refresh, and revert actions."
+        >
+          {null}
+        </AdminMutationGate>
+      )}
 
       {mutation.state.status === "error" ? (
         <Alert
@@ -286,24 +304,26 @@ export function ExtensionsPage({ core }: { core: OperatorCore }) {
         />
       ) : null}
 
-      <Tabs
-        value={tab}
-        onValueChange={(value) => setTab(value as ExtensionsTab)}
-        className="grid gap-3"
-      >
-        <TabsList className="flex-wrap">
-          <TabsTrigger value="skills">Skills</TabsTrigger>
-          <TabsTrigger value="mcp">MCP Servers</TabsTrigger>
-        </TabsList>
+      {adminHttp ? (
+        <Tabs
+          value={tab}
+          onValueChange={(value) => setTab(value as ExtensionsTab)}
+          className="grid gap-3"
+        >
+          <TabsList className="flex-wrap">
+            <TabsTrigger value="skills">Skills</TabsTrigger>
+            <TabsTrigger value="mcp">MCP Servers</TabsTrigger>
+          </TabsList>
 
-        <TabsContent value="skills" className="grid gap-3">
-          {renderExtensionList("skill", "No managed skills yet.")}
-        </TabsContent>
+          <TabsContent value="skills" className="grid gap-3">
+            {renderExtensionList("skill", "No managed skills yet.")}
+          </TabsContent>
 
-        <TabsContent value="mcp" className="grid gap-3">
-          {renderExtensionList("mcp", "No managed MCP servers yet.")}
-        </TabsContent>
-      </Tabs>
+          <TabsContent value="mcp" className="grid gap-3">
+            {renderExtensionList("mcp", "No managed MCP servers yet.")}
+          </TabsContent>
+        </Tabs>
+      ) : null}
     </AppPage>
   );
 }

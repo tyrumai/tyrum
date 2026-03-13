@@ -11,6 +11,7 @@ import { AdminHttpPolicyAuthPanels } from "./admin-http-policy-auth-panels.js";
 import { AdminHttpRoutingConfigPanel } from "./admin-http-routing-config.js";
 import { AdminHttpSecretsPanel } from "./admin-http-secrets.js";
 import { AdminWsCommandPanel } from "./admin-ws-command-panel.js";
+import { AdminMutationGate } from "./admin-http-shared.js";
 import { ConfigureGeneralPanel } from "./configure-general-panel.js";
 import { ThemeProvider, useThemeOptional } from "../../hooks/use-theme.js";
 import { useReconnectScrollArea, useReconnectTabState } from "../../reconnect-ui-state.js";
@@ -105,7 +106,9 @@ function ConfigurePageContent({ core }: ConfigurePageProps) {
         </TabsContent>
 
         <TabsContent value="audit">
-          <AuditPanel core={core} />
+          <AdminMutationGate core={core}>
+            <AuditPanel core={core} />
+          </AdminMutationGate>
         </TabsContent>
 
         <TabsContent value="routing-config">
@@ -125,11 +128,15 @@ function ConfigurePageContent({ core }: ConfigurePageProps) {
         </TabsContent>
 
         <TabsContent value="device-tokens">
-          <AuthTokensCard core={core} />
+          <AdminMutationGate core={core}>
+            <AuthTokensCard core={core} />
+          </AdminMutationGate>
         </TabsContent>
 
         <TabsContent value="commands">
-          <AdminWsCommandPanel core={core} />
+          <AdminMutationGate core={core}>
+            <AdminWsCommandPanel core={core} />
+          </AdminMutationGate>
         </TabsContent>
       </Tabs>
     </AppPage>

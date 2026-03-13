@@ -145,6 +145,59 @@ describe("Auth integration", () => {
       const body = (await res.json()) as { error?: string };
       expect(body.error).toBe("forbidden");
     });
+
+    it("authorizes approval and pairing reads with an operator.read device token", async () => {
+      const issued = await authTokens.issueToken({
+        tenantId: DEFAULT_TENANT_ID,
+        role: "client",
+        scopes: ["operator.read"],
+        deviceId: "dev_client_1",
+        ttlSeconds: 300,
+      });
+
+      const approvalsRes = await requestUnauthenticated("/approvals", {
+        headers: { Authorization: `Bearer ${issued.token}` },
+      });
+      expect(approvalsRes.status).toBe(200);
+
+      const pairingsRes = await requestUnauthenticated("/pairings", {
+        headers: { Authorization: `Bearer ${issued.token}` },
+      });
+      expect(pairingsRes.status).toBe(200);
+    });
+
+    it("forbids approval and pairing mutations with a read-only device token", async () => {
+      const issued = await authTokens.issueToken({
+        tenantId: DEFAULT_TENANT_ID,
+        role: "client",
+        scopes: ["operator.read"],
+        deviceId: "dev_client_1",
+        ttlSeconds: 300,
+      });
+
+      const approvalsRes = await requestUnauthenticated(
+        "/approvals/00000000-0000-4000-8000-000000000001/respond",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${issued.token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ decision: "approved" }),
+        },
+      );
+      expect(approvalsRes.status).toBe(403);
+
+      const pairingsRes = await requestUnauthenticated("/pairings/1/approve", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${issued.token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ trust_level: "remote", capability_allowlist: [] }),
+      });
+      expect(pairingsRes.status).toBe(403);
+    });
   });
 
   describe("localhost bind (auth still enforced)", () => {

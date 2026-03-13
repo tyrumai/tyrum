@@ -1,31 +1,30 @@
 import {
   TyrumClient,
   createTyrumHttpClient,
-  type DeviceIdentity,
-  type ClientCapability,
   type ExecutionAttempt,
   type ExecutionRun,
   type ExecutionStep,
   type TyrumClientEvents,
 } from "@tyrum/client/browser";
-import { httpAuthForAuth, wsTokenForAuth, type OperatorAuthStrategy } from "./auth.js";
+import { httpAuthForAuth, wsTokenForAuth } from "./auth.js";
 import type { OperatorHttpClient, OperatorWsClient } from "./deps.js";
-import type { Unsubscribe } from "./store.js";
-import { createApprovalsStore, type ApprovalsStore } from "./stores/approvals-store.js";
-import { createConnectionStore, type ConnectionStore } from "./stores/connection-store.js";
-import { createPairingStore, type Pairing, type PairingStore } from "./stores/pairing-store.js";
-import { createRunsStore, type RunsStore } from "./stores/runs-store.js";
-import { createElevatedModeStore, type ElevatedModeStore } from "./stores/elevated-mode-store.js";
 import {
-  createStatusStore,
-  type OperatorPresenceEntry,
-  type StatusStore,
-} from "./stores/status-store.js";
-import { createChatStore, type ChatStore } from "./stores/chat-store.js";
-import { createAutoSyncManager, type AutoSyncState, type AutoSyncTask } from "./auto-sync.js";
-import { createWorkboardStore, type WorkboardStore } from "./stores/workboard-store.js";
-import { createAgentStatusStore, type AgentStatusStore } from "./stores/agent-status-store.js";
-import { createActivityStore, type ActivityStore } from "./stores/activity-store.js";
+  createPrivilegedHttpClientFactory,
+  createPrivilegedWsClientFactory,
+} from "./operator-core.privileged-clients.js";
+import type { OperatorCore, OperatorCoreOptions } from "./operator-core.types.js";
+import type { Unsubscribe } from "./store.js";
+import { createApprovalsStore } from "./stores/approvals-store.js";
+import { createConnectionStore } from "./stores/connection-store.js";
+import { createPairingStore, type Pairing } from "./stores/pairing-store.js";
+import { createRunsStore } from "./stores/runs-store.js";
+import { createElevatedModeStore } from "./stores/elevated-mode-store.js";
+import { createStatusStore, type OperatorPresenceEntry } from "./stores/status-store.js";
+import { createChatStore } from "./stores/chat-store.js";
+import { createAutoSyncManager, type AutoSyncTask } from "./auto-sync.js";
+import { createWorkboardStore } from "./stores/workboard-store.js";
+import { createAgentStatusStore } from "./stores/agent-status-store.js";
+import { createActivityStore } from "./stores/activity-store.js";
 import {
   readClientId,
   readDisconnect,
@@ -33,60 +32,24 @@ import {
   readReconnectSchedule,
   readTransportMessage,
 } from "./operator-core.transport-helpers.js";
-import {
-  createDesktopEnvironmentHostsStore,
-  type DesktopEnvironmentHostsStore,
-} from "./stores/desktop-environment-hosts-store.js";
-import {
-  createDesktopEnvironmentsStore,
-  type DesktopEnvironmentsStore,
-} from "./stores/desktop-environments-store.js";
+import { createDesktopEnvironmentHostsStore } from "./stores/desktop-environment-hosts-store.js";
+import { createDesktopEnvironmentsStore } from "./stores/desktop-environments-store.js";
 import { registerActivityWsHandlers } from "./operator-core.activity-events.js";
 import { readOccurredAt, readPayload } from "./operator-core.event-helpers.js";
 import type { Approval, WorkItem } from "@tyrum/schemas";
 import type { WorkTaskEvent } from "./workboard/workboard-utils.js";
-
-export interface OperatorCoreOptions {
-  wsUrl: string;
-  httpBaseUrl: string;
-  auth: OperatorAuthStrategy;
-  capabilities?: ClientCapability[];
-  deviceIdentity?: DeviceIdentity;
-  elevatedModeStore?: ElevatedModeStore;
-  deps?: {
-    ws?: OperatorWsClient;
-    http?: Partial<OperatorHttpClient>;
-  };
-}
-
-export interface OperatorCore {
-  wsUrl: string;
-  httpBaseUrl: string;
-  deviceId?: string | null;
-  ws: OperatorWsClient;
-  http: OperatorHttpClient;
-  elevatedModeStore: ElevatedModeStore;
-  connectionStore: ConnectionStore;
-  autoSyncStore: import("./store.js").ExternalStore<AutoSyncState>;
-  approvalsStore: ApprovalsStore;
-  runsStore: RunsStore;
-  pairingStore: PairingStore;
-  statusStore: StatusStore;
-  workboardStore: WorkboardStore;
-  agentStatusStore: AgentStatusStore;
-  desktopEnvironmentHostsStore: DesktopEnvironmentHostsStore;
-  desktopEnvironmentsStore: DesktopEnvironmentsStore;
-  chatStore: ChatStore;
-  activityStore: ActivityStore;
-  syncAllNow(): Promise<void>;
-  connect(): void;
-  disconnect(): void;
-  dispose(): void;
-}
+export type { OperatorCore, OperatorCoreOptions } from "./operator-core.types.js";
 
 export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
   const elevatedModeStore = options.elevatedModeStore ?? createElevatedModeStore();
   const elevatedModeStoreOwned = options.elevatedModeStore === undefined;
+  const createPrivilegedWs =
+    options.deps?.createPrivilegedWs ??
+    createPrivilegedWsClientFactory({
+      wsUrl: options.wsUrl,
+      deviceIdentity: options.deviceIdentity,
+      elevatedModeStore,
+    });
 
   const ws: OperatorWsClient =
     options.deps?.ws ??
@@ -110,10 +73,13 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
   const http: OperatorHttpClient = options.deps?.http
     ? { ...baseHttp, ...options.deps.http }
     : baseHttp;
+  const createPrivilegedHttp =
+    options.deps?.createPrivilegedHttp ??
+    createPrivilegedHttpClientFactory({ httpBaseUrl: options.httpBaseUrl, elevatedModeStore });
 
   const connection = createConnectionStore(ws);
-  const approvals = createApprovalsStore(ws);
-  const pairing = createPairingStore(http);
+  const approvals = createApprovalsStore({ ws, getPrivilegedWs: createPrivilegedWs });
+  const pairing = createPairingStore({ http, getPrivilegedHttp: createPrivilegedHttp });
   const status = createStatusStore(http);
   const runs = createRunsStore(ws);
   const chat = createChatStore(ws, http);

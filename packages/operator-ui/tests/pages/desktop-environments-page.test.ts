@@ -1,20 +1,56 @@
 // @vitest-environment jsdom
 
 import React, { act } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF } from "@tyrum/schemas";
 import { createBearerTokenAuth, createOperatorCore } from "../../../operator-core/src/index.js";
 import { DesktopEnvironmentsPage } from "../../src/components/pages/desktop-environments-page.js";
 import { cleanupTestRoot, click, renderIntoDocument } from "../test-utils.js";
 import { FakeWsClient, createFakeHttpClient } from "../operator-ui.test-fixtures.js";
 
-vi.mock("../../src/components/pages/admin-http-shared.js", () => ({
-  useAdminHttpClient: () => null,
-  useAdminMutationAccess: () => ({
-    canMutate: true,
-    requestEnter: vi.fn(),
-  }),
-}));
+let adminHttpClient: ReturnType<typeof createFakeHttpClient>["http"] | null = null;
+let canMutate = true;
+const requestEnter = vi.fn();
+
+vi.mock("../../src/components/pages/admin-http-shared.js", async () => {
+  const ReactModule = await import("react");
+
+  return {
+    useAdminHttpClient: () => adminHttpClient,
+    useAdminMutationAccess: () => ({
+      canMutate,
+      requestEnter,
+    }),
+    AdminMutationGate: ({
+      children,
+      title = "Authorize admin access to continue",
+      description = "Admin access required.",
+    }: {
+      children?: React.ReactNode;
+      title?: string;
+      description?: string;
+    }) =>
+      canMutate
+        ? ReactModule.createElement(ReactModule.Fragment, null, children)
+        : ReactModule.createElement(
+            "div",
+            { "data-testid": "admin-access-gate" },
+            ReactModule.createElement("div", null, title),
+            ReactModule.createElement("div", null, description),
+            ReactModule.createElement(
+              "button",
+              {
+                type: "button",
+                "data-testid": "admin-access-enter",
+                onClick: () => {
+                  requestEnter();
+                },
+              },
+              "Authorize admin access",
+            ),
+          ),
+  };
+});
 
 async function flushPage(): Promise<void> {
   await act(async () => {
@@ -56,8 +92,22 @@ function createEnvironment(overrides: Partial<Record<string, unknown>> = {}) {
   } as const;
 }
 
+beforeEach(() => {
+  adminHttpClient = null;
+  canMutate = true;
+  requestEnter.mockReset();
+});
+
+afterEach(() => {
+  adminHttpClient = null;
+  canMutate = true;
+  requestEnter.mockReset();
+});
+
 describe("DesktopEnvironmentsPage", () => {
-  it("renders managed hosts and a gateway takeover link", async () => {
+  it("prompts for admin access before loading desktop environments", async () => {
+    canMutate = false;
+
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
     const core = createOperatorCore({
@@ -66,13 +116,59 @@ describe("DesktopEnvironmentsPage", () => {
       auth: createBearerTokenAuth("test"),
       deps: { ws, http },
     });
+    const hostListCallsBeforeRender = http.desktopEnvironmentHosts.list.mock.calls.length;
+    const environmentListCallsBeforeRender = http.desktopEnvironments.list.mock.calls.length;
+    const testRoot = renderIntoDocument(React.createElement(DesktopEnvironmentsPage, { core }));
+    await flushPage();
 
+    expect(testRoot.container.textContent).toContain(
+      "Authorize admin access to load desktop environments",
+    );
+    expect(http.desktopEnvironmentHosts.list.mock.calls.length).toBeGreaterThanOrEqual(
+      hostListCallsBeforeRender,
+    );
+    expect(http.desktopEnvironments.list.mock.calls.length).toBeGreaterThanOrEqual(
+      environmentListCallsBeforeRender,
+    );
+
+    const enterButton = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="admin-access-enter"]',
+    );
+    expect(enterButton).not.toBeNull();
+    await act(async () => {
+      click(enterButton!);
+    });
+    expect(requestEnter).toHaveBeenCalledTimes(1);
+
+    cleanupTestRoot(testRoot);
+    core.dispose();
+  });
+
+  it("renders managed hosts and a gateway takeover link via admin http", async () => {
+    const ws = new FakeWsClient();
+    const { http } = createFakeHttpClient();
+    adminHttpClient = http;
+
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test"),
+      deps: { ws, http },
+    });
+    const hostListCallsBeforeRender = http.desktopEnvironmentHosts.list.mock.calls.length;
+    const environmentListCallsBeforeRender = http.desktopEnvironments.list.mock.calls.length;
     const testRoot = renderIntoDocument(React.createElement(DesktopEnvironmentsPage, { core }));
     await flushPage();
 
     expect(testRoot.container.textContent).toContain("Gateway-managed desktop environments");
     expect(testRoot.container.textContent).toContain("Primary runtime");
     expect(testRoot.container.textContent).toContain("Research desktop");
+    expect(http.desktopEnvironmentHosts.list.mock.calls.length).toBeGreaterThanOrEqual(
+      hostListCallsBeforeRender + 1,
+    );
+    expect(http.desktopEnvironments.list.mock.calls.length).toBeGreaterThanOrEqual(
+      environmentListCallsBeforeRender + 1,
+    );
 
     const takeoverLink = testRoot.container.querySelector<HTMLAnchorElement>(
       '[data-testid="desktop-environment-takeover-env-1"]',
@@ -83,16 +179,17 @@ describe("DesktopEnvironmentsPage", () => {
     core.dispose();
   });
 
-  it("invokes desktop environment create, start, logs, and delete actions", async () => {
+  it("invokes desktop environment create, start, logs, and delete actions via admin http", async () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
+    adminHttpClient = http;
+
     const core = createOperatorCore({
       wsUrl: "ws://example.test/ws",
       httpBaseUrl: "http://example.test",
       auth: createBearerTokenAuth("test"),
       deps: { ws, http },
     });
-
     const testRoot = renderIntoDocument(React.createElement(DesktopEnvironmentsPage, { core }));
     await flushPage();
 
@@ -160,6 +257,8 @@ describe("DesktopEnvironmentsPage", () => {
 
     const ws = new FakeWsClient(false);
     const { http } = createFakeHttpClient();
+    adminHttpClient = http;
+
     http.desktopEnvironments.list
       .mockResolvedValueOnce({
         status: "ok",
@@ -218,6 +317,7 @@ describe("DesktopEnvironmentsPage", () => {
       await Promise.resolve();
       await Promise.resolve();
     });
+
     await waitForAssertion(() => {
       expect(
         testRoot.container.querySelector('[data-testid="desktop-environment-logs-button-env-2"]'),

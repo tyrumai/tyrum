@@ -12,7 +12,7 @@ import { PairingPage } from "../../../packages/operator-ui/src/components/pages/
 import { BrowserCapabilitiesPage } from "../../../packages/operator-ui/src/components/pages/platform/browser-capabilities-page.js";
 import { WorkBoardPage } from "../../../packages/operator-ui/src/components/pages/workboard-page.js";
 import { BrowserNodeProvider } from "../../../packages/operator-ui/src/browser-node/browser-node-provider.js";
-import { ElevatedModeProvider } from "../../../packages/operator-ui/src/elevated-mode.js";
+import { AdminAccessProvider } from "../../../packages/operator-ui/src/elevated-mode.js";
 import { OperatorUiHostProvider } from "../../../packages/operator-ui/src/host/host-api.js";
 import {
   createAgentsCore,
@@ -89,17 +89,17 @@ function renderRoute(route: LayoutRoute): React.ReactNode {
     case "extensions": {
       const core = createAgentsCore();
       return (
-        <ElevatedModeProvider core={core} mode="desktop">
+        <AdminAccessProvider core={core} mode="desktop">
           <ExtensionsPage core={core} />
-        </ElevatedModeProvider>
+        </AdminAccessProvider>
       );
     }
     case "configure": {
       const core = createConfigureCore();
       return (
-        <ElevatedModeProvider core={core} mode="desktop">
+        <AdminAccessProvider core={core} mode="desktop">
           <ConfigurePage core={core} />
-        </ElevatedModeProvider>
+        </AdminAccessProvider>
       );
     }
     case "browser":

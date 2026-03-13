@@ -199,7 +199,7 @@ export function ProviderAccountDialog({
 
   const submit = async (): Promise<void> => {
     if (!canMutate) {
-      throw new Error("Enter Elevated Mode to configure providers.");
+      throw new Error("Authorize admin access to configure providers.");
     }
     if (!selectedProvider || !selectedMethod) {
       setErrorMessage("Choose a supported provider and authentication method.");

@@ -4,9 +4,18 @@ import { describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
 import type { OperatorCore } from "../../../operator-core/src/index.js";
 import { createElevatedModeStore } from "../../../operator-core/src/index.js";
-import { ElevatedModeProvider } from "../../src/index.js";
+import { AdminAccessProvider } from "../../src/index.js";
 import { ConfigurePage } from "../../src/components/pages/configure-page.js";
 import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
+
+vi.mock("../../src/components/pages/admin-http-shared.js", async () => {
+  const actual = await import("../../src/components/pages/admin-http-shared.js");
+  return {
+    ...actual,
+    executeAdminWsCommand: async ({ core, command }: { core: OperatorCore; command: string }) =>
+      await core.ws.commandExecute(command),
+  };
+});
 
 async function switchAdminTab(container: HTMLElement, testId: string): Promise<void> {
   const tab = container.querySelector<HTMLButtonElement>(`[data-testid="${testId}"]`);
@@ -121,7 +130,7 @@ describe("configure-page WS sections", () => {
     const { core } = createCore();
 
     const testRoot = renderIntoDocument(
-      React.createElement(ElevatedModeProvider, {
+      React.createElement(AdminAccessProvider, {
         core,
         mode: "desktop",
         children: React.createElement(ConfigurePage, { core }),
@@ -143,7 +152,7 @@ describe("configure-page WS sections", () => {
     const { core, commandExecute } = createCore();
 
     const testRoot = renderIntoDocument(
-      React.createElement(ElevatedModeProvider, {
+      React.createElement(AdminAccessProvider, {
         core,
         mode: "desktop",
         children: React.createElement(ConfigurePage, { core }),

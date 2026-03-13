@@ -7,7 +7,7 @@ import { requiresPostcondition } from "@tyrum/schemas";
 import { randomUUID } from "node:crypto";
 import type { Logger } from "../../observability/logger.js";
 import type { SqlDb } from "../../../statestore/types.js";
-import { APPROVAL_WS_AUDIENCE } from "../../../ws/audience.js";
+import { APPROVAL_PROMPT_WS_AUDIENCE, APPROVAL_WS_AUDIENCE } from "../../../ws/audience.js";
 import { ApprovalDal } from "../../approval/dal.js";
 import { toApprovalContract } from "../../approval/to-contract.js";
 import { releaseLaneAndWorkspaceLeasesTx } from "./concurrency-manager.js";
@@ -396,7 +396,7 @@ export class ExecutionEngineApprovalManager {
       tx,
       opts.tenantId,
       approvalRequest,
-      APPROVAL_WS_AUDIENCE,
+      APPROVAL_PROMPT_WS_AUDIENCE,
     );
 
     return { approvalId: approval.approval_id, resumeToken };

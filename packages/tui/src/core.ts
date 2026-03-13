@@ -10,6 +10,7 @@ import {
   createOperatorCore,
   createOperatorCoreManager,
   httpAuthForAuth,
+  isElevatedModeActive,
   wsTokenForAuth,
   type OperatorCore,
   type OperatorCoreFactory,
@@ -70,9 +71,51 @@ export async function createTuiCore(options: TuiCoreOptions): Promise<TuiRuntime
       wsUrl: coreOptions.wsUrl,
       httpBaseUrl: coreOptions.httpBaseUrl,
       auth: coreOptions.auth,
+      deviceIdentity: identity,
       elevatedModeStore: coreOptions.elevatedModeStore,
-      // Operator core still types the legacy memory methods on its WS client.
-      deps: { ws: ws as unknown as OperatorWsClient, http },
+      deps: {
+        // Operator core still types the legacy memory methods on its WS client.
+        ws: ws as unknown as OperatorWsClient,
+        http,
+        createPrivilegedWs() {
+          const elevatedMode = coreOptions.elevatedModeStore.getSnapshot();
+          const token = elevatedMode.elevatedToken?.trim();
+          if (!isElevatedModeActive(elevatedMode) || !token) {
+            return null;
+          }
+
+          return new TyrumClient({
+            url: coreOptions.wsUrl,
+            token,
+            tlsCertFingerprint256: options.tlsCertFingerprint256,
+            tlsAllowSelfSigned: options.tlsAllowSelfSigned,
+            reconnect: false,
+            capabilities: [],
+            device: {
+              publicKey: identity.publicKey,
+              privateKey: identity.privateKey,
+              deviceId: identity.deviceId,
+              label: "tui",
+              platform: typeof process !== "undefined" ? process.platform : "unknown",
+              version: typeof process !== "undefined" ? process.version : "unknown",
+            },
+          }) as unknown as OperatorWsClient;
+        },
+        createPrivilegedHttp() {
+          const elevatedMode = coreOptions.elevatedModeStore.getSnapshot();
+          const token = elevatedMode.elevatedToken?.trim();
+          if (!isElevatedModeActive(elevatedMode) || !token) {
+            return null;
+          }
+
+          return createTyrumHttpClient({
+            baseUrl: coreOptions.httpBaseUrl,
+            auth: { type: "bearer", token },
+            tlsCertFingerprint256: options.tlsCertFingerprint256,
+            tlsAllowSelfSigned: options.tlsAllowSelfSigned,
+          });
+        },
+      },
     });
   };
 
@@ -100,13 +143,7 @@ export async function createTuiCore(options: TuiCoreOptions): Promise<TuiRuntime
     const issued = await http.deviceTokens.issue({
       device_id: identity.deviceId,
       role: "client",
-      scopes: [
-        "operator.read",
-        "operator.write",
-        "operator.approvals",
-        "operator.pairing",
-        "operator.admin",
-      ],
+      scopes: ["operator.approvals", "operator.pairing", "operator.admin"],
       ttl_seconds: opts?.ttlSeconds ?? 60 * 10,
     });
 

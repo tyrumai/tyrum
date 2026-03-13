@@ -1,12 +1,11 @@
 import type { ElevatedModeStore, OperatorHttpClient } from "@tyrum/operator-core";
 
 export const ELEVATED_MODE_SCOPES = [
-  "operator.read",
-  "operator.write",
   "operator.approvals",
   "operator.pairing",
   "operator.admin",
 ] as const;
+const ADMIN_ACCESS_TTL_SECONDS = 60 * 10;
 
 export interface ElevatedModeController {
   enter(): Promise<void>;
@@ -28,8 +27,11 @@ export function createPersistentElevatedModeController({
         device_id: deviceId,
         role: "client",
         scopes: [...ELEVATED_MODE_SCOPES],
-        persistent: true,
+        ttl_seconds: ADMIN_ACCESS_TTL_SECONDS,
       });
+      if (!issued.expires_at) {
+        throw new Error("Gateway returned admin access without an expiration.");
+      }
       elevatedModeStore.enter({
         elevatedToken: issued.token,
         expiresAt: issued.expires_at,

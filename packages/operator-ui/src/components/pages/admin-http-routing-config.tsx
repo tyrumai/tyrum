@@ -11,7 +11,11 @@ import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { ConfirmDangerDialog } from "../ui/confirm-danger-dialog.js";
 import { EmptyState } from "../ui/empty-state.js";
 import { Input } from "../ui/input.js";
-import { useAdminHttpClient, useAdminMutationAccess } from "./admin-http-shared.js";
+import {
+  useAdminHttpClient,
+  useAdminMutationAccess,
+  useAdminMutationHttpClient,
+} from "./admin-http-shared.js";
 import {
   asChannelRoutingApi,
   getTelegramAccounts,
@@ -33,6 +37,8 @@ import {
   type RoutingRuleRow,
 } from "./admin-http-routing-config.shared.js";
 
+type AgentHttpClient = Pick<OperatorCore["http"], "agentList" | "agents">;
+
 function buildAgentOptions(agents: AgentListResult["agents"]): RoutingAgentOption[] {
   return agents.map((agent) => ({
     key: agent.agent_key,
@@ -43,13 +49,13 @@ function buildAgentOptions(agents: AgentListResult["agents"]): RoutingAgentOptio
   }));
 }
 
-async function loadAgentOptions(core: OperatorCore): Promise<RoutingAgentOption[]> {
-  if (core.http.agentList) {
-    const result = await core.http.agentList.get({ include_default: true });
+async function loadAgentOptions(http: AgentHttpClient): Promise<RoutingAgentOption[]> {
+  if (http.agentList) {
+    const result = await http.agentList.get({ include_default: true });
     return buildAgentOptions(result.agents);
   }
-  if (core.http.agents) {
-    const result = await core.http.agents.list();
+  if (http.agents) {
+    const result = await http.agents.list();
     return buildAgentOptions(result.agents);
   }
   return [];
@@ -68,7 +74,8 @@ function describeRule(row: RoutingRuleRow): string {
 }
 
 export function AdminHttpRoutingConfigPanel({ core }: { core: OperatorCore }): React.ReactElement {
-  const mutationHttp = useAdminHttpClient() ?? core.http;
+  const readHttp = useAdminHttpClient();
+  const mutationHttp = useAdminMutationHttpClient();
   const { canMutate, requestEnter } = useAdminMutationAccess(core);
   const [filterValue, setFilterValue] = React.useState("");
   const [loading, setLoading] = React.useState(true);
@@ -86,9 +93,10 @@ export function AdminHttpRoutingConfigPanel({ core }: { core: OperatorCore }): R
   const [deletingRow, setDeletingRow] = React.useState<RoutingRuleRow | null>(null);
   const [revertingRevision, setRevertingRevision] =
     React.useState<ChannelRoutingRevisionSummary | null>(null);
+  const mutationRoutingApi = asChannelRoutingApi(mutationHttp?.routingConfig);
 
   const loadPanelData = async (busyState: "loading" | "refreshing"): Promise<void> => {
-    const routingApi = asChannelRoutingApi(core.http.routingConfig);
+    const routingApi = asChannelRoutingApi(readHttp.routingConfig);
     if (!routingApi?.listChannelConfigs) {
       setErrorMessage("Channels config API unavailable.");
       setLoading(false);
@@ -110,7 +118,7 @@ export function AdminHttpRoutingConfigPanel({ core }: { core: OperatorCore }): R
           routingApi.listRevisions({ limit: 20 }),
           routingApi.listObservedTelegramThreads({ limit: 200 }),
           routingApi.listChannelConfigs(),
-          loadAgentOptions(core),
+          loadAgentOptions(readHttp),
         ]);
       setConfig(current.config as ChannelRoutingConfig);
       setRevisions(revisionResult.revisions as ChannelRoutingRevisionSummary[]);
@@ -128,7 +136,7 @@ export function AdminHttpRoutingConfigPanel({ core }: { core: OperatorCore }): R
   React.useEffect(() => {
     void loadPanelData("loading");
     // Intentional: initial load should only run when the core instance changes.
-  }, [core]);
+  }, [readHttp]);
 
   const allRows = buildRoutingRuleRows(config, observedThreads);
   const rows = filterRoutingRuleRows(allRows, filterValue);
@@ -184,11 +192,10 @@ export function AdminHttpRoutingConfigPanel({ core }: { core: OperatorCore }): R
   };
 
   const saveRule = async (draft: RoutingRuleDraft): Promise<void> => {
-    const routingApi = asChannelRoutingApi(mutationHttp.routingConfig);
-    if (!routingApi) {
+    if (!mutationRoutingApi) {
       throw new Error("Channels config API unavailable.");
     }
-    await routingApi.update({
+    await mutationRoutingApi.update({
       config: upsertRoutingRule(config, draft, editingRow),
     });
     setEditingRow(null);
@@ -197,11 +204,10 @@ export function AdminHttpRoutingConfigPanel({ core }: { core: OperatorCore }): R
 
   const removeRule = async (): Promise<void> => {
     if (!deletingRow) return;
-    const routingApi = asChannelRoutingApi(mutationHttp.routingConfig);
-    if (!routingApi) {
+    if (!mutationRoutingApi) {
       throw new Error("Channels config API unavailable.");
     }
-    await routingApi.update({
+    await mutationRoutingApi.update({
       config: removeRoutingRule(config, deletingRow),
     });
     setDeletingRow(null);
@@ -210,11 +216,10 @@ export function AdminHttpRoutingConfigPanel({ core }: { core: OperatorCore }): R
 
   const revertRevision = async (): Promise<void> => {
     if (!revertingRevision) return;
-    const routingApi = asChannelRoutingApi(mutationHttp.routingConfig);
-    if (!routingApi) {
+    if (!mutationRoutingApi) {
       throw new Error("Channels config API unavailable.");
     }
-    await routingApi.revert({ revision: revertingRevision.revision });
+    await mutationRoutingApi.revert({ revision: revertingRevision.revision });
     setRevertingRevision(null);
     await loadPanelData("refreshing");
   };

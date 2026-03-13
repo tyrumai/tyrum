@@ -18,9 +18,9 @@ export { OperatorUiHostProvider, useHostApi, useHostApiOptional } from "./host/h
 export type { DesktopApi } from "./desktop-api.js";
 export { getDesktopApi } from "./desktop-api.js";
 
-export type { ElevatedModeController, ElevatedModeProviderProps } from "./elevated-mode.js";
-export { ELEVATED_MODE_SCOPES, createPersistentElevatedModeController } from "./elevated-mode.js";
-export { ElevatedModeGate, ElevatedModeProvider } from "./elevated-mode.js";
+export type { AdminAccessController, AdminAccessProviderProps } from "./elevated-mode.js";
+export { ADMIN_ACCESS_SCOPES, createAdminAccessController } from "./elevated-mode.js";
+export { AdminAccessGate, AdminAccessProvider } from "./elevated-mode.js";
 
 export { cn } from "./lib/cn.js";
 

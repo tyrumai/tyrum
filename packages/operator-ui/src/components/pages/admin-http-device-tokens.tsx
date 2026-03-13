@@ -170,7 +170,7 @@ function DeviceTokenIssueDialog({
         issue.setError(undefined);
         if (!canMutate) {
           requestEnter();
-          throw new Error("Enter Elevated Mode to issue device tokens.");
+          throw new Error("Authorize admin access to issue device tokens.");
         }
 
         const ttlSecondsRaw = issue.ttlSeconds.trim();
@@ -222,7 +222,7 @@ function DeviceTokenRevokeDialog({
         revoke.setError(undefined);
         if (!canMutate) {
           requestEnter();
-          throw new Error("Enter Elevated Mode to revoke device tokens.");
+          throw new Error("Authorize admin access to revoke device tokens.");
         }
 
         try {
@@ -241,7 +241,7 @@ function DeviceTokenRevokeDialog({
 
 export function DeviceTokensCard({ core }: { core: OperatorCore }) {
   const { canMutate, requestEnter } = useAdminMutationAccess(core);
-  const http = useAdminHttpClient() ?? core.http;
+  const adminHttp = useAdminHttpClient({ access: "strict" });
   const issue = useDeviceTokensIssueState();
   const revoke = useDeviceTokensRevokeState();
 
@@ -287,18 +287,22 @@ export function DeviceTokensCard({ core }: { core: OperatorCore }) {
           </div>
         </ElevatedModeTooltip>
       </CardFooter>
-      <DeviceTokenIssueDialog
-        http={http}
-        canMutate={canMutate}
-        requestEnter={requestEnter}
-        issue={issue}
-      />
-      <DeviceTokenRevokeDialog
-        http={http}
-        canMutate={canMutate}
-        requestEnter={requestEnter}
-        revoke={revoke}
-      />
+      {adminHttp ? (
+        <>
+          <DeviceTokenIssueDialog
+            http={adminHttp}
+            canMutate={canMutate}
+            requestEnter={requestEnter}
+            issue={issue}
+          />
+          <DeviceTokenRevokeDialog
+            http={adminHttp}
+            canMutate={canMutate}
+            requestEnter={requestEnter}
+            revoke={revoke}
+          />
+        </>
+      ) : null}
     </Card>
   );
 }

@@ -1,9 +1,9 @@
 import { expect, it, vi } from "vitest";
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { createBearerTokenAuth, createOperatorCore } from "../../operator-core/src/index.js";
 import { OperatorUiApp } from "../src/index.js";
 import * as operatorUi from "../src/index.js";
+import { createOperatorUiTestCoreWithAdminAccess } from "./operator-ui.admin-access-test-support.js";
 import {
   FakeWsClient,
   createFakeHttpClient,
@@ -25,12 +25,7 @@ export function registerApprovalsTests(): void {
     ws.approvalResolve.mockResolvedValueOnce({ approval: sampleApprovalApproved() });
 
     const { http } = createFakeHttpClient();
-    const core = createOperatorCore({
-      wsUrl: "ws://example.test/ws",
-      httpBaseUrl: "http://example.test",
-      auth: createBearerTokenAuth("test"),
-      deps: { ws, http },
-    });
+    const core = createOperatorUiTestCoreWithAdminAccess({ ws, http });
 
     const container = document.createElement("div");
     document.body.appendChild(container);
@@ -102,12 +97,7 @@ export function registerApprovalsTests(): void {
     });
 
     const { http } = createFakeHttpClient();
-    const core = createOperatorCore({
-      wsUrl: "ws://example.test/ws",
-      httpBaseUrl: "http://example.test",
-      auth: createBearerTokenAuth("test"),
-      deps: { ws, http },
-    });
+    const core = createOperatorUiTestCoreWithAdminAccess({ ws, http });
 
     const container = document.createElement("div");
     document.body.appendChild(container);
@@ -159,12 +149,7 @@ export function registerApprovalsTests(): void {
     });
 
     const { http } = createFakeHttpClient();
-    const core = createOperatorCore({
-      wsUrl: "ws://example.test/ws",
-      httpBaseUrl: "http://example.test",
-      auth: createBearerTokenAuth("test"),
-      deps: { ws, http },
-    });
+    const core = createOperatorUiTestCoreWithAdminAccess({ ws, http });
 
     const container = document.createElement("div");
     document.body.appendChild(container);

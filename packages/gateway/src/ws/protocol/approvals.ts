@@ -1,6 +1,6 @@
 import type { WsRequestEnvelope } from "@tyrum/schemas";
 import { hasAnyRequiredScope } from "../../modules/auth/scopes.js";
-import { APPROVAL_WS_AUDIENCE } from "../audience.js";
+import { APPROVAL_PROMPT_WS_AUDIENCE } from "../audience.js";
 import type { ProtocolDeps } from "./types.js";
 
 /**
@@ -57,7 +57,7 @@ export function requestApproval(
           source_edge_id: deps.cluster.edgeId,
           skip_local: true,
           message,
-          audience: APPROVAL_WS_AUDIENCE,
+          audience: APPROVAL_PROMPT_WS_AUDIENCE,
         })
         .catch((err) => {
           const errorMessage = err instanceof Error ? err.message : String(err);
@@ -75,7 +75,7 @@ export function requestApproval(
       .enqueue(normalizedTenantId, "ws.broadcast", {
         source_edge_id: deps.cluster.edgeId,
         message,
-        audience: APPROVAL_WS_AUDIENCE,
+        audience: APPROVAL_PROMPT_WS_AUDIENCE,
       })
       .catch((err) => {
         const errorMessage = err instanceof Error ? err.message : String(err);

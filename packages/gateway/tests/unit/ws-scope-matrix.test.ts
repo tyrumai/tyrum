@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { resolveWsRequestRequiredScopes } from "../../src/modules/authz/ws-scope-matrix.js";
 
 describe("WS scope authorization matrix", () => {
-  it("maps approval control-plane operations to operator.approvals", () => {
-    expect(resolveWsRequestRequiredScopes("approval.list")).toEqual(["operator.approvals"]);
+  it("maps approval reads to operator.read and approval resolution to operator.approvals", () => {
+    expect(resolveWsRequestRequiredScopes("approval.list")).toEqual(["operator.read"]);
     expect(resolveWsRequestRequiredScopes("approval.resolve")).toEqual(["operator.approvals"]);
   });
 

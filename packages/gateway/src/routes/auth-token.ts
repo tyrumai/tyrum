@@ -12,7 +12,7 @@ import {
 } from "@tyrum/schemas";
 import type { AuthTokenService } from "../modules/auth/auth-token-service.js";
 import type { AuthTokenListRow, AuthTokenRow } from "../modules/auth/auth-token-dal.js";
-import { requireAuthClaims, requireTenantId } from "../modules/auth/claims.js";
+import { requireOperatorAdminAccess, requireTenantId } from "../modules/auth/claims.js";
 import type { ConnectionManager } from "../ws/connection-manager.js";
 
 export interface AuthTokenRouteDeps {
@@ -58,13 +58,11 @@ function toListItem(row: AuthTokenListRow | AuthTokenRow) {
 
 export function createAuthTokenRoutes(deps: AuthTokenRouteDeps): Hono {
   const app = new Hono();
+  const adminTokenRequired = { message: "admin token required" } as const;
 
   app.get("/auth/tokens", async (c) => {
     const tenantId = requireTenantId(c);
-    const claims = requireAuthClaims(c);
-    if (claims.role !== "admin") {
-      return c.json({ error: "forbidden", message: "admin token required" }, 403);
-    }
+    requireOperatorAdminAccess(c, adminTokenRequired);
 
     const rows = await deps.authTokens.listTenantTokens(tenantId);
     const tokens = rows.map(toListItem);
@@ -73,10 +71,7 @@ export function createAuthTokenRoutes(deps: AuthTokenRouteDeps): Hono {
 
   app.post("/auth/tokens/issue", async (c) => {
     const tenantId = requireTenantId(c);
-    const claims = requireAuthClaims(c);
-    if (claims.role !== "admin") {
-      return c.json({ error: "forbidden", message: "admin token required" }, 403);
-    }
+    const claims = requireOperatorAdminAccess(c, adminTokenRequired);
 
     let body: unknown;
     try {
@@ -123,10 +118,7 @@ export function createAuthTokenRoutes(deps: AuthTokenRouteDeps): Hono {
 
   app.patch("/auth/tokens/:tokenId", async (c) => {
     const tenantId = requireTenantId(c);
-    const claims = requireAuthClaims(c);
-    if (claims.role !== "admin") {
-      return c.json({ error: "forbidden", message: "admin token required" }, 403);
-    }
+    requireOperatorAdminAccess(c, adminTokenRequired);
 
     let body: unknown;
     try {
@@ -172,10 +164,7 @@ export function createAuthTokenRoutes(deps: AuthTokenRouteDeps): Hono {
 
   app.post("/auth/tokens/revoke", async (c) => {
     const tenantId = requireTenantId(c);
-    const claims = requireAuthClaims(c);
-    if (claims.role !== "admin") {
-      return c.json({ error: "forbidden", message: "admin token required" }, 403);
-    }
+    requireOperatorAdminAccess(c, adminTokenRequired);
 
     let body: unknown;
     try {

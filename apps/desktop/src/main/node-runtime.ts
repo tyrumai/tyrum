@@ -172,7 +172,7 @@ export class NodeRuntime {
       });
     });
 
-    this.client.on("disconnected", (info) => {
+    this.client.on("disconnected", (info: { code: number; reason?: string }) => {
       this.callbacks.onStatusChange({ connected: false, ...info });
       this.callbacks.onLog({
         level: "info",
@@ -181,15 +181,15 @@ export class NodeRuntime {
       });
     });
 
-    this.client.on("approval_request", (msg) => {
+    this.client.on("approval_request", (msg: unknown) => {
       this.callbacks.onConsentRequest(msg);
     });
 
-    this.client.on("plan_update", (msg) => {
+    this.client.on("plan_update", (msg: unknown) => {
       this.callbacks.onPlanUpdate(msg);
     });
 
-    this.client.on("error", (msg) => {
+    this.client.on("error", (msg: { payload: { message: string } }) => {
       this.callbacks.onLog({
         level: "error",
         message: `Gateway error: ${msg.payload.message}`,
@@ -197,7 +197,7 @@ export class NodeRuntime {
       });
     });
 
-    this.client.on("transport_error", (msg) => {
+    this.client.on("transport_error", (msg: { message: string }) => {
       this.callbacks.onLog({
         level: "error",
         message: `Transport error: ${msg.message}`,

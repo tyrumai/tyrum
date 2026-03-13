@@ -15,6 +15,17 @@ const OPERATOR_UI_DIR_ENV = "TYRUM_OPERATOR_UI_ASSETS_DIR";
 
 const isCi = Boolean(process.env.CI?.trim());
 
+async function waitForBuiltOperatorUi(timeoutMs = 30_000): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() <= deadline) {
+    if (await pathExists(OPERATOR_UI_DIST_INDEX)) {
+      return true;
+    }
+    await new Promise((done) => setTimeout(done, 100));
+  }
+  return false;
+}
+
 let canRunPlaywright = false;
 let playwrightProbeError: string | undefined;
 try {
@@ -59,7 +70,7 @@ describe.skipIf(!canRunPlaywright && !isCi)("operator UI real-browser smoke (/ui
       );
     }
 
-    if (!(await pathExists(OPERATOR_UI_DIST_INDEX))) {
+    if (!(await waitForBuiltOperatorUi())) {
       throw new Error(
         `Missing operator UI build output at ${OPERATOR_UI_DIST_INDEX}. ` +
           `Run pnpm --filter @tyrum/web build (or pnpm build) before running this test.`,

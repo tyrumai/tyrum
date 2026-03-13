@@ -13,7 +13,7 @@ const {
   createDeviceIdentityMock,
   createElevatedModeStoreMock,
   createOperatorCoreManagerMock,
-  createPersistentElevatedModeControllerMock,
+  createAdminAccessControllerMock,
   createTyrumHttpClientMock,
   gatewayGetOperatorConnectionMock,
   managerDisposeMock,
@@ -41,15 +41,15 @@ const {
     subscribe: managerSubscribeMockInner,
     dispose: managerDisposeMockInner,
   }));
-  const createPersistentElevatedModeControllerMockInner = vi.fn(() => controllerInner);
+  const createAdminAccessControllerMockInner = vi.fn(() => controllerInner);
 
   return {
     connectMock: connectMockInner,
     controller: controllerInner,
+    createAdminAccessControllerMock: createAdminAccessControllerMockInner,
     createDeviceIdentityMock: createDeviceIdentityMockInner,
     createElevatedModeStoreMock: createElevatedModeStoreMockInner,
     createOperatorCoreManagerMock: createOperatorCoreManagerMockInner,
-    createPersistentElevatedModeControllerMock: createPersistentElevatedModeControllerMockInner,
     createTyrumHttpClientMock: createTyrumHttpClientMockInner,
     gatewayGetOperatorConnectionMock: gatewayGetOperatorConnectionMockInner,
     managerDisposeMock: managerDisposeMockInner,
@@ -69,7 +69,7 @@ vi.mock("@tyrum/operator-core/browser", () => ({
 }));
 
 vi.mock("@tyrum/operator-ui", () => ({
-  createPersistentElevatedModeController: createPersistentElevatedModeControllerMock,
+  createAdminAccessController: createAdminAccessControllerMock,
 }));
 
 function createDesktopApi() {
@@ -125,7 +125,7 @@ describe("useDesktopOperatorCore", () => {
 
     expect(connectMock).toHaveBeenCalledTimes(1);
     expect(state?.core).not.toBeNull();
-    expect(state?.elevatedModeController).toBe(controller);
+    expect(state?.adminAccessController).toBe(controller);
 
     act(() => {
       root.unmount();
@@ -182,7 +182,7 @@ describe("useDesktopOperatorCore", () => {
   });
 
   it("disposes the fresh manager and store when controller creation throws", async () => {
-    createPersistentElevatedModeControllerMock.mockImplementationOnce(() => {
+    createAdminAccessControllerMock.mockImplementationOnce(() => {
       throw new Error("controller boom");
     });
 
@@ -205,7 +205,7 @@ describe("useDesktopOperatorCore", () => {
     expect(storeDisposeMock).toHaveBeenCalledTimes(1);
     expect(state?.errorMessage).toBe("controller boom");
     expect(state?.core).toBeNull();
-    expect(state?.elevatedModeController).toBeNull();
+    expect(state?.adminAccessController).toBeNull();
 
     act(() => {
       root.unmount();

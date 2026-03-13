@@ -1,10 +1,10 @@
 import { expect, it, vi } from "vitest";
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { createBearerTokenAuth, createOperatorCore } from "../../operator-core/src/index.js";
 import { OperatorUiApp } from "../src/index.js";
 import * as operatorUi from "../src/index.js";
 import { PairingPage } from "../src/components/pages/pairing-page.js";
+import { createOperatorUiTestCoreWithAdminAccess } from "./operator-ui.admin-access-test-support.js";
 import {
   FakeWsClient,
   createFakeHttpClient,
@@ -26,12 +26,7 @@ function registerPairingApproveTests(): void {
       .spyOn(operatorUi.toast as unknown as { success: (message: string) => void }, "success")
       .mockImplementation(() => {});
 
-    const core = createOperatorCore({
-      wsUrl: "ws://example.test/ws",
-      httpBaseUrl: "http://example.test",
-      auth: createBearerTokenAuth("test"),
-      deps: { ws, http },
-    });
+    const core = createOperatorUiTestCoreWithAdminAccess({ ws, http });
 
     const container = document.createElement("div");
     document.body.appendChild(container);
@@ -130,12 +125,7 @@ function registerPairingApproveTests(): void {
       pairing: samplePairingRequestApproved(),
     });
 
-    const core = createOperatorCore({
-      wsUrl: "ws://example.test/ws",
-      httpBaseUrl: "http://example.test",
-      auth: createBearerTokenAuth("test"),
-      deps: { ws, http },
-    });
+    const core = createOperatorUiTestCoreWithAdminAccess({ ws, http });
 
     const container = document.createElement("div");
     document.body.appendChild(container);
@@ -196,12 +186,7 @@ function registerPairingApproveTests(): void {
       "error",
     ).mockImplementation(() => {});
 
-    const core = createOperatorCore({
-      wsUrl: "ws://example.test/ws",
-      httpBaseUrl: "http://example.test",
-      auth: createBearerTokenAuth("test"),
-      deps: { ws, http },
-    });
+    const core = createOperatorUiTestCoreWithAdminAccess({ ws, http });
 
     const container = document.createElement("div");
     document.body.appendChild(container);
@@ -254,12 +239,7 @@ function registerPairingApproveTests(): void {
     });
     pairingsApprove.mockImplementationOnce(() => approvePromise as never);
 
-    const core = createOperatorCore({
-      wsUrl: "ws://example.test/ws",
-      httpBaseUrl: "http://example.test",
-      auth: createBearerTokenAuth("test"),
-      deps: { ws, http },
-    });
+    const core = createOperatorUiTestCoreWithAdminAccess({ ws, http });
 
     const container = document.createElement("div");
     document.body.appendChild(container);
@@ -306,12 +286,7 @@ function registerPairingApproveTests(): void {
     const { http, pairingsList } = createFakeHttpClient();
     pairingsList.mockResolvedValueOnce({ status: "ok", pairings: [samplePairingRequestPending()] });
 
-    const core = createOperatorCore({
-      wsUrl: "ws://example.test/ws",
-      httpBaseUrl: "http://example.test",
-      auth: createBearerTokenAuth("test"),
-      deps: { ws, http },
-    });
+    const core = createOperatorUiTestCoreWithAdminAccess({ ws, http });
 
     const container = document.createElement("div");
     document.body.appendChild(container);
@@ -346,12 +321,7 @@ function registerPairingDenyRevokeTests(): void {
     const { http, pairingsList } = createFakeHttpClient();
     pairingsList.mockResolvedValueOnce({ status: "ok", pairings: [] });
 
-    const core = createOperatorCore({
-      wsUrl: "ws://example.test/ws",
-      httpBaseUrl: "http://example.test",
-      auth: createBearerTokenAuth("test"),
-      deps: { ws, http },
-    });
+    const core = createOperatorUiTestCoreWithAdminAccess({ ws, http });
 
     const container = document.createElement("div");
     document.body.appendChild(container);
@@ -407,12 +377,7 @@ function registerPairingDenyRevokeTests(): void {
       .spyOn(operatorUi.toast as unknown as { success: (message: string) => void }, "success")
       .mockImplementation(() => {});
 
-    const core = createOperatorCore({
-      wsUrl: "ws://example.test/ws",
-      httpBaseUrl: "http://example.test",
-      auth: createBearerTokenAuth("test"),
-      deps: { ws, http },
-    });
+    const core = createOperatorUiTestCoreWithAdminAccess({ ws, http });
 
     const container = document.createElement("div");
     document.body.appendChild(container);
@@ -480,12 +445,7 @@ function registerPairingDenyRevokeTests(): void {
       },
     });
 
-    const core = createOperatorCore({
-      wsUrl: "ws://example.test/ws",
-      httpBaseUrl: "http://example.test",
-      auth: createBearerTokenAuth("test"),
-      deps: { ws, http },
-    });
+    const core = createOperatorUiTestCoreWithAdminAccess({ ws, http });
 
     const container = document.createElement("div");
     document.body.appendChild(container);

@@ -14,7 +14,7 @@ import {
   MAX_DEVICE_TOKEN_TTL_SECONDS,
 } from "@tyrum/schemas";
 import type { AuthTokenService } from "../modules/auth/auth-token-service.js";
-import { requireAuthClaims, requireTenantId } from "../modules/auth/claims.js";
+import { requireOperatorAdminAccess, requireTenantId } from "../modules/auth/claims.js";
 import type { ConnectionManager } from "../ws/connection-manager.js";
 
 export interface DeviceTokenRouteDeps {
@@ -24,13 +24,11 @@ export interface DeviceTokenRouteDeps {
 
 export function createDeviceTokenRoutes(deps: DeviceTokenRouteDeps): Hono {
   const app = new Hono();
+  const adminTokenRequired = { message: "admin token required" } as const;
 
   app.post("/auth/device-tokens/issue", async (c) => {
     const tenantId = requireTenantId(c);
-    const claims = requireAuthClaims(c);
-    if (claims.role !== "admin") {
-      return c.json({ error: "forbidden", message: "admin token required" }, 403);
-    }
+    const claims = requireOperatorAdminAccess(c, adminTokenRequired);
 
     let body: unknown;
     try {
@@ -77,10 +75,7 @@ export function createDeviceTokenRoutes(deps: DeviceTokenRouteDeps): Hono {
 
   app.post("/auth/device-tokens/revoke", async (c) => {
     const tenantId = requireTenantId(c);
-    const claims = requireAuthClaims(c);
-    if (claims.role !== "admin") {
-      return c.json({ error: "forbidden", message: "admin token required" }, 403);
-    }
+    requireOperatorAdminAccess(c, adminTokenRequired);
 
     let body: unknown;
     try {
