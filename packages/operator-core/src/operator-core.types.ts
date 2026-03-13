@@ -10,7 +10,6 @@ import type { AgentStatusStore } from "./stores/agent-status-store.js";
 import type { ApprovalsStore } from "./stores/approvals-store.js";
 import type { DesktopEnvironmentHostsStore } from "./stores/desktop-environment-hosts-store.js";
 import type { DesktopEnvironmentsStore } from "./stores/desktop-environments-store.js";
-import type { MemoryStore } from "./stores/memory-store.js";
 import type { PairingStore } from "./stores/pairing-store.js";
 import type { RunsStore } from "./stores/runs-store.js";
 import type { StatusStore } from "./stores/status-store.js";
@@ -45,7 +44,6 @@ export interface OperatorCore {
   runsStore: RunsStore;
   pairingStore: PairingStore;
   statusStore: StatusStore;
-  memoryStore: MemoryStore;
   workboardStore: WorkboardStore;
   agentStatusStore: AgentStatusStore;
   desktopEnvironmentHostsStore: DesktopEnvironmentHostsStore;
