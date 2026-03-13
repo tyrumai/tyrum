@@ -243,8 +243,8 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
         ) : (
           <EmptyState
             icon={CircleCheck}
-            title="No blocked approvals"
-            description="Approvals appear here while guardian or human review is still required."
+            title="No pending approvals"
+            description="Approvals appear here when agents request permission to perform actions."
           />
         )
       ) : (

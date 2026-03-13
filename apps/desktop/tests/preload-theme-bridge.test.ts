@@ -60,8 +60,6 @@ type PreloadApi = {
   };
   onStatusChange: (cb: (status: unknown) => void) => () => void;
   onLog: (cb: (entry: unknown) => void) => () => void;
-  onConsentRequest: (cb: (req: unknown) => void) => () => void;
-  consentRespond: (requestId: string, approved: boolean, reason?: string) => Promise<unknown>;
   checkMacPermissions: () => Promise<unknown>;
   requestMacPermission: (permission: "accessibility" | "screenRecording") => Promise<unknown>;
   openExternal: (url: string) => Promise<unknown>;
@@ -169,7 +167,6 @@ describe("preload theme bridge", () => {
     });
     await api.node.connect();
     await api.node.disconnect();
-    await api.consentRespond("req-123", true, "approved");
     await api.checkMacPermissions();
     await api.requestMacPermission("accessibility");
     await api.openExternal("https://docs.tyrum.dev");
@@ -203,7 +200,6 @@ describe("preload theme bridge", () => {
       ],
       ["node:connect"],
       ["node:disconnect"],
-      ["consent:respond", "req-123", true, "approved"],
       ["permissions:check-mac"],
       ["permissions:request-mac", "accessibility"],
       ["shell:open-external", "https://docs.tyrum.dev"],
@@ -211,42 +207,36 @@ describe("preload theme bridge", () => {
     ]);
   });
 
-  it("registers desktop status, log, consent, update, and navigation listeners and unsubscribes them", async () => {
+  it("registers desktop status, log, update, and navigation listeners and unsubscribes them", async () => {
     const api = await importPreloadApi();
 
     const statusCallback = vi.fn();
     const logCallback = vi.fn();
-    const consentCallback = vi.fn();
     const updateCallback = vi.fn();
     const navigationCallback = vi.fn();
 
     const unsubscribeStatus = api.onStatusChange(statusCallback);
     const unsubscribeLog = api.onLog(logCallback);
-    const unsubscribeConsent = api.onConsentRequest(consentCallback);
     const unsubscribeUpdate = api.onUpdateStateChange(updateCallback);
     const unsubscribeNavigation = api.onNavigationRequest(navigationCallback);
 
     getRegisteredListener("status:change")?.({}, { state: "running" });
     getRegisteredListener("log:entry")?.({}, { level: "info" });
-    getRegisteredListener("consent:request")?.({}, { requestId: "consent-1" });
     getRegisteredListener("update:state")?.({}, { status: "downloaded" });
     getRegisteredListener("navigation:request")?.({}, { href: "/settings" });
 
     expect(statusCallback).toHaveBeenCalledWith({ state: "running" });
     expect(logCallback).toHaveBeenCalledWith({ level: "info" });
-    expect(consentCallback).toHaveBeenCalledWith({ requestId: "consent-1" });
     expect(updateCallback).toHaveBeenCalledWith({ status: "downloaded" });
     expect(navigationCallback).toHaveBeenCalledWith({ href: "/settings" });
 
     const statusListener = getRegisteredListener("status:change");
     const logListener = getRegisteredListener("log:entry");
-    const consentListener = getRegisteredListener("consent:request");
     const updateListener = getRegisteredListener("update:state");
     const navigationListener = getRegisteredListener("navigation:request");
 
     unsubscribeStatus();
     unsubscribeLog();
-    unsubscribeConsent();
     unsubscribeUpdate();
     unsubscribeNavigation();
 
@@ -254,7 +244,6 @@ describe("preload theme bridge", () => {
       expect.arrayContaining([
         ["status:change", statusListener],
         ["log:entry", logListener],
-        ["consent:request", consentListener],
         ["update:state", updateListener],
         ["navigation:request", navigationListener],
       ]),

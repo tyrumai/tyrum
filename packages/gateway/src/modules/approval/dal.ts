@@ -101,6 +101,7 @@ function parseJsonOrEmpty(raw: string | null): unknown {
   try {
     return JSON.parse(raw) as unknown;
   } catch {
+    // Intentional: approval context is optional persisted metadata; fall back to an empty object.
     return {};
   }
 }

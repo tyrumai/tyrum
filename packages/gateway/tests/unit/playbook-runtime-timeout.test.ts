@@ -98,7 +98,9 @@ describe("playbook runtime resume timeout", () => {
       workspaceId: DEFAULT_WORKSPACE_ID,
       approvalKey: "approval-resume-timeout-1",
       prompt: "test",
+      motivation: "Resume tokens should respect the original timeout budget.",
       kind: "policy",
+      status: "awaiting_human",
       runId,
       resumeToken,
     });

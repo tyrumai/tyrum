@@ -34,6 +34,9 @@ describe("ApprovalEngineActionProcessor", () => {
       workspaceId: DEFAULT_WORKSPACE_ID,
       approvalKey: `approval:${randomUUID()}`,
       prompt: "Resume run?",
+      motivation: "Queued resume actions should be processed exactly once.",
+      kind: "workflow_step",
+      status: "awaiting_human",
       runId,
       resumeToken: `resume-${randomUUID()}`,
     });
@@ -99,6 +102,9 @@ describe("ApprovalEngineActionProcessor", () => {
       workspaceId: DEFAULT_WORKSPACE_ID,
       approvalKey: `approval:${randomUUID()}`,
       prompt: "Cancel run?",
+      motivation: "Transient engine failures should retry while preserving last_error.",
+      kind: "workflow_step",
+      status: "awaiting_human",
       runId,
       resumeToken: `resume-${randomUUID()}`,
     });

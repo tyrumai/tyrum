@@ -48,6 +48,7 @@ describe("approval routes (engine integration)", () => {
       approvalKey: "approval-engine-resume",
       kind: "takeover",
       prompt: "Takeover required",
+      motivation: "Resume the paused engine run after the takeover approval is granted.",
       runId,
       resumeToken,
     });

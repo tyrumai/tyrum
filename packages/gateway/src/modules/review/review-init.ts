@@ -63,6 +63,7 @@ export async function resolveAutoReviewMode(input: {
     });
     return effective.bundle.approvals.auto_review.mode;
   } catch {
+    // Intentional: fall back to guardian-first review if policy lookup is unavailable.
     // Keep guardian-first review as the safe default even if policy lookup fails.
     return "auto_review";
   }
@@ -106,6 +107,7 @@ export async function createReviewedApproval(input: {
         workspaceId: input.params.workspaceId,
       });
     } catch {
+      // Intentional: approval creation still succeeds even if policy snapshot enrichment fails.
       // Approval creation still proceeds in guardian-first mode if policy lookup is unavailable.
     }
   }

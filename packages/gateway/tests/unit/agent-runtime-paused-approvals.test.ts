@@ -70,6 +70,8 @@ describe("AgentRuntime paused approvals", () => {
       workspaceId: DEFAULT_WORKSPACE_ID,
       approvalKey: `approval:${randomUUID()}`,
       prompt: "approve",
+      motivation: "Resume the paused run using the token stored in approval context.",
+      kind: "workflow_step",
       runId,
       context: { resume_token: resumeToken },
     });

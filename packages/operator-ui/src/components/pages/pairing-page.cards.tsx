@@ -48,11 +48,13 @@ function extractNodeMeta(metadata: unknown): NodeMeta {
   };
 }
 
-function getPairingStatusDisplay(status: Pairing["status"]): {
+function getPairingStatusDisplay(status: Pairing["status"] | "pending"): {
   label: string;
   variant: ComponentProps<typeof Badge>["variant"];
 } {
   switch (status) {
+    case "pending":
+      return { label: "Awaiting human review", variant: "warning" };
     case "queued":
       return { label: "Guardian queued", variant: "outline" };
     case "reviewing":

@@ -50,6 +50,7 @@ function parseJsonOrEmpty(raw: string): unknown {
   try {
     return JSON.parse(raw) as unknown;
   } catch {
+    // Intentional: malformed node metadata should not block loading the pairing row.
     return {};
   }
 }
@@ -59,6 +60,7 @@ function parseCapabilities(raw: string): CapabilityDescriptor[] {
     const parsed = JSON.parse(raw) as unknown;
     return parseStoredCapabilityDescriptors(parsed);
   } catch {
+    // Intentional: capability decoding is best-effort for legacy or malformed stored rows.
     return [];
   }
 }
@@ -74,6 +76,7 @@ function parseAllowlist(raw: string): CapabilityDescriptor[] {
         .map((result) => result.data),
     );
   } catch {
+    // Intentional: allowlist decoding is best-effort for legacy or malformed stored rows.
     return [];
   }
 }
@@ -499,7 +502,7 @@ export class NodePairingDal {
       decisionPayload: input.decisionPayload ?? input.resolvedBy,
       trustLevel: input.trustLevel,
       capabilityAllowlist: input.capabilityAllowlist,
-      allowedCurrentStatuses: input.allowedCurrentStatuses ?? ["awaiting_human"],
+      allowedCurrentStatuses: input.allowedCurrentStatuses ?? ["queued", "awaiting_human"],
     });
     return result
       ? {

@@ -138,7 +138,6 @@ describe("e2e: tool.node.dispatch against docker desktop-sandbox", () => {
             listPending: async () => {
               const pending = await container.nodePairingDal.list({
                 tenantId: DEFAULT_TENANT_ID,
-                status: "pending",
                 limit: 25,
               });
               return pending.map((p) => ({

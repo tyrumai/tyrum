@@ -31,6 +31,8 @@ describe("approval respond engine actions", () => {
       workspaceId: DEFAULT_WORKSPACE_ID,
       approvalKey: `approval:${randomUUID()}`,
       prompt: "Resume run?",
+      motivation: "Resume the paused run when this approval is granted.",
+      kind: "workflow_step",
       runId: "run-1",
       resumeToken: "resume-1",
     });
@@ -92,6 +94,8 @@ describe("approval respond engine actions", () => {
       workspaceId: DEFAULT_WORKSPACE_ID,
       approvalKey: `approval:${randomUUID()}`,
       prompt: "Resume run?",
+      motivation: "Expired approvals must not enqueue new engine actions.",
+      kind: "workflow_step",
       runId: "run-2",
       resumeToken: "resume-2",
     });

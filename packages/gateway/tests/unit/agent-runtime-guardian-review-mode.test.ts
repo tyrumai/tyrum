@@ -28,15 +28,16 @@ describe("AgentRuntime guardian review mode", () => {
       config: {
         model: { model: "openai/gpt-4.1" },
         skills: { enabled: [] },
-        mcp: { enabled: [] },
-        tools: { allow: ["bash", "read", "write"] },
-        sessions: { ttl_days: 30, max_turns: 20 },
-        memory: {
-          v1: {
-            enabled: true,
-            auto_write: { enabled: true },
+        mcp: {
+          enabled: [],
+          server_settings: {
+            memory: {
+              enabled: false,
+            },
           },
         },
+        tools: { allow: ["bash", "read", "write"] },
+        sessions: { ttl_days: 30, max_turns: 20 },
       },
     });
 

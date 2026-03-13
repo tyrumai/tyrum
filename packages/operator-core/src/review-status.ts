@@ -35,11 +35,16 @@ export function approvalUpdatedAt(approval: Approval): string {
 }
 
 export function isPairingBlockedStatus(status: PairingLikeStatus): boolean {
-  return status === "queued" || status === "reviewing" || status === "awaiting_human";
+  return (
+    status === "pending" ||
+    status === "queued" ||
+    status === "reviewing" ||
+    status === "awaiting_human"
+  );
 }
 
 export function isPairingHumanActionableStatus(status: PairingLikeStatus): boolean {
-  return status === "awaiting_human";
+  return status === "pending" || status === "awaiting_human";
 }
 
 export function pairingUpdatedAt(pairing: NodePairingRequest): string {

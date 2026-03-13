@@ -128,6 +128,17 @@ function approvalResolutionNote(
   const review = approval?.latest_review;
   const reason = typeof review?.reason === "string" ? review.reason.trim() : "";
   if (reason) return reason;
+  const legacyResolution = isRecord(approval as unknown)
+    ? (approval as Record<string, unknown>)["resolution"]
+    : undefined;
+  const legacyReason =
+    legacyResolution &&
+    typeof legacyResolution === "object" &&
+    !Array.isArray(legacyResolution) &&
+    typeof (legacyResolution as Record<string, unknown>)["reason"] === "string"
+      ? ((legacyResolution as Record<string, unknown>)["reason"] as string).trim()
+      : "";
+  if (legacyReason) return legacyReason;
   const prompt = typeof approval?.prompt === "string" ? approval.prompt.trim() : "";
   const detail = item.detail.trim();
   if (!detail || detail === prompt) return null;

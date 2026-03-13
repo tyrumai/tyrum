@@ -32,6 +32,9 @@ describe("ApprovalEngineActionDal", () => {
       workspaceId: DEFAULT_WORKSPACE_ID,
       approvalKey: `approval:${randomUUID()}`,
       prompt: "Resume run?",
+      motivation: "Approving this request should enqueue a resume_run action.",
+      kind: "workflow_step",
+      status: "awaiting_human",
       runId,
       resumeToken: `resume-${randomUUID()}`,
     });
@@ -102,6 +105,9 @@ describe("ApprovalEngineActionDal", () => {
       workspaceId: DEFAULT_WORKSPACE_ID,
       approvalKey: `approval:${randomUUID()}`,
       prompt: "Continue without resume token?",
+      motivation: "Missing resume tokens should enqueue a cancel_run fallback action.",
+      kind: "workflow_step",
+      status: "awaiting_human",
       runId,
     });
 

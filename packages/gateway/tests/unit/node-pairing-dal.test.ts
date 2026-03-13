@@ -159,6 +159,35 @@ describe("NodePairingDal.upsertOnConnect", () => {
     expect(approvedReloaded!.capability_allowlist).toEqual([]);
   });
 
+  it("allows resolving queued pairings by default", async () => {
+    db = openTestSqliteDb();
+    const dal = new NodePairingDal(db);
+
+    const pending = await dal.upsertOnConnect({
+      tenantId,
+      nodeId: "node-queued",
+      pubkey: "pubkey-queued",
+      label: "node-queued",
+      capabilities: ["cli"],
+      nowIso: "2026-02-23T00:00:00.000Z",
+    });
+    expect(pending.status).toBe("queued");
+
+    const approved = await dal.resolve({
+      tenantId,
+      pairingId: pending.pairing_id,
+      decision: "approved",
+      trustLevel: "remote",
+      capabilityAllowlist: [],
+      resolvedBy: { kind: "test" },
+      nowIso: "2026-02-23T00:00:01.000Z",
+    });
+
+    expect(approved).toBeDefined();
+    expect(approved?.transitioned).toBe(true);
+    expect(approved?.pairing.status).toBe("approved");
+  });
+
   it("rejects pairing writes without a tenant id", async () => {
     db = openTestSqliteDb();
     const dal = new NodePairingDal(db);

@@ -45,7 +45,7 @@ describe("TuiApp", () => {
         byId: {
           "approval-1": {
             approval_id: "approval-1",
-            status: "pending",
+            status: "awaiting_human",
             kind: "tool",
             prompt: "Approve?",
             created_at: "2026-02-26T00:00:00.000Z",
@@ -56,7 +56,7 @@ describe("TuiApp", () => {
         byId: {
           10: {
             pairing_id: 10,
-            status: "pending",
+            status: "awaiting_human",
             node: { node_id: "node-1", label: null, capabilities: [] },
             capability_allowlist: [],
             trust_level: null,
@@ -123,7 +123,7 @@ describe("TuiApp", () => {
       byId: {
         "approval-1": {
           approval_id: "approval-1",
-          status: "pending",
+          status: "awaiting_human",
           kind: "tool",
           prompt: "Approve?",
           created_at: "2026-02-26T00:00:00.000Z",
@@ -134,7 +134,7 @@ describe("TuiApp", () => {
       byId: {
         10: {
           pairing_id: 10,
-          status: "pending",
+          status: "awaiting_human",
           node: { node_id: "node-1", label: null, capabilities: [] },
           capability_allowlist: ["runs.read"],
           trust_level: null,

@@ -61,7 +61,7 @@ describe("SessionDal transcript regressions", () => {
           kind: "approval",
           id: "approval-1",
           approval_id: "approval-1",
-          status: "pending",
+          status: "awaiting_human",
           title: "Approval required",
           detail: "Need approval",
           created_at: "2026-03-08T00:00:03Z",

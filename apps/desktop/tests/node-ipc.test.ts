@@ -136,7 +136,7 @@ describe("node-ipc", () => {
 
     expect(registeredHandlers.has("node:connect")).toBe(true);
     expect(registeredHandlers.has("node:disconnect")).toBe(true);
-    expect(registeredHandlers.has("consent:respond")).toBe(true);
+    expect(registeredHandlers.has("node:get-status")).toBe(true);
   });
 
   it("registerNodeIpc is idempotent — does not register handlers twice", async () => {
@@ -376,40 +376,17 @@ describe("node-ipc", () => {
     expect(firstRuntime?.connect).not.toHaveBeenCalled();
   });
 
-  it("responds to consent requests over IPC when runtime exists", async () => {
-    const { resolvePermissions } = await import("../src/main/config/permissions.js");
-    (resolvePermissions as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
-      cli: false,
-      cliAllowlistEnforced: true,
-      playwright: false,
-      playwrightDomainRestricted: true,
-    });
-
+  it("returns node status over IPC", async () => {
     const { registerNodeIpc } = await import("../src/main/ipc/node-ipc.js");
     registerNodeIpc(createWindowStub());
 
-    const connectHandler = registeredHandlers.get("node:connect");
-    expect(connectHandler).toBeDefined();
-    await (connectHandler as () => Promise<{ status: string }>)();
-
-    const consentHandler = registeredHandlers.get("consent:respond");
-    expect(consentHandler).toBeDefined();
-    const result = (
-      consentHandler as (
-        _event: unknown,
-        requestId: string,
-        approved: boolean,
-        reason?: string,
-      ) => { status: string }
-    )(null, "req-1", true, "ok");
-
-    expect(result.status).toBe("responded");
-
-    const { NodeRuntime } = await import("../src/main/node-runtime.js");
-    const NodeRuntimeMock = NodeRuntime as unknown as ReturnType<typeof vi.fn>;
-    const runtimeInstance = NodeRuntimeMock.mock.results.at(-1)?.value as
-      | { respondToConsent: (...args: unknown[]) => void }
-      | undefined;
-    expect(runtimeInstance?.respondToConsent).toHaveBeenCalledWith("req-1", true, "ok");
+    const statusHandler = registeredHandlers.get("node:get-status");
+    expect(statusHandler).toBeDefined();
+    expect((statusHandler as () => { status: string; connected: boolean; deviceId: string | null })())
+      .toEqual({
+        status: "disconnected",
+        connected: false,
+        deviceId: null,
+      });
   });
 });

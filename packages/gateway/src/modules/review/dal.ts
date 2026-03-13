@@ -58,6 +58,7 @@ function parseJsonOrNull(raw: string | null): unknown | null {
   try {
     return JSON.parse(raw) as unknown;
   } catch {
+    // Intentional: review evidence/payload blobs are optional; discard malformed legacy JSON.
     return null;
   }
 }
