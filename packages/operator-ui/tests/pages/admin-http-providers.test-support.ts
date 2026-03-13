@@ -5,6 +5,16 @@ import { ElevatedModeProvider } from "../../src/elevated-mode.js";
 import { AdminHttpProvidersPanel } from "../../src/components/pages/admin-http-providers.js";
 import { cleanupTestRoot, renderIntoDocument, type TestRoot } from "../test-utils.js";
 
+let adminHttpClient: OperatorCore["http"] | null = null;
+
+vi.mock("../../src/components/pages/admin-http-shared.js", async () => {
+  const actual = await import("../../src/components/pages/admin-http-shared.js");
+  return {
+    ...actual,
+    useAdminHttpClient: () => adminHttpClient,
+  };
+});
+
 const TEST_TIMESTAMP = "2026-03-01T00:00:00.000Z";
 
 const PROVIDER_DETAILS = {
@@ -96,6 +106,76 @@ const PRESET_DEFAULTS = {
 type ProviderKey = keyof typeof PROVIDER_DETAILS;
 type PresetProviderKey = keyof typeof PRESET_DEFAULTS;
 const PROVIDER_KEYS = Object.keys(PROVIDER_DETAILS) as ProviderKey[];
+
+function getJsonHeaders(token: string): HeadersInit {
+  return {
+    authorization: `Bearer ${token}`,
+    "content-type": "application/json",
+  };
+}
+
+async function readJsonResponse(response: Response): Promise<unknown> {
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Request failed with status ${String(response.status)}`);
+  }
+  return (await response.json()) as unknown;
+}
+
+function createFetchBackedAdminHttp(core: OperatorCore): OperatorCore["http"] {
+  const token = core.elevatedModeStore.getSnapshot().elevatedToken ?? "";
+  const providerConfig = core.http.providerConfig;
+
+  return {
+    ...core.http,
+    providerConfig: {
+      ...providerConfig,
+      async createAccount(body) {
+        const response = await fetch(`${core.httpBaseUrl}/config/providers/accounts`, {
+          method: "POST",
+          headers: getJsonHeaders(token),
+          body: JSON.stringify(body),
+        });
+        return (await readJsonResponse(response)) as Awaited<
+          ReturnType<typeof providerConfig.createAccount>
+        >;
+      },
+      async updateAccount(accountKey, body) {
+        const response = await fetch(
+          `${core.httpBaseUrl}/config/providers/accounts/${accountKey}`,
+          {
+            method: "PATCH",
+            headers: getJsonHeaders(token),
+            body: JSON.stringify(body),
+          },
+        );
+        return (await readJsonResponse(response)) as Awaited<
+          ReturnType<typeof providerConfig.updateAccount>
+        >;
+      },
+      async deleteAccount(accountKey) {
+        const response = await fetch(
+          `${core.httpBaseUrl}/config/providers/accounts/${accountKey}`,
+          {
+            method: "DELETE",
+            headers: { authorization: `Bearer ${token}` },
+          },
+        );
+        return (await readJsonResponse(response)) as Awaited<
+          ReturnType<typeof providerConfig.deleteAccount>
+        >;
+      },
+      async deleteProvider(providerKey, body) {
+        const response = await fetch(`${core.httpBaseUrl}/config/providers/${providerKey}`, {
+          method: "DELETE",
+          headers: body ? getJsonHeaders(token) : { authorization: `Bearer ${token}` },
+          body: body ? JSON.stringify(body) : undefined,
+        });
+        return (await response.json()) as Awaited<ReturnType<typeof providerConfig.deleteProvider>>;
+      },
+    },
+  } as OperatorCore["http"];
+}
 
 function expectPresent<T>(value: T | null | undefined): T {
   expect(value).not.toBeNull();
@@ -287,6 +367,7 @@ export function createAdminHttpProvidersTestCore(input?: {
 }
 
 export async function renderAdminHttpProvidersPanel(core: OperatorCore): Promise<TestRoot> {
+  adminHttpClient = createFetchBackedAdminHttp(core);
   const testRoot = renderIntoDocument(
     React.createElement(
       ElevatedModeProvider,
@@ -338,5 +419,6 @@ export async function openEditAccountDialog(
 }
 
 export function cleanupPanel(testRoot: TestRoot): void {
+  adminHttpClient = null;
   cleanupTestRoot(testRoot);
 }

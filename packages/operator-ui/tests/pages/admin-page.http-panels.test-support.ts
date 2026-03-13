@@ -7,6 +7,16 @@ import { ElevatedModeProvider } from "../../src/elevated-mode.js";
 import { ThemeProvider } from "../../src/hooks/use-theme.js";
 import { renderIntoDocument, type TestRoot } from "../test-utils.js";
 
+let adminHttpClient: OperatorCore["http"] | null = null;
+
+vi.mock("../../src/components/pages/admin-http-shared.js", async () => {
+  const actual = await import("../../src/components/pages/admin-http-shared.js");
+  return {
+    ...actual,
+    useAdminHttpClient: () => adminHttpClient,
+  };
+});
+
 const EXECUTION_PROFILE_IDS = [
   "interaction",
   "explorer_ro",
@@ -16,6 +26,84 @@ const EXECUTION_PROFILE_IDS = [
   "executor_rw",
   "integrator",
 ] as const;
+
+function getBearerHeaders(token: string, includeJson = false): HeadersInit {
+  return includeJson
+    ? { authorization: `Bearer ${token}`, "content-type": "application/json" }
+    : { authorization: `Bearer ${token}` };
+}
+
+async function readJsonResponse(response: Response): Promise<unknown> {
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Request failed with status ${String(response.status)}`);
+  }
+  return (await response.json()) as unknown;
+}
+
+function createFetchBackedAdminHttp(core: OperatorCore): OperatorCore["http"] {
+  const token = core.elevatedModeStore.getSnapshot().elevatedToken ?? "";
+  const authTokens = core.http.authTokens;
+  const deviceTokens = core.http.deviceTokens;
+
+  return {
+    ...core.http,
+    authTokens: {
+      ...authTokens,
+      async list() {
+        const response = await fetch(`${core.httpBaseUrl}/auth/tokens`, {
+          headers: getBearerHeaders(token),
+        });
+        return (await readJsonResponse(response)) as Awaited<ReturnType<typeof authTokens.list>>;
+      },
+      async issue(body) {
+        const response = await fetch(`${core.httpBaseUrl}/auth/tokens/issue`, {
+          method: "POST",
+          headers: getBearerHeaders(token, true),
+          body: JSON.stringify(body),
+        });
+        return (await readJsonResponse(response)) as Awaited<ReturnType<typeof authTokens.issue>>;
+      },
+      async update(tokenId, body) {
+        const response = await fetch(`${core.httpBaseUrl}/auth/tokens/${tokenId}`, {
+          method: "PATCH",
+          headers: getBearerHeaders(token, true),
+          body: JSON.stringify(body),
+        });
+        return (await readJsonResponse(response)) as Awaited<ReturnType<typeof authTokens.update>>;
+      },
+      async revoke(body) {
+        const response = await fetch(`${core.httpBaseUrl}/auth/tokens/revoke`, {
+          method: "POST",
+          headers: getBearerHeaders(token, true),
+          body: JSON.stringify(body),
+        });
+        return (await readJsonResponse(response)) as Awaited<ReturnType<typeof authTokens.revoke>>;
+      },
+    },
+    deviceTokens: {
+      ...deviceTokens,
+      async issue(body) {
+        const response = await fetch(`${core.httpBaseUrl}/device-tokens/issue`, {
+          method: "POST",
+          headers: getBearerHeaders(token, true),
+          body: JSON.stringify(body),
+        });
+        return (await readJsonResponse(response)) as Awaited<ReturnType<typeof deviceTokens.issue>>;
+      },
+      async revoke(body) {
+        const response = await fetch(`${core.httpBaseUrl}/device-tokens/revoke`, {
+          method: "POST",
+          headers: getBearerHeaders(token, true),
+          body: JSON.stringify(body),
+        });
+        return (await readJsonResponse(response)) as Awaited<
+          ReturnType<typeof deviceTokens.revoke>
+        >;
+      },
+    },
+  } as OperatorCore["http"];
+}
 
 export async function switchAdminTab(container: HTMLElement, testId: string): Promise<void> {
   const tab = container.querySelector<HTMLButtonElement>(`[data-testid="${testId}"]`);
@@ -29,6 +117,7 @@ export async function switchAdminTab(container: HTMLElement, testId: string): Pr
 }
 
 export function renderStrictAdminConfigurePage(core: OperatorCore): TestRoot {
+  adminHttpClient = createFetchBackedAdminHttp(core);
   return renderIntoDocument(
     React.createElement(
       ThemeProvider,

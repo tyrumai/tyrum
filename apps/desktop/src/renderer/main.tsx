@@ -249,7 +249,7 @@ function DesktopBootstrap() {
       <OperatorUiApp
         core={operatorCore.core}
         mode="desktop"
-        elevatedModeController={operatorCore.elevatedModeController ?? undefined}
+        adminAccessController={operatorCore.adminAccessController ?? undefined}
         onReloadPage={operatorCore.retry}
       />
     </OperatorUiHostProvider>

@@ -6,6 +6,7 @@ import type { OperatorCore } from "../../../operator-core/src/index.js";
 import { createElevatedModeStore } from "../../../operator-core/src/index.js";
 import { ElevatedModeProvider } from "../../src/elevated-mode.js";
 import { ConfigurePage } from "../../src/components/pages/configure-page.js";
+import * as adminHttpShared from "../../src/components/pages/admin-http-shared.js";
 import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
 
 function setReactTextValue(el: HTMLInputElement, value: string): void {
@@ -24,10 +25,7 @@ async function switchAdminTab(container: HTMLElement, testId: string): Promise<v
   });
 }
 
-function createCore(activeAdminMode: boolean): {
-  core: OperatorCore;
-  commandExecute: ReturnType<typeof vi.fn>;
-} {
+function createCore(activeAdminMode: boolean): { core: OperatorCore } {
   const nowMs = Date.parse("2026-03-01T00:00:00.000Z");
   const elevatedModeStore = createElevatedModeStore({ tickIntervalMs: 0, now: () => nowMs });
   if (activeAdminMode) {
@@ -37,16 +35,11 @@ function createCore(activeAdminMode: boolean): {
     });
   }
 
-  const commandExecute = vi.fn(async (command: string) => ({ output: `ok:${command}` }));
-
   const core = {
     httpBaseUrl: "http://example.test",
+    wsUrl: "ws://example.test/ws",
     elevatedModeStore,
-    ws: {
-      on: vi.fn(),
-      off: vi.fn(),
-      commandExecute,
-    },
+    ws: { on: vi.fn(), off: vi.fn(), commandExecute: vi.fn() },
     http: {
       policy: {
         getBundle: vi.fn(async () => ({ status: "ok" })),
@@ -122,7 +115,7 @@ function createCore(activeAdminMode: boolean): {
     },
   } as unknown as OperatorCore;
 
-  return { core, commandExecute };
+  return { core };
 }
 
 describe("ConfigurePage WebSocket panels", () => {
@@ -163,7 +156,10 @@ describe("ConfigurePage WebSocket panels", () => {
   });
 
   it("runs command.execute with trimmed command text in Elevated Mode", async () => {
-    const { core, commandExecute } = createCore(true);
+    const { core } = createCore(true);
+    const executeAdminWsCommand = vi
+      .spyOn(adminHttpShared, "executeAdminWsCommand")
+      .mockResolvedValue({ output: "ok:/help" });
 
     const testRoot = renderIntoDocument(
       React.createElement(
@@ -195,15 +191,17 @@ describe("ConfigurePage WebSocket panels", () => {
         await Promise.resolve();
       });
 
-      expect(commandExecute).toHaveBeenCalledTimes(1);
-      expect(commandExecute).toHaveBeenCalledWith("/help");
+      expect(executeAdminWsCommand).toHaveBeenCalledTimes(1);
+      expect(executeAdminWsCommand).toHaveBeenCalledWith({ core, command: "/help" });
     } finally {
+      executeAdminWsCommand.mockRestore();
       cleanupTestRoot(testRoot);
     }
   });
 
-  it("does not run command.execute when Elevated Mode expires before the click handler runs", async () => {
-    const { core, commandExecute } = createCore(true);
+  it("replaces the commands panel with an admin-access gate when access expires", async () => {
+    const { core } = createCore(true);
+    const executeAdminWsCommand = vi.spyOn(adminHttpShared, "executeAdminWsCommand");
 
     const testRoot = renderIntoDocument(
       React.createElement(
@@ -216,36 +214,23 @@ describe("ConfigurePage WebSocket panels", () => {
     try {
       await switchAdminTab(testRoot.container, "admin-ws-tab-commands");
 
-      const commandButton = testRoot.container.querySelector<HTMLButtonElement>(
-        "[data-testid='admin-ws-command-run']",
-      );
-      expect(commandButton).not.toBeNull();
-      expect(commandButton?.disabled).toBe(false);
-
-      const activeSnapshot = core.elevatedModeStore.getSnapshot();
-      const inactiveSnapshot = {
-        ...activeSnapshot,
-        status: "inactive",
-        elevatedToken: null,
-        enteredAt: null,
-        expiresAt: null,
-        remainingMs: null,
-      };
-      core.elevatedModeStore.getSnapshot = () => inactiveSnapshot;
-
+      act(() => {
+        core.elevatedModeStore.exit();
+      });
       await act(async () => {
-        commandButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
         await Promise.resolve();
       });
 
-      expect(commandExecute).not.toHaveBeenCalled();
-      expect(document.body.querySelector("[data-testid='elevated-mode-dialog']")).not.toBeNull();
+      expect(executeAdminWsCommand).not.toHaveBeenCalled();
+      expect(testRoot.container.querySelector("[data-testid='admin-ws-command-panel']")).toBeNull();
+      expect(testRoot.container.querySelector("[data-testid='admin-access-gate']")).not.toBeNull();
     } finally {
+      executeAdminWsCommand.mockRestore();
       cleanupTestRoot(testRoot);
     }
   });
 
-  it("disables command.execute when Elevated Mode is inactive", async () => {
+  it("shows an admin-access gate when command access is inactive", async () => {
     const { core } = createCore(false);
 
     const testRoot = renderIntoDocument(
@@ -259,11 +244,8 @@ describe("ConfigurePage WebSocket panels", () => {
     try {
       await switchAdminTab(testRoot.container, "admin-ws-tab-commands");
 
-      const commandButton = testRoot.container.querySelector<HTMLButtonElement>(
-        "[data-testid='admin-ws-command-run']",
-      );
-      expect(commandButton).not.toBeNull();
-      expect(commandButton?.closest("[data-elevated-mode-guard]")).not.toBeNull();
+      expect(testRoot.container.querySelector("[data-testid='admin-ws-command-panel']")).toBeNull();
+      expect(testRoot.container.querySelector("[data-testid='admin-access-gate']")).not.toBeNull();
     } finally {
       cleanupTestRoot(testRoot);
     }

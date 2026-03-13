@@ -109,7 +109,7 @@ async function loadOptionalPolicyConfig<T>(
 }
 
 export function AdminHttpPolicyCard({
-  core,
+  core: _core,
   canMutate,
   requestEnter,
 }: {
@@ -117,7 +117,8 @@ export function AdminHttpPolicyCard({
   canMutate: boolean;
   requestEnter: () => void;
 }): React.ReactElement {
-  const http = (useAdminHttpClient() ?? core.http) as PolicyHttpClient;
+  const adminHttp = useAdminHttpClient();
+  const http = (adminHttp ?? null) as PolicyHttpClient | null;
   const [effective, setEffective] = React.useState<PolicyEffectiveBundle | null>(null);
   const [currentRevision, setCurrentRevision] = React.useState<PolicyConfigDeployment | null>(null);
   const [revisions, setRevisions] = React.useState<PolicyConfigRevision[]>([]);
@@ -146,6 +147,9 @@ export function AdminHttpPolicyCard({
     setLoadBusy(true);
     setLoadError(null);
     try {
+      if (!http) {
+        throw new Error("Admin access is required to load policy configuration.");
+      }
       if (!http.policyConfig) {
         throw new Error("Deployment policy config API unavailable.");
       }
@@ -205,6 +209,7 @@ export function AdminHttpPolicyCard({
           if (!requireMutationAccess()) return false;
           setSaveBusy(true);
           try {
+            if (!http) throw new Error("Admin access is required to save policy configuration.");
             if (!http.policyConfig) throw new Error("Deployment policy config API unavailable.");
             await http.policyConfig.updateDeployment({
               bundle,
@@ -224,6 +229,7 @@ export function AdminHttpPolicyCard({
           if (!requireMutationAccess()) return;
           setRevertBusy(true);
           try {
+            if (!http) throw new Error("Admin access is required to revert policy configuration.");
             if (!http.policyConfig) throw new Error("Deployment policy config API unavailable.");
             await http.policyConfig.revertDeployment({
               revision,
@@ -258,6 +264,7 @@ export function AdminHttpPolicyCard({
           if (!requireMutationAccess()) return false;
           setCreateBusy(true);
           try {
+            if (!http) throw new Error("Admin access is required to create policy overrides.");
             await http.policy.createOverride(input);
             await loadAll();
             return true;
@@ -273,6 +280,7 @@ export function AdminHttpPolicyCard({
           if (!requireMutationAccess()) return;
           setRevokeBusy(true);
           try {
+            if (!http) throw new Error("Admin access is required to revoke policy overrides.");
             await http.policy.revokeOverride(input);
             await loadAll();
           } catch (error) {

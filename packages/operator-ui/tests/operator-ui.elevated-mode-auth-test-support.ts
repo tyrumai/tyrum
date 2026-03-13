@@ -6,12 +6,12 @@ import {
   createBrowserCookieAuth,
   createOperatorCore,
 } from "../../operator-core/src/index.js";
-import { ElevatedModeGate, ElevatedModeProvider } from "../src/index.js";
+import { AdminAccessGate, AdminAccessProvider } from "../src/index.js";
 import { TEST_DEVICE_IDENTITY, requestInfoToUrl } from "./operator-ui.test-support.js";
 import { FakeWsClient, createFakeHttpClient } from "./operator-ui.test-fixtures.js";
 
 function registerElevatedModeAuthBearerTests(): void {
-  it("uses baseline bearer auth to enter Elevated Mode", async () => {
+  it("uses baseline bearer auth to authorize admin access", async () => {
     const issuedAt = "2026-02-27T00:00:00.000Z";
     const expiresAt = "2026-02-27T00:10:00.000Z";
     vi.useFakeTimers();
@@ -50,11 +50,11 @@ function registerElevatedModeAuthBearerTests(): void {
     act(() => {
       root = createRoot(container);
       root.render(
-        React.createElement(ElevatedModeProvider, {
+        React.createElement(AdminAccessProvider, {
           core,
           mode: "web",
           children: React.createElement(
-            ElevatedModeGate,
+            AdminAccessGate,
             null,
             React.createElement(
               "button",
@@ -67,7 +67,7 @@ function registerElevatedModeAuthBearerTests(): void {
     });
 
     expect(container.querySelector('[data-testid="danger-action"]')).toBeNull();
-    expect(container.textContent).toContain("Enter Elevated Mode to continue");
+    expect(container.textContent).toContain("Authorize admin access to continue");
 
     const enterButton = container.querySelector<HTMLButtonElement>(
       '[data-testid="elevated-mode-enter"]',
@@ -118,7 +118,7 @@ function registerElevatedModeAuthBearerTests(): void {
       expiresAt,
     });
 
-    expect(container.querySelector('[data-testid="elevated-mode-frame"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="elevated-mode-frame"]')).toBeNull();
     expect(container.querySelector('[data-testid="danger-action"]')).not.toBeNull();
 
     act(() => {
@@ -127,7 +127,7 @@ function registerElevatedModeAuthBearerTests(): void {
     container.remove();
   });
 
-  it("rejects a timed fallback Elevated Mode token without expires_at", async () => {
+  it("rejects a timed admin-access token without expires_at", async () => {
     const issuedAt = "2026-02-27T00:00:00.000Z";
     const fetchMock = vi.fn(async () => {
       return new Response(
@@ -162,11 +162,11 @@ function registerElevatedModeAuthBearerTests(): void {
     act(() => {
       root = createRoot(container);
       root.render(
-        React.createElement(ElevatedModeProvider, {
+        React.createElement(AdminAccessProvider, {
           core,
           mode: "web",
           children: React.createElement(
-            ElevatedModeGate,
+            AdminAccessGate,
             null,
             React.createElement(
               "button",
@@ -221,7 +221,7 @@ function registerElevatedModeAuthBearerTests(): void {
 }
 
 function registerElevatedModeAuthCookieDialogTests(): void {
-  it("uses baseline cookie auth to enter Elevated Mode in web mode", async () => {
+  it("uses baseline cookie auth to authorize admin access in web mode", async () => {
     const issuedAt = "2026-02-27T00:00:00.000Z";
     const expiresAt = "2026-02-27T00:10:00.000Z";
     const fetchMock = vi.fn(async () => {
@@ -257,11 +257,11 @@ function registerElevatedModeAuthCookieDialogTests(): void {
     act(() => {
       root = createRoot(container);
       root.render(
-        React.createElement(ElevatedModeProvider, {
+        React.createElement(AdminAccessProvider, {
           core,
           mode: "web",
           children: React.createElement(
-            ElevatedModeGate,
+            AdminAccessGate,
             null,
             React.createElement(
               "button",
@@ -320,7 +320,7 @@ function registerElevatedModeAuthCookieDialogTests(): void {
     container.remove();
   });
 
-  it("renders an accessible Elevated Mode dialog and closes on Escape", () => {
+  it("renders an accessible admin-access dialog and closes on Escape", () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
     const core = createOperatorCore({
@@ -337,11 +337,11 @@ function registerElevatedModeAuthCookieDialogTests(): void {
     act(() => {
       root = createRoot(container);
       root.render(
-        React.createElement(ElevatedModeProvider, {
+        React.createElement(AdminAccessProvider, {
           core,
           mode: "web",
           children: React.createElement(
-            ElevatedModeGate,
+            AdminAccessGate,
             null,
             React.createElement(
               "button",

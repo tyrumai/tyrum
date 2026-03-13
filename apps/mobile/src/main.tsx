@@ -141,7 +141,7 @@ function MobileRoot() {
     );
   }
 
-  if (!operator.core || !operator.elevatedModeController) {
+  if (!operator.core || !operator.adminAccessController) {
     if (operator.busy) {
       return <LoadingScreen label="Connecting to the Tyrum gateway…" />;
     }
@@ -182,7 +182,7 @@ function MobileRoot() {
         <OperatorUiApp
           core={operator.core}
           mode="web"
-          elevatedModeController={operator.elevatedModeController}
+          adminAccessController={operator.adminAccessController}
           onReloadPage={() => {
             globalThis.location.reload();
           }}

@@ -23,9 +23,7 @@ import {
 export function AdminHttpLocationPanel({ core }: { core: OperatorCore }) {
   const { canMutate, requestEnter } = useAdminMutationAccess(core);
   const adminHttp = useAdminHttpClient();
-  const locationHttp =
-    (adminHttp as { location?: LocationHttpApi } | null)?.location ??
-    (core.http as { location?: LocationHttpApi }).location;
+  const locationHttp = (adminHttp as { location?: LocationHttpApi } | null)?.location ?? null;
 
   const [places, setPlaces] = React.useState<LocationPlace[]>([]);
   const [profile, setProfile] = React.useState<LocationProfile | null>(null);
@@ -40,7 +38,7 @@ export function AdminHttpLocationPanel({ core }: { core: OperatorCore }) {
   const [placeDraft, setPlaceDraft] = React.useState(EMPTY_PLACE_DRAFT);
 
   const loadData = React.useCallback(async () => {
-    if (!locationHttp) {
+    if (!adminHttp || !locationHttp) {
       setLoading(false);
       setLoadError(null);
       return;
@@ -52,7 +50,7 @@ export function AdminHttpLocationPanel({ core }: { core: OperatorCore }) {
       const [placesResponse, profileResponse, nodesResponse] = await Promise.all([
         locationHttp.listPlaces(),
         locationHttp.getProfile(),
-        core.http.nodes.list({ dispatchable_only: false }),
+        adminHttp.nodes.list({ dispatchable_only: false }),
       ]);
       setPlaces(placesResponse.places);
       setProfile(profileResponse.profile);
@@ -63,7 +61,7 @@ export function AdminHttpLocationPanel({ core }: { core: OperatorCore }) {
     } finally {
       setLoading(false);
     }
-  }, [core.http.nodes, locationHttp]);
+  }, [adminHttp, locationHttp]);
 
   React.useEffect(() => {
     void loadData();
@@ -153,7 +151,7 @@ export function AdminHttpLocationPanel({ core }: { core: OperatorCore }) {
     if (!locationHttp || !deleteTarget) return;
     if (!canMutate) {
       requestEnter();
-      throw new Error("Enter Elevated Mode to delete a saved place.");
+      throw new Error("Authorize admin access to delete a saved place.");
     }
 
     setBusyKey(`delete:${deleteTarget.place_id}`);

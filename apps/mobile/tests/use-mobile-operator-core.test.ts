@@ -66,7 +66,7 @@ vi.mock("@tyrum/operator-core/browser", () => ({
 }));
 
 vi.mock("@tyrum/operator-ui", () => ({
-  createPersistentElevatedModeController: vi.fn(() => controller),
+  createAdminAccessController: vi.fn(() => controller),
 }));
 
 vi.mock("@tyrum/client/browser", () => ({

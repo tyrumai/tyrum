@@ -33,6 +33,8 @@ import {
   type RoutingRuleRow,
 } from "./admin-http-routing-config.shared.js";
 
+type AgentHttpClient = Pick<OperatorCore["http"], "agentList" | "agents">;
+
 function buildAgentOptions(agents: AgentListResult["agents"]): RoutingAgentOption[] {
   return agents.map((agent) => ({
     key: agent.agent_key,
@@ -43,13 +45,13 @@ function buildAgentOptions(agents: AgentListResult["agents"]): RoutingAgentOptio
   }));
 }
 
-async function loadAgentOptions(core: OperatorCore): Promise<RoutingAgentOption[]> {
-  if (core.http.agentList) {
-    const result = await core.http.agentList.get({ include_default: true });
+async function loadAgentOptions(http: AgentHttpClient): Promise<RoutingAgentOption[]> {
+  if (http.agentList) {
+    const result = await http.agentList.get({ include_default: true });
     return buildAgentOptions(result.agents);
   }
-  if (core.http.agents) {
-    const result = await core.http.agents.list();
+  if (http.agents) {
+    const result = await http.agents.list();
     return buildAgentOptions(result.agents);
   }
   return [];
@@ -68,7 +70,7 @@ function describeRule(row: RoutingRuleRow): string {
 }
 
 export function AdminHttpRoutingConfigPanel({ core }: { core: OperatorCore }): React.ReactElement {
-  const mutationHttp = useAdminHttpClient() ?? core.http;
+  const adminHttp = useAdminHttpClient();
   const { canMutate, requestEnter } = useAdminMutationAccess(core);
   const [filterValue, setFilterValue] = React.useState("");
   const [loading, setLoading] = React.useState(true);
@@ -88,9 +90,9 @@ export function AdminHttpRoutingConfigPanel({ core }: { core: OperatorCore }): R
     React.useState<ChannelRoutingRevisionSummary | null>(null);
 
   const loadPanelData = async (busyState: "loading" | "refreshing"): Promise<void> => {
-    const routingApi = asChannelRoutingApi(core.http.routingConfig);
+    const routingApi = asChannelRoutingApi(adminHttp?.routingConfig);
     if (!routingApi?.listChannelConfigs) {
-      setErrorMessage("Channels config API unavailable.");
+      setErrorMessage("Admin access is required to load channel configuration.");
       setLoading(false);
       setRefreshing(false);
       return;
@@ -110,7 +112,7 @@ export function AdminHttpRoutingConfigPanel({ core }: { core: OperatorCore }): R
           routingApi.listRevisions({ limit: 20 }),
           routingApi.listObservedTelegramThreads({ limit: 200 }),
           routingApi.listChannelConfigs(),
-          loadAgentOptions(core),
+          adminHttp ? loadAgentOptions(adminHttp) : Promise.resolve([]),
         ]);
       setConfig(current.config as ChannelRoutingConfig);
       setRevisions(revisionResult.revisions as ChannelRoutingRevisionSummary[]);
@@ -128,7 +130,7 @@ export function AdminHttpRoutingConfigPanel({ core }: { core: OperatorCore }): R
   React.useEffect(() => {
     void loadPanelData("loading");
     // Intentional: initial load should only run when the core instance changes.
-  }, [core]);
+  }, [adminHttp, core]);
 
   const allRows = buildRoutingRuleRows(config, observedThreads);
   const rows = filterRoutingRuleRows(allRows, filterValue);
@@ -184,7 +186,7 @@ export function AdminHttpRoutingConfigPanel({ core }: { core: OperatorCore }): R
   };
 
   const saveRule = async (draft: RoutingRuleDraft): Promise<void> => {
-    const routingApi = asChannelRoutingApi(mutationHttp.routingConfig);
+    const routingApi = asChannelRoutingApi(adminHttp?.routingConfig);
     if (!routingApi) {
       throw new Error("Channels config API unavailable.");
     }
@@ -197,7 +199,7 @@ export function AdminHttpRoutingConfigPanel({ core }: { core: OperatorCore }): R
 
   const removeRule = async (): Promise<void> => {
     if (!deletingRow) return;
-    const routingApi = asChannelRoutingApi(mutationHttp.routingConfig);
+    const routingApi = asChannelRoutingApi(adminHttp?.routingConfig);
     if (!routingApi) {
       throw new Error("Channels config API unavailable.");
     }
@@ -210,7 +212,7 @@ export function AdminHttpRoutingConfigPanel({ core }: { core: OperatorCore }): R
 
   const revertRevision = async (): Promise<void> => {
     if (!revertingRevision) return;
-    const routingApi = asChannelRoutingApi(mutationHttp.routingConfig);
+    const routingApi = asChannelRoutingApi(adminHttp?.routingConfig);
     if (!routingApi) {
       throw new Error("Channels config API unavailable.");
     }

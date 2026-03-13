@@ -20,10 +20,10 @@ export function ImportGuard({
   return (
     <Alert
       variant="warning"
-      title="Elevated mode required"
+      title="Admin access required"
       description={
         <div className="flex flex-wrap items-center gap-3">
-          <span>Imports and changes require elevated mode.</span>
+          <span>Imports and changes require temporary admin access.</span>
           <Button
             variant="outline"
             size="sm"
@@ -31,7 +31,7 @@ export function ImportGuard({
               requestEnter();
             }}
           >
-            Unlock changes
+            Authorize admin access
           </Button>
         </div>
       }

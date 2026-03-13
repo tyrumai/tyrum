@@ -8,10 +8,7 @@ import {
   type OperatorCore,
   type OperatorCoreManager,
 } from "@tyrum/operator-core/browser";
-import {
-  createPersistentElevatedModeController,
-  type ElevatedModeController,
-} from "@tyrum/operator-ui";
+import { createAdminAccessController, type AdminAccessController } from "@tyrum/operator-ui";
 import { formatDeviceIdentityError, loadOrCreateDeviceIdentity } from "@tyrum/client/browser";
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 import type { ElevatedModeStore } from "@tyrum/operator-core/browser";
@@ -27,7 +24,7 @@ import {
 type UseMobileOperatorCoreState = {
   bootstrap: MobileBootstrapConfig | null;
   core: OperatorCore | null;
-  elevatedModeController: ElevatedModeController | null;
+  adminAccessController: AdminAccessController | null;
   busy: boolean;
   errorMessage: string | null;
   retry: () => void;
@@ -52,8 +49,9 @@ function disposeManager(
 export function useMobileOperatorCore(): UseMobileOperatorCoreState {
   const [bootstrap, setBootstrap] = useState<MobileBootstrapConfig | null>(null);
   const [core, setCore] = useState<OperatorCore | null>(null);
-  const [elevatedModeController, setElevatedModeController] =
-    useState<ElevatedModeController | null>(null);
+  const [adminAccessController, setAdminAccessController] = useState<AdminAccessController | null>(
+    null,
+  );
   const [busy, setBusy] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [reloadVersion, setReloadVersion] = useState(0);
@@ -86,7 +84,7 @@ export function useMobileOperatorCore(): UseMobileOperatorCoreState {
     await clearMobileBootstrapConfig();
     setBootstrap(null);
     setCore(null);
-    setElevatedModeController(null);
+    setAdminAccessController(null);
     setErrorMessage(null);
   }, []);
 
@@ -130,7 +128,7 @@ export function useMobileOperatorCore(): UseMobileOperatorCoreState {
     if (!connectionBootstrap) {
       disposeManager(managerRef, unsubscribeRef, elevatedModeStoreRef);
       setCore(null);
-      setElevatedModeController(null);
+      setAdminAccessController(null);
       setBusy(false);
       return;
     }
@@ -161,7 +159,7 @@ export function useMobileOperatorCore(): UseMobileOperatorCoreState {
             });
           },
         });
-        const controller = createPersistentElevatedModeController({
+        const controller = createAdminAccessController({
           http: baselineHttp,
           deviceId: deviceIdentity.deviceId,
           elevatedModeStore,
@@ -177,7 +175,7 @@ export function useMobileOperatorCore(): UseMobileOperatorCoreState {
         managerRef.current = manager;
         elevatedModeStoreRef.current = elevatedModeStore;
         setCore(manager.getCore());
-        setElevatedModeController(controller);
+        setAdminAccessController(controller);
         unsubscribeRef.current = manager.subscribe(() => {
           if (disposed) return;
           setCore(manager.getCore());
@@ -188,7 +186,7 @@ export function useMobileOperatorCore(): UseMobileOperatorCoreState {
         if (disposed) return;
         disposeManager(managerRef, unsubscribeRef, elevatedModeStoreRef);
         setCore(null);
-        setElevatedModeController(null);
+        setAdminAccessController(null);
         setErrorMessage(formatDeviceIdentityError(error));
       } finally {
         if (!disposed) {
@@ -206,7 +204,7 @@ export function useMobileOperatorCore(): UseMobileOperatorCoreState {
   return {
     bootstrap,
     core,
-    elevatedModeController,
+    adminAccessController,
     busy,
     errorMessage,
     retry,

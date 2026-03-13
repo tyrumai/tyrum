@@ -25,8 +25,9 @@ export function AdminHttpChannelConfigsPanel({
   core: OperatorCore;
   onChannelConfigsChanged?: () => void;
 }): React.ReactElement {
-  const readApi = asChannelRoutingApi(core.http.routingConfig);
-  const mutationApi = asChannelRoutingApi((useAdminHttpClient() ?? core.http).routingConfig);
+  const adminHttp = useAdminHttpClient();
+  const readApi = asChannelRoutingApi(adminHttp?.routingConfig);
+  const mutationApi = asChannelRoutingApi(adminHttp?.routingConfig);
   const { canMutate, requestEnter } = useAdminMutationAccess(core);
 
   const [loading, setLoading] = React.useState(true);

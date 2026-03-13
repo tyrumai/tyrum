@@ -14,6 +14,7 @@ import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { Input } from "../ui/input.js";
+import { useAdminHttpClient } from "./admin-http-shared.js";
 
 type SourceFilter = ToolRegistryEntry["source"] | "all";
 type RiskFilter = ToolRegistryEntry["risk"] | "all";
@@ -115,8 +116,9 @@ function buildGroups(tools: readonly ToolRegistryEntry[]): Array<{
   })).filter((group) => group.items.length > 0);
 }
 
-export function ToolRegistryCard({ core }: { core: OperatorCore }): React.ReactElement {
-  const toolRegistryApi = core.http.toolRegistry;
+export function ToolRegistryCard({ core: _core }: { core: OperatorCore }): React.ReactElement {
+  const adminHttp = useAdminHttpClient();
+  const toolRegistryApi = adminHttp?.toolRegistry ?? null;
   const [tools, setTools] = React.useState<ToolRegistryEntry[]>([]);
   const [expandedIds, setExpandedIds] = React.useState<Set<string>>(() => new Set());
   const [filter, setFilter] = React.useState("");

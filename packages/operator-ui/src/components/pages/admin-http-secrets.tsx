@@ -135,8 +135,9 @@ function SecretRowActions({
 }
 
 export function AdminHttpSecretsPanel({ core }: { core: OperatorCore }): React.ReactElement {
-  const readApi: SecretsApi = core.http.secrets;
-  const mutationApi: SecretsApi = (useAdminHttpClient() ?? core.http).secrets;
+  const adminHttp = useAdminHttpClient();
+  const readApi: SecretsApi | null = adminHttp?.secrets ?? null;
+  const mutationApi: SecretsApi | null = adminHttp?.secrets ?? null;
   const { canMutate, requestEnter } = useAdminMutationAccess(core);
 
   const [rows, setRows] = React.useState<SecretRow[]>([]);
@@ -153,6 +154,13 @@ export function AdminHttpSecretsPanel({ core }: { core: OperatorCore }): React.R
   const [revokeTarget, setRevokeTarget] = React.useState<SecretRow | null>(null);
 
   const refreshSecrets = React.useCallback(async (): Promise<void> => {
+    if (!readApi) {
+      setRows([]);
+      setLoading(false);
+      setRefreshing(false);
+      setErrorMessage("Admin access is required to load secrets.");
+      return;
+    }
     setRefreshing(true);
     setErrorMessage(null);
     try {
@@ -181,7 +189,7 @@ export function AdminHttpSecretsPanel({ core }: { core: OperatorCore }): React.R
   const runStore = async (): Promise<void> => {
     if (!canMutate) {
       requestEnter();
-      throw new Error("Enter Elevated Mode to store secrets.");
+      throw new Error("Authorize admin access to store secrets.");
     }
 
     const secretKey = storeSecretKeyRaw.trim();
@@ -194,6 +202,9 @@ export function AdminHttpSecretsPanel({ core }: { core: OperatorCore }): React.R
       throw new Error("value is required");
     }
 
+    if (!mutationApi) {
+      throw new Error("Admin access is required to store secrets.");
+    }
     await mutationApi.store({ secret_key: secretKey, value: rawValue });
     await refreshSecrets();
     setStoreSecretKeyRaw("");
@@ -207,7 +218,7 @@ export function AdminHttpSecretsPanel({ core }: { core: OperatorCore }): React.R
   const runRotate = async (): Promise<void> => {
     if (!canMutate) {
       requestEnter();
-      throw new Error("Enter Elevated Mode to rotate secrets.");
+      throw new Error("Authorize admin access to rotate secrets.");
     }
     if (!rotateTarget) {
       throw new Error("Select a secret to rotate.");
@@ -218,6 +229,9 @@ export function AdminHttpSecretsPanel({ core }: { core: OperatorCore }): React.R
       throw new Error("value is required");
     }
 
+    if (!mutationApi) {
+      throw new Error("Admin access is required to rotate secrets.");
+    }
     await mutationApi.rotate(rotateTarget.handle.handle_id, { value: rawValue });
     await refreshSecrets();
     setRotateValueRaw("");
@@ -230,12 +244,15 @@ export function AdminHttpSecretsPanel({ core }: { core: OperatorCore }): React.R
   const runRevoke = async (): Promise<void> => {
     if (!canMutate) {
       requestEnter();
-      throw new Error("Enter Elevated Mode to revoke secrets.");
+      throw new Error("Authorize admin access to revoke secrets.");
     }
     if (!revokeTarget) {
       throw new Error("Select a secret to revoke.");
     }
 
+    if (!mutationApi) {
+      throw new Error("Admin access is required to revoke secrets.");
+    }
     await mutationApi.revoke(revokeTarget.handle.handle_id);
     await refreshSecrets();
     setStatusMessage({

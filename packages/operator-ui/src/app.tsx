@@ -1,6 +1,6 @@
 import type { OperatorCore } from "@tyrum/operator-core";
 import { Suspense, useEffect, useRef, type ReactNode } from "react";
-import { ElevatedModeProvider } from "./elevated-mode.js";
+import { AdminAccessProvider } from "./elevated-mode.js";
 import { ErrorBoundary } from "./components/error/error-boundary.js";
 import { AppShell } from "./components/layout/app-shell.js";
 import { MobileNav } from "./components/layout/mobile-nav.js";
@@ -15,14 +15,14 @@ import { OperatorUiHostProvider, useHostApiOptional, type HostKind } from "./hos
 import { CONNECT_PAGE_RENDER, getOperatorRouteDefinition } from "./operator-routes.js";
 import { RetainedUiStateProvider } from "./reconnect-ui-state.js";
 import { useOperatorAppViewModel } from "./use-operator-app-view-model.js";
-import type { ElevatedModeController } from "./components/elevated-mode/elevated-mode-controller.js";
+import type { AdminAccessController } from "./elevated-mode.js";
 
 export type OperatorUiMode = "web" | "desktop";
 
 export interface OperatorUiAppProps {
   core: OperatorCore;
   mode: OperatorUiMode;
-  elevatedModeController?: ElevatedModeController;
+  adminAccessController?: AdminAccessController;
   onReloadPage?: () => void;
   onReconfigureGateway?: (httpUrl: string, wsUrl: string) => void;
 }
@@ -30,7 +30,7 @@ export interface OperatorUiAppProps {
 export function OperatorUiApp({
   core,
   mode,
-  elevatedModeController,
+  adminAccessController,
   onReloadPage,
   onReconfigureGateway,
 }: OperatorUiAppProps) {
@@ -40,7 +40,7 @@ export function OperatorUiApp({
         <OperatorUiAppRoot
           core={core}
           mode={mode}
-          elevatedModeController={elevatedModeController}
+          adminAccessController={adminAccessController}
           onReloadPage={onReloadPage}
           onReconfigureGateway={onReconfigureGateway}
         />
@@ -68,12 +68,12 @@ function OperatorUiAppHostBoundary({
 function OperatorUiAppRoot({
   core,
   mode,
-  elevatedModeController,
+  adminAccessController,
   onReloadPage,
   onReconfigureGateway,
 }: Pick<
   OperatorUiAppProps,
-  "core" | "mode" | "elevatedModeController" | "onReloadPage" | "onReconfigureGateway"
+  "core" | "mode" | "adminAccessController" | "onReloadPage" | "onReconfigureGateway"
 >) {
   const existingTheme = useThemeOptional();
   const host = useHostApiOptional();
@@ -135,11 +135,7 @@ function OperatorUiAppRoot({
       }
     >
       <RetainedUiStateProvider scopeKey={reconnectUiScopeKey}>
-        <ElevatedModeProvider
-          core={core}
-          mode={mode}
-          elevatedModeController={elevatedModeController}
-        >
+        <AdminAccessProvider core={core} mode={mode} adminAccessController={adminAccessController}>
           {viewModel.showConnectPage ? (
             <div className="flex min-h-0 flex-1 overflow-hidden">
               <ScrollArea className="h-full w-full">
@@ -169,7 +165,7 @@ function OperatorUiAppRoot({
               }) ?? null}
             </Suspense>
           )}
-        </ElevatedModeProvider>
+        </AdminAccessProvider>
       </RetainedUiStateProvider>
     </AppShell>
   );

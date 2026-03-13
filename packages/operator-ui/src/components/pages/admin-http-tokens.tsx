@@ -31,7 +31,7 @@ import {
 
 export function AuthTokensCard({ core }: { core: OperatorCore }): React.ReactElement {
   const { canMutate, requestEnter } = useAdminMutationAccess(core);
-  const http = useAdminHttpClient() ?? core.http;
+  const adminHttp = useAdminHttpClient();
   const [tokens, setTokens] = React.useState<AuthTokenListEntry[]>([]);
   const [listBusy, setListBusy] = React.useState(true);
   const [listErrorMessage, setListErrorMessage] = React.useState<string | null>(null);
@@ -52,10 +52,16 @@ export function AuthTokensCard({ core }: { core: OperatorCore }): React.ReactEle
   const [revokeErrorMessage, setRevokeErrorMessage] = React.useState<string | null>(null);
 
   const loadTokens = React.useCallback(async () => {
+    if (!adminHttp) {
+      setTokens([]);
+      setListBusy(false);
+      setListErrorMessage("Admin access is required to load tenant tokens.");
+      return;
+    }
     setListBusy(true);
     setListErrorMessage(null);
     try {
-      const result = await http.authTokens.list();
+      const result = await adminHttp.authTokens.list();
       setTokens(result.tokens);
     } catch (error) {
       setListErrorMessage(error instanceof Error ? error.message : "Failed to load tokens.");
@@ -63,7 +69,7 @@ export function AuthTokensCard({ core }: { core: OperatorCore }): React.ReactEle
     } finally {
       setListBusy(false);
     }
-  }, [http]);
+  }, [adminHttp]);
 
   React.useEffect(() => {
     void loadTokens();
@@ -137,9 +143,15 @@ export function AuthTokensCard({ core }: { core: OperatorCore }): React.ReactEle
     setDialogErrorMessage(null);
     try {
       if (dialogMode === "create") {
-        setIssuedToken(await http.authTokens.issue(buildIssueInput(formState)));
+        if (!adminHttp) {
+          throw new Error("Admin access is required to issue tenant tokens.");
+        }
+        setIssuedToken(await adminHttp.authTokens.issue(buildIssueInput(formState)));
       } else if (dialogMode === "edit" && editingToken) {
-        await http.authTokens.update(
+        if (!adminHttp) {
+          throw new Error("Admin access is required to update tenant tokens.");
+        }
+        await adminHttp.authTokens.update(
           editingToken.token_id,
           buildUpdateInput(formState, {
             initialExpiresAt: editingToken.expires_at,
@@ -160,7 +172,7 @@ export function AuthTokensCard({ core }: { core: OperatorCore }): React.ReactEle
   const revokeToken = async (): Promise<void> => {
     if (!canMutate) {
       requestEnter();
-      throw new Error("Enter Elevated Mode to revoke tokens.");
+      throw new Error("Authorize admin access to revoke tokens.");
     }
     if (!revokeTarget) {
       throw new Error("Select a token to revoke.");
@@ -168,7 +180,10 @@ export function AuthTokensCard({ core }: { core: OperatorCore }): React.ReactEle
 
     setRevokeErrorMessage(null);
     try {
-      const result = await http.authTokens.revoke({ token_id: revokeTarget.token_id });
+      if (!adminHttp) {
+        throw new Error("Admin access is required to revoke tenant tokens.");
+      }
+      const result = await adminHttp.authTokens.revoke({ token_id: revokeTarget.token_id });
       if (!result.revoked) {
         throw new Error("Token could not be revoked.");
       }

@@ -18,8 +18,7 @@ import type {
 
 export function AdminHttpProvidersPanel({ core }: { core: OperatorCore }): React.ReactElement {
   const { canMutate, requestEnter } = useAdminMutationAccess(core);
-  const mutationHttp = useAdminHttpClient() ?? core.http;
-  const readHttp = core.http;
+  const adminHttp = useAdminHttpClient();
   const [registry, setRegistry] = React.useState<ProviderRegistryEntry[]>([]);
   const [providers, setProviders] = React.useState<ConfiguredProviderGroup[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -37,12 +36,20 @@ export function AdminHttpProvidersPanel({ core }: { core: OperatorCore }): React
   const [actionKey, setActionKey] = React.useState<string | null>(null);
 
   const refresh = React.useCallback(async (): Promise<void> => {
+    if (!adminHttp) {
+      setRegistry([]);
+      setProviders([]);
+      setErrorMessage("Admin access is required to load provider configuration.");
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
     setRefreshing(true);
     setErrorMessage(null);
     try {
       const [registryResult, providerResult] = await Promise.all([
-        readHttp.providerConfig.listRegistry(),
-        readHttp.providerConfig.listProviders(),
+        adminHttp.providerConfig.listRegistry(),
+        adminHttp.providerConfig.listProviders(),
       ]);
       setRegistry(registryResult.providers);
       setProviders(providerResult.providers);
@@ -52,7 +59,7 @@ export function AdminHttpProvidersPanel({ core }: { core: OperatorCore }): React
       setLoading(false);
       setRefreshing(false);
     }
-  }, [readHttp.providerConfig]);
+  }, [adminHttp]);
 
   React.useEffect(() => {
     void refresh();
@@ -69,7 +76,10 @@ export function AdminHttpProvidersPanel({ core }: { core: OperatorCore }): React
     setActionKey(`${account.account_key}:${status}`);
     setErrorMessage(null);
     try {
-      await mutationHttp.providerConfig.updateAccount(account.account_key, { status });
+      if (!adminHttp) {
+        throw new Error("Admin access is required to update provider accounts.");
+      }
+      await adminHttp.providerConfig.updateAccount(account.account_key, { status });
       await refresh();
     } catch (error) {
       setErrorMessage(formatErrorMessage(error));
@@ -80,7 +90,10 @@ export function AdminHttpProvidersPanel({ core }: { core: OperatorCore }): React
 
   const removeAccount = async (): Promise<void> => {
     if (!deletingAccount) return;
-    await mutationHttp.providerConfig.deleteAccount(deletingAccount.account_key);
+    if (!adminHttp) {
+      throw new Error("Admin access is required to remove provider accounts.");
+    }
+    await adminHttp.providerConfig.deleteAccount(deletingAccount.account_key);
     setDeletingAccount(null);
     await refresh();
   };
@@ -91,14 +104,17 @@ export function AdminHttpProvidersPanel({ core }: { core: OperatorCore }): React
       deletingProvider.requiredExecutionProfileIds,
       deletingProvider.replacementAssignments,
     );
+    if (!adminHttp) {
+      throw new Error("Admin access is required to remove providers.");
+    }
 
-    const result = await mutationHttp.providerConfig.deleteProvider(
+    const result = await adminHttp.providerConfig.deleteProvider(
       deletingProvider.group.provider_key,
       replacementAssignments ? { replacement_assignments: replacementAssignments } : undefined,
     );
 
     if ("error" in result) {
-      const presets = await readHttp.modelConfig.listPresets();
+      const presets = await adminHttp.modelConfig.listPresets();
       setDeletingProvider((current) =>
         current
           ? {
@@ -165,23 +181,25 @@ export function AdminHttpProvidersPanel({ core }: { core: OperatorCore }): React
         requestEnter={requestEnter}
       />
 
-      <ProviderAccountDialog
-        open={dialogOpen}
-        onOpenChange={(open) => {
-          setDialogOpen(open);
-          if (!open) {
-            setEditingAccount(null);
-            setDialogProviderKey(null);
-          }
-        }}
-        registry={registry}
-        configuredProviders={providers}
-        initialProviderKey={dialogProviderKey}
-        account={editingAccount}
-        onSaved={refresh}
-        canMutate={canMutate}
-        api={mutationHttp.providerConfig}
-      />
+      {adminHttp ? (
+        <ProviderAccountDialog
+          open={dialogOpen}
+          onOpenChange={(open) => {
+            setDialogOpen(open);
+            if (!open) {
+              setEditingAccount(null);
+              setDialogProviderKey(null);
+            }
+          }}
+          registry={registry}
+          configuredProviders={providers}
+          initialProviderKey={dialogProviderKey}
+          account={editingAccount}
+          onSaved={refresh}
+          canMutate={canMutate}
+          api={adminHttp.providerConfig}
+        />
+      ) : null}
 
       <ConfirmDangerDialog
         open={deletingAccount !== null}

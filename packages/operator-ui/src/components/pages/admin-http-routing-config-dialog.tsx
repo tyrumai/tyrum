@@ -142,7 +142,7 @@ export function RoutingRuleDialog({
 
   const submit = async (): Promise<void> => {
     if (!canMutate) {
-      setErrorMessage("Enter Elevated Mode to change channels routing.");
+      setErrorMessage("Authorize admin access to change channels routing.");
       return;
     }
     if (!draft.accountKey.trim()) {

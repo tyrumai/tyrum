@@ -3,7 +3,9 @@ import { Hono } from "hono";
 import { createAuthTokenRoutes } from "../../src/routes/auth-token.js";
 
 function createApp(overrides?: {
+  tokenKind?: "admin" | "device";
   role?: "admin" | "client" | "node";
+  scopes?: string[];
   tenantId?: string;
   listTenantTokens?: ReturnType<typeof vi.fn>;
   issueToken?: ReturnType<typeof vi.fn>;
@@ -15,11 +17,11 @@ function createApp(overrides?: {
   const app = new Hono();
   app.use("*", async (c, next) => {
     c.set("authClaims", {
-      token_kind: "admin",
+      token_kind: overrides?.tokenKind ?? "admin",
       token_id: "admin-token-id",
       tenant_id: overrides?.tenantId ?? "11111111-1111-4111-8111-111111111111",
       role: overrides?.role ?? "admin",
-      scopes: ["*"],
+      scopes: overrides?.scopes ?? ["*"],
     });
     await next();
   });
@@ -142,6 +144,49 @@ describe("auth token routes", () => {
         scopes: ["*"],
       }),
     );
+  });
+
+  it("allows scoped device tokens with operator.admin to list and issue tenant tokens", async () => {
+    const listTenantTokens = vi.fn(async () => []);
+    const issueToken = vi.fn(async () => ({
+      token: "tyrum-token.v1.token-id.secret",
+      row: {
+        token_id: "token-id",
+        tenant_id: "11111111-1111-4111-8111-111111111111",
+        display_name: "Client token",
+        role: "client",
+        device_id: "device-1",
+        scopes_json: JSON.stringify(["operator.read"]),
+        issued_at: "2026-03-06T12:00:00.000Z",
+        expires_at: "2026-04-05T12:00:00.000Z",
+        revoked_at: null,
+        created_by_json: "{}",
+        created_at: "2026-03-06T12:00:00.000Z",
+        updated_at: "2026-03-06T12:00:00.000Z",
+      },
+    }));
+    const app = createApp({
+      tokenKind: "device",
+      role: "client",
+      scopes: ["operator.admin"],
+      listTenantTokens,
+      issueToken,
+    });
+
+    const listRes = await app.request("/auth/tokens");
+    expect(listRes.status).toBe(200);
+    expect(listTenantTokens).toHaveBeenCalledTimes(1);
+
+    const issueRes = await app.request("/auth/tokens/issue", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        role: "client",
+        scopes: ["operator.read"],
+      }),
+    });
+    expect(issueRes.status).toBe(201);
+    expect(issueToken).toHaveBeenCalledTimes(1);
   });
 
   it("updates tenant tokens in place and evicts matching websocket clients", async () => {

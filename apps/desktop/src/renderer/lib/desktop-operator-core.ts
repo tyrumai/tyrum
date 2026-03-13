@@ -10,10 +10,7 @@ import {
   type OperatorCore,
   type OperatorCoreManager,
 } from "@tyrum/operator-core/browser";
-import {
-  createPersistentElevatedModeController,
-  type ElevatedModeController,
-} from "@tyrum/operator-ui";
+import { createAdminAccessController, type AdminAccessController } from "@tyrum/operator-ui";
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
 import { toErrorMessage } from "./errors.js";
 
@@ -39,7 +36,7 @@ export function headersToRecord(
 
 export type DesktopOperatorCoreState = {
   core: OperatorCore | null;
-  elevatedModeController: ElevatedModeController | null;
+  adminAccessController: AdminAccessController | null;
   busy: boolean;
   errorMessage: string | null;
   needsConfiguration: boolean;
@@ -62,7 +59,7 @@ function resetDesktopOperatorCoreState({
   setNeedsConfiguration,
 }: {
   setCore: (core: OperatorCore | null) => void;
-  setElevatedModeController: (controller: ElevatedModeController | null) => void;
+  setElevatedModeController: (controller: AdminAccessController | null) => void;
   setBusy: (busy: boolean) => void;
   setErrorMessage: (message: string | null) => void;
   setNeedsConfiguration: (needsConfiguration: boolean) => void;
@@ -136,14 +133,14 @@ function createDesktopElevatedModeController({
   ipcFetch: DesktopIpcFetch;
   deviceIdentity: Awaited<ReturnType<typeof createDeviceIdentity>>;
   elevatedModeStore: ElevatedModeStore;
-}): ElevatedModeController {
+}): AdminAccessController {
   const baselineAuth = createBearerTokenAuth(connection.token);
   const http = createTyrumHttpClient({
     baseUrl: connection.httpBaseUrl,
     auth: httpAuthForAuth(baselineAuth),
     fetch: ipcFetch,
   });
-  return createPersistentElevatedModeController({
+  return createAdminAccessController({
     http,
     deviceId: deviceIdentity.deviceId,
     elevatedModeStore,
@@ -216,7 +213,7 @@ async function bootDesktopOperatorCore({
   unsubManagerRef: MutableRefObject<(() => void) | null>;
   elevatedModeStoreRef: MutableRefObject<ElevatedModeStore | null>;
   setCore: (core: OperatorCore | null) => void;
-  setElevatedModeController: (controller: ElevatedModeController | null) => void;
+  setElevatedModeController: (controller: AdminAccessController | null) => void;
   setBusy: (busy: boolean) => void;
   setErrorMessage: (message: string | null) => void;
   setNeedsConfiguration: (needsConfiguration: boolean) => void;
@@ -255,7 +252,7 @@ async function bootDesktopOperatorCore({
         elevatedModeStore,
       });
 
-      const elevatedModeController = createDesktopElevatedModeController({
+      const adminAccessController = createDesktopElevatedModeController({
         connection,
         ipcFetch,
         deviceIdentity,
@@ -278,7 +275,7 @@ async function bootDesktopOperatorCore({
         isDisposed,
         setCore,
       });
-      setElevatedModeController(elevatedModeController);
+      setElevatedModeController(adminAccessController);
       manager.getCore().connect();
     } catch (err) {
       manager?.dispose();
@@ -308,8 +305,9 @@ export function useDesktopOperatorCore(
 ): DesktopOperatorCoreState {
   const enabled = opts.enabled ?? true;
   const [core, setCore] = useState<OperatorCore | null>(null);
-  const [elevatedModeController, setElevatedModeController] =
-    useState<ElevatedModeController | null>(null);
+  const [adminAccessController, setElevatedModeController] = useState<AdminAccessController | null>(
+    null,
+  );
   const [busy, setBusy] = useState(enabled);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [needsConfiguration, setNeedsConfiguration] = useState(false);
@@ -376,5 +374,5 @@ export function useDesktopOperatorCore(
     };
   }, [enabled, retryCount]);
 
-  return { core, elevatedModeController, busy, errorMessage, needsConfiguration, retry };
+  return { core, adminAccessController, busy, errorMessage, needsConfiguration, retry };
 }

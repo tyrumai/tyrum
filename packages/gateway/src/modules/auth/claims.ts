@@ -1,5 +1,6 @@
 import { HTTPException } from "hono/http-exception";
 import type { AuthTokenClaims } from "@tyrum/schemas";
+import { hasAnyRequiredScope } from "./scopes.js";
 import { requireTenantIdValue } from "../identity/scope.js";
 
 export function requireAuthClaims(c: { get: (key: string) => unknown }): AuthTokenClaims {
@@ -18,4 +19,12 @@ export function requireTenantId(c: { get: (key: string) => unknown }): string {
     // Intentional: translate missing tenant scope into the route-layer HTTP authorization error.
     throw new HTTPException(403, { message: "tenant token required" });
   }
+}
+
+export function requireOperatorAdminAccess(c: { get: (key: string) => unknown }): AuthTokenClaims {
+  const claims = requireAuthClaims(c);
+  if (claims.role === "admin" || hasAnyRequiredScope(claims, ["operator.admin"])) {
+    return claims;
+  }
+  throw new HTTPException(403, { message: "operator admin access required" });
 }

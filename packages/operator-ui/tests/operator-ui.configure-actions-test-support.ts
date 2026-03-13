@@ -11,6 +11,62 @@ import {
 } from "./operator-ui.test-support.js";
 import { FakeWsClient, createFakeHttpClient } from "./operator-ui.test-fixtures.js";
 
+const MODEL_PRESETS = [
+  {
+    preset_id: "c2d1f6c6-f541-46a8-9f47-8a2d0ff3c9e5",
+    preset_key: "preset-default",
+    display_name: "Default",
+    provider_key: "openai",
+    model_id: "gpt-4.1",
+    options: {},
+    created_at: "2026-03-01T00:00:00.000Z",
+    updated_at: "2026-03-01T00:00:00.000Z",
+  },
+  {
+    preset_id: "d5c709e9-4585-426e-81ed-7904f7fbbe1b",
+    preset_key: "preset-review",
+    display_name: "Review",
+    provider_key: "openai",
+    model_id: "gpt-4.1-mini",
+    options: { reasoning_effort: "medium" },
+    created_at: "2026-03-01T00:00:00.000Z",
+    updated_at: "2026-03-01T00:00:00.000Z",
+  },
+];
+
+const AVAILABLE_MODELS = [
+  {
+    provider_key: "openai",
+    provider_name: "OpenAI",
+    model_id: "gpt-4.1",
+    model_name: "GPT-4.1",
+    family: null,
+    reasoning: true,
+    tool_call: true,
+    modalities: { output: ["text"] },
+  },
+  {
+    provider_key: "openai",
+    provider_name: "OpenAI",
+    model_id: "gpt-4.1-mini",
+    model_name: "GPT-4.1 Mini",
+    family: null,
+    reasoning: true,
+    tool_call: true,
+    modalities: { output: ["text"] },
+  },
+];
+
+function createDefaultAssignments() {
+  return EXECUTION_PROFILE_IDS.map((execution_profile_id) => ({
+    execution_profile_id,
+    preset_key: "preset-default",
+    preset_display_name: "Default",
+    provider_key: "openai",
+    model_id: "gpt-4.1",
+  }));
+}
+
 function registerConfigureActionsPluginTests(): void {
   it("disables Configure model assignment save while a request is in flight", async () => {
     const refreshDeferred = createDeferred<Response>();
@@ -29,7 +85,39 @@ function registerConfigureActionsPluginTests(): void {
       expiresAt: "2099-01-01T00:00:00.000Z",
     });
 
-    const fetchMock = vi.fn(async () => await refreshDeferred.promise);
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url =
+        typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      const method = init?.method ?? "GET";
+      const headers = new Headers(init?.headers);
+      expect(headers.get("authorization")).toBe("Bearer elevated-test-token");
+
+      if (method === "GET" && url === "http://example.test/config/models/presets") {
+        return new Response(JSON.stringify({ status: "ok", presets: MODEL_PRESETS }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (method === "GET" && url === "http://example.test/config/models/presets/available") {
+        return new Response(JSON.stringify({ status: "ok", models: AVAILABLE_MODELS }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (method === "GET" && url === "http://example.test/config/models/assignments") {
+        return new Response(
+          JSON.stringify({ status: "ok", assignments: createDefaultAssignments() }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      if (method === "PUT" && url === "http://example.test/config/models/assignments") {
+        return await refreshDeferred.promise;
+      }
+      throw new Error(`Unexpected request: ${method} ${url}`);
+    });
     vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
 
     const container = document.createElement("div");
@@ -67,8 +155,9 @@ function registerConfigureActionsPluginTests(): void {
         await Promise.resolve();
       });
 
-      expect(fetchMock).toHaveBeenCalledTimes(1);
-      const [input, init] = fetchMock.mock.calls[0] ?? [];
+      const saveCall = fetchMock.mock.calls.find(([, init]) => init?.method === "PUT");
+      expect(saveCall).toBeDefined();
+      const [input, init] = saveCall ?? [];
       const url =
         typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
       expect(url).toBe("http://example.test/config/models/assignments");
@@ -126,11 +215,44 @@ function registerConfigureActionsModelTests(): void {
       expiresAt: "2099-01-01T00:00:00.000Z",
     });
 
-    const fetchMock = vi.fn(async () => {
-      return new Response(JSON.stringify({ status: "ok", models_dev: {} }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url =
+        typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      const method = init?.method ?? "GET";
+      const headers = new Headers(init?.headers);
+      expect(headers.get("authorization")).toBe("Bearer elevated-test-token");
+
+      if (method === "GET" && url === "http://example.test/config/models/presets") {
+        return new Response(JSON.stringify({ status: "ok", presets: MODEL_PRESETS }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (method === "GET" && url === "http://example.test/config/models/presets/available") {
+        return new Response(JSON.stringify({ status: "ok", models: AVAILABLE_MODELS }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (method === "GET" && url === "http://example.test/config/models/assignments") {
+        return new Response(
+          JSON.stringify({ status: "ok", assignments: createDefaultAssignments() }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      if (
+        method === "DELETE" &&
+        url === "http://example.test/config/models/presets/preset-review"
+      ) {
+        return new Response(JSON.stringify({ status: "ok", models_dev: {} }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      throw new Error(`Unexpected request: ${method} ${url}`);
     });
     vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
 
@@ -156,7 +278,7 @@ function registerConfigureActionsModelTests(): void {
         removeButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       });
 
-      expect(fetchMock).toHaveBeenCalledTimes(0);
+      expect(fetchMock.mock.calls.some(([, init]) => init?.method === "DELETE")).toBe(false);
 
       const confirmButton = document.body.querySelector<HTMLButtonElement>(
         '[data-testid="confirm-danger-confirm"]',
@@ -177,8 +299,9 @@ function registerConfigureActionsModelTests(): void {
         await Promise.resolve();
       });
 
-      expect(fetchMock).toHaveBeenCalledTimes(1);
-      const [input, init] = fetchMock.mock.calls[0] ?? [];
+      const deleteCall = fetchMock.mock.calls.find(([, init]) => init?.method === "DELETE");
+      expect(deleteCall).toBeDefined();
+      const [input, init] = deleteCall ?? [];
       const url =
         typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
       expect(url).toBe("http://example.test/config/models/presets/preset-review");

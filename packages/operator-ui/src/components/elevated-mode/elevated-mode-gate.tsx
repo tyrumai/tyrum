@@ -20,8 +20,8 @@ export function ElevatedModeGate({ children }: { children: ReactNode }) {
         <CardContent className="grid gap-4 pt-6">
           <Alert
             variant="warning"
-            title="Enter Elevated Mode to continue"
-            description="Elevated Mode is required for this action."
+            title="Authorize admin access to continue"
+            description="Admin access is required for this action."
           />
         </CardContent>
         <CardFooter>
@@ -31,7 +31,7 @@ export function ElevatedModeGate({ children }: { children: ReactNode }) {
               requestEnter();
             }}
           >
-            Enter Elevated Mode
+            Authorize admin access
           </Button>
         </CardFooter>
       </Card>

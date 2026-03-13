@@ -11,7 +11,7 @@ import { FakeWsClient, createFakeHttpClient } from "./operator-ui.test-fixtures.
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 describe("desktop environments page", () => {
-  it("lists managed desktop environments and exposes takeover", async () => {
+  it("shows an admin access prompt before loading desktop environments", async () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
     const core = createOperatorCore({
@@ -20,6 +20,8 @@ describe("desktop environments page", () => {
       auth: createBearerTokenAuth("test"),
       deps: { ws, http },
     });
+    const hostListCallsBeforeRender = http.desktopEnvironmentHosts.list.mock.calls.length;
+    const environmentListCallsBeforeRender = http.desktopEnvironments.list.mock.calls.length;
 
     const container = document.createElement("div");
     document.body.appendChild(container);
@@ -42,12 +44,13 @@ describe("desktop environments page", () => {
     });
 
     expect(container.querySelector('[data-testid="desktop-environments-page"]')).not.toBeNull();
-    expect(container.textContent).toContain("Research desktop");
-
-    const takeoverLink = container.querySelector<HTMLAnchorElement>(
-      'a[href*="desktop-environments/env-1/takeover"]',
+    expect(container.textContent).toContain("Authorize admin access to load desktop environments");
+    expect(http.desktopEnvironmentHosts.list.mock.calls.length).toBeGreaterThanOrEqual(
+      hostListCallsBeforeRender,
     );
-    expect(takeoverLink).not.toBeNull();
+    expect(http.desktopEnvironments.list.mock.calls.length).toBeGreaterThanOrEqual(
+      environmentListCallsBeforeRender,
+    );
 
     act(() => {
       root?.unmount();

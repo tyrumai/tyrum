@@ -15,14 +15,14 @@ vi.mock("@tyrum/operator-core/browser", () => ({
 }));
 
 vi.mock("@tyrum/operator-ui", () => ({
-  ELEVATED_MODE_SCOPES: [
+  ADMIN_ACCESS_SCOPES: [
     "operator.read",
     "operator.write",
     "operator.approvals",
     "operator.pairing",
     "operator.admin",
   ],
-  createPersistentElevatedModeController: vi.fn(() => ({
+  createAdminAccessController: vi.fn(() => ({
     enter: vi.fn(async () => {}),
     exit: vi.fn(async () => {}),
   })),
@@ -48,7 +48,7 @@ describe("apps/web main bootstrap", () => {
   type RootMock = { render: ReturnType<typeof vi.fn> };
 
   type OperatorUiAppProps = {
-    elevatedModeController?: {
+    adminAccessController?: {
       enter: () => Promise<void>;
       exit: () => Promise<void>;
     };
@@ -305,8 +305,8 @@ describe("apps/web main bootstrap", () => {
     expect(root.render).toHaveBeenCalledTimes(2);
 
     const props = getRenderedOperatorUiProps(root);
-    expect(typeof props.elevatedModeController?.enter).toBe("function");
-    expect(typeof props.elevatedModeController?.exit).toBe("function");
+    expect(typeof props.adminAccessController?.enter).toBe("function");
+    expect(typeof props.adminAccessController?.exit).toBe("function");
     props.onReloadPage();
     props.onReconfigureGateway("http://gateway.internal", "ws://gateway.internal/ws");
 

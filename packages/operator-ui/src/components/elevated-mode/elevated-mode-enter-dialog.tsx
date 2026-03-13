@@ -90,10 +90,10 @@ export function ElevatedModeEnterDialog() {
         }}
       >
         <DialogHeader>
-          <DialogTitle>Enter Elevated Mode</DialogTitle>
+          <DialogTitle>Authorize admin access</DialogTitle>
           <DialogDescription>
-            Elevated Mode enables dangerous operator actions. It can be exited at any time. Entering
-            it uses your current authenticated session.
+            Admin access enables dangerous operator actions for 10 minutes in the current app
+            session. Authorizing it uses your current authenticated session.
           </DialogDescription>
         </DialogHeader>
 
@@ -104,7 +104,7 @@ export function ElevatedModeEnterDialog() {
           </label>
 
           {errorMessage ? (
-            <Alert variant="error" title="Elevated Mode error" description={errorMessage} />
+            <Alert variant="error" title="Admin access error" description={errorMessage} />
           ) : null}
         </div>
 
@@ -128,7 +128,7 @@ export function ElevatedModeEnterDialog() {
               void submit();
             }}
           >
-            Enter Elevated Mode
+            Authorize admin access
           </Button>
         </DialogFooter>
       </DialogContent>
