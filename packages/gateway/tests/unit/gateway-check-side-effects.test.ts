@@ -36,8 +36,6 @@ vi.mock("../../src/container.js", () => {
 
 describe("tyrum check side effects", () => {
   const originalEnv = {
-    TYRUM_HOME: process.env["TYRUM_HOME"],
-    GATEWAY_DB_PATH: process.env["GATEWAY_DB_PATH"],
     GATEWAY_PORT: process.env["GATEWAY_PORT"],
     GATEWAY_TOKEN: process.env["GATEWAY_TOKEN"],
   };
@@ -62,8 +60,6 @@ describe("tyrum check side effects", () => {
     const home = await mkdtemp(join(tmpdir(), "tyrum-check-"));
     const tokenPath = join(home, ".admin-token");
 
-    process.env["TYRUM_HOME"] = home;
-    process.env["GATEWAY_DB_PATH"] = ":memory:";
     process.env["GATEWAY_PORT"] = "invalid";
     delete process.env["GATEWAY_TOKEN"];
 
@@ -75,7 +71,7 @@ describe("tyrum check side effects", () => {
     try {
       expect(await pathExists(tokenPath)).toBe(false);
       const { runCli } = await import("../../src/index.js");
-      const exitCode = await runCli(["check"]);
+      const exitCode = await runCli(["check", "--home", home, "--db", ":memory:"]);
       if (exitCode !== 0) {
         const errors = errorMock.mock.calls.map((args) => args.join(" ")).join("\n");
         const logs = logMock.mock.calls.map((args) => args.join(" ")).join("\n");
