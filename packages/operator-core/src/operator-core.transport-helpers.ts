@@ -1,5 +1,5 @@
-import { ApprovalKind } from "@tyrum/schemas";
-import type { Approval, WsApprovalRequest } from "@tyrum/client/browser";
+import { ApprovalKind, type Approval } from "@tyrum/schemas";
+import type { WsApprovalRequest } from "@tyrum/client/browser";
 import { readOccurredAt, readPayload } from "./operator-core.event-helpers.js";
 
 export function readClientId(data: unknown): string | null {

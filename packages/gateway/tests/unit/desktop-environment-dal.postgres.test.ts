@@ -59,37 +59,53 @@ describe("desktop environment DAL (postgres)", () => {
         imageRef: "tyrum-desktop-sandbox:latest",
         desiredRunning: false,
       });
-      let environmentRow = await db.get<{ desired_running: boolean }>(
-        `SELECT desired_running
+      let environmentRow = await db.get<{ desired_running: boolean; status: string }>(
+        `SELECT desired_running, status
            FROM desktop_environments
           WHERE tenant_id = ? AND environment_id = ?`,
         [DEFAULT_TENANT_ID, created.environment_id],
       );
       expect(environmentRow?.desired_running).toBe(false);
-
-      await environmentDal.start({
-        tenantId: DEFAULT_TENANT_ID,
-        environmentId: created.environment_id,
-      });
-      environmentRow = await db.get<{ desired_running: boolean }>(
-        `SELECT desired_running
-           FROM desktop_environments
-          WHERE tenant_id = ? AND environment_id = ?`,
-        [DEFAULT_TENANT_ID, created.environment_id],
-      );
-      expect(environmentRow?.desired_running).toBe(true);
+      expect(environmentRow?.status).toBe("stopped");
 
       await environmentDal.reset({
         tenantId: DEFAULT_TENANT_ID,
         environmentId: created.environment_id,
       });
-      environmentRow = await db.get<{ desired_running: boolean }>(
-        `SELECT desired_running
+      environmentRow = await db.get<{ desired_running: boolean; status: string }>(
+        `SELECT desired_running, status
+           FROM desktop_environments
+          WHERE tenant_id = ? AND environment_id = ?`,
+        [DEFAULT_TENANT_ID, created.environment_id],
+      );
+      expect(environmentRow?.desired_running).toBe(false);
+      expect(environmentRow?.status).toBe("stopped");
+
+      await environmentDal.start({
+        tenantId: DEFAULT_TENANT_ID,
+        environmentId: created.environment_id,
+      });
+      environmentRow = await db.get<{ desired_running: boolean; status: string }>(
+        `SELECT desired_running, status
            FROM desktop_environments
           WHERE tenant_id = ? AND environment_id = ?`,
         [DEFAULT_TENANT_ID, created.environment_id],
       );
       expect(environmentRow?.desired_running).toBe(true);
+      expect(environmentRow?.status).toBe("starting");
+
+      await environmentDal.reset({
+        tenantId: DEFAULT_TENANT_ID,
+        environmentId: created.environment_id,
+      });
+      environmentRow = await db.get<{ desired_running: boolean; status: string }>(
+        `SELECT desired_running, status
+           FROM desktop_environments
+          WHERE tenant_id = ? AND environment_id = ?`,
+        [DEFAULT_TENANT_ID, created.environment_id],
+      );
+      expect(environmentRow?.desired_running).toBe(true);
+      expect(environmentRow?.status).toBe("pending");
     } finally {
       await close();
     }

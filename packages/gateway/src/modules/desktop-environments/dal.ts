@@ -296,8 +296,7 @@ export class DesktopEnvironmentDal {
   }): Promise<DesktopEnvironmentT | undefined> {
     const row = await this.db.get<RawEnvironmentRow>(
       `UPDATE desktop_environments
-       SET status = 'pending',
-           desired_running = ?,
+       SET status = CASE WHEN desired_running = ? THEN 'pending' ELSE 'stopped' END,
            node_id = NULL,
            takeover_url = NULL,
            last_seen_at = NULL,
@@ -305,7 +304,7 @@ export class DesktopEnvironmentDal {
            logs_json = '[]',
            updated_at = ?
        WHERE tenant_id = ? AND environment_id = ?
-       RETURNING environment_id, host_id, label, image_ref, managed_kind, status, desired_running,
+      RETURNING environment_id, host_id, label, image_ref, managed_kind, status, desired_running,
                  node_id, takeover_url, last_seen_at, last_error, logs_json, created_at, updated_at`,
       [
         sqlBoolParam(this.db, true),

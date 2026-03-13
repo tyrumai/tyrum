@@ -103,6 +103,19 @@ describe("desktop environment routes", () => {
       desired_running: false,
     });
 
+    const resetRes = await app.request(`/desktop-environments/${environmentId}/reset`, {
+      method: "POST",
+    });
+    expect(resetRes.status).toBe(200);
+    const resetBody = (await resetRes.json()) as {
+      environment: { environment_id: string; desired_running: boolean; status: string };
+    };
+    expect(resetBody.environment).toMatchObject({
+      environment_id: environmentId,
+      desired_running: false,
+      status: "stopped",
+    });
+
     const startRes = await app.request(`/desktop-environments/${environmentId}/start`, {
       method: "POST",
     });
