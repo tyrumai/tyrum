@@ -6,6 +6,7 @@ const prepareTurnMock = vi.hoisted(() => vi.fn());
 const finalizeTurnMock = vi.hoisted(() => vi.fn());
 const compactForOverflowMock = vi.hoisted(() => vi.fn());
 const maybeAutoCompactSessionMock = vi.hoisted(() => vi.fn());
+const extractToolApprovalResumeStateMock = vi.hoisted(() => vi.fn(() => undefined));
 
 vi.mock("ai", async (importOriginal) => {
   const actual = await importOriginal<typeof import("ai")>();
@@ -39,7 +40,7 @@ vi.mock("../../src/modules/agent/runtime/turn-direct-runtime-helpers.js", () => 
 
 vi.mock("../../src/modules/agent/runtime/turn-helpers.js", () => ({
   createStaticLanguageModelV3: vi.fn(),
-  extractToolApprovalResumeState: vi.fn(() => undefined),
+  extractToolApprovalResumeState: extractToolApprovalResumeStateMock,
   isStatusQuery: vi.fn(() => false),
 }));
 
@@ -117,6 +118,7 @@ function samplePreparedTurn(usedTools: Set<string>) {
     toolCallPolicyStates: new Map(),
     laneQueue: undefined,
     usedTools,
+    memoryWriteState: { wrote: false },
     userContent: [{ type: "text", text: "hello" }],
     contextReport: {
       session_id: "session-1",
@@ -171,6 +173,8 @@ describe("turnDirect overflow retry", () => {
     finalizeTurnMock.mockReset();
     compactForOverflowMock.mockReset();
     maybeAutoCompactSessionMock.mockReset();
+    extractToolApprovalResumeStateMock.mockReset();
+    extractToolApprovalResumeStateMock.mockReturnValue(undefined);
   });
 
   it("does not retry after tools have already been used", async () => {
@@ -211,6 +215,51 @@ describe("turnDirect overflow retry", () => {
     expect(compactForOverflowMock).toHaveBeenCalledOnce();
     expect(generateTextMock).toHaveBeenCalledTimes(2);
     expect(result.response).toEqual({ reply: "ok" });
+  });
+});
+
+describe("turnDirect approval resume state", () => {
+  beforeEach(() => {
+    generateTextMock.mockReset();
+    prepareTurnMock.mockReset();
+    finalizeTurnMock.mockReset();
+    maybeAutoCompactSessionMock.mockReset();
+    extractToolApprovalResumeStateMock.mockReset();
+  });
+
+  it("restores memory_written from approval resume state", async () => {
+    prepareTurnMock.mockResolvedValue(samplePreparedTurn(new Set()));
+    extractToolApprovalResumeStateMock.mockReturnValue({
+      approval_id: "approval-1",
+      messages: [],
+      memory_written: true,
+      used_tools: [],
+      steps_used: 0,
+    });
+    generateTextMock.mockResolvedValue({
+      text: "ok",
+      steps: [],
+      totalUsage: undefined,
+      response: { messages: [] },
+    });
+    finalizeTurnMock.mockResolvedValue({ reply: "ok" });
+
+    const deps = sampleDeps();
+    deps.approvalDal = {
+      getById: vi.fn(async () => ({
+        status: "approved",
+        context: {},
+        resolution: null,
+      })),
+    } as never;
+
+    const { turnDirect } = await import("../../src/modules/agent/runtime/turn-direct.js");
+
+    await turnDirect(deps, { channel: "ui", thread_id: "thread-1", message: "hello" } as never, {
+      execution: { stepApprovalId: "approval-1" } as never,
+    });
+
+    expect(finalizeTurnMock).toHaveBeenCalledWith(expect.objectContaining({ memoryWritten: true }));
   });
 });
 

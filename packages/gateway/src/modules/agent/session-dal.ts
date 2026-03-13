@@ -42,6 +42,14 @@ import {
   stringifySessionContextState,
   stringifySessionMessages,
 } from "./session-dal-runtime.js";
+import { buildDeterministicFallbackCheckpoint } from "./runtime/session-compaction-fallback.js";
+import {
+  collectPendingApprovals,
+  collectPendingToolStates,
+  extractCriticalIdentifiers,
+  extractRelevantFiles,
+  splitMessagesForContextCompaction,
+} from "./runtime/session-context-state.js";
 import {
   createTextMessage,
   deleteExpiredSessions,
@@ -152,6 +160,54 @@ export class SessionDal {
       contextState: input.contextState,
       updatedAt: input.updatedAt,
     });
+  }
+
+  async compact(
+    input: SessionIdentity & { keepLastMessages: number; updatedAt?: string },
+  ): Promise<{ droppedMessages: number; keptMessages: number; summary: string }> {
+    const session = await this.requireSession({
+      tenantId: input.tenantId,
+      sessionId: input.sessionId,
+    });
+    const updatedAt = input.updatedAt ?? new Date().toISOString();
+    const { dropped, kept } = splitMessagesForContextCompaction({
+      messages: session.messages,
+      keepLastMessages: input.keepLastMessages,
+    });
+    if (dropped.length === 0) {
+      return {
+        droppedMessages: 0,
+        keptMessages: kept.length,
+        summary: session.context_state.checkpoint?.handoff_md ?? "",
+      };
+    }
+    const criticalIdentifiers = extractCriticalIdentifiers(dropped);
+    const checkpoint = buildDeterministicFallbackCheckpoint({
+      previousCheckpoint: session.context_state.checkpoint,
+      droppedMessages: dropped,
+      criticalIdentifiers,
+      relevantFiles: extractRelevantFiles(criticalIdentifiers),
+    });
+    const contextState = {
+      ...session.context_state,
+      compacted_through_message_id: dropped.at(-1)?.id,
+      recent_message_ids: kept.map((message) => message.id),
+      checkpoint,
+      pending_approvals: collectPendingApprovals(session.messages),
+      pending_tool_state: collectPendingToolStates(session.messages),
+      updated_at: updatedAt,
+    };
+    await this.replaceContextState({
+      tenantId: input.tenantId,
+      sessionId: input.sessionId,
+      contextState,
+      updatedAt,
+    });
+    return {
+      droppedMessages: dropped.length,
+      keptMessages: kept.length,
+      summary: checkpoint.handoff_md,
+    };
   }
 
   async getById(input: { tenantId: string; sessionId: string }): Promise<SessionRow | undefined> {

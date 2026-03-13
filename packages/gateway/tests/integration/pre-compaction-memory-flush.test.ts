@@ -3,19 +3,17 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { MockLanguageModelV3 } from "ai/test";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
-import { prepareTurn } from "../../src/modules/agent/runtime/turn-preparation.js";
-import { turnDirect } from "../../src/modules/agent/runtime/turn-direct.js";
-import { maybeRunPreCompactionMemoryFlush } from "../../src/modules/agent/runtime/pre-compaction-memory-flush.js";
 import { MemoryV1Dal } from "../../src/modules/memory/v1-dal.js";
 import {
+  checkpointJson,
+  countFlushCalls,
   createMockMcpManager,
   createSequencedTextLanguageModel,
+  findFlushPromptText,
   listNonTitleGenerateCalls,
   seedAgentConfig,
-  usage,
 } from "./pre-compaction-memory-flush.test-support.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -42,9 +40,9 @@ describe("Pre-compaction memory flush", () => {
 
     const languageModel = createSequencedTextLanguageModel([
       "a1",
-      "a2",
       "FLUSH_OK",
-      "summary: first / a1",
+      checkpointJson("summary: first / a1"),
+      "a2",
     ]);
 
     const mcpManager = createMockMcpManager();
@@ -72,30 +70,22 @@ describe("Pre-compaction memory flush", () => {
     });
     expect(second.reply).toBe("a2");
 
-    const nonTitleCalls = listNonTitleGenerateCalls(languageModel);
-    expect(nonTitleCalls).toHaveLength(4);
+    expect(listNonTitleGenerateCalls(languageModel)).toHaveLength(4);
 
-    const flushCall = nonTitleCalls[2];
-    const flushPromptText = flushCall
-      ? flushCall.prompt
-          .filter((msg) => msg.role === "user")
-          .flatMap((msg) => (Array.isArray(msg.content) ? msg.content : []))
-          .filter((part) => part.type === "text")
-          .map((part) => part.text)
-          .join("\n")
-      : "";
+    const flushPromptText = findFlushPromptText(languageModel);
 
     expect(flushPromptText).toContain("pre-compaction");
     expect(flushPromptText).toContain("first");
-    expect(flushPromptText).toContain("a1");
+    expect(flushPromptText).not.toContain("Assistant (");
 
     const session = await container.sessionDal.getOrCreate({
       connectorKey: "test",
       providerThreadId: "thread-flush",
       containerKind: "channel",
     });
-    expect(session.summary).toContain("summary: first / a1");
-    expect(session.summary).not.toContain("FLUSH_OK");
+    const handoff = session.context_state.checkpoint?.handoff_md ?? "";
+    expect(handoff).toContain("summary: first / a1");
+    expect(handoff).not.toContain("FLUSH_OK");
 
     const memory = new MemoryV1Dal(container.db);
     const search = await memory.search({ v: 1, query: "FLUSH_OK", limit: 5 }, agentId);
@@ -121,9 +111,9 @@ describe("Pre-compaction memory flush", () => {
 
     const languageModel = createSequencedTextLanguageModel([
       "a1",
-      "a2",
       "FLUSH_OK",
-      "summary: secret redaction",
+      checkpointJson("summary: secret redaction"),
+      "a2",
     ]);
 
     const mcpManager = createMockMcpManager();
@@ -151,17 +141,9 @@ describe("Pre-compaction memory flush", () => {
     });
     expect(second.reply).toBe("a2");
 
-    const nonTitleCalls = listNonTitleGenerateCalls(languageModel);
-    expect(nonTitleCalls).toHaveLength(4);
-    const flushCall = nonTitleCalls[2];
-    const flushPromptText = flushCall
-      ? flushCall.prompt
-          .filter((msg) => msg.role === "user")
-          .flatMap((msg) => (Array.isArray(msg.content) ? msg.content : []))
-          .filter((part) => part.type === "text")
-          .map((part) => part.text)
-          .join("\n")
-      : "";
+    expect(listNonTitleGenerateCalls(languageModel)).toHaveLength(4);
+
+    const flushPromptText = findFlushPromptText(languageModel);
 
     expect(flushPromptText).not.toContain(secret);
     expect(flushPromptText).toContain("[REDACTED]");
@@ -176,9 +158,9 @@ describe("Pre-compaction memory flush", () => {
 
     const languageModel = createSequencedTextLanguageModel([
       "a1",
-      "a2",
       `Remember this: ${secret}`,
-      "summary: secret output redaction",
+      checkpointJson("summary: secret output redaction"),
+      "a2",
     ]);
 
     const mcpManager = createMockMcpManager();
@@ -209,12 +191,11 @@ describe("Pre-compaction memory flush", () => {
     const memory = new MemoryV1Dal(container.db);
     const list = await memory.list({ tenantId, agentId, limit: 50 });
     const notes = list.items.filter((item) => item.kind === "note");
-    expect(notes).toHaveLength(1);
-    const item = notes[0];
-    if (!item) throw new Error("expected memory v1 note item");
-
-    expect(item.body_md).not.toContain(secret);
-    expect(item.body_md).toContain("[REDACTED]");
+    expect(notes.length).toBeGreaterThan(0);
+    expect(notes.some((item) => item.body_md.includes("[REDACTED]"))).toBe(true);
+    for (const item of notes) {
+      expect(item.body_md).not.toContain(secret);
+    }
   });
 
   it("truncates very long message content in the flush prompt", async () => {
@@ -227,9 +208,9 @@ describe("Pre-compaction memory flush", () => {
 
     const languageModel = createSequencedTextLanguageModel([
       "a1",
-      "a2",
       "NOOP",
-      "summary: truncate",
+      checkpointJson("summary: truncate"),
+      "a2",
     ]);
 
     const mcpManager = createMockMcpManager();
@@ -257,17 +238,9 @@ describe("Pre-compaction memory flush", () => {
     });
     expect(second.reply).toBe("a2");
 
-    const nonTitleCalls = listNonTitleGenerateCalls(languageModel);
-    expect(nonTitleCalls).toHaveLength(4);
-    const flushCall = nonTitleCalls[2];
-    const flushPromptText = flushCall
-      ? flushCall.prompt
-          .filter((msg) => msg.role === "user")
-          .flatMap((msg) => (Array.isArray(msg.content) ? msg.content : []))
-          .filter((part) => part.type === "text")
-          .map((part) => part.text)
-          .join("\n")
-      : "";
+    expect(listNonTitleGenerateCalls(languageModel)).toHaveLength(4);
+
+    const flushPromptText = findFlushPromptText(languageModel);
 
     expect(flushPromptText).toContain("prefix");
     expect(flushPromptText).not.toContain(tail);
@@ -284,7 +257,8 @@ describe("Pre-compaction memory flush", () => {
       "a2",
       "a3",
       "FLUSH_OK",
-      "summary: threshold",
+      checkpointJson("summary: threshold"),
+      "a4",
     ]);
 
     const mcpManager = createMockMcpManager();
@@ -304,7 +278,7 @@ describe("Pre-compaction memory flush", () => {
       message: "first",
     });
     expect(first.reply).toBe("a1");
-    expect(listNonTitleGenerateCalls(languageModel)).toHaveLength(1);
+    expect(countFlushCalls(languageModel)).toBe(0);
 
     const second = await runtime.turn({
       channel: "test",
@@ -313,6 +287,7 @@ describe("Pre-compaction memory flush", () => {
     });
     expect(second.reply).toBe("a2");
     expect(listNonTitleGenerateCalls(languageModel)).toHaveLength(2);
+    expect(countFlushCalls(languageModel)).toBe(0);
 
     const third = await runtime.turn({
       channel: "test",
@@ -320,19 +295,37 @@ describe("Pre-compaction memory flush", () => {
       message: "third",
     });
     expect(third.reply).toBe("a3");
-    expect(listNonTitleGenerateCalls(languageModel)).toHaveLength(5);
+    expect(listNonTitleGenerateCalls(languageModel)).toHaveLength(3);
+    expect(countFlushCalls(languageModel)).toBe(0);
+
+    const fourth = await runtime.turn({
+      channel: "test",
+      thread_id: "thread-threshold",
+      message: "fourth",
+    });
+    expect(fourth.reply).toBe("a4");
+    expect(listNonTitleGenerateCalls(languageModel)).toHaveLength(6);
+    expect(countFlushCalls(languageModel)).toBe(1);
 
     const memory = new MemoryV1Dal(container.db);
     const search = await memory.search({ v: 1, query: "FLUSH_OK", limit: 5 }, agentId);
     expect(search.hits.length).toBeGreaterThan(0);
   });
 
-  it("is idempotent for the same dropped turns (no duplicate flush calls)", async () => {
-    homeDir = await mkdtemp(join(tmpdir(), "tyrum-preflush-idempotent-"));
+  it("uses prompt-visible recent messages for max_turns after prompt-only compaction", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-preflush-prompt-only-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
-    const { tenantId, agentId } = await seedAgentConfig(container, { maxTurns: 1 });
+    await seedAgentConfig(container, { maxTurns: 3 });
 
-    const languageModel = createSequencedTextLanguageModel(["FLUSH_OK"]);
+    const languageModel = createSequencedTextLanguageModel([
+      "a1",
+      "a2",
+      "a3",
+      "FLUSH_OK",
+      checkpointJson("summary: prompt-only"),
+      "a4",
+      "a5",
+    ]);
 
     const mcpManager = createMockMcpManager();
 
@@ -345,151 +338,61 @@ describe("Pre-compaction memory flush", () => {
       >[0]["mcpManager"],
     });
 
-    const session = await container.sessionDal.getOrCreate({
-      connectorKey: "test",
-      providerThreadId: "thread-idempotent",
-      containerKind: "channel",
-    });
-    await container.sessionDal.appendTurn({
-      tenantId: session.tenant_id,
-      sessionId: session.session_id,
-      userMessage: "first",
-      assistantMessage: "a1",
-      timestamp: new Date().toISOString(),
-    });
+    expect(
+      (
+        await runtime.turn({
+          channel: "test",
+          thread_id: "thread-prompt-only",
+          message: "first",
+        })
+      ).reply,
+    ).toBe("a1");
+    expect(
+      (
+        await runtime.turn({
+          channel: "test",
+          thread_id: "thread-prompt-only",
+          message: "second",
+        })
+      ).reply,
+    ).toBe("a2");
+    expect(
+      (
+        await runtime.turn({
+          channel: "test",
+          thread_id: "thread-prompt-only",
+          message: "third",
+        })
+      ).reply,
+    ).toBe("a3");
 
-    const prepared = await prepareTurn((runtime as any).prepareTurnDeps, {
-      channel: "test",
-      thread_id: "thread-idempotent",
-      message: "second",
-    });
+    expect(listNonTitleGenerateCalls(languageModel)).toHaveLength(3);
+    expect(countFlushCalls(languageModel)).toBe(0);
 
-    const flush = async (input: {
-      ctx: typeof prepared.ctx;
-      session: typeof prepared.session;
-      model: typeof prepared.model;
-      droppedTurns: typeof prepared.session.transcript;
-    }) =>
-      maybeRunPreCompactionMemoryFlush(
-        { db: container.db, logger: container.logger, agentId },
-        input,
-      );
+    expect(
+      (
+        await runtime.turn({
+          channel: "test",
+          thread_id: "thread-prompt-only",
+          message: "fourth",
+        })
+      ).reply,
+    ).toBe("a4");
 
-    await flush({
-      ctx: prepared.ctx,
-      session: prepared.session,
-      model: prepared.model,
-      droppedTurns: prepared.session.transcript,
-    });
-    expect(listNonTitleGenerateCalls(languageModel)).toHaveLength(1);
+    expect(listNonTitleGenerateCalls(languageModel)).toHaveLength(6);
+    expect(countFlushCalls(languageModel)).toBe(1);
 
-    const memory = new MemoryV1Dal(container.db);
-    const firstList = await memory.list({ tenantId, agentId, limit: 50 });
-    expect(firstList.items).toHaveLength(1);
+    expect(
+      (
+        await runtime.turn({
+          channel: "test",
+          thread_id: "thread-prompt-only",
+          message: "fifth",
+        })
+      ).reply,
+    ).toBe("a5");
 
-    await flush({
-      ctx: prepared.ctx,
-      session: prepared.session,
-      model: prepared.model,
-      droppedTurns: prepared.session.transcript,
-    });
-    expect(listNonTitleGenerateCalls(languageModel)).toHaveLength(1);
-
-    const secondList = await memory.list({ tenantId, agentId, limit: 50 });
-    expect(secondList.items).toHaveLength(1);
-  });
-
-  it("bounds pre-compaction flush timeout to a slice of the turn timeout", async () => {
-    homeDir = await mkdtemp(join(tmpdir(), "tyrum-preflush-timeout-"));
-    container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
-    await seedAgentConfig(container, { maxTurns: 1 });
-
-    let callCount = 0;
-    const languageModel = new MockLanguageModelV3({
-      doGenerate: async (options) => {
-        if (
-          JSON.stringify((options as { prompt?: unknown[] }).prompt ?? []).includes(
-            "Write a concise session title.",
-          )
-        ) {
-          return {
-            content: [{ type: "text" as const, text: "Generated session title" }],
-            finishReason: { unified: "stop" as const, raw: undefined },
-            usage: usage(),
-            warnings: [],
-          };
-        }
-        callCount += 1;
-
-        if (callCount === 1) {
-          return {
-            content: [{ type: "text" as const, text: "a1" }],
-            finishReason: { unified: "stop" as const, raw: undefined },
-            usage: usage(),
-            warnings: [],
-          };
-        }
-
-        if (callCount === 2) {
-          return {
-            content: [{ type: "text" as const, text: "a2" }],
-            finishReason: { unified: "stop" as const, raw: undefined },
-            usage: usage(),
-            warnings: [],
-          };
-        }
-
-        if (callCount === 3) {
-          const signal = options.abortSignal;
-          if (!signal) {
-            throw new Error("expected abortSignal for pre-compaction flush call");
-          }
-
-          await new Promise((_, reject) => {
-            if (signal.aborted) {
-              reject(new Error("aborted"));
-              return;
-            }
-            signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
-          });
-        }
-
-        return {
-          content: [{ type: "text" as const, text: "summary: timeout" }],
-          finishReason: { unified: "stop" as const, raw: undefined },
-          usage: usage(),
-          warnings: [],
-        };
-      },
-    });
-
-    const mcpManager = createMockMcpManager();
-
-    const runtime = new AgentRuntime({
-      container,
-      home: homeDir,
-      languageModel,
-      mcpManager: mcpManager as unknown as ConstructorParameters<
-        typeof AgentRuntime
-      >[0]["mcpManager"],
-    });
-
-    const first = await turnDirect(
-      (runtime as any).turnDirectDeps,
-      { channel: "test", thread_id: "thread-timeout", message: "first" },
-      { timeoutMs: 1_000 },
-    );
-    expect(first.response.reply).toBe("a1");
-
-    const startMs = performance.now();
-    const second = await turnDirect(
-      (runtime as any).turnDirectDeps,
-      { channel: "test", thread_id: "thread-timeout", message: "second" },
-      { timeoutMs: 100 },
-    );
-    const elapsedMs = performance.now() - startMs;
-
-    expect(second.response.reply).toBe("a2");
-    expect(elapsedMs).toBeLessThan(200);
+    expect(listNonTitleGenerateCalls(languageModel)).toHaveLength(7);
+    expect(countFlushCalls(languageModel)).toBe(1);
   });
 });

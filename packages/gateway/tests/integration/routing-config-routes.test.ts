@@ -304,7 +304,7 @@ describe("routing config routes", () => {
     await db.run(
       `INSERT INTO sessions (
          tenant_id, session_id, session_key, agent_id, workspace_id, channel_thread_id,
-         title, summary, transcript_json, created_at, updated_at
+         title, messages_json, context_state_json, created_at, updated_at
        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         DEFAULT_TENANT_ID,
@@ -314,8 +314,15 @@ describe("routing config routes", () => {
         workspaceId,
         channelThreadId,
         "Support room",
-        "",
         "[]",
+        JSON.stringify({
+          version: 1,
+          recent_message_ids: [],
+          checkpoint: null,
+          pending_approvals: [],
+          pending_tool_state: [],
+          updated_at: "2026-03-02T00:00:00.000Z",
+        }),
         "2026-03-01T00:00:00.000Z",
         "2026-03-02T00:00:00.000Z",
       ],

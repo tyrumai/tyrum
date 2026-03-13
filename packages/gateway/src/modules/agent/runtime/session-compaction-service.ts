@@ -135,6 +135,26 @@ function getReservedInputTokens(config: AgentConfigT): number {
   );
 }
 
+function recentMessageCount(session: SessionRow): number {
+  if (session.context_state.recent_message_ids.length > 0) {
+    return session.context_state.recent_message_ids.length;
+  }
+
+  const compactedThroughMessageId = session.context_state.compacted_through_message_id;
+  if (!compactedThroughMessageId) {
+    return session.messages.length;
+  }
+
+  const compactedIndex = session.messages.findIndex(
+    (message) => message.id === compactedThroughMessageId,
+  );
+  if (compactedIndex < 0) {
+    return 0;
+  }
+
+  return Math.max(0, session.messages.length - compactedIndex - 1);
+}
+
 function trimJsonFence(value: string): string {
   const trimmed = value.trim();
   if (!trimmed.startsWith("```")) {
@@ -226,6 +246,13 @@ export function shouldCompactSessionForUsage(input: {
 }): boolean {
   if (input.config.sessions.compaction?.auto === false) return false;
 
+  // Prompt-only compaction keeps full session history in storage, so the
+  // compatibility max_turns fallback has to consider only the still-visible
+  // recent messages instead of the persisted message array.
+  const maxTurns = Math.floor(input.config.sessions.max_turns);
+  const maxTurnsExceeded =
+    Number.isFinite(maxTurns) && maxTurns > 0 && recentMessageCount(input.session) >= maxTurns * 2;
+
   const limits = deriveEffectiveModelLimits(input.modelResolution);
   const reservedInputTokens = getReservedInputTokens(input.config);
   const observedTokens = getObservedUsageTokens(input.usage);
@@ -245,7 +272,7 @@ export function shouldCompactSessionForUsage(input: {
       ? limits.input - reservedInputTokens
       : undefined;
   if (usableFromInput) {
-    return promptTokens >= usableFromInput;
+    return promptTokens >= usableFromInput || maxTurnsExceeded;
   }
 
   const reservedFromContext = limits.output ?? reservedInputTokens;
@@ -254,14 +281,10 @@ export function shouldCompactSessionForUsage(input: {
       ? limits.context - reservedFromContext
       : undefined;
   if (usableFromContext) {
-    return promptTokens >= usableFromContext;
+    return promptTokens >= usableFromContext || maxTurnsExceeded;
   }
 
-  const maxTurns = Math.floor(input.config.sessions.max_turns);
-  if (!Number.isFinite(maxTurns) || maxTurns <= 0) {
-    return false;
-  }
-  return input.session.messages.length >= maxTurns * 2;
+  return maxTurnsExceeded;
 }
 
 function compactionTimeoutMs(timeoutMs: number | undefined): number | undefined {

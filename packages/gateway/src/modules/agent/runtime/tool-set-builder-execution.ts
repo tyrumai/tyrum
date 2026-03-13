@@ -23,7 +23,6 @@ import {
   recordToolResultContext,
   redactPluginToolResult,
   syncToolLifecycle,
-  upsertApprovalTranscript,
 } from "./tool-set-builder-lifecycle.js";
 import {
   GUARDIAN_REVIEW_DECISION_TOOL_ID,
@@ -313,10 +312,6 @@ async function maybeHandleToolApproval(input: {
     approvalStepIndex,
     policyContext,
     async (update) => {
-      await upsertApprovalTranscript(
-        { sessionDal: input.deps.sessionDal, tenantId: input.deps.tenantId },
-        { context: input.context, update },
-      );
       await syncToolLifecycle(input.deps, {
         context: input.context,
         toolCallId: input.toolCallId,

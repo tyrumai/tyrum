@@ -26,6 +26,14 @@ export interface SessionRow extends RawSessionTimeFields {
   title: string;
   messages: TyrumUIMessage[];
   context_state: SessionContextState;
+  summary: string;
+  transcript: Array<{
+    kind: "text";
+    id: string;
+    role: TyrumUIMessage["role"];
+    content: string;
+    created_at: string;
+  }>;
   created_at: string;
   updated_at: string;
 }
@@ -38,6 +46,8 @@ export interface SessionListRow extends RawSessionTimeFields {
   title: string;
   message_count: number;
   last_message: TyrumUIMessagePreview | null;
+  transcript_count: number;
+  last_text: TyrumUIMessagePreview | null;
   created_at: string;
   updated_at: string;
 }
@@ -191,6 +201,27 @@ function extractMessageListPreview(
   return { messageCount, lastMessage };
 }
 
+function textTranscript(messages: readonly TyrumUIMessage[]): SessionRow["transcript"] {
+  return messages.flatMap((message) =>
+    message.parts.flatMap((part) =>
+      part.type === "text" && typeof part.text === "string" && part.text.length > 0
+        ? [
+            {
+              kind: "text" as const,
+              id: message.id,
+              role: message.role,
+              content: part.text,
+              created_at:
+                typeof message.metadata?.["timestamp"] === "string"
+                  ? message.metadata["timestamp"]
+                  : "",
+            },
+          ]
+        : [],
+    ),
+  );
+}
+
 export function isChatMessageArray(value: unknown): value is TyrumUIMessage[] {
   return Array.isArray(value) && value.every(isChatMessage);
 }
@@ -239,6 +270,8 @@ export function parseContextState(
 
 export function toSessionRow(raw: RawSessionRow, observer: PersistedJsonObserver): SessionRow {
   const updatedAt = normalizeTime(raw.updated_at);
+  const messages = parseMessages(raw.messages_json, observer);
+  const contextState = parseContextState(raw.context_state_json, observer, updatedAt);
   return {
     tenant_id: raw.tenant_id,
     session_id: raw.session_id,
@@ -247,8 +280,10 @@ export function toSessionRow(raw: RawSessionRow, observer: PersistedJsonObserver
     workspace_id: raw.workspace_id,
     channel_thread_id: raw.channel_thread_id,
     title: raw.title,
-    messages: parseMessages(raw.messages_json, observer),
-    context_state: parseContextState(raw.context_state_json, observer, updatedAt),
+    messages,
+    context_state: contextState,
+    summary: contextState.checkpoint?.handoff_md ?? "",
+    transcript: textTranscript(messages),
     created_at: normalizeTime(raw.created_at),
     updated_at: updatedAt,
   };
@@ -271,6 +306,8 @@ export function toSessionListRow(
     title: raw.title,
     message_count: messageCount,
     last_message: lastMessage ? { role: lastMessage.role, content: lastMessage.content } : null,
+    transcript_count: messageCount,
+    last_text: lastMessage ? { role: lastMessage.role, content: lastMessage.content } : null,
     created_at: normalizeTime(raw.created_at),
     updated_at: normalizeTime(raw.updated_at),
   };

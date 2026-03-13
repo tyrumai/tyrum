@@ -124,6 +124,7 @@ export async function sessionMessagesToModelMessages(
     try {
       return await convertToModelMessages(messages as unknown as UIMessage[]);
     } catch {
+      // Intentional: malformed persisted histories should fall back to the local mapper.
       // Fall back to the local mapper for malformed persisted history.
     }
   }

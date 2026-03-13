@@ -1,8 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { rm, mkdtemp } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
+import { fileURLToPath } from "node:url";
 import { pathExists } from "../helpers/path-exists.js";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const migrationsDir = join(__dirname, "../../migrations/sqlite");
 
 vi.mock("../../src/container.js", () => {
   const mockContainer = {
@@ -71,7 +75,7 @@ describe("tyrum check side effects", () => {
     try {
       expect(await pathExists(tokenPath)).toBe(false);
       const { runCli } = await import("../../src/index.js");
-      const exitCode = await runCli(["check", "--home", home, "--db", ":memory:"]);
+      const exitCode = await runCli(["check", "--migrations-dir", migrationsDir]);
       if (exitCode !== 0) {
         const errors = errorMock.mock.calls.map((args) => args.join(" ")).join("\n");
         const logs = logMock.mock.calls.map((args) => args.join(" ")).join("\n");

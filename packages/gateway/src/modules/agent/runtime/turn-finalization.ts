@@ -16,6 +16,32 @@ import { normalizeSessionTitle } from "../session-dal-helpers.js";
 
 type FinalizeContainer = Pick<GatewayContainer, "contextReportDal" | "logger">;
 
+function messagesEqualIgnoringId(left: TyrumUIMessage, right: TyrumUIMessage): boolean {
+  return left.role === right.role && JSON.stringify(left.parts) === JSON.stringify(right.parts);
+}
+
+function appendWithoutDuplicateOverlap(
+  existing: readonly TyrumUIMessage[],
+  appended: readonly TyrumUIMessage[],
+): TyrumUIMessage[] {
+  const maxOverlap = Math.min(existing.length, appended.length);
+  for (let overlap = maxOverlap; overlap > 0; overlap -= 1) {
+    let matches = true;
+    for (let index = 0; index < overlap; index += 1) {
+      const left = existing[existing.length - overlap + index];
+      const right = appended[index];
+      if (!left || !right || !messagesEqualIgnoringId(left, right)) {
+        matches = false;
+        break;
+      }
+    }
+    if (matches) {
+      return [...existing, ...appended.slice(overlap)];
+    }
+  }
+  return [...existing, ...appended];
+}
+
 function isAssistantTextMessage(message: TyrumUIMessage): boolean {
   return (
     message.role === "assistant" &&
@@ -170,15 +196,18 @@ export async function finalizeTurn(input: {
   await persistContextReport(input);
   let updatedSession: SessionRow;
   if (input.responseMessages) {
+    const currentUserMessage = createTextChatMessage({
+      role: "user",
+      text: input.resolved.message,
+    });
     const appendedMessages = applyFinalAssistantReply(
       modelMessagesToChatMessages(input.responseMessages),
       finalizedReply,
     );
-    const nextMessages = [
-      ...input.session.messages,
-      createTextChatMessage({ role: "user", text: input.resolved.message }),
-      ...appendedMessages,
-    ];
+    const nextMessages = appendWithoutDuplicateOverlap(
+      [...input.session.messages, currentUserMessage],
+      appendedMessages,
+    );
     await input.sessionDal.replaceMessages({
       tenantId: input.session.tenant_id,
       sessionId: input.session.session_id,

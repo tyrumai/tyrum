@@ -12,7 +12,7 @@ type JsonColumnSpec = {
   column: string;
   shape: JsonColumnShape;
   nullable: boolean;
-  default: "{}" | "[]" | null;
+  default: string | null;
 };
 
 type SqliteColumnInfo = {
@@ -43,6 +43,10 @@ function listSqliteJsonColumns(db: ReturnType<typeof createDatabase>) {
   }
   columns.sort((a, b) => a.table.localeCompare(b.table) || a.column.localeCompare(b.column));
   return columns;
+}
+
+function parseJsonDefault(value: string): unknown {
+  return JSON.parse(value) as unknown;
 }
 
 describe("StateStore JSON column specs", () => {
@@ -78,10 +82,25 @@ describe("StateStore JSON column specs", () => {
           true,
         );
         expect(typeof spec.nullable).toBe("boolean");
-        expect(spec.default === null || spec.default === "{}" || spec.default === "[]").toBe(true);
+        expect(
+          spec.default === null ||
+            (() => {
+              try {
+                parseJsonDefault(spec.default);
+                return true;
+              } catch {
+                return false;
+              }
+            })(),
+        ).toBe(true);
         if (spec.default !== null) {
-          if (spec.shape === "array") expect(spec.default).toBe("[]");
-          if (spec.shape === "object") expect(spec.default).toBe("{}");
+          const parsedDefault = parseJsonDefault(spec.default);
+          if (spec.shape === "array") expect(Array.isArray(parsedDefault)).toBe(true);
+          if (spec.shape === "object") {
+            expect(
+              parsedDefault && typeof parsedDefault === "object" && !Array.isArray(parsedDefault),
+            ).toBe(true);
+          }
         }
       }
 

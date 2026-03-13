@@ -216,7 +216,10 @@ function buildPromptAwareInput(options: LanguageModelV3CallOptions): PromptAware
 }
 
 function hasToolResult(options: LanguageModelV3CallOptions, toolName: string): boolean {
-  return (options.prompt ?? []).some(
+  const prompt = options.prompt ?? [];
+  const lastUserIndex = prompt.findLastIndex((entry) => entry.role === "user");
+  const relevantEntries = lastUserIndex >= 0 ? prompt.slice(lastUserIndex + 1) : prompt;
+  return relevantEntries.some(
     (entry) =>
       entry.role === "tool" &&
       Array.isArray(entry.content) &&
@@ -242,6 +245,7 @@ export function createPromptAwareLanguageModel(
     modelId?: string;
     defaultTitle?: string;
     memoryDecision?: (input: PromptAwareModelInput) => PromptAwareMemoryDecision | undefined;
+    allowRepeatedMemoryDecisions?: boolean;
   },
 ): LanguageModelV3 {
   const buildResponse = (
@@ -254,7 +258,10 @@ export function createPromptAwareLanguageModel(
       return { kind: "text", text: opts?.defaultTitle?.trim() || "Behavior Test Session" };
     }
 
-    if (opts?.memoryDecision && !hasToolResult(options, "mcp.memory.write")) {
+    if (
+      opts?.memoryDecision &&
+      (opts.allowRepeatedMemoryDecisions || !hasToolResult(options, "mcp.memory.write"))
+    ) {
       const writeInput = resolveMemoryWriteInput(opts.memoryDecision(input));
       if (writeInput) {
         return {

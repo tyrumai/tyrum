@@ -5,11 +5,7 @@ import type { ToolDescriptor } from "../tools.js";
 import type { ToolResult } from "../tool-executor.js";
 import { runWebFetchExtractionPass } from "../webfetch-extraction.js";
 import type { AgentContextReport } from "./types.js";
-import type {
-  ApprovalStatusUpdate,
-  ToolExecutionContext,
-  ToolSetBuilderDeps,
-} from "./tool-set-builder-helpers.js";
+import type { ToolExecutionContext, ToolSetBuilderDeps } from "./tool-set-builder-helpers.js";
 import { OPERATOR_WS_AUDIENCE } from "../../../ws/audience.js";
 import { enqueueWsBroadcastMessage } from "../../../ws/outbox.js";
 
@@ -42,17 +38,6 @@ export async function maybeExtractWebFetchResult(
     output: extraction.output,
     provenance: extraction.provenance,
   };
-}
-
-export async function upsertApprovalTranscript(
-  deps: Pick<ToolSetBuilderDeps, "sessionDal" | "tenantId">,
-  input: {
-    context: ToolExecutionContext;
-    update: ApprovalStatusUpdate;
-  },
-): Promise<void> {
-  void deps;
-  void input;
 }
 
 export async function syncToolLifecycle(

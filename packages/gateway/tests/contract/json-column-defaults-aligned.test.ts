@@ -10,7 +10,7 @@ type JsonColumnSpec = {
   column: string;
   shape: JsonColumnShape;
   nullable: boolean;
-  default: "{}" | "[]" | null;
+  default: string | null;
 };
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -44,7 +44,7 @@ function findCreateTableBlock(sql: string, table: string): string | null {
 
 function findAddColumnBlock(sql: string, table: string, column: string): string | null {
   const pattern = new RegExp(
-    `ALTER\\s+TABLE\\s+${escapeRegex(table)}\\s+ADD\\s+COLUMN\\s+${escapeRegex(column)}\\b([\\s\\S]{0,240}?);`,
+    `ALTER\\s+TABLE\\s+${escapeRegex(table)}\\s+ADD\\s+COLUMN(?:\\s+IF\\s+NOT\\s+EXISTS)?\\s+${escapeRegex(column)}\\b([\\s\\S]{0,240}?);`,
     "m",
   );
   const match = sql.match(pattern);

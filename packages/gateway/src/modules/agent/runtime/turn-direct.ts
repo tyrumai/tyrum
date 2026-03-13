@@ -235,7 +235,7 @@ export async function turnDirect(
         for (const toolId of resumeState.used_tools ?? []) {
           usedTools.add(toolId);
         }
-        if (resumeState.memory_written) {
+        if (resumeState.memory_written && memoryWriteState) {
           memoryWriteState.wrote = true;
         }
         stepsUsedSoFar = resumeState.steps_used ?? countAssistantMessages(resumeState.messages);

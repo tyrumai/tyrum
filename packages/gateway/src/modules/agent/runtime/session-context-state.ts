@@ -278,23 +278,31 @@ function buildPendingStateText(contextState: SessionContextState): string {
 
 export function buildPromptVisibleMessages(
   messages: readonly TyrumUIMessage[],
-  contextState: SessionContextState,
+  contextState: SessionContextState | null | undefined,
 ): TyrumUIMessage[] {
+  const normalizedContextState: SessionContextState = contextState ?? {
+    version: 1,
+    recent_message_ids: [],
+    checkpoint: null,
+    pending_approvals: [],
+    pending_tool_state: [],
+    updated_at: new Date(0).toISOString(),
+  };
   if (
-    !contextState.checkpoint &&
-    contextState.pending_approvals.length === 0 &&
-    contextState.pending_tool_state.length === 0
+    !normalizedContextState.checkpoint &&
+    normalizedContextState.pending_approvals.length === 0 &&
+    normalizedContextState.pending_tool_state.length === 0
   ) {
     return messages.slice();
   }
 
-  const recentIds = new Set(contextState.recent_message_ids);
+  const recentIds = new Set(normalizedContextState.recent_message_ids);
   let recentMessages =
     recentIds.size > 0 ? messages.filter((message) => recentIds.has(message.id)) : [];
 
-  if (recentMessages.length === 0 && contextState.compacted_through_message_id) {
+  if (recentMessages.length === 0 && normalizedContextState.compacted_through_message_id) {
     const splitIndex = messages.findIndex(
-      (message) => message.id === contextState.compacted_through_message_id,
+      (message) => message.id === normalizedContextState.compacted_through_message_id,
     );
     if (splitIndex >= 0) {
       recentMessages = messages.slice(splitIndex + 1);
@@ -305,10 +313,10 @@ export function buildPromptVisibleMessages(
   }
 
   const sections: string[] = [];
-  if (contextState.checkpoint) {
-    sections.push(buildCheckpointPromptText(contextState.checkpoint));
+  if (normalizedContextState.checkpoint) {
+    sections.push(buildCheckpointPromptText(normalizedContextState.checkpoint));
   }
-  const pendingStateText = buildPendingStateText(contextState);
+  const pendingStateText = buildPendingStateText(normalizedContextState);
   if (pendingStateText.length > 0) {
     sections.push(pendingStateText);
   }
@@ -318,7 +326,7 @@ export function buildPromptVisibleMessages(
 
   return [
     {
-      id: `checkpoint-${contextState.compacted_through_message_id ?? contextState.updated_at}`,
+      id: `checkpoint-${normalizedContextState.compacted_through_message_id ?? normalizedContextState.updated_at}`,
       role: "system",
       parts: [{ type: "text", text: sections.join("\n\n") }],
     },

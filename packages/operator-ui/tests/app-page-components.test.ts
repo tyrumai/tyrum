@@ -11,10 +11,11 @@ describe("Operator UI app/page component structure", () => {
         { specifier: "../src/components/pages/connect-page.js", exportName: "ConnectPage" },
         { specifier: "../src/components/pages/dashboard-page.js", exportName: "DashboardPage" },
         { specifier: "../src/components/pages/chat-page-ai-sdk.js", exportName: "AiSdkChatPage" },
-        { specifier: "../src/components/pages/memory-page.js", exportName: "MemoryPage" },
         { specifier: "../src/components/pages/approvals-page.js", exportName: "ApprovalsPage" },
         { specifier: "../src/components/pages/runs-page.js", exportName: "RunsPage" },
+        { specifier: "../src/components/pages/workboard-page.js", exportName: "WorkBoardPage" },
         { specifier: "../src/components/pages/agents-page.js", exportName: "AgentsPage" },
+        { specifier: "../src/components/pages/extensions-page.js", exportName: "ExtensionsPage" },
         { specifier: "../src/components/pages/pairing-page.js", exportName: "PairingPage" },
         {
           specifier: "../src/components/pages/desktop-environments-page.js",

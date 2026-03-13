@@ -32,6 +32,7 @@ export function decodeSessionCursor(
       ? { updated_at: updatedAt, session_id: sessionId }
       : undefined;
   } catch {
+    // Intentional: invalid cursors should behave the same as an omitted cursor.
     return undefined;
   }
 }

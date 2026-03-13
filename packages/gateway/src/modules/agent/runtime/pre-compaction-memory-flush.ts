@@ -73,21 +73,23 @@ export async function maybeRunPreCompactionMemoryFlush(
     ctx: { config: AgentConfigT };
     session: SessionRow;
     model: LanguageModel;
-    droppedMessages: readonly TyrumUIMessage[];
+    droppedMessages?: readonly TyrumUIMessage[];
+    droppedTurns?: readonly TyrumUIMessage[];
     abortSignal?: AbortSignal;
     timeoutMs?: number;
   },
 ): Promise<void> {
+  const droppedMessages = input.droppedMessages ?? input.droppedTurns ?? [];
   const v1Enabled = resolvePreCompactionMemoryEnabled(input.ctx.config);
   if (!v1Enabled) {
     return;
   }
 
-  if (input.droppedMessages.length === 0) {
+  if (droppedMessages.length === 0) {
     return;
   }
 
-  const flushPromptText = formatPreCompactionFlushPrompt(input.droppedMessages);
+  const flushPromptText = formatPreCompactionFlushPrompt(droppedMessages);
   const flushKey = sha256HexFromString(`${input.session.session_id}\n${flushPromptText}`);
   const flushTag = `preflush:${flushKey}`;
 
@@ -185,7 +187,7 @@ export async function maybeRunPreCompactionMemoryFlush(
               metadata: {
                 kind: "pre_compaction_memory_flush",
                 flush_key: flushKey,
-                dropped_messages: input.droppedMessages.length,
+                dropped_messages: droppedMessages.length,
               },
             },
           },
