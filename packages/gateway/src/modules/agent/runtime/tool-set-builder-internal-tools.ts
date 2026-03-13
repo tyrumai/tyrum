@@ -27,22 +27,18 @@ export function createGuardianReviewDecisionTool(collector: GuardianReviewDecisi
 }
 
 function createValidatedDecisionInputSchema<T>(toolId: string, schema: z.ZodType<T>) {
-  return jsonSchema<T>(
-    async () => {
-      const json = await zodSchema(schema).jsonSchema;
-      const validatedSchema = validateModelToolInputSchema({ ...json, type: "object" });
-      if (!validatedSchema.ok) {
-        throw new Error(`invalid input schema for tool '${toolId}': ${validatedSchema.error}`);
-      }
-      return validatedSchema.schema;
+  const json = zodSchema(schema).jsonSchema;
+  const validatedSchema = validateModelToolInputSchema({ ...json, type: "object" });
+  if (!validatedSchema.ok) {
+    throw new Error(`invalid input schema for tool '${toolId}': ${validatedSchema.error}`);
+  }
+
+  return jsonSchema<T>(validatedSchema.schema, {
+    validate: async (value) => {
+      const parsed = await schema.safeParseAsync(value);
+      return parsed.success
+        ? { success: true, value: parsed.data }
+        : { success: false, error: parsed.error };
     },
-    {
-      validate: async (value) => {
-        const parsed = await schema.safeParseAsync(value);
-        return parsed.success
-          ? { success: true, value: parsed.data }
-          : { success: false, error: parsed.error };
-      },
-    },
-  );
+  });
 }
