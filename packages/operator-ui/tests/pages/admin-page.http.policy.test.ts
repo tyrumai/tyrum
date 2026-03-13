@@ -194,6 +194,44 @@ describe("ConfigurePage (HTTP) policy + config", () => {
     cleanupAdminHttpPage(page);
   });
 
+  it("keeps Policy and Overrides available when deployment config routes are absent", async () => {
+    const { core } = createAdminHttpTestCore();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input);
+      const method = init?.method ?? "GET";
+      if (method !== "GET") {
+        throw new Error(`Unexpected ${method} request to ${url}`);
+      }
+      if (url === "http://example.test/config/policy/deployment") {
+        return jsonResponse({ error: "not_found", message: "route not found" }, 404);
+      }
+      if (url === "http://example.test/config/policy/deployment/revisions") {
+        return jsonResponse({ error: "not_found", message: "route not found" }, 404);
+      }
+      const response = policyPageGetResponse(input, init);
+      if (response) return response;
+      throw new Error(`Unexpected request to ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const page = renderAdminHttpConfigurePage(core);
+    await switchHttpTab(page.container, "admin-http-tab-policy");
+    await flush();
+    await flush();
+
+    expect(page.container.textContent).not.toContain("Policy tab failed to load");
+    expect(page.container.textContent).not.toContain("Overrides failed to load");
+    expect(page.container.textContent).toContain("Deployment policy editing unavailable");
+    expect(getByTestId<HTMLButtonElement>(page.container, "policy-config-save").disabled).toBe(
+      true,
+    );
+    expect(
+      getByTestId<HTMLButtonElement>(page.container, "admin-policy-overrides-refresh"),
+    ).not.toBeNull();
+
+    cleanupAdminHttpPage(page);
+  });
+
   it("retries policy loading when elevated mode enables the admin client after mount", async () => {
     const { core } = createAdminHttpTestCore();
     core.elevatedModeStore.exit();

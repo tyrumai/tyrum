@@ -63,6 +63,11 @@ async function recordSessionSendActivity(input: {
   }
 }
 
+function isNoOutputStreamError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return error.message.includes("No output generated");
+}
+
 export async function handleSessionListMessage(
   client: ConnectedClient,
   msg: ProtocolRequestEnvelope,
@@ -375,6 +380,17 @@ export async function handleSessionSendMessage(
 
   try {
     const agentId = parsedReq.data.payload.agent_id ?? "default";
+    const requestMetadata = {
+      source: "ws",
+      request_id: msg.request_id,
+      ...(typeof client.auth_claims?.device_id === "string" &&
+      client.auth_claims.device_id.trim().length > 0
+        ? { source_client_device_id: client.auth_claims.device_id }
+        : {}),
+      ...(parsedReq.data.payload.attached_node_id
+        ? { attached_node_id: parsedReq.data.payload.attached_node_id }
+        : {}),
+    } as Record<string, unknown>;
     const session = deps.db
       ? await createSessionDal(deps).getOrCreate({
           scopeKeys: { agentKey: agentId, workspaceKey: resolveWorkspaceKey() },
@@ -396,21 +412,17 @@ export async function handleSessionSendMessage(
       typeof requestPayload["client_message_id"] === "string"
         ? requestPayload["client_message_id"]
         : randomUUID();
+    if (sourceClientDeviceId) {
+      requestMetadata["source_client_device_id"] = sourceClientDeviceId;
+    }
+    if (typeof requestPayload["client_message_id"] === "string") {
+      requestMetadata["client_message_id"] = requestPayload["client_message_id"];
+    }
     const stream = await runtime.turnStream({
       channel: parsedReq.data.payload.channel,
       thread_id: parsedReq.data.payload.thread_id,
       message: parsedReq.data.payload.content,
-      metadata: {
-        source: "ws",
-        request_id: msg.request_id,
-        ...(sourceClientDeviceId ? { source_client_device_id: sourceClientDeviceId } : {}),
-        ...(typeof requestPayload["client_message_id"] === "string"
-          ? { client_message_id: requestPayload["client_message_id"] }
-          : {}),
-        ...(parsedReq.data.payload.attached_node_id
-          ? { attached_node_id: parsedReq.data.payload.attached_node_id }
-          : {}),
-      },
+      metadata: requestMetadata,
     });
     const sessionKey = session?.session_key ?? stream.sessionId;
     await recordSessionSendActivity({
@@ -421,7 +433,7 @@ export async function handleSessionSendMessage(
       sourceClientDeviceId,
       attachedNodeId: parsedReq.data.payload.attached_node_id,
     });
-    const { approvalRequested } = await broadcastSessionSendStream({
+    const { approvalRequested, emittedAssistantOutput } = await broadcastSessionSendStream({
       deps,
       tenantId,
       agentId,
@@ -432,7 +444,19 @@ export async function handleSessionSendMessage(
       stream,
     });
 
-    const response = approvalRequested ? null : await stream.finalize();
+    const response = approvalRequested
+      ? null
+      : await stream.finalize().catch(async (error) => {
+          if (!emittedAssistantOutput && isNoOutputStreamError(error)) {
+            return await runtime.turn({
+              channel: parsedReq.data.payload.channel,
+              thread_id: parsedReq.data.payload.thread_id,
+              message: parsedReq.data.payload.content,
+              metadata: requestMetadata,
+            });
+          }
+          throw error;
+        });
     const result = WsSessionSendResult.parse({
       session_id: sessionKey,
       assistant_message: response?.reply ?? "",

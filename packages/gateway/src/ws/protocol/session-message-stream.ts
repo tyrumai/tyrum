@@ -81,6 +81,7 @@ export async function broadcastSessionSendStream(input: {
   stream: SessionStreamHandle;
 }): Promise<{
   approvalRequested: boolean;
+  emittedAssistantOutput: boolean;
 }> {
   const { deps, tenantId, agentId, sessionKey, threadId, clientMessageId, userContent, stream } =
     input;
@@ -256,5 +257,8 @@ export async function broadcastSessionSendStream(input: {
     throw error;
   }
 
-  return { approvalRequested };
+  return {
+    approvalRequested,
+    emittedAssistantOutput: assistantParts.size > 0 || reasoningParts.size > 0,
+  };
 }

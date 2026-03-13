@@ -63,7 +63,9 @@ export function PolicyConfigSection(props: PolicyConfigSectionProps): React.Reac
 
   React.useEffect(() => {
     if (!props.effective) return;
-    const deploymentBundle = props.currentRevision?.bundle ?? EMPTY_POLICY_BUNDLE;
+    const deploymentBundle =
+      props.currentRevision?.bundle ??
+      (props.configUnavailable ? props.effective.bundle : EMPTY_POLICY_BUNDLE);
     const deploymentBundleSignature = stringifyPolicyBundle(deploymentBundle);
     if (skipNextPropBundleSignatureRef.current === deploymentBundleSignature) {
       skipNextPropBundleSignatureRef.current = null;
@@ -114,6 +116,14 @@ export function PolicyConfigSection(props: PolicyConfigSectionProps): React.Reac
         onRefresh={props.onRefresh}
         loadBusy={props.loadBusy}
       />
+
+      {props.configUnavailable ? (
+        <Alert
+          variant="info"
+          title="Deployment policy editing unavailable"
+          description="This gateway is not exposing deployment policy config routes, so the editor is read-only and overrides remain available."
+        />
+      ) : null}
 
       {props.saveError ? (
         <Alert
@@ -223,7 +233,7 @@ export function PolicyConfigSection(props: PolicyConfigSectionProps): React.Reac
           <Button
             variant="secondary"
             data-testid="policy-config-reset"
-            disabled={!dirty}
+            disabled={props.configUnavailable || !dirty}
             onClick={() => {
               setFormState(policyBundleToFormState(initialBundle));
               setSaveReason("");
@@ -236,7 +246,7 @@ export function PolicyConfigSection(props: PolicyConfigSectionProps): React.Reac
               variant="danger"
               data-testid="policy-config-save"
               isLoading={props.saveBusy}
-              disabled={!dirty}
+              disabled={props.configUnavailable || !dirty}
               onClick={() => setSaveOpen(true)}
             >
               Save policy
@@ -255,6 +265,7 @@ export function PolicyConfigSection(props: PolicyConfigSectionProps): React.Reac
 
       <RevisionHistoryCard
         revisions={props.revisions}
+        configUnavailable={props.configUnavailable}
         busy={props.revertBusy}
         error={props.loadError}
         canMutate={props.canMutate}
