@@ -84,7 +84,7 @@ describe("DesktopEnvironmentRuntimeManager security hardening", () => {
       updateRuntime: vi.fn(async () => {}),
     };
     const nodePairingDal = {
-      getByNodeId: vi.fn(async () => ({ pairing_id: 101, status: "pending" })),
+      getByNodeId: vi.fn(async () => ({ pairing_id: 101, status: "queued" })),
       resolve: vi.fn(async () => ({ pairing: { status: "approved" } })),
     };
     const authTokens = {

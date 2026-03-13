@@ -22,7 +22,7 @@ export function isApprovalBlockedStatus(status: ApprovalLikeStatus): boolean {
 }
 
 export function isApprovalHumanActionableStatus(status: ApprovalLikeStatus): boolean {
-  return status === "awaiting_human";
+  return status === "queued" || status === "awaiting_human";
 }
 
 export function approvalUpdatedAt(approval: Approval): string {

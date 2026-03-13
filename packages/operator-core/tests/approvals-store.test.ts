@@ -2,7 +2,45 @@ import { describe, expect, it, vi } from "vitest";
 import { ElevatedModeRequiredError } from "../src/elevated-mode.js";
 import { createApprovalsStore } from "../src/stores/approvals-store.js";
 
+function makeApproval(
+  approvalId: string,
+  status: "queued" | "reviewing" | "awaiting_human" | "approved",
+) {
+  return {
+    approval_id: approvalId,
+    approval_key: `approval:${approvalId}`,
+    kind: "workflow_step",
+    status,
+    prompt: `Approve ${approvalId}?`,
+    motivation: "Approval is required before execution can continue.",
+    created_at: "2026-03-10T00:00:00.000Z",
+    expires_at: null,
+    latest_review: null,
+  } as const;
+}
+
 describe("approvals-store", () => {
+  it("treats queued approvals as human actionable pending work", async () => {
+    const queued = makeApproval("11111111-1111-1111-1111-111111111111", "queued");
+    const reviewing = makeApproval("22222222-2222-2222-2222-222222222222", "reviewing");
+    const awaitingHuman = makeApproval("33333333-3333-3333-3333-333333333333", "awaiting_human");
+    const ws = {
+      approvalList: vi.fn(async () => ({
+        approvals: [queued, reviewing, awaitingHuman],
+      })),
+    };
+
+    const { store } = createApprovalsStore(ws as never);
+    await store.refreshPending();
+
+    expect(store.getSnapshot().blockedIds).toEqual([
+      queued.approval_id,
+      reviewing.approval_id,
+      awaitingHuman.approval_id,
+    ]);
+    expect(store.getSnapshot().pendingIds).toEqual([queued.approval_id, awaitingHuman.approval_id]);
+  });
+
   it("passes approve-always payloads through and returns created overrides", async () => {
     const approval = {
       approval_id: "11111111-1111-1111-1111-111111111111",

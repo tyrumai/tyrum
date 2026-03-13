@@ -1,6 +1,6 @@
 import type { WsEventEnvelope } from "@tyrum/schemas";
 import { UuidSchema, canonicalizeToolId } from "@tyrum/schemas";
-import type { ApprovalDal, ApprovalRow } from "./dal.js";
+import type { ApprovalDal, ApprovalRow, ApprovalStatus } from "./dal.js";
 import type { PolicyOverrideDal, PolicyOverrideRow } from "../policy/override-dal.js";
 import { isSafeSuggestedOverridePattern } from "../policy/override-guardrails.js";
 import type { WsEventDal } from "../ws-event/dal.js";
@@ -20,6 +20,8 @@ type NormalizedSelectedOverride = {
   pattern: string;
   workspace_id?: string;
 };
+
+const HUMAN_RESOLVABLE_APPROVAL_STATUSES = ["queued", "awaiting_human"] satisfies ApprovalStatus[];
 
 type ApprovalResolveErrorCode = "invalid_request" | "not_found" | "unsupported";
 
@@ -122,6 +124,10 @@ function invalidRequest(message: string): ResolveApprovalResult {
   return { ok: false, code: "invalid_request", message };
 }
 
+function isHumanResolvableApprovalStatus(status: ApprovalStatus): boolean {
+  return status === "queued" || status === "awaiting_human";
+}
+
 function notFound(approvalId: string): ResolveApprovalResult {
   return {
     ok: false,
@@ -137,6 +143,20 @@ export async function resolveApproval(
   const overrideDal = deps.policyOverrideDal;
   let selectedOverrides: NormalizedSelectedOverride[] | undefined;
   let policySnapshotId: string | undefined;
+  const existing = deps.approvalDal.getById
+    ? await deps.approvalDal.getById({
+        tenantId: input.tenantId,
+        approvalId: input.approvalId,
+      })
+    : undefined;
+
+  if (existing?.status === "reviewing") {
+    return invalidRequest("approval is still being reviewed by the guardian");
+  }
+
+  if (existing && !isHumanResolvableApprovalStatus(existing.status)) {
+    return { ok: true, approval: existing, transitioned: false };
+  }
 
   if (input.decision === "approved" && input.mode === "always") {
     if (!deps.approvalDal.getById) {
@@ -146,20 +166,8 @@ export async function resolveApproval(
         message: "approval lookup not configured",
       };
     }
-
-    const existing = await deps.approvalDal.getById({
-      tenantId: input.tenantId,
-      approvalId: input.approvalId,
-    });
     if (!existing) {
       return notFound(input.approvalId);
-    }
-
-    if (existing.status !== "awaiting_human") {
-      if (existing.status === "queued" || existing.status === "reviewing") {
-        return invalidRequest("approval is still being reviewed by the guardian");
-      }
-      return { ok: true, approval: existing, transitioned: false };
     }
 
     if (!overrideDal) {
@@ -214,9 +222,13 @@ export async function resolveApproval(
       selected_overrides: selectedOverrides ?? [],
       actor: input.resolvedBy ?? null,
     },
+    allowedCurrentStatuses: [...HUMAN_RESOLVABLE_APPROVAL_STATUSES],
   });
   if (!resolved) {
     return notFound(input.approvalId);
+  }
+  if (!resolved.transitioned && resolved.approval.status === "reviewing") {
+    return invalidRequest("approval is still being reviewed by the guardian");
   }
 
   let createdOverrides: PolicyOverrideRow[] | undefined;

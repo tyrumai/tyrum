@@ -28,7 +28,6 @@ import { createActivityStore } from "./stores/activity-store.js";
 import {
   readClientId,
   readDisconnect,
-  readPendingApprovalFromRequest,
   readReconnectSchedule,
   readTransportMessage,
 } from "./operator-core.transport-helpers.js";

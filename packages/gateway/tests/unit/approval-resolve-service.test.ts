@@ -174,4 +174,75 @@ describe("resolveApproval", () => {
       }),
     ).toHaveLength(0);
   });
+
+  it("allows humans to resolve queued approvals directly", async () => {
+    db = openTestSqliteDb();
+    const approvalDal = new ApprovalDal(db);
+
+    const approval = await approvalDal.create({
+      tenantId: DEFAULT_TENANT_ID,
+      agentId: DEFAULT_AGENT_ID,
+      workspaceId: DEFAULT_WORKSPACE_ID,
+      approvalKey: `approval:${randomUUID()}`,
+      prompt: "Allow tool?",
+      motivation: "Guardian review may not be available for this approval.",
+      kind: "policy",
+      status: "queued",
+    });
+
+    const result = await resolveApproval(
+      {
+        approvalDal,
+      },
+      {
+        tenantId: DEFAULT_TENANT_ID,
+        approvalId: approval.approval_id,
+        decision: "approved",
+        resolvedBy: { kind: "http" },
+      },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.message);
+    expect(result.transitioned).toBe(true);
+    expect(result.approval.status).toBe("approved");
+    expect(result.approval.latest_review).toMatchObject({
+      reviewer_kind: "human",
+      state: "approved",
+    });
+  });
+
+  it("keeps reviewing approvals reserved for the guardian", async () => {
+    db = openTestSqliteDb();
+    const approvalDal = new ApprovalDal(db);
+
+    const approval = await approvalDal.create({
+      tenantId: DEFAULT_TENANT_ID,
+      agentId: DEFAULT_AGENT_ID,
+      workspaceId: DEFAULT_WORKSPACE_ID,
+      approvalKey: `approval:${randomUUID()}`,
+      prompt: "Allow tool?",
+      motivation: "Guardian review is already in progress.",
+      kind: "policy",
+      status: "reviewing",
+    });
+
+    const result = await resolveApproval(
+      {
+        approvalDal,
+      },
+      {
+        tenantId: DEFAULT_TENANT_ID,
+        approvalId: approval.approval_id,
+        decision: "denied",
+        resolvedBy: { kind: "http" },
+      },
+    );
+
+    expect(result).toEqual({
+      ok: false,
+      code: "invalid_request",
+      message: "approval is still being reviewed by the guardian",
+    });
+  });
 });
