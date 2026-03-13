@@ -26,6 +26,10 @@ const GATEWAY_BIN = resolve(PACKAGE_ROOT, "bin/tyrum.mjs");
 const GATEWAY_ENTRYPOINT = resolve(PACKAGE_ROOT, "dist/index.mjs");
 const GATEWAY_MIGRATIONS_DIR = resolve(PACKAGE_ROOT, "migrations/sqlite");
 const SCHEMAS_DIST = resolve(REPO_ROOT, "packages/schemas/dist/index.mjs");
+const SCHEMAS_PACKAGE_JSON = resolve(REPO_ROOT, "packages/schemas/package.json");
+const SCHEMAS_TSCONFIG = resolve(REPO_ROOT, "packages/schemas/tsconfig.json");
+const SCHEMAS_SRC_DIR = resolve(REPO_ROOT, "packages/schemas/src");
+const SCHEMAS_SCRIPTS_DIR = resolve(REPO_ROOT, "packages/schemas/scripts");
 const GATEWAY_SRC_DIR = resolve(PACKAGE_ROOT, "src");
 const GATEWAY_BUILD_LOCK = resolve(REPO_ROOT, ".tyrum-gateway-build.lock");
 
@@ -148,13 +152,13 @@ function tryGatewayBuild(cmd: string, args: string[]): ReturnType<typeof spawnSy
   });
 }
 
-function waitForGatewayBuildByAnotherWorker(timeoutMs: number): boolean {
+function waitForBuildOutputByAnotherWorker(outputPath: string, timeoutMs: number): boolean {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    if (existsSync(GATEWAY_ENTRYPOINT)) return true;
+    if (existsSync(outputPath)) return true;
     sleepSync(200);
   }
-  return existsSync(GATEWAY_ENTRYPOINT);
+  return existsSync(outputPath);
 }
 
 function latestMtimeInDir(rootDir: string): number {
@@ -184,6 +188,7 @@ function latestMtimeInDir(rootDir: string): number {
 
 function gatewayBuildIsStale(): boolean {
   if (!existsSync(GATEWAY_ENTRYPOINT)) return true;
+  if (!existsSync(SCHEMAS_DIST)) return true;
 
   const gatewayMtime = statSync(GATEWAY_ENTRYPOINT).mtimeMs;
 
@@ -191,36 +196,58 @@ function gatewayBuildIsStale(): boolean {
     return true;
   }
 
-  if (existsSync(SCHEMAS_DIST) && gatewayMtime < statSync(SCHEMAS_DIST).mtimeMs) {
+  if (existsSync(SCHEMAS_PACKAGE_JSON) && gatewayMtime < statSync(SCHEMAS_PACKAGE_JSON).mtimeMs) {
+    return true;
+  }
+
+  if (existsSync(SCHEMAS_TSCONFIG) && gatewayMtime < statSync(SCHEMAS_TSCONFIG).mtimeMs) {
+    return true;
+  }
+
+  if (existsSync(SCHEMAS_SRC_DIR) && gatewayMtime < latestMtimeInDir(SCHEMAS_SRC_DIR)) {
+    return true;
+  }
+
+  if (existsSync(SCHEMAS_SCRIPTS_DIR) && gatewayMtime < latestMtimeInDir(SCHEMAS_SCRIPTS_DIR)) {
+    return true;
+  }
+
+  if (gatewayMtime < statSync(SCHEMAS_DIST).mtimeMs) {
     return true;
   }
 
   return false;
 }
 
-function ensureGatewayBuild(): void {
-  if (!gatewayBuildIsStale()) return;
-
-  const args = ["--filter", "@tyrum/gateway", "build"];
+function ensureWorkspaceBuild(filter: string, outputPath: string, failurePrefix: string): void {
+  const args = ["--filter", filter, "build"];
   const result = tryGatewayBuild("pnpm", args);
-  if (result.status === 0 || existsSync(GATEWAY_ENTRYPOINT)) return;
-  if (waitForGatewayBuildByAnotherWorker(5_000)) return;
+  if (result.status === 0 || existsSync(outputPath)) return;
+  if (waitForBuildOutputByAnotherWorker(outputPath, 5_000)) return;
 
   if (result.error?.message.includes("ENOENT")) {
     const corepackResult = tryGatewayBuild("corepack", ["pnpm", ...args]);
-    if (corepackResult.status === 0 || existsSync(GATEWAY_ENTRYPOINT)) return;
-    if (waitForGatewayBuildByAnotherWorker(5_000)) return;
+    if (corepackResult.status === 0 || existsSync(outputPath)) return;
+    if (waitForBuildOutputByAnotherWorker(outputPath, 5_000)) return;
 
-    throw new Error(
-      formatBuildFailure(
-        "Failed to build @tyrum/gateway before startup test via pnpm/corepack.",
-        corepackResult,
-      ),
-    );
+    throw new Error(formatBuildFailure(failurePrefix, corepackResult));
   }
 
-  throw new Error(
-    formatBuildFailure("Failed to build @tyrum/gateway before startup test.", result),
+  throw new Error(formatBuildFailure(failurePrefix, result));
+}
+
+function ensureGatewayBuild(): void {
+  if (!gatewayBuildIsStale()) return;
+
+  ensureWorkspaceBuild(
+    "@tyrum/schemas",
+    SCHEMAS_DIST,
+    "Failed to build @tyrum/schemas before startup test.",
+  );
+  ensureWorkspaceBuild(
+    "@tyrum/gateway",
+    GATEWAY_ENTRYPOINT,
+    "Failed to build @tyrum/gateway before startup test.",
   );
 }
 

@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { closeSync, existsSync, openSync, statSync, unlinkSync } from "node:fs";
+import { closeSync, existsSync, openSync, readdirSync, statSync, unlinkSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
@@ -12,7 +12,11 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, "../../../../");
 const GATEWAY_BIN = resolve(REPO_ROOT, "packages/gateway/dist/index.mjs");
 const SCHEMAS_DIST = resolve(REPO_ROOT, "packages/schemas/dist/index.mjs");
-const GATEWAY_SRC_ENTRYPOINT = resolve(REPO_ROOT, "packages/gateway/src/index.ts");
+const SCHEMAS_PACKAGE_JSON = resolve(REPO_ROOT, "packages/schemas/package.json");
+const SCHEMAS_TSCONFIG = resolve(REPO_ROOT, "packages/schemas/tsconfig.json");
+const SCHEMAS_SRC_DIR = resolve(REPO_ROOT, "packages/schemas/src");
+const SCHEMAS_SCRIPTS_DIR = resolve(REPO_ROOT, "packages/schemas/scripts");
+const GATEWAY_SRC_DIR = resolve(REPO_ROOT, "packages/gateway/src");
 const GATEWAY_BUILD_LOCK = resolve(REPO_ROOT, ".tyrum-gateway-build.lock");
 
 const isWindows = process.platform === "win32";
@@ -73,56 +77,102 @@ function tryGatewayBuild(cmd: string, args: string[]): ReturnType<typeof spawnSy
   });
 }
 
-function waitForGatewayBuildByAnotherWorker(timeoutMs: number): boolean {
+function waitForBuildOutputByAnotherWorker(outputPath: string, timeoutMs: number): boolean {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    if (existsSync(GATEWAY_BIN)) return true;
+    if (existsSync(outputPath)) return true;
     sleepSync(200);
   }
-  return existsSync(GATEWAY_BIN);
+  return existsSync(outputPath);
+}
+
+function latestMtimeInDir(rootDir: string): number {
+  let latest = 0;
+  const stack: string[] = [rootDir];
+
+  while (stack.length > 0) {
+    const dir = stack.pop();
+    if (!dir) break;
+
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const fullPath = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name === "node_modules" || entry.name === "dist") continue;
+        stack.push(fullPath);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+
+      const mtimeMs = statSync(fullPath).mtimeMs;
+      if (mtimeMs > latest) latest = mtimeMs;
+    }
+  }
+
+  return latest;
 }
 
 function gatewayBuildIsStale(): boolean {
   if (!existsSync(GATEWAY_BIN)) return true;
+  if (!existsSync(SCHEMAS_DIST)) return true;
 
   const gatewayMtime = statSync(GATEWAY_BIN).mtimeMs;
 
-  if (existsSync(GATEWAY_SRC_ENTRYPOINT)) {
-    const srcMtime = statSync(GATEWAY_SRC_ENTRYPOINT).mtimeMs;
-    if (gatewayMtime < srcMtime) return true;
+  if (existsSync(GATEWAY_SRC_DIR) && gatewayMtime < latestMtimeInDir(GATEWAY_SRC_DIR)) {
+    return true;
   }
 
-  if (existsSync(SCHEMAS_DIST)) {
-    const schemasMtime = statSync(SCHEMAS_DIST).mtimeMs;
-    if (gatewayMtime < schemasMtime) return true;
+  if (existsSync(SCHEMAS_PACKAGE_JSON) && gatewayMtime < statSync(SCHEMAS_PACKAGE_JSON).mtimeMs) {
+    return true;
+  }
+
+  if (existsSync(SCHEMAS_TSCONFIG) && gatewayMtime < statSync(SCHEMAS_TSCONFIG).mtimeMs) {
+    return true;
+  }
+
+  if (existsSync(SCHEMAS_SRC_DIR) && gatewayMtime < latestMtimeInDir(SCHEMAS_SRC_DIR)) {
+    return true;
+  }
+
+  if (existsSync(SCHEMAS_SCRIPTS_DIR) && gatewayMtime < latestMtimeInDir(SCHEMAS_SCRIPTS_DIR)) {
+    return true;
+  }
+
+  if (gatewayMtime < statSync(SCHEMAS_DIST).mtimeMs) {
+    return true;
   }
 
   return false;
 }
 
-function ensureGatewayBuild(): void {
-  if (!gatewayBuildIsStale()) return;
-
-  const args = ["--filter", "@tyrum/gateway", "build"];
+function ensureWorkspaceBuild(filter: string, outputPath: string, failurePrefix: string): void {
+  const args = ["--filter", filter, "build"];
   const result = tryGatewayBuild("pnpm", args);
-  if (result.status === 0 || existsSync(GATEWAY_BIN)) return;
-  if (waitForGatewayBuildByAnotherWorker(5_000)) return;
+  if (result.status === 0 || existsSync(outputPath)) return;
+  if (waitForBuildOutputByAnotherWorker(outputPath, 5_000)) return;
 
   if (result.error?.message.includes("ENOENT")) {
     const corepackResult = tryGatewayBuild("corepack", ["pnpm", ...args]);
-    if (corepackResult.status === 0 || existsSync(GATEWAY_BIN)) return;
-    if (waitForGatewayBuildByAnotherWorker(5_000)) return;
+    if (corepackResult.status === 0 || existsSync(outputPath)) return;
+    if (waitForBuildOutputByAnotherWorker(outputPath, 5_000)) return;
 
-    throw new Error(
-      formatBuildFailure(
-        "Failed to build @tyrum/gateway before desktop integration test via pnpm/corepack.",
-        corepackResult,
-      ),
-    );
+    throw new Error(formatBuildFailure(failurePrefix, corepackResult));
   }
 
-  throw new Error(
-    formatBuildFailure("Failed to build @tyrum/gateway before desktop integration test.", result),
+  throw new Error(formatBuildFailure(failurePrefix, result));
+}
+
+function ensureGatewayBuild(): void {
+  if (!gatewayBuildIsStale()) return;
+
+  ensureWorkspaceBuild(
+    "@tyrum/schemas",
+    SCHEMAS_DIST,
+    "Failed to build @tyrum/schemas before desktop integration test.",
+  );
+  ensureWorkspaceBuild(
+    "@tyrum/gateway",
+    GATEWAY_BIN,
+    "Failed to build @tyrum/gateway before desktop integration test.",
   );
 }
 

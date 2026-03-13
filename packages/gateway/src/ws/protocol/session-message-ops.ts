@@ -383,10 +383,6 @@ export async function handleSessionSendMessage(
     const requestMetadata = {
       source: "ws",
       request_id: msg.request_id,
-      ...(typeof client.auth_claims?.device_id === "string" &&
-      client.auth_claims.device_id.trim().length > 0
-        ? { source_client_device_id: client.auth_claims.device_id }
-        : {}),
       ...(parsedReq.data.payload.attached_node_id
         ? { attached_node_id: parsedReq.data.payload.attached_node_id }
         : {}),

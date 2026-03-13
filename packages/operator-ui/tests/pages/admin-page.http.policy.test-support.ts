@@ -1,5 +1,35 @@
 import { jsonResponse } from "./admin-page.http.test-support.js";
 
+const POLICY_PAGE_BUNDLE = {
+  v: 1,
+  tools: {
+    default: "require_approval",
+    allow: ["read"],
+    require_approval: [],
+    deny: [],
+  },
+  network_egress: {
+    default: "require_approval",
+    allow: [],
+    require_approval: [],
+    deny: [],
+  },
+  secrets: {
+    default: "require_approval",
+    allow: [],
+    require_approval: [],
+    deny: [],
+  },
+  connectors: {
+    default: "require_approval",
+    allow: ["telegram:*"],
+    require_approval: [],
+    deny: [],
+  },
+  artifacts: { default: "allow" },
+  provenance: { untrusted_shell_requires_approval: true },
+} as const;
+
 export function requestUrl(input: RequestInfo | URL): string {
   return typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
 }
@@ -26,35 +56,7 @@ export function policyPageGetResponse(
       generated_at: "2026-03-01T00:00:00.000Z",
       effective: {
         sha256: "policy-sha-1",
-        bundle: {
-          v: 1,
-          tools: {
-            default: "require_approval",
-            allow: ["read"],
-            require_approval: [],
-            deny: [],
-          },
-          network_egress: {
-            default: "require_approval",
-            allow: [],
-            require_approval: [],
-            deny: [],
-          },
-          secrets: {
-            default: "require_approval",
-            allow: [],
-            require_approval: [],
-            deny: [],
-          },
-          connectors: {
-            default: "require_approval",
-            allow: ["telegram:*"],
-            require_approval: [],
-            deny: [],
-          },
-          artifacts: { default: "allow" },
-          provenance: { untrusted_shell_requires_approval: true },
-        },
+        bundle: POLICY_PAGE_BUNDLE,
         sources: { deployment: "default", agent: null, playbook: null },
       },
     });
@@ -108,6 +110,30 @@ export function policyPageGetResponse(
         },
       ],
     });
+  }
+  return null;
+}
+
+export function policyPageWritableConfigGetResponse(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): Response | null {
+  const url = requestUrl(input);
+  const method = init?.method ?? "GET";
+  if (method !== "GET") return null;
+  if (url === "http://example.test/config/policy/deployment") {
+    return jsonResponse({
+      revision: 1,
+      agent_key: null,
+      bundle: POLICY_PAGE_BUNDLE,
+      created_at: "2026-03-01T00:00:00.000Z",
+      created_by: { kind: "tenant.token", token_id: "token-1" },
+      reason: null,
+      reverted_from_revision: null,
+    });
+  }
+  if (url === "http://example.test/config/policy/deployment/revisions") {
+    return jsonResponse({ revisions: [] });
   }
   return null;
 }

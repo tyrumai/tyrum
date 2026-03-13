@@ -20,6 +20,7 @@ import {
 import {
   matchMutation,
   policyPageGetResponse,
+  policyPageWritableConfigGetResponse,
   requestUrl,
 } from "./admin-page.http.policy.test-support.js";
 
@@ -355,6 +356,8 @@ describe("ConfigurePage (HTTP) policy + config", () => {
   it("saves deployment policy revisions from structured controls", async () => {
     const { core } = createAdminHttpTestCore();
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const writableConfigResponse = policyPageWritableConfigGetResponse(input, init);
+      if (writableConfigResponse) return writableConfigResponse;
       const getResponse = policyPageGetResponse(input, init);
       if (getResponse) return getResponse;
       expectAuthorizedJsonRequest(input, init, {
