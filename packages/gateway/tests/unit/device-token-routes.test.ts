@@ -156,4 +156,31 @@ describe("device token routes", () => {
     expect(res.status).toBe(201);
     expect(issueToken).toHaveBeenCalledTimes(1);
   });
+
+  it("preserves the legacy forbidden JSON body for non-admin token access", async () => {
+    const issueToken = vi.fn();
+    const app = createApp({
+      issueToken,
+      tokenKind: "device",
+      role: "client",
+      scopes: ["operator.read"],
+    });
+
+    const res = await app.request("/auth/device-tokens/issue", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        device_id: "device-1",
+        role: "client",
+        scopes: ["operator.read"],
+      }),
+    });
+
+    expect(res.status).toBe(403);
+    await expect(res.json()).resolves.toEqual({
+      error: "forbidden",
+      message: "admin token required",
+    });
+    expect(issueToken).not.toHaveBeenCalled();
+  });
 });

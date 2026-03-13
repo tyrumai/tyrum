@@ -31,7 +31,7 @@ import {
 
 export function AuthTokensCard({ core }: { core: OperatorCore }): React.ReactElement {
   const { canMutate, requestEnter } = useAdminMutationAccess(core);
-  const adminHttp = useAdminHttpClient();
+  const adminHttp = useAdminHttpClient({ access: "strict" });
   const [tokens, setTokens] = React.useState<AuthTokenListEntry[]>([]);
   const [listBusy, setListBusy] = React.useState(true);
   const [listErrorMessage, setListErrorMessage] = React.useState<string | null>(null);

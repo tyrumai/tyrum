@@ -2,7 +2,7 @@ import { TyrumHttpClientError } from "@tyrum/client/browser";
 import type { OperatorCore } from "@tyrum/operator-core";
 import * as React from "react";
 import type { AdminHttpClient } from "./admin-http-shared.js";
-import { useAdminHttpClient } from "./admin-http-shared.js";
+import { useAdminHttpClient, useAdminMutationHttpClient } from "./admin-http-shared.js";
 import {
   PolicyConfigSection,
   type PolicyConfigDeployment,
@@ -117,8 +117,9 @@ export function AdminHttpPolicyCard({
   canMutate: boolean;
   requestEnter: () => void;
 }): React.ReactElement {
-  const adminHttp = useAdminHttpClient();
-  const http = (adminHttp ?? null) as PolicyHttpClient | null;
+  const readHttp = useAdminHttpClient() as PolicyHttpClient;
+  const mutationHttp = useAdminMutationHttpClient() as PolicyHttpClient | null;
+  const http = mutationHttp ?? readHttp;
   const [effective, setEffective] = React.useState<PolicyEffectiveBundle | null>(null);
   const [currentRevision, setCurrentRevision] = React.useState<PolicyConfigDeployment | null>(null);
   const [revisions, setRevisions] = React.useState<PolicyConfigRevision[]>([]);
@@ -147,9 +148,6 @@ export function AdminHttpPolicyCard({
     setLoadBusy(true);
     setLoadError(null);
     try {
-      if (!http) {
-        throw new Error("Admin access is required to load policy configuration.");
-      }
       if (!http.policyConfig) {
         throw new Error("Deployment policy config API unavailable.");
       }
@@ -209,9 +207,10 @@ export function AdminHttpPolicyCard({
           if (!requireMutationAccess()) return false;
           setSaveBusy(true);
           try {
-            if (!http) throw new Error("Admin access is required to save policy configuration.");
-            if (!http.policyConfig) throw new Error("Deployment policy config API unavailable.");
-            await http.policyConfig.updateDeployment({
+            if (!mutationHttp?.policyConfig) {
+              throw new Error("Deployment policy config API unavailable.");
+            }
+            await mutationHttp.policyConfig.updateDeployment({
               bundle,
               ...(reason.trim() ? { reason: reason.trim() } : {}),
             });
@@ -229,9 +228,10 @@ export function AdminHttpPolicyCard({
           if (!requireMutationAccess()) return;
           setRevertBusy(true);
           try {
-            if (!http) throw new Error("Admin access is required to revert policy configuration.");
-            if (!http.policyConfig) throw new Error("Deployment policy config API unavailable.");
-            await http.policyConfig.revertDeployment({
+            if (!mutationHttp?.policyConfig) {
+              throw new Error("Deployment policy config API unavailable.");
+            }
+            await mutationHttp.policyConfig.revertDeployment({
               revision,
               ...(reason.trim() ? { reason: reason.trim() } : {}),
             });
@@ -264,8 +264,10 @@ export function AdminHttpPolicyCard({
           if (!requireMutationAccess()) return false;
           setCreateBusy(true);
           try {
-            if (!http) throw new Error("Admin access is required to create policy overrides.");
-            await http.policy.createOverride(input);
+            if (!mutationHttp) {
+              throw new Error("Admin access is required to create policy overrides.");
+            }
+            await mutationHttp.policy.createOverride(input);
             await loadAll();
             return true;
           } catch (error) {
@@ -280,8 +282,10 @@ export function AdminHttpPolicyCard({
           if (!requireMutationAccess()) return;
           setRevokeBusy(true);
           try {
-            if (!http) throw new Error("Admin access is required to revoke policy overrides.");
-            await http.policy.revokeOverride(input);
+            if (!mutationHttp) {
+              throw new Error("Admin access is required to revoke policy overrides.");
+            }
+            await mutationHttp.policy.revokeOverride(input);
             await loadAll();
           } catch (error) {
             setRevokeError(error);

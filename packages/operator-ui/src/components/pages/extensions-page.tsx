@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useApiAction } from "../../hooks/use-api-action.js";
 import { AppPage } from "../layout/app-page.js";
 import {
-  AdminAccessGate,
+  AdminMutationGate,
   useAdminHttpClient,
   useAdminMutationAccess,
 } from "./admin-http-shared.js";
@@ -41,7 +41,7 @@ export function ExtensionsPage({ core }: { core: OperatorCore }) {
   const [refreshNonce, setRefreshNonce] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
-  const adminHttp = useAdminHttpClient();
+  const adminHttp = useAdminHttpClient({ access: "strict" });
   const mutationHttp = adminHttp;
   const extensionsApi = adminHttp?.extensions;
   const { canMutate, requestEnter } = useAdminMutationAccess(core);
@@ -288,12 +288,12 @@ export function ExtensionsPage({ core }: { core: OperatorCore }) {
           )}
         </ImportGuard>
       ) : (
-        <AdminAccessGate
+        <AdminMutationGate
           core={core}
           description="Authorizing admin access loads extension inventories and enables import, toggle, refresh, and revert actions."
         >
           {null}
-        </AdminAccessGate>
+        </AdminMutationGate>
       )}
 
       {mutation.state.status === "error" ? (

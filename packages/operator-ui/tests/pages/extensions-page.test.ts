@@ -386,8 +386,8 @@ describe("ExtensionsPage", () => {
     try {
       await flush();
 
-      expect(testRoot.container.textContent).toContain("Elevated mode required");
-      await clickButton(testRoot.container, "Unlock changes");
+      expect(testRoot.container.textContent).toContain("Admin access required");
+      await clickButton(testRoot.container, "Authorize admin access");
       expect(mutationAccess.requestEnter).toHaveBeenCalledTimes(1);
     } finally {
       cleanupTestRoot(testRoot);

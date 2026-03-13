@@ -20,6 +20,7 @@ import {
   buildReplacementAssignments,
   useAdminHttpClient,
   useAdminMutationAccess,
+  useAdminMutationHttpClient,
 } from "./admin-http-shared.js";
 
 function normalizeAssignments(assignments: Assignment[]): Assignment[] {
@@ -42,7 +43,8 @@ function normalizeAssignments(assignments: Assignment[]): Assignment[] {
 
 export function AdminHttpModelsPanel({ core }: { core: OperatorCore }): React.ReactElement {
   const { canMutate, requestEnter } = useAdminMutationAccess(core);
-  const adminHttp = useAdminHttpClient();
+  const readHttp = useAdminHttpClient();
+  const mutationHttp = useAdminMutationHttpClient();
   const [presets, setPresets] = React.useState<ModelPreset[]>([]);
   const [availableModels, setAvailableModels] = React.useState<AvailableModel[]>([]);
   const [assignments, setAssignments] = React.useState<Assignment[]>([]);
@@ -61,18 +63,7 @@ export function AdminHttpModelsPanel({ core }: { core: OperatorCore }): React.Re
   const [deletingPreset, setDeletingPreset] = React.useState<DeletePresetDialogState>(null);
 
   const refresh = React.useCallback(
-    async (httpClient: ModelConfigHttpClient | null = adminHttp): Promise<void> => {
-      if (!httpClient) {
-        setPresets([]);
-        setAvailableModels([]);
-        setAssignments(normalizeAssignments([]));
-        setAssignmentDraft({});
-        setExecutionProfilesErrorMessage("Admin access is required to load model configuration.");
-        setAvailableModelsErrorMessage(null);
-        setLoading(false);
-        setRefreshing(false);
-        return;
-      }
+    async (httpClient: ModelConfigHttpClient = readHttp): Promise<void> => {
       setRefreshing(true);
       setExecutionProfilesErrorMessage(null);
       setAvailableModelsErrorMessage(null);
@@ -126,12 +117,12 @@ export function AdminHttpModelsPanel({ core }: { core: OperatorCore }): React.Re
       setLoading(false);
       setRefreshing(false);
     },
-    [adminHttp],
+    [readHttp],
   );
 
   React.useEffect(() => {
-    void refresh(adminHttp);
-  }, [adminHttp, refresh]);
+    void refresh(readHttp);
+  }, [readHttp, refresh]);
 
   const assignmentPresetKeys = new Map(
     assignments.map((assignment) => [assignment.execution_profile_id, assignment.preset_key]),
@@ -149,11 +140,11 @@ export function AdminHttpModelsPanel({ core }: { core: OperatorCore }): React.Re
     setSavingAssignments(true);
     setExecutionProfilesErrorMessage(null);
     try {
-      if (!adminHttp) {
+      if (!mutationHttp) {
         throw new Error("Admin access is required to update model assignments.");
       }
-      await adminHttp.modelConfig.updateAssignments({ assignments: assignmentDraft });
-      await refresh(adminHttp);
+      await mutationHttp.modelConfig.updateAssignments({ assignments: assignmentDraft });
+      await refresh(mutationHttp);
     } catch (error) {
       setExecutionProfilesErrorMessage(formatErrorMessage(error));
     } finally {
@@ -163,14 +154,14 @@ export function AdminHttpModelsPanel({ core }: { core: OperatorCore }): React.Re
 
   const removePreset = async (): Promise<void> => {
     if (!deletingPreset) return;
+    if (!mutationHttp) {
+      throw new Error("Admin access is required to remove model presets.");
+    }
     const replacementAssignments = buildReplacementAssignments(
       deletingPreset.requiredExecutionProfileIds,
       deletingPreset.replacementAssignments,
     );
-    if (!adminHttp) {
-      throw new Error("Admin access is required to remove model presets.");
-    }
-    const result = await adminHttp.modelConfig.deletePreset(
+    const result = await mutationHttp.modelConfig.deletePreset(
       deletingPreset.preset.preset_key,
       replacementAssignments ? { replacement_assignments: replacementAssignments } : undefined,
     );
@@ -187,7 +178,7 @@ export function AdminHttpModelsPanel({ core }: { core: OperatorCore }): React.Re
     }
 
     setDeletingPreset(null);
-    await refresh(adminHttp);
+    await refresh(mutationHttp);
   };
 
   const candidatePresets = deletingPreset
@@ -212,7 +203,7 @@ export function AdminHttpModelsPanel({ core }: { core: OperatorCore }): React.Re
           }));
         }}
         onRefresh={() => {
-          void refresh(adminHttp);
+          void refresh(readHttp);
         }}
         onSaveAssignments={() => {
           void saveAssignments();
@@ -245,7 +236,7 @@ export function AdminHttpModelsPanel({ core }: { core: OperatorCore }): React.Re
         requestEnter={requestEnter}
       />
 
-      {adminHttp ? (
+      {mutationHttp ? (
         <ModelPresetDialog
           open={dialogOpen}
           onOpenChange={(open) => {
@@ -257,10 +248,10 @@ export function AdminHttpModelsPanel({ core }: { core: OperatorCore }): React.Re
           preset={editingPreset}
           availableModels={availableModels}
           onSaved={async () => {
-            await refresh(adminHttp);
+            await refresh(mutationHttp);
           }}
           canMutate={canMutate}
-          api={adminHttp.modelConfig}
+          api={mutationHttp.modelConfig}
         />
       ) : null}
 

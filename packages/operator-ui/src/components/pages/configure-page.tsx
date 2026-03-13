@@ -11,7 +11,7 @@ import { AdminHttpPolicyAuthPanels } from "./admin-http-policy-auth-panels.js";
 import { AdminHttpRoutingConfigPanel } from "./admin-http-routing-config.js";
 import { AdminHttpSecretsPanel } from "./admin-http-secrets.js";
 import { AdminWsCommandPanel } from "./admin-ws-command-panel.js";
-import { AdminAccessGate } from "./admin-http-shared.js";
+import { AdminMutationGate } from "./admin-http-shared.js";
 import { ConfigureGeneralPanel } from "./configure-general-panel.js";
 import { ThemeProvider, useThemeOptional } from "../../hooks/use-theme.js";
 import { useReconnectScrollArea, useReconnectTabState } from "../../reconnect-ui-state.js";
@@ -94,63 +94,49 @@ function ConfigurePageContent({ core }: ConfigurePageProps) {
         </TabsContent>
 
         <TabsContent value="policy">
-          <AdminAccessGate core={core}>
-            <AdminHttpPolicyAuthPanels core={core} />
-          </AdminAccessGate>
+          <AdminHttpPolicyAuthPanels core={core} />
         </TabsContent>
 
         <TabsContent value="providers">
-          <AdminAccessGate core={core}>
-            <AdminHttpProvidersPanel core={core} />
-          </AdminAccessGate>
+          <AdminHttpProvidersPanel core={core} />
         </TabsContent>
 
         <TabsContent value="models">
-          <AdminAccessGate core={core}>
-            <AdminHttpModelsPanel core={core} />
-          </AdminAccessGate>
+          <AdminHttpModelsPanel core={core} />
         </TabsContent>
 
         <TabsContent value="audit">
-          <AdminAccessGate core={core}>
+          <AdminMutationGate core={core}>
             <AuditPanel core={core} />
-          </AdminAccessGate>
+          </AdminMutationGate>
         </TabsContent>
 
         <TabsContent value="routing-config">
-          <AdminAccessGate core={core}>
-            <AdminHttpRoutingConfigPanel core={core} />
-          </AdminAccessGate>
+          <AdminHttpRoutingConfigPanel core={core} />
         </TabsContent>
 
         <TabsContent value="location">
-          <AdminAccessGate core={core}>
-            <AdminHttpLocationPanel core={core} />
-          </AdminAccessGate>
+          <AdminHttpLocationPanel core={core} />
         </TabsContent>
 
         <TabsContent value="secrets">
-          <AdminAccessGate core={core}>
-            <AdminHttpSecretsPanel core={core} />
-          </AdminAccessGate>
+          <AdminHttpSecretsPanel core={core} />
         </TabsContent>
 
         <TabsContent value="tools">
-          <AdminAccessGate core={core}>
-            <ToolRegistryCard core={core} />
-          </AdminAccessGate>
+          <ToolRegistryCard core={core} />
         </TabsContent>
 
         <TabsContent value="device-tokens">
-          <AdminAccessGate core={core}>
+          <AdminMutationGate core={core}>
             <AuthTokensCard core={core} />
-          </AdminAccessGate>
+          </AdminMutationGate>
         </TabsContent>
 
         <TabsContent value="commands">
-          <AdminAccessGate core={core}>
+          <AdminMutationGate core={core}>
             <AdminWsCommandPanel core={core} />
-          </AdminAccessGate>
+          </AdminMutationGate>
         </TabsContent>
       </Tabs>
     </AppPage>

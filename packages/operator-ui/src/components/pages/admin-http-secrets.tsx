@@ -11,7 +11,11 @@ import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { ConfirmDangerDialog } from "../ui/confirm-danger-dialog.js";
 import { EmptyState } from "../ui/empty-state.js";
 import { Input } from "../ui/input.js";
-import { useAdminHttpClient, useAdminMutationAccess } from "./admin-http-shared.js";
+import {
+  useAdminHttpClient,
+  useAdminMutationAccess,
+  useAdminMutationHttpClient,
+} from "./admin-http-shared.js";
 
 type SecretsApi = OperatorCore["http"]["secrets"];
 type SecretPanelMessage = {
@@ -135,9 +139,10 @@ function SecretRowActions({
 }
 
 export function AdminHttpSecretsPanel({ core }: { core: OperatorCore }): React.ReactElement {
-  const adminHttp = useAdminHttpClient();
-  const readApi: SecretsApi | null = adminHttp?.secrets ?? null;
-  const mutationApi: SecretsApi | null = adminHttp?.secrets ?? null;
+  const readHttp = useAdminHttpClient();
+  const mutationHttp = useAdminMutationHttpClient();
+  const readApi: SecretsApi = readHttp.secrets;
+  const mutationApi: SecretsApi | null = mutationHttp?.secrets ?? null;
   const { canMutate, requestEnter } = useAdminMutationAccess(core);
 
   const [rows, setRows] = React.useState<SecretRow[]>([]);
@@ -154,13 +159,6 @@ export function AdminHttpSecretsPanel({ core }: { core: OperatorCore }): React.R
   const [revokeTarget, setRevokeTarget] = React.useState<SecretRow | null>(null);
 
   const refreshSecrets = React.useCallback(async (): Promise<void> => {
-    if (!readApi) {
-      setRows([]);
-      setLoading(false);
-      setRefreshing(false);
-      setErrorMessage("Admin access is required to load secrets.");
-      return;
-    }
     setRefreshing(true);
     setErrorMessage(null);
     try {

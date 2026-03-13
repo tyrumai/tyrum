@@ -54,7 +54,7 @@ describe("ConfigurePage (strict admin tabs)", () => {
     }
   });
 
-  it("shows local admin-access gates outside admin mode", async () => {
+  it("keeps mixed admin tabs readable outside admin mode while gating token management", async () => {
     const { core } = createPanelsCore(false);
     const testRoot = renderStrictAdminConfigurePage(core);
 
@@ -66,18 +66,18 @@ describe("ConfigurePage (strict admin tabs)", () => {
       expect(testRoot.container.querySelector("[data-testid='admin-access-gate']")).not.toBeNull();
 
       await switchAdminTab(testRoot.container, "admin-http-tab-providers");
-      expect(testRoot.container.querySelector("[data-testid='providers-add-open']")).toBeNull();
-      expect(testRoot.container.querySelector("[data-testid='admin-access-gate']")).not.toBeNull();
+      expect(testRoot.container.querySelector("[data-testid='providers-add-open']")).not.toBeNull();
+      expect(testRoot.container.querySelector("[data-testid='admin-access-gate']")).toBeNull();
 
       await switchAdminTab(testRoot.container, "admin-http-tab-models");
-      expect(testRoot.container.querySelector("[data-testid='models-add-open']")).toBeNull();
-      expect(testRoot.container.querySelector("[data-testid='admin-access-gate']")).not.toBeNull();
+      expect(testRoot.container.querySelector("[data-testid='models-add-open']")).not.toBeNull();
+      expect(testRoot.container.querySelector("[data-testid='admin-access-gate']")).toBeNull();
 
       await switchAdminTab(testRoot.container, "admin-http-tab-policy");
       expect(
         testRoot.container.querySelector("[data-testid='admin-policy-override-create']"),
-      ).toBeNull();
-      expect(testRoot.container.querySelector("[data-testid='admin-access-gate']")).not.toBeNull();
+      ).not.toBeNull();
+      expect(testRoot.container.querySelector("[data-testid='admin-access-gate']")).toBeNull();
     } finally {
       cleanupTestRoot(testRoot);
     }

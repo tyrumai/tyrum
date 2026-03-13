@@ -3,6 +3,13 @@ import type { AuthTokenClaims } from "@tyrum/schemas";
 import { hasAnyRequiredScope } from "./scopes.js";
 import { requireTenantIdValue } from "../identity/scope.js";
 
+function jsonForbiddenResponse(message: string): Response {
+  return new Response(JSON.stringify({ error: "forbidden", message }), {
+    status: 403,
+    headers: { "content-type": "application/json" },
+  });
+}
+
 export function requireAuthClaims(c: { get: (key: string) => unknown }): AuthTokenClaims {
   const raw = c.get("authClaims") as unknown;
   if (!raw || typeof raw !== "object") {
@@ -21,10 +28,15 @@ export function requireTenantId(c: { get: (key: string) => unknown }): string {
   }
 }
 
-export function requireOperatorAdminAccess(c: { get: (key: string) => unknown }): AuthTokenClaims {
+export function requireOperatorAdminAccess(
+  c: { get: (key: string) => unknown },
+  options?: { message?: string },
+): AuthTokenClaims {
   const claims = requireAuthClaims(c);
   if (claims.role === "admin" || hasAnyRequiredScope(claims, ["operator.admin"])) {
     return claims;
   }
-  throw new HTTPException(403, { message: "operator admin access required" });
+  throw new HTTPException(403, {
+    res: jsonForbiddenResponse(options?.message ?? "operator admin access required"),
+  });
 }

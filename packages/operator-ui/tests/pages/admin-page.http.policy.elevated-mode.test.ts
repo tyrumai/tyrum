@@ -26,7 +26,7 @@ afterEach(() => {
 });
 
 describe("ConfigurePage (HTTP) policy admin-access transitions", () => {
-  it("shows a local admin-access gate if policy access expires before save confirmation", async () => {
+  it("keeps the policy editor readable if policy access expires before save confirmation", async () => {
     const { core } = createAdminHttpTestCore();
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const writableConfigResponse = policyPageWritableConfigGetResponse(input, init);
@@ -72,13 +72,13 @@ describe("ConfigurePage (HTTP) policy admin-access transitions", () => {
         ),
       ),
     ).toHaveLength(0);
-    expect(page.container.querySelector("[data-testid='admin-access-gate']")).not.toBeNull();
-    expect(page.container.querySelector("[data-testid='policy-config-save']")).toBeNull();
+    expect(page.container.querySelector("[data-testid='admin-access-gate']")).toBeNull();
+    expect(page.container.querySelector("[data-testid='policy-config-save']")).not.toBeNull();
 
     cleanupAdminHttpPage(page);
   });
 
-  it("shows a local admin-access gate if override creation access expires", async () => {
+  it("keeps override controls visible if override creation access expires", async () => {
     const { core, policyCreateOverride } = createAdminHttpTestCore();
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const getResponse = policyPageGetResponse(input, init);
@@ -128,13 +128,15 @@ describe("ConfigurePage (HTTP) policy admin-access transitions", () => {
         ),
       ),
     ).toHaveLength(0);
-    expect(page.container.querySelector("[data-testid='admin-access-gate']")).not.toBeNull();
-    expect(page.container.querySelector("[data-testid='admin-policy-override-create']")).toBeNull();
+    expect(page.container.querySelector("[data-testid='admin-access-gate']")).toBeNull();
+    expect(
+      page.container.querySelector("[data-testid='admin-policy-override-create']"),
+    ).not.toBeNull();
 
     cleanupAdminHttpPage(page);
   });
 
-  it("shows a local admin-access gate when policy revert is opened without admin access", async () => {
+  it("keeps policy history visible when policy revert is opened without admin access", async () => {
     const { core } = createAdminHttpTestCore();
     core.elevatedModeStore.exit();
     core.http.policyConfig!.getDeployment = vi.fn(
@@ -174,13 +176,13 @@ describe("ConfigurePage (HTTP) policy admin-access transitions", () => {
     await flush();
 
     expect(core.http.policyConfig!.revertDeployment).toHaveBeenCalledTimes(0);
-    expect(page.container.querySelector("[data-testid='admin-access-gate']")).not.toBeNull();
-    expect(page.container.querySelector("[data-testid='policy-config-revert-1']")).toBeNull();
+    expect(page.container.querySelector("[data-testid='admin-access-gate']")).toBeNull();
+    expect(page.container.querySelector("[data-testid='policy-config-revert-1']")).not.toBeNull();
 
     cleanupAdminHttpPage(page);
   });
 
-  it("shows a local admin-access gate when override revocation is opened without admin access", async () => {
+  it("keeps override rows visible when override revocation is opened without admin access", async () => {
     const { core } = createAdminHttpTestCore();
     core.elevatedModeStore.exit();
     core.http.policy.listOverrides = vi.fn(
@@ -206,12 +208,12 @@ describe("ConfigurePage (HTTP) policy admin-access transitions", () => {
     await flush();
 
     expect(core.http.policy.revokeOverride).toHaveBeenCalledTimes(0);
-    expect(page.container.querySelector("[data-testid='admin-access-gate']")).not.toBeNull();
+    expect(page.container.querySelector("[data-testid='admin-access-gate']")).toBeNull();
     expect(
       page.container.querySelector(
         "[data-testid='policy-override-revoke-00000000-0000-0000-0000-000000000001']",
       ),
-    ).toBeNull();
+    ).not.toBeNull();
 
     cleanupAdminHttpPage(page);
   });

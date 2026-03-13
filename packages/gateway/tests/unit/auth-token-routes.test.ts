@@ -189,6 +189,22 @@ describe("auth token routes", () => {
     expect(issueToken).toHaveBeenCalledTimes(1);
   });
 
+  it("preserves the legacy forbidden JSON body for non-admin token access", async () => {
+    const app = createApp({
+      tokenKind: "device",
+      role: "client",
+      scopes: ["operator.read"],
+    });
+
+    const res = await app.request("/auth/tokens");
+
+    expect(res.status).toBe(403);
+    await expect(res.json()).resolves.toEqual({
+      error: "forbidden",
+      message: "admin token required",
+    });
+  });
+
   it("updates tenant tokens in place and evicts matching websocket clients", async () => {
     const getTokenById = vi
       .fn()

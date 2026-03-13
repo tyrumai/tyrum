@@ -24,10 +24,11 @@ export interface DeviceTokenRouteDeps {
 
 export function createDeviceTokenRoutes(deps: DeviceTokenRouteDeps): Hono {
   const app = new Hono();
+  const adminTokenRequired = { message: "admin token required" } as const;
 
   app.post("/auth/device-tokens/issue", async (c) => {
     const tenantId = requireTenantId(c);
-    const claims = requireOperatorAdminAccess(c);
+    const claims = requireOperatorAdminAccess(c, adminTokenRequired);
 
     let body: unknown;
     try {
@@ -74,7 +75,7 @@ export function createDeviceTokenRoutes(deps: DeviceTokenRouteDeps): Hono {
 
   app.post("/auth/device-tokens/revoke", async (c) => {
     const tenantId = requireTenantId(c);
-    requireOperatorAdminAccess(c);
+    requireOperatorAdminAccess(c, adminTokenRequired);
 
     let body: unknown;
     try {

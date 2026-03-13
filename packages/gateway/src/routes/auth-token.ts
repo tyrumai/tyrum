@@ -58,10 +58,11 @@ function toListItem(row: AuthTokenListRow | AuthTokenRow) {
 
 export function createAuthTokenRoutes(deps: AuthTokenRouteDeps): Hono {
   const app = new Hono();
+  const adminTokenRequired = { message: "admin token required" } as const;
 
   app.get("/auth/tokens", async (c) => {
     const tenantId = requireTenantId(c);
-    requireOperatorAdminAccess(c);
+    requireOperatorAdminAccess(c, adminTokenRequired);
 
     const rows = await deps.authTokens.listTenantTokens(tenantId);
     const tokens = rows.map(toListItem);
@@ -70,7 +71,7 @@ export function createAuthTokenRoutes(deps: AuthTokenRouteDeps): Hono {
 
   app.post("/auth/tokens/issue", async (c) => {
     const tenantId = requireTenantId(c);
-    const claims = requireOperatorAdminAccess(c);
+    const claims = requireOperatorAdminAccess(c, adminTokenRequired);
 
     let body: unknown;
     try {
@@ -117,7 +118,7 @@ export function createAuthTokenRoutes(deps: AuthTokenRouteDeps): Hono {
 
   app.patch("/auth/tokens/:tokenId", async (c) => {
     const tenantId = requireTenantId(c);
-    requireOperatorAdminAccess(c);
+    requireOperatorAdminAccess(c, adminTokenRequired);
 
     let body: unknown;
     try {
@@ -163,7 +164,7 @@ export function createAuthTokenRoutes(deps: AuthTokenRouteDeps): Hono {
 
   app.post("/auth/tokens/revoke", async (c) => {
     const tenantId = requireTenantId(c);
-    requireOperatorAdminAccess(c);
+    requireOperatorAdminAccess(c, adminTokenRequired);
 
     let body: unknown;
     try {

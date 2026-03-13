@@ -6,6 +6,7 @@ import {
   buildReplacementAssignments,
   useAdminHttpClient,
   useAdminMutationAccess,
+  useAdminMutationHttpClient,
 } from "./admin-http-shared.js";
 import { ProviderAccountDialog } from "./admin-http-providers-dialog.js";
 import { ProvidersCard, ReplacementAssignmentsFields } from "./admin-http-providers-sections.js";
@@ -19,6 +20,7 @@ import type {
 export function AdminHttpProvidersPanel({ core }: { core: OperatorCore }): React.ReactElement {
   const { canMutate, requestEnter } = useAdminMutationAccess(core);
   const adminHttp = useAdminHttpClient();
+  const mutationHttp = useAdminMutationHttpClient();
   const [registry, setRegistry] = React.useState<ProviderRegistryEntry[]>([]);
   const [providers, setProviders] = React.useState<ConfiguredProviderGroup[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -76,10 +78,10 @@ export function AdminHttpProvidersPanel({ core }: { core: OperatorCore }): React
     setActionKey(`${account.account_key}:${status}`);
     setErrorMessage(null);
     try {
-      if (!adminHttp) {
+      if (!mutationHttp) {
         throw new Error("Admin access is required to update provider accounts.");
       }
-      await adminHttp.providerConfig.updateAccount(account.account_key, { status });
+      await mutationHttp.providerConfig.updateAccount(account.account_key, { status });
       await refresh();
     } catch (error) {
       setErrorMessage(formatErrorMessage(error));
@@ -90,10 +92,10 @@ export function AdminHttpProvidersPanel({ core }: { core: OperatorCore }): React
 
   const removeAccount = async (): Promise<void> => {
     if (!deletingAccount) return;
-    if (!adminHttp) {
+    if (!mutationHttp) {
       throw new Error("Admin access is required to remove provider accounts.");
     }
-    await adminHttp.providerConfig.deleteAccount(deletingAccount.account_key);
+    await mutationHttp.providerConfig.deleteAccount(deletingAccount.account_key);
     setDeletingAccount(null);
     await refresh();
   };
@@ -104,11 +106,11 @@ export function AdminHttpProvidersPanel({ core }: { core: OperatorCore }): React
       deletingProvider.requiredExecutionProfileIds,
       deletingProvider.replacementAssignments,
     );
-    if (!adminHttp) {
+    if (!mutationHttp) {
       throw new Error("Admin access is required to remove providers.");
     }
 
-    const result = await adminHttp.providerConfig.deleteProvider(
+    const result = await mutationHttp.providerConfig.deleteProvider(
       deletingProvider.group.provider_key,
       replacementAssignments ? { replacement_assignments: replacementAssignments } : undefined,
     );
@@ -181,7 +183,7 @@ export function AdminHttpProvidersPanel({ core }: { core: OperatorCore }): React
         requestEnter={requestEnter}
       />
 
-      {adminHttp ? (
+      {mutationHttp ? (
         <ProviderAccountDialog
           open={dialogOpen}
           onOpenChange={(open) => {
@@ -197,7 +199,7 @@ export function AdminHttpProvidersPanel({ core }: { core: OperatorCore }): React
           account={editingAccount}
           onSaved={refresh}
           canMutate={canMutate}
-          api={adminHttp.providerConfig}
+          api={mutationHttp.providerConfig}
         />
       ) : null}
 

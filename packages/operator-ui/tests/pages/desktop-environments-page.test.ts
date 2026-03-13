@@ -21,7 +21,7 @@ vi.mock("../../src/components/pages/admin-http-shared.js", async () => {
       canMutate,
       requestEnter,
     }),
-    AdminAccessGate: ({
+    AdminMutationGate: ({
       children,
       title = "Authorize admin access to continue",
       description = "Admin access required.",

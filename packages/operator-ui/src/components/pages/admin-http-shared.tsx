@@ -8,7 +8,7 @@ import { Button } from "../ui/button.js";
 import { Card, CardContent, CardFooter } from "../ui/card.js";
 import { Alert } from "../ui/alert.js";
 
-export type AdminHttpClient = ReturnType<typeof createTyrumHttpClient>;
+export type AdminHttpClient = OperatorCore["http"];
 
 export function toSafeJsonDownloadFileName(rawName: string, fallback: string): string {
   const trimmed = rawName.trim();
@@ -23,7 +23,20 @@ export function toSafeJsonDownloadFileName(rawName: string, fallback: string): s
   return base.toLowerCase().endsWith(".json") ? base : `${base}.json`;
 }
 
-export function useAdminHttpClient(): AdminHttpClient | null {
+export function useAdminHttpClient(options: { access: "strict" }): AdminHttpClient | null;
+export function useAdminHttpClient(options?: { access?: "read" }): AdminHttpClient;
+export function useAdminHttpClient(options?: {
+  access?: "read" | "strict";
+}): AdminHttpClient | null {
+  const { core } = useElevatedModeUiContext();
+  const mutationHttp = useAdminMutationHttpClient();
+  if (options?.access === "strict") {
+    return mutationHttp;
+  }
+  return core.http;
+}
+
+export function useAdminMutationHttpClient(): AdminHttpClient | null {
   const { core, mode } = useElevatedModeUiContext();
   const elevatedMode = useOperatorStore(core.elevatedModeStore);
 
@@ -47,7 +60,7 @@ export function useAdminMutationAccess(core: OperatorCore): {
   return { canMutate: isElevatedModeActive(elevatedMode), requestEnter };
 }
 
-export function AdminAccessGate({
+export function AdminMutationGate({
   core,
   title = "Authorize admin access to continue",
   description = "Admin configuration and dangerous operator actions require temporary admin access.",

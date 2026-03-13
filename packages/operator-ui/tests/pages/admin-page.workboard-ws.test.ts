@@ -12,6 +12,18 @@ import { ElevatedModeProvider } from "../../src/elevated-mode.js";
 import { ConfigurePage } from "../../src/components/pages/configure-page.js";
 import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
 
+const { executeAdminWsCommand } = vi.hoisted(() => ({
+  executeAdminWsCommand: vi.fn(async () => ({ output: "ok" })),
+}));
+
+vi.mock("../../src/components/pages/admin-http-shared.js", async () => {
+  const actual = await import("../../src/components/pages/admin-http-shared.js");
+  return {
+    ...actual,
+    executeAdminWsCommand,
+  };
+});
+
 function createActiveElevatedModeStore(): ElevatedModeStore {
   const activeState: ElevatedModeState = {
     status: "active",
@@ -71,7 +83,7 @@ describe("ConfigurePage WorkBoard WS panels", () => {
   });
 
   it("keeps command.execute available as the WS admin action", async () => {
-    const commandExecute = vi.fn(async () => ({ output: "ok" }));
+    executeAdminWsCommand.mockClear();
     const elevatedModeStore = createActiveElevatedModeStore();
 
     const core = {
@@ -80,7 +92,7 @@ describe("ConfigurePage WorkBoard WS panels", () => {
       ws: {
         on: vi.fn(),
         off: vi.fn(),
-        commandExecute,
+        commandExecute: vi.fn(async () => ({ output: "ok" })),
       },
     } as unknown as OperatorCore;
 
@@ -104,7 +116,7 @@ describe("ConfigurePage WorkBoard WS panels", () => {
         await Promise.resolve();
       });
 
-      expect(commandExecute).toHaveBeenCalledWith("/help");
+      expect(executeAdminWsCommand).toHaveBeenCalledWith({ core, command: "/help" });
     } finally {
       cleanupTestRoot(testRoot);
     }

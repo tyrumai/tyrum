@@ -241,7 +241,7 @@ function DeviceTokenRevokeDialog({
 
 export function DeviceTokensCard({ core }: { core: OperatorCore }) {
   const { canMutate, requestEnter } = useAdminMutationAccess(core);
-  const adminHttp = useAdminHttpClient();
+  const adminHttp = useAdminHttpClient({ access: "strict" });
   const issue = useDeviceTokensIssueState();
   const revoke = useDeviceTokensRevokeState();
 

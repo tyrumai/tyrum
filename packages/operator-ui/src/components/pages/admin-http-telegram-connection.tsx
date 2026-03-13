@@ -16,7 +16,11 @@ import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { EmptyState } from "../ui/empty-state.js";
-import { useAdminHttpClient, useAdminMutationAccess } from "./admin-http-shared.js";
+import {
+  useAdminHttpClient,
+  useAdminMutationAccess,
+  useAdminMutationHttpClient,
+} from "./admin-http-shared.js";
 
 export function AdminHttpChannelConfigsPanel({
   core,
@@ -25,9 +29,10 @@ export function AdminHttpChannelConfigsPanel({
   core: OperatorCore;
   onChannelConfigsChanged?: () => void;
 }): React.ReactElement {
-  const adminHttp = useAdminHttpClient();
-  const readApi = asChannelRoutingApi(adminHttp?.routingConfig);
-  const mutationApi = asChannelRoutingApi(adminHttp?.routingConfig);
+  const readHttp = useAdminHttpClient();
+  const mutationHttp = useAdminMutationHttpClient();
+  const readApi = asChannelRoutingApi(readHttp.routingConfig);
+  const mutationApi = asChannelRoutingApi(mutationHttp?.routingConfig);
   const { canMutate, requestEnter } = useAdminMutationAccess(core);
 
   const [loading, setLoading] = React.useState(true);

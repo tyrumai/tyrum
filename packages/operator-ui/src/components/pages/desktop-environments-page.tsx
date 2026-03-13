@@ -15,7 +15,7 @@ import {
 import { useApiAction } from "../../hooks/use-api-action.js";
 import { AppPage } from "../layout/app-page.js";
 import {
-  AdminAccessGate,
+  AdminMutationGate,
   useAdminHttpClient,
   useAdminMutationAccess,
   type AdminHttpClient,
@@ -28,7 +28,7 @@ function toErrorMessage(error: unknown): string {
 }
 
 export function DesktopEnvironmentsPage({ core }: { core: OperatorCore }) {
-  const adminHttp = useAdminHttpClient();
+  const adminHttp = useAdminHttpClient({ access: "strict" });
   const adminHttpRef = useRef<AdminHttpClient | null>(adminHttp);
   const { canMutate, requestEnter } = useAdminMutationAccess(core);
   const refreshAction = useApiAction<void>();
@@ -295,13 +295,13 @@ export function DesktopEnvironmentsPage({ core }: { core: OperatorCore }) {
       />
 
       {!adminHttp ? (
-        <AdminAccessGate
+        <AdminMutationGate
           core={core}
           title="Authorize admin access to load desktop environments"
           description="Desktop environment hosts, environments, and mutations require temporary admin access."
         >
           {null}
-        </AdminAccessGate>
+        </AdminMutationGate>
       ) : (
         <div className="grid gap-4 lg:grid-cols-[1.2fr_1.8fr]">
           <div className="grid gap-4">
