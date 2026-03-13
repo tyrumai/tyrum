@@ -197,4 +197,67 @@ describe("ConfigurePage (HTTP) location", () => {
 
     cleanupAdminHttpPage(page);
   });
+
+  it("opens the admin access dialog before saving the profile when mutations are unavailable", async () => {
+    const { core } = createAdminHttpTestCore();
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    core.elevatedModeStore.exit();
+
+    const page = renderAdminHttpConfigurePage(core);
+    await openLocationTab(page.container);
+
+    setSelectValue(getLabeledSelect(page.container, "Primary tracked node"), "mobile-node-2");
+    await flush();
+    await clickAndFlush(getByTestId<HTMLButtonElement>(page.container, "location-profile-save"));
+
+    expect(document.querySelector("[data-testid='elevated-mode-dialog']")).not.toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    cleanupAdminHttpPage(page);
+  });
+
+  it("opens the admin access dialog before creating a place when mutations are unavailable", async () => {
+    const { core } = createAdminHttpTestCore();
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    core.elevatedModeStore.exit();
+
+    const page = renderAdminHttpConfigurePage(core);
+    await openLocationTab(page.container);
+
+    act(() => {
+      setNativeValue(getLabeledInput(page.container, "Place name"), "Warehouse");
+      setNativeValue(getLabeledInput(page.container, "Tags"), "logistics, store");
+      setNativeValue(getLabeledInput(page.container, "Latitude"), "52.1000");
+      setNativeValue(getLabeledInput(page.container, "Longitude"), "4.3000");
+      setNativeValue(getLabeledInput(page.container, "Radius (m)"), "180");
+    });
+    await flush();
+    await clickAndFlush(getByTestId<HTMLButtonElement>(page.container, "location-place-save"));
+
+    expect(document.querySelector("[data-testid='elevated-mode-dialog']")).not.toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    cleanupAdminHttpPage(page);
+  });
+
+  it("opens the admin access dialog before deleting a place when mutations are unavailable", async () => {
+    const { core } = createAdminHttpTestCore();
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    core.elevatedModeStore.exit();
+
+    const page = renderAdminHttpConfigurePage(core);
+    await openLocationTab(page.container);
+
+    click(getByTestId<HTMLButtonElement>(page.container, "location-place-delete-place-home"));
+    click(getByTestId<HTMLElement>(document.body, "confirm-danger-checkbox"));
+    await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "confirm-danger-confirm"));
+
+    expect(document.querySelector("[data-testid='elevated-mode-dialog']")).not.toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    cleanupAdminHttpPage(page);
+  });
 });

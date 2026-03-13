@@ -91,7 +91,6 @@ export function AdminHttpLocationPanel({ core }: { core: OperatorCore }) {
   }, []);
 
   const saveProfile = React.useCallback(async () => {
-    if (!mutationLocationHttp) return;
     if (!canMutate) {
       requestEnter();
       return;
@@ -100,6 +99,9 @@ export function AdminHttpLocationPanel({ core }: { core: OperatorCore }) {
     setBusyKey("profile");
     setMutationError(null);
     try {
+      if (!mutationLocationHttp) {
+        throw new Error("Admin access is required to update the location profile.");
+      }
       const response = await mutationLocationHttp.updateProfile({
         primary_node_id: normalizeOptionalText(profileDraft.primaryNodeId),
         poi_provider_key: normalizeOptionalPoiProviderKey(profileDraft.poiProviderKey),
@@ -114,7 +116,7 @@ export function AdminHttpLocationPanel({ core }: { core: OperatorCore }) {
   }, [canMutate, mutationLocationHttp, profileDraft, requestEnter]);
 
   const savePlace = React.useCallback(async () => {
-    if (!mutationLocationHttp || placeValidationError) return;
+    if (placeValidationError) return;
     if (!canMutate) {
       requestEnter();
       return;
@@ -123,6 +125,9 @@ export function AdminHttpLocationPanel({ core }: { core: OperatorCore }) {
     setBusyKey("place");
     setMutationError(null);
     try {
+      if (!mutationLocationHttp) {
+        throw new Error("Admin access is required to save places.");
+      }
       const input = {
         name: placeDraft.name.trim(),
         latitude: Number(placeDraft.latitude),
@@ -157,7 +162,7 @@ export function AdminHttpLocationPanel({ core }: { core: OperatorCore }) {
   ]);
 
   const deletePlace = React.useCallback(async () => {
-    if (!mutationLocationHttp || !deleteTarget) return;
+    if (!deleteTarget) return;
     if (!canMutate) {
       requestEnter();
       throw new Error("Authorize admin access to delete a saved place.");
@@ -166,6 +171,9 @@ export function AdminHttpLocationPanel({ core }: { core: OperatorCore }) {
     setBusyKey(`delete:${deleteTarget.place_id}`);
     setMutationError(null);
     try {
+      if (!mutationLocationHttp) {
+        throw new Error("Admin access is required to delete saved places.");
+      }
       await mutationLocationHttp.deletePlace(deleteTarget.place_id);
       setPlaces((current) => current.filter((place) => place.place_id !== deleteTarget.place_id));
       if (editingPlaceId === deleteTarget.place_id) {
