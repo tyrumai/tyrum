@@ -23,10 +23,6 @@ import {
   parseManagedSkillPackage,
 } from "../extensions/managed.js";
 import {
-  ExtensionDefaultsDal,
-  applyExtensionDefaultsToConfig,
-} from "../extensions/defaults-dal.js";
-import {
   loadLocalEnabledMcpServers,
   loadSharedEnabledMcpServers,
   parseDefaultIdentity,
@@ -48,7 +44,6 @@ export interface AgentContextStore {
 class LocalAgentContextStore implements AgentContextStore {
   private readonly identityDal: AgentIdentityDal;
   private readonly runtimePackageDal: RuntimePackageDal;
-  private readonly defaultsDal: ExtensionDefaultsDal;
 
   constructor(
     private readonly db: SqlDb,
@@ -58,7 +53,6 @@ class LocalAgentContextStore implements AgentContextStore {
   ) {
     this.identityDal = new AgentIdentityDal(db);
     this.runtimePackageDal = new RuntimePackageDal(db);
-    this.defaultsDal = new ExtensionDefaultsDal(db);
   }
 
   private async resolveScopeIds(scope: AgentContextScope): Promise<AgentContextScope> {
@@ -142,10 +136,6 @@ class LocalAgentContextStore implements AgentContextStore {
     scope: AgentContextScope,
     config: AgentConfigT,
   ): Promise<LoadedSkillManifest[]> {
-    const effectiveConfig = applyExtensionDefaultsToConfig(
-      config,
-      await this.defaultsDal.list(scope.tenantId),
-    );
     const managedSkills = await this.runtimePackageDal.listLatest({
       tenantId: scope.tenantId,
       packageKind: "skill",
@@ -178,7 +168,7 @@ class LocalAgentContextStore implements AgentContextStore {
       if (
         normalizedSkillId.length === 0 ||
         seen.has(normalizedSkillId) ||
-        !isAgentAccessAllowed(effectiveConfig.skills, normalizedSkillId)
+        !isAgentAccessAllowed(config.skills, normalizedSkillId)
       ) {
         continue;
       }
@@ -244,7 +234,6 @@ class LocalAgentContextStore implements AgentContextStore {
       logger: this.logger,
       config,
       runtimePackageDal: this.runtimePackageDal,
-      defaultsDal: this.defaultsDal,
     });
   }
 }
@@ -262,7 +251,6 @@ class SharedAgentContextStore implements AgentContextStore {
   private readonly identityDal: AgentIdentityDal;
   private readonly runtimePackageDal: RuntimePackageDal;
   private readonly bundledSkillsDir: string;
-  private readonly defaultsDal: ExtensionDefaultsDal;
 
   constructor(
     db: SqlDb,
@@ -272,7 +260,6 @@ class SharedAgentContextStore implements AgentContextStore {
   ) {
     this.identityDal = new AgentIdentityDal(db);
     this.runtimePackageDal = new RuntimePackageDal(db);
-    this.defaultsDal = new ExtensionDefaultsDal(db);
     this.bundledSkillsDir = bundledSkillsDir ?? resolveBundledSkillsDir();
   }
 
@@ -301,10 +288,6 @@ class SharedAgentContextStore implements AgentContextStore {
     scope: AgentContextScope,
     config: AgentConfigT,
   ): Promise<LoadedSkillManifest[]> {
-    const effectiveConfig = applyExtensionDefaultsToConfig(
-      config,
-      await this.defaultsDal.list(scope.tenantId),
-    );
     const sharedSkills = await this.runtimePackageDal.listLatest({
       tenantId: scope.tenantId,
       packageKind: "skill",
@@ -324,7 +307,7 @@ class SharedAgentContextStore implements AgentContextStore {
       if (
         normalizedSkillId.length === 0 ||
         seen.has(normalizedSkillId) ||
-        !isAgentAccessAllowed(effectiveConfig.skills, normalizedSkillId)
+        !isAgentAccessAllowed(config.skills, normalizedSkillId)
       ) {
         continue;
       }
@@ -385,7 +368,6 @@ class SharedAgentContextStore implements AgentContextStore {
       logger: this.logger,
       config,
       runtimePackageDal: this.runtimePackageDal,
-      defaultsDal: this.defaultsDal,
     });
   }
 }

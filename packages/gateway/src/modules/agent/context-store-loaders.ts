@@ -15,10 +15,6 @@ import {
   parseManagedMcpPackage,
 } from "../extensions/managed.js";
 import { buildBuiltinMemoryServerSpec } from "../memory/builtin-mcp.js";
-import {
-  applyExtensionDefaultsToConfig,
-  type ExtensionDefaultsDal,
-} from "../extensions/defaults-dal.js";
 import type { RuntimePackageDal } from "./runtime-package-dal.js";
 
 function normalizeManagedMcpSpec(
@@ -52,12 +48,7 @@ export async function loadLocalEnabledMcpServers(params: {
   logger: Logger | undefined;
   config: AgentConfigT;
   runtimePackageDal: RuntimePackageDal;
-  defaultsDal: ExtensionDefaultsDal;
 }): Promise<McpServerSpecT[]> {
-  const effectiveConfig = applyExtensionDefaultsToConfig(
-    params.config,
-    await params.defaultsDal.list(params.tenantId),
-  );
   const builtinMemoryServer = buildBuiltinMemoryServerSpec();
   const managedServers = await params.runtimePackageDal.listLatest({
     tenantId: params.tenantId,
@@ -79,7 +70,7 @@ export async function loadLocalEnabledMcpServers(params: {
     if (
       normalizedServerId.length === 0 ||
       seen.has(normalizedServerId) ||
-      !isAgentAccessAllowed(effectiveConfig.mcp, normalizedServerId)
+      !isAgentAccessAllowed(params.config.mcp, normalizedServerId)
     ) {
       continue;
     }
@@ -130,12 +121,7 @@ export async function loadSharedEnabledMcpServers(params: {
   logger: Logger | undefined;
   config: AgentConfigT;
   runtimePackageDal: RuntimePackageDal;
-  defaultsDal: ExtensionDefaultsDal;
 }): Promise<McpServerSpecT[]> {
-  const effectiveConfig = applyExtensionDefaultsToConfig(
-    params.config,
-    await params.defaultsDal.list(params.tenantId),
-  );
   const builtinMemoryServer = buildBuiltinMemoryServerSpec();
   const sharedServers = await params.runtimePackageDal.listLatest({
     tenantId: params.tenantId,
@@ -154,7 +140,7 @@ export async function loadSharedEnabledMcpServers(params: {
     if (
       normalizedServerId.length === 0 ||
       seen.has(normalizedServerId) ||
-      !isAgentAccessAllowed(effectiveConfig.mcp, normalizedServerId)
+      !isAgentAccessAllowed(params.config.mcp, normalizedServerId)
     ) {
       continue;
     }

@@ -56,7 +56,7 @@ export function uniqSortedStrings(values: readonly string[]): string[] {
 }
 
 export function extractSearchTerms(query: string): string[] {
-  const matches = query.match(/[\p{L}\p{N}_-]+/gu) ?? [];
+  const matches = query.match(/[%]|[\p{L}\p{N}_-]+/gu) ?? [];
   return uniqSortedStrings(matches.map((term) => term.toLowerCase()));
 }
 
