@@ -314,13 +314,20 @@ export async function executeWorkboardTool(
       if (!clarificationId || !answerText || !answeredBySessionKey) {
         throw new Error("clarification_id, answer_text, and active work_session_key are required");
       }
-      const clarification = await workboard.answerClarification({
+      const clarificationBefore = await workboard.getClarification({
         scope,
         clarification_id: clarificationId,
-        answer_text: answerText,
-        answered_by_session_key: answeredBySessionKey,
       });
-      if (clarification) {
+      const clarification =
+        clarificationBefore?.status === "open"
+          ? await workboard.answerClarification({
+              scope,
+              clarification_id: clarificationId,
+              answer_text: answerText,
+              answered_by_session_key: answeredBySessionKey,
+            })
+          : clarificationBefore;
+      if (clarificationBefore?.status === "open" && clarification?.status === "answered") {
         await workboard.setStateKv({
           scope: { kind: "work_item", ...scope, work_item_id: clarification.work_item_id },
           key: "work.refinement.phase",

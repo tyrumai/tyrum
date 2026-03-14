@@ -32,7 +32,7 @@ describe("WorkBoard regressions", () => {
     attachmentDal = undefined;
   });
 
-  it("requeues cancelled orphaned execution tasks back to ready", async () => {
+  it("blocks doing items with only cancelled execution tasks without resurrecting them", async () => {
     db = openTestSqliteDb();
     attachmentDal = new SessionLaneNodeAttachmentDal(db);
     const workboard = new WorkboardDal(db);
@@ -89,28 +89,17 @@ describe("WorkBoard regressions", () => {
     await reconciler.tick();
 
     expect(await workboard.getItem({ scope, work_item_id: item.work_item_id })).toMatchObject({
-      status: "ready",
+      status: "blocked",
     });
     expect(await workboard.getTask({ scope, task_id: task.task_id })).toMatchObject({
-      status: "queued",
+      status: "cancelled",
     });
     expect(
       await workboard.getStateKv({
         scope: { kind: "work_item", ...scope, work_item_id: item.work_item_id },
         key: "work.dispatch.phase",
       }),
-    ).toMatchObject({ value_json: "unassigned" });
-
-    const dispatcher = new WorkboardDispatcher({
-      db,
-      agents: createFakeAgents("executor retried"),
-      sessionLaneNodeAttachmentDal: attachmentDal,
-    });
-    await dispatcher.tick();
-
-    expect(await workboard.getItem({ scope, work_item_id: item.work_item_id })).toMatchObject({
-      status: "done",
-    });
+    ).toMatchObject({ value_json: "running" });
   });
 
   it("returns doing items with no tasks to ready so they can be redispatched", async () => {
@@ -216,5 +205,110 @@ describe("WorkBoard regressions", () => {
         work_item_id: workItemId,
       }),
     ).toMatchObject({ priority: 0 });
+  });
+
+  it("does not restart refinement when answering an already handled clarification", async () => {
+    db = openTestSqliteDb();
+    const workboard = new WorkboardDal(db);
+    const scope = {
+      tenant_id: DEFAULT_TENANT_ID,
+      agent_id: DEFAULT_AGENT_ID,
+      workspace_id: DEFAULT_WORKSPACE_ID,
+    } as const;
+    const mainSessionKey = "agent:default:test:default:channel:thread-regression-4";
+    const plannerSessionKey = "agent:default:subagent:423e4567-e89b-12d3-a456-426614174111";
+    const item = await workboard.createItem({
+      scope,
+      createdFromSessionKey: mainSessionKey,
+      item: { kind: "action", title: "Clarification idempotency" },
+    });
+    await workboard.upsertScopeActivity({
+      scope,
+      last_active_session_key: mainSessionKey,
+    });
+    await workboard.createSubagent({
+      scope,
+      subagent: {
+        work_item_id: item.work_item_id,
+        execution_profile: "planner",
+        session_key: plannerSessionKey,
+        lane: "subagent",
+        status: "running",
+      },
+      subagentId: "423e4567-e89b-12d3-a456-426614174111",
+    });
+    const pausedPlannerTask = await workboard.createTask({
+      scope,
+      task: {
+        work_item_id: item.work_item_id,
+        status: "paused",
+        execution_profile: "planner",
+        side_effect_class: "workspace",
+      },
+    });
+    const toolContext = {
+      workspaceLease: {
+        db,
+        tenantId: DEFAULT_TENANT_ID,
+        agentId: DEFAULT_AGENT_ID,
+        workspaceId: DEFAULT_WORKSPACE_ID,
+      },
+    };
+
+    const requested = await executeWorkboardTool(
+      toolContext,
+      "workboard.clarification.request",
+      "tool-clarification-request",
+      { work_item_id: item.work_item_id, question: "Need exact schema?" },
+      { work_session_key: plannerSessionKey },
+    );
+    const requestPayload = JSON.parse(requested?.output ?? "{}") as {
+      clarification?: { clarification_id?: string };
+    };
+    const clarificationId = requestPayload.clarification?.clarification_id ?? "";
+
+    await executeWorkboardTool(
+      toolContext,
+      "workboard.clarification.answer",
+      "tool-clarification-answer-1",
+      { clarification_id: clarificationId, answer_text: "Use the shipped schema." },
+      { work_session_key: mainSessionKey },
+    );
+
+    await workboard.updateTask({
+      scope,
+      task_id: pausedPlannerTask.task_id,
+      patch: {
+        status: "completed",
+        finished_at: new Date().toISOString(),
+      },
+    });
+    await workboard.setStateKv({
+      scope: { kind: "work_item", ...scope, work_item_id: item.work_item_id },
+      key: "work.refinement.phase",
+      value_json: "complete",
+      provenance_json: { source: "test" },
+    });
+
+    await executeWorkboardTool(
+      toolContext,
+      "workboard.clarification.answer",
+      "tool-clarification-answer-2",
+      { clarification_id: clarificationId, answer_text: "Repeat answer should be ignored." },
+      { work_session_key: mainSessionKey },
+    );
+
+    const plannerTasks = await workboard.listTasks({
+      scope,
+      work_item_id: item.work_item_id,
+    });
+    expect(plannerTasks).toHaveLength(1);
+    expect(plannerTasks[0]).toMatchObject({ status: "completed" });
+    expect(
+      await workboard.getStateKv({
+        scope: { kind: "work_item", ...scope, work_item_id: item.work_item_id },
+        key: "work.refinement.phase",
+      }),
+    ).toMatchObject({ value_json: "complete" });
   });
 });
