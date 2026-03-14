@@ -34,8 +34,8 @@ export type FirstRunOnboardingStepId =
   | "agent"
   | "done";
 export type FirstRunOnboardingStoredState = {
-  issueSignature: string;
-  status: "dismissed" | "completed";
+  issueSignature?: string;
+  status: "skipped" | "completed";
 };
 
 export function supportsFirstRunOnboarding(hostKind: "desktop" | "mobile" | "web"): boolean {
@@ -65,9 +65,16 @@ export function readOnboardingStoredState(scopeKey: string): FirstRunOnboardingS
     }
     const issueSignature = (parsed as { issueSignature?: unknown }).issueSignature;
     const status = (parsed as { status?: unknown }).status;
-    if (typeof issueSignature !== "string") return null;
-    if (status !== "dismissed" && status !== "completed") return null;
-    return { issueSignature, status };
+    if (status === "dismissed") {
+      return typeof issueSignature === "string"
+        ? { issueSignature, status: "skipped" }
+        : { status: "skipped" };
+    }
+    if (status !== "skipped" && status !== "completed") return null;
+    if (typeof issueSignature === "string") {
+      return { issueSignature, status };
+    }
+    return { status };
   } catch {
     return null;
   }

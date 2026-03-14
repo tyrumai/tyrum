@@ -61,9 +61,10 @@ Connect the desktop app to an existing gateway.
 Remote mode still keeps the same split locally: the UI connects as an operator client, and the
 desktop runtime connects separately as a node for local capabilities.
 
-After the desktop app connects, Tyrum automatically opens a guided setup wizard when the gateway
-still needs first-run configuration. That post-connect flow covers the basic operator setup steps
-and then returns you to the normal dashboard, configure, and agents pages.
+After the desktop app connects, Tyrum opens a guided setup wizard by default when the gateway
+still needs first-run configuration. You can skip that post-connect flow and configure the gateway
+manually from the normal dashboard, configure, and agents pages, then reopen the wizard later from
+the dashboard if you want to use it.
 
 ## Troubleshooting
 

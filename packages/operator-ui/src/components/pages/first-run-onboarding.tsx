@@ -44,14 +44,14 @@ export function FirstRunOnboardingPage({
   core,
   issueSignature,
   onClose,
-  onDismiss,
+  onSkip,
   onMarkCompleted,
   onNavigate,
 }: {
   core: OperatorCore;
   issueSignature: string;
   onClose: () => void;
-  onDismiss: () => void;
+  onSkip: () => void;
   onMarkCompleted: () => void;
   onNavigate: (routeId: "agents" | "configure" | "dashboard") => void;
 }) {
@@ -294,7 +294,8 @@ export function FirstRunOnboardingPage({
                 <h2 className="text-lg font-semibold text-fg">Initial Setup</h2>
               </div>
               <div className="text-sm text-fg-muted">
-                Finish the first-run configuration so Tyrum can use its default runtime paths.
+                Follow the guided setup or skip it and configure providers, models, and agents
+                manually.
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -310,10 +311,10 @@ export function FirstRunOnboardingPage({
                     onClose();
                     return;
                   }
-                  onDismiss();
+                  onSkip();
                 }}
               >
-                {step === "done" ? "Close" : "Dismiss"}
+                {step === "done" ? "Close" : "Skip setup"}
               </Button>
             </div>
           </div>
