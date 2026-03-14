@@ -2,6 +2,7 @@ import type { Approval } from "@tyrum/client";
 import {
   getToolName,
   isDataUIPart,
+  isFileUIPart,
   isReasoningUIPart,
   isTextUIPart,
   isToolUIPart,
@@ -17,6 +18,7 @@ import { useClipboard } from "../../utils/clipboard.js";
 import { formatRelativeTime } from "../../utils/format-relative-time.js";
 import { cn } from "../../lib/cn.js";
 import { ApprovalActions } from "./approval-actions.js";
+import { renderMetaMessagePart } from "./chat-page-ai-sdk-meta-part-card.js";
 import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
 import type { ReasoningDisplayMode } from "./chat-page-ai-sdk-types.js";
@@ -164,6 +166,25 @@ function textFromMessage(message: UIMessage): string {
     }
     if (isDataUIPart(part)) {
       lines.push(`${part.type}: ${stringifyPart(part.data)}`);
+      continue;
+    }
+    if (part.type === "source-url") {
+      lines.push(`Source: ${part.title ? `${part.title} ` : ""}${part.url}`.trim());
+      continue;
+    }
+    if (part.type === "source-document") {
+      lines.push(
+        `Source document: ${part.title} (${part.mediaType})${
+          part.filename ? ` [${part.filename}]` : ""
+        }`,
+      );
+      continue;
+    }
+    if (isFileUIPart(part)) {
+      lines.push(
+        `File: ${part.filename ? `${part.filename} ` : ""}(${part.mediaType}) ${part.url}`.trim(),
+      );
+      continue;
     }
   }
   return lines.join("\n\n");
@@ -447,6 +468,13 @@ export function MessageCard({
                 </pre>
               </div>
             );
+          }
+          if (part.type === "step-start") {
+            return null;
+          }
+          const metaPart = renderMetaMessagePart({ index, messageId: message.id, part });
+          if (metaPart) {
+            return metaPart;
           }
           return (
             <div

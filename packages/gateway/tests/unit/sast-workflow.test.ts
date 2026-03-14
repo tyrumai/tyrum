@@ -13,7 +13,7 @@ test("SAST workflow exists and scopes to packages/apps", () => {
   expect(workflow).toContain("pull_request");
   expect(workflow).toContain("push:");
   expect(workflow).toContain("branches: [main]");
-  expect(workflow).toContain("dorny/paths-filter@v3");
+  expect(workflow).toMatch(/dorny\/paths-filter@v\d+/);
   expect(workflow).toContain("packages/**");
   expect(workflow).toContain("apps/**");
 });
