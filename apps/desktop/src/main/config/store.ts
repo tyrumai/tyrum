@@ -1,6 +1,7 @@
-import { readFileSync, writeFileSync, mkdirSync, existsSync, chmodSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { homedir } from "node:os";
+import Store from "electron-store";
 import { DesktopNodeConfig, DEFAULT_CONFIG } from "./schema.js";
 import { encryptToken } from "./token-store.js";
 
@@ -12,15 +13,27 @@ function getConfigPath(): string {
   return join(getConfigDir(), "desktop-node.json");
 }
 
+function createConfigStore(): Store<Record<string, unknown>> {
+  return new Store<Record<string, unknown>>({
+    cwd: getConfigDir(),
+    name: "desktop-node",
+    configFileMode: 0o600,
+    clearInvalidConfig: false,
+    serialize: (value) => JSON.stringify(value, null, 2),
+    deserialize: (value) => JSON.parse(value) as Record<string, unknown>,
+  });
+}
+
 export function configExists(): boolean {
   return existsSync(getConfigPath());
 }
 
 export function loadConfig(): DesktopNodeConfig {
-  const path = getConfigPath();
-  if (!existsSync(path)) return structuredClone(DEFAULT_CONFIG);
-  const raw = readFileSync(path, "utf-8");
-  const parsed = DesktopNodeConfig.parse(JSON.parse(raw));
+  if (!configExists()) {
+    return structuredClone(DEFAULT_CONFIG);
+  }
+
+  const parsed = DesktopNodeConfig.parse(createConfigStore().store);
   const normalized = normalizeNodeDeviceConfig(parsed);
   if (normalized !== parsed) {
     saveConfig(normalized);
@@ -29,11 +42,8 @@ export function loadConfig(): DesktopNodeConfig {
 }
 
 export function saveConfig(config: DesktopNodeConfig): void {
-  const path = getConfigPath();
-  mkdirSync(dirname(path), { recursive: true });
   const normalized = normalizeNodeDeviceConfig(config);
-  writeFileSync(path, JSON.stringify(normalized, null, 2), { mode: 0o600 });
-  chmodSync(path, 0o600);
+  createConfigStore().store = normalized as Record<string, unknown>;
 }
 
 function normalizeNodeDeviceConfig(config: DesktopNodeConfig): DesktopNodeConfig {

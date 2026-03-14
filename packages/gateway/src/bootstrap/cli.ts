@@ -1,6 +1,7 @@
 import { X509Certificate } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { Command, CommanderError } from "commander";
 import { installPluginFromDir } from "../modules/plugins/installer.js";
 import { runToolRunnerFromStdio } from "../toolrunner.js";
 import { VERSION } from "../version.js";
@@ -32,7 +33,6 @@ type CliCommand =
 function printCliHelp(): void {
   console.log(CLI_HELP_TEXT);
 }
-type CommonDbFlags = { home?: string; db?: string; migrationsDir?: string };
 
 function parsePortFlag(value: string): number {
   const trimmed = value.trim();
@@ -54,6 +54,43 @@ function parseNonEmptyStringFlag(flag: string, value: string): string {
   return trimmed;
 }
 
+type CommonDbCliOptions = {
+  home?: string;
+  db?: string;
+  migrationsDir?: string;
+};
+
+function parseOptionalNonEmptyStringFlag(
+  flag: string,
+  value: string | undefined,
+): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  return parseNonEmptyStringFlag(flag, value);
+}
+
+function parseCommonDbOptions(options: CommonDbCliOptions): CommonDbCliOptions {
+  const parsed: CommonDbCliOptions = {};
+
+  const home = parseOptionalNonEmptyStringFlag("--home", options.home);
+  if (home !== undefined) {
+    parsed.home = home;
+  }
+
+  const db = parseOptionalNonEmptyStringFlag("--db", options.db);
+  if (db !== undefined) {
+    parsed.db = db;
+  }
+
+  const migrationsDir = parseOptionalNonEmptyStringFlag("--migrations-dir", options.migrationsDir);
+  if (migrationsDir !== undefined) {
+    parsed.migrationsDir = migrationsDir;
+  }
+
+  return parsed;
+}
+
 function parseRoleFlag(value: string): GatewayRole {
   const normalized = value.trim().toLowerCase();
   if (
@@ -70,356 +107,193 @@ function parseRoleFlag(value: string): GatewayRole {
   );
 }
 
-function parseCommonDbFlag(
-  args: readonly string[],
-  index: number,
-  target: CommonDbFlags,
-): { handled: boolean; nextIndex: number } {
-  const arg = args[index];
-  if (!arg) return { handled: false, nextIndex: index };
-
-  if (arg === "--home") {
-    const value = args[index + 1];
-    if (!value) throw new Error("--home requires a value");
-    target.home = value;
-    return { handled: true, nextIndex: index + 1 };
+function normalizeCommanderError(error: unknown): Error {
+  if (!(error instanceof CommanderError)) {
+    return error instanceof Error ? error : new Error(String(error));
   }
 
-  if (arg === "--db") {
-    const value = args[index + 1];
-    if (!value) throw new Error("--db requires a value");
-    target.db = value;
-    return { handled: true, nextIndex: index + 1 };
+  if (error.code === "commander.unknownCommand") {
+    const match = error.message.match(/unknown command '([^']+)'/);
+    return new Error(`unknown command '${match?.[1] ?? ""}'`);
   }
 
-  if (arg === "--migrations-dir") {
-    const value = args[index + 1];
-    if (!value) throw new Error("--migrations-dir requires a value");
-    target.migrationsDir = value;
-    return { handled: true, nextIndex: index + 1 };
+  if (error.code === "commander.optionMissingArgument") {
+    const match = error.message.match(/option '([^']+?)\s+<[^>]+>'/);
+    const flag = match?.[1]
+      ?.split(",")
+      .map((part) => part.trim())
+      .at(-1);
+    return new Error(`${flag ?? "option"} requires a value`);
   }
 
-  return { handled: false, nextIndex: index };
-}
-
-function parseStartFlags(
-  args: readonly string[],
-): Omit<CliCommand & { kind: "start" }, "kind"> | { kind: "help" } {
-  const common: CommonDbFlags = {};
-  let host: string | undefined;
-  let port: number | undefined;
-  let role: GatewayRole | undefined;
-  let trustedProxies: string | undefined;
-  let tlsReady: true | undefined;
-  let tlsSelfSigned: true | undefined;
-  let allowInsecureHttp: true | undefined;
-  let engineApiEnabled: true | undefined;
-  let snapshotImportEnabled: true | undefined;
-
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
-    if (!arg) continue;
-
-    if (arg === "-h" || arg === "--help") return { kind: "help" };
-
-    const commonFlag = parseCommonDbFlag(args, index, common);
-    if (commonFlag.handled) {
-      index = commonFlag.nextIndex;
-      continue;
-    }
-
-    if (arg === "--host") {
-      const value = args[index + 1];
-      if (!value) throw new Error("--host requires a value");
-      host = value;
-      index += 1;
-      continue;
-    }
-
-    if (arg === "--port") {
-      const value = args[index + 1];
-      if (!value) throw new Error("--port requires a value");
-      port = parsePortFlag(value);
-      index += 1;
-      continue;
-    }
-
-    if (arg === "--role") {
-      const value = args[index + 1];
-      if (!value) throw new Error("--role requires a value");
-      role = parseRoleFlag(value);
-      index += 1;
-      continue;
-    }
-
-    if (arg === "--trusted-proxies") {
-      const value = args[index + 1];
-      if (value === undefined) throw new Error("--trusted-proxies requires a value");
-      trustedProxies = parseNonEmptyStringFlag("--trusted-proxies", value);
-      index += 1;
-      continue;
-    }
-
-    if (arg === "--tls-ready") {
-      tlsReady = true;
-      continue;
-    }
-
-    if (arg === "--tls-self-signed") {
-      tlsSelfSigned = true;
-      continue;
-    }
-
-    if (arg === "--allow-insecure-http") {
-      allowInsecureHttp = true;
-      continue;
-    }
-
-    if (arg === "--enable-engine-api") {
-      engineApiEnabled = true;
-      continue;
-    }
-
-    if (arg === "--enable-snapshot-import") {
-      snapshotImportEnabled = true;
-      continue;
-    }
-
-    throw new Error(`unsupported start argument '${arg}'`);
-  }
-
-  return {
-    home: common.home,
-    db: common.db,
-    host,
-    port,
-    role,
-    trustedProxies,
-    tlsReady,
-    tlsSelfSigned,
-    migrationsDir: common.migrationsDir,
-    allowInsecureHttp,
-    engineApiEnabled,
-    snapshotImportEnabled,
-  };
-}
-
-function parseDbFlags(
-  args: readonly string[],
-): { home?: string; db?: string; migrationsDir?: string } | { kind: "help" } {
-  const common: CommonDbFlags = {};
-
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
-    if (!arg) continue;
-
-    if (arg === "-h" || arg === "--help") return { kind: "help" };
-
-    const commonFlag = parseCommonDbFlag(args, index, common);
-    if (commonFlag.handled) {
-      index = commonFlag.nextIndex;
-      continue;
-    }
-
-    throw new Error(`unsupported argument '${arg}'`);
-  }
-
-  return { home: common.home, db: common.db, migrationsDir: common.migrationsDir };
-}
-
-function parseToolrunnerFlags(
-  args: readonly string[],
-): { home?: string; db?: string; migrationsDir?: string; payloadB64?: string } | { kind: "help" } {
-  const common: CommonDbFlags = {};
-  let payloadB64: string | undefined;
-
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
-    if (!arg) continue;
-
-    if (arg === "-h" || arg === "--help") return { kind: "help" };
-
-    const commonFlag = parseCommonDbFlag(args, index, common);
-    if (commonFlag.handled) {
-      index = commonFlag.nextIndex;
-      continue;
-    }
-
-    if (arg === "--payload-b64") {
-      const value = args[index + 1];
-      if (!value) throw new Error("--payload-b64 requires a value");
-      payloadB64 = value;
-      index += 1;
-      continue;
-    }
-
-    throw new Error(`unsupported argument '${arg}'`);
-  }
-
-  return {
-    home: common.home,
-    db: common.db,
-    migrationsDir: common.migrationsDir,
-    payloadB64,
-  };
+  return new Error(error.message.replace(/^error:\s*/i, ""));
 }
 
 export function parseCliArgs(argv: readonly string[]): CliCommand {
   if (argv.length === 0) return { kind: "start" };
 
-  const [first, ...rest] = argv;
+  const [first] = argv;
   if (!first) return { kind: "start" };
 
-  if (first === "-h" || first === "--help") return { kind: "help" };
+  if (argv.includes("-h") || argv.includes("--help")) return { kind: "help" };
   if (first === "-v" || first === "--version" || first === "version") return { kind: "version" };
 
-  if (first.startsWith("-")) {
-    const flags = parseStartFlags(argv);
-    if ("kind" in flags) return flags;
-    return { kind: "start", ...flags };
+  let result: CliCommand | undefined;
+  const program = new Command()
+    .name("tyrum")
+    .helpOption(false)
+    .showHelpAfterError(false)
+    .allowUnknownOption(false)
+    .allowExcessArguments(false)
+    .configureOutput({ writeOut: () => undefined, writeErr: () => undefined })
+    .exitOverride();
+
+  const addCommonDbOptions = <T extends Command>(command: T): T =>
+    command.option("--home <dir>").option("--db <path>").option("--migrations-dir <dir>");
+
+  const addStartCommand = (name: string, forcedRole?: GatewayRole): void => {
+    addCommonDbOptions(program.command(name))
+      .option("--host <host>")
+      .option("--port <port>", "port", parsePortFlag)
+      .option("--role <role>", "role", parseRoleFlag)
+      .option("--trusted-proxies <list>")
+      .option("--tls-ready")
+      .option("--tls-self-signed")
+      .option("--allow-insecure-http")
+      .option("--enable-engine-api")
+      .option("--enable-snapshot-import")
+      .action(
+        (options: {
+          home?: string;
+          db?: string;
+          migrationsDir?: string;
+          host?: string;
+          port?: number;
+          role?: GatewayRole;
+          trustedProxies?: string;
+          tlsReady?: boolean;
+          tlsSelfSigned?: boolean;
+          allowInsecureHttp?: boolean;
+          enableEngineApi?: boolean;
+          enableSnapshotImport?: boolean;
+        }) => {
+          const host = parseOptionalNonEmptyStringFlag("--host", options.host);
+          const trustedProxies = parseOptionalNonEmptyStringFlag(
+            "--trusted-proxies",
+            options.trustedProxies,
+          );
+          const role = options.role ?? forcedRole;
+
+          result = {
+            kind: "start",
+            ...parseCommonDbOptions(options),
+            ...(host !== undefined ? { host } : {}),
+            ...(options.port !== undefined ? { port: options.port } : {}),
+            ...(role !== undefined ? { role } : {}),
+            ...(trustedProxies !== undefined ? { trustedProxies } : {}),
+            ...(options.tlsReady ? { tlsReady: true } : {}),
+            ...(options.tlsSelfSigned ? { tlsSelfSigned: true } : {}),
+            ...(options.allowInsecureHttp ? { allowInsecureHttp: true } : {}),
+            ...(options.enableEngineApi ? { engineApiEnabled: true } : {}),
+            ...(options.enableSnapshotImport ? { snapshotImportEnabled: true } : {}),
+          };
+        },
+      );
+  };
+
+  addStartCommand("start");
+  addStartCommand("all", "all");
+  addStartCommand("edge", "edge");
+  addStartCommand("worker", "worker");
+  addStartCommand("scheduler", "scheduler");
+  addStartCommand("desktop-runtime", "desktop-runtime");
+
+  addCommonDbOptions(program.command("check")).action(
+    (options: { home?: string; db?: string; migrationsDir?: string }) => {
+      result = {
+        kind: "check",
+        ...parseCommonDbOptions(options),
+      };
+    },
+  );
+
+  addCommonDbOptions(program.command("toolrunner"))
+    .option("--payload-b64 <value>")
+    .action(
+      (options: { home?: string; db?: string; migrationsDir?: string; payloadB64?: string }) => {
+        const payloadB64 = parseOptionalNonEmptyStringFlag("--payload-b64", options.payloadB64);
+        result = {
+          kind: "toolrunner",
+          ...parseCommonDbOptions(options),
+          ...(payloadB64 !== undefined ? { payloadB64 } : {}),
+        };
+      },
+    );
+
+  const tokens = program.command("tokens").action(() => {
+    throw new Error("tokens requires a subcommand (issue-default-tenant-admin)");
+  });
+  addCommonDbOptions(tokens.command("issue-default-tenant-admin")).action(
+    (options: { home?: string; db?: string; migrationsDir?: string }) => {
+      result = {
+        kind: "issue_default_tenant_admin_token",
+        ...parseCommonDbOptions(options),
+      };
+    },
+  );
+
+  const tls = program.command("tls").action(() => {
+    throw new Error("tls requires a subcommand (fingerprint)");
+  });
+  tls
+    .command("fingerprint")
+    .option("--home <dir>")
+    .action((options: { home?: string }) => {
+      const home = parseOptionalNonEmptyStringFlag("--home", options.home);
+      result = {
+        kind: "tls_fingerprint",
+        ...(home !== undefined ? { home } : {}),
+      };
+    });
+
+  const plugin = program.command("plugin");
+  plugin
+    .command("install")
+    .argument("<source_dir>")
+    .option("--home <dir>")
+    .action((sourceDir: string, options: { home?: string }) => {
+      const home = parseOptionalNonEmptyStringFlag("--home", options.home);
+      result = {
+        kind: "plugin_install",
+        source_dir: parseNonEmptyStringFlag("--source-dir", sourceDir),
+        ...(home !== undefined ? { home } : {}),
+      };
+    });
+
+  program
+    .command("update")
+    .option("--channel <channel>", "channel", parseUpdateChannel, "stable")
+    .option("--version <version>", "version", normalizeVersionSpecifier)
+    .action((options: { channel: UpdateChannel; version?: string }) => {
+      result = {
+        kind: "update",
+        channel: options.channel,
+        version: options.version,
+      };
+    });
+
+  const normalizedArgv = first.startsWith("-") ? ["start", ...argv] : argv;
+  try {
+    program.parse(normalizedArgv, { from: "user" });
+  } catch (error) {
+    throw normalizeCommanderError(error);
   }
 
-  if (first === "start") {
-    const flags = parseStartFlags(rest);
-    if ("kind" in flags) return flags;
-    return { kind: "start", ...flags };
+  if (!result) {
+    throw new Error(`unknown command '${first}'`);
   }
 
-  if (
-    first === "all" ||
-    first === "edge" ||
-    first === "worker" ||
-    first === "scheduler" ||
-    first === "desktop-runtime"
-  ) {
-    const flags = parseStartFlags(rest);
-    if ("kind" in flags) return flags;
-    return { kind: "start", ...flags, role: flags.role ?? first };
-  }
-
-  if (first === "check") {
-    const flags = parseDbFlags(rest);
-    if ("kind" in flags) return flags;
-    return { kind: "check", ...flags };
-  }
-
-  if (first === "tokens") {
-    const [subcommand, ...args] = rest;
-    if (!subcommand) throw new Error("tokens requires a subcommand (issue-default-tenant-admin)");
-    if (subcommand === "-h" || subcommand === "--help") return { kind: "help" };
-    if (subcommand !== "issue-default-tenant-admin") {
-      throw new Error(`unknown tokens command '${subcommand}'`);
-    }
-
-    const flags = parseDbFlags(args);
-    if ("kind" in flags) return flags;
-    return { kind: "issue_default_tenant_admin_token", ...flags };
-  }
-
-  if (first === "toolrunner") {
-    const flags = parseToolrunnerFlags(rest);
-    if ("kind" in flags) return flags;
-    return { kind: "toolrunner", ...flags };
-  }
-
-  if (first === "tls") {
-    const [subcommand, ...args] = rest;
-    if (!subcommand) throw new Error("tls requires a subcommand (fingerprint)");
-    if (subcommand === "-h" || subcommand === "--help") return { kind: "help" };
-    if (subcommand !== "fingerprint") throw new Error(`unknown tls command '${subcommand}'`);
-
-    const flags = parseDbFlags(args);
-    if ("kind" in flags) return flags;
-    if (flags.db || flags.migrationsDir) {
-      throw new Error("tls fingerprint only supports --home");
-    }
-    return { kind: "tls_fingerprint", home: flags.home };
-  }
-
-  if (first === "plugin") {
-    const [subcommand, ...args] = rest;
-    if (subcommand === "-h" || subcommand === "--help") return { kind: "help" };
-    if (subcommand !== "install") {
-      throw new Error(`unknown plugin command '${subcommand ?? ""}'`);
-    }
-
-    let sourceDir: string | undefined;
-    let home: string | undefined;
-
-    for (let index = 0; index < args.length; index += 1) {
-      const arg = args[index];
-      if (!arg) continue;
-
-      if (arg === "--home") {
-        const value = args[index + 1];
-        if (!value) {
-          throw new Error("--home requires a value");
-        }
-        home = value;
-        index += 1;
-        continue;
-      }
-
-      if (arg === "-h" || arg === "--help") {
-        return { kind: "help" };
-      }
-
-      if (arg.startsWith("-")) {
-        throw new Error(`unsupported plugin install argument '${arg}'`);
-      }
-
-      if (!sourceDir) {
-        sourceDir = arg;
-        continue;
-      }
-
-      throw new Error(`unexpected plugin install argument '${arg}'`);
-    }
-
-    if (!sourceDir) {
-      throw new Error("plugin install requires a source directory");
-    }
-
-    return { kind: "plugin_install", source_dir: sourceDir, home };
-  }
-
-  if (first !== "update") throw new Error(`unknown command '${first}'`);
-
-  let channel: UpdateChannel = "stable";
-  let version: string | undefined;
-
-  for (let index = 0; index < rest.length; index += 1) {
-    const arg = rest[index];
-    if (!arg) continue;
-
-    if (arg === "--channel") {
-      const value = rest[index + 1];
-      if (!value) {
-        throw new Error("--channel requires a value");
-      }
-      channel = parseUpdateChannel(value);
-      index += 1;
-      continue;
-    }
-
-    if (arg === "--version") {
-      const value = rest[index + 1];
-      if (!value) {
-        throw new Error("--version requires a value");
-      }
-      version = normalizeVersionSpecifier(value);
-      index += 1;
-      continue;
-    }
-
-    if (arg === "-h" || arg === "--help") {
-      return { kind: "help" };
-    }
-
-    throw new Error(`unsupported update argument '${arg}'`);
-  }
-
-  return { kind: "update", channel, version };
+  return result;
 }
 
 async function runTlsFingerprint(

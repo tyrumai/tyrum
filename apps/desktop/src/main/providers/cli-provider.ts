@@ -1,9 +1,9 @@
-import { spawn } from "node:child_process";
 import { isAbsolute, relative, resolve } from "node:path";
 import type { ActionPrimitive, ClientCapability } from "@tyrum/operator-core";
 import { checkPostcondition } from "@tyrum/operator-core";
 import type { EvaluationContext } from "@tyrum/operator-core";
 import type { CapabilityProvider, TaskResult } from "@tyrum/operator-core";
+import { execa } from "execa";
 
 const MAX_OUTPUT_BYTES = 1_000_000; // 1MB output cap
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -153,15 +153,28 @@ function appendOutput(current: string, data: Buffer): string {
   return current;
 }
 
-function writeChildStdin(child: ReturnType<typeof spawn>, stdin: string | undefined): void {
+function toOutputChunk(data: Uint8Array | string): Buffer {
+  return typeof data === "string" ? Buffer.from(data) : Buffer.from(data);
+}
+
+function writeChildStdin(
+  child: {
+    stdin?: {
+      on?: (event: "error", listener: () => undefined) => void;
+      write?: (chunk: string) => void;
+      end?: () => void;
+    } | null;
+  },
+  stdin: string | undefined,
+): void {
   const stdinStream = child.stdin;
   // Child may exit before consuming stdin; ignore resulting pipe stream errors.
-  stdinStream?.on("error", () => undefined);
+  stdinStream?.on?.("error", () => undefined);
 
   if (stdin !== undefined) {
-    stdinStream?.write(stdin);
+    stdinStream?.write?.(stdin);
   }
-  stdinStream?.end();
+  stdinStream?.end?.();
 }
 
 function spawnCommand(options: {
@@ -171,40 +184,43 @@ function spawnCommand(options: {
   stdin: string | undefined;
   timeoutMs: number;
 }): Promise<SpawnedProcessOutput> {
-  return new Promise((resolvePromise, rejectPromise) => {
-    const start = Date.now();
-    const child = spawn(options.cmd, options.cmdArgs, {
-      cwd: options.cwd,
-      timeout: options.timeoutMs,
-      env: { ...process.env },
-      stdio: ["pipe", "pipe", "pipe"],
-    });
+  const child = execa(options.cmd, options.cmdArgs, {
+    buffer: false,
+    cwd: options.cwd,
+    env: { ...process.env },
+    extendEnv: false,
+    reject: false,
+    stdin: "pipe",
+    stdout: "pipe",
+    stderr: "pipe",
+    stripFinalNewline: false,
+    timeout: options.timeoutMs,
+  });
 
-    let stdout = "";
-    let stderr = "";
+  let stdout = "";
+  let stderr = "";
 
-    writeChildStdin(child, options.stdin);
+  writeChildStdin(child, options.stdin);
 
-    child.stdout?.on("data", (data: Buffer) => {
-      stdout = appendOutput(stdout, data);
-    });
+  child.stdout?.on("data", (data: Uint8Array | string) => {
+    stdout = appendOutput(stdout, toOutputChunk(data));
+  });
 
-    child.stderr?.on("data", (data: Buffer) => {
-      stderr = appendOutput(stderr, data);
-    });
+  child.stderr?.on("data", (data: Uint8Array | string) => {
+    stderr = appendOutput(stderr, toOutputChunk(data));
+  });
 
-    child.once("close", (code) => {
-      resolvePromise({
-        exitCode: code,
-        stdout,
-        stderr,
-        durationMs: Date.now() - start,
-      });
-    });
+  return child.then((result) => {
+    if (result.code && result.exitCode == null && !result.timedOut && !result.isTerminated) {
+      throw new Error(result.originalMessage ?? result.message ?? `Failed to spawn ${options.cmd}`);
+    }
 
-    child.once("error", (err) => {
-      rejectPromise(err);
-    });
+    return {
+      exitCode: result.exitCode ?? null,
+      stdout,
+      stderr,
+      durationMs: result.durationMs,
+    };
   });
 }
 

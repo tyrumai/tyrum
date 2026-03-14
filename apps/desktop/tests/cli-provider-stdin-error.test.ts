@@ -2,15 +2,13 @@ import { EventEmitter } from "node:events";
 import { describe, expect, it, vi } from "vitest";
 import type { ActionPrimitive } from "@tyrum/schemas";
 
-const { spawnMock } = vi.hoisted(() => ({
-  spawnMock: vi.fn(),
+const { execaMock } = vi.hoisted(() => ({
+  execaMock: vi.fn(),
 }));
 
-vi.mock("node:child_process", async () => {
-  const actual = await vi.importActual<typeof import("node:child_process")>("node:child_process");
+vi.mock("execa", () => {
   return {
-    ...actual,
-    spawn: spawnMock,
+    execa: execaMock,
   };
 });
 
@@ -48,11 +46,42 @@ function createMockChild(): MockChildProcess {
   });
 }
 
+type MockSubprocessResult = {
+  exitCode: number | null;
+  durationMs: number;
+  code?: string;
+  timedOut: boolean;
+  isTerminated: boolean;
+  originalMessage?: string;
+  message?: string;
+};
+
+type MockSubprocess = Promise<MockSubprocessResult> & MockChildProcess;
+
+function createMockSubprocess(result: MockSubprocessResult): MockSubprocess {
+  const child = createMockChild();
+  let resolvePromise: (value: MockSubprocessResult) => void = () => undefined;
+  const promise = new Promise<MockSubprocessResult>((resolve) => {
+    resolvePromise = resolve;
+  });
+
+  queueMicrotask(() => {
+    resolvePromise(result);
+  });
+
+  return Object.assign(promise, child);
+}
+
 describe("CliProvider stdin handling", () => {
   it("handles stdin EPIPE without throwing", async () => {
-    spawnMock.mockImplementation(() => {
-      const child = createMockChild();
-      queueMicrotask(() => child.emit("close", 0));
+    let child: MockSubprocess | undefined;
+    execaMock.mockImplementation(() => {
+      child = createMockSubprocess({
+        exitCode: 0,
+        durationMs: 1,
+        timedOut: false,
+        isTerminated: false,
+      });
       return child;
     });
 
@@ -65,7 +94,6 @@ describe("CliProvider stdin handling", () => {
     );
 
     expect(result.success).toBe(true);
-    const child = spawnMock.mock.results[0]?.value as MockChildProcess | undefined;
     expect(child).toBeDefined();
     expect(child?.stdin.listenerCount("error")).toBeGreaterThan(0);
   });

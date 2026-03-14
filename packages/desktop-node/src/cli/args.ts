@@ -1,3 +1,5 @@
+import { Command, CommanderError } from "commander";
+
 export interface DesktopNodeArgs {
   wsUrl?: string;
   token?: string;
@@ -12,11 +14,26 @@ export interface DesktopNodeArgs {
   version: boolean;
 }
 
-function requireValue(flag: string, value: string | undefined): string {
-  if (!value) {
-    throw new Error(`${flag} requires a value`);
+function normalizeCommanderError(error: unknown): Error {
+  if (!(error instanceof CommanderError)) {
+    return error instanceof Error ? error : new Error(String(error));
   }
-  return value;
+
+  if (error.code === "commander.optionMissingArgument") {
+    const match = error.message.match(/option '([^']+?)\s+<[^>]+>'/);
+    const flag = match?.[1]
+      ?.split(",")
+      .map((part) => part.trim())
+      .at(-1);
+    return new Error(`${flag ?? "option"} requires a value`);
+  }
+
+  if (error.code === "commander.unknownOption") {
+    const match = error.message.match(/unknown option '([^']+)'/);
+    return new Error(`unknown argument: ${match?.[1] ?? ""}`);
+  }
+
+  return new Error(error.message.replace(/^error:\s*/i, ""));
 }
 
 export function parseDesktopNodeArgs(argv: readonly string[]): DesktopNodeArgs {
@@ -25,75 +42,59 @@ export function parseDesktopNodeArgs(argv: readonly string[]): DesktopNodeArgs {
     version: false,
   };
 
-  for (let i = 0; i < argv.length; i += 1) {
-    const arg = argv[i];
-    if (!arg) continue;
-
-    if (arg === "-h" || arg === "--help") {
-      result.help = true;
-      continue;
-    }
-
-    if (arg === "--version") {
-      result.version = true;
-      continue;
-    }
-
-    if (arg === "--ws-url") {
-      result.wsUrl = requireValue(arg, argv[i + 1]);
-      i += 1;
-      continue;
-    }
-
-    if (arg === "--token") {
-      result.token = requireValue(arg, argv[i + 1]);
-      i += 1;
-      continue;
-    }
-
-    if (arg === "--token-path") {
-      result.tokenPath = requireValue(arg, argv[i + 1]);
-      i += 1;
-      continue;
-    }
-
-    if (arg === "--tls-fingerprint256") {
-      result.tlsFingerprint256 = requireValue(arg, argv[i + 1]);
-      i += 1;
-      continue;
-    }
-
-    if (arg === "--tls-allow-self-signed") {
-      result.tlsAllowSelfSigned = true;
-      continue;
-    }
-
-    if (arg === "--takeover-url") {
-      result.takeoverUrl = requireValue(arg, argv[i + 1]);
-      i += 1;
-      continue;
-    }
-
-    if (arg === "--label") {
-      result.label = requireValue(arg, argv[i + 1]);
-      i += 1;
-      continue;
-    }
-
-    if (arg === "--mode") {
-      result.mode = requireValue(arg, argv[i + 1]);
-      i += 1;
-      continue;
-    }
-
-    if (arg === "--home") {
-      result.home = requireValue(arg, argv[i + 1]);
-      i += 1;
-      continue;
-    }
-
-    throw new Error(`unknown argument: ${arg}`);
+  if (argv.includes("-h") || argv.includes("--help")) {
+    return { ...result, help: true };
+  }
+  if (argv.includes("--version")) {
+    return { ...result, version: true };
   }
 
-  return result;
+  const program = new Command()
+    .name("tyrum-desktop-node")
+    .helpOption(false)
+    .showHelpAfterError(false)
+    .allowUnknownOption(false)
+    .allowExcessArguments(false)
+    .configureOutput({ writeOut: () => undefined, writeErr: () => undefined })
+    .exitOverride()
+    .option("--ws-url <url>")
+    .option("--token <token>")
+    .option("--token-path <path>")
+    .option("--tls-fingerprint256 <hex>")
+    .option("--tls-allow-self-signed")
+    .option("--takeover-url <url>")
+    .option("--label <label>")
+    .option("--mode <mode>")
+    .option("--home <dir>");
+
+  try {
+    program.parse(argv, { from: "user" });
+  } catch (error) {
+    throw normalizeCommanderError(error);
+  }
+
+  const options = program.opts<{
+    wsUrl?: string;
+    token?: string;
+    tokenPath?: string;
+    tlsFingerprint256?: string;
+    tlsAllowSelfSigned?: boolean;
+    takeoverUrl?: string;
+    label?: string;
+    mode?: string;
+    home?: string;
+  }>();
+
+  return {
+    ...result,
+    wsUrl: options.wsUrl,
+    token: options.token,
+    tokenPath: options.tokenPath,
+    tlsFingerprint256: options.tlsFingerprint256,
+    tlsAllowSelfSigned: options.tlsAllowSelfSigned,
+    takeoverUrl: options.takeoverUrl,
+    label: options.label,
+    mode: options.mode,
+    home: options.home,
+  };
 }

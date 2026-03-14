@@ -167,6 +167,27 @@ describe("gateway CLI argument parsing", () => {
     expect(parseCliArgs(["check"])).toEqual({ kind: "check" });
   });
 
+  it.each([
+    { argv: ["start", "--home", ""], message: "--home requires a non-empty value" },
+    { argv: ["start", "--db", ""], message: "--db requires a non-empty value" },
+    {
+      argv: ["start", "--migrations-dir", ""],
+      message: "--migrations-dir requires a non-empty value",
+    },
+    { argv: ["start", "--host", ""], message: "--host requires a non-empty value" },
+    {
+      argv: ["start", "--trusted-proxies", ""],
+      message: "--trusted-proxies requires a non-empty value",
+    },
+    {
+      argv: ["toolrunner", "--payload-b64", ""],
+      message: "--payload-b64 requires a non-empty value",
+    },
+    { argv: ["tls", "fingerprint", "--home", ""], message: "--home requires a non-empty value" },
+  ])("rejects empty string values for $argv", ({ argv, message }) => {
+    expect(() => parseCliArgs(argv)).toThrow(message);
+  });
+
   it("parses default tenant admin token recovery command", () => {
     expect(
       parseCliArgs([
