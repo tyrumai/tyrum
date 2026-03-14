@@ -79,6 +79,117 @@ describe("ApprovalDal regressions", () => {
     });
   });
 
+  it("discards speculative reviews when the transition compare-and-swap loses a race", async () => {
+    const approvalId = "approval-race-1";
+    let approvalReadCount = 0;
+    let createdReviewId = "";
+    let deletedReviewCount = 0;
+
+    const awaitingHumanRow = {
+      tenant_id: tenantId,
+      approval_id: approvalId,
+      approval_key: "approval:key:race:1",
+      agent_id: agentId,
+      workspace_id: workspaceId,
+      kind: "policy",
+      status: "awaiting_human",
+      prompt: "Approve?",
+      motivation: "Human or guardian review is required before this action continues.",
+      context_json: "{}",
+      created_at: "2026-01-01T00:00:00.000Z",
+      expires_at: null,
+      latest_review_id: null as string | null,
+      session_id: null,
+      plan_id: null,
+      run_id: null,
+      step_id: null,
+      attempt_id: null,
+      work_item_id: null,
+      work_item_task_id: null,
+      resume_token: null,
+    };
+    const approvedRow = {
+      ...awaitingHumanRow,
+      status: "approved",
+    };
+
+    const handleGet = async (sql: string, params: readonly unknown[] = []) => {
+      if (sql.includes("FROM approvals")) {
+        approvalReadCount += 1;
+        return (approvalReadCount === 1 ? awaitingHumanRow : approvedRow) as never;
+      }
+      if (sql.includes("INSERT INTO review_entries")) {
+        createdReviewId = String(params[1]);
+        return {
+          tenant_id: tenantId,
+          review_id: createdReviewId,
+          target_type: "approval" as const,
+          target_id: approvalId,
+          reviewer_kind: "human" as const,
+          reviewer_id: null,
+          state: "approved" as const,
+          reason: "approved safely",
+          risk_level: null,
+          risk_score: null,
+          evidence_json: null,
+          decision_payload_json: null,
+          created_at: "2026-01-01T00:00:01.000Z",
+          started_at: null,
+          completed_at: "2026-01-01T00:00:01.000Z",
+        } as never;
+      }
+      throw new Error(`unexpected get query: ${sql} :: ${JSON.stringify(params)}`);
+    };
+
+    const handleRun = async (sql: string, params: readonly unknown[] = []) => {
+      if (sql.includes("UPDATE approvals") && sql.includes("latest_review_id")) {
+        expect(sql).toContain("AND status = ?");
+        expect(params[4]).toBe("awaiting_human");
+        return { changes: 0 };
+      }
+      if (sql.includes("DELETE FROM review_entries")) {
+        deletedReviewCount += 1;
+        expect(params).toEqual([tenantId, createdReviewId]);
+        return { changes: 1 };
+      }
+      throw new Error(`unexpected run query: ${sql} :: ${JSON.stringify(params)}`);
+    };
+
+    const txDb: SqlDb = {
+      kind: "postgres",
+      get: handleGet,
+      all: async () => [],
+      run: handleRun,
+      exec: async () => {},
+      transaction: async () => {
+        throw new Error("nested transactions are not supported");
+      },
+      close: async () => {},
+    };
+
+    const rootDb: SqlDb = {
+      kind: "postgres",
+      get: handleGet,
+      all: async () => [],
+      run: handleRun,
+      exec: async () => {},
+      transaction: async (fn) => await fn(txDb),
+      close: async () => {},
+    };
+
+    const dal = new ApprovalDal(rootDb);
+    const resolved = await dal.resolveWithEngineAction({
+      tenantId,
+      approvalId,
+      decision: "approved",
+      reason: "approved safely",
+    });
+
+    expect(resolved?.transitioned).toBe(false);
+    expect(resolved?.approval.status).toBe("approved");
+    expect(deletedReviewCount).toBe(1);
+  });
+
   it("batch-hydrates latest reviews for status listings", async () => {
     const approvalRows = [
       {

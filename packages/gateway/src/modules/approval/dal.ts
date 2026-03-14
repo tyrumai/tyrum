@@ -1,12 +1,14 @@
-import type { ApprovalKind as ApprovalKindT, ReviewEntry as ReviewEntryT } from "@tyrum/schemas";
+import type { ReviewEntry as ReviewEntryT } from "@tyrum/schemas";
 import { randomUUID } from "node:crypto";
 import type { SqlDb } from "../../statestore/types.js";
-import {
-  type CreateReviewEntryParams,
-  ReviewEntryDal,
-  type ReviewEntryRow,
-  type ReviewerKind,
-} from "../review/dal.js";
+import { ReviewEntryDal, type ReviewEntryRow, type ReviewerKind } from "../review/dal.js";
+import type {
+  ApprovalRow,
+  CreateApprovalParams,
+  RawApprovalRow,
+  ResolveWithEngineActionInput,
+  TransitionWithReviewInput,
+} from "./dal-types.js";
 import { ApprovalEngineActionDal } from "./engine-action-dal.js";
 import { expireStaleApprovals, toApprovalRow } from "./dal-support.js";
 import {
@@ -17,106 +19,9 @@ import {
   normalizeApprovalStatus,
 } from "./status.js";
 
+export type { ApprovalRow, CreateApprovalParams, RawApprovalRow } from "./dal-types.js";
 export type { ApprovalStatus } from "./status.js";
 export { approvalNeedsHumanDecision, isApprovalBlockedStatus, isApprovalTerminalStatus };
-
-export interface ApprovalRow {
-  tenant_id: string;
-  approval_id: string;
-  approval_key: string;
-  agent_id: string;
-  workspace_id: string;
-  kind: ApprovalKindT;
-  status: ApprovalStatus;
-  prompt: string;
-  motivation: string;
-  context: unknown;
-  created_at: string;
-  expires_at: string | null;
-  latest_review: ReviewEntryT | null;
-  reviews?: ReviewEntryT[];
-  session_id: string | null;
-  plan_id: string | null;
-  run_id: string | null;
-  step_id: string | null;
-  attempt_id: string | null;
-  work_item_id: string | null;
-  work_item_task_id: string | null;
-  resume_token: string | null;
-}
-
-export interface RawApprovalRow {
-  tenant_id: string;
-  approval_id: string;
-  approval_key: string;
-  agent_id: string;
-  workspace_id: string;
-  kind: string;
-  status: string;
-  prompt: string;
-  motivation: string;
-  context_json: string;
-  created_at: string | Date;
-  expires_at: string | Date | null;
-  latest_review_id: string | null;
-  session_id: string | null;
-  plan_id: string | null;
-  run_id: string | null;
-  step_id: string | null;
-  attempt_id: string | null;
-  work_item_id: string | null;
-  work_item_task_id: string | null;
-  resume_token: string | null;
-}
-
-export interface CreateApprovalParams {
-  tenantId: string;
-  agentId: string;
-  workspaceId: string;
-  approvalKey: string;
-  prompt: string;
-  motivation: string;
-  kind: ApprovalKindT;
-  status?: ApprovalStatus;
-  context?: unknown;
-  expiresAt?: string | null;
-  sessionId?: string | null;
-  planId?: string | null;
-  runId?: string | null;
-  stepId?: string | null;
-  attemptId?: string | null;
-  workItemId?: string | null;
-  workItemTaskId?: string | null;
-  resumeToken?: string | null;
-}
-
-type TransitionWithReviewInput = {
-  tenantId: string;
-  approvalId: string;
-  status: ApprovalStatus;
-  reviewerKind: ReviewerKind;
-  reviewerId?: string | null;
-  reviewState: CreateReviewEntryParams["state"];
-  reason?: string | null;
-  riskLevel?: CreateReviewEntryParams["riskLevel"];
-  riskScore?: CreateReviewEntryParams["riskScore"];
-  evidence?: unknown;
-  decisionPayload?: unknown;
-  allowedCurrentStatuses?: ApprovalStatus[];
-  includeReviews?: boolean;
-};
-
-type ResolveWithEngineActionInput = {
-  tenantId: string;
-  approvalId: string;
-  decision: "approved" | "denied";
-  reason?: string;
-  reviewerKind?: ReviewerKind;
-  reviewerId?: string | null;
-  allowedCurrentStatuses?: ApprovalStatus[];
-  resolvedBy?: unknown;
-  decisionPayload?: unknown;
-};
 
 function toReviewEntryContract(review: ReviewEntryRow): ReviewEntryT {
   const { tenant_id: _tenantId, ...contract } = review;
@@ -380,6 +285,7 @@ export class ApprovalDal {
     input: TransitionWithReviewInput,
   ): Promise<{ approval: ApprovalRow; transitioned: boolean } | undefined> {
     const approvalDal = tx === this.db ? this : this.createTxDal(tx);
+    const reviewDal = new ReviewEntryDal(tx);
     const current = await approvalDal.getRawById({
       tenantId: input.tenantId,
       approvalId: input.approvalId,
@@ -404,8 +310,9 @@ export class ApprovalDal {
       };
     }
 
-    const review = await new ReviewEntryDal(tx).create({
+    const review = await reviewDal.create({
       tenantId: input.tenantId,
+      reviewId: randomUUID(),
       targetType: "approval",
       targetId: input.approvalId,
       reviewerKind: input.reviewerKind,
@@ -427,9 +334,32 @@ export class ApprovalDal {
       `UPDATE approvals
        SET status = ?,
            latest_review_id = ?
-       WHERE tenant_id = ? AND approval_id = ?`,
-      [input.status, review.review_id, input.tenantId, input.approvalId],
+       WHERE tenant_id = ?
+         AND approval_id = ?
+         AND status = ?`,
+      [input.status, review.review_id, input.tenantId, input.approvalId, currentStatus],
     );
+    if (updated.changes === 0) {
+      const deletedReview = await reviewDal.deleteById({
+        tenantId: input.tenantId,
+        reviewId: review.review_id,
+      });
+      if (!deletedReview) {
+        throw new Error(
+          `failed to discard review ${review.review_id} for approval ${input.approvalId}`,
+        );
+      }
+
+      const currentApproval = await approvalDal.getById({
+        tenantId: input.tenantId,
+        approvalId: input.approvalId,
+        includeReviews: input.includeReviews,
+      });
+      if (!currentApproval) {
+        throw new Error(`approval ${input.approvalId} disappeared after lost transition race`);
+      }
+      return { approval: currentApproval, transitioned: false };
+    }
     if (updated.changes !== 1) {
       throw new Error(`failed to update approval ${input.approvalId}`);
     }

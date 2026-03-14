@@ -38,6 +38,7 @@ interface RawReviewEntryRow {
 
 export interface CreateReviewEntryParams {
   tenantId: string;
+  reviewId?: string;
   targetType: ReviewTargetType;
   targetId: string | number;
   reviewerKind: ReviewerKind;
@@ -101,8 +102,10 @@ export class ReviewEntryDal {
 
   async create(params: CreateReviewEntryParams): Promise<ReviewEntryRow> {
     const tenantId = params.tenantId.trim();
+    const reviewId = params.reviewId?.trim() ?? randomUUID();
     const targetId = normalizeTargetId(params.targetId);
     if (!tenantId) throw new Error("tenantId is required");
+    if (!reviewId) throw new Error("reviewId is required");
     if (!targetId) throw new Error("targetId is required");
 
     const createdAt = params.createdAt ?? new Date().toISOString();
@@ -128,7 +131,7 @@ export class ReviewEntryDal {
        RETURNING *`,
       [
         tenantId,
-        randomUUID(),
+        reviewId,
         params.targetType,
         targetId,
         params.reviewerKind,
@@ -148,6 +151,15 @@ export class ReviewEntryDal {
       throw new Error("review entry insert failed");
     }
     return toReviewEntryRow(inserted);
+  }
+
+  async deleteById(input: { tenantId: string; reviewId: string }): Promise<boolean> {
+    const deleted = await this.db.run(
+      `DELETE FROM review_entries
+       WHERE tenant_id = ? AND review_id = ?`,
+      [input.tenantId.trim(), input.reviewId.trim()],
+    );
+    return deleted.changes === 1;
   }
 
   async getById(input: {
