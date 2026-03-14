@@ -184,6 +184,7 @@ function textFromMessage(message: UIMessage): string {
       lines.push(
         `File: ${part.filename ? `${part.filename} ` : ""}(${part.mediaType}) ${part.url}`.trim(),
       );
+      continue;
     }
   }
   return lines.join("\n\n");
