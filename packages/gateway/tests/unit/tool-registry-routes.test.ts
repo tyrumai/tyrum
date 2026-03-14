@@ -75,7 +75,13 @@ describe("tool registry routes", () => {
         agents: {
           getRuntime: vi.fn(async () => ({
             listRegisteredTools: vi.fn(async () => ({
-              allowlist: ["read", "websearch", "plugin.echo.say", "mcp.exa.web_search_exa"],
+              allowlist: [
+                "read",
+                "websearch",
+                "plugin.echo.say",
+                "plugin.echo.union",
+                "mcp.exa.web_search_exa",
+              ],
               tools: [],
               mcpServers: [],
             })),
@@ -113,6 +119,37 @@ describe("tool registry routes", () => {
                 risk: "low" as const,
                 requires_confirmation: false,
                 keywords: ["echo"],
+              },
+              {
+                id: "plugin.echo.union",
+                description: "Echo text or markdown back to the caller.",
+                risk: "low" as const,
+                requires_confirmation: false,
+                keywords: ["echo"],
+                inputSchema: {
+                  type: "object",
+                  properties: {
+                    kind: { type: "string", enum: ["text", "markdown"] },
+                    text: { type: "string" },
+                    markdown: { type: "string" },
+                  },
+                  required: ["kind"],
+                  additionalProperties: false,
+                  oneOf: [
+                    {
+                      properties: {
+                        kind: { type: "string", enum: ["text"] },
+                      },
+                      required: ["kind", "text"],
+                    },
+                    {
+                      properties: {
+                        kind: { type: "string", enum: ["markdown"] },
+                      },
+                      required: ["kind", "markdown"],
+                    },
+                  ],
+                },
               },
             ],
             getTool: (toolId: string) =>
@@ -211,6 +248,27 @@ describe("tool registry routes", () => {
         input_schema: {
           type: "object",
           additionalProperties: true,
+        },
+      }),
+    );
+    expect(body.tools).toContainEqual(
+      expect.objectContaining({
+        source: "plugin",
+        canonical_id: "plugin.echo.union",
+        effective_exposure: expect.objectContaining({
+          enabled: true,
+          reason: "enabled",
+          agent_key: "default",
+        }),
+        input_schema: {
+          type: "object",
+          properties: {
+            kind: { type: "string", enum: ["text", "markdown"] },
+            text: { type: "string" },
+            markdown: { type: "string" },
+          },
+          required: ["kind"],
+          additionalProperties: false,
         },
       }),
     );
