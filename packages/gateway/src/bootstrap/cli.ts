@@ -54,6 +54,43 @@ function parseNonEmptyStringFlag(flag: string, value: string): string {
   return trimmed;
 }
 
+type CommonDbCliOptions = {
+  home?: string;
+  db?: string;
+  migrationsDir?: string;
+};
+
+function parseOptionalNonEmptyStringFlag(
+  flag: string,
+  value: string | undefined,
+): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  return parseNonEmptyStringFlag(flag, value);
+}
+
+function parseCommonDbOptions(options: CommonDbCliOptions): CommonDbCliOptions {
+  const parsed: CommonDbCliOptions = {};
+
+  const home = parseOptionalNonEmptyStringFlag("--home", options.home);
+  if (home !== undefined) {
+    parsed.home = home;
+  }
+
+  const db = parseOptionalNonEmptyStringFlag("--db", options.db);
+  if (db !== undefined) {
+    parsed.db = db;
+  }
+
+  const migrationsDir = parseOptionalNonEmptyStringFlag("--migrations-dir", options.migrationsDir);
+  if (migrationsDir !== undefined) {
+    parsed.migrationsDir = migrationsDir;
+  }
+
+  return parsed;
+}
+
 function parseRoleFlag(value: string): GatewayRole {
   const normalized = value.trim().toLowerCase();
   if (
@@ -140,22 +177,20 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
           enableEngineApi?: boolean;
           enableSnapshotImport?: boolean;
         }) => {
+          const host = parseOptionalNonEmptyStringFlag("--host", options.host);
+          const trustedProxies = parseOptionalNonEmptyStringFlag(
+            "--trusted-proxies",
+            options.trustedProxies,
+          );
+          const role = options.role ?? forcedRole;
+
           result = {
             kind: "start",
-            ...(options.home ? { home: options.home } : {}),
-            ...(options.db ? { db: options.db } : {}),
-            ...(options.migrationsDir ? { migrationsDir: options.migrationsDir } : {}),
-            ...(options.host ? { host: options.host } : {}),
+            ...parseCommonDbOptions(options),
+            ...(host !== undefined ? { host } : {}),
             ...(options.port !== undefined ? { port: options.port } : {}),
-            ...((options.role ?? forcedRole) ? { role: options.role ?? forcedRole } : {}),
-            ...(options.trustedProxies
-              ? {
-                  trustedProxies: parseNonEmptyStringFlag(
-                    "--trusted-proxies",
-                    options.trustedProxies,
-                  ),
-                }
-              : {}),
+            ...(role !== undefined ? { role } : {}),
+            ...(trustedProxies !== undefined ? { trustedProxies } : {}),
             ...(options.tlsReady ? { tlsReady: true } : {}),
             ...(options.tlsSelfSigned ? { tlsSelfSigned: true } : {}),
             ...(options.allowInsecureHttp ? { allowInsecureHttp: true } : {}),
@@ -177,9 +212,7 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
     (options: { home?: string; db?: string; migrationsDir?: string }) => {
       result = {
         kind: "check",
-        ...(options.home ? { home: options.home } : {}),
-        ...(options.db ? { db: options.db } : {}),
-        ...(options.migrationsDir ? { migrationsDir: options.migrationsDir } : {}),
+        ...parseCommonDbOptions(options),
       };
     },
   );
@@ -188,12 +221,11 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
     .option("--payload-b64 <value>")
     .action(
       (options: { home?: string; db?: string; migrationsDir?: string; payloadB64?: string }) => {
+        const payloadB64 = parseOptionalNonEmptyStringFlag("--payload-b64", options.payloadB64);
         result = {
           kind: "toolrunner",
-          ...(options.home ? { home: options.home } : {}),
-          ...(options.db ? { db: options.db } : {}),
-          ...(options.migrationsDir ? { migrationsDir: options.migrationsDir } : {}),
-          ...(options.payloadB64 ? { payloadB64: options.payloadB64 } : {}),
+          ...parseCommonDbOptions(options),
+          ...(payloadB64 !== undefined ? { payloadB64 } : {}),
         };
       },
     );
@@ -205,9 +237,7 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
     (options: { home?: string; db?: string; migrationsDir?: string }) => {
       result = {
         kind: "issue_default_tenant_admin_token",
-        ...(options.home ? { home: options.home } : {}),
-        ...(options.db ? { db: options.db } : {}),
-        ...(options.migrationsDir ? { migrationsDir: options.migrationsDir } : {}),
+        ...parseCommonDbOptions(options),
       };
     },
   );
@@ -219,7 +249,11 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
     .command("fingerprint")
     .option("--home <dir>")
     .action((options: { home?: string }) => {
-      result = { kind: "tls_fingerprint", ...(options.home ? { home: options.home } : {}) };
+      const home = parseOptionalNonEmptyStringFlag("--home", options.home);
+      result = {
+        kind: "tls_fingerprint",
+        ...(home !== undefined ? { home } : {}),
+      };
     });
 
   const plugin = program.command("plugin");
@@ -228,10 +262,11 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
     .argument("<source_dir>")
     .option("--home <dir>")
     .action((sourceDir: string, options: { home?: string }) => {
+      const home = parseOptionalNonEmptyStringFlag("--home", options.home);
       result = {
         kind: "plugin_install",
         source_dir: parseNonEmptyStringFlag("--source-dir", sourceDir),
-        ...(options.home ? { home: options.home } : {}),
+        ...(home !== undefined ? { home } : {}),
       };
     });
 
