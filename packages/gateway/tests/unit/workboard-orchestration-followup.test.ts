@@ -378,6 +378,12 @@ describe("WorkBoard orchestration follow-up behaviors", () => {
         key: "work.dispatch.phase",
       }),
     ).toMatchObject({ value_json: "unassigned" });
+    await workboard.setStateKv({
+      scope: { kind: "work_item", ...scope, work_item_id: item.work_item_id },
+      key: "work.size.class",
+      value_json: "small",
+      provenance_json: { source: "test" },
+    });
 
     const dispatcher = new WorkboardDispatcher({
       db,

@@ -139,13 +139,13 @@ export class WorkboardItemTransitionsDal {
     existing: DalHelpers.RawWorkItemRow,
     to: WorkItemState,
   ): Promise<void> {
-    if (to !== "ready") {
+    if (to !== "ready" && to !== "doing") {
       return;
     }
 
     const reasons: string[] = [];
     const from = existing.status as WorkItemState;
-    if (from === "doing") {
+    if (to === "ready" && from === "doing") {
       return;
     }
     const workItemId = existing.work_item_id;

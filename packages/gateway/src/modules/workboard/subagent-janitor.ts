@@ -82,17 +82,30 @@ export class SubagentJanitor {
         agent_id: subagent.agent_id,
         workspace_id: subagent.workspace_id,
       };
+      let canDeleteAttachment = subagent.status === "closed" || subagent.status === "failed";
       if (
         subagent.execution_profile === "planner" &&
         (subagent.status === "running" || subagent.status === "paused") &&
         subagent.work_item_status !== "backlog"
       ) {
-        await this.workboard
-          .markSubagentClosed({
+        try {
+          const closed = await this.workboard.markSubagentClosed({
             scope,
             subagent_id: subagent.subagent_id,
-          })
-          .catch(() => undefined);
+          });
+          canDeleteAttachment = closed?.status === "closed";
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          this.opts.logger?.warn("workboard.subagent_janitor_close_failed", {
+            subagent_id: subagent.subagent_id,
+            error: message,
+          });
+          canDeleteAttachment = false;
+        }
+      }
+
+      if (!canDeleteAttachment) {
+        continue;
       }
 
       if (subagent.desktop_environment_id) {
@@ -117,6 +130,7 @@ export class SubagentJanitor {
             environment_id: subagent.desktop_environment_id,
             error: message,
           });
+          continue;
         }
       }
 
