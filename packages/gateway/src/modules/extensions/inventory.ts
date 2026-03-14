@@ -255,7 +255,11 @@ async function buildManagedMcpEntry(input: {
   };
 }
 
-async function loadSkillEntries(stateMode: ExtensionStateMode): Promise<InventoryEntry[]> {
+async function loadSkillEntries(
+  stateMode: ExtensionStateMode,
+  keyFilter?: string,
+): Promise<InventoryEntry[]> {
+  const normalizedKey = keyFilter?.trim();
   const bundled = await listSkillsFromDir(resolveBundledSkillsDir(), "bundled");
   const bundledEntries: InventoryEntry[] = bundled.map((skill) => ({
     kind: "skill",
@@ -275,38 +279,44 @@ async function loadSkillEntries(stateMode: ExtensionStateMode): Promise<Inventor
     files: ["SKILL.md"],
     revisions: [],
   }));
+  const filteredBundledEntries = normalizedKey
+    ? bundledEntries.filter((entry) => entry.key === normalizedKey)
+    : bundledEntries;
   if (stateMode === "shared") {
-    return bundledEntries;
+    return filteredBundledEntries;
   }
 
   const userSkills = await listSkillsFromDir(resolveUserSkillsDir(), "user");
-  return [
-    ...bundledEntries,
-    ...userSkills.map((skill) => ({
-      kind: "skill" as const,
-      key: skill.meta.id,
-      name: skill.meta.name,
-      description: skill.meta.description ?? null,
-      version: skill.meta.version ?? null,
-      transport: null,
-      enabled: true,
-      revision: null,
-      source: null,
-      sourceType: "user" as const,
-      refreshable: false,
-      materializedPath: skill.provenance.path,
-      manifest: skill,
-      spec: null,
-      files: ["SKILL.md"],
-      revisions: [],
-    })),
-  ];
+  const userEntries = userSkills.map((skill) => ({
+    kind: "skill" as const,
+    key: skill.meta.id,
+    name: skill.meta.name,
+    description: skill.meta.description ?? null,
+    version: skill.meta.version ?? null,
+    transport: null,
+    enabled: true,
+    revision: null,
+    source: null,
+    sourceType: "user" as const,
+    refreshable: false,
+    materializedPath: skill.provenance.path,
+    manifest: skill,
+    spec: null,
+    files: ["SKILL.md"],
+    revisions: [],
+  }));
+  const filteredUserEntries = normalizedKey
+    ? userEntries.filter((entry) => entry.key === normalizedKey)
+    : userEntries;
+  return [...filteredBundledEntries, ...filteredUserEntries];
 }
 
 async function loadMcpEntries(
   home: string,
   stateMode: ExtensionStateMode,
+  keyFilter?: string,
 ): Promise<InventoryEntry[]> {
+  const normalizedKey = keyFilter?.trim();
   const builtin = buildBuiltinMemoryServerSpec();
   const entries: InventoryEntry[] = [
     {
@@ -328,30 +338,34 @@ async function loadMcpEntries(
       revisions: [],
     },
   ];
+  const filteredEntries = normalizedKey
+    ? entries.filter((entry) => entry.key === normalizedKey)
+    : entries;
   if (stateMode === "local") {
     const local = await listMcpServersFromDir(resolveMcpDir(home));
-    entries.push(
-      ...local.map((server) => ({
-        kind: "mcp" as const,
-        key: server.id,
-        name: server.name,
-        description: null,
-        version: null,
-        transport: server.transport,
-        enabled: server.enabled,
-        revision: null,
-        source: null,
-        sourceType: "local" as const,
-        refreshable: false,
-        materializedPath: server.transport === "stdio" ? (server.cwd ?? null) : null,
-        manifest: null,
-        spec: server,
-        files: [],
-        revisions: [],
-      })),
-    );
+    const localEntries = local.map((server) => ({
+      kind: "mcp" as const,
+      key: server.id,
+      name: server.name,
+      description: null,
+      version: null,
+      transport: server.transport,
+      enabled: server.enabled,
+      revision: null,
+      source: null,
+      sourceType: "local" as const,
+      refreshable: false,
+      materializedPath: server.transport === "stdio" ? (server.cwd ?? null) : null,
+      manifest: null,
+      spec: server,
+      files: [],
+      revisions: [],
+    }));
+    return normalizedKey
+      ? [...filteredEntries, ...localEntries.filter((entry) => entry.key === normalizedKey)]
+      : [...filteredEntries, ...localEntries];
   }
-  return entries;
+  return filteredEntries;
 }
 
 export async function buildExtensionInventory(params: {
@@ -360,17 +374,24 @@ export async function buildExtensionInventory(params: {
   kind: ExtensionKind;
   stateMode: ExtensionStateMode;
   home: string;
+  key?: string;
 }): Promise<ManagedExtensionDetailT[]> {
   const runtimePackageDal = new RuntimePackageDal(params.db);
   const defaultsDal = new ExtensionDefaultsDal(params.db);
+  const normalizedKey = params.key?.trim();
   const [rawConfigs, defaults, skillEntries, mcpEntries, managedRevisions] = await Promise.all([
     listLatestAgentConfigs(params.db, params.tenantId),
     defaultsDal.list(params.tenantId, params.kind),
-    params.kind === "skill" ? loadSkillEntries(params.stateMode) : Promise.resolve([]),
-    params.kind === "mcp" ? loadMcpEntries(params.home, params.stateMode) : Promise.resolve([]),
+    params.kind === "skill"
+      ? loadSkillEntries(params.stateMode, normalizedKey)
+      : Promise.resolve([]),
+    params.kind === "mcp"
+      ? loadMcpEntries(params.home, params.stateMode, normalizedKey)
+      : Promise.resolve([]),
     runtimePackageDal.listLatest({
       tenantId: params.tenantId,
       packageKind: params.kind,
+      ...(normalizedKey ? { packageKeys: [normalizedKey] } : {}),
     }),
   ]);
 

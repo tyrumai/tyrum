@@ -3,21 +3,29 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Hono } from "hono";
+import type { AuthTokenClaims } from "@tyrum/schemas";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { createExtensionsRoutes } from "../../src/routes/extensions.js";
 
 const migrationsDir = join(import.meta.dirname, "../../migrations/sqlite");
 
-function createApp(container: GatewayContainer, tenantId: string): Hono {
+function createApp(
+  container: GatewayContainer,
+  tenantId: string,
+  claims?: AuthTokenClaims | Record<string, unknown>,
+): Hono {
   const app = new Hono();
   app.use("*", async (c, next) => {
-    c.set("authClaims", {
-      token_kind: "tenant",
-      token_id: "tenant-token-1",
-      tenant_id: tenantId,
-      role: "admin",
-      scopes: ["*"],
-    });
+    c.set(
+      "authClaims",
+      claims ?? {
+        token_kind: "tenant",
+        token_id: "tenant-token-1",
+        tenant_id: tenantId,
+        role: "admin",
+        scopes: ["*"],
+      },
+    );
     await next();
   });
   app.route(
@@ -307,6 +315,29 @@ limits:
           search: 5,
         },
       },
+    });
+  });
+
+  it("requires a tenant-scoped token for MCP settings parsing", async () => {
+    const adminOnlyApp = createApp(container, tenantId, {
+      token_kind: "admin",
+      token_id: "admin-token-1",
+      role: "admin",
+      scopes: ["*"],
+    });
+
+    const response = await adminOnlyApp.request("/config/extensions/mcp/parse-settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        settings_format: "json",
+        settings_text: '{"enabled":true}',
+      }),
+    });
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      message: "tenant token required",
     });
   });
 });

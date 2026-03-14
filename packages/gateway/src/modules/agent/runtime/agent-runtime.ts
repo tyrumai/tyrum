@@ -6,7 +6,7 @@ import type {
   AgentTurnRequest as AgentTurnRequestT,
   AgentTurnResponse as AgentTurnResponseT,
 } from "@tyrum/schemas";
-import { AgentKey, AgentStatusResponse, WorkspaceKey } from "@tyrum/schemas";
+import { AgentKey, WorkspaceKey } from "@tyrum/schemas";
 import {
   type LaneQueueScope,
   type TurnEngineBridgeDeps,
@@ -47,10 +47,8 @@ import {
   resolveRuntimeCompactionContext,
   type SessionCompactionResult,
 } from "./session-compaction-service.js";
-import { resolveAgentPersona } from "../persona.js";
 import type { ToolDescriptor } from "../tools.js";
 import type { GuardianReviewDecision } from "../../review/guardian-review-mode.js";
-import type { ToolDescriptor } from "../tools.js";
 import {
   buildEnabledAgentStatus,
   buildRegisteredToolsResult,

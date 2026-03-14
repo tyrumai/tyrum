@@ -80,6 +80,7 @@ export class ExtensionsService {
   private async loadInventory(
     tenantId: string,
     kind: ExtensionKindT,
+    key?: string,
   ): Promise<ManagedExtensionDetail[]> {
     return await buildExtensionInventory({
       db: this.db,
@@ -87,6 +88,7 @@ export class ExtensionsService {
       kind,
       stateMode: this.stateMode,
       home: this.home,
+      key,
     });
   }
 
@@ -95,7 +97,7 @@ export class ExtensionsService {
     kind: ExtensionKind,
     key: string,
   ): Promise<ManagedExtensionDetail | null> {
-    const inventory = await this.loadInventory(tenantId, kind);
+    const inventory = await this.loadInventory(tenantId, kind, key);
     return inventory.find((item) => item.key === key) ?? null;
   }
 

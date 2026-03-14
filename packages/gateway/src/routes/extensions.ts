@@ -372,6 +372,7 @@ export function createExtensionsRoutes(deps: {
   });
 
   app.post("/config/extensions/mcp/parse-settings", async (c) => {
+    requireTenantId(c);
     const parsed = await parseJsonBody(c.req.raw, parseMcpSettingsRequestSchema);
     if (!parsed.success) {
       return c.json({ error: "invalid_request", message: parsed.message }, 400);
