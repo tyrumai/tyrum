@@ -55,6 +55,7 @@ import {
   listAvailableRuntimeTools,
   loadResolvedRuntimeContext,
 } from "./agent-runtime-status.js";
+import { resolveExistingRuntimeScopeIds } from "./scope-resolution.js";
 
 const DEFAULT_MAX_STEPS = 20;
 const DEFAULT_APPROVAL_WAIT_MS = 120_000;
@@ -251,19 +252,12 @@ export class AgentRuntime {
     tools: ToolDescriptor[];
     mcpServers: string[];
   }> {
-    const agentId = await this.opts.container.identityScopeDal.ensureAgentId(
-      this.tenantId,
-      this.agentId,
-    );
-    const workspaceId = await this.opts.container.identityScopeDal.ensureWorkspaceId(
-      this.tenantId,
-      this.workspaceId,
-    );
-    await this.opts.container.identityScopeDal.ensureMembership(
-      this.tenantId,
-      agentId,
-      workspaceId,
-    );
+    const { agentId, workspaceId } = await resolveExistingRuntimeScopeIds({
+      identityScopeDal: this.opts.container.identityScopeDal,
+      tenantId: this.tenantId,
+      agentKey: this.agentId,
+      workspaceKey: this.workspaceId,
+    });
     const loaded = await loadResolvedRuntimeContext({
       opts: this.opts,
       contextStore: this.contextStore,

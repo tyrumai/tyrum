@@ -33,6 +33,7 @@ function parseSettings(raw: string | null): Record<string, unknown> | undefined 
     }
     return parsed as Record<string, unknown>;
   } catch {
+    // Intentional: invalid persisted JSON settings are treated as absent.
     return undefined;
   }
 }

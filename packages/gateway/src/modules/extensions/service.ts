@@ -101,11 +101,26 @@ export class ExtensionsService {
     return inventory.find((item) => item.key === key) ?? null;
   }
 
+  private toSummary(item: ManagedExtensionDetail): ManagedExtensionSummary {
+    const {
+      manifest: _manifest,
+      spec: _spec,
+      files: _files,
+      revisions: _revisions,
+      default_mcp_server_settings_json: _defaultMcpServerSettingsJson,
+      default_mcp_server_settings_yaml: _defaultMcpServerSettingsYaml,
+      sources: _sources,
+      ...summary
+    } = item;
+    return summary;
+  }
+
   listExtensions = async (
     tenantId: string,
     kind: ExtensionKind,
   ): Promise<ManagedExtensionSummary[]> => {
-    return await this.loadInventory(tenantId, kind);
+    const items = await this.loadInventory(tenantId, kind);
+    return items.map((item) => this.toSummary(item));
   };
 
   getExtensionDetail = async (

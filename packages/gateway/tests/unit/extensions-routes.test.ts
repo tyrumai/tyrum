@@ -336,8 +336,6 @@ limits:
     });
 
     expect(response.status).toBe(403);
-    await expect(response.json()).resolves.toMatchObject({
-      message: "tenant token required",
-    });
+    await expect(response.text()).resolves.toBe("tenant token required");
   });
 });

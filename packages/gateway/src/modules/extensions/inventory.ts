@@ -153,6 +153,7 @@ async function listLatestAgentConfigs(db: SqlDb, tenantId: string) {
       const parsed = AgentConfig.safeParse(JSON.parse(row.config_json) as unknown);
       return parsed.success ? [parsed.data] : [];
     } catch {
+      // Intentional: malformed historical agent configs are skipped during inventory reads.
       return [];
     }
   });
