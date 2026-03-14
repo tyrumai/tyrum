@@ -23,6 +23,7 @@ export async function loadResolvedRuntimeContext(params: {
   contextStore: AgentContextStore;
   tenantId: string;
   agentId: string;
+  agentKey: string;
   workspaceId: string;
 }) {
   const config = await (
@@ -31,7 +32,7 @@ export async function loadResolvedRuntimeContext(params: {
       stateMode: resolveGatewayStateMode(params.opts.container.deploymentConfig),
       tenantId: params.tenantId,
       agentId: params.agentId,
-      agentKey: params.agentId,
+      agentKey: params.agentKey,
       createdBy: { kind: "agent-runtime" },
       reason: "seed",
     })

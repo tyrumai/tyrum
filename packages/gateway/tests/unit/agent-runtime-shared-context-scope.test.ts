@@ -10,6 +10,7 @@ import { AgentConfigDal } from "../../src/modules/config/agent-config-dal.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
 import type { AgentContextScope } from "../../src/modules/agent/context-store.js";
 import { DEFAULT_WORKSPACE_KEY } from "../../src/modules/identity/scope.js";
+import { pickSeededPersonaName } from "../../src/modules/agent/persona.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -125,6 +126,61 @@ describe("AgentRuntime shared context scopes", () => {
         workspaceId: resolvedWorkspaceId,
       },
     ]);
+  });
+
+  it("seeds persona/config using the agent key instead of the resolved UUID", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-seeded-key-"));
+    container = createContainer(
+      { dbPath: ":memory:", migrationsDir, tyrumHome: homeDir },
+      { deploymentConfig: { state: { mode: "shared" } } },
+    );
+
+    const tenantId = await container.identityScopeDal.ensureTenantId("tenant-shared-seeded-key");
+    const agentKey = "default";
+    const resolvedAgentId = await container.identityScopeDal.ensureAgentId(tenantId, agentKey);
+    const resolvedWorkspaceId = await container.identityScopeDal.ensureWorkspaceId(
+      tenantId,
+      DEFAULT_WORKSPACE_KEY,
+    );
+    await container.identityScopeDal.ensureMembership(
+      tenantId,
+      resolvedAgentId,
+      resolvedWorkspaceId,
+    );
+
+    const runtime = new AgentRuntime({
+      container,
+      tenantId,
+      home: homeDir,
+      contextStore: {
+        ensureAgentContext: async () => {},
+        getIdentity: async () => ({
+          meta: { name: "Shared Agent", description: "shared identity" },
+          body: "You are a shared agent.",
+        }),
+        getEnabledSkills: async () => [],
+        getEnabledMcpServers: async () => [],
+      },
+      mcpManager: {
+        listToolDescriptors: async () => [],
+        callTool: async () => ({ content: [] }),
+        shutdown: async () => {},
+      } as never,
+    });
+
+    await runtime.status(true);
+
+    const latest = await new AgentConfigDal(container.db).getLatest({
+      tenantId,
+      agentId: resolvedAgentId,
+    });
+    expect(latest?.config.persona?.name).toBe(
+      pickSeededPersonaName({
+        tenantId,
+        agentKey,
+        usedNames: [],
+      }),
+    );
   });
 
   it("keeps source-less non-builtin tools in shared mode while excluding blocked builtins", async () => {

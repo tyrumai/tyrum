@@ -229,6 +229,7 @@ export class AgentRuntime {
       contextStore: this.contextStore,
       tenantId: this.tenantId,
       agentId,
+      agentKey: this.agentId,
       workspaceId,
     });
     const availableTools = await listAvailableRuntimeTools({
@@ -268,6 +269,7 @@ export class AgentRuntime {
       contextStore: this.contextStore,
       tenantId: this.tenantId,
       agentId,
+      agentKey: this.agentId,
       workspaceId,
     });
     const availableTools = await listAvailableRuntimeTools({

@@ -38,12 +38,13 @@ function parseSettings(raw: string | null): Record<string, unknown> | undefined 
 }
 
 function rowToRecord(row: RawExtensionDefaultRow): ExtensionDefaultRecord {
+  const settings = parseSettings(row.settings_json);
   return {
     tenantId: row.tenant_id,
     kind: row.kind,
     extensionId: row.extension_id,
     ...(row.default_access ? { defaultAccess: row.default_access } : {}),
-    ...(parseSettings(row.settings_json) ? { settings: parseSettings(row.settings_json) } : {}),
+    ...(settings ? { settings } : {}),
     createdAt: normalizeDbDateTime(row.created_at),
     updatedAt: normalizeDbDateTime(row.updated_at),
   };
