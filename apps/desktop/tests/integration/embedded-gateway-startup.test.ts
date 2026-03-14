@@ -11,6 +11,10 @@ import { GatewayManager } from "../../src/main/gateway-manager.js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, "../../../../");
 const GATEWAY_BIN = resolve(REPO_ROOT, "packages/gateway/dist/index.mjs");
+const CLI_UTILS_DIST = resolve(REPO_ROOT, "packages/cli-utils/dist/index.mjs");
+const CLI_UTILS_PACKAGE_JSON = resolve(REPO_ROOT, "packages/cli-utils/package.json");
+const CLI_UTILS_TSCONFIG = resolve(REPO_ROOT, "packages/cli-utils/tsconfig.json");
+const CLI_UTILS_SRC_DIR = resolve(REPO_ROOT, "packages/cli-utils/src");
 const SCHEMAS_DIST = resolve(REPO_ROOT, "packages/schemas/dist/index.mjs");
 const SCHEMAS_PACKAGE_JSON = resolve(REPO_ROOT, "packages/schemas/package.json");
 const SCHEMAS_TSCONFIG = resolve(REPO_ROOT, "packages/schemas/tsconfig.json");
@@ -113,11 +117,27 @@ function latestMtimeInDir(rootDir: string): number {
 
 function gatewayBuildIsStale(): boolean {
   if (!existsSync(GATEWAY_BIN)) return true;
+  if (!existsSync(CLI_UTILS_DIST)) return true;
   if (!existsSync(SCHEMAS_DIST)) return true;
 
   const gatewayMtime = statSync(GATEWAY_BIN).mtimeMs;
 
   if (existsSync(GATEWAY_SRC_DIR) && gatewayMtime < latestMtimeInDir(GATEWAY_SRC_DIR)) {
+    return true;
+  }
+
+  if (
+    existsSync(CLI_UTILS_PACKAGE_JSON) &&
+    gatewayMtime < statSync(CLI_UTILS_PACKAGE_JSON).mtimeMs
+  ) {
+    return true;
+  }
+
+  if (existsSync(CLI_UTILS_TSCONFIG) && gatewayMtime < statSync(CLI_UTILS_TSCONFIG).mtimeMs) {
+    return true;
+  }
+
+  if (existsSync(CLI_UTILS_SRC_DIR) && gatewayMtime < latestMtimeInDir(CLI_UTILS_SRC_DIR)) {
     return true;
   }
 
@@ -138,6 +158,10 @@ function gatewayBuildIsStale(): boolean {
   }
 
   if (gatewayMtime < statSync(SCHEMAS_DIST).mtimeMs) {
+    return true;
+  }
+
+  if (gatewayMtime < statSync(CLI_UTILS_DIST).mtimeMs) {
     return true;
   }
 
@@ -168,6 +192,11 @@ function ensureGatewayBuild(): void {
     "@tyrum/schemas",
     SCHEMAS_DIST,
     "Failed to build @tyrum/schemas before desktop integration test.",
+  );
+  ensureWorkspaceBuild(
+    "@tyrum/cli-utils",
+    CLI_UTILS_DIST,
+    "Failed to build @tyrum/cli-utils before desktop integration test.",
   );
   ensureWorkspaceBuild(
     "@tyrum/gateway",
