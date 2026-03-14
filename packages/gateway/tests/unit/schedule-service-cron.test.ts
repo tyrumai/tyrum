@@ -37,6 +37,16 @@ describe("schedule-service-cron", () => {
     expect(new Date(next ?? 0).toISOString()).toBe("2026-03-06T10:05:00.000Z");
   });
 
+  it("does not return the same cron slot again when afterMs lands on a matching minute", () => {
+    const next = nextCronFireAtMs({
+      expression: "0 12 * * *",
+      timeZone: "UTC",
+      afterMs: Date.parse("2026-03-06T12:00:00.000Z"),
+    });
+
+    expect(new Date(next ?? 0).toISOString()).toBe("2026-03-07T12:00:00.000Z");
+  });
+
   it("preserves OR semantics when both day-of-month and day-of-week are restricted", () => {
     const next = nextCronFireAtMs({
       expression: "0 9 15 * 1",

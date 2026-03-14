@@ -42,7 +42,6 @@ export function nextCronFireAtMs(input: {
   afterMs: number;
 }): number | undefined {
   const expression = normalizeCronExpression(input.expression);
-  parseCronExpression(expression);
   ensureValidTimeZone(input.timeZone);
 
   const endDate = new Date(input.afterMs + MAX_CRON_SEARCH_MINUTES * 60_000);
