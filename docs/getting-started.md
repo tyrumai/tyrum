@@ -48,6 +48,8 @@ tyrum tokens issue-default-tenant-admin
 
 After you sign in, open `Configure -> Tokens` to manage tenant-scoped tokens in the UI. The page provides a filterable token list plus structured add/edit/revoke flows; newly minted token secrets are shown once in the issue result and cannot be read back later.
 
+If the gateway is missing first-run configuration, Tyrum now opens a guided setup wizard after sign-in. The wizard walks through admin access, provider setup, model presets, execution-profile assignments, and the default agent model before handing you back to the full UI.
+
 ## 4. Singleton agent routes (default on)
 
 ```bash

@@ -138,6 +138,8 @@ export function createFakeHttpClient(): {
   pairingsRevoke: ReturnType<typeof vi.fn>;
   agentListGet: ReturnType<typeof vi.fn>;
   agentStatusGet: ReturnType<typeof vi.fn>;
+  agentConfigGet: ReturnType<typeof vi.fn>;
+  agentConfigUpdate: ReturnType<typeof vi.fn>;
   modelAssignmentsUpdate: ReturnType<typeof vi.fn>;
 } {
   const { authTokensList, authTokensIssue, authTokensUpdate, authTokensRevoke } =
@@ -164,6 +166,64 @@ export function createFakeHttpClient(): {
   );
   const agentListGet = vi.fn(async () => ({ agents: [{ agent_key: "default" }] }) as const);
   const agentStatusGet = vi.fn(async () => sampleAgentStatusResponse());
+  let defaultAgentConfig = {
+    revision: 1,
+    tenant_id: "tenant-1",
+    agent_id: "11111111-1111-4111-8111-111111111111",
+    agent_key: "default",
+    config: AgentConfig.parse({
+      model: { model: "openai/gpt-5.4" },
+      persona: {
+        name: "Default Agent",
+        tone: "direct",
+        palette: "graphite",
+        character: "architect",
+      },
+    }),
+    persona: {
+      name: "Default Agent",
+      tone: "direct",
+      palette: "graphite",
+      character: "architect",
+    },
+    config_sha256: "c".repeat(64),
+    created_at: "2026-03-01T00:00:00.000Z",
+    created_by: { kind: "tenant.token", token_id: "token-1" },
+    reason: null,
+    reverted_from_revision: null,
+  } as const;
+  const agentConfigList = vi.fn(
+    async () =>
+      ({
+        agents: [
+          {
+            agent_id: defaultAgentConfig.agent_id,
+            agent_key: defaultAgentConfig.agent_key,
+            created_at: defaultAgentConfig.created_at,
+            updated_at: defaultAgentConfig.created_at,
+            has_config: true,
+            persona: defaultAgentConfig.persona,
+          },
+        ],
+      }) as const,
+  );
+  const agentConfigGet = vi.fn(async () => defaultAgentConfig);
+  const agentConfigUpdate = vi.fn(
+    async (
+      agentKey: string,
+      input: { config: typeof defaultAgentConfig.config; reason?: string },
+    ) => {
+      defaultAgentConfig = {
+        ...defaultAgentConfig,
+        agent_key: agentKey,
+        revision: defaultAgentConfig.revision + 1,
+        config: AgentConfig.parse(input.config),
+        config_sha256: "d".repeat(64),
+        reason: input.reason ?? null,
+      };
+      return defaultAgentConfig;
+    },
+  );
   const desktopEnvironmentHostsList = vi.fn(
     async () => ({ status: "ok", hosts: [sampleDesktopEnvironmentHost()] }) as const,
   );
@@ -392,6 +452,11 @@ export function createFakeHttpClient(): {
       update: agentsUpdate,
       delete: agentsDelete,
     },
+    agentConfig: {
+      list: agentConfigList,
+      get: agentConfigGet,
+      update: agentConfigUpdate,
+    },
     toolRegistry: {
       list: toolRegistryList,
     },
@@ -415,6 +480,8 @@ export function createFakeHttpClient(): {
     pairingsRevoke,
     agentListGet,
     agentStatusGet,
+    agentConfigGet,
+    agentConfigUpdate,
     modelAssignmentsUpdate,
   };
 }
