@@ -4,7 +4,9 @@ import { extractMessageText } from "./session-context-state.js";
 function truncateSummaryLine(value: string, maxLength = 240): string {
   const normalized = value.replace(/\s+/g, " ").trim();
   if (normalized.length <= maxLength) return normalized;
-  return `${normalized.slice(0, Math.max(0, maxLength - 1)).trimEnd()}...`;
+  if (maxLength <= 0) return "";
+  if (maxLength <= 3) return "...".slice(0, maxLength);
+  return `${normalized.slice(0, maxLength - 3).trimEnd()}...`;
 }
 
 function uniqueNonEmpty(items: readonly string[], limit: number): string[] {
