@@ -24,7 +24,6 @@ import {
   patchSessionList,
   toThreadSummary,
 } from "./chat-page-ai-sdk-shared.js";
-import type { ReasoningDisplayMode } from "./chat-page-ai-sdk-types.js";
 
 const CHAT_TWO_PANEL_CONTENT_WIDTH_PX = 800;
 
@@ -118,7 +117,6 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [mobileView, setMobileView] = useState<"conversation" | "threads">("threads");
   const [renderMode, setRenderMode] = useState<"markdown" | "text">("markdown");
-  const [reasoningMode, setReasoningMode] = useState<ReasoningDisplayMode>("collapsed");
   const [resolvingApproval, setResolvingApproval] = useState<{
     approvalId: string;
     state: "always" | "approved" | "denied";
@@ -463,12 +461,10 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
                 void resolveApproval(input);
               }}
               onRenderModeChange={setRenderMode}
-              onReasoningModeChange={setReasoningMode}
               onSessionMessages={handleConversationMessages}
               renderMode={renderMode}
               resolvingApproval={resolvingApproval}
               resolveAttachedNodeId={resolveAttachedNodeId}
-              reasoningMode={reasoningMode}
               session={activeSession}
               sessionClient={sessionClient}
               transport={transport}

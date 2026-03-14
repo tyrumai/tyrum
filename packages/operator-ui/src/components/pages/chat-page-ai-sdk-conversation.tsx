@@ -12,7 +12,6 @@ import type {
   TyrumAiSdkChatSession,
 } from "@tyrum/client";
 import { AiSdkChatMessageList } from "./chat-page-ai-sdk-messages.js";
-import type { ReasoningDisplayMode } from "./chat-page-ai-sdk-types.js";
 import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
 
@@ -45,35 +44,6 @@ function MarkdownToggle({
   );
 }
 
-function ReasoningToggle({
-  onChange,
-  value,
-}: {
-  onChange: (value: ReasoningDisplayMode) => void;
-  value: ReasoningDisplayMode;
-}) {
-  return (
-    <div className="inline-flex rounded-md border border-border bg-bg-subtle/60 p-0.5">
-      {(["hidden", "collapsed", "expanded"] as const).map((mode) => (
-        <button
-          key={mode}
-          type="button"
-          className={
-            value === mode
-              ? "rounded px-2 py-1 text-xs font-medium capitalize bg-bg text-fg shadow-sm"
-              : "rounded px-2 py-1 text-xs font-medium capitalize text-fg-muted hover:text-fg"
-          }
-          onClick={() => {
-            onChange(mode);
-          }}
-        >
-          {mode}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 export function AiSdkConversation({
   approvalsById,
   core,
@@ -81,12 +51,10 @@ export function AiSdkConversation({
   onDelete,
   onResolveApproval,
   onRenderModeChange,
-  onReasoningModeChange,
   onSessionMessages,
   renderMode,
   resolvingApproval,
   resolveAttachedNodeId,
-  reasoningMode,
   session,
   sessionClient,
   transport,
@@ -97,12 +65,10 @@ export function AiSdkConversation({
   onDelete: () => void;
   onResolveApproval: (input: ResolveApprovalInput) => void;
   onRenderModeChange: (value: "markdown" | "text") => void;
-  onReasoningModeChange: (value: ReasoningDisplayMode) => void;
   onSessionMessages: (messages: UIMessage[]) => void;
   renderMode: "markdown" | "text";
   resolvingApproval: { approvalId: string; state: "always" | "approved" | "denied" } | null;
   resolveAttachedNodeId: () => Promise<string | null>;
-  reasoningMode: ReasoningDisplayMode;
   session: TyrumAiSdkChatSession;
   sessionClient: ReturnType<typeof createTyrumAiSdkChatSessionClient>;
   transport: ReturnType<typeof createTyrumAiSdkChatTransport>;
@@ -212,7 +178,6 @@ export function AiSdkConversation({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <ReasoningToggle value={reasoningMode} onChange={onReasoningModeChange} />
           <MarkdownToggle value={renderMode} onChange={onRenderModeChange} />
           <Button
             size="sm"
@@ -231,7 +196,6 @@ export function AiSdkConversation({
         core={core}
         messages={chat.messages}
         onResolveApproval={onResolveApproval}
-        reasoningMode={reasoningMode}
         renderMode={renderMode}
         resolvingApproval={resolvingApproval}
         working={working}
