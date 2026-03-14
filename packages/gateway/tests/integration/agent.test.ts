@@ -221,7 +221,12 @@ describe("agent routes", () => {
     await writeWorkspace(join(homeDir!, "agents/agent-2"));
 
     const { app, agents, container } = await createTestApp({ tyrumHome: homeDir });
-    await container.identityScopeDal.ensureAgentId(DEFAULT_TENANT_ID, "agent-2");
+    const agentId = await container.identityScopeDal.ensureAgentId(DEFAULT_TENANT_ID, "agent-2");
+    const workspaceId = await container.identityScopeDal.ensureWorkspaceId(
+      DEFAULT_TENANT_ID,
+      "default",
+    );
+    await container.identityScopeDal.ensureMembership(DEFAULT_TENANT_ID, agentId, workspaceId);
     const getRuntimeSpy = vi.spyOn(agents!, "getRuntime");
     const res = await app.request("/agent/status?agent_key=agent-2");
     expect(res.status).toBe(200);

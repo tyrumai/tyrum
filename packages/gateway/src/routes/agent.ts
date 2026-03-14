@@ -11,6 +11,7 @@ import type { SqlDb } from "../statestore/types.js";
 import { requireTenantId } from "../modules/auth/claims.js";
 import { listLatestAgentConfigsByAgentId, resolveAgentPersona } from "../modules/agent/persona.js";
 import { loadOptionalIdentity } from "../modules/agent/optional-identity.js";
+import { ScopeNotFoundError } from "../modules/identity/scope.js";
 
 async function resolveAgentRecord(
   db: SqlDb,
@@ -91,8 +92,15 @@ export function createAgentRoutes(opts: { agents: AgentRegistry; db: SqlDb }): H
       const message = err instanceof Error ? err.message : String(err);
       return c.json({ error: "invalid_request", message }, 400);
     }
-    const status = await runtime.status(true);
-    return c.json(status);
+    try {
+      const status = await runtime.status(true);
+      return c.json(status);
+    } catch (err) {
+      if (err instanceof ScopeNotFoundError) {
+        return c.json({ error: err.code, message: err.message }, 404);
+      }
+      throw err;
+    }
   });
 
   agent.post("/agent/turn", async (c) => {
