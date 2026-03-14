@@ -1,5 +1,6 @@
 import type { BrowserWindow } from "electron";
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import Store from "electron-store";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 export type WindowBounds = {
@@ -18,6 +19,17 @@ const WINDOW_STATE_FILENAME = "window-state.json";
 
 function getWindowStatePath(userDataPath: string): string {
   return join(userDataPath, WINDOW_STATE_FILENAME);
+}
+
+function createWindowStateStore(userDataPath: string): Store<Record<string, unknown>> {
+  return new Store<Record<string, unknown>>({
+    cwd: userDataPath,
+    name: "window-state",
+    configFileMode: 0o600,
+    clearInvalidConfig: false,
+    serialize: (value) => `${JSON.stringify(value, null, 2)}\n`,
+    deserialize: (value) => JSON.parse(value) as Record<string, unknown>,
+  });
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -61,8 +73,7 @@ export function loadWindowState(userDataPath: string): WindowState | null {
   }
 
   try {
-    const raw = readFileSync(path, "utf-8");
-    const parsed = JSON.parse(raw) as unknown;
+    const parsed = createWindowStateStore(userDataPath).store as unknown;
     if (!isRecord(parsed)) {
       return null;
     }
@@ -81,11 +92,8 @@ export function loadWindowState(userDataPath: string): WindowState | null {
 }
 
 export function saveWindowState(userDataPath: string, state: WindowState): void {
-  const path = getWindowStatePath(userDataPath);
   try {
-    mkdirSync(userDataPath, { recursive: true });
-    writeFileSync(path, `${JSON.stringify(state, null, 2)}\n`, { mode: 0o600 });
-    chmodSync(path, 0o600);
+    createWindowStateStore(userDataPath).store = state as Record<string, unknown>;
   } catch (err) {
     console.error("Failed to save window state", err);
   }
