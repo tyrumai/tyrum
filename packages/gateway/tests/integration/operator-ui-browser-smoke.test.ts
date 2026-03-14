@@ -134,10 +134,25 @@ describe.skipIf(!canRunPlaywright && !isCi)("operator UI real-browser smoke (/ui
         throw new Error(`navigation failed: HTTP ${String(res.status())} ${targetUrl}`);
       }
 
-      await page.waitForSelector('[data-testid="nav-dashboard"]', {
-        state: "visible",
-        timeout: 30_000,
-      });
+      const visibleUiState = await Promise.race([
+        page
+          .waitForSelector('[data-testid="nav-dashboard"]', {
+            state: "visible",
+            timeout: 30_000,
+          })
+          .then(() => "dashboard" as const),
+        page
+          .waitForSelector('[data-testid="first-run-onboarding"]', {
+            state: "visible",
+            timeout: 30_000,
+          })
+          .then(() => "onboarding" as const),
+      ]);
+
+      if (visibleUiState === "onboarding") {
+        expect(await page.locator('[data-testid="nav-dashboard"]').count()).toBe(0);
+        expect(await page.isVisible('[data-testid="first-run-onboarding"]')).toBe(true);
+      }
 
       await page.waitForFunction(
         () => !new URL(window.location.href).searchParams.has("token"),
