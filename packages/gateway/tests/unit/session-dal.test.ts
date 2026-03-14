@@ -52,6 +52,49 @@ describe("SessionDal", () => {
     expect(updated?.context_state.recent_message_ids).toEqual(["m1", "m2"]);
   });
 
+  it("uses the session updated_at as a valid transcript timestamp fallback", async () => {
+    const { dal } = createSessionDalFixture();
+    const session = await dal.getOrCreate({
+      scopeKeys: { agentKey: "default", workspaceKey: "default" },
+      connectorKey: "ui",
+      providerThreadId: "thread-1",
+      containerKind: "channel",
+    });
+    const messages = [
+      createTextMessage({ id: "m1", role: "user", text: "hello" }),
+      createTextMessage({ id: "m2", role: "assistant", text: "hi" }),
+    ];
+
+    await dal.replaceMessages({
+      tenantId: session.tenant_id,
+      sessionId: session.session_id,
+      messages,
+      updatedAt: "2026-02-17T00:00:00.000Z",
+    });
+
+    const updated = await dal.getById({
+      tenantId: session.tenant_id,
+      sessionId: session.session_id,
+    });
+
+    expect(updated?.transcript).toEqual([
+      {
+        kind: "text",
+        id: "m1",
+        role: "user",
+        content: "hello",
+        created_at: "2026-02-17T00:00:00.000Z",
+      },
+      {
+        kind: "text",
+        id: "m2",
+        role: "assistant",
+        content: "hi",
+        created_at: "2026-02-17T00:00:00.000Z",
+      },
+    ]);
+  });
+
   it("replaces prompt context state without mutating persisted messages", async () => {
     const { dal } = createSessionDalFixture();
     const session = await dal.getOrCreate({

@@ -74,12 +74,11 @@ export async function maybeRunPreCompactionMemoryFlush(
     session: SessionRow;
     model: LanguageModel;
     droppedMessages?: readonly TyrumUIMessage[];
-    droppedTurns?: readonly TyrumUIMessage[];
     abortSignal?: AbortSignal;
     timeoutMs?: number;
   },
 ): Promise<void> {
-  const droppedMessages = input.droppedMessages ?? input.droppedTurns ?? [];
+  const droppedMessages = input.droppedMessages ?? [];
   const v1Enabled = resolvePreCompactionMemoryEnabled(input.ctx.config);
   if (!v1Enabled) {
     return;

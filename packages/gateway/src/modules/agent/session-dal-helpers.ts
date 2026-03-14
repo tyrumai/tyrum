@@ -201,7 +201,10 @@ function extractMessageListPreview(
   return { messageCount, lastMessage };
 }
 
-function textTranscript(messages: readonly TyrumUIMessage[]): SessionRow["transcript"] {
+function textTranscript(
+  messages: readonly TyrumUIMessage[],
+  fallbackCreatedAt: string,
+): SessionRow["transcript"] {
   return messages.flatMap((message) =>
     message.parts.flatMap((part) =>
       part.type === "text" && typeof part.text === "string" && part.text.length > 0
@@ -214,7 +217,7 @@ function textTranscript(messages: readonly TyrumUIMessage[]): SessionRow["transc
               created_at:
                 typeof message.metadata?.["timestamp"] === "string"
                   ? message.metadata["timestamp"]
-                  : "",
+                  : fallbackCreatedAt,
             },
           ]
         : [],
@@ -270,6 +273,7 @@ export function parseContextState(
 
 export function toSessionRow(raw: RawSessionRow, observer: PersistedJsonObserver): SessionRow {
   const updatedAt = normalizeTime(raw.updated_at);
+  const createdAt = normalizeTime(raw.created_at);
   const messages = parseMessages(raw.messages_json, observer);
   const contextState = parseContextState(raw.context_state_json, observer, updatedAt);
   return {
@@ -283,8 +287,8 @@ export function toSessionRow(raw: RawSessionRow, observer: PersistedJsonObserver
     messages,
     context_state: contextState,
     summary: contextState.checkpoint?.handoff_md ?? "",
-    transcript: textTranscript(messages),
-    created_at: normalizeTime(raw.created_at),
+    transcript: textTranscript(messages, updatedAt),
+    created_at: createdAt,
     updated_at: updatedAt,
   };
 }
