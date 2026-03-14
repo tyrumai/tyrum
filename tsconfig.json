@@ -1,6 +1,7 @@
 {
   "files": [],
   "references": [
+    { "path": "packages/cli-utils" },
     { "path": "packages/schemas" },
     { "path": "packages/gateway" },
     { "path": "packages/client" },

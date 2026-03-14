@@ -1,4 +1,4 @@
-import { CommanderError } from "commander";
+import { normalizeCommanderError as normalizeSharedCommanderError } from "@tyrum/cli-utils";
 
 export function collectValues(value: string, previous: string[]): string[] {
   previous.push(value);
@@ -6,30 +6,7 @@ export function collectValues(value: string, previous: string[]): string[] {
 }
 
 export function normalizeCommanderError(error: unknown): never {
-  if (!(error instanceof CommanderError)) {
-    throw error;
-  }
-
-  if (error.code === "commander.unknownOption") {
-    const match = error.message.match(/unknown option '([^']+)'/);
-    throw new Error(`unknown argument '${match?.[1] ?? ""}'`);
-  }
-
-  if (error.code === "commander.unknownCommand") {
-    const match = error.message.match(/unknown command '([^']+)'/);
-    throw new Error(`unknown command '${match?.[1] ?? ""}'`);
-  }
-
-  if (error.code === "commander.optionMissingArgument") {
-    const match = error.message.match(/option '([^']+?)\s+<[^>]+>'/);
-    const flag = match?.[1]
-      ?.split(",")
-      .map((part) => part.trim())
-      .at(-1);
-    throw new Error(`${flag ?? "option"} requires a value`);
-  }
-
-  throw new Error(error.message.replace(/^error:\s*/i, ""));
+  throw normalizeSharedCommanderError(error);
 }
 
 export function normalizeArgv(argv: readonly string[]): string[] {

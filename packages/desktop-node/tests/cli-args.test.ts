@@ -61,6 +61,6 @@ describe("parseDesktopNodeArgs", () => {
   });
 
   it("throws on unknown arguments", () => {
-    expect(() => parseDesktopNodeArgs(["--nope"])).toThrow("unknown argument: --nope");
+    expect(() => parseDesktopNodeArgs(["--nope"])).toThrow("unknown argument '--nope'");
   });
 });

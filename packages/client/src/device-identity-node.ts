@@ -1,6 +1,6 @@
 import {
   DeviceIdentityError,
-  type DeviceIdentity,
+  parseStoredDeviceIdentity,
   type DeviceIdentityStorage,
 } from "./device-identity.js";
 
@@ -20,7 +20,7 @@ export function createNodeFileDeviceIdentityStorage(path: string): DeviceIdentit
             { cause: error },
           );
         }
-        return parseStoredIdentity(parsed);
+        return parseStoredDeviceIdentity(parsed);
       } catch (error) {
         if (error instanceof DeviceIdentityError) {
           throw error;
@@ -37,25 +37,4 @@ export function createNodeFileDeviceIdentityStorage(path: string): DeviceIdentit
       await writeFile(path, `${JSON.stringify(identity, null, 2)}\n`, { mode: 0o600 });
     },
   };
-}
-
-function parseStoredIdentity(value: unknown): DeviceIdentity | null {
-  if (value === null || value === undefined) return null;
-  if (typeof value !== "object") {
-    throw new DeviceIdentityError(
-      "device_identity_invalid_stored_value",
-      "Stored device identity must be an object",
-    );
-  }
-  const raw = value as Record<string, unknown>;
-  const deviceId = typeof raw.deviceId === "string" ? raw.deviceId.trim() : "";
-  const publicKey = typeof raw.publicKey === "string" ? raw.publicKey.trim() : "";
-  const privateKey = typeof raw.privateKey === "string" ? raw.privateKey.trim() : "";
-  if (!deviceId || !publicKey || !privateKey) {
-    throw new DeviceIdentityError(
-      "device_identity_invalid_stored_value",
-      "Stored device identity is missing required fields",
-    );
-  }
-  return { deviceId, publicKey, privateKey };
 }

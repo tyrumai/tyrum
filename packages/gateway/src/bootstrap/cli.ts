@@ -1,7 +1,8 @@
 import { X509Certificate } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { Command, CommanderError } from "commander";
+import { configureCommander, normalizeCommanderError } from "@tyrum/cli-utils";
+import { Command } from "commander";
 import { installPluginFromDir } from "../modules/plugins/installer.js";
 import { runToolRunnerFromStdio } from "../toolrunner.js";
 import { VERSION } from "../version.js";
@@ -107,28 +108,6 @@ function parseRoleFlag(value: string): GatewayRole {
   );
 }
 
-function normalizeCommanderError(error: unknown): Error {
-  if (!(error instanceof CommanderError)) {
-    return error instanceof Error ? error : new Error(String(error));
-  }
-
-  if (error.code === "commander.unknownCommand") {
-    const match = error.message.match(/unknown command '([^']+)'/);
-    return new Error(`unknown command '${match?.[1] ?? ""}'`);
-  }
-
-  if (error.code === "commander.optionMissingArgument") {
-    const match = error.message.match(/option '([^']+?)\s+<[^>]+>'/);
-    const flag = match?.[1]
-      ?.split(",")
-      .map((part) => part.trim())
-      .at(-1);
-    return new Error(`${flag ?? "option"} requires a value`);
-  }
-
-  return new Error(error.message.replace(/^error:\s*/i, ""));
-}
-
 export function parseCliArgs(argv: readonly string[]): CliCommand {
   if (argv.length === 0) return { kind: "start" };
 
@@ -139,14 +118,7 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
   if (first === "-v" || first === "--version" || first === "version") return { kind: "version" };
 
   let result: CliCommand | undefined;
-  const program = new Command()
-    .name("tyrum")
-    .helpOption(false)
-    .showHelpAfterError(false)
-    .allowUnknownOption(false)
-    .allowExcessArguments(false)
-    .configureOutput({ writeOut: () => undefined, writeErr: () => undefined })
-    .exitOverride();
+  const program = configureCommander(new Command().name("tyrum"));
 
   const addCommonDbOptions = <T extends Command>(command: T): T =>
     command.option("--home <dir>").option("--db <path>").option("--migrations-dir <dir>");

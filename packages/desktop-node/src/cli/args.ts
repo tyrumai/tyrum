@@ -1,4 +1,5 @@
-import { Command, CommanderError } from "commander";
+import { configureCommander, normalizeCommanderError } from "@tyrum/cli-utils";
+import { Command } from "commander";
 
 export interface DesktopNodeArgs {
   wsUrl?: string;
@@ -14,28 +15,6 @@ export interface DesktopNodeArgs {
   version: boolean;
 }
 
-function normalizeCommanderError(error: unknown): Error {
-  if (!(error instanceof CommanderError)) {
-    return error instanceof Error ? error : new Error(String(error));
-  }
-
-  if (error.code === "commander.optionMissingArgument") {
-    const match = error.message.match(/option '([^']+?)\s+<[^>]+>'/);
-    const flag = match?.[1]
-      ?.split(",")
-      .map((part) => part.trim())
-      .at(-1);
-    return new Error(`${flag ?? "option"} requires a value`);
-  }
-
-  if (error.code === "commander.unknownOption") {
-    const match = error.message.match(/unknown option '([^']+)'/);
-    return new Error(`unknown argument: ${match?.[1] ?? ""}`);
-  }
-
-  return new Error(error.message.replace(/^error:\s*/i, ""));
-}
-
 export function parseDesktopNodeArgs(argv: readonly string[]): DesktopNodeArgs {
   const result: DesktopNodeArgs = {
     help: false,
@@ -49,14 +28,7 @@ export function parseDesktopNodeArgs(argv: readonly string[]): DesktopNodeArgs {
     return { ...result, version: true };
   }
 
-  const program = new Command()
-    .name("tyrum-desktop-node")
-    .helpOption(false)
-    .showHelpAfterError(false)
-    .allowUnknownOption(false)
-    .allowExcessArguments(false)
-    .configureOutput({ writeOut: () => undefined, writeErr: () => undefined })
-    .exitOverride()
+  const program = configureCommander(new Command().name("tyrum-desktop-node"))
     .option("--ws-url <url>")
     .option("--token <token>")
     .option("--token-path <path>")

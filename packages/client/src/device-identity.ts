@@ -100,7 +100,7 @@ async function exportPrivateKeyPkcs8(privateKey: CryptoKey): Promise<Uint8Array>
   return new Uint8Array(pkcs8);
 }
 
-function parseStoredIdentity(value: unknown): DeviceIdentity | null {
+export function parseStoredDeviceIdentity(value: unknown): DeviceIdentity | null {
   if (value === null || value === undefined) return null;
   if (typeof value !== "object") {
     throw new DeviceIdentityError(
@@ -153,7 +153,7 @@ export async function loadOrCreateDeviceIdentity(
       },
     );
   }
-  const loaded = parseStoredIdentity(loadedRaw);
+  const loaded = parseStoredDeviceIdentity(loadedRaw);
   if (loaded) return loaded;
   const created = await createDeviceIdentity();
   try {
@@ -188,7 +188,7 @@ export function createBrowserLocalStorageDeviceIdentityStorage(
           { cause: error },
         );
       }
-      return parseStoredIdentity(parsed);
+      return parseStoredDeviceIdentity(parsed);
     },
     save: (identity) => {
       if (typeof localStorage === "undefined") {

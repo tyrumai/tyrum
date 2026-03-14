@@ -5,7 +5,11 @@ import {
 } from "@tyrum/schemas";
 import { SecureStorage } from "@aparajita/capacitor-secure-storage";
 import { Preferences } from "@capacitor/preferences";
-import type { DeviceIdentity, DeviceIdentityStorage } from "@tyrum/client";
+import {
+  parseStoredDeviceIdentity,
+  type DeviceIdentity,
+  type DeviceIdentityStorage,
+} from "@tyrum/client";
 import type { MobileHostActionName } from "@tyrum/operator-ui";
 
 export type MobileActionSettings = Record<MobileHostActionName, boolean>;
@@ -172,16 +176,6 @@ export function getDefaultLocationStreamingConfig(): MobileLocationStreamingConf
   return { ...DEFAULT_LOCATION_STREAMING_CONFIG };
 }
 
-export function getDefaultConnectionConfig(): MobileConnectionConfig {
-  return {
-    httpBaseUrl: "",
-    wsUrl: "",
-    nodeEnabled: true,
-    actionSettings: getDefaultActionSettings(),
-    locationStreaming: getDefaultLocationStreamingConfig(),
-  };
-}
-
 export function mobileBootstrapConfigFromPayload(
   payload: MobileBootstrapPayload,
 ): MobileBootstrapConfig {
@@ -261,21 +255,15 @@ function createSecureDeviceIdentityStorage(key: string): DeviceIdentityStorage {
     load: async () => {
       await ensureStorageReady();
       const value = await SecureStorage.get(key);
-      if (!value || typeof value !== "object" || Array.isArray(value)) {
-        return null;
-      }
-      const record = value as Record<string, unknown>;
-      const deviceId = typeof record["deviceId"] === "string" ? record["deviceId"] : "";
-      const publicKey = typeof record["publicKey"] === "string" ? record["publicKey"] : "";
-      const privateKey = typeof record["privateKey"] === "string" ? record["privateKey"] : "";
-      if (!deviceId || !publicKey || !privateKey) {
-        return null;
-      }
-      return { deviceId, publicKey, privateKey };
+      return parseStoredDeviceIdentity(value);
     },
     save: async (identity: DeviceIdentity) => {
       await ensureStorageReady();
-      await SecureStorage.set(key, identity as unknown as Record<string, unknown>);
+      await SecureStorage.set(key, {
+        deviceId: identity.deviceId,
+        publicKey: identity.publicKey,
+        privateKey: identity.privateKey,
+      });
     },
   };
 }
