@@ -1,4 +1,4 @@
-import type { OperatorCore, Pairing } from "@tyrum/operator-core";
+import { type OperatorCore, type Pairing } from "@tyrum/operator-core";
 import type { NodeInventoryEntry } from "@tyrum/schemas";
 import { Link2 } from "lucide-react";
 import { useMemo } from "react";
@@ -24,8 +24,12 @@ function getPairingStatusDisplay(status: NodeInventoryEntry["paired_status"]): {
   switch (status) {
     case "approved":
       return { label: "Trusted", variant: "success" };
-    case "pending":
-      return { label: "Pending approval", variant: "warning" };
+    case "awaiting_human":
+      return { label: "Awaiting human review", variant: "warning" };
+    case "reviewing":
+      return { label: "Guardian reviewing", variant: "outline" };
+    case "queued":
+      return { label: "Guardian queued", variant: "outline" };
     case "denied":
       return { label: "Denied", variant: "danger" };
     case "revoked":
@@ -39,6 +43,7 @@ export function PairingPage({ core }: { core: OperatorCore }) {
   const connection = useOperatorStore(core.connectionStore);
   const pairing = useOperatorStore(core.pairingStore);
   const chat = useOperatorStore(core.chatStore);
+  const blockedPairingIds = pairing.blockedIds ?? pairing.pendingIds;
   const inventory = useNodeInventory({
     core,
     connected:
@@ -50,10 +55,10 @@ export function PairingPage({ core }: { core: OperatorCore }) {
 
   const pending = useMemo(
     () =>
-      pairing.pendingIds
+      blockedPairingIds
         .map((pairingId) => pairing.byId[pairingId])
         .filter((entry): entry is Pairing => entry !== undefined),
-    [pairing.byId, pairing.pendingIds],
+    [blockedPairingIds, pairing.byId],
   );
 
   const approved = useMemo(

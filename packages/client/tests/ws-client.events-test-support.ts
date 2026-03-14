@@ -107,76 +107,6 @@ function registerEventsBasicTests(fixture: EventsFixture): void {
     expect((response["error"] as Record<string, unknown>)["code"]).toBe("invalid_request");
   });
 
-  it("emits human_confirmation event", async () => {
-    const server = createTestServer();
-    fixture.setServer(server);
-    const client = new TyrumClient({
-      url: server.url,
-      token: "t",
-      capabilities: [],
-    });
-    fixture.setClient(client);
-
-    const received = new Promise<unknown>((resolve) => {
-      client.on("approval_request", resolve);
-    });
-
-    client.connect();
-    const ws = await server.waitForClient();
-    await acceptConnect(ws);
-
-    const confirmMsg = {
-      request_id: "approval-7",
-      type: "approval.request",
-      payload: {
-        approval_id: "550e8400-e29b-41d4-a716-446655440000",
-        approval_key: "approval-7",
-        kind: "other",
-        prompt: "Approve this?",
-        expires_at: null,
-      },
-    };
-    ws.send(JSON.stringify(confirmMsg));
-
-    const msg = await received;
-    expect(msg).toEqual(confirmMsg);
-  });
-
-  it("responds with error envelope when approval.request fails validation", async () => {
-    const server = createTestServer();
-    fixture.setServer(server);
-    const client = new TyrumClient({
-      url: server.url,
-      token: "t",
-      capabilities: [],
-      reconnect: false,
-    });
-    fixture.setClient(client);
-
-    client.connect();
-    const ws = await server.waitForClient();
-    await acceptConnect(ws);
-
-    ws.send(
-      JSON.stringify({
-        request_id: "approval-7",
-        type: "approval.request",
-        payload: {
-          approval_id: "not-a-uuid",
-          approval_key: "approval-7",
-          kind: "other",
-          prompt: "Approve this?",
-        },
-      }),
-    );
-
-    const response = (await waitForMessage(ws)) as Record<string, unknown>;
-    expect(response["request_id"]).toBe("approval-7");
-    expect(response["type"]).toBe("approval.request");
-    expect(response["ok"]).toBe(false);
-    expect((response["error"] as Record<string, unknown>)["code"]).toBe("invalid_request");
-  });
-
   it("emits plan_update event", async () => {
     const server = createTestServer();
     fixture.setServer(server);
@@ -386,13 +316,26 @@ function registerEventsAdvancedTests(fixture: EventsFixture): void {
           approval: {
             approval_id: "550e8400-e29b-41d4-a716-446655440000",
             approval_key: "approval-7",
-            kind: "other",
+            kind: "workflow_step",
             status: "approved",
             prompt: "ok?",
+            motivation: "The tool call required review.",
             created_at: "2026-02-20T00:00:00Z",
-            resolution: {
-              decision: "approved",
-              resolved_at: "2026-02-20T00:00:01Z",
+            latest_review: {
+              review_id: "550e8400-e29b-41d4-a716-446655440001",
+              target_type: "approval",
+              target_id: "550e8400-e29b-41d4-a716-446655440000",
+              reviewer_kind: "human",
+              reviewer_id: "operator-1",
+              state: "approved",
+              reason: "approved",
+              risk_level: "low",
+              risk_score: 5,
+              evidence: null,
+              decision_payload: null,
+              created_at: "2026-02-20T00:00:01Z",
+              started_at: "2026-02-20T00:00:01Z",
+              completed_at: "2026-02-20T00:00:01Z",
             },
           },
         },

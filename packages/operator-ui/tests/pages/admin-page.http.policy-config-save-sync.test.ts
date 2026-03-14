@@ -22,6 +22,11 @@ describe("PolicyConfigSection save sync", () => {
     const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0.123456789);
     const nextRevisionBundle = {
       v: 1 as const,
+      approvals: {
+        auto_review: {
+          mode: "auto_review" as const,
+        },
+      },
       tools: {
         default: "allow" as const,
         allow: ["read"],
@@ -56,6 +61,11 @@ describe("PolicyConfigSection save sync", () => {
           sha256: "policy-sha-1",
           bundle: {
             v: 1,
+            approvals: {
+              auto_review: {
+                mode: "auto_review",
+              },
+            },
             tools: {
               default: "require_approval",
               allow: ["read"],
@@ -90,6 +100,11 @@ describe("PolicyConfigSection save sync", () => {
           agent_key: null,
           bundle: {
             v: 1,
+            approvals: {
+              auto_review: {
+                mode: "auto_review",
+              },
+            },
             tools: {
               default: "require_approval",
               allow: ["read"],

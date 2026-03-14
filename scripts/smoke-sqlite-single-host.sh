@@ -130,12 +130,28 @@ enqueue_and_wait_sqlite_run() {
 
           const approval = db
             .prepare(
-              "SELECT approval_id FROM approvals WHERE run_id = ? AND status = ? AND kind = ? ORDER BY created_at ASC, approval_id ASC LIMIT 1",
+              "SELECT approval_id, status FROM approvals WHERE run_id = ? AND kind = ? ORDER BY created_at ASC, approval_id ASC LIMIT 1",
             )
-            .get(runId, "pending", "policy");
+            .get(runId, "policy");
           const approvalId = approval?.approval_id;
-          if (typeof approvalId !== "string" || approvalId.length === 0) {
-            throw new Error(`[smoke] run ${runId} paused for policy but no pending approval found`);
+          const approvalStatus = approval?.status;
+          if (approvalStatus === "reviewing") {
+            await new Promise((r) => setTimeout(r, 1000));
+            continue;
+          }
+          if (approvalStatus === "denied" || approvalStatus === "expired" || approvalStatus === "cancelled") {
+            throw new Error(
+              `[smoke] run ${runId} paused for policy but approval ${approvalId ?? "<missing>"} is terminal with status=${approvalStatus}`,
+            );
+          }
+          if (
+            (approvalStatus !== "queued" && approvalStatus !== "awaiting_human") ||
+            typeof approvalId !== "string" ||
+            approvalId.length === 0
+          ) {
+            throw new Error(
+              `[smoke] run ${runId} paused for policy but no human-resolvable approval found (status=${approvalStatus ?? "<missing>"})`,
+            );
           }
 
           const approveRes = await fetch(

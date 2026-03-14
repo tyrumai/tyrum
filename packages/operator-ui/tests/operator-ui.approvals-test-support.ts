@@ -175,7 +175,7 @@ export function registerApprovalsTests(): void {
     });
 
     expect(ws.approvalList).toHaveBeenCalledTimes(1);
-    expect(container.textContent).toContain("No pending approvals");
+    expect(container.textContent).toContain("0 approvals awaiting action");
     expect(container.textContent).toContain(
       "Approvals appear here when agents request permission to perform actions.",
     );

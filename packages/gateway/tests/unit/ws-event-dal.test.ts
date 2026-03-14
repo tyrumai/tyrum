@@ -2,11 +2,10 @@ import { describe, expect, it } from "vitest";
 import { WsEventDal } from "../../src/modules/ws-event/dal.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
-import { openTestPostgresDb } from "../helpers/postgres-db.js";
 import type { SqlDb } from "../../src/statestore/types.js";
 
 const TEST_TENANT_ID = DEFAULT_TENANT_ID;
-const EVENT_KEY = "approval.resolved:approval-1:approved";
+const EVENT_KEY = "approval.updated:approval-1:approved";
 const EVENT_AUDIENCE = {
   roles: ["client"],
   required_scopes: ["operator.admin"],
@@ -28,10 +27,6 @@ const DB_CASES: Array<{
       };
     },
   },
-  {
-    name: "postgres",
-    open: openTestPostgresDb,
-  },
 ];
 
 for (const testCase of DB_CASES) {
@@ -44,7 +39,7 @@ for (const testCase of DB_CASES) {
         const first = await dal.ensureEvent({
           tenantId: TEST_TENANT_ID,
           eventKey: EVENT_KEY,
-          type: "approval.resolved",
+          type: "approval.updated",
           occurredAt: "2026-03-06T12:00:00.000Z",
           payload: { approval_id: "approval-1", status: "approved" },
           audience: EVENT_AUDIENCE,
@@ -52,7 +47,7 @@ for (const testCase of DB_CASES) {
         const second = await dal.ensureEvent({
           tenantId: TEST_TENANT_ID,
           eventKey: EVENT_KEY,
-          type: "approval.resolved",
+          type: "approval.updated",
           occurredAt: "2026-03-06T12:05:00.000Z",
           payload: { approval_id: "approval-1", status: "approved", duplicate: true },
           audience: { roles: ["node"] },

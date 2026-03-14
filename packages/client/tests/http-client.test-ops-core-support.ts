@@ -128,4 +128,20 @@ export function registerHttpClientOpsCoreTests(): void {
     expect(init.method).toBe("POST");
     expect(JSON.parse(init.body as string)).toEqual({ reason: "not trusted" });
   });
+
+  it("pairings.get sends GET /pairings/:id", async () => {
+    const fetch = makeFetchMock(async () =>
+      jsonResponse({ status: "ok", pairing: samplePairing() }),
+    );
+    const client = createTestClient({ fetch });
+
+    await client.pairings.get(7);
+
+    const [url, init] = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [
+      string,
+      RequestInit,
+    ];
+    expect(url).toBe("https://gateway.example/pairings/7");
+    expect(init.method).toBe("GET");
+  });
 }

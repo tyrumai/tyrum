@@ -27,6 +27,8 @@ describe("snapshot routes", () => {
       workspaceId: seededSession.workspace_id,
       approvalKey: "plan-1:0",
       prompt: "approve test",
+      motivation: "Snapshot export should preserve approvals and their sessions.",
+      kind: "policy",
       sessionId: seededSession.session_id,
     });
 
@@ -63,6 +65,8 @@ describe("snapshot routes", () => {
       workspaceId: seededSession.workspace_id,
       approvalKey: "plan-2:0",
       prompt: "next",
+      motivation: "Snapshot import should keep approval inserts working afterward.",
+      kind: "policy",
       sessionId: seededSession.session_id,
     });
     expect(nextApproval.approval_id).not.toBe(approval.approval_id);
@@ -171,6 +175,7 @@ describe("snapshot routes", () => {
       workspaceId: DEFAULT_WORKSPACE_ID,
       approvalKey: "snapshot-linked:0",
       prompt: "approve snapshot-linked run",
+      motivation: "Snapshot import should preserve execution-linked approvals.",
       kind: "policy",
       runId,
       stepId,
@@ -222,6 +227,63 @@ describe("snapshot routes", () => {
       [DEFAULT_TENANT_ID, stepId],
     );
     expect(importedStep).toEqual({ approval_id: approval.approval_id });
+
+    await container.db.close();
+    await container2.db.close();
+  });
+
+  it("imports approvals with guardian review history", async () => {
+    const { app, container } = await createTestApp({
+      deploymentConfig: { snapshots: { importEnabled: true } },
+    });
+
+    const approval = await container.approvalDal.create({
+      tenantId: DEFAULT_TENANT_ID,
+      agentId: DEFAULT_AGENT_ID,
+      workspaceId: DEFAULT_WORKSPACE_ID,
+      approvalKey: "snapshot-reviewed:0",
+      prompt: "approve reviewed snapshot",
+      motivation: "Snapshot import should preserve latest review references.",
+      kind: "policy",
+      status: "awaiting_human",
+    });
+    const resolved = await container.approvalDal.resolveWithEngineAction({
+      tenantId: DEFAULT_TENANT_ID,
+      approvalId: approval.approval_id,
+      decision: "approved",
+      reason: "reviewed in source snapshot",
+      resolvedBy: { kind: "test" },
+    });
+    expect(resolved?.transitioned).toBe(true);
+
+    const exportRes = await app.request("/snapshot/export");
+    expect(exportRes.status).toBe(200);
+    const bundle = (await exportRes.json()) as Record<string, unknown>;
+    const tables = bundle["tables"] as Record<string, { rows?: unknown[] }> | undefined;
+    expect(tables?.["review_entries"]?.rows?.length).toBeGreaterThan(0);
+
+    const { app: app2, container: container2 } = await createTestApp({
+      deploymentConfig: { snapshots: { importEnabled: true } },
+    });
+    const importRes = await app2.request("/snapshot/import", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ confirm: "IMPORT", bundle }),
+    });
+    expect(importRes.status).toBe(200);
+
+    const importedApproval = await container2.approvalDal.getById({
+      tenantId: DEFAULT_TENANT_ID,
+      approvalId: approval.approval_id,
+      includeReviews: true,
+    });
+    expect(importedApproval?.status).toBe("approved");
+    expect(importedApproval?.latest_review).toMatchObject({
+      reviewer_kind: "human",
+      state: "approved",
+      reason: "reviewed in source snapshot",
+    });
+    expect(importedApproval?.reviews).toHaveLength(1);
 
     await container.db.close();
     await container2.db.close();

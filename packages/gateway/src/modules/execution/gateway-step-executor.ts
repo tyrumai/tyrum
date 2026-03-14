@@ -17,6 +17,7 @@ import {
 } from "../ai-sdk/message-utils.js";
 import { generateText, stepCountIs } from "ai";
 import type { LanguageModel, ModelMessage } from "ai";
+import { isApprovalBlockedStatus } from "../approval/dal.js";
 import type { SecretProvider } from "../secret/provider.js";
 import { coerceRecord } from "../util/coerce.js";
 import {
@@ -122,12 +123,17 @@ async function executeLlmAction(input: {
     const row = await input.container.db.get<{
       status: string;
       context_json: string;
-      resolution_json: string | null;
+      latest_review_reason: string | null;
     }>(
-      "SELECT status, context_json, resolution_json FROM approvals WHERE tenant_id = ? AND approval_id = ?",
+      `SELECT a.status, a.context_json, r.reason AS latest_review_reason
+       FROM approvals a
+       LEFT JOIN review_entries r
+         ON r.tenant_id = a.tenant_id
+        AND r.review_id = a.latest_review_id
+       WHERE a.tenant_id = ? AND a.approval_id = ?`,
       [input.executionContext.tenantId, stepApprovalId],
     );
-    if (row && row.status !== "pending") {
+    if (row && !isApprovalBlockedStatus(row.status as never)) {
       let approvalContext: unknown = {};
       try {
         approvalContext = JSON.parse(row.context_json) as unknown;
@@ -153,24 +159,13 @@ async function executeLlmAction(input: {
         messages = appendToolApprovalResponseMessage(resumeState.messages, {
           approvalId: resumeState.approval_id,
           approved: row.status === "approved",
-          reason: (() => {
-            if (row.resolution_json) {
-              try {
-                const parsed = JSON.parse(row.resolution_json) as unknown;
-                if (parsed && typeof parsed === "object" && "reason" in parsed) {
-                  const reason = (parsed as { reason?: unknown }).reason;
-                  if (typeof reason === "string" && reason.trim().length > 0) return reason.trim();
-                }
-              } catch {
-                // ignore
-              }
-            }
-            return row.status === "expired"
+          reason:
+            row.latest_review_reason ??
+            (row.status === "expired"
               ? "approval expired"
               : row.status === "cancelled"
                 ? "approval cancelled"
-                : undefined;
-          })(),
+                : undefined),
         });
       }
     }

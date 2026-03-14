@@ -1,6 +1,6 @@
 import type { WsEventEnvelope } from "@tyrum/schemas";
 import { UuidSchema, canonicalizeToolId } from "@tyrum/schemas";
-import type { ApprovalDal, ApprovalRow } from "./dal.js";
+import type { ApprovalDal, ApprovalRow, ApprovalStatus } from "./dal.js";
 import type { PolicyOverrideDal, PolicyOverrideRow } from "../policy/override-dal.js";
 import { isSafeSuggestedOverridePattern } from "../policy/override-guardrails.js";
 import type { WsEventDal } from "../ws-event/dal.js";
@@ -11,7 +11,7 @@ import {
   type WsBroadcastAudience,
 } from "../../ws/audience.js";
 import {
-  ensureApprovalResolvedEvent,
+  ensureApprovalUpdatedEvent,
   ensurePolicyOverrideCreatedEvent,
 } from "../../ws/stable-events.js";
 
@@ -20,6 +20,8 @@ type NormalizedSelectedOverride = {
   pattern: string;
   workspace_id?: string;
 };
+
+const HUMAN_RESOLVABLE_APPROVAL_STATUSES = ["queued", "awaiting_human"] satisfies ApprovalStatus[];
 
 type ApprovalResolveErrorCode = "invalid_request" | "not_found" | "unsupported";
 
@@ -122,6 +124,10 @@ function invalidRequest(message: string): ResolveApprovalResult {
   return { ok: false, code: "invalid_request", message };
 }
 
+function isHumanResolvableApprovalStatus(status: ApprovalStatus): boolean {
+  return status === "queued" || status === "awaiting_human";
+}
+
 function notFound(approvalId: string): ResolveApprovalResult {
   return {
     ok: false,
@@ -146,7 +152,6 @@ export async function resolveApproval(
         message: "approval lookup not configured",
       };
     }
-
     const existing = await deps.approvalDal.getById({
       tenantId: input.tenantId,
       approvalId: input.approvalId,
@@ -154,8 +159,10 @@ export async function resolveApproval(
     if (!existing) {
       return notFound(input.approvalId);
     }
-
-    if (existing.status !== "pending") {
+    if (existing.status === "reviewing") {
+      return invalidRequest("approval is still being reviewed by the guardian");
+    }
+    if (!isHumanResolvableApprovalStatus(existing.status)) {
       return { ok: true, approval: existing, transitioned: false };
     }
 
@@ -204,9 +211,20 @@ export async function resolveApproval(
     decision: input.decision,
     reason: input.reason,
     resolvedBy: input.resolvedBy,
+    decisionPayload: {
+      decision: input.decision,
+      reason: input.reason ?? null,
+      mode: input.mode ?? "once",
+      selected_overrides: selectedOverrides ?? [],
+      actor: input.resolvedBy ?? null,
+    },
+    allowedCurrentStatuses: [...HUMAN_RESOLVABLE_APPROVAL_STATUSES],
   });
   if (!resolved) {
     return notFound(input.approvalId);
+  }
+  if (!resolved.transitioned && resolved.approval.status === "reviewing") {
+    return invalidRequest("approval is still being reviewed by the guardian");
   }
 
   let createdOverrides: PolicyOverrideRow[] | undefined;
@@ -250,7 +268,7 @@ export async function resolveApproval(
   if (resolved.transitioned && deps.emitEvent) {
     const approval = toApprovalContract(resolved.approval);
     if (approval) {
-      const persistedEvent = await ensureApprovalResolvedEvent({
+      const persistedEvent = await ensureApprovalUpdatedEvent({
         tenantId: input.tenantId,
         approval,
         wsEventDal: deps.wsEventDal,

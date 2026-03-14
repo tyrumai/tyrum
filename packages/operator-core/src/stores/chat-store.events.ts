@@ -12,12 +12,9 @@ import {
   appendTranscriptTextDelta,
   appendTranscriptTextItem,
   eventOccurredAt,
-  readApprovalRequestSessionId,
-  readApprovalRequestThreadId,
   readApprovalSessionId,
   readApprovalThreadId,
   removeTranscriptEntriesById,
-  toApprovalRequestTranscriptItem,
   toApprovalTranscriptItem,
   toReasoningTranscriptItem,
   toToolTranscriptItem,
@@ -161,28 +158,6 @@ function handleApprovalEvent(ctx: ChatStoreContext, data: unknown): void {
   const threadId = readApprovalThreadId(payload);
   const item = toApprovalTranscriptItem(payload, eventOccurredAt(data));
   if (!item) return;
-  if (upsertPendingTranscriptItem(ctx, { sessionId, threadId, item })) return;
-
-  ctx.setState((prev) => {
-    const activeSession = prev.active.session;
-    if (!activeSession || !matchesActiveSession(prev, { sessionId, threadId })) return prev;
-    return {
-      ...prev,
-      active: {
-        ...prev.active,
-        session: upsertTranscriptItem(activeSession, item),
-      },
-    };
-  });
-}
-
-function handleApprovalRequest(ctx: ChatStoreContext, data: unknown): void {
-  const occurredAt = eventOccurredAt(data);
-  const payload = readPayload(data);
-  const item = toApprovalRequestTranscriptItem(payload, occurredAt);
-  if (!item) return;
-  const sessionId = readApprovalRequestSessionId(payload);
-  const threadId = readApprovalRequestThreadId(payload);
   if (upsertPendingTranscriptItem(ctx, { sessionId, threadId, item })) return;
 
   ctx.setState((prev) => {
@@ -382,14 +357,8 @@ export function registerChatStoreEventHandlers(ws: OperatorWsClient, ctx: ChatSt
   ws.on?.("typing.stopped", (data) => {
     handleTypingState(ctx, false, data);
   });
-  ws.on?.("approval.requested", (data) => {
+  ws.on?.("approval.updated" as never, (data) => {
     handleApprovalEvent(ctx, data);
-  });
-  ws.on?.("approval.resolved", (data) => {
-    handleApprovalEvent(ctx, data);
-  });
-  ws.on?.("approval_request" as never, (data) => {
-    handleApprovalRequest(ctx, data);
   });
   ws.on?.("tool.lifecycle" as never, (data) => {
     handleToolLifecycle(ctx, data);

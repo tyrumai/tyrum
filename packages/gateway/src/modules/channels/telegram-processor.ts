@@ -7,7 +7,6 @@ import { releaseLaneLease } from "../lanes/lane-lease.js";
 import type { SessionDal } from "../agent/session-dal.js";
 import type { AgentRegistry } from "../agent/registry.js";
 import type { ApprovalDal } from "../approval/dal.js";
-import type { ApprovalNotifier } from "../approval/notifier.js";
 import type { MemoryV1Dal } from "../memory/v1-dal.js";
 import type { TelegramBot } from "../ingress/telegram-bot.js";
 import {
@@ -17,8 +16,8 @@ import {
 } from "./interface.js";
 import { enqueueWsBroadcastMessage } from "../../ws/outbox.js";
 import { SessionSendPolicyOverrideDal } from "./send-policy-override-dal.js";
-import { coerceRecord } from "../util/coerce.js";
 import { processTelegramBatch } from "./telegram-batch-processor.js";
+import type { ProtocolDeps } from "../../ws/protocol.js";
 import {
   CHANNEL_TYPING_REFRESH_DEFAULT_MS,
   CHANNEL_TYPING_REFRESH_MAX_MS,
@@ -40,7 +39,7 @@ export class TelegramChannelProcessor {
   private readonly logger?: Logger;
   private readonly memoryV1Dal?: MemoryV1Dal;
   private readonly approvalDal?: ApprovalDal;
-  private readonly approvalNotifier?: ApprovalNotifier;
+  private readonly protocolDeps?: ProtocolDeps;
   private readonly typingMode: ChannelTypingMode;
   private readonly typingRefreshMs: number;
   private readonly typingAutomationEnabled: boolean;
@@ -63,7 +62,7 @@ export class TelegramChannelProcessor {
     logger?: Logger;
     memoryV1Dal?: MemoryV1Dal;
     approvalDal?: ApprovalDal;
-    approvalNotifier?: ApprovalNotifier;
+    protocolDeps?: ProtocolDeps;
     typingMode?: ChannelTypingMode;
     typingRefreshMs?: number;
     typingAutomationEnabled?: boolean;
@@ -91,7 +90,7 @@ export class TelegramChannelProcessor {
     this.logger = opts.logger;
     this.memoryV1Dal = opts.memoryV1Dal;
     this.approvalDal = opts.approvalDal;
-    this.approvalNotifier = opts.approvalNotifier;
+    this.protocolDeps = opts.protocolDeps;
     this.typingMode = opts.typingMode ?? "never";
     const rawTypingRefreshMs =
       typeof opts.typingRefreshMs === "number" && Number.isFinite(opts.typingRefreshMs)
@@ -170,7 +169,7 @@ export class TelegramChannelProcessor {
                 logger: this.logger,
                 memoryV1Dal: this.memoryV1Dal,
                 approvalDal: this.approvalDal,
-                approvalNotifier: this.approvalNotifier,
+                protocolDeps: this.protocolDeps,
                 typingMode: this.typingMode,
                 typingRefreshMs: this.typingRefreshMs,
                 typingAutomationEnabled: this.typingAutomationEnabled,
@@ -246,11 +245,7 @@ export class TelegramChannelProcessor {
           approval.status === "expired" ||
           approval.status === "cancelled"
         ) {
-          const reason = (() => {
-            const record = coerceRecord(approval.resolution);
-            const candidate = typeof record?.["reason"] === "string" ? record["reason"].trim() : "";
-            return candidate.length > 0 ? candidate : `approval ${approval.status}`;
-          })();
+          const reason = approval.latest_review?.reason?.trim() || `approval ${approval.status}`;
           await this.outbox.markFailedByApproval(approval.approval_id, reason);
           return true;
         }

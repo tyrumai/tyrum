@@ -17,7 +17,7 @@ describe("NodePairingDal.upsertOnConnect", () => {
     await db?.close();
   });
 
-  it("does not wipe trust_level or allowlist when reopening after revoke", async () => {
+  it("resets trust_level and allowlist when reopening after revoke", async () => {
     db = openTestSqliteDb();
     const dal = new NodePairingDal(db);
 
@@ -33,9 +33,11 @@ describe("NodePairingDal.upsertOnConnect", () => {
       pubkey: "pubkey-1",
       label: "node-1",
       capabilities: ["cli"],
+      motivation: "Human review is required before this node can be paired.",
+      initialStatus: "awaiting_human",
       nowIso: "2026-02-23T00:00:00.000Z",
     });
-    expect(pending.status).toBe("pending");
+    expect(pending.status).toBe("awaiting_human");
 
     const approved = await dal.resolve({
       tenantId,
@@ -71,12 +73,12 @@ describe("NodePairingDal.upsertOnConnect", () => {
       capabilities: ["cli"],
       nowIso: "2026-02-23T00:00:03.000Z",
     });
-    expect(reopened.status).toBe("pending");
-    expect(reopened.trust_level).toBe("local");
-    expect(reopened.capability_allowlist).toEqual([cliDescriptor]);
+    expect(reopened.status).toBe("queued");
+    expect(reopened.trust_level).toBe("remote");
+    expect(reopened.capability_allowlist).toEqual([]);
   });
 
-  it("does not wipe trust_level or allowlist when reopening after deny", async () => {
+  it("resets trust_level and allowlist when reopening after deny", async () => {
     db = openTestSqliteDb();
     const dal = new NodePairingDal(db);
 
@@ -92,6 +94,8 @@ describe("NodePairingDal.upsertOnConnect", () => {
       pubkey: "pubkey-2",
       label: "node-2",
       capabilities: ["cli"],
+      motivation: "Human review is required before this node can be paired.",
+      initialStatus: "awaiting_human",
       nowIso: "2026-02-23T00:00:00.000Z",
     });
 
@@ -99,18 +103,9 @@ describe("NodePairingDal.upsertOnConnect", () => {
       `UPDATE node_pairings
        SET status = 'denied',
            trust_level = 'local',
-           capability_allowlist_json = ?,
-           resolved_at = ?,
-           resolved_by_json = ?,
-           resolution_reason = ?
+           capability_allowlist_json = ?
        WHERE node_id = ?`,
-      [
-        JSON.stringify([cliDescriptor]),
-        "2026-02-23T00:00:01.000Z",
-        JSON.stringify({ kind: "test" }),
-        "denied for test",
-        nodeId,
-      ],
+      [JSON.stringify([cliDescriptor]), nodeId],
     );
 
     const reopened = await dal.upsertOnConnect({
@@ -121,9 +116,9 @@ describe("NodePairingDal.upsertOnConnect", () => {
       capabilities: ["cli"],
       nowIso: "2026-02-23T00:00:02.000Z",
     });
-    expect(reopened.status).toBe("pending");
-    expect(reopened.trust_level).toBe("local");
-    expect(reopened.capability_allowlist).toEqual([cliDescriptor]);
+    expect(reopened.status).toBe("queued");
+    expect(reopened.trust_level).toBe("remote");
+    expect(reopened.capability_allowlist).toEqual([]);
   });
 
   it("allows approving with an explicitly empty allowlist", async () => {
@@ -137,9 +132,11 @@ describe("NodePairingDal.upsertOnConnect", () => {
       pubkey: "pubkey-3",
       label: "node-3",
       capabilities: ["cli"],
+      motivation: "Human review is required before this node can be paired.",
+      initialStatus: "awaiting_human",
       nowIso: "2026-02-23T00:00:00.000Z",
     });
-    expect(pending.status).toBe("pending");
+    expect(pending.status).toBe("awaiting_human");
 
     const approved = await dal.resolve({
       tenantId,
@@ -160,6 +157,35 @@ describe("NodePairingDal.upsertOnConnect", () => {
     const approvedReloaded = await dal.getById(approved!.pairing.pairing_id, tenantId);
     expect(approvedReloaded).toBeDefined();
     expect(approvedReloaded!.capability_allowlist).toEqual([]);
+  });
+
+  it("allows resolving queued pairings by default", async () => {
+    db = openTestSqliteDb();
+    const dal = new NodePairingDal(db);
+
+    const pending = await dal.upsertOnConnect({
+      tenantId,
+      nodeId: "node-queued",
+      pubkey: "pubkey-queued",
+      label: "node-queued",
+      capabilities: ["cli"],
+      nowIso: "2026-02-23T00:00:00.000Z",
+    });
+    expect(pending.status).toBe("queued");
+
+    const approved = await dal.resolve({
+      tenantId,
+      pairingId: pending.pairing_id,
+      decision: "approved",
+      trustLevel: "remote",
+      capabilityAllowlist: [],
+      resolvedBy: { kind: "test" },
+      nowIso: "2026-02-23T00:00:01.000Z",
+    });
+
+    expect(approved).toBeDefined();
+    expect(approved?.transitioned).toBe(true);
+    expect(approved?.pairing.status).toBe("approved");
   });
 
   it("rejects pairing writes without a tenant id", async () => {

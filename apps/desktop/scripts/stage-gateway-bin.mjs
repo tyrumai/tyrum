@@ -39,7 +39,7 @@ rmSync(targetDir, { recursive: true, force: true });
 mkdirSync(dirname(targetDir), { recursive: true });
 
 const pnpmCmd = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
-const deployArgsBase = ["--filter", "@tyrum/gateway", "deploy", "--prod"];
+const deployArgsBase = ["--ignore-scripts", "--filter", "@tyrum/gateway", "deploy", "--prod"];
 
 let deploy = spawnSync(pnpmCmd, [...deployArgsBase, targetDir], {
   stdio: "pipe",

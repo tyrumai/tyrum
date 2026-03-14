@@ -7,7 +7,6 @@ import {
   type AuthTokenClaims,
   type WsConnectInitRequest,
   type WsConnectProofRequest,
-  type WsEventEnvelope,
   type WsResponseEnvelope,
 } from "@tyrum/schemas";
 import type { WebSocket, WebSocketServer } from "ws";
@@ -19,9 +18,8 @@ import {
 } from "../../modules/auth/client-ip.js";
 import type { NodePairingDal } from "../../modules/node/pairing-dal.js";
 import type { PresenceDal } from "../../modules/presence/dal.js";
-import { broadcastWsEvent } from "../../ws/broadcast.js";
-import type { ConnectionManager } from "../../ws/connection-manager.js";
 import { handleClientMessage } from "../../ws/protocol.js";
+import type { ConnectionManager } from "../../ws/connection-manager.js";
 import type { ProtocolDeps } from "../../ws/protocol.js";
 import { rawDataToUtf8 } from "../../ws/raw-data.js";
 import {
@@ -32,19 +30,16 @@ import {
   resolveWsAuth,
 } from "./auth.js";
 import {
-  PAIRING_REQUESTED_AUDIENCE,
   type PendingInit,
-  broadcastLocalEvent,
-  createPresenceUpsertedEvent,
   parseCapabilitiesFromInit,
   verifyConnectProof,
 } from "./connection-support.js";
+import { syncConnectionClosed, syncConnectionEstablished } from "./connection-state-sync.js";
 import type { WsClusterOptions } from "./types.js";
 
 const EARLY_MESSAGE_MAX_COUNT = 8;
 const EARLY_MESSAGE_MAX_BYTES = 64 * 1024;
 const GATEWAY_PROTOCOL_REV = 2;
-type ClientIpInfo = { rawRemoteIp: string | undefined; resolvedClientIp: string | undefined };
 
 interface BindWsConnectionHandlerOptions {
   wss: WebSocketServer;
@@ -334,146 +329,32 @@ class WsConnectionSession {
 
   private completeHandshake(pending: PendingInit, claims: AuthTokenClaims | undefined): void {
     this.clearHandshakeTimeout();
-    this.clientId = pending.connectionId;
-    this.deviceId = pending.deviceId;
+    const clientId = pending.connectionId;
+    const deviceId = pending.deviceId;
+    this.clientId = clientId;
+    this.deviceId = deviceId;
     this.pendingInit = undefined;
 
     this.input.connectionManager.addClient(this.ws, pending.capabilities, {
-      id: this.clientId,
+      id: clientId,
       role: pending.role,
-      deviceId: this.deviceId,
+      deviceId,
       protocolRev: pending.protocolRev,
       authClaims: claims ?? undefined,
     });
 
     const clientIp = resolveClientIpFromRequest(this.req, this.input.trustedProxies);
-    this.persistClusterConnection(pending, claims);
-    this.upsertPresenceOnConnect(pending, clientIp);
-    this.upsertNodePairingOnConnect(pending, clientIp, claims);
+    syncConnectionEstablished({
+      deps: this.input,
+      pending,
+      claims,
+      clientId,
+      deviceId,
+      clientIp,
+    });
     this.ws.on("close", () => {
       this.handleConnectedClose(claims);
     });
-  }
-
-  private persistClusterConnection(
-    pending: PendingInit,
-    claims: AuthTokenClaims | undefined,
-  ): void {
-    if (!this.input.cluster || !this.clientId || !this.deviceId) return;
-
-    const nowMs = Date.now();
-    void this.input.cluster.connectionDirectory
-      .upsertConnection({
-        tenantId: claims?.tenant_id ?? undefined,
-        connectionId: this.clientId,
-        edgeId: this.input.cluster.instanceId,
-        role: pending.role,
-        protocolRev: pending.protocolRev,
-        deviceId: this.deviceId,
-        pubkey: pending.pubkey,
-        label: pending.label ?? null,
-        version: pending.version ?? null,
-        mode: pending.mode ?? null,
-        capabilities: pending.capabilities,
-        nowMs,
-        ttlMs: this.input.connectionTtlMs,
-      })
-      .catch(() => {});
-  }
-
-  private upsertPresenceOnConnect(pending: PendingInit, clientIp: ClientIpInfo): void {
-    if (!this.input.presenceDal || !this.clientId || !this.deviceId) return;
-
-    const nowMs = Date.now();
-    const persistedClientIp = toPersistedClientIp(clientIp);
-    void this.input.presenceDal
-      .upsert({
-        instanceId: this.deviceId,
-        role: pending.role,
-        connectionId: this.clientId,
-        host: pending.label ?? null,
-        ip: persistedClientIp.ip,
-        version: pending.version ?? null,
-        mode: pending.mode ?? null,
-        metadata: {
-          capabilities: pending.capabilities,
-          edge_id: this.input.cluster?.instanceId ?? null,
-          ...persistedClientIp.metadata,
-        },
-        nowMs,
-        ttlMs: this.input.presenceTtlMs,
-      })
-      .then((row) => {
-        broadcastLocalEvent(this.input.connectionManager, createPresenceUpsertedEvent(row));
-      })
-      .catch(() => {});
-  }
-
-  private upsertNodePairingOnConnect(
-    pending: PendingInit,
-    clientIp: ClientIpInfo,
-    claims: AuthTokenClaims | undefined,
-  ): void {
-    if (!this.input.nodePairingDal || pending.role !== "node") return;
-    const tenantId = claims?.tenant_id?.trim();
-    if (!tenantId) return;
-
-    const nowIso = new Date().toISOString();
-    const nodeId = pending.deviceId;
-    const persistedClientIp = toPersistedClientIp(clientIp);
-    void this.input.nodePairingDal
-      .getByNodeId(nodeId, tenantId)
-      .then((previous) => {
-        return this.input
-          .nodePairingDal!.upsertOnConnect({
-            tenantId,
-            nodeId,
-            pubkey: pending.pubkey,
-            label: pending.label ?? null,
-            capabilities: pending.capabilities,
-            metadata: {
-              ip: persistedClientIp.ip,
-              ...persistedClientIp.metadata,
-              platform: pending.platform ?? null,
-              version: pending.version ?? null,
-              mode: pending.mode ?? null,
-              edge_id: this.input.cluster?.instanceId ?? null,
-            },
-            nowIso,
-          })
-          .then((pairing) => {
-            const shouldRequest =
-              pairing.status === "pending" &&
-              (!previous || previous.status === "denied" || previous.status === "revoked");
-            if (!shouldRequest) return;
-            this.broadcastPairingRequested(pairing, claims);
-          });
-      })
-      .catch(() => {});
-  }
-
-  private broadcastPairingRequested(pairing: unknown, claims: AuthTokenClaims | undefined): void {
-    const tenantId = claims?.tenant_id;
-    if (!tenantId) return;
-
-    const event = {
-      event_id: crypto.randomUUID(),
-      type: "pairing.requested",
-      occurred_at: new Date().toISOString(),
-      payload: { pairing },
-    } satisfies WsEventEnvelope;
-
-    broadcastWsEvent(
-      tenantId,
-      event,
-      {
-        connectionManager: this.input.connectionManager,
-        cluster: this.input.protocolDeps.cluster,
-        logger: this.input.protocolDeps.logger,
-        maxBufferedBytes: this.input.protocolDeps.maxBufferedBytes,
-      },
-      PAIRING_REQUESTED_AUDIENCE,
-    );
   }
 
   private handleConnectedClose(claims: AuthTokenClaims | undefined): void {
@@ -491,26 +372,12 @@ class WsConnectionSession {
     }
 
     this.input.connectionManager.removeClient(connectionId);
-    this.removeClusterConnection(connectionId, claims?.tenant_id);
-    this.markPresenceDisconnected();
-  }
-
-  private removeClusterConnection(connectionId: string, tenantId: string | null | undefined): void {
-    if (!this.input.cluster || !tenantId) return;
-    void this.input.cluster.connectionDirectory
-      .removeConnection({ tenantId, connectionId })
-      .catch(() => {});
-  }
-
-  private markPresenceDisconnected(): void {
-    if (!this.input.presenceDal || !this.deviceId) return;
-    void this.input.presenceDal
-      .markDisconnected({
-        instanceId: this.deviceId,
-        nowMs: Date.now(),
-        ttlMs: this.input.presenceTtlMs,
-      })
-      .catch(() => {});
+    syncConnectionClosed({
+      deps: this.input,
+      connectionId,
+      tenantId: claims?.tenant_id,
+      deviceId: this.deviceId,
+    });
   }
 
   private handleConnectedMessage(raw: string): void {
@@ -529,21 +396,4 @@ class WsConnectionSession {
       })
       .catch(() => {});
   }
-}
-
-function toPersistedClientIp(input: ClientIpInfo): {
-  ip: string | null;
-  metadata: {
-    raw_remote_ip: string | null;
-    resolved_client_ip: string | null;
-  };
-} {
-  const ip = input.resolvedClientIp ?? input.rawRemoteIp ?? null;
-  return {
-    ip,
-    metadata: {
-      raw_remote_ip: input.rawRemoteIp ?? null,
-      resolved_client_ip: ip,
-    },
-  };
 }

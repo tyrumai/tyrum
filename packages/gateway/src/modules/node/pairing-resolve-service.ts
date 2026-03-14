@@ -74,6 +74,11 @@ export async function resolveNodePairing(
       pairingId: input.pairingId,
       reason: input.reason,
       resolvedBy: input.resolvedBy,
+      decisionPayload: {
+        decision: "revoked",
+        reason: input.reason ?? null,
+        actor: input.resolvedBy ?? null,
+      },
     });
     if (!pairing) {
       return notFound(input.pairingId);
@@ -108,6 +113,13 @@ export async function resolveNodePairing(
       decision: "approved",
       reason: input.reason,
       resolvedBy: input.resolvedBy,
+      decisionPayload: {
+        decision: "approved",
+        reason: input.reason ?? null,
+        trust_level: input.trustLevel,
+        capability_allowlist: input.capabilityAllowlist,
+        actor: input.resolvedBy ?? null,
+      },
       trustLevel: input.trustLevel,
       capabilityAllowlist: input.capabilityAllowlist,
     });
@@ -115,8 +127,8 @@ export async function resolveNodePairing(
       return notFound(input.pairingId);
     }
 
-    const { pairing, scopedToken } = resolved;
-    if (scopedToken && deps.emitPairingApproved) {
+    const { pairing, scopedToken, transitioned } = resolved;
+    if (transitioned && scopedToken && deps.emitPairingApproved) {
       deps.emitPairingApproved({
         tenantId: input.tenantId,
         pairing,
@@ -125,11 +137,12 @@ export async function resolveNodePairing(
       });
     }
 
-    if (deps.emitEvent) {
+    if (transitioned && deps.emitEvent) {
       const persistedEvent = await ensurePairingResolvedEvent({
         tenantId: input.tenantId,
         pairing,
         wsEventDal: deps.wsEventDal,
+        scopedToken,
       });
       deps.emitEvent({ tenantId: input.tenantId, event: persistedEvent.event });
     }
@@ -143,6 +156,11 @@ export async function resolveNodePairing(
     decision: "denied",
     reason: input.reason,
     resolvedBy: input.resolvedBy,
+    decisionPayload: {
+      decision: "denied",
+      reason: input.reason ?? null,
+      actor: input.resolvedBy ?? null,
+    },
   });
   if (!resolved?.pairing) {
     return notFound(input.pairingId);

@@ -347,8 +347,18 @@ function registerLeaseOwnerAndEventTests(fixture: WorkboardDalFixture): void {
     });
 
     const approval = await db!.get<{ approval_id: string }>(
-      `INSERT INTO approvals (tenant_id, approval_id, approval_key, agent_id, workspace_id, kind, status, prompt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO approvals (
+         tenant_id,
+         approval_id,
+         approval_key,
+         agent_id,
+         workspace_id,
+         kind,
+         status,
+         prompt,
+         motivation
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
        RETURNING approval_id`,
       [
         scope.tenant_id,
@@ -356,8 +366,9 @@ function registerLeaseOwnerAndEventTests(fixture: WorkboardDalFixture): void {
         "approval:test",
         scope.agent_id,
         scope.workspace_id,
-        "other",
-        "pending",
+        "policy",
+        "queued",
+        "approve?",
         "approve?",
       ],
     );

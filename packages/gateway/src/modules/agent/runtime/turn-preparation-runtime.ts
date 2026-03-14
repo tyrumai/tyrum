@@ -36,8 +36,8 @@ import { parseChannelSourceKey } from "../../channels/interface.js";
 import { resolveGatewayStateMode } from "../../runtime-state/mode.js";
 import { applyPersonaToIdentity, resolveAgentPersona } from "../persona.js";
 import { ToolSetBuilder } from "./tool-set-builder.js";
+import type { ToolSetBuilderDeps } from "./tool-set-builder.js";
 import type { McpManager } from "../mcp-manager.js";
-import type { ApprovalNotifier } from "../../approval/notifier.js";
 import type { PluginRegistry } from "../../plugins/registry.js";
 import type { PolicyService } from "../../policy/service.js";
 
@@ -49,7 +49,6 @@ export interface TurnPreparationRuntimeDeps extends PrepareTurnHelperDeps {
   mcpManager: McpManager;
   plugins: PluginRegistry | undefined;
   policyService: PolicyService;
-  approvalNotifier: ApprovalNotifier;
   approvalWaitMs: number;
   approvalPollMs: number;
 }
@@ -358,24 +357,7 @@ export async function resolveToolsAndMemory(
   const mcpTools = canDiscoverMcpTools(ctx.config.tools)
     ? await deps.mcpManager.listToolDescriptors(ctx.mcpServers)
     : [];
-  const toolSetBuilderDeps = {
-    home: deps.home,
-    stateMode: resolveGatewayStateMode(deps.opts.container.deploymentConfig),
-    tenantId: session.tenant_id,
-    agentId: session.agent_id,
-    workspaceId: session.workspace_id,
-    sessionDal: deps.sessionDal,
-    wsEventDb: deps.opts.container.db,
-    policyService: deps.policyService,
-    approvalDal: deps.opts.container.approvalDal,
-    approvalNotifier: deps.approvalNotifier as { notify: (approval: unknown) => void },
-    approvalWaitMs: deps.approvalWaitMs,
-    approvalPollMs: deps.approvalPollMs,
-    logger: deps.opts.container.logger,
-    secretProvider: deps.secretProvider,
-    plugins: deps.plugins,
-    redactionEngine: deps.opts.container.redactionEngine,
-  };
+  const toolSetBuilderDeps = buildToolSetBuilderDeps(deps, session);
   const toolSetBuilder = new ToolSetBuilder(toolSetBuilderDeps);
   const builtinTools = listBuiltinToolDescriptors();
   const pluginToolsRaw = deps.plugins?.getToolDescriptors() ?? [];
@@ -441,4 +423,38 @@ export async function resolveToolsAndMemory(
     });
 
   return { availableTools, toolSetBuilderDeps, toolSetBuilder, filteredTools };
+}
+
+export function buildToolSetBuilderDeps(
+  deps: Pick<
+    TurnPreparationRuntimeDeps,
+    | "home"
+    | "opts"
+    | "sessionDal"
+    | "policyService"
+    | "approvalWaitMs"
+    | "approvalPollMs"
+    | "secretProvider"
+    | "plugins"
+  >,
+  session: Pick<SessionRow, "tenant_id" | "agent_id" | "workspace_id">,
+): ToolSetBuilderDeps {
+  return {
+    home: deps.home,
+    stateMode: resolveGatewayStateMode(deps.opts.container.deploymentConfig),
+    tenantId: session.tenant_id,
+    agentId: session.agent_id,
+    workspaceId: session.workspace_id,
+    sessionDal: deps.sessionDal,
+    wsEventDb: deps.opts.container.db,
+    policyService: deps.policyService,
+    approvalDal: deps.opts.container.approvalDal,
+    protocolDeps: deps.opts.protocolDeps,
+    approvalWaitMs: deps.approvalWaitMs,
+    approvalPollMs: deps.approvalPollMs,
+    logger: deps.opts.container.logger,
+    secretProvider: deps.secretProvider,
+    plugins: deps.plugins,
+    redactionEngine: deps.opts.container.redactionEngine,
+  };
 }

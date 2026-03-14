@@ -11,6 +11,8 @@ export { Decision, RuleKind, RuleDecision, PolicyDecision, PiiCategory, LegalFla
 // prettier-ignore
 export { PolicyBundleV1, PolicyBundle, PolicySnapshotId, PolicySnapshot, PolicyOverrideStatus, PolicyOverrideId, PolicyOverride, PolicyOverrideListRequest, PolicyOverrideListResponse, PolicyOverrideRevokeRequest, PolicyOverrideRevokeResponse, PolicyOverrideCreateRequest, PolicyOverrideCreateResponse } from "./policy-bundle.js";
 // prettier-ignore
+export { ReviewId, ReviewTargetType, ReviewerKind, ReviewState, ReviewRiskLevel, ReviewEntry } from "./review.js";
+// prettier-ignore
 export { DeploymentPolicyConfigRevisionNumber, DeploymentPolicyConfigRevision, DeploymentPolicyConfigGetResponse, DeploymentPolicyConfigListRevisionsResponse, DeploymentPolicyConfigUpdateRequest, DeploymentPolicyConfigUpdateResponse, DeploymentPolicyConfigRevertRequest, DeploymentPolicyConfigRevertResponse } from "./policy-config.js";
 // prettier-ignore
 export { TelegramAccountRoutingConfig, TelegramRoutingConfig, RoutingConfig, RoutingConfigRevisionNumber, RoutingConfigGetResponse, RoutingConfigUpdateRequest, RoutingConfigUpdateResponse, RoutingConfigRevertRequest, RoutingConfigRevertResponse, RoutingConfigRevisionSummary, RoutingConfigRevisionListResponse, ObservedTelegramThread, ObservedTelegramThreadListResponse } from "./routing.js";
@@ -96,7 +98,6 @@ export {
   NodePairingStatus,
   NodePairingDecision,
   NodePairingTrustLevel,
-  NodePairingResolution,
   NodePairingRequest,
 } from "./node.js";
 // prettier-ignore
@@ -112,7 +113,7 @@ export { ScopeKeys, ScopeIds } from "./scope.js";
 // prettier-ignore
 export { ArtifactId, ArtifactKind, Sha256Hex, ArtifactUri, ArtifactRef } from "./artifact.js";
 // prettier-ignore
-export { ApprovalStatus, ApprovalKind, ApprovalScope, ApprovalDecision, ApprovalResolution, Approval, ApprovalListRequest, ApprovalListResponse, ApprovalResolveRequest, ApprovalResolveResponse } from "./approval.js";
+export { ApprovalStatus, ApprovalKind, ApprovalScope, ApprovalDecision, Approval, ApprovalListRequest, ApprovalListResponse, ApprovalResolveRequest, ApprovalResolveResponse } from "./approval.js";
 // prettier-ignore
 export { ExecutionJobId, ExecutionRunId, ExecutionStepId, ExecutionAttemptId, ExecutionRunStatus, ExecutionStepStatus, ExecutionAttemptStatus, ExecutionJobStatus, ExecutionTrigger, ExecutionJob, ExecutionPauseReason, ExecutionRunPausedPayload, ExecutionRun, ExecutionStep, ExecutionAttempt, AttemptCost, ExecutionBudgets } from "./execution.js";
 // prettier-ignore

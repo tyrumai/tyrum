@@ -1,8 +1,13 @@
-import type { ExecutionAttempt } from "@tyrum/client";
-import type { OperatorCore, Pairing, ResolveApprovalInput, RunsState } from "@tyrum/operator-core";
-import { clientCapabilityFromDescriptorId } from "@tyrum/schemas";
+import type { Approval, ExecutionAttempt } from "@tyrum/client";
+import {
+  isApprovalHumanActionableStatus,
+  type OperatorCore,
+  type ResolveApprovalInput,
+  type RunsState,
+} from "@tyrum/operator-core";
+import { clientCapabilityFromDescriptorId, type CapabilityDescriptor } from "@tyrum/schemas";
 import { CircleCheck } from "lucide-react";
-import { useState } from "react";
+import { type ComponentProps, useState } from "react";
 import { toast } from "sonner";
 import { AttemptArtifactsDialog } from "../artifacts/attempt-artifacts-dialog.js";
 import { AppPage } from "../layout/app-page.js";
@@ -23,6 +28,37 @@ function formatTimestamp(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString();
+}
+
+function formatReviewRisk(review: Approval["latest_review"]): string | null {
+  if (!review) return null;
+  const parts = [
+    review.risk_level ? review.risk_level.toUpperCase() : null,
+    typeof review.risk_score === "number" ? `score ${String(review.risk_score)}` : null,
+  ].filter((part): part is string => part !== null);
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
+
+function getApprovalStatusDisplay(status: Approval["status"] | "pending"): {
+  label: string;
+  variant: ComponentProps<typeof Badge>["variant"];
+} {
+  switch (status) {
+    case "pending":
+      return { label: "Awaiting human review", variant: "warning" };
+    case "queued":
+      return { label: "Guardian queued", variant: "outline" };
+    case "reviewing":
+      return { label: "Guardian reviewing", variant: "outline" };
+    case "awaiting_human":
+      return { label: "Awaiting human review", variant: "warning" };
+    case "approved":
+      return { label: "Approved", variant: "success" };
+    case "denied":
+    case "expired":
+    case "cancelled":
+      return { label: status, variant: "danger" };
+  }
 }
 
 type DesktopApprovalSummary = {
@@ -128,6 +164,7 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
   const approvals = useOperatorStore(core.approvalsStore);
   const pairingState = useOperatorStore(core.pairingStore);
   const runsState = useOperatorStore(core.runsStore);
+  const blockedApprovalIds = approvals.blockedIds ?? approvals.pendingIds;
   const [resolvingById, setResolvingById] = useState<
     Record<string, "approved" | "denied" | "always" | undefined>
   >({});
@@ -138,7 +175,7 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
       const capabilities = pairing.node.capabilities;
       if (
         !capabilities.some(
-          (capability: Pairing["node"]["capabilities"][number]) =>
+          (capability: CapabilityDescriptor) =>
             clientCapabilityFromDescriptorId(capability.id) === "desktop",
         )
       ) {
@@ -187,14 +224,14 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
   return (
     <AppPage contentClassName="max-w-4xl gap-5">
       <LiveRegion data-testid="approvals-pending-live">
-        {approvals.pendingIds.length} pending approvals
+        {approvals.pendingIds.length} approvals awaiting action
       </LiveRegion>
 
       {approvals.error ? (
         <Alert variant="error" title="Approvals failed to load" description={approvals.error} />
       ) : null}
 
-      {approvals.pendingIds.length === 0 ? (
+      {blockedApprovalIds.length === 0 ? (
         approvals.loading && approvals.lastSyncedAt === null ? (
           <div
             className="flex items-center justify-center gap-2 px-4 py-10 text-sm text-fg-muted"
@@ -212,11 +249,15 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
         )
       ) : (
         <div className="grid gap-3">
-          {approvals.pendingIds.map((approvalId) => {
+          {blockedApprovalIds.map((approvalId) => {
             const approval = approvals.byId[approvalId];
             if (!approval) return null;
 
             const resolvingDecision = resolvingById[approvalId];
+            const actionable = isApprovalHumanActionableStatus(approval.status);
+            const statusDisplay = getApprovalStatusDisplay(approval.status);
+            const reviewReason = approval.latest_review?.reason?.trim() ?? "";
+            const reviewRisk = formatReviewRisk(approval.latest_review);
             const scope = approval.scope;
             const approvalAgentKey =
               typeof scope?.key === "string" ? parseAgentIdFromKey(scope.key) : null;
@@ -234,7 +275,10 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
               <Card key={approvalId}>
                 <CardHeader className="pb-2.5">
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <Badge variant="outline">{approval.kind}</Badge>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="outline">{approval.kind}</Badge>
+                      <Badge variant={statusDisplay.variant}>{statusDisplay.label}</Badge>
+                    </div>
                     <time
                       dateTime={approval.created_at}
                       className="text-xs text-fg-muted"
@@ -248,6 +292,33 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
                   <blockquote className="rounded-md border border-border bg-bg-subtle px-3 py-2.5 text-sm text-fg break-words [overflow-wrap:anywhere]">
                     {approval.prompt}
                   </blockquote>
+
+                  <div
+                    data-testid={`approval-motivation-${approvalId}`}
+                    className="grid gap-0.5 rounded-md border border-border bg-bg-subtle px-3 py-2.5"
+                  >
+                    <div className="text-xs font-medium text-fg-muted">Motivation</div>
+                    <div className="text-sm text-fg break-words [overflow-wrap:anywhere]">
+                      {approval.motivation}
+                    </div>
+                  </div>
+
+                  {reviewReason || reviewRisk ? (
+                    <div
+                      data-testid={`approval-review-${approvalId}`}
+                      className="grid gap-1 rounded-md border border-border bg-bg-subtle px-3 py-2.5"
+                    >
+                      <div className="text-xs font-medium text-fg-muted">Latest review</div>
+                      {reviewReason ? (
+                        <div className="text-sm text-fg break-words [overflow-wrap:anywhere]">
+                          {reviewReason}
+                        </div>
+                      ) : null}
+                      {reviewRisk ? (
+                        <div className="text-xs text-fg-muted">Risk {reviewRisk}</div>
+                      ) : null}
+                    </div>
+                  ) : null}
 
                   {detailEntries.length > 0 ? (
                     <div
@@ -311,14 +382,22 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
                   })()}
                 </CardContent>
                 <CardFooter className="gap-2">
-                  <ApprovalActions
-                    approvalId={approvalId}
-                    approval={approval}
-                    resolvingState={resolvingDecision}
-                    onResolve={(input) => {
-                      void resolveApproval(input);
-                    }}
-                  />
+                  {actionable ? (
+                    <ApprovalActions
+                      approvalId={approvalId}
+                      approval={approval}
+                      resolvingState={resolvingDecision}
+                      onResolve={(input) => {
+                        void resolveApproval(input);
+                      }}
+                    />
+                  ) : (
+                    <div className="text-sm text-fg-muted">
+                      {approval.status === "queued"
+                        ? "Queued for guardian review."
+                        : "Guardian review is in progress."}
+                    </div>
+                  )}
                 </CardFooter>
               </Card>
             );

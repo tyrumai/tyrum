@@ -44,8 +44,9 @@ describe("DB enum constraints", () => {
          workspace_id,
          kind,
          status,
-         prompt
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+         prompt,
+         motivation
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         DEFAULT_TENANT_ID,
         randomUUID(),
@@ -55,6 +56,7 @@ describe("DB enum constraints", () => {
         kind,
         status,
         "test prompt",
+        "test motivation",
       ],
     );
   }
@@ -71,7 +73,7 @@ describe("DB enum constraints", () => {
 
   it("rejects invalid approvals.kind values", async () => {
     db = openTestSqliteDb();
-    await expect(insertApproval("not_a_kind", "pending")).rejects.toThrow();
+    await expect(insertApproval("not_a_kind", "queued")).rejects.toThrow();
   });
 
   it("rejects invalid approvals.status values", async () => {

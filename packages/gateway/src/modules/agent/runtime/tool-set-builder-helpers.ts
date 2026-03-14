@@ -4,12 +4,14 @@ import type { SuggestedOverride } from "../../policy/suggested-overrides.js";
 import { coerceRecord } from "../../util/coerce.js";
 import type { GatewayStateMode } from "../../runtime-state/mode.js";
 import type { SecretProvider } from "../../secret/provider.js";
-import type { ApprovalNotifier } from "../../approval/notifier.js";
 import type { ApprovalDal, ApprovalStatus } from "../../approval/dal.js";
+import { broadcastApprovalUpdated } from "../../approval/update-broadcast.js";
 import type { PluginRegistry } from "../../plugins/registry.js";
 import type { PolicyService } from "../../policy/service.js";
+import { createReviewedApproval } from "../../review/review-init.js";
 import type { SqlDb } from "../../../statestore/types.js";
 import type { SessionDal } from "../session-dal.js";
+import type { ProtocolDeps } from "../../../ws/protocol.js";
 
 export interface ToolExecutionContext {
   tenantId: string;
@@ -53,7 +55,7 @@ export interface ToolSetBuilderDeps {
   wsEventDb?: SqlDb;
   policyService: PolicyService;
   approvalDal: ApprovalDal;
-  approvalNotifier: ApprovalNotifier;
+  protocolDeps?: ProtocolDeps;
   approvalWaitMs: number;
   approvalPollMs: number;
   logger: ToolSetBuilderLogger;
@@ -80,10 +82,9 @@ export function coerceSecretHandle(value: unknown): SecretHandleT | undefined {
 }
 
 export function extractApprovalReason(
-  approval: { resolution: unknown | null } | undefined,
+  approval: { latest_review: { reason: string | null } | null } | undefined,
 ): string | undefined {
-  const record = coerceRecord(approval?.resolution);
-  const reason = typeof record?.["reason"] === "string" ? record["reason"].trim() : "";
+  const reason = approval?.latest_review?.reason?.trim() ?? "";
   return reason.length > 0 ? reason : undefined;
 }
 
@@ -124,10 +125,11 @@ export async function awaitApprovalForToolExecution(
     | "agentId"
     | "workspaceId"
     | "approvalDal"
-    | "approvalNotifier"
+    | "protocolDeps"
     | "approvalWaitMs"
     | "approvalPollMs"
     | "logger"
+    | "policyService"
   >,
   tool: ToolDescriptor,
   args: unknown,
@@ -145,28 +147,39 @@ export async function awaitApprovalForToolExecution(
 ): Promise<ApprovalDecisionResult> {
   const deadline = Date.now() + deps.approvalWaitMs;
   const approvalKey = `${context.planId}:step:${String(stepIndex)}:tool_call:${toolCallId}`;
-  const approval = await deps.approvalDal.create({
-    tenantId: deps.tenantId,
-    kind: "workflow_step",
-    agentId: deps.agentId,
-    workspaceId: deps.workspaceId,
-    approvalKey,
-    prompt: `Approve execution of '${tool.id}' (risk=${tool.risk})`,
-    context: {
-      source: "agent-tool-execution",
-      tool_id: tool.id,
-      tool_risk: tool.risk,
-      tool_call_id: toolCallId,
-      args,
-      session_id: context.sessionId,
-      channel: context.channel,
-      thread_id: context.threadId,
-      policy: policyContext ?? undefined,
+  const approval = await createReviewedApproval({
+    approvalDal: deps.approvalDal,
+    policyService: deps.policyService,
+    emitUpdate: async (createdApproval) => {
+      await broadcastApprovalUpdated({
+        tenantId: deps.tenantId,
+        approval: createdApproval,
+        protocolDeps: deps.protocolDeps,
+      });
     },
-    expiresAt: new Date(deadline).toISOString(),
-    sessionId: context.sessionId,
-    runId: context.execution?.runId,
-    stepId: context.execution?.stepId,
+    params: {
+      tenantId: deps.tenantId,
+      kind: "workflow_step",
+      agentId: deps.agentId,
+      workspaceId: deps.workspaceId,
+      approvalKey,
+      prompt: `Approve execution of '${tool.id}'`,
+      motivation: `The agent requested permission to run '${tool.id}' for this turn.`,
+      context: {
+        source: "agent-tool-execution",
+        tool_id: tool.id,
+        tool_call_id: toolCallId,
+        args,
+        session_id: context.sessionId,
+        channel: context.channel,
+        thread_id: context.threadId,
+        policy: policyContext ?? undefined,
+      },
+      expiresAt: new Date(deadline).toISOString(),
+      sessionId: context.sessionId,
+      runId: context.execution?.runId,
+      stepId: context.execution?.stepId,
+    },
   });
 
   deps.logger.info("approval.created", {
@@ -174,12 +187,10 @@ export async function awaitApprovalForToolExecution(
     plan_id: context.planId,
     step_index: stepIndex,
     tool_id: tool.id,
-    tool_risk: tool.risk,
     tool_call_id: toolCallId,
     expires_at: approval.expires_at,
   });
 
-  deps.approvalNotifier.notify(approval);
   await onStatusUpdate?.({
     approvalId: approval.approval_id,
     toolCallId,
@@ -227,7 +238,11 @@ export async function awaitApprovalForToolExecution(
         reason,
       };
     }
-    if (current.status === "denied" || current.status === "expired") {
+    if (
+      current.status === "denied" ||
+      current.status === "expired" ||
+      current.status === "cancelled"
+    ) {
       const reason = extractApprovalReason(current);
       await onStatusUpdate?.({
         approvalId: current.approval_id,

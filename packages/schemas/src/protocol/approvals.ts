@@ -6,7 +6,6 @@ import {
   ApprovalResolveRequest,
   ApprovalResolveResponse,
 } from "../approval.js";
-import { DateTimeSchema, UuidSchema } from "../common.js";
 import {
   WsEventEnvelope,
   WsRequestEnvelope,
@@ -17,32 +16,6 @@ import {
 // ---------------------------------------------------------------------------
 // Operation payloads (typed) — approvals
 // ---------------------------------------------------------------------------
-
-export const WsApprovalRequestPayload = z
-  .object({
-    approval_id: UuidSchema,
-    approval_key: z.string().trim().min(1),
-    kind: z.string().trim().min(1),
-    prompt: z.string().min(1),
-    context: z.unknown().optional(),
-    expires_at: DateTimeSchema.nullable().optional(),
-  })
-  .strict();
-export type WsApprovalRequestPayload = z.infer<typeof WsApprovalRequestPayload>;
-
-export const WsApprovalRequest = WsRequestEnvelope.extend({
-  type: z.literal("approval.request"),
-  payload: WsApprovalRequestPayload,
-});
-export type WsApprovalRequest = z.infer<typeof WsApprovalRequest>;
-
-export const WsApprovalDecision = z
-  .object({
-    approved: z.boolean(),
-    reason: z.string().optional(),
-  })
-  .strict();
-export type WsApprovalDecision = z.infer<typeof WsApprovalDecision>;
 
 export const WsApprovalListPayload = ApprovalListRequest;
 export type WsApprovalListPayload = z.infer<typeof WsApprovalListPayload>;
@@ -71,27 +44,6 @@ export type WsApprovalResolveResult = z.infer<typeof WsApprovalResolveResult>;
 // ---------------------------------------------------------------------------
 // Operation responses (typed) — approvals
 // ---------------------------------------------------------------------------
-
-export const WsApprovalRequestResponseOkEnvelope = WsResponseOkEnvelope.extend({
-  type: z.literal("approval.request"),
-  result: WsApprovalDecision,
-});
-export type WsApprovalRequestResponseOkEnvelope = z.infer<
-  typeof WsApprovalRequestResponseOkEnvelope
->;
-
-export const WsApprovalRequestResponseErrEnvelope = WsResponseErrEnvelope.extend({
-  type: z.literal("approval.request"),
-});
-export type WsApprovalRequestResponseErrEnvelope = z.infer<
-  typeof WsApprovalRequestResponseErrEnvelope
->;
-
-export const WsApprovalRequestResponseEnvelope = z.union([
-  WsApprovalRequestResponseOkEnvelope,
-  WsApprovalRequestResponseErrEnvelope,
-]);
-export type WsApprovalRequestResponseEnvelope = z.infer<typeof WsApprovalRequestResponseEnvelope>;
 
 export const WsApprovalListResponseOkEnvelope = WsResponseOkEnvelope.extend({
   type: z.literal("approval.list"),
@@ -135,28 +87,15 @@ export type WsApprovalResolveResponseEnvelope = z.infer<typeof WsApprovalResolve
 // Events (typed) — approvals
 // ---------------------------------------------------------------------------
 
-export const WsApprovalRequestedEventPayload = z
+export const WsApprovalUpdatedEventPayload = z
   .object({
     approval: Approval,
   })
   .strict();
-export type WsApprovalRequestedEventPayload = z.infer<typeof WsApprovalRequestedEventPayload>;
+export type WsApprovalUpdatedEventPayload = z.infer<typeof WsApprovalUpdatedEventPayload>;
 
-export const WsApprovalRequestedEvent = WsEventEnvelope.extend({
-  type: z.literal("approval.requested"),
-  payload: WsApprovalRequestedEventPayload,
+export const WsApprovalUpdatedEvent = WsEventEnvelope.extend({
+  type: z.literal("approval.updated"),
+  payload: WsApprovalUpdatedEventPayload,
 });
-export type WsApprovalRequestedEvent = z.infer<typeof WsApprovalRequestedEvent>;
-
-export const WsApprovalResolvedEventPayload = z
-  .object({
-    approval: Approval,
-  })
-  .strict();
-export type WsApprovalResolvedEventPayload = z.infer<typeof WsApprovalResolvedEventPayload>;
-
-export const WsApprovalResolvedEvent = WsEventEnvelope.extend({
-  type: z.literal("approval.resolved"),
-  payload: WsApprovalResolvedEventPayload,
-});
-export type WsApprovalResolvedEvent = z.infer<typeof WsApprovalResolvedEvent>;
+export type WsApprovalUpdatedEvent = z.infer<typeof WsApprovalUpdatedEvent>;

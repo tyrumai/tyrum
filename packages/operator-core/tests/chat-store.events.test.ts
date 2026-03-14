@@ -284,17 +284,39 @@ describe("chatStore event handling", () => {
         summary: "Waiting for approval",
       },
     });
-    ws.emit("approval_request", {
+    ws.emit("approval.updated", {
       occurred_at: "2026-01-01T00:00:02.000Z",
       payload: {
-        approval_id: "11111111-1111-1111-1111-111111111111",
-        approval_key: "approval:11111111-1111-1111-1111-111111111111",
-        kind: "other",
-        prompt: "Allow shell command?",
-        context: {
-          session_id: "session-1",
-          thread_id: "ui-session-1",
-          tool_call_id: "tool-1",
+        approval: {
+          approval_id: "11111111-1111-1111-1111-111111111111",
+          approval_key: "approval:11111111-1111-1111-1111-111111111111",
+          kind: "policy",
+          status: "awaiting_human",
+          prompt: "Allow shell command?",
+          motivation: "Allow shell command?",
+          created_at: "2026-01-01T00:00:02.000Z",
+          expires_at: null,
+          latest_review: {
+            review_id: "review-1",
+            target_type: "approval",
+            target_id: "11111111-1111-1111-1111-111111111111",
+            reviewer_kind: "guardian",
+            reviewer_id: "guardian-1",
+            state: "requested_human",
+            reason: "Guardian requested human review.",
+            risk_level: "medium",
+            risk_score: 0.55,
+            evidence: null,
+            decision_payload: null,
+            created_at: "2026-01-01T00:00:02.000Z",
+            started_at: "2026-01-01T00:00:02.000Z",
+            completed_at: "2026-01-01T00:00:02.000Z",
+          },
+          context: {
+            session_id: "session-1",
+            thread_id: "ui-session-1",
+            tool_call_id: "tool-1",
+          },
         },
       },
     });
@@ -338,7 +360,7 @@ describe("chatStore event handling", () => {
         id: "11111111-1111-1111-1111-111111111111",
         approval_id: "11111111-1111-1111-1111-111111111111",
         tool_call_id: "tool-1",
-        status: "pending",
+        status: "awaiting_human",
         title: "Approval required",
         detail: "Allow shell command?",
         created_at: "2026-01-01T00:00:02.000Z",

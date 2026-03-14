@@ -59,21 +59,24 @@ describe("Pairing routes", () => {
     await db.close();
   });
 
-  async function seedPendingPairing(): Promise<number> {
-    const pending = await nodePairingDal.upsertOnConnect({
+  async function seedAwaitingHumanPairing(): Promise<number> {
+    const pairing = await nodePairingDal.upsertOnConnect({
       tenantId,
       nodeId: "node-1",
       pubkey: "pubkey-1",
       label: "node-1",
       capabilities: ["cli"],
+      motivation: "Human review is required before this node can be paired.",
+      initialStatus: "awaiting_human",
       nowIso: "2026-02-23T00:00:00.000Z",
     });
-    expect(pending.status).toBe("pending");
-    return pending.pairing_id;
+    expect(pairing.status).toBe("awaiting_human");
+    expect(pairing.motivation).toBe("Human review is required before this node can be paired.");
+    return pairing.pairing_id;
   }
 
   it("rejects approve when trust_level is missing", async () => {
-    const pairingId = await seedPendingPairing();
+    const pairingId = await seedAwaitingHumanPairing();
     const res = await app.request(`/pairings/${String(pairingId)}/approve`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -89,7 +92,7 @@ describe("Pairing routes", () => {
   });
 
   it("rejects approve when capability_allowlist is missing", async () => {
-    const pairingId = await seedPendingPairing();
+    const pairingId = await seedAwaitingHumanPairing();
     const res = await app.request(`/pairings/${String(pairingId)}/approve`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -105,7 +108,7 @@ describe("Pairing routes", () => {
   });
 
   it("allows approving with an explicitly empty capability_allowlist", async () => {
-    const pairingId = await seedPendingPairing();
+    const pairingId = await seedAwaitingHumanPairing();
     const res = await app.request(`/pairings/${String(pairingId)}/approve`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -126,8 +129,43 @@ describe("Pairing routes", () => {
     expect(body.pairing?.capability_allowlist).toEqual([]);
   });
 
+  it("gets a single pairing with full review history", async () => {
+    const pairingId = await seedAwaitingHumanPairing();
+    await nodePairingDal.transitionWithReview({
+      tenantId,
+      pairingId,
+      status: "awaiting_human",
+      reviewerKind: "guardian",
+      reviewState: "requested_human",
+      reason: "A human should verify the node trust assumptions.",
+      allowedCurrentStatuses: ["awaiting_human"],
+    });
+
+    const res = await app.request(`/pairings/${String(pairingId)}`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      status?: string;
+      pairing?: {
+        pairing_id?: number;
+        motivation?: string;
+        reviews?: Array<{ state?: string; reason?: string | null }>;
+      };
+    };
+    expect(body.status).toBe("ok");
+    expect(body.pairing?.pairing_id).toBe(pairingId);
+    expect(body.pairing?.motivation).toBe(
+      "Human review is required before this node can be paired.",
+    );
+    expect(body.pairing?.reviews).toEqual([
+      expect.objectContaining({
+        state: "requested_human",
+        reason: "A human should verify the node trust assumptions.",
+      }),
+    ]);
+  });
+
   it("rejects approving with a legacy umbrella capability descriptor", async () => {
-    const pairingId = await seedPendingPairing();
+    const pairingId = await seedAwaitingHumanPairing();
     const res = await app.request(`/pairings/${String(pairingId)}/approve`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -145,7 +183,7 @@ describe("Pairing routes", () => {
   });
 
   it("rejects approve when capability_allowlist contains a legacy umbrella descriptor", async () => {
-    const pairingId = await seedPendingPairing();
+    const pairingId = await seedAwaitingHumanPairing();
     const res = await app.request(`/pairings/${String(pairingId)}/approve`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -163,7 +201,7 @@ describe("Pairing routes", () => {
   });
 
   it("does not return scoped_token in the approve response body", async () => {
-    const pairingId = await seedPendingPairing();
+    const pairingId = await seedAwaitingHumanPairing();
     const res = await app.request(`/pairings/${String(pairingId)}/approve`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -180,7 +218,7 @@ describe("Pairing routes", () => {
   });
 
   it("evicts slow websocket consumers during pairing approval delivery", async () => {
-    const pairingId = await seedPendingPairing();
+    const pairingId = await seedAwaitingHumanPairing();
     const connectionManager = new ConnectionManager();
     const slowNodeWs = createMockWs({ bufferedAmount: 11 });
     const healthyClientWs = createMockWs();
@@ -251,17 +289,17 @@ describe("Pairing routes", () => {
         delivery_mode: "local_direct",
         node_id: "node-1",
         peer_id: "slow-node",
-        topic: "pairing.approved",
+        topic: "pairing.updated",
       }),
     );
     expect(healthyClientWs.send).toHaveBeenCalledTimes(1);
     expect(JSON.parse(String(healthyClientWs.send.mock.calls[0]?.[0] ?? "{}"))).toMatchObject({
-      type: "pairing.resolved",
+      type: "pairing.updated",
     });
   });
 
   it("does not deliver pairing.approved to nodes without a tenant claim", async () => {
-    const pairingId = await seedPendingPairing();
+    const pairingId = await seedAwaitingHumanPairing();
     const connectionManager = new ConnectionManager();
     const unscopedNodeWs = createMockWs();
 

@@ -19,9 +19,12 @@ import { requireTenantId } from "../modules/auth/claims.js";
 import { type WsBroadcastAudience } from "../ws/audience.js";
 import { broadcastWsEvent } from "../ws/broadcast.js";
 import { resolveApproval } from "../modules/approval/resolve-service.js";
+import { toApprovalContract } from "../modules/approval/to-contract.js";
 
 const VALID_STATUSES = new Set<ApprovalStatus>([
-  "pending",
+  "queued",
+  "reviewing",
+  "awaiting_human",
   "approved",
   "denied",
   "expired",
@@ -57,7 +60,7 @@ function emitEvent(
 export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
   const app = new Hono();
 
-  /** List approvals. Defaults to pending; use ?status= to filter. */
+  /** List approvals. Defaults to blocked approvals; use ?status= to filter. */
   app.get("/approvals", async (c) => {
     const tenantId = requireTenantId(c);
     const status = c.req.query("status") as ApprovalStatus | undefined;
@@ -72,11 +75,15 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
       );
     }
 
-    const approvals = await deps.approvalDal.getByStatus({
-      tenantId,
-      status: status ?? "pending",
+    const approvals = status
+      ? await deps.approvalDal.getByStatus({
+          tenantId,
+          status,
+        })
+      : await deps.approvalDal.listBlocked({ tenantId });
+    return c.json({
+      approvals: approvals.map((approval) => toApprovalContract(approval) ?? approval),
     });
-    return c.json({ approvals });
   });
 
   /** Get a single approval by id. */
@@ -91,15 +98,16 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
     const approval = await deps.approvalDal.getById({
       tenantId,
       approvalId: parsedId.data,
+      includeReviews: true,
     });
     if (!approval) {
       return c.json({ error: "not_found", message: `approval ${String(id)} not found` }, 404);
     }
 
-    return c.json({ approval });
+    return c.json({ approval: toApprovalContract(approval) ?? approval });
   });
 
-  /** Respond to a pending approval (approve or deny). */
+  /** Respond to an approval awaiting human review (approve or deny). */
   app.post("/approvals/:id/respond", async (c) => {
     const tenantId = requireTenantId(c);
     const parsedId = UuidSchema.safeParse(c.req.param("id"));
@@ -162,12 +170,12 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
     }
 
     return c.json({
-      approval: result.approval,
+      approval: toApprovalContract(result.approval) ?? result.approval,
       created_overrides: result.createdOverrides,
     });
   });
 
-  /** Preview the context of a pending approval. */
+  /** Preview the context of an approval. */
   app.get("/approvals/:id/preview", async (c) => {
     const tenantId = requireTenantId(c);
     const id = c.req.param("id");
@@ -188,6 +196,7 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
       approval_id: approval.approval_id,
       approval_key: approval.approval_key,
       prompt: approval.prompt,
+      motivation: approval.motivation,
       context: approval.context,
       status: approval.status,
       expires_at: approval.expires_at,

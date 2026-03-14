@@ -138,17 +138,19 @@ describe("operator-core wiring", () => {
     expect(ws.approvalList).toHaveBeenCalledTimes(1);
     expect(ws.runList).toHaveBeenCalledTimes(1);
 
-    ws.emit("approval.requested", {
+    ws.emit("approval.updated", {
       payload: { approval: sampleApprovalPending() },
     });
-    expect(core.approvalsStore.getSnapshot().pendingIds).toEqual([1]);
+    expect(core.approvalsStore.getSnapshot().pendingIds).toEqual([
+      "11111111-1111-1111-1111-111111111111",
+    ]);
 
-    ws.emit("approval.resolved", {
+    ws.emit("approval.updated", {
       payload: { approval: sampleApprovalApproved() },
     });
     expect(core.approvalsStore.getSnapshot().pendingIds).toEqual([]);
 
-    ws.emit("pairing.requested", { payload: { pairing: samplePairingPending() } });
+    ws.emit("pairing.updated", { payload: { pairing: samplePairingPending() } });
     expect(core.pairingStore.getSnapshot().pendingIds).toEqual([10]);
 
     ws.emit("presence.upserted", { payload: { entry: samplePresenceEntry() } });
@@ -166,20 +168,42 @@ describe("operator-core wiring", () => {
     expect(runs.attemptIdsByStepId["step-1"]).toEqual(["attempt-1"]);
   });
 
-  it("hydrates approvalsStore from approval_request envelopes", () => {
+  it("hydrates approvalsStore from approval.updated envelopes", () => {
     const { core, ws } = createTestOperatorCore();
 
-    ws.emit("approval_request", {
+    ws.emit("approval.updated", {
       occurred_at: "2026-01-01T00:00:05.000Z",
       payload: {
-        approval_id: "11111111-1111-1111-1111-111111111111",
-        approval_key: "approval:11111111-1111-1111-1111-111111111111",
-        kind: "other",
-        prompt: "Approve shell.exec?",
-        context: {
-          session_id: "session-1",
-          thread_id: "ui-1",
-          tool_call_id: "tool-1",
+        approval: {
+          approval_id: "11111111-1111-1111-1111-111111111111",
+          approval_key: "approval:11111111-1111-1111-1111-111111111111",
+          kind: "policy",
+          status: "awaiting_human",
+          prompt: "Approve shell.exec?",
+          motivation: "Approve shell.exec?",
+          created_at: "2026-01-01T00:00:05.000Z",
+          expires_at: null,
+          latest_review: {
+            review_id: "review-1",
+            target_type: "approval",
+            target_id: "11111111-1111-1111-1111-111111111111",
+            reviewer_kind: "guardian",
+            reviewer_id: "guardian-1",
+            state: "requested_human",
+            reason: "Guardian requested human review.",
+            risk_level: "medium",
+            risk_score: 0.5,
+            evidence: null,
+            decision_payload: null,
+            created_at: "2026-01-01T00:00:05.000Z",
+            started_at: "2026-01-01T00:00:05.000Z",
+            completed_at: "2026-01-01T00:00:05.000Z",
+          },
+          context: {
+            session_id: "session-1",
+            thread_id: "ui-1",
+            tool_call_id: "tool-1",
+          },
         },
       },
     });
@@ -190,10 +214,14 @@ describe("operator-core wiring", () => {
     expect(core.approvalsStore.getSnapshot().byId["11111111-1111-1111-1111-111111111111"]).toEqual(
       expect.objectContaining({
         approval_id: "11111111-1111-1111-1111-111111111111",
-        status: "pending",
+        status: "awaiting_human",
         prompt: "Approve shell.exec?",
+        motivation: "Approve shell.exec?",
         created_at: "2026-01-01T00:00:05.000Z",
-        resolution: null,
+        latest_review: expect.objectContaining({
+          state: "requested_human",
+          reason: "Guardian requested human review.",
+        }),
       }),
     );
   });
@@ -426,13 +454,17 @@ describe("operator-core wiring", () => {
     const { core } = createTestOperatorCore({ ws, http });
 
     ws.emit("connected", { clientId: "client-123" });
-    ws.emit("approval.requested", { payload: { approval: sampleApprovalPending() } });
-    expect(core.approvalsStore.getSnapshot().pendingIds).toEqual([1]);
+    ws.emit("approval.updated", { payload: { approval: sampleApprovalPending() } });
+    expect(core.approvalsStore.getSnapshot().pendingIds).toEqual([
+      "11111111-1111-1111-1111-111111111111",
+    ]);
 
     approvalList.resolve({ approvals: [], next_cursor: undefined });
     await tick();
 
-    expect(core.approvalsStore.getSnapshot().pendingIds).toEqual([1]);
+    expect(core.approvalsStore.getSnapshot().pendingIds).toEqual([
+      "11111111-1111-1111-1111-111111111111",
+    ]);
   });
 
   it("does not drop WS pairings during refresh", async () => {
@@ -445,7 +477,7 @@ describe("operator-core wiring", () => {
     const { core } = createTestOperatorCore({ ws, http });
 
     ws.emit("connected", { clientId: "client-123" });
-    ws.emit("pairing.requested", { payload: { pairing: samplePairingPending() } });
+    ws.emit("pairing.updated", { payload: { pairing: samplePairingPending() } });
     expect(core.pairingStore.getSnapshot().pendingIds).toEqual([10]);
 
     pairingsList.resolve({ status: "ok", pairings: [] });

@@ -97,12 +97,4 @@ export interface ProtocolDeps {
 
   /** Called when a WebSocket peer disconnects (best-effort). */
   onConnectionClosed?: (connectionId: string) => void;
-
-  /** Called when an approval.request response is received from a client. */
-  onApprovalDecision?: (
-    tenantId: string,
-    approvalId: string,
-    approved: boolean,
-    reason: string | undefined,
-  ) => void;
 }

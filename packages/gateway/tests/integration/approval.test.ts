@@ -8,6 +8,7 @@ import {
   DEFAULT_TENANT_ID,
   DEFAULT_WORKSPACE_ID,
 } from "../../src/modules/identity/scope.js";
+import type { ApprovalRow } from "../../src/modules/approval/dal.js";
 
 const approvalScope = {
   tenantId: DEFAULT_TENANT_ID,
@@ -87,43 +88,86 @@ describe("Approval routes (with DAL access)", () => {
     container = result.container;
   });
 
-  it("creates an approval via DAL, lists it via route", async () => {
-    await container.approvalDal.create({
+  async function createHumanApproval(input?: {
+    approvalKey: string;
+    prompt?: string;
+    motivation?: string;
+    context?: unknown;
+  }): Promise<ApprovalRow> {
+    return await container.approvalDal.create({
       ...approvalScope,
+      approvalKey: input?.approvalKey ?? "approval-test",
+      prompt: input?.prompt ?? "Approve?",
+      motivation: input?.motivation ?? "Human review is required before this action may continue.",
+      kind: "policy",
+      context: input?.context,
+      status: "awaiting_human",
+    });
+  }
+
+  it("creates an approval via DAL, lists it via route", async () => {
+    await createHumanApproval({
       approvalKey: "approval-test-list",
       prompt: "Allow web scrape?",
+      motivation: "This scrape needs a human approval before it runs.",
       context: { url: "https://example.com" },
     });
 
     const res = await app.request("/approvals");
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
-      approvals: Array<{ prompt: string }>;
+      approvals: Array<{ prompt: string; motivation: string; status: string }>;
     };
     expect(body.approvals).toHaveLength(1);
     expect(body.approvals[0]!.prompt).toBe("Allow web scrape?");
+    expect(body.approvals[0]!.motivation).toBe(
+      "This scrape needs a human approval before it runs.",
+    );
+    expect(body.approvals[0]!.status).toBe("awaiting_human");
   });
 
   it("gets a single approval by id", async () => {
-    const created = await container.approvalDal.create({
-      ...approvalScope,
+    const created = await createHumanApproval({
       approvalKey: "approval-test-get",
-      prompt: "Approve?",
+      prompt: "Approve this run?",
+    });
+    await container.approvalDal.transitionWithReview({
+      tenantId: DEFAULT_TENANT_ID,
+      approvalId: created.approval_id,
+      status: "awaiting_human",
+      reviewerKind: "guardian",
+      reviewState: "requested_human",
+      reason: "A human should check the final side effects.",
+      allowedCurrentStatuses: ["awaiting_human"],
+      includeReviews: true,
     });
 
     const res = await app.request(`/approvals/${String(created.approval_id)}`);
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
-      approval: { approval_id: string };
+      approval: {
+        approval_id: string;
+        motivation: string;
+        status: string;
+        reviews?: Array<{ state?: string; reason?: string | null }>;
+      };
     };
     expect(body.approval.approval_id).toBe(created.approval_id);
+    expect(body.approval.motivation).toBe(
+      "Human review is required before this action may continue.",
+    );
+    expect(body.approval.status).toBe("awaiting_human");
+    expect(body.approval.reviews).toEqual([
+      expect.objectContaining({
+        state: "requested_human",
+        reason: "A human should check the final side effects.",
+      }),
+    ]);
   });
 
-  it("responds to a pending approval (approve)", async () => {
-    const created = await container.approvalDal.create({
-      ...approvalScope,
+  it("responds to an awaiting-human approval (approve)", async () => {
+    const created = await createHumanApproval({
       approvalKey: "approval-test-approve",
-      prompt: "Approve?",
     });
 
     const res = await app.request(`/approvals/${String(created.approval_id)}/respond`, {
@@ -134,17 +178,15 @@ describe("Approval routes (with DAL access)", () => {
 
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
-      approval: { status: string; resolution: { reason?: string } | null };
+      approval: { status: string; latest_review: { reason?: string | null } | null };
     };
     expect(body.approval.status).toBe("approved");
-    expect(body.approval.resolution?.reason).toBe("looks safe");
+    expect(body.approval.latest_review?.reason).toBe("looks safe");
   });
 
-  it("responds to a pending approval (deny)", async () => {
-    const created = await container.approvalDal.create({
-      ...approvalScope,
+  it("responds to an awaiting-human approval (deny)", async () => {
+    const created = await createHumanApproval({
       approvalKey: "approval-test-deny",
-      prompt: "Approve?",
     });
 
     const res = await app.request(`/approvals/${String(created.approval_id)}/respond`, {
@@ -155,17 +197,15 @@ describe("Approval routes (with DAL access)", () => {
 
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
-      approval: { status: string; resolution: { reason?: string } | null };
+      approval: { status: string; latest_review: { reason?: string | null } | null };
     };
     expect(body.approval.status).toBe("denied");
-    expect(body.approval.resolution?.reason).toBe("too risky");
+    expect(body.approval.latest_review?.reason).toBe("too risky");
   });
 
   it("is idempotent when responding to already-responded approval", async () => {
-    const created = await container.approvalDal.create({
-      ...approvalScope,
+    const created = await createHumanApproval({
       approvalKey: "approval-test-idempotent",
-      prompt: "Approve?",
     });
 
     await app.request(`/approvals/${String(created.approval_id)}/respond`, {
@@ -186,10 +226,8 @@ describe("Approval routes (with DAL access)", () => {
   });
 
   it("returns 400 when approved field is missing", async () => {
-    const created = await container.approvalDal.create({
-      ...approvalScope,
+    const created = await createHumanApproval({
       approvalKey: "approval-test-missing-decision",
-      prompt: "Approve?",
     });
 
     const res = await app.request(`/approvals/${String(created.approval_id)}/respond`, {
@@ -202,10 +240,10 @@ describe("Approval routes (with DAL access)", () => {
   });
 
   it("previews an approval context", async () => {
-    const created = await container.approvalDal.create({
-      ...approvalScope,
+    const created = await createHumanApproval({
       approvalKey: "approval-test-preview",
       prompt: "Approve payment?",
+      motivation: "Human review is required before sending this payment.",
       context: { amount: 100, currency: "USD" },
     });
 
@@ -214,28 +252,28 @@ describe("Approval routes (with DAL access)", () => {
     const body = (await res.json()) as {
       approval_id: string;
       prompt: string;
+      motivation: string;
       context: { amount: number; currency: string };
       status: string;
     };
     expect(body.approval_id).toBe(created.approval_id);
     expect(body.prompt).toBe("Approve payment?");
+    expect(body.motivation).toBe("Human review is required before sending this payment.");
     expect(body.context).toEqual({ amount: 100, currency: "USD" });
-    expect(body.status).toBe("pending");
+    expect(body.status).toBe("awaiting_human");
   });
 
-  it("approved approvals are excluded from pending list", async () => {
-    const a1 = await container.approvalDal.create({
-      ...approvalScope,
+  it("approved approvals are excluded from the default blocked list", async () => {
+    const a1 = await createHumanApproval({
       approvalKey: "approval-test-pending-a1",
       prompt: "First?",
     });
-    await container.approvalDal.create({
-      ...approvalScope,
+    await createHumanApproval({
       approvalKey: "approval-test-pending-a2",
       prompt: "Second?",
     });
 
-    await container.approvalDal.respond({
+    await container.approvalDal.resolveWithEngineAction({
       tenantId: DEFAULT_TENANT_ID,
       approvalId: a1.approval_id,
       decision: "approved",
@@ -250,11 +288,9 @@ describe("Approval routes (with DAL access)", () => {
     expect(body.approvals[0]!.prompt).toBe("Second?");
   });
 
-  it("evicts slow websocket consumers when broadcasting approval.resolved", async () => {
-    const approval = await container.approvalDal.create({
-      ...approvalScope,
+  it("evicts slow websocket consumers when broadcasting approval.updated", async () => {
+    const approval = await createHumanApproval({
       approvalKey: "approval-test-ws-backpressure",
-      prompt: "Approve?",
     });
 
     const connectionManager = new ConnectionManager();
@@ -315,15 +351,13 @@ describe("Approval routes (with DAL access)", () => {
     expect(connectionManager.getClient("slow-client")).toBeUndefined();
     expect(healthyWs.send).toHaveBeenCalledTimes(1);
     expect(JSON.parse(String(healthyWs.send.mock.calls[0]?.[0] ?? "{}"))).toMatchObject({
-      type: "approval.resolved",
+      type: "approval.updated",
     });
   });
 
-  it("broadcasts approval.resolved to read-capable operator clients but not nodes", async () => {
-    const approval = await container.approvalDal.create({
-      ...approvalScope,
+  it("broadcasts approval.updated to read-capable operator clients but not nodes", async () => {
+    const approval = await createHumanApproval({
       approvalKey: "approval-test-node-audience",
-      prompt: "Approve?",
     });
 
     const connectionManager = new ConnectionManager();
@@ -389,20 +423,20 @@ describe("Approval routes (with DAL access)", () => {
     expect(res.status).toBe(200);
     expect(operatorWs.send).toHaveBeenCalledTimes(1);
     expect(JSON.parse(String(operatorWs.send.mock.calls[0]?.[0] ?? "{}"))).toMatchObject({
-      type: "approval.resolved",
+      type: "approval.updated",
     });
     expect(readOnlyWs.send).toHaveBeenCalledTimes(1);
     expect(JSON.parse(String(readOnlyWs.send.mock.calls[0]?.[0] ?? "{}"))).toMatchObject({
-      type: "approval.resolved",
+      type: "approval.updated",
     });
     expect(nodeWs.send).not.toHaveBeenCalled();
   });
 
   it("broadcasts approval-created policy overrides to approval and admin operators only", async () => {
-    const approval = await container.approvalDal.create({
-      ...approvalScope,
+    const approval = await createHumanApproval({
       approvalKey: "approval-test-policy-override-audience",
       prompt: "Approve always?",
+      motivation: "Human review is required before approving this override permanently.",
       context: {
         policy: {
           agent_id: DEFAULT_AGENT_ID,
@@ -501,12 +535,12 @@ describe("Approval routes (with DAL access)", () => {
     expect(res.status).toBe(200);
     expect(
       approvalOperatorWs.send.mock.calls.map((call) => JSON.parse(String(call[0]))["type"]),
-    ).toEqual(["policy_override.created", "approval.resolved"]);
+    ).toEqual(["policy_override.created", "approval.updated"]);
     expect(
       policyAdminWs.send.mock.calls.map((call) => JSON.parse(String(call[0]))["type"]),
     ).toEqual(["policy_override.created"]);
     expect(readOnlyWs.send.mock.calls.map((call) => JSON.parse(String(call[0]))["type"])).toEqual([
-      "approval.resolved",
+      "approval.updated",
     ]);
     expect(nodeWs.send).not.toHaveBeenCalled();
   });

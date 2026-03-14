@@ -49,7 +49,6 @@ function createRuntime(config: DesktopNodeConfig, permissions: ResolvedPermissio
         nodeStatus: toNodeStatusString(status),
         node: { ...status, deviceId: runtime?.deviceId ?? null },
       }),
-    onConsentRequest: (msg) => sender.send("consent:request", msg),
     onPlanUpdate: (msg) => sender.send("plan:update", msg),
     onLog: (entry) => sender.send("log:entry", { source: "node", ...entry }),
   });
@@ -172,16 +171,6 @@ function handleNodeGetStatus(): {
   };
 }
 
-function handleConsentRespond(
-  _event: Electron.IpcMainInvokeEvent,
-  requestId: string,
-  approved: boolean,
-  reason?: string,
-): { status: "responded" } {
-  runtime?.respondToConsent(requestId, approved, reason);
-  return { status: "responded" };
-}
-
 export function registerNodeIpc(window: BrowserWindow): void {
   sender.setWindow(window);
   if (ipcRegistered) return;
@@ -190,5 +179,4 @@ export function registerNodeIpc(window: BrowserWindow): void {
   ipcMain.handle("node:connect", handleNodeConnect);
   ipcMain.handle("node:disconnect", handleNodeDisconnect);
   ipcMain.handle("node:get-status", handleNodeGetStatus);
-  ipcMain.handle("consent:respond", handleConsentRespond);
 }

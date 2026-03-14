@@ -1,5 +1,6 @@
 import type {
   ActionPrimitive as ActionPrimitiveT,
+  ApprovalKind as ApprovalKindT,
   ArtifactRef as ArtifactRefT,
   AttemptCost as AttemptCostT,
   ClientCapability as ClientCapabilityT,
@@ -17,7 +18,7 @@ export interface StepResult {
   artifacts?: ArtifactRefT[];
   cost?: AttemptCostT;
   pause?: {
-    kind: string;
+    kind: ApprovalKindT;
     prompt: string;
     detail: string;
     context?: unknown;

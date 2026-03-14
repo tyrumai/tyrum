@@ -124,7 +124,7 @@ function registerCancelAndRetryTests(fixture: { db: () => SqliteDb }): void {
     );
     expect(approvalRow).toBeTruthy();
     expect(approvalRow!.kind).toBe("takeover");
-    expect(approvalRow!.status).toBe("pending");
+    expect(approvalRow!.status).toBe("queued");
     expect(approvalRow!.run_id).toBe(runId);
     expect(approvalRow!.resume_token).toBe(tokenRow!.token);
     const stepApproval = await db.get<{ approval_id: string | null }>(

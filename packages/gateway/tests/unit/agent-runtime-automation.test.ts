@@ -8,13 +8,16 @@ import { createContainer } from "../../src/container.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
 import { ChannelInboxDal } from "../../src/modules/channels/inbox-dal.js";
 import { ScheduleService } from "../../src/modules/automation/schedule-service.js";
+import { WsEventDal } from "../../src/modules/ws-event/dal.js";
 import { WorkboardDal } from "../../src/modules/workboard/dal.js";
 import {
   DEFAULT_AGENT_ID,
   DEFAULT_TENANT_ID,
   DEFAULT_WORKSPACE_ID,
 } from "../../src/modules/identity/scope.js";
+import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { createStubLanguageModel } from "./stub-language-model.js";
+import { makeClient } from "./ws-protocol.test-support.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -170,7 +173,8 @@ describe("AgentRuntime automation replies", () => {
     container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
     await seedNotificationRoute(container);
 
-    const notify = vi.fn();
+    const connectionManager = new ConnectionManager();
+    const { ws } = makeClient(connectionManager, ["playwright"]);
     vi.spyOn(container.policyService, "evaluateConnectorAction").mockResolvedValue({
       decision: "require_approval",
       policy_snapshot: { policy_snapshot_id: "snapshot-1" },
@@ -182,14 +186,23 @@ describe("AgentRuntime automation replies", () => {
       home: homeDir,
       languageModel: createStubLanguageModel("notify operator"),
       fetchImpl: fetch404,
-      approvalNotifier: { notify },
+      protocolDeps: {
+        connectionManager,
+        wsEventDal: new WsEventDal(container.db),
+        logger: container.logger,
+        maxBufferedBytes: 64 * 1024,
+      },
     });
 
     await runtime.executeDecideAction(makeAutomationRequest());
 
-    const pending = await container.approvalDal.getPending({ tenantId: DEFAULT_TENANT_ID });
+    const pending = await container.approvalDal.listBlocked({ tenantId: DEFAULT_TENANT_ID });
     expect(pending).toHaveLength(1);
-    expect(notify).toHaveBeenCalledTimes(1);
+    expect(pending[0]!.status).toBe("queued");
+    expect(ws.send).toHaveBeenCalledOnce();
+    const event = JSON.parse(ws.send.mock.calls[0]![0] as string) as Record<string, unknown>;
+    expect(event["type"]).toBe("approval.updated");
+    expect((event["payload"] as { approval: { status: string } }).approval.status).toBe("queued");
 
     const outbox = await container.db.get<{ count: number; approval_id: string | null }>(
       `SELECT COUNT(*) AS count, MAX(approval_id) AS approval_id
@@ -204,7 +217,6 @@ describe("AgentRuntime automation replies", () => {
     container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
     await seedNotificationRoute(container);
 
-    const notify = vi.fn();
     vi.spyOn(container.policyService, "evaluateConnectorAction").mockResolvedValue({
       decision: "require_approval",
       policy_snapshot: { policy_snapshot_id: "snapshot-1" },
@@ -216,16 +228,14 @@ describe("AgentRuntime automation replies", () => {
       home: homeDir,
       languageModel: createStubLanguageModel("notify operator"),
       fetchImpl: fetch404,
-      approvalNotifier: { notify },
     });
 
     const handle = await runtime.turnStream(makeAutomationRequest());
     const response = await handle.finalize();
     expect(response.reply).toBe("notify operator");
 
-    const pending = await container.approvalDal.getPending({ tenantId: DEFAULT_TENANT_ID });
+    const pending = await container.approvalDal.listBlocked({ tenantId: DEFAULT_TENANT_ID });
     expect(pending).toHaveLength(1);
-    expect(notify).toHaveBeenCalledTimes(1);
 
     const outbox = await container.db.get<{ count: number; approval_id: string | null }>(
       `SELECT COUNT(*) AS count, MAX(approval_id) AS approval_id

@@ -62,7 +62,7 @@ export function registerToolLoopApprovalTests(state: ToolLoopTestState): void {
     expect(pending.workspace_id).toBe(ids.workspaceId);
     expect(pending.run_id).not.toBeNull();
     expect(pending.resume_token).toMatch(/^resume-/);
-    expect(pending.status).toBe("pending");
+    expect(pending.status).toBe("queued");
 
     const res = await respondToApproval(container, pending.approval_id, {
       decision: "approved",
@@ -87,6 +87,7 @@ export function registerToolLoopApprovalTests(state: ToolLoopTestState): void {
       approvalKey: "tool-loop-already-approved",
       kind: "workflow_step",
       prompt: "Approve execution of 'bash' (risk=high)",
+      motivation: "Pre-approved tool executions should not trigger duplicate approval prompts.",
       context: {
         source: "agent-tool-execution",
         tool_id: "bash",

@@ -8,6 +8,37 @@ import {
 } from "../../src/modules/identity/scope.js";
 import { makeDeps, makeClient } from "./ws-protocol.test-support.js";
 
+function makeApprovalRow(input: {
+  approvalId: string;
+  status: "queued" | "reviewing" | "awaiting_human" | "approved" | "denied";
+  context?: unknown;
+  latestReview?: unknown;
+}) {
+  return {
+    tenant_id: DEFAULT_TENANT_ID,
+    approval_id: input.approvalId,
+    approval_key: `approval:${input.approvalId}`,
+    agent_id: DEFAULT_AGENT_ID,
+    workspace_id: DEFAULT_WORKSPACE_ID,
+    kind: "policy" as const,
+    status: input.status,
+    prompt: "Ok?",
+    motivation: "A review is required before continuing.",
+    context: input.context ?? {},
+    created_at: "2026-02-20T22:00:00.000Z",
+    expires_at: null,
+    latest_review: (input.latestReview ?? null) as never,
+    session_id: null,
+    plan_id: null,
+    run_id: null,
+    step_id: null,
+    attempt_id: null,
+    work_item_id: null,
+    work_item_task_id: null,
+    resume_token: null,
+  };
+}
+
 /**
  * Approval list, approval resolve, and override tests for handleClientMessage.
  * Must be called inside a `describe("handleClientMessage")` block.
@@ -20,35 +51,16 @@ function registerApprovalListAndResolveTests(): void {
     const approvalId = "00000000-0000-4000-8000-0000000000aa";
 
     const approvalDal = {
-      getPending: vi.fn(async () => {
+      listBlocked: vi.fn(async () => {
         return [
-          {
-            tenant_id: DEFAULT_TENANT_ID,
-            approval_id: approvalId,
-            approval_key: `approval:${approvalId}`,
-            agent_id: DEFAULT_AGENT_ID,
-            workspace_id: DEFAULT_WORKSPACE_ID,
-            kind: "policy",
-            status: "pending",
-            prompt: "Approve?",
+          makeApprovalRow({
+            approvalId,
+            status: "awaiting_human",
             context: { x: 1 },
-            created_at: "2026-02-20 22:00:00",
-            expires_at: null,
-            resolved_at: null,
-            resolution: null,
-            session_id: null,
-            plan_id: null,
-            run_id: null,
-            step_id: null,
-            attempt_id: null,
-            work_item_id: null,
-            work_item_task_id: null,
-            resume_token: null,
-          },
+          }),
         ];
       }),
       getByStatus: vi.fn(async () => []),
-      respond: vi.fn(async () => undefined),
     };
 
     const deps = makeDeps(cm, { approvalDal: approvalDal as never });
@@ -67,14 +79,14 @@ function registerApprovalListAndResolveTests(): void {
     expect((result as unknown as { ok: boolean }).ok).toBe(true);
     const res = result as unknown as {
       result: {
-        approvals: Array<{ approval_id: string; created_at: string; resolution: unknown }>;
+        approvals: Array<{ approval_id: string; created_at: string; latest_review: unknown }>;
       };
     };
     expect(res.result.approvals).toHaveLength(1);
     expect(res.result.approvals[0]!.approval_id).toBe(approvalId);
     expect(res.result.approvals[0]!.created_at).toContain("T");
     expect(res.result.approvals[0]!.created_at).toContain("Z");
-    expect(res.result.approvals[0]!.resolution).toBeNull();
+    expect(res.result.approvals[0]!.latest_review).toBeNull();
   });
 
   it("rejects approval.list when peer role is node", async () => {
@@ -83,9 +95,8 @@ function registerApprovalListAndResolveTests(): void {
     const client = cm.getClient(id)!;
 
     const approvalDal = {
-      getPending: vi.fn(async () => []),
+      listBlocked: vi.fn(async () => []),
       getByStatus: vi.fn(async () => []),
-      respond: vi.fn(async () => undefined),
     };
 
     const deps = makeDeps(cm, { approvalDal: approvalDal as never });
@@ -208,44 +219,36 @@ function registerApprovalListAndResolveTests(): void {
     const client = cm.getClient(id)!;
     const approvalId = "00000000-0000-4000-8000-0000000000ab";
 
-    const respond = vi.fn(async () => {
+    const resolveWithEngineAction = vi.fn(async () => {
       return {
-        tenant_id: DEFAULT_TENANT_ID,
-        approval_id: approvalId,
-        approval_key: `approval:${approvalId}`,
-        agent_id: DEFAULT_AGENT_ID,
-        workspace_id: DEFAULT_WORKSPACE_ID,
-        kind: "policy",
-        status: "approved",
-        prompt: "Ok?",
-        context: {},
-        created_at: "2026-02-20 22:00:00",
-        expires_at: null,
-        resolved_at: "2026-02-20 22:00:05",
-        resolution: {
-          decision: "approved",
-          resolved_at: "2026-02-20T22:00:05Z",
-          reason: "looks good",
-        },
-        session_id: null,
-        plan_id: null,
-        run_id: null,
-        step_id: null,
-        attempt_id: null,
-        work_item_id: null,
-        work_item_task_id: null,
-        resume_token: null,
+        approval: makeApprovalRow({
+          approvalId,
+          status: "approved",
+          latestReview: {
+            review_id: "00000000-0000-4000-8000-0000000000ff",
+            target_type: "approval",
+            target_id: approvalId,
+            reviewer_kind: "human",
+            reviewer_id: "client-1",
+            state: "approved",
+            reason: "looks good",
+            risk_level: null,
+            risk_score: null,
+            evidence: null,
+            decision_payload: { decision: "approved", reason: "looks good", mode: "once" },
+            created_at: "2026-02-20T22:00:05.000Z",
+            started_at: "2026-02-20T22:00:05.000Z",
+            completed_at: "2026-02-20T22:00:05.000Z",
+          },
+        }),
+        transitioned: true,
       };
     });
 
     const approvalDal = {
-      getPending: vi.fn(async () => []),
+      listBlocked: vi.fn(async () => []),
       getByStatus: vi.fn(async () => []),
-      respond,
-      resolveWithEngineAction: vi.fn(async () => {
-        const approval = await respond();
-        return { approval, transitioned: true };
-      }),
+      resolveWithEngineAction,
     };
 
     const deps = makeDeps(cm, { approvalDal: approvalDal as never });
@@ -264,12 +267,16 @@ function registerApprovalListAndResolveTests(): void {
     expect((result as unknown as { ok: boolean }).ok).toBe(true);
     const res = result as unknown as {
       result: {
-        approval: { approval_id: string; status: string; resolution: { decision: string } };
+        approval: {
+          approval_id: string;
+          status: string;
+          latest_review: { decision_payload: { decision: string } } | null;
+        };
       };
     };
     expect(res.result.approval.approval_id).toBe(approvalId);
     expect(res.result.approval.status).toBe("approved");
-    expect(res.result.approval.resolution.decision).toBe("approved");
+    expect(res.result.approval.latest_review?.decision_payload.decision).toBe("approved");
   });
 }
 
@@ -280,49 +287,13 @@ function registerOverrideTests(): void {
     const client = cm.getClient(id)!;
     const approvalId = "00000000-0000-4000-8000-0000000000ac";
 
-    const respond = vi.fn(async () => {
-      return {
-        tenant_id: DEFAULT_TENANT_ID,
-        approval_id: approvalId,
-        approval_key: `approval:${approvalId}`,
-        agent_id: DEFAULT_AGENT_ID,
-        workspace_id: DEFAULT_WORKSPACE_ID,
-        kind: "policy",
-        status: "denied",
-        prompt: "Ok?",
-        context: {},
-        created_at: "2026-02-20 22:00:00",
-        expires_at: null,
-        resolved_at: "2026-02-20 22:00:05",
-        resolution: {
-          decision: "denied",
-          resolved_at: "2026-02-20T22:00:05Z",
-          reason: "no",
-        },
-        session_id: null,
-        plan_id: null,
-        run_id: null,
-        step_id: null,
-        attempt_id: null,
-        work_item_id: null,
-        work_item_task_id: null,
-        resume_token: null,
-      };
-    });
-
     const approvalDal = {
-      getPending: vi.fn(async () => []),
+      listBlocked: vi.fn(async () => []),
       getByStatus: vi.fn(async () => []),
-      getById: vi.fn(async () => {
-        return {
-          tenant_id: DEFAULT_TENANT_ID,
-          approval_id: approvalId,
-          approval_key: `approval:${approvalId}`,
-          agent_id: DEFAULT_AGENT_ID,
-          workspace_id: DEFAULT_WORKSPACE_ID,
-          kind: "policy",
-          status: "pending",
-          prompt: "Ok?",
+      getById: vi.fn(async () =>
+        makeApprovalRow({
+          approvalId,
+          status: "awaiting_human",
           context: {
             policy: {
               agent_id: DEFAULT_AGENT_ID,
@@ -336,25 +307,31 @@ function registerOverrideTests(): void {
               ],
             },
           },
-          created_at: "2026-02-20 22:00:00",
-          expires_at: null,
-          resolved_at: null,
-          resolution: null,
-          session_id: null,
-          plan_id: null,
-          run_id: null,
-          step_id: null,
-          attempt_id: null,
-          work_item_id: null,
-          work_item_task_id: null,
-          resume_token: null,
-        };
-      }),
-      respond,
-      resolveWithEngineAction: vi.fn(async () => {
-        const approval = await respond();
-        return { approval, transitioned: true };
-      }),
+        }),
+      ),
+      resolveWithEngineAction: vi.fn(async () => ({
+        approval: makeApprovalRow({
+          approvalId,
+          status: "denied",
+          latestReview: {
+            review_id: "00000000-0000-4000-8000-0000000000fe",
+            target_type: "approval",
+            target_id: approvalId,
+            reviewer_kind: "human",
+            reviewer_id: "client-1",
+            state: "denied",
+            reason: "no",
+            risk_level: null,
+            risk_score: null,
+            evidence: null,
+            decision_payload: { decision: "denied", reason: "no", mode: "always" },
+            created_at: "2026-02-20T22:00:05.000Z",
+            started_at: "2026-02-20T22:00:05.000Z",
+            completed_at: "2026-02-20T22:00:05.000Z",
+          },
+        }),
+        transitioned: true,
+      })),
     };
 
     const policyOverrideDal = {
@@ -411,18 +388,12 @@ function registerOverrideTests(): void {
     const approvalId = "00000000-0000-4000-8000-0000000000ad";
 
     const approvalDal = {
-      getPending: vi.fn(async () => []),
+      listBlocked: vi.fn(async () => []),
       getByStatus: vi.fn(async () => []),
-      getById: vi.fn(async () => {
-        return {
-          tenant_id: DEFAULT_TENANT_ID,
-          approval_id: approvalId,
-          approval_key: `approval:${approvalId}`,
-          agent_id: DEFAULT_AGENT_ID,
-          workspace_id: DEFAULT_WORKSPACE_ID,
-          kind: "policy",
-          status: "pending",
-          prompt: "Ok?",
+      getById: vi.fn(async () =>
+        makeApprovalRow({
+          approvalId,
+          status: "awaiting_human",
           context: {
             policy: {
               agent_id: DEFAULT_AGENT_ID,
@@ -436,48 +407,10 @@ function registerOverrideTests(): void {
               ],
             },
           },
-          created_at: "2026-02-20 22:00:00",
-          expires_at: null,
-          resolved_at: null,
-          resolution: null,
-          session_id: null,
-          plan_id: null,
-          run_id: null,
-          step_id: null,
-          attempt_id: null,
-          work_item_id: null,
-          work_item_task_id: null,
-          resume_token: null,
-        };
-      }),
-      respond: vi.fn(async () => {
-        return {
-          tenant_id: DEFAULT_TENANT_ID,
-          approval_id: approvalId,
-          approval_key: `approval:${approvalId}`,
-          agent_id: DEFAULT_AGENT_ID,
-          workspace_id: DEFAULT_WORKSPACE_ID,
-          kind: "policy",
-          status: "approved",
-          prompt: "Ok?",
-          context: {},
-          created_at: "2026-02-20 22:00:00",
-          expires_at: null,
-          resolved_at: "2026-02-20 22:00:05",
-          resolution: {
-            decision: "approved",
-            resolved_at: "2026-02-20T22:00:05Z",
-            reason: "looks good",
-          },
-          session_id: null,
-          plan_id: null,
-          run_id: null,
-          step_id: null,
-          attempt_id: null,
-          work_item_id: null,
-          work_item_task_id: null,
-          resume_token: null,
-        };
+        }),
+      ),
+      resolveWithEngineAction: vi.fn(async () => {
+        throw new Error("resolveWithEngineAction should not be called when guardrails reject");
       }),
     };
 

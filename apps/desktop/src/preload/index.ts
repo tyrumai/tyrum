@@ -54,15 +54,6 @@ contextBridge.exposeInMainWorld("tyrumDesktop", {
       ipcRenderer.removeListener("log:entry", listener);
     };
   },
-  onConsentRequest: (cb: (req: unknown) => void) => {
-    const listener = (_event: unknown, req: unknown) => cb(req);
-    ipcRenderer.on("consent:request", listener);
-    return () => {
-      ipcRenderer.removeListener("consent:request", listener);
-    };
-  },
-  consentRespond: (requestId: string, approved: boolean, reason?: string) =>
-    ipcRenderer.invoke("consent:respond", requestId, approved, reason),
   checkMacPermissions: () => ipcRenderer.invoke("permissions:check-mac"),
   requestMacPermission: (permission: "accessibility" | "screenRecording") =>
     ipcRenderer.invoke("permissions:request-mac", permission),

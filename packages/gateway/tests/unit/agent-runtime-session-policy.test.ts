@@ -366,6 +366,7 @@ describe("AgentRuntime - session lifecycle and policy", () => {
       approvalKey: "plan-1:step:0:tool_call:tc-other",
       kind: "workflow_step",
       prompt: "Approve bash",
+      motivation: "Verify the resumed approval only applies to its original tool call.",
       context: {
         source: "agent-tool-execution",
         tool_id: "bash",
@@ -466,6 +467,7 @@ describe("AgentRuntime - session lifecycle and policy", () => {
       approvalKey: "plan-1:step:0:tool_call:tc-secret",
       kind: "workflow_step",
       prompt: "Resume bash",
+      motivation: "Resume the original tool call using stored secret-backed arguments.",
       context: {
         source: "agent-tool-execution",
         tool_id: "bash",

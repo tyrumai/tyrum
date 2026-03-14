@@ -1,12 +1,15 @@
 import type { WorkItem, WorkScope } from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
 import type { ApprovalDal } from "../approval/dal.js";
+import { broadcastApprovalUpdated } from "../approval/update-broadcast.js";
 import type { PolicyService } from "../policy/service.js";
 import { ChannelOutboxDal } from "../channels/outbox-dal.js";
 import { DEFAULT_CHANNEL_ACCOUNT_ID, parseChannelSourceKey } from "../channels/interface.js";
 import { SessionSendPolicyOverrideDal } from "../channels/send-policy-override-dal.js";
 import { DEFAULT_TENANT_ID } from "../identity/scope.js";
+import { createReviewedApproval } from "../review/review-init.js";
 import { WorkboardDal } from "./dal.js";
+import type { ProtocolDeps } from "../../ws/protocol.js";
 
 type WorkItemTerminalState = "blocked" | "done" | "failed";
 
@@ -33,6 +36,7 @@ export async function enqueueWorkItemStateChangeNotification(input: {
   item: WorkItem;
   policyService?: PolicyService;
   approvalDal?: ApprovalDal;
+  protocolDeps?: ProtocolDeps;
 }): Promise<{ enqueued: boolean; deduped?: boolean; skipped_reason?: string }> {
   if (!isTerminalState(input.item.status)) {
     return { enqueued: false, skipped_reason: "status_not_notifiable" };
@@ -125,27 +129,40 @@ export async function enqueueWorkItemStateChangeNotification(input: {
     }
 
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-    const approval = await input.approvalDal.create({
-      tenantId,
-      agentId: input.scope.agent_id,
-      workspaceId: input.scope.workspace_id,
-      approvalKey: `connector:work.notify:${route.source}:${route.thread_id}:${input.item.work_item_id}:${updatedAtIso}`,
-      kind: "connector.send",
-      prompt: `Approve sending a ${route.source} completion notification`,
-      context: {
-        source: route.source,
-        thread_id: route.thread_id,
-        inbox_id: route.inbox_id,
-        key: targetSessionKey,
-        lane: "main",
-        policy_snapshot_id: policySnapshotId,
-        work_item: {
-          work_item_id: input.item.work_item_id,
-          status: input.item.status,
-          title: input.item.title,
-        },
+    const approval = await createReviewedApproval({
+      approvalDal: input.approvalDal,
+      policyService,
+      emitUpdate: async (createdApproval) => {
+        await broadcastApprovalUpdated({
+          tenantId,
+          approval: createdApproval,
+          protocolDeps: input.protocolDeps,
+        });
       },
-      expiresAt,
+      params: {
+        tenantId,
+        agentId: input.scope.agent_id,
+        workspaceId: input.scope.workspace_id,
+        approvalKey: `connector:work.notify:${route.source}:${route.thread_id}:${input.item.work_item_id}:${updatedAtIso}`,
+        kind: "connector.send",
+        prompt: `Approve sending a ${route.source} completion notification`,
+        motivation:
+          "The system wants to notify the external thread that a tracked work item reached a terminal state.",
+        context: {
+          source: route.source,
+          thread_id: route.thread_id,
+          inbox_id: route.inbox_id,
+          key: targetSessionKey,
+          lane: "main",
+          policy_snapshot_id: policySnapshotId,
+          work_item: {
+            work_item_id: input.item.work_item_id,
+            status: input.item.status,
+            title: input.item.title,
+          },
+        },
+        expiresAt,
+      },
     });
     approvalId = approval.approval_id;
   }

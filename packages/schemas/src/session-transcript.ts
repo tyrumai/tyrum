@@ -67,7 +67,7 @@ export const SessionTranscriptApprovalItem = z
     approval_id: z.string().trim().min(1),
     tool_call_id: z.string().trim().min(1).optional(),
     status: ApprovalStatus,
-    title: z.string().default("Approval required"),
+    title: z.string().default("Review required"),
     detail: z.string().default(""),
     created_at: DateTimeSchema,
     updated_at: DateTimeSchema,

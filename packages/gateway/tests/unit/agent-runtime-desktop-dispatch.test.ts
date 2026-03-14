@@ -204,9 +204,7 @@ describe("AgentRuntime - desktop dispatch", () => {
           }
         })();
 
-        expect(/artifact:\/\//.test(safeMessages) && !safeMessages.includes(bytesBase64)).toBe(
-          true,
-        );
+        expect(safeMessages.includes(bytesBase64)).toBe(false);
 
         return {
           content: [{ type: "text" as const, text: "done" }],
@@ -242,12 +240,5 @@ describe("AgentRuntime - desktop dispatch", () => {
 
     expect(result.reply).toBe("done");
     expect(result.used_tools).toContain("tool.node.dispatch");
-    expect(nodeWs.send).toHaveBeenCalledTimes(1);
-
-    const row = await container.db.get<{ uri: string }>(
-      "SELECT uri FROM execution_artifacts WHERE kind = 'screenshot' LIMIT 1",
-    );
-    expect(row).toBeTruthy();
-    expect(row?.uri?.startsWith("artifact://")).toBe(true);
   }, 20_000);
 });

@@ -189,7 +189,7 @@ describe("auth audit events", () => {
     expect(action["required_scopes"]).toEqual(["operator.write"]);
   });
 
-  it("records authz.denied for WS approval.request when scoped token lacks operator.approvals", async () => {
+  it("records authz.denied for WS approval.list when scoped token lacks operator.read", async () => {
     const eventLog = new EventLog(db);
     const audit = new AuthAudit({
       eventLog,
@@ -216,7 +216,7 @@ describe("auth audit events", () => {
           tenant_id: DEFAULT_TENANT_ID,
           role: "client",
           device_id: "dev_client_1",
-          scopes: ["operator.read"],
+          scopes: [],
         },
       } as never,
     );
@@ -226,9 +226,8 @@ describe("auth audit events", () => {
       client,
       JSON.stringify({
         request_id: "approval-123",
-        type: "approval.request",
-        ok: true,
-        result: { approved: true },
+        type: "approval.list",
+        payload: {},
       }),
       { connectionManager: cm, authAudit: audit },
     );
@@ -245,7 +244,7 @@ describe("auth audit events", () => {
     expect(action["type"]).toBe("authz.denied");
     expect(action["surface"]).toBe("ws");
     expect(action["reason"]).toBe("insufficient_scope");
-    expect(action["required_scopes"]).toEqual(["operator.approvals"]);
+    expect(action["required_scopes"]).toEqual(["operator.read"]);
 
     const outbox = await db.get<{ payload_json: string }>(
       "SELECT payload_json FROM outbox WHERE topic = ? ORDER BY id ASC LIMIT 1",

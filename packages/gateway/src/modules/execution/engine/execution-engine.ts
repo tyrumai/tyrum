@@ -74,6 +74,7 @@ export class ExecutionEngine {
     this.approvalManager = new ExecutionEngineApprovalManager({
       clock: this.clock,
       logger: this.logger,
+      policyService: this.policyService,
       redactText: (value) => this.redactText(value),
       redactUnknown: (value) => this.redactUnknown(value),
       eventEmitter: this.eventEmitter,

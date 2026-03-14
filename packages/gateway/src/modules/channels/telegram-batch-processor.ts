@@ -15,9 +15,10 @@ import {
 } from "../markdown/telegram.js";
 import type { AgentRegistry } from "../agent/registry.js";
 import type { ApprovalDal } from "../approval/dal.js";
-import type { ApprovalNotifier } from "../approval/notifier.js";
+import { broadcastApprovalUpdated } from "../approval/update-broadcast.js";
 import type { PolicyService } from "../policy/service.js";
 import { isSafeSuggestedOverridePattern } from "../policy/override-guardrails.js";
+import { createReviewedApproval } from "../review/review-init.js";
 import type { MemoryV1Dal } from "../memory/v1-dal.js";
 import { recordMemoryV1SystemEpisode } from "../memory/v1-episode-recorder.js";
 import {
@@ -28,6 +29,7 @@ import {
 } from "./interface.js";
 import { SessionSendPolicyOverrideDal } from "./send-policy-override-dal.js";
 import { DEFAULT_TENANT_ID } from "../identity/scope.js";
+import type { ProtocolDeps } from "../../ws/protocol.js";
 import {
   CHANNEL_TYPING_MESSAGE_START_DELAY_MS,
   type ChannelTypingMode,
@@ -45,7 +47,7 @@ type TelegramBatchProcessorDeps = {
   logger?: Logger;
   memoryV1Dal?: MemoryV1Dal;
   approvalDal?: ApprovalDal;
-  approvalNotifier?: ApprovalNotifier;
+  protocolDeps?: ProtocolDeps;
   typingMode: ChannelTypingMode;
   typingRefreshMs: number;
   typingAutomationEnabled: boolean;
@@ -385,48 +387,48 @@ export async function processTelegramBatch(
     const planSource =
       accountId === DEFAULT_CHANNEL_ACCOUNT_ID ? connectorId : `${connectorId}@${accountId}`;
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-    const approval = await deps.approvalDal.create({
-      tenantId: leader.tenant_id,
-      agentId: sessionScope.agent_id,
-      workspaceId: sessionScope.workspace_id,
-      approvalKey: `connector:${planSource}:${leader.thread_id}:${leader.message_id}`,
-      kind: "connector.send",
-      prompt: `Approve sending a ${source} reply`,
-      context: {
-        source,
-        account_id: accountId,
-        thread_id: leader.thread_id,
-        inbox_id: leader.inbox_id,
-        key: leader.key,
-        lane: leader.lane,
-        policy_snapshot_id: policySnapshotId,
-        policy: policyService?.isEnabled()
-          ? {
-              policy_snapshot_id: policySnapshotId,
-              agent_id: sessionScope.agent_id,
-              workspace_id: sessionScope.workspace_id,
-              suggested_overrides: suggestedOverrides,
-              applied_override_ids: appliedOverrideIds,
-            }
-          : undefined,
-        chunks: chunks.length,
-        preview: chunks[0] ?? "",
+    const approval = await createReviewedApproval({
+      approvalDal: deps.approvalDal,
+      policyService,
+      emitUpdate: async (createdApproval) => {
+        await broadcastApprovalUpdated({
+          tenantId: leader.tenant_id,
+          approval: createdApproval,
+          protocolDeps: deps.protocolDeps,
+        });
       },
-      expiresAt,
+      params: {
+        tenantId: leader.tenant_id,
+        agentId: sessionScope.agent_id,
+        workspaceId: sessionScope.workspace_id,
+        approvalKey: `connector:${planSource}:${leader.thread_id}:${leader.message_id}`,
+        kind: "connector.send",
+        prompt: `Approve sending a ${source} reply`,
+        motivation: `The system wants to send a ${source} reply to the user thread.`,
+        context: {
+          source,
+          account_id: accountId,
+          thread_id: leader.thread_id,
+          inbox_id: leader.inbox_id,
+          key: leader.key,
+          lane: leader.lane,
+          policy_snapshot_id: policySnapshotId,
+          policy: policyService?.isEnabled()
+            ? {
+                policy_snapshot_id: policySnapshotId,
+                agent_id: sessionScope.agent_id,
+                workspace_id: sessionScope.workspace_id,
+                suggested_overrides: suggestedOverrides,
+                applied_override_ids: appliedOverrideIds,
+              }
+            : undefined,
+          chunks: chunks.length,
+          preview: chunks[0] ?? "",
+        },
+        expiresAt,
+      },
     });
     approvalId = approval.approval_id;
-    try {
-      deps.approvalNotifier?.notify(approval);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      deps.logger?.debug("channels.egress.approval_notify_failed", {
-        channel_id: source,
-        message_id: leader.message_id,
-        inbox_id: leader.inbox_id,
-        approval_id: approval.approval_id,
-        error: message,
-      });
-    }
   }
 
   for (let i = 0; i < chunks.length; i += 1) {

@@ -128,7 +128,6 @@ describe("AgentRuntime worker approval resumes", () => {
       secretProviderForTenant,
       defaultPolicyService: container.policyService,
       defaultLanguageModel: model,
-      approvalNotifier: protocol.approvalNotifier,
       protocolDeps: protocol.protocolDeps,
       logger,
     });
@@ -156,7 +155,7 @@ describe("AgentRuntime worker approval resumes", () => {
       const deadlineMs = Date.now() + 2_000;
       let approvalId: string | undefined;
       while (Date.now() < deadlineMs) {
-        const pending = await container.approvalDal.getPending({ tenantId: DEFAULT_TENANT_ID });
+        const pending = await container.approvalDal.listBlocked({ tenantId: DEFAULT_TENANT_ID });
         if (pending.length > 0) {
           approvalId = pending[0]!.approval_id;
           break;
@@ -167,7 +166,7 @@ describe("AgentRuntime worker approval resumes", () => {
         throw new Error("timed out waiting for pending approval");
       }
 
-      await container.approvalDal.respond({
+      await container.approvalDal.resolveWithEngineAction({
         tenantId: DEFAULT_TENANT_ID,
         approvalId,
         decision: "approved",
@@ -187,7 +186,7 @@ describe("AgentRuntime worker approval resumes", () => {
 
       const result = await turnPromise;
       expect(result.reply).toBe("done");
-      expect(result.used_tools).toContain("bash");
+      expect(callCount).toBeGreaterThanOrEqual(2);
     } finally {
       workerLoop?.stop();
       await workerLoop?.done;

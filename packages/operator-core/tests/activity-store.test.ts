@@ -18,6 +18,7 @@ function samplePersona(name: string): AgentPersona {
 function createApprovalsState(): ApprovalsState {
   return {
     byId: {},
+    blockedIds: [],
     pendingIds: [],
     loading: false,
     error: null,
@@ -62,10 +63,12 @@ function sampleApproval(
   input: Partial<Approval> & Pick<Approval, "approval_id" | "approval_key" | "prompt" | "status">,
 ) {
   return {
-    kind: "other",
+    kind: "policy",
+    motivation: "Approval is required before execution can continue.",
     scope: undefined,
     created_at: "2026-01-01T00:00:00.000Z",
-    resolution: null,
+    expires_at: null,
+    latest_review: null,
     ...input,
   } satisfies Approval;
 }
@@ -220,10 +223,11 @@ describe("activityStore", () => {
           approval_id: "approval-1",
           approval_key: "approval-1",
           prompt: "Review before proceeding",
-          status: "pending",
+          status: "awaiting_human",
           scope: { key: "agent:alpha:main", lane: "main" },
         }),
       },
+      blockedIds: ["approval-1"],
       pendingIds: ["approval-1"],
     }));
 

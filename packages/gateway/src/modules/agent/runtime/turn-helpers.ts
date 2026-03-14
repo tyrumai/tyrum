@@ -8,6 +8,7 @@ import type {
 } from "@ai-sdk/provider";
 import type {
   AgentTurnRequest as AgentTurnRequestT,
+  ApprovalKind as ApprovalKindT,
   NormalizedContainerKind,
   NormalizedMessageEnvelope as NormalizedMessageEnvelopeT,
 } from "@tyrum/schemas";
@@ -61,7 +62,7 @@ export function createStaticLanguageModelV3(text: string): LanguageModelV3 {
 }
 
 export type StepPauseRequest = {
-  kind: string;
+  kind: ApprovalKindT;
   prompt: string;
   detail: string;
   context?: unknown;

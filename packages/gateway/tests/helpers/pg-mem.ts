@@ -16,6 +16,10 @@ const AGENT_ACCESS_DEFAULTS_TOOLS_MIGRATION_MARKERS = [
   "jsonb_array_elements_text",
   '\'["read","write","edit","apply_patch","glob","grep"]\'::jsonb',
 ] as const;
+const GUARDIAN_REVIEW_MIGRATION_MARKERS = [
+  "CREATE TABLE IF NOT EXISTS review_entries",
+  "CURRENT_TIMESTAMP AT TIME ZONE 'UTC'",
+] as const;
 const FILESYSTEM_TOOL_IDS = ["read", "write", "edit", "apply_patch", "glob", "grep"] as const;
 
 type SessionTitleMigrationRow = {
@@ -46,6 +50,10 @@ function isSessionTranscriptMigration(sql: string): boolean {
 
 function isAgentAccessDefaultsToolsMigration(sql: string): boolean {
   return AGENT_ACCESS_DEFAULTS_TOOLS_MIGRATION_MARKERS.every((marker) => sql.includes(marker));
+}
+
+function isGuardianReviewMigration(sql: string): boolean {
+  return GUARDIAN_REVIEW_MIGRATION_MARKERS.every((marker) => sql.includes(marker));
 }
 
 function toSqlTextLiteral(value: string): string {
@@ -243,6 +251,15 @@ function applyAgentAccessDefaultsToolsMigration(mem: ReturnType<typeof newDb>): 
   }
 }
 
+function applyGuardianReviewMigration(mem: ReturnType<typeof newDb>, sql: string): void {
+  mem.public.none(
+    sql.replace(
+      /created_at\s+TEXT NOT NULL DEFAULT\s+\(CURRENT_TIMESTAMP AT TIME ZONE 'UTC'\),/g,
+      "created_at             TEXT NOT NULL DEFAULT '1970-01-01T00:00:00.000Z',",
+    ),
+  );
+}
+
 function parseJsonbSetPath(pathText: string): string[] {
   const trimmed = pathText.trim();
   if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return [];
@@ -318,6 +335,16 @@ function setJsonbPath(
 }
 
 function registerCommonPgFunctions(mem: ReturnType<typeof newDb>): void {
+  mem.public.registerFunction({
+    name: "nullif",
+    args: [DataType.text, DataType.text],
+    returns: DataType.text,
+    implementation: (left: string | null, right: string | null) => {
+      if (left === null) return null;
+      return left === right ? null : left;
+    },
+  });
+
   mem.public.registerFunction({
     name: "trim",
     args: [DataType.text],
@@ -451,6 +478,10 @@ export function createPgMemDb(): ReturnType<typeof newDb> {
     }
     if (isAgentAccessDefaultsToolsMigration(sql)) {
       applyAgentAccessDefaultsToolsMigration(mem);
+      return [];
+    }
+    if (isGuardianReviewMigration(sql)) {
+      applyGuardianReviewMigration(mem, sql);
       return [];
     }
     return null;

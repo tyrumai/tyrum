@@ -28,7 +28,6 @@ import { createActivityStore } from "./stores/activity-store.js";
 import {
   readClientId,
   readDisconnect,
-  readPendingApprovalFromRequest,
   readReconnectSchedule,
   readTransportMessage,
 } from "./operator-core.transport-helpers.js";
@@ -249,7 +248,7 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
     }
   });
 
-  on("approval.requested", (data) => {
+  on("approval.updated", (data) => {
     const payload = readPayload(data);
     const approval = payload?.["approval"];
     if (approval) {
@@ -257,38 +256,7 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
     }
   });
 
-  on("approval_request", (data) => {
-    const approval = readPendingApprovalFromRequest(data);
-    if (approval) {
-      approvals.handleApprovalUpsert(approval);
-    }
-  });
-
-  on("approval.resolved", (data) => {
-    const payload = readPayload(data);
-    const approval = payload?.["approval"];
-    if (approval) {
-      approvals.handleApprovalUpsert(approval as Approval);
-    }
-  });
-
-  on("pairing.requested", (data) => {
-    const payload = readPayload(data);
-    const pairingReq = payload?.["pairing"];
-    if (pairingReq) {
-      pairing.handlePairingUpsert(pairingReq as Pairing);
-    }
-  });
-
-  on("pairing.approved", (data) => {
-    const payload = readPayload(data);
-    const pairingReq = payload?.["pairing"];
-    if (pairingReq) {
-      pairing.handlePairingUpsert(pairingReq as Pairing);
-    }
-  });
-
-  on("pairing.resolved", (data) => {
+  on("pairing.updated", (data) => {
     const payload = readPayload(data);
     const pairingReq = payload?.["pairing"];
     if (pairingReq) {

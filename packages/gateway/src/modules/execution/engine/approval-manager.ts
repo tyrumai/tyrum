@@ -1,15 +1,17 @@
 import type {
   ActionPrimitive as ActionPrimitiveT,
+  ApprovalKind as ApprovalKindT,
   WsEventEnvelope as WsEventEnvelopeT,
-  WsRequestEnvelope as WsRequestEnvelopeT,
 } from "@tyrum/schemas";
 import { requiresPostcondition } from "@tyrum/schemas";
 import { randomUUID } from "node:crypto";
 import type { Logger } from "../../observability/logger.js";
 import type { SqlDb } from "../../../statestore/types.js";
-import { APPROVAL_PROMPT_WS_AUDIENCE, APPROVAL_WS_AUDIENCE } from "../../../ws/audience.js";
+import { APPROVAL_WS_AUDIENCE } from "../../../ws/audience.js";
 import { ApprovalDal } from "../../approval/dal.js";
 import { toApprovalContract } from "../../approval/to-contract.js";
+import type { PolicyService } from "../../policy/service.js";
+import { createReviewedApproval } from "../../review/review-init.js";
 import { releaseLaneAndWorkspaceLeasesTx } from "./concurrency-manager.js";
 import { parsePlanIdFromTriggerJson } from "./db.js";
 import type { ExecutionEngineEventEmitter } from "./event-emitter.js";
@@ -31,7 +33,7 @@ export interface PauseRunForApprovalOpts {
 }
 
 export interface PauseRunForApprovalInput {
-  kind: string;
+  kind: ApprovalKindT;
   prompt: string;
   detail: string;
   context?: unknown;
@@ -64,6 +66,7 @@ export class ExecutionEngineApprovalManager {
     private readonly opts: {
       clock: ClockFn;
       logger?: Logger;
+      policyService?: PolicyService;
       redactText: (text: string) => string;
       redactUnknown: (value: unknown) => unknown;
       eventEmitter: Pick<
@@ -261,8 +264,19 @@ export class ExecutionEngineApprovalManager {
     let approval = await approvalDal.getByKey({ tenantId: opts.tenantId, approvalKey });
     let resumeToken = approval?.resume_token?.trim() ?? "";
 
-    if (!approval || approval.status !== "pending") {
-      const suffix = approval && approval.status !== "pending" ? `:${randomUUID()}` : "";
+    if (
+      !approval ||
+      (approval.status !== "queued" &&
+        approval.status !== "reviewing" &&
+        approval.status !== "awaiting_human")
+    ) {
+      const suffix =
+        approval &&
+        approval.status !== "queued" &&
+        approval.status !== "reviewing" &&
+        approval.status !== "awaiting_human"
+          ? `:${randomUUID()}`
+          : "";
       const approvalKeyToCreate = suffix ? `${approvalKey}${suffix}` : approvalKey;
       resumeToken = `resume-${randomUUID()}`;
 
@@ -289,19 +303,24 @@ export class ExecutionEngineApprovalManager {
       };
       const contextToPersist = this.opts.redactUnknown(baseContext);
 
-      approval = await approvalDal.create({
-        tenantId: opts.tenantId,
-        agentId: opts.agentId,
-        workspaceId: opts.workspaceId,
-        approvalKey: approvalKeyToCreate,
-        prompt: input.prompt,
-        kind: input.kind,
-        context: contextToPersist,
-        expiresAt,
-        runId: opts.runId,
-        stepId: opts.stepId,
-        attemptId: opts.attemptId ?? null,
-        resumeToken,
+      approval = await createReviewedApproval({
+        approvalDal,
+        policyService: this.opts.policyService,
+        params: {
+          tenantId: opts.tenantId,
+          agentId: opts.agentId,
+          workspaceId: opts.workspaceId,
+          approvalKey: approvalKeyToCreate,
+          prompt: input.prompt,
+          motivation: input.detail,
+          kind: input.kind,
+          context: contextToPersist,
+          expiresAt,
+          runId: opts.runId,
+          stepId: opts.stepId,
+          attemptId: opts.attemptId ?? null,
+          resumeToken,
+        },
       });
     } else {
       if (!resumeToken) {
@@ -367,7 +386,7 @@ export class ExecutionEngineApprovalManager {
     if (approvalContract) {
       const approvalRequestedEvt: WsEventEnvelopeT = {
         event_id: randomUUID(),
-        type: "approval.requested",
+        type: "approval.updated",
         occurred_at: nowIso,
         scope: { kind: "run", run_id: opts.runId },
         payload: { approval: approvalContract },
@@ -379,25 +398,6 @@ export class ExecutionEngineApprovalManager {
         APPROVAL_WS_AUDIENCE,
       );
     }
-
-    const approvalRequest: WsRequestEnvelopeT = {
-      request_id: `approval-${approval.approval_id}`,
-      type: "approval.request",
-      payload: {
-        approval_id: approval.approval_id,
-        approval_key: approval.approval_key,
-        kind: approval.kind,
-        prompt: approval.prompt,
-        context: approval.context,
-        expires_at: approval.expires_at,
-      },
-    };
-    await this.opts.eventEmitter.enqueueWsMessage(
-      tx,
-      opts.tenantId,
-      approvalRequest,
-      APPROVAL_PROMPT_WS_AUDIENCE,
-    );
 
     return { approvalId: approval.approval_id, resumeToken };
   }

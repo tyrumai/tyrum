@@ -268,13 +268,17 @@ async function executeApprovalsCommand(
     return { output: "Approvals are not available on this gateway instance.", data: null };
   }
   const status = toks[1]?.toLowerCase();
-  const allowed = new Set(["pending", "approved", "denied", "expired", "cancelled"]);
-  const filter = status && allowed.has(status) ? status : "pending";
+  const blockedStatuses = ["queued", "reviewing", "awaiting_human"] as const;
+  const terminalStatuses = ["approved", "denied", "expired", "cancelled"] as const;
+  const allowed = new Set<string>([...blockedStatuses, ...terminalStatuses]);
+  const filter = status && allowed.has(status) ? status : undefined;
   const payload = {
-    approvals: await deps.approvalDal.getByStatus({
-      tenantId: resolveTenantId(deps),
-      status: filter as never,
-    }),
+    approvals: filter
+      ? await deps.approvalDal.getByStatus({
+          tenantId: resolveTenantId(deps),
+          status: filter as never,
+        })
+      : await deps.approvalDal.listBlocked({ tenantId: resolveTenantId(deps) }),
   };
   return { output: jsonBlock(payload), data: payload };
 }
@@ -287,7 +291,14 @@ async function executePairingsCommand(
     return { output: "Node pairing is not available on this gateway instance.", data: null };
   }
   const status = toks[1]?.toLowerCase();
-  const allowed = new Set(["pending", "approved", "denied", "revoked"]);
+  const allowed = new Set([
+    "queued",
+    "reviewing",
+    "awaiting_human",
+    "approved",
+    "denied",
+    "revoked",
+  ]);
   const filter = status && allowed.has(status) ? status : undefined;
   const tenantId = resolveTenantId(deps);
   const payload = {

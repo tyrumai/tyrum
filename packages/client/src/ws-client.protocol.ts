@@ -3,8 +3,6 @@ import * as mittNs from "mitt";
 
 import type { WsEvent as WsEventT, WsRequestEnvelope, WsResponseEnvelope } from "@tyrum/schemas";
 import {
-  WsApprovalDecision,
-  WsApprovalRequest,
   WsError,
   WsEvent,
   WsMessageEnvelope,
@@ -179,17 +177,6 @@ export abstract class TyrumClientProtocolCore {
     this.send(response);
   }
 
-  respondApprovalRequest(requestId: string, approved: boolean, reason?: string): void {
-    const response: WsResponseEnvelope = {
-      request_id: requestId,
-      type: "approval.request",
-      ok: true,
-      result: WsApprovalDecision.parse({ approved, reason }),
-    };
-    this.cacheInboundRequestResponse("approval.request", requestId, response);
-    this.send(response);
-  }
-
   protected abstract openSocket(): void;
 
   protected parsePayload<T>(type: string, payload: unknown, schema: SafeParseSchema<T>): T {
@@ -321,15 +308,6 @@ export abstract class TyrumClientProtocolCore {
           "task_execute",
         );
         return;
-      case "approval.request":
-        this.handleInboundClientRequest(
-          msg.type,
-          msg.request_id,
-          msg,
-          WsApprovalRequest,
-          "approval_request",
-        );
-        return;
       case "connect":
         this.send({
           request_id: msg.request_id,
@@ -429,11 +407,11 @@ export abstract class TyrumClientProtocolCore {
   }
 
   private handleInboundClientRequest<T>(
-    type: "task.execute" | "approval.request",
+    type: "task.execute",
     requestId: string,
     msg: unknown,
     schema: SafeParseSchema<T>,
-    eventName: "task_execute" | "approval_request",
+    eventName: "task_execute",
   ): void {
     const cached = this.getCachedInboundRequestResponse(type, requestId);
     if (cached) {

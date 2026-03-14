@@ -80,7 +80,7 @@ describe("WS envelopes", () => {
     const msg = WsApprovalListRequest.parse({
       request_id: "r-approval-list-1",
       type: "approval.list",
-      payload: { status: "pending", limit: 25 },
+      payload: { status: "queued", limit: 25 },
     });
     expect(msg.type).toBe("approval.list");
   });

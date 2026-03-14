@@ -89,9 +89,12 @@ describe("gateway startup process", () => {
               ws.send(
                 JSON.stringify({
                   request_id: `approval-${deniedApprovalFixture.approvalId}`,
-                  type: "approval.request",
-                  ok: true,
-                  result: { approved: false, reason: "denied in ws test" },
+                  type: "approval.resolve",
+                  payload: {
+                    approval_id: deniedApprovalFixture.approvalId,
+                    decision: "denied",
+                    reason: "denied in ws test",
+                  },
                 }),
               );
 
@@ -141,9 +144,12 @@ describe("gateway startup process", () => {
               ws.send(
                 JSON.stringify({
                   request_id: `approval-${missingResumeTokenApprovalFixture.approvalId}`,
-                  type: "approval.request",
-                  ok: true,
-                  result: { approved: true, reason: "approved in ws test (missing resume token)" },
+                  type: "approval.resolve",
+                  payload: {
+                    approval_id: missingResumeTokenApprovalFixture.approvalId,
+                    decision: "approved",
+                    reason: "approved in ws test (missing resume token)",
+                  },
                 }),
               );
 

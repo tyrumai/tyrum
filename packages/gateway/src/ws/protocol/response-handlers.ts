@@ -1,6 +1,5 @@
-import { UuidSchema, WsApprovalDecision, WsTaskExecuteResult } from "@tyrum/schemas";
+import { WsTaskExecuteResult } from "@tyrum/schemas";
 import type { WsEventEnvelope, WsResponseEnvelope } from "@tyrum/schemas";
-import { hasAnyRequiredScope } from "../../modules/auth/scopes.js";
 import type { ConnectedClient } from "../connection-manager.js";
 import { errorEvent } from "./helpers.js";
 import type { ProtocolDeps, ProtocolResponseEnvelope } from "./types.js";
@@ -14,18 +13,7 @@ export async function handleResponseMessage(
     return handleTaskExecuteResponse(client, msg, deps);
   }
 
-  if (msg.type === "approval.request") {
-    return handleApprovalResponse(client, msg, deps);
-  }
-
   return undefined;
-}
-
-function parseApprovalId(requestId: string): string | undefined {
-  if (!requestId.startsWith("approval-")) return undefined;
-  const raw = requestId.slice("approval-".length);
-  const parsed = UuidSchema.safeParse(raw);
-  return parsed.success ? parsed.data : undefined;
 }
 
 function evidenceFromErrorDetails(details: unknown): unknown {
@@ -73,71 +61,5 @@ function handleTaskExecuteResponse(
       : failureEvidence,
     msg.ok ? undefined : msg.error.message,
   );
-  return undefined;
-}
-
-async function handleApprovalResponse(
-  client: ConnectedClient,
-  msg: ProtocolResponseEnvelope,
-  deps: ProtocolDeps,
-): Promise<WsEventEnvelope | undefined> {
-  const authClaims = client.auth_claims;
-  if (!authClaims) {
-    return errorEvent("unauthorized", "missing auth claims");
-  }
-  if (client.role !== "client") {
-    return errorEvent("unauthorized", "only operator clients may resolve approvals");
-  }
-  if (
-    authClaims.token_kind === "device" &&
-    !hasAnyRequiredScope(authClaims, ["operator.approvals"])
-  ) {
-    await deps.authAudit?.recordAuthzDenied({
-      surface: "ws",
-      reason: "insufficient_scope",
-      token: {
-        token_kind: authClaims.token_kind,
-        token_id: authClaims.token_id,
-        device_id: authClaims.device_id,
-        role: authClaims.role,
-        scopes: authClaims.scopes,
-      },
-      tenant_id: authClaims.tenant_id ?? undefined,
-      required_scopes: ["operator.approvals"],
-      request_type: msg.type,
-      request_id: msg.request_id,
-      client_id: client.id,
-    });
-    return errorEvent("forbidden", "insufficient scope");
-  }
-
-  const approvalId = parseApprovalId(msg.request_id);
-  if (approvalId === undefined) {
-    return errorEvent(
-      "invalid_approval_request_id",
-      "approval response missing or invalid approval request id",
-    );
-  }
-
-  if (!msg.ok) {
-    return errorEvent(
-      "approval_request_failed",
-      `client error for ${msg.request_id} (${msg.error.code}): ${msg.error.message}`,
-    );
-  }
-
-  const decision = WsApprovalDecision.safeParse(msg.result ?? {});
-  if (!decision.success) {
-    return errorEvent(
-      "invalid_approval_decision",
-      `invalid approval decision for ${msg.request_id}: ${decision.error.message}`,
-    );
-  }
-
-  const tenantId = authClaims.tenant_id;
-  if (!tenantId) {
-    return errorEvent("unauthorized", "missing tenant_id");
-  }
-  deps.onApprovalDecision?.(tenantId, approvalId, decision.data.approved, decision.data.reason);
   return undefined;
 }

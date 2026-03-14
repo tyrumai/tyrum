@@ -31,6 +31,9 @@ describe("approval respond policy overrides", () => {
       workspaceId: DEFAULT_WORKSPACE_ID,
       approvalKey: `approval:${randomUUID()}`,
       prompt: "Allow bash?",
+      motivation: "Human review is required before approving a standing bash override.",
+      kind: "policy",
+      status: "awaiting_human",
       context: {
         policy: {
           agent_id: DEFAULT_AGENT_ID,
@@ -86,6 +89,9 @@ describe("approval respond policy overrides", () => {
       workspaceId: DEFAULT_WORKSPACE_ID,
       approvalKey: `approval:${randomUUID()}`,
       prompt: "Allow bash?",
+      motivation: "Human review is required before approving a standing bash override.",
+      kind: "policy",
+      status: "awaiting_human",
       context: {
         policy: {
           agent_id: DEFAULT_AGENT_ID,
@@ -130,7 +136,7 @@ describe("approval respond policy overrides", () => {
       tenantId: DEFAULT_TENANT_ID,
       approvalId: created.approval_id,
     });
-    expect(approvalAfter?.status).toBe("pending");
+    expect(approvalAfter?.status).toBe("awaiting_human");
     expect(
       await policyOverrideDal.list({
         tenantId: DEFAULT_TENANT_ID,
@@ -151,6 +157,9 @@ describe("approval respond policy overrides", () => {
       workspaceId: DEFAULT_WORKSPACE_ID,
       approvalKey: `approval:${randomUUID()}`,
       prompt: "Allow bash?",
+      motivation: "Human review is required before approving a standing bash override.",
+      kind: "policy",
+      status: "awaiting_human",
       context: {
         policy: {
           agent_id: DEFAULT_AGENT_ID,
@@ -221,18 +230,18 @@ describe("approval respond policy overrides", () => {
 
     let routeDeps: { approvalDal: ApprovalDal; policyOverrideDal?: PolicyOverrideDal };
 
-    class MutatingApprovalDal extends ApprovalDal {
-      override async respond(
-        input: Parameters<ApprovalDal["respond"]>[0],
-      ): Promise<Awaited<ReturnType<ApprovalDal["respond"]>>> {
-        const updated = await super.respond(input);
+    class MutatingPolicyOverrideDal extends PolicyOverrideDal {
+      override async create(
+        input: Parameters<PolicyOverrideDal["create"]>[0],
+      ): Promise<Awaited<ReturnType<PolicyOverrideDal["create"]>>> {
+        const created = await super.create(input);
         routeDeps.policyOverrideDal = undefined;
-        return updated;
+        return created;
       }
     }
 
-    const approvalDal = new MutatingApprovalDal(db);
-    const policyOverrideDal = new PolicyOverrideDal(db);
+    const approvalDal = new ApprovalDal(db);
+    const policyOverrideDal = new MutatingPolicyOverrideDal(db);
 
     routeDeps = { approvalDal, policyOverrideDal };
 
@@ -242,6 +251,9 @@ describe("approval respond policy overrides", () => {
       workspaceId: DEFAULT_WORKSPACE_ID,
       approvalKey: `approval:${randomUUID()}`,
       prompt: "Allow bash?",
+      motivation: "Human review is required before approving a standing bash override.",
+      kind: "policy",
+      status: "awaiting_human",
       context: {
         policy: {
           agent_id: DEFAULT_AGENT_ID,

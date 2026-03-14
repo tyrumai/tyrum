@@ -5,7 +5,7 @@ import type {
   SessionTranscriptTextItem,
   SessionTranscriptToolItem,
 } from "@tyrum/client";
-import type { ResolveApprovalInput } from "@tyrum/operator-core";
+import { isApprovalHumanActionableStatus, type ResolveApprovalInput } from "@tyrum/operator-core";
 import { Copy, Hammer, ShieldCheck } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -84,8 +84,12 @@ function approvalBadgeVariant(
 
 export function formatApprovalStatus(status: SessionTranscriptApprovalItem["status"]): string {
   switch (status) {
-    case "pending":
-      return "Pending";
+    case "queued":
+      return "Guardian queued";
+    case "reviewing":
+      return "Guardian reviewing";
+    case "awaiting_human":
+      return "Awaiting human review";
     case "approved":
       return "Approved";
     case "denied":
@@ -121,9 +125,20 @@ function approvalResolutionNote(
   item: SessionTranscriptApprovalItem,
   approval: Approval | null,
 ): string | null {
-  const resolution = isRecord(approval?.resolution) ? approval.resolution : null;
-  const reason = typeof resolution?.["reason"] === "string" ? resolution["reason"].trim() : "";
+  const review = approval?.latest_review;
+  const reason = typeof review?.reason === "string" ? review.reason.trim() : "";
   if (reason) return reason;
+  const legacyResolution = isRecord(approval as unknown)
+    ? (approval as Record<string, unknown>)["resolution"]
+    : undefined;
+  const legacyReason =
+    legacyResolution &&
+    typeof legacyResolution === "object" &&
+    !Array.isArray(legacyResolution) &&
+    typeof (legacyResolution as Record<string, unknown>)["reason"] === "string"
+      ? ((legacyResolution as Record<string, unknown>)["reason"] as string).trim()
+      : "";
+  if (legacyReason) return legacyReason;
   const prompt = typeof approval?.prompt === "string" ? approval.prompt.trim() : "";
   const detail = item.detail.trim();
   if (!detail || detail === prompt) return null;
@@ -256,8 +271,9 @@ export function ChatToolItem({
   onResolve: (input: ResolveApprovalInput) => void;
   resolvingState?: "approved" | "denied" | "always";
 }) {
-  const approvalStatus = approval?.status ?? approvalItem?.status ?? "pending";
+  const approvalStatus = approval?.status ?? approvalItem?.status ?? "awaiting_human";
   const approvalNote = approvalItem ? approvalResolutionNote(approvalItem, approval) : null;
+  const actionable = isApprovalHumanActionableStatus(approvalStatus);
 
   return (
     <div
@@ -275,7 +291,7 @@ export function ChatToolItem({
         </div>
         <Badge variant={toolBadgeVariant(item.status)}>{formatToolStatus(item.status)}</Badge>
       </div>
-      {approvalItem && approvalStatus === "pending" ? (
+      {approvalItem && actionable ? (
         <div
           className="mt-2 rounded-md border border-warning-300/70 bg-warning-50/70 px-2 py-1.5"
           data-testid={`chat-tool-approval-${approvalItem.approval_id}`}
@@ -365,7 +381,7 @@ export function ChatApprovalItem({
   resolvingState?: "approved" | "denied" | "always";
 }) {
   const approvalStatus = approval?.status ?? item.status;
-  const actionable = approvalStatus === "pending";
+  const actionable = isApprovalHumanActionableStatus(approvalStatus);
 
   return (
     <div

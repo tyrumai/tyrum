@@ -130,7 +130,7 @@ describe("DesktopEnvironmentRuntimeManager", () => {
     const nodePairingDal = {
       getByNodeId: vi.fn(async (nodeId: string) => ({
         pairing_id: nodeId === "device-env-1" ? 101 : 202,
-        status: "pending",
+        status: "queued",
       })),
       resolve: vi.fn(async () => ({ pairing: { status: "approved" } })),
     };
@@ -247,7 +247,7 @@ describe("DesktopEnvironmentRuntimeManager", () => {
       updateRuntime: vi.fn(async () => {}),
     };
     const nodePairingDal = {
-      getByNodeId: vi.fn(async () => ({ pairing_id: 101, status: "pending" })),
+      getByNodeId: vi.fn(async () => ({ pairing_id: 101, status: "queued" })),
       resolve: vi.fn(async () => ({ pairing: { status: "approved" } })),
     };
     const authTokens = {
@@ -301,7 +301,7 @@ describe("DesktopEnvironmentRuntimeManager", () => {
       updateRuntime: vi.fn(async () => {}),
     };
     const nodePairingDal = {
-      getByNodeId: vi.fn(async () => ({ pairing_id: 202, status: "pending" })),
+      getByNodeId: vi.fn(async () => ({ pairing_id: 202, status: "queued" })),
       resolve: vi.fn(async () => ({ pairing: { status: "approved" } })),
     };
     const authTokens = {
@@ -395,7 +395,7 @@ describe("DesktopEnvironmentRuntimeManager", () => {
       }),
     };
     const nodePairingDal = {
-      getByNodeId: vi.fn(async () => ({ pairing_id: 202, status: "pending" })),
+      getByNodeId: vi.fn(async () => ({ pairing_id: 202, status: "queued" })),
       resolve: vi.fn(async () => ({ pairing: { status: "approved" } })),
     };
     const authTokens = {

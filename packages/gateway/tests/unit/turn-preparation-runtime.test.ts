@@ -16,6 +16,7 @@ vi.mock("node:child_process", async () => {
 import { getExecutionProfile } from "../../src/modules/agent/execution-profiles.js";
 import { ToolSetBuilder } from "../../src/modules/agent/runtime/tool-set-builder.js";
 import {
+  buildToolSetBuilderDeps,
   buildRuntimePrompt,
   canPatternMatchMcpToolId,
   resetGitRootCacheForTests,
@@ -110,6 +111,46 @@ describe("turn preparation runtime helpers", () => {
     expect(canPatternMatchMcpToolId("m?p.weather.*")).toBe(true);
     expect(canPatternMatchMcpToolId("mcp*")).toBe(true);
     expect(canPatternMatchMcpToolId("calendar.*")).toBe(false);
+  });
+
+  it("builds shared ToolSetBuilder deps for both normal and guardian review turns", () => {
+    const deps = buildToolSetBuilderDeps(
+      {
+        home: "/workspace",
+        sessionDal: {} as never,
+        policyService: {} as never,
+        approvalWaitMs: 1_000,
+        approvalPollMs: 100,
+        secretProvider: {} as never,
+        plugins: {} as never,
+        opts: {
+          container: {
+            deploymentConfig: {},
+            db: {} as never,
+            approvalDal: {} as never,
+            logger: {} as never,
+            redactionEngine: { redactText: vi.fn() },
+          },
+          protocolDeps: { connectionManager: {} } as never,
+        } as never,
+      },
+      {
+        tenant_id: "tenant-1",
+        agent_id: "agent-1",
+        workspace_id: "workspace-1",
+      },
+    );
+
+    expect(deps).toMatchObject({
+      home: "/workspace",
+      tenantId: "tenant-1",
+      agentId: "agent-1",
+      workspaceId: "workspace-1",
+      approvalWaitMs: 1_000,
+      approvalPollMs: 100,
+    });
+    expect(deps.redactionEngine).toBeDefined();
+    expect(deps.protocolDeps).toBeDefined();
   });
 
   it("warns once per invalid tool schema even when the tool is reused for pre-turn lookup", async () => {

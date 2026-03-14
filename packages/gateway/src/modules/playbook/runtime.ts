@@ -69,7 +69,9 @@ async function loadPendingApprovalForRun(
   const row = await db.get<{ prompt: string; resume_token: string | null }>(
     `SELECT prompt, resume_token
      FROM approvals
-     WHERE tenant_id = ? AND run_id = ? AND status = 'pending'
+     WHERE tenant_id = ?
+       AND run_id = ?
+       AND status IN ('queued', 'reviewing', 'awaiting_human')
      ORDER BY created_at DESC
      LIMIT 1`,
     [DEFAULT_TENANT_ID, runId],
@@ -150,7 +152,7 @@ async function waitForRunToResumeOrCancel(
        FROM approvals
        WHERE tenant_id = ?
          AND run_id = ?
-         AND status = 'pending'
+         AND status IN ('queued', 'reviewing', 'awaiting_human')
        LIMIT 1`,
       [DEFAULT_TENANT_ID, runId],
     );
@@ -427,7 +429,7 @@ async function runPlaybookResumeAction(
   }
 
   const resolvedApproval =
-    approval.status === "pending"
+    approval.status === "awaiting_human"
       ? (
           await deps.approvalDal.resolveWithEngineAction({
             tenantId: DEFAULT_TENANT_ID,

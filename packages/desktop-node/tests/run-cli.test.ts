@@ -53,9 +53,13 @@ vi.mock("@tyrum/client/node", () => {
       clientConnectSpy();
       queueMicrotask(() => this.emit("connected", {}));
       queueMicrotask(() =>
-        this.emit("pairing.approved", { payload: { scoped_token: "scoped-1" } }),
+        this.emit("pairing.updated", {
+          payload: { pairing: { status: "approved" }, scoped_token: "scoped-1" },
+        }),
       );
-      queueMicrotask(() => this.emit("pairing.approved", { payload: {} }));
+      queueMicrotask(() =>
+        this.emit("pairing.updated", { payload: { pairing: { status: "approved" } } }),
+      );
       queueMicrotask(() => this.emit("transport_error", { message: "mock transport error" }));
       queueMicrotask(() => this.emit("error", { payload: { message: "mock gateway error" } }));
       queueMicrotask(() => this.emit("disconnected", { code: 1006, reason: "mock disconnect" }));

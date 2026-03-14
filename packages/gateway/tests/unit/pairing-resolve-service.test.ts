@@ -18,21 +18,23 @@ describe("resolveNodePairing", () => {
     await db.close();
   });
 
-  async function seedPendingPairing(nodeId: string): Promise<number> {
+  async function seedAwaitingHumanPairing(nodeId: string): Promise<number> {
     const pairing = await nodePairingDal.upsertOnConnect({
       tenantId: DEFAULT_TENANT_ID,
       nodeId,
       pubkey: `${nodeId}-pubkey`,
       label: nodeId,
       capabilities: ["cli"],
+      motivation: "Human review is required before this node can be paired.",
+      initialStatus: "awaiting_human",
       nowIso: "2026-02-23T00:00:00.000Z",
     });
-    expect(pairing.status).toBe("pending");
+    expect(pairing.status).toBe("awaiting_human");
     return pairing.pairing_id;
   }
 
   it("approves a pairing once and does not replay side effects on duplicate approval", async () => {
-    const pairingId = await seedPendingPairing("node-1");
+    const pairingId = await seedAwaitingHumanPairing("node-1");
     const deliveredTokens: Array<{ nodeId: string; scopedToken: string }> = [];
     const emittedTypes: string[] = [];
 
@@ -62,7 +64,17 @@ describe("resolveNodePairing", () => {
     expect(deliveredTokens).toHaveLength(1);
     expect(deliveredTokens[0]).toMatchObject({ nodeId: "node-1" });
     expect(deliveredTokens[0]?.scopedToken.length).toBeGreaterThan(0);
-    expect(emittedTypes).toEqual(["pairing.resolved"]);
+    expect(emittedTypes).toEqual(["pairing.updated"]);
+    expect(
+      (await nodePairingDal.getById(pairingId, DEFAULT_TENANT_ID, true))?.latest_review
+        ?.decision_payload,
+    ).toEqual({
+      decision: "approved",
+      reason: null,
+      trust_level: "remote",
+      capability_allowlist: [],
+      actor: { kind: "http" },
+    });
 
     const second = await resolveNodePairing(
       {
@@ -84,18 +96,16 @@ describe("resolveNodePairing", () => {
       },
     );
 
-    expect(second).toEqual({
-      ok: false,
-      code: "not_found",
-      message: `pairing ${String(pairingId)} not found or not resolvable`,
-    });
+    expect(second.ok).toBe(true);
+    if (!second.ok) throw new Error(second.message);
+    expect(second.pairing.status).toBe("approved");
     expect(deliveredTokens).toHaveLength(1);
-    expect(emittedTypes).toEqual(["pairing.resolved"]);
+    expect(emittedTypes).toEqual(["pairing.updated"]);
   });
 
   it("only emits pairing.approved delivery for approvals", async () => {
-    const denyPairingId = await seedPendingPairing("node-deny");
-    const revokePairingId = await seedPendingPairing("node-revoke");
+    const denyPairingId = await seedAwaitingHumanPairing("node-deny");
+    const revokePairingId = await seedAwaitingHumanPairing("node-revoke");
     const deliveredTokens: Array<{ nodeId: string; scopedToken: string }> = [];
     const emittedTypes: string[] = [];
 
@@ -122,7 +132,7 @@ describe("resolveNodePairing", () => {
     if (!denied.ok) throw new Error(denied.message);
     expect(denied.pairing.status).toBe("denied");
     expect(deliveredTokens).toHaveLength(0);
-    expect(emittedTypes).toEqual(["pairing.resolved"]);
+    expect(emittedTypes).toEqual(["pairing.updated"]);
 
     emittedTypes.length = 0;
 
@@ -165,6 +175,14 @@ describe("resolveNodePairing", () => {
     if (!revoked.ok) throw new Error(revoked.message);
     expect(revoked.pairing.status).toBe("revoked");
     expect(deliveredTokens).toHaveLength(0);
-    expect(emittedTypes).toEqual(["pairing.resolved"]);
+    expect(emittedTypes).toEqual(["pairing.updated"]);
+    expect(
+      (await nodePairingDal.getById(revokePairingId, DEFAULT_TENANT_ID, true))?.latest_review
+        ?.decision_payload,
+    ).toEqual({
+      decision: "revoked",
+      reason: "rotated credentials",
+      actor: { kind: "http" },
+    });
   });
 });

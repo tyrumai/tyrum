@@ -2,8 +2,6 @@ import { z } from "zod";
 import {
   WsApprovalListResponseErrEnvelope,
   WsApprovalListResponseOkEnvelope,
-  WsApprovalRequestResponseErrEnvelope,
-  WsApprovalRequestResponseOkEnvelope,
   WsApprovalResolveResponseErrEnvelope,
   WsApprovalResolveResponseOkEnvelope,
 } from "./approvals.js";
@@ -167,8 +165,6 @@ export const WsResponse = z.union([
   WsRunListResponseErrEnvelope,
   WsTaskExecuteResponseOkEnvelope,
   WsTaskExecuteResponseErrEnvelope,
-  WsApprovalRequestResponseOkEnvelope,
-  WsApprovalRequestResponseErrEnvelope,
   WsApprovalListResponseOkEnvelope,
   WsApprovalListResponseErrEnvelope,
   WsApprovalResolveResponseOkEnvelope,

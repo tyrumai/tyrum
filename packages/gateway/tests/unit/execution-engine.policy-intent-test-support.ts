@@ -59,7 +59,7 @@ function registerPolicyApprovalTests(fixture: { db: () => SqliteDb }): void {
       kind: string;
       resume_token: string | null;
     }>(
-      "SELECT approval_id, kind, resume_token FROM approvals WHERE tenant_id = ? AND status = 'pending' ORDER BY created_at ASC, approval_id ASC LIMIT 1",
+      "SELECT approval_id, kind, resume_token FROM approvals WHERE tenant_id = ? AND status = 'queued' ORDER BY created_at ASC, approval_id ASC LIMIT 1",
       [DEFAULT_TENANT_ID],
     );
     expect(approval?.kind).toBe("policy");
@@ -288,7 +288,7 @@ function registerPolicyPersistenceTests(fixture: { db: () => SqliteDb }): void {
       kind: string;
       resume_token: string | null;
     }>(
-      "SELECT approval_id, kind, resume_token FROM approvals WHERE tenant_id = ? AND status = 'pending' ORDER BY created_at ASC, approval_id ASC LIMIT 1",
+      "SELECT approval_id, kind, resume_token FROM approvals WHERE tenant_id = ? AND status = 'queued' ORDER BY created_at ASC, approval_id ASC LIMIT 1",
       [DEFAULT_TENANT_ID],
     );
     expect(approval?.kind).toBe("policy");

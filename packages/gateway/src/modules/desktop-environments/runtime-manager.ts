@@ -5,7 +5,7 @@ import {
   descriptorIdsForClientCapability,
 } from "@tyrum/schemas";
 import type { AuthTokenService } from "../auth/auth-token-service.js";
-import type { NodePairingDal } from "../node/pairing-dal.js";
+import { isPairingBlockedStatus, type NodePairingDal } from "../node/pairing-dal.js";
 import type { Logger } from "../observability/logger.js";
 import { DesktopEnvironmentDal, type DesktopEnvironment } from "./dal.js";
 import { loadOrCreateDesktopEnvironmentIdentity } from "./device-identity.js";
@@ -265,7 +265,9 @@ export class DesktopEnvironmentRuntimeManager {
 
   private async approveManagedPairing(tenantId: string, nodeId: string): Promise<void> {
     const pairing = await this.nodePairingDal.getByNodeId(nodeId, tenantId);
-    if (!pairing || pairing.status !== "pending") return;
+    if (!pairing || pairing.status === "reviewing" || !isPairingBlockedStatus(pairing.status)) {
+      return;
+    }
     await this.nodePairingDal.resolve({
       tenantId,
       pairingId: pairing.pairing_id,
@@ -274,6 +276,7 @@ export class DesktopEnvironmentRuntimeManager {
       capabilityAllowlist: DESKTOP_ALLOWLIST,
       reason: "gateway-managed desktop environment",
       resolvedBy: { kind: "desktop_environment_runtime", host_id: this.options.hostId },
+      allowedCurrentStatuses: ["queued", "awaiting_human"],
     });
   }
 }

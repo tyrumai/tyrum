@@ -29,11 +29,11 @@ class FakeWebSocket {
   }
 }
 
-function countApprovalResolvedEvents(ws: FakeWebSocket): number {
+function countApprovalUpdatedEvents(ws: FakeWebSocket): number {
   return ws.sent.filter((raw) => {
     try {
       const msg = JSON.parse(raw) as { type?: unknown };
-      return msg.type === "approval.resolved";
+      return msg.type === "approval.updated";
     } catch {
       return false;
     }
@@ -55,6 +55,8 @@ describe("WS approval.resolve idempotency", () => {
       approvalKey: `approval-test-${randomUUID()}`,
       kind: "workflow_step",
       prompt: "Approve?",
+      motivation: "Human review is required before resuming this workflow step.",
+      status: "awaiting_human",
       context: {},
       resumeToken,
       runId,
@@ -104,7 +106,7 @@ describe("WS approval.resolve idempotency", () => {
     expect(res2 && "ok" in res2 && res2.ok).toBe(true);
 
     expect(resumeCalls).toBeLessThanOrEqual(1);
-    expect(countApprovalResolvedEvents(ws)).toBeLessThanOrEqual(1);
+    expect(countApprovalUpdatedEvents(ws)).toBeLessThanOrEqual(1);
   });
 
   it("does not call the engine inline (durable action processing)", async () => {
@@ -121,6 +123,8 @@ describe("WS approval.resolve idempotency", () => {
       approvalKey: `approval-test-${randomUUID()}`,
       kind: "workflow_step",
       prompt: "Approve?",
+      motivation: "Human review is required before resuming this workflow step.",
+      status: "awaiting_human",
       context: {},
       resumeToken,
       runId,

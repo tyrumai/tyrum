@@ -3,6 +3,7 @@ import { createServer } from "node:http";
 import { WebSocket } from "ws";
 import { generateKeyPairSync, sign } from "node:crypto";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
+import { WsEventDal } from "../../src/modules/ws-event/dal.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { createWsHandler } from "../../src/routes/ws.js";
 import { mkdtemp } from "node:fs/promises";
@@ -27,6 +28,18 @@ import {
   waitForOpen,
 } from "./ws-handler.test-support.js";
 
+const manualOnlyPolicyService = {
+  loadEffectiveBundle: async () => ({
+    bundle: {
+      approvals: {
+        auto_review: {
+          mode: "manual_only" as const,
+        },
+      },
+    },
+  }),
+};
+
 function registerPairingRequestTests(ctx: TestContext): void {
   it("creates a pairing request when a node connects and allows WS approval", async () => {
     ctx.setHomeDir(await mkdtemp(join(tmpdir(), "tyrum-ws-")));
@@ -38,9 +51,15 @@ function registerPairingRequestTests(ctx: TestContext): void {
     ctx.containers.push(container);
 
     const connectionManager = new ConnectionManager();
+    const wsEventDal = new WsEventDal(container.db);
     const { handleUpgrade, stopHeartbeat } = createWsHandler({
       connectionManager,
-      protocolDeps: { connectionManager, nodePairingDal: container.nodePairingDal },
+      protocolDeps: {
+        connectionManager,
+        nodePairingDal: container.nodePairingDal,
+        policyService: manualOnlyPolicyService as never,
+        wsEventDal,
+      },
       authTokens,
       nodePairingDal: container.nodePairingDal,
     });
@@ -151,25 +170,26 @@ function registerPairingRequestTests(ctx: TestContext): void {
     const pairingEvt = await waitForJsonMessageMatching(
       operator,
       (msg) =>
-        msg["type"] === "pairing.requested" &&
-        Object.prototype.hasOwnProperty.call(msg, "event_id"),
+        msg["type"] === "pairing.updated" && Object.prototype.hasOwnProperty.call(msg, "event_id"),
       5_000,
-      "pairing.requested",
+      "pairing.updated",
     );
-    expect(pairingEvt["type"]).toBe("pairing.requested");
-    const observerPairingEvt = await waitForJsonMessageMatching(
-      observer,
-      (msg) =>
-        msg["type"] === "pairing.requested" &&
-        Object.prototype.hasOwnProperty.call(msg, "event_id"),
-      5_000,
-      "observer.pairing.requested",
+    expect(pairingEvt["type"]).toBe("pairing.updated");
+    const persistedEventId = String(pairingEvt["event_id"]);
+    const persistedEvent = await container.db.get<{ event_id: string; type: string }>(
+      `SELECT event_id, type
+       FROM ws_events
+       WHERE tenant_id = ? AND event_id = ?`,
+      [DEFAULT_TENANT_ID, persistedEventId],
     );
-    expect(observerPairingEvt["type"]).toBe("pairing.requested");
+    expect(persistedEvent).toEqual({
+      event_id: persistedEventId,
+      type: "pairing.updated",
+    });
 
     const pairing = await container.nodePairingDal.getByNodeId(deviceId, DEFAULT_TENANT_ID);
     expect(pairing).toBeDefined();
-    expect(pairing!.status).toBe("pending");
+    expect(pairing!.status).toBe("awaiting_human");
     const operatorMessages = recordJsonMessages(operator);
     const observerMessages = recordJsonMessages(observer);
     const nodeMessages = recordJsonMessages(node);
@@ -207,16 +227,16 @@ function registerPairingRequestTests(ctx: TestContext): void {
       },
     ]);
     await waitForCondition(
-      () => operatorMessages.some((msg) => msg["type"] === "pairing.resolved"),
-      { description: "operator pairing.resolved event" },
+      () => operatorMessages.some((msg) => msg["type"] === "pairing.updated"),
+      { description: "operator pairing.updated event" },
     );
     await waitForCondition(
-      () => observerMessages.some((msg) => msg["type"] === "pairing.resolved"),
-      { description: "observer pairing.resolved event" },
+      () => observerMessages.some((msg) => msg["type"] === "pairing.updated"),
+      { description: "observer pairing.updated event" },
     );
     await new Promise<void>((resolve) => setTimeout(resolve, 200));
-    expect(observerMessages.some((msg) => msg["type"] === "pairing.resolved")).toBe(true);
-    expect(nodeMessages.some((msg) => msg["type"] === "pairing.resolved")).toBe(false);
+    expect(observerMessages.some((msg) => msg["type"] === "pairing.updated")).toBe(true);
+    expect(nodeMessages.some((msg) => msg["type"] === "pairing.updated")).toBe(true);
 
     stopHeartbeat();
   });
@@ -235,7 +255,11 @@ function registerTokenRevocationTests(ctx: TestContext): void {
     const connectionManager = new ConnectionManager();
     const { handleUpgrade, stopHeartbeat } = createWsHandler({
       connectionManager,
-      protocolDeps: { connectionManager, nodePairingDal: container.nodePairingDal },
+      protocolDeps: {
+        connectionManager,
+        nodePairingDal: container.nodePairingDal,
+        policyService: manualOnlyPolicyService as never,
+      },
       authTokens,
       nodePairingDal: container.nodePairingDal,
     });
@@ -314,8 +338,7 @@ function registerTokenRevocationTests(ctx: TestContext): void {
     const pairingEvt = await waitForJsonMessageMatching(
       operator,
       (msg) =>
-        msg["type"] === "pairing.requested" &&
-        Object.prototype.hasOwnProperty.call(msg, "event_id"),
+        msg["type"] === "pairing.updated" && Object.prototype.hasOwnProperty.call(msg, "event_id"),
     );
     const pairingPayload = pairingEvt["payload"] as Record<string, unknown>;
     const pairing = pairingPayload["pairing"] as Record<string, unknown>;
@@ -325,9 +348,9 @@ function registerTokenRevocationTests(ctx: TestContext): void {
     const approvedEvtP = waitForJsonMessageMatching(
       node,
       (msg) =>
-        msg["type"] === "pairing.approved" && Object.prototype.hasOwnProperty.call(msg, "event_id"),
+        msg["type"] === "pairing.updated" && Object.prototype.hasOwnProperty.call(msg, "event_id"),
       5_000,
-      "pairing.approved",
+      "pairing.updated",
     );
 
     operator.send(

@@ -34,37 +34,40 @@ async function ensureStableWsEvent(input: {
   });
 }
 
-export async function ensureApprovalResolvedEvent(input: {
+export async function ensureApprovalUpdatedEvent(input: {
   tenantId: string;
   approval: Approval;
   wsEventDal?: WsEventDal;
 }): Promise<PersistedWsEvent> {
   return await ensureStableWsEvent({
     tenantId: input.tenantId,
-    eventKey: `approval.resolved:${input.approval.approval_id}:${input.approval.status}`,
-    type: "approval.resolved",
-    occurredAt: input.approval.resolution?.resolved_at ?? input.approval.created_at,
+    eventKey: `approval.updated:${input.approval.approval_id}:${input.approval.status}:${input.approval.latest_review?.review_id ?? "none"}`,
+    type: "approval.updated",
+    occurredAt: input.approval.latest_review?.completed_at ?? input.approval.created_at,
     payload: { approval: input.approval },
     wsEventDal: input.wsEventDal,
   });
 }
 
+export const ensureApprovalResolvedEvent = ensureApprovalUpdatedEvent;
+
 export async function ensurePairingResolvedEvent(input: {
   tenantId: string;
   pairing: NodePairingRequest;
   wsEventDal?: WsEventDal;
+  scopedToken?: string;
 }): Promise<PersistedWsEvent> {
   return await ensureStableWsEvent({
     tenantId: input.tenantId,
-    // Pairings can later transition from approved to revoked; include the terminal status
-    // so retries reuse the same id without collapsing distinct transitions.
-    eventKey: `pairing.resolved:${String(input.pairing.pairing_id)}:${input.pairing.status}`,
-    type: "pairing.resolved",
-    occurredAt:
-      input.pairing.resolution?.resolved_at ??
-      input.pairing.resolved_at ??
-      input.pairing.requested_at,
-    payload: { pairing: input.pairing },
+    eventKey:
+      `pairing.updated:${String(input.pairing.pairing_id)}:${input.pairing.status}:` +
+      `${input.pairing.latest_review?.review_id ?? "none"}`,
+    type: "pairing.updated",
+    occurredAt: input.pairing.latest_review?.completed_at ?? input.pairing.requested_at,
+    payload: {
+      pairing: input.pairing,
+      ...(input.scopedToken ? { scoped_token: input.scopedToken } : {}),
+    },
     wsEventDal: input.wsEventDal,
   });
 }

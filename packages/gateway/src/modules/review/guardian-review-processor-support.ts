@@ -1,0 +1,343 @@
+import { randomUUID } from "node:crypto";
+import type { Approval, NodePairingRequest } from "@tyrum/schemas";
+import type { GatewayContainer } from "../../container.js";
+import { AgentRuntime } from "../agent/runtime.js";
+import { resolveAgentHome } from "../agent/home.js";
+import type { ApprovalRow } from "../approval/dal.js";
+import { toApprovalContract } from "../approval/to-contract.js";
+import type { Logger } from "../observability/logger.js";
+import { DEFAULT_AGENT_KEY, DEFAULT_WORKSPACE_KEY } from "../identity/scope.js";
+import type { WorkboardDal } from "../workboard/dal.js";
+import { APPROVAL_WS_AUDIENCE, PAIRING_WS_AUDIENCE } from "../../ws/audience.js";
+import { broadcastWsEvent } from "../../ws/broadcast.js";
+import type { PairingApprovedDeliveryDeps } from "../../ws/pairing-approved.js";
+import { ensureApprovalUpdatedEvent, ensurePairingResolvedEvent } from "../../ws/stable-events.js";
+import type { WsEventDal } from "../ws-event/dal.js";
+import type { SecretProvider } from "../secret/provider.js";
+import type { ApprovalGuardianDecision, PairingGuardianDecision } from "./guardian-review-mode.js";
+
+export type GuardianProcessorOptions = {
+  container: GatewayContainer;
+  secretProviderForTenant: (tenantId: string) => SecretProvider;
+  owner: string;
+  tenantId?: string;
+  logger?: Logger;
+  wsEventDal?: WsEventDal;
+  tickMs?: number;
+  staleReviewMs?: number;
+  batchSize?: number;
+  keepProcessAlive?: boolean;
+  ws?: PairingApprovedDeliveryDeps;
+};
+
+export function truncateText(value: string, maxChars: number): string {
+  return value.length <= maxChars ? value : `${value.slice(0, Math.max(0, maxChars - 1))}...`;
+}
+
+export function isoToMs(value: string | null | undefined): number | undefined {
+  if (!value) return undefined;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+export function summarizeApproval(approval: ApprovalRow): unknown {
+  return {
+    approval_id: approval.approval_id,
+    kind: approval.kind,
+    status: approval.status,
+    prompt: approval.prompt,
+    motivation: approval.motivation,
+    context: approval.context,
+    created_at: approval.created_at,
+    expires_at: approval.expires_at,
+    session_id: approval.session_id,
+    run_id: approval.run_id,
+    step_id: approval.step_id,
+    latest_review: approval.latest_review,
+  };
+}
+
+function summarizeTranscriptItem(item: Record<string, unknown>): unknown {
+  const kind = item["kind"];
+  if (kind === "text") {
+    return {
+      kind,
+      role: item["role"],
+      content: truncateText(String(item["content"] ?? ""), 600),
+      created_at: item["created_at"],
+    };
+  }
+  if (kind === "tool") {
+    return {
+      kind,
+      tool_id: item["tool_id"],
+      tool_call_id: item["tool_call_id"],
+      status: item["status"],
+      summary: truncateText(String(item["summary"] ?? ""), 400),
+      error: item["error"],
+      created_at: item["created_at"],
+      updated_at: item["updated_at"],
+    };
+  }
+  if (kind === "approval") {
+    return {
+      kind,
+      approval_id: item["approval_id"],
+      status: item["status"],
+      title: item["title"],
+      detail: truncateText(String(item["detail"] ?? ""), 400),
+      created_at: item["created_at"],
+      updated_at: item["updated_at"],
+    };
+  }
+  return { kind: typeof kind === "string" ? kind : "unknown" };
+}
+
+export function buildApprovalReviewMessage(
+  approval: ApprovalRow,
+  session?: {
+    session_id: string;
+    summary: string;
+    transcript: unknown[];
+  },
+): string {
+  const evidence = {
+    subject: summarizeApproval(approval),
+    session: session
+      ? {
+          session_id: session.session_id,
+          summary: truncateText(session.summary, 1_200),
+          transcript: session.transcript
+            .slice(-12)
+            .map((item) => summarizeTranscriptItem(item as Record<string, unknown>)),
+        }
+      : undefined,
+  };
+  return `Review this approval request.\n\n${JSON.stringify(evidence, null, 2)}`;
+}
+
+export function buildPairingReviewMessage(pairing: NodePairingRequest): string {
+  return `Review this pairing request.\n\n${JSON.stringify(pairing, null, 2)}`;
+}
+
+export function isValidGuardianPairingDecision(
+  pairing: NodePairingRequest,
+  trustLevel: PairingGuardianDecision["trust_level"],
+  capabilityAllowlist: PairingGuardianDecision["capability_allowlist"],
+): capabilityAllowlist is NonNullable<PairingGuardianDecision["capability_allowlist"]> {
+  return Boolean(
+    trustLevel &&
+    Array.isArray(capabilityAllowlist) &&
+    capabilityAllowlist.every((capability) =>
+      pairing.node.capabilities.some((candidate) => candidate.id === capability.id),
+    ),
+  );
+}
+
+export function buildGuardianApproveDecisionPayload(
+  decision: ApprovalGuardianDecision | PairingGuardianDecision,
+  subagentId: string | undefined,
+  extra: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    decision: "approve",
+    reason: decision.reason,
+    risk_level: decision.risk_level,
+    risk_score: decision.risk_score,
+    evidence: decision.evidence ?? null,
+    ...extra,
+    actor: {
+      kind: "guardian",
+      reviewer_subagent_id: subagentId ?? null,
+    },
+  };
+}
+
+export function buildGuardianRequestedHumanPayload(
+  decision: ApprovalGuardianDecision | PairingGuardianDecision,
+  subagentId: string | undefined,
+  extra: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    decision: "requested_human",
+    reason: decision.reason,
+    risk_level: decision.risk_level,
+    risk_score: decision.risk_score,
+    evidence: decision.evidence ?? null,
+    ...extra,
+    actor: {
+      kind: "guardian",
+      reviewer_subagent_id: subagentId ?? null,
+    },
+  };
+}
+
+export function buildFailedDecisionPayload(
+  message: string,
+  subagentId: string | undefined,
+): Record<string, unknown> {
+  return {
+    decision: "failed",
+    error: truncateText(message, 1_000),
+    actor: {
+      kind: "system",
+      reviewer_subagent_id: subagentId ?? null,
+    },
+  };
+}
+
+function buildReviewerSessionKey(subagentId: string): string {
+  return `agent:${DEFAULT_AGENT_KEY}:subagent:${subagentId}`;
+}
+
+export function reviewerTurnMetadata(input: {
+  subagentId: string;
+  subjectType: "approval" | "pairing";
+  targetId: string;
+}): Record<string, unknown> {
+  return {
+    tyrum_key: buildReviewerSessionKey(input.subagentId),
+    lane: "subagent",
+    subagent_id: input.subagentId,
+    guardian_review: {
+      subject_type: input.subjectType,
+      target_id: input.targetId,
+    },
+  };
+}
+
+export function getOrCreateReviewerRuntime(input: {
+  cache: Map<string, AgentRuntime>;
+  container: GatewayContainer;
+  tenantId: string;
+  secretProviderForTenant: (tenantId: string) => SecretProvider;
+}): AgentRuntime {
+  const cached = input.cache.get(input.tenantId);
+  if (cached) return cached;
+
+  const runtime = new AgentRuntime({
+    container: input.container,
+    tenantId: input.tenantId,
+    agentId: DEFAULT_AGENT_KEY,
+    home: resolveAgentHome(input.container.config.tyrumHome, DEFAULT_AGENT_KEY),
+    fetchImpl: fetch,
+    secretProvider: input.secretProviderForTenant(input.tenantId),
+    policyService: input.container.policyService,
+  });
+  input.cache.set(input.tenantId, runtime);
+  return runtime;
+}
+
+async function resolveReviewerScope(container: GatewayContainer, tenantId: string) {
+  const agentId = await container.identityScopeDal.ensureAgentId(tenantId, DEFAULT_AGENT_KEY);
+  const workspaceId = await container.identityScopeDal.ensureWorkspaceId(
+    tenantId,
+    DEFAULT_WORKSPACE_KEY,
+  );
+  await container.identityScopeDal.ensureMembership(tenantId, agentId, workspaceId);
+  return {
+    tenant_id: tenantId,
+    agent_id: agentId,
+    workspace_id: workspaceId,
+  };
+}
+
+export async function createReviewerSubagent(input: {
+  container: GatewayContainer;
+  workboard: WorkboardDal;
+  tenantId: string;
+}) {
+  const scope = await resolveReviewerScope(input.container, input.tenantId);
+  const subagentId = randomUUID();
+  return await input.workboard.createSubagent({
+    scope,
+    subagentId,
+    subagent: {
+      execution_profile: "reviewer_ro",
+      session_key: buildReviewerSessionKey(subagentId),
+      lane: "subagent",
+      status: "running",
+    },
+  });
+}
+
+export async function markReviewerClosed(input: {
+  container: GatewayContainer;
+  workboard: WorkboardDal;
+  tenantId: string;
+  subagentId: string;
+}) {
+  const scope = await resolveReviewerScope(input.container, input.tenantId);
+  await input.workboard.markSubagentClosed({ scope, subagent_id: input.subagentId });
+}
+
+export async function markReviewerFailed(input: {
+  container: GatewayContainer;
+  workboard: WorkboardDal;
+  tenantId: string;
+  subagentId: string;
+  reason: string;
+}) {
+  const scope = await resolveReviewerScope(input.container, input.tenantId);
+  await input.workboard.markSubagentFailed({
+    scope,
+    subagent_id: input.subagentId,
+    reason: truncateText(input.reason, 800),
+  });
+}
+
+type GuardianBroadcastDeps = {
+  logger?: Logger;
+  ws?: PairingApprovedDeliveryDeps;
+  wsEventDal?: WsEventDal;
+};
+
+export async function emitApprovalUpdate(input: {
+  approval: ApprovalRow;
+  deps: GuardianBroadcastDeps;
+}): Promise<void> {
+  const contract = toApprovalContract(input.approval);
+  if (!contract || !input.deps.ws) return;
+  const persisted = await ensureApprovalUpdatedEvent({
+    tenantId: input.approval.tenant_id,
+    approval: contract as Approval,
+    wsEventDal: input.deps.wsEventDal,
+  });
+  broadcastWsEvent(
+    input.approval.tenant_id,
+    persisted.event,
+    {
+      connectionManager: input.deps.ws.connectionManager,
+      cluster: input.deps.ws.cluster,
+      logger: input.deps.logger,
+      maxBufferedBytes: input.deps.ws.maxBufferedBytes,
+    },
+    APPROVAL_WS_AUDIENCE,
+  );
+}
+
+export async function emitPairingUpdate(input: {
+  tenantId: string;
+  pairing: NodePairingRequest;
+  deps: GuardianBroadcastDeps;
+  scopedToken?: string;
+}): Promise<void> {
+  if (!input.deps.ws) return;
+  const persisted = await ensurePairingResolvedEvent({
+    tenantId: input.tenantId,
+    pairing: input.pairing,
+    wsEventDal: input.deps.wsEventDal,
+    scopedToken: input.scopedToken,
+  });
+  broadcastWsEvent(
+    input.tenantId,
+    persisted.event,
+    {
+      connectionManager: input.deps.ws.connectionManager,
+      cluster: input.deps.ws.cluster,
+      logger: input.deps.logger,
+      maxBufferedBytes: input.deps.ws.maxBufferedBytes,
+    },
+    PAIRING_WS_AUDIENCE,
+  );
+}

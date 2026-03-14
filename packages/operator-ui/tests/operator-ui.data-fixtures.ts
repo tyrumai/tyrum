@@ -98,7 +98,7 @@ export function samplePresenceResponse() {
 export function samplePairingRequestPending() {
   return {
     pairing_id: 1,
-    status: "pending",
+    status: "awaiting_human",
     requested_at: "2026-01-01T00:00:00.000Z",
     node: {
       node_id: "node-1",
@@ -149,7 +149,7 @@ export function sampleApprovalPending() {
     approval_id: 1,
     approval_key: "approval:1",
     kind: "other",
-    status: "pending",
+    status: "awaiting_human",
     prompt: "Allow the tool call?",
     created_at: "2026-01-01T00:00:00.000Z",
     expires_at: null,

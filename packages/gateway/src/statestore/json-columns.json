@@ -91,13 +91,6 @@
     "default": "{}"
   },
   {
-    "table": "approvals",
-    "column": "resolution_json",
-    "shape": "any",
-    "nullable": true,
-    "default": null
-  },
-  {
     "table": "auth_profiles",
     "column": "config_json",
     "shape": "object",
@@ -441,13 +434,6 @@
     "default": "{}"
   },
   {
-    "table": "node_pairings",
-    "column": "resolved_by_json",
-    "shape": "object",
-    "nullable": true,
-    "default": null
-  },
-  {
     "table": "oauth_pending",
     "column": "metadata_json",
     "shape": "object",
@@ -508,6 +494,20 @@
     "column": "bundle_json",
     "shape": "object",
     "nullable": false,
+    "default": null
+  },
+  {
+    "table": "review_entries",
+    "column": "decision_payload_json",
+    "shape": "any",
+    "nullable": true,
+    "default": null
+  },
+  {
+    "table": "review_entries",
+    "column": "evidence_json",
+    "shape": "any",
+    "nullable": true,
     "default": null
   },
   {
