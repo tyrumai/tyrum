@@ -11,6 +11,7 @@ import {
 } from "@tyrum/desktop-node";
 import { PlaywrightProvider } from "../providers/playwright-provider.js";
 import { CliProvider } from "../providers/cli-provider.js";
+import { IsolatedDesktopBackend } from "../providers/backends/isolated-desktop-backend.js";
 import { RealPlaywrightBackend } from "../providers/backends/real-playwright-backend.js";
 import { createWindowSender } from "./window-sender.js";
 import { ensureEmbeddedGatewayToken, startEmbeddedGatewayFromConfig } from "./gateway-ipc.js";
@@ -81,7 +82,7 @@ function registerProviders(
 ): void {
   // Register providers based on capabilities and permissions
   if (config.capabilities.desktop) {
-    const desktopBackend = new NutJsDesktopBackend();
+    const desktopBackend = new IsolatedDesktopBackend(new NutJsDesktopBackend());
     const a11yBackend = process.platform === "linux" ? new AtSpiDesktopA11yBackend() : undefined;
     nodeRuntime.registerProvider(
       new DesktopProvider(
