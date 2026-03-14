@@ -57,6 +57,10 @@ export function registerFirstRunOnboardingStateTests(): void {
     });
 
     await waitForSelector(container, '[data-testid="first-run-onboarding"]');
+    expect(container.querySelector('[data-testid="nav-dashboard"]')).toBeNull();
+    expect(container.textContent).toContain("Setup items remaining");
+    expect(container.textContent).toContain("Provider account");
+    expect(container.textContent).not.toContain("no_provider_accounts:deployment:");
 
     const skipButton = findButtonByText(container, "Skip setup");
     expect(skipButton).not.toBeNull();
@@ -69,6 +73,7 @@ export function registerFirstRunOnboardingStateTests(): void {
       container,
       '[data-testid="dashboard-resume-setup"]',
     );
+    expect(container.querySelector('[data-testid="nav-dashboard"]')).not.toBeNull();
     const storedValues = Array.from(local.values());
     expect(storedValues).toHaveLength(1);
     expect(storedValues[0]).toContain('"status":"skipped"');

@@ -15,6 +15,12 @@ import type { SidebarNavItem } from "./components/layout/sidebar.js";
 import { useOperatorStore } from "./use-operator-store.js";
 
 const KEYBOARD_NAV_KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"] as const;
+const MOBILE_NAV_LABELS: Partial<Record<OperatorUiRouteId, string>> = {
+  dashboard: "Home",
+  chat: "Chat",
+  approvals: "Review",
+  workboard: "Work",
+};
 
 function isOperatorUiRouteId(value: string): value is OperatorUiRouteId {
   return OPERATOR_ROUTE_DEFINITIONS.some((route) => route.id === value);
@@ -24,9 +30,10 @@ export function useOperatorAppViewModel(opts: {
   core: OperatorCore;
   mode: "web" | "desktop";
   hostKind: HostKind;
+  navigationLocked?: boolean;
   onNavigationRequest?: (handler: (request: unknown) => void) => (() => void) | undefined;
 }) {
-  const { core, mode, hostKind } = opts;
+  const { core, mode, hostKind, navigationLocked = false } = opts;
   const [route, setRoute] = useState<OperatorUiRouteId>(
     hostKind === "mobile" ? "mobile" : "dashboard",
   );
@@ -61,6 +68,7 @@ export function useOperatorAppViewModel(opts: {
     return {
       id: routeId,
       label: definition.label,
+      mobileLabel: MOBILE_NAV_LABELS[routeId],
       icon: definition.icon,
       testId: `nav-${routeId}`,
       badgeCount:
@@ -106,6 +114,7 @@ export function useOperatorAppViewModel(opts: {
   };
 
   useEffect(() => {
+    if (navigationLocked) return;
     if (!opts.onNavigationRequest) return;
     return opts.onNavigationRequest((request: unknown) => {
       if (!request || typeof request !== "object" || Array.isArray(request)) return;
@@ -113,13 +122,13 @@ export function useOperatorAppViewModel(opts: {
       if (typeof pageId !== "string") return;
       navigate(pageId);
     });
-  }, [opts.onNavigationRequest, hostKind]);
+  }, [hostKind, navigationLocked, opts.onNavigationRequest]);
 
   const keyboardRoutes = availableRoutes
     .filter((routeDef) => routeDef.shortcut)
     .slice(0, KEYBOARD_NAV_KEYS.length);
   useKeyboardShortcut(
-    showOperatorRoutes
+    showOperatorRoutes && !navigationLocked
       ? keyboardRoutes.flatMap((routeDef, index) => {
           const key = KEYBOARD_NAV_KEYS[index];
           if (!key) return [];

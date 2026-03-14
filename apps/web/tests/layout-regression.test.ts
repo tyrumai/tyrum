@@ -313,6 +313,27 @@ async function assertDashboardLayout(
   }, expected);
 }
 
+async function assertSingleRowTabs(page: Page, selector: string): Promise<void> {
+  const result = await page.evaluate((targetSelector) => {
+    const list = document.querySelector<HTMLElement>(targetSelector);
+    if (!list) {
+      return { found: false, uniqueTopCount: 0, scrollable: false };
+    }
+    const triggerTops = Array.from(list.querySelectorAll<HTMLElement>('[role="tab"]')).map((tab) =>
+      Math.round(tab.getBoundingClientRect().top),
+    );
+    return {
+      found: true,
+      uniqueTopCount: new Set(triggerTops).size,
+      scrollable: list.scrollWidth > list.clientWidth,
+    };
+  }, selector);
+
+  expect(result.found, `${selector} should exist`).toBe(true);
+  expect(result.uniqueTopCount).toBe(1);
+  expect(typeof result.scrollable).toBe("boolean");
+}
+
 describe("layout regression harness", () => {
   beforeAll(async () => {
     process.chdir(APP_ROOT);
@@ -443,6 +464,22 @@ describe("layout regression harness", () => {
         summaryColumns: "grid-cols-2",
       });
       await assertNoHorizontalOverflow(page, ["[data-layout-content]"]);
+    } finally {
+      await page.close();
+    }
+  });
+
+  it("keeps configure tabs on one row at medium widths", { timeout: 30_000 }, async () => {
+    const page = await browser.newPage({ viewport: { width: 1024, height: 820 } });
+    try {
+      await page.goto(`${baseUrl}?route=configure`, { waitUntil: "load" });
+      await page.waitForSelector('[data-testid="configure-tab-strip"]');
+
+      await assertNoHorizontalOverflow(page, [
+        "[data-layout-content]",
+        '[data-testid="configure-tab-strip"]',
+      ]);
+      await assertSingleRowTabs(page, '[aria-label="Configure sections"]');
     } finally {
       await page.close();
     }

@@ -94,7 +94,15 @@ export function OnboardingAdminStep({
         title={ISSUE_COPY.admin.title}
         description={ISSUE_COPY.admin.detail}
       />
-      <Button type="button" isLoading={busy} onClick={enterAdminAccess}>
+      <Button
+        type="button"
+        variant="warning"
+        size="lg"
+        className="w-full justify-center"
+        data-testid="first-run-onboarding-admin-access"
+        isLoading={busy}
+        onClick={enterAdminAccess}
+      >
         <ShieldCheck className="h-4 w-4" />
         Authorize admin access
       </Button>
