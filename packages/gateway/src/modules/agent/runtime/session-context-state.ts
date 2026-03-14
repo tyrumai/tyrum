@@ -131,6 +131,19 @@ export function collectPendingToolStates(messages: readonly TyrumUIMessage[]): P
     for (const part of message.parts) {
       const record = coerceRecord(part);
       if (!record) continue;
+      const toolCallId = record["toolCallId"];
+      const state = record["state"];
+      const rawType = record["type"];
+      if (
+        typeof rawType === "string" &&
+        rawType.startsWith("tool-") &&
+        typeof toolCallId === "string" &&
+        typeof state === "string" &&
+        TOOL_STATE_FINAL.has(state)
+      ) {
+        tools.delete(toolCallId);
+        continue;
+      }
       const toolState = normalizePendingToolState(record, fallbackSummary);
       if (!toolState) continue;
       tools.set(toolState.tool_call_id, toolState);

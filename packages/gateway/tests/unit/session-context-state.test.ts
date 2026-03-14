@@ -29,6 +29,37 @@ describe("collectPendingToolStates", () => {
       },
     ]);
   });
+
+  it("removes a pending tool once a later final state is recorded", () => {
+    const states = collectPendingToolStates([
+      {
+        id: "msg-1",
+        role: "assistant",
+        parts: [
+          {
+            type: "tool-invocation",
+            toolCallId: "tc-1",
+            toolName: "readFile",
+            state: "running",
+          },
+        ],
+      },
+      {
+        id: "msg-2",
+        role: "tool",
+        parts: [
+          {
+            type: "tool-invocation",
+            toolCallId: "tc-1",
+            toolName: "readFile",
+            state: "output-available",
+          },
+        ],
+      },
+    ] as never);
+
+    expect(states).toEqual([]);
+  });
 });
 
 describe("buildPromptVisibleMessages", () => {
