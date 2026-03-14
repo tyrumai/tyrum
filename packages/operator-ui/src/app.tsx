@@ -167,7 +167,7 @@ function OperatorUiAppRoot({
               core={core}
               issueSignature={onboarding.issueSignature}
               onClose={onboarding.close}
-              onDismiss={onboarding.dismiss}
+              onSkip={onboarding.skip}
               onMarkCompleted={onboarding.markCompleted}
               onNavigate={(routeId) => {
                 viewModel.navigate(routeId);

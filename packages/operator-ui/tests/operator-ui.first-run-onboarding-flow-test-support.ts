@@ -248,7 +248,8 @@ export function registerFirstRunOnboardingFlowTests(): void {
     expect(
       await waitForSelector(container, '[data-testid="first-run-onboarding-step-done"]'),
     ).not.toBeNull();
-    expect(local.size).toBe(0);
+    expect(local.size).toBe(1);
+    expect(Array.from(local.values())[0]).toContain('"status":"completed"');
 
     cleanup(root, container);
   });

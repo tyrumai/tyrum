@@ -6,7 +6,6 @@ import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { useAdminHttpClient } from "./admin-http-shared.js";
 import {
   buildOnboardingIssueSignature,
-  clearOnboardingStoredState,
   getRelevantOnboardingIssues,
   readOnboardingStoredState,
   supportsFirstRunOnboarding,
@@ -39,7 +38,7 @@ export type FirstRunOnboardingController = {
   issueSignature: string;
   close: () => void;
   open: () => void;
-  dismiss: () => void;
+  skip: () => void;
   markCompleted: () => void;
 };
 
@@ -154,13 +153,12 @@ export function useFirstRunOnboardingController(input: {
     if (!isConnectedForOnboarding(connection)) return;
     if (status.status === null && status.loading.status) return;
     if (issues.length === 0) {
-      clearOnboardingStoredState(input.scopeKey);
       return;
     }
     if (issueSignature.length === 0) return;
 
     const storedState = readOnboardingStoredState(input.scopeKey);
-    if (storedState && storedState.issueSignature === issueSignature) {
+    if (storedState?.status === "skipped") {
       return;
     }
     setIsOpen(true);
@@ -185,23 +183,19 @@ export function useFirstRunOnboardingController(input: {
       open() {
         setIsOpen(true);
       },
-      dismiss() {
+      skip() {
         const persistedSignature = issueSignature || lastNonEmptySignatureRef.current;
-        if (persistedSignature.length > 0) {
-          writeOnboardingStoredState(input.scopeKey, {
-            issueSignature: persistedSignature,
-            status: "dismissed",
-          });
-        }
+        writeOnboardingStoredState(input.scopeKey, {
+          ...(persistedSignature.length > 0 ? { issueSignature: persistedSignature } : {}),
+          status: "skipped",
+        });
         setIsOpen(false);
       },
       markCompleted() {
-        if (issueSignature.length > 0) {
-          writeOnboardingStoredState(input.scopeKey, {
-            issueSignature,
-            status: "completed",
-          });
-        }
+        writeOnboardingStoredState(input.scopeKey, {
+          ...(issueSignature.length > 0 ? { issueSignature } : {}),
+          status: "completed",
+        });
       },
     }),
     [available, input.scopeKey, isOpen, issueSignature],

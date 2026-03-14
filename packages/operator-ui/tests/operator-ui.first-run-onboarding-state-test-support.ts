@@ -25,7 +25,7 @@ import {
 } from "./operator-ui.first-run-onboarding.helpers.js";
 
 export function registerFirstRunOnboardingStateTests(): void {
-  it("auto-opens setup when config health has first-run issues and resumes after dismissal", async () => {
+  it("auto-opens setup when config health has first-run issues and resumes after skipping", async () => {
     const { local } = stubPersistentStorage();
     const ws = new FakeWsClient();
     const { http, statusGet } = createFakeHttpClient();
@@ -58,10 +58,10 @@ export function registerFirstRunOnboardingStateTests(): void {
 
     await waitForSelector(container, '[data-testid="first-run-onboarding"]');
 
-    const dismissButton = findButtonByText(container, "Dismiss");
-    expect(dismissButton).not.toBeNull();
+    const skipButton = findButtonByText(container, "Skip setup");
+    expect(skipButton).not.toBeNull();
     await act(async () => {
-      dismissButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      skipButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       await Promise.resolve();
     });
 
@@ -71,7 +71,7 @@ export function registerFirstRunOnboardingStateTests(): void {
     );
     const storedValues = Array.from(local.values());
     expect(storedValues).toHaveLength(1);
-    expect(storedValues[0]).toContain('"status":"dismissed"');
+    expect(storedValues[0]).toContain('"status":"skipped"');
 
     await act(async () => {
       resumeButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -201,7 +201,7 @@ export function registerFirstRunOnboardingStateTests(): void {
     cleanup(root, container);
   });
 
-  it("reopens onboarding when the unresolved issue signature changes after dismissal", async () => {
+  it("keeps onboarding skipped when the unresolved issue signature changes", async () => {
     stubPersistentStorage();
     let issues: Parameters<typeof buildIssueStatusResponse>[0] = [
       {
@@ -232,10 +232,10 @@ export function registerFirstRunOnboardingStateTests(): void {
     });
 
     await waitForSelector(container, '[data-testid="first-run-onboarding"]');
-    const dismissButton = findButtonByText(container, "Dismiss");
-    expect(dismissButton).not.toBeNull();
+    const skipButton = findButtonByText(container, "Skip setup");
+    expect(skipButton).not.toBeNull();
     await act(async () => {
-      dismissButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      skipButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       await Promise.resolve();
     });
 
@@ -251,12 +251,18 @@ export function registerFirstRunOnboardingStateTests(): void {
       await core.syncAllNow();
     });
 
-    expect(await waitForSelector(container, '[data-testid="first-run-onboarding"]')).not.toBeNull();
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(container.querySelector('[data-testid="first-run-onboarding"]')).toBeNull();
+    expect(
+      await waitForSelector(container, '[data-testid="dashboard-resume-setup"]'),
+    ).not.toBeNull();
 
     cleanup(root, container);
   });
 
-  it("clears dismissed state once config health becomes clean and reopens for the same issue later", async () => {
+  it("keeps skipped state when config health becomes clean and suppresses the same issue later", async () => {
     const { local } = stubPersistentStorage();
     let issues: Parameters<typeof buildIssueStatusResponse>[0] = [
       {
@@ -289,19 +295,19 @@ export function registerFirstRunOnboardingStateTests(): void {
     });
 
     await waitForSelector(container, '[data-testid="first-run-onboarding"]');
-    const dismissButton = findButtonByText(container, "Dismiss");
-    expect(dismissButton).not.toBeNull();
+    const skipButton = findButtonByText(container, "Skip setup");
+    expect(skipButton).not.toBeNull();
     await act(async () => {
-      dismissButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      skipButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       await Promise.resolve();
     });
-    expect(Array.from(local.values())[0]).toContain('"status":"dismissed"');
+    expect(Array.from(local.values())[0]).toContain('"status":"skipped"');
 
     issues = [];
     await act(async () => {
       await core.syncAllNow();
     });
-    expect(local.size).toBe(0);
+    expect(local.size).toBe(1);
 
     issues = [
       {
@@ -315,7 +321,76 @@ export function registerFirstRunOnboardingStateTests(): void {
       await core.syncAllNow();
     });
 
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(container.querySelector('[data-testid="first-run-onboarding"]')).toBeNull();
+    expect(
+      await waitForSelector(container, '[data-testid="dashboard-resume-setup"]'),
+    ).not.toBeNull();
+
+    const resumeButton = findButtonByText(container, "Resume Setup");
+    expect(resumeButton).not.toBeNull();
+    await act(async () => {
+      resumeButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
     expect(await waitForSelector(container, '[data-testid="first-run-onboarding"]')).not.toBeNull();
+
+    cleanup(root, container);
+  });
+
+  it("treats legacy dismissed storage as skipped onboarding", async () => {
+    const scopeKey = "desktop:http://example.test:";
+    stubPersistentStorage({
+      local: new Map<string, string>([
+        [
+          `tyrum.first-run-onboarding:${scopeKey}`,
+          JSON.stringify({
+            issueSignature: "no_provider_accounts:deployment:",
+            status: "dismissed",
+          }),
+        ],
+      ]),
+    });
+    const ws = new FakeWsClient();
+    const { http, statusGet } = createFakeHttpClient();
+    statusGet.mockResolvedValue(
+      buildIssueStatusResponse([
+        {
+          code: "no_provider_accounts",
+          severity: "error",
+          message: "No active provider accounts are configured.",
+          target: { kind: "deployment", id: null },
+        },
+      ]),
+    );
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test"),
+      deps: { ws, http },
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    await act(async () => {
+      root = createRoot(container);
+      root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('[data-testid="first-run-onboarding"]')).toBeNull();
+    expect(
+      await waitForSelector(container, '[data-testid="dashboard-resume-setup"]'),
+    ).not.toBeNull();
 
     cleanup(root, container);
   });
