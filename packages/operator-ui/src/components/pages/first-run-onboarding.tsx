@@ -23,7 +23,6 @@ import {
   saveProviderAccountFromState,
   useOnboardingData,
   useOnboardingDrafts,
-  useFirstRunOnboardingController,
 } from "./first-run-onboarding.logic.js";
 import {
   getRelevantOnboardingIssues,

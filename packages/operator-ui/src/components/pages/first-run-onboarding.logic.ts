@@ -13,6 +13,7 @@ import {
   writeOnboardingStoredState,
 } from "./first-run-onboarding.shared.js";
 import {
+  EXECUTION_PROFILE_IDS,
   emptyDialogState,
   modelRefFor,
   normalizeDialogState,
@@ -82,15 +83,7 @@ export function normalizeAssignments(assignments: readonly Assignment[]): Assign
   const byProfileId = new Map(
     assignments.map((assignment) => [assignment.execution_profile_id, assignment]),
   );
-  return [
-    "interaction",
-    "explorer_ro",
-    "reviewer_ro",
-    "planner",
-    "jury",
-    "executor_rw",
-    "integrator",
-  ].map((executionProfileId) => {
+  return EXECUTION_PROFILE_IDS.map((executionProfileId) => {
     const assignment = byProfileId.get(executionProfileId);
     return (
       assignment ?? {
@@ -121,15 +114,7 @@ export function resolvePreferredPresetKey(
 
 export function buildDefaultAssignments(presetKey: string): Record<string, string | null> {
   return Object.fromEntries(
-    [
-      "interaction",
-      "explorer_ro",
-      "reviewer_ro",
-      "planner",
-      "jury",
-      "executor_rw",
-      "integrator",
-    ].map((profileId) => [profileId, presetKey || null]),
+    EXECUTION_PROFILE_IDS.map((profileId) => [profileId, presetKey || null]),
   );
 }
 

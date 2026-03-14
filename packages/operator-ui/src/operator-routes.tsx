@@ -34,6 +34,8 @@ function lazyNamed<TProps>(
 const DashboardPage = lazyNamed<{
   core: OperatorCore;
   onNavigate: (id: string) => void;
+  onboardingAvailable?: boolean;
+  onOpenOnboarding?: () => void;
   connectionRouteId: "configure" | "desktop" | "mobile";
 }>(() => import("./components/pages/dashboard-page.js"), "DashboardPage");
 const ChatPage = lazyNamed<{ core: OperatorCore }>(
