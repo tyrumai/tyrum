@@ -24,6 +24,7 @@ export class WorkboardItemTransitionsDal {
 
       const from = existing.status as WorkItemState;
       this.assertTransitionAllowed(from, params.status);
+      await this.enforceReadyGate(tx, params.scope, existing, params.status);
       await this.enforceDoingLimit(tx, params.scope, from, params.status);
 
       const updated = await this.updateItemStatus(
@@ -130,6 +131,134 @@ export class WorkboardItemTransitionsDal {
       },
       `WIP limit ${dalHelpers.DEFAULT_WORK_ITEM_WIP_LIMIT} reached for doing items`,
     );
+  }
+
+  private async enforceReadyGate(
+    tx: SqlDb,
+    scope: WorkScope,
+    existing: DalHelpers.RawWorkItemRow,
+    to: WorkItemState,
+  ): Promise<void> {
+    if (to !== "ready") {
+      return;
+    }
+
+    const reasons: string[] = [];
+    const from = existing.status as WorkItemState;
+    const workItemId = existing.work_item_id;
+
+    const refinementPhase = await this.getWorkItemStateString(
+      tx,
+      scope,
+      workItemId,
+      "work.refinement.phase",
+    );
+    if (!refinementPhase) {
+      return;
+    }
+
+    if (existing.acceptance_json === null) {
+      reasons.push("acceptance_missing");
+    }
+
+    const openClarifications = await tx.get<{ count: number }>(
+      `SELECT COUNT(*) AS count
+       FROM work_clarifications
+       WHERE tenant_id = ?
+         AND agent_id = ?
+         AND workspace_id = ?
+         AND work_item_id = ?
+         AND status = 'open'`,
+      [scope.tenant_id, scope.agent_id, scope.workspace_id, workItemId],
+    );
+    if (dalHelpers.normalizeCount(openClarifications?.count) > 0) {
+      reasons.push("open_clarifications");
+    }
+
+    const sizeClass = await this.getWorkItemStateString(tx, scope, workItemId, "work.size.class");
+    if (!sizeClass || !["small", "medium", "large", "split_required"].includes(sizeClass)) {
+      reasons.push("size_missing");
+    }
+
+    if (refinementPhase === "awaiting_clarification") {
+      reasons.push("awaiting_clarification");
+    }
+
+    const readinessReason = await this.getWorkItemStateString(
+      tx,
+      scope,
+      workItemId,
+      "work.readiness.reason",
+    );
+    if (readinessReason) {
+      reasons.push(`readiness_blocker:${readinessReason}`);
+    }
+
+    if (sizeClass === "split_required") {
+      const childItems = await tx.get<{ count: number }>(
+        `SELECT COUNT(*) AS count
+         FROM work_items
+         WHERE tenant_id = ?
+           AND agent_id = ?
+           AND workspace_id = ?
+           AND parent_work_item_id = ?`,
+        [scope.tenant_id, scope.agent_id, scope.workspace_id, workItemId],
+      );
+      const executionTasks = await tx.get<{ count: number }>(
+        `SELECT COUNT(*) AS count
+         FROM work_item_tasks t
+         JOIN work_items i ON i.tenant_id = t.tenant_id AND i.work_item_id = t.work_item_id
+         WHERE i.tenant_id = ?
+           AND i.agent_id = ?
+           AND i.workspace_id = ?
+           AND t.tenant_id = ?
+           AND t.work_item_id = ?
+           AND t.execution_profile <> 'planner'`,
+        [scope.tenant_id, scope.agent_id, scope.workspace_id, scope.tenant_id, workItemId],
+      );
+      if (
+        dalHelpers.normalizeCount(childItems?.count) === 0 &&
+        dalHelpers.normalizeCount(executionTasks?.count) === 0
+      ) {
+        reasons.push("split_required_without_children_or_execution_tasks");
+      }
+    }
+
+    if (reasons.length === 0) {
+      return;
+    }
+
+    throw new dalHelpers.WorkboardTransitionError(
+      "readiness_gate_failed",
+      {
+        code: "readiness_gate_failed",
+        from,
+        to,
+        allowed: dalHelpers.WORK_ITEM_TRANSITIONS[from],
+        reasons,
+      },
+      `readiness gate failed: ${reasons.join(", ")}`,
+    );
+  }
+
+  private async getWorkItemStateString(
+    tx: SqlDb,
+    scope: WorkScope,
+    workItemId: string,
+    key: string,
+  ): Promise<string | undefined> {
+    const row = await tx.get<{ value_json: string | null }>(
+      `SELECT value_json
+       FROM work_item_state_kv
+       WHERE tenant_id = ?
+         AND agent_id = ?
+         AND workspace_id = ?
+         AND work_item_id = ?
+         AND key = ?`,
+      [scope.tenant_id, scope.agent_id, scope.workspace_id, workItemId, key],
+    );
+    const parsed = dalHelpers.parseJsonOr(row?.value_json ?? null, null);
+    return typeof parsed === "string" && parsed.trim().length > 0 ? parsed.trim() : undefined;
   }
 
   private async updateItemStatus(

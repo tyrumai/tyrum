@@ -32,7 +32,11 @@ import { loadAllPlaybooks } from "../modules/playbook/loader.js";
 import { PlaybookRunner } from "../modules/playbook/runner.js";
 import { ensureSelfSignedTlsMaterial } from "../modules/tls/self-signed.js";
 import { WsEventDal } from "../modules/ws-event/dal.js";
+import { WorkboardDispatcher } from "../modules/workboard/dispatcher.js";
+import { WorkboardOrchestrator } from "../modules/workboard/orchestrator.js";
+import { WorkboardReconciler } from "../modules/workboard/reconciler.js";
 import { WorkSignalScheduler } from "../modules/workboard/signal-scheduler.js";
+import { SubagentJanitor } from "../modules/workboard/subagent-janitor.js";
 import { createWsHandler } from "../routes/ws.js";
 import { isPostgresDbUri } from "../statestore/db-uri.js";
 import { VERSION } from "../version.js";
@@ -374,11 +378,53 @@ export async function startEdgeRuntime(
     : undefined;
   telegramProcessor?.start();
 
+  const workboardOrchestrator = agents
+    ? new WorkboardOrchestrator({
+        db: context.container.db,
+        agents,
+        owner: context.instanceId,
+        logger: context.logger,
+      })
+    : undefined;
+  workboardOrchestrator?.start();
+
+  const workboardDispatcher = agents
+    ? new WorkboardDispatcher({
+        db: context.container.db,
+        agents,
+        sessionLaneNodeAttachmentDal: context.container.sessionLaneNodeAttachmentDal,
+        owner: context.instanceId,
+        logger: context.logger,
+      })
+    : undefined;
+  workboardDispatcher?.start();
+
+  const workboardReconciler = agents
+    ? new WorkboardReconciler({
+        db: context.container.db,
+        logger: context.logger,
+      })
+    : undefined;
+  workboardReconciler?.start();
+
+  const subagentJanitor = agents
+    ? new SubagentJanitor({
+        db: context.container.db,
+        sessionLaneNodeAttachmentDal: context.container.sessionLaneNodeAttachmentDal,
+        logger: context.logger,
+      })
+    : undefined;
+  subagentJanitor?.start();
+
   const server = await createGatewayServer(context, app, wsHandler);
   return {
     plugins,
     pluginCatalogProvider,
     agents,
+    workboardOrchestrator,
+    workboardDispatcher,
+    workboardReconciler,
+    subagentJanitor,
     authRateLimiter,
     wsUpgradeRateLimiter,
     wsHandler,

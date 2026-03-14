@@ -11,10 +11,13 @@ export type ExecutionProfileId =
   | "executor_rw"
   | "integrator";
 
+type ResolvedExecutionProfileId = Exclude<ExecutionProfileId, "integrator">;
+
 export type ExecutionProfile = {
-  id: ExecutionProfileId;
+  id: ResolvedExecutionProfileId;
   allowed_lanes: readonly Lane[];
   tool_allowlist: readonly string[];
+  tool_denylist?: readonly string[];
   capabilities: readonly ExecutionProfileCapability[];
   model_id?: string;
   reasoning_effort?: "low" | "medium" | "high";
@@ -24,11 +27,16 @@ export type ExecutionProfile = {
   };
 };
 
-const PROFILES: Record<ExecutionProfileId, ExecutionProfile> = {
+const PROFILES: Record<ResolvedExecutionProfileId, ExecutionProfile> = {
   interaction: {
     id: "interaction",
     allowed_lanes: ["main"],
-    tool_allowlist: ["*"],
+    tool_allowlist: ["*", "workboard.*"],
+    tool_denylist: [
+      "workboard.subagent.spawn",
+      "workboard.subagent.send",
+      "workboard.subagent.close",
+    ],
     capabilities: ["subagent.spawn", "work.write"],
     reasoning_effort: "medium",
     budgets: {
@@ -51,6 +59,21 @@ const PROFILES: Record<ExecutionProfileId, ExecutionProfile> = {
       "grep",
       "mcp.memory.seed",
       "mcp.memory.search",
+      "workboard.item.list",
+      "workboard.item.get",
+      "workboard.task.list",
+      "workboard.task.get",
+      "workboard.artifact.list",
+      "workboard.artifact.get",
+      "workboard.decision.list",
+      "workboard.decision.get",
+      "workboard.signal.list",
+      "workboard.signal.get",
+      "workboard.state.list",
+      "workboard.state.get",
+      "workboard.clarification.list",
+      "workboard.subagent.list",
+      "workboard.subagent.get",
     ],
     capabilities: [],
     reasoning_effort: "low",
@@ -71,6 +94,21 @@ const PROFILES: Record<ExecutionProfileId, ExecutionProfile> = {
       "grep",
       "mcp.memory.seed",
       "mcp.memory.search",
+      "workboard.item.list",
+      "workboard.item.get",
+      "workboard.task.list",
+      "workboard.task.get",
+      "workboard.artifact.list",
+      "workboard.artifact.get",
+      "workboard.decision.list",
+      "workboard.decision.get",
+      "workboard.signal.list",
+      "workboard.signal.get",
+      "workboard.state.list",
+      "workboard.state.get",
+      "workboard.clarification.list",
+      "workboard.subagent.list",
+      "workboard.subagent.get",
     ],
     capabilities: [],
     reasoning_effort: "low",
@@ -91,6 +129,15 @@ const PROFILES: Record<ExecutionProfileId, ExecutionProfile> = {
       "grep",
       "mcp.memory.seed",
       "mcp.memory.search",
+      "workboard.item.*",
+      "workboard.task.*",
+      "workboard.artifact.*",
+      "workboard.decision.*",
+      "workboard.signal.*",
+      "workboard.state.*",
+      "workboard.subagent.*",
+      "workboard.clarification.list",
+      "workboard.clarification.request",
     ],
     capabilities: ["subagent.spawn", "work.write"],
     reasoning_effort: "high",
@@ -114,6 +161,21 @@ const PROFILES: Record<ExecutionProfileId, ExecutionProfile> = {
       "grep",
       "mcp.memory.seed",
       "mcp.memory.search",
+      "workboard.item.list",
+      "workboard.item.get",
+      "workboard.task.list",
+      "workboard.task.get",
+      "workboard.artifact.list",
+      "workboard.artifact.get",
+      "workboard.decision.list",
+      "workboard.decision.get",
+      "workboard.signal.list",
+      "workboard.signal.get",
+      "workboard.state.list",
+      "workboard.state.get",
+      "workboard.clarification.list",
+      "workboard.subagent.list",
+      "workboard.subagent.get",
     ],
     capabilities: [],
     reasoning_effort: "medium",
@@ -140,32 +202,24 @@ const PROFILES: Record<ExecutionProfileId, ExecutionProfile> = {
       "mcp.memory.search",
       "mcp.memory.write",
       "plugin.*",
-    ],
-    capabilities: ["work.write"],
-    reasoning_effort: "high",
-    budgets: {
-      max_duration_ms: 10 * 60_000,
-      max_total_tokens: 200_000,
-    },
-  },
-  integrator: {
-    id: "integrator",
-    allowed_lanes: ["subagent"],
-    tool_allowlist: [
-      "read",
-      "write",
-      "edit",
-      "apply_patch",
-      "bash",
-      "glob",
-      "grep",
-      "websearch",
-      "webfetch",
-      "codesearch",
-      "mcp.memory.seed",
-      "mcp.memory.search",
-      "mcp.memory.write",
-      "plugin.*",
+      "workboard.item.list",
+      "workboard.item.get",
+      "workboard.item.update",
+      "workboard.item.delete",
+      "workboard.item.transition",
+      "workboard.task.list",
+      "workboard.task.get",
+      "workboard.task.create",
+      "workboard.task.delete",
+      "workboard.task.update",
+      "workboard.artifact.*",
+      "workboard.decision.*",
+      "workboard.signal.*",
+      "workboard.state.*",
+      "workboard.subagent.list",
+      "workboard.subagent.get",
+      "workboard.clarification.list",
+      "workboard.clarification.request",
     ],
     capabilities: ["work.write"],
     reasoning_effort: "high",
@@ -176,21 +230,26 @@ const PROFILES: Record<ExecutionProfileId, ExecutionProfile> = {
   },
 };
 
-const PROFILE_ALIASES: Record<string, ExecutionProfileId> = {
+const PROFILE_ALIASES: Record<string, ResolvedExecutionProfileId> = {
   executor: "executor_rw",
   explorer: "explorer_ro",
   reviewer: "reviewer_ro",
+  integrator: "executor_rw",
 };
 
 export function normalizeExecutionProfileId(raw: string): ExecutionProfileId | undefined {
   const normalized = raw.trim().toLowerCase();
   if (!normalized) return undefined;
+  const alias = PROFILE_ALIASES[normalized];
+  if (alias) {
+    return alias;
+  }
   if (Object.prototype.hasOwnProperty.call(PROFILES, normalized)) {
     return normalized as ExecutionProfileId;
   }
-  return PROFILE_ALIASES[normalized];
+  return undefined;
 }
 
 export function getExecutionProfile(id: ExecutionProfileId): ExecutionProfile {
-  return PROFILES[id];
+  return id === "integrator" ? PROFILES.executor_rw : PROFILES[id];
 }

@@ -7,7 +7,6 @@ export const EXECUTION_PROFILE_IDS = [
   "planner",
   "jury",
   "executor_rw",
-  "integrator",
 ] as const;
 
 export type ExecutionProfileId = (typeof EXECUTION_PROFILE_IDS)[number];
@@ -19,7 +18,6 @@ export const EXECUTION_PROFILE_LABELS: Record<ExecutionProfileId, string> = {
   planner: "Planner",
   jury: "Jury",
   executor_rw: "Executor",
-  integrator: "Integrator",
 };
 
 export const REASONING_OPTIONS = [

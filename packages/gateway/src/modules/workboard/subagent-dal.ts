@@ -11,6 +11,7 @@ import type { SqlDb } from "../../statestore/types.js";
 import type { GetItemFn } from "./dal-deps.js";
 import * as dalHelpers from "./dal-helpers.js";
 import type * as DalHelpers from "./dal-helpers.js";
+import { deleteTerminatedSubagentsBefore, updateSubagentRow } from "./subagent-dal-maintenance.js";
 
 type WorkboardSubagentDalDependencies = {
   db: SqlDb;
@@ -29,6 +30,8 @@ export class WorkboardSubagentDal {
       session_key: string;
       lane?: Lane;
       status?: SubagentStatus;
+      desktop_environment_id?: string;
+      attached_node_id?: string;
     };
     subagentId?: string;
     createdAtIso?: string;
@@ -57,6 +60,8 @@ export class WorkboardSubagentDal {
       sessionKey: params.subagent.session_key,
       lane,
       status,
+      desktopEnvironmentId: params.subagent.desktop_environment_id ?? null,
+      attachedNodeId: params.subagent.attached_node_id ?? null,
       createdAtIso,
     });
     return dalHelpers.toSubagent(row);
@@ -112,6 +117,9 @@ export class WorkboardSubagentDal {
   async listSubagents(params: {
     scope: WorkScope;
     statuses?: SubagentStatus[];
+    work_item_id?: string;
+    work_item_task_id?: string;
+    execution_profile?: string;
     limit?: number;
     cursor?: string;
   }): Promise<{ subagents: SubagentDescriptor[]; next_cursor?: string }> {
@@ -125,6 +133,18 @@ export class WorkboardSubagentDal {
     if (params.statuses && params.statuses.length > 0) {
       where.push(`status IN (${params.statuses.map(() => "?").join(", ")})`);
       values.push(...params.statuses);
+    }
+    if (params.work_item_id) {
+      where.push("work_item_id = ?");
+      values.push(params.work_item_id);
+    }
+    if (params.work_item_task_id) {
+      where.push("work_item_task_id = ?");
+      values.push(params.work_item_task_id);
+    }
+    if (params.execution_profile) {
+      where.push("execution_profile = ?");
+      values.push(params.execution_profile);
     }
 
     if (params.cursor) {
@@ -298,6 +318,44 @@ export class WorkboardSubagentDal {
     });
   }
 
+  async updateSubagent(params: {
+    scope: WorkScope;
+    subagent_id: string;
+    patch: {
+      status?: SubagentStatus;
+      desktop_environment_id?: string | null;
+      attached_node_id?: string | null;
+      close_reason?: string | null;
+      closed_at?: string | null;
+      last_heartbeat_at?: string | null;
+    };
+    updatedAtIso?: string;
+  }): Promise<SubagentDescriptor | undefined> {
+    const updatedAtIso = params.updatedAtIso ?? new Date().toISOString();
+    const row = await updateSubagentRow({
+      db: this.deps.db,
+      scope: params.scope,
+      subagent_id: params.subagent_id,
+      patch: params.patch,
+      updatedAtIso,
+    });
+    return row ? dalHelpers.toSubagent(row) : undefined;
+  }
+
+  async deleteTerminatedSubagentsBefore(params: {
+    scope: WorkScope;
+    closedBeforeIso: string;
+    limit?: number;
+  }): Promise<number> {
+    const limit = Math.max(1, Math.min(500, params.limit ?? 100));
+    return await deleteTerminatedSubagentsBefore({
+      db: this.deps.db,
+      scope: params.scope,
+      closedBeforeIso: params.closedBeforeIso,
+      limit,
+    });
+  }
+
   private async resolveTaskLinkedWorkItemId(
     scope: WorkScope,
     workItemTaskId: string | undefined,
@@ -359,6 +417,8 @@ export class WorkboardSubagentDal {
     sessionKey: string;
     lane: Lane;
     status: SubagentStatus;
+    desktopEnvironmentId: string | null;
+    attachedNodeId: string | null;
     createdAtIso: string;
   }): Promise<DalHelpers.RawSubagentRow> {
     const row = await this.deps.db.get<DalHelpers.RawSubagentRow>(
@@ -373,12 +433,14 @@ export class WorkboardSubagentDal {
          session_key,
          lane,
          status,
+         desktop_environment_id,
+         attached_node_id,
          created_at,
          updated_at,
          last_heartbeat_at,
          closed_at
        )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        RETURNING *`,
       [
         params.subagentId,
@@ -391,6 +453,8 @@ export class WorkboardSubagentDal {
         params.sessionKey,
         params.lane,
         params.status,
+        params.desktopEnvironmentId,
+        params.attachedNodeId,
         params.createdAtIso,
         params.createdAtIso,
         null,

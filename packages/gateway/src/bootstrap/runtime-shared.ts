@@ -29,6 +29,10 @@ import type { ArtifactLifecycleScheduler } from "../modules/artifact/lifecycle.j
 import type { OutboxLifecycleScheduler } from "../modules/backplane/outbox-lifecycle.js";
 import type { StateStoreLifecycleScheduler } from "../modules/statestore/lifecycle.js";
 import type { DesktopEnvironmentHostRuntime } from "../modules/desktop-environments/host-runtime.js";
+import type { WorkboardOrchestrator } from "../modules/workboard/orchestrator.js";
+import type { WorkboardDispatcher } from "../modules/workboard/dispatcher.js";
+import type { WorkboardReconciler } from "../modules/workboard/reconciler.js";
+import type { SubagentJanitor } from "../modules/workboard/subagent-janitor.js";
 
 export type GatewayServer = HttpServer | HttpsServer;
 export type SecretProviderForTenant = Awaited<
@@ -81,6 +85,10 @@ export interface EdgeRuntime {
   plugins?: PluginRegistry;
   pluginCatalogProvider?: PluginCatalogProvider;
   agents?: AgentRegistry;
+  workboardOrchestrator?: WorkboardOrchestrator;
+  workboardDispatcher?: WorkboardDispatcher;
+  workboardReconciler?: WorkboardReconciler;
+  subagentJanitor?: SubagentJanitor;
   authRateLimiter?: SlidingWindowRateLimiter;
   wsUpgradeRateLimiter?: SlidingWindowRateLimiter;
   wsHandler?: ReturnType<typeof createWsHandler>;

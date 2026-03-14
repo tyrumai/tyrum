@@ -202,6 +202,75 @@ export class WorkboardItemsDal {
     return row ? dalHelpers.toWorkItem(row) : undefined;
   }
 
+  async deleteItem(params: {
+    scope: WorkScope;
+    work_item_id: string;
+  }): Promise<WorkItem | undefined> {
+    const existing = await this.getItem(params);
+    if (!existing) {
+      return undefined;
+    }
+
+    const activeSubagent = await this.db.get<{ subagent_id: string }>(
+      `SELECT subagent_id
+       FROM subagents
+       WHERE tenant_id = ?
+         AND agent_id = ?
+         AND workspace_id = ?
+         AND work_item_id = ?
+         AND status IN ('running', 'paused', 'closing')
+       LIMIT 1`,
+      [
+        params.scope.tenant_id,
+        params.scope.agent_id,
+        params.scope.workspace_id,
+        params.work_item_id,
+      ],
+    );
+    if (activeSubagent) {
+      throw new Error("cannot delete work item with active subagents");
+    }
+
+    const activeTask = await this.db.get<{ task_id: string }>(
+      `SELECT t.task_id
+       FROM work_item_tasks t
+       JOIN work_items i ON i.tenant_id = t.tenant_id AND i.work_item_id = t.work_item_id
+       WHERE i.tenant_id = ?
+         AND i.agent_id = ?
+         AND i.workspace_id = ?
+         AND t.tenant_id = ?
+         AND t.work_item_id = ?
+         AND t.status IN ('leased', 'running', 'paused')
+       LIMIT 1`,
+      [
+        params.scope.tenant_id,
+        params.scope.agent_id,
+        params.scope.workspace_id,
+        params.scope.tenant_id,
+        params.work_item_id,
+      ],
+    );
+    if (activeTask) {
+      throw new Error("cannot delete work item with active tasks");
+    }
+
+    const row = await this.db.get<DalHelpers.RawWorkItemRow>(
+      `DELETE FROM work_items
+       WHERE tenant_id = ?
+         AND agent_id = ?
+         AND workspace_id = ?
+         AND work_item_id = ?
+       RETURNING *`,
+      [
+        params.scope.tenant_id,
+        params.scope.agent_id,
+        params.scope.workspace_id,
+        params.work_item_id,
+      ],
+    );
+    return row ? dalHelpers.toWorkItem(row) : undefined;
+  }
+
   private async assertParentInScope(scope: WorkScope, workItemId: string): Promise<void> {
     const parent = await this.getItem({ scope, work_item_id: workItemId });
     if (!parent) {

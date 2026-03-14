@@ -199,9 +199,11 @@ Practical mapping:
 - **Monitoring + replanning:** approvals, postconditions, and budgets create explicit feedback signals; conflicts trigger read-only fan-out (jury) and DecisionRecords.
 - **Habit vs goal-directed control:** playbooks and durable procedures handle repeatable workflows; ad-hoc planning tasks handle novel work under tighter oversight.
 
-## Predictable intake and delegation
+## Predictable intake and automatic orchestration
 
-Delegation should be a deterministic policy step, not a model whim.
+The interactive agent should be able to notice when work is too large, ambiguous, or long-running for an inline turn and capture it on the WorkBoard directly through built-in tools.
+
+Execution dispatch remains scheduler-owned. The model decides when to externalize work; background services decide when `ready` work is actually assigned and executed.
 
 ```mermaid
 flowchart TB
@@ -215,20 +217,20 @@ flowchart TB
     Telegram["Telegram DM session_key"]:::session
   end
 
-  Desktop --> Intake["Intake standard work<br/>classify + acceptance + budget + state/signals + fingerprint<br/>choose mode (reason-coded)"]:::session
+  Desktop --> Intake["Interactive agent turn<br/>classify + inspect work state + decide inline vs capture"]:::session
   Telegram --> Intake
 
   Intake -->|inline| Inline["Reply in-session"]:::session
-  Intake -->|delegate_execute / delegate_plan| WB["WorkBoard (workspace scope)<br/>WorkItem + drilldown updated"]:::board
+  Intake -->|workboard.capture| WB["WorkBoard (workspace scope)<br/>WorkItem + drilldown updated"]:::board
 
-  WB -->|dispatch tasks| SA["Subagent session_key<br/>(lane=subagent)"]:::exec
+  WB -->|auto-start refinement| SA["Planner subagent<br/>(one per WorkItem)"]:::exec
   SA --> ENG["Execution engine<br/>(jobs/runs/steps)"]:::exec
   ENG --> ART["Artifacts + postconditions"]:::exec
   ENG --> APPR["Approvals (pause/resume)"]:::gate
 
   ART --> WB
   APPR --> WB
-  WB --> Notify["Notify last_active_session_key<br/>(or created_from_session_key)"]:::session
+  WB --> Notify["Clarification notification via steer<br/>to last_active_session_key<br/>(or created_from_session_key)"]:::session
   Notify --> Desktop
   Notify --> Telegram
 ```
@@ -240,12 +242,19 @@ Standard work at intake:
 3. **Estimate and budget:** timebox + cost budget per WorkItem and per task.
 4. **Initialize state:** write authoritative "current truth" into WorkItem state KV, seed initial WorkArtifacts, and create WorkSignals when the task includes "remember to…" triggers.
 5. **Scope fingerprint:** record a bounded set of intended resources (repo/service/calendar/system) for overlap warnings (not auto-merge).
-6. **Choose mode (reason-coded):**
+6. **Choose execution shape:**
    - `inline`: answer now, no background work.
-   - `delegate_execute`: create Action WorkItem and dispatch executor/reviewer tasks.
-   - `delegate_plan`: create Initiative WorkItem and dispatch planning tasks; child Action WorkItems are created from the plan.
+   - `workboard.capture`: create a backlog WorkItem and let background refinement own the next steps.
 
-Operator overrides should exist (slash commands / UI actions) to force a mode for predictability.
+After capture:
+
+1. A planner subagent is created for that WorkItem and reused across refinement iterations.
+2. The planner may spawn read-only helper subagents (`explorer_ro`, `reviewer_ro`, `jury`) for bounded side work.
+3. If refinement needs information, it writes a clarification request to the WorkBoard.
+4. The user-facing agent receives a `steer` notification after its next tool boundary, asks the user, and writes the answer back durably.
+5. Once readiness gates pass, the planner moves the WorkItem to `ready`.
+6. A workspace-global dispatcher starts `ready` work automatically when WIP allows and moves it to `doing`.
+7. A reconciler and janitor repair orphaned `doing` work and clean up unused subagents and managed desktops.
 
 ## Execution flow (fan-out, fan-in)
 
@@ -267,7 +276,7 @@ flowchart TB
   WI --> P1["Explore task<br/>(cheap model, read-only)"]
   WI --> P2["Review task<br/>(cheap model, read-only)"]
   WI -.-> J["Jury fan-out<br/>(read-only, on conflict)"]
-  P1 --> S["Synthesize task<br/>(planner/integrator)"]
+  P1 --> S["Synthesize task<br/>(planner/executor)"]
   P2 --> S
   J -.-> S
   S --> N["Append next tasks<br/>(execute/verify/notify)"]
@@ -343,8 +352,7 @@ Execution profiles bind model selection to tool/policy constraints (distinct fro
 - `explorer` / `reviewer`: cheap model, read-only tool allowlist.
 - `planner`: cheap/medium model, allowed to create/update task graphs and propose child WorkItems.
 - `jury` (optional): cheap model, read-only tool allowlist; used for conflict arbitration fan-out (produces `jury_opinion` WorkArtifacts).
-- `executor`: write-capable within workspace under strict leases; external side effects remain approval-gated.
-- `integrator`: applies changes, runs verification, and produces final operator-facing summaries.
+- `executor`: write-capable within workspace; it may implement, verify, synthesize, and close work depending on the assigned task and prompt.
 
 Spawning subagents and mutating the WorkBoard should be controlled by execution profile capabilities (for example `work.write`, `subagent.spawn`) plus quotas, not by convention.
 

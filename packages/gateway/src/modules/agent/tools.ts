@@ -132,6 +132,20 @@ export function isToolAllowed(allowlist: readonly string[], toolId: string): boo
   return false;
 }
 
+export function isToolAllowedWithDenylist(
+  allowlist: readonly string[],
+  denylist: readonly string[] | undefined,
+  toolId: string,
+): boolean {
+  if (!isToolAllowed(allowlist, toolId)) {
+    return false;
+  }
+  if (!denylist || denylist.length === 0) {
+    return true;
+  }
+  return !isToolAllowed(denylist, toolId);
+}
+
 function scoreTool(tool: ToolDescriptor, normalizedPrompt: string): number {
   let score = 0;
   for (const keyword of tool.keywords) {

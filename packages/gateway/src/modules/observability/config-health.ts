@@ -1,17 +1,13 @@
 import { AgentConfig } from "@tyrum/schemas";
 import type { ModelsDevService } from "../models/models-dev-service.js";
+import {
+  normalizePublicExecutionProfileId,
+  PUBLIC_EXECUTION_PROFILE_IDS,
+} from "../models/public-execution-profiles.js";
 import type { SqlDb } from "../../statestore/types.js";
 import { isMissingTableError } from "./db-errors.js";
 
-const EXECUTION_PROFILE_IDS = [
-  "interaction",
-  "explorer_ro",
-  "reviewer_ro",
-  "planner",
-  "jury",
-  "executor_rw",
-  "integrator",
-] as const;
+const EXECUTION_PROFILE_IDS = PUBLIC_EXECUTION_PROFILE_IDS;
 
 type CatalogLookup = Map<string, Set<string>>;
 
@@ -209,9 +205,16 @@ export async function loadConfigHealth(input: {
       .filter((providerKey) => providerKey.trim().length > 0),
   );
   const presetsByKey = new Map(presetRows.map((row) => [row.preset_key, row]));
-  const assignmentsByProfileId = new Map(
-    assignmentRows.map((row) => [row.execution_profile_id, row.preset_key]),
-  );
+  const assignmentsByProfileId = new Map<string, string>();
+  for (const row of assignmentRows) {
+    const profileId = normalizePublicExecutionProfileId(row.execution_profile_id);
+    if (!profileId) {
+      continue;
+    }
+    if (row.execution_profile_id === profileId || !assignmentsByProfileId.has(profileId)) {
+      assignmentsByProfileId.set(profileId, row.preset_key);
+    }
+  }
 
   if (activeProviderKeys.size === 0) {
     issues.push({

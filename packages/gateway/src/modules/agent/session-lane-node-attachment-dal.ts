@@ -59,4 +59,12 @@ export class SessionLaneNodeAttachmentDal {
       [input.tenantId, input.key, input.lane],
     );
   }
+
+  async delete(input: { tenantId: string; key: string; lane: string }): Promise<void> {
+    await this.db.run(
+      `DELETE FROM session_lane_node_attachments
+       WHERE tenant_id = ? AND key = ? AND lane = ?`,
+      [input.tenantId, input.key, input.lane],
+    );
+  }
 }

@@ -74,6 +74,62 @@ export class WorkboardTasksDal {
     return rows.map(dalHelpers.toWorkItemTask);
   }
 
+  async getTask(params: { scope: WorkScope; task_id: string }): Promise<WorkItemTask | undefined> {
+    const row = await this.deps.db.get<DalHelpers.RawWorkItemTaskRow>(
+      `SELECT t.*
+       FROM work_item_tasks t
+       JOIN work_items i ON i.tenant_id = t.tenant_id AND i.work_item_id = t.work_item_id
+       WHERE i.tenant_id = ?
+         AND i.agent_id = ?
+         AND i.workspace_id = ?
+         AND t.tenant_id = ?
+         AND t.task_id = ?`,
+      [
+        params.scope.tenant_id,
+        params.scope.agent_id,
+        params.scope.workspace_id,
+        params.scope.tenant_id,
+        params.task_id,
+      ],
+    );
+    return row ? dalHelpers.toWorkItemTask(row) : undefined;
+  }
+
+  async deleteTask(params: {
+    scope: WorkScope;
+    task_id: string;
+  }): Promise<WorkItemTask | undefined> {
+    const existing = await this.getTask(params);
+    if (!existing) {
+      return undefined;
+    }
+    if (["leased", "running", "paused"].includes(existing.status)) {
+      throw new Error(`cannot delete active task (${existing.status})`);
+    }
+
+    const row = await this.deps.db.get<DalHelpers.RawWorkItemTaskRow>(
+      `DELETE FROM work_item_tasks
+       WHERE tenant_id = ?
+         AND task_id = ?
+         AND work_item_id IN (
+           SELECT work_item_id
+           FROM work_items
+           WHERE tenant_id = ?
+             AND agent_id = ?
+             AND workspace_id = ?
+         )
+       RETURNING *`,
+      [
+        params.scope.tenant_id,
+        params.task_id,
+        params.scope.tenant_id,
+        params.scope.agent_id,
+        params.scope.workspace_id,
+      ],
+    );
+    return row ? dalHelpers.toWorkItemTask(row) : undefined;
+  }
+
   private async assertCreateTaskAllowed(
     scope: WorkScope,
     workItemId: string,
