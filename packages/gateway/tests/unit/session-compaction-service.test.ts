@@ -21,7 +21,7 @@ vi.mock("../../src/modules/agent/runtime/pre-compaction-memory-flush.js", () => 
 
 const mockGenerateText = vi.mocked(generateText);
 
-function sampleMessage(id: string, role: "user" | "assistant", text: string) {
+function sampleMessage(id: string, role: "user" | "assistant" | "system" | "tool", text: string) {
   return { id, role, parts: [{ type: "text" as const, text }] };
 }
 
@@ -119,6 +119,63 @@ describe("shouldCompactSessionForUsage", () => {
               relevant_files: [],
               handoff_md: "Continue the task.",
             },
+            pending_approvals: [],
+            pending_tool_state: [],
+            updated_at: "2026-03-08T00:00:00Z",
+          },
+        } as never,
+        modelResolution: { candidates: [] } as never,
+        usage: undefined,
+      }),
+    ).toBe(true);
+  });
+
+  it("ignores system and tool messages in the max_turns fallback", () => {
+    expect(
+      shouldCompactSessionForUsage({
+        config: {
+          sessions: { max_turns: 2, compaction: { auto: true, reserved_input_tokens: 20_000 } },
+        } as never,
+        session: {
+          messages: [
+            sampleMessage("m1", "user", "hello"),
+            sampleMessage("m2", "assistant", "hi"),
+            sampleMessage("m3", "assistant", "tool requested"),
+            sampleMessage("m4", "tool", "tool output"),
+            sampleMessage("m5", "system", "checkpoint"),
+          ],
+          context_state: {
+            version: 1,
+            recent_message_ids: ["m1", "m2", "m3", "m4", "m5"],
+            checkpoint: null,
+            pending_approvals: [],
+            pending_tool_state: [],
+            updated_at: "2026-03-08T00:00:00Z",
+          },
+        } as never,
+        modelResolution: { candidates: [] } as never,
+        usage: undefined,
+      }),
+    ).toBe(false);
+  });
+
+  it("falls back to retained turn messages when recent_message_ids are stale", () => {
+    expect(
+      shouldCompactSessionForUsage({
+        config: {
+          sessions: { max_turns: 2, compaction: { auto: true, reserved_input_tokens: 20_000 } },
+        } as never,
+        session: {
+          messages: [
+            sampleMessage("m1", "user", "hello"),
+            sampleMessage("m2", "assistant", "hi"),
+            sampleMessage("m3", "user", "again"),
+            sampleMessage("m4", "assistant", "done"),
+          ],
+          context_state: {
+            version: 1,
+            recent_message_ids: ["missing-message"],
+            checkpoint: null,
             pending_approvals: [],
             pending_tool_state: [],
             updated_at: "2026-03-08T00:00:00Z",

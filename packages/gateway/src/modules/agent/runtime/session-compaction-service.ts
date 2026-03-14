@@ -135,24 +135,36 @@ function getReservedInputTokens(config: AgentConfigT): number {
   );
 }
 
+function isRetainedTurnMessage(message: SessionRow["messages"][number]): boolean {
+  return message.role === "user" || message.role === "assistant";
+}
+
+function countRetainedTurnMessages(messages: readonly SessionRow["messages"][number][]): number {
+  return messages.reduce((count, message) => count + (isRetainedTurnMessage(message) ? 1 : 0), 0);
+}
+
 function recentMessageCount(session: SessionRow): number {
   if (session.context_state.recent_message_ids.length > 0) {
-    return session.context_state.recent_message_ids.length;
+    const recentMessageIds = new Set(session.context_state.recent_message_ids);
+    const recentMessages = session.messages.filter((message) => recentMessageIds.has(message.id));
+    if (recentMessages.length > 0) {
+      return countRetainedTurnMessages(recentMessages);
+    }
   }
 
   const compactedThroughMessageId = session.context_state.compacted_through_message_id;
   if (!compactedThroughMessageId) {
-    return session.messages.length;
+    return countRetainedTurnMessages(session.messages);
   }
 
   const compactedIndex = session.messages.findIndex(
     (message) => message.id === compactedThroughMessageId,
   );
   if (compactedIndex < 0) {
-    return session.messages.length;
+    return countRetainedTurnMessages(session.messages);
   }
 
-  return Math.max(0, session.messages.length - compactedIndex - 1);
+  return countRetainedTurnMessages(session.messages.slice(compactedIndex + 1));
 }
 
 function trimJsonFence(value: string): string {
