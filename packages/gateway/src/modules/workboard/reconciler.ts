@@ -96,7 +96,10 @@ export class WorkboardReconciler {
       return;
     }
 
-    if (tasks.every((task) => task.status === "completed" || task.status === "skipped")) {
+    if (
+      tasks.length > 0 &&
+      tasks.every((task) => task.status === "completed" || task.status === "skipped")
+    ) {
       await maybeFinalizeWorkItem({
         workboard: this.workboard,
         scope,
@@ -110,14 +113,19 @@ export class WorkboardReconciler {
         task.status === "queued" ||
         task.status === "leased" ||
         task.status === "running" ||
-        task.status === "paused",
+        task.status === "paused" ||
+        task.status === "cancelled",
     );
-    if (needsReady) {
+    if (tasks.length === 0 || needsReady) {
       await this.opts.db.run(
         `UPDATE work_item_tasks
          SET status = CASE
-             WHEN status IN ('leased', 'running', 'paused') THEN 'queued'
+             WHEN status IN ('leased', 'running', 'paused', 'cancelled') THEN 'queued'
              ELSE status
+           END,
+           finished_at = CASE
+             WHEN status = 'cancelled' THEN NULL
+             ELSE finished_at
            END,
            lease_owner = NULL,
            lease_expires_at_ms = NULL,

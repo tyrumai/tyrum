@@ -96,7 +96,7 @@ export async function executeWorkboardCrudTool(params: {
           patch: {
             ...(readString(record, "title") ? { title: readString(record, "title") } : {}),
             ...(readNumber(record, "priority") !== undefined
-              ? { priority: Math.floor(readNumber(record, "priority") ?? 0) }
+              ? { priority: Math.max(0, Math.floor(readNumber(record, "priority") ?? 0)) }
               : {}),
             ...(record?.["acceptance"] !== undefined ? { acceptance: record["acceptance"] } : {}),
           },
