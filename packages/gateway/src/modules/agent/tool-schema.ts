@@ -45,7 +45,14 @@ function mergeProperties(
   }
 
   for (const [key, value] of Object.entries(nextProperties)) {
-    if (!(key in base) && isRecord(value)) {
+    if (key in base) {
+      continue;
+    }
+    if (value === true || value === false) {
+      base[key] = value;
+      continue;
+    }
+    if (isRecord(value)) {
       base[key] = cloneRecord(value);
     }
   }

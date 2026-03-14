@@ -121,6 +121,47 @@ describe("model tool naming", () => {
     });
   });
 
+  it("preserves variant-only boolean property schemas while normalizing top-level oneOf", () => {
+    expect(
+      validateToolDescriptorInputSchema({
+        id: "plugin.echo.boolean_variant_property",
+        inputSchema: {
+          type: "object",
+          properties: {
+            mode: { type: "string", enum: ["open", "closed"] },
+          },
+          required: ["mode"],
+          oneOf: [
+            {
+              properties: {
+                mode: { type: "string", enum: ["open"] },
+                payload: true,
+              },
+              required: ["mode", "payload"],
+            },
+            {
+              properties: {
+                mode: { type: "string", enum: ["closed"] },
+                payload: false,
+              },
+              required: ["mode"],
+            },
+          ],
+        },
+      }),
+    ).toEqual({
+      ok: true,
+      schema: {
+        type: "object",
+        properties: {
+          mode: { type: "string", enum: ["open", "closed"] },
+          payload: true,
+        },
+        required: ["mode"],
+      },
+    });
+  });
+
   it("rejects top-level oneOf schemas that do not describe object variants", () => {
     expect(
       validateToolDescriptorInputSchema({
