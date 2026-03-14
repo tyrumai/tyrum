@@ -180,7 +180,7 @@ describe("turnDirect overflow retry", () => {
     sessionMessagesToModelMessagesMock.mockResolvedValue([]);
   });
 
-  it("does not retry after tools have already been used", async () => {
+  it("compacts but does not retry after tools have already been used", async () => {
     const overflow = new Error("This model's maximum context length is 128000 tokens.");
     prepareTurnMock.mockResolvedValue(samplePreparedTurn(new Set(["write_file"])));
     generateTextMock.mockRejectedValue(overflow);
@@ -191,7 +191,7 @@ describe("turnDirect overflow retry", () => {
       turnDirect(sampleDeps(), { channel: "ui", thread_id: "thread-1", message: "hello" } as never),
     ).rejects.toThrow(/maximum context length/);
 
-    expect(compactForOverflowMock).not.toHaveBeenCalled();
+    expect(compactForOverflowMock).toHaveBeenCalledOnce();
     expect(generateTextMock).toHaveBeenCalledTimes(1);
   });
 

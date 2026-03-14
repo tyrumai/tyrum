@@ -24,7 +24,6 @@ import {
 import {
   createStopWhenWithWithinTurnLoopDetection,
   compactForOverflow,
-  extractUsageSnapshot,
   makeEventfulAbortSignal,
   maybeAutoCompactSession,
   prepareLaneQueueStep,
@@ -133,7 +132,6 @@ export async function turnDirect(
   const finalizeAndPersist = async (params: {
     reply: string;
     turnKind?: "normal" | "skip";
-    usage?: ReturnType<typeof extractUsageSnapshot>;
     responseMessages?: readonly ModelMessage[];
   }) => {
     const memoryWritten = memoryWriteState?.wrote ?? false;
@@ -296,9 +294,6 @@ export async function turnDirect(
     });
   } catch (error) {
     if (!turnOpts?.compactionRetried && isContextOverflowError(error)) {
-      if (usedTools.size > 0) {
-        throw error;
-      }
       await compactForOverflow({
         deps,
         ctx,
@@ -307,6 +302,9 @@ export async function turnDirect(
         abortSignal,
         timeoutMs: turnOpts?.timeoutMs,
       });
+      if (usedTools.size > 0) {
+        throw error;
+      }
       return await turnDirect(deps, input, { ...turnOpts, compactionRetried: true });
     }
     throw error;
@@ -346,7 +344,6 @@ export async function turnDirect(
   const response = await finalizeAndPersist({
     reply,
     turnKind: guardianReviewDecisionCollector ? "skip" : undefined,
-    usage: extractUsageSnapshot(result.totalUsage),
     responseMessages: (result.response?.messages ?? []) as ModelMessage[],
   });
   return {
