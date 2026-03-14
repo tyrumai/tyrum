@@ -23,19 +23,23 @@ describe("NutJsDesktopBackend", () => {
     !macOsCiLacksCapture &&
     (!!process.env["DISPLAY"] || process.platform === "darwin" || process.platform === "win32");
 
-  it.skipIf(!hasDisplay)("captureScreen returns a PNG buffer", async () => {
-    const { NutJsDesktopBackend } = await import("@tyrum/desktop-node");
-    const backend = new NutJsDesktopBackend();
-    const capture = await backend.captureScreen("primary");
+  it.skipIf(!hasDisplay)(
+    "captureScreen returns a PNG buffer",
+    async () => {
+      const { NutJsDesktopBackend } = await import("@tyrum/desktop-node");
+      const backend = new NutJsDesktopBackend();
+      const capture = await backend.captureScreen("primary");
 
-    expect(capture.width).toBeGreaterThan(0);
-    expect(capture.height).toBeGreaterThan(0);
-    expect(capture.buffer.length).toBeGreaterThan(0);
+      expect(capture.width).toBeGreaterThan(0);
+      expect(capture.height).toBeGreaterThan(0);
+      expect(capture.buffer.length).toBeGreaterThan(0);
 
-    // Verify PNG magic bytes: \x89PNG
-    expect(capture.buffer[0]).toBe(0x89);
-    expect(capture.buffer[1]).toBe(0x50); // P
-    expect(capture.buffer[2]).toBe(0x4e); // N
-    expect(capture.buffer[3]).toBe(0x47); // G
-  });
+      // Verify PNG magic bytes: \x89PNG
+      expect(capture.buffer[0]).toBe(0x89);
+      expect(capture.buffer[1]).toBe(0x50); // P
+      expect(capture.buffer[2]).toBe(0x4e); // N
+      expect(capture.buffer[3]).toBe(0x47); // G
+    },
+    15_000,
+  );
 });

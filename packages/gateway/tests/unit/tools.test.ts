@@ -75,6 +75,109 @@ describe("model tool naming", () => {
     });
   });
 
+  it("normalizes top-level oneOf schemas into provider-safe object schemas", () => {
+    expect(
+      validateToolDescriptorInputSchema({
+        id: "mcp.memory.write",
+        inputSchema: {
+          type: "object",
+          properties: {
+            kind: { type: "string", enum: ["fact", "note"] },
+            key: { type: "string" },
+            value: {},
+            body_md: { type: "string" },
+          },
+          required: ["kind"],
+          additionalProperties: false,
+          oneOf: [
+            {
+              properties: {
+                kind: { type: "string", enum: ["fact"] },
+              },
+              required: ["kind", "key", "value"],
+            },
+            {
+              properties: {
+                kind: { type: "string", enum: ["note"] },
+              },
+              required: ["kind", "body_md"],
+            },
+          ],
+        },
+      }),
+    ).toEqual({
+      ok: true,
+      schema: {
+        type: "object",
+        properties: {
+          kind: { type: "string", enum: ["fact", "note"] },
+          key: { type: "string" },
+          value: {},
+          body_md: { type: "string" },
+        },
+        required: ["kind"],
+        additionalProperties: false,
+      },
+    });
+  });
+
+  it("preserves variant-only boolean property schemas while normalizing top-level oneOf", () => {
+    expect(
+      validateToolDescriptorInputSchema({
+        id: "plugin.echo.boolean_variant_property",
+        inputSchema: {
+          type: "object",
+          properties: {
+            mode: { type: "string", enum: ["open", "closed"] },
+          },
+          required: ["mode"],
+          oneOf: [
+            {
+              properties: {
+                mode: { type: "string", enum: ["open"] },
+                payload: true,
+              },
+              required: ["mode", "payload"],
+            },
+            {
+              properties: {
+                mode: { type: "string", enum: ["closed"] },
+                payload: false,
+              },
+              required: ["mode"],
+            },
+          ],
+        },
+      }),
+    ).toEqual({
+      ok: true,
+      schema: {
+        type: "object",
+        properties: {
+          mode: { type: "string", enum: ["open", "closed"] },
+          payload: true,
+        },
+        required: ["mode"],
+      },
+    });
+  });
+
+  it("rejects top-level oneOf schemas that do not describe object variants", () => {
+    expect(
+      validateToolDescriptorInputSchema({
+        id: "plugin.echo.bad_union",
+        inputSchema: {
+          type: "object",
+          oneOf: [{ type: "string" }],
+        },
+      }),
+    ).toEqual({
+      ok: false,
+      error:
+        "plugin.echo.bad_union: input schema top-level 'oneOf' entries must describe object variants",
+    });
+  });
+
   it("sanitizes dotted tool ids for model-facing names", () => {
     const names = buildModelToolNameMap(["mcp.calendar.events_list", "plugin.echo.danger"]);
 

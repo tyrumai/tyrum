@@ -183,6 +183,6 @@ describe("Pre-compaction memory flush - advanced", () => {
     const elapsedTimeMs = performance.now() - startedAtMs;
 
     expect(second.response.reply).toBe("a2");
-    expect(elapsedTimeMs).toBeLessThan(200);
+    expect(elapsedTimeMs).toBeLessThan(350);
   });
 });

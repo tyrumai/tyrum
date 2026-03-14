@@ -153,6 +153,109 @@ describe("turn preparation runtime helpers", () => {
     expect(deps.protocolDeps).toBeDefined();
   });
 
+  it("keeps object-root top-level oneOf schemas after provider-safe normalization", async () => {
+    vi.spyOn(ToolSetBuilder.prototype, "resolvePolicyGatedPluginToolExposure").mockImplementation(
+      async ({ allowlist, pluginTools }) => ({
+        allowlist: [...allowlist],
+        pluginTools: [...pluginTools],
+      }),
+    );
+
+    const logger = { warn: vi.fn() };
+    const normalizableTool = {
+      id: "mcp.memory.write",
+      description: "Persist durable memory.",
+      risk: "medium" as const,
+      requires_confirmation: false,
+      keywords: ["memory", "write"],
+      inputSchema: {
+        type: "object",
+        properties: {
+          kind: { type: "string", enum: ["fact", "note"] },
+          key: { type: "string" },
+          value: {},
+          body_md: { type: "string" },
+        },
+        required: ["kind"],
+        additionalProperties: false,
+        oneOf: [
+          {
+            properties: { kind: { type: "string", enum: ["fact"] } },
+            required: ["kind", "key", "value"],
+          },
+          {
+            properties: { kind: { type: "string", enum: ["note"] } },
+            required: ["kind", "body_md"],
+          },
+        ],
+      },
+    };
+
+    const result = await resolveToolsAndMemory(
+      {
+        tenantId: "tenant-1",
+        home: "/workspace",
+        contextStore: {} as never,
+        agentId: "agent-1",
+        workspaceId: "workspace-1",
+        mcpManager: {
+          listToolDescriptors: vi.fn().mockResolvedValue([normalizableTool]),
+        } as never,
+        plugins: undefined,
+        policyService: {} as never,
+        approvalNotifier: {} as never,
+        approvalWaitMs: 1_000,
+        approvalPollMs: 100,
+        sessionDal: {} as never,
+        secretProvider: undefined,
+        opts: {
+          container: {
+            deploymentConfig: {},
+            db: {} as never,
+            approvalDal: {} as never,
+            logger,
+            redactionEngine: {} as never,
+          },
+        } as never,
+      },
+      {
+        config: AgentConfig.parse({
+          model: { model: "openai/gpt-4.1" },
+        }),
+        identity: {} as never,
+        skills: [],
+        mcpServers: [],
+      },
+      {
+        tenant_id: "tenant-1",
+        agent_id: "agent-1",
+        workspace_id: "workspace-1",
+      } as never,
+      {
+        message: "store this in memory",
+      } as never,
+      {
+        id: "interaction",
+        profile: getExecutionProfile("interaction"),
+        source: "interaction_default",
+      },
+    );
+
+    const availableTool = result.availableTools.find((tool) => tool.id === "mcp.memory.write");
+    const filteredTool = result.filteredTools.find((tool) => tool.id === "mcp.memory.write");
+
+    expect(availableTool?.inputSchema).toMatchObject({
+      type: "object",
+      required: ["kind"],
+    });
+    expect(filteredTool?.inputSchema).toMatchObject({
+      type: "object",
+      required: ["kind"],
+    });
+    expect(filteredTool?.inputSchema).not.toHaveProperty("oneOf");
+    expect(logger.warn).not.toHaveBeenCalled();
+  });
+
   it("warns once per invalid tool schema even when the tool is reused for pre-turn lookup", async () => {
     vi.spyOn(ToolSetBuilder.prototype, "resolvePolicyGatedPluginToolExposure").mockImplementation(
       async ({ allowlist, pluginTools }) => ({

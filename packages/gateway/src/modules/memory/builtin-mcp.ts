@@ -162,14 +162,19 @@ export const BUILTIN_MEMORY_MCP_TOOLS: readonly BuiltinMcpToolInfo[] = [
   {
     name: "write",
     description:
-      "Persist durable memory for this agent when the turn yields stable, reusable information. Use facts, notes, procedures, or episodes. Do not store secrets, raw transcripts, or boilerplate.",
+      "Persist durable memory for this agent when the turn yields stable, reusable information. Use facts, notes, procedures, or episodes. Required fields by kind: fact requires key and value; note and procedure require body_md; episode requires summary_md. Do not store secrets, raw transcripts, or boilerplate.",
     risk: "medium",
     requiresConfirmation: false,
     keywords: ["memory", "remember", "store", "write", "fact", "procedure"],
     inputSchema: {
       type: "object",
       properties: {
-        kind: { type: "string", enum: ["fact", "note", "procedure", "episode"] },
+        kind: {
+          type: "string",
+          enum: ["fact", "note", "procedure", "episode"],
+          description:
+            "Memory kind. fact requires key and value; note and procedure require body_md; episode requires summary_md.",
+        },
         key: { type: "string", description: "Stable fact key." },
         value: { description: "Structured fact value." },
         title: { type: "string" },
