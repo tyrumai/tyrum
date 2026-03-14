@@ -50,7 +50,12 @@ function parseJsonSettingsText(text: string): Record<string, unknown> {
   if (!trimmed) {
     throw new Error("MCP override settings must be a JSON object.");
   }
-  const parsed = JSON.parse(trimmed) as unknown;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(trimmed) as unknown;
+  } catch {
+    throw new Error("MCP override settings must be a JSON object.");
+  }
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
     throw new Error("MCP override settings must be a JSON object.");
   }
@@ -391,24 +396,29 @@ export function AgentsPageEditor({
   }
 
   const save = async (): Promise<void> => {
-    const resolvedMcpConfig = await buildResolvedMcpConfig();
-    if (mode === "create") {
-      const created = await saveAction.runAndThrow(async () => {
+    try {
+      if (mode === "create") {
+        const created = await saveAction.runAndThrow(async () => {
+          const resolvedMcpConfig = await buildResolvedMcpConfig();
+          const payload = buildPayload(form, preservedModelOptions, resolvedMcpConfig);
+          return await core.http.agents.create(payload);
+        });
+        onSaved(created.agent_key);
+        return;
+      }
+
+      const updated = await saveAction.runAndThrow(async () => {
+        const resolvedMcpConfig = await buildResolvedMcpConfig();
         const payload = buildPayload(form, preservedModelOptions, resolvedMcpConfig);
-        return await core.http.agents.create(payload);
+        const targetKey = agentKey ?? payload.agent_key;
+        return await core.http.agents.update(targetKey, {
+          config: payload.config,
+        });
       });
-      onSaved(created.agent_key);
+      onSaved(updated.agent_key);
+    } catch {
       return;
     }
-
-    const updated = await saveAction.runAndThrow(async () => {
-      const payload = buildPayload(form, preservedModelOptions, resolvedMcpConfig);
-      const targetKey = agentKey ?? payload.agent_key;
-      return await core.http.agents.update(targetKey, {
-        config: payload.config,
-      });
-    });
-    onSaved(updated.agent_key);
   };
 
   if (loadError) {

@@ -10,7 +10,7 @@ import type {
   McpServerSpec as McpServerSpecT,
   SkillManifest as SkillManifestT,
 } from "@tyrum/schemas";
-import { AgentConfig, type ExtensionKind } from "@tyrum/schemas";
+import { type ExtensionKind } from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
 import { listMcpServersFromDir, listSkillsFromDir } from "../agent/workspace.js";
 import { resolveBundledSkillsDir, resolveMcpDir, resolveUserSkillsDir } from "../agent/home.js";
@@ -21,6 +21,7 @@ import {
 } from "./managed.js";
 import type { ExtensionStateMode } from "./service.js";
 import { RuntimePackageDal, type RuntimePackageRevision } from "../agent/runtime-package-dal.js";
+import { listLatestAgentConfigs } from "./catalog.js";
 import {
   ExtensionDefaultsDal,
   applyExtensionDefaultsToConfig,
@@ -133,30 +134,6 @@ function countAssignmentsWithDefaults(
     if (access.deny.includes(key)) return false;
     return access.default_mode === "allow";
   }).length;
-}
-
-async function listLatestAgentConfigs(db: SqlDb, tenantId: string) {
-  const rows = await db.all<{ config_json: string }>(
-    `SELECT current.config_json
-       FROM agent_configs current
-      WHERE current.tenant_id = ?
-        AND current.revision = (
-          SELECT MAX(inner_cfg.revision)
-            FROM agent_configs inner_cfg
-           WHERE inner_cfg.tenant_id = current.tenant_id
-             AND inner_cfg.agent_id = current.agent_id
-        )`,
-    [tenantId],
-  );
-  return rows.flatMap((row) => {
-    try {
-      const parsed = AgentConfig.safeParse(JSON.parse(row.config_json) as unknown);
-      return parsed.success ? [parsed.data] : [];
-    } catch {
-      // Intentional: malformed historical agent configs are skipped during inventory reads.
-      return [];
-    }
-  });
 }
 
 async function buildManagedSkillEntry(input: {
