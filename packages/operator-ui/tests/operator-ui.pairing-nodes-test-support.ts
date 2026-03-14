@@ -2,10 +2,30 @@ import { expect, it } from "vitest";
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { createBearerTokenAuth, createOperatorCore } from "../../operator-core/src/index.js";
+import { AdminAccessProvider } from "../src/index.js";
 import { PairingPage } from "../src/components/pages/pairing-page.js";
 import { FakeWsClient, createFakeHttpClient } from "./operator-ui.test-fixtures.js";
 import { sampleNodeInventoryResponse } from "./operator-ui.http-fixture-data.js";
 import { TEST_DEVICE_IDENTITY } from "./operator-ui.test-support.js";
+
+const NOOP_ADMIN_ACCESS_CONTROLLER = {
+  enter: async () => {},
+  exit: async () => {},
+};
+
+function renderPairingPage(root: Root, core: Parameters<typeof PairingPage>[0]["core"]): void {
+  root.render(
+    React.createElement(
+      AdminAccessProvider,
+      {
+        core,
+        mode: "desktop",
+        adminAccessController: NOOP_ADMIN_ACCESS_CONTROLLER,
+      },
+      React.createElement(PairingPage, { core }),
+    ),
+  );
+}
 
 export function registerPairingNodeInventoryTests(): void {
   it("requests node inventory for the active chat lane and highlights the attached local node", async () => {
@@ -74,7 +94,7 @@ export function registerPairingNodeInventoryTests(): void {
     let root: Root | null = null;
     act(() => {
       root = createRoot(container);
-      root.render(React.createElement(PairingPage, { core }));
+      renderPairingPage(root, core);
     });
 
     await act(async () => {
@@ -170,7 +190,7 @@ export function registerPairingNodeInventoryTests(): void {
     let root: Root | null = null;
     act(() => {
       root = createRoot(container);
-      root.render(React.createElement(PairingPage, { core }));
+      renderPairingPage(root, core);
     });
 
     await act(async () => {
@@ -259,7 +279,7 @@ export function registerPairingNodeInventoryTests(): void {
     let root: Root | null = null;
     act(() => {
       root = createRoot(container);
-      root.render(React.createElement(PairingPage, { core }));
+      renderPairingPage(root, core);
     });
 
     await act(async () => {

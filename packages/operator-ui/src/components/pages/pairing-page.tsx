@@ -10,11 +10,8 @@ import { EmptyState } from "../ui/empty-state.js";
 import { useOperatorStore } from "../../use-operator-store.js";
 import { cn } from "../../lib/cn.js";
 import { formatRelativeTime } from "../../utils/format-relative-time.js";
-import {
-  ApprovedPairingCard,
-  PendingPairingCard,
-  resolveAttachmentKind,
-} from "./pairing-page.cards.js";
+import { ApprovedPairingCard, PendingPairingCard } from "./pairing-page.cards.js";
+import { resolveAttachmentKind } from "./pairing-page.shared.js";
 import { useNodeInventory } from "./pairing-page.inventory.js";
 
 function getPairingStatusDisplay(status: NodeInventoryEntry["paired_status"]): {

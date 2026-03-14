@@ -8,6 +8,7 @@ import { registerConnectDesktopTests } from "./operator-ui.connect-desktop-test-
 import { registerLoginTests } from "./operator-ui.login-test-support.js";
 import { registerDashboardNavTests } from "./operator-ui.dashboard-nav-test-support.js";
 import { registerApprovalsTests } from "./operator-ui.approvals-test-support.js";
+import { registerPairingAdminAccessTests } from "./operator-ui.pairing-admin-access-test-support.js";
 import { registerPairingTests } from "./operator-ui.pairing-test-support.js";
 import { registerPairingNodeInventoryTests } from "./operator-ui.pairing-nodes-test-support.js";
 import { registerAgentRunsGeneralTests } from "./operator-ui.agent-runs-general-test-support.js";
@@ -33,6 +34,7 @@ describe("operator-ui", () => {
   registerLoginTests();
   registerDashboardNavTests();
   registerApprovalsTests();
+  registerPairingAdminAccessTests();
   registerPairingTests();
   registerPairingNodeInventoryTests();
   registerAgentRunsGeneralTests();
