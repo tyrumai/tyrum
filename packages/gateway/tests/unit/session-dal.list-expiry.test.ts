@@ -99,6 +99,24 @@ describe("SessionDal expiry and listing", () => {
     expect(await dal.getById({ tenantId: b.tenant_id, sessionId: b.session_id })).toBeDefined();
   });
 
+  it("does not create a missing agent when deleting expired sessions by agent key", async () => {
+    const dal = createDal();
+    const tenantId = "00000000-0000-4000-8000-000000000001";
+    const before = await db!.get<{ count: number }>(
+      "SELECT COUNT(1) AS count FROM agents WHERE tenant_id = ?",
+      [tenantId],
+    );
+
+    const removed = await dal.deleteExpired(30, "missing-agent");
+
+    const after = await db!.get<{ count: number }>(
+      "SELECT COUNT(1) AS count FROM agents WHERE tenant_id = ?",
+      [tenantId],
+    );
+    expect(removed).toBe(0);
+    expect(after?.count ?? 0).toBe(before?.count ?? 0);
+  });
+
   it("keeps newer legacy-format timestamps on threshold date", async () => {
     vi.useFakeTimers();
     try {

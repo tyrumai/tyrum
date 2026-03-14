@@ -6,6 +6,8 @@ import {
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { handleClientMessage } from "../../src/ws/protocol.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
+import { LocationService } from "../../src/modules/location/service.js";
+import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 
 interface MockWebSocket {
   send: ReturnType<typeof vi.fn>;
@@ -123,5 +125,68 @@ describe("scoped node WS authorization", () => {
       ok: false,
       error: { code: "forbidden" },
     });
+  });
+
+  it("returns not_found for location.beacon when the explicit agent scope is missing", async () => {
+    const cm = new ConnectionManager();
+    const { id } = addScopedNodeClient(cm, "dev_node_2");
+    const db = openTestSqliteDb();
+    const locationService = new LocationService(db, {
+      identityScopeDal: {
+        ...({
+          resolveAgentId: async (tenantId: string, agentKey: string) => {
+            const row = await db.get<{ agent_id: string }>(
+              "SELECT agent_id FROM agents WHERE tenant_id = ? AND agent_key = ? LIMIT 1",
+              [tenantId, agentKey],
+            );
+            return row?.agent_id ?? null;
+          },
+        } as const),
+      } as never,
+      memoryV1Dal: {
+        createEpisode: vi.fn(),
+      } as never,
+    });
+
+    try {
+      const before = await db.get<{ count: number }>(
+        "SELECT COUNT(1) AS count FROM agents WHERE tenant_id = ?",
+        [DEFAULT_TENANT_ID],
+      );
+      const result = await handleClientMessage(
+        cm.getClient(id)!,
+        JSON.stringify({
+          request_id: "r-node-location-1",
+          type: "location.beacon",
+          payload: {
+            agent_key: "missing-agent",
+            sample_id: "99999999-9999-4999-8999-999999999999",
+            recorded_at: "2026-03-11T10:00:00.000Z",
+            coords: {
+              latitude: 52.3702,
+              longitude: 4.8952,
+              accuracy_m: 8,
+            },
+            source: "gps",
+            is_background: false,
+          },
+        }),
+        { connectionManager: cm, locationService },
+      );
+
+      expect(result).toMatchObject({
+        request_id: "r-node-location-1",
+        ok: false,
+        error: { code: "not_found", message: "agent 'missing-agent' not found" },
+      });
+
+      const after = await db.get<{ count: number }>(
+        "SELECT COUNT(1) AS count FROM agents WHERE tenant_id = ?",
+        [DEFAULT_TENANT_ID],
+      );
+      expect(after?.count ?? 0).toBe(before?.count ?? 0);
+    } finally {
+      await db.close();
+    }
   });
 });

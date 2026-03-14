@@ -14,46 +14,9 @@ import type { WsResponseEnvelope } from "@tyrum/schemas";
 import type { ConnectedClient } from "../connection-manager.js";
 import { WORKBOARD_WS_AUDIENCE } from "../workboard-audience.js";
 import { WorkboardDal } from "../../modules/workboard/dal.js";
-import { IdentityScopeDal, normalizeScopeKeys } from "../../modules/identity/scope.js";
 import type { ProtocolDeps, ProtocolRequestEnvelope } from "./types.js";
 import { broadcastEvent, errorResponse, workboardErrorResponse } from "./helpers.js";
-
-type ScopeKeysPayload = {
-  tenant_key?: string;
-  agent_key?: string;
-  workspace_key?: string;
-};
-
-async function resolveWorkScope(params: {
-  deps: ProtocolDeps;
-  tenantId: string;
-  payload: ScopeKeysPayload;
-}): Promise<{
-  scope: { tenant_id: string; agent_id: string; workspace_id: string };
-  keys: { agentKey: string; workspaceKey: string };
-}> {
-  if (!params.deps.db) {
-    throw new Error("db is required");
-  }
-
-  const identityScopeDal = params.deps.identityScopeDal ?? new IdentityScopeDal(params.deps.db);
-  const keys = normalizeScopeKeys({
-    agentKey: params.payload.agent_key,
-    workspaceKey: params.payload.workspace_key,
-  });
-  const tenantId = params.tenantId.trim();
-  const agentId = await identityScopeDal.ensureAgentId(tenantId, keys.agentKey);
-  const workspaceId = await identityScopeDal.ensureWorkspaceId(tenantId, keys.workspaceKey);
-  await identityScopeDal.ensureMembership(tenantId, agentId, workspaceId);
-  return {
-    keys: { agentKey: keys.agentKey, workspaceKey: keys.workspaceKey },
-    scope: {
-      tenant_id: tenantId,
-      agent_id: agentId,
-      workspace_id: workspaceId,
-    },
-  };
-}
+import { ensureWorkScope, resolveExistingWorkScope } from "./workboard-handlers-shared.js";
 
 export async function handleSubagentMessage(
   client: ConnectedClient,
@@ -94,7 +57,7 @@ export async function handleSubagentMessage(
     const dal = new WorkboardDal(deps.db);
     try {
       const payload = parsedReq.data.payload;
-      const { scope, keys } = await resolveWorkScope({ deps, tenantId, payload });
+      const { scope, keys } = await ensureWorkScope({ deps, tenantId, payload });
       const subagentId = crypto.randomUUID();
       const sessionKey = `agent:${keys.agentKey}:subagent:${subagentId}`;
       const subagent = await dal.createSubagent({
@@ -158,7 +121,7 @@ export async function handleSubagentMessage(
     const dal = new WorkboardDal(deps.db);
     try {
       const payload = parsedReq.data.payload;
-      const { scope } = await resolveWorkScope({ deps, tenantId, payload });
+      const { scope } = await resolveExistingWorkScope({ deps, tenantId, payload });
       const { subagents, next_cursor } = await dal.listSubagents({
         scope,
         statuses: payload.statuses,
@@ -200,7 +163,7 @@ export async function handleSubagentMessage(
     const dal = new WorkboardDal(deps.db);
     try {
       const payload = parsedReq.data.payload;
-      const { scope } = await resolveWorkScope({ deps, tenantId, payload });
+      const { scope } = await resolveExistingWorkScope({ deps, tenantId, payload });
       const subagent = await dal.getSubagent({ scope, subagent_id: payload.subagent_id });
       if (!subagent) {
         return errorResponse(msg.request_id, msg.type, "not_found", "subagent not found");
@@ -239,15 +202,16 @@ export async function handleSubagentMessage(
 
     const dal = new WorkboardDal(deps.db);
     const payload = parsedReq.data.payload;
-    const resolved = await resolveWorkScope({ deps, tenantId, payload });
-    const scope = resolved.scope;
-    const agentKey = resolved.keys.agentKey;
+    let resolved: Awaited<ReturnType<typeof resolveExistingWorkScope>>;
     let subagent: Awaited<ReturnType<WorkboardDal["getSubagent"]>>;
     try {
-      subagent = await dal.getSubagent({ scope, subagent_id: payload.subagent_id });
+      resolved = await resolveExistingWorkScope({ deps, tenantId, payload });
+      subagent = await dal.getSubagent({ scope: resolved.scope, subagent_id: payload.subagent_id });
     } catch (err) {
       return workboardErrorResponse(msg.request_id, msg.type, err, deps);
     }
+    const scope = resolved.scope;
+    const agentKey = resolved.keys.agentKey;
 
     if (!subagent) {
       return errorResponse(msg.request_id, msg.type, "not_found", "subagent not found");
@@ -372,7 +336,7 @@ export async function handleSubagentMessage(
     const dal = new WorkboardDal(deps.db);
     try {
       const payload = parsedReq.data.payload;
-      const { scope } = await resolveWorkScope({ deps, tenantId, payload });
+      const { scope } = await resolveExistingWorkScope({ deps, tenantId, payload });
       const closing = await dal.closeSubagent({
         scope,
         subagent_id: payload.subagent_id,

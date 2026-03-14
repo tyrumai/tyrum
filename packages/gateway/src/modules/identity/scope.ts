@@ -22,6 +22,18 @@ export interface ScopeIds {
   workspaceId: string;
 }
 
+export class ScopeNotFoundError extends Error {
+  readonly code = "not_found";
+
+  constructor(
+    message: string,
+    readonly details?: Record<string, unknown>,
+  ) {
+    super(message);
+    this.name = "ScopeNotFoundError";
+  }
+}
+
 export function requireTenantIdValue(
   tenantId: string | null | undefined,
   message = "tenantId is required",
@@ -118,6 +130,37 @@ export class IdentityScopeDal {
     return resolved;
   }
 
+  async resolveTenantId(tenantKey: string): Promise<string | null> {
+    const key = tenantKey.trim() || DEFAULT_TENANT_KEY;
+    const cached = this.getCached(this.tenantCache, key);
+    if (cached) return cached;
+
+    const found = await this.db.get<{ tenant_id: string }>(
+      "SELECT tenant_id FROM tenants WHERE tenant_key = ? LIMIT 1",
+      [key],
+    );
+    if (!found?.tenant_id) return null;
+
+    this.setCached(this.tenantCache, key, found.tenant_id);
+    return found.tenant_id;
+  }
+
+  async resolveAgentId(tenantId: string, agentKey: string): Promise<string | null> {
+    const key = agentKey.trim() || DEFAULT_AGENT_KEY;
+    const cacheKey = `${tenantId}:${key}`;
+    const cached = this.getCached(this.agentCache, cacheKey);
+    if (cached) return cached;
+
+    const found = await this.db.get<{ agent_id: string }>(
+      "SELECT agent_id FROM agents WHERE tenant_id = ? AND agent_key = ? LIMIT 1",
+      [tenantId, key],
+    );
+    if (!found?.agent_id) return null;
+
+    this.setCached(this.agentCache, cacheKey, found.agent_id);
+    return found.agent_id;
+  }
+
   async ensureAgentId(tenantId: string, agentKey: string): Promise<string> {
     const key = agentKey.trim() || "default";
     const cacheKey = `${tenantId}:${key}`;
@@ -155,6 +198,22 @@ export class IdentityScopeDal {
 
     this.setCached(this.agentCache, cacheKey, resolved);
     return resolved;
+  }
+
+  async resolveWorkspaceId(tenantId: string, workspaceKey: string): Promise<string | null> {
+    const key = workspaceKey.trim() || DEFAULT_WORKSPACE_KEY;
+    const cacheKey = `${tenantId}:${key}`;
+    const cached = this.getCached(this.workspaceCache, cacheKey);
+    if (cached) return cached;
+
+    const found = await this.db.get<{ workspace_id: string }>(
+      "SELECT workspace_id FROM workspaces WHERE tenant_id = ? AND workspace_key = ? LIMIT 1",
+      [tenantId, key],
+    );
+    if (!found?.workspace_id) return null;
+
+    this.setCached(this.workspaceCache, cacheKey, found.workspace_id);
+    return found.workspace_id;
   }
 
   async ensureWorkspaceId(tenantId: string, workspaceKey: string): Promise<string> {
@@ -205,6 +264,36 @@ export class IdentityScopeDal {
     );
   }
 
+  async hasMembership(tenantId: string, agentId: string, workspaceId: string): Promise<boolean> {
+    const row = await this.db.get<{ found: 1 }>(
+      `SELECT 1 AS found
+       FROM agent_workspaces
+       WHERE tenant_id = ?
+         AND agent_id = ?
+         AND workspace_id = ?
+       LIMIT 1`,
+      [tenantId, agentId, workspaceId],
+    );
+    return row?.found === 1;
+  }
+
+  async resolveExistingScopeIdsForTenant(input: {
+    tenantId: string;
+    agentKey: string;
+    workspaceKey: string;
+  }): Promise<Omit<ScopeIds, "tenantId"> | null> {
+    const agentId = await this.resolveAgentId(input.tenantId, input.agentKey);
+    if (!agentId) return null;
+
+    const workspaceId = await this.resolveWorkspaceId(input.tenantId, input.workspaceKey);
+    if (!workspaceId) return null;
+
+    const hasMembership = await this.hasMembership(input.tenantId, agentId, workspaceId);
+    if (!hasMembership) return null;
+
+    return { agentId, workspaceId };
+  }
+
   async resolveScopeIds(input?: Partial<ScopeKeys>): Promise<ScopeIds> {
     const keys = normalizeScopeKeys(input);
     const tenantId = await this.ensureTenantId(keys.tenantKey);
@@ -212,6 +301,21 @@ export class IdentityScopeDal {
     const workspaceId = await this.ensureWorkspaceId(tenantId, keys.workspaceKey);
     await this.ensureMembership(tenantId, agentId, workspaceId);
     return { tenantId, agentId, workspaceId };
+  }
+
+  async resolveExistingScopeIds(input?: Partial<ScopeKeys>): Promise<ScopeIds | null> {
+    const keys = normalizeScopeKeys(input);
+    const tenantId = await this.resolveTenantId(keys.tenantKey);
+    if (!tenantId) return null;
+
+    const resolved = await this.resolveExistingScopeIdsForTenant({
+      tenantId,
+      agentKey: keys.agentKey,
+      workspaceKey: keys.workspaceKey,
+    });
+    if (!resolved) return null;
+
+    return { tenantId, agentId: resolved.agentId, workspaceId: resolved.workspaceId };
   }
 
   rememberAgentId(tenantId: string, agentKey: string, agentId: string): void {

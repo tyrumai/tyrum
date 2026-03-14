@@ -66,6 +66,10 @@ export function workboardErrorResponse(
     return errorResponse(requestId, type, errorCode, message, details);
   }
 
+  if (errorCode === "not_found") {
+    return errorResponse(requestId, type, errorCode, message, details);
+  }
+
   const looksLikeSqlError = Boolean(errorCode) || message.includes("SQLITE_");
   if (looksLikeSqlError) {
     deps.logger?.warn("ws.workboard_request_failed", {

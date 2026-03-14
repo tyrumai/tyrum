@@ -2,16 +2,21 @@ import type { WsResponseEnvelope } from "@tyrum/schemas";
 import type { ConnectedClient } from "../connection-manager.js";
 import { WORKBOARD_WS_AUDIENCE } from "../workboard-audience.js";
 import { WorkboardDal } from "../../modules/workboard/dal.js";
-import { IdentityScopeDal, normalizeScopeKeys } from "../../modules/identity/scope.js";
+import {
+  IdentityScopeDal,
+  ScopeNotFoundError,
+  normalizeScopeKeys,
+} from "../../modules/identity/scope.js";
 import type { ProtocolDeps, ProtocolRequestEnvelope } from "./types.js";
 import { broadcastEvent, errorResponse, workboardErrorResponse } from "./helpers.js";
 
 export type ScopeKeysPayload = { tenant_key?: string; agent_key?: string; workspace_key?: string };
 
-export async function resolveWorkScope(params: {
+async function buildWorkScope(params: {
   deps: ProtocolDeps;
   tenantId: string;
   payload: ScopeKeysPayload;
+  resolveOnly: boolean;
 }): Promise<{
   scope: { tenant_id: string; agent_id: string; workspace_id: string };
   keys: { agentKey: string; workspaceKey: string };
@@ -23,16 +28,51 @@ export async function resolveWorkScope(params: {
     workspaceKey: params.payload.workspace_key,
   });
   const tenantId = params.tenantId.trim();
-  const agentId = await identityScopeDal.ensureAgentId(tenantId, keys.agentKey);
-  const workspaceId = await identityScopeDal.ensureWorkspaceId(tenantId, keys.workspaceKey);
-  await identityScopeDal.ensureMembership(tenantId, agentId, workspaceId);
+  let agentId: string;
+  let workspaceId: string;
+
+  if (params.resolveOnly) {
+    const resolved = await identityScopeDal.resolveExistingScopeIdsForTenant({
+      tenantId,
+      agentKey: keys.agentKey,
+      workspaceKey: keys.workspaceKey,
+    });
+    if (!resolved) {
+      throw new ScopeNotFoundError("scope not found", {
+        agent_key: keys.agentKey,
+        workspace_key: keys.workspaceKey,
+      });
+    }
+    agentId = resolved.agentId;
+    workspaceId = resolved.workspaceId;
+  } else {
+    agentId = await identityScopeDal.ensureAgentId(tenantId, keys.agentKey);
+    workspaceId = await identityScopeDal.ensureWorkspaceId(tenantId, keys.workspaceKey);
+    await identityScopeDal.ensureMembership(tenantId, agentId, workspaceId);
+  }
   return {
     keys: { agentKey: keys.agentKey, workspaceKey: keys.workspaceKey },
     scope: { tenant_id: tenantId, agent_id: agentId, workspace_id: workspaceId },
   };
 }
 
-export type WorkScope = Awaited<ReturnType<typeof resolveWorkScope>>["scope"];
+export async function ensureWorkScope(params: {
+  deps: ProtocolDeps;
+  tenantId: string;
+  payload: ScopeKeysPayload;
+}) {
+  return await buildWorkScope({ ...params, resolveOnly: false });
+}
+
+export async function resolveExistingWorkScope(params: {
+  deps: ProtocolDeps;
+  tenantId: string;
+  payload: ScopeKeysPayload;
+}) {
+  return await buildWorkScope({ ...params, resolveOnly: true });
+}
+
+export type WorkScope = Awaited<ReturnType<typeof ensureWorkScope>>["scope"];
 export type TransitionItem = NonNullable<Awaited<ReturnType<WorkboardDal["transitionItem"]>>>;
 export type StateKvScopePayload = ScopeKeysPayload &
   ({ kind: "agent" } | { kind: "work_item"; work_item_id: string });
@@ -158,13 +198,31 @@ export function getWorkTransitionEventType(status: string): string {
   );
 }
 
-export async function resolveStateKvScope(
+async function buildStateKvScope(
+  deps: ProtocolDeps,
+  tenantId: string,
+  payload: StateKvScopePayload,
+  resolveOnly: boolean,
+) {
+  const resolver = resolveOnly ? resolveExistingWorkScope : ensureWorkScope;
+  const { scope } = await resolver({ deps, tenantId, payload });
+  return payload.kind === "agent"
+    ? ({ kind: "agent", ...scope } as const)
+    : ({ kind: "work_item", ...scope, work_item_id: payload.work_item_id } as const);
+}
+
+export async function ensureStateKvScope(
   deps: ProtocolDeps,
   tenantId: string,
   payload: StateKvScopePayload,
 ) {
-  const { scope } = await resolveWorkScope({ deps, tenantId, payload });
-  return payload.kind === "agent"
-    ? ({ kind: "agent", ...scope } as const)
-    : ({ kind: "work_item", ...scope, work_item_id: payload.work_item_id } as const);
+  return await buildStateKvScope(deps, tenantId, payload, false);
+}
+
+export async function resolveExistingStateKvScope(
+  deps: ProtocolDeps,
+  tenantId: string,
+  payload: StateKvScopePayload,
+) {
+  return await buildStateKvScope(deps, tenantId, payload, true);
 }

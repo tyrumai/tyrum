@@ -33,6 +33,8 @@ import type { PolicyService } from "../../policy/service.js";
 import { ExecutionEngine } from "../../execution/engine.js";
 import { resolveWorkspaceKey } from "../../workspace/id.js";
 import { DEFAULT_TENANT_ID } from "../../identity/scope.js";
+import { resolveExistingRuntimeScopeIds } from "./scope-resolution.js";
+import { createDisabledAgentStatus } from "./status-disabled.js";
 import { resolveGatewayStateMode } from "../../runtime-state/mode.js";
 import { resolveAutomationMetadata, maybeDeliverAutomationReply } from "./automation-delivery.js";
 import { resolveExecutionProfile } from "./intake-delegation.js";
@@ -211,34 +213,15 @@ export class AgentRuntime {
 
   async status(enabled: boolean): Promise<AgentStatusResponseT> {
     if (!enabled) {
-      const persona = resolveAgentPersona({ agentKey: this.agentId });
-      return AgentStatusResponse.parse({
-        enabled: false,
-        home: this.home,
-        persona,
-        identity: { name: persona.name },
-        model: { model: "disabled/disabled" },
-        skills: [],
-        mcp: [],
-        tools: [],
-        tool_access: { default_mode: "allow", allow: [], deny: [] },
-        sessions: { ttl_days: 365, max_turns: 0 },
-      });
+      return createDisabledAgentStatus({ home: this.home, agentKey: this.agentId });
     }
 
-    const agentId = await this.opts.container.identityScopeDal.ensureAgentId(
-      this.tenantId,
-      this.agentId,
-    );
-    const workspaceId = await this.opts.container.identityScopeDal.ensureWorkspaceId(
-      this.tenantId,
-      this.workspaceId,
-    );
-    await this.opts.container.identityScopeDal.ensureMembership(
-      this.tenantId,
-      agentId,
-      workspaceId,
-    );
+    const { agentId, workspaceId } = await resolveExistingRuntimeScopeIds({
+      identityScopeDal: this.opts.container.identityScopeDal,
+      tenantId: this.tenantId,
+      agentKey: this.agentId,
+      workspaceKey: this.workspaceId,
+    });
     const config = await (
       await ensureAgentConfigSeeded({
         db: this.opts.container.db,
@@ -319,19 +302,12 @@ export class AgentRuntime {
     tools: ToolDescriptor[];
     mcpServers: string[];
   }> {
-    const agentId = await this.opts.container.identityScopeDal.ensureAgentId(
-      this.tenantId,
-      this.agentId,
-    );
-    const workspaceId = await this.opts.container.identityScopeDal.ensureWorkspaceId(
-      this.tenantId,
-      this.workspaceId,
-    );
-    await this.opts.container.identityScopeDal.ensureMembership(
-      this.tenantId,
-      agentId,
-      workspaceId,
-    );
+    const { agentId, workspaceId } = await resolveExistingRuntimeScopeIds({
+      identityScopeDal: this.opts.container.identityScopeDal,
+      tenantId: this.tenantId,
+      agentKey: this.agentId,
+      workspaceKey: this.workspaceId,
+    });
     const config = await (
       await ensureAgentConfigSeeded({
         db: this.opts.container.db,

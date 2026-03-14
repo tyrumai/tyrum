@@ -87,4 +87,36 @@ describe("location routes", () => {
       message: "limit must be a positive integer",
     });
   });
+
+  it("returns 404 for missing explicit location scopes without creating agents", async () => {
+    const { request, container, agents } = await createTestApp();
+    const tenantId = "00000000-0000-4000-8000-000000000001";
+    const before = await container.db.get<{ count: number }>(
+      "SELECT COUNT(1) AS count FROM agents WHERE tenant_id = ?",
+      [tenantId],
+    );
+
+    const profileRes = await request("/location/profile?agent_key=missing-agent");
+    expect(profileRes.status).toBe(404);
+    await expect(profileRes.json()).resolves.toMatchObject({
+      error: "not_found",
+      message: "agent 'missing-agent' not found",
+    });
+
+    const triggerRes = await request("/automation/triggers?agent_key=missing-agent");
+    expect(triggerRes.status).toBe(404);
+    await expect(triggerRes.json()).resolves.toMatchObject({
+      error: "not_found",
+      message: "agent 'missing-agent' not found",
+    });
+
+    const after = await container.db.get<{ count: number }>(
+      "SELECT COUNT(1) AS count FROM agents WHERE tenant_id = ?",
+      [tenantId],
+    );
+    expect(after?.count ?? 0).toBe(before?.count ?? 0);
+
+    await agents?.shutdown();
+    await container.db.close();
+  });
 });
