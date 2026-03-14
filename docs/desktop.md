@@ -82,6 +82,8 @@ Some desktop capabilities require macOS permissions:
 - Screen Recording
 
 Use **Diagnostics** to check and request missing permissions.
+If Screen Recording is missing, desktop screenshot tasks now fail with an explicit tool error instead
+of crashing Tyrum Desktop. After granting access, restart the app.
 
 ### Updates
 

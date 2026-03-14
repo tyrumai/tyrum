@@ -75,6 +75,10 @@ vi.mock("@tyrum/desktop-node", () => ({
   getTesseractOcrEngine: vi.fn(() => ({ recognize: vi.fn() })),
 }));
 
+vi.mock("../src/main/providers/backends/isolated-desktop-backend.js", () => ({
+  IsolatedDesktopBackend: vi.fn(),
+}));
+
 vi.mock("../src/main/providers/playwright-provider.js", () => ({
   PlaywrightProvider: vi.fn(),
 }));
@@ -269,9 +273,12 @@ describe("node-ipc", () => {
     expect(runtimeInstance?.connect).toHaveBeenCalledWith("ws://gateway.example/ws", "test-token");
 
     const { DesktopProvider } = await import("@tyrum/desktop-node");
+    const { IsolatedDesktopBackend } =
+      await import("../src/main/providers/backends/isolated-desktop-backend.js");
     const { PlaywrightProvider } = await import("../src/main/providers/playwright-provider.js");
     const { CliProvider } = await import("../src/main/providers/cli-provider.js");
     expect(DesktopProvider).toHaveBeenCalledTimes(1);
+    expect(IsolatedDesktopBackend).toHaveBeenCalledTimes(1);
     expect(PlaywrightProvider).toHaveBeenCalledTimes(1);
     expect(CliProvider).toHaveBeenCalledTimes(1);
 
