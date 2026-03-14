@@ -148,5 +148,71 @@ export function createGuardianDecisionLanguageModel(input: {
         warnings: [],
       };
     },
+    doStream: async () => {
+      callCount += 1;
+      if (callCount === 1) {
+        return {
+          stream: simulateReadableStream({
+            chunks: [
+              {
+                type: "tool-call" as const,
+                toolCallId: "tc-guardian-review",
+                toolName: "guardian_review_decision",
+                input: JSON.stringify(input.decision),
+              },
+              {
+                type: "finish" as const,
+                finishReason: { unified: "tool-calls" as const, raw: undefined },
+                logprobs: undefined,
+                usage: {
+                  inputTokens: {
+                    total: 10,
+                    noCache: 10,
+                    cacheRead: undefined,
+                    cacheWrite: undefined,
+                  },
+                  outputTokens: {
+                    total: 5,
+                    text: 5,
+                    reasoning: undefined,
+                  },
+                },
+              },
+            ],
+          }),
+          warnings: [],
+        };
+      }
+
+      const reply = input.reply ?? "";
+      return {
+        stream: simulateReadableStream({
+          chunks: [
+            { type: "text-start" as const, id: "text-1" },
+            { type: "text-delta" as const, id: "text-1", delta: reply },
+            { type: "text-end" as const, id: "text-1" },
+            {
+              type: "finish" as const,
+              finishReason: { unified: "stop" as const, raw: undefined },
+              logprobs: undefined,
+              usage: {
+                inputTokens: {
+                  total: 10,
+                  noCache: 10,
+                  cacheRead: undefined,
+                  cacheWrite: undefined,
+                },
+                outputTokens: {
+                  total: 5,
+                  text: 5,
+                  reasoning: undefined,
+                },
+              },
+            },
+          ],
+        }),
+        warnings: [],
+      };
+    },
   });
 }

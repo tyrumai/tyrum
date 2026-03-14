@@ -232,4 +232,82 @@ describe("AgentRuntime guardian review mode", () => {
       risk_score: 8,
     });
   });
+
+  it("surfaces guardian review decisions through turnStream", async () => {
+    ({ homeDir, container } = await setupTestEnv());
+    await seedAgentConfig(container, {
+      config: {
+        model: { model: "openai/gpt-4.1" },
+        skills: { enabled: [] },
+        mcp: {
+          enabled: [],
+          server_settings: {
+            memory: {
+              enabled: false,
+            },
+          },
+        },
+        tools: { allow: ["bash", "read", "write"] },
+        sessions: { ttl_days: 30, max_turns: 20 },
+      },
+    });
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: createGuardianDecisionLanguageModel({
+        decision: {
+          decision: "approve",
+          reason: "Streaming guardian review reached the same safe decision.",
+          risk_level: "low",
+          risk_score: 9,
+        },
+      }),
+      fetchImpl: fetch404,
+    });
+    const workboard = new WorkboardDal(container.db);
+    const subagentId = "guardian-subagent-stream-1";
+    const scope = {
+      tenant_id: DEFAULT_TENANT_ID,
+      agent_id: DEFAULT_AGENT_ID,
+      workspace_id: DEFAULT_WORKSPACE_ID,
+    } as const;
+
+    await workboard.createSubagent({
+      scope,
+      subagentId,
+      subagent: {
+        execution_profile: "reviewer_ro",
+        session_key: `agent:default:subagent:${subagentId}`,
+        lane: "subagent",
+        status: "running",
+      },
+    });
+
+    const handle = await runtime.turnStream({
+      channel: "subagent",
+      thread_id: subagentId,
+      message: 'Review this approval request.\n\n{"subject":{"approval_id":"approval-stream-1"}}',
+      metadata: {
+        tyrum_key: `agent:default:subagent:${subagentId}`,
+        lane: "subagent",
+        subagent_id: subagentId,
+        guardian_review: {
+          subject_type: "approval",
+          target_id: "approval-stream-1",
+        },
+      },
+    });
+
+    await handle.finalize();
+
+    expect(handle.guardianReviewDecisionCollector?.calls).toBe(1);
+    expect(handle.guardianReviewDecisionCollector?.invalidCalls).toBe(0);
+    expect(handle.guardianReviewDecisionCollector?.lastDecision).toMatchObject({
+      decision: "approve",
+      reason: "Streaming guardian review reached the same safe decision.",
+      risk_level: "low",
+      risk_score: 9,
+    });
+  });
 });

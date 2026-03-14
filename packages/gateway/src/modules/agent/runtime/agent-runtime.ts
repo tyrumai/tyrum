@@ -38,7 +38,11 @@ import { resolveAutomationMetadata, maybeDeliverAutomationReply } from "./automa
 import { resolveExecutionProfile } from "./intake-delegation.js";
 import type { PrepareTurnDeps } from "./turn-preparation.js";
 import type { TurnExecutionContext } from "./turn-preparation.js";
-import { turnDirect, turnStreamDirect } from "./turn-direct.js";
+import {
+  turnDirect,
+  turnStreamDirect,
+  type GuardianReviewDecisionCollectorResult,
+} from "./turn-direct.js";
 import type { TurnDirectDeps } from "./turn-direct-runtime-helpers.js";
 import {
   compactSessionWithResolvedModel,
@@ -373,6 +377,7 @@ export class AgentRuntime {
   async turnStream(input: AgentTurnRequestT): Promise<{
     streamResult: ReturnType<typeof streamText>;
     sessionId: string;
+    guardianReviewDecisionCollector?: GuardianReviewDecisionCollectorResult;
     finalize: () => Promise<AgentTurnResponseT>;
   }> {
     const result = await turnStreamDirect(this.turnDirectDeps, input);
@@ -380,6 +385,7 @@ export class AgentRuntime {
     return {
       streamResult: result.streamResult,
       sessionId: result.sessionId,
+      guardianReviewDecisionCollector: result.guardianReviewDecisionCollector,
       finalize: async () =>
         await this.finalizeTurnLifecycle({
           turnInput: input,

@@ -45,12 +45,14 @@ export {
   maybeStoreToolApprovalArgsHandle,
 } from "./turn-direct-helpers.js";
 
+export type GuardianReviewDecisionCollectorResult = NonNullable<
+  Awaited<ReturnType<typeof prepareTurn>>["guardianReviewDecisionCollector"]
+>;
+
 export interface TurnDirectResult {
   response: AgentTurnResponseT;
   contextReport: AgentContextReport;
-  guardianReviewDecisionCollector?: NonNullable<
-    Awaited<ReturnType<typeof prepareTurn>>["guardianReviewDecisionCollector"]
-  >;
+  guardianReviewDecisionCollector?: GuardianReviewDecisionCollectorResult;
 }
 
 type TurnInvocationOptions = {
@@ -319,6 +321,7 @@ export interface TurnStreamDirectResult {
   streamResult: ReturnType<typeof streamText>;
   sessionId: string;
   contextReport: AgentContextReport;
+  guardianReviewDecisionCollector?: GuardianReviewDecisionCollectorResult;
   finalize: () => Promise<AgentTurnResponseT>;
 }
 
@@ -399,6 +402,7 @@ export async function turnStreamDirect(
       streamResult,
       sessionId: session.session_id,
       contextReport,
+      guardianReviewDecisionCollector,
       finalize: async () => response,
     };
   }
@@ -468,5 +472,11 @@ export async function turnStreamDirect(
     return response;
   };
 
-  return { streamResult, sessionId: session.session_id, contextReport, finalize };
+  return {
+    streamResult,
+    sessionId: session.session_id,
+    contextReport,
+    guardianReviewDecisionCollector,
+    finalize,
+  };
 }
