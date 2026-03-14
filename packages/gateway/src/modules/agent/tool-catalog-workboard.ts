@@ -5,6 +5,13 @@ const WORKBOARD_GENERIC_INPUT_SCHEMA = {
   additionalProperties: true,
 } as const;
 
+function classifyWorkboardToolRisk(id: string): "low" | "medium" {
+  if (id.endsWith(".list") || id.endsWith(".get")) {
+    return "low";
+  }
+  return "medium";
+}
+
 export const WORKBOARD_TOOL_REGISTRY: readonly ToolDescriptor[] = [
   {
     id: "workboard.capture",
@@ -69,13 +76,7 @@ export const WORKBOARD_TOOL_REGISTRY: readonly ToolDescriptor[] = [
   ).map(([id, description]) => ({
     id,
     description,
-    risk:
-      id.includes(".create") ||
-      id.includes(".update") ||
-      id.includes(".delete") ||
-      id.includes(".spawn")
-        ? ("medium" as const)
-        : ("low" as const),
+    risk: classifyWorkboardToolRisk(id),
     requires_confirmation: false,
     keywords: ["workboard", "task", "subagent", "clarification", "state"],
     source: "builtin" as const,

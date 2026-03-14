@@ -31,7 +31,7 @@ const PROFILES: Record<ResolvedExecutionProfileId, ExecutionProfile> = {
   interaction: {
     id: "interaction",
     allowed_lanes: ["main"],
-    tool_allowlist: ["*", "workboard.*"],
+    tool_allowlist: ["*"],
     tool_denylist: [
       "workboard.subagent.spawn",
       "workboard.subagent.send",
