@@ -4,6 +4,7 @@ import {
   ExtensionsMutateResponse,
 } from "@tyrum/schemas";
 import { Hono } from "hono";
+import { parse as parseYaml } from "yaml";
 import { z } from "zod";
 import type { GatewayContainer } from "../container.js";
 import { requireAuthClaims, requireTenantId } from "../modules/auth/claims.js";
@@ -39,6 +40,21 @@ const uploadRequestSchema = z
     content_base64: z.string().trim().min(1),
     enabled: z.boolean().optional(),
     reason: z.string().trim().min(1).optional(),
+  })
+  .strict();
+
+const defaultsUpdateRequestSchema = z
+  .object({
+    default_access: z.enum(["inherit", "allow", "deny"]),
+    settings_format: z.enum(["json", "yaml"]).optional(),
+    settings_text: z.string().optional(),
+  })
+  .strict();
+
+const parseMcpSettingsRequestSchema = z
+  .object({
+    settings_format: z.enum(["json", "yaml"]),
+    settings_text: z.string(),
   })
   .strict();
 
@@ -138,6 +154,33 @@ function toMcpImportInput(parsed: z.output<typeof mcpImportRequestSchema>): McpI
     name: parsed.name,
     enabled: parsed.enabled,
     reason: parsed.reason,
+  };
+}
+
+function parseStructuredSettings(input: {
+  kind: z.infer<typeof extensionKindSchema>;
+  settingsFormat?: "json" | "yaml";
+  settingsText?: string;
+}): { replaceSettings: boolean; settings?: Record<string, unknown> } {
+  if (typeof input.settingsText !== "string") {
+    return { replaceSettings: false };
+  }
+  const trimmed = input.settingsText.trim();
+  if (trimmed.length === 0) return { replaceSettings: true };
+  if (input.kind !== "mcp") {
+    throw new Error("settings are only supported for MCP extensions");
+  }
+
+  const parsed =
+    input.settingsFormat === "yaml"
+      ? (parseYaml(trimmed) as unknown)
+      : (JSON.parse(trimmed) as unknown);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("settings must be an object");
+  }
+  return {
+    replaceSettings: true,
+    settings: parsed as Record<string, unknown>,
   };
 }
 
@@ -288,6 +331,74 @@ export function createExtensionsRoutes(deps: {
       return c.json({ error: "not_found", message: `extension '${key}' not found` }, 404);
     }
     return c.json(ExtensionsMutateResponse.parse({ item }), 200);
+  });
+
+  app.put("/config/extensions/:kind/:key/defaults", async (c) => {
+    const tenantId = requireTenantId(c);
+    const kind = extensionKindSchema.parse(c.req.param("kind"));
+    const key = c.req.param("key").trim();
+    const parsed = await parseJsonBody(c.req.raw, defaultsUpdateRequestSchema);
+    if (!parsed.success) {
+      return c.json({ error: "invalid_request", message: parsed.message }, 400);
+    }
+
+    try {
+      const settingsUpdate = parseStructuredSettings({
+        kind,
+        settingsFormat: parsed.data.settings_format,
+        settingsText: parsed.data.settings_text,
+      });
+      const item = await service.updateDefaults({
+        tenantId,
+        kind,
+        key,
+        defaultAccess: parsed.data.default_access,
+        replaceSettings: settingsUpdate.replaceSettings,
+        settings: settingsUpdate.settings,
+      });
+      if (!item) {
+        return c.json({ error: "not_found", message: `extension '${key}' not found` }, 404);
+      }
+      return c.json(ExtensionsMutateResponse.parse({ item }), 200);
+    } catch (error) {
+      return c.json(
+        {
+          error: "invalid_request",
+          message: error instanceof Error ? error.message : String(error),
+        },
+        400,
+      );
+    }
+  });
+
+  app.post("/config/extensions/mcp/parse-settings", async (c) => {
+    const parsed = await parseJsonBody(c.req.raw, parseMcpSettingsRequestSchema);
+    if (!parsed.success) {
+      return c.json({ error: "invalid_request", message: parsed.message }, 400);
+    }
+
+    try {
+      const settingsUpdate = parseStructuredSettings({
+        kind: "mcp",
+        settingsFormat: parsed.data.settings_format,
+        settingsText: parsed.data.settings_text,
+      });
+      if (!settingsUpdate.settings) {
+        return c.json(
+          { error: "invalid_request", message: "settings must be a non-empty object" },
+          400,
+        );
+      }
+      return c.json({ settings: settingsUpdate.settings }, 200);
+    } catch (error) {
+      return c.json(
+        {
+          error: "invalid_request",
+          message: error instanceof Error ? error.message : String(error),
+        },
+        400,
+      );
+    }
   });
 
   return app;

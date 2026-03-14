@@ -9,12 +9,8 @@ import {
   useAdminHttpClient,
   useAdminMutationAccess,
 } from "./admin-http-shared.js";
-import {
-  ExtensionCard,
-  ImportGuard,
-  McpImportPanel,
-  SkillImportPanel,
-} from "./extensions-page.sections.js";
+import { ExtensionCard } from "./extensions-page.sections.js";
+import { ImportGuard, McpImportPanel, SkillImportPanel } from "./extensions-page-import-panels.js";
 import {
   EMPTY_EXTENSIONS_BY_TAB,
   encodeFileToBase64,
@@ -149,6 +145,8 @@ export function ExtensionsPage({ core }: { core: OperatorCore }) {
             detail={item.key === selectedKey ? selectedDetail : undefined}
             inspectLoading={loadingKey === item.key}
             mutateLoading={loadingKey === item.key}
+            canMutate={canMutate}
+            requestEnter={requestEnter}
             onInspect={() => {
               inspect(kind, item.key);
             }}
@@ -179,6 +177,14 @@ export function ExtensionsPage({ core }: { core: OperatorCore }) {
                 async () => await mutationHttp!.extensions!.revert(kind, item.key, { revision }),
               );
             }}
+            onUpdateDefaults={(input) => {
+              mutateItem(
+                kind,
+                item.key,
+                async () =>
+                  await requireExtensionsMutationApi().updateDefaults(kind, item.key, input),
+              );
+            }}
           />
         ))}
       </>
@@ -200,7 +206,8 @@ export function ExtensionsPage({ core }: { core: OperatorCore }) {
         </CardHeader>
         <CardContent className="grid gap-3">
           <div className="text-sm text-fg-muted">
-            Manage shared Skills and MCP Servers here. Agent assignment stays on the Agents page.
+            Manage discoverable Skills and MCP Servers here. Shared defaults apply to agents until
+            an agent explicitly overrides them.
           </div>
           <div className="flex flex-wrap gap-2">
             <Badge variant="outline">{`${items.skills.length} skills`}</Badge>
@@ -316,11 +323,11 @@ export function ExtensionsPage({ core }: { core: OperatorCore }) {
           </TabsList>
 
           <TabsContent value="skills" className="grid gap-3">
-            {renderExtensionList("skill", "No managed skills yet.")}
+            {renderExtensionList("skill", "No discoverable skills yet.")}
           </TabsContent>
 
           <TabsContent value="mcp" className="grid gap-3">
-            {renderExtensionList("mcp", "No managed MCP servers yet.")}
+            {renderExtensionList("mcp", "No discoverable MCP servers yet.")}
           </TabsContent>
         </Tabs>
       ) : null}

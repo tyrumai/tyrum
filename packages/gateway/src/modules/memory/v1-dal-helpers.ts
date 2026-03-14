@@ -55,6 +55,11 @@ export function uniqSortedStrings(values: readonly string[]): string[] {
   return [...new Set(values.map((v) => v.trim()).filter((v) => v.length > 0))].toSorted();
 }
 
+export function extractSearchTerms(query: string): string[] {
+  const matches = query.match(/[\p{L}\p{N}_-]+/gu) ?? [];
+  return uniqSortedStrings(matches.map((term) => term.toLowerCase()));
+}
+
 export function normalizeSnippet(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }

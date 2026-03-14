@@ -23,6 +23,7 @@ import type { AgentLoadedContext } from "./types.js";
 import type { AgentContextStore } from "../context-store.js";
 import { materializeAllowedAgentIds } from "../access-config.js";
 import { loadCurrentAgentContext } from "../load-context.js";
+import { resolveEffectiveAgentConfig } from "../../extensions/defaults-dal.js";
 import type { SessionRow } from "../session-dal.js";
 import {
   isToolAllowed,
@@ -311,12 +312,17 @@ export async function resolveIdentityAndContext(
     agentId,
     agentKey,
   });
+  const effectiveConfig = await resolveEffectiveAgentConfig({
+    db: deps.opts.container.db,
+    tenantId: deps.tenantId,
+    config,
+  });
   const loaded = await loadCurrentAgentContext({
     contextStore: deps.contextStore,
     tenantId: deps.tenantId,
     agentId,
     workspaceId,
-    config,
+    config: effectiveConfig,
   });
   const persona = resolveAgentPersona({
     agentKey,

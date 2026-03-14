@@ -1,140 +1,19 @@
 // @vitest-environment jsdom
 
-import { AgentConfig, IdentityPack } from "@tyrum/schemas";
+import { AgentConfig } from "@tyrum/schemas";
 import { describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
-import type { OperatorCore } from "../../../operator-core/src/index.js";
-import { createStore } from "../../../operator-core/src/store.js";
 import { AgentsPageEditor } from "../../src/components/pages/agents-page-editor.js";
 import { AgentsPage } from "../../src/components/pages/agents-page.js";
+import {
+  createCore,
+  flush,
+  sampleManagedAgentDetail,
+  sampleMcpExtensionDetail,
+  samplePresets,
+  setLabeledValue,
+} from "./agents-page-editor.test-helpers.js";
 import { cleanupTestRoot, click, renderIntoDocument, setNativeValue } from "../test-utils.js";
-
-function sampleManagedAgentDetail(agentKey: string) {
-  return {
-    agent_id:
-      agentKey === "default"
-        ? "11111111-1111-4111-8111-111111111111"
-        : "22222222-2222-4222-8222-222222222222",
-    agent_key: agentKey,
-    created_at: "2026-03-08T00:00:00.000Z",
-    updated_at: "2026-03-08T00:00:00.000Z",
-    has_config: true,
-    has_identity: true,
-    can_delete: agentKey !== "default",
-    persona: {
-      name: agentKey === "default" ? "Default Agent" : "Agent One",
-      tone: "direct",
-      palette: "graphite",
-      character: "architect",
-    },
-    config: AgentConfig.parse({
-      model: { model: "openai/gpt-5.4" },
-      persona: {
-        name: agentKey === "default" ? "Default Agent" : "Agent One",
-        tone: "direct",
-        palette: "graphite",
-        character: "architect",
-      },
-    }),
-    identity: IdentityPack.parse({
-      meta: {
-        name: agentKey === "default" ? "Default Agent" : "Agent One",
-        style: { tone: "direct" },
-      },
-    }),
-  };
-}
-
-async function flush(): Promise<void> {
-  await act(async () => {
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
-  });
-}
-
-function samplePresets() {
-  return {
-    status: "ok" as const,
-    presets: [
-      {
-        preset_id: "33333333-3333-4333-8333-333333333333",
-        preset_key: "claude-opus-4-6-high",
-        display_name: "Claude Opus 4.6 High",
-        provider_key: "openrouter",
-        model_id: "anthropic/claude-opus-4.6",
-        options: { reasoning_effort: "high" as const },
-        created_at: "2026-03-08T00:00:00.000Z",
-        updated_at: "2026-03-08T00:00:00.000Z",
-      },
-      {
-        preset_id: "44444444-4444-4444-8444-444444444444",
-        preset_key: "gpt-5-4",
-        display_name: "GPT-5.4",
-        provider_key: "openrouter",
-        model_id: "openai/gpt-5.4",
-        options: {},
-        created_at: "2026-03-08T00:00:00.000Z",
-        updated_at: "2026-03-08T00:00:00.000Z",
-      },
-    ],
-  };
-}
-
-function createCore(
-  list: ReturnType<typeof vi.fn>,
-  get: ReturnType<typeof vi.fn>,
-  capabilities: ReturnType<typeof vi.fn>,
-  update: ReturnType<typeof vi.fn>,
-  listPresets = vi.fn().mockResolvedValue(samplePresets()),
-) {
-  const { store: connectionStore } = createStore({
-    status: "connected",
-    clientId: null,
-    lastDisconnect: null,
-    transportError: null,
-    recovering: false,
-  });
-  const { store: statusStore } = createStore({
-    status: { session_lanes: null },
-    usage: null,
-    presenceByInstanceId: {},
-    loading: { status: false, usage: false, presence: false },
-    error: { status: null, usage: null, presence: null },
-    lastSyncedAt: null,
-  });
-  const { store: agentStatusStore } = createStore({
-    agentKey: "missing-agent",
-    status: null,
-    loading: false,
-    error: null,
-    lastSyncedAt: null,
-  });
-  const { store: runsStore } = createStore({
-    runsById: {},
-    stepsById: {},
-    attemptsById: {},
-    stepIdsByRunId: {},
-    attemptIdsByStepId: {},
-  });
-
-  return {
-    connectionStore,
-    statusStore,
-    agentStatusStore: {
-      ...agentStatusStore,
-      setAgentKey: vi.fn(),
-      refresh: vi.fn().mockResolvedValue(undefined),
-    },
-    http: {
-      agents: { list, get, capabilities, create: vi.fn(), update, delete: vi.fn() },
-      modelConfig: {
-        listPresets,
-      },
-    },
-    runsStore,
-  } as unknown as OperatorCore;
-}
 
 describe("AgentsPage editor", () => {
   it("preloads the selected agent into the editor and saves through update", async () => {
@@ -157,7 +36,19 @@ describe("AgentsPage editor", () => {
     const get = vi.fn().mockResolvedValue(sampleManagedAgentDetail("agent-1"));
     const capabilities = vi.fn(async () => ({
       skills: { default_mode: "allow", allow: [], deny: [], workspace_trusted: true, items: [] },
-      mcp: { default_mode: "allow", allow: [], deny: [], items: [] },
+      mcp: {
+        default_mode: "allow",
+        allow: [],
+        deny: [],
+        items: [
+          {
+            id: "memory",
+            name: "Memory",
+            transport: "stdio" as const,
+            source: "builtin" as const,
+          },
+        ],
+      },
       tools: { default_mode: "allow", allow: [], deny: [], items: [] },
     }));
     const update = vi.fn().mockResolvedValue(sampleManagedAgentDetail("agent-1"));
@@ -241,6 +132,12 @@ describe("AgentsPage editor", () => {
         deny: ["secrets"],
         items: [
           {
+            id: "memory",
+            name: "Memory",
+            transport: "stdio" as const,
+            source: "builtin" as const,
+          },
+          {
             id: "filesystem",
             name: "Filesystem",
             transport: "stdio" as const,
@@ -313,7 +210,19 @@ describe("AgentsPage editor", () => {
     const get = vi.fn().mockResolvedValue(sampleManagedAgentDetail("default"));
     const capabilities = vi.fn(async () => ({
       skills: { default_mode: "allow", allow: [], deny: [], workspace_trusted: true, items: [] },
-      mcp: { default_mode: "allow", allow: [], deny: [], items: [] },
+      mcp: {
+        default_mode: "allow",
+        allow: [],
+        deny: [],
+        items: [
+          {
+            id: "memory",
+            name: "Memory",
+            transport: "stdio" as const,
+            source: "builtin" as const,
+          },
+        ],
+      },
       tools: { default_mode: "allow", allow: [], deny: [], items: [] },
     }));
     const update = vi.fn().mockResolvedValue(sampleManagedAgentDetail("default"));
@@ -377,12 +286,159 @@ describe("AgentsPage editor", () => {
     cleanupTestRoot(testRoot);
   });
 
+  it("supports inheriting memory defaults and overriding another MCP server with YAML", async () => {
+    const list = vi.fn(async () => ({
+      agents: [
+        {
+          agent_key: "default",
+          agent_id: "11111111-1111-4111-8111-111111111111",
+          can_delete: false,
+          persona: { name: "Feynman" },
+        },
+      ],
+    }));
+    const existingDetail = {
+      ...sampleManagedAgentDetail("default"),
+      config: AgentConfig.parse({
+        ...sampleManagedAgentDetail("default").config,
+        mcp: {
+          default_mode: "allow",
+          allow: ["memory", "filesystem"],
+          deny: [],
+          pre_turn_tools: ["mcp.memory.seed"],
+          server_settings: {
+            memory: {
+              enabled: false,
+            },
+          },
+        },
+      }),
+    };
+    const get = vi.fn().mockResolvedValue(existingDetail);
+    const capabilities = vi.fn(async () => ({
+      skills: { default_mode: "allow", allow: [], deny: [], workspace_trusted: true, items: [] },
+      mcp: {
+        default_mode: "allow",
+        allow: ["memory", "filesystem"],
+        deny: [],
+        items: [
+          {
+            id: "memory",
+            name: "Memory",
+            transport: "stdio" as const,
+            source: "builtin" as const,
+          },
+          {
+            id: "filesystem",
+            name: "Filesystem",
+            transport: "stdio" as const,
+            source: "managed" as const,
+          },
+        ],
+      },
+      tools: { default_mode: "allow", allow: [], deny: [], items: [] },
+    }));
+    const update = vi.fn().mockResolvedValue(existingDetail);
+    const extensions = {
+      list: vi.fn().mockResolvedValue({
+        items: [sampleMcpExtensionDetail("memory"), sampleMcpExtensionDetail("filesystem")],
+      }),
+      get: vi.fn(async (_kind: "mcp", key: string) => ({
+        item: sampleMcpExtensionDetail(key),
+      })),
+      parseMcpSettings: vi.fn(async ({ settings_text }: { settings_text: string }) => ({
+        settings: {
+          namespace: "workspace",
+          raw: settings_text,
+        },
+      })),
+    };
+    const core = createCore(
+      list,
+      get,
+      capabilities,
+      update,
+      vi.fn().mockResolvedValue(samplePresets()),
+      extensions,
+    );
+
+    const testRoot = renderIntoDocument(
+      React.createElement(AgentsPageEditor, {
+        core,
+        mode: "edit",
+        createNonce: 1,
+        agentKey: "default",
+        onSaved: vi.fn(),
+        onCancelCreate: vi.fn(),
+      }),
+    );
+    await flush();
+
+    act(() => {
+      setLabeledValue(testRoot.container, "Memory settings mode", "inherit");
+      setLabeledValue(testRoot.container, "Settings mode for Filesystem", "override");
+      setLabeledValue(testRoot.container, "Settings format for Filesystem", "yaml");
+      setLabeledValue(
+        testRoot.container,
+        "Server settings for Filesystem",
+        "namespace: workspace\n",
+      );
+    });
+    await flush();
+
+    const saveButton = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="agents-editor-save"]',
+    );
+    expect(saveButton).not.toBeNull();
+
+    await act(async () => {
+      if (saveButton) click(saveButton);
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(extensions.parseMcpSettings).toHaveBeenCalledWith({
+      settings_format: "yaml",
+      settings_text: "namespace: workspace\n",
+    });
+    expect(update).toHaveBeenCalledWith(
+      "default",
+      expect.objectContaining({
+        config: expect.objectContaining({
+          mcp: expect.objectContaining({
+            server_settings: {
+              filesystem: {
+                namespace: "workspace",
+                raw: "namespace: workspace\n",
+              },
+            },
+          }),
+        }),
+      }),
+    );
+
+    cleanupTestRoot(testRoot);
+  });
+
   it("debounces capability lookups while typing a new agent key", async () => {
     vi.useFakeTimers();
     try {
       const capabilities = vi.fn(async () => ({
         skills: { default_mode: "allow", allow: [], deny: [], workspace_trusted: true, items: [] },
-        mcp: { default_mode: "allow", allow: [], deny: [], items: [] },
+        mcp: {
+          default_mode: "allow",
+          allow: [],
+          deny: [],
+          items: [
+            {
+              id: "memory",
+              name: "Memory",
+              transport: "stdio" as const,
+              source: "builtin" as const,
+            },
+          ],
+        },
         tools: { default_mode: "allow", allow: [], deny: [], items: [] },
       }));
       const core = createCore(vi.fn(), vi.fn(), capabilities, vi.fn());

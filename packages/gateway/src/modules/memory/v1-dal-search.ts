@@ -9,11 +9,11 @@ import type { MemorySearchInput, RawSearchRow } from "./v1-dal-types.js";
 import {
   buildMemoryV1ItemQueryParts,
   buildSnippet,
+  extractSearchTerms,
   invalidRequestError,
   markdownToPlainText,
   normalizeTime,
   parseJson,
-  uniqSortedStrings,
 } from "./v1-dal-helpers.js";
 
 type Scope = { tenantId: string; agentId: string };
@@ -182,18 +182,10 @@ export async function searchMemoryItems(
     throw invalidRequestError(`query too long (max=${MAX_QUERY_CHARS})`);
   }
 
-  const rawTerms =
-    query === "*"
-      ? []
-      : query
-          .split(/\s+/g)
-          .map((term) => term.trim())
-          .filter(Boolean);
-  if (rawTerms.some((term) => term.length > MAX_TERM_CHARS)) {
+  const terms = query === "*" ? [] : extractSearchTerms(query);
+  if (terms.some((term) => term.length > MAX_TERM_CHARS)) {
     throw invalidRequestError(`query term too long (max=${MAX_TERM_CHARS})`);
   }
-
-  const terms = uniqSortedStrings(rawTerms.map((term) => term.toLowerCase()));
 
   if (terms.length > MAX_TERMS) {
     throw invalidRequestError(`too many query terms (max=${MAX_TERMS})`);

@@ -1,10 +1,16 @@
-import type { AgentCapabilitiesResponse } from "@tyrum/schemas";
+import type { AgentCapabilitiesResponse, ManagedExtensionDetail } from "@tyrum/schemas";
 import { PERSONA_CHARACTERS, PERSONA_PALETTES, PERSONA_TONES } from "@tyrum/schemas";
 import type { AgentEditorFormState, AgentEditorSetField } from "./agents-page-editor-form.js";
 import { AccessTransferField } from "./agents-page-editor-access-transfer.js";
 import type { ModelPreset } from "./admin-http-models.shared.js";
+import {
+  AgentEditorMcpOverrides,
+  type AgentMcpSettingsDraft,
+  effectiveSourceLabel,
+} from "./agents-page-editor-mcp-overrides.js";
 import { AgentEditorModelFields } from "./agents-page-editor-models.js";
-import { BudgetInputs, FieldGroup, ToggleField } from "./agents-page-editor-shared.js";
+import { FieldGroup, ToggleField } from "./agents-page-editor-shared.js";
+import { MemorySettingsFields } from "./memory-settings-fields.js";
 import { Input } from "../ui/input.js";
 import { Select } from "../ui/select.js";
 import { Textarea } from "../ui/textarea.js";
@@ -24,6 +30,13 @@ export function AgentEditorSections({
   onSelectPrimaryPreset,
   onClearPrimaryModel,
   unsupportedModelOptions,
+  mcpExtensionDetailsById,
+  mcpExplicitServerSettings,
+  mcpExtensionsLoading,
+  mcpExtensionsError,
+  onMemorySettingsModeChange,
+  mcpSettingsDrafts,
+  onMcpSettingsDraftChange,
 }: {
   form: AgentEditorFormState;
   mode: "create" | "edit";
@@ -39,7 +52,18 @@ export function AgentEditorSections({
   onSelectPrimaryPreset: (preset: ModelPreset) => void;
   onClearPrimaryModel: () => void;
   unsupportedModelOptions: string | null;
+  mcpExtensionDetailsById: Record<string, ManagedExtensionDetail>;
+  mcpExplicitServerSettings: Record<string, Record<string, unknown>>;
+  mcpExtensionsLoading: boolean;
+  mcpExtensionsError: string | null;
+  onMemorySettingsModeChange: (modeValue: AgentEditorFormState["memorySettingsMode"]) => void;
+  mcpSettingsDrafts: Record<string, AgentMcpSettingsDraft>;
+  onMcpSettingsDraftChange: (serverId: string, draft: AgentMcpSettingsDraft) => void;
 }) {
+  const memoryDetail = mcpExtensionDetailsById["memory"];
+  const memorySharedDefaultAvailable = Boolean(memoryDetail?.default_mcp_server_settings_json);
+  const mcpSettingsItems = (capabilities?.mcp.items ?? []).filter((item) => item.id !== "memory");
+
   return (
     <>
       <FieldGroup title="Profile" description="Operator-facing persona settings for this agent.">
@@ -214,6 +238,15 @@ export function AgentEditorSections({
             setField("mcpDeny", ids);
           }}
         />
+        <AgentEditorMcpOverrides
+          items={mcpSettingsItems}
+          detailsById={mcpExtensionDetailsById}
+          explicitServerSettings={mcpExplicitServerSettings}
+          loading={mcpExtensionsLoading}
+          error={mcpExtensionsError}
+          drafts={mcpSettingsDrafts}
+          onDraftChange={onMcpSettingsDraftChange}
+        />
       </FieldGroup>
 
       <FieldGroup
@@ -339,126 +372,31 @@ export function AgentEditorSections({
       </FieldGroup>
 
       <FieldGroup title="Memory" description="Memory retrieval and budget controls.">
-        <ToggleField
-          label="Enable memory"
-          checked={form.memoryEnabled}
-          onCheckedChange={(checked) => setField("memoryEnabled", checked)}
-        />
-        <div className="grid gap-2">
-          <div className="text-sm font-medium text-fg">Allowed sensitivities</div>
-          <div className="flex flex-wrap gap-4">
-            <ToggleField
-              label="Public"
-              checked={form.allowPublic}
-              onCheckedChange={(checked) => setField("allowPublic", checked)}
-            />
-            <ToggleField
-              label="Private"
-              checked={form.allowPrivate}
-              onCheckedChange={(checked) => setField("allowPrivate", checked)}
-            />
-            <ToggleField
-              label="Sensitive"
-              checked={form.allowSensitive}
-              onCheckedChange={(checked) => setField("allowSensitive", checked)}
-            />
+        <Select
+          label="Memory settings mode"
+          value={form.memorySettingsMode}
+          onChange={(event) =>
+            onMemorySettingsModeChange(
+              event.currentTarget.value as AgentEditorFormState["memorySettingsMode"],
+            )
+          }
+          helperText={
+            memorySharedDefaultAvailable
+              ? `Shared default available from the ${effectiveSourceLabel(memoryDetail)} memory server.`
+              : "No shared default memory settings are configured."
+          }
+        >
+          <option value="inherit">Inherit shared default</option>
+          <option value="override">Override for this agent</option>
+        </Select>
+        {form.memorySettingsMode === "inherit" ? (
+          <div className="text-sm text-fg-muted">
+            This agent will use the shared memory settings until you switch back to override mode.
           </div>
-        </div>
-        <Textarea
-          label="Structured fact keys"
-          rows={3}
-          helperText="One fact key per line."
-          value={form.factKeys}
-          onChange={(event) => setField("factKeys", event.currentTarget.value)}
-        />
-        <Textarea
-          label="Structured tags"
-          rows={3}
-          helperText="One tag per line."
-          value={form.memoryTags}
-          onChange={(event) => setField("memoryTags", event.currentTarget.value)}
-        />
-        <div className="grid gap-4 lg:grid-cols-2">
-          <div className="grid gap-3 rounded-lg border border-border/70 p-3">
-            <ToggleField
-              label="Enable keyword retrieval"
-              checked={form.keywordEnabled}
-              onCheckedChange={(checked) => setField("keywordEnabled", checked)}
-            />
-            <Input
-              label="Keyword limit"
-              value={form.keywordLimit}
-              onChange={(event) => setField("keywordLimit", event.currentTarget.value)}
-            />
-          </div>
-          <div className="grid gap-3 rounded-lg border border-border/70 p-3">
-            <ToggleField
-              label="Enable semantic retrieval"
-              checked={form.semanticEnabled}
-              onCheckedChange={(checked) => setField("semanticEnabled", checked)}
-            />
-            <Input
-              label="Semantic limit"
-              value={form.semanticLimit}
-              onChange={(event) => setField("semanticLimit", event.currentTarget.value)}
-            />
-          </div>
-        </div>
-        <BudgetInputs
-          prefix="Total budget"
-          itemsValue={form.totalItems}
-          charsValue={form.totalChars}
-          tokensValue={form.totalTokens}
-          onChange={(field, value) => {
-            if (field === "items") setField("totalItems", value);
-            if (field === "chars") setField("totalChars", value);
-            if (field === "tokens") setField("totalTokens", value);
-          }}
-        />
-        <BudgetInputs
-          prefix="Fact budget"
-          itemsValue={form.factItems}
-          charsValue={form.factChars}
-          tokensValue={form.factTokens}
-          onChange={(field, value) => {
-            if (field === "items") setField("factItems", value);
-            if (field === "chars") setField("factChars", value);
-            if (field === "tokens") setField("factTokens", value);
-          }}
-        />
-        <BudgetInputs
-          prefix="Note budget"
-          itemsValue={form.noteItems}
-          charsValue={form.noteChars}
-          tokensValue={form.noteTokens}
-          onChange={(field, value) => {
-            if (field === "items") setField("noteItems", value);
-            if (field === "chars") setField("noteChars", value);
-            if (field === "tokens") setField("noteTokens", value);
-          }}
-        />
-        <BudgetInputs
-          prefix="Procedure budget"
-          itemsValue={form.procedureItems}
-          charsValue={form.procedureChars}
-          tokensValue={form.procedureTokens}
-          onChange={(field, value) => {
-            if (field === "items") setField("procedureItems", value);
-            if (field === "chars") setField("procedureChars", value);
-            if (field === "tokens") setField("procedureTokens", value);
-          }}
-        />
-        <BudgetInputs
-          prefix="Episode budget"
-          itemsValue={form.episodeItems}
-          charsValue={form.episodeChars}
-          tokensValue={form.episodeTokens}
-          onChange={(field, value) => {
-            if (field === "items") setField("episodeItems", value);
-            if (field === "chars") setField("episodeChars", value);
-            if (field === "tokens") setField("episodeTokens", value);
-          }}
-        />
+        ) : null}
+        {form.memorySettingsMode === "override" ? (
+          <MemorySettingsFields form={form} setField={setField} />
+        ) : null}
       </FieldGroup>
     </>
   );

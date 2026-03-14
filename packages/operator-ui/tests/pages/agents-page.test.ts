@@ -202,6 +202,11 @@ function createCore(options?: {
       modelConfig: {
         listPresets: options?.listPresets ?? vi.fn().mockResolvedValue(samplePresets()),
       },
+      extensions: {
+        list: vi.fn().mockResolvedValue({ items: [] }),
+        get: vi.fn(),
+        parseMcpSettings: vi.fn(),
+      },
     },
     runsStore,
   } as unknown as OperatorCore;

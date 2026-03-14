@@ -93,15 +93,21 @@ Read the referenced file before changing it.
     const listResponse = await app.request("/config/extensions/skill");
     expect(listResponse.status).toBe(200);
     const listed = (await listResponse.json()) as {
-      items: Array<{ key: string; refreshable: boolean; assignment_count: number }>;
+      items: Array<{
+        key: string;
+        refreshable: boolean;
+        assignment_count: number;
+        source_type: string;
+      }>;
     };
-    expect(listed.items).toEqual([
+    expect(listed.items).toContainEqual(
       expect.objectContaining({
         key: "skill-from-url",
         refreshable: true,
         assignment_count: 0,
+        source_type: "managed",
       }),
-    ]);
+    );
   });
 
   it("rejects direct-url skill imports that target localhost or private addresses", async () => {
@@ -200,5 +206,107 @@ url: https://example.com/mcp
     const serverFile = await readFile(payload.item.materialized_path!, "utf-8");
     expect(serverFile).toContain("Calendar MCP");
     expect(serverFile).toContain("https://example.com/mcp");
+  });
+
+  it("lists built-in memory and updates shared defaults with YAML settings", async () => {
+    const listResponse = await app.request("/config/extensions/mcp");
+    expect(listResponse.status).toBe(200);
+    const listed = (await listResponse.json()) as {
+      items: Array<{ key: string; source_type: string; can_edit_settings: boolean }>;
+    };
+    expect(listed.items).toContainEqual(
+      expect.objectContaining({
+        key: "memory",
+        source_type: "builtin",
+        can_edit_settings: true,
+      }),
+    );
+
+    const firstUpdateResponse = await app.request("/config/extensions/mcp/memory/defaults", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        default_access: "allow",
+        settings_format: "yaml",
+        settings_text: `semantic:
+  enabled: false
+  limit: 9
+`,
+      }),
+    });
+    expect(firstUpdateResponse.status).toBe(200);
+    await expect(firstUpdateResponse.json()).resolves.toMatchObject({
+      item: {
+        key: "memory",
+        default_access: "allow",
+        default_mcp_server_settings_json: {
+          semantic: {
+            enabled: false,
+            limit: 9,
+          },
+        },
+      },
+    });
+
+    const secondUpdateResponse = await app.request("/config/extensions/mcp/memory/defaults", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        default_access: "deny",
+      }),
+    });
+    expect(secondUpdateResponse.status).toBe(200);
+    await expect(secondUpdateResponse.json()).resolves.toMatchObject({
+      item: {
+        key: "memory",
+        default_access: "deny",
+        default_mcp_server_settings_json: {
+          semantic: {
+            enabled: false,
+            limit: 9,
+          },
+        },
+      },
+    });
+
+    const clearResponse = await app.request("/config/extensions/mcp/memory/defaults", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        default_access: "inherit",
+        settings_text: "",
+      }),
+    });
+    expect(clearResponse.status).toBe(200);
+    await expect(clearResponse.json()).resolves.toMatchObject({
+      item: {
+        key: "memory",
+        default_access: "inherit",
+        default_mcp_server_settings_json: null,
+      },
+    });
+  });
+
+  it("parses MCP settings text via the extensions route", async () => {
+    const response = await app.request("/config/extensions/mcp/parse-settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        settings_format: "yaml",
+        settings_text: `namespace: shared
+limits:
+  search: 5
+`,
+      }),
+    });
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      settings: {
+        namespace: "shared",
+        limits: {
+          search: 5,
+        },
+      },
+    });
   });
 });

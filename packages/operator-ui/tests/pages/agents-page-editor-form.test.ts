@@ -28,6 +28,7 @@ describe("agents-page-editor-form", () => {
     form.mcpDefaultMode = "deny";
     form.mcpAllow = ["filesystem"];
     form.mcpDeny = ["secrets"];
+    form.memorySettingsMode = "override";
 
     const payload = buildPayload(form, undefined, {
       pre_turn_tools: ["mcp.memory.seed"],
@@ -54,5 +55,29 @@ describe("agents-page-editor-form", () => {
         }),
       }),
     );
+  });
+
+  it("drops explicit memory server settings when inheriting shared defaults", () => {
+    const form = createBlankForm();
+    form.agentKey = "agent-memory-inherit";
+    form.memorySettingsMode = "inherit";
+
+    const payload = buildPayload(form, undefined, {
+      pre_turn_tools: ["mcp.memory.seed"],
+      server_settings: {
+        filesystem: {
+          namespace: "agents",
+        },
+        memory: {
+          enabled: false,
+        },
+      },
+    });
+
+    expect(payload.config.mcp.server_settings).toEqual({
+      filesystem: {
+        namespace: "agents",
+      },
+    });
   });
 });
