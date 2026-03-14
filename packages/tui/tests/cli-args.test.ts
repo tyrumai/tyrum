@@ -10,6 +10,11 @@ describe("tui cli args", () => {
     expect(parseTuiCliArgs(["--version"])).toEqual({ kind: "version" });
   });
 
+  it("parses bare help/version commands only in first position", () => {
+    expect(parseTuiCliArgs(["help"])).toEqual({ kind: "help" });
+    expect(parseTuiCliArgs(["version"])).toEqual({ kind: "version" });
+  });
+
   it("parses --gateway/--token", () => {
     expect(parseTuiCliArgs(["--gateway", "http://127.0.0.1:8788", "--token", "t"])).toMatchObject({
       kind: "start",
@@ -20,6 +25,17 @@ describe("tui cli args", () => {
 
   it("rejects missing --gateway value", () => {
     expect(() => parseTuiCliArgs(["--gateway"])).toThrow(/--gateway requires a value/i);
+  });
+
+  it("does not treat help/version option values as commands", () => {
+    expect(parseTuiCliArgs(["--gateway", "help"])).toEqual({
+      kind: "start",
+      gatewayUrl: "help",
+    });
+    expect(parseTuiCliArgs(["--token", "version"])).toEqual({
+      kind: "start",
+      token: "version",
+    });
   });
 
   it("parses reconnect flags", () => {

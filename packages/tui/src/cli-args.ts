@@ -47,10 +47,16 @@ export function parseTuiCliArgs(argv: readonly string[]): TuiCliCommand {
   const [first] = argv;
   if (!first) return { kind: "start" };
 
-  if (argv.some((arg) => arg === "-h" || arg === "--help" || arg === "help")) {
+  if (first === "help") {
     return { kind: "help" };
   }
-  if (argv.some((arg) => arg === "-v" || arg === "--version" || arg === "version")) {
+  if (first === "version") {
+    return { kind: "version" };
+  }
+  if (argv.some((arg) => arg === "-h" || arg === "--help")) {
+    return { kind: "help" };
+  }
+  if (argv.some((arg) => arg === "-v" || arg === "--version")) {
     return { kind: "version" };
   }
 
