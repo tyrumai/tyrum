@@ -19,12 +19,9 @@ import { Logger } from "../observability/logger.js";
 import { createPoiProvider, type PoiProvider } from "./poi-provider.js";
 import { haversineDistanceMeters } from "./geo.js";
 import { LocationDal } from "./dal.js";
-import {
-  DEFAULT_CATEGORY_EXIT_M,
-  evaluateCategoryEvent,
-  evaluateSavedPlaceEvent,
-  type LocationSubjectState,
-} from "./event-evaluator.js";
+import { resolveExistingAgentIdOrThrow, resolveExistingScopedIds } from "./scope-resolution.js";
+import { evaluateSavedPlaceEvent, type LocationSubjectState } from "./event-evaluator.js";
+import { evaluateCategoryTriggerEvents } from "./category-trigger-evaluator.js";
 import { fireLocationTriggers, recordLocationEpisode } from "./trigger-execution.js";
 import type {
   LocationAutomationTriggerCreateRequest,
@@ -66,7 +63,10 @@ export class LocationService {
   }
 
   async getProfile(input: { tenantId: string; agentKey: string }): Promise<LocationProfile> {
-    const agentId = await this.opts.identityScopeDal.ensureAgentId(input.tenantId, input.agentKey);
+    const agentId = await resolveExistingAgentIdOrThrow({
+      identityScopeDal: this.opts.identityScopeDal,
+      ...input,
+    });
     return await this.dal.getProfile({
       tenantId: input.tenantId,
       agentId,
@@ -99,7 +99,10 @@ export class LocationService {
   }
 
   async listPlaces(input: { tenantId: string; agentKey: string }): Promise<LocationPlace[]> {
-    const agentId = await this.opts.identityScopeDal.ensureAgentId(input.tenantId, input.agentKey);
+    const agentId = await resolveExistingAgentIdOrThrow({
+      identityScopeDal: this.opts.identityScopeDal,
+      ...input,
+    });
     return await this.dal.listPlaces({
       tenantId: input.tenantId,
       agentId,
@@ -138,7 +141,10 @@ export class LocationService {
     placeId: string;
     patch: LocationPlacePatchRequest;
   }): Promise<LocationPlace> {
-    const agentId = await this.opts.identityScopeDal.ensureAgentId(input.tenantId, input.agentKey);
+    const agentId = await resolveExistingAgentIdOrThrow({
+      identityScopeDal: this.opts.identityScopeDal,
+      ...input,
+    });
     return await this.dal.updatePlace({
       tenantId: input.tenantId,
       agentId,
@@ -153,7 +159,10 @@ export class LocationService {
     agentKey: string;
     placeId: string;
   }): Promise<boolean> {
-    const agentId = await this.opts.identityScopeDal.ensureAgentId(input.tenantId, input.agentKey);
+    const agentId = await resolveExistingAgentIdOrThrow({
+      identityScopeDal: this.opts.identityScopeDal,
+      ...input,
+    });
     return await this.dal.deletePlace({
       tenantId: input.tenantId,
       agentId,
@@ -166,7 +175,10 @@ export class LocationService {
     agentKey: string;
     limit?: number;
   }): Promise<LocationEvent[]> {
-    const agentId = await this.opts.identityScopeDal.ensureAgentId(input.tenantId, input.agentKey);
+    const agentId = await resolveExistingAgentIdOrThrow({
+      identityScopeDal: this.opts.identityScopeDal,
+      ...input,
+    });
     return await this.dal.listEvents({
       tenantId: input.tenantId,
       agentId,
@@ -180,15 +192,13 @@ export class LocationService {
     agentKey?: string;
     workspaceKey?: string;
   }): Promise<LocationAutomationTriggerRecord[]> {
-    const agentId = input.agentKey
-      ? await this.opts.identityScopeDal.ensureAgentId(input.tenantId, input.agentKey)
-      : undefined;
-    const workspaceId = input.workspaceKey
-      ? await this.opts.identityScopeDal.ensureWorkspaceId(input.tenantId, input.workspaceKey)
-      : undefined;
-    if (agentId && workspaceId) {
-      await this.opts.identityScopeDal.ensureMembership(input.tenantId, agentId, workspaceId);
-    }
+    const { agentId, workspaceId } = await resolveExistingScopedIds({
+      identityScopeDal: this.opts.identityScopeDal,
+      tenantId: input.tenantId,
+      agentKey: input.agentKey,
+      workspaceKey: input.workspaceKey,
+      requireMembership: Boolean(input.agentKey?.trim() && input.workspaceKey?.trim()),
+    });
     return await this.dal.listAutomationTriggers({
       tenantId: input.tenantId,
       agentId,
@@ -252,7 +262,11 @@ export class LocationService {
     payload: LocationBeacon;
   }): Promise<LocationBeaconResult> {
     const agentKey = input.payload.agent_key?.trim() || "default";
-    const agentId = await this.opts.identityScopeDal.ensureAgentId(input.tenantId, agentKey);
+    const agentId = await resolveExistingAgentIdOrThrow({
+      identityScopeDal: this.opts.identityScopeDal,
+      tenantId: input.tenantId,
+      agentKey,
+    });
     let profile = await this.dal.getProfile({ tenantId: input.tenantId, agentId, agentKey });
     if (!profile.primary_node_id) {
       await this.dal.upsertProfile({
@@ -403,73 +417,15 @@ export class LocationService {
     stateMap: Map<string, LocationSubjectState>;
     automationTriggers: LocationAutomationTriggerRecord[];
   }): Promise<LocationEvent[]> {
-    const categoryKeys = [
-      ...new Set(
-        input.automationTriggers
-          .filter((trigger) => trigger.enabled)
-          .flatMap((trigger) =>
-            trigger.condition.type === "poi_category" ? [trigger.condition.category_key] : [],
-          ),
-      ),
-    ];
-    if (categoryKeys.length === 0 || input.profile.poi_provider_kind === "none") {
-      return [];
-    }
-    const provider = this.getPoiProvider(input.profile.poi_provider_kind);
-    const events: LocationEvent[] = [];
-
-    for (const categoryKey of categoryKeys) {
-      const match = await provider.findNearestCategoryMatch({
-        coords: input.payload.coords,
-        categoryKey,
-        radiusM: DEFAULT_CATEGORY_EXIT_M,
-      });
-      const subjectKey = `poi_category:${categoryKey}`;
-      const currentState = input.stateMap.get(subjectKey);
-      const event = evaluateCategoryEvent({
-        agentKey: input.agentKey,
-        nodeId: input.nodeId,
-        payload: input.payload,
-        categoryKey,
-        currentState,
-        match,
-      });
-      if (!event) continue;
-      const inserted = await this.dal.insertEventIfAbsent({
-        tenantId: input.tenantId,
-        agentId: input.agentId,
-        event: event.event,
-        subjectKind: "poi_category",
-        subjectRef: categoryKey,
-      });
-      if (inserted) {
-        await this.dal.upsertState({
-          tenantId: input.tenantId,
-          agentId: input.agentId,
-          nodeId: input.nodeId,
-          subjectKind: "poi_category",
-          subjectRef: categoryKey,
-          status: event.state.status,
-          enteredAt: event.state.enteredAt,
-          dwellEmittedAt: event.state.dwellEmittedAt,
-        });
-        events.push(event.event);
-        await recordLocationEpisode(
-          this.opts.memoryV1Dal,
-          input.tenantId,
-          input.agentId,
-          event.event,
-        );
-        await this.dispatchLocationTriggers({
-          tenantId: input.tenantId,
-          agentId: input.agentId,
-          event: event.event,
-          triggers: input.automationTriggers,
-        });
-      }
-    }
-
-    return events;
+    return await evaluateCategoryTriggerEvents({
+      dal: this.dal,
+      memoryV1Dal: this.opts.memoryV1Dal,
+      getPoiProvider: (kind) => this.getPoiProvider(kind),
+      dispatchLocationTriggers: async (triggerInput) => {
+        await this.dispatchLocationTriggers(triggerInput);
+      },
+      ...input,
+    });
   }
 
   private async dispatchLocationTriggers(input: {

@@ -169,11 +169,14 @@ export async function maybeDeliverAutomationReply(
   const tenantId = deps.tenantId;
   const agentKey = input.turnInput.agent_key?.trim() || deps.agentId;
   const workspaceKey = input.turnInput.workspace_key?.trim() || deps.workspaceId;
-  const agentId = await deps.container.identityScopeDal.ensureAgentId(tenantId, agentKey);
-  const workspaceId = await deps.container.identityScopeDal.ensureWorkspaceId(
+  const resolved = await deps.container.identityScopeDal.resolveExistingScopeIdsForTenant({
     tenantId,
+    agentKey,
     workspaceKey,
-  );
+  });
+  if (!resolved) return;
+
+  const { agentId, workspaceId } = resolved;
   const workboard = new WorkboardDal(deps.container.db);
   const activity = await workboard.getScopeActivity({
     scope: { tenant_id: tenantId, agent_id: agentId, workspace_id: workspaceId },

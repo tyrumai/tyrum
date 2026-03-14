@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { requireTenantId } from "../modules/auth/claims.js";
+import { ScopeNotFoundError } from "../modules/identity/scope.js";
 import {
   LocationAutomationTriggerCreateRequest,
   LocationAutomationTriggerPatchRequest,
@@ -13,10 +14,17 @@ export function createAutomationTriggerRoutes(service: LocationService): Hono {
     const tenantId = requireTenantId(c);
     const agentKey = c.req.query("agent_key")?.trim() || undefined;
     const workspaceKey = c.req.query("workspace_key")?.trim() || undefined;
-    return c.json({
-      status: "ok",
-      triggers: await service.listAutomationTriggers({ tenantId, agentKey, workspaceKey }),
-    });
+    try {
+      return c.json({
+        status: "ok",
+        triggers: await service.listAutomationTriggers({ tenantId, agentKey, workspaceKey }),
+      });
+    } catch (error) {
+      if (error instanceof ScopeNotFoundError) {
+        return c.json({ error: error.code, message: error.message }, 404);
+      }
+      throw error;
+    }
   });
 
   app.post("/automation/triggers", async (c) => {

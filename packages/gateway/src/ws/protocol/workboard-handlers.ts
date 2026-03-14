@@ -42,24 +42,25 @@ import {
   type WsResponseEnvelope,
 } from "@tyrum/schemas";
 import type { ConnectedClient } from "../connection-manager.js";
-import { WORKBOARD_WS_AUDIENCE } from "../workboard-audience.js";
-import type { WorkboardDal } from "../../modules/workboard/dal.js";
 import { enqueueWorkItemStateChangeNotification } from "../../modules/workboard/notifications.js";
 import type { ProtocolDeps, ProtocolRequestEnvelope } from "./types.js";
-import { broadcastEvent, errorResponse } from "./helpers.js";
+import { errorResponse } from "./helpers.js";
 import {
   broadcastAgentEvent,
   createHandler,
+  ensureStateKvScope,
+  ensureWorkScope,
   getWorkTransitionEventType,
   notFound,
   okResult,
-  resolveStateKvScope,
-  resolveWorkScope,
+  resolveExistingStateKvScope,
+  resolveExistingWorkScope,
   type ScopedHandlerContext,
   type WorkboardHandler,
   type WorkScope,
   type TransitionItem,
 } from "./workboard-handlers-shared.js";
+import { maybeEmitWorkItemOverlapWarningArtifact } from "./workboard-overlap-warning.js";
 
 async function maybeEnqueueTransitionNotification(params: {
   ctx: ScopedHandlerContext;
@@ -96,7 +97,7 @@ const workboardHandlers: Record<string, WorkboardHandler> = {
     unsupportedMessage: "work.create not supported",
     schema: WsWorkCreateRequest,
     run: async ({ msg, deps, tenantId, dal }, payload) => {
-      const { scope, keys } = await resolveWorkScope({ deps, tenantId, payload });
+      const { scope, keys } = await ensureWorkScope({ deps, tenantId, payload });
       const item = await dal.createItem({
         scope,
         item: payload.item,
@@ -112,7 +113,7 @@ const workboardHandlers: Record<string, WorkboardHandler> = {
     unsupportedMessage: "work.list not supported",
     schema: WsWorkListRequest,
     run: async ({ msg, deps, tenantId, dal }, payload) => {
-      const { scope } = await resolveWorkScope({ deps, tenantId, payload });
+      const { scope } = await resolveExistingWorkScope({ deps, tenantId, payload });
       const { items, next_cursor } = await dal.listItems({
         scope,
         statuses: payload.statuses,
@@ -128,7 +129,7 @@ const workboardHandlers: Record<string, WorkboardHandler> = {
     unsupportedMessage: "work.get not supported",
     schema: WsWorkGetRequest,
     run: async ({ msg, deps, tenantId, dal }, payload) => {
-      const { scope } = await resolveWorkScope({ deps, tenantId, payload });
+      const { scope } = await resolveExistingWorkScope({ deps, tenantId, payload });
       const item = await dal.getItem({ scope, work_item_id: payload.work_item_id });
       return item ? okResult(msg, WsWorkGetResult.parse({ item })) : notFound(msg, "work item");
     },
@@ -138,7 +139,7 @@ const workboardHandlers: Record<string, WorkboardHandler> = {
     unsupportedMessage: "work.update not supported",
     schema: WsWorkUpdateRequest,
     run: async ({ msg, deps, tenantId, dal }, payload) => {
-      const { scope } = await resolveWorkScope({ deps, tenantId, payload });
+      const { scope } = await resolveExistingWorkScope({ deps, tenantId, payload });
       const item = await dal.updateItem({
         scope,
         work_item_id: payload.work_item_id,
@@ -162,7 +163,7 @@ const workboardHandlers: Record<string, WorkboardHandler> = {
     schema: WsWorkTransitionRequest,
     run: async (ctx, payload) => {
       const { msg, deps, tenantId, dal } = ctx;
-      const { scope } = await resolveWorkScope({ deps, tenantId, payload });
+      const { scope } = await resolveExistingWorkScope({ deps, tenantId, payload });
       const item = await dal.transitionItem({
         scope,
         work_item_id: payload.work_item_id,
@@ -185,7 +186,7 @@ const workboardHandlers: Record<string, WorkboardHandler> = {
     action: "manage work item links",
     schema: WsWorkLinkCreateRequest,
     run: async ({ msg, deps, tenantId, dal }, payload) => {
-      const { scope } = await resolveWorkScope({ deps, tenantId, payload });
+      const { scope } = await resolveExistingWorkScope({ deps, tenantId, payload });
       if (payload.work_item_id === payload.linked_work_item_id) {
         return errorResponse(
           msg.request_id,
@@ -220,7 +221,7 @@ const workboardHandlers: Record<string, WorkboardHandler> = {
     action: "manage work item links",
     schema: WsWorkLinkListRequest,
     run: async ({ msg, deps, tenantId, dal }, payload) => {
-      const { scope } = await resolveWorkScope({ deps, tenantId, payload });
+      const { scope } = await resolveExistingWorkScope({ deps, tenantId, payload });
       const { links } = await dal.listLinks({
         scope,
         work_item_id: payload.work_item_id,
@@ -233,7 +234,7 @@ const workboardHandlers: Record<string, WorkboardHandler> = {
     action: "access work artifacts",
     schema: WsWorkArtifactListRequest,
     run: async ({ msg, deps, tenantId, dal }, payload) => {
-      const { scope } = await resolveWorkScope({ deps, tenantId, payload });
+      const { scope } = await resolveExistingWorkScope({ deps, tenantId, payload });
       const { artifacts, next_cursor } = await dal.listArtifacts({
         scope,
         work_item_id: payload.work_item_id,
@@ -247,7 +248,7 @@ const workboardHandlers: Record<string, WorkboardHandler> = {
     action: "access work artifacts",
     schema: WsWorkArtifactGetRequest,
     run: async ({ msg, deps, tenantId, dal }, payload) => {
-      const { scope } = await resolveWorkScope({ deps, tenantId, payload });
+      const { scope } = await resolveExistingWorkScope({ deps, tenantId, payload });
       const artifact = await dal.getArtifact({ scope, artifact_id: payload.artifact_id });
       return artifact
         ? okResult(msg, WsWorkArtifactGetResult.parse({ artifact }))
@@ -258,7 +259,7 @@ const workboardHandlers: Record<string, WorkboardHandler> = {
     action: "access work artifacts",
     schema: WsWorkArtifactCreateRequest,
     run: async ({ msg, deps, tenantId, dal }, payload) => {
-      const { scope } = await resolveWorkScope({ deps, tenantId, payload });
+      const { scope } = await resolveExistingWorkScope({ deps, tenantId, payload });
       const artifact = await dal.createArtifact({ scope, artifact: payload.artifact });
       broadcastAgentEvent(
         scope.tenant_id,
@@ -274,7 +275,7 @@ const workboardHandlers: Record<string, WorkboardHandler> = {
     action: "access decision records",
     schema: WsWorkDecisionListRequest,
     run: async ({ msg, deps, tenantId, dal }, payload) => {
-      const { scope } = await resolveWorkScope({ deps, tenantId, payload });
+      const { scope } = await resolveExistingWorkScope({ deps, tenantId, payload });
       const { decisions, next_cursor } = await dal.listDecisions({
         scope,
         work_item_id: payload.work_item_id,
@@ -288,7 +289,7 @@ const workboardHandlers: Record<string, WorkboardHandler> = {
     action: "access decision records",
     schema: WsWorkDecisionGetRequest,
     run: async ({ msg, deps, tenantId, dal }, payload) => {
-      const { scope } = await resolveWorkScope({ deps, tenantId, payload });
+      const { scope } = await resolveExistingWorkScope({ deps, tenantId, payload });
       const decision = await dal.getDecision({ scope, decision_id: payload.decision_id });
       return decision
         ? okResult(msg, WsWorkDecisionGetResult.parse({ decision }))
@@ -299,7 +300,7 @@ const workboardHandlers: Record<string, WorkboardHandler> = {
     action: "access decision records",
     schema: WsWorkDecisionCreateRequest,
     run: async ({ msg, deps, tenantId, dal }, payload) => {
-      const { scope } = await resolveWorkScope({ deps, tenantId, payload });
+      const { scope } = await resolveExistingWorkScope({ deps, tenantId, payload });
       const decision = await dal.createDecision({ scope, decision: payload.decision });
       broadcastAgentEvent(
         scope.tenant_id,
@@ -315,7 +316,7 @@ const workboardHandlers: Record<string, WorkboardHandler> = {
     action: "access work signals",
     schema: WsWorkSignalListRequest,
     run: async ({ msg, deps, tenantId, dal }, payload) => {
-      const { scope } = await resolveWorkScope({ deps, tenantId, payload });
+      const { scope } = await resolveExistingWorkScope({ deps, tenantId, payload });
       const { signals, next_cursor } = await dal.listSignals({
         scope,
         work_item_id: payload.work_item_id,
@@ -330,7 +331,7 @@ const workboardHandlers: Record<string, WorkboardHandler> = {
     action: "access work signals",
     schema: WsWorkSignalGetRequest,
     run: async ({ msg, deps, tenantId, dal }, payload) => {
-      const { scope } = await resolveWorkScope({ deps, tenantId, payload });
+      const { scope } = await resolveExistingWorkScope({ deps, tenantId, payload });
       const signal = await dal.getSignal({ scope, signal_id: payload.signal_id });
       return signal
         ? okResult(msg, WsWorkSignalGetResult.parse({ signal }))
@@ -341,7 +342,7 @@ const workboardHandlers: Record<string, WorkboardHandler> = {
     action: "access work signals",
     schema: WsWorkSignalCreateRequest,
     run: async ({ msg, deps, tenantId, dal }, payload) => {
-      const { scope } = await resolveWorkScope({ deps, tenantId, payload });
+      const { scope } = await resolveExistingWorkScope({ deps, tenantId, payload });
       const signal = await dal.createSignal({ scope, signal: payload.signal });
       broadcastAgentEvent(
         scope.tenant_id,
@@ -357,7 +358,7 @@ const workboardHandlers: Record<string, WorkboardHandler> = {
     action: "access work signals",
     schema: WsWorkSignalUpdateRequest,
     run: async ({ msg, deps, tenantId, dal }, payload) => {
-      const { scope } = await resolveWorkScope({ deps, tenantId, payload });
+      const { scope } = await resolveExistingWorkScope({ deps, tenantId, payload });
       const updated = await dal.updateSignal({
         scope,
         signal_id: payload.signal_id,
@@ -382,7 +383,7 @@ const workboardHandlers: Record<string, WorkboardHandler> = {
     action: "access work state kv",
     schema: WsWorkStateKvGetRequest,
     run: async ({ msg, deps, tenantId, dal }, payload) => {
-      const scope = await resolveStateKvScope(deps, tenantId, payload.scope);
+      const scope = await resolveExistingStateKvScope(deps, tenantId, payload.scope);
       const entry = (await dal.getStateKv({ scope, key: payload.key })) ?? null;
       return okResult(msg, WsWorkStateKvGetResult.parse({ entry }));
     },
@@ -391,7 +392,7 @@ const workboardHandlers: Record<string, WorkboardHandler> = {
     action: "access work state kv",
     schema: WsWorkStateKvListRequest,
     run: async ({ msg, deps, tenantId, dal }, payload) => {
-      const scope = await resolveStateKvScope(deps, tenantId, payload.scope);
+      const scope = await resolveExistingStateKvScope(deps, tenantId, payload.scope);
       const { entries } = await dal.listStateKv({ scope, prefix: payload.prefix });
       return okResult(msg, WsWorkStateKvListResult.parse({ entries }));
     },
@@ -400,7 +401,7 @@ const workboardHandlers: Record<string, WorkboardHandler> = {
     action: "access work state kv",
     schema: WsWorkStateKvSetRequest,
     run: async ({ msg, deps, tenantId, dal }, payload) => {
-      const scope = await resolveStateKvScope(deps, tenantId, payload.scope);
+      const scope = await ensureStateKvScope(deps, tenantId, payload.scope);
       const entry = await dal.setStateKv({
         scope,
         key: payload.key,
@@ -435,76 +436,4 @@ export async function handleWorkboardMessage(
   }
   const handler = workboardHandlers[msg.type];
   return handler ? handler({ client, msg, deps, tenantId }) : undefined;
-}
-
-async function maybeEmitWorkItemOverlapWarningArtifact(params: {
-  dal: WorkboardDal;
-  scope: Parameters<WorkboardDal["listItems"]>[0]["scope"];
-  item: { work_item_id: string; title: string; fingerprint?: { resources: string[] } };
-  deps: ProtocolDeps;
-  fingerprintTouched?: boolean;
-}): Promise<void> {
-  try {
-    if (params.fingerprintTouched === false) return;
-
-    const fingerprint = params.item.fingerprint;
-    if (!fingerprint || fingerprint.resources.length === 0) return;
-
-    const { items: active } = await params.dal.listItems({
-      scope: params.scope,
-      statuses: ["doing", "blocked"],
-      limit: 200,
-    });
-
-    const resourceSet = new Set(fingerprint.resources);
-    const overlaps = active
-      .filter((other) => other.work_item_id !== params.item.work_item_id)
-      .map((other) => {
-        const otherResources = other.fingerprint?.resources ?? [];
-        const shared = otherResources.filter((r) => resourceSet.has(r));
-        return shared.length > 0 ? { other, shared } : null;
-      })
-      .filter(
-        (entry): entry is { other: (typeof active)[number]; shared: string[] } => entry !== null,
-      );
-
-    if (overlaps.length === 0) return;
-
-    const body_md = [
-      `Detected overlap with active WorkItems (no auto-merge):`,
-      ``,
-      ...overlaps.map(
-        ({ other, shared }) =>
-          `- \`${other.work_item_id}\` — ${other.title} (shared: ${shared.join(", ")})`,
-      ),
-      ``,
-      `Suggested next steps: queue this WorkItem, link it as a dependency, or explicitly merge.`,
-    ].join("\n");
-
-    const artifact = await params.dal.createArtifact({
-      scope: params.scope,
-      artifact: {
-        work_item_id: params.item.work_item_id,
-        kind: "risk",
-        title: "WorkItem overlap detected",
-        body_md,
-      },
-    });
-
-    broadcastEvent(
-      params.scope.tenant_id,
-      {
-        event_id: crypto.randomUUID(),
-        type: "work.artifact.created",
-        occurred_at: new Date().toISOString(),
-        scope: { kind: "agent", agent_id: artifact.agent_id },
-        payload: { artifact },
-      },
-      params.deps,
-      WORKBOARD_WS_AUDIENCE,
-    );
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    params.deps.logger?.warn("work.item.overlap_warning_failed", { error: message });
-  }
 }

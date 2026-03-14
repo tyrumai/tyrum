@@ -166,6 +166,68 @@ describe("handleClientMessage (subagent.*)", () => {
     }
   });
 
+  it("returns not_found for subagent.list when the explicit scope is missing without creating it", async () => {
+    const cm = new ConnectionManager();
+    const { id } = makeClient(cm);
+    const client = cm.getClient(id)!;
+
+    const db = openTestSqliteDb();
+    try {
+      const before = await db.get<{ count: number }>(
+        "SELECT COUNT(1) AS count FROM agents WHERE tenant_id = ?",
+        [DEFAULT_TENANT_ID],
+      );
+      const beforeWorkspaces = await db.get<{ count: number }>(
+        "SELECT COUNT(1) AS count FROM workspaces WHERE tenant_id = ?",
+        [DEFAULT_TENANT_ID],
+      );
+      const beforeMemberships = await db.get<{ count: number }>(
+        "SELECT COUNT(1) AS count FROM agent_workspaces WHERE tenant_id = ?",
+        [DEFAULT_TENANT_ID],
+      );
+      const deps = makeDeps(cm, { db });
+
+      const res = await handleClientMessage(
+        client,
+        JSON.stringify({
+          request_id: "r-missing-scope",
+          type: "subagent.list",
+          payload: {
+            tenant_key: "default",
+            agent_key: "missing-agent",
+            workspace_key: "missing-workspace",
+            limit: 50,
+          },
+        }),
+        deps,
+      );
+
+      expect(res).toMatchObject({
+        request_id: "r-missing-scope",
+        ok: false,
+        error: { code: "not_found", message: "scope not found" },
+      });
+
+      const after = await db.get<{ count: number }>(
+        "SELECT COUNT(1) AS count FROM agents WHERE tenant_id = ?",
+        [DEFAULT_TENANT_ID],
+      );
+      const afterWorkspaces = await db.get<{ count: number }>(
+        "SELECT COUNT(1) AS count FROM workspaces WHERE tenant_id = ?",
+        [DEFAULT_TENANT_ID],
+      );
+      const afterMemberships = await db.get<{ count: number }>(
+        "SELECT COUNT(1) AS count FROM agent_workspaces WHERE tenant_id = ?",
+        [DEFAULT_TENANT_ID],
+      );
+      expect(after?.count ?? 0).toBe(before?.count ?? 0);
+      expect(afterWorkspaces?.count ?? 0).toBe(beforeWorkspaces?.count ?? 0);
+      expect(afterMemberships?.count ?? 0).toBe(beforeMemberships?.count ?? 0);
+    } finally {
+      await db.close();
+    }
+  });
+
   it("handles subagent.send and emits subagent.output", async () => {
     const cm = new ConnectionManager();
     const { id, ws } = makeClient(cm);

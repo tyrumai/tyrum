@@ -13,6 +13,7 @@ import {
 } from "../modules/agent/tools.js";
 import { validateToolDescriptorInputSchema } from "../modules/agent/tool-schema.js";
 import { requireTenantId } from "../modules/auth/claims.js";
+import { ScopeNotFoundError } from "../modules/identity/scope.js";
 import type { Logger } from "../modules/observability/logger.js";
 import type { PluginCatalogProvider } from "../modules/plugins/catalog-provider.js";
 import type { PluginRegistry } from "../modules/plugins/registry.js";
@@ -390,6 +391,9 @@ export function createToolRegistryRoutes(deps: ToolRegistryRouteDeps): Hono {
 
       return c.json({ status: "ok", tools }, 200);
     } catch (error) {
+      if (error instanceof ScopeNotFoundError) {
+        return c.json({ error: error.code, message: error.message }, 404);
+      }
       const message = error instanceof Error ? error.message : String(error);
       return c.json({ error: "invalid_request", message }, 400);
     } finally {

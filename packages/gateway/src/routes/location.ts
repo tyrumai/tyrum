@@ -5,6 +5,7 @@ import {
 } from "@tyrum/schemas";
 import { Hono } from "hono";
 import { requireTenantId } from "../modules/auth/claims.js";
+import { ScopeNotFoundError } from "../modules/identity/scope.js";
 import { LocationService } from "../modules/location/service.js";
 
 function toHttpPlace(place: Awaited<ReturnType<LocationService["listPlaces"]>>[number]) {
@@ -29,14 +30,38 @@ function toHttpProfile(profile: Awaited<ReturnType<LocationService["getProfile"]
   };
 }
 
+function toLocationRouteError(error: unknown): {
+  status: number;
+  body: { error: string; message: string };
+} {
+  if (error instanceof ScopeNotFoundError) {
+    return {
+      status: 404,
+      body: { error: error.code, message: error.message },
+    };
+  }
+
+  const message = error instanceof Error ? error.message : String(error);
+  const status = message.includes("not found") ? 404 : 400;
+  return {
+    status,
+    body: { error: status === 404 ? "not_found" : "invalid_request", message },
+  };
+}
+
 export function createLocationRoutes(service: LocationService): Hono {
   const app = new Hono();
 
   app.get("/location/profile", async (c) => {
     const tenantId = requireTenantId(c);
     const agentKey = c.req.query("agent_key")?.trim() || "default";
-    const profile = await service.getProfile({ tenantId, agentKey });
-    return c.json({ status: "ok", profile: toHttpProfile(profile) });
+    try {
+      const profile = await service.getProfile({ tenantId, agentKey });
+      return c.json({ status: "ok", profile: toHttpProfile(profile) });
+    } catch (error) {
+      const response = toLocationRouteError(error);
+      return c.json(response.body, response.status);
+    }
   });
 
   app.patch("/location/profile", async (c) => {
@@ -63,8 +88,13 @@ export function createLocationRoutes(service: LocationService): Hono {
   app.get("/location/places", async (c) => {
     const tenantId = requireTenantId(c);
     const agentKey = c.req.query("agent_key")?.trim() || "default";
-    const places = await service.listPlaces({ tenantId, agentKey });
-    return c.json({ status: "ok", places: places.map(toHttpPlace) });
+    try {
+      const places = await service.listPlaces({ tenantId, agentKey });
+      return c.json({ status: "ok", places: places.map(toHttpPlace) });
+    } catch (error) {
+      const response = toLocationRouteError(error);
+      return c.json(response.body, response.status);
+    }
   });
 
   app.post("/location/places", async (c) => {
@@ -110,20 +140,24 @@ export function createLocationRoutes(service: LocationService): Hono {
       });
       return c.json({ status: "ok", place: toHttpPlace(place) });
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      const status = message.includes("not found") ? 404 : 400;
-      return c.json({ error: status === 404 ? "not_found" : "invalid_request", message }, status);
+      const response = toLocationRouteError(error);
+      return c.json(response.body, response.status);
     }
   });
 
   app.delete("/location/places/:id", async (c) => {
     const tenantId = requireTenantId(c);
     const agentKey = c.req.query("agent_key")?.trim() || "default";
-    const deleted = await service.deletePlace({ tenantId, agentKey, placeId: c.req.param("id") });
-    if (!deleted) {
-      return c.json({ error: "not_found", message: "place not found" }, 404);
+    try {
+      const deleted = await service.deletePlace({ tenantId, agentKey, placeId: c.req.param("id") });
+      if (!deleted) {
+        return c.json({ error: "not_found", message: "place not found" }, 404);
+      }
+      return c.json({ status: "ok", place_id: c.req.param("id"), deleted: true });
+    } catch (error) {
+      const response = toLocationRouteError(error);
+      return c.json(response.body, response.status);
     }
-    return c.json({ status: "ok", place_id: c.req.param("id"), deleted: true });
   });
 
   app.get("/location/events", async (c) => {
@@ -141,10 +175,15 @@ export function createLocationRoutes(service: LocationService): Hono {
     if (limit === null) {
       return c.json({ error: "invalid_request", message: "limit must be a positive integer" }, 400);
     }
-    return c.json({
-      status: "ok",
-      events: await service.listEvents({ tenantId, agentKey, limit }),
-    });
+    try {
+      return c.json({
+        status: "ok",
+        events: await service.listEvents({ tenantId, agentKey, limit }),
+      });
+    } catch (error) {
+      const response = toLocationRouteError(error);
+      return c.json(response.body, response.status);
+    }
   });
 
   return app;

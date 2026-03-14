@@ -12,6 +12,7 @@ import type { AgentRegistry } from "../modules/agent/registry.js";
 import type { ContextReportDal } from "../modules/context/report-dal.js";
 import { requireTenantId } from "../modules/auth/claims.js";
 import { isToolAllowed } from "../modules/agent/tools.js";
+import { ScopeNotFoundError } from "../modules/identity/scope.js";
 
 export interface ContextRouteDeps {
   agents: AgentRegistry;
@@ -72,23 +73,30 @@ export function createContextRoutes(deps: ContextRouteDeps): Hono {
       return c.json({ error: "invalid_request", message }, 400);
     }
 
-    const registry = await runtime.listRegisteredTools();
-    return c.json({
-      status: "ok",
-      allowlist: registry.allowlist,
-      mcp_servers: registry.mcpServers,
-      tools: registry.tools.map((tool) => ({
-        id: tool.id,
-        description: tool.description,
-        risk: tool.risk,
-        requires_confirmation: tool.requires_confirmation,
-        keywords: [...tool.keywords],
-        source: tool.source ?? "builtin",
-        family: tool.family ?? null,
-        backing_server_id: tool.backingServerId ?? null,
-        enabled_by_agent: isToolAllowed(registry.allowlist, tool.id),
-      })),
-    });
+    try {
+      const registry = await runtime.listRegisteredTools();
+      return c.json({
+        status: "ok",
+        allowlist: registry.allowlist,
+        mcp_servers: registry.mcpServers,
+        tools: registry.tools.map((tool) => ({
+          id: tool.id,
+          description: tool.description,
+          risk: tool.risk,
+          requires_confirmation: tool.requires_confirmation,
+          keywords: [...tool.keywords],
+          source: tool.source ?? "builtin",
+          family: tool.family ?? null,
+          backing_server_id: tool.backingServerId ?? null,
+          enabled_by_agent: isToolAllowed(registry.allowlist, tool.id),
+        })),
+      });
+    } catch (err) {
+      if (err instanceof ScopeNotFoundError) {
+        return c.json({ error: err.code, message: err.message }, 404);
+      }
+      throw err;
+    }
   });
 
   return app;

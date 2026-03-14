@@ -7,6 +7,7 @@ import {
 } from "@tyrum/schemas";
 import type { WsEventEnvelope, WsResponseEnvelope } from "@tyrum/schemas";
 import type { ConnectedClient } from "../connection-manager.js";
+import { ScopeNotFoundError } from "../../modules/identity/scope.js";
 import { broadcastEvent, errorResponse } from "./helpers.js";
 import type { ProtocolDeps, ProtocolRequestEnvelope } from "./types.js";
 
@@ -181,17 +182,24 @@ export async function handleLocationBeaconMessage(
     });
   }
 
-  const result = await deps.locationService.ingestBeacon({
-    tenantId,
-    nodeId: client.device_id,
-    payload: parsedReq.data.payload,
-  });
-  return {
-    request_id: msg.request_id,
-    type: msg.type,
-    ok: true,
-    result: WsLocationBeaconResult.parse(result),
-  };
+  try {
+    const result = await deps.locationService.ingestBeacon({
+      tenantId,
+      nodeId: client.device_id,
+      payload: parsedReq.data.payload,
+    });
+    return {
+      request_id: msg.request_id,
+      type: msg.type,
+      ok: true,
+      result: WsLocationBeaconResult.parse(result),
+    };
+  } catch (error) {
+    if (error instanceof ScopeNotFoundError) {
+      return errorResponse(msg.request_id, msg.type, error.code, error.message);
+    }
+    throw error;
+  }
 }
 
 function validateAttemptEvidenceSize(

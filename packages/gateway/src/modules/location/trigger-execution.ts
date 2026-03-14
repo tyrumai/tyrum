@@ -212,13 +212,16 @@ export async function recordLocationEpisode(
 }
 
 export async function fireLocationTriggers(input: FireLocationTriggersInput): Promise<void> {
+  const agentId =
+    input.agentId ??
+    (await input.identityScopeDal.resolveAgentId(input.tenantId, input.event.agent_key));
+  if (!agentId) return;
+
   const triggers =
     input.triggers ??
     (await input.dal.listAutomationTriggers({
       tenantId: input.tenantId,
-      agentId:
-        input.agentId ??
-        (await input.identityScopeDal.ensureAgentId(input.tenantId, input.event.agent_key)),
+      agentId,
     }));
 
   for (const trigger of triggers) {

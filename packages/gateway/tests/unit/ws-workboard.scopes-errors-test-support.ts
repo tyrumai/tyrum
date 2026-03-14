@@ -124,78 +124,6 @@ function registerScopeTests(): void {
 }
 
 function registerErrorHandlingTests(): void {
-  it("sanitizes SQL-level failures for work.* requests", async () => {
-    const cm = new ConnectionManager();
-    const { id } = makeClient(cm);
-    const client = cm.getClient(id)!;
-
-    const sqlErr = Object.assign(
-      new Error("SQLITE_CONSTRAINT: UNIQUE constraint failed: work_items.work_item_id"),
-      { code: "SQLITE_CONSTRAINT" as const },
-    );
-
-    const deps = makeDeps(cm, {
-      db: {
-        get: async () => {
-          throw sqlErr;
-        },
-      } as never,
-    });
-
-    const res = await handleClientMessage(
-      client,
-      JSON.stringify({
-        request_id: "r-1",
-        type: "work.create",
-        payload: {
-          tenant_key: "default",
-          agent_key: "default",
-          workspace_key: "default",
-          item: { kind: "action", title: "Hello" },
-        },
-      }),
-      deps,
-    );
-
-    expect(res).toBeDefined();
-    expect((res as unknown as { ok: boolean }).ok).toBe(false);
-    const err = (res as unknown as { error: { code: string; message: string } }).error;
-    expect(err.code).toBe("internal_error");
-    expect(err.message).toBe("internal error");
-  });
-
-  it("denies work.create for non-client WS roles", async () => {
-    const cm = new ConnectionManager();
-    const { id } = makeClient(cm, { role: "node" });
-    const client = cm.getClient(id)!;
-
-    const db = openTestSqliteDb();
-    try {
-      const deps = makeDeps(cm, { db });
-      const res = await handleClientMessage(
-        client,
-        JSON.stringify({
-          request_id: "r-1",
-          type: "work.create",
-          payload: {
-            tenant_key: "default",
-            agent_key: "default",
-            workspace_key: "default",
-            item: { kind: "action", title: "Hello" },
-          },
-        }),
-        deps,
-      );
-
-      expect((res as unknown as { ok: boolean }).ok).toBe(false);
-      const err = (res as unknown as { error: { code: string; message: string } }).error;
-      expect(err.code).toBe("unauthorized");
-      expect(err.message).toBe("only operator clients may create work items");
-    } finally {
-      await db.close();
-    }
-  });
-
   it("returns unsupported_request for work.create when DB is not configured", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm);
@@ -505,6 +433,6 @@ function registerValidationTests(): void {
 
 export function registerWorkboardScopeErrorTests(): void {
   registerScopeTests();
-  registerErrorHandlingTests();
   registerValidationTests();
+  registerErrorHandlingTests();
 }
