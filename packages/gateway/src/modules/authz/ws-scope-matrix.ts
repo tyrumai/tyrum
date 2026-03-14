@@ -21,23 +21,23 @@ export function resolveWsRequestRequiredScopes(type: string): string[] | null {
     case "command.execute": {
       return ["operator.admin"];
     }
-    case "session.send":
+    case "chat.session.send":
+    case "chat.session.create":
+    case "chat.session.delete": {
+      return ["operator.write"];
+    }
+    case "chat.session.list":
+    case "chat.session.get":
+    case "chat.session.reconnect": {
+      return ["operator.read"];
+    }
     case "workflow.run":
     case "workflow.resume":
     case "workflow.cancel": {
       return ["operator.write"];
     }
-    case "session.list":
-    case "session.get": {
-      return ["operator.read"];
-    }
     case "run.list": {
       return ["operator.read"];
-    }
-    case "session.create":
-    case "session.compact":
-    case "session.delete": {
-      return ["operator.write"];
     }
     case "work.list":
     case "work.get":

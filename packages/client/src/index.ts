@@ -4,6 +4,13 @@ export { VERSION } from "./version.js";
 export { autoExecute } from "./capability.js";
 export { normalizeFingerprint256 } from "./tls/fingerprint.js";
 export { TyrumClient, TyrumHttpClientError, createTyrumHttpClient } from "./browser.js";
+export {
+  createTyrumAiSdkChatSessionClient,
+  createTyrumAiSdkChatTransport,
+  DEFAULT_TYRUM_AI_SDK_CHAT_OPERATIONS,
+  supportsTyrumAiSdkChatSocket,
+  TyrumAiSdkChatTransport,
+} from "./ai-sdk-chat.js";
 export type {
   BrowserTyrumClientOptions as TyrumClientOptions,
   BrowserTyrumHttpClientOptions,
@@ -19,6 +26,8 @@ export {
   signProofWithPrivateKey,
 } from "./device-identity.js";
 export type { DeviceIdentity, DeviceIdentityStorage } from "./device-identity.js";
+export type { ChatTransport, CreateUIMessage, UIMessage, UIMessageChunk } from "ai";
+
 export type {
   TyrumHttpAuthStrategy,
   TyrumHttpClient,
@@ -28,7 +37,27 @@ export type {
   TyrumRequestOptions,
 } from "./http/index.js";
 export type {
+  TyrumAiSdkChatOperations,
+  TyrumAiSdkChatPreview,
+  TyrumAiSdkChatReconnectPayload,
+  TyrumAiSdkChatSession,
+  TyrumAiSdkChatSessionClient,
+  TyrumAiSdkChatSessionCreatePayload,
+  TyrumAiSdkChatSessionDeletePayload,
+  TyrumAiSdkChatSessionGetPayload,
+  TyrumAiSdkChatSessionListPayload,
+  TyrumAiSdkChatSessionSummary,
+  TyrumAiSdkChatSendPayload,
+  TyrumAiSdkChatSocket,
+  TyrumAiSdkChatStreamEvent,
+  TyrumAiSdkChatStreamStart,
+  TyrumAiSdkChatTransportOptions,
+  TyrumAiSdkChatTrigger,
+} from "./ai-sdk-chat.js";
+
+export type {
   TyrumClientEvents,
+  TyrumClientDynamicSchema,
   TyrumClientProtocolErrorInfo,
   TyrumClientProtocolErrorKind,
 } from "./ws-client.js";
@@ -98,19 +127,15 @@ export type {
 export type {
   Approval,
   ClientCapability,
+  CheckpointSummary,
   ExecutionAttempt,
   ExecutionRun,
   ExecutionStep,
-  SessionTranscriptReasoningItem,
-  SessionTranscriptApprovalItem,
-  SessionTranscriptItem,
-  SessionTranscriptTextItem,
-  SessionTranscriptTextPreview,
-  SessionTranscriptTextRole,
-  SessionTranscriptToolItem,
-  SessionTranscriptToolStatus,
   NodePairingRequest,
+  PendingApprovalState,
+  PendingToolState,
   PresenceEntry,
+  SessionContextState,
   WsError,
   WsRequestEnvelope,
   WsResponseEnvelope,
@@ -127,18 +152,6 @@ export type {
   MemoryTombstone,
   MemoryItemFilter,
   MemoryForgetSelector,
-  WsSessionListItem,
-  WsSessionListPayload,
-  WsSessionListResult,
-  WsSessionGetSession,
-  WsSessionGetPayload,
-  WsSessionGetResult,
-  WsSessionCreatePayload,
-  WsSessionCreateResult,
-  WsSessionCompactPayload,
-  WsSessionCompactResult,
-  WsSessionDeletePayload,
-  WsSessionDeleteResult,
   WsLocationBeaconPayload,
   WsLocationBeaconResult,
   WsConnectRequest,

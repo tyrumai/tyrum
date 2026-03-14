@@ -1,11 +1,13 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { GatewayContainer } from "../../src/container.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
+import { createPromptAwareLanguageModel, promptIncludes } from "./agent-behavior.test-support.js";
 import {
-  createPromptAwareLanguageModel,
-  extractPromptSection,
-  promptIncludes,
-} from "./agent-behavior.test-support.js";
+  compactSessionForTest,
+  makeMemoryConfig,
+  memorySection,
+  noteDecision,
+} from "./agent-behavior-memory.test-support.js";
 import {
   DEFAULT_AGENT_ID,
   DEFAULT_TENANT_ID,
@@ -16,74 +18,6 @@ import {
   setupTestEnv,
   teardownTestEnv,
 } from "./agent-runtime.test-helpers.js";
-
-type MemoryBudgets = {
-  max_total_items: number;
-  max_total_chars: number;
-  per_kind: {
-    fact: { max_items: number; max_chars: number };
-    note: { max_items: number; max_chars: number };
-    procedure: { max_items: number; max_chars: number };
-    episode: { max_items: number; max_chars: number };
-  };
-};
-
-function makeMemoryConfig(input?: {
-  maxTurns?: number;
-  structuredFactKeys?: string[];
-  structuredTags?: string[];
-  budgets?: MemoryBudgets;
-}): Record<string, unknown> {
-  const memorySettings = {
-    enabled: true,
-    keyword: { enabled: true, limit: 20 },
-    semantic: { enabled: false, limit: 1 },
-    structured: {
-      fact_keys: input?.structuredFactKeys ?? [],
-      tags: input?.structuredTags ?? [],
-    },
-    budgets: input?.budgets ?? {
-      max_total_items: 10,
-      max_total_chars: 4000,
-      per_kind: {
-        fact: { max_items: 4, max_chars: 1200 },
-        note: { max_items: 6, max_chars: 2400 },
-        procedure: { max_items: 2, max_chars: 1200 },
-        episode: { max_items: 4, max_chars: 1600 },
-      },
-    },
-  };
-  return {
-    model: { model: "openai/gpt-4.1" },
-    skills: { default_mode: "deny", workspace_trusted: false },
-    mcp: {
-      default_mode: "allow",
-      pre_turn_tools: ["mcp.memory.seed"],
-      server_settings: { memory: memorySettings },
-    },
-    tools: { default_mode: "allow" },
-    sessions: {
-      ttl_days: 30,
-      max_turns: input?.maxTurns ?? 20,
-    },
-  };
-}
-
-function memorySection(promptText: string): string {
-  return extractPromptSection(promptText, "Memory digest:");
-}
-
-function noteDecision(body_md: string, tags?: string[]) {
-  return {
-    should_store: true as const,
-    reason: "Durable user-provided information.",
-    memory: {
-      kind: "note" as const,
-      body_md,
-      tags,
-    },
-  };
-}
 
 describe("Agent behavior - memory continuity", () => {
   let homeDir: string | undefined;
@@ -306,8 +240,7 @@ describe("Agent behavior - memory continuity", () => {
       });
     }
 
-    const compactCounts = await container.sessionDal.compact({
-      tenantId: DEFAULT_TENANT_ID,
+    const compactCounts = await compactSessionForTest(runtime, {
       sessionId: first.session_id,
       keepLastMessages: 2,
     });
@@ -316,7 +249,7 @@ describe("Agent behavior - memory continuity", () => {
       tenantId: DEFAULT_TENANT_ID,
       sessionId: first.session_id,
     });
-    expect(compactedSession?.summary).not.toBe("");
+    expect(compactedSession?.context_state.checkpoint?.handoff_md ?? "").not.toBe("");
 
     const recalled = await runtime.turn({
       channel: "telegram",
@@ -325,220 +258,5 @@ describe("Agent behavior - memory continuity", () => {
     });
 
     expect(recalled.reply).toBe("jasmine tea");
-  });
-
-  it("prefers the corrected memory after compaction, restart, and cross-channel recall", async () => {
-    ({ homeDir, container, dbPath } = await setupFileBackedTestEnv());
-    await seedAgentConfig(container, { config: makeMemoryConfig({ maxTurns: 6 }) });
-
-    let capturedMemoryDigest = "";
-    const createRuntime = (currentContainer: GatewayContainer) =>
-      new AgentRuntime({
-        container: currentContainer,
-        home: homeDir,
-        languageModel: createPromptAwareLanguageModel(
-          ({ promptText }) => {
-            if (promptIncludes(promptText, "what is my name now")) {
-              capturedMemoryDigest = memorySection(promptText);
-              if (/my name is robert/iu.test(capturedMemoryDigest)) {
-                return "Robert";
-              }
-              if (/my name is ron/iu.test(capturedMemoryDigest)) {
-                return "Ron";
-              }
-              return "UNKNOWN";
-            }
-            return "Stored.";
-          },
-          {
-            memoryDecision: ({ latestUserText }) => {
-              if (promptIncludes(latestUserText, "remember that my name is robert")) {
-                return noteDecision("remember that my name is Robert");
-              }
-              if (promptIncludes(latestUserText, "remember that my name is ron")) {
-                return noteDecision("remember that my name is Ron");
-              }
-              return undefined;
-            },
-          },
-        ),
-        fetchImpl: fetch404,
-      });
-
-    let runtime = createRuntime(container);
-    const original = await runtime.turn({
-      channel: "ui",
-      thread_id: "correction-thread",
-      message: "remember that my name is Ron",
-    });
-    const corrected = await runtime.turn({
-      channel: "ui",
-      thread_id: "correction-thread",
-      message: "remember that my name is Robert",
-    });
-
-    expect(original.memory_written).toBe(true);
-    expect(corrected.memory_written).toBe(true);
-
-    for (let index = 0; index < 8; index += 1) {
-      await runtime.turn({
-        channel: "ui",
-        thread_id: "correction-thread",
-        message: `filler correction turn ${String(index)}`,
-      });
-    }
-
-    const compacted = await container.sessionDal.compact({
-      tenantId: DEFAULT_TENANT_ID,
-      sessionId: original.session_id,
-      keepLastMessages: 2,
-    });
-    expect(compacted.droppedMessages).toBeGreaterThan(0);
-
-    container = await restartFileBackedContainer({ homeDir, dbPath, container });
-    runtime = createRuntime(container);
-
-    const recalled = await runtime.turn({
-      channel: "telegram",
-      thread_id: "correction-cross-channel",
-      message: "what is my name now?",
-    });
-
-    expect(recalled.reply).toBe("Robert");
-    expect(capturedMemoryDigest).toContain("my name is Robert");
-    expect(capturedMemoryDigest).toContain("my name is Ron");
-    expect(capturedMemoryDigest.indexOf("my name is Robert")).toBeLessThan(
-      capturedMemoryDigest.indexOf("my name is Ron"),
-    );
-
-    const items = await container.memoryV1Dal.list({
-      tenantId: DEFAULT_TENANT_ID,
-      agentId: DEFAULT_AGENT_ID,
-    });
-    const nameNotes = items.items.filter(
-      (item) => item.kind === "note" && /my name is (robert|ron)/iu.test(item.body_md),
-    );
-    expect(nameNotes.length).toBeGreaterThanOrEqual(2);
-    expect(nameNotes[0]?.kind === "note" ? nameNotes[0].body_md : "").toContain(
-      "my name is Robert",
-    );
-    expect(
-      nameNotes.some((item) => item.kind === "note" && item.body_md.includes("my name is Ron")),
-    ).toBe(true);
-  });
-
-  it("does not store secret-like content in durable memory", async () => {
-    ({ homeDir, container } = await setupTestEnv());
-    await seedAgentConfig(container, { config: makeMemoryConfig() });
-
-    const runtime = new AgentRuntime({
-      container,
-      home: homeDir,
-      languageModel: createPromptAwareLanguageModel(({ promptText }) => {
-        if (promptIncludes(promptText, "what is my api key")) {
-          return /sk-1234567890abcdefghijklmnop/iu.test(memorySection(promptText))
-            ? "sk-1234567890abcdefghijklmnop"
-            : "UNKNOWN";
-        }
-        return "Noted.";
-      }),
-      fetchImpl: fetch404,
-    });
-
-    const remembered = await runtime.turn({
-      channel: "ui",
-      thread_id: "secret-thread",
-      message: "remember that my api key is sk-1234567890abcdefghijklmnop",
-    });
-    const recalled = await runtime.turn({
-      channel: "telegram",
-      thread_id: "secret-cross-channel",
-      message: "what is my api key?",
-    });
-
-    expect(remembered.memory_written).toBe(false);
-    expect(recalled.reply).toBe("UNKNOWN");
-
-    const items = await container.memoryV1Dal.list({});
-    expect(items.items).toHaveLength(0);
-  });
-
-  it("preserves canonical facts while budget consolidation removes low-utility history", async () => {
-    ({ homeDir, container } = await setupTestEnv());
-    const constrainedBudgets: MemoryBudgets = {
-      max_total_items: 3,
-      max_total_chars: 420,
-      per_kind: {
-        fact: { max_items: 1, max_chars: 120 },
-        note: { max_items: 2, max_chars: 200 },
-        procedure: { max_items: 1, max_chars: 120 },
-        episode: { max_items: 1, max_chars: 160 },
-      },
-    };
-    await seedAgentConfig(container, {
-      config: makeMemoryConfig({
-        structuredFactKeys: ["user.preferred_drink"],
-        budgets: constrainedBudgets,
-      }),
-    });
-
-    const fact = await container.memoryV1Dal.create({
-      kind: "fact",
-      key: "user.preferred_drink",
-      value: "oolong tea",
-      observed_at: "2026-03-11T00:00:00.000Z",
-      confidence: 0.99,
-      tags: ["canonical"],
-      sensitivity: "private",
-      provenance: { source_kind: "user", refs: [] },
-    });
-
-    for (let index = 0; index < 6; index += 1) {
-      await container.memoryV1Dal.create({
-        kind: "episode",
-        occurred_at: `2026-03-${String(10 - index).padStart(2, "0")}T00:00:00.000Z`,
-        summary_md:
-          `Long episodic note ${String(index)} about an unimportant transient detail ` +
-          "that should be compacted away under pressure.",
-        tags: ["noise"],
-        sensitivity: "private",
-        provenance: { source_kind: "system", refs: [] },
-      });
-    }
-
-    const consolidation = await container.memoryV1Dal.consolidateToBudgets({
-      tenantId: DEFAULT_TENANT_ID,
-      agentId: DEFAULT_AGENT_ID,
-      budgets: constrainedBudgets,
-    });
-
-    const runtime = new AgentRuntime({
-      container,
-      home: homeDir,
-      languageModel: createPromptAwareLanguageModel(({ promptText }) => {
-        if (promptIncludes(promptText, "what is my preferred drink")) {
-          return /user\.preferred_drink/iu.test(memorySection(promptText)) &&
-            /oolong tea/iu.test(memorySection(promptText))
-            ? "oolong tea"
-            : "UNKNOWN";
-        }
-        return "ok";
-      }),
-      fetchImpl: fetch404,
-    });
-
-    const recalled = await runtime.turn({
-      channel: "ui",
-      thread_id: "budget-thread",
-      message: "what is my preferred drink?",
-    });
-
-    expect(consolidation.ran).toBe(true);
-    expect(consolidation.deleted_tombstones.length).toBeGreaterThan(0);
-    expect(await container.memoryV1Dal.getById(fact.memory_item_id)).toMatchObject({
-      kind: "fact",
-      key: "user.preferred_drink",
-    });
-    expect(recalled.reply).toBe("oolong tea");
   });
 });

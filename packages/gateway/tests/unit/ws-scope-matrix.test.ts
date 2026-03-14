@@ -17,19 +17,19 @@ describe("WS scope authorization matrix", () => {
     expect(resolveWsRequestRequiredScopes("command.execute")).toEqual(["operator.admin"]);
   });
 
-  it("maps workflow + session operations to operator.write", () => {
-    expect(resolveWsRequestRequiredScopes("session.send")).toEqual(["operator.write"]);
-    expect(resolveWsRequestRequiredScopes("session.create")).toEqual(["operator.write"]);
-    expect(resolveWsRequestRequiredScopes("session.compact")).toEqual(["operator.write"]);
-    expect(resolveWsRequestRequiredScopes("session.delete")).toEqual(["operator.write"]);
+  it("maps workflow + chat session operations to operator.write", () => {
+    expect(resolveWsRequestRequiredScopes("chat.session.send")).toEqual(["operator.write"]);
+    expect(resolveWsRequestRequiredScopes("chat.session.create")).toEqual(["operator.write"]);
+    expect(resolveWsRequestRequiredScopes("chat.session.delete")).toEqual(["operator.write"]);
     expect(resolveWsRequestRequiredScopes("workflow.run")).toEqual(["operator.write"]);
     expect(resolveWsRequestRequiredScopes("workflow.resume")).toEqual(["operator.write"]);
     expect(resolveWsRequestRequiredScopes("workflow.cancel")).toEqual(["operator.write"]);
   });
 
-  it("maps session list/get operations to operator.read", () => {
-    expect(resolveWsRequestRequiredScopes("session.list")).toEqual(["operator.read"]);
-    expect(resolveWsRequestRequiredScopes("session.get")).toEqual(["operator.read"]);
+  it("maps chat session list/get operations to operator.read", () => {
+    expect(resolveWsRequestRequiredScopes("chat.session.list")).toEqual(["operator.read"]);
+    expect(resolveWsRequestRequiredScopes("chat.session.get")).toEqual(["operator.read"]);
+    expect(resolveWsRequestRequiredScopes("chat.session.reconnect")).toEqual(["operator.read"]);
     expect(resolveWsRequestRequiredScopes("run.list")).toEqual(["operator.read"]);
   });
 

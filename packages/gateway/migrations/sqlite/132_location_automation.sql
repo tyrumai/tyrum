@@ -1,4 +1,4 @@
-CREATE TABLE location_profiles (
+CREATE TABLE IF NOT EXISTS location_profiles (
   tenant_id         TEXT NOT NULL,
   agent_id          TEXT NOT NULL,
   primary_node_id   TEXT,
@@ -14,7 +14,7 @@ CREATE TABLE location_profiles (
   FOREIGN KEY (tenant_id, agent_id) REFERENCES agents(tenant_id, agent_id) ON DELETE CASCADE
 );
 
-CREATE TABLE location_places (
+CREATE TABLE IF NOT EXISTS location_places (
   tenant_id         TEXT NOT NULL,
   agent_id          TEXT NOT NULL,
   place_id          TEXT NOT NULL,
@@ -32,7 +32,7 @@ CREATE TABLE location_places (
   FOREIGN KEY (tenant_id, agent_id) REFERENCES agents(tenant_id, agent_id) ON DELETE CASCADE
 );
 
-CREATE TABLE location_samples (
+CREATE TABLE IF NOT EXISTS location_samples (
   tenant_id            TEXT NOT NULL,
   agent_id             TEXT NOT NULL,
   sample_id            TEXT NOT NULL,
@@ -53,7 +53,7 @@ CREATE TABLE location_samples (
   FOREIGN KEY (tenant_id, agent_id) REFERENCES agents(tenant_id, agent_id) ON DELETE CASCADE
 );
 
-CREATE TABLE location_subject_states (
+CREATE TABLE IF NOT EXISTS location_subject_states (
   tenant_id         TEXT NOT NULL,
   agent_id          TEXT NOT NULL,
   node_id           TEXT NOT NULL,
@@ -67,7 +67,7 @@ CREATE TABLE location_subject_states (
   FOREIGN KEY (tenant_id, agent_id) REFERENCES agents(tenant_id, agent_id) ON DELETE CASCADE
 );
 
-CREATE TABLE location_events (
+CREATE TABLE IF NOT EXISTS location_events (
   tenant_id            TEXT NOT NULL,
   agent_id             TEXT NOT NULL,
   event_id             TEXT NOT NULL,
@@ -105,7 +105,7 @@ CREATE TABLE location_events (
   FOREIGN KEY (tenant_id, sample_id) REFERENCES location_samples(tenant_id, sample_id) ON DELETE CASCADE
 );
 
-CREATE TABLE automation_triggers (
+CREATE TABLE IF NOT EXISTS automation_triggers (
   tenant_id        TEXT NOT NULL,
   trigger_id       TEXT NOT NULL,
   agent_id         TEXT NOT NULL,
@@ -122,7 +122,7 @@ CREATE TABLE automation_triggers (
     REFERENCES agent_workspaces(tenant_id, agent_id, workspace_id) ON DELETE CASCADE
 );
 
-CREATE INDEX idx_location_places_agent ON location_places(tenant_id, agent_id, updated_at DESC);
-CREATE INDEX idx_location_samples_agent_recorded ON location_samples(tenant_id, agent_id, recorded_at DESC);
-CREATE INDEX idx_location_events_agent_occurred ON location_events(tenant_id, agent_id, occurred_at DESC);
-CREATE INDEX idx_automation_triggers_scope ON automation_triggers(tenant_id, agent_id, workspace_id, enabled);
+CREATE INDEX IF NOT EXISTS idx_location_places_agent ON location_places(tenant_id, agent_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_location_samples_agent_recorded ON location_samples(tenant_id, agent_id, recorded_at DESC);
+CREATE INDEX IF NOT EXISTS idx_location_events_agent_occurred ON location_events(tenant_id, agent_id, occurred_at DESC);
+CREATE INDEX IF NOT EXISTS idx_automation_triggers_scope ON automation_triggers(tenant_id, agent_id, workspace_id, enabled);

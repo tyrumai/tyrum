@@ -540,10 +540,17 @@
   },
   {
     "table": "sessions",
-    "column": "transcript_json",
+    "column": "messages_json",
     "shape": "array",
     "nullable": false,
     "default": "[]"
+  },
+  {
+    "table": "sessions",
+    "column": "context_state_json",
+    "shape": "object",
+    "nullable": false,
+    "default": "{\"version\":1,\"recent_message_ids\":[],\"checkpoint\":null,\"pending_approvals\":[],\"pending_tool_state\":[],\"updated_at\":\"1970-01-01T00:00:00.000Z\"}"
   },
   {
     "table": "tenant_configs",

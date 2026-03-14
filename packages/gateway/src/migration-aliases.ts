@@ -25,6 +25,7 @@ export const MIGRATION_FILENAME_ALIASES: Readonly<Record<string, readonly string
     "132_desktop_environment_boolean_columns.sql",
     "133_desktop_environment_boolean_columns.sql",
   ],
+  "137_session_messages_json.sql": ["133_session_messages_json.sql"],
 };
 
 export function findAppliedMigrationAlias(

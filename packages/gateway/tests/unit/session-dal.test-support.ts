@@ -8,12 +8,28 @@ import { ChannelInboxDal } from "../../src/modules/channels/inbox-dal.js";
 import { ChannelOutboxDal } from "../../src/modules/channels/outbox-dal.js";
 import { seedCompletedTelegramTurn } from "../helpers/channel-session-repair.js";
 import type { SessionRow } from "../../src/modules/agent/session-dal.js";
+import type { SessionContextState, TyrumUIMessage } from "@tyrum/schemas";
 
-export function textTranscript(session: { transcript?: Array<{ kind: string }> | undefined }) {
-  return (session.transcript ?? []).filter(
-    (item): item is { kind: "text"; role: string; content: string; created_at: string } =>
-      item.kind === "text",
-  );
+export function textTranscript(session: { messages?: TyrumUIMessage[] | undefined }) {
+  return (session.messages ?? [])
+    .flatMap((message) =>
+      message.parts.flatMap((part) =>
+        part.type === "text" && typeof part.text === "string"
+          ? [
+              {
+                id: message.id,
+                role: message.role,
+                content: part.text,
+                created_at:
+                  typeof message.metadata?.["timestamp"] === "string"
+                    ? message.metadata["timestamp"]
+                    : "",
+              },
+            ]
+          : [],
+      ),
+    )
+    .filter((item) => item.content.length > 0);
 }
 
 export function createSessionDalFixture(): { db: SqliteDb; dal: SessionDal } {
@@ -107,13 +123,48 @@ export async function setSessionTranscriptAndSummary(input: {
   summary: string;
   updatedAt: string;
 }) {
+  const parsedMessages = (
+    JSON.parse(input.transcriptJson) as Array<{
+      role: "user" | "assistant" | "system";
+      content: string;
+      created_at?: string;
+    }>
+  ).map(
+    (turn, index): TyrumUIMessage => ({
+      id: `turn-${String(index)}`,
+      role: turn.role,
+      parts: [{ type: "text", text: turn.content }],
+      metadata: turn.created_at ? { timestamp: turn.created_at } : undefined,
+    }),
+  );
+  const contextState: SessionContextState = {
+    version: 1,
+    recent_message_ids: parsedMessages.map((message) => message.id),
+    checkpoint: input.summary
+      ? {
+          goal: "",
+          user_constraints: [],
+          decisions: [],
+          discoveries: [],
+          completed_work: [],
+          pending_work: [],
+          unresolved_questions: [],
+          critical_identifiers: [],
+          relevant_files: [],
+          handoff_md: input.summary,
+        }
+      : null,
+    pending_approvals: [],
+    pending_tool_state: [],
+    updated_at: input.updatedAt,
+  };
   await input.db.run(
     `UPDATE sessions
-     SET transcript_json = ?, summary = ?, updated_at = ?
+     SET messages_json = ?, context_state_json = ?, updated_at = ?
      WHERE tenant_id = ? AND session_id = ?`,
     [
-      input.transcriptJson,
-      input.summary,
+      JSON.stringify(parsedMessages),
+      JSON.stringify(contextState),
       input.updatedAt,
       input.session.tenant_id,
       input.session.session_id,

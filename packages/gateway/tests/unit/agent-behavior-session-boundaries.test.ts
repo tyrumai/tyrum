@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GatewayContainer } from "../../src/container.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
-import { executeCommand } from "../../src/modules/commands/dispatcher.js";
 import { SessionDal } from "../../src/modules/agent/session-dal.js";
 import { ChannelThreadDal } from "../../src/modules/channels/thread-dal.js";
 import {
@@ -58,10 +57,6 @@ function makeRuntimeConfig(input?: { memoryEnabled?: boolean }): Record<string, 
   };
 }
 
-function sessionContext(promptText: string): string {
-  return extractPromptSection(promptText, "Session context:");
-}
-
 function noteDecision(body_md: string) {
   return {
     should_store: true as const,
@@ -92,7 +87,7 @@ describe("Agent behavior - session boundaries", () => {
       home: homeDir,
       languageModel: createPromptAwareLanguageModel(({ promptText }) => {
         if (promptIncludes(promptText, "what is my name")) {
-          return /my name is alice/iu.test(sessionContext(promptText)) ? "Alice" : "UNKNOWN";
+          return /my name is alice/iu.test(promptText) ? "Alice" : "UNKNOWN";
         }
         return "ok";
       }),
@@ -350,7 +345,7 @@ describe("Agent behavior - session boundaries", () => {
     }
   });
 
-  it("repairs session context from retained channel logs before the next turn", async () => {
+  it("does not reconstruct cleared session context from retained channel logs", async () => {
     ({ homeDir, container } = await setupTestEnv());
 
     const session = await commandSupport.ensureSession(container.db, {
@@ -370,17 +365,12 @@ describe("Agent behavior - session boundaries", () => {
     await commandSupport.writeSessionState(container.db, session, { summary: "", turns: [] });
     await seedAgentConfig(container, { config: makeRuntimeConfig() });
 
-    await executeCommand("/repair", {
-      db: container.db,
-      commandContext: { agentId: "default", channel: "telegram", threadId: "repair-thread" },
-    });
-
     const runtime = new AgentRuntime({
       container,
       home: homeDir,
       languageModel: createPromptAwareLanguageModel(({ promptText }) => {
         if (promptIncludes(promptText, "what did i say earlier")) {
-          return /user-one/iu.test(sessionContext(promptText)) ? "user-one" : "UNKNOWN";
+          return /user-one/iu.test(promptText) ? "user-one" : "UNKNOWN";
         }
         return "ok";
       }),
@@ -393,7 +383,7 @@ describe("Agent behavior - session boundaries", () => {
       message: "what did I say earlier?",
     });
 
-    expect(repaired.reply).toBe("user-one");
+    expect(repaired.reply).toBe("UNKNOWN");
   });
 
   it("dedupes duplicate inbound deliveries down to one turn and one side effect", async () => {

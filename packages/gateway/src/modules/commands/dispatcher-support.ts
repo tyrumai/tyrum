@@ -42,7 +42,6 @@ export function helpText(): string {
     "- /reset",
     "- /stop",
     "- /compact",
-    "- /repair",
     "- /status",
     "- /presence",
     "- /approvals [queued|reviewing|awaiting_human|approved|denied|expired|cancelled]",

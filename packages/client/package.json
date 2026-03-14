@@ -25,6 +25,7 @@
     "build": "tsdown src/index.ts src/browser.ts src/node.ts --format esm --dts"
   },
   "dependencies": {
+    "ai": "^6.0.116",
     "@tyrum/schemas": "workspace:*",
     "mitt": "^3.0.1",
     "undici": "^7.24.0",

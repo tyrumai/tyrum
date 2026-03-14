@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { startSmokeGateway } from "./smoke-turn-harness.js";
 import { TyrumClient } from "@tyrum/client";
+import {
+  WsAiSdkChatStreamEvent,
+  WsChatSessionCreateResult,
+  WsChatSessionGetResult,
+  WsChatSessionStreamStart,
+} from "@tyrum/schemas";
 
 describe("gateway e2e smoke: login-to-turn", () => {
   let stopGateway: (() => Promise<void>) | undefined;
@@ -13,7 +19,7 @@ describe("gateway e2e smoke: login-to-turn", () => {
     stopGateway = undefined;
   });
 
-  it("starts gateway, authenticates via /auth/session, connects WS, sends session.send, receives reply", async () => {
+  it("starts gateway, authenticates via /auth/session, connects WS, sends chat.session.send, receives reply", async () => {
     const gateway = await startSmokeGateway({ modelReply: "smoke-ok" });
     stopGateway = gateway.stop;
 
@@ -49,12 +55,57 @@ describe("gateway e2e smoke: login-to-turn", () => {
     client.connect();
     await connectedP;
 
-    const result = await client.sessionSend({
-      channel: "ui",
-      thread_id: "thread-1",
-      content: "hello",
+    const created = await client.requestDynamic(
+      "chat.session.create",
+      { channel: "ui" },
+      WsChatSessionCreateResult,
+    );
+    const streamDone = new Promise<void>((resolve, reject) => {
+      const handleEvent = (event: unknown) => {
+        const parsed = WsAiSdkChatStreamEvent.safeParse(event);
+        if (!parsed.success) {
+          return;
+        }
+        if (parsed.data.payload.stage === "chunk") {
+          return;
+        }
+        client?.offDynamicEvent("chat.ui-message.stream", handleEvent);
+        if (parsed.data.payload.stage === "done") {
+          resolve();
+          return;
+        }
+        reject(new Error(parsed.data.payload.error.message));
+      };
+      client?.onDynamicEvent("chat.ui-message.stream", handleEvent);
     });
-    expect(result.assistant_message).toBe("smoke-ok");
+    await client.requestDynamic(
+      "chat.session.send",
+      {
+        session_id: created.session.session_id,
+        messages: [
+          {
+            id: "msg-1",
+            role: "user",
+            parts: [{ type: "text", text: "hello" }],
+          },
+        ],
+        trigger: "submit-message",
+      },
+      WsChatSessionStreamStart,
+    );
+    await streamDone;
+
+    const session = await client.requestDynamic(
+      "chat.session.get",
+      { session_id: created.session.session_id },
+      WsChatSessionGetResult,
+    );
+    const assistantMessage = session.session.messages.findLast(
+      (message) => message.role === "assistant",
+    );
+    const textPart = assistantMessage?.parts.find((part) => part.type === "text");
+    const assistantText = textPart?.text;
+    expect(assistantText).toBe("smoke-ok");
 
     client.disconnect();
     client = undefined;

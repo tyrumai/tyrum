@@ -7,6 +7,35 @@ import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 const TITLE_PROMPT_TEXT = "Write a concise session title.";
 
+export function extractUserPromptText(prompt: unknown[] | undefined): string {
+  return (prompt ?? [])
+    .filter((msg): msg is { role: string; content: unknown } =>
+      Boolean(msg && typeof msg === "object"),
+    )
+    .filter((msg) => msg.role === "user")
+    .flatMap((msg) => (Array.isArray(msg.content) ? msg.content : []))
+    .filter((part): part is { type: "text"; text: string } =>
+      Boolean(part && typeof part === "object" && (part as { type?: unknown }).type === "text"),
+    )
+    .map((part) => part.text)
+    .join("\n");
+}
+
+export function checkpointJson(handoffMd: string): string {
+  return JSON.stringify({
+    goal: "",
+    user_constraints: [],
+    decisions: [],
+    discoveries: [],
+    completed_work: [],
+    pending_work: [],
+    unresolved_questions: [],
+    critical_identifiers: [],
+    relevant_files: [],
+    handoff_md: handoffMd,
+  });
+}
+
 export function usage() {
   return {
     inputTokens: {
@@ -33,6 +62,19 @@ export function listNonTitleGenerateCalls(
   return languageModel.doGenerateCalls.filter((call) => !isTitleGenerateCall(call)) as {
     prompt: unknown[];
   }[];
+}
+
+export function findFlushPromptText(languageModel: MockLanguageModelV3): string {
+  const call = listNonTitleGenerateCalls(languageModel).find((entry) =>
+    extractUserPromptText(entry.prompt).includes("silent internal pre-compaction memory flush"),
+  );
+  return extractUserPromptText(call?.prompt);
+}
+
+export function countFlushCalls(languageModel: MockLanguageModelV3): number {
+  return listNonTitleGenerateCalls(languageModel).filter((entry) =>
+    extractUserPromptText(entry.prompt).includes("silent internal pre-compaction memory flush"),
+  ).length;
 }
 
 function titleGenerateResult() {
@@ -82,7 +124,15 @@ export async function seedAgentConfig(
         server_settings: { memory: { enabled: true } },
       },
       tools: { allow: [] },
-      sessions: { ttl_days: 30, max_turns: opts?.maxTurns ?? 1 },
+      sessions: {
+        ttl_days: 30,
+        max_turns: opts?.maxTurns ?? 1,
+        compaction: {
+          auto: true,
+          reserved_input_tokens: 1,
+          keep_last_messages_after_compaction: 1,
+        },
+      },
     }),
     createdBy: { kind: "test" },
     reason: "pre-compaction flush test",

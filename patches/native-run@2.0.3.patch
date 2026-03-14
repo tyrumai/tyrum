@@ -1,0 +1,13 @@
+diff --git a/package.json b/package.json
+index 33e9896e677797716bf2e3550f8cc86f8457707a..f67617707d782b33cfefba1d5f2037d7ec85f635 100644
+--- a/package.json
++++ b/package.json
+@@ -37,7 +37,7 @@
+     "split2": "^4.2.0",
+     "through2": "^4.0.2",
+     "tslib": "^2.6.2",
+-    "yauzl": "^2.10.0"
++    "yauzl": "^3.2.1"
+   },
+   "devDependencies": {
+     "@ionic/eslint-config": "^0.4.0",

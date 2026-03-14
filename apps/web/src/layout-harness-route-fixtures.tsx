@@ -16,6 +16,7 @@ import {
   createStatusStore,
   createWorkboardStore,
 } from "./layout-harness-store-fixtures.js";
+import { createAiSdkChatWsStub } from "./layout-harness-chat-fixtures.js";
 import { createHarnessAgentHttpFixtures } from "./layout-harness-agent-http-fixtures.js";
 import { createHarnessConfigureHttpFixtures } from "./layout-harness-configure-http-fixtures.js";
 
@@ -95,6 +96,14 @@ export function createChatCore(): OperatorCore {
     connectionStore: createConnectionStore(),
     approvalsStore: createApprovalsStore(),
     chatStore: createChatStore(),
+    ws: createAiSdkChatWsStub(),
+    http: {
+      agents: {
+        list: async () => ({
+          agents: [{ agent_id: "default" }],
+        }),
+      },
+    },
   } as unknown as OperatorCore;
 }
 

@@ -1,22 +1,61 @@
 import { generateText, type LanguageModel } from "ai";
-import type {
-  AgentTurnResponse as AgentTurnResponseT,
-  SessionTranscriptTextItem,
-} from "@tyrum/schemas";
+import type { AgentTurnResponse as AgentTurnResponseT, TyrumUIMessage } from "@tyrum/schemas";
 import { AgentTurnResponse } from "@tyrum/schemas";
 import type { GatewayContainer } from "../../../container.js";
+import type { ModelMessage } from "ai";
 import { decideCrossTurnLoopWarning, LOOP_WARNING_PREFIX } from "../loop-detection.js";
 import type { SessionDal, SessionRow } from "../session-dal.js";
 import type { ResolvedAgentTurnInput } from "./turn-helpers.js";
 import type { AgentContextReport, AgentLoadedContext } from "./types.js";
+import {
+  applyFinalAssistantReply,
+  createTextChatMessage,
+  modelMessagesToChatMessages,
+} from "../../ai-sdk/message-utils.js";
 import { normalizeSessionTitle } from "../session-dal-helpers.js";
 
 type FinalizeContainer = Pick<GatewayContainer, "contextReportDal" | "logger">;
 
-function isAssistantTextTurn(
-  turn: SessionRow["transcript"][number],
-): turn is SessionTranscriptTextItem & { role: "assistant" } {
-  return turn.kind === "text" && turn.role === "assistant";
+function messagesEqualIgnoringId(left: TyrumUIMessage, right: TyrumUIMessage): boolean {
+  return left.role === right.role && JSON.stringify(left.parts) === JSON.stringify(right.parts);
+}
+
+function appendWithoutDuplicateOverlap(
+  existing: readonly TyrumUIMessage[],
+  appended: readonly TyrumUIMessage[],
+): TyrumUIMessage[] {
+  const maxOverlap = Math.min(existing.length, appended.length);
+  for (let overlap = maxOverlap; overlap > 0; overlap -= 1) {
+    let matches = true;
+    for (let index = 0; index < overlap; index += 1) {
+      const left = existing[existing.length - overlap + index];
+      const right = appended[index];
+      if (!left || !right || !messagesEqualIgnoringId(left, right)) {
+        matches = false;
+        break;
+      }
+    }
+    if (matches) {
+      return [...existing, ...appended.slice(overlap)];
+    }
+  }
+  return [...existing, ...appended];
+}
+
+function isAssistantTextMessage(message: TyrumUIMessage): boolean {
+  return (
+    message.role === "assistant" &&
+    message.parts.some((part) => part.type === "text" && typeof part["text"] === "string")
+  );
+}
+
+function textFromChatMessage(message: TyrumUIMessage): string {
+  return message.parts
+    .flatMap((part) =>
+      part.type === "text" && typeof part["text"] === "string" ? [part["text"]] : [],
+    )
+    .join("\n\n")
+    .trim();
 }
 
 const CROSS_TURN_LOOP_WARNING_TEXT =
@@ -35,9 +74,10 @@ function applyCrossTurnLoopWarning(input: {
     return input.reply;
   }
 
-  const previousAssistantMessages = input.session.transcript
-    .filter(isAssistantTextTurn)
-    .map((turn) => turn.content);
+  const previousAssistantMessages = input.session.messages
+    .filter(isAssistantTextMessage)
+    .map(textFromChatMessage)
+    .filter((message) => message.length > 0);
   const decision = decideCrossTurnLoopWarning({
     previousAssistantMessages,
     reply: input.reply,
@@ -147,19 +187,56 @@ export async function finalizeTurn(input: {
   memoryWritten: boolean;
   contextReport: AgentContextReport;
   turnKind?: "normal" | "skip";
+  responseMessages?: readonly ModelMessage[];
 }): Promise<AgentTurnResponseT> {
   const nowIso = new Date().toISOString();
   const finalizedReply = applyCrossTurnLoopWarning(input);
   const memoryWritten = input.turnKind !== "skip" && input.memoryWritten;
 
   await persistContextReport(input);
-  const updatedSession = await input.sessionDal.appendTurn({
-    tenantId: input.session.tenant_id,
-    sessionId: input.session.session_id,
-    userMessage: input.resolved.message,
-    assistantMessage: finalizedReply,
-    timestamp: nowIso,
-  });
+  let updatedSession: SessionRow;
+  if (input.responseMessages) {
+    const currentUserMessage = createTextChatMessage({
+      role: "user",
+      text: input.resolved.message,
+    });
+    const appendedMessages = applyFinalAssistantReply(
+      modelMessagesToChatMessages(input.responseMessages),
+      finalizedReply,
+    );
+    const nextMessages = appendWithoutDuplicateOverlap(
+      [...input.session.messages, currentUserMessage],
+      appendedMessages,
+    );
+    await input.sessionDal.replaceMessages({
+      tenantId: input.session.tenant_id,
+      sessionId: input.session.session_id,
+      messages: nextMessages,
+      updatedAt: nowIso,
+    });
+    updatedSession =
+      (await input.sessionDal.getById({
+        tenantId: input.session.tenant_id,
+        sessionId: input.session.session_id,
+      })) ?? input.session;
+  } else {
+    const nextMessages = [
+      ...input.session.messages,
+      createTextChatMessage({ role: "user", text: input.resolved.message }),
+      createTextChatMessage({ role: "assistant", text: finalizedReply }),
+    ];
+    await input.sessionDal.replaceMessages({
+      tenantId: input.session.tenant_id,
+      sessionId: input.session.session_id,
+      messages: nextMessages,
+      updatedAt: nowIso,
+    });
+    updatedSession =
+      (await input.sessionDal.getById({
+        tenantId: input.session.tenant_id,
+        sessionId: input.session.session_id,
+      })) ?? input.session;
+  }
   await maybeGenerateSessionTitle({
     container: input.container,
     sessionDal: input.sessionDal,

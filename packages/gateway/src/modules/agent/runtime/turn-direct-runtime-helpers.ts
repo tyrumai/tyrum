@@ -117,24 +117,6 @@ export interface TurnDirectDeps {
   secretProvider?: SecretProvider;
 }
 
-export function extractUsageSnapshot(
-  totalUsage:
-    | {
-        inputTokens?: number;
-        outputTokens?: number;
-        totalTokens?: number;
-      }
-    | null
-    | undefined,
-): SessionUsageSnapshot | undefined {
-  if (!totalUsage) return undefined;
-  return {
-    inputTokens: totalUsage.inputTokens,
-    outputTokens: totalUsage.outputTokens,
-    totalTokens: totalUsage.totalTokens,
-  };
-}
-
 export async function maybeAutoCompactSession(input: {
   deps: TurnDirectDeps;
   tenantId: string;
@@ -143,6 +125,8 @@ export async function maybeAutoCompactSession(input: {
   model: LanguageModel;
   modelResolution: ResolvedSessionModel;
   usage: SessionUsageSnapshot | undefined;
+  currentTurnText?: string;
+  systemPrompt?: string;
   abortSignal?: AbortSignal;
   timeoutMs?: number;
 }): Promise<void> {
@@ -160,6 +144,8 @@ export async function maybeAutoCompactSession(input: {
       session: persisted,
       modelResolution: input.modelResolution,
       usage: input.usage,
+      currentTurnText: input.currentTurnText,
+      systemPrompt: input.systemPrompt,
     })
   ) {
     return;

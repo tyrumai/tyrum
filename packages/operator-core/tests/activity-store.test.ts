@@ -32,7 +32,6 @@ function createChatState(): ChatState {
     agents: { agents: [], loading: false, error: null },
     sessions: { sessions: [], nextCursor: null, loading: false, error: null },
     active: { sessionId: null, session: null, loading: false, error: null },
-    send: { sending: false, error: null },
   };
 }
 

@@ -60,7 +60,7 @@ export { IosLocationGetCurrentArgs, IosCameraTarget, IosCameraCapturePhotoFormat
 // prettier-ignore
 export { AndroidLocationGetCurrentArgs, AndroidCameraTarget, AndroidCameraCapturePhotoFormat, AndroidCameraCapturePhotoArgs, AndroidAudioRecordClipArgs, AndroidActionArgs, AndroidLocationCoords, AndroidLocationGetCurrentResult, AndroidCameraCapturePhotoResult, AndroidAudioRecordClipResult, AndroidActionResult } from "./android.js";
 // prettier-ignore
-export { AgentAccessDefaultMode, AgentModelConfig, AgentSkillConfig, AgentMcpConfig, AgentToolConfig, AgentSessionConfig, BuiltinMemoryServerSettings, AgentPersona, AgentConfig, IdentityStyle, IdentityFrontmatter, IdentityPack, SkillRequires, SkillFrontmatter, SkillManifest, SkillProvenanceSource, SkillStatus, McpToolMetadataOverride, McpServerSpec, AgentTurnRequest, AgentTurnResponse, AgentListItem, AgentListResponse, AgentConfigListItem, AgentConfigListResponse, AgentConfigGetResponse, AgentConfigUpdateRequest, AgentConfigUpdateResponse, ManagedAgentSummary, ManagedAgentListResponse, ManagedAgentDetail, ManagedAgentGetResponse, ManagedAgentCreateRequest, ManagedAgentUpdateRequest, ManagedAgentDeleteResponse, AgentStatusResponse, AgentSkillCapability, AgentMcpCapabilitySource, AgentMcpCapability, AgentToolCapability, AgentCapabilitiesResponse } from "./agent.js";
+export { AgentAccessDefaultMode, AgentModelConfig, AgentSkillConfig, AgentMcpConfig, AgentToolConfig, AgentSessionConfig, BuiltinMemoryServerSettings, AgentPersona, AgentConfig, IdentityStyle, IdentityFrontmatter, IdentityPack, SkillRequires, SkillFrontmatter, SkillManifest, SkillProvenanceSource, SkillStatus, McpServerSpec, AgentTurnRequest, AgentTurnResponse, AgentListItem, AgentListResponse, AgentConfigListItem, AgentConfigListResponse, AgentConfigGetResponse, AgentConfigUpdateRequest, AgentConfigUpdateResponse, ManagedAgentSummary, ManagedAgentListResponse, ManagedAgentDetail, ManagedAgentGetResponse, ManagedAgentCreateRequest, ManagedAgentUpdateRequest, ManagedAgentDeleteResponse, AgentStatusResponse, AgentSkillCapability, AgentMcpCapabilitySource, AgentMcpCapability, AgentToolCapability, AgentCapabilitiesResponse } from "./agent.js";
 export {
   CODEX_AGENT_NAMES,
   PERSONA_CHARACTERS,
@@ -139,6 +139,10 @@ export { PluginId, PluginContributions, PluginPermissions, PluginManifest, Plugi
 // prettier-ignore
 export { ExtensionKind, ManagedBundleFile, ManagedSkillSource, ManagedMcpSource, ManagedSkillPackage, ManagedMcpPackage, ManagedExtensionRevision, ManagedExtensionSourceDescriptor, ManagedExtensionSummary, ManagedExtensionDetail, ExtensionsListResponse, ExtensionsDetailResponse, ExtensionsMutateResponse } from "./extensions.js";
 // prettier-ignore
-export { SessionTranscriptTextRole, SessionTranscriptTextItem, SessionTranscriptReasoningItem, SessionTranscriptToolStatus, SessionTranscriptToolItem, SessionTranscriptApprovalItem, SessionTranscriptItem, SessionTranscriptTextPreview } from "./session-transcript.js";
+export { TyrumUIMessageRole, TyrumUIMessagePart, TyrumUIMessageMetadata, TyrumUIMessage, TyrumUIMessagePreview } from "./ui-message.js";
+// prettier-ignore
+export { CheckpointSummary, PendingApprovalState, PendingToolState, SessionContextState } from "./session-context.js";
+// prettier-ignore
+export { ToolLifecycleStatus } from "./tool-lifecycle.js";
 // prettier-ignore
 export { base32LowerNoPad, deviceIdFromSha256Digest } from "./device-id.js";

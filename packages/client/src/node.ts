@@ -32,6 +32,7 @@ import {
 import { normalizeFingerprint256 } from "./tls/fingerprint.js";
 import {
   TyrumClient,
+  type TyrumClientDynamicSchema,
   type TyrumClientEvents,
   type TyrumClientOptions as NodeTyrumClientOptions,
   type TyrumClientProtocolErrorInfo,
@@ -40,7 +41,15 @@ import {
 import { VERSION } from "./version.js";
 
 export { autoExecute } from "./capability.js";
+export {
+  createTyrumAiSdkChatSessionClient,
+  createTyrumAiSdkChatTransport,
+  DEFAULT_TYRUM_AI_SDK_CHAT_OPERATIONS,
+  supportsTyrumAiSdkChatSocket,
+  TyrumAiSdkChatTransport,
+} from "./ai-sdk-chat.js";
 export type { CapabilityProvider, TaskExecuteContext, TaskResult } from "./capability.js";
+export type { ChatTransport, CreateUIMessage, UIMessage, UIMessageChunk } from "ai";
 export type {
   AuditPlansListInput,
   AuditPlansListResult,
@@ -104,21 +113,35 @@ export type {
   LocationProfileUpdateInput,
 } from "./http/index.js";
 export type {
+  TyrumAiSdkChatOperations,
+  TyrumAiSdkChatPreview,
+  TyrumAiSdkChatReconnectPayload,
+  TyrumAiSdkChatSession,
+  TyrumAiSdkChatSessionClient,
+  TyrumAiSdkChatSessionCreatePayload,
+  TyrumAiSdkChatSessionDeletePayload,
+  TyrumAiSdkChatSessionGetPayload,
+  TyrumAiSdkChatSessionListPayload,
+  TyrumAiSdkChatSessionSummary,
+  TyrumAiSdkChatSendPayload,
+  TyrumAiSdkChatSocket,
+  TyrumAiSdkChatStreamEvent,
+  TyrumAiSdkChatStreamStart,
+  TyrumAiSdkChatTransportOptions,
+  TyrumAiSdkChatTrigger,
+} from "./ai-sdk-chat.js";
+export type {
   Approval,
   ClientCapability,
+  CheckpointSummary,
   ExecutionAttempt,
   ExecutionRun,
   ExecutionStep,
-  SessionTranscriptReasoningItem,
-  SessionTranscriptApprovalItem,
-  SessionTranscriptItem,
-  SessionTranscriptTextItem,
-  SessionTranscriptTextPreview,
-  SessionTranscriptTextRole,
-  SessionTranscriptToolItem,
-  SessionTranscriptToolStatus,
   NodePairingRequest,
+  PendingApprovalState,
+  PendingToolState,
   PresenceEntry,
+  SessionContextState,
   WsError,
   WsRequestEnvelope,
   WsResponseEnvelope,
@@ -135,18 +158,6 @@ export type {
   MemoryTombstone,
   MemoryItemFilter,
   MemoryForgetSelector,
-  WsSessionListItem,
-  WsSessionListPayload,
-  WsSessionListResult,
-  WsSessionGetSession,
-  WsSessionGetPayload,
-  WsSessionGetResult,
-  WsSessionCreatePayload,
-  WsSessionCreateResult,
-  WsSessionCompactPayload,
-  WsSessionCompactResult,
-  WsSessionDeletePayload,
-  WsSessionDeleteResult,
   WsConnectRequest,
   WsConnectResult,
   WsTaskExecuteRequest,
@@ -187,6 +198,7 @@ export type {
   NodePinnedWebSocketOptions,
   NodeTyrumClientOptions,
   NodeTyrumHttpClientOptions,
+  TyrumClientDynamicSchema,
   TyrumClientEvents,
   TyrumClientProtocolErrorInfo,
   TyrumClientProtocolErrorKind,

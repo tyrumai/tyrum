@@ -17,18 +17,6 @@ import {
   type WsPairingRevokePayload,
   type WsPresenceBeaconPayload,
   type WsPresenceBeaconResult as WsPresenceBeaconResultT,
-  type WsSessionCompactPayload,
-  type WsSessionCompactResult as WsSessionCompactResultT,
-  type WsSessionCreatePayload,
-  type WsSessionCreateResult as WsSessionCreateResultT,
-  type WsSessionDeletePayload,
-  type WsSessionDeleteResult as WsSessionDeleteResultT,
-  type WsSessionGetPayload,
-  type WsSessionGetResult as WsSessionGetResultT,
-  type WsSessionListPayload,
-  type WsSessionListResult as WsSessionListResultT,
-  type WsSessionSendPayload,
-  type WsSessionSendResult as WsSessionSendResultT,
   type WsSubagentClosePayload,
   type WsSubagentCloseResult as WsSubagentCloseResultT,
   type WsSubagentGetPayload,
@@ -92,12 +80,6 @@ import {
   WsPairingResolveResult,
   WsPresenceBeaconResult,
   WsRunListResult,
-  WsSessionCompactResult,
-  WsSessionCreateResult,
-  WsSessionDeleteResult,
-  WsSessionGetResult,
-  WsSessionListResult,
-  WsSessionSendResult,
   WsSubagentClosePayload as WsSubagentClosePayloadSchema,
   WsSubagentCloseResult,
   WsSubagentGetPayload as WsSubagentGetPayloadSchema,
@@ -134,6 +116,21 @@ import {
 } from "@tyrum/schemas";
 import { TyrumClientTransportCore } from "./ws-client.transport.js";
 
+export type TyrumClientDynamicSchema<T> = {
+  safeParse: (input: unknown) =>
+    | { success: true; data: T }
+    | {
+        success: false;
+        error: { message: string; issues?: unknown };
+      };
+};
+
+const UNKNOWN_DYNAMIC_RESULT_SCHEMA: TyrumClientDynamicSchema<unknown> = {
+  safeParse(input: unknown) {
+    return { success: true, data: input };
+  },
+};
+
 export type {
   TyrumClientEvents,
   TyrumClientOptions,
@@ -142,6 +139,23 @@ export type {
 } from "./ws-client.types.js";
 
 export class TyrumClient extends TyrumClientTransportCore {
+  requestDynamic<T = unknown>(
+    type: string,
+    payload: unknown,
+    schema: TyrumClientDynamicSchema<T> = UNKNOWN_DYNAMIC_RESULT_SCHEMA as TyrumClientDynamicSchema<T>,
+    timeoutMs?: number,
+  ): Promise<T> {
+    return this.request(type, payload, schema, timeoutMs);
+  }
+
+  onDynamicEvent(event: string, handler: (event: unknown) => void): void {
+    this.on(event as never, handler as never);
+  }
+
+  offDynamicEvent(event: string, handler: (event: unknown) => void): void {
+    this.off(event as never, handler as never);
+  }
+
   approvalList(payload: WsApprovalListPayload = { limit: 100 }): Promise<WsApprovalListResultT> {
     return this.request("approval.list", payload, WsApprovalListResult);
   }
@@ -163,24 +177,6 @@ export class TyrumClient extends TyrumClientTransportCore {
   }
   ping(): Promise<void> {
     return this.requestVoid("ping", {});
-  }
-  sessionSend(payload: WsSessionSendPayload): Promise<WsSessionSendResultT> {
-    return this.request("session.send", payload, WsSessionSendResult);
-  }
-  sessionList(payload: WsSessionListPayload = {}): Promise<WsSessionListResultT> {
-    return this.request("session.list", payload, WsSessionListResult);
-  }
-  sessionGet(payload: WsSessionGetPayload): Promise<WsSessionGetResultT> {
-    return this.request("session.get", payload, WsSessionGetResult);
-  }
-  sessionCreate(payload: WsSessionCreatePayload = {}): Promise<WsSessionCreateResultT> {
-    return this.request("session.create", payload, WsSessionCreateResult);
-  }
-  sessionCompact(payload: WsSessionCompactPayload): Promise<WsSessionCompactResultT> {
-    return this.request("session.compact", payload, WsSessionCompactResult);
-  }
-  sessionDelete(payload: WsSessionDeletePayload): Promise<WsSessionDeleteResultT> {
-    return this.request("session.delete", payload, WsSessionDeleteResult);
   }
   workflowRun(payload: WsWorkflowRunPayload): Promise<WsWorkflowRunResultT> {
     return this.request("workflow.run", payload, WsWorkflowRunResult);

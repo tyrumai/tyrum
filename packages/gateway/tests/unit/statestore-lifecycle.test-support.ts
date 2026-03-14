@@ -67,12 +67,13 @@ async function insertSession(db: SqlDb, seed: SessionSeed): Promise<void> {
        agent_id,
        workspace_id,
        channel_thread_id,
-       summary,
-       transcript_json,
+       title,
+       messages_json,
+       context_state_json,
        created_at,
        updated_at
      )
-     VALUES (?, ?, ?, ?, ?, ?, '', '[]', ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, '', '[]', ?, ?, ?)`,
     [
       DEFAULT_TENANT_ID,
       seed.sessionId,
@@ -80,6 +81,14 @@ async function insertSession(db: SqlDb, seed: SessionSeed): Promise<void> {
       DEFAULT_AGENT_ID,
       DEFAULT_WORKSPACE_ID,
       seed.channelThreadId,
+      JSON.stringify({
+        version: 1,
+        recent_message_ids: [],
+        checkpoint: null,
+        pending_approvals: [],
+        pending_tool_state: [],
+        updated_at: seed.updatedAt,
+      }),
       seed.createdAt,
       seed.updatedAt,
     ],

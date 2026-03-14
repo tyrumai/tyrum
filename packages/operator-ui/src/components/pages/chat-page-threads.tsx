@@ -11,8 +11,6 @@ export interface ChatThreadSummary {
   channel: string;
   thread_id: string;
   title: string;
-  summary: string;
-  last_text?: { role: string; content: string } | null;
   created_at: string;
   updated_at: string;
   preview: string;

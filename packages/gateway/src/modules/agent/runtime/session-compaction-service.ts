@@ -1,14 +1,32 @@
-import { generateText, stepCountIs } from "ai";
-import type { LanguageModel, ModelMessage } from "ai";
-import type { AgentConfig as AgentConfigT, SessionTranscriptTextItem } from "@tyrum/schemas";
+import { generateText } from "ai";
+import type { LanguageModel } from "ai";
+import type {
+  AgentConfig as AgentConfigT,
+  CheckpointSummary,
+  TyrumUIMessage,
+} from "@tyrum/schemas";
 import type { GatewayContainer } from "../../../container.js";
 import { ensureAgentConfigSeeded } from "../default-config.js";
 import { loadCurrentAgentContext } from "../load-context.js";
 import type { AgentContextStore } from "../context-store.js";
 import type { SessionDal } from "../session-dal.js";
 import type { SessionRow } from "../session-dal.js";
-import { countTextTranscriptItems, splitTranscriptForCompaction } from "../session-dal-helpers.js";
 import { maybeRunPreCompactionMemoryFlush } from "./pre-compaction-memory-flush.js";
+import {
+  buildPromptVisibleMessages,
+  collectPendingApprovals,
+  collectPendingToolStates,
+  estimatePromptTokens,
+  extractCriticalIdentifiers,
+  extractRelevantFiles,
+  splitMessagesForContextCompaction,
+} from "./session-context-state.js";
+import { buildDeterministicFallbackCheckpoint } from "./session-compaction-fallback.js";
+import {
+  buildCompactionInstruction,
+  COMPACTION_JSON_SCHEMA,
+  findCheckpointDeficiencies,
+} from "./session-compaction-prompt.js";
 import {
   resolveSessionModelDetailed,
   type ResolvedSessionModel,
@@ -18,8 +36,8 @@ import type { AgentLoadedContext } from "./types.js";
 import { resolveGatewayStateMode } from "../../runtime-state/mode.js";
 
 const DEFAULT_RESERVED_INPUT_TOKENS = 20_000;
-const DEFAULT_KEEP_LAST_MESSAGES_AFTER_COMPACTION = 2;
-const DEFAULT_COMPACTION_TIMEOUT_MS = 5_000;
+const DEFAULT_KEEP_LAST_MESSAGES_AFTER_COMPACTION = 12;
+const DEFAULT_COMPACTION_TIMEOUT_MS = 8_000;
 const CONTEXT_OVERFLOW_PATTERNS = [
   /context window/i,
   /context length/i,
@@ -29,44 +47,7 @@ const CONTEXT_OVERFLOW_PATTERNS = [
   /(?:input|prompt|message).{0,40}too large/i,
   /(?:input|prompt|message).{0,40}too long/i,
   /exceeds?.*context/i,
-];
-const COMPACTION_SYSTEM_PROMPT = [
-  "You are a hidden session compaction assistant.",
-  "Produce a detailed but concise summary that lets another agent continue the work safely.",
-  "Focus on the user's goal, instructions, discoveries, work completed, work remaining, and relevant files/directories.",
-  "Do not answer the conversation directly. Output only the summary.",
-].join("\n");
-const COMPACTION_USER_PROMPT = [
-  "Provide a continuation summary for the conversation above.",
-  "Use this template:",
-  "",
-  "## Goal",
-  "",
-  "[What the user is trying to accomplish.]",
-  "",
-  "## Instructions",
-  "",
-  "- [Important user instructions or constraints that must persist]",
-  "- [Important plan/spec details the next agent must follow]",
-  "",
-  "## Discoveries",
-  "",
-  "[Notable technical findings, decisions, and facts learned so far.]",
-  "",
-  "## Accomplished",
-  "",
-  "[What is done, what is in progress, and what remains.]",
-  "",
-  "## Relevant files / directories",
-  "",
-  "[Only the files or directories that matter for continuing the work.]",
-].join("\n");
-
-export type SessionUsageSnapshot = {
-  inputTokens?: number;
-  outputTokens?: number;
-  totalTokens?: number;
-};
+] as const;
 
 type LoggerLike = Pick<GatewayContainer["logger"], "warn">;
 
@@ -76,12 +57,18 @@ type EffectiveModelLimits = {
   context?: number;
 };
 
+export type SessionUsageSnapshot = {
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+};
+
 export type SessionCompactionResult = {
   compacted: boolean;
   droppedMessages: number;
   keptMessages: number;
   summary: string;
-  reason: "model" | "fallback" | "noop";
+  reason: "fallback" | "model" | "noop";
 };
 
 function asPositiveLimit(value: unknown): number | undefined {
@@ -148,67 +135,117 @@ function getReservedInputTokens(config: AgentConfigT): number {
   );
 }
 
-function buildSummaryHistoryMessages(
-  previousSummary: string,
-  droppedTurns: readonly SessionTranscriptTextItem[],
-): ModelMessage[] {
-  const messages: ModelMessage[] = [];
-  const trimmedSummary = previousSummary.trim();
-  if (trimmedSummary.length > 0) {
-    messages.push({
-      role: "assistant",
-      content: [{ type: "text", text: `Summary so far:\n${trimmedSummary}` }],
-    });
-  }
-  for (const turn of droppedTurns) {
-    const text = `[${turn.created_at}] ${turn.content}`;
-    const content = [{ type: "text" as const, text }];
-    switch (turn.role) {
-      case "assistant":
-        messages.push({ role: "assistant", content });
-        break;
-      case "system":
-        messages.push({ role: "system", content: text });
-        break;
-      case "user":
-      default:
-        messages.push({ role: "user", content });
-        break;
+function isRetainedTurnMessage(message: SessionRow["messages"][number]): boolean {
+  return message.role === "user" || message.role === "assistant";
+}
+
+function countRetainedTurnMessages(messages: readonly SessionRow["messages"][number][]): number {
+  return messages.reduce((count, message) => count + (isRetainedTurnMessage(message) ? 1 : 0), 0);
+}
+
+function recentMessageCount(session: SessionRow): number {
+  if (session.context_state.recent_message_ids.length > 0) {
+    const recentMessageIds = new Set(session.context_state.recent_message_ids);
+    const recentMessages = session.messages.filter((message) => recentMessageIds.has(message.id));
+    if (recentMessages.length > 0) {
+      return countRetainedTurnMessages(recentMessages);
     }
   }
-  return messages;
-}
 
-function compactionTimeoutMs(timeoutMs: number | undefined): number | undefined {
-  if (typeof timeoutMs !== "number" || !Number.isFinite(timeoutMs) || timeoutMs <= 0) {
-    return DEFAULT_COMPACTION_TIMEOUT_MS;
+  const compactedThroughMessageId = session.context_state.compacted_through_message_id;
+  if (!compactedThroughMessageId) {
+    return countRetainedTurnMessages(session.messages);
   }
-  const slice = Math.floor(timeoutMs * 0.25);
-  if (slice <= 0) return 0;
-  return Math.min(DEFAULT_COMPACTION_TIMEOUT_MS, slice);
+
+  const compactedIndex = session.messages.findIndex(
+    (message) => message.id === compactedThroughMessageId,
+  );
+  if (compactedIndex < 0) {
+    return countRetainedTurnMessages(session.messages);
+  }
+
+  return countRetainedTurnMessages(session.messages.slice(compactedIndex + 1));
 }
 
-async function runDeterministicFallbackCompaction(input: {
-  sessionDal: SessionDal;
-  session: SessionRow;
-  keepLastMessages: number;
-}): Promise<SessionCompactionResult> {
-  const fallback = await input.sessionDal.compact({
-    tenantId: input.session.tenant_id,
-    sessionId: input.session.session_id,
-    keepLastMessages: input.keepLastMessages,
-  });
-  const updated = await input.sessionDal.getById({
-    tenantId: input.session.tenant_id,
-    sessionId: input.session.session_id,
-  });
-  return {
-    compacted: true,
-    droppedMessages: fallback.droppedMessages,
-    keptMessages: fallback.keptMessages,
-    summary: updated?.summary ?? input.session.summary,
-    reason: "fallback",
-  };
+function trimJsonFence(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("```")) {
+    return trimmed;
+  }
+  const lines = trimmed.split("\n");
+  const inner = lines.slice(1, -1).join("\n").trim();
+  return inner || trimmed;
+}
+
+async function generateCheckpointSummary(input: {
+  model: LanguageModel;
+  previousCheckpoint: CheckpointSummary | null;
+  droppedMessages: readonly TyrumUIMessage[];
+  criticalIdentifiers: readonly string[];
+  relevantFiles: readonly string[];
+  abortSignal?: AbortSignal;
+  timeoutMs?: number;
+}): Promise<CheckpointSummary> {
+  let lastError: Error | undefined;
+  let auditFeedback: string[] | undefined;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const result = await generateText({
+        model: input.model,
+        system:
+          "Return strict JSON only. Do not wrap the answer in markdown fences or prose. " +
+          "Do not omit any keys; use empty strings or empty arrays when needed.",
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text:
+                  buildCompactionInstruction({
+                    previousCheckpoint: input.previousCheckpoint,
+                    droppedMessages: input.droppedMessages,
+                    criticalIdentifiers: input.criticalIdentifiers,
+                    relevantFiles: input.relevantFiles,
+                    auditFeedback,
+                  }) +
+                  (attempt === 0
+                    ? ""
+                    : "\n\nYour previous answer failed validation. Fix every listed issue and return strict JSON only."),
+              },
+            ],
+          },
+        ],
+        abortSignal: input.abortSignal,
+        timeout: input.timeoutMs ?? DEFAULT_COMPACTION_TIMEOUT_MS,
+      });
+      const parsed = COMPACTION_JSON_SCHEMA.parse(JSON.parse(trimJsonFence(result.text ?? "")));
+      const mergedIdentifiers = Array.from(
+        new Set([...input.criticalIdentifiers, ...parsed.critical_identifiers]),
+      );
+      const mergedFiles = Array.from(new Set([...input.relevantFiles, ...parsed.relevant_files]));
+      const checkpoint: CheckpointSummary = {
+        ...parsed,
+        critical_identifiers: mergedIdentifiers,
+        relevant_files: mergedFiles,
+      };
+      const deficiencies = findCheckpointDeficiencies({
+        checkpoint,
+        criticalIdentifiers: input.criticalIdentifiers,
+        droppedMessages: input.droppedMessages,
+      });
+      if (deficiencies.length > 0) {
+        auditFeedback = deficiencies;
+        lastError = new Error(deficiencies.join(" "));
+        continue;
+      }
+      return checkpoint;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      auditFeedback ??= ["Return strict JSON that matches the required schema exactly."];
+    }
+  }
+  throw lastError ?? new Error("failed to generate checkpoint summary");
 }
 
 export function shouldCompactSessionForUsage(input: {
@@ -216,18 +253,38 @@ export function shouldCompactSessionForUsage(input: {
   session: SessionRow;
   modelResolution: ResolvedSessionModel;
   usage: SessionUsageSnapshot | undefined;
+  currentTurnText?: string;
+  systemPrompt?: string;
 }): boolean {
   if (input.config.sessions.compaction?.auto === false) return false;
 
-  const observedTokens = getObservedUsageTokens(input.usage);
+  // Prompt-only compaction keeps full session history in storage, so the
+  // compatibility max_turns fallback has to consider only the still-visible
+  // recent messages instead of the persisted message array.
+  const maxTurns = Math.floor(input.config.sessions.max_turns);
+  const maxTurnsExceeded =
+    Number.isFinite(maxTurns) && maxTurns > 0 && recentMessageCount(input.session) >= maxTurns * 2;
+
   const limits = deriveEffectiveModelLimits(input.modelResolution);
   const reservedInputTokens = getReservedInputTokens(input.config);
+  const observedTokens = getObservedUsageTokens(input.usage);
+  const promptTokens =
+    observedTokens > 0
+      ? observedTokens
+      : estimatePromptTokens({
+          messages: buildPromptVisibleMessages(input.session.messages, input.session.context_state),
+          systemPrompt: input.systemPrompt,
+          userContent: input.currentTurnText
+            ? [{ type: "text", text: input.currentTurnText }]
+            : undefined,
+        });
+
   const usableFromInput =
     limits.input && limits.input > reservedInputTokens
       ? limits.input - reservedInputTokens
       : undefined;
   if (usableFromInput) {
-    return observedTokens >= usableFromInput;
+    return promptTokens >= usableFromInput || maxTurnsExceeded;
   }
 
   const reservedFromContext = limits.output ?? reservedInputTokens;
@@ -236,14 +293,17 @@ export function shouldCompactSessionForUsage(input: {
       ? limits.context - reservedFromContext
       : undefined;
   if (usableFromContext) {
-    return observedTokens >= usableFromContext;
+    return promptTokens >= usableFromContext || maxTurnsExceeded;
   }
 
-  const maxTurns = Math.floor(input.config.sessions.max_turns);
-  if (!Number.isFinite(maxTurns) || maxTurns <= 0) {
-    return false;
+  return maxTurnsExceeded;
+}
+
+function compactionTimeoutMs(timeoutMs: number | undefined): number | undefined {
+  if (typeof timeoutMs !== "number" || !Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    return DEFAULT_COMPACTION_TIMEOUT_MS;
   }
-  return countTextTranscriptItems(input.session.transcript) >= maxTurns * 2;
+  return Math.min(DEFAULT_COMPACTION_TIMEOUT_MS, Math.max(1_000, Math.floor(timeoutMs * 0.25)));
 }
 
 export async function compactSessionWithResolvedModel(input: {
@@ -261,19 +321,16 @@ export async function compactSessionWithResolvedModel(input: {
     0,
     input.keepLastMessages ?? getKeepLastMessages(input.ctx.config),
   );
-  const { dropped, kept } = splitTranscriptForCompaction({
-    transcript: input.session.transcript,
+  const { dropped, kept } = splitMessagesForContextCompaction({
+    messages: input.session.messages,
     keepLastMessages,
   });
-  const droppedTurns = dropped.filter(
-    (item): item is SessionTranscriptTextItem => item.kind === "text",
-  );
-  if (droppedTurns.length === 0) {
+  if (dropped.length === 0) {
     return {
       compacted: false,
       droppedMessages: 0,
-      keptMessages: countTextTranscriptItems(input.session.transcript),
-      summary: input.session.summary,
+      keptMessages: kept.length,
+      summary: input.session.context_state.checkpoint?.handoff_md ?? "",
       reason: "noop",
     };
   }
@@ -284,64 +341,82 @@ export async function compactSessionWithResolvedModel(input: {
       ctx: input.ctx,
       session: input.session,
       model: input.model,
-      droppedTurns,
+      droppedMessages: dropped,
       abortSignal: input.abortSignal,
       timeoutMs: input.timeoutMs,
     },
   );
 
-  const timeout = compactionTimeoutMs(input.timeoutMs);
-  if (timeout === 0) {
-    return await runDeterministicFallbackCompaction({
-      sessionDal: input.sessionDal,
-      session: input.session,
-      keepLastMessages,
-    });
-  }
-
   try {
-    const result = await generateText({
+    const criticalIdentifiers = extractCriticalIdentifiers(dropped);
+    const relevantFiles = extractRelevantFiles(criticalIdentifiers);
+    const checkpoint = await generateCheckpointSummary({
       model: input.model,
-      system: COMPACTION_SYSTEM_PROMPT,
-      messages: [
-        ...buildSummaryHistoryMessages(input.session.summary, droppedTurns),
-        { role: "user", content: [{ type: "text", text: COMPACTION_USER_PROMPT }] },
-      ],
-      stopWhen: [stepCountIs(1)],
+      previousCheckpoint: input.session.context_state.checkpoint,
+      droppedMessages: dropped,
+      criticalIdentifiers,
+      relevantFiles,
       abortSignal: input.abortSignal,
-      timeout,
+      timeoutMs: compactionTimeoutMs(input.timeoutMs),
     });
-    const summary = (result.text ?? "").trim();
-    if (summary.length === 0) {
-      throw new Error("empty compaction summary");
-    }
 
-    await input.sessionDal.replaceTranscript({
+    await input.sessionDal.replaceContextState({
       tenantId: input.session.tenant_id,
       sessionId: input.session.session_id,
-      transcript: kept.slice(),
-      title: input.session.title,
-      summary,
+      updatedAt: new Date().toISOString(),
+      contextState: {
+        version: 1,
+        compacted_through_message_id: dropped.at(-1)?.id,
+        recent_message_ids: kept.map((message) => message.id),
+        checkpoint,
+        pending_approvals: collectPendingApprovals(input.session.messages),
+        pending_tool_state: collectPendingToolStates(input.session.messages),
+        updated_at: new Date().toISOString(),
+      },
     });
 
     return {
       compacted: true,
-      droppedMessages: droppedTurns.length,
-      keptMessages: countTextTranscriptItems(kept),
-      summary,
+      droppedMessages: dropped.length,
+      keptMessages: kept.length,
+      summary: checkpoint.handoff_md,
       reason: "model",
     };
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    const errorMessage = err instanceof Error ? err.message : String(err);
     input.logger?.warn("agents.session_compaction_failed", {
       session_id: input.session.session_id,
-      error: message,
+      error: errorMessage,
     });
-    return await runDeterministicFallbackCompaction({
-      sessionDal: input.sessionDal,
-      session: input.session,
-      keepLastMessages,
+    const criticalIdentifiers = extractCriticalIdentifiers(dropped);
+    const relevantFiles = extractRelevantFiles(criticalIdentifiers);
+    const fallbackCheckpoint = buildDeterministicFallbackCheckpoint({
+      previousCheckpoint: input.session.context_state.checkpoint,
+      droppedMessages: dropped,
+      criticalIdentifiers,
+      relevantFiles,
     });
+    await input.sessionDal.replaceContextState({
+      tenantId: input.session.tenant_id,
+      sessionId: input.session.session_id,
+      updatedAt: new Date().toISOString(),
+      contextState: {
+        version: 1,
+        compacted_through_message_id: dropped.at(-1)?.id,
+        recent_message_ids: kept.map((keptMessage) => keptMessage.id),
+        checkpoint: fallbackCheckpoint,
+        pending_approvals: collectPendingApprovals(input.session.messages),
+        pending_tool_state: collectPendingToolStates(input.session.messages),
+        updated_at: new Date().toISOString(),
+      },
+    });
+    return {
+      compacted: true,
+      droppedMessages: dropped.length,
+      keptMessages: kept.length,
+      summary: fallbackCheckpoint.handoff_md,
+      reason: "fallback",
+    };
   }
 }
 
@@ -381,8 +456,22 @@ export async function resolveRuntimeCompactionContext(input: {
     workspaceId: input.workspaceId,
     config: revision.config,
   });
+  const compactionModel = ctx.config.sessions.compaction?.model;
+  const compactionConfig =
+    compactionModel &&
+    compactionModel.provider_id.trim().length > 0 &&
+    compactionModel.model_id.trim().length > 0
+      ? {
+          ...ctx.config,
+          model: {
+            ...ctx.config.model,
+            model: `${compactionModel.provider_id}/${compactionModel.model_id}`,
+            fallback: [],
+          },
+        }
+      : ctx.config;
   const modelResolution = await resolveSessionModelDetailed(input.resolveModelDeps, {
-    config: ctx.config,
+    config: compactionConfig,
     tenantId: input.tenantId,
     sessionId: input.sessionId,
   });

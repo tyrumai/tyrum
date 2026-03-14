@@ -3,7 +3,7 @@ import { AppShell } from "../../../packages/operator-ui/src/components/layout/ap
 import { Sidebar } from "../../../packages/operator-ui/src/components/layout/sidebar.js";
 import { AgentsPage } from "../../../packages/operator-ui/src/components/pages/agents-page.js";
 import { ApprovalsPage } from "../../../packages/operator-ui/src/components/pages/approvals-page.js";
-import { ChatPage } from "../../../packages/operator-ui/src/components/pages/chat-page.js";
+import { AiSdkChatPage } from "../../../packages/operator-ui/src/components/pages/chat-page-ai-sdk.js";
 import { ConfigurePage } from "../../../packages/operator-ui/src/components/pages/configure-page.js";
 import { DashboardPage } from "../../../packages/operator-ui/src/components/pages/dashboard-page.js";
 import { ExtensionsPage } from "../../../packages/operator-ui/src/components/pages/extensions-page.js";
@@ -77,7 +77,7 @@ function renderRoute(route: LayoutRoute): React.ReactNode {
     case "dashboard":
       return <DashboardPage core={createDashboardCore()} />;
     case "chat":
-      return <ChatPage core={createChatCore()} />;
+      return <AiSdkChatPage core={createChatCore()} />;
     case "approvals":
       return <ApprovalsPage core={createApprovalsCore()} />;
     case "agents":

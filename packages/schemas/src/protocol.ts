@@ -18,14 +18,16 @@ export {
 // Keep submodules limited to intended public exports only.
 export * from "./protocol/approvals.js";
 export * from "./protocol/capability-ready.js";
+export * from "./protocol/chat-events.js";
+export * from "./protocol/chat-session.js";
 export * from "./protocol/connect.js";
+export * from "./protocol/command-execute.js";
 export * from "./protocol/envelopes.js";
 export * from "./protocol/execution.js";
 export * from "./protocol/execution-events.js";
 export * from "./protocol/location.js";
 export * from "./protocol/pairing.js";
 export * from "./protocol/presence.js";
-export * from "./protocol/session.js";
 export * from "./protocol/subagent.js";
 export * from "./protocol/work.js";
 export * from "./protocol/work-drilldown.js";

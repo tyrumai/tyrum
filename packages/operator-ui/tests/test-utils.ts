@@ -102,25 +102,39 @@ export function stubMatchMedia(
 
   let matches = initialMatches;
   const listeners = new Set<(event: MediaQueryListEvent) => void>();
+  const extraLists = new Map<string, MediaQueryList>();
 
-  const mediaQueryList = {
-    get matches() {
-      return matches;
-    },
-    media: query,
-    addEventListener: (_event: string, listener: (event: MediaQueryListEvent) => void) => {
-      listeners.add(listener);
-    },
-    removeEventListener: (_event: string, listener: (event: MediaQueryListEvent) => void) => {
-      listeners.delete(listener);
-    },
-  } as unknown as MediaQueryList;
+  const createList = (
+    media: string,
+    getMatches: () => boolean,
+    setListeners?: Set<(event: MediaQueryListEvent) => void>,
+  ) =>
+    ({
+      get matches() {
+        return getMatches();
+      },
+      media,
+      addEventListener: (_event: string, listener: (event: MediaQueryListEvent) => void) => {
+        setListeners?.add(listener);
+      },
+      removeEventListener: (_event: string, listener: (event: MediaQueryListEvent) => void) => {
+        setListeners?.delete(listener);
+      },
+    }) as unknown as MediaQueryList;
+
+  const mediaQueryList = createList(query, () => matches, listeners);
 
   const matchMedia = vi.fn((requestedQuery: string) => {
-    if (requestedQuery !== query) {
-      throw new Error(`Unexpected matchMedia query: ${requestedQuery}`);
+    if (requestedQuery === query) {
+      return mediaQueryList;
     }
-    return mediaQueryList;
+    const existing = extraLists.get(requestedQuery);
+    if (existing) {
+      return existing;
+    }
+    const fallbackList = createList(requestedQuery, () => false);
+    extraLists.set(requestedQuery, fallbackList);
+    return fallbackList;
   });
 
   (globalThis as unknown as { matchMedia?: unknown }).matchMedia = matchMedia;

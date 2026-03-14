@@ -7,6 +7,11 @@ import { axe } from "vitest-axe";
 import { toHaveNoViolations } from "vitest-axe/matchers.js";
 import { createBearerTokenAuth, createOperatorCore } from "../../operator-core/src/index.js";
 import type { OperatorHttpClient, OperatorWsClient } from "../../operator-core/src/deps.js";
+import {
+  WsChatSessionCreateResult,
+  WsChatSessionDeleteResult,
+  WsChatSessionGetResult,
+} from "@tyrum/schemas";
 import { OperatorUiApp } from "../src/index.js";
 import { formatAxeIncompleteSummary, OPERATOR_UI_WCAG_AA_RUN_OPTIONS } from "./a11y-config.js";
 import { stubMatchMedia } from "./test-utils.js";
@@ -34,34 +39,71 @@ class FakeWsClient implements OperatorWsClient {
   approvalResolve = vi.fn(async () => {
     throw new Error("not implemented");
   });
+  memorySearch = vi.fn(async () => ({ v: 1, hits: [], next_cursor: undefined }) as unknown);
+  memoryList = vi.fn(async () => ({ v: 1, items: [], next_cursor: undefined }) as unknown);
+  memoryGet = vi.fn(async () => ({ v: 1, item: {} }) as unknown);
+  memoryUpdate = vi.fn(async () => ({ v: 1, item: {} }) as unknown);
+  memoryForget = vi.fn(async () => ({ v: 1, deleted_count: 0, tombstones: [] }) as unknown);
+  memoryExport = vi.fn(async () => ({ v: 1, artifact_id: "artifact-1" }) as unknown);
+  requestDynamic = vi.fn(
+    async (type: string, payload: unknown, schema?: { parse?: (input: unknown) => unknown }) => {
+      let result: unknown;
+      switch (type) {
+        case "chat.session.list":
+          result = await this.sessionList(payload);
+          break;
+        case "chat.session.get":
+          result = await this.sessionGet(payload);
+          break;
+        case "chat.session.create":
+          result = await this.sessionCreate(payload);
+          break;
+        case "chat.session.delete":
+          result = await this.sessionDelete(payload);
+          break;
+        default:
+          throw new Error(`unsupported dynamic request: ${type}`);
+      }
+      return schema?.parse ? schema.parse(result) : result;
+    },
+  );
+  onDynamicEvent = vi.fn((event: string, handler: Handler) => this.on(event, handler));
+  offDynamicEvent = vi.fn((event: string, handler: Handler) => this.off(event, handler));
   sessionList = vi.fn(async () => ({ sessions: [], next_cursor: null }));
   sessionGet = vi.fn(async () => ({
-    session: {
-      session_id: "session-1",
-      agent_id: "default",
-      channel: "ui",
-      thread_id: "ui-session-1",
-      title: "",
-      summary: "",
-      transcript: [],
-      updated_at: "2026-01-01T00:00:00.000Z",
-      created_at: "2026-01-01T00:00:00.000Z",
-    },
+    session: WsChatSessionGetResult.parse({
+      session: {
+        session_id: "session-1",
+        agent_id: "default",
+        channel: "ui",
+        thread_id: "ui-session-1",
+        title: "",
+        message_count: 0,
+        last_message: null,
+        messages: [],
+        updated_at: "2026-01-01T00:00:00.000Z",
+        created_at: "2026-01-01T00:00:00.000Z",
+      },
+    }).session,
   }));
-  sessionCreate = vi.fn(async () => ({
-    session_id: "session-1",
-    agent_id: "default",
-    channel: "ui",
-    thread_id: "ui-session-1",
-    title: "",
-  }));
-  sessionCompact = vi.fn(async () => ({
-    session_id: "session-1",
-    dropped_messages: 0,
-    kept_messages: 0,
-  }));
-  sessionDelete = vi.fn(async () => ({ session_id: "session-1" }));
-  sessionSend = vi.fn(async () => ({ session_id: "session-1", assistant_message: "" }));
+  sessionCreate = vi.fn(
+    async () =>
+      WsChatSessionCreateResult.parse({
+        session: {
+          session_id: "session-1",
+          agent_id: "default",
+          channel: "ui",
+          thread_id: "ui-session-1",
+          title: "",
+          message_count: 0,
+          last_message: null,
+          messages: [],
+          updated_at: "2026-01-01T00:00:00.000Z",
+          created_at: "2026-01-01T00:00:00.000Z",
+        },
+      }).session,
+  );
+  sessionDelete = vi.fn(async () => WsChatSessionDeleteResult.parse({ session_id: "session-1" }));
   commandExecute = vi.fn(async () => ({}));
 
   private readonly handlers = new Map<string, Set<Handler>>();

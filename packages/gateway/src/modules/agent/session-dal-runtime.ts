@@ -1,15 +1,13 @@
-import type { SessionTranscriptItem } from "@tyrum/schemas";
-import type { SqlDb } from "../../statestore/types.js";
+import type { TyrumUIMessage } from "@tyrum/schemas";
 import { stringifyPersistedJson } from "../observability/persisted-json.js";
-import { SESSION_TURNS_JSON_META, isSessionTranscriptArray } from "./session-dal-helpers.js";
-
-function transcriptDisplayOrderTimestamp(item: SessionTranscriptItem): string {
-  return item.created_at;
-}
-
-function transcriptActivityTimestamp(item: SessionTranscriptItem): string {
-  return item.kind === "text" ? item.created_at : item.updated_at;
-}
+import {
+  createEmptySessionContextState,
+  type SessionContextState,
+  SESSION_CONTEXT_STATE_JSON_META,
+  SESSION_MESSAGES_JSON_META,
+  isChatMessageArray,
+  isSessionContextState,
+} from "./session-dal-helpers.js";
 
 export function encodeSessionCursor(input: { updated_at: string; session_id: string }): string {
   return Buffer.from(
@@ -33,41 +31,25 @@ export function decodeSessionCursor(
       sessionId.trim().length > 0
       ? { updated_at: updatedAt, session_id: sessionId }
       : undefined;
-  } catch (error) {
-    void error;
+  } catch {
+    // Intentional: invalid cursors should behave the same as an omitted cursor.
     return undefined;
   }
 }
 
-export function latestTranscriptTimestamp(
-  transcript: readonly SessionTranscriptItem[],
-): string | undefined {
-  let latest: string | undefined;
-  for (const item of transcript) {
-    const itemAt = transcriptActivityTimestamp(item);
-    if (!latest || itemAt.localeCompare(latest) > 0) {
-      latest = itemAt;
-    }
-  }
-  return latest;
-}
-
-export function sortSessionTranscript(
-  transcript: readonly SessionTranscriptItem[],
-): SessionTranscriptItem[] {
-  return transcript.toSorted((left, right) => {
-    const leftAt = transcriptDisplayOrderTimestamp(left);
-    const rightAt = transcriptDisplayOrderTimestamp(right);
-    if (leftAt === rightAt) return 0;
-    return leftAt.localeCompare(rightAt);
+export function stringifySessionContextState(state: SessionContextState): string {
+  return stringifyPersistedJson({
+    value: state,
+    ...SESSION_CONTEXT_STATE_JSON_META,
+    validate: isSessionContextState,
   });
 }
 
-export function stringifySessionTranscript(transcript: SessionTranscriptItem[]): string {
+export function stringifySessionMessages(messages: TyrumUIMessage[]): string {
   return stringifyPersistedJson({
-    value: transcript,
-    ...SESSION_TURNS_JSON_META,
-    validate: isSessionTranscriptArray,
+    value: messages,
+    ...SESSION_MESSAGES_JSON_META,
+    validate: isChatMessageArray,
   });
 }
 
@@ -91,13 +73,32 @@ export function buildSessionListWhereClause(input: {
   return { where, params };
 }
 
-export async function loadOutboxReplyText(
-  db: SqlDb,
-  input: { tenantId: string; inboxId: number },
-): Promise<string | undefined> {
-  const rows = await db.all<{ text: string }>(
-    "SELECT text FROM channel_outbox WHERE tenant_id = ? AND inbox_id = ? ORDER BY chunk_index ASC, outbox_id ASC",
-    [input.tenantId, input.inboxId],
-  );
-  return rows.length > 0 ? rows.map((row) => row.text).join("") : undefined;
+export function createSessionContextStateForMessages(
+  recentMessages: readonly TyrumUIMessage[],
+  updatedAt: string,
+  current?: SessionContextState,
+): SessionContextState {
+  const nextRecentMessageIds = (() => {
+    if (current?.compacted_through_message_id) {
+      const compactedIndex = recentMessages.findIndex(
+        (message) => message.id === current.compacted_through_message_id,
+      );
+      if (compactedIndex >= 0) {
+        return recentMessages.slice(compactedIndex + 1).map((message) => message.id);
+      }
+    }
+    if (current?.recent_message_ids.length) {
+      const recentIdSet = new Set(current.recent_message_ids);
+      const lastKnownIndex = recentMessages.findIndex((message) => recentIdSet.has(message.id));
+      if (lastKnownIndex >= 0) {
+        return recentMessages.slice(lastKnownIndex).map((message) => message.id);
+      }
+    }
+    return recentMessages.map((message) => message.id);
+  })();
+  return {
+    ...(current ?? createEmptySessionContextState(updatedAt)),
+    recent_message_ids: nextRecentMessageIds,
+    updated_at: updatedAt,
+  };
 }

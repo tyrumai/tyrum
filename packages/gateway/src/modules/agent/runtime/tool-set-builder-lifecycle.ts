@@ -1,20 +1,11 @@
 import { randomUUID } from "node:crypto";
 import type { LanguageModel } from "ai";
-import {
-  SessionTranscriptApprovalItem,
-  SessionTranscriptToolItem,
-  type SessionTranscriptToolStatus,
-  type WsEventEnvelope,
-} from "@tyrum/schemas";
+import { type ToolLifecycleStatus, type WsEventEnvelope } from "@tyrum/schemas";
 import type { ToolDescriptor } from "../tools.js";
 import type { ToolResult } from "../tool-executor.js";
 import { runWebFetchExtractionPass } from "../webfetch-extraction.js";
 import type { AgentContextReport } from "./types.js";
-import type {
-  ApprovalStatusUpdate,
-  ToolExecutionContext,
-  ToolSetBuilderDeps,
-} from "./tool-set-builder-helpers.js";
+import type { ToolExecutionContext, ToolSetBuilderDeps } from "./tool-set-builder-helpers.js";
 import { OPERATOR_WS_AUDIENCE } from "../../../ws/audience.js";
 import { enqueueWsBroadcastMessage } from "../../../ws/outbox.js";
 
@@ -49,32 +40,6 @@ export async function maybeExtractWebFetchResult(
   };
 }
 
-export async function upsertApprovalTranscript(
-  deps: Pick<ToolSetBuilderDeps, "sessionDal" | "tenantId">,
-  input: {
-    context: ToolExecutionContext;
-    update: ApprovalStatusUpdate;
-  },
-): Promise<void> {
-  if (!deps.sessionDal) return;
-  await deps.sessionDal.upsertTranscriptItem({
-    tenantId: deps.tenantId,
-    sessionId: input.context.sessionId,
-    item: SessionTranscriptApprovalItem.parse({
-      kind: "approval",
-      id: input.update.approvalId,
-      approval_id: input.update.approvalId,
-      tool_call_id: input.update.toolCallId,
-      status: input.update.status,
-      title: "Approval required",
-      detail: input.update.reason?.trim() || input.update.prompt,
-      created_at: input.update.createdAt,
-      updated_at: new Date().toISOString(),
-      run_id: input.context.execution?.runId,
-    }),
-  });
-}
-
 export async function syncToolLifecycle(
   deps: Pick<
     ToolSetBuilderDeps,
@@ -84,7 +49,7 @@ export async function syncToolLifecycle(
     context: ToolExecutionContext;
     toolCallId: string;
     toolId: string;
-    status: SessionTranscriptToolStatus;
+    status: ToolLifecycleStatus;
     summary: string;
     error?: string;
     durationMs?: number;
@@ -92,29 +57,6 @@ export async function syncToolLifecycle(
 ): Promise<void> {
   const updatedAt = new Date().toISOString();
 
-  if (deps.sessionDal) {
-    await deps.sessionDal.upsertTranscriptItem({
-      tenantId: deps.tenantId,
-      sessionId: input.context.sessionId,
-      item: SessionTranscriptToolItem.parse({
-        kind: "tool",
-        id: input.toolCallId,
-        tool_id: input.toolId,
-        tool_call_id: input.toolCallId,
-        status: input.status,
-        summary: input.summary,
-        created_at: updatedAt,
-        updated_at: updatedAt,
-        duration_ms: input.durationMs,
-        error: input.error,
-        run_id: input.context.execution?.runId,
-        agent_id: deps.agentId,
-        workspace_id: deps.workspaceId,
-        channel: input.context.channel,
-        thread_id: input.context.threadId,
-      }),
-    });
-  }
   if (!deps.wsEventDb) return;
 
   const event: WsEventEnvelope = {
