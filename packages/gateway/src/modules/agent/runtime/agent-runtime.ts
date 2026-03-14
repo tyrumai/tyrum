@@ -62,7 +62,6 @@ const DEFAULT_MAX_STEPS = 20;
 const DEFAULT_APPROVAL_WAIT_MS = 120_000;
 const DEFAULT_APPROVAL_POLL_MS = 500;
 const MAX_TURN_ENGINE_WAIT_MS = 60_000;
-
 export class AgentRuntime {
   private readonly home: string;
   private readonly contextStore: AgentContextStore;

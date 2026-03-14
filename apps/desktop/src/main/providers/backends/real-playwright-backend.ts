@@ -12,13 +12,10 @@ export class RealPlaywrightBackend implements PlaywrightBackend {
   async ensureBrowser(): Promise<void> {
     if (this.browser?.isConnected() && this.page && !this.page.isClosed()) return;
 
-    // Clean up stale resources
     if (this.browser) {
       try {
         await this.browser.close();
-      } catch {
-        // Browser may already be closed
-      }
+      } catch {}
     }
 
     let chromium;
@@ -87,18 +84,14 @@ export class RealPlaywrightBackend implements PlaywrightBackend {
     if (browser) {
       try {
         await browser.close();
-      } catch {
-        // Browser may already be closed
-      }
+      } catch {}
       return;
     }
 
     if (page) {
       try {
         await page.close();
-      } catch {
-        // Page may already be closed
-      }
+      } catch {}
     }
   }
 }

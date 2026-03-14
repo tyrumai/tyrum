@@ -9,6 +9,7 @@ import type {
 import type { SqlDb } from "../../statestore/types.js";
 import type { RedactionEngine } from "../redaction/engine.js";
 import { DEFAULT_TENANT_ID } from "../identity/scope.js";
+import { readRecordString } from "../util/coerce.js";
 
 import * as dalHelpers from "./dal-helpers.js";
 import type * as DalHelpers from "./dal-helpers.js";
@@ -69,10 +70,7 @@ export class WorkboardDal {
     const redactedPayload = this.redactionEngine
       ? this.redactionEngine.redactUnknown(payload).redacted
       : payload;
-    const tenantId =
-      typeof (evt.payload as any)?.tenant_id === "string" && (evt.payload as any).tenant_id.trim()
-        ? ((evt.payload as any).tenant_id as string)
-        : DEFAULT_TENANT_ID;
+    const tenantId = readRecordString(evt.payload, "tenant_id") ?? DEFAULT_TENANT_ID;
     await tx.run(
       `INSERT INTO outbox (tenant_id, topic, target_edge_id, payload_json)
        VALUES (?, ?, ?, ?)`,

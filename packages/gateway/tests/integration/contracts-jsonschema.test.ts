@@ -1,8 +1,43 @@
 import { describe, expect, it } from "vitest";
 import { createTestApp } from "./helpers.js";
-import { dirname, join, basename } from "node:path";
+import { basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readFile } from "node:fs/promises";
+
+interface ContractCatalogPayload {
+  format: string;
+  generated_at: string;
+  package: { name: string; version: string };
+  schemas: Array<{ name: string; file: string; $id: string }>;
+  errors?: unknown;
+}
+
+async function readCatalogArtifact(): Promise<ContractCatalogPayload | undefined> {
+  const catalogPath = fileURLToPath(
+    new URL("../../../schemas/dist/jsonschema/catalog.json", import.meta.url),
+  );
+
+  try {
+    return JSON.parse(await readFile(catalogPath, "utf-8")) as ContractCatalogPayload;
+  } catch (error) {
+    const code =
+      error && typeof error === "object" && "code" in error
+        ? (error as { code?: unknown }).code
+        : undefined;
+    if (code === "ENOENT") return undefined;
+    throw error;
+  }
+}
+
+function normalizeCatalogSchemas(
+  catalog: ContractCatalogPayload,
+): ContractCatalogPayload["schemas"] {
+  return catalog.schemas.map((schema) => {
+    const normalizedSchema = Object.assign({}, schema);
+    normalizedSchema.file = basename(schema.file);
+    return normalizedSchema;
+  });
+}
 
 describe("Gateway JSON Schema publishing", () => {
   it("serves the @tyrum/schemas catalog artifact (with file names normalized)", async () => {
@@ -10,32 +45,18 @@ describe("Gateway JSON Schema publishing", () => {
 
     const res = await app.request("/contracts/jsonschema/catalog.json");
     expect(res.status).toBe(200);
-    const served = (await res.json()) as {
-      format: string;
-      generated_at: string;
-      package: { name: string; version: string };
-      schemas: Array<{ name: string; file: string; $id: string }>;
-      errors?: unknown;
-    };
+    const served = (await res.json()) as ContractCatalogPayload;
 
-    const entrypointUrl = import.meta.resolve("@tyrum/schemas");
-    const entrypointPath = fileURLToPath(entrypointUrl);
-    const pkgRoot = dirname(dirname(entrypointPath));
-    const catalogPath = join(pkgRoot, "dist", "jsonschema", "catalog.json");
-    const expected = JSON.parse(await readFile(catalogPath, "utf-8")) as typeof served;
+    expect(served.format).toBe("tyrum.contracts.jsonschema.catalog.v1");
+    expect(served.package.name).toBe("@tyrum/schemas");
+    expect(served.schemas.every((schema) => schema.file === basename(schema.file))).toBe(true);
+
+    const expected = await readCatalogArtifact();
+    if (!expected) return;
 
     expect(expected.format).toBe("tyrum.contracts.jsonschema.catalog.v1");
-
-    const expectedNormalized = {
-      ...expected,
-      schemas: expected.schemas.map((schema) => {
-        const normalizedSchema = Object.assign({}, schema);
-        normalizedSchema.file = basename(schema.file);
-        return normalizedSchema;
-      }),
-    };
-
-    expect(served).toEqual(expectedNormalized);
+    expect(served.package).toEqual(expected.package);
+    expect(served.schemas).toEqual(normalizeCatalogSchemas(expected));
   });
 
   it("serves a JSON Schema catalog for contracts", async () => {

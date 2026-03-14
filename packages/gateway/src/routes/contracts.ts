@@ -34,12 +34,7 @@ function isSafeContractFilename(filename: string): boolean {
   return true;
 }
 
-async function readJsonFile(
-  path: string,
-  opts?: {
-    transientNotFound?: boolean;
-  },
-): Promise<unknown> {
+async function readJsonFile(path: string): Promise<unknown> {
   let lastError: unknown = new Error(`Failed to read JSON file: ${path}`);
 
   for (let attempt = 0; attempt < TRANSIENT_READ_MAX_ATTEMPTS; attempt += 1) {
@@ -49,11 +44,7 @@ async function readJsonFile(
     } catch (err) {
       lastError = err;
 
-      const code = errorCode(err);
-      const isParseError = err instanceof SyntaxError;
-      const isTransient = isParseError || (opts?.transientNotFound === true && code === "ENOENT");
-
-      if (!isTransient || attempt === TRANSIENT_READ_MAX_ATTEMPTS - 1) {
+      if (!(err instanceof SyntaxError) || attempt === TRANSIENT_READ_MAX_ATTEMPTS - 1) {
         throw err;
       }
 
@@ -269,9 +260,7 @@ async function handleCatalogRequest(
   }
 
   try {
-    const parsed: unknown = await readJsonFile(join(jsonSchemaDir, "catalog.json"), {
-      transientNotFound: true,
-    });
+    const parsed: unknown = await readJsonFile(join(jsonSchemaDir, "catalog.json"));
     return c.json(sanitizeCatalogPayload(parsed));
   } catch (err) {
     try {
