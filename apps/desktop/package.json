@@ -27,7 +27,7 @@
     "execa": "^9.6.1",
     "playwright": "^1.58.2",
     "tesseract.js": "^7.0.0",
-    "undici": "^7.24.0",
+    "undici": "^7.24.2",
     "zod": "^4.3.6"
   },
   "devDependencies": {
@@ -39,8 +39,8 @@
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@tyrum/gateway": "workspace:*",
-    "@vitejs/plugin-react": "^6.0.0",
-    "electron": "^41.0.1",
+    "@vitejs/plugin-react": "^6.0.1",
+    "electron": "^41.0.2",
     "electron-builder": "^26.8.1",
     "lucide-react": "^0.577.0",
     "react": "^19.2.4",

@@ -28,13 +28,13 @@
     "ai": "^6.0.116",
     "@tyrum/schemas": "workspace:*",
     "mitt": "^3.0.1",
-    "undici": "^7.24.0",
+    "undici": "^7.24.2",
     "zod": "^4.3.6"
   },
   "devDependencies": {
     "@hono/node-server": "^1.19.11",
     "@types/ws": "^8.18.1",
-    "hono": "^4.12.7",
+    "hono": "^4.12.8",
     "ws": "^8.19.0"
   }
 }
