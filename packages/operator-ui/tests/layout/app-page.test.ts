@@ -128,4 +128,58 @@ describe("AppPageContent", () => {
       measurements.restore();
     }
   });
+
+  it("keeps stack layout as the default mode", () => {
+    const measurements = installLayoutContentMeasurements({ clientWidth: 900, scrollWidth: 900 });
+    let testRoot: ReturnType<typeof renderIntoDocument> | null = null;
+
+    try {
+      testRoot = renderIntoDocument(
+        React.createElement(
+          AppPageContent,
+          null,
+          React.createElement("div", null, "Document content"),
+        ),
+      );
+
+      const content = testRoot.container.querySelector("[data-layout-content]");
+      expect(content?.getAttribute("data-layout-mode")).toBe("stack");
+      expect(content?.className).toContain("grid");
+      expect(content?.className).toContain("min-h-fit");
+      expect(content?.className).not.toContain("flex-col");
+    } finally {
+      if (testRoot) {
+        cleanupTestRoot(testRoot);
+      }
+      measurements.restore();
+    }
+  });
+
+  it("supports fill layout mode for viewport-constrained pages", () => {
+    const measurements = installLayoutContentMeasurements({ clientWidth: 900, scrollWidth: 900 });
+    let testRoot: ReturnType<typeof renderIntoDocument> | null = null;
+
+    try {
+      testRoot = renderIntoDocument(
+        React.createElement(
+          AppPageContent,
+          { contentLayout: "fill" },
+          React.createElement("div", null, "Constrained content"),
+        ),
+      );
+
+      const content = testRoot.container.querySelector("[data-layout-content]");
+      expect(content?.getAttribute("data-layout-mode")).toBe("fill");
+      expect(content?.className).toContain("flex");
+      expect(content?.className).toContain("flex-col");
+      expect(content?.className).toContain("h-full");
+      expect(content?.className).toContain("min-h-0");
+      expect(content?.className).not.toContain("grid");
+    } finally {
+      if (testRoot) {
+        cleanupTestRoot(testRoot);
+      }
+      measurements.restore();
+    }
+  });
 });

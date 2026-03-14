@@ -284,9 +284,16 @@ export function FirstRunOnboardingPage({
   };
 
   return (
-    <AppPage contentClassName="max-w-4xl gap-5" data-testid="first-run-onboarding">
-      <Card>
-        <CardHeader className="pb-3">
+    <AppPage
+      contentLayout="fill"
+      contentClassName="max-w-4xl gap-5"
+      data-testid="first-run-onboarding"
+    >
+      <Card
+        className="flex min-h-0 flex-1 flex-col overflow-hidden"
+        data-testid="first-run-onboarding-card"
+      >
+        <CardHeader className="shrink-0 pb-3">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="grid gap-2">
               <div className="flex items-center gap-2">
@@ -318,7 +325,10 @@ export function FirstRunOnboardingPage({
             </div>
           </div>
         </CardHeader>
-        <CardContent className="grid gap-4">
+        <CardContent
+          className="grid min-h-0 flex-1 gap-4 overflow-auto"
+          data-testid="first-run-onboarding-card-body"
+        >
           {data.errorMessage ? (
             <Alert
               variant="error"
@@ -347,7 +357,7 @@ export function FirstRunOnboardingPage({
           ) : null}
           {renderStep()}
         </CardContent>
-        <CardFooter className="justify-between">
+        <CardFooter className="shrink-0 justify-between">
           <div className="text-xs text-fg-muted">
             Status is refreshed against the live gateway after each step.
           </div>
