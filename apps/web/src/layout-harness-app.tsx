@@ -7,6 +7,7 @@ import { AiSdkChatPage } from "../../../packages/operator-ui/src/components/page
 import { ConfigurePage } from "../../../packages/operator-ui/src/components/pages/configure-page.js";
 import { DashboardPage } from "../../../packages/operator-ui/src/components/pages/dashboard-page.js";
 import { ExtensionsPage } from "../../../packages/operator-ui/src/components/pages/extensions-page.js";
+import { FirstRunOnboardingPage } from "../../../packages/operator-ui/src/components/pages/first-run-onboarding.js";
 import { NodeConfigurePage } from "../../../packages/operator-ui/src/components/pages/node-configure-page.js";
 import { PairingPage } from "../../../packages/operator-ui/src/components/pages/pairing-page.js";
 import { BrowserCapabilitiesPage } from "../../../packages/operator-ui/src/components/pages/platform/browser-capabilities-page.js";
@@ -21,6 +22,7 @@ import {
   createConfigureCore,
   createDashboardCore,
   createDesktopApi,
+  createOnboardingCore,
   createPairingCore,
   createWorkboardCore,
 } from "./layout-harness-route-fixtures.js";
@@ -35,7 +37,8 @@ type LayoutRoute =
   | "extensions"
   | "configure"
   | "browser"
-  | "desktop";
+  | "desktop"
+  | "onboarding";
 
 function HarnessIcon({ className }: { className?: string }) {
   return (
@@ -69,6 +72,22 @@ function createDesktopRoute(): React.ReactNode {
     <OperatorUiHostProvider value={{ kind: "desktop", api: createDesktopApi() }}>
       <NodeConfigurePage />
     </OperatorUiHostProvider>
+  );
+}
+
+function createOnboardingRoute(): React.ReactNode {
+  const core = createOnboardingCore();
+  return (
+    <AdminAccessProvider core={core} mode="desktop">
+      <FirstRunOnboardingPage
+        core={core}
+        issueSignature="no_provider_accounts:deployment"
+        onClose={() => undefined}
+        onDismiss={() => undefined}
+        onMarkCompleted={() => undefined}
+        onNavigate={() => undefined}
+      />
+    </AdminAccessProvider>
   );
 }
 
@@ -106,6 +125,8 @@ function renderRoute(route: LayoutRoute): React.ReactNode {
       return createBrowserRoute();
     case "desktop":
       return createDesktopRoute();
+    case "onboarding":
+      return createOnboardingRoute();
     default:
       return null;
   }
@@ -125,6 +146,7 @@ export function LayoutHarnessApp() {
     { id: "configure", label: "Configure", icon: HarnessIcon },
     { id: "browser", label: "Browser", icon: HarnessIcon },
     { id: "desktop", label: "Desktop", icon: HarnessIcon },
+    { id: "onboarding", label: "Onboarding", icon: HarnessIcon },
   ];
 
   return (

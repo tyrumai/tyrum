@@ -29,6 +29,7 @@ export function AppPageToolbar({ title, actions, className, ...props }: AppPageT
 }
 
 export interface AppPageContentProps extends React.HTMLAttributes<HTMLDivElement> {
+  contentLayout?: "stack" | "fill";
   contentClassName?: string;
   scrollAreaClassName?: string;
   scrollAreaRef?: React.Ref<React.ElementRef<typeof ScrollArea>>;
@@ -37,6 +38,7 @@ export interface AppPageContentProps extends React.HTMLAttributes<HTMLDivElement
 export function AppPageContent({
   children,
   className,
+  contentLayout = "stack",
   contentClassName,
   scrollAreaClassName,
   scrollAreaRef,
@@ -71,21 +73,35 @@ export function AppPageContent({
     };
   }, [updateAlignment]);
 
+  const content = (
+    <div
+      ref={contentRef}
+      data-layout-content=""
+      data-layout-alignment={centerContent ? "center" : "start"}
+      data-layout-mode={contentLayout}
+      className={cn(
+        "box-border w-full max-w-5xl gap-5 px-4 py-4 md:px-5 md:py-5",
+        contentLayout === "fill" ? "flex h-full min-h-0 min-w-0 flex-col" : "grid min-h-fit",
+        centerContent ? "mx-auto" : "ml-0 mr-auto",
+        contentClassName,
+      )}
+    >
+      {children}
+    </div>
+  );
+
+  if (contentLayout === "fill") {
+    return (
+      <div className={cn("min-h-0 flex-1 overflow-hidden", className)} {...props}>
+        {content}
+      </div>
+    );
+  }
+
   return (
     <div className={cn("min-h-0 flex-1 overflow-hidden", className)} {...props}>
       <ScrollArea ref={scrollAreaRef} className={cn("h-full", scrollAreaClassName)}>
-        <div
-          ref={contentRef}
-          data-layout-content=""
-          data-layout-alignment={centerContent ? "center" : "start"}
-          className={cn(
-            "grid box-border w-full max-w-5xl gap-5 px-4 py-4 md:px-5 md:py-5",
-            centerContent ? "mx-auto" : "ml-0 mr-auto",
-            contentClassName,
-          )}
-        >
-          {children}
-        </div>
+        {content}
       </ScrollArea>
     </div>
   );
@@ -94,6 +110,7 @@ export function AppPageContent({
 export interface AppPageProps extends Omit<React.HTMLAttributes<HTMLDivElement>, "title"> {
   title?: React.ReactNode;
   actions?: React.ReactNode;
+  contentLayout?: "stack" | "fill";
   contentClassName?: string;
   scrollAreaClassName?: string;
   scrollAreaRef?: React.Ref<React.ElementRef<typeof ScrollArea>>;
@@ -105,6 +122,7 @@ export function AppPage({
   actions,
   children,
   className,
+  contentLayout,
   contentClassName,
   scrollAreaClassName,
   scrollAreaRef,
@@ -119,6 +137,7 @@ export function AppPage({
       {title || actions ? <AppPageToolbar title={title} actions={actions} /> : null}
       <AppPageContent
         className={bodyClassName}
+        contentLayout={contentLayout}
         contentClassName={contentClassName}
         scrollAreaClassName={scrollAreaClassName}
         scrollAreaRef={scrollAreaRef}

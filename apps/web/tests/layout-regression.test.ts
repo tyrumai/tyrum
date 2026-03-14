@@ -18,6 +18,8 @@ type LayoutCase = {
   route: string;
   clicks?: string[];
   selectors: string[];
+  constrainedSelectors?: string[];
+  verticallyScrollableSelectors?: string[];
   viewport?: {
     width: number;
     height: number;
@@ -165,6 +167,18 @@ const cases: LayoutCase[] = [
     clicks: ['[role="tab"]:has-text("Web")'],
     selectors: ["[data-layout-content]", '[role="tabpanel"][data-state="active"]'],
   },
+  {
+    name: "onboarding",
+    route: "onboarding",
+    selectors: [
+      '[data-testid="first-run-onboarding"]',
+      '[data-testid="first-run-onboarding-card"]',
+      '[data-testid="first-run-onboarding-card-body"]',
+    ],
+    constrainedSelectors: ['[data-testid="first-run-onboarding-card"]'],
+    verticallyScrollableSelectors: ['[data-testid="first-run-onboarding-card-body"]'],
+    viewport: { width: 1280, height: 720 },
+  },
 ];
 
 async function assertNoHorizontalOverflow(page: Page, selectors: string[]): Promise<void> {
@@ -224,6 +238,57 @@ async function assertNoInternalHorizontalClipping(page: Page, selectors: string[
       measurement.clippedBy,
       `${measurement.selector} clipped ${measurement.clippedBy}px of horizontal content`,
     ).toBeLessThanOrEqual(1);
+  }
+}
+
+async function assertWithinViewportHeight(page: Page, selectors: string[]): Promise<void> {
+  const result = await page.evaluate((candidateSelectors) => {
+    const viewportHeight = window.innerHeight;
+    return candidateSelectors.map((selector) => {
+      const element = document.querySelector<HTMLElement>(selector);
+      if (!element) {
+        return { selector, found: false, bottom: null, overflow: null };
+      }
+      const rect = element.getBoundingClientRect();
+      return {
+        selector,
+        found: true,
+        bottom: rect.bottom,
+        overflow: Math.max(0, rect.bottom - viewportHeight),
+      };
+    });
+  }, selectors);
+
+  for (const measurement of result) {
+    expect(measurement.found, `${measurement.selector} should exist`).toBe(true);
+    expect(
+      measurement.overflow,
+      `${measurement.selector} overflowed vertically by ${measurement.overflow}px`,
+    ).toBeLessThanOrEqual(1);
+  }
+}
+
+async function assertHasVerticalScrollCapacity(page: Page, selectors: string[]): Promise<void> {
+  const result = await page.evaluate((candidateSelectors) => {
+    return candidateSelectors.map((selector) => {
+      const element = document.querySelector<HTMLElement>(selector);
+      if (!element) {
+        return { selector, found: false, overflowBy: null };
+      }
+      return {
+        selector,
+        found: true,
+        overflowBy: Math.max(0, element.scrollHeight - element.clientHeight),
+      };
+    });
+  }, selectors);
+
+  for (const measurement of result) {
+    expect(measurement.found, `${measurement.selector} should exist`).toBe(true);
+    expect(
+      measurement.overflowBy,
+      `${measurement.selector} should own vertical overflow`,
+    ).toBeGreaterThan(1);
   }
 }
 
@@ -289,6 +354,12 @@ describe("layout regression harness", () => {
         }
 
         await assertNoHorizontalOverflow(page, testCase.selectors);
+        if (testCase.constrainedSelectors) {
+          await assertWithinViewportHeight(page, testCase.constrainedSelectors);
+        }
+        if (testCase.verticallyScrollableSelectors) {
+          await assertHasVerticalScrollCapacity(page, testCase.verticallyScrollableSelectors);
+        }
         if (testCase.name === "workboard") {
           await assertNoInternalHorizontalClipping(page, ['[data-testid="workboard-board"]']);
         }

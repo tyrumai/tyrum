@@ -2,6 +2,7 @@ import {
   createElevatedModeStore,
   type OperatorCore,
 } from "../../../packages/operator-core/src/index.js";
+import { createStore } from "../../../packages/operator-core/src/store.js";
 import type { DesktopApi } from "../../../packages/operator-ui/src/desktop-api.js";
 import {
   createActivityStore,
@@ -30,6 +31,100 @@ function createNodeConfig(overrides: Record<string, unknown> = {}): Record<strin
     web: { allowedDomains: [], headless: true },
     ...overrides,
   };
+}
+
+function createOnboardingStatusStore() {
+  return createStore({
+    status: {
+      status: "ok" as const,
+      version: "1.0.0",
+      instance_id: "layout-harness",
+      role: "all" as const,
+      db_kind: "sqlite" as const,
+      is_exposed: false,
+      otel_enabled: false,
+      auth: { enabled: true },
+      ws: null,
+      policy: null,
+      model_auth: null,
+      catalog_freshness: null,
+      session_lanes: {},
+      queue_depth: null,
+      sandbox: null,
+      config_health: {
+        status: "issues" as const,
+        issues: [
+          {
+            code: "no_provider_accounts" as const,
+            severity: "error" as const,
+            message: "No active provider accounts are configured.",
+            target: { kind: "deployment" as const, id: null },
+          },
+        ],
+      },
+    },
+    usage: null,
+    presenceByInstanceId: {},
+    loading: { status: false, usage: false, presence: false },
+    error: { status: null, usage: null, presence: null },
+    lastSyncedAt: "2026-03-08T00:00:00.000Z",
+  }).store;
+}
+
+function createOnboardingAgentConfigResponse() {
+  return {
+    revision: 1,
+    tenant_id: "tenant-1",
+    agent_id: "11111111-1111-4111-8111-111111111111",
+    agent_key: "default",
+    config: {
+      model: { model: null },
+      persona: {
+        name: "Default Agent",
+        tone: "direct",
+        palette: "graphite",
+        character: "architect",
+      },
+      memory: {
+        enabled: true,
+        strategy: "summary",
+      },
+      instructions: "",
+      mcp: {
+        pre_turn_tools: [],
+        server_settings: {},
+      },
+    },
+    persona: {
+      name: "Default Agent",
+      tone: "direct",
+      palette: "graphite",
+      character: "architect",
+    },
+    config_sha256: "e".repeat(64),
+    created_at: "2026-03-01T00:00:00.000Z",
+    created_by: { kind: "tenant.token" as const, token_id: "token-1" },
+    reason: null,
+    reverted_from_revision: null,
+  };
+}
+
+function createUnassignedAssignments() {
+  return [
+    "interaction",
+    "explorer_ro",
+    "reviewer_ro",
+    "planner",
+    "jury",
+    "executor_rw",
+    "integrator",
+  ].map((execution_profile_id) => ({
+    execution_profile_id,
+    preset_key: null,
+    preset_display_name: null,
+    provider_key: null,
+    model_id: null,
+  }));
 }
 
 export function createDesktopApi(): DesktopApi {
@@ -148,5 +243,73 @@ export function createConfigureCore(): OperatorCore {
   return {
     elevatedModeStore: createElevatedModeStore(),
     http: createHarnessConfigureHttpFixtures(),
+  } as unknown as OperatorCore;
+}
+
+export function createOnboardingCore(): OperatorCore {
+  const elevatedModeStore = createElevatedModeStore();
+  elevatedModeStore.enter({
+    elevatedToken: "layout-harness-elevated-token",
+    expiresAt: "2099-01-01T00:00:00.000Z",
+  });
+
+  const onboardingRegistry = [
+    {
+      provider_key: "openai",
+      name: "OpenAI",
+      doc: null,
+      supported: true,
+      accounts: [],
+      methods: [
+        {
+          method_key: "api_key",
+          label: "API key",
+          type: "api_key",
+          fields: [
+            {
+              key: "api_key",
+              label: "API key",
+              description: "Primary secret used for the provider account.",
+              kind: "secret",
+              input: "password",
+              required: true,
+            },
+            ...Array.from({ length: 12 }, (_, index) => ({
+              key: `config_${String(index + 1)}`,
+              label: `Config field ${String(index + 1)}`,
+              description:
+                "Extra fixture field to force the onboarding provider step to scroll within its card body.",
+              kind: "config" as const,
+              input: "text" as const,
+              required: false,
+            })),
+          ],
+        },
+      ],
+    },
+  ];
+
+  return {
+    httpBaseUrl: "http://127.0.0.1:8788/",
+    elevatedModeStore,
+    statusStore: createOnboardingStatusStore(),
+    http: {
+      providerConfig: {
+        listRegistry: async () => ({ status: "ok" as const, providers: onboardingRegistry }),
+        listProviders: async () => ({ status: "ok" as const, providers: [] }),
+      },
+      modelConfig: {
+        listPresets: async () => ({ status: "ok" as const, presets: [] }),
+        listAvailable: async () => ({ status: "ok" as const, models: [] }),
+        listAssignments: async () => ({
+          status: "ok" as const,
+          assignments: createUnassignedAssignments(),
+        }),
+      },
+      agentConfig: {
+        get: async () => createOnboardingAgentConfigResponse(),
+      },
+    },
+    syncAllNow: async () => {},
   } as unknown as OperatorCore;
 }
