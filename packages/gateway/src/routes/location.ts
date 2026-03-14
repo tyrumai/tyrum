@@ -31,7 +31,7 @@ function toHttpProfile(profile: Awaited<ReturnType<LocationService["getProfile"]
 }
 
 function toLocationRouteError(error: unknown): {
-  status: number;
+  status: 400 | 404;
   body: { error: string; message: string };
 } {
   if (error instanceof ScopeNotFoundError) {

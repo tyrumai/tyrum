@@ -27,7 +27,7 @@ export async function resolveExistingScopedIds(input: {
   let workspaceId: string | undefined;
 
   if (agentKey) {
-    agentId = await input.identityScopeDal.resolveAgentId(input.tenantId, agentKey);
+    agentId = (await input.identityScopeDal.resolveAgentId(input.tenantId, agentKey)) ?? undefined;
     if (!agentId) {
       throw new ScopeNotFoundError(`agent '${agentKey}' not found`, {
         agent_key: agentKey,
@@ -36,7 +36,8 @@ export async function resolveExistingScopedIds(input: {
   }
 
   if (workspaceKey) {
-    workspaceId = await input.identityScopeDal.resolveWorkspaceId(input.tenantId, workspaceKey);
+    workspaceId =
+      (await input.identityScopeDal.resolveWorkspaceId(input.tenantId, workspaceKey)) ?? undefined;
     if (!workspaceId) {
       throw new ScopeNotFoundError(`workspace '${workspaceKey}' not found`, {
         workspace_key: workspaceKey,

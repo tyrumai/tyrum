@@ -412,7 +412,7 @@ export class SessionDal {
     const tenantId = await this.identityScopeDal.ensureTenantId(DEFAULT_TENANT_KEY);
     const normalizedAgentKey = agentKey?.trim();
     const agentId = normalizedAgentKey
-      ? await this.identityScopeDal.resolveAgentId(tenantId, normalizedAgentKey)
+      ? ((await this.identityScopeDal.resolveAgentId(tenantId, normalizedAgentKey)) ?? undefined)
       : undefined;
     if (normalizedAgentKey && !agentId) return 0;
     return await deleteExpiredSessions({
