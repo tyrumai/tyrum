@@ -3,9 +3,15 @@ import type { ModelMessage } from "ai";
 import type {
   AgentTurnRequest as AgentTurnRequestT,
   AgentTurnResponse as AgentTurnResponseT,
-  SessionContextState,
   WorkScope,
 } from "@tyrum/schemas";
+import {
+  createGuardianReviewTurnControl,
+  stripEmbeddedSessionContext,
+  type TurnDirectResult,
+  type TurnInvocationOptions,
+  type TurnStreamDirectResult,
+} from "./turn-direct-support.js";
 import {
   createStaticLanguageModelV3,
   extractToolApprovalResumeState,
@@ -14,7 +20,6 @@ import {
 import { isApprovalBlockedStatus } from "../../approval/dal.js";
 import { coerceRecord } from "../../util/coerce.js";
 import { finalizeTurn } from "./turn-finalization.js";
-import type { AgentContextReport } from "./types.js";
 import { resolveAutomationMetadata } from "./automation-delivery.js";
 import {
   resolveIntakeDecision,
@@ -35,70 +40,17 @@ import {
   countAssistantMessages,
   sessionMessagesToModelMessages,
 } from "../../ai-sdk/message-utils.js";
-import { prepareTurn, type TurnExecutionContext } from "./turn-preparation.js";
+import { prepareTurn } from "./turn-preparation.js";
 import { handleStatusQuery, throwToolApprovalError } from "./turn-direct-helpers.js";
 import { applyDeterministicContextCompactionAndToolPruning } from "./context-pruning.js";
 import { buildPromptVisibleMessages } from "./session-context-state.js";
 import { isContextOverflowError } from "./session-compaction-service.js";
-import { GUARDIAN_REVIEW_DECISION_TOOL_ID } from "./tool-set-builder-internal-tools.js";
-
 export {
   handleStatusQuery,
   throwToolApprovalError,
   maybeStoreToolApprovalArgsHandle,
 } from "./turn-direct-helpers.js";
-
-export type GuardianReviewDecisionCollectorResult = NonNullable<
-  Awaited<ReturnType<typeof prepareTurn>>["guardianReviewDecisionCollector"]
->;
-
-export interface TurnDirectResult {
-  response: AgentTurnResponseT;
-  contextReport: AgentContextReport;
-  guardianReviewDecisionCollector?: GuardianReviewDecisionCollectorResult;
-}
-
-type TurnInvocationOptions = {
-  abortSignal?: AbortSignal;
-  timeoutMs?: number;
-  execution?: TurnExecutionContext;
-  compactionRetried?: boolean;
-};
-
-function createGuardianReviewTurnControl(): {
-  stopWhen: Array<ReturnType<typeof stepCountIs>>;
-  toolChoice: { type: "tool"; toolName: typeof GUARDIAN_REVIEW_DECISION_TOOL_ID };
-  withinTurnLoop: { value: undefined };
-} {
-  return {
-    stopWhen: [stepCountIs(1)],
-    toolChoice: { type: "tool", toolName: GUARDIAN_REVIEW_DECISION_TOOL_ID },
-    withinTurnLoop: { value: undefined },
-  };
-}
-function hasPromptInjectedSessionContext(
-  contextState: SessionContextState | null | undefined,
-): boolean {
-  return Boolean(
-    contextState?.checkpoint ||
-    contextState?.pending_approvals.length ||
-    contextState?.pending_tool_state.length,
-  );
-}
-
-function stripEmbeddedSessionContext(
-  userContent: ReadonlyArray<{ type: "text"; text: string }>,
-  contextState: SessionContextState | null | undefined,
-): Array<{ type: "text"; text: string }> {
-  if (!hasPromptInjectedSessionContext(contextState)) {
-    return [...userContent];
-  }
-  // `prepareTurn()` formats session context before auto-compaction may refresh the
-  // checkpoint. When prompt-visible messages inject the current checkpoint/pending
-  // state separately, drop the pre-turn embedded block so the model sees one
-  // authoritative session-context representation.
-  return userContent.filter((part) => !part.text.startsWith("Session context:\n"));
-}
+export type { GuardianReviewDecisionCollectorResult } from "./turn-direct-support.js";
 
 export async function turnDirect(
   deps: TurnDirectDeps,
@@ -355,14 +307,6 @@ export async function turnDirect(
     contextReport,
     guardianReviewDecisionCollector,
   };
-}
-
-export interface TurnStreamDirectResult {
-  streamResult: ReturnType<typeof streamText>;
-  sessionId: string;
-  contextReport: AgentContextReport;
-  guardianReviewDecisionCollector?: GuardianReviewDecisionCollectorResult;
-  finalize: () => Promise<AgentTurnResponseT>;
 }
 
 export async function turnStreamDirect(
