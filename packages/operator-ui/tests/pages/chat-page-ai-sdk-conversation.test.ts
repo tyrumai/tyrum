@@ -41,6 +41,16 @@ async function flushEffects(): Promise<void> {
   });
 }
 
+function dispatchDraftKeyDown(draft: HTMLTextAreaElement, init: KeyboardEventInit): boolean {
+  return draft.dispatchEvent(
+    new KeyboardEvent("keydown", {
+      bubbles: true,
+      cancelable: true,
+      ...init,
+    }),
+  );
+}
+
 describe("AiSdkConversation", () => {
   beforeEach(() => {
     useChatMock.mockReset();
@@ -178,6 +188,167 @@ describe("AiSdkConversation", () => {
     expect(sessionClient.get).toHaveBeenCalledWith({ session_id: "session-1" });
     expect(chatState.setMessages).toHaveBeenCalledWith(reloadedMessages);
     expect(onSessionMessages).toHaveBeenCalledWith(reloadedMessages);
+
+    cleanupTestRoot(testRoot);
+  });
+
+  it("sends the draft on plain Enter", async () => {
+    const chatState = makeUseChatState();
+    useChatMock.mockReturnValue(chatState);
+
+    const resolveAttachedNodeId = vi.fn(async () => null);
+    const sessionClient = {
+      get: vi.fn(async () => ({
+        session_id: "session-1",
+        messages: [],
+      })),
+    };
+
+    const { AiSdkConversation } =
+      await import("../../src/components/pages/chat-page-ai-sdk-conversation.js");
+    const testRoot = renderIntoDocument(
+      e(AiSdkConversation, {
+        approvalsById: {},
+        onDelete: vi.fn(),
+        onResolveApproval: vi.fn(),
+        onRenderModeChange: vi.fn(),
+        onReasoningModeChange: vi.fn(),
+        onSessionMessages: vi.fn(),
+        renderMode: "markdown",
+        resolvingApproval: null,
+        resolveAttachedNodeId,
+        reasoningMode: "collapsed",
+        session: {
+          session_id: "session-1",
+          thread_id: "thread-1",
+          messages: [],
+        },
+        sessionClient,
+        transport: { transport: true },
+      } as never),
+    );
+
+    const draft = testRoot.container.querySelector(
+      "[data-testid='ai-sdk-chat-draft']",
+    ) as HTMLTextAreaElement;
+    setNativeValue(draft, "hello world");
+
+    let eventAllowed = true;
+    act(() => {
+      eventAllowed = dispatchDraftKeyDown(draft, { key: "Enter" });
+    });
+    await flushEffects();
+
+    expect(eventAllowed).toBe(false);
+    expect(resolveAttachedNodeId).toHaveBeenCalledOnce();
+    expect(chatState.sendMessage).toHaveBeenCalledWith({ text: "hello world" }, undefined);
+    expect(draft.value).toBe("");
+
+    cleanupTestRoot(testRoot);
+  });
+
+  it("keeps Shift+Enter as a newline action", async () => {
+    const chatState = makeUseChatState();
+    useChatMock.mockReturnValue(chatState);
+
+    const sessionClient = {
+      get: vi.fn(async () => ({
+        session_id: "session-1",
+        messages: [],
+      })),
+    };
+
+    const { AiSdkConversation } =
+      await import("../../src/components/pages/chat-page-ai-sdk-conversation.js");
+    const testRoot = renderIntoDocument(
+      e(AiSdkConversation, {
+        approvalsById: {},
+        onDelete: vi.fn(),
+        onResolveApproval: vi.fn(),
+        onRenderModeChange: vi.fn(),
+        onReasoningModeChange: vi.fn(),
+        onSessionMessages: vi.fn(),
+        renderMode: "markdown",
+        resolvingApproval: null,
+        resolveAttachedNodeId: vi.fn(async () => null),
+        reasoningMode: "collapsed",
+        session: {
+          session_id: "session-1",
+          thread_id: "thread-1",
+          messages: [],
+        },
+        sessionClient,
+        transport: { transport: true },
+      } as never),
+    );
+
+    const draft = testRoot.container.querySelector(
+      "[data-testid='ai-sdk-chat-draft']",
+    ) as HTMLTextAreaElement;
+    setNativeValue(draft, "line 1\nline 2");
+
+    let eventAllowed = true;
+    act(() => {
+      eventAllowed = dispatchDraftKeyDown(draft, { key: "Enter", shiftKey: true });
+    });
+    await flushEffects();
+
+    expect(eventAllowed).toBe(true);
+    expect(chatState.sendMessage).not.toHaveBeenCalled();
+    expect(draft.value).toBe("line 1\nline 2");
+
+    cleanupTestRoot(testRoot);
+  });
+
+  it("does not send on Enter while composing IME input", async () => {
+    const chatState = makeUseChatState();
+    useChatMock.mockReturnValue(chatState);
+
+    const sessionClient = {
+      get: vi.fn(async () => ({
+        session_id: "session-1",
+        messages: [],
+      })),
+    };
+
+    const { AiSdkConversation } =
+      await import("../../src/components/pages/chat-page-ai-sdk-conversation.js");
+    const testRoot = renderIntoDocument(
+      e(AiSdkConversation, {
+        approvalsById: {},
+        onDelete: vi.fn(),
+        onResolveApproval: vi.fn(),
+        onRenderModeChange: vi.fn(),
+        onReasoningModeChange: vi.fn(),
+        onSessionMessages: vi.fn(),
+        renderMode: "markdown",
+        resolvingApproval: null,
+        resolveAttachedNodeId: vi.fn(async () => null),
+        reasoningMode: "collapsed",
+        session: {
+          session_id: "session-1",
+          thread_id: "thread-1",
+          messages: [],
+        },
+        sessionClient,
+        transport: { transport: true },
+      } as never),
+    );
+
+    const draft = testRoot.container.querySelector(
+      "[data-testid='ai-sdk-chat-draft']",
+    ) as HTMLTextAreaElement;
+    setNativeValue(draft, "hello");
+
+    let eventAllowed = true;
+    act(() => {
+      eventAllowed = dispatchDraftKeyDown(draft, { key: "Enter", isComposing: true });
+    });
+    await flushEffects();
+
+    expect(eventAllowed).toBe(true);
+    expect(chatState.sendMessage).not.toHaveBeenCalled();
+    expect(draft.value).toBe("hello");
 
     cleanupTestRoot(testRoot);
   });

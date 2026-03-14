@@ -3,7 +3,7 @@ import type { ResolveApprovalInput } from "@tyrum/operator-core";
 import { useChat } from "@ai-sdk/react";
 import type { UIMessage } from "ai";
 import { ChevronLeft, Send, Trash2 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { toast } from "sonner";
 import type {
   createTyrumAiSdkChatSessionClient,
@@ -168,6 +168,24 @@ export function AiSdkConversation({
   const working = chat.status === "submitted" || chat.status === "streaming";
   const canSend = draft.trim().length > 0 && chat.status !== "submitted";
 
+  const handleDraftKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>): void => {
+    if (
+      event.key !== "Enter" ||
+      event.shiftKey ||
+      event.altKey ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.nativeEvent.isComposing
+    ) {
+      return;
+    }
+    event.preventDefault();
+    if (!canSend) {
+      return;
+    }
+    void send();
+  };
+
   return (
     <div
       className="flex h-full min-h-0 min-w-0 flex-1 flex-col"
@@ -229,6 +247,7 @@ export function AiSdkConversation({
             onChange={(event) => {
               setDraft(event.currentTarget.value);
             }}
+            onKeyDown={handleDraftKeyDown}
             placeholder="Send a message"
             value={draft}
           />
