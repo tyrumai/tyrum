@@ -16,6 +16,7 @@ import {
   EXECUTION_PROFILE_IDS,
   emptyDialogState,
   modelRefFor,
+  normalizeAssignments,
   normalizeDialogState,
   splitModelRef,
   type Assignment,
@@ -77,24 +78,6 @@ export function countActiveProviders(providers: readonly ConfiguredProviderGroup
   return providers.reduce((count, provider) => {
     return count + provider.accounts.filter((account) => account.status === "active").length;
   }, 0);
-}
-
-export function normalizeAssignments(assignments: readonly Assignment[]): Assignment[] {
-  const byProfileId = new Map(
-    assignments.map((assignment) => [assignment.execution_profile_id, assignment]),
-  );
-  return EXECUTION_PROFILE_IDS.map((executionProfileId) => {
-    const assignment = byProfileId.get(executionProfileId);
-    return (
-      assignment ?? {
-        execution_profile_id: executionProfileId,
-        preset_key: null,
-        preset_display_name: null,
-        provider_key: null,
-        model_id: null,
-      }
-    );
-  });
 }
 
 export function resolvePreferredPresetKey(

@@ -15,6 +15,7 @@ import {
   type DeletePresetDialogState,
   type ModelConfigHttpClient,
   type ModelPreset,
+  normalizeAssignments,
 } from "./admin-http-models.shared.js";
 import {
   buildReplacementAssignments,
@@ -22,24 +23,6 @@ import {
   useAdminMutationAccess,
   useAdminMutationHttpClient,
 } from "./admin-http-shared.js";
-
-function normalizeAssignments(assignments: Assignment[]): Assignment[] {
-  const assignmentsByProfileId = new Map(
-    assignments.map((assignment) => [assignment.execution_profile_id, assignment]),
-  );
-  return EXECUTION_PROFILE_IDS.map((executionProfileId) => {
-    const assignment = assignmentsByProfileId.get(executionProfileId);
-    return (
-      assignment ?? {
-        execution_profile_id: executionProfileId,
-        preset_key: null,
-        preset_display_name: null,
-        provider_key: null,
-        model_id: null,
-      }
-    );
-  });
-}
 
 export function AdminHttpModelsPanel({ core }: { core: OperatorCore }): React.ReactElement {
   const { canMutate, requestEnter } = useAdminMutationAccess(core);
