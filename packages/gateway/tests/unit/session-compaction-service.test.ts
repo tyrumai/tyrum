@@ -90,6 +90,46 @@ describe("shouldCompactSessionForUsage", () => {
     ).toBe(true);
   });
 
+  it("falls back to persisted message count when compacted_through_message_id is stale", () => {
+    expect(
+      shouldCompactSessionForUsage({
+        config: {
+          sessions: { max_turns: 2, compaction: { auto: true, reserved_input_tokens: 20_000 } },
+        } as never,
+        session: {
+          messages: [
+            sampleMessage("m1", "user", "hello"),
+            sampleMessage("m2", "assistant", "hi"),
+            sampleMessage("m3", "user", "again"),
+            sampleMessage("m4", "assistant", "done"),
+          ],
+          context_state: {
+            version: 1,
+            compacted_through_message_id: "missing-message",
+            recent_message_ids: [],
+            checkpoint: {
+              goal: "continue task",
+              user_constraints: [],
+              decisions: [],
+              discoveries: [],
+              completed_work: [],
+              pending_work: [],
+              unresolved_questions: [],
+              critical_identifiers: [],
+              relevant_files: [],
+              handoff_md: "Continue the task.",
+            },
+            pending_approvals: [],
+            pending_tool_state: [],
+            updated_at: "2026-03-08T00:00:00Z",
+          },
+        } as never,
+        modelResolution: { candidates: [] } as never,
+        usage: undefined,
+      }),
+    ).toBe(true);
+  });
+
   it("retries when the first checkpoint drops a critical identifier", async () => {
     mockGenerateText
       .mockResolvedValueOnce({

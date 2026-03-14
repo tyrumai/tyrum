@@ -7,6 +7,7 @@ const finalizeTurnMock = vi.hoisted(() => vi.fn());
 const compactForOverflowMock = vi.hoisted(() => vi.fn());
 const maybeAutoCompactSessionMock = vi.hoisted(() => vi.fn());
 const extractToolApprovalResumeStateMock = vi.hoisted(() => vi.fn(() => undefined));
+const sessionMessagesToModelMessagesMock = vi.hoisted(() => vi.fn(async () => []));
 
 vi.mock("ai", async (importOriginal) => {
   const actual = await importOriginal<typeof import("ai")>();
@@ -62,7 +63,7 @@ vi.mock("../../src/modules/agent/runtime/automation-delivery.js", () => ({
 vi.mock("../../src/modules/ai-sdk/message-utils.js", () => ({
   appendToolApprovalResponseMessage: vi.fn((messages: unknown) => messages),
   countAssistantMessages: vi.fn(() => 0),
-  sessionMessagesToModelMessages: vi.fn(async () => []),
+  sessionMessagesToModelMessages: sessionMessagesToModelMessagesMock,
 }));
 
 vi.mock("../../src/modules/agent/runtime/context-pruning.js", () => ({
@@ -175,6 +176,8 @@ describe("turnDirect overflow retry", () => {
     maybeAutoCompactSessionMock.mockReset();
     extractToolApprovalResumeStateMock.mockReset();
     extractToolApprovalResumeStateMock.mockReturnValue(undefined);
+    sessionMessagesToModelMessagesMock.mockReset();
+    sessionMessagesToModelMessagesMock.mockResolvedValue([]);
   });
 
   it("does not retry after tools have already been used", async () => {
@@ -215,6 +218,70 @@ describe("turnDirect overflow retry", () => {
     expect(compactForOverflowMock).toHaveBeenCalledOnce();
     expect(generateTextMock).toHaveBeenCalledTimes(2);
     expect(result.response).toEqual({ reply: "ok" });
+  });
+
+  it("strips embedded session context when checkpoint state is injected separately", async () => {
+    prepareTurnMock.mockResolvedValue({
+      ...samplePreparedTurn(new Set()),
+      userContent: [
+        { type: "text", text: "Enabled skills:\nnone" },
+        { type: "text", text: "Session context:\ncheckpoint text" },
+        { type: "text", text: "hello" },
+      ],
+    });
+    generateTextMock.mockResolvedValue({
+      text: "ok",
+      steps: [],
+      totalUsage: undefined,
+      response: { messages: [] },
+    });
+    finalizeTurnMock.mockResolvedValue({ reply: "ok" });
+
+    const deps = sampleDeps();
+    deps.sessionDal.getById = vi.fn(async () => ({
+      tenant_id: "tenant-1",
+      session_id: "session-1",
+      agent_id: "agent-1",
+      workspace_id: "workspace-1",
+      messages: [],
+      context_state: {
+        version: 1,
+        recent_message_ids: [],
+        checkpoint: {
+          goal: "continue task",
+          user_constraints: [],
+          decisions: [],
+          discoveries: [],
+          completed_work: [],
+          pending_work: [],
+          unresolved_questions: [],
+          critical_identifiers: [],
+          relevant_files: [],
+          handoff_md: "Continue the task.",
+        },
+        pending_approvals: [],
+        pending_tool_state: [],
+        updated_at: "2026-03-13T00:00:00.000Z",
+      },
+    }));
+
+    const { turnDirect } = await import("../../src/modules/agent/runtime/turn-direct.js");
+
+    await turnDirect(deps, {
+      channel: "ui",
+      thread_id: "thread-1",
+      message: "hello",
+    } as never);
+
+    const call = generateTextMock.mock.calls[0]?.[0];
+    const userMessage = Array.isArray(call?.messages) ? call.messages.at(-1) : undefined;
+    expect(userMessage).toMatchObject({
+      role: "user",
+      content: [
+        { type: "text", text: "Enabled skills:\nnone" },
+        { type: "text", text: "hello" },
+      ],
+    });
   });
 });
 

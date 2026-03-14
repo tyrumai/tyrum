@@ -1,18 +1,13 @@
-import { randomUUID } from "node:crypto";
-import { TyrumUIMessage as ChatMessageSchema } from "@tyrum/schemas";
 import type { TyrumUIMessage } from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
+import { createTextChatMessage } from "../ai-sdk/message-utils.js";
 
 export function createTextMessage(input: {
   id?: string;
   role: TyrumUIMessage["role"];
   text: string;
 }): TyrumUIMessage {
-  return ChatMessageSchema.parse({
-    id: input.id ?? randomUUID(),
-    role: input.role,
-    parts: [{ type: "text", text: input.text }],
-  });
+  return createTextChatMessage(input);
 }
 
 export async function deleteExpiredSessions(input: {

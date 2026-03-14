@@ -149,7 +149,7 @@ function recentMessageCount(session: SessionRow): number {
     (message) => message.id === compactedThroughMessageId,
   );
   if (compactedIndex < 0) {
-    return 0;
+    return session.messages.length;
   }
 
   return Math.max(0, session.messages.length - compactedIndex - 1);

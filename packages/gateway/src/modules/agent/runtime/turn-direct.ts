@@ -77,14 +77,13 @@ function createGuardianReviewTurnControl(): {
     withinTurnLoop: { value: undefined },
   };
 }
-
 function hasPromptInjectedSessionContext(
   contextState: SessionContextState | null | undefined,
 ): boolean {
   return Boolean(
     contextState?.checkpoint ||
-      contextState?.pending_approvals.length ||
-      contextState?.pending_tool_state.length,
+    contextState?.pending_approvals.length ||
+    contextState?.pending_tool_state.length,
   );
 }
 
