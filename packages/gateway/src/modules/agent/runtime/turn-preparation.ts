@@ -16,6 +16,7 @@ import { resolveSessionModelDetailed as resolveSessionModelImpl } from "./sessio
 import type { ResolvedSessionModel } from "./session-model-resolution.js";
 import {
   assemblePrompts,
+  buildToolSetBuilderDeps,
   buildRuntimePrompt,
   resolveIdentityAndContext,
   resolveToolsAndMemory,
@@ -152,24 +153,7 @@ export async function prepareTurn(
 
   const guardianReviewRequest = resolveGuardianReviewRequest(resolved.metadata);
   const guardianReviewToolSetBuilder = guardianReviewRequest
-    ? new ToolSetBuilder({
-        home: deps.home,
-        stateMode: resolveGatewayStateMode(deps.opts.container.deploymentConfig),
-        tenantId: session.tenant_id,
-        agentId: session.agent_id,
-        workspaceId: session.workspace_id,
-        sessionDal: deps.sessionDal,
-        wsEventDb: deps.opts.container.db,
-        policyService: deps.policyService,
-        approvalDal: deps.opts.container.approvalDal,
-        protocolDeps: deps.opts.protocolDeps,
-        approvalWaitMs: deps.approvalWaitMs,
-        approvalPollMs: deps.approvalPollMs,
-        logger: deps.opts.container.logger,
-        secretProvider: deps.secretProvider,
-        plugins: deps.plugins,
-        redactionEngine: deps.opts.container.redactionEngine,
-      })
+    ? new ToolSetBuilder(buildToolSetBuilderDeps(deps, session))
     : undefined;
   const normalTurnContext = guardianReviewRequest
     ? undefined
