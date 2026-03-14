@@ -16,6 +16,10 @@ import { CONNECT_PAGE_RENDER, getOperatorRouteDefinition } from "./operator-rout
 import { RetainedUiStateProvider } from "./reconnect-ui-state.js";
 import { useOperatorAppViewModel } from "./use-operator-app-view-model.js";
 import type { AdminAccessController } from "./elevated-mode.js";
+import {
+  FirstRunOnboardingPage,
+  useFirstRunOnboardingController,
+} from "./components/pages/first-run-onboarding.js";
 
 export type OperatorUiMode = "web" | "desktop";
 
@@ -94,6 +98,11 @@ function OperatorUiAppRoot({
   });
   const routeDefinition = getOperatorRouteDefinition(viewModel.route);
   const reconnectUiScopeKey = `${mode}:${core.httpBaseUrl}:${core.deviceId ?? ""}`;
+  const onboarding = useFirstRunOnboardingController({
+    core,
+    hostKind,
+    scopeKey: reconnectUiScopeKey,
+  });
 
   const shell = (
     <AppShell
@@ -153,6 +162,17 @@ function OperatorUiAppRoot({
                 </div>
               </ScrollArea>
             </div>
+          ) : onboarding.isOpen ? (
+            <FirstRunOnboardingPage
+              core={core}
+              issueSignature={onboarding.issueSignature}
+              onClose={onboarding.close}
+              onDismiss={onboarding.dismiss}
+              onMarkCompleted={onboarding.markCompleted}
+              onNavigate={(routeId) => {
+                viewModel.navigate(routeId);
+              }}
+            />
           ) : (
             <Suspense fallback={<OperatorRouteFallback />}>
               {routeDefinition?.render({
@@ -160,6 +180,8 @@ function OperatorUiAppRoot({
                 mode,
                 hostKind,
                 navigate: viewModel.navigate,
+                onboardingAvailable: onboarding.available,
+                onOpenOnboarding: onboarding.open,
                 onReloadPage,
                 onReconfigureGateway,
               }) ?? null}

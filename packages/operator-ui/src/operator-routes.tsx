@@ -34,6 +34,8 @@ function lazyNamed<TProps>(
 const DashboardPage = lazyNamed<{
   core: OperatorCore;
   onNavigate: (id: string) => void;
+  onboardingAvailable?: boolean;
+  onOpenOnboarding?: () => void;
   connectionRouteId: "configure" | "desktop" | "mobile";
 }>(() => import("./components/pages/dashboard-page.js"), "DashboardPage");
 const ChatPage = lazyNamed<{ core: OperatorCore }>(
@@ -107,6 +109,8 @@ export interface OperatorRouteRenderContext {
   mode: OperatorUiMode;
   hostKind: HostKind;
   navigate: (id: string) => void;
+  onboardingAvailable?: boolean;
+  onOpenOnboarding?: () => void;
   onReconfigureGateway?: (httpUrl: string, wsUrl: string) => void;
   onReloadPage?: () => void;
 }
@@ -129,10 +133,12 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
     navGroup: "sidebar",
     shortcut: true,
     hostKinds: SHARED_HOST_KINDS,
-    render: ({ core, hostKind, navigate }) => (
+    render: ({ core, hostKind, navigate, onboardingAvailable, onOpenOnboarding }) => (
       <DashboardPage
         core={core}
         onNavigate={navigate}
+        onboardingAvailable={onboardingAvailable}
+        onOpenOnboarding={onOpenOnboarding}
         connectionRouteId={hostKind === "desktop" || hostKind === "mobile" ? hostKind : "configure"}
       />
     ),

@@ -1,5 +1,5 @@
 import { defineConfig } from "vitest/config";
-import { readdirSync } from "node:fs";
+import { mkdirSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
@@ -15,7 +15,33 @@ function resolvePnpmPackageDir(packageName: string): string {
   return resolve(pnpmStoreDir, entry, "node_modules", packageName);
 }
 
-const enforceCoverageThresholds = process.env.VITEST_SHARD_RUN !== "1";
+function readVitestShardId(): string | null {
+  for (let index = 0; index < process.argv.length; index += 1) {
+    const argument = process.argv[index];
+    if (argument === "--shard") {
+      const shardId = process.argv[index + 1];
+      return typeof shardId === "string" && shardId.length > 0 ? shardId : null;
+    }
+    if (argument.startsWith("--shard=")) {
+      const shardId = argument.slice("--shard=".length);
+      return shardId.length > 0 ? shardId : null;
+    }
+  }
+  return null;
+}
+
+const vitestShardId = readVitestShardId();
+const isVitestShardRun = process.env.VITEST_SHARD_RUN === "1" || vitestShardId !== null;
+
+if (vitestShardId) {
+  // Vitest coverage shards write partial results under coverage/.tmp-<shard>.
+  // Create it eagerly so shard runs do not fail before the merge job combines reports.
+  mkdirSync(resolve(__dirname, "coverage", `.tmp-${vitestShardId.replace("/", "-")}`), {
+    recursive: true,
+  });
+}
+
+const enforceCoverageThresholds = !isVitestShardRun;
 const coverageThresholds = {
   lines: 75,
   functions: 75,

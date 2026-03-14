@@ -67,12 +67,16 @@ function getAuthEnabledLabel(status: StatusResponse | null): string {
 export interface DashboardPageProps {
   core: OperatorCore;
   onNavigate?: (id: string) => void;
+  onboardingAvailable?: boolean;
+  onOpenOnboarding?: () => void;
   connectionRouteId?: "configure" | "desktop" | "mobile";
 }
 
 export function DashboardPage({
   core,
   onNavigate,
+  onboardingAvailable = false,
+  onOpenOnboarding,
   connectionRouteId = "configure",
 }: DashboardPageProps) {
   const wideDashboard = useAppShellMinWidth(DASHBOARD_WIDE_CONTENT_WIDTH_PX);
@@ -233,11 +237,26 @@ export function DashboardPage({
       {configHealthIssues.length > 0 ? (
         <Card data-testid="dashboard-config-health">
           <CardHeader className="pb-2.5">
-            <div className="grid gap-1">
-              <h3 className="text-sm font-semibold">Configuration Health</h3>
-              <div className="text-sm text-fg-muted">
-                Resolve configuration issues before agents can run reliably.
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="grid gap-1">
+                <h3 className="text-sm font-semibold">Configuration Health</h3>
+                <div className="text-sm text-fg-muted">
+                  Resolve configuration issues before agents can run reliably.
+                </div>
               </div>
+              {onboardingAvailable && onOpenOnboarding ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  data-testid="dashboard-resume-setup"
+                  onClick={() => {
+                    onOpenOnboarding();
+                  }}
+                >
+                  Resume Setup
+                </Button>
+              ) : null}
             </div>
           </CardHeader>
           <CardContent className="grid gap-3">

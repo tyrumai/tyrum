@@ -53,37 +53,56 @@ export function createProviderConfigHttpFixtures() {
 }
 
 export function createModelConfigHttpFixtures() {
-  const modelAssignmentsUpdate = vi.fn(async () => ({
-    status: "ok" as const,
-    assignments: EXECUTION_PROFILE_IDS.map(createModelAssignment),
-  }));
+  const presets = [
+    {
+      preset_id: "c2d1f6c6-f541-46a8-9f47-8a2d0ff3c9e5",
+      preset_key: "preset-default",
+      display_name: "Default",
+      provider_key: "openai",
+      model_id: "gpt-4.1",
+      options: {},
+      created_at: "2026-03-01T00:00:00.000Z",
+      updated_at: "2026-03-01T00:00:00.000Z",
+    },
+    {
+      preset_id: "d5c709e9-4585-426e-81ed-7904f7fbbe1b",
+      preset_key: "preset-review",
+      display_name: "Review",
+      provider_key: "openai",
+      model_id: "gpt-4.1-mini",
+      options: { reasoning_effort: "medium" },
+      created_at: "2026-03-01T00:00:00.000Z",
+      updated_at: "2026-03-01T00:00:00.000Z",
+    },
+  ];
+  let assignments = EXECUTION_PROFILE_IDS.map(createModelAssignment);
+
+  const modelAssignmentsUpdate = vi.fn(
+    async (input: { assignments: Record<string, string | null> }) => {
+      assignments = EXECUTION_PROFILE_IDS.map((execution_profile_id) => {
+        const preset_key = input.assignments[execution_profile_id] ?? null;
+        const preset = presets.find((candidate) => candidate.preset_key === preset_key) ?? null;
+        return {
+          execution_profile_id,
+          preset_key,
+          preset_display_name: preset?.display_name ?? null,
+          provider_key: preset?.provider_key ?? null,
+          model_id: preset?.model_id ?? null,
+        };
+      });
+
+      return {
+        status: "ok" as const,
+        assignments,
+      };
+    },
+  );
 
   return {
     modelConfig: {
       listPresets: vi.fn(async () => ({
         status: "ok" as const,
-        presets: [
-          {
-            preset_id: "c2d1f6c6-f541-46a8-9f47-8a2d0ff3c9e5",
-            preset_key: "preset-default",
-            display_name: "Default",
-            provider_key: "openai",
-            model_id: "gpt-4.1",
-            options: {},
-            created_at: "2026-03-01T00:00:00.000Z",
-            updated_at: "2026-03-01T00:00:00.000Z",
-          },
-          {
-            preset_id: "d5c709e9-4585-426e-81ed-7904f7fbbe1b",
-            preset_key: "preset-review",
-            display_name: "Review",
-            provider_key: "openai",
-            model_id: "gpt-4.1-mini",
-            options: { reasoning_effort: "medium" },
-            created_at: "2026-03-01T00:00:00.000Z",
-            updated_at: "2026-03-01T00:00:00.000Z",
-          },
-        ],
+        presets,
       })),
       listAvailable: vi.fn(async () => ({
         status: "ok" as const,
@@ -110,12 +129,56 @@ export function createModelConfigHttpFixtures() {
           },
         ],
       })),
-      createPreset: vi.fn(async () => ({ status: "ok" as const })),
-      updatePreset: vi.fn(async () => ({ status: "ok" as const })),
+      createPreset: vi.fn(
+        async (input: {
+          display_name: string;
+          provider_key: string;
+          model_id: string;
+          options: Record<string, string>;
+        }) => {
+          const preset = {
+            preset_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            preset_key: `preset-${
+              input.display_name
+                .toLowerCase()
+                .replaceAll(/[^a-z0-9]+/g, "-")
+                .replaceAll(/^-+|-+$/g, "") || "new"
+            }`,
+            display_name: input.display_name,
+            provider_key: input.provider_key,
+            model_id: input.model_id,
+            options: input.options,
+            created_at: "2026-03-02T00:00:00.000Z",
+            updated_at: "2026-03-02T00:00:00.000Z",
+          };
+          presets.push(preset);
+          return { status: "ok" as const, preset };
+        },
+      ),
+      updatePreset: vi.fn(
+        async (
+          presetKey: string,
+          input: { display_name?: string; options?: Record<string, string> },
+        ) => {
+          const preset =
+            presets.find((candidate) => candidate.preset_key === presetKey) ?? presets[0];
+          if (!preset) {
+            throw new Error(`Unknown preset: ${presetKey}`);
+          }
+          if (input.display_name) {
+            preset.display_name = input.display_name;
+          }
+          if (input.options) {
+            preset.options = input.options;
+          }
+          preset.updated_at = "2026-03-03T00:00:00.000Z";
+          return { status: "ok" as const, preset };
+        },
+      ),
       deletePreset: vi.fn(async () => ({ status: "ok" as const })),
       listAssignments: vi.fn(async () => ({
         status: "ok" as const,
-        assignments: EXECUTION_PROFILE_IDS.map(createModelAssignment),
+        assignments,
       })),
       updateAssignments: modelAssignmentsUpdate,
     },
