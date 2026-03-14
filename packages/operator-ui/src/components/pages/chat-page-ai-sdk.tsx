@@ -28,7 +28,45 @@ import type { ReasoningDisplayMode } from "./chat-page-ai-sdk-types.js";
 
 const CHAT_TWO_PANEL_CONTENT_WIDTH_PX = 800;
 
-type ChatAgentOption = { agent_id: string };
+type ChatAgentOption = {
+  agent_id: string;
+  label: string;
+};
+
+function formatChatAgentLabel(input: {
+  agent_id: string;
+  agent_key?: string;
+  persona?: { name?: string };
+}): string {
+  const agentId = input.agent_id.trim();
+  const agentKey = input.agent_key?.trim() ?? "";
+  const displayName = input.persona?.name?.trim() || agentKey || agentId;
+  if (!agentKey || displayName === agentKey) {
+    return displayName;
+  }
+  return `${displayName} (${agentKey})`;
+}
+
+function normalizeChatAgentOptions(
+  input: Array<{
+    agent_id: string;
+    agent_key?: string;
+    persona?: { name?: string };
+  }>,
+): ChatAgentOption[] {
+  const byId = new Map<string, ChatAgentOption>();
+  for (const agent of input) {
+    const agentId = agent.agent_id.trim();
+    if (!agentId || byId.has(agentId)) {
+      continue;
+    }
+    byId.set(agentId, {
+      agent_id: agentId,
+      label: formatChatAgentLabel(agent),
+    });
+  }
+  return [...byId.values()];
+}
 
 type SessionListState = {
   error: string | null;
@@ -108,7 +146,7 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
         if (cancelled) {
           return;
         }
-        const nextAgents = result.agents.map((agent) => ({ agent_id: agent.agent_id }));
+        const nextAgents = normalizeChatAgentOptions(result.agents);
         setAgents(nextAgents);
         const firstAgent = nextAgents[0];
         if (firstAgent) {

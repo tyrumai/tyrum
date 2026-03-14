@@ -172,13 +172,15 @@ function textFromMessage(message: UIMessage): string {
 function TextBlock({ value, renderMode }: { value: string; renderMode: "markdown" | "text" }) {
   if (renderMode === "markdown") {
     return (
-      <div className="prose prose-sm max-w-none text-fg prose-headings:mb-2 prose-headings:mt-3 prose-headings:text-fg prose-p:my-2 prose-p:text-fg prose-ul:my-2 prose-ol:my-2 prose-strong:text-fg prose-code:text-fg prose-pre:my-2 prose-pre:bg-bg-subtle">
+      <div className="prose prose-sm min-w-0 max-w-none break-words text-fg [overflow-wrap:anywhere] prose-headings:mb-2 prose-headings:mt-3 prose-headings:text-fg prose-p:my-2 prose-p:break-words prose-p:text-fg prose-ul:my-2 prose-ol:my-2 prose-strong:text-fg prose-code:break-words prose-code:text-fg prose-code:[overflow-wrap:anywhere] prose-pre:my-2 prose-pre:overflow-x-auto prose-pre:whitespace-pre-wrap prose-pre:break-words prose-pre:bg-bg-subtle prose-pre:[overflow-wrap:anywhere]">
         <ReactMarkdown remarkPlugins={[remarkGfm]}>{value}</ReactMarkdown>
       </div>
     );
   }
   return (
-    <pre className="whitespace-pre-wrap break-words text-[13px] leading-5 text-fg">{value}</pre>
+    <pre className="whitespace-pre-wrap break-words text-[13px] leading-5 text-fg [overflow-wrap:anywhere]">
+      {value}
+    </pre>
   );
 }
 
@@ -218,7 +220,7 @@ function ToolPartCard({
       {"input" in part && part.input !== undefined ? (
         <div className="mt-2">
           <div className="mb-1 text-[11px] uppercase tracking-wide text-fg-muted">Input</div>
-          <pre className="overflow-x-auto rounded-md bg-bg px-2 py-1.5 text-xs text-fg">
+          <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded-md bg-bg px-2 py-1.5 text-xs text-fg [overflow-wrap:anywhere]">
             {stringifyPart(part.input)}
           </pre>
         </div>
@@ -227,14 +229,16 @@ function ToolPartCard({
       {"output" in part && part.output !== undefined ? (
         <div className="mt-2">
           <div className="mb-1 text-[11px] uppercase tracking-wide text-fg-muted">Output</div>
-          <pre className="overflow-x-auto rounded-md bg-bg px-2 py-1.5 text-xs text-fg">
+          <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded-md bg-bg px-2 py-1.5 text-xs text-fg [overflow-wrap:anywhere]">
             {stringifyPart(part.output)}
           </pre>
         </div>
       ) : null}
 
       {"errorText" in part && typeof part.errorText === "string" ? (
-        <div className="mt-2 text-sm text-danger-700">{part.errorText}</div>
+        <div className="mt-2 break-words text-sm text-danger-700 [overflow-wrap:anywhere]">
+          {part.errorText}
+        </div>
       ) : null}
 
       {showApprovalDetails && "approval" in part && part.approval ? (
@@ -346,12 +350,12 @@ export function MessageCard({
   return (
     <div
       className={cn(
-        "group relative rounded-lg px-2 py-1.5",
+        "group relative w-full min-w-0 rounded-lg px-2 py-1.5",
         messageContainerClassName(message.role),
       )}
     >
-      <div className="mb-1.5 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-fg-muted">
+      <div className="mb-1.5 flex min-w-0 items-center justify-between gap-2">
+        <div className="min-w-0 flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-fg-muted">
           <span>{message.role}</span>
           {createdAt ? (
             <>
@@ -438,7 +442,7 @@ export function MessageCard({
                 <div className="mb-1 text-[11px] uppercase tracking-wide text-fg-muted">
                   {part.type}
                 </div>
-                <pre className="overflow-x-auto whitespace-pre-wrap break-words text-xs text-fg">
+                <pre className="overflow-x-auto whitespace-pre-wrap break-words text-xs text-fg [overflow-wrap:anywhere]">
                   {stringifyPart(part.data)}
                 </pre>
               </div>

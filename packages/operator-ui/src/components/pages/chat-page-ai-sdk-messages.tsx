@@ -59,13 +59,13 @@ export function AiSdkChatMessageList({
   return (
     <div
       ref={transcriptRef}
-      className="min-h-0 flex-1 overflow-y-auto p-2"
+      className="min-h-0 min-w-0 flex-1 overflow-y-auto p-2"
       data-testid="ai-sdk-chat-transcript"
     >
       {messages.length === 0 ? (
         <div className="text-sm text-fg-muted">No messages yet.</div>
       ) : (
-        <div className="grid gap-1.5">
+        <div className="grid min-w-0 gap-1.5">
           {messages.map((message) => (
             <MessageCard
               key={message.id}
