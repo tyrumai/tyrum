@@ -1,3 +1,4 @@
+import { configureCommander } from "@tyrum/cli-utils";
 import { Command } from "commander";
 import { normalizeFingerprint256 } from "@tyrum/client/node";
 import type { ActionPrimitive } from "@tyrum/client";
@@ -149,14 +150,7 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
   const normalizedArgv = normalizeArgv(argv);
   let result: CliCommand | undefined;
 
-  const program = new Command()
-    .name("tyrum-cli")
-    .helpOption(false)
-    .showHelpAfterError(false)
-    .allowExcessArguments(false)
-    .allowUnknownOption(false)
-    .configureOutput({ writeOut: () => undefined, writeErr: () => undefined })
-    .exitOverride();
+  const program = configureCommander(new Command().name("tyrum-cli"));
 
   const configCommand = program.command("config");
   configCommand

@@ -1,12 +1,9 @@
 {
-  "name": "@tyrum/cli",
+  "name": "@tyrum/cli-utils",
   "version": "0.1.0",
   "author": "Ron Hernaus <ron@virtunet.nl>",
   "license": "MIT",
   "type": "module",
-  "bin": {
-    "tyrum-cli": "./bin/tyrum-cli.mjs"
-  },
   "exports": {
     ".": {
       "types": "./dist/index.d.mts",
@@ -14,16 +11,12 @@
     }
   },
   "files": [
-    "dist",
-    "bin"
+    "dist"
   ],
   "scripts": {
-    "build": "tsdown src/index.ts --format esm --dts",
-    "start": "node bin/tyrum-cli.mjs"
+    "build": "tsdown src/index.ts --format esm --dts"
   },
   "dependencies": {
-    "@tyrum/cli-utils": "workspace:*",
-    "@tyrum/client": "workspace:*",
     "commander": "^14.0.3"
   },
   "devDependencies": {

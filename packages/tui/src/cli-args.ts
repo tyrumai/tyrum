@@ -1,4 +1,5 @@
-import { Command, CommanderError } from "commander";
+import { configureCommander, normalizeCommanderError } from "@tyrum/cli-utils";
+import { Command } from "commander";
 
 export type TuiCliCommand =
   | { kind: "help" }
@@ -13,33 +14,6 @@ export type TuiCliCommand =
       tlsAllowSelfSigned?: boolean;
       reconnect?: boolean;
     };
-
-function normalizeCommanderError(error: unknown): Error {
-  if (!(error instanceof CommanderError)) {
-    return error instanceof Error ? error : new Error(String(error));
-  }
-
-  if (error.code === "commander.optionMissingArgument") {
-    const match = error.message.match(/option '([^']+?)\s+<[^>]+>'/);
-    const flag = match?.[1]
-      ?.split(",")
-      .map((part) => part.trim())
-      .at(-1);
-    return new Error(`${flag ?? "option"} requires a value`);
-  }
-
-  if (error.code === "commander.unknownOption") {
-    const match = error.message.match(/unknown option '([^']+)'/);
-    return new Error(`unknown argument '${match?.[1] ?? ""}'`);
-  }
-
-  if (error.code === "commander.unknownCommand") {
-    const match = error.message.match(/unknown command '([^']+)'/);
-    return new Error(`unknown argument '${match?.[1] ?? ""}'`);
-  }
-
-  return new Error(error.message.replace(/^error:\s*/i, ""));
-}
 
 export function parseTuiCliArgs(argv: readonly string[]): TuiCliCommand {
   if (argv.length === 0) return { kind: "start" };
@@ -61,15 +35,9 @@ export function parseTuiCliArgs(argv: readonly string[]): TuiCliCommand {
   }
 
   let result: TuiCliCommand | undefined;
-  const program = new Command()
-    .name("tyrum-tui")
-    .helpOption(false)
-    .version("", "-v, --version", "")
-    .showHelpAfterError(false)
-    .allowExcessArguments(false)
-    .allowUnknownOption(false)
-    .configureOutput({ writeOut: () => undefined, writeErr: () => undefined })
-    .exitOverride();
+  const program = configureCommander(
+    new Command().name("tyrum-tui").version("", "-v, --version", ""),
+  );
 
   program
     .command("start")

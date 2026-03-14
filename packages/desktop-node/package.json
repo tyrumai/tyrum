@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@nut-tree-fork/nut-js": "^4.2.6",
+    "@tyrum/cli-utils": "workspace:*",
     "@tyrum/client": "workspace:*",
     "@tyrum/schemas": "workspace:*",
     "commander": "^14.0.3",

@@ -66,7 +66,11 @@ describe("gateway CLI argument parsing", () => {
   });
 
   it("rejects unknown commands", () => {
-    expect(() => parseCliArgs(["nope"])).toThrow("unknown command");
+    expect(() => parseCliArgs(["nope"])).toThrow("unknown command 'nope'");
+  });
+
+  it("rejects unknown start flags", () => {
+    expect(() => parseCliArgs(["--nope"])).toThrow("unknown argument '--nope'");
   });
 
   it("parses role subcommands", () => {

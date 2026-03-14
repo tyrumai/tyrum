@@ -22,6 +22,11 @@ describe("Admin page dead code", () => {
       "packages/operator-ui/src/components/admin-workboard/work-items-table.tsx",
       "packages/operator-ui/src/components/admin-workboard/work-scope-selector.tsx",
       "packages/operator-ui/src/components/admin-workboard/ws-json-panel.tsx",
+
+      "packages/operator-ui/src/components/pages/admin-http-auth-pins-card.tsx",
+      "packages/operator-ui/src/components/pages/admin-http-auth-profiles-card.tsx",
+      "packages/operator-ui/src/components/pages/admin-http-device-tokens.tsx",
+      "packages/operator-ui/src/components/pages/admin-http-plugins.tsx",
     ];
 
     for (const path of removed) {

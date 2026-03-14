@@ -5,6 +5,7 @@ import {
   createDeviceIdentity,
   DeviceIdentityError,
   loadOrCreateDeviceIdentity,
+  parseStoredDeviceIdentity,
   signProofWithPrivateKey,
 } from "../src/index.js";
 
@@ -36,6 +37,24 @@ describe("device identity helpers", () => {
     const identity = await loadOrCreateDeviceIdentity({ load, save });
     expect(identity).toEqual(existing);
     expect(save).not.toHaveBeenCalled();
+  });
+
+  it("normalizes valid stored identities and rejects malformed ones", () => {
+    expect(
+      parseStoredDeviceIdentity({
+        deviceId: " dev_existing ",
+        publicKey: " public-key ",
+        privateKey: " private-key ",
+      }),
+    ).toEqual({
+      deviceId: "dev_existing",
+      publicKey: "public-key",
+      privateKey: "private-key",
+    });
+
+    expect(() => parseStoredDeviceIdentity({ deviceId: "dev_existing", publicKey: "" })).toThrow(
+      "Stored device identity is missing required fields",
+    );
   });
 
   it("creates and saves identity when storage is empty", async () => {

@@ -4,7 +4,7 @@ import {
   PlaywrightProvider,
   type PlaywrightProviderConfig,
 } from "../src/main/providers/playwright-provider.js";
-import { MockPlaywrightBackend } from "../src/main/providers/backends/playwright-backend.js";
+import { MockPlaywrightBackend } from "./test-utils/mock-playwright-backend.js";
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -64,4 +64,8 @@ describe("tui cli args", () => {
   it("rejects unknown arguments", () => {
     expect(() => parseTuiCliArgs(["--nope"])).toThrow(/unknown argument/i);
   });
+
+  it("rejects unknown commands with the shared wording", () => {
+    expect(() => parseTuiCliArgs(["nope"])).toThrow("unknown command 'nope'");
+  });
 });

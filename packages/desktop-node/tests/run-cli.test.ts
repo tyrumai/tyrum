@@ -154,7 +154,7 @@ describe("runCli", () => {
     const code = await runCli(["--nope"]);
 
     expect(code).toBe(1);
-    expect(errorSpy).toHaveBeenCalledWith("error: unknown argument: --nope");
+    expect(errorSpy).toHaveBeenCalledWith("error: unknown argument '--nope'");
     expect(String(logSpy.mock.calls[0]?.[0] ?? "")).toContain("tyrum-desktop-node");
   });
 

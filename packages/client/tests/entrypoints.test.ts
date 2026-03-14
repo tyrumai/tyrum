@@ -29,6 +29,8 @@ describe("@tyrum/client entrypoints", () => {
       indexSource,
       browserSource,
       nodeSource,
+      sharedSource,
+      publicTypesSource,
       typesSource,
       httpSharedSource,
       wsTransportSource,
@@ -36,6 +38,8 @@ describe("@tyrum/client entrypoints", () => {
       readFile(resolve(__dirname, "../src/index.ts"), "utf8"),
       readFile(resolve(__dirname, "../src/browser.ts"), "utf8"),
       readFile(resolve(__dirname, "../src/node.ts"), "utf8"),
+      readFile(resolve(__dirname, "../src/public-shared.ts"), "utf8"),
+      readFile(resolve(__dirname, "../src/public-types.ts"), "utf8"),
       readFile(resolve(__dirname, "../src/types.ts"), "utf8"),
       readFile(resolve(__dirname, "../src/http/shared.ts"), "utf8"),
       readFile(resolve(__dirname, "../src/ws-client.transport.ts"), "utf8"),
@@ -46,10 +50,13 @@ describe("@tyrum/client entrypoints", () => {
     expect(browserSource).not.toContain("SessionTranscript");
     expect(nodeSource).not.toContain('export { VERSION } from "./index.js";');
     expect(nodeSource).not.toContain("SessionTranscript");
+    expect(sharedSource).not.toContain("SessionTranscript");
+    expect(publicTypesSource).not.toContain("SessionTranscript");
     expect(typesSource).not.toContain("SessionTranscript");
-    expect(indexSource).toContain("SessionContextState");
-    expect(browserSource).toContain("SessionContextState");
-    expect(nodeSource).toContain("SessionContextState");
+    expect(indexSource).toContain('export * from "./public-shared.js";');
+    expect(browserSource).toContain('export * from "./public-shared.js";');
+    expect(nodeSource).toContain('export * from "./public-shared.js";');
+    expect(publicTypesSource).toContain('export type * from "./types.js";');
     expect(typesSource).toContain("SessionContextState");
     expect(httpSharedSource).not.toContain('from "../node/load-pinned-transport.js"');
     expect(wsTransportSource).not.toContain('from "./node/load-pinned-transport.js"');

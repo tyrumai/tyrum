@@ -155,4 +155,15 @@ describe("mobile-config", () => {
       locationStreaming: updated.locationStreaming,
     });
   });
+
+  it("surfaces invalid stored operator identity instead of treating it as missing", async () => {
+    secureState.set("operator.identity", { deviceId: "dev_1", publicKey: "" });
+
+    const { createOperatorIdentityStorage } = await import("../src/mobile-config.js");
+
+    await expect(createOperatorIdentityStorage().load()).rejects.toMatchObject({
+      name: "DeviceIdentityError",
+      code: "device_identity_invalid_stored_value",
+    });
+  });
 });
