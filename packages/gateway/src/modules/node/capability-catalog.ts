@@ -18,6 +18,7 @@ import {
   DesktopMouseArgs,
   DesktopQueryArgs,
   DesktopQueryResult,
+  DesktopScreenshotResult,
   DesktopScreenshotArgs,
   DesktopSnapshotArgs,
   DesktopSnapshotResult,
@@ -241,7 +242,7 @@ const CATALOG_ENTRIES: CapabilityCatalogEntry[] = [
       "screenshot",
       "Capture a desktop screenshot.",
       DesktopScreenshotArgs,
-      DesktopSnapshotResult,
+      DesktopScreenshotResult,
     ),
   ),
   createEntry(

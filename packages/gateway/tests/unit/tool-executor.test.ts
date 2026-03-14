@@ -11,6 +11,7 @@ import {
 } from "./tool-executor.security-test-support.js";
 import { registerTempHomeLifecycle } from "./tool-executor.shared-test-support.js";
 import { registerToolExecutorNodeDispatchTests } from "./tool-executor.node-dispatch-test-support.js";
+import { registerToolExecutorNodeToolTests } from "./tool-executor.node-tools-test-support.js";
 
 describe("ToolExecutor", () => {
   const home = registerTempHomeLifecycle();
@@ -18,6 +19,7 @@ describe("ToolExecutor", () => {
   describe("builtin routing", () => {
     registerToolExecutorBuiltinCoreTests(home);
     registerToolExecutorNodeDispatchTests(home);
+    registerToolExecutorNodeToolTests(home);
   });
 
   describe("path sandboxing", () => {

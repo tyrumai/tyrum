@@ -175,7 +175,6 @@ export class NodeInventoryService {
       ];
 
       for (const descriptorId of candidateDescriptorIds) {
-        if (filteredCapability && filteredCapability !== descriptorId) continue;
         const advertisedCapability = node.capabilities.get(descriptorId);
         const pairedCapability = allowlist.find((entry) => entry.id === descriptorId);
         if (!advertisedCapability && !pairedCapability) {
@@ -228,6 +227,12 @@ export class NodeInventoryService {
         });
       }
 
+      if (
+        filteredCapability &&
+        !summaries.some((summary) => summary.capability === filteredCapability)
+      ) {
+        continue;
+      }
       if (dispatchableOnly && !summaries.some((summary) => summary.dispatchable)) {
         continue;
       }

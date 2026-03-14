@@ -18,7 +18,13 @@ import { tagContent } from "./provenance.js";
 import { sanitizeForModel } from "./sanitizer.js";
 import type { ToolResult, WorkspaceLeaseConfig } from "./tool-executor-shared.js";
 import {
+  ensureSyntheticExecutionScope,
+  stripNodeInspectionControlState,
+  stripNodeListControlState,
+} from "./tool-executor-node-dispatch-internals.js";
+import {
   dispatchError,
+  normalizeValidationFailure,
   normalizeExecutionFailure,
   normalizeJsonObject,
   normalizeProviderError,
@@ -44,45 +50,6 @@ type NodeDispatchAudit = {
   execution_step_id?: string;
   policy_snapshot_id?: string;
 };
-
-function stripNodeListControlState(payload: ReturnType<typeof NodeInventoryResponse.parse>) {
-  return {
-    status: payload.status,
-    generated_at: payload.generated_at,
-    ...(payload.key ? { key: payload.key } : {}),
-    ...(payload.lane ? { lane: payload.lane } : {}),
-    nodes: payload.nodes.map((node) => ({
-      node_id: node.node_id,
-      ...(node.label ? { label: node.label } : {}),
-      ...(node.mode ? { mode: node.mode } : {}),
-      ...(node.version ? { version: node.version } : {}),
-      connected: node.connected,
-      ...(node.last_seen_at ? { last_seen_at: node.last_seen_at } : {}),
-      capabilities: node.capabilities.map((capabilitySummary) => ({
-        capability: capabilitySummary.capability,
-        capability_version: capabilitySummary.capability_version,
-        connected: capabilitySummary.connected,
-        supported_action_count: capabilitySummary.supported_action_count,
-        enabled_action_count: capabilitySummary.enabled_action_count,
-        available_action_count: capabilitySummary.available_action_count,
-        unknown_action_count: capabilitySummary.unknown_action_count,
-      })),
-    })),
-  };
-}
-
-function stripNodeInspectionControlState(payload: NodeCapabilityInspectionResponseT) {
-  return {
-    status: payload.status,
-    generated_at: payload.generated_at,
-    node_id: payload.node_id,
-    capability: payload.capability,
-    capability_version: payload.capability_version,
-    connected: payload.connected,
-    source_of_truth: payload.source_of_truth,
-    actions: payload.actions,
-  };
-}
 
 type DispatchExecutionContext = {
   tenantId: string;
@@ -194,14 +161,26 @@ async function performNodeDispatch(
       [catalogAction.transport.op_field]: catalogAction.transport.op_value,
     }) as Record<string, unknown>;
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return preflightFailure(request, dispatchError("invalid_input", message));
+    return preflightFailure(request, normalizeValidationFailure(error));
   }
 
   const timeoutMs = resolveTimeout(request.timeout_ms);
   const runId = audit?.execution_run_id?.trim() || crypto.randomUUID();
   const stepId = audit?.execution_step_id?.trim() || crypto.randomUUID();
   const attemptId = crypto.randomUUID();
+  const hasExecutionScope = Boolean(
+    audit?.execution_run_id?.trim() && audit?.execution_step_id?.trim(),
+  );
+  const hasDurableRunId = hasExecutionScope
+    ? true
+    : await ensureSyntheticExecutionScope(context, {
+        nodeId: request.node_id,
+        runId,
+        stepId,
+        attemptId,
+        key: audit?.work_session_key,
+        lane: audit?.work_lane,
+      });
   const primitive: ActionPrimitive = {
     type: catalogAction.transport.primitive_kind,
     args: actionArgs,
@@ -229,6 +208,7 @@ async function performNodeDispatch(
     return NodeActionDispatchResponse.parse({
       status: "ok",
       task_id: taskId,
+      ...(hasDurableRunId ? { run_id: runId } : {}),
       node_id: request.node_id,
       capability: request.capability,
       action_name: request.action_name,
@@ -241,6 +221,7 @@ async function performNodeDispatch(
     return NodeActionDispatchResponse.parse({
       status: "ok",
       task_id: "not-dispatched",
+      ...(hasDurableRunId ? { run_id: runId } : {}),
       node_id: request.node_id,
       capability: request.capability,
       action_name: request.action_name,
@@ -370,6 +351,7 @@ export async function executeNodeListTool(
         lane,
       })),
     }),
+    { capability, dispatchableOnly, key, lane },
   );
   const tagged = tagContent(JSON.stringify(payload), "tool");
   return {
@@ -405,11 +387,11 @@ export async function executeNodeDispatchTool(
   try {
     request = NodeActionDispatchRequest.parse(args);
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const details = normalizeValidationFailure(error);
     return {
       tool_call_id: toolCallId,
       output: "",
-      error: `invalid node dispatch request: ${message}`,
+      error: `invalid node dispatch request: ${details.message}`,
     };
   }
   if (isLegacyUmbrellaCapabilityDescriptorId(request.capability)) {

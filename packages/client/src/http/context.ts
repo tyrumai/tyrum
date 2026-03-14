@@ -74,9 +74,6 @@ const ToolRegistryEntry = z
   .object({
     id: NonEmptyString,
     description: z.string(),
-    risk: z.enum(["low", "medium", "high"]),
-    requires_confirmation: z.boolean(),
-    keywords: z.array(z.string()),
     source: z.enum(["builtin", "builtin_mcp", "mcp", "plugin"]),
     family: z.string().nullable(),
     backing_server_id: z.string().nullable(),

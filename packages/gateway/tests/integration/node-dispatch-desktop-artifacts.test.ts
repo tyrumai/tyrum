@@ -79,6 +79,12 @@ describe("tool.node.dispatch desktop evidence artifacts", () => {
     }
   });
 
+  function parseTaggedToolOutput(output: string): Record<string, unknown> {
+    const trimmed = output.trim();
+    const match = trimmed.match(/^<data source="tool">\s*([\s\S]*)\s*<\/data>$/);
+    return JSON.parse((match?.[1] ?? trimmed).trim()) as Record<string, unknown>;
+  }
+
   it("stores screenshot bytes as a run-scoped artifact and strips base64 from tool output", async () => {
     const container = await createTestContainer();
     const authTokens = new AuthTokenService(container.db);
@@ -163,6 +169,62 @@ describe("tool.node.dispatch desktop evidence artifacts", () => {
     expect(row?.labels_json).toContain("desktop");
 
     const res = await app.request(`/runs/${scope.runId}/artifacts/${artifactId}`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("image/png");
+    expect(Buffer.from(await res.arrayBuffer())).toEqual(pngBytes);
+
+    await container.db.close();
+  });
+
+  it("creates a synthetic execution scope for chat-style screenshot dispatch so artifacts are fetchable", async () => {
+    const container = await createTestContainer();
+    const authTokens = new AuthTokenService(container.db);
+    const tenantToken = await authTokens.issueToken({
+      tenantId: DEFAULT_TENANT_ID,
+      role: "admin",
+      scopes: ["*"],
+    });
+    const app = createApp(container, { authTokens });
+    decorateAppWithDefaultAuth(app, tenantToken.token);
+
+    const pngBytes = Buffer.from("synthetic-fake-png-bytes", "utf8");
+    const bytesBase64 = pngBytes.toString("base64");
+
+    const nodeDispatchService = {
+      dispatchAndWait: vi.fn(async () => ({
+        taskId: "task-synthetic-1",
+        result: {
+          ok: true,
+          evidence: {
+            type: "screenshot",
+            mime: "image/png",
+            width: 1,
+            height: 1,
+            timestamp: new Date().toISOString(),
+            bytesBase64,
+          },
+        },
+      })),
+    };
+
+    const executor = createExecutor(container, nodeDispatchService as any);
+    const result = await executor.execute("tool.node.dispatch", "call-synthetic-1", {
+      node_id: NODE_ID,
+      capability: "tyrum.desktop.screenshot",
+      action_name: "screenshot",
+      input: { display: "primary" },
+    });
+
+    expect(result.error).toBeUndefined();
+    const parsed = parseTaggedToolOutput(result.output);
+    const runId =
+      typeof parsed["run_id"] === "string" && parsed["run_id"].trim().length > 0
+        ? parsed["run_id"]
+        : null;
+    expect(runId).not.toBeNull();
+
+    const artifactId = extractPayloadArtifactId(result.output, "artifact");
+    const res = await app.request(`/runs/${runId}/artifacts/${artifactId}`);
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("image/png");
     expect(Buffer.from(await res.arrayBuffer())).toEqual(pngBytes);

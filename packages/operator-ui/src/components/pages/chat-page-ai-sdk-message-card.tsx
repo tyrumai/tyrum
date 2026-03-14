@@ -1,8 +1,8 @@
 import type { Approval } from "@tyrum/client";
+import type { OperatorCore } from "@tyrum/operator-core";
 import {
   getToolName,
   isDataUIPart,
-  isFileUIPart,
   isReasoningUIPart,
   isTextUIPart,
   isToolUIPart,
@@ -12,27 +12,26 @@ import type { ResolveApprovalInput } from "@tyrum/operator-core";
 import { Copy, Hammer, ShieldCheck } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { toast } from "sonner";
-import { isRecord } from "../../utils/is-record.js";
 import { useClipboard } from "../../utils/clipboard.js";
 import { formatRelativeTime } from "../../utils/format-relative-time.js";
+import { isRecord } from "../../utils/is-record.js";
 import { cn } from "../../lib/cn.js";
 import { ApprovalActions } from "./approval-actions.js";
 import { renderMetaMessagePart } from "./chat-page-ai-sdk-meta-part-card.js";
+import {
+  collectArtifactRefs,
+  copyToClipboard,
+  formatToolState,
+  readCreatedAt,
+  readRunId,
+  readRunIdFromValue,
+  stringifyPart,
+  textFromMessage,
+} from "./chat-page-ai-sdk-message-card-helpers.js";
+import { ArtifactInlinePreview } from "../artifacts/artifact-inline-preview.js";
 import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
 import type { ReasoningDisplayMode } from "./chat-page-ai-sdk-types.js";
-
-export function readCreatedAt(message: UIMessage): string | null {
-  const metadata = isRecord(message.metadata) ? message.metadata : null;
-  const createdAt =
-    typeof metadata?.["created_at"] === "string"
-      ? metadata["created_at"]
-      : typeof metadata?.["createdAt"] === "string"
-        ? metadata["createdAt"]
-        : null;
-  return createdAt && createdAt.trim().length > 0 ? createdAt : null;
-}
 
 function messageContainerClassName(role: UIMessage["role"]): string {
   if (role === "assistant") {
@@ -42,28 +41,6 @@ function messageContainerClassName(role: UIMessage["role"]): string {
     return "border border-amber-200/70 bg-amber-50/70";
   }
   return "border border-border bg-bg-subtle/70";
-}
-
-function stringifyPart(value: unknown): string {
-  if (typeof value === "string") {
-    return value;
-  }
-  return JSON.stringify(value, null, 2);
-}
-
-function copyToClipboard(clipboard: ReturnType<typeof useClipboard>, value: string): void {
-  void clipboard
-    .writeText(value)
-    .then(() => {
-      toast.success("Copied to clipboard");
-    })
-    .catch(() => {
-      toast.error("Failed to copy to clipboard");
-    });
-}
-
-function formatToolState(state: string): string {
-  return state.replace(/-/g, " ");
 }
 
 function toolBadgeVariant(state: string): React.ComponentProps<typeof Badge>["variant"] {
@@ -153,43 +130,6 @@ function readToolApprovalId(
   return approval?.id?.trim() ? approval.id : null;
 }
 
-function textFromMessage(message: UIMessage): string {
-  const lines: string[] = [];
-  for (const part of message.parts) {
-    if (isTextUIPart(part) || isReasoningUIPart(part)) {
-      lines.push(part.text);
-      continue;
-    }
-    if (isToolUIPart(part)) {
-      lines.push(`${getToolName(part)} (${part.state})`);
-      continue;
-    }
-    if (isDataUIPart(part)) {
-      lines.push(`${part.type}: ${stringifyPart(part.data)}`);
-      continue;
-    }
-    if (part.type === "source-url") {
-      lines.push(`Source: ${part.title ? `${part.title} ` : ""}${part.url}`.trim());
-      continue;
-    }
-    if (part.type === "source-document") {
-      lines.push(
-        `Source document: ${part.title} (${part.mediaType})${
-          part.filename ? ` [${part.filename}]` : ""
-        }`,
-      );
-      continue;
-    }
-    if (isFileUIPart(part)) {
-      lines.push(
-        `File: ${part.filename ? `${part.filename} ` : ""}(${part.mediaType}) ${part.url}`.trim(),
-      );
-      continue;
-    }
-  }
-  return lines.join("\n\n");
-}
-
 function TextBlock({ value, renderMode }: { value: string; renderMode: "markdown" | "text" }) {
   if (renderMode === "markdown") {
     return (
@@ -207,15 +147,19 @@ function TextBlock({ value, renderMode }: { value: string; renderMode: "markdown
 
 function ToolPartCard({
   approval,
+  core,
   onResolveApproval,
   part,
   resolvingApproval,
+  runId,
   showApprovalDetails,
 }: {
   approval: Approval | null;
+  core?: OperatorCore;
   onResolveApproval: (input: ResolveApprovalInput) => void;
   part: Extract<UIMessage["parts"][number], { type: string }>;
   resolvingApproval: { approvalId: string; state: "always" | "approved" | "denied" } | null;
+  runId: string | null;
   showApprovalDetails: boolean;
 }) {
   if (!isToolUIPart(part)) {
@@ -223,6 +167,11 @@ function ToolPartCard({
   }
   const approvalId = readToolApprovalId(part);
   const isPendingApproval = part.state === "approval-requested" && approvalId;
+  const artifactRefs =
+    "output" in part && part.output !== undefined ? collectArtifactRefs(part.output) : [];
+  const resolvedRunId =
+    ("output" in part && part.output !== undefined ? readRunIdFromValue(part.output) : null) ??
+    runId;
   return (
     <div className="rounded-lg border border-border bg-bg-subtle/40 px-2 py-1.5">
       <div className="flex items-start justify-between gap-3">
@@ -253,6 +202,18 @@ function ToolPartCard({
           <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded-md bg-bg px-2 py-1.5 text-xs text-fg [overflow-wrap:anywhere]">
             {stringifyPart(part.output)}
           </pre>
+          {core && resolvedRunId && artifactRefs.length > 0 ? (
+            <div className="mt-2 grid gap-3">
+              {artifactRefs.map((artifact) => (
+                <ArtifactInlinePreview
+                  key={artifact.artifact_id}
+                  core={core}
+                  runId={resolvedRunId}
+                  artifact={artifact}
+                />
+              ))}
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -347,6 +308,7 @@ function ApprovalDataPartCard({
 
 export function MessageCard({
   approvalsById,
+  core,
   message,
   onResolveApproval,
   reasoningMode,
@@ -354,6 +316,7 @@ export function MessageCard({
   resolvingApproval,
 }: {
   approvalsById: Record<string, Approval>;
+  core?: OperatorCore;
   message: UIMessage;
   onResolveApproval: (input: ResolveApprovalInput) => void;
   reasoningMode: ReasoningDisplayMode;
@@ -362,6 +325,7 @@ export function MessageCard({
 }) {
   const clipboard = useClipboard();
   const createdAt = readCreatedAt(message);
+  const runId = readRunId(message);
   const approvalIdsWithDataPart = new Set(
     message.parts
       .map((part) => readApprovalDataPart(part)?.approval_id ?? null)
@@ -435,9 +399,11 @@ export function MessageCard({
               <ToolPartCard
                 key={`${message.id}:tool:${index}`}
                 approval={approval}
+                core={core}
                 onResolveApproval={onResolveApproval}
                 part={part}
                 resolvingApproval={resolvingApproval}
+                runId={runId}
                 showApprovalDetails={!approvalId || !approvalIdsWithDataPart.has(approvalId)}
               />
             );

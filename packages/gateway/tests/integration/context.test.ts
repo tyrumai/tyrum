@@ -226,4 +226,39 @@ describe("/context", () => {
     await agents?.shutdown();
     await container.db.close();
   });
+
+  it("omits risk and confirmation metadata from /context/tools", async () => {
+    const { request, container, agents } = await createTestApp({
+      tyrumHome: homeDir,
+    });
+
+    const response = await request("/context/tools");
+
+    expect(response.status).toBe(200);
+    const payload = (await response.json()) as {
+      status: string;
+      tools: Array<Record<string, unknown>>;
+    };
+    expect(payload).toMatchObject({
+      status: "ok",
+      tools: expect.arrayContaining([
+        expect.objectContaining({
+          id: "read",
+          description: expect.any(String),
+          source: "builtin",
+          family: "filesystem",
+          enabled_by_agent: expect.any(Boolean),
+        }),
+      ]),
+    });
+
+    const readTool = payload.tools.find((tool) => tool["id"] === "read");
+    expect(readTool).toBeTruthy();
+    expect(readTool).not.toHaveProperty("risk");
+    expect(readTool).not.toHaveProperty("requires_confirmation");
+    expect(readTool).not.toHaveProperty("keywords");
+
+    await agents?.shutdown();
+    await container.db.close();
+  });
 });

@@ -1,17 +1,19 @@
 // @vitest-environment jsdom
 
-import React from "react";
+import React, { act } from "react";
 import { describe, expect, it, vi } from "vitest";
 import type { UIMessage } from "ai";
+import type { OperatorCore } from "../../../operator-core/src/index.js";
 import { MessageCard } from "../../src/components/pages/chat-page-ai-sdk-message-card.js";
 import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
 
 const e = React.createElement;
 
-function renderMessageCard(message: UIMessage) {
+function renderMessageCard(message: UIMessage, core?: OperatorCore) {
   return renderIntoDocument(
     e(MessageCard, {
       approvalsById: {},
+      core,
       message,
       onResolveApproval: vi.fn(),
       reasoningMode: "collapsed",
@@ -193,6 +195,103 @@ describe("MessageCard", () => {
     expect(testRoot.container.textContent).toContain("result");
     expect(testRoot.container.textContent).not.toContain("Unsupported part");
 
+    cleanupTestRoot(testRoot);
+  });
+
+  it("renders inline artifact previews for tool output with a run id", async () => {
+    const getBytes = vi.fn(async () => ({
+      kind: "bytes" as const,
+      bytes: new Uint8Array([1, 2, 3]),
+      contentType: "image/png",
+    }));
+    const getMetadata = vi.fn(async () => ({
+      artifact: {
+        artifact_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+        uri: "artifact://aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+        kind: "screenshot" as const,
+        created_at: "2026-01-01T00:00:00.000Z",
+        mime_type: "image/png",
+        labels: ["screenshot", "desktop"],
+      },
+      scope: {
+        workspace_id: "default",
+        agent_id: "default",
+        run_id: "11111111-1111-1111-1111-111111111111",
+        step_id: "22222222-2222-2222-2222-222222222222",
+        attempt_id: "33333333-3333-3333-3333-333333333333",
+        sensitivity: "sensitive",
+        policy_snapshot_id: null,
+      },
+    }));
+    const originalCreateObjectUrl = URL.createObjectURL;
+    const originalRevokeObjectUrl = URL.revokeObjectURL;
+    URL.createObjectURL = vi.fn(() => "blob:chat-artifact-preview");
+    URL.revokeObjectURL = vi.fn();
+
+    const core = {
+      httpBaseUrl: "http://example.test",
+      http: {
+        artifacts: {
+          getBytes,
+          getMetadata,
+        },
+      },
+    } as unknown as OperatorCore;
+
+    const testRoot = renderMessageCard(
+      {
+        id: "assistant-tool-artifact",
+        role: "assistant",
+        parts: [
+          {
+            type: "dynamic-tool",
+            toolName: "tool.node.dispatch",
+            toolCallId: "tool-call-2",
+            state: "output-available",
+            output: {
+              run_id: "11111111-1111-1111-1111-111111111111",
+              payload: {
+                artifact: {
+                  artifact_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                  uri: "artifact://aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                  kind: "screenshot",
+                  created_at: "2026-01-01T00:00:00.000Z",
+                  mime_type: "image/png",
+                  labels: ["screenshot", "desktop"],
+                },
+              },
+            },
+          },
+        ],
+      } as unknown as UIMessage,
+      core,
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const preview = testRoot.container.querySelector(
+      "[data-testid='artifact-preview-image-aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa']",
+    ) as HTMLImageElement | null;
+
+    expect(preview).not.toBeNull();
+    expect(preview?.getAttribute("src")).toBe("blob:chat-artifact-preview");
+    expect(getBytes).toHaveBeenCalledWith(
+      "11111111-1111-1111-1111-111111111111",
+      "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(getMetadata).toHaveBeenCalledWith(
+      "11111111-1111-1111-1111-111111111111",
+      "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+
+    URL.createObjectURL = originalCreateObjectUrl;
+    URL.revokeObjectURL = originalRevokeObjectUrl;
     cleanupTestRoot(testRoot);
   });
 });

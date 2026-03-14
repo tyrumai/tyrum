@@ -3,11 +3,13 @@
 import React, { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { UIMessage } from "ai";
+import type { OperatorCore } from "../../../operator-core/src/index.js";
 import { click, cleanupTestRoot, renderIntoDocument, setNativeValue } from "../test-utils.js";
 
 const e = React.createElement;
 const useChatMock = vi.hoisted(() => vi.fn());
 const toastErrorMock = vi.hoisted(() => vi.fn());
+const testCore = { http: {} } as unknown as OperatorCore;
 
 vi.mock("@ai-sdk/react", () => ({
   useChat: useChatMock,
@@ -78,6 +80,7 @@ describe("AiSdkConversation", () => {
     const testRoot = renderIntoDocument(
       e(AiSdkConversation, {
         approvalsById: {},
+        core: testCore,
         onDelete,
         onResolveApproval: vi.fn(),
         onRenderModeChange,
@@ -159,6 +162,7 @@ describe("AiSdkConversation", () => {
       await import("../../src/components/pages/chat-page-ai-sdk-conversation.js");
     const props = {
       approvalsById: {},
+      core: testCore,
       onDelete: vi.fn(),
       onResolveApproval: vi.fn(),
       onRenderModeChange: vi.fn(),
@@ -209,6 +213,7 @@ describe("AiSdkConversation", () => {
     const testRoot = renderIntoDocument(
       e(AiSdkConversation, {
         approvalsById: {},
+        core: testCore,
         onDelete: vi.fn(),
         onResolveApproval: vi.fn(),
         onRenderModeChange: vi.fn(),
@@ -263,6 +268,7 @@ describe("AiSdkConversation", () => {
     const testRoot = renderIntoDocument(
       e(AiSdkConversation, {
         approvalsById: {},
+        core: testCore,
         onDelete: vi.fn(),
         onResolveApproval: vi.fn(),
         onRenderModeChange: vi.fn(),
@@ -316,6 +322,7 @@ describe("AiSdkConversation", () => {
     const testRoot = renderIntoDocument(
       e(AiSdkConversation, {
         approvalsById: {},
+        core: testCore,
         onDelete: vi.fn(),
         onResolveApproval: vi.fn(),
         onRenderModeChange: vi.fn(),

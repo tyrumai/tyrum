@@ -315,9 +315,6 @@ describe("admin HTTP client coverage", () => {
             {
               id: "read",
               description: "Read files from disk.",
-              risk: "low",
-              requires_confirmation: false,
-              keywords: ["read", "file"],
               source: "builtin",
               family: "fs",
               backing_server_id: null,

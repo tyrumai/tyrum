@@ -82,9 +82,6 @@ export function createContextRoutes(deps: ContextRouteDeps): Hono {
         tools: registry.tools.map((tool) => ({
           id: tool.id,
           description: tool.description,
-          risk: tool.risk,
-          requires_confirmation: tool.requires_confirmation,
-          keywords: [...tool.keywords],
           source: tool.source ?? "builtin",
           family: tool.family ?? null,
           backing_server_id: tool.backingServerId ?? null,
