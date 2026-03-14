@@ -2,9 +2,15 @@
 
 import { describe, expect, it, vi } from "vitest";
 import React from "react";
-import type { OperatorCore } from "../../../operator-core/src/index.js";
+import { createElevatedModeStore, type OperatorCore } from "../../../operator-core/src/index.js";
+import { AdminAccessProvider } from "../../src/index.js";
 import { PendingPairingCard } from "../../src/components/pages/pairing-page.cards.js";
 import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
+
+const NOOP_ADMIN_ACCESS_CONTROLLER = {
+  enter: async () => {},
+  exit: async () => {},
+};
 
 describe("PendingPairingCard", () => {
   it("renders motivation and latest guardian review context", () => {
@@ -45,14 +51,25 @@ describe("PendingPairingCard", () => {
         deny: vi.fn(),
         revoke: vi.fn(),
       },
+      elevatedModeStore: createElevatedModeStore({
+        tickIntervalMs: 0,
+      }),
     } as unknown as OperatorCore;
 
     const { container, root } = renderIntoDocument(
-      React.createElement(PendingPairingCard, {
-        core,
-        pairing,
-        attachmentKind: "none",
-      }),
+      React.createElement(
+        AdminAccessProvider,
+        {
+          core,
+          mode: "desktop",
+          adminAccessController: NOOP_ADMIN_ACCESS_CONTROLLER,
+        },
+        React.createElement(PendingPairingCard, {
+          core,
+          pairing,
+          attachmentKind: "none",
+        }),
+      ),
     );
 
     try {

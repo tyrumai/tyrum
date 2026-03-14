@@ -2,8 +2,9 @@
 
 import { describe, expect, it } from "vitest";
 import React from "react";
-import type { OperatorCore } from "../../../operator-core/src/index.js";
+import { createElevatedModeStore, type OperatorCore } from "../../../operator-core/src/index.js";
 import { createStore } from "../../../operator-core/src/store.js";
+import { AdminAccessProvider } from "../../src/index.js";
 import { ApprovalsPage } from "../../src/components/pages/approvals-page.js";
 import {
   createApprovedDesktopPairingFixture,
@@ -15,6 +16,25 @@ import {
   DESKTOP_TAKEOVER_URL,
 } from "./approvals-page.desktop.test-fixtures.js";
 import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
+
+const NOOP_ADMIN_ACCESS_CONTROLLER = {
+  enter: async () => {},
+  exit: async () => {},
+};
+
+function renderApprovalsPage(core: OperatorCore) {
+  return renderIntoDocument(
+    React.createElement(
+      AdminAccessProvider,
+      {
+        core,
+        mode: "desktop",
+        adminAccessController: NOOP_ADMIN_ACCESS_CONTROLLER,
+      },
+      React.createElement(ApprovalsPage, { core }),
+    ),
+  );
+}
 
 describe("ApprovalsPage (desktop approvals)", () => {
   it("renders Desktop op summary and takeover link when available", () => {
@@ -49,9 +69,12 @@ describe("ApprovalsPage (desktop approvals)", () => {
       approvalsStore,
       pairingStore,
       runsStore,
+      elevatedModeStore: createElevatedModeStore({
+        tickIntervalMs: 0,
+      }),
     } as unknown as OperatorCore;
 
-    const { container, root } = renderIntoDocument(React.createElement(ApprovalsPage, { core }));
+    const { container, root } = renderApprovalsPage(core);
 
     try {
       const summary = container.querySelector<HTMLDivElement>(
@@ -114,9 +137,12 @@ describe("ApprovalsPage (desktop approvals)", () => {
       approvalsStore,
       pairingStore,
       runsStore,
+      elevatedModeStore: createElevatedModeStore({
+        tickIntervalMs: 0,
+      }),
     } as unknown as OperatorCore;
 
-    const { container, root } = renderIntoDocument(React.createElement(ApprovalsPage, { core }));
+    const { container, root } = renderApprovalsPage(core);
 
     try {
       const takeoverLink = container.querySelector<HTMLAnchorElement>(
@@ -182,9 +208,12 @@ describe("ApprovalsPage (desktop approvals)", () => {
       approvalsStore,
       pairingStore,
       runsStore,
+      elevatedModeStore: createElevatedModeStore({
+        tickIntervalMs: 0,
+      }),
     } as unknown as OperatorCore;
 
-    const { container, root } = renderIntoDocument(React.createElement(ApprovalsPage, { core }));
+    const { container, root } = renderApprovalsPage(core);
 
     try {
       const motivation = container.querySelector<HTMLDivElement>(
@@ -269,9 +298,12 @@ describe("ApprovalsPage (desktop approvals)", () => {
       approvalsStore,
       pairingStore,
       runsStore,
+      elevatedModeStore: createElevatedModeStore({
+        tickIntervalMs: 0,
+      }),
     } as unknown as OperatorCore;
 
-    const { container, root } = renderIntoDocument(React.createElement(ApprovalsPage, { core }));
+    const { container, root } = renderApprovalsPage(core);
 
     try {
       const artifactsButton = container.querySelector<HTMLButtonElement>(
@@ -363,9 +395,12 @@ describe("ApprovalsPage (desktop approvals)", () => {
       approvalsStore,
       pairingStore,
       runsStore,
+      elevatedModeStore: createElevatedModeStore({
+        tickIntervalMs: 0,
+      }),
     } as unknown as OperatorCore;
 
-    const { container, root } = renderIntoDocument(React.createElement(ApprovalsPage, { core }));
+    const { container, root } = renderApprovalsPage(core);
 
     try {
       const artifactsButton = container.querySelector<HTMLButtonElement>(

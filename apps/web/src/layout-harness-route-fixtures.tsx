@@ -204,6 +204,7 @@ export function createChatCore(): OperatorCore {
 
 export function createApprovalsCore(): OperatorCore {
   return {
+    elevatedModeStore: createElevatedModeStore(),
     approvalsStore: createApprovalsStore(),
     pairingStore: createPairingStore(),
     runsStore: createRunsStore(),
@@ -212,6 +213,7 @@ export function createApprovalsCore(): OperatorCore {
 
 export function createPairingCore(): OperatorCore {
   return {
+    elevatedModeStore: createElevatedModeStore(),
     connectionStore: createConnectionStore(),
     chatStore: createChatStore(),
     pairingStore: createPairingStore(),

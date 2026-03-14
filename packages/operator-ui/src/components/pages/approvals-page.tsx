@@ -23,6 +23,8 @@ import { parseAgentIdFromKey } from "../../lib/status-session-lanes.js";
 import { useOperatorStore } from "../../use-operator-store.js";
 import { extractTakeoverUrlFromNodeIdentity } from "../../utils/takeover-url.js";
 import { isRecord } from "../../utils/is-record.js";
+import { isAdminAccessRequiredError } from "../elevated-mode/admin-access-error.js";
+import { useAdminMutationAccess } from "./admin-http-shared.js";
 
 function formatTimestamp(value: string): string {
   const date = new Date(value);
@@ -164,6 +166,7 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
   const approvals = useOperatorStore(core.approvalsStore);
   const pairingState = useOperatorStore(core.pairingStore);
   const runsState = useOperatorStore(core.runsStore);
+  const { canMutate, requestEnter } = useAdminMutationAccess(core);
   const blockedApprovalIds = approvals.blockedIds ?? approvals.pendingIds;
   const [resolvingById, setResolvingById] = useState<
     Record<string, "approved" | "denied" | "always" | undefined>
@@ -196,6 +199,10 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
 
   const resolveApproval = async (input: ResolveApprovalInput): Promise<void> => {
     if (resolvingById[input.approvalId]) return;
+    if (!canMutate) {
+      requestEnter();
+      return;
+    }
 
     setResolvingById((prev) => ({
       ...prev,
@@ -211,6 +218,10 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
             : "Approval resolved",
       );
     } catch (error) {
+      if (isAdminAccessRequiredError(error)) {
+        requestEnter();
+        return;
+      }
       toast.error(error instanceof Error ? error.message : String(error));
     } finally {
       setResolvingById((prev) => {

@@ -97,12 +97,24 @@ function renderRoute(route: LayoutRoute): React.ReactNode {
       return <DashboardPage core={createDashboardCore()} />;
     case "chat":
       return <AiSdkChatPage core={createChatCore()} />;
-    case "approvals":
-      return <ApprovalsPage core={createApprovalsCore()} />;
+    case "approvals": {
+      const core = createApprovalsCore();
+      return (
+        <AdminAccessProvider core={core} mode="desktop">
+          <ApprovalsPage core={core} />
+        </AdminAccessProvider>
+      );
+    }
     case "agents":
       return <AgentsPage core={createAgentsCore()} />;
-    case "pairing":
-      return <PairingPage core={createPairingCore()} />;
+    case "pairing": {
+      const core = createPairingCore();
+      return (
+        <AdminAccessProvider core={core} mode="desktop">
+          <PairingPage core={core} />
+        </AdminAccessProvider>
+      );
+    }
     case "workboard":
       return <WorkBoardPage core={createWorkboardCore()} />;
     case "extensions": {
