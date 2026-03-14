@@ -117,24 +117,6 @@ export interface TurnDirectDeps {
   secretProvider?: SecretProvider;
 }
 
-export function extractUsageSnapshot(
-  totalUsage:
-    | {
-        inputTokens?: number;
-        outputTokens?: number;
-        totalTokens?: number;
-      }
-    | null
-    | undefined,
-): SessionUsageSnapshot | undefined {
-  if (!totalUsage) return undefined;
-  return {
-    inputTokens: totalUsage.inputTokens,
-    outputTokens: totalUsage.outputTokens,
-    totalTokens: totalUsage.totalTokens,
-  };
-}
-
 export async function maybeAutoCompactSession(input: {
   deps: TurnDirectDeps;
   tenantId: string;

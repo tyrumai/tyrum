@@ -94,4 +94,19 @@ describe("SessionDal", () => {
     expect(updated?.messages).toEqual(messages);
     expect(updated?.context_state.checkpoint?.handoff_md).toBe("checkpoint");
   });
+
+  it("rebuilds recent ids from the first persisted recent message that still exists", () => {
+    const messages = [
+      createTextMessage({ id: "m1", role: "user", text: "hello" }),
+      createTextMessage({ id: "m2", role: "assistant", text: "hi" }),
+      createTextMessage({ id: "m3", role: "user", text: "follow up" }),
+    ];
+
+    const state = createSessionContextStateForMessages(messages, "2026-02-17T00:02:00.000Z", {
+      ...createSessionContextStateForMessages(messages, "2026-02-17T00:01:00.000Z"),
+      recent_message_ids: ["missing-message", "m2"],
+    });
+
+    expect(state.recent_message_ids).toEqual(["m2", "m3"]);
+  });
 });

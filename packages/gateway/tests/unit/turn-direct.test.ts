@@ -33,7 +33,6 @@ vi.mock("../../src/modules/agent/runtime/turn-direct-runtime-helpers.js", () => 
     withinTurnLoop: { value: undefined },
   })),
   compactForOverflow: compactForOverflowMock,
-  extractUsageSnapshot: vi.fn(() => undefined),
   makeEventfulAbortSignal: vi.fn((signal?: AbortSignal) => signal),
   maybeAutoCompactSession: maybeAutoCompactSessionMock,
   prepareLaneQueueStep: vi.fn(() => ({ messages: [] })),

@@ -89,14 +89,9 @@ export function createSessionContextStateForMessages(
     }
     if (current?.recent_message_ids.length) {
       const recentIdSet = new Set(current.recent_message_ids);
-      const matching = recentMessages
-        .filter((message) => recentIdSet.has(message.id))
-        .map((message) => message.id);
-      if (matching.length > 0) {
-        const lastKnownIndex = recentMessages.findIndex((message) => matching.includes(message.id));
-        if (lastKnownIndex >= 0) {
-          return recentMessages.slice(lastKnownIndex).map((message) => message.id);
-        }
+      const lastKnownIndex = recentMessages.findIndex((message) => recentIdSet.has(message.id));
+      if (lastKnownIndex >= 0) {
+        return recentMessages.slice(lastKnownIndex).map((message) => message.id);
       }
     }
     return recentMessages.map((message) => message.id);
