@@ -1,11 +1,7 @@
 import { ipcMain, nativeTheme, shell } from "electron";
 import { configExists, loadConfig, saveConfig } from "../config/store.js";
 import { DesktopNodeConfig } from "../config/schema.js";
-import {
-  checkMacPermissions,
-  requestMacPermission,
-  type MacPermissionKind,
-} from "../platform/permissions.js";
+import { checkMacPermissions, requestMacPermission } from "../platform/permissions.js";
 import { normalizeConfigPartialForSave } from "../config/token-ref-normalizer.js";
 import { notifyBackgroundConfigChanged } from "../background-mode.js";
 
@@ -30,11 +26,6 @@ const RENDERER_MUTABLE_PATHS = new Set([
   "permissions.overrides",
 ]);
 
-/**
- * Recursively filter an object to only include keys whose dot-paths
- * appear in `allowed`. Sub-objects whose path is listed are kept whole;
- * otherwise we recurse and keep only the allowed leaves.
- */
 export function filterMutableKeys(
   partial: Record<string, unknown>,
   allowed: ReadonlySet<string>,
@@ -44,22 +35,19 @@ export function filterMutableKeys(
   for (const key of Object.keys(partial)) {
     const dotPath = prefix ? `${prefix}.${key}` : key;
     const value = partial[key];
-    if (value !== null && typeof value === "object" && !Array.isArray(value)) {
-      // Check if the entire sub-object path is allowed (e.g. "permissions.overrides")
-      if (allowed.has(dotPath)) {
-        result[key] = value;
-      } else {
-        // Recurse into nested objects
-        const filtered = filterMutableKeys(value as Record<string, unknown>, allowed, dotPath);
-        if (Object.keys(filtered).length > 0) {
-          result[key] = filtered;
-        }
-      }
-    } else {
-      // Leaf value — only include if the dot-path is allowlisted
-      if (allowed.has(dotPath)) {
-        result[key] = value;
-      }
+    if (value === null || typeof value !== "object" || Array.isArray(value)) {
+      if (allowed.has(dotPath)) result[key] = value;
+      continue;
+    }
+
+    if (allowed.has(dotPath)) {
+      result[key] = value;
+      continue;
+    }
+
+    const filtered = filterMutableKeys(value as Record<string, unknown>, allowed, dotPath);
+    if (Object.keys(filtered).length > 0) {
+      result[key] = filtered;
     }
   }
   return result;
@@ -67,7 +55,6 @@ export function filterMutableKeys(
 
 let ipcRegistered = false;
 
-/** Recursively merge `source` into `target`, preserving nested fields. */
 function deepMerge(
   target: Record<string, unknown>,
   source: Record<string, unknown>,
@@ -122,9 +109,7 @@ export function registerConfigIpc(): void {
     const filtered = filterMutableKeys(partial as Record<string, unknown>, RENDERER_MUTABLE_PATHS);
     const current = loadConfig();
     const normalizedPartial = normalizeConfigPartialForSave(filtered);
-    const merged = DesktopNodeConfig.parse(
-      deepMerge(current as unknown as Record<string, unknown>, normalizedPartial),
-    );
+    const merged = DesktopNodeConfig.parse(deepMerge(current, normalizedPartial));
     saveConfig(merged);
     notifyBackgroundConfigChanged(merged);
     nativeTheme.themeSource = merged.theme.source;
@@ -139,7 +124,7 @@ export function registerConfigIpc(): void {
     if (permission !== "accessibility" && permission !== "screenRecording") {
       throw new Error("permissions:request-mac requires 'accessibility' or 'screenRecording'");
     }
-    return requestMacPermission(permission as MacPermissionKind);
+    return requestMacPermission(permission);
   });
 
   ipcMain.handle("shell:open-external", async (_event, rawUrl: unknown) => {

@@ -1,10 +1,3 @@
-/**
- * WebSocket connection manager — tracks connected clients and their capabilities.
- *
- * Stateless with respect to plan orchestration; it only manages the set of
- * live WebSocket connections and exposes capability-based routing helpers.
- */
-
 import type { WebSocket } from "ws";
 import type {
   CapabilityDescriptor,
@@ -14,10 +7,6 @@ import type {
 } from "@tyrum/schemas";
 import type { AuthTokenClaims } from "@tyrum/schemas";
 import { gatewayMetrics, type MetricsRegistry } from "../modules/observability/metrics.js";
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
 
 export interface ConnectedClient {
   readonly id: string;
@@ -37,16 +26,7 @@ export interface ConnectionStats {
   capabilityCounts: Record<string, number>;
 }
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
-/** Clients that have not responded to a ping within this window are evicted. */
 const HEARTBEAT_TIMEOUT_MS = 10_000;
-
-// ---------------------------------------------------------------------------
-// ConnectionManager
-// ---------------------------------------------------------------------------
 
 export class ConnectionManager {
   private readonly clients = new Map<string, ConnectedClient>();
@@ -97,12 +77,6 @@ export class ConnectionManager {
     return id;
   }
 
-  /**
-   * Record which node was dispatched as the executor for an attempt.
-   *
-   * This is a best-effort, in-memory cache used as a fallback when attempt
-   * executor metadata cannot be persisted to the DB.
-   */
   recordDispatchedAttemptExecutor(attemptId: string, nodeId: string): void {
     const normalizedAttemptId = attemptId.trim();
     const normalizedNodeId = nodeId.trim();

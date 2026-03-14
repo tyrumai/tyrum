@@ -269,9 +269,7 @@ async function handleCatalogRequest(
   }
 
   try {
-    const parsed: unknown = await readJsonFile(join(jsonSchemaDir, "catalog.json"), {
-      transientNotFound: true,
-    });
+    const parsed: unknown = await readJsonFile(join(jsonSchemaDir, "catalog.json"));
     return c.json(sanitizeCatalogPayload(parsed));
   } catch (err) {
     try {

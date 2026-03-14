@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { dirname, resolve } from "node:path";
+import { cp, mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { formatOperatorUiSmokeDiagnostics } from "../helpers/operator-ui-smoke-diagnostics.js";
 import { pathExists } from "../helpers/path-exists.js";
@@ -26,6 +28,12 @@ async function waitForBuiltOperatorUi(timeoutMs = 30_000): Promise<boolean> {
   return false;
 }
 
+async function snapshotBuiltOperatorUi(): Promise<string> {
+  const snapshotDir = await mkdtemp(join(tmpdir(), "tyrum-operator-ui-smoke-"));
+  await cp(OPERATOR_UI_DIST_DIR, snapshotDir, { recursive: true });
+  return snapshotDir;
+}
+
 let canRunPlaywright = false;
 let playwrightProbeError: string | undefined;
 try {
@@ -41,6 +49,7 @@ describe.skipIf(!canRunPlaywright && !isCi)("operator UI real-browser smoke (/ui
   const prevUiDir = process.env[OPERATOR_UI_DIR_ENV];
 
   let stopGateway: (() => Promise<void>) | undefined;
+  let operatorUiSnapshotDir: string | undefined;
   let browser: (typeof import("playwright"))["Browser"] | undefined;
   let context: (typeof import("playwright"))["BrowserContext"] | undefined;
   let page: (typeof import("playwright"))["Page"] | undefined;
@@ -57,6 +66,11 @@ describe.skipIf(!canRunPlaywright && !isCi)("operator UI real-browser smoke (/ui
       const stop = stopGateway;
       stopGateway = undefined;
       await stop().catch(() => undefined);
+    }
+
+    if (operatorUiSnapshotDir) {
+      await rm(operatorUiSnapshotDir, { recursive: true, force: true }).catch(() => undefined);
+      operatorUiSnapshotDir = undefined;
     }
 
     if (prevUiDir === undefined) delete process.env[OPERATOR_UI_DIR_ENV];
@@ -77,7 +91,8 @@ describe.skipIf(!canRunPlaywright && !isCi)("operator UI real-browser smoke (/ui
       );
     }
 
-    process.env[OPERATOR_UI_DIR_ENV] = OPERATOR_UI_DIST_DIR;
+    operatorUiSnapshotDir = await snapshotBuiltOperatorUi();
+    process.env[OPERATOR_UI_DIR_ENV] = operatorUiSnapshotDir;
 
     const gateway = await startSmokeGateway({ modelReply: "operator-ui smoke" });
     stopGateway = gateway.stop;

@@ -31,14 +31,6 @@ export type ProtocolRequestEnvelope = Extract<
 
 export type ProtocolResponseEnvelope = Extract<WsMessageEnvelope, { ok: boolean }>;
 
-// ---------------------------------------------------------------------------
-// Dependency injection
-// ---------------------------------------------------------------------------
-
-/**
- * External dependencies injected into the protocol handler so the module
- * stays unit-testable without real services.
- */
 export interface ProtocolDeps {
   connectionManager: ConnectionManager;
   logger?: Logger;

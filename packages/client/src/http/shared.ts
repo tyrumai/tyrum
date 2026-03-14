@@ -12,6 +12,7 @@ const ErrorBodySchema = z
   .passthrough();
 
 export type TyrumHttpFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+type PinnedNodeRequestInit = RequestInit & { dispatcher?: unknown };
 
 export type TyrumHttpAuthStrategy =
   | {
@@ -193,19 +194,13 @@ function createPinnedNodeFetch(options: {
 }): TyrumHttpFetch {
   let initPromise:
     | Promise<{
-        fetchImpl: (
-          input: RequestInfo | URL,
-          init?: RequestInit & { dispatcher?: unknown },
-        ) => Promise<Response>;
+        fetchImpl: (input: RequestInfo | URL, init?: PinnedNodeRequestInit) => Promise<Response>;
         dispatcher: { destroy?: () => Promise<void> | void };
       }>
     | undefined;
 
   async function init(): Promise<{
-    fetchImpl: (
-      input: RequestInfo | URL,
-      init?: RequestInit & { dispatcher?: unknown },
-    ) => Promise<Response>;
+    fetchImpl: (input: RequestInfo | URL, init?: PinnedNodeRequestInit) => Promise<Response>;
     dispatcher: { destroy?: () => Promise<void> | void };
   }> {
     const nodeTransport = await loadNodePinnedTransportModule();
@@ -217,10 +212,10 @@ function createPinnedNodeFetch(options: {
       initPromise = init();
     }
     const { fetchImpl, dispatcher } = await initPromise;
-    const initWithDispatcher = initOptions
-      ? ({ ...initOptions, dispatcher } as RequestInit & { dispatcher?: unknown })
-      : ({ dispatcher } as RequestInit & { dispatcher?: unknown });
-    return await fetchImpl(input, initWithDispatcher as any);
+    const initWithDispatcher: PinnedNodeRequestInit = initOptions
+      ? { ...initOptions, dispatcher }
+      : { dispatcher };
+    return await fetchImpl(input, initWithDispatcher);
   };
 }
 

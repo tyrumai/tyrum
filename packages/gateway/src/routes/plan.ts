@@ -1,10 +1,3 @@
-/**
- * Plan route orchestrator.
- *
- * All "client" calls (policy, wallet, discovery) are direct in-process
- * function calls since everything runs inside a single gateway process.
- */
-
 import { Hono } from "hono";
 import { randomUUID } from "node:crypto";
 import { PlanRequest as PlanRequestSchema } from "@tyrum/schemas";
@@ -25,16 +18,8 @@ import { PlanDal } from "../modules/planner/plan-dal.js";
 import { DEFAULT_AGENT_KEY, DEFAULT_WORKSPACE_KEY } from "../modules/identity/scope.js";
 import { requireTenantId } from "../modules/auth/claims.js";
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
 const DECISION_AUDIT_STEP_INDEX = 2147483647; // i32::MAX
 const WALLET_GUARDRAIL_NOTE = "Spend guardrail enforced by wallet authorization.";
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function formatPlanId(): string {
   return `plan-${randomUUID().replace(/-/g, "")}`;
@@ -84,10 +69,6 @@ function guardrailMessage(reason: string): string {
   if (!reason) return WALLET_GUARDRAIL_NOTE;
   return `${reason}\n${WALLET_GUARDRAIL_NOTE}`;
 }
-
-// ---------------------------------------------------------------------------
-// Plan step builders
-// ---------------------------------------------------------------------------
 
 function researchStep(): ActionPrimitive {
   return {
@@ -141,10 +122,6 @@ function walletPayStep(directive: SpendDirective): ActionPrimitive {
     },
   };
 }
-
-// ---------------------------------------------------------------------------
-// Outcome builders
-// ---------------------------------------------------------------------------
 
 function buildPlanSteps(
   request: PlanRequest,
@@ -232,10 +209,6 @@ function buildWalletDenialError(sanitizedReason: string): PlanError {
   };
 }
 
-// ---------------------------------------------------------------------------
-// Spend request extraction
-// ---------------------------------------------------------------------------
-
 interface SpendRequest {
   stepIndex: number;
   amountMinorUnits: number;
@@ -279,10 +252,6 @@ function directiveToSpendContext(directive: SpendDirective): RiskSpendContext {
   };
 }
 
-// ---------------------------------------------------------------------------
-// Route factory
-// ---------------------------------------------------------------------------
-
 export function createPlanRoutes(container: GatewayContainer): Hono {
   const plan = new Hono();
 
@@ -303,8 +272,6 @@ export function createPlanRoutes(container: GatewayContainer): Hono {
     const spendDirective = extractSpendDirective(request);
     let capturedSpend: RiskSpendContext | undefined;
 
-    // --- Policy check (direct in-process call) ---
-
     const policyRequest = {
       request_id: request.request_id,
       spend: spendDirective
@@ -313,9 +280,6 @@ export function createPlanRoutes(container: GatewayContainer): Hono {
             currency: spendDirective.currency,
           }
         : undefined,
-      // The PlanRequest schema does not carry PII/legal contexts.
-      // Default to empty contexts so that the policy engine does not
-      // escalate solely because context is absent.
       pii: { categories: [] },
       legal: { flags: [] },
     };
@@ -326,8 +290,6 @@ export function createPlanRoutes(container: GatewayContainer): Hono {
 
     switch (policyDecision.decision) {
       case "allow": {
-        // Build success steps (discovery is in-process and returns empty
-        // resolutions in the simplified pipeline, so we use fallback path)
         const steps = buildPlanSteps(request, spendDirective);
 
         const synopsis = "Falling back to automation for the local workspace";
@@ -341,7 +303,6 @@ export function createPlanRoutes(container: GatewayContainer): Hono {
           summary: { synopsis: `${synopsis}${spendSuffix}` },
         };
 
-        // --- Wallet authorization (direct in-process call) ---
         const spend = firstSpendRequest(steps);
         if (spend) {
           capturedSpend = spendRequestToContext(spend);
@@ -356,7 +317,6 @@ export function createPlanRoutes(container: GatewayContainer): Hono {
 
           switch (walletResponse.decision) {
             case "approve":
-              // keep outcome as success
               break;
             case "escalate":
               outcome = {
@@ -405,16 +365,12 @@ export function createPlanRoutes(container: GatewayContainer): Hono {
         });
         break;
     }
-
-    // --- Risk classification ---
     const riskSpend =
       capturedSpend ?? (spendDirective ? directiveToSpendContext(spendDirective) : undefined);
     const riskVerdict = container.riskClassifier.classify({
       tags: request.tags,
       spend: riskSpend,
     });
-
-    // --- Audit event ---
     const auditPayload = {
       plan_id: planId,
       request_id: request.request_id,
@@ -464,8 +420,6 @@ export function createPlanRoutes(container: GatewayContainer): Hono {
     if (outcome.status === "success") {
       container.eventBus.emit("plan:completed", { planId, stepsExecuted: outcome.steps.length });
     }
-
-    // --- Build response ---
     const response: PlanResponse = {
       plan_id: planId,
       request_id: request.request_id,

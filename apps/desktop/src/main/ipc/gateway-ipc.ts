@@ -19,9 +19,14 @@ const sender = createWindowSender();
 let manager: GatewayManager | null = null,
   ipcRegistered = false;
 
+type PinnedGatewayFetch = (
+  input: RequestInfo | URL,
+  init?: RequestInit & { dispatcher?: unknown },
+) => Promise<Response>;
+
 type PinnedGatewayFetchState = {
   key: string;
-  fetchImpl: typeof fetch;
+  fetchImpl: PinnedGatewayFetch;
   dispatcher: { destroy?: () => Promise<void> | void };
 };
 
@@ -60,7 +65,7 @@ async function createPinnedGatewayFetchState(options: {
 
   return {
     key: options.key,
-    fetchImpl: transport.fetchImpl as typeof fetch,
+    fetchImpl: transport.fetchImpl,
     dispatcher: transport.dispatcher,
   };
 }
@@ -541,15 +546,10 @@ async function handleGatewayHttpFetch(
 
   const requestUrl = resolveGatewayHttpFetchUrl(url, allowedOrigin);
   const init = buildGatewayHttpFetchInit(rawInit);
-
-  // The renderer always provides serializable primitives; ensure we pass plain objects through.
   const pinned =
     requestUrl.protocol === "https:" ? await resolvePinnedGatewayFetchState(config) : null;
   const res = pinned
-    ? await pinned.fetchImpl(requestUrl.toString(), {
-        ...(init as any),
-        dispatcher: pinned.dispatcher,
-      } as any)
+    ? await pinned.fetchImpl(requestUrl.toString(), { ...init, dispatcher: pinned.dispatcher })
     : await fetch(requestUrl.toString(), init);
   const bodyText = await res.text();
 

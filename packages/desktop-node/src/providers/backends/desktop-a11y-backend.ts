@@ -16,11 +16,6 @@ export type DesktopA11yActResult = {
   resolved_element_ref?: string;
 };
 
-/**
- * Accessibility backend for desktop automation (AT-SPI on Linux).
- *
- * Keep this surface minimal; the provider owns permissions, fallbacks, and evidence.
- */
 export interface DesktopA11yBackend {
   isAvailable(): Promise<boolean>;
   snapshot(args: DesktopSnapshotArgs): Promise<DesktopA11ySnapshot>;
