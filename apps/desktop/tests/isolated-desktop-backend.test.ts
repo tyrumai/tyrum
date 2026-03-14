@@ -18,6 +18,11 @@ type MockChildProcess = EventEmitter & {
   kill: ReturnType<typeof vi.fn>;
 };
 
+const allowMacScreenRecording = () => ({
+  accessibility: true,
+  screenRecording: true,
+});
+
 function createDelegate() {
   return {
     captureScreen: vi.fn(),
@@ -98,6 +103,7 @@ describe("IsolatedDesktopBackend", () => {
     const backend = new IsolatedDesktopBackend(delegate, {
       helperPath: "/tmp/helper.mjs",
       spawn: spawnMock as unknown as typeof import("node:child_process").spawn,
+      macPermissions: allowMacScreenRecording,
       processExecPath: "/Applications/Tyrum.app/Contents/MacOS/Tyrum",
       versions: { ...process.versions, electron: "40.8.0" },
     });
@@ -133,6 +139,7 @@ describe("IsolatedDesktopBackend", () => {
     const backend = new IsolatedDesktopBackend(createDelegate(), {
       helperPath: "/tmp/helper.mjs",
       spawn: vi.fn(() => child) as unknown as typeof import("node:child_process").spawn,
+      macPermissions: allowMacScreenRecording,
     });
 
     const capturePromise = backend.captureScreen("primary");
@@ -150,6 +157,7 @@ describe("IsolatedDesktopBackend", () => {
     const backend = new IsolatedDesktopBackend(createDelegate(), {
       helperPath: "/tmp/helper.mjs",
       spawn: vi.fn(() => child) as unknown as typeof import("node:child_process").spawn,
+      macPermissions: allowMacScreenRecording,
     });
 
     const capturePromise = backend.captureScreen("primary");
@@ -166,6 +174,7 @@ describe("IsolatedDesktopBackend", () => {
     const backend = new IsolatedDesktopBackend(createDelegate(), {
       helperPath: "/tmp/helper.mjs",
       spawn: vi.fn(() => child) as unknown as typeof import("node:child_process").spawn,
+      macPermissions: allowMacScreenRecording,
     });
 
     const capturePromise = backend.captureScreen("primary");
