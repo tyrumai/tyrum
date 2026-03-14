@@ -8,6 +8,7 @@ const compactForOverflowMock = vi.hoisted(() => vi.fn());
 const maybeAutoCompactSessionMock = vi.hoisted(() => vi.fn());
 const extractToolApprovalResumeStateMock = vi.hoisted(() => vi.fn(() => undefined));
 const sessionMessagesToModelMessagesMock = vi.hoisted(() => vi.fn(async () => []));
+const buildPromptVisibleMessagesMock = vi.hoisted(() => vi.fn((messages: unknown) => messages));
 
 vi.mock("ai", async (importOriginal) => {
   const actual = await importOriginal<typeof import("ai")>();
@@ -71,7 +72,7 @@ vi.mock("../../src/modules/agent/runtime/context-pruning.js", () => ({
 }));
 
 vi.mock("../../src/modules/agent/runtime/session-context-state.js", () => ({
-  buildPromptVisibleMessages: vi.fn((messages: unknown) => messages),
+  buildPromptVisibleMessages: buildPromptVisibleMessagesMock,
 }));
 
 vi.mock("../../src/modules/agent/runtime/session-compaction-service.js", () => ({
@@ -178,6 +179,8 @@ describe("turnDirect overflow retry", () => {
     extractToolApprovalResumeStateMock.mockReturnValue(undefined);
     sessionMessagesToModelMessagesMock.mockReset();
     sessionMessagesToModelMessagesMock.mockResolvedValue([]);
+    buildPromptVisibleMessagesMock.mockReset();
+    buildPromptVisibleMessagesMock.mockImplementation((messages: unknown) => messages);
   });
 
   it("compacts but does not retry after tools have already been used", async () => {
@@ -221,11 +224,30 @@ describe("turnDirect overflow retry", () => {
   });
 
   it("strips embedded session context when checkpoint state is injected separately", async () => {
+    const refreshedContextState = {
+      version: 1,
+      recent_message_ids: [],
+      checkpoint: {
+        goal: "continue task",
+        user_constraints: [],
+        decisions: [],
+        discoveries: [],
+        completed_work: [],
+        pending_work: [],
+        unresolved_questions: [],
+        critical_identifiers: [],
+        relevant_files: [],
+        handoff_md: "Continue the task.",
+      },
+      pending_approvals: [],
+      pending_tool_state: [],
+      updated_at: "2026-03-13T00:00:00.000Z",
+    };
     prepareTurnMock.mockResolvedValue({
       ...samplePreparedTurn(new Set()),
       userContent: [
         { type: "text", text: "Enabled skills:\nnone" },
-        { type: "text", text: "Session context:\ncheckpoint text" },
+        { type: "text", text: "Session context:\nstale checkpoint text" },
         { type: "text", text: "hello" },
       ],
     });
@@ -244,25 +266,7 @@ describe("turnDirect overflow retry", () => {
       agent_id: "agent-1",
       workspace_id: "workspace-1",
       messages: [],
-      context_state: {
-        version: 1,
-        recent_message_ids: [],
-        checkpoint: {
-          goal: "continue task",
-          user_constraints: [],
-          decisions: [],
-          discoveries: [],
-          completed_work: [],
-          pending_work: [],
-          unresolved_questions: [],
-          critical_identifiers: [],
-          relevant_files: [],
-          handoff_md: "Continue the task.",
-        },
-        pending_approvals: [],
-        pending_tool_state: [],
-        updated_at: "2026-03-13T00:00:00.000Z",
-      },
+      context_state: refreshedContextState,
     }));
 
     const { turnDirect } = await import("../../src/modules/agent/runtime/turn-direct.js");
@@ -275,6 +279,7 @@ describe("turnDirect overflow retry", () => {
 
     const call = generateTextMock.mock.calls[0]?.[0];
     const userMessage = Array.isArray(call?.messages) ? call.messages.at(-1) : undefined;
+    expect(buildPromptVisibleMessagesMock).toHaveBeenCalledWith([], refreshedContextState);
     expect(userMessage).toMatchObject({
       role: "user",
       content: [
@@ -282,6 +287,7 @@ describe("turnDirect overflow retry", () => {
         { type: "text", text: "hello" },
       ],
     });
+    expect(JSON.stringify(call?.messages ?? [])).not.toContain("stale checkpoint text");
   });
 });
 

@@ -93,6 +93,10 @@ function stripEmbeddedSessionContext(
   if (!hasPromptInjectedSessionContext(contextState)) {
     return [...userContent];
   }
+  // `prepareTurn()` formats session context before auto-compaction may refresh the
+  // checkpoint. When prompt-visible messages inject the current checkpoint/pending
+  // state separately, drop the pre-turn embedded block so the model sees one
+  // authoritative session-context representation.
   return userContent.filter((part) => !part.text.startsWith("Session context:\n"));
 }
 
