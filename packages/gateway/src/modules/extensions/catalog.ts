@@ -97,6 +97,7 @@ export async function buildExtensionSummary(input: {
   revision: RuntimePackageRevision;
   assignmentCount: number;
 }): Promise<ManagedExtensionSummary> {
+  const sourceType = input.stateMode === "shared" ? "shared" : "managed";
   if (input.kind === "skill") {
     const pkg = parseManagedSkillPackage(input.revision.packageData, input.revision.packageKey);
     const materializedPath = await ensureManagedExtensionMaterialized({
@@ -115,10 +116,16 @@ export async function buildExtensionSummary(input: {
       enabled: input.revision.enabled,
       revision: input.revision.revision,
       source: sourceDescriptorForSkill(pkg.source),
+      source_type: sourceType,
       refreshable: pkg.source.kind === "direct-url",
       materialized_path: materializedPath ?? null,
       assignment_count: input.assignmentCount,
       transport: null,
+      default_access: "inherit",
+      can_edit_settings: false,
+      can_toggle_source_enabled: true,
+      can_refresh_source: pkg.source.kind === "direct-url",
+      can_revert_source: true,
     };
   }
 
@@ -139,10 +146,16 @@ export async function buildExtensionSummary(input: {
     enabled: input.revision.enabled,
     revision: input.revision.revision,
     source: sourceDescriptorForMcp(pkg.source),
+    source_type: sourceType,
     refreshable: pkg.source.kind === "direct-url" || pkg.source.kind === "npm",
     materialized_path: materializedPath ?? null,
     assignment_count: input.assignmentCount,
     transport: pkg.spec.transport,
+    default_access: "inherit",
+    can_edit_settings: true,
+    can_toggle_source_enabled: true,
+    can_refresh_source: pkg.source.kind === "direct-url" || pkg.source.kind === "npm",
+    can_revert_source: true,
   };
 }
 
@@ -176,6 +189,22 @@ export async function buildExtensionDetail(input: {
         reason: revision.reason ?? null,
         reverted_from_revision: revision.revertedFromRevision ?? null,
       })),
+      default_mcp_server_settings_json: null,
+      default_mcp_server_settings_yaml: null,
+      sources: [
+        {
+          source_type: summary.source_type,
+          is_effective: true,
+          enabled: summary.enabled,
+          revision: summary.revision,
+          refreshable: summary.refreshable,
+          materialized_path: summary.materialized_path,
+          transport: summary.transport,
+          version: summary.version,
+          description: summary.description,
+          source: summary.source,
+        },
+      ],
     };
   }
 
@@ -192,5 +221,21 @@ export async function buildExtensionDetail(input: {
       reason: revision.reason ?? null,
       reverted_from_revision: revision.revertedFromRevision ?? null,
     })),
+    default_mcp_server_settings_json: null,
+    default_mcp_server_settings_yaml: null,
+    sources: [
+      {
+        source_type: summary.source_type,
+        is_effective: true,
+        enabled: summary.enabled,
+        revision: summary.revision,
+        refreshable: summary.refreshable,
+        materialized_path: summary.materialized_path,
+        transport: summary.transport,
+        version: summary.version,
+        description: summary.description,
+        source: summary.source,
+      },
+    ],
   };
 }

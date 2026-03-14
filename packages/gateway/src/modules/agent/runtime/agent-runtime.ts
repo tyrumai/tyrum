@@ -47,6 +47,8 @@ import {
   resolveRuntimeCompactionContext,
   type SessionCompactionResult,
 } from "./session-compaction-service.js";
+import { resolveAgentPersona } from "../persona.js";
+import type { ToolDescriptor } from "../tools.js";
 import type { GuardianReviewDecision } from "../../review/guardian-review-mode.js";
 import type { ToolDescriptor } from "../tools.js";
 import {
