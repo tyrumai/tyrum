@@ -34,14 +34,17 @@ describe("MobileNav", () => {
 
     const active = container.querySelector("[data-testid='nav-workboard']");
     expect(active?.getAttribute("data-active")).toBe("true");
+    expect(active?.textContent).toContain("Work");
 
     const dashboard = container.querySelector<HTMLButtonElement>("[data-testid='nav-dashboard']");
     expect(dashboard).not.toBeNull();
     expect(dashboard?.className).toContain("focus-visible:ring-2");
     expect(dashboard?.className).toContain("focus-visible:ring-focus-ring");
+    expect(dashboard?.textContent).toContain("Dashboard");
 
-    const more = container.querySelector("[data-testid='nav-more']");
+    const more = container.querySelector<HTMLButtonElement>("[data-testid='nav-more']");
     expect(more).not.toBeNull();
+    expect(more?.textContent).toContain("More");
 
     cleanupTestRoot({ container, root });
   });
@@ -63,6 +66,7 @@ describe("MobileNav", () => {
     expect(nav).not.toBeNull();
     expect(nav?.className).toContain("z-40");
     expect(nav?.className).not.toContain("z-50");
+    expect(nav?.textContent).toContain("Dashboard");
 
     cleanupTestRoot({ container, root });
   });

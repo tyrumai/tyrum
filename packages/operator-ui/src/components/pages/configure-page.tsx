@@ -53,41 +53,43 @@ function ConfigurePageContent({ core }: ConfigurePageProps) {
         }}
         className="grid gap-3"
       >
-        <TabsList aria-label="Configure sections" className="flex-wrap">
-          <TabsTrigger value="general" data-testid="configure-tab-general">
-            General
-          </TabsTrigger>
-          <TabsTrigger value="policy" data-testid="admin-http-tab-policy">
-            Policy
-          </TabsTrigger>
-          <TabsTrigger value="providers" data-testid="admin-http-tab-providers">
-            Providers
-          </TabsTrigger>
-          <TabsTrigger value="models" data-testid="admin-http-tab-models">
-            Models
-          </TabsTrigger>
-          <TabsTrigger value="audit" data-testid="admin-http-tab-audit">
-            Audit
-          </TabsTrigger>
-          <TabsTrigger value="routing-config" data-testid="admin-http-tab-routing-config">
-            Channels
-          </TabsTrigger>
-          <TabsTrigger value="location" data-testid="admin-http-tab-location">
-            Location
-          </TabsTrigger>
-          <TabsTrigger value="secrets" data-testid="admin-http-tab-secrets">
-            Secrets
-          </TabsTrigger>
-          <TabsTrigger value="tools" data-testid="admin-http-tab-tools">
-            Tools
-          </TabsTrigger>
-          <TabsTrigger value="device-tokens" data-testid="admin-http-tab-gateway">
-            Tokens
-          </TabsTrigger>
-          <TabsTrigger value="commands" data-testid="admin-ws-tab-commands">
-            Commands
-          </TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto pb-1" data-testid="configure-tab-strip">
+          <TabsList aria-label="Configure sections" className="min-w-max flex-nowrap">
+            <TabsTrigger value="general" data-testid="configure-tab-general">
+              General
+            </TabsTrigger>
+            <TabsTrigger value="policy" data-testid="admin-http-tab-policy">
+              Policy
+            </TabsTrigger>
+            <TabsTrigger value="providers" data-testid="admin-http-tab-providers">
+              Providers
+            </TabsTrigger>
+            <TabsTrigger value="models" data-testid="admin-http-tab-models">
+              Models
+            </TabsTrigger>
+            <TabsTrigger value="audit" data-testid="admin-http-tab-audit">
+              Audit
+            </TabsTrigger>
+            <TabsTrigger value="routing-config" data-testid="admin-http-tab-routing-config">
+              Channels
+            </TabsTrigger>
+            <TabsTrigger value="location" data-testid="admin-http-tab-location">
+              Location
+            </TabsTrigger>
+            <TabsTrigger value="secrets" data-testid="admin-http-tab-secrets">
+              Secrets
+            </TabsTrigger>
+            <TabsTrigger value="tools" data-testid="admin-http-tab-tools">
+              Tools
+            </TabsTrigger>
+            <TabsTrigger value="device-tokens" data-testid="admin-http-tab-gateway">
+              Tokens
+            </TabsTrigger>
+            <TabsTrigger value="commands" data-testid="admin-ws-tab-commands">
+              Commands
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="general">
           <ConfigureGeneralPanel />

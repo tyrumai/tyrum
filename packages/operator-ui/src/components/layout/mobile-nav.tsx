@@ -11,6 +11,7 @@ import {
 export interface MobileNavItem {
   id: string;
   label: string;
+  mobileLabel?: string;
   icon: React.ComponentType<{ className?: string }>;
   testId?: string;
 }
@@ -43,7 +44,7 @@ export function MobileNav({
         data-active={active ? "true" : undefined}
         aria-current={active ? "page" : undefined}
         className={cn(
-          "flex flex-1 flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-xs transition-colors",
+          "flex min-w-0 flex-1 flex-col items-center justify-center gap-1 px-0.5 py-1 text-[10px] transition-colors",
           "text-fg-muted hover:text-fg",
           "rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
           active ? "text-fg" : null,
@@ -53,7 +54,7 @@ export function MobileNav({
         }}
       >
         <Icon className="h-5 w-5" />
-        <span className="sr-only">{item.label}</span>
+        <span className="max-w-full truncate leading-none">{item.mobileLabel ?? item.label}</span>
       </button>
     );
   };
@@ -66,7 +67,7 @@ export function MobileNav({
       )}
       {...props}
     >
-      <div className="mx-auto flex h-14 w-full max-w-6xl items-stretch">
+      <div className="mx-auto flex h-16 w-full max-w-6xl items-stretch">
         {items.map(renderTab)}
 
         <DropdownMenu>
@@ -77,14 +78,14 @@ export function MobileNav({
               data-active={overflowActive ? "true" : undefined}
               aria-current={overflowActive ? "page" : undefined}
               className={cn(
-                "flex flex-1 flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-xs transition-colors",
+                "flex min-w-0 flex-1 flex-col items-center justify-center gap-1 px-0.5 py-1 text-[10px] transition-colors",
                 "text-fg-muted hover:text-fg",
                 "rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
                 overflowActive ? "text-fg" : null,
               )}
             >
               <MoreHorizontal className="h-5 w-5" />
-              <span className="sr-only">More</span>
+              <span className="max-w-full truncate leading-none">More</span>
             </button>
           </DropdownMenuTrigger>
           {overflowItems.length > 0 ? (

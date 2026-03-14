@@ -82,10 +82,17 @@ function OperatorUiAppRoot({
   const existingTheme = useThemeOptional();
   const host = useHostApiOptional();
   const hostKind: HostKind = host?.kind ?? (mode === "desktop" ? "desktop" : "web");
+  const reconnectUiScopeKey = `${mode}:${core.httpBaseUrl}:${core.deviceId ?? ""}`;
+  const onboarding = useFirstRunOnboardingController({
+    core,
+    hostKind,
+    scopeKey: reconnectUiScopeKey,
+  });
   const viewModel = useOperatorAppViewModel({
     core,
     mode,
     hostKind,
+    navigationLocked: onboarding.isOpen,
     onNavigationRequest:
       (host?.kind === "desktop" || host?.kind === "mobile") && host.api?.onNavigationRequest
         ? host.api.onNavigationRequest
@@ -97,12 +104,7 @@ function OperatorUiAppRoot({
     hostApi: host?.kind === "desktop" ? host.api : null,
   });
   const routeDefinition = getOperatorRouteDefinition(viewModel.route);
-  const reconnectUiScopeKey = `${mode}:${core.httpBaseUrl}:${core.deviceId ?? ""}`;
-  const onboarding = useFirstRunOnboardingController({
-    core,
-    hostKind,
-    scopeKey: reconnectUiScopeKey,
-  });
+  const navigationBlocked = onboarding.isOpen;
 
   const shell = (
     <AppShell
@@ -110,7 +112,7 @@ function OperatorUiAppRoot({
       fullBleed={true}
       viewportLocked={true}
       sidebar={
-        viewModel.showShell ? (
+        viewModel.showShell && !navigationBlocked ? (
           <Sidebar
             items={viewModel.sidebarItems}
             secondaryItems={viewModel.platformItems}
@@ -133,7 +135,7 @@ function OperatorUiAppRoot({
         ) : null
       }
       mobileNav={
-        viewModel.showShell ? (
+        viewModel.showShell && !navigationBlocked ? (
           <MobileNav
             items={viewModel.mobileItems}
             overflowItems={viewModel.mobileOverflowItems}
@@ -148,7 +150,7 @@ function OperatorUiAppRoot({
           {viewModel.showConnectPage ? (
             <div className="flex min-h-0 flex-1 overflow-hidden">
               <ScrollArea className="h-full w-full">
-                <div className="mx-auto flex min-h-full w-full max-w-md items-start px-4 py-6 md:items-center md:py-10">
+                <div className="mx-auto flex min-h-full w-full max-w-lg items-start px-4 py-6 md:items-center md:py-10">
                   <Suspense fallback={<OperatorRouteFallback />}>
                     {CONNECT_PAGE_RENDER({
                       core,
@@ -165,7 +167,6 @@ function OperatorUiAppRoot({
           ) : onboarding.isOpen ? (
             <FirstRunOnboardingPage
               core={core}
-              issueSignature={onboarding.issueSignature}
               onClose={onboarding.close}
               onSkip={onboarding.skip}
               onMarkCompleted={onboarding.markCompleted}

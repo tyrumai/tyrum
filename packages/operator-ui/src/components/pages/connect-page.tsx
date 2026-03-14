@@ -117,14 +117,28 @@ export function ConnectPage({
   return (
     <div className="grid gap-5">
       <Card>
-        <CardHeader className="pb-2.5">
+        <CardHeader className="grid gap-2 pb-2.5">
+          <div className="text-lg font-semibold text-fg">Connect to Tyrum</div>
           <div className="text-sm text-fg-muted">
             {isWeb
-              ? "Enter your gateway token to start a session."
+              ? "Enter a tenant admin token to start an operator session."
               : "Connect to the local operator gateway."}
           </div>
         </CardHeader>
         <CardContent className="grid gap-4">
+          {isWeb ? (
+            <Alert
+              title="Need a gateway token?"
+              description={
+                <>
+                  Use the <code>default-tenant-admin</code> token printed when the gateway starts
+                  for the first time. If you need a new one, run{" "}
+                  <code>tyrum tokens issue-default-tenant-admin</code>.
+                </>
+              }
+            />
+          ) : null}
+
           {onReconfigureGateway ? (
             <Input
               id="gateway-url"
@@ -136,6 +150,7 @@ export function ConnectPage({
               spellCheck={false}
               autoCapitalize="none"
               autoCorrect="off"
+              helperText="Default local gateway URL is prefilled. Change it only if the gateway is running elsewhere."
             />
           ) : null}
 
@@ -149,6 +164,7 @@ export function ConnectPage({
               spellCheck={false}
               autoCapitalize="none"
               autoCorrect="off"
+              helperText="Paste the tenant admin token from gateway startup or a newly issued recovery token."
               suffix={
                 <button
                   type="button"

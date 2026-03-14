@@ -65,6 +65,9 @@ function registerLoginFormTests(): void {
     expect(scrollArea?.className).toContain("h-full");
     expect(scrollArea?.className).toContain("w-full");
     expect(container.querySelector('[data-testid="login-button"]')).not.toBeNull();
+    expect(container.textContent).toContain("Need a gateway token?");
+    expect(container.textContent).toContain("default-tenant-admin");
+    expect(container.textContent).toContain("tyrum tokens issue-default-tenant-admin");
 
     act(() => {
       root?.unmount();

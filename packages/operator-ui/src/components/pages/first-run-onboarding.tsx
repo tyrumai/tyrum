@@ -27,6 +27,7 @@ import {
 import {
   getRelevantOnboardingIssues,
   resolveFirstRunOnboardingStep,
+  summarizeOnboardingIssues,
   type FirstRunOnboardingStepId,
 } from "./first-run-onboarding.shared.js";
 import {
@@ -42,14 +43,12 @@ export { useFirstRunOnboardingController } from "./first-run-onboarding.logic.js
 
 export function FirstRunOnboardingPage({
   core,
-  issueSignature,
   onClose,
   onSkip,
   onMarkCompleted,
   onNavigate,
 }: {
   core: OperatorCore;
-  issueSignature: string;
   onClose: () => void;
   onSkip: () => void;
   onMarkCompleted: () => void;
@@ -60,6 +59,7 @@ export function FirstRunOnboardingPage({
   const mutationHttp = useAdminMutationHttpClient();
   const status = useOperatorStore(core.statusStore);
   const issues = getRelevantOnboardingIssues(status.status?.config_health.issues ?? []);
+  const issueBadges = React.useMemo(() => summarizeOnboardingIssues(issues), [issues]);
   const [submitBusy, setSubmitBusy] = React.useState(false);
   const [submitErrorMessage, setSubmitErrorMessage] = React.useState<string | null>(null);
   const { data, refresh } = useOnboardingData();
@@ -286,7 +286,7 @@ export function FirstRunOnboardingPage({
   return (
     <AppPage
       contentLayout="fill"
-      contentClassName="max-w-4xl gap-5"
+      contentClassName="max-w-3xl gap-5"
       data-testid="first-run-onboarding"
     >
       <Card
@@ -301,14 +301,11 @@ export function FirstRunOnboardingPage({
                 <h2 className="text-lg font-semibold text-fg">Initial Setup</h2>
               </div>
               <div className="text-sm text-fg-muted">
-                Follow the guided setup or skip it and configure providers, models, and agents
-                manually.
+                Finish the required setup before using the main operator workspace. You can skip now
+                and resume later from the dashboard if needed.
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="outline" data-testid="first-run-onboarding-issue-signature">
-                {issueSignature || "no-issues"}
-              </Badge>
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
               <Button
                 type="button"
                 variant="secondary"
@@ -344,16 +341,20 @@ export function FirstRunOnboardingPage({
               description={submitErrorMessage}
             />
           ) : null}
-          {issues.length > 0 ? (
-            <div className="flex flex-wrap gap-2">
-              {issues.map((issue) => (
-                <Badge
-                  key={`${issue.code}:${issue.target.kind}:${issue.target.id ?? ""}`}
-                  variant={issue.severity === "error" ? "danger" : "warning"}
-                >
-                  {issue.code}
-                </Badge>
-              ))}
+          {issueBadges.length > 0 ? (
+            <div className="grid gap-2">
+              <div className="text-sm font-medium text-fg">Setup items remaining</div>
+              <div className="flex flex-wrap gap-2">
+                {issueBadges.map((issue) => (
+                  <Badge
+                    key={issue.key}
+                    variant={issue.variant}
+                    data-testid={`first-run-onboarding-issue-${issue.key}`}
+                  >
+                    {issue.label}
+                  </Badge>
+                ))}
+              </div>
             </div>
           ) : null}
           {renderStep()}

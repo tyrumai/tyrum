@@ -11,6 +11,7 @@ export type SidebarConnectionStatus = ConnectionStatus;
 export interface SidebarNavItem {
   id: string;
   label: string;
+  mobileLabel?: string;
   icon: React.ComponentType<{ className?: string }>;
   testId?: string;
   badgeCount?: number;

@@ -81,9 +81,8 @@ function createOnboardingRoute(): React.ReactNode {
     <AdminAccessProvider core={core} mode="desktop">
       <FirstRunOnboardingPage
         core={core}
-        issueSignature="no_provider_accounts:deployment"
         onClose={() => undefined}
-        onDismiss={() => undefined}
+        onSkip={() => undefined}
         onMarkCompleted={() => undefined}
         onNavigate={() => undefined}
       />

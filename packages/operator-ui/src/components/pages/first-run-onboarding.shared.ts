@@ -26,6 +26,11 @@ const AGENT_CODES = new Set<StatusResponse["config_health"]["issues"][number]["c
 ]);
 
 export type FirstRunOnboardingIssue = StatusResponse["config_health"]["issues"][number];
+export type FirstRunOnboardingIssueBadge = {
+  key: string;
+  label: string;
+  variant: "danger" | "warning";
+};
 export type FirstRunOnboardingStepId =
   | "admin"
   | "provider"
@@ -37,6 +42,24 @@ export type FirstRunOnboardingStoredState = {
   issueSignature?: string;
   status: "skipped" | "completed";
 };
+const ISSUE_BADGE_COPY: Partial<
+  Record<FirstRunOnboardingIssue["code"], { key: string; label: string }>
+> = {
+  no_provider_accounts: { key: "providers", label: "Provider account" },
+  no_model_presets: { key: "presets", label: "Model preset" },
+  execution_profile_unassigned: { key: "execution-profiles", label: "Execution profiles" },
+  execution_profile_provider_unconfigured: {
+    key: "execution-profiles",
+    label: "Execution profiles",
+  },
+  execution_profile_model_unavailable: {
+    key: "execution-profiles",
+    label: "Execution profiles",
+  },
+  agent_model_unconfigured: { key: "default-agent", label: "Default agent" },
+  agent_provider_unconfigured: { key: "default-agent", label: "Default agent" },
+  agent_model_unavailable: { key: "default-agent", label: "Default agent" },
+};
 
 export function supportsFirstRunOnboarding(hostKind: "desktop" | "mobile" | "web"): boolean {
   return hostKind === "desktop" || hostKind === "web";
@@ -46,6 +69,30 @@ export function getRelevantOnboardingIssues(
   issues: readonly FirstRunOnboardingIssue[],
 ): FirstRunOnboardingIssue[] {
   return issues.filter((issue) => RELEVANT_CODES.has(issue.code));
+}
+
+export function summarizeOnboardingIssues(
+  issues: readonly FirstRunOnboardingIssue[],
+): FirstRunOnboardingIssueBadge[] {
+  const summarized = new Map<string, FirstRunOnboardingIssueBadge>();
+  for (const issue of getRelevantOnboardingIssues(issues)) {
+    const copy = ISSUE_BADGE_COPY[issue.code];
+    if (!copy) continue;
+    const nextVariant = issue.severity === "error" ? "danger" : "warning";
+    const current = summarized.get(copy.key);
+    if (!current) {
+      summarized.set(copy.key, {
+        key: copy.key,
+        label: copy.label,
+        variant: nextVariant,
+      });
+      continue;
+    }
+    if (current.variant !== "danger" && nextVariant === "danger") {
+      summarized.set(copy.key, { ...current, variant: "danger" });
+    }
+  }
+  return Array.from(summarized.values());
 }
 
 export function buildOnboardingIssueSignature(issues: readonly FirstRunOnboardingIssue[]): string {
