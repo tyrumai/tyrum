@@ -1,6 +1,6 @@
 import { Command, CommanderError } from "commander";
 
-export const COMMANDER_SILENT_OUTPUT = {
+const COMMANDER_SILENT_OUTPUT = {
   writeOut: () => undefined,
   writeErr: () => undefined,
 };
