@@ -90,16 +90,47 @@ export interface CreateApprovalParams {
   resumeToken?: string | null;
 }
 
+type TransitionWithReviewInput = {
+  tenantId: string;
+  approvalId: string;
+  status: ApprovalStatus;
+  reviewerKind: ReviewerKind;
+  reviewerId?: string | null;
+  reviewState: CreateReviewEntryParams["state"];
+  reason?: string | null;
+  riskLevel?: CreateReviewEntryParams["riskLevel"];
+  riskScore?: CreateReviewEntryParams["riskScore"];
+  evidence?: unknown;
+  decisionPayload?: unknown;
+  allowedCurrentStatuses?: ApprovalStatus[];
+  includeReviews?: boolean;
+};
+
+type ResolveWithEngineActionInput = {
+  tenantId: string;
+  approvalId: string;
+  decision: "approved" | "denied";
+  reason?: string;
+  reviewerKind?: ReviewerKind;
+  reviewerId?: string | null;
+  allowedCurrentStatuses?: ApprovalStatus[];
+  resolvedBy?: unknown;
+  decisionPayload?: unknown;
+};
+
 function toReviewEntryContract(review: ReviewEntryRow): ReviewEntryT {
   const { tenant_id: _tenantId, ...contract } = review;
   return contract;
 }
 
 export class ApprovalDal {
-  constructor(private readonly db: SqlDb) {}
+  constructor(
+    private readonly db: SqlDb,
+    private readonly inTransaction = false,
+  ) {}
 
   private createTxDal(tx: SqlDb): ApprovalDal {
-    return new ApprovalDal(tx);
+    return new ApprovalDal(tx, true);
   }
 
   private get reviewEntries(): ReviewEntryDal {
@@ -331,124 +362,128 @@ export class ApprovalDal {
     return row ? await this.hydrate(row, { includeReviews: input.includeReviews }) : undefined;
   }
 
-  async transitionWithReview(input: {
-    tenantId: string;
-    approvalId: string;
-    status: ApprovalStatus;
-    reviewerKind: ReviewerKind;
-    reviewerId?: string | null;
-    reviewState: CreateReviewEntryParams["state"];
-    reason?: string | null;
-    riskLevel?: CreateReviewEntryParams["riskLevel"];
-    riskScore?: CreateReviewEntryParams["riskScore"];
-    evidence?: unknown;
-    decisionPayload?: unknown;
-    allowedCurrentStatuses?: ApprovalStatus[];
-    includeReviews?: boolean;
-  }): Promise<{ approval: ApprovalRow; transitioned: boolean } | undefined> {
+  async transitionWithReview(
+    input: TransitionWithReviewInput,
+  ): Promise<{ approval: ApprovalRow; transitioned: boolean } | undefined> {
+    if (this.inTransaction) {
+      return await this.transitionWithReviewTx(this.db, input);
+    }
+
     return await this.db.transaction(async (tx) => {
       const approvalDal = tx === this.db ? this : this.createTxDal(tx);
-      const current = await approvalDal.getRawById({
-        tenantId: input.tenantId,
-        approvalId: input.approvalId,
-      });
-      if (!current) return undefined;
-
-      const currentStatus = normalizeApprovalStatus(current.status);
-      if (
-        input.allowedCurrentStatuses &&
-        !input.allowedCurrentStatuses.includes(currentStatus) &&
-        !isApprovalTerminalStatus(currentStatus)
-      ) {
-        return {
-          approval: await approvalDal.hydrate(current, { includeReviews: input.includeReviews }),
-          transitioned: false,
-        };
-      }
-      if (isApprovalTerminalStatus(currentStatus)) {
-        return {
-          approval: await approvalDal.hydrate(current, { includeReviews: input.includeReviews }),
-          transitioned: false,
-        };
-      }
-
-      const review = await new ReviewEntryDal(tx).create({
-        tenantId: input.tenantId,
-        targetType: "approval",
-        targetId: input.approvalId,
-        reviewerKind: input.reviewerKind,
-        reviewerId: input.reviewerId,
-        state: input.reviewState,
-        reason: input.reason,
-        riskLevel: input.riskLevel ?? null,
-        riskScore: input.riskScore ?? null,
-        evidence: input.evidence,
-        decisionPayload: input.decisionPayload,
-        startedAt: input.reviewState === "running" ? new Date().toISOString() : null,
-        completedAt:
-          input.reviewState === "running" || input.reviewState === "queued"
-            ? null
-            : new Date().toISOString(),
-      });
-
-      const updated = await tx.run(
-        `UPDATE approvals
-         SET status = ?,
-             latest_review_id = ?
-         WHERE tenant_id = ? AND approval_id = ?`,
-        [input.status, review.review_id, input.tenantId, input.approvalId],
-      );
-      if (updated.changes !== 1) {
-        throw new Error(`failed to update approval ${input.approvalId}`);
-      }
-
-      const next = await approvalDal.getById({
-        tenantId: input.tenantId,
-        approvalId: input.approvalId,
-        includeReviews: input.includeReviews,
-      });
-      if (!next) {
-        throw new Error(`approval ${input.approvalId} disappeared after update`);
-      }
-      return { approval: next, transitioned: true };
+      return await approvalDal.transitionWithReviewTx(tx, input);
     });
   }
 
-  async resolveWithEngineAction(input: {
-    tenantId: string;
-    approvalId: string;
-    decision: "approved" | "denied";
-    reason?: string;
-    reviewerKind?: ReviewerKind;
-    reviewerId?: string | null;
-    allowedCurrentStatuses?: ApprovalStatus[];
-    resolvedBy?: unknown;
-    decisionPayload?: unknown;
-  }): Promise<{ approval: ApprovalRow; transitioned: boolean } | undefined> {
+  private async transitionWithReviewTx(
+    tx: SqlDb,
+    input: TransitionWithReviewInput,
+  ): Promise<{ approval: ApprovalRow; transitioned: boolean } | undefined> {
+    const approvalDal = tx === this.db ? this : this.createTxDal(tx);
+    const current = await approvalDal.getRawById({
+      tenantId: input.tenantId,
+      approvalId: input.approvalId,
+    });
+    if (!current) return undefined;
+
+    const currentStatus = normalizeApprovalStatus(current.status);
+    if (
+      input.allowedCurrentStatuses &&
+      !input.allowedCurrentStatuses.includes(currentStatus) &&
+      !isApprovalTerminalStatus(currentStatus)
+    ) {
+      return {
+        approval: await approvalDal.hydrate(current, { includeReviews: input.includeReviews }),
+        transitioned: false,
+      };
+    }
+    if (isApprovalTerminalStatus(currentStatus)) {
+      return {
+        approval: await approvalDal.hydrate(current, { includeReviews: input.includeReviews }),
+        transitioned: false,
+      };
+    }
+
+    const review = await new ReviewEntryDal(tx).create({
+      tenantId: input.tenantId,
+      targetType: "approval",
+      targetId: input.approvalId,
+      reviewerKind: input.reviewerKind,
+      reviewerId: input.reviewerId,
+      state: input.reviewState,
+      reason: input.reason,
+      riskLevel: input.riskLevel ?? null,
+      riskScore: input.riskScore ?? null,
+      evidence: input.evidence,
+      decisionPayload: input.decisionPayload,
+      startedAt: input.reviewState === "running" ? new Date().toISOString() : null,
+      completedAt:
+        input.reviewState === "running" || input.reviewState === "queued"
+          ? null
+          : new Date().toISOString(),
+    });
+
+    const updated = await tx.run(
+      `UPDATE approvals
+       SET status = ?,
+           latest_review_id = ?
+       WHERE tenant_id = ? AND approval_id = ?`,
+      [input.status, review.review_id, input.tenantId, input.approvalId],
+    );
+    if (updated.changes !== 1) {
+      throw new Error(`failed to update approval ${input.approvalId}`);
+    }
+
+    const next = await approvalDal.getById({
+      tenantId: input.tenantId,
+      approvalId: input.approvalId,
+      includeReviews: input.includeReviews,
+    });
+    if (!next) {
+      throw new Error(`approval ${input.approvalId} disappeared after update`);
+    }
+    return { approval: next, transitioned: true };
+  }
+
+  async resolveWithEngineAction(
+    input: ResolveWithEngineActionInput,
+  ): Promise<{ approval: ApprovalRow; transitioned: boolean } | undefined> {
+    if (this.inTransaction) {
+      return await this.resolveWithEngineActionTx(this.db, input);
+    }
+
     return await this.db.transaction(async (tx) => {
       const approvalDal = tx === this.db ? this : this.createTxDal(tx);
-      const actionDal = new ApprovalEngineActionDal(tx);
-      const transitioned = await approvalDal.transitionWithReview({
-        tenantId: input.tenantId,
-        approvalId: input.approvalId,
-        status: input.decision === "approved" ? "approved" : "denied",
-        reviewerKind: input.reviewerKind ?? "human",
-        reviewerId: input.reviewerId,
-        reviewState: input.decision === "approved" ? "approved" : "denied",
-        reason: input.reason,
-        decisionPayload: input.decisionPayload ?? input.resolvedBy,
-        allowedCurrentStatuses: input.allowedCurrentStatuses ?? ["awaiting_human"],
-      });
-      if (!transitioned) return undefined;
-      if (transitioned.transitioned) {
-        await actionDal.enqueueForResolvedApproval({
-          tenantId: input.tenantId,
-          approval: transitioned.approval,
-          reason: input.reason,
-        });
-      }
-      return transitioned;
+      return await approvalDal.resolveWithEngineActionTx(tx, input);
     });
+  }
+
+  private async resolveWithEngineActionTx(
+    tx: SqlDb,
+    input: ResolveWithEngineActionInput,
+  ): Promise<{ approval: ApprovalRow; transitioned: boolean } | undefined> {
+    const approvalDal = tx === this.db ? this : this.createTxDal(tx);
+    const actionDal = new ApprovalEngineActionDal(tx);
+    const transitioned = await approvalDal.transitionWithReviewTx(tx, {
+      tenantId: input.tenantId,
+      approvalId: input.approvalId,
+      status: input.decision === "approved" ? "approved" : "denied",
+      reviewerKind: input.reviewerKind ?? "human",
+      reviewerId: input.reviewerId,
+      reviewState: input.decision === "approved" ? "approved" : "denied",
+      reason: input.reason,
+      decisionPayload: input.decisionPayload ?? input.resolvedBy,
+      allowedCurrentStatuses: input.allowedCurrentStatuses ?? ["awaiting_human"],
+    });
+    if (!transitioned) return undefined;
+    if (transitioned.transitioned) {
+      await actionDal.enqueueForResolvedApproval({
+        tenantId: input.tenantId,
+        approval: transitioned.approval,
+        reason: input.reason,
+      });
+    }
+    return transitioned;
   }
 
   async respond(input: {
