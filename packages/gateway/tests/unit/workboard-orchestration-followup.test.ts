@@ -352,6 +352,10 @@ describe("WorkBoard orchestration follow-up behaviors", () => {
         started_at: new Date().toISOString(),
       },
     });
+    await workboard.deleteStateKv({
+      scope: { kind: "work_item", ...scope, work_item_id: item.work_item_id },
+      key: "work.size.class",
+    });
 
     const reconciler = new WorkboardReconciler({ db });
     await reconciler.tick();

@@ -51,6 +51,36 @@ async function describeWorkItemState(input: {
   return parts;
 }
 
+async function appendWorkItemSection(input: {
+  lines: string[];
+  label: string;
+  items: Array<{ work_item_id: string; title: string }>;
+  workboard: WorkboardDal;
+  scope: WorkScope;
+}): Promise<void> {
+  if (input.items.length === 0) {
+    return;
+  }
+
+  const details = await Promise.all(
+    input.items.map((item) =>
+      describeWorkItemState({
+        workboard: input.workboard,
+        scope: input.scope,
+        workItemId: item.work_item_id,
+      }),
+    ),
+  );
+
+  input.lines.push(input.label);
+  for (const [index, item] of input.items.entries()) {
+    const parts = details[index] ?? [];
+    input.lines.push(
+      `- ${item.work_item_id} — ${item.title}${parts.length > 0 ? ` [${parts.join("; ")}]` : ""}`,
+    );
+  }
+}
+
 export async function buildWorkFocusDigest(input: {
   container: Pick<GatewayContainer, "db" | "redactionEngine" | "logger">;
   scope: WorkScope;
@@ -82,45 +112,27 @@ export async function buildWorkFocusDigest(input: {
     }
 
     const lines: string[] = [];
-    if (doing.length > 0) {
-      lines.push("Doing:");
-      for (const item of doing) {
-        const parts = await describeWorkItemState({
-          workboard,
-          scope: input.scope,
-          workItemId: item.work_item_id,
-        });
-        lines.push(
-          `- ${item.work_item_id} — ${item.title}${parts.length > 0 ? ` [${parts.join("; ")}]` : ""}`,
-        );
-      }
-    }
-    if (blocked.length > 0) {
-      lines.push("Blocked:");
-      for (const item of blocked) {
-        const parts = await describeWorkItemState({
-          workboard,
-          scope: input.scope,
-          workItemId: item.work_item_id,
-        });
-        lines.push(
-          `- ${item.work_item_id} — ${item.title}${parts.length > 0 ? ` [${parts.join("; ")}]` : ""}`,
-        );
-      }
-    }
-    if (ready.length > 0) {
-      lines.push("Ready:");
-      for (const item of ready) {
-        const parts = await describeWorkItemState({
-          workboard,
-          scope: input.scope,
-          workItemId: item.work_item_id,
-        });
-        lines.push(
-          `- ${item.work_item_id} — ${item.title}${parts.length > 0 ? ` [${parts.join("; ")}]` : ""}`,
-        );
-      }
-    }
+    await appendWorkItemSection({
+      lines,
+      label: "Doing:",
+      items: doing,
+      workboard,
+      scope: input.scope,
+    });
+    await appendWorkItemSection({
+      lines,
+      label: "Blocked:",
+      items: blocked,
+      workboard,
+      scope: input.scope,
+    });
+    await appendWorkItemSection({
+      lines,
+      label: "Ready:",
+      items: ready,
+      workboard,
+      scope: input.scope,
+    });
     if (clarifications.length > 0) {
       lines.push("Open clarifications:");
       for (const clarification of clarifications) {

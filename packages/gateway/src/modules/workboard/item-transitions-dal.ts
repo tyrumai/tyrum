@@ -145,6 +145,9 @@ export class WorkboardItemTransitionsDal {
 
     const reasons: string[] = [];
     const from = existing.status as WorkItemState;
+    if (from === "doing") {
+      return;
+    }
     const workItemId = existing.work_item_id;
 
     const refinementPhase = await this.getWorkItemStateString(
