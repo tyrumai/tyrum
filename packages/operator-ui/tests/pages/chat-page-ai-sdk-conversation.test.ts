@@ -90,6 +90,11 @@ describe("AiSdkConversation", () => {
     await flushEffects();
     expect(onSessionMessages).toHaveBeenCalledWith([]);
 
+    const conversationPanel = testRoot.container.querySelector(
+      "[data-testid='chat-conversation-panel']",
+    ) as HTMLElement | null;
+    expect(conversationPanel?.className).toContain("min-w-0");
+
     const draft = testRoot.container.querySelector(
       "[data-testid='ai-sdk-chat-draft']",
     ) as HTMLTextAreaElement;

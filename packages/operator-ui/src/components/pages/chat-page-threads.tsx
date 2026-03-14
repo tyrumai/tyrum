@@ -45,7 +45,7 @@ export function ChatThreadsPanel({
   canLoadMore: boolean;
   onOpenThread: (sessionId: string) => void;
   agentId: string;
-  agents: Array<{ agent_id: string }>;
+  agents: Array<{ agent_id: string; label: string }>;
   onAgentChange: (value: string) => void;
   onNewChat: () => void;
 }) {
@@ -71,7 +71,7 @@ export function ChatThreadsPanel({
           ) : (
             agents.map((agent) => (
               <option key={agent.agent_id} value={agent.agent_id}>
-                {agent.agent_id}
+                {agent.label}
               </option>
             ))
           )}

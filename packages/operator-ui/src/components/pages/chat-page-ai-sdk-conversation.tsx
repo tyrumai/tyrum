@@ -169,7 +169,10 @@ export function AiSdkConversation({
   const canSend = draft.trim().length > 0 && chat.status !== "submitted";
 
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col" data-testid="chat-conversation-panel">
+    <div
+      className="flex h-full min-h-0 min-w-0 flex-1 flex-col"
+      data-testid="chat-conversation-panel"
+    >
       <div className="flex h-12 shrink-0 items-center justify-between border-b border-border px-3">
         <div className="flex items-center gap-2">
           {onBack ? (

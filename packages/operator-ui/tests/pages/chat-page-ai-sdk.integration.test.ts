@@ -188,7 +188,10 @@ describe("AiSdkChatPage integration", () => {
     createSessionClientMock.mockReturnValue(sessionClient);
 
     const agentsList = vi.fn(async () => ({
-      agents: [{ agent_id: "default" }, { agent_id: "other" }],
+      agents: [
+        { agent_id: "default", agent_key: "default", persona: { name: "Default" } },
+        { agent_id: "other", agent_key: "other", persona: { name: "Other" } },
+      ],
     }));
     const { store: connectionStore } = createStore({
       status: "connected",
