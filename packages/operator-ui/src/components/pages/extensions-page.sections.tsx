@@ -86,7 +86,10 @@ export function ExtensionCard({
         : ""),
   );
   const [memoryForm, setMemoryForm] = useState<AgentEditorFormState>(() =>
-    applyMemorySettingsToForm(createBlankForm(), detail?.default_mcp_server_settings_json),
+    applyMemorySettingsToForm(
+      createBlankForm(),
+      detail?.default_mcp_server_settings_json ?? undefined,
+    ),
   );
 
   useEffect(() => {
@@ -105,7 +108,10 @@ export function ExtensionCard({
 
   useEffect(() => {
     setMemoryForm(
-      applyMemorySettingsToForm(createBlankForm(), detail?.default_mcp_server_settings_json),
+      applyMemorySettingsToForm(
+        createBlankForm(),
+        detail?.default_mcp_server_settings_json ?? undefined,
+      ),
     );
   }, [detail?.default_mcp_server_settings_json]);
 
