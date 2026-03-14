@@ -4,6 +4,19 @@ import { McpServerSpec, SkillManifest } from "./agent.js";
 export const ExtensionKind = z.enum(["skill", "mcp"]);
 export type ExtensionKind = z.infer<typeof ExtensionKind>;
 
+export const ExtensionSourceType = z.enum([
+  "builtin",
+  "bundled",
+  "user",
+  "local",
+  "managed",
+  "shared",
+]);
+export type ExtensionSourceType = z.infer<typeof ExtensionSourceType>;
+
+export const ExtensionAccessDefault = z.enum(["inherit", "allow", "deny"]);
+export type ExtensionAccessDefault = z.infer<typeof ExtensionAccessDefault>;
+
 export const ManagedBundleFile = z
   .object({
     path: z.string().trim().min(1),
@@ -118,6 +131,22 @@ export const ManagedExtensionSourceDescriptor = z.discriminatedUnion("kind", [
 ]);
 export type ManagedExtensionSourceDescriptor = z.infer<typeof ManagedExtensionSourceDescriptor>;
 
+export const ExtensionDiscoveredSource = z
+  .object({
+    source_type: ExtensionSourceType,
+    is_effective: z.boolean(),
+    enabled: z.boolean(),
+    revision: z.number().int().positive().nullable(),
+    refreshable: z.boolean(),
+    materialized_path: z.string().trim().min(1).nullable(),
+    transport: z.enum(["stdio", "remote"]).nullable(),
+    version: z.string().trim().min(1).nullable(),
+    description: z.string().trim().min(1).nullable(),
+    source: ManagedExtensionSourceDescriptor.nullable(),
+  })
+  .strict();
+export type ExtensionDiscoveredSource = z.infer<typeof ExtensionDiscoveredSource>;
+
 export const ManagedExtensionSummary = z
   .object({
     kind: ExtensionKind,
@@ -126,12 +155,18 @@ export const ManagedExtensionSummary = z
     description: z.string().trim().min(1).nullable(),
     version: z.string().trim().min(1).nullable(),
     enabled: z.boolean(),
-    revision: z.number().int().positive(),
-    source: ManagedExtensionSourceDescriptor,
+    revision: z.number().int().positive().nullable(),
+    source: ManagedExtensionSourceDescriptor.nullable(),
+    source_type: ExtensionSourceType,
     refreshable: z.boolean(),
     materialized_path: z.string().trim().min(1).nullable(),
     assignment_count: z.number().int().min(0),
     transport: z.enum(["stdio", "remote"]).nullable(),
+    default_access: ExtensionAccessDefault,
+    can_edit_settings: z.boolean(),
+    can_toggle_source_enabled: z.boolean(),
+    can_refresh_source: z.boolean(),
+    can_revert_source: z.boolean(),
   })
   .strict();
 export type ManagedExtensionSummary = z.infer<typeof ManagedExtensionSummary>;
@@ -141,6 +176,9 @@ export const ManagedExtensionDetail = ManagedExtensionSummary.extend({
   spec: McpServerSpec.nullable(),
   files: z.array(z.string().trim().min(1)),
   revisions: z.array(ManagedExtensionRevision),
+  default_mcp_server_settings_json: z.record(z.string(), z.unknown()).nullable(),
+  default_mcp_server_settings_yaml: z.string().trim().min(1).nullable(),
+  sources: z.array(ExtensionDiscoveredSource),
 }).strict();
 export type ManagedExtensionDetail = z.infer<typeof ManagedExtensionDetail>;
 

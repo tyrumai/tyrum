@@ -40,6 +40,7 @@ export type AgentEditorFormState = {
   crossTurnSimilarityThreshold: string;
   crossTurnMinChars: string;
   crossTurnCooldownMessages: string;
+  memorySettingsMode: "inherit" | "override";
   memoryEnabled: boolean;
   allowPublic: boolean;
   allowPrivate: boolean;
@@ -91,6 +92,10 @@ export function snapshotToForm(snapshot: {
   identity?: IdentityPackT;
 }): AgentEditorFormState {
   const config = snapshot.config;
+  const hasExplicitMemorySettings = Object.prototype.hasOwnProperty.call(
+    config.mcp.server_settings,
+    "memory",
+  );
   const memory = BuiltinMemoryServerSettings.parse(config.mcp.server_settings["memory"] ?? {});
   const budgets = memory.budgets;
   const perKind = budgets.per_kind;
@@ -133,6 +138,7 @@ export function snapshotToForm(snapshot: {
     crossTurnCooldownMessages: String(
       config.sessions.loop_detection.cross_turn.cooldown_assistant_messages,
     ),
+    memorySettingsMode: hasExplicitMemorySettings ? "override" : "inherit",
     memoryEnabled: memory.enabled,
     allowPublic: memory.allow_sensitivities.includes("public"),
     allowPrivate: memory.allow_sensitivities.includes("private"),
@@ -185,19 +191,16 @@ function parseOptionalInt(value: string): number | undefined {
   return Number(trimmed);
 }
 
-export function buildPayload(
+export function buildMemoryServerSettings(
   form: AgentEditorFormState,
-  preservedModelOptions?: Record<string, unknown>,
-  preservedMcpConfig?: PreservedMcpConfig,
-) {
-  const primaryModel = form.model.trim();
+): ReturnType<typeof BuiltinMemoryServerSettings.parse> {
   const allowSensitivities = [
     form.allowPublic ? "public" : null,
     form.allowPrivate ? "private" : null,
     form.allowSensitive ? "sensitive" : null,
   ].filter((value): value is "public" | "private" | "sensitive" => value !== null);
 
-  const memorySettings = BuiltinMemoryServerSettings.parse({
+  return BuiltinMemoryServerSettings.parse({
     enabled: form.memoryEnabled,
     allow_sensitivities: allowSensitivities,
     structured: {
@@ -250,9 +253,69 @@ export function buildPayload(
       },
     },
   });
+}
+
+export function applyMemorySettingsToForm(
+  form: AgentEditorFormState,
+  settings: Record<string, unknown> | undefined,
+  mode: AgentEditorFormState["memorySettingsMode"] = form.memorySettingsMode,
+): AgentEditorFormState {
+  const memory = BuiltinMemoryServerSettings.parse(settings ?? {});
+  const budgets = memory.budgets;
+  const perKind = budgets.per_kind;
+  return {
+    ...form,
+    memorySettingsMode: mode,
+    memoryEnabled: memory.enabled,
+    allowPublic: memory.allow_sensitivities.includes("public"),
+    allowPrivate: memory.allow_sensitivities.includes("private"),
+    allowSensitive: memory.allow_sensitivities.includes("sensitive"),
+    factKeys: joinList(memory.structured.fact_keys),
+    memoryTags: joinList(memory.structured.tags),
+    keywordEnabled: memory.keyword.enabled,
+    keywordLimit: String(memory.keyword.limit),
+    semanticEnabled: memory.semantic.enabled,
+    semanticLimit: String(memory.semantic.limit),
+    totalItems: String(budgets.max_total_items),
+    totalChars: String(budgets.max_total_chars),
+    totalTokens: budgets.max_total_tokens === undefined ? "" : String(budgets.max_total_tokens),
+    factItems: String(perKind.fact.max_items),
+    factChars: String(perKind.fact.max_chars),
+    factTokens: perKind.fact.max_tokens === undefined ? "" : String(perKind.fact.max_tokens),
+    noteItems: String(perKind.note.max_items),
+    noteChars: String(perKind.note.max_chars),
+    noteTokens: perKind.note.max_tokens === undefined ? "" : String(perKind.note.max_tokens),
+    procedureItems: String(perKind.procedure.max_items),
+    procedureChars: String(perKind.procedure.max_chars),
+    procedureTokens:
+      perKind.procedure.max_tokens === undefined ? "" : String(perKind.procedure.max_tokens),
+    episodeItems: String(perKind.episode.max_items),
+    episodeChars: String(perKind.episode.max_chars),
+    episodeTokens:
+      perKind.episode.max_tokens === undefined ? "" : String(perKind.episode.max_tokens),
+  };
+}
+
+export function buildPayload(
+  form: AgentEditorFormState,
+  preservedModelOptions?: Record<string, unknown>,
+  preservedMcpConfig?: PreservedMcpConfig,
+) {
+  const primaryModel = form.model.trim();
+  const memorySettings = buildMemoryServerSettings(form);
   const preservedServerSettings = preservedMcpConfig?.server_settings ?? {};
   const preTurnTools =
-    preservedMcpConfig?.pre_turn_tools ?? (form.memoryEnabled ? ["mcp.memory.seed"] : []);
+    preservedMcpConfig?.pre_turn_tools ??
+    (form.memorySettingsMode === "inherit" || form.memoryEnabled ? ["mcp.memory.seed"] : []);
+  const serverSettings =
+    form.memorySettingsMode === "inherit"
+      ? Object.fromEntries(
+          Object.entries(preservedServerSettings).filter(([key]) => key !== "memory"),
+        )
+      : {
+          ...preservedServerSettings,
+          memory: memorySettings,
+        };
   const payload = {
     agent_key: form.agentKey.trim(),
     config: AgentConfig.parse({
@@ -283,10 +346,7 @@ export function buildPayload(
         allow: form.mcpAllow,
         deny: form.mcpDeny,
         ...(preTurnTools.length ? { pre_turn_tools: preTurnTools } : {}),
-        server_settings: {
-          ...preservedServerSettings,
-          memory: memorySettings,
-        },
+        server_settings: serverSettings,
       },
       tools: {
         default_mode: form.toolsDefaultMode,

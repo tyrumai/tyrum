@@ -6,15 +6,13 @@ import type {
   AgentTurnRequest as AgentTurnRequestT,
   AgentTurnResponse as AgentTurnResponseT,
 } from "@tyrum/schemas";
-import { AgentKey, AgentStatusResponse, WorkspaceKey } from "@tyrum/schemas";
+import { AgentKey, WorkspaceKey } from "@tyrum/schemas";
 import {
   type LaneQueueScope,
   type TurnEngineBridgeDeps,
   turnViaExecutionEngine as turnViaExecutionEngineBridge,
 } from "./turn-engine-bridge.js";
-import { ensureAgentConfigSeeded } from "../default-config.js";
 import { createDefaultAgentContextStore, type AgentContextStore } from "../context-store.js";
-import { loadCurrentAgentContext } from "../load-context.js";
 import {
   ToolExecutionApprovalRequiredError,
   resolveAgentId,
@@ -33,9 +31,7 @@ import type { PolicyService } from "../../policy/service.js";
 import { ExecutionEngine } from "../../execution/engine.js";
 import { resolveWorkspaceKey } from "../../workspace/id.js";
 import { DEFAULT_TENANT_ID } from "../../identity/scope.js";
-import { resolveExistingRuntimeScopeIds } from "./scope-resolution.js";
 import { createDisabledAgentStatus } from "./status-disabled.js";
-import { resolveGatewayStateMode } from "../../runtime-state/mode.js";
 import { resolveAutomationMetadata, maybeDeliverAutomationReply } from "./automation-delivery.js";
 import { resolveExecutionProfile } from "./intake-delegation.js";
 import type { PrepareTurnDeps } from "./turn-preparation.js";
@@ -51,14 +47,15 @@ import {
   resolveRuntimeCompactionContext,
   type SessionCompactionResult,
 } from "./session-compaction-service.js";
-import { materializeAllowedAgentIds } from "../access-config.js";
-import { applyPersonaToIdentity, resolveAgentPersona } from "../persona.js";
-import {
-  isBuiltinToolAvailableInStateMode,
-  listBuiltinToolDescriptors,
-  type ToolDescriptor,
-} from "../tools.js";
+import type { ToolDescriptor } from "../tools.js";
 import type { GuardianReviewDecision } from "../../review/guardian-review-mode.js";
+import {
+  buildEnabledAgentStatus,
+  buildRegisteredToolsResult,
+  listAvailableRuntimeTools,
+  loadResolvedRuntimeContext,
+} from "./agent-runtime-status.js";
+import { resolveExistingRuntimeScopeIds } from "./scope-resolution.js";
 
 const DEFAULT_MAX_STEPS = 20;
 const DEFAULT_APPROVAL_WAIT_MS = 120_000;
@@ -215,86 +212,39 @@ export class AgentRuntime {
     if (!enabled) {
       return createDisabledAgentStatus({ home: this.home, agentKey: this.agentId });
     }
-
-    const { agentId, workspaceId } = await resolveExistingRuntimeScopeIds({
-      identityScopeDal: this.opts.container.identityScopeDal,
-      tenantId: this.tenantId,
-      agentKey: this.agentId,
-      workspaceKey: this.workspaceId,
-    });
-    const config = await (
-      await ensureAgentConfigSeeded({
-        db: this.opts.container.db,
-        stateMode: resolveGatewayStateMode(this.opts.container.deploymentConfig),
-        tenantId: this.tenantId,
-        agentId,
-        agentKey: this.agentId,
-        createdBy: { kind: "agent-runtime" },
-        reason: "seed",
-      })
-    ).config;
-    const loaded = await loadCurrentAgentContext({
+    const agentId = await this.opts.container.identityScopeDal.ensureAgentId(
+      this.tenantId,
+      this.agentId,
+    );
+    const workspaceId = await this.opts.container.identityScopeDal.ensureWorkspaceId(
+      this.tenantId,
+      this.workspaceId,
+    );
+    await this.opts.container.identityScopeDal.ensureMembership(
+      this.tenantId,
+      agentId,
+      workspaceId,
+    );
+    const loaded = await loadResolvedRuntimeContext({
+      opts: this.opts,
       contextStore: this.contextStore,
       tenantId: this.tenantId,
       agentId,
-      workspaceId,
-      config,
-    });
-    const persona = resolveAgentPersona({
       agentKey: this.agentId,
-      config: loaded.config,
-      identity: loaded.identity,
+      workspaceId,
     });
-    const ctx = {
-      ...loaded,
-      identity: applyPersonaToIdentity(loaded.identity, persona),
-    };
-    const stateMode = resolveGatewayStateMode(this.opts.container.deploymentConfig);
-    const builtinTools = listBuiltinToolDescriptors();
-    const builtinToolIds = new Set(builtinTools.map((tool) => tool.id));
-    const mcpTools = await this.mcpManager.listToolDescriptors(ctx.mcpServers);
-    const pluginTools = this.plugins?.getToolDescriptors() ?? [];
-    const availableTools = Array.from(
-      new Map(
-        [...builtinTools, ...mcpTools, ...pluginTools]
-          .filter((tool) => {
-            const isBuiltinTool =
-              tool.source === "builtin" ||
-              tool.source === "builtin_mcp" ||
-              (tool.source === undefined && builtinToolIds.has(tool.id));
-            return !isBuiltinTool || isBuiltinToolAvailableInStateMode(tool.id, stateMode);
-          })
-          .map((tool) => [tool.id, tool] as const),
-      ).values(),
-    );
-    const status = {
-      enabled: true,
+    const availableTools = await listAvailableRuntimeTools({
+      opts: this.opts,
+      mcpManager: this.mcpManager,
+      mcpServers: loaded.mcpServers,
+      plugins: this.plugins,
+    });
+    return buildEnabledAgentStatus({
       home: this.home,
-      persona,
-      identity: {
-        name: ctx.identity.meta.name,
-      },
-      model: ctx.config.model,
-      skills: ctx.skills.map((skill) => skill.meta.id),
-      skills_detailed: ctx.skills.map((skill) => ({
-        id: skill.meta.id,
-        name: skill.meta.name,
-        version: skill.meta.version,
-        source: skill.provenance.source,
-      })),
-      workspace_skills_trusted: ctx.config.skills.workspace_trusted,
-      mcp: ctx.mcpServers.map((server) => ({
-        id: server.id,
-        name: server.name,
-        enabled: server.enabled,
-        transport: server.transport,
-      })),
-      tools: materializeAllowedAgentIds(ctx.config.tools, availableTools).map((tool) => tool.id),
-      tool_access: ctx.config.tools,
-      sessions: ctx.config.sessions,
-    };
-
-    return AgentStatusResponse.parse(status);
+      agentKey: this.agentId,
+      loaded,
+      availableTools,
+    });
   }
 
   async listRegisteredTools(): Promise<{
@@ -308,41 +258,24 @@ export class AgentRuntime {
       agentKey: this.agentId,
       workspaceKey: this.workspaceId,
     });
-    const config = await (
-      await ensureAgentConfigSeeded({
-        db: this.opts.container.db,
-        stateMode: resolveGatewayStateMode(this.opts.container.deploymentConfig),
-        tenantId: this.tenantId,
-        agentId,
-        agentKey: this.agentId,
-        createdBy: { kind: "agent-runtime" },
-        reason: "seed",
-      })
-    ).config;
-    const ctx = await loadCurrentAgentContext({
+    const loaded = await loadResolvedRuntimeContext({
+      opts: this.opts,
       contextStore: this.contextStore,
       tenantId: this.tenantId,
       agentId,
+      agentKey: this.agentId,
       workspaceId,
-      config,
     });
-
-    const mcpTools = await this.mcpManager.listToolDescriptors(ctx.mcpServers);
-    const pluginTools = this.plugins?.getToolDescriptors() ?? [];
-    const byId = new Map<string, ToolDescriptor>();
-    for (const tool of [...listBuiltinToolDescriptors(), ...mcpTools, ...pluginTools]) {
-      if (!byId.has(tool.id)) {
-        byId.set(tool.id, tool);
-      }
-    }
-
-    return {
-      allowlist: materializeAllowedAgentIds(ctx.config.tools, Array.from(byId.values())).map(
-        (tool) => tool.id,
-      ),
-      tools: Array.from(byId.values()).toSorted((left, right) => left.id.localeCompare(right.id)),
-      mcpServers: ctx.mcpServers.map((server) => server.id),
-    };
+    const availableTools = await listAvailableRuntimeTools({
+      opts: this.opts,
+      mcpManager: this.mcpManager,
+      mcpServers: loaded.mcpServers,
+      plugins: this.plugins,
+    });
+    return buildRegisteredToolsResult({
+      loaded,
+      availableTools,
+    });
   }
 
   getLastContextReport(): AgentContextReport | undefined {

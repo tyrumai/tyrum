@@ -128,4 +128,44 @@ describe("AgentMemoryToolRuntime", () => {
       ]),
     );
   });
+
+  it("matches fact keys when the query includes punctuation", async () => {
+    await dal.create(
+      {
+        kind: "fact",
+        key: "user_name",
+        value: "Ron",
+        observed_at: "2026-03-14T00:00:00.000Z",
+        confidence: 0.99,
+        tags: ["identity", "user"],
+        sensitivity: "private",
+        provenance: { source_kind: "user", refs: [] },
+      },
+      { tenantId: DEFAULT_TENANT_ID, agentId: DEFAULT_AGENT_ID },
+    );
+
+    const runtime = new AgentMemoryToolRuntime({
+      db,
+      dal,
+      tenantId: DEFAULT_TENANT_ID,
+      agentId: DEFAULT_AGENT_ID,
+      sessionId: "session-3",
+      channel: "test",
+      threadId: "thread-3",
+      config,
+      budgetsProvider: async () => config.budgets,
+      resolveEmbeddingPipeline: async () => undefined,
+    });
+
+    const result = await runtime.search({ query: "Do you know my name?", limit: 5 });
+    expect(result["hits"]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "fact",
+          key: "user_name",
+          preview: expect.stringContaining("Ron"),
+        }),
+      ]),
+    );
+  });
 });

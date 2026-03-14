@@ -232,4 +232,71 @@ describe("AgentRuntime (memory MCP pre-turn injection)", () => {
     });
     expect(stitched).toContain("Pre-turn context (mcp.memory.seed):");
   });
+
+  it("injects fact recall for punctuated identity questions", async () => {
+    generateTextMock.mockResolvedValue({ text: "ok", steps: [] });
+
+    const { createContainer } = await import("../../src/container.js");
+    const { AgentRuntime } = await import("../../src/modules/agent/runtime.js");
+
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
+    container = await createContainer({ dbPath: ":memory:", migrationsDir });
+
+    await seedAgentConfig(container, {
+      config: {
+        model: { model: "openai/gpt-4.1" },
+        skills: { default_mode: "deny", workspace_trusted: false },
+        mcp: {
+          default_mode: "allow",
+          pre_turn_tools: ["mcp.memory.seed"],
+          server_settings: {
+            memory: {
+              enabled: true,
+              keyword: { enabled: true, limit: 20 },
+              semantic: { enabled: false, limit: 1 },
+              budgets: baseMemoryBudgets,
+            },
+          },
+        },
+        tools: { default_mode: "allow" },
+        sessions: { ttl_days: 30, max_turns: 20 },
+      },
+    });
+
+    const memory = new MemoryV1Dal(container.db);
+    const item = await memory.create({
+      kind: "fact",
+      key: "user_name",
+      value: "Ron",
+      observed_at: "2026-03-14T10:06:11.684Z",
+      confidence: 0.99,
+      tags: ["identity", "user"],
+      sensitivity: "private",
+      provenance: { source_kind: "tool", refs: [] },
+    });
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: createStubLanguageModel("unused"),
+      fetchImpl: fetch404,
+    } as ConstructorParameters<typeof AgentRuntime>[0]);
+
+    const res = await runtime.turn({
+      channel: "ui",
+      thread_id: "thread-identity",
+      message: "Do you know my name?",
+    });
+    expect(res.reply).toBe("ok");
+
+    const call = generateTextMock.mock.calls[0]?.[0] as
+      | { messages?: Array<{ role: string; content: Array<{ type: string; text: string }> }> }
+      | undefined;
+    const stitched = (call?.messages?.[0]?.content ?? []).map((part) => part.text).join("\n\n");
+
+    expect(stitched).toContain("Pre-turn context (mcp.memory.seed):");
+    expect(stitched).toContain(item.memory_item_id);
+    expect(stitched).toContain("key=user_name");
+    expect(stitched).toContain('value="Ron"');
+  });
 });

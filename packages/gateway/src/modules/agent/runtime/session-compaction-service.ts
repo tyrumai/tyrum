@@ -8,6 +8,7 @@ import type {
 import type { GatewayContainer } from "../../../container.js";
 import { ensureAgentConfigSeeded } from "../default-config.js";
 import { loadCurrentAgentContext } from "../load-context.js";
+import { resolveEffectiveAgentConfig } from "../../extensions/defaults-dal.js";
 import type { AgentContextStore } from "../context-store.js";
 import type { SessionDal } from "../session-dal.js";
 import type { SessionRow } from "../session-dal.js";
@@ -449,12 +450,17 @@ export async function resolveRuntimeCompactionContext(input: {
     createdBy: { kind: "agent-runtime" },
     reason: "session compaction",
   });
+  const effectiveConfig = await resolveEffectiveAgentConfig({
+    db: input.container.db,
+    tenantId: input.tenantId,
+    config: revision.config,
+  });
   const ctx = await loadCurrentAgentContext({
     contextStore: input.contextStore,
     tenantId: input.tenantId,
     agentId: input.agentId,
     workspaceId: input.workspaceId,
-    config: revision.config,
+    config: effectiveConfig,
   });
   const compactionModel = ctx.config.sessions.compaction?.model;
   const compactionConfig =

@@ -48,6 +48,12 @@ const skillSummary = {
   materialized_path: "/var/lib/tyrum/extensions/ops-pack",
   assignment_count: 1,
   transport: null,
+  source_type: "managed",
+  default_access: "inherit",
+  can_edit_settings: false,
+  can_toggle_source_enabled: true,
+  can_refresh_source: true,
+  can_revert_source: true,
 } as const;
 
 const skillDetail = {
@@ -72,6 +78,26 @@ const skillDetail = {
       reverted_from_revision: null,
     },
   ],
+  default_mcp_server_settings_json: null,
+  default_mcp_server_settings_yaml: null,
+  sources: [
+    {
+      source_type: "managed",
+      is_effective: true,
+      enabled: true,
+      revision: 2,
+      refreshable: true,
+      materialized_path: "/var/lib/tyrum/extensions/ops-pack",
+      transport: null,
+      version: "1.0.0",
+      description: "Managed operational skills",
+      source: {
+        kind: "direct-url",
+        url: "https://example.test/ops-pack.tgz",
+        filename: "ops-pack.tgz",
+      },
+    },
+  ],
 } as const;
 
 const mcpDetail = {
@@ -92,6 +118,12 @@ const mcpDetail = {
   materialized_path: "/var/lib/tyrum/extensions/exa",
   assignment_count: 2,
   transport: "remote",
+  source_type: "managed",
+  default_access: "allow",
+  can_edit_settings: true,
+  can_toggle_source_enabled: true,
+  can_refresh_source: false,
+  can_revert_source: true,
   manifest: null,
   spec: {
     id: "exa",
@@ -108,6 +140,29 @@ const mcpDetail = {
       created_at: "2026-03-11T00:00:00.000Z",
       reason: "imported from npm",
       reverted_from_revision: null,
+    },
+  ],
+  default_mcp_server_settings_json: {
+    namespace: "shared",
+  },
+  default_mcp_server_settings_yaml: "namespace: shared\n",
+  sources: [
+    {
+      source_type: "managed",
+      is_effective: true,
+      enabled: true,
+      revision: 3,
+      refreshable: false,
+      materialized_path: "/var/lib/tyrum/extensions/exa",
+      transport: "remote",
+      version: "1.0.0",
+      description: "Remote search server",
+      source: {
+        kind: "npm",
+        npm_spec: "@modelcontextprotocol/server-exa",
+        command: "npx",
+        args: ["-y"],
+      },
     },
   ],
 } as const;

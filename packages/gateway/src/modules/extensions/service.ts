@@ -1,18 +1,16 @@
 import { Buffer } from "node:buffer";
-import type { ManagedExtensionDetail, ManagedExtensionSummary } from "@tyrum/schemas";
+import type {
+  ExtensionKind as ExtensionKindT,
+  ManagedExtensionDetail,
+  ManagedExtensionSummary,
+} from "@tyrum/schemas";
 import type { GatewayContainer } from "../../container.js";
-import { RuntimePackageDal, type RuntimePackageRevision } from "../agent/runtime-package-dal.js";
+import { RuntimePackageDal } from "../agent/runtime-package-dal.js";
 import {
   buildManagedMcpPackageFromSpec,
   parseManagedMcpPackage,
   parseManagedSkillPackage,
 } from "./managed.js";
-import {
-  buildExtensionDetail,
-  buildExtensionSummary,
-  countAssignments,
-  listLatestAgentConfigs,
-} from "./catalog.js";
 import {
   buildMcpPackageFromArchive,
   buildSkillPackageFromArtifact,
@@ -20,6 +18,8 @@ import {
   downloadArtifact,
 } from "./package-source.js";
 import type { SqlDb } from "../../statestore/types.js";
+import { ExtensionDefaultsDal } from "./defaults-dal.js";
+import { buildExtensionInventory } from "./inventory.js";
 
 export type ExtensionKind = "skill" | "mcp";
 export type ExtensionStateMode = "local" | "shared";
@@ -59,16 +59,10 @@ export type McpImportInput =
       reason?: string;
     };
 
-interface BuildExtensionBaseInput {
-  tenantId: string;
-  kind: ExtensionKind;
-  revision: RuntimePackageRevision;
-  assignmentCount: number;
-}
-
 export class ExtensionsService {
   private readonly db: SqlDb;
   private readonly runtimePackageDal: RuntimePackageDal;
+  private readonly defaultsDal: ExtensionDefaultsDal;
   private readonly stateMode: ExtensionStateMode;
   private readonly home: string;
 
@@ -78,81 +72,55 @@ export class ExtensionsService {
   }) {
     this.db = deps.db;
     this.runtimePackageDal = new RuntimePackageDal(deps.db);
+    this.defaultsDal = new ExtensionDefaultsDal(deps.db);
     this.stateMode = deps.container.deploymentConfig.state.mode === "shared" ? "shared" : "local";
     this.home = deps.container.config.tyrumHome ?? "";
   }
 
-  private async buildExtensionSummary(
-    input: BuildExtensionBaseInput,
-  ): Promise<ManagedExtensionSummary> {
-    return await buildExtensionSummary({
-      tenantId: input.tenantId,
+  private async loadInventory(
+    tenantId: string,
+    kind: ExtensionKindT,
+    key?: string,
+  ): Promise<ManagedExtensionDetail[]> {
+    return await buildExtensionInventory({
+      db: this.db,
+      tenantId,
+      kind,
       stateMode: this.stateMode,
       home: this.home,
-      kind: input.kind,
-      revision: input.revision,
-      assignmentCount: input.assignmentCount,
+      key,
     });
   }
 
-  private async buildExtensionDetail(
-    input: BuildExtensionBaseInput,
-  ): Promise<ManagedExtensionDetail> {
-    return await buildExtensionDetail({
-      tenantId: input.tenantId,
-      stateMode: this.stateMode,
-      home: this.home,
-      kind: input.kind,
-      revision: input.revision,
-      assignmentCount: input.assignmentCount,
-      runtimePackageDal: this.runtimePackageDal,
-    });
-  }
-
-  private async getAssignmentCount(
+  private async getInventoryDetail(
     tenantId: string,
     kind: ExtensionKind,
     key: string,
-  ): Promise<number> {
-    return countAssignments(await listLatestAgentConfigs(this.db, tenantId), kind, key);
+  ): Promise<ManagedExtensionDetail | null> {
+    const inventory = await this.loadInventory(tenantId, kind, key);
+    return inventory.find((item) => item.key === key) ?? null;
   }
 
-  private async buildDetailForRevision(input: {
-    tenantId: string;
-    kind: ExtensionKind;
-    revision: RuntimePackageRevision;
-  }): Promise<ManagedExtensionDetail> {
-    return await this.buildExtensionDetail({
-      tenantId: input.tenantId,
-      kind: input.kind,
-      revision: input.revision,
-      assignmentCount: await this.getAssignmentCount(
-        input.tenantId,
-        input.kind,
-        input.revision.packageKey,
-      ),
-    });
+  private toSummary(item: ManagedExtensionDetail): ManagedExtensionSummary {
+    const {
+      manifest: _manifest,
+      spec: _spec,
+      files: _files,
+      revisions: _revisions,
+      default_mcp_server_settings_json: _defaultMcpServerSettingsJson,
+      default_mcp_server_settings_yaml: _defaultMcpServerSettingsYaml,
+      sources: _sources,
+      ...summary
+    } = item;
+    return summary;
   }
 
   listExtensions = async (
     tenantId: string,
     kind: ExtensionKind,
   ): Promise<ManagedExtensionSummary[]> => {
-    const [revisions, configs] = await Promise.all([
-      this.runtimePackageDal.listLatest({ tenantId, packageKind: kind }),
-      listLatestAgentConfigs(this.db, tenantId),
-    ]);
-
-    return await Promise.all(
-      revisions.map((revision) =>
-        this.buildExtensionSummary({
-          tenantId,
-          kind,
-          revision,
-          assignmentCount: countAssignments(configs, kind, revision.packageKey),
-        }),
-      ),
-    );
+    const items = await this.loadInventory(tenantId, kind);
+    return items.map((item) => this.toSummary(item));
   };
 
   getExtensionDetail = async (
@@ -160,18 +128,7 @@ export class ExtensionsService {
     kind: ExtensionKind,
     key: string,
   ): Promise<ManagedExtensionDetail | null> => {
-    const [revision, configs] = await Promise.all([
-      this.runtimePackageDal.getLatest({ tenantId, packageKind: kind, packageKey: key }),
-      listLatestAgentConfigs(this.db, tenantId),
-    ]);
-    if (!revision) return null;
-
-    return await this.buildExtensionDetail({
-      tenantId,
-      kind,
-      revision,
-      assignmentCount: countAssignments(configs, kind, key),
-    });
+    return await this.getInventoryDetail(tenantId, kind, key);
   };
 
   importSkill = async (
@@ -197,7 +154,9 @@ export class ExtensionsService {
       createdBy: { kind: "tenant.token", token_id: tokenId },
       reason: input.reason,
     });
-    return await this.buildDetailForRevision({ tenantId, kind: "skill", revision });
+    const detail = await this.getInventoryDetail(tenantId, "skill", revision.packageKey);
+    if (!detail) throw new Error("expected imported skill inventory detail");
+    return detail;
   };
 
   uploadSkill = async (
@@ -221,7 +180,9 @@ export class ExtensionsService {
       createdBy: { kind: "tenant.token", token_id: tokenId },
       reason: input.reason,
     });
-    return await this.buildDetailForRevision({ tenantId, kind: "skill", revision });
+    const detail = await this.getInventoryDetail(tenantId, "skill", revision.packageKey);
+    if (!detail) throw new Error("expected uploaded skill inventory detail");
+    return detail;
   };
 
   importMcp = async (
@@ -275,7 +236,9 @@ export class ExtensionsService {
       createdBy: { kind: "tenant.token", token_id: tokenId },
       reason: input.reason,
     });
-    return await this.buildDetailForRevision({ tenantId, kind: "mcp", revision });
+    const detail = await this.getInventoryDetail(tenantId, "mcp", revision.packageKey);
+    if (!detail) throw new Error("expected imported MCP inventory detail");
+    return detail;
   };
 
   uploadMcp = async (
@@ -299,7 +262,9 @@ export class ExtensionsService {
       createdBy: { kind: "tenant.token", token_id: tokenId },
       reason: input.reason,
     });
-    return await this.buildDetailForRevision({ tenantId, kind: "mcp", revision });
+    const detail = await this.getInventoryDetail(tenantId, "mcp", revision.packageKey);
+    if (!detail) throw new Error("expected uploaded MCP inventory detail");
+    return detail;
   };
 
   toggleExtension = async (input: {
@@ -327,11 +292,7 @@ export class ExtensionsService {
       createdBy: { kind: "tenant.token", token_id: input.tokenId },
       reason: input.reason,
     });
-    return await this.buildDetailForRevision({
-      tenantId: input.tenantId,
-      kind: input.kind,
-      revision,
-    });
+    return await this.getInventoryDetail(input.tenantId, input.kind, revision.packageKey);
   };
 
   revertExtension = async (input: {
@@ -350,11 +311,9 @@ export class ExtensionsService {
       createdBy: { kind: "tenant.token", token_id: input.tokenId },
       reason: input.reason,
     });
-    return await this.buildDetailForRevision({
-      tenantId: input.tenantId,
-      kind: input.kind,
-      revision,
-    });
+    const detail = await this.getInventoryDetail(input.tenantId, input.kind, revision.packageKey);
+    if (!detail) throw new Error("expected reverted extension inventory detail");
+    return detail;
   };
 
   refreshExtension = async (input: {
@@ -384,11 +343,44 @@ export class ExtensionsService {
       createdBy: { kind: "tenant.token", token_id: input.tokenId },
       reason: "refresh",
     });
-    return await this.buildDetailForRevision({
+    return await this.getInventoryDetail(input.tenantId, input.kind, revision.packageKey);
+  };
+
+  updateDefaults = async (input: {
+    tenantId: string;
+    kind: ExtensionKind;
+    key: string;
+    defaultAccess: "inherit" | "allow" | "deny";
+    replaceSettings?: boolean;
+    settings?: Record<string, unknown>;
+  }): Promise<ManagedExtensionDetail | null> => {
+    const existing = await this.getInventoryDetail(input.tenantId, input.kind, input.key);
+    if (!existing) return null;
+
+    const currentDefaults = await this.defaultsDal.get({
       tenantId: input.tenantId,
       kind: input.kind,
-      revision,
+      extensionId: input.key,
     });
+    const nextSettings = input.replaceSettings ? input.settings : currentDefaults?.settings;
+    const shouldDelete = input.defaultAccess === "inherit" && !nextSettings;
+    if (shouldDelete) {
+      await this.defaultsDal.delete({
+        tenantId: input.tenantId,
+        kind: input.kind,
+        extensionId: input.key,
+      });
+    } else {
+      await this.defaultsDal.set({
+        tenantId: input.tenantId,
+        kind: input.kind,
+        extensionId: input.key,
+        ...(input.defaultAccess !== "inherit" ? { defaultAccess: input.defaultAccess } : {}),
+        ...(nextSettings ? { settings: nextSettings } : {}),
+      });
+    }
+
+    return await this.getInventoryDetail(input.tenantId, input.kind, input.key);
   };
 
   private decodeUploadedBuffer(contentBase64: string): Buffer {

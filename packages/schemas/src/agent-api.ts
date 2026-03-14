@@ -260,7 +260,7 @@ export const AgentSkillCapability = z
   .strict();
 export type AgentSkillCapability = z.infer<typeof AgentSkillCapability>;
 
-export const AgentMcpCapabilitySource = z.enum(["workspace", "managed", "shared"]);
+export const AgentMcpCapabilitySource = z.enum(["builtin", "workspace", "managed", "shared"]);
 export type AgentMcpCapabilitySource = z.infer<typeof AgentMcpCapabilitySource>;
 
 export const AgentMcpCapability = z

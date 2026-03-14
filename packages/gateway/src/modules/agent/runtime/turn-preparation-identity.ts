@@ -12,6 +12,7 @@ import { loadCurrentAgentContext } from "../load-context.js";
 import { applyPersonaToIdentity, resolveAgentPersona } from "../persona.js";
 import type { PrepareTurnDeps } from "./turn-preparation.js";
 import type { ResolvedAgentTurnInput } from "./turn-helpers.js";
+import { resolveEffectiveAgentConfig } from "../../extensions/defaults-dal.js";
 
 export async function resolveIdentityAndContext(
   deps: PrepareTurnDeps,
@@ -34,12 +35,17 @@ export async function resolveIdentityAndContext(
     agentId,
     agentKey,
   });
+  const effectiveConfig = await resolveEffectiveAgentConfig({
+    db: deps.opts.container.db,
+    tenantId: deps.tenantId,
+    config,
+  });
   const loaded = await loadCurrentAgentContext({
     contextStore: deps.contextStore,
     tenantId: deps.tenantId,
     agentId,
     workspaceId,
-    config,
+    config: effectiveConfig,
   });
   const persona = resolveAgentPersona({
     agentKey,

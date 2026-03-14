@@ -357,6 +357,13 @@
     "default": null
   },
   {
+    "table": "extension_defaults",
+    "column": "settings_json",
+    "shape": "object",
+    "nullable": true,
+    "default": null
+  },
+  {
     "table": "idempotency_records",
     "column": "result_json",
     "shape": "any",

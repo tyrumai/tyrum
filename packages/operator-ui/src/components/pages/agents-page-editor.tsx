@@ -1,5 +1,9 @@
 import type { OperatorCore } from "@tyrum/operator-core";
-import type { AgentCapabilitiesResponse, ManagedAgentDetail } from "@tyrum/schemas";
+import type {
+  AgentCapabilitiesResponse,
+  ManagedAgentDetail,
+  ManagedExtensionDetail,
+} from "@tyrum/schemas";
 import * as React from "react";
 import { useApiAction } from "../../hooks/use-api-action.js";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
@@ -10,6 +14,7 @@ import { Card, CardContent } from "../ui/card.js";
 import {
   type AgentEditorFormState,
   type PreservedMcpConfig,
+  applyMemorySettingsToForm,
   buildPayload,
   createBlankForm,
   snapshotToForm,
@@ -27,11 +32,34 @@ type AgentEditorProps = {
 
 const CREATE_CAPABILITIES_DEBOUNCE_MS = 250;
 
+type AgentMcpSettingsDraft = {
+  mode: "inherit" | "override";
+  format: "json" | "yaml";
+  text: string;
+};
+
 function createEmptyPreservedMcpConfig(): PreservedMcpConfig {
   return {
     pre_turn_tools: [],
     server_settings: {},
   };
+}
+
+function parseJsonSettingsText(text: string): Record<string, unknown> {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    throw new Error("MCP override settings must be a JSON object.");
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(trimmed) as unknown;
+  } catch {
+    throw new Error("MCP override settings must be a JSON object.");
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("MCP override settings must be a JSON object.");
+  }
+  return parsed as Record<string, unknown>;
 }
 
 function sortJsonValue(value: unknown): unknown {
@@ -92,6 +120,14 @@ export function AgentsPageEditor({
   const [preservedMcpConfig, setPreservedMcpConfig] = React.useState<PreservedMcpConfig>(
     createEmptyPreservedMcpConfig(),
   );
+  const [mcpExtensionsById, setMcpExtensionsById] = React.useState<
+    Record<string, ManagedExtensionDetail>
+  >({});
+  const [mcpExtensionsLoading, setMcpExtensionsLoading] = React.useState(true);
+  const [mcpExtensionsError, setMcpExtensionsError] = React.useState<string | null>(null);
+  const [mcpSettingsDrafts, setMcpSettingsDrafts] = React.useState<
+    Record<string, AgentMcpSettingsDraft>
+  >({});
   const saveAction = useApiAction<ManagedAgentDetail>();
   const deferredCreateCapabilitiesAgentKey = React.useDeferredValue(
     form.agentKey.trim() || "default",
@@ -127,6 +163,7 @@ export function AgentsPageEditor({
         setForm(createBlankForm());
         setPreservedModelOptions({});
         setPreservedMcpConfig(createEmptyPreservedMcpConfig());
+        setMcpSettingsDrafts({});
         setLoadError(null);
         setLoading(false);
         try {
@@ -174,6 +211,7 @@ export function AgentsPageEditor({
             pre_turn_tools: detailResult.value.config.mcp.pre_turn_tools,
             server_settings: detailResult.value.config.mcp.server_settings,
           });
+          setMcpSettingsDrafts({});
         } else {
           setLoadError(formatErrorMessage(detailResult.reason));
         }
@@ -198,6 +236,38 @@ export function AgentsPageEditor({
       cancelled = true;
     };
   }, [agentKey, core.http.agents, core.http.modelConfig, createNonce, mode]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    async function loadMcpExtensions(): Promise<void> {
+      setMcpExtensionsLoading(true);
+      setMcpExtensionsError(null);
+      try {
+        const listed = await core.http.extensions.list("mcp");
+        const detailResults = await Promise.all(
+          listed.items.map(async (item) => await core.http.extensions.get("mcp", item.key)),
+        );
+        if (cancelled) return;
+        setMcpExtensionsById(
+          Object.fromEntries(detailResults.map((result) => [result.item.key, result.item])),
+        );
+      } catch (error) {
+        if (cancelled) return;
+        setMcpExtensionsById({});
+        setMcpExtensionsError(formatErrorMessage(error));
+      } finally {
+        if (!cancelled) {
+          setMcpExtensionsLoading(false);
+        }
+      }
+    }
+
+    void loadMcpExtensions();
+    return () => {
+      cancelled = true;
+    };
+  }, [core.http.extensions]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -267,24 +337,88 @@ export function AgentsPageEditor({
     setPreservedModelOptions({});
   }, [setField]);
 
-  const save = async (): Promise<void> => {
-    if (mode === "create") {
-      const created = await saveAction.runAndThrow(async () => {
-        const payload = buildPayload(form, preservedModelOptions, preservedMcpConfig);
-        return await core.http.agents.create(payload);
+  const memoryExtension = mcpExtensionsById["memory"];
+
+  const handleMemorySettingsModeChange = React.useCallback(
+    (modeValue: AgentEditorFormState["memorySettingsMode"]) => {
+      if (modeValue === "inherit") {
+        setField("memorySettingsMode", "inherit");
+        return;
+      }
+
+      const explicitMemorySettings = preservedMcpConfig.server_settings["memory"];
+      setForm((current) => {
+        const seeded = explicitMemorySettings ?? memoryExtension?.default_mcp_server_settings_json;
+        if (!seeded) {
+          return { ...current, memorySettingsMode: "override" };
+        }
+        return applyMemorySettingsToForm(current, seeded, "override");
       });
-      onSaved(created.agent_key);
-      return;
+    },
+    [
+      memoryExtension?.default_mcp_server_settings_json,
+      preservedMcpConfig.server_settings,
+      setField,
+    ],
+  );
+
+  const updateMcpSettingsDraft = React.useCallback(
+    (serverId: string, draft: AgentMcpSettingsDraft) => {
+      setMcpSettingsDrafts((current) => ({ ...current, [serverId]: draft }));
+    },
+    [],
+  );
+
+  async function buildResolvedMcpConfig(): Promise<PreservedMcpConfig> {
+    const nextServerSettings: Record<string, Record<string, unknown>> = {
+      ...preservedMcpConfig.server_settings,
+    };
+    for (const [serverId, draft] of Object.entries(mcpSettingsDrafts)) {
+      if (draft.mode === "inherit") {
+        delete nextServerSettings[serverId];
+        continue;
+      }
+      nextServerSettings[serverId] =
+        draft.format === "json"
+          ? parseJsonSettingsText(draft.text)
+          : (
+              await core.http.extensions.parseMcpSettings({
+                settings_format: draft.format,
+                settings_text: draft.text,
+              })
+            ).settings;
     }
 
-    const updated = await saveAction.runAndThrow(async () => {
-      const payload = buildPayload(form, preservedModelOptions, preservedMcpConfig);
-      const targetKey = agentKey ?? payload.agent_key;
-      return await core.http.agents.update(targetKey, {
-        config: payload.config,
+    return {
+      pre_turn_tools: preservedMcpConfig.pre_turn_tools,
+      server_settings: nextServerSettings,
+    };
+  }
+
+  const save = async (): Promise<void> => {
+    try {
+      if (mode === "create") {
+        const created = await saveAction.runAndThrow(async () => {
+          const resolvedMcpConfig = await buildResolvedMcpConfig();
+          const payload = buildPayload(form, preservedModelOptions, resolvedMcpConfig);
+          return await core.http.agents.create(payload);
+        });
+        onSaved(created.agent_key);
+        return;
+      }
+
+      const updated = await saveAction.runAndThrow(async () => {
+        const resolvedMcpConfig = await buildResolvedMcpConfig();
+        const payload = buildPayload(form, preservedModelOptions, resolvedMcpConfig);
+        const targetKey = agentKey ?? payload.agent_key;
+        return await core.http.agents.update(targetKey, {
+          config: payload.config,
+        });
       });
-    });
-    onSaved(updated.agent_key);
+      onSaved(updated.agent_key);
+    } catch {
+      return;
+    }
   };
 
   if (loadError) {
@@ -340,6 +474,13 @@ export function AgentsPageEditor({
           description="This editor keeps existing provider-specific model options intact, but it does not edit them yet."
         />
       ) : null}
+      {mcpExtensionsError ? (
+        <Alert
+          variant="warning"
+          title="Shared MCP defaults unavailable"
+          description={mcpExtensionsError}
+        />
+      ) : null}
 
       <AgentEditorSections
         form={form}
@@ -356,6 +497,13 @@ export function AgentsPageEditor({
         capabilities={capabilities}
         capabilitiesLoading={capabilitiesLoading}
         capabilitiesError={capabilitiesError}
+        mcpExtensionDetailsById={mcpExtensionsById}
+        mcpExplicitServerSettings={preservedMcpConfig.server_settings}
+        mcpExtensionsLoading={mcpExtensionsLoading}
+        mcpExtensionsError={mcpExtensionsError}
+        onMemorySettingsModeChange={handleMemorySettingsModeChange}
+        mcpSettingsDrafts={mcpSettingsDrafts}
+        onMcpSettingsDraftChange={updateMcpSettingsDraft}
       />
     </div>
   );

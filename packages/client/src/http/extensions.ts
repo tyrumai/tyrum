@@ -71,11 +71,35 @@ const revertInputSchema = z
   })
   .strict();
 
+const defaultsUpdateInputSchema = z
+  .object({
+    default_access: z.enum(["inherit", "allow", "deny"]),
+    settings_format: z.enum(["json", "yaml"]).optional(),
+    settings_text: z.string().optional(),
+  })
+  .strict();
+
+const parseMcpSettingsInputSchema = z
+  .object({
+    settings_format: z.enum(["json", "yaml"]),
+    settings_text: z.string(),
+  })
+  .strict();
+
+const parseMcpSettingsResponseSchema = z
+  .object({
+    settings: z.record(z.string(), z.unknown()),
+  })
+  .strict();
+
 export type SkillImportInput = z.infer<typeof skillImportInputSchema>;
 export type UploadInput = z.infer<typeof uploadInputSchema>;
 export type McpImportInput = z.infer<typeof mcpImportInputSchema>;
 export type ExtensionsToggleInput = z.infer<typeof toggleInputSchema>;
 export type ExtensionsRevertInput = z.infer<typeof revertInputSchema>;
+export type ExtensionsDefaultsUpdateInput = z.infer<typeof defaultsUpdateInputSchema>;
+export type ExtensionsParseMcpSettingsInput = z.infer<typeof parseMcpSettingsInputSchema>;
+export type ExtensionsParseMcpSettingsResult = z.infer<typeof parseMcpSettingsResponseSchema>;
 
 export interface ExtensionsApi {
   list(kind: ExtensionKind, options?: TyrumRequestOptions): Promise<ExtensionsListResponseT>;
@@ -114,6 +138,16 @@ export interface ExtensionsApi {
     key: string,
     options?: TyrumRequestOptions,
   ): Promise<ExtensionsMutateResponseT>;
+  updateDefaults(
+    kind: ExtensionKind,
+    key: string,
+    input: ExtensionsDefaultsUpdateInput,
+    options?: TyrumRequestOptions,
+  ): Promise<ExtensionsMutateResponseT>;
+  parseMcpSettings(
+    input: ExtensionsParseMcpSettingsInput,
+    options?: TyrumRequestOptions,
+  ): Promise<ExtensionsParseMcpSettingsResult>;
 }
 
 export function createExtensionsApi(transport: HttpTransport): ExtensionsApi {
@@ -217,6 +251,34 @@ export function createExtensionsApi(transport: HttpTransport): ExtensionsApi {
         path: `/config/extensions/${encodeURIComponent(parsedKind)}/${encodeURIComponent(parsedKey)}/refresh`,
         body: {},
         response: ExtensionsMutateResponse,
+        signal: options?.signal,
+      });
+    },
+
+    async updateDefaults(kind, key, input, options) {
+      const parsedKind = validateOrThrow(extensionKindSchema, kind, "extension kind");
+      const parsedKey = validateOrThrow(extensionKeySchema, key, "extension key");
+      const payload = validateOrThrow(defaultsUpdateInputSchema, input, "defaults input");
+      return await transport.request({
+        method: "PUT",
+        path: `/config/extensions/${encodeURIComponent(parsedKind)}/${encodeURIComponent(parsedKey)}/defaults`,
+        body: payload,
+        response: ExtensionsMutateResponse,
+        signal: options?.signal,
+      });
+    },
+
+    async parseMcpSettings(input, options) {
+      const payload = validateOrThrow(
+        parseMcpSettingsInputSchema,
+        input,
+        "MCP settings parse input",
+      );
+      return await transport.request({
+        method: "POST",
+        path: "/config/extensions/mcp/parse-settings",
+        body: payload,
+        response: parseMcpSettingsResponseSchema,
         signal: options?.signal,
       });
     },

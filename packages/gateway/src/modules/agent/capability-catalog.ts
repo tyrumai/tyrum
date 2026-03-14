@@ -21,6 +21,7 @@ import type { SqlDb } from "../../statestore/types.js";
 import type { Logger } from "../observability/logger.js";
 import type { PluginCatalogProvider } from "../plugins/catalog-provider.js";
 import type { PluginRegistry } from "../plugins/registry.js";
+import { buildBuiltinMemoryServerSpec } from "../memory/builtin-mcp.js";
 
 function upsertCapability<T extends { id: string }>(itemsById: Map<string, T>, item: T): void {
   if (!itemsById.has(item.id)) {
@@ -140,6 +141,14 @@ export async function listAgentMcpCapabilities(params: {
 }): Promise<AgentMcpCapabilityT[]> {
   const runtimePackageDal = new RuntimePackageDal(params.db);
   const itemsById = new Map<string, AgentMcpCapabilityT>();
+
+  const builtinMemory = buildBuiltinMemoryServerSpec();
+  upsertCapability(itemsById, {
+    id: builtinMemory.id,
+    name: builtinMemory.name,
+    transport: builtinMemory.transport,
+    source: "builtin",
+  });
 
   if (params.stateMode === "local") {
     const workspaceMcpServers = await listMcpServersFromDir(

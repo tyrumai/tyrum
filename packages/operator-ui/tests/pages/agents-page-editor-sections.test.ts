@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import type { ManagedExtensionDetail } from "@tyrum/schemas";
 import { describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
 import { AgentEditorSections } from "../../src/components/pages/agents-page-editor-sections.js";
@@ -107,6 +108,12 @@ function sampleCapabilities() {
       deny: [],
       items: [
         {
+          id: "memory",
+          name: "Memory",
+          transport: "stdio" as const,
+          source: "builtin" as const,
+        },
+        {
           id: "filesystem",
           name: "Filesystem",
           transport: "stdio" as const,
@@ -131,12 +138,93 @@ function sampleCapabilities() {
   };
 }
 
+function sampleMcpExtensionDetails(): Record<string, ManagedExtensionDetail> {
+  return {
+    memory: {
+      kind: "mcp",
+      key: "memory",
+      name: "Memory",
+      description: null,
+      version: null,
+      enabled: true,
+      revision: null,
+      source: null,
+      source_type: "builtin",
+      refreshable: false,
+      materialized_path: null,
+      assignment_count: 0,
+      transport: "stdio",
+      default_access: "inherit",
+      can_edit_settings: true,
+      can_toggle_source_enabled: false,
+      can_refresh_source: false,
+      can_revert_source: false,
+      manifest: null,
+      spec: {
+        id: "memory",
+        name: "Memory",
+        enabled: true,
+        transport: "stdio",
+        command: "node",
+        args: ["-e", ""],
+      },
+      files: [],
+      revisions: [],
+      default_mcp_server_settings_json: { enabled: true },
+      default_mcp_server_settings_yaml: "enabled: true\n",
+      sources: [],
+    },
+    filesystem: {
+      kind: "mcp",
+      key: "filesystem",
+      name: "Filesystem",
+      description: null,
+      version: null,
+      enabled: true,
+      revision: 1,
+      source: {
+        kind: "npm",
+        npm_spec: "@modelcontextprotocol/server-filesystem",
+        command: "npx",
+        args: ["-y"],
+      },
+      source_type: "managed",
+      refreshable: true,
+      materialized_path: "/tmp/managed/mcp/filesystem/server.yml",
+      assignment_count: 0,
+      transport: "stdio",
+      default_access: "inherit",
+      can_edit_settings: true,
+      can_toggle_source_enabled: true,
+      can_refresh_source: true,
+      can_revert_source: true,
+      manifest: null,
+      spec: {
+        id: "filesystem",
+        name: "Filesystem",
+        enabled: true,
+        transport: "stdio",
+        command: "npx",
+        args: ["-y", "@modelcontextprotocol/server-filesystem"],
+      },
+      files: [],
+      revisions: [],
+      default_mcp_server_settings_json: { namespace: "shared" },
+      default_mcp_server_settings_yaml: "namespace: shared\n",
+      sources: [],
+    },
+  };
+}
+
 describe("AgentEditorSections", () => {
   it("wires profile, runtime, session, and memory controls into setField", () => {
     const setField = vi.fn();
 
     function Harness() {
-      const [form, setForm] = React.useState(createBlankForm());
+      const [form, setForm] = React.useState({
+        ...createBlankForm(),
+        memorySettingsMode: "override" as const,
+      });
       return React.createElement(AgentEditorSections, {
         form,
         mode: "create",
@@ -164,6 +252,16 @@ describe("AgentEditorSections", () => {
           setForm((current) => ({ ...current, model: "" }));
         },
         unsupportedModelOptions: '{\n  "temperature": 0.2\n}',
+        mcpExtensionDetailsById: sampleMcpExtensionDetails(),
+        mcpExplicitServerSettings: {},
+        mcpExtensionsLoading: false,
+        mcpExtensionsError: null,
+        onMemorySettingsModeChange: (modeValue) => {
+          setField("memorySettingsMode", modeValue);
+          setForm((current) => ({ ...current, memorySettingsMode: modeValue }));
+        },
+        mcpSettingsDrafts: {},
+        onMcpSettingsDraftChange: vi.fn(),
       });
     }
 
@@ -366,7 +464,10 @@ describe("AgentEditorSections", () => {
 
     const { root, container } = renderIntoDocument(
       React.createElement(AgentEditorSections, {
-        form,
+        form: {
+          ...form,
+          memorySettingsMode: "override",
+        },
         mode: "edit",
         setField,
         modelPresets: sampleModelPresets(),
@@ -380,6 +481,13 @@ describe("AgentEditorSections", () => {
         onSelectPrimaryPreset: vi.fn(),
         onClearPrimaryModel: vi.fn(),
         unsupportedModelOptions: null,
+        mcpExtensionDetailsById: sampleMcpExtensionDetails(),
+        mcpExplicitServerSettings: {},
+        mcpExtensionsLoading: false,
+        mcpExtensionsError: null,
+        onMemorySettingsModeChange: vi.fn(),
+        mcpSettingsDrafts: {},
+        onMcpSettingsDraftChange: vi.fn(),
       }),
     );
 

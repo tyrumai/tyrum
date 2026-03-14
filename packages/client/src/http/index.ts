@@ -126,6 +126,9 @@ export type {
   McpImportInput,
   ExtensionsToggleInput,
   ExtensionsRevertInput,
+  ExtensionsDefaultsUpdateInput,
+  ExtensionsParseMcpSettingsInput,
+  ExtensionsParseMcpSettingsResult,
 } from "./extensions.js";
 export type {
   LocationPlace,

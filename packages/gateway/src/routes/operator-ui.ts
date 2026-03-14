@@ -5,6 +5,7 @@ import { dirname, extname, isAbsolute, join, relative, resolve, sep } from "node
 import { fileURLToPath } from "node:url";
 
 const OPERATOR_UI_PATH_PREFIX = "/ui";
+const OPERATOR_UI_ASSETS_DIR_ENV = "TYRUM_OPERATOR_UI_ASSETS_DIR";
 
 const INDEX_CACHE_CONTROL = "no-cache";
 const ASSET_CACHE_CONTROL = "public, max-age=31536000, immutable";
@@ -144,8 +145,11 @@ async function serveIndexHtml(assetsDir: string | undefined): Promise<string> {
 
 export function createOperatorUiRoutes(opts: { assetsDir?: string } = {}): Hono {
   const app = new Hono();
+  const configuredAssetsDir = process.env[OPERATOR_UI_ASSETS_DIR_ENV]?.trim();
   const assetsDir =
-    opts.assetsDir ?? resolveOperatorUiAssetsDirFrom(dirname(fileURLToPath(import.meta.url)));
+    opts.assetsDir ??
+    (configuredAssetsDir && configuredAssetsDir.length > 0 ? configuredAssetsDir : undefined) ??
+    resolveOperatorUiAssetsDirFrom(dirname(fileURLToPath(import.meta.url)));
   const assetsDirReal = assetsDir ? safeRealpathSync(assetsDir) : undefined;
 
   app.use(OPERATOR_UI_PATH_PREFIX, applyOperatorUiSecurityHeaders);

@@ -10,6 +10,7 @@ import {
   createLocalAgentContextStore,
   createSharedAgentContextStore,
 } from "../../src/modules/agent/context-store.js";
+import { resolveEffectiveAgentConfig } from "../../src/modules/extensions/defaults-dal.js";
 import { DEFAULT_WORKSPACE_KEY } from "../../src/modules/identity/scope.js";
 
 const migrationsDir = join(import.meta.dirname, "../../migrations/sqlite");
@@ -92,6 +93,73 @@ args:
     expect(identity.meta.name).toBe("Tyrum");
     expect(skills.map((skill) => skill.meta.id)).toEqual(["file-reader"]);
     expect(mcpServers.map((server) => server.id)).toEqual(["calendar"]);
+  });
+
+  it("uses the already-resolved config instead of reloading extension defaults", async () => {
+    await mkdir(join(homeDir, "skills/file-reader"), { recursive: true });
+    writeFileSync(
+      join(homeDir, "skills/file-reader/SKILL.md"),
+      `---
+id: file-reader
+name: File Reader
+version: 1.0.0
+description: Read local files.
+---
+Always inspect files before proposing changes.
+`,
+      "utf-8",
+    );
+
+    const store = createLocalAgentContextStore({
+      db: container.db,
+      home: homeDir,
+      identityScopeDal: container.identityScopeDal,
+    });
+    const tenantId = await container.identityScopeDal.ensureTenantId("tenant-local");
+    const agentId = await container.identityScopeDal.ensureAgentId(tenantId, "default");
+    const workspaceId = await container.identityScopeDal.ensureWorkspaceId(
+      tenantId,
+      DEFAULT_WORKSPACE_KEY,
+    );
+    await container.identityScopeDal.ensureMembership(tenantId, agentId, workspaceId);
+    const scope = { tenantId, agentId, workspaceId };
+
+    await container.db.run(
+      `INSERT INTO extension_defaults (tenant_id, kind, extension_id, default_access)
+       VALUES (?, 'skill', 'file-reader', 'allow'),
+              (?, 'mcp', 'memory', 'allow')`,
+      [tenantId, tenantId],
+    );
+
+    const baseConfig = AgentConfig.parse({
+      model: { model: "openai/gpt-4.1" },
+      skills: {
+        default_mode: "deny",
+        allow: [],
+        deny: [],
+        workspace_trusted: true,
+      },
+      mcp: {
+        default_mode: "deny",
+        allow: [],
+        deny: [],
+        pre_turn_tools: ["mcp.memory.seed"],
+        server_settings: {},
+      },
+    });
+    const effectiveConfig = await resolveEffectiveAgentConfig({
+      db: container.db,
+      tenantId,
+      config: baseConfig,
+    });
+
+    await container.db.run(`DELETE FROM extension_defaults WHERE tenant_id = ?`, [tenantId]);
+
+    const skills = await store.getEnabledSkills(scope, effectiveConfig);
+    const mcpServers = await store.getEnabledMcpServers(scope, effectiveConfig);
+
+    expect(skills.map((skill) => skill.meta.id)).toEqual(["file-reader"]);
+    expect(mcpServers.map((server) => server.id)).toEqual(["memory"]);
   });
 
   it("loads managed skills and MCP servers from runtime packages when local files are absent", async () => {

@@ -137,7 +137,7 @@ export { LifecycleHookEvent, LifecycleHookDefinition, LifecycleHooksConfig } fro
 // prettier-ignore
 export { PluginId, PluginContributions, PluginPermissions, PluginManifest, PluginLockFormat, PluginLockFile } from "./plugin.js";
 // prettier-ignore
-export { ExtensionKind, ManagedBundleFile, ManagedSkillSource, ManagedMcpSource, ManagedSkillPackage, ManagedMcpPackage, ManagedExtensionRevision, ManagedExtensionSourceDescriptor, ManagedExtensionSummary, ManagedExtensionDetail, ExtensionsListResponse, ExtensionsDetailResponse, ExtensionsMutateResponse } from "./extensions.js";
+export { ExtensionKind, ExtensionSourceType, ExtensionAccessDefault, ManagedBundleFile, ManagedSkillSource, ManagedMcpSource, ManagedSkillPackage, ManagedMcpPackage, ManagedExtensionRevision, ManagedExtensionSourceDescriptor, ExtensionDiscoveredSource, ManagedExtensionSummary, ManagedExtensionDetail, ExtensionsListResponse, ExtensionsDetailResponse, ExtensionsMutateResponse } from "./extensions.js";
 // prettier-ignore
 export { TyrumUIMessageRole, TyrumUIMessagePart, TyrumUIMessageMetadata, TyrumUIMessage, TyrumUIMessagePreview } from "./ui-message.js";
 // prettier-ignore
