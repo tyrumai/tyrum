@@ -1,14 +1,14 @@
 // @vitest-environment jsdom
 
 import React, { act } from "react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createElevatedModeStore, type OperatorCore } from "@tyrum/operator-core";
 import { ElevatedModeProvider } from "../../src/elevated-mode.js";
 import { useAdminHttpClient } from "../../src/components/pages/admin-http-shared.js";
 import { cleanupTestRoot, renderIntoDocument, type TestRoot } from "../test-utils.js";
 
-function createTestCore() {
-  const baseStore = createElevatedModeStore({ tickIntervalMs: 0 });
+function createTestCore(options?: { tickIntervalMs?: number }) {
+  const baseStore = createElevatedModeStore({ tickIntervalMs: options?.tickIntervalMs ?? 0 });
   let subscribeCalls = 0;
   const elevatedModeStore = {
     ...baseStore,
@@ -33,6 +33,7 @@ function createTestCore() {
 }
 
 afterEach(() => {
+  vi.useRealTimers();
   document.body.innerHTML = "";
 });
 
@@ -99,6 +100,66 @@ describe("useAdminHttpClient", () => {
       });
 
       expect(hasStrictClient).toBe(true);
+    } finally {
+      if (testRoot) cleanupTestRoot(testRoot);
+      baseStore.dispose();
+    }
+  });
+
+  it("keeps the elevated client stable across countdown ticks, recreates it for a new token, and falls back on exit", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-01T00:00:00.000Z"));
+
+    const { baseStore, core, readHttp } = createTestCore({ tickIntervalMs: 1_000 });
+    let testRoot: TestRoot | null = null;
+    let resolvedClient: OperatorCore["http"] | null = null;
+
+    function ReadProbe() {
+      resolvedClient = useAdminHttpClient();
+      return null;
+    }
+
+    try {
+      testRoot = renderIntoDocument(
+        <ElevatedModeProvider core={core} mode="web">
+          <ReadProbe />
+        </ElevatedModeProvider>,
+      );
+
+      expect(resolvedClient).toBe(readHttp);
+
+      act(() => {
+        baseStore.enter({
+          elevatedToken: "token-1",
+          expiresAt: "2026-03-01T00:01:00.000Z",
+        });
+      });
+
+      const firstElevatedClient = resolvedClient;
+      expect(firstElevatedClient).not.toBeNull();
+      expect(firstElevatedClient).not.toBe(readHttp);
+
+      act(() => {
+        vi.advanceTimersByTime(1_000);
+      });
+
+      expect(resolvedClient).toBe(firstElevatedClient);
+
+      act(() => {
+        baseStore.enter({
+          elevatedToken: "token-2",
+          expiresAt: "2026-03-01T00:02:00.000Z",
+        });
+      });
+
+      expect(resolvedClient).not.toBe(firstElevatedClient);
+      expect(resolvedClient).not.toBe(readHttp);
+
+      act(() => {
+        baseStore.exit();
+      });
+
+      expect(resolvedClient).toBe(readHttp);
     } finally {
       if (testRoot) cleanupTestRoot(testRoot);
       baseStore.dispose();
