@@ -12,6 +12,7 @@ import {
   resolveAgentKeyById,
   runManagedSubagentTurn,
 } from "./orchestration-support.js";
+import { isTerminalTaskState } from "./task-helpers.js";
 
 const DEFAULT_TICK_MS = 1_000;
 
@@ -93,19 +94,7 @@ export class WorkboardDispatcher {
       return false;
     }
 
-    const tasks = await this.workboard.listTasks({ scope, work_item_id: workItemId });
-    if (tasks.length === 0) {
-      await this.workboard.createTask({
-        scope,
-        task: {
-          work_item_id: workItemId,
-          status: "queued",
-          execution_profile: "executor_rw",
-          side_effect_class: "workspace",
-          result_summary: "Default execution task",
-        },
-      });
-    }
+    await this.ensureExecutionTask(scope, workItemId);
 
     const leaseOwner = `${this.opts.owner?.trim() || "workboard-dispatcher"}:${workItemId}`;
     const leased = await this.workboard.leaseRunnableTasks({
@@ -264,5 +253,34 @@ export class WorkboardDispatcher {
     }
 
     return true;
+  }
+
+  private async ensureExecutionTask(
+    scope: { tenant_id: string; agent_id: string; workspace_id: string },
+    workItemId: string,
+  ): Promise<void> {
+    const tasks = await this.workboard.listTasks({ scope, work_item_id: workItemId });
+    const executionTasks = tasks.filter((task) => task.execution_profile !== "planner");
+    if (executionTasks.some((task) => !isTerminalTaskState(task.status))) {
+      return;
+    }
+
+    const hasSuccessfulExecutionTask = executionTasks.some(
+      (task) => task.status === "completed" || task.status === "skipped",
+    );
+    if (executionTasks.length > 0 && hasSuccessfulExecutionTask) {
+      return;
+    }
+
+    await this.workboard.createTask({
+      scope,
+      task: {
+        work_item_id: workItemId,
+        status: "queued",
+        execution_profile: "executor_rw",
+        side_effect_class: "workspace",
+        result_summary: "Default execution task",
+      },
+    });
   }
 }

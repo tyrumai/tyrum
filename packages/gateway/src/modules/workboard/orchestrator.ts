@@ -9,6 +9,7 @@ import {
   resolveAgentKeyById,
   runManagedSubagentTurn,
 } from "./orchestration-support.js";
+import { isTerminalTaskState } from "./task-helpers.js";
 
 const DEFAULT_TICK_MS = 1_000;
 
@@ -101,6 +102,8 @@ export class WorkboardOrchestrator {
       return;
     }
 
+    await this.ensurePlannerTask(scope, workItemId);
+
     const leaseOwner = `${this.opts.owner?.trim() || "workboard-orchestrator"}:${workItemId}`;
     const leased = await this.workboard.leaseRunnableTasks({
       scope,
@@ -189,6 +192,28 @@ export class WorkboardOrchestrator {
         error: message,
       });
     }
+  }
+
+  private async ensurePlannerTask(
+    scope: { tenant_id: string; agent_id: string; workspace_id: string },
+    workItemId: string,
+  ): Promise<void> {
+    const tasks = await this.workboard.listTasks({ scope, work_item_id: workItemId });
+    const plannerTasks = tasks.filter((task) => task.execution_profile === "planner");
+    if (plannerTasks.some((task) => !isTerminalTaskState(task.status))) {
+      return;
+    }
+
+    await this.workboard.createTask({
+      scope,
+      task: {
+        work_item_id: workItemId,
+        status: "queued",
+        execution_profile: "planner",
+        side_effect_class: "workspace",
+        result_summary: "Planner refinement task",
+      },
+    });
   }
 
   private async ensurePlannerSubagent(
