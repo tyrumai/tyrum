@@ -1,4 +1,5 @@
 import { AgentConfig } from "@tyrum/schemas";
+import { randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -6,9 +7,14 @@ import { setTimeout as delay } from "node:timers/promises";
 import { Hono } from "hono";
 import { describe, expect, it } from "vitest";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
-import { DEFAULT_TENANT_ID, DEFAULT_WORKSPACE_KEY } from "../../src/modules/identity/scope.js";
+import {
+  DEFAULT_TENANT_ID,
+  DEFAULT_WORKSPACE_ID,
+  DEFAULT_WORKSPACE_KEY,
+} from "../../src/modules/identity/scope.js";
 import { createAgentsRoutes } from "../../src/routes/agents.js";
 import { seedPausedExecutionRun } from "../helpers/execution-fixtures.js";
+import { insertExecutionArtifactRecord } from "./artifact.test-support.js";
 import { createTestApp } from "./helpers.js";
 
 function sampleConfig(name: string) {
@@ -274,6 +280,48 @@ describe("Managed agents routes integration", () => {
 
     const get = await app.request("/agents/agent-delete");
     expect(get.status).toBe(404);
+  });
+
+  it("deletes a managed agent after detaching retained artifact references", async () => {
+    const { app, container } = await createTestApp({
+      isLocalOnly: false,
+      deploymentConfig: { modelsDev: { disableFetch: true } },
+    });
+    const agentKey = "agent-artifacts";
+
+    const create = await app.request("/agents", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        agent_key: agentKey,
+        config: sampleConfig("Delete Artifact Agent"),
+      }),
+    });
+    expect(create.status).toBe(201);
+    const created = (await create.json()) as { agent_id: string };
+
+    const artifactId = randomUUID();
+    await insertExecutionArtifactRecord(container.db, {
+      artifactId,
+      kind: "log",
+      uri: "artifact://delete-agent-log",
+      createdAt: "2026-03-15T10:00:00.000Z",
+      workspaceId: DEFAULT_WORKSPACE_ID,
+      agentId: created.agent_id,
+    });
+
+    const remove = await app.request(`/agents/${agentKey}`, {
+      method: "DELETE",
+    });
+    expect(remove.status).toBe(200);
+
+    const artifact = await container.db.get<{ agent_id: string | null }>(
+      `SELECT agent_id
+       FROM execution_artifacts
+       WHERE tenant_id = ? AND artifact_id = ?`,
+      [DEFAULT_TENANT_ID, artifactId],
+    );
+    expect(artifact?.agent_id).toBeNull();
   });
 
   it("returns 409 for one of two concurrent creates with the same agent key", async () => {

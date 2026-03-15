@@ -51,6 +51,19 @@ async function assertNoActiveRuns(db: SqlDb, tenantId: string, agentKey: string)
   }
 }
 
+async function detachExecutionArtifactsForAgent(
+  db: SqlDb,
+  tenantId: string,
+  agentId: string,
+): Promise<void> {
+  await db.run(
+    `UPDATE execution_artifacts
+     SET agent_id = NULL
+     WHERE tenant_id = ? AND agent_id = ?`,
+    [tenantId, agentId],
+  );
+}
+
 export class AgentAdminService {
   private readonly configDal: AgentConfigDal;
   private readonly identityDal: AgentIdentityDal;
@@ -290,6 +303,10 @@ export class AgentAdminService {
 
     await this.deps.db.transaction(async (tx) => {
       await assertNoActiveRuns(tx, params.tenantId, params.agentKey);
+      // execution_artifacts stores a composite (tenant_id, agent_id) FK with
+      // ON DELETE SET NULL, but tenant_id is non-nullable. Clear agent_id
+      // explicitly so artifact history survives agent deletion.
+      await detachExecutionArtifactsForAgent(tx, params.tenantId, row.agent_id);
       const result = await tx.run(
         `DELETE FROM agents
          WHERE tenant_id = ? AND agent_id = ?`,
