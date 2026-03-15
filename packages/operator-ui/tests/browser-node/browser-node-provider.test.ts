@@ -3,6 +3,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import React, { act, useEffect } from "react";
 import { cleanupTestRoot, createTestRoot } from "../test-utils.js";
+import { createManagedNodeClientLifecycleMock } from "../../../client/tests/managed-node-client.test-support.js";
 
 const clientInstances: FakeTyrumClient[] = [];
 
@@ -60,62 +61,10 @@ vi.mock("@tyrum/client/browser", () => {
 
   return {
     autoExecute,
-    createManagedNodeClientLifecycle: vi.fn(
-      (input: {
-        client: FakeTyrumClient;
-        providers: readonly unknown[];
-        getCapabilityReadyPayload: () => unknown;
-        onConnected?: (event: { clientId: string }) => void;
-        onDisconnected?: () => void;
-        onTransportError?: (event: { message: string }) => void;
-        onDispose?: () => void;
-      }) => {
-        let disposed = false;
-        let connected = false;
-
-        const handleConnected = (event?: unknown) => {
-          if (disposed || !event || typeof event !== "object") return;
-          connected = true;
-          input.onConnected?.(event as { clientId: string });
-          void input.client.capabilityReady(input.getCapabilityReadyPayload());
-        };
-        const handleDisconnected = () => {
-          connected = false;
-          if (disposed) return;
-          input.onDisconnected?.();
-        };
-        const handleTransportError = (event?: unknown) => {
-          if (disposed || !event || typeof event !== "object") return;
-          input.onTransportError?.(event as { message: string });
-        };
-
-        autoExecute(input.client, [...input.providers]);
-        input.client.on("connected", handleConnected);
-        input.client.on("disconnected", handleDisconnected);
-        input.client.on("transport_error", handleTransportError);
-
-        return {
-          client: input.client,
-          connect() {
-            if (disposed) return;
-            input.client.connect();
-          },
-          async publishCapabilityState() {
-            if (disposed || !connected) return;
-            await input.client.capabilityReady(input.getCapabilityReadyPayload());
-          },
-          dispose() {
-            if (disposed) return;
-            disposed = true;
-            input.client.off("connected", handleConnected);
-            input.client.off("disconnected", handleDisconnected);
-            input.client.off("transport_error", handleTransportError);
-            input.onDispose?.();
-            input.client.disconnect();
-          },
-        };
-      },
-    ),
+    createManagedNodeClientLifecycle: createManagedNodeClientLifecycleMock({
+      autoExecute,
+      requireConnectedObject: true,
+    }),
     createBrowserLocalStorageDeviceIdentityStorage: vi.fn((_key: string) => ({})),
     formatDeviceIdentityError: vi.fn((err: unknown) => String(err)),
     loadOrCreateDeviceIdentity: vi.fn(async () => ({
