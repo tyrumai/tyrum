@@ -50,6 +50,10 @@ export interface AttemptClaim {
   leaseTtlMs: number;
 }
 
+function isInternalControlAction(action: ActionPrimitiveT): boolean {
+  return action.type === "Decide";
+}
+
 export async function loadBudgetPolicyRowTx(
   tx: SqlDb,
   run: RunnableRunRow,
@@ -167,6 +171,9 @@ export async function maybeHandleSnapshotPolicyTx(
 ): Promise<StepClaimOutcome | undefined> {
   const policySnapshotId = budgetRow?.policy_snapshot_id ?? null;
   if (!policySnapshotId || !parsedAction) {
+    return undefined;
+  }
+  if (isInternalControlAction(parsedAction)) {
     return undefined;
   }
 

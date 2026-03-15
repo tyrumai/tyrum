@@ -23,6 +23,10 @@ export async function persistAttemptPolicyContext(
   deps: AttemptPolicyDeps,
   opts: AttemptPolicyContext,
 ): Promise<void> {
+  if (opts.action.type === "Decide") {
+    return;
+  }
+
   const run = await deps.db.get<{ policy_snapshot_id: string | null }>(
     "SELECT policy_snapshot_id FROM execution_runs WHERE tenant_id = ? AND run_id = ?",
     [opts.tenantId, opts.runId],

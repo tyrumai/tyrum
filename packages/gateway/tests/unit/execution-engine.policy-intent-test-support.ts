@@ -98,6 +98,63 @@ function registerPolicyApprovalTests(fixture: { db: () => SqliteDb }): void {
     expect(runDone?.status).toBe("succeeded");
   });
 
+  it("does not approval-gate internal Decide steps under a policy snapshot", async () => {
+    const db = fixture.db();
+    const snapshotDal = new PolicySnapshotDal(db);
+    const snapshot = await snapshotDal.getOrCreate(
+      DEFAULT_TENANT_ID,
+      PolicyBundle.parse({
+        v: 1,
+        tools: { default: "require_approval", allow: [], require_approval: [], deny: [] },
+        network_egress: { default: "require_approval", allow: [], require_approval: [], deny: [] },
+      }),
+    );
+    const engine = new ExecutionEngine({ db });
+    await enqueuePlan(engine, {
+      key: "agent:default:main",
+      lane: "heartbeat",
+      planId: "plan-heartbeat-decide-1",
+      requestId: "req-heartbeat-decide-1",
+      policySnapshotId: snapshot.policy_snapshot_id,
+      steps: [
+        action("Decide", {
+          channel: "automation:default",
+          thread_id: "schedule-heartbeat-1",
+          message: "Review signals and act only if useful.",
+          metadata: {
+            automation: {
+              schedule_id: "heartbeat-1",
+              schedule_kind: "heartbeat",
+              delivery_mode: "quiet",
+            },
+          },
+        }),
+      ],
+    });
+    const executor: StepExecutor = {
+      execute: vi.fn(async (): Promise<StepResult> => ({ success: true, result: { ok: true } })),
+    };
+    await drain(engine, "w1", executor);
+    expect(mockCallCount(executor)).toBe(1);
+
+    const approvalCount = await db.get<{ n: number }>("SELECT COUNT(*) AS n FROM approvals");
+    expect(approvalCount?.n).toBe(0);
+
+    const run = await db.get<{ status: string; paused_reason: string | null }>(
+      "SELECT status, paused_reason FROM execution_runs LIMIT 1",
+    );
+    expect(run).toMatchObject({ status: "succeeded", paused_reason: null });
+
+    const attempt = await db.get<{
+      policy_snapshot_id?: string | null;
+      policy_decision_json?: string | null;
+      policy_applied_override_ids_json?: string | null;
+    }>("SELECT * FROM execution_attempts LIMIT 1");
+    expect(attempt?.policy_snapshot_id).toBe(snapshot.policy_snapshot_id);
+    expect(attempt?.policy_decision_json).toBeNull();
+    expect(attempt?.policy_applied_override_ids_json).toBeNull();
+  });
+
   it("fails the run when policy denies a step (cancels remaining steps + releases leases)", async () => {
     const db = fixture.db();
     const snapshotDal = new PolicySnapshotDal(db);
