@@ -1,7 +1,4 @@
-import type {
-  Decision as DecisionT,
-  PolicyBundle as PolicyBundleT,
-} from "@tyrum/schemas";
+import type { Decision as DecisionT, PolicyBundle as PolicyBundleT } from "@tyrum/schemas";
 import { PolicyBundle } from "@tyrum/schemas";
 import type { GatewayContainer } from "../../container.js";
 import type { LanguageModel } from "ai";

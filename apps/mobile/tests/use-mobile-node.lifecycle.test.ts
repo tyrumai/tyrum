@@ -107,56 +107,58 @@ vi.mock("@capacitor/clipboard", () => ({
 }));
 
 vi.mock("@tyrum/client/browser", () => ({
-  createManagedNodeClientLifecycle: vi.fn((input: {
-    client: InstanceType<typeof MockTyrumClient>;
-    providers: readonly unknown[];
-    getCapabilityReadyPayload: () => unknown;
-    onConnected?: () => void;
-    onDisconnected?: () => void;
-    onTransportError?: (event: { message: string }) => void;
-    onDispose?: () => void;
-  }) => {
-    let disposed = false;
-    let connected = false;
-    const handleConnected = () => {
-      if (disposed) return;
-      connected = true;
-      input.onConnected?.();
-      void input.client.capabilityReady(input.getCapabilityReadyPayload());
-    };
-    const handleDisconnected = () => {
-      connected = false;
-      if (disposed) return;
-      input.onDisconnected?.();
-    };
-    const handleTransportError = (event?: unknown) => {
-      if (disposed || !event || typeof event !== "object") return;
-      input.onTransportError?.(event as { message: string });
-    };
-    input.client.on("connected", handleConnected);
-    input.client.on("disconnected", handleDisconnected);
-    input.client.on("transport_error", handleTransportError);
-    return {
-      client: input.client,
-      connect() {
+  createManagedNodeClientLifecycle: vi.fn(
+    (input: {
+      client: InstanceType<typeof MockTyrumClient>;
+      providers: readonly unknown[];
+      getCapabilityReadyPayload: () => unknown;
+      onConnected?: () => void;
+      onDisconnected?: () => void;
+      onTransportError?: (event: { message: string }) => void;
+      onDispose?: () => void;
+    }) => {
+      let disposed = false;
+      let connected = false;
+      const handleConnected = () => {
         if (disposed) return;
-        input.client.connect();
-      },
-      async publishCapabilityState() {
-        if (disposed || !connected) return;
-        await input.client.capabilityReady(input.getCapabilityReadyPayload());
-      },
-      dispose() {
+        connected = true;
+        input.onConnected?.();
+        void input.client.capabilityReady(input.getCapabilityReadyPayload());
+      };
+      const handleDisconnected = () => {
+        connected = false;
         if (disposed) return;
-        disposed = true;
-        input.client.off("connected", handleConnected);
-        input.client.off("disconnected", handleDisconnected);
-        input.client.off("transport_error", handleTransportError);
-        input.onDispose?.();
-        input.client.disconnect();
-      },
-    };
-  }),
+        input.onDisconnected?.();
+      };
+      const handleTransportError = (event?: unknown) => {
+        if (disposed || !event || typeof event !== "object") return;
+        input.onTransportError?.(event as { message: string });
+      };
+      input.client.on("connected", handleConnected);
+      input.client.on("disconnected", handleDisconnected);
+      input.client.on("transport_error", handleTransportError);
+      return {
+        client: input.client,
+        connect() {
+          if (disposed) return;
+          input.client.connect();
+        },
+        async publishCapabilityState() {
+          if (disposed || !connected) return;
+          await input.client.capabilityReady(input.getCapabilityReadyPayload());
+        },
+        dispose() {
+          if (disposed) return;
+          disposed = true;
+          input.client.off("connected", handleConnected);
+          input.client.off("disconnected", handleDisconnected);
+          input.client.off("transport_error", handleTransportError);
+          input.onDispose?.();
+          input.client.disconnect();
+        },
+      };
+    },
+  ),
   formatDeviceIdentityError: vi.fn((error: unknown) =>
     error instanceof Error ? error.message : String(error),
   ),

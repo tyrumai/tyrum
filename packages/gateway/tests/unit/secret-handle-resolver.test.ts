@@ -49,7 +49,7 @@ describe("createSecretHandleResolver", () => {
     } as const;
     const secretProvider = {
       list: vi
-        .fn<() => Promise<readonly typeof firstHandle[]>>()
+        .fn<() => Promise<readonly (typeof firstHandle)[]>>()
         .mockResolvedValueOnce([firstHandle])
         .mockResolvedValueOnce([secondHandle]),
       resolve: vi.fn(async () => "value"),

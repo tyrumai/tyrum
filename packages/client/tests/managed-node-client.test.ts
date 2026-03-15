@@ -23,23 +23,20 @@ class FakeManagedNodeClient implements ManagedNodeClient {
   };
 
   on(event: "connected", handler: (event: ManagedEventPayloads["connected"]) => void): void;
-  on(
-    event: "disconnected",
-    handler: (event: ManagedEventPayloads["disconnected"]) => void,
-  ): void;
+  on(event: "disconnected", handler: (event: ManagedEventPayloads["disconnected"]) => void): void;
   on(
     event: "transport_error",
     handler: (event: ManagedEventPayloads["transport_error"]) => void,
   ): void;
-  on(event: ManagedEventName, handler: (event: ManagedEventPayloads[ManagedEventName]) => void): void {
+  on(
+    event: ManagedEventName,
+    handler: (event: ManagedEventPayloads[ManagedEventName]) => void,
+  ): void {
     this.listeners[event].add(handler as never);
   }
 
   off(event: "connected", handler: (event: ManagedEventPayloads["connected"]) => void): void;
-  off(
-    event: "disconnected",
-    handler: (event: ManagedEventPayloads["disconnected"]) => void,
-  ): void;
+  off(event: "disconnected", handler: (event: ManagedEventPayloads["disconnected"]) => void): void;
   off(
     event: "transport_error",
     handler: (event: ManagedEventPayloads["transport_error"]) => void,

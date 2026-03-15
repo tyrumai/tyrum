@@ -16,18 +16,16 @@ export interface ManagedNodeClientLifecycle<TClient extends ManagedNodeClient> {
   dispose(): void;
 }
 
-export function createManagedNodeClientLifecycle<TClient extends ManagedNodeClient>(
-  input: {
-    client: TClient;
-    getCapabilityReadyPayload: () => WsCapabilityReadyPayload;
-    providers?: readonly CapabilityProvider[];
-    registerProviders?: (client: TClient) => void;
-    onConnected?: (event: TyrumClientEvents["connected"]) => void;
-    onDisconnected?: (event: TyrumClientEvents["disconnected"]) => void;
-    onTransportError?: (event: TyrumClientEvents["transport_error"]) => void;
-    onDispose?: () => void;
-  },
-): ManagedNodeClientLifecycle<TClient> {
+export function createManagedNodeClientLifecycle<TClient extends ManagedNodeClient>(input: {
+  client: TClient;
+  getCapabilityReadyPayload: () => WsCapabilityReadyPayload;
+  providers?: readonly CapabilityProvider[];
+  registerProviders?: (client: TClient) => void;
+  onConnected?: (event: TyrumClientEvents["connected"]) => void;
+  onDisconnected?: (event: TyrumClientEvents["disconnected"]) => void;
+  onTransportError?: (event: TyrumClientEvents["transport_error"]) => void;
+  onDispose?: () => void;
+}): ManagedNodeClientLifecycle<TClient> {
   let disposed = false;
   let connected = false;
 
