@@ -112,31 +112,53 @@ export async function seedAgentConfig(
   });
 }
 
-export async function setupTestEnv(): Promise<{
+export async function setupTestEnv(input?: {
+  policyMode?: "observe" | "observe-only" | "enforce";
+}): Promise<{
   homeDir: string;
   container: GatewayContainer;
 }> {
   const homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
-  const container = await createContainer({
-    dbPath: ":memory:",
-    migrationsDir,
-    tyrumHome: homeDir,
-  });
+  const container = await createContainer(
+    {
+      dbPath: ":memory:",
+      migrationsDir,
+      tyrumHome: homeDir,
+    },
+    {
+      deploymentConfig: {
+        policy: {
+          mode: input?.policyMode ?? "observe",
+        },
+      },
+    },
+  );
   return { homeDir, container };
 }
 
-export async function setupFileBackedTestEnv(): Promise<{
+export async function setupFileBackedTestEnv(input?: {
+  policyMode?: "observe" | "observe-only" | "enforce";
+}): Promise<{
   homeDir: string;
   dbPath: string;
   container: GatewayContainer;
 }> {
   const homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
   const dbPath = join(homeDir, "gateway.sqlite");
-  const container = await createContainer({
-    dbPath,
-    migrationsDir,
-    tyrumHome: homeDir,
-  });
+  const container = await createContainer(
+    {
+      dbPath,
+      migrationsDir,
+      tyrumHome: homeDir,
+    },
+    {
+      deploymentConfig: {
+        policy: {
+          mode: input?.policyMode ?? "observe",
+        },
+      },
+    },
+  );
   return { homeDir, dbPath, container };
 }
 
@@ -144,13 +166,23 @@ export async function restartFileBackedContainer(input: {
   homeDir: string;
   dbPath: string;
   container?: GatewayContainer;
+  policyMode?: "observe" | "observe-only" | "enforce";
 }): Promise<GatewayContainer> {
   await input.container?.db.close();
-  return await createContainer({
-    dbPath: input.dbPath,
-    migrationsDir,
-    tyrumHome: input.homeDir,
-  });
+  return await createContainer(
+    {
+      dbPath: input.dbPath,
+      migrationsDir,
+      tyrumHome: input.homeDir,
+    },
+    {
+      deploymentConfig: {
+        policy: {
+          mode: input.policyMode ?? "observe",
+        },
+      },
+    },
+  );
 }
 
 export async function teardownTestEnv(env: {

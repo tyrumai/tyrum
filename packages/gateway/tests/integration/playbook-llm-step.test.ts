@@ -224,7 +224,7 @@ describe("Playbook LLM step executor", () => {
       [runId],
     );
     expect(approval?.status).toBe("queued");
-    expect(approval?.prompt ?? "").toContain("bash");
+    expect(approval?.prompt ?? "").toContain("Policy approval required");
   });
 
   it("pauses when policy requires approval for HTTP fetch tool calls", async () => {
@@ -319,7 +319,7 @@ describe("Playbook LLM step executor", () => {
       [runId],
     );
     expect(approval?.status).toBe("queued");
-    expect(approval?.prompt ?? "").toContain("webfetch");
+    expect(approval?.prompt ?? "").toContain("Policy approval required");
   });
 
   it("succeeds when JSON output matches schema", async () => {

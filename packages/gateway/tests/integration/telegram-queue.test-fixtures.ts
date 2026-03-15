@@ -135,7 +135,11 @@ export function makeAgents(runtime: unknown, policyService?: PolicyService): Age
   return {
     getRuntime: async () => runtime,
     getPolicyService: () =>
-      policyService ?? ({ isEnabled: () => false } as unknown as PolicyService),
+      policyService ??
+      ({
+        evaluateConnectorAction: async () => ({ decision: "allow" }),
+        isObserveOnly: () => false,
+      } as unknown as PolicyService),
   } as AgentRegistry;
 }
 

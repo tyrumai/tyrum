@@ -22,6 +22,22 @@ import {
   createStubLanguageModel,
 } from "./stub-language-model.js";
 
+async function createObservedContainer(): Promise<GatewayContainer> {
+  return await createContainer(
+    {
+      dbPath: ":memory:",
+      migrationsDir,
+    },
+    {
+      deploymentConfig: {
+        policy: {
+          mode: "observe",
+        },
+      },
+    },
+  );
+}
+
 function makeMemoryToolConfig(input?: { memoryEnabled?: boolean }): Record<string, unknown> {
   return {
     model: { model: "openai/gpt-4.1" },
@@ -52,10 +68,7 @@ describe("AgentRuntime - tool tracking, memory, and lane signals", () => {
 
   it("does not report context-available tools as used_tools", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
-    container = await createContainer({
-      dbPath: ":memory:",
-      migrationsDir,
-    });
+    container = await createObservedContainer();
 
     const runtime = new AgentRuntime({
       container,
@@ -76,10 +89,7 @@ describe("AgentRuntime - tool tracking, memory, and lane signals", () => {
 
   it("records an episode for a meaningful turn outcome", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
-    container = await createContainer({
-      dbPath: ":memory:",
-      migrationsDir,
-    });
+    container = await createObservedContainer();
     await seedAgentConfig(container, { config: makeMemoryToolConfig() });
 
     const createSpy = vi.spyOn(container.memoryV1Dal, "create");
@@ -125,10 +135,7 @@ describe("AgentRuntime - tool tracking, memory, and lane signals", () => {
 
   it("does not mark memory_written when mcp.memory.write returns an error", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
-    container = await createContainer({
-      dbPath: ":memory:",
-      migrationsDir,
-    });
+    container = await createObservedContainer();
     await seedAgentConfig(container, {
       config: makeMemoryToolConfig({ memoryEnabled: false }),
     });
@@ -162,10 +169,7 @@ describe("AgentRuntime - tool tracking, memory, and lane signals", () => {
 
   it("persists explicit note tags without duplicates", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
-    container = await createContainer({
-      dbPath: ":memory:",
-      migrationsDir,
-    });
+    container = await createObservedContainer();
     await seedAgentConfig(container, { config: makeMemoryToolConfig() });
 
     const createSpy = vi.spyOn(container.memoryV1Dal, "create");
@@ -204,10 +208,7 @@ describe("AgentRuntime - tool tracking, memory, and lane signals", () => {
 
   it("logs when subagent execution profile resolution fails", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
-    container = await createContainer({
-      dbPath: ":memory:",
-      migrationsDir,
-    });
+    container = await createObservedContainer();
 
     const warnSpy = vi.spyOn(container.logger, "warn").mockImplementation(() => undefined);
     const getSubagentSpy = vi

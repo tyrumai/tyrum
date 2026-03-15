@@ -17,14 +17,6 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function dispatchSelectChange(select: HTMLSelectElement, value: string): void {
-  const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set as
-    | ((this: HTMLSelectElement, nextValue: string) => void)
-    | undefined;
-  setter?.call(select, value);
-  select.dispatchEvent(new Event("change", { bubbles: true }));
-}
-
 describe("PolicyConfigSection", () => {
   it("clears the save reason after a successful policy save", async () => {
     const onSave = vi.fn(async () => true);
@@ -81,10 +73,13 @@ describe("PolicyConfigSection", () => {
 
     await flush();
 
-    setSelectValue(
-      getByTestId<HTMLSelectElement>(page.container, "policy-config-tools-default"),
-      "allow",
-    );
+    click(getByTestId<HTMLButtonElement>(page.container, "policy-config-tools-allow-add"));
+    act(() => {
+      setNativeValue(
+        getByTestId<HTMLInputElement>(page.container, "policy-config-tools-allow-row-0"),
+        "glob",
+      );
+    });
     act(() => {
       setNativeValue(
         getByTestId<HTMLInputElement>(page.container, "policy-config-save-reason"),
@@ -99,7 +94,7 @@ describe("PolicyConfigSection", () => {
 
     expect(onSave).toHaveBeenCalledWith(
       expect.objectContaining({
-        tools: expect.objectContaining({ default: "allow" }),
+        tools: expect.objectContaining({ allow: ["glob"] }),
       }),
       "Tighten nothing yet",
     );
@@ -223,10 +218,13 @@ describe("PolicyConfigSection", () => {
 
     await flush();
 
-    setSelectValue(
-      getByTestId<HTMLSelectElement>(page.container, "policy-config-tools-default"),
-      "allow",
-    );
+    click(getByTestId<HTMLButtonElement>(page.container, "policy-config-tools-allow-add"));
+    act(() => {
+      setNativeValue(
+        getByTestId<HTMLInputElement>(page.container, "policy-config-tools-allow-row-0"),
+        "glob",
+      );
+    });
 
     expect(page.container.textContent).toContain("Unsaved changes ready");
     expect(getByTestId<HTMLButtonElement>(page.container, "policy-config-save").disabled).toBe(
@@ -302,10 +300,13 @@ describe("PolicyConfigSection", () => {
 
     await flush();
 
-    setSelectValue(
-      getByTestId<HTMLSelectElement>(page.container, "policy-config-tools-default"),
-      "allow",
-    );
+    click(getByTestId<HTMLButtonElement>(page.container, "policy-config-tools-allow-add"));
+    act(() => {
+      setNativeValue(
+        getByTestId<HTMLInputElement>(page.container, "policy-config-tools-allow-row-0"),
+        "glob",
+      );
+    });
     act(() => {
       setNativeValue(
         getByTestId<HTMLInputElement>(page.container, "policy-config-save-reason"),
@@ -385,12 +386,14 @@ describe("PolicyConfigSection", () => {
 
     await flush();
 
+    click(getByTestId<HTMLButtonElement>(page.container, "policy-config-tools-allow-add"));
+    await flush();
     await act(async () => {
-      dispatchSelectChange(
-        getByTestId<HTMLSelectElement>(page.container, "policy-config-tools-default"),
-        "allow",
+      setNativeValue(
+        getByTestId<HTMLInputElement>(page.container, "policy-config-tools-allow-row-0"),
+        "glob",
       );
-      dispatchSelectChange(
+      setSelectValue(
         getByTestId<HTMLSelectElement>(page.container, "policy-config-network-default"),
         "allow",
       );
@@ -403,7 +406,7 @@ describe("PolicyConfigSection", () => {
 
     expect(onSave).toHaveBeenCalledWith(
       expect.objectContaining({
-        tools: expect.objectContaining({ default: "allow" }),
+        tools: expect.objectContaining({ allow: ["glob"] }),
         network_egress: expect.objectContaining({ default: "allow" }),
       }),
       "",

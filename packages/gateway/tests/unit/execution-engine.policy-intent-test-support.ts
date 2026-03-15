@@ -426,7 +426,7 @@ function registerPolicyPersistenceTests(fixture: { db: () => SqliteDb }): void {
         DEFAULT_TENANT_ID,
         PolicyBundle.parse({
           v: 1,
-          tools: { default: "allow", allow: [], require_approval: [], deny: [] },
+          tools: { allow: ["action.Research"], require_approval: [], deny: [] },
           network_egress: { default: "allow", allow: [], require_approval: [], deny: [] },
         }),
       );

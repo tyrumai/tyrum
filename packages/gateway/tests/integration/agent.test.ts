@@ -250,6 +250,11 @@ describe("agent routes", () => {
   it("separates short-term session context per channel/thread and writes Memory v1 records", async () => {
     const { app, container, agents } = await createTestApp({
       tyrumHome: homeDir,
+      deploymentConfig: {
+        policy: {
+          mode: "observe",
+        },
+      },
       languageModel: createMemoryDecisionLanguageModel({
         decision: {
           should_store: true,
