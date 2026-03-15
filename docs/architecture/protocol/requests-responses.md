@@ -59,4 +59,6 @@ Distributed systems lose packets and drop connections; retries are expected. Tyr
 
 - Resolution is an atomic state transition on the durable approval record (`pending → approved|denied|expired`).
 - Only the first successful transition enqueues a durable engine action (resume/cancel). Duplicate resolve attempts for an already-resolved approval do not enqueue additional actions.
-- `approval.resolved` is emitted once per approval transition, and any re-emission of that same transition reuses the persisted `event_id`; delivery is still at-least-once, so consumers should dedupe using `event_id`.
+- `approval.updated` is emitted for each approval transition/status change, and re-emission of that
+  same transition reuses the persisted `event_id`; delivery is still at-least-once, so consumers
+  should dedupe using `event_id`.

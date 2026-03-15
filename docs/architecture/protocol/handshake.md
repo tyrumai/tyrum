@@ -94,4 +94,8 @@ After a connection is authenticated, the gateway authorizes what the peer can do
 
 Nodes require pairing approval before they can execute capabilities. Pairing binds a node device identity to a trust level and a scoped capability allowlist, and it can be revoked at any time.
 
-On approval, the gateway issues a node-scoped access token and delivers it to the node via a `pairing.approved` event (`payload.scoped_token`). Nodes can persist this token and use it for WS upgrade authentication (for example via `tyrum-auth.<base64url(token)>`) to reduce bootstrap-token usage during normal operation. Revocation invalidates this scoped token immediately.
+On approval, the gateway issues a node-scoped access token and delivers it to the node via a
+`pairing.updated` event when the pairing transitions to `approved` (`payload.scoped_token`). Nodes
+can persist this token and use it for WS upgrade authentication (for example via
+`tyrum-auth.<base64url(token)>`) to reduce bootstrap-token usage during normal operation.
+Revocation invalidates this scoped token immediately.

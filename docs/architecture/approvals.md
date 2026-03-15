@@ -15,7 +15,7 @@ Approvals are **enforcement**, not prompt guidance.
 
 ## Approval lifecycle
 
-1. **Requested:** the gateway persists an approval request and emits an event.
+1. **Requested:** the gateway persists an approval request.
 2. **Resolved:** an operator approves/denies (or it expires).
 3. **Applied:** the waiting workflow/run resumes, cancels, or escalates.
 
@@ -28,13 +28,16 @@ Approvals are durable records in the StateStore and should behave correctly when
 - **Any gateway edge instance can serve the approval queue** (read from the StateStore) and accept resolution requests.
 - **Atomic resolution:** apply `pending → approved|denied|expired` transitions in a single durable write so double-submission is safe.
 - **Durable side effects:** engine resume/cancel is driven by a leased, durable action queue so retries and multi-instance deployments do not duplicate side effects.
-- **At-least-once events:** `approval.requested` / `approval.resolved` events may be delivered more than once; clients should dedupe using event ids. Re-emission of the same `approval.resolved` transition reuses the persisted `event_id`.
+- **At-least-once events:** `approval.updated` events may be delivered more than once; clients
+  should dedupe using event ids. Re-emission of the same approval transition reuses the persisted
+  `event_id`.
 
 ## Interfaces
 
 Approvals are exposed over:
 
-- WebSocket requests/responses plus server-push events (for real-time operator clients)
+- WebSocket requests/responses plus `approval.updated` server-push events (for real-time operator
+  clients)
 - HTTP APIs (for automation and operational tooling)
 
 ## Scoping
@@ -101,8 +104,7 @@ When a workflow step requires approval:
 
 Approvals should be observable via gateway-emitted events:
 
-- `approval.requested`
-- `approval.resolved`
+- `approval.updated`
 - `policy_override.created` (when `mode=always` creates an override)
 - `policy_override.revoked` / `policy_override.expired`
 - `run.paused` (with reason: approval)

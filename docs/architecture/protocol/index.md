@@ -8,11 +8,15 @@ Tyrum uses a typed WebSocket protocol between the gateway, clients, and nodes. T
 
 The wire shapes are defined by shared, versioned contracts (see [Contracts](../contracts.md)).
 
+For wire-level behavior, the exported schemas in `packages/schemas` are the source of truth. The
+architecture docs explain intent and usage, but schema-backed request/response/event names win when
+they disagree with prose examples.
+
 The protocol is the primary interface for:
 
 - interactive chat sessions
 - workflow execution progress (runs/steps)
-- approvals (requested/resolved) and resume control
+- approvals and resume control
 - node pairing and capability RPC
 
 ## Transport

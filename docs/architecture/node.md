@@ -64,9 +64,9 @@ sequenceDiagram
   participant Client
 
   Node->>Gateway: connect.init/connect.proof (role=node, device, capabilities)
-  Gateway-->>Client: pairing.requested(node_id, identity)
+  Gateway-->>Client: pairing.updated(pairing.status=queued)
   Client->>Gateway: pairing.approve(node_id)
-  Gateway-->>Node: pairing.approved(scoped_token)
+  Gateway-->>Node: pairing.updated(scoped_token)
   Node-->>Gateway: capability.ready(...)
   Node-->>Gateway: attempt.evidence(...)
 ```
