@@ -194,6 +194,8 @@ function ToolPartCard({
   runId: string | null;
   showApprovalDetails: boolean;
 }) {
+  const { open, toggleOpen } = useAutoDisclosure(isToolActive(part));
+
   if (!isToolUIPart(part)) {
     return null;
   }
@@ -205,7 +207,6 @@ function ToolPartCard({
   const resolvedRunId =
     ("output" in part && part.output !== undefined ? readRunIdFromValue(part.output) : null) ??
     runId;
-  const { open, toggleOpen } = useAutoDisclosure(isToolActive(part));
 
   return (
     <DisclosureCard header={getToolName(part)} open={open} onToggle={toggleOpen}>
