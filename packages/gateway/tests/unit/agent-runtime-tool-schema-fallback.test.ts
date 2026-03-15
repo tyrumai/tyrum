@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GatewayContainer } from "../../src/container.js";
 import { McpManager } from "../../src/modules/agent/mcp-manager.js";
+import { WORKBOARD_TOOL_REGISTRY } from "../../src/modules/agent/tool-catalog-workboard.js";
 import { buildBuiltinMemoryServerSpec } from "../../src/modules/memory/builtin-mcp.js";
 import {
   createToolSetBuilder,
@@ -122,5 +123,54 @@ describe("ToolSetBuilder schema fallback", () => {
     } finally {
       await mcpManager.shutdown();
     }
+  });
+
+  it("registers workboard artifact tools with explicit model-safe properties", async () => {
+    ({ homeDir, container } = await setupTestEnv());
+
+    const toolSetBuilder = createToolSetBuilder({
+      home: homeDir,
+      container,
+      policyService: {
+        isEnabled: () => false,
+        isObserveOnly: () => false,
+      },
+    });
+    const descriptor = WORKBOARD_TOOL_REGISTRY.find((tool) => tool.id === "workboard.artifact.get");
+    expect(descriptor).toBeDefined();
+    if (!descriptor) {
+      throw new Error("missing workboard.artifact.get descriptor");
+    }
+
+    const toolSet = toolSetBuilder.buildToolSet(
+      [descriptor],
+      {
+        execute: vi.fn(async () => ({
+          tool_call_id: "tc-workboard-artifact-get",
+          output: "ok",
+        })),
+      } as never,
+      new Set<string>(),
+      {
+        planId: "plan-workboard",
+        sessionId: "session-workboard",
+        channel: "test",
+        threadId: "thread-workboard",
+      },
+      makeContextReport() as never,
+    );
+
+    const modelTool = toolSet["workboard_artifact_get"] as {
+      inputSchema?: { jsonSchema?: Record<string, unknown> };
+    };
+
+    expect(modelTool.inputSchema?.jsonSchema).toMatchObject({
+      type: "object",
+      properties: {
+        artifact_id: { type: "string" },
+      },
+      required: ["artifact_id"],
+      additionalProperties: false,
+    });
   });
 });

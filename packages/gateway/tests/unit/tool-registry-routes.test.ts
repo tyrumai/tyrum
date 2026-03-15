@@ -303,6 +303,20 @@ describe("tool registry routes", () => {
     expect(body.tools).toContainEqual(
       expect.objectContaining({
         source: "builtin",
+        canonical_id: "workboard.artifact.get",
+        input_schema: {
+          type: "object",
+          properties: {
+            artifact_id: { type: "string" },
+          },
+          required: ["artifact_id"],
+          additionalProperties: false,
+        },
+      }),
+    );
+    expect(body.tools).toContainEqual(
+      expect.objectContaining({
+        source: "builtin",
         canonical_id: "tool.automation.schedule.list",
         family: "automation",
       }),
