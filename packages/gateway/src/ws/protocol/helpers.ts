@@ -62,7 +62,11 @@ export function workboardErrorResponse(
       ? (err as { details?: unknown }).details
       : undefined;
 
-  if (errorCode === "invalid_transition" || errorCode === "wip_limit_exceeded") {
+  if (
+    errorCode === "invalid_transition" ||
+    errorCode === "wip_limit_exceeded" ||
+    errorCode === "readiness_gate_failed"
+  ) {
     return errorResponse(requestId, type, errorCode, message, details);
   }
 

@@ -1,4 +1,6 @@
 import type { ToolDescriptor } from "./tools.js";
+import { WORKBOARD_TOOL_REGISTRY } from "./tool-catalog-workboard.js";
+
 export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
   {
     id: "read",
@@ -459,4 +461,5 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
       additionalProperties: false,
     },
   },
+  ...WORKBOARD_TOOL_REGISTRY,
 ];

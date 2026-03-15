@@ -281,6 +281,7 @@ export async function prepareTurn(
     nodeInventoryService,
     nodeCapabilityInspectionService,
     memoryToolRuntime,
+    deps.opts.protocolDeps?.agents,
   );
   const toolExecutionContext = {
     tenantId: session.tenant_id,

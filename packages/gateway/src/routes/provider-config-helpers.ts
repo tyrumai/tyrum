@@ -9,6 +9,7 @@ import {
   type ProviderMethodSpec,
   type ProviderRegistrySpec,
 } from "../modules/models/provider-config-registry.js";
+import { normalizePublicExecutionProfileId } from "../modules/models/public-execution-profiles.js";
 import type { SecretProvider } from "../modules/secret/provider.js";
 import type { ModelCatalogService } from "../modules/models/model-catalog-service.js";
 
@@ -181,9 +182,14 @@ export async function resolveProviderDeletionRequirements(input: {
         )
       : [];
 
-  const requiredExecutionProfileIds = assignments
-    .map((assignment) => assignment.execution_profile_id)
-    .toSorted((a, b) => a.localeCompare(b));
+  const requiredExecutionProfileIds = [
+    ...new Set(
+      assignments.flatMap((assignment) => {
+        const profileId = normalizePublicExecutionProfileId(assignment.execution_profile_id);
+        return profileId ? [profileId] : [];
+      }),
+    ),
+  ].toSorted((a, b) => a.localeCompare(b));
   if (requiredExecutionProfileIds.length === 0) {
     return {
       deletedPresetKeys,

@@ -234,4 +234,45 @@ export class WorkboardStateKvDal {
       work_item_id: scope.work_item_id,
     }) as WorkItemStateKVEntry;
   }
+
+  async deleteStateKv(params: {
+    scope: WorkStateKVScopeIds;
+    key: WorkStateKVKey;
+  }): Promise<(AgentStateKVEntry | WorkItemStateKVEntry) | undefined> {
+    if (params.scope.kind === "agent") {
+      const row = await this.deps.db.get<DalHelpers.RawKvRow>(
+        `DELETE FROM agent_state_kv
+         WHERE tenant_id = ?
+           AND agent_id = ?
+           AND workspace_id = ?
+           AND key = ?
+         RETURNING *`,
+        [params.scope.tenant_id, params.scope.agent_id, params.scope.workspace_id, params.key],
+      );
+      return row ? (dalHelpers.toKvEntry(row) as AgentStateKVEntry) : undefined;
+    }
+
+    const row = await this.deps.db.get<DalHelpers.RawKvRow>(
+      `DELETE FROM work_item_state_kv
+       WHERE tenant_id = ?
+         AND agent_id = ?
+         AND workspace_id = ?
+         AND work_item_id = ?
+         AND key = ?
+       RETURNING *`,
+      [
+        params.scope.tenant_id,
+        params.scope.agent_id,
+        params.scope.workspace_id,
+        params.scope.work_item_id,
+        params.key,
+      ],
+    );
+    return row
+      ? (dalHelpers.toKvEntry({
+          ...row,
+          work_item_id: params.scope.work_item_id,
+        }) as WorkItemStateKVEntry)
+      : undefined;
+  }
 }

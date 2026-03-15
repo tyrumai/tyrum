@@ -1,12 +1,13 @@
 import { z } from "zod";
 import { DateTimeSchema, UuidSchema } from "./common.js";
-import { AgentId, Lane, TenantId, WorkspaceId } from "./keys.js";
+import { DesktopEnvironmentId } from "./desktop-environment.js";
+import { AgentId, Lane, NodeId, TenantId, WorkspaceId } from "./keys.js";
 import { WorkItemId, WorkItemTaskId } from "./workboard.js";
 
 export const SubagentId = UuidSchema;
 export type SubagentId = z.infer<typeof SubagentId>;
 
-export const SubagentStatus = z.enum(["running", "closing", "closed", "failed"]);
+export const SubagentStatus = z.enum(["running", "paused", "closing", "closed", "failed"]);
 export type SubagentStatus = z.infer<typeof SubagentStatus>;
 
 export const SubagentSessionKey = z
@@ -30,6 +31,8 @@ export const SubagentDescriptor = z
     session_key: SubagentSessionKey,
     lane: Lane.default("subagent"),
     status: SubagentStatus,
+    desktop_environment_id: DesktopEnvironmentId.optional(),
+    attached_node_id: NodeId.optional(),
     created_at: DateTimeSchema,
     last_heartbeat_at: DateTimeSchema.nullable().optional(),
     updated_at: DateTimeSchema.optional(),

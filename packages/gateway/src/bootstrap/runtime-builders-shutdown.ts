@@ -157,6 +157,10 @@ export function createShutdownHandler(
     runtime.protocol.guardianReviewProcessor?.stop();
     runtime.edge.outboxPoller?.stop();
     runtime.edge.telegramProcessor?.stop();
+    runtime.edge.workboardOrchestrator?.stop();
+    runtime.edge.workboardDispatcher?.stop();
+    runtime.edge.workboardReconciler?.stop();
+    runtime.edge.subagentJanitor?.stop();
     context.container.modelsDev.stopBackgroundRefresh();
 
     void runShutdownCleanup(

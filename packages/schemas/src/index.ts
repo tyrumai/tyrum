@@ -121,6 +121,8 @@ export { WorkScope, WorkItemId, WorkItemKind, WorkItemState, WorkItemFingerprint
 // prettier-ignore
 export { SubagentId, SubagentStatus, SubagentSessionKey, SubagentDescriptor, Subagent } from "./subagent.js";
 // prettier-ignore
+export { WorkClarificationId, WorkClarificationStatus, WorkClarification } from "./work-clarifications.js";
+// prettier-ignore
 export { WorkArtifactId, WorkArtifactKind, WorkArtifact } from "./work-artifacts.js";
 // prettier-ignore
 export { ToolIntentCostBudget, ToolIntentV1, ToolIntent } from "./tool-intent.js";

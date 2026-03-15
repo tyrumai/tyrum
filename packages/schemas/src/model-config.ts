@@ -12,7 +12,6 @@ export const ConfiguredExecutionProfileId = z.enum([
   "planner",
   "jury",
   "executor_rw",
-  "integrator",
 ]);
 export type ConfiguredExecutionProfileId = z.infer<typeof ConfiguredExecutionProfileId>;
 

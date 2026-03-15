@@ -9,7 +9,6 @@ export const ADMIN_HTTP_EXECUTION_PROFILE_IDS = [
   "planner",
   "jury",
   "executor_rw",
-  "integrator",
 ] as const;
 
 export type ExecutionProfileId = (typeof ADMIN_HTTP_EXECUTION_PROFILE_IDS)[number];

@@ -265,4 +265,20 @@ export class WorkboardSignalsDal {
 
     return { signals, next_cursor };
   }
+
+  async deleteSignal(params: {
+    scope: WorkScope;
+    signal_id: string;
+  }): Promise<WorkSignal | undefined> {
+    const row = await this.db.get<DalHelpers.RawWorkSignalRow>(
+      `DELETE FROM work_signals
+       WHERE tenant_id = ?
+         AND agent_id = ?
+         AND workspace_id = ?
+         AND signal_id = ?
+       RETURNING *`,
+      [params.scope.tenant_id, params.scope.agent_id, params.scope.workspace_id, params.signal_id],
+    );
+    return row ? dalHelpers.toWorkSignal(row) : undefined;
+  }
 }

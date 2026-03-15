@@ -24,7 +24,6 @@ const EXECUTION_PROFILE_IDS = [
   "planner",
   "jury",
   "executor_rw",
-  "integrator",
 ] as const;
 
 function getBearerHeaders(token: string, includeJson = false): HeadersInit {

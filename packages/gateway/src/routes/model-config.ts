@@ -1,7 +1,6 @@
 import { Hono } from "hono";
 import {
   ConfiguredAvailableModelListResponse,
-  ConfiguredExecutionProfileId,
   ConfiguredModelPreset,
   ConfiguredModelPresetCreateRequest,
   ConfiguredModelPresetListResponse,
@@ -26,11 +25,15 @@ import {
   ExecutionProfileModelAssignmentDal,
   type ExecutionProfileModelAssignmentRow,
 } from "../modules/models/execution-profile-model-assignment-dal.js";
+import {
+  normalizePublicExecutionProfileId,
+  PUBLIC_EXECUTION_PROFILE_IDS,
+} from "../modules/models/public-execution-profiles.js";
 import { normalizeProviderScopedModelId } from "../modules/models/provider-model-id.js";
 import { coerceRecord } from "../modules/util/coerce.js";
 import { createUniqueKey, slugifyKey } from "./config-key-utils.js";
 
-const EXECUTION_PROFILE_IDS = ConfiguredExecutionProfileId.options;
+const EXECUTION_PROFILE_IDS = PUBLIC_EXECUTION_PROFILE_IDS;
 
 type ReplacementAssignments = Record<string, string | null>;
 
@@ -102,9 +105,16 @@ async function toAssignmentResponse(input: {
     input.assignmentDal.list({ tenantId: input.tenantId }),
     loadPresetByKey(input.presetDal, input.tenantId),
   ]);
-  const assignmentsByProfileId = new Map(
-    assignments.map((assignment) => [assignment.execution_profile_id, assignment]),
-  );
+  const assignmentsByProfileId = new Map<string, ExecutionProfileModelAssignmentRow>();
+  for (const assignment of assignments) {
+    const profileId = normalizePublicExecutionProfileId(assignment.execution_profile_id);
+    if (!profileId) {
+      continue;
+    }
+    if (assignment.execution_profile_id === profileId || !assignmentsByProfileId.has(profileId)) {
+      assignmentsByProfileId.set(profileId, assignment);
+    }
+  }
 
   return ExecutionProfileModelAssignmentListResponse.parse({
     status: "ok",
@@ -126,10 +136,17 @@ function resolveRequiredAssignments(
   assignments: ExecutionProfileModelAssignmentRow[],
   deletedPresetKeys: Set<string>,
 ) {
-  return assignments
-    .filter((assignment) => deletedPresetKeys.has(assignment.preset_key))
-    .map((assignment) => assignment.execution_profile_id)
-    .toSorted((a, b) => a.localeCompare(b));
+  const required = new Set<string>();
+  for (const assignment of assignments) {
+    if (!deletedPresetKeys.has(assignment.preset_key)) {
+      continue;
+    }
+    const profileId = normalizePublicExecutionProfileId(assignment.execution_profile_id);
+    if (profileId) {
+      required.add(profileId);
+    }
+  }
+  return [...required].toSorted((a, b) => a.localeCompare(b));
 }
 
 async function validateReplacementAssignments(input: {

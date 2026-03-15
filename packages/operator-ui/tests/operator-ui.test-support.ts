@@ -82,7 +82,6 @@ export const EXECUTION_PROFILE_IDS = [
   "planner",
   "jury",
   "executor_rw",
-  "integrator",
 ] as const;
 
 export const TEST_DEVICE_IDENTITY = {

@@ -10,6 +10,7 @@ import {
   formatSessionContext,
   formatSkillsPrompt,
   formatToolPrompt,
+  formatWorkOrchestrationPrompt,
 } from "./prompts.js";
 import {
   ensureDefaultHeartbeatSchedule,
@@ -27,6 +28,7 @@ import { resolveEffectiveAgentConfig } from "../../extensions/defaults-dal.js";
 import type { SessionRow } from "../session-dal.js";
 import {
   isToolAllowed,
+  isToolAllowedWithDenylist,
   isBuiltinToolAvailableInStateMode,
   listBuiltinToolDescriptors,
   selectToolDirectory,
@@ -159,7 +161,10 @@ export function assemblePrompts(
   const sessionCtx = formatSessionContext(session.context_state);
   const identityPrompt = formatIdentityPrompt(ctx.identity);
   const skillsText = `Enabled skills:\n${formatSkillsPrompt(ctx.skills)}`;
-  const toolsText = `Available tools:\n${formatToolPrompt(filteredTools)}`;
+  const workOrchestrationText = formatWorkOrchestrationPrompt(filteredTools);
+  const toolsText = [`Available tools:\n${formatToolPrompt(filteredTools)}`, workOrchestrationText]
+    .filter((value): value is string => typeof value === "string" && value.length > 0)
+    .join("\n\n");
   const sessionText = `Session context:\n${sessionCtx}`;
   const automationTriggerText = automation
     ? `Automation trigger:\n${[
@@ -416,13 +421,25 @@ export async function resolveToolsAndMemory(
     ...mcpTools,
     ...pluginTools,
   ]
-    .filter((tool) => isToolAllowed(executionProfile.profile.tool_allowlist, tool.id))
+    .filter((tool) =>
+      isToolAllowedWithDenylist(
+        executionProfile.profile.tool_allowlist,
+        executionProfile.profile.tool_denylist,
+        tool.id,
+      ),
+    )
     .flatMap((tool) => {
       const validated = validateTool(tool);
       return validated ? [validated] : [];
     });
   const filteredTools = toolCandidates
-    .filter((tool) => isToolAllowed(executionProfile.profile.tool_allowlist, tool.id))
+    .filter((tool) =>
+      isToolAllowedWithDenylist(
+        executionProfile.profile.tool_allowlist,
+        executionProfile.profile.tool_denylist,
+        tool.id,
+      ),
+    )
     .flatMap((tool) => {
       const validated = validateTool(tool);
       return validated ? [validated] : [];

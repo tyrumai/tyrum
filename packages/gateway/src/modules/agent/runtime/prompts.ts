@@ -169,3 +169,36 @@ export function formatToolPrompt(tools: readonly ToolDescriptor[]): string {
 
   return tools.map((tool) => `${tool.id}: ${tool.description}`).join("\n");
 }
+
+export function formatWorkOrchestrationPrompt(
+  tools: readonly ToolDescriptor[],
+): string | undefined {
+  const toolIds = new Set(tools.map((tool) => tool.id));
+  const lines: string[] = [];
+
+  if (toolIds.has("workboard.capture")) {
+    lines.push(
+      "Use workboard.capture when work is multi-step, ambiguous, or should continue beyond the current turn.",
+    );
+  }
+  if (toolIds.has("workboard.clarification.request")) {
+    lines.push(
+      "Use workboard.clarification.request when you need missing information instead of guessing. The main user-facing agent will ask the human and write the answer back.",
+    );
+  }
+  if (toolIds.has("workboard.subagent.spawn")) {
+    lines.push(
+      "Use workboard.subagent.spawn for bounded helper work. Persist important handoff state through WorkBoard artifacts, decisions, or state keys.",
+    );
+  }
+  if (toolIds.has("workboard.item.list") || toolIds.has("workboard.state.list")) {
+    lines.push(
+      "Use WorkBoard tools to inspect durable current state instead of relying only on prompt context.",
+    );
+  }
+
+  if (lines.length === 0) {
+    return undefined;
+  }
+  return `Work orchestration:\n${lines.map((line) => `- ${line}`).join("\n")}`;
+}

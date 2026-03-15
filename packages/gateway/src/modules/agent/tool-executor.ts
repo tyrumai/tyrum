@@ -17,9 +17,11 @@ import {
   executeNodeListTool,
 } from "./tool-executor-node-dispatch.js";
 import { executeAutomationScheduleTool } from "./tool-executor-schedule-tools.js";
+import { executeWorkboardTool } from "./tool-executor-workboard-tools.js";
 import type { McpManager } from "./mcp-manager.js";
 import type { NodeDispatchService } from "./node-dispatch-service.js";
 import type { NodeCapabilityInspectionService } from "../node/capability-inspection-service.js";
+import type { AgentRegistry } from "./registry.js";
 import {
   DEFAULT_DNS_LOOKUP,
   type DnsLookupFn,
@@ -55,6 +57,7 @@ export class ToolExecutor {
     private readonly nodeInventoryService?: NodeInventoryService,
     private readonly nodeCapabilityInspectionService?: NodeCapabilityInspectionService,
     private readonly memoryToolRuntime?: AgentMemoryToolRuntime,
+    private readonly agents?: AgentRegistry,
   ) {}
 
   private workspaceLeaseOwner(toolCallId: string): string {
@@ -238,6 +241,20 @@ export class ToolExecutor {
     );
     if (scheduleResult) {
       return scheduleResult;
+    }
+
+    const workboardResult = await executeWorkboardTool(
+      {
+        workspaceLease: this.workspaceLease,
+        agents: this.agents,
+      },
+      toolId,
+      toolCallId,
+      args,
+      audit,
+    );
+    if (workboardResult) {
+      return workboardResult;
     }
 
     const coreResult = await executeCoreTool(coreContext, toolId, toolCallId, args);
