@@ -1,8 +1,9 @@
 import {
-  autoExecute,
+  createManagedNodeClientLifecycle,
   formatDeviceIdentityError,
   loadOrCreateDeviceIdentity,
   TyrumClient,
+  type ManagedNodeClientLifecycle,
 } from "@tyrum/client/browser";
 import { Capacitor } from "@capacitor/core";
 import { capabilityDescriptorsForClientCapability } from "@tyrum/schemas";
@@ -118,6 +119,7 @@ export function useMobileNode(options: UseMobileNodeOptions): {
   }, [state]);
 
   const clientRef = useRef<TyrumClient | null>(null);
+  const lifecycleRef = useRef<ManagedNodeClientLifecycle<TyrumClient> | null>(null);
   const retry = useCallback(() => {
     setReloadVersion((current) => current + 1);
   }, []);
@@ -125,26 +127,16 @@ export function useMobileNode(options: UseMobileNodeOptions): {
     null,
   );
 
-  const publishCapabilityState = useCallback(
-    async (client: TyrumClient) => {
-      const capabilityStates = toNodeCapabilityStates(platform, actionStatesRef.current);
-      await client.capabilityReady({
-        capabilities: capabilityStates.map((capabilityState) => capabilityState.capability),
-        capability_states: capabilityStates,
-      });
-    },
-    [platform],
-  );
-
   useEffect(() => {
-    const client = clientRef.current;
-    if (!client || status !== "connected" || !enabled) return;
-    void publishCapabilityState(client);
-  }, [actionStates, enabled, publishCapabilityState, status]);
+    const lifecycle = lifecycleRef.current;
+    if (!lifecycle || status !== "connected" || !enabled) return;
+    void lifecycle.publishCapabilityState();
+  }, [actionStates, enabled, status]);
 
   useEffect(() => {
     if (!wsUrl || !token || !enabled) {
-      clientRef.current?.disconnect();
+      lifecycleRef.current?.dispose();
+      lifecycleRef.current = null;
       clientRef.current = null;
       setStatus("disconnected");
       setDeviceId(null);
@@ -157,7 +149,8 @@ export function useMobileNode(options: UseMobileNodeOptions): {
     }
 
     if (!Capacitor.isNativePlatform()) {
-      clientRef.current?.disconnect();
+      lifecycleRef.current?.dispose();
+      lifecycleRef.current = null;
       clientRef.current = null;
       setStatus("disconnected");
       setDeviceId(null);
@@ -211,53 +204,60 @@ export function useMobileNode(options: UseMobileNodeOptions): {
         },
       });
       locationStreamRef.current = locationStream;
-      autoExecute(client, [provider]);
-
-      const onConnected = () => {
-        if (disposed) return;
-        setStatus("connected");
-        setError(null);
-        void publishCapabilityState(client);
-      };
-      const onDisconnected = () => {
-        if (disposed) return;
-        void locationStream.stop();
-        setStatus("disconnected");
-      };
-      const onTransportError = (event: unknown) => {
-        if (disposed) return;
-        const message =
-          event && typeof event === "object" && "message" in event
-            ? (event as { message?: unknown }).message
-            : undefined;
-        if (typeof message === "string" && message.trim().length > 0) {
-          setError(message);
-        }
-      };
-
-      client.on("connected", onConnected);
-      client.on("disconnected", onDisconnected);
-      client.on("transport_error", onTransportError);
-      client.connect();
+      const lifecycle = createManagedNodeClientLifecycle({
+        client,
+        providers: [provider],
+        getCapabilityReadyPayload: () => {
+          const capabilityStates = toNodeCapabilityStates(platform, actionStatesRef.current);
+          return {
+            capabilities: capabilityStates.map((capabilityState) => capabilityState.capability),
+            capability_states: capabilityStates,
+          };
+        },
+        onConnected: () => {
+          if (disposed) return;
+          setStatus("connected");
+          setError(null);
+        },
+        onDisconnected: () => {
+          if (disposed) return;
+          void locationStream.stop();
+          setStatus("disconnected");
+        },
+        onTransportError: (event) => {
+          if (disposed) return;
+          const message = event.message;
+          if (typeof message === "string" && message.trim().length > 0) {
+            setError(message);
+          }
+        },
+        onDispose: () => {
+          void locationStream.stop();
+          if (locationStreamRef.current === locationStream) {
+            locationStreamRef.current = null;
+          }
+        },
+      });
+      lifecycleRef.current = lifecycle;
+      lifecycle.connect();
 
       if (disposed) {
-        client.off("connected", onConnected);
-        client.off("disconnected", onDisconnected);
-        client.off("transport_error", onTransportError);
+        lifecycle.dispose();
+        lifecycleRef.current = null;
         void locationStream.stop();
-        client.disconnect();
         locationStreamRef.current = null;
       }
     })();
 
     return () => {
       disposed = true;
+      lifecycleRef.current?.dispose();
+      lifecycleRef.current = null;
       void locationStreamRef.current?.stop();
-      clientRef.current?.disconnect();
       clientRef.current = null;
       locationStreamRef.current = null;
     };
-  }, [enabled, platform, publishCapabilityState, reloadVersion, token, wsUrl]);
+  }, [enabled, platform, reloadVersion, token, wsUrl]);
 
   useEffect(() => {
     const locationStream = locationStreamRef.current;

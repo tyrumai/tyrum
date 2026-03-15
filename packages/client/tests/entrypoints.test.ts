@@ -9,9 +9,13 @@ describe("@tyrum/client entrypoints", () => {
   it("keeps browser-only storage helpers off the node entrypoint", async () => {
     const browserEntry = (await import("../src/browser.js")) as Record<string, unknown>;
     const nodeEntry = (await import("../src/node.js")) as Record<string, unknown>;
+    const rootEntry = (await import("../src/index.js")) as Record<string, unknown>;
 
     expect(typeof browserEntry["createBrowserLocalStorageDeviceIdentityStorage"]).toBe("function");
+    expect(typeof browserEntry["createManagedNodeClientLifecycle"]).toBe("function");
     expect("createBrowserLocalStorageDeviceIdentityStorage" in nodeEntry).toBe(false);
+    expect("createManagedNodeClientLifecycle" in nodeEntry).toBe(false);
+    expect("createManagedNodeClientLifecycle" in rootEntry).toBe(false);
   });
 
   it("re-exports the shared SDK version across public entrypoints", async () => {

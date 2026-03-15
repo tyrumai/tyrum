@@ -1,6 +1,7 @@
 import type { ModelMessage } from "ai";
 import type { ToolDescriptor } from "../tools.js";
 import { collectSecretHandleIds } from "../../secret/collect-secret-handle-ids.js";
+import { createSecretHandleResolver } from "../../secret/handle-resolver.js";
 import { canonicalizeToolMatchTarget } from "../../policy/match-target.js";
 import { suggestedOverridesForToolCall } from "../../policy/suggested-overrides.js";
 import { hasToolResult } from "../../ai-sdk/message-utils.js";
@@ -215,11 +216,9 @@ async function resolveSecretScopes(
     return undefined;
   }
 
-  const handles = await deps.secretProvider.list();
-  const secretScopes = handleIds.map((id) => {
-    const handle = handles.find((candidate) => candidate.handle_id === id);
-    return handle?.scope ? `${handle.provider}:${handle.scope}` : id;
-  });
+  const secretScopes = await createSecretHandleResolver(deps.secretProvider).resolveScopes(
+    handleIds,
+  );
   return secretScopes.length > 0 ? secretScopes : undefined;
 }
 

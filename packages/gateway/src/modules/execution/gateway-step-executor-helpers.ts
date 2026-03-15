@@ -1,7 +1,6 @@
 import type {
   Decision as DecisionT,
   PolicyBundle as PolicyBundleT,
-  SecretHandle as SecretHandleT,
 } from "@tyrum/schemas";
 import { PolicyBundle } from "@tyrum/schemas";
 import type { GatewayContainer } from "../../container.js";
@@ -21,6 +20,7 @@ import {
   normalizeUrlForPolicy,
 } from "../policy/domain.js";
 import { collectSecretHandleIds } from "../secret/collect-secret-handle-ids.js";
+import { createSecretHandleResolver } from "../secret/handle-resolver.js";
 import type { SecretProvider } from "../secret/provider.js";
 import { coerceRecord, coerceStringRecord } from "../util/coerce.js";
 import { coerceModelMessages } from "../ai-sdk/message-utils.js";
@@ -103,26 +103,14 @@ export async function resolveSecretScopesFromArgs(
   if (handleIds.length === 0) return [];
   if (!secretProvider) return handleIds;
 
-  let handles: SecretHandleT[];
   try {
-    handles = await secretProvider.list();
+    return await createSecretHandleResolver(secretProvider).resolveScopes(handleIds);
   } catch (err) {
     // Intentional: if the secret provider fails, fall back to handle IDs so the policy
     // engine still sees the secret references (but not resolved values).
     void err;
     return handleIds;
   }
-
-  const out: string[] = [];
-  for (const id of handleIds) {
-    const handle = handles.find((h) => h.handle_id === id);
-    if (handle?.scope) {
-      out.push(`${handle.provider}:${handle.scope}`);
-    } else {
-      out.push(id);
-    }
-  }
-  return out;
 }
 
 export async function evaluateToolCallDecision(input: {

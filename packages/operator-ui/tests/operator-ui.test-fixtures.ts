@@ -16,6 +16,7 @@ import {
   samplePairingRequestApproved,
   samplePairingRequestPending,
   samplePairingRequestPendingWithNodeCapabilities,
+  sampleNodeInventoryResponse,
   samplePresenceResponse,
   sampleStatusResponse,
   sampleUsageResponse,
@@ -24,7 +25,6 @@ import {
   createModelConfigHttpFixtures,
   createProviderConfigHttpFixtures,
 } from "./operator-ui.admin-http-fixtures.js";
-import { sampleNodeInventoryResponse } from "./operator-ui.http-fixture-data.js";
 import { createExtensionsHttpFixtures } from "./operator-ui.extensions-http-fixtures.js";
 export { FakeWsClient } from "./operator-ui.ws-test-fixtures.js";
 
@@ -38,6 +38,7 @@ export {
   sampleUsageResponse,
   sampleAgentStatusResponse,
   samplePresenceResponse,
+  sampleNodeInventoryResponse,
   samplePairingRequestPending,
   samplePairingRequestPendingWithNodeCapabilities,
   samplePairingRequestApproved,

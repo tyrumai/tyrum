@@ -1,9 +1,10 @@
 import {
-  autoExecute,
   createBrowserLocalStorageDeviceIdentityStorage,
+  createManagedNodeClientLifecycle,
   formatDeviceIdentityError,
   loadOrCreateDeviceIdentity,
   TyrumClient,
+  type ManagedNodeClientLifecycle,
   type TaskResult,
 } from "@tyrum/client/browser";
 import { BrowserActionArgs, capabilityDescriptorsForClientCapability } from "@tyrum/schemas";
@@ -151,14 +152,8 @@ export function BrowserNodeProvider({
   }, []);
 
   const clientRef = useRef<TyrumClient | null>(null);
+  const lifecycleRef = useRef<ManagedNodeClientLifecycle<TyrumClient> | null>(null);
   const providerRef = useRef<ReturnType<typeof createBrowserCapabilityProvider> | null>(null);
-  const publishCapabilityState = useCallback(async (client: TyrumClient) => {
-    const nodeCapabilityStates = toNodeCapabilityStates(capabilityStatesRef.current);
-    await client.capabilityReady({
-      capabilities: nodeCapabilityStates.map((capabilityState) => capabilityState.capability),
-      capability_states: nodeCapabilityStates,
-    });
-  }, []);
 
   const setEnabled = useCallback((next: boolean) => {
     setEnabledState(next);
@@ -181,10 +176,9 @@ export function BrowserNodeProvider({
       setDeviceId(null);
       clearConsentQueue();
 
-      if (clientRef.current) {
-        clientRef.current.disconnect();
-        clientRef.current = null;
-      }
+      lifecycleRef.current?.dispose();
+      lifecycleRef.current = null;
+      clientRef.current = null;
       providerRef.current = null;
       return;
     }
@@ -258,46 +252,46 @@ export function BrowserNodeProvider({
         },
       };
       providerRef.current = provider;
-      autoExecute(client, [provider]);
-
-      const onConnected = (evt: unknown) => {
-        if (disposed) return;
-        const cid =
-          evt && typeof evt === "object" && "clientId" in evt
-            ? (evt as { clientId?: unknown }).clientId
-            : undefined;
-        setClientId(typeof cid === "string" ? cid : null);
-        setStatus("connected");
-        void publishCapabilityState(client);
-      };
-
-      const onDisconnected = () => {
-        if (disposed) return;
-        setClientId(null);
-        setStatus(enabledRef.current ? "disconnected" : "disabled");
-      };
-
-      const onTransportError = (evt: unknown) => {
-        if (disposed) return;
-        const message =
-          evt && typeof evt === "object" && "message" in evt
-            ? (evt as { message?: unknown }).message
-            : undefined;
-        if (typeof message === "string" && message.trim().length > 0) {
-          setError(message);
-        }
-      };
-
-      client.on("connected", onConnected);
-      client.on("disconnected", onDisconnected);
-      client.on("transport_error", onTransportError);
-      client.connect();
+      const lifecycle = createManagedNodeClientLifecycle({
+        client,
+        providers: [provider],
+        getCapabilityReadyPayload: () => {
+          const nodeCapabilityStates = toNodeCapabilityStates(capabilityStatesRef.current);
+          return {
+            capabilities: nodeCapabilityStates.map((capabilityState) => capabilityState.capability),
+            capability_states: nodeCapabilityStates,
+          };
+        },
+        onConnected: (event) => {
+          if (disposed) return;
+          setClientId(event.clientId);
+          setStatus("connected");
+        },
+        onDisconnected: () => {
+          if (disposed) return;
+          setClientId(null);
+          setStatus(enabledRef.current ? "disconnected" : "disabled");
+        },
+        onTransportError: (event) => {
+          if (disposed) return;
+          const message = event.message;
+          if (typeof message === "string" && message.trim().length > 0) {
+            setError(message);
+          }
+        },
+        onDispose: () => {
+          clearConsentQueue();
+          if (providerRef.current === provider) {
+            providerRef.current = null;
+          }
+        },
+      });
+      lifecycleRef.current = lifecycle;
+      lifecycle.connect();
 
       if (disposed) {
-        client.off("connected", onConnected);
-        client.off("disconnected", onDisconnected);
-        client.off("transport_error", onTransportError);
-        client.disconnect();
+        lifecycle.dispose();
+        lifecycleRef.current = null;
         return;
       }
     })();
@@ -305,18 +299,18 @@ export function BrowserNodeProvider({
     return () => {
       disposed = true;
       clearConsentQueue();
-      if (clientRef.current) {
-        clientRef.current.disconnect();
-        clientRef.current = null;
-      }
+      lifecycleRef.current?.dispose();
+      lifecycleRef.current = null;
+      clientRef.current = null;
       providerRef.current = null;
     };
-  }, [clearConsentQueue, enabled, publishCapabilityState, requestConsent, wsUrl]);
+  }, [clearConsentQueue, enabled, requestConsent, wsUrl]);
 
   useEffect(() => {
-    if (!enabled || status !== "connected" || !clientRef.current) return;
-    void publishCapabilityState(clientRef.current);
-  }, [capabilityStates, enabled, publishCapabilityState, status]);
+    const lifecycle = lifecycleRef.current;
+    if (!enabled || status !== "connected" || !lifecycle) return;
+    void lifecycle.publishCapabilityState();
+  }, [capabilityStates, enabled, status]);
 
   const executeLocal = useCallback(async (args: BrowserActionArgs): Promise<TaskResult> => {
     const provider = providerRef.current;

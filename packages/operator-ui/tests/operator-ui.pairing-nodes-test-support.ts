@@ -5,7 +5,7 @@ import { createBearerTokenAuth, createOperatorCore } from "../../operator-core/s
 import { AdminAccessProvider } from "../src/index.js";
 import { PairingPage } from "../src/components/pages/pairing-page.js";
 import { FakeWsClient, createFakeHttpClient } from "./operator-ui.test-fixtures.js";
-import { sampleNodeInventoryResponse } from "./operator-ui.http-fixture-data.js";
+import { sampleNodeInventoryResponse } from "./operator-ui.data-fixtures.js";
 import { TEST_DEVICE_IDENTITY } from "./operator-ui.test-support.js";
 
 const NOOP_ADMIN_ACCESS_CONTROLLER = {

@@ -7,6 +7,7 @@ import type { Logger } from "../../observability/logger.js";
 import type { PolicyService } from "../../policy/service.js";
 import type { SecretProvider } from "../../secret/provider.js";
 import { collectSecretHandleIds } from "../../secret/collect-secret-handle-ids.js";
+import { createSecretHandleResolver } from "../../secret/handle-resolver.js";
 import type { SqlDb } from "../../../statestore/types.js";
 import { ExecutionEngineApprovalManager } from "./approval-manager.js";
 import { ExecutionAttemptRunner, type ExecuteAttemptOptions } from "./attempt-runner.js";
@@ -123,20 +124,7 @@ export class ExecutionEngine {
     }
 
     try {
-      const handles = await secretProvider.list();
-      const byId = new Map(handles.map((h) => [h.handle_id, h]));
-      const scopes = new Set<string>();
-
-      for (const id of handleIds) {
-        const handle = byId.get(id);
-        if (handle?.scope) {
-          scopes.add(`${handle.provider}:${handle.scope}`);
-        } else {
-          scopes.add(id);
-        }
-      }
-
-      return [...scopes];
+      return await createSecretHandleResolver(secretProvider).resolveScopes(handleIds);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       this.logger?.warn("execution.secret_provider_list_failed", {
