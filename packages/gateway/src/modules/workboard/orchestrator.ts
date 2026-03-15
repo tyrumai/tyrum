@@ -4,17 +4,15 @@ import type { Logger } from "../observability/logger.js";
 import type { SqlDb } from "../../statestore/types.js";
 import type { AgentRegistry } from "../agent/registry.js";
 import { WorkboardDal } from "./dal.js";
-import {
-  buildPlannerInstruction,
-  resolveAgentKeyById,
-  runManagedSubagentTurn,
-} from "./orchestration-support.js";
+import { SubagentService } from "./subagent-service.js";
+import { buildPlannerInstruction, runManagedSubagentTurn } from "./orchestration-support.js";
 import { isTerminalTaskState } from "./task-helpers.js";
 
 const DEFAULT_TICK_MS = 1_000;
 
 export class WorkboardOrchestrator {
   private readonly workboard: WorkboardDal;
+  private readonly subagents: SubagentService;
   private readonly scheduler: IntervalScheduler;
 
   constructor(
@@ -28,6 +26,7 @@ export class WorkboardOrchestrator {
     },
   ) {
     this.workboard = new WorkboardDal(opts.db);
+    this.subagents = new SubagentService({ db: opts.db, agents: opts.agents });
     this.scheduler = new IntervalScheduler({
       tickMs: resolvePositiveInt(opts.tickMs, DEFAULT_TICK_MS),
       keepProcessAlive: opts.keepProcessAlive ?? false,
@@ -233,18 +232,17 @@ export class WorkboardOrchestrator {
     }
 
     const subagentId = randomUUID();
-    const agentKey = await resolveAgentKeyById({
-      db: this.opts.db,
-      tenantId: scope.tenant_id,
-      agentId: scope.agent_id,
+    const item = await this.workboard.getItem({
+      scope,
+      work_item_id: workItemId,
     });
-    return await this.workboard.createSubagent({
+    return await this.subagents.createSubagent({
       scope,
       subagentId,
       subagent: {
+        parent_session_key: item?.created_from_session_key,
         work_item_id: workItemId,
         execution_profile: "planner",
-        session_key: `agent:${agentKey}:subagent:${subagentId}`,
         lane: "subagent",
         status: "paused",
       },

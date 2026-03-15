@@ -22,8 +22,6 @@ describe("WorkBoard tool metadata", () => {
   it("marks state-mutating workboard tools as medium risk", () => {
     expect(toolRisk("workboard.item.transition")).toBe("medium");
     expect(toolRisk("workboard.state.set")).toBe("medium");
-    expect(toolRisk("workboard.subagent.send")).toBe("medium");
-    expect(toolRisk("workboard.subagent.close")).toBe("medium");
     expect(toolRisk("workboard.clarification.request")).toBe("medium");
     expect(toolRisk("workboard.clarification.answer")).toBe("medium");
     expect(toolRisk("workboard.clarification.cancel")).toBe("medium");
@@ -35,8 +33,17 @@ describe("WorkBoard tool metadata", () => {
     expect(toolRisk("workboard.clarification.list")).toBe("low");
   });
 
-  it("keeps the interaction profile wildcard allowlist minimal", () => {
-    expect(getExecutionProfile("interaction").tool_allowlist).toEqual(["*"]);
+  it("does not expose workboard.subagent.* in the model-facing workboard registry", () => {
+    expect(toolRisk("workboard.subagent.spawn")).toBeUndefined();
+    expect(toolRisk("workboard.subagent.send")).toBeUndefined();
+    expect(toolRisk("workboard.subagent.close")).toBeUndefined();
+  });
+
+  it("keeps interaction broad while explicitly denying workboard mutators", () => {
+    const profile = getExecutionProfile("interaction");
+    expect(profile.tool_allowlist).toEqual(["*"]);
+    expect(profile.tool_denylist).toContain("workboard.item.update");
+    expect(profile.tool_denylist).toContain("workboard.subagent.*");
   });
 
   it("keeps registry ids and explicit schema ids in exact sync", () => {
@@ -82,15 +89,6 @@ describe("WorkBoard tool metadata", () => {
         provenance_json: expect.any(Object),
       },
       required: ["key"],
-    });
-    expect(expectToolSchema("workboard.subagent.spawn")).toMatchObject({
-      properties: {
-        message: { type: "string" },
-        execution_profile: { type: "string" },
-        work_item_id: { type: "string" },
-        work_item_task_id: { type: "string" },
-      },
-      required: ["message", "execution_profile"],
     });
   });
 });

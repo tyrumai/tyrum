@@ -249,7 +249,7 @@ Standard work at intake:
 After capture:
 
 1. A planner subagent is created for that WorkItem and reused across refinement iterations.
-2. The planner may spawn read-only helper subagents (`explorer_ro`, `reviewer_ro`, `jury`) for bounded side work.
+2. The planner may use `subagent.spawn` to create read-only helper subagents (`explorer_ro`, `reviewer_ro`, `jury`) for bounded side work.
 3. If refinement needs information, it writes a clarification request to the WorkBoard.
 4. The user-facing agent receives a `steer` notification after its next tool boundary, asks the user, and writes the answer back durably.
 5. Once readiness gates pass, the planner moves the WorkItem to `ready`.

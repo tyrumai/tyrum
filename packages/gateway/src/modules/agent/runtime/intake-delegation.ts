@@ -12,6 +12,7 @@ import { getExecutionProfile, normalizeExecutionProfileId } from "../execution-p
 import type { ExecutionProfile, ExecutionProfileId } from "../execution-profiles.js";
 import { IntakeModeOverrideDal } from "../intake-mode-override-dal.js";
 import { WorkboardDal } from "../../workboard/dal.js";
+import { SubagentService } from "../../workboard/subagent-service.js";
 import type { GatewayContainer } from "../../../container.js";
 
 export type ResolvedExecutionProfile = {
@@ -179,6 +180,7 @@ export async function delegateFromIntake(
   const scope = input.scope;
 
   const workboard = new WorkboardDal(deps.container.db);
+  const subagents = new SubagentService({ db: deps.container.db });
 
   const delegatedProfileId: ExecutionProfileId =
     input.mode === "delegate_plan" ? "planner" : "executor_rw";
@@ -213,16 +215,16 @@ export async function delegateFromIntake(
 
   const quota = input.executionProfile.profile.quotas?.max_running_subagents;
   if (quota !== undefined) {
-    const { subagents } = await workboard.listSubagents({
+    const { subagents: runningSubagents } = await workboard.listSubagents({
       scope,
       statuses: ["running"],
       limit: 200,
     });
-    if (subagents.length >= quota) {
+    if (runningSubagents.length >= quota) {
       return {
         reply:
           `Delegated to WorkItem ${workItem.work_item_id} (mode=${input.mode}). ` +
-          `Spawn quota reached (${String(subagents.length)}/${String(quota)}); no subagent spawned.`,
+          `Spawn quota reached (${String(runningSubagents.length)}/${String(quota)}); no subagent spawned.`,
         work_item_id: workItem.work_item_id,
       };
     }
@@ -237,9 +239,10 @@ export async function delegateFromIntake(
     const normalized = agentKey && agentKey.length > 0 ? agentKey : deps.agentId;
     return `agent:${normalized}:subagent:${subagentId}`;
   })();
-  const subagent = await workboard.createSubagent({
+  const subagent = await subagents.createSubagent({
     scope,
     subagent: {
+      parent_session_key: input.createdFromSessionKey,
       execution_profile: delegatedProfileId,
       session_key: sessionKey,
       lane: "subagent",

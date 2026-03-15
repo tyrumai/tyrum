@@ -186,9 +186,9 @@ export function formatWorkOrchestrationPrompt(
       "Use workboard.clarification.request when you need missing information instead of guessing. The main user-facing agent will ask the human and write the answer back.",
     );
   }
-  if (toolIds.has("workboard.subagent.spawn")) {
+  if (toolIds.has("subagent.spawn")) {
     lines.push(
-      "Use workboard.subagent.spawn for bounded helper work. Persist important handoff state through WorkBoard artifacts, decisions, or state keys.",
+      "Use subagent.spawn for bounded helper work. Prefer read-only helpers when possible, and close them when the helper is no longer needed.",
     );
   }
   if (toolIds.has("workboard.item.list") || toolIds.has("workboard.state.list")) {

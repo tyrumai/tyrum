@@ -1,4 +1,5 @@
 import type { ToolDescriptor } from "./tools.js";
+import { SUBAGENT_TOOL_REGISTRY } from "./tool-catalog-subagent.js";
 import { WORKBOARD_TOOL_REGISTRY } from "./tool-catalog-workboard.js";
 
 export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
@@ -461,5 +462,6 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
       additionalProperties: false,
     },
   },
+  ...SUBAGENT_TOOL_REGISTRY,
   ...WORKBOARD_TOOL_REGISTRY,
 ];

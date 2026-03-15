@@ -25,6 +25,7 @@ export const SubagentDescriptor = z
     tenant_id: TenantId,
     agent_id: AgentId,
     workspace_id: WorkspaceId,
+    parent_session_key: z.string().trim().min(1).optional(),
     work_item_id: WorkItemId.optional(),
     work_item_task_id: WorkItemTaskId.optional(),
     execution_profile: z.string().trim().min(1),

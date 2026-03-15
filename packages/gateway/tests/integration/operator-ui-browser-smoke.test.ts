@@ -130,30 +130,34 @@ describe.skipIf(!canRunPlaywright && !isCi)("operator UI real-browser smoke (/ui
 
     try {
       async function ensureOperatorShellVisible(): Promise<void> {
-        const visibleUiState = await Promise.race([
-          page!
-            .waitForSelector('[data-testid="nav-dashboard"]', {
-              state: "visible",
-              timeout: 30_000,
-            })
-            .then(() => "dashboard" as const),
-          page!
-            .waitForSelector('[data-testid="first-run-onboarding"]', {
-              state: "visible",
-              timeout: 30_000,
-            })
-            .then(() => "onboarding" as const),
-        ]);
+        const deadline = Date.now() + 30_000;
+        while (Date.now() <= deadline) {
+          const visibleUiState = await Promise.race([
+            page!
+              .waitForSelector('[data-testid="nav-chat"]', {
+                state: "visible",
+                timeout: 1_000,
+              })
+              .then(() => "shell" as const),
+            page!
+              .waitForSelector('[data-testid="first-run-onboarding"]', {
+                state: "visible",
+                timeout: 1_000,
+              })
+              .then(() => "onboarding" as const),
+          ]).catch(() => null);
 
-        if (visibleUiState === "dashboard") {
-          return;
+          if (visibleUiState === "shell") {
+            return;
+          }
+
+          if (visibleUiState === "onboarding") {
+            await page!.getByRole("button", { name: "Skip setup" }).click();
+            continue;
+          }
         }
 
-        await page!.getByRole("button", { name: "Skip setup" }).click();
-        await page!.waitForSelector('[data-testid="nav-dashboard"]', {
-          state: "visible",
-          timeout: 30_000,
-        });
+        throw new Error("operator shell did not become visible");
       }
 
       async function authorizeAdminAccess(): Promise<void> {
@@ -183,6 +187,8 @@ describe.skipIf(!canRunPlaywright && !isCi)("operator UI real-browser smoke (/ui
         undefined,
         { timeout: 10_000 },
       );
+
+      await ensureOperatorShellVisible();
 
       const finalUrl = new URL(page.url());
       expect(finalUrl.pathname === "/ui" || finalUrl.pathname.startsWith("/ui/")).toBe(true);

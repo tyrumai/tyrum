@@ -1,6 +1,7 @@
-import { randomUUID } from "node:crypto";
 import { LaneQueueSignalDal } from "../lanes/queue-signal-dal.js";
 import { WorkboardDal } from "../workboard/dal.js";
+import { SubagentService } from "../workboard/subagent-service.js";
+import { requireHelperExecutionProfile } from "./subagent-helper-profiles.js";
 import type { ToolExecutionAudit, ToolResult } from "./tool-executor-shared.js";
 import { executeWorkboardCrudTool } from "./tool-executor-workboard-tools-crud.js";
 import {
@@ -13,7 +14,6 @@ import {
   requireDb,
   requireWorkScope,
   resolveClarificationTargetSessionKey,
-  runSubagentTurn,
   type WorkboardToolExecutorContext,
 } from "./tool-executor-workboard-tools-shared.js";
 
@@ -90,6 +90,7 @@ async function executeSubagentSpawnOrSend(
   toolCallId: string,
   toolId: string,
   args: unknown,
+  audit?: ToolExecutionAudit,
 ): Promise<ToolResult> {
   const agents = context.agents;
   if (!agents) {
@@ -97,7 +98,7 @@ async function executeSubagentSpawnOrSend(
   }
   const db = requireDb(context);
   const scope = requireWorkScope(context);
-  const workboard = new WorkboardDal(db);
+  const subagents = new SubagentService({ db, agents });
   const record = asRecord(args);
   const message = readString(record, "message");
   if (!message) {
@@ -105,82 +106,40 @@ async function executeSubagentSpawnOrSend(
   }
 
   if (toolId === "workboard.subagent.spawn") {
-    const executionProfile = readString(record, "execution_profile");
-    if (!executionProfile) {
-      throw new Error("execution_profile is required");
-    }
-    const subagentId = randomUUID();
-    const agentKeyRow = await db.get<{ agent_key: string }>(
-      `SELECT agent_key FROM agents WHERE tenant_id = ? AND agent_id = ?`,
-      [scope.tenant_id, scope.agent_id],
+    const executionProfile = requireHelperExecutionProfile(
+      readString(record, "execution_profile"),
+      { toolId },
     );
-    const agentKey = agentKeyRow?.agent_key?.trim();
-    if (!agentKey) {
-      throw new Error("agent_key not found for work scope");
-    }
-    const subagent = await workboard.createSubagent({
+    const { subagent, reply } = await subagents.spawnAndRunSubagent({
       scope,
-      subagentId,
       subagent: {
+        parent_session_key: audit?.work_session_key?.trim(),
         execution_profile: executionProfile,
-        session_key: `agent:${agentKey}:subagent:${subagentId}`,
         lane: "subagent",
         status: "running",
         work_item_id: readString(record, "work_item_id"),
         work_item_task_id: readString(record, "work_item_task_id"),
       },
+      message,
+      close_on_success: true,
     });
-    try {
-      const reply = await runSubagentTurn({
-        agents,
-        db,
-        scope,
-        subagent,
-        message,
-      });
-      await workboard.markSubagentClosed({ scope, subagent_id: subagent.subagent_id });
-      return jsonResult(toolCallId, {
-        subagent,
-        reply,
-      });
-    } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error);
-      await workboard.markSubagentFailed({
-        scope,
-        subagent_id: subagent.subagent_id,
-        reason,
-      });
-      throw error;
-    }
+    return jsonResult(toolCallId, {
+      subagent,
+      reply,
+    });
   }
 
   const subagentId = readString(record, "subagent_id");
   if (!subagentId) {
     throw new Error("subagent_id is required");
   }
-  const subagent = await workboard.getSubagent({ scope, subagent_id: subagentId });
-  if (!subagent) {
-    throw new Error("subagent not found");
-  }
-  await workboard.updateSubagent({
+  const { reply } = await subagents.sendSubagentMessage({
     scope,
     subagent_id: subagentId,
-    patch: { status: "running" },
+    parent_session_key: audit?.work_session_key?.trim(),
+    message,
   });
-  try {
-    const reply = await runSubagentTurn({
-      agents,
-      db,
-      scope,
-      subagent,
-      message,
-    });
-    return jsonResult(toolCallId, { subagent_id: subagentId, reply });
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error);
-    await workboard.markSubagentFailed({ scope, subagent_id: subagentId, reason });
-    throw error;
-  }
+  return jsonResult(toolCallId, { subagent_id: subagentId, reply });
 }
 
 export async function executeWorkboardTool(
@@ -239,7 +198,7 @@ export async function executeWorkboardTool(
       });
     case "workboard.subagent.spawn":
     case "workboard.subagent.send":
-      return await executeSubagentSpawnOrSend(context, toolCallId, toolId, args);
+      return await executeSubagentSpawnOrSend(context, toolCallId, toolId, args, audit);
     case "workboard.subagent.close":
       return jsonResult(toolCallId, {
         subagent: await workboard.closeSubagent({

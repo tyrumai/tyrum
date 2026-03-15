@@ -13,7 +13,7 @@ import {
 import type { WsResponseEnvelope } from "@tyrum/schemas";
 import type { ConnectedClient } from "../connection-manager.js";
 import { WORKBOARD_WS_AUDIENCE } from "../workboard-audience.js";
-import { WorkboardDal } from "../../modules/workboard/dal.js";
+import { SubagentService } from "../../modules/workboard/subagent-service.js";
 import type { ProtocolDeps, ProtocolRequestEnvelope } from "./types.js";
 import { broadcastEvent, errorResponse, workboardErrorResponse } from "./helpers.js";
 import { ensureWorkScope, resolveExistingWorkScope } from "./workboard-handlers-shared.js";
@@ -54,23 +54,22 @@ export async function handleSubagentMessage(
       });
     }
 
-    const dal = new WorkboardDal(deps.db);
+    const subagents = new SubagentService({ db: deps.db });
     try {
       const payload = parsedReq.data.payload;
       const { scope, keys } = await ensureWorkScope({ deps, tenantId, payload });
       const subagentId = crypto.randomUUID();
-      const sessionKey = `agent:${keys.agentKey}:subagent:${subagentId}`;
-      const subagent = await dal.createSubagent({
+      const subagent = await subagents.createSubagent({
         scope,
+        subagentId,
         subagent: {
           execution_profile: payload.execution_profile,
-          session_key: sessionKey,
+          session_key: `agent:${keys.agentKey}:subagent:${subagentId}`,
           work_item_id: payload.work_item_id,
           work_item_task_id: payload.work_item_task_id,
           lane: "subagent",
           status: "running",
         },
-        subagentId,
       });
 
       broadcastEvent(
@@ -118,17 +117,17 @@ export async function handleSubagentMessage(
       });
     }
 
-    const dal = new WorkboardDal(deps.db);
+    const subagents = new SubagentService({ db: deps.db });
     try {
       const payload = parsedReq.data.payload;
       const { scope } = await resolveExistingWorkScope({ deps, tenantId, payload });
-      const { subagents, next_cursor } = await dal.listSubagents({
+      const { subagents: records, next_cursor } = await subagents.listSubagents({
         scope,
         statuses: payload.statuses,
         limit: payload.limit,
         cursor: payload.cursor,
       });
-      const result = WsSubagentListResult.parse({ subagents, next_cursor });
+      const result = WsSubagentListResult.parse({ subagents: records, next_cursor });
       return { request_id: msg.request_id, type: msg.type, ok: true, result };
     } catch (err) {
       return workboardErrorResponse(msg.request_id, msg.type, err, deps);
@@ -160,11 +159,11 @@ export async function handleSubagentMessage(
       });
     }
 
-    const dal = new WorkboardDal(deps.db);
+    const subagents = new SubagentService({ db: deps.db });
     try {
       const payload = parsedReq.data.payload;
       const { scope } = await resolveExistingWorkScope({ deps, tenantId, payload });
-      const subagent = await dal.getSubagent({ scope, subagent_id: payload.subagent_id });
+      const subagent = await subagents.getSubagent({ scope, subagent_id: payload.subagent_id });
       if (!subagent) {
         return errorResponse(msg.request_id, msg.type, "not_found", "subagent not found");
       }
@@ -200,42 +199,43 @@ export async function handleSubagentMessage(
       });
     }
 
-    const dal = new WorkboardDal(deps.db);
+    const subagents = new SubagentService({ db: deps.db, agents: deps.agents });
     const payload = parsedReq.data.payload;
     let resolved: Awaited<ReturnType<typeof resolveExistingWorkScope>>;
-    let subagent: Awaited<ReturnType<WorkboardDal["getSubagent"]>>;
+    let subagent: Awaited<ReturnType<SubagentService["getSubagent"]>>;
     try {
       resolved = await resolveExistingWorkScope({ deps, tenantId, payload });
-      subagent = await dal.getSubagent({ scope: resolved.scope, subagent_id: payload.subagent_id });
+      subagent = await subagents.getSubagent({
+        scope: resolved.scope,
+        subagent_id: payload.subagent_id,
+      });
     } catch (err) {
       return workboardErrorResponse(msg.request_id, msg.type, err, deps);
     }
     const scope = resolved.scope;
-    const agentKey = resolved.keys.agentKey;
-
     if (!subagent) {
       return errorResponse(msg.request_id, msg.type, "not_found", "subagent not found");
     }
-    if (subagent.status !== "running") {
-      return errorResponse(msg.request_id, msg.type, "invalid_state", "subagent is not running");
+    if (
+      subagent.status === "closing" ||
+      subagent.status === "closed" ||
+      subagent.status === "failed"
+    ) {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "invalid_state",
+        `subagent is ${subagent.status}`,
+      );
     }
 
     void (async () => {
       try {
-        const runtime = await deps.agents!.getRuntime({ tenantId: scope.tenant_id, agentKey });
-        const res = await runtime.turn({
-          channel: "subagent",
-          thread_id: subagent.subagent_id,
+        const res = await subagents.sendSubagentMessage({
+          scope,
+          subagent_id: payload.subagent_id,
           message: payload.content,
-          metadata: {
-            tyrum_key: subagent.session_key,
-            lane: subagent.lane,
-            subagent_id: subagent.subagent_id,
-            ...(subagent.work_item_id ? { work_item_id: subagent.work_item_id } : {}),
-            ...(subagent.work_item_task_id
-              ? { work_item_task_id: subagent.work_item_task_id }
-              : {}),
-          },
+          subagent,
         });
 
         broadcastEvent(
@@ -255,7 +255,7 @@ export async function handleSubagentMessage(
                 ? { work_item_task_id: subagent.work_item_task_id }
                 : {}),
               kind: "final",
-              content: res.reply ?? "",
+              content: res.reply,
             },
           },
           deps,
@@ -272,10 +272,9 @@ export async function handleSubagentMessage(
         });
 
         try {
-          const failed = await dal.markSubagentFailed({
+          const failed = await subagents.getSubagent({
             scope,
             subagent_id: payload.subagent_id,
-            reason: message,
           });
           if (failed) {
             broadcastEvent(
@@ -304,6 +303,7 @@ export async function handleSubagentMessage(
       }
     })();
 
+    await Promise.resolve();
     const result = WsSubagentSendResult.parse({ accepted: true });
     return { request_id: msg.request_id, type: msg.type, ok: true, result };
   }
@@ -333,11 +333,11 @@ export async function handleSubagentMessage(
       });
     }
 
-    const dal = new WorkboardDal(deps.db);
+    const subagents = new SubagentService({ db: deps.db });
     try {
       const payload = parsedReq.data.payload;
       const { scope } = await resolveExistingWorkScope({ deps, tenantId, payload });
-      const closing = await dal.closeSubagent({
+      const closing = await subagents.closeSubagent({
         scope,
         subagent_id: payload.subagent_id,
         reason: payload.reason,
@@ -365,7 +365,7 @@ export async function handleSubagentMessage(
         WORKBOARD_WS_AUDIENCE,
       );
 
-      const closed = await dal.markSubagentClosed({
+      const closed = await subagents.markSubagentClosed({
         scope,
         subagent_id: payload.subagent_id,
       });

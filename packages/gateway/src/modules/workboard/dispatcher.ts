@@ -5,6 +5,7 @@ import type { SqlDb } from "../../statestore/types.js";
 import type { AgentRegistry } from "../agent/registry.js";
 import type { SessionLaneNodeAttachmentDal } from "../agent/session-lane-node-attachment-dal.js";
 import { WorkboardDal } from "./dal.js";
+import { SubagentService } from "./subagent-service.js";
 import {
   buildExecutorInstruction,
   maybeFinalizeWorkItem,
@@ -18,6 +19,7 @@ const DEFAULT_TICK_MS = 1_000;
 
 export class WorkboardDispatcher {
   private readonly workboard: WorkboardDal;
+  private readonly subagents: SubagentService;
   private readonly scheduler: IntervalScheduler;
 
   constructor(
@@ -32,6 +34,7 @@ export class WorkboardDispatcher {
     },
   ) {
     this.workboard = new WorkboardDal(opts.db);
+    this.subagents = new SubagentService({ db: opts.db, agents: opts.agents });
     this.scheduler = new IntervalScheduler({
       tickMs: resolvePositiveInt(opts.tickMs, DEFAULT_TICK_MS),
       keepProcessAlive: opts.keepProcessAlive ?? false,
@@ -162,10 +165,11 @@ export class WorkboardDispatcher {
         })
       : undefined;
 
-    const subagent = await this.workboard.createSubagent({
+    const subagent = await this.subagents.createSubagent({
       scope,
       subagentId,
       subagent: {
+        parent_session_key: item.created_from_session_key,
         work_item_id: workItemId,
         work_item_task_id: executionTask.task.task_id,
         execution_profile:

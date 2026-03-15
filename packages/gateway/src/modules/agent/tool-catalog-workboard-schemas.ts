@@ -47,7 +47,6 @@ const ARTIFACT_KINDS = [
 ] as const;
 const SIGNAL_STATUSES = ["active", "paused", "fired", "resolved", "cancelled"] as const;
 const SIGNAL_TRIGGER_KINDS = ["time", "event"] as const;
-const SUBAGENT_STATUSES = ["running", "paused", "closing", "closed", "failed"] as const;
 const CLARIFICATION_STATUSES = ["open", "answered", "cancelled"] as const;
 const STATE_SCOPE_KINDS = ["agent", "work_item"] as const;
 
@@ -232,37 +231,6 @@ export const WORKBOARD_TOOL_INPUT_SCHEMAS = {
       provenance_json: ANY_JSON_VALUE_SCHEMA,
     },
     ["key"],
-  ),
-  "workboard.subagent.list": objectSchema({
-    statuses: arraySchema(enumSchema(SUBAGENT_STATUSES)),
-    work_item_id: STRING_SCHEMA,
-    work_item_task_id: STRING_SCHEMA,
-    execution_profile: STRING_SCHEMA,
-    ...CURSOR_LIMIT_PROPERTIES,
-  }),
-  "workboard.subagent.get": objectSchema({ subagent_id: STRING_SCHEMA }, ["subagent_id"]),
-  "workboard.subagent.spawn": objectSchema(
-    {
-      message: STRING_SCHEMA,
-      execution_profile: STRING_SCHEMA,
-      work_item_id: STRING_SCHEMA,
-      work_item_task_id: STRING_SCHEMA,
-    },
-    ["message", "execution_profile"],
-  ),
-  "workboard.subagent.send": objectSchema(
-    {
-      subagent_id: STRING_SCHEMA,
-      message: STRING_SCHEMA,
-    },
-    ["subagent_id", "message"],
-  ),
-  "workboard.subagent.close": objectSchema(
-    {
-      subagent_id: STRING_SCHEMA,
-      reason: STRING_SCHEMA,
-    },
-    ["subagent_id"],
   ),
   "workboard.clarification.list": objectSchema({
     work_item_id: STRING_SCHEMA,

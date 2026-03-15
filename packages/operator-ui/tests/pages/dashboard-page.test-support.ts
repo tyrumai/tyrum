@@ -2,7 +2,6 @@ import { vi } from "vitest";
 import type { OperatorCore } from "../../../operator-core/src/index.js";
 import { createStore } from "../../../operator-core/src/store.js";
 import type { ActivityState } from "../../../operator-core/src/stores/activity-store.js";
-import { sampleNodeInventoryResponse } from "../operator-ui.http-fixture-data.js";
 
 const emptyActivityState: ActivityState = {
   agentsById: {},
@@ -20,6 +19,23 @@ function createMockActivityStore() {
     clearSelection: vi.fn(),
     selectWorkstream: vi.fn(),
   };
+}
+
+export function sampleDashboardNodeInventoryResponse() {
+  return {
+    status: "ok",
+    generated_at: "2026-01-01T00:00:00.000Z",
+    nodes: [
+      {
+        node_id: "node-1",
+        label: "my takeover: label (takeover: http://localhost:6080/vnc.html?autoconnect=true)",
+        connected: false,
+        paired_status: "approved",
+        attached_to_requested_lane: false,
+        capabilities: [],
+      },
+    ],
+  } as const;
 }
 
 export function createMockCore(overrides?: Partial<Record<string, unknown>>) {
@@ -74,7 +90,7 @@ export function createMockCore(overrides?: Partial<Record<string, unknown>>) {
   });
 
   const activityStore = createMockActivityStore();
-  const nodesList = vi.fn(async () => sampleNodeInventoryResponse());
+  const nodesList = vi.fn(async () => sampleDashboardNodeInventoryResponse());
 
   const core = {
     connectionStore,

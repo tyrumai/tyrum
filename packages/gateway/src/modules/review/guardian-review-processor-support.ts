@@ -8,6 +8,7 @@ import { toApprovalContract } from "../approval/to-contract.js";
 import type { Logger } from "../observability/logger.js";
 import { DEFAULT_AGENT_KEY, DEFAULT_WORKSPACE_KEY } from "../identity/scope.js";
 import type { WorkboardDal } from "../workboard/dal.js";
+import { SubagentService } from "../workboard/subagent-service.js";
 import { APPROVAL_WS_AUDIENCE, PAIRING_WS_AUDIENCE } from "../../ws/audience.js";
 import { broadcastWsEvent } from "../../ws/broadcast.js";
 import type { PairingApprovedDeliveryDeps } from "../../ws/pairing-approved.js";
@@ -249,7 +250,7 @@ export async function createReviewerSubagent(input: {
 }) {
   const scope = await resolveReviewerScope(input.container, input.tenantId);
   const subagentId = randomUUID();
-  return await input.workboard.createSubagent({
+  return await new SubagentService({ db: input.container.db }).createSubagent({
     scope,
     subagentId,
     subagent: {

@@ -17,6 +17,7 @@ import {
   executeNodeListTool,
 } from "./tool-executor-node-dispatch.js";
 import { executeAutomationScheduleTool } from "./tool-executor-schedule-tools.js";
+import { executeSubagentTool } from "./tool-executor-subagent-tools.js";
 import { executeWorkboardTool } from "./tool-executor-workboard-tools.js";
 import type { McpManager } from "./mcp-manager.js";
 import type { NodeDispatchService } from "./node-dispatch-service.js";
@@ -241,6 +242,20 @@ export class ToolExecutor {
     );
     if (scheduleResult) {
       return scheduleResult;
+    }
+
+    const subagentResult = await executeSubagentTool(
+      {
+        workspaceLease: this.workspaceLease,
+        agents: this.agents,
+      },
+      toolId,
+      toolCallId,
+      args,
+      audit,
+    );
+    if (subagentResult) {
+      return subagentResult;
     }
 
     const workboardResult = await executeWorkboardTool(

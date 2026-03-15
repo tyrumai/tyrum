@@ -7,14 +7,16 @@ import { join } from "node:path";
 import { createStore } from "../../../operator-core/src/store.js";
 import { AppShell } from "../../src/components/layout/app-shell.js";
 import { DashboardPage } from "../../src/components/pages/dashboard-page.js";
-import { sampleNodeInventoryResponse } from "../operator-ui.data-fixtures.js";
 import {
   cleanupTestRoot,
   renderIntoDocument,
   stubAppShellContentWidth,
   stubMatchMedia,
 } from "../test-utils.js";
-import { createMockCore } from "./dashboard-page.test-support.js";
+import {
+  createMockCore,
+  sampleDashboardNodeInventoryResponse,
+} from "./dashboard-page.test-support.js";
 
 describe("DashboardPage", () => {
   afterEach(() => {
@@ -206,7 +208,7 @@ describe("DashboardPage", () => {
   });
 
   it("counts connected nodes from live node inventory instead of presence entries", async () => {
-    const liveInventory = sampleNodeInventoryResponse();
+    const liveInventory = sampleDashboardNodeInventoryResponse();
     const { store: statusStore } = createStore({
       status: {
         version: "1.0.0",
