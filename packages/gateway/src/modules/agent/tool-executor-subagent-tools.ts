@@ -1,4 +1,5 @@
 import { SubagentService } from "../workboard/subagent-service.js";
+import { requireHelperExecutionProfile } from "./subagent-helper-profiles.js";
 import type { ToolExecutionAudit, ToolResult } from "./tool-executor-shared.js";
 import {
   asRecord,
@@ -11,27 +12,12 @@ import {
   type WorkboardToolExecutorContext,
 } from "./tool-executor-workboard-tools-shared.js";
 
-const HELPER_EXECUTION_PROFILES = new Set(["explorer_ro", "reviewer_ro", "jury"]);
-
 function requireParentSessionKey(audit?: ToolExecutionAudit): string {
   const sessionKey = audit?.work_session_key?.trim();
   if (!sessionKey) {
     throw new Error("subagent tools require an active work_session_key");
   }
   return sessionKey;
-}
-
-function requireHelperExecutionProfile(raw: string | undefined): string {
-  const executionProfile = raw?.trim();
-  if (!executionProfile) {
-    throw new Error("execution_profile is required");
-  }
-  if (!HELPER_EXECUTION_PROFILES.has(executionProfile)) {
-    throw new Error(
-      `execution_profile must be one of: ${Array.from(HELPER_EXECUTION_PROFILES).join(", ")}`,
-    );
-  }
-  return executionProfile;
 }
 
 export async function executeSubagentTool(

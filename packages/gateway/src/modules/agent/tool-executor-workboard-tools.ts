@@ -1,6 +1,7 @@
 import { LaneQueueSignalDal } from "../lanes/queue-signal-dal.js";
 import { WorkboardDal } from "../workboard/dal.js";
 import { SubagentService } from "../workboard/subagent-service.js";
+import { requireHelperExecutionProfile } from "./subagent-helper-profiles.js";
 import type { ToolExecutionAudit, ToolResult } from "./tool-executor-shared.js";
 import { executeWorkboardCrudTool } from "./tool-executor-workboard-tools-crud.js";
 import {
@@ -15,24 +16,6 @@ import {
   resolveClarificationTargetSessionKey,
   type WorkboardToolExecutorContext,
 } from "./tool-executor-workboard-tools-shared.js";
-
-const HELPER_EXECUTION_PROFILES = new Set(["explorer_ro", "reviewer_ro", "jury"]);
-
-function requireHelperExecutionProfile(
-  executionProfile: string | undefined,
-  toolId: string,
-): string {
-  const normalized = executionProfile?.trim();
-  if (!normalized) {
-    throw new Error("execution_profile is required");
-  }
-  if (!HELPER_EXECUTION_PROFILES.has(normalized)) {
-    throw new Error(
-      `${toolId} execution_profile must be one of: ${Array.from(HELPER_EXECUTION_PROFILES).join(", ")}`,
-    );
-  }
-  return normalized;
-}
 
 async function createCapture(
   context: WorkboardToolExecutorContext,
@@ -125,7 +108,7 @@ async function executeSubagentSpawnOrSend(
   if (toolId === "workboard.subagent.spawn") {
     const executionProfile = requireHelperExecutionProfile(
       readString(record, "execution_profile"),
-      toolId,
+      { toolId },
     );
     const { subagent, reply } = await subagents.spawnAndRunSubagent({
       scope,

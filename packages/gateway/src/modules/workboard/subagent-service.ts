@@ -114,11 +114,21 @@ export class SubagentService {
     }
 
     if (subagent.status !== "running") {
-      await this.workboard.updateSubagent({
-        scope: params.scope,
-        subagent_id: params.subagent_id,
-        patch: { status: "running" },
-      });
+      try {
+        await this.workboard.updateSubagent({
+          scope: params.scope,
+          subagent_id: params.subagent_id,
+          patch: { status: "running" },
+        });
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        await this.workboard.markSubagentFailed({
+          scope: params.scope,
+          subagent_id: params.subagent_id,
+          reason,
+        });
+        throw error;
+      }
     }
 
     try {

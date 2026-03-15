@@ -1,10 +1,11 @@
+import { HELPER_EXECUTION_PROFILES } from "./subagent-helper-profiles.js";
+
 type JsonSchema = Record<string, unknown>;
 type ObjectProperties = Record<string, JsonSchema>;
 
 const STRING_SCHEMA = { type: "string" } as const;
 const NUMBER_SCHEMA = { type: "number" } as const;
 const SUBAGENT_STATUSES = ["running", "paused", "closing", "closed", "failed"] as const;
-const HELPER_EXECUTION_PROFILES = ["explorer_ro", "reviewer_ro", "jury"] as const;
 
 function enumSchema(values: readonly string[]): JsonSchema {
   return {
