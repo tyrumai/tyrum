@@ -10,6 +10,32 @@ import { JsonViewer } from "../../ui/json-viewer.js";
 import { Switch } from "../../ui/switch.js";
 import { useClipboard } from "../../../utils/clipboard.js";
 
+function describeEffectiveCapabilityState(input: {
+  executorEnabled: boolean;
+  capabilityEnabled: boolean;
+  availabilityStatus: string;
+}): string {
+  if (!input.executorEnabled) {
+    return input.capabilityEnabled
+      ? "inactive until the browser executor is enabled"
+      : "inactive while the browser executor is disabled";
+  }
+  if (!input.capabilityEnabled) {
+    return "disabled";
+  }
+
+  switch (input.availabilityStatus) {
+    case "available":
+      return "active";
+    case "unknown":
+      return "waiting for browser permission or runtime checks";
+    case "unavailable":
+      return "enabled but unavailable in this browser";
+    default:
+      return input.availabilityStatus;
+  }
+}
+
 export function BrowserCapabilitiesPage() {
   const browserNode = useBrowserNode();
   const clipboard = useClipboard();
@@ -77,7 +103,7 @@ export function BrowserCapabilitiesPage() {
           </div>
 
           <div className="text-sm text-fg-muted">
-            Status <span className="font-medium text-fg">{browserNode.status}</span>
+            Executor status <span className="font-medium text-fg">{browserNode.status}</span>
           </div>
 
           {browserNode.deviceId ? (
@@ -137,12 +163,22 @@ export function BrowserCapabilitiesPage() {
                     <div className="text-sm font-medium text-fg">{entry.label}</div>
                     <div className="text-sm text-fg-muted">{entry.description}</div>
                     <div className="text-xs text-fg-muted">
-                      Status{" "}
+                      Configured{" "}
                       <span className="font-medium text-fg">
                         {state.enabled ? "enabled" : "disabled"}
                       </span>
-                      {" · "}
+                    </div>
+                    <div className="text-xs text-fg-muted">
+                      Effective{" "}
                       <span className="font-medium text-fg">{state.availability_status}</span>
+                      {" · "}
+                      <span className="font-medium text-fg">
+                        {describeEffectiveCapabilityState({
+                          executorEnabled: browserNode.enabled,
+                          capabilityEnabled: state.enabled,
+                          availabilityStatus: state.availability_status,
+                        })}
+                      </span>
                     </div>
                     {state.unavailable_reason ? (
                       <div className="text-xs text-danger">{state.unavailable_reason}</div>
@@ -166,6 +202,13 @@ export function BrowserCapabilitiesPage() {
       <Card>
         <CardContent className="grid gap-4 pt-6">
           <div className="text-sm font-semibold text-fg">Test actions</div>
+          {!browserNode.enabled ? (
+            <Alert
+              variant="info"
+              title="Enable the browser executor to run tests"
+              description="Capability toggles are saved, but local capability checks stay inactive until the browser node executor is enabled."
+            />
+          ) : null}
           <div className="flex flex-wrap gap-2">
             <Button
               variant="outline"

@@ -15,7 +15,9 @@ import {
 import { useApiAction } from "../../hooks/use-api-action.js";
 import { AppPage } from "../layout/app-page.js";
 import {
+  AdminAccessGateCard,
   AdminMutationGate,
+  isAdminAccessHttpError,
   useAdminHttpClient,
   useAdminMutationAccess,
   type AdminHttpClient,
@@ -26,6 +28,8 @@ function toErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message.length > 0) return error.message;
   return String(error);
 }
+
+type RefreshResult = "admin-access-required" | "error" | "ok" | "stale";
 
 export function DesktopEnvironmentsPage({ core }: { core: OperatorCore }) {
   const adminHttp = useAdminHttpClient({ access: "strict" });
@@ -40,6 +44,7 @@ export function DesktopEnvironmentsPage({ core }: { core: OperatorCore }) {
   const [environments, setEnvironments] = useState<readonly DesktopEnvironment[]>([]);
   const [environmentsLoading, setEnvironmentsLoading] = useState(false);
   const [environmentsError, setEnvironmentsError] = useState<string | null>(null);
+  const [requiresAdminAccess, setRequiresAdminAccess] = useState(false);
   const [logsById, setLogsById] = useState<Record<string, DesktopEnvironmentLogsState | undefined>>(
     {},
   );
@@ -86,17 +91,34 @@ export function DesktopEnvironmentsPage({ core }: { core: OperatorCore }) {
     setSelectedEnvironmentId(environments[0]?.environment_id ?? null);
   }, [environments, pendingSelectedEnvironmentId, selectedEnvironmentId]);
 
-  async function refreshHosts(httpClient: AdminHttpClient): Promise<void> {
+  async function refreshHosts(
+    httpClient: AdminHttpClient,
+    options: { updateAdminAccess?: boolean } = {},
+  ): Promise<RefreshResult> {
+    const updateAdminAccess = options.updateAdminAccess ?? true;
     setHostsLoading(true);
     setHostsError(null);
     try {
       const result = await httpClient.desktopEnvironmentHosts.list();
-      if (adminHttpRef.current !== httpClient) return;
+      if (adminHttpRef.current !== httpClient) return "stale";
       setHosts(result.hosts);
       setHostsError(null);
+      if (updateAdminAccess) {
+        setRequiresAdminAccess(false);
+      }
+      return "ok";
     } catch (error) {
-      if (adminHttpRef.current !== httpClient) return;
+      if (adminHttpRef.current !== httpClient) return "stale";
+      if (isAdminAccessHttpError(error)) {
+        core.elevatedModeStore.exit();
+        if (updateAdminAccess) {
+          setRequiresAdminAccess(true);
+        }
+        setHostsError(null);
+        return "admin-access-required";
+      }
       setHostsError(toErrorMessage(error));
+      return "error";
     } finally {
       if (adminHttpRef.current === httpClient) {
         setHostsLoading(false);
@@ -104,12 +126,16 @@ export function DesktopEnvironmentsPage({ core }: { core: OperatorCore }) {
     }
   }
 
-  async function refreshEnvironments(httpClient: AdminHttpClient): Promise<void> {
+  async function refreshEnvironments(
+    httpClient: AdminHttpClient,
+    options: { updateAdminAccess?: boolean } = {},
+  ): Promise<RefreshResult> {
+    const updateAdminAccess = options.updateAdminAccess ?? true;
     setEnvironmentsLoading(true);
     setEnvironmentsError(null);
     try {
       const result = await httpClient.desktopEnvironments.list();
-      if (adminHttpRef.current !== httpClient) return;
+      if (adminHttpRef.current !== httpClient) return "stale";
       setEnvironments(result.environments);
       setLogsById((current) =>
         Object.fromEntries(
@@ -120,9 +146,22 @@ export function DesktopEnvironmentsPage({ core }: { core: OperatorCore }) {
         ),
       );
       setEnvironmentsError(null);
+      if (updateAdminAccess) {
+        setRequiresAdminAccess(false);
+      }
+      return "ok";
     } catch (error) {
-      if (adminHttpRef.current !== httpClient) return;
+      if (adminHttpRef.current !== httpClient) return "stale";
+      if (isAdminAccessHttpError(error)) {
+        core.elevatedModeStore.exit();
+        if (updateAdminAccess) {
+          setRequiresAdminAccess(true);
+        }
+        setEnvironmentsError(null);
+        return "admin-access-required";
+      }
       setEnvironmentsError(toErrorMessage(error));
+      return "error";
     } finally {
       if (adminHttpRef.current === httpClient) {
         setEnvironmentsLoading(false);
@@ -131,7 +170,18 @@ export function DesktopEnvironmentsPage({ core }: { core: OperatorCore }) {
   }
 
   async function refreshPageData(httpClient: AdminHttpClient): Promise<void> {
-    await Promise.all([refreshHosts(httpClient), refreshEnvironments(httpClient)]);
+    const [hostsResult, environmentsResult] = await Promise.all([
+      refreshHosts(httpClient, { updateAdminAccess: false }),
+      refreshEnvironments(httpClient, { updateAdminAccess: false }),
+    ]);
+    if (adminHttpRef.current !== httpClient) {
+      return;
+    }
+    if (hostsResult === "admin-access-required" || environmentsResult === "admin-access-required") {
+      setRequiresAdminAccess(true);
+      return;
+    }
+    setRequiresAdminAccess(false);
   }
 
   useEffect(() => {
@@ -294,7 +344,13 @@ export function DesktopEnvironmentsPage({ core }: { core: OperatorCore }) {
         mutationError={mutation.error ? toErrorMessage(mutation.error) : null}
       />
 
-      {!adminHttp ? (
+      {requiresAdminAccess ? (
+        <AdminAccessGateCard
+          title="Authorize admin access to load desktop environments"
+          description="Desktop environment hosts, environments, and mutations require temporary admin access."
+          onAuthorize={requestEnter}
+        />
+      ) : !adminHttp ? (
         <AdminMutationGate
           core={core}
           title="Authorize admin access to load desktop environments"

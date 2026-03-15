@@ -5,8 +5,6 @@ import { Bot, Inbox, Play, ShieldCheck, SquareKanban } from "lucide-react";
 import { AppPage } from "../layout/app-page.js";
 import { useAppShellMinWidth } from "../layout/app-shell.js";
 import { Alert } from "../ui/alert.js";
-import { Badge } from "../ui/badge.js";
-import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { EmptyState } from "../ui/empty-state.js";
 import { LiveRegion } from "../ui/live-region.js";
@@ -21,6 +19,7 @@ import {
 import { useOperatorStore } from "../../use-operator-store.js";
 import {
   ActivityFeedItem,
+  ConfigHealthCard,
   KpiCard,
   StatusRow,
   WorkDistributionBar,
@@ -28,18 +27,7 @@ import {
 } from "./dashboard-page.parts.js";
 import { useNodeInventory } from "./pairing-page.inventory.js";
 
-type ConfigHealthIssue = NonNullable<StatusResponse["config_health"]>["issues"][number];
 const DASHBOARD_WIDE_CONTENT_WIDTH_PX = 768;
-
-function getConfigHealthAction(issue: ConfigHealthIssue): {
-  label: "Configure" | "Agents";
-  routeId: "configure" | "agents";
-} {
-  if (issue.target.kind === "agent") {
-    return { label: "Agents", routeId: "agents" };
-  }
-  return { label: "Configure", routeId: "configure" };
-}
 
 function getPolicyModeLabel(status: StatusResponse | null): string {
   if (status?.sandbox) return status.sandbox.mode;
@@ -235,66 +223,12 @@ export function DashboardPage({
         ))}
 
       {configHealthIssues.length > 0 ? (
-        <Card data-testid="dashboard-config-health">
-          <CardHeader className="pb-2.5">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="grid gap-1">
-                <h3 className="text-sm font-semibold">Configuration Health</h3>
-                <div className="text-sm text-fg-muted">
-                  Resolve configuration issues before agents can run reliably.
-                </div>
-              </div>
-              {onboardingAvailable && onOpenOnboarding ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  data-testid="dashboard-resume-setup"
-                  onClick={() => {
-                    onOpenOnboarding();
-                  }}
-                >
-                  Resume Setup
-                </Button>
-              ) : null}
-            </div>
-          </CardHeader>
-          <CardContent className="grid gap-3">
-            {configHealthIssues.map((issue, index) => {
-              const action = getConfigHealthAction(issue);
-              return (
-                <div
-                  key={`${issue.code}:${issue.target.kind}:${issue.target.id ?? "deployment"}:${index}`}
-                  className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-border/70 px-3 py-3"
-                >
-                  <div className="grid gap-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant={issue.severity === "error" ? "danger" : "warning"}>
-                        {issue.severity}
-                      </Badge>
-                      <div className="text-sm font-medium text-fg">{issue.message}</div>
-                    </div>
-                    {issue.target.id ? (
-                      <div className="text-xs text-fg-muted">
-                        {issue.target.kind === "agent" ? "Agent" : "Target"}: {issue.target.id}
-                      </div>
-                    ) : null}
-                  </div>
-                  {onNavigate ? (
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => onNavigate(action.routeId)}
-                    >
-                      {action.label}
-                    </Button>
-                  ) : null}
-                </div>
-              );
-            })}
-          </CardContent>
-        </Card>
+        <ConfigHealthCard
+          issues={configHealthIssues}
+          onNavigate={onNavigate}
+          onboardingAvailable={onboardingAvailable}
+          onOpenOnboarding={onOpenOnboarding}
+        />
       ) : null}
 
       {/* KPI Grid */}

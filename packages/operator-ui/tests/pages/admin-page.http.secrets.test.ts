@@ -2,6 +2,7 @@
 
 import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { stubAdminHttpFetch } from "../admin-http-fetch-test-support.js";
 import { setNativeValue } from "../test-utils.js";
 import {
   cleanupAdminHttpPage,
@@ -61,6 +62,7 @@ describe("ConfigurePage (HTTP) secrets", () => {
       ],
     }));
     core.http.secrets.list = listSecrets as typeof core.http.secrets.list;
+    stubAdminHttpFetch(core);
 
     const page = renderAdminHttpConfigurePage(core);
     await switchHttpTab(page.container, "admin-http-tab-secrets");
@@ -108,7 +110,7 @@ describe("ConfigurePage (HTTP) secrets", () => {
     });
     core.http.secrets.list = listSecrets as typeof core.http.secrets.list;
 
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const { writeSpy } = stubAdminHttpFetch(core, async (input: RequestInfo | URL, init) => {
       expectAuthorizedJsonRequest(input, init, {
         url: "http://example.test/secrets",
         method: "POST",
@@ -124,7 +126,6 @@ describe("ConfigurePage (HTTP) secrets", () => {
         201,
       );
     });
-    vi.stubGlobal("fetch", fetchMock);
 
     const page = renderAdminHttpConfigurePage(core);
     await switchHttpTab(page.container, "admin-http-tab-secrets");
@@ -148,7 +149,7 @@ describe("ConfigurePage (HTTP) secrets", () => {
     await clickAndFlush(confirmButton);
     await flush();
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(writeSpy).toHaveBeenCalledTimes(1);
     expect(listSecrets).toHaveBeenCalledTimes(2);
     expect(page.container.querySelector("[data-testid='secret-row-gamma']")).not.toBeNull();
     expect(page.container.textContent).toContain('Stored secret "gamma".');
@@ -162,7 +163,7 @@ describe("ConfigurePage (HTTP) secrets", () => {
       handles: [createSecretHandle({ handle_id: "h-1" })],
     })) as typeof core.http.secrets.list;
 
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const { writeSpy } = stubAdminHttpFetch(core, async (input: RequestInfo | URL, init) => {
       expectAuthorizedJsonRequest(input, init, {
         url: "http://example.test/secrets/h-1/rotate",
         method: "POST",
@@ -181,7 +182,6 @@ describe("ConfigurePage (HTTP) secrets", () => {
         201,
       );
     });
-    vi.stubGlobal("fetch", fetchMock);
 
     const page = renderAdminHttpConfigurePage(core);
     await switchHttpTab(page.container, "admin-http-tab-secrets");
@@ -203,7 +203,7 @@ describe("ConfigurePage (HTTP) secrets", () => {
     await clickAndFlush(confirmButton);
 
     expect(secretsRotate).toHaveBeenCalledTimes(0);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(writeSpy).toHaveBeenCalledTimes(1);
     cleanupAdminHttpPage(page);
   });
 
@@ -232,14 +232,13 @@ describe("ConfigurePage (HTTP) secrets", () => {
     });
     core.http.secrets.list = listSecrets as typeof core.http.secrets.list;
 
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const { writeSpy } = stubAdminHttpFetch(core, async (input: RequestInfo | URL, init) => {
       expectAuthorizedJsonRequest(input, init, {
         url: "http://example.test/secrets/secret-a",
         method: "DELETE",
       });
       return jsonResponse({ revoked: true }, 200);
     });
-    vi.stubGlobal("fetch", fetchMock);
 
     const page = renderAdminHttpConfigurePage(core);
     await switchHttpTab(page.container, "admin-http-tab-secrets");
@@ -250,7 +249,7 @@ describe("ConfigurePage (HTTP) secrets", () => {
     await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "confirm-danger-confirm"));
     await flush();
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(writeSpy).toHaveBeenCalledTimes(1);
     expect(listSecrets).toHaveBeenCalledTimes(2);
     expect(page.container.querySelector("[data-testid='secret-row-secret-a']")).toBeNull();
     expect(page.container.querySelector("[data-testid='secret-row-secret-b']")).not.toBeNull();

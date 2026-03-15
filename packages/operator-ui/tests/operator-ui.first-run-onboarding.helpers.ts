@@ -85,6 +85,11 @@ export function createActiveProviderGroup() {
   };
 }
 
+export function createConfiguredProviderGroup() {
+  const { methods: _methods, ...configuredGroup } = createActiveProviderGroup();
+  return configuredGroup;
+}
+
 export function createAgentConfigResponse(modelRef: string | null) {
   return {
     revision: 1,

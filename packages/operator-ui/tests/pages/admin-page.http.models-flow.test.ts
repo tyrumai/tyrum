@@ -2,6 +2,7 @@
 
 import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { stubAdminHttpFetch } from "../admin-http-fetch-test-support.js";
 import { setNativeValue } from "../test-utils.js";
 import {
   ADMIN_HTTP_EXECUTION_PROFILE_IDS,
@@ -33,6 +34,10 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
+
+function countMutationCalls(fetchMock: ReturnType<typeof vi.fn>): number {
+  return fetchMock.mock.calls.filter(([, init]) => (init?.method ?? "GET") !== "GET").length;
+}
 
 function getDialogInput(dialog: HTMLElement, labelText: string): HTMLInputElement {
   const label = expectPresent(
@@ -78,11 +83,12 @@ describe("ConfigurePage (HTTP) models", () => {
       listAvailableError: new Error("Catalog unavailable"),
       listAssignmentsError: new Error("Assignments unavailable"),
     });
+    stubAdminHttpFetch(core);
 
     const page = renderAdminHttpConfigurePage(core);
     await openModelsTab(page.container);
 
-    expect(page.container.textContent).toContain("No model presets configured");
+    expect(page.container.textContent).toContain("No model presets saved yet.");
     expect(page.container.textContent).toContain("Available model discovery failed");
     expect(page.container.textContent).not.toContain("Model config failed");
 
@@ -106,7 +112,7 @@ describe("ConfigurePage (HTTP) models", () => {
     await clickAndFlush(saveButton);
     await flush();
 
-    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(countMutationCalls(fetchMock)).toBe(1);
     expect(saveButton.disabled).toBe(true);
     cleanupAdminHttpPage(page);
   });
@@ -142,7 +148,7 @@ describe("ConfigurePage (HTTP) models", () => {
     await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "models-save"));
     await flush();
 
-    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(countMutationCalls(fetchMock)).toBe(1);
     expect(page.container.textContent).toContain("GPT-4.1 Mini");
     cleanupAdminHttpPage(page);
   });
@@ -161,8 +167,8 @@ describe("ConfigurePage (HTTP) models", () => {
     await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "models-save"));
     await flush();
 
-    expect(modelConfig.listPresets).toHaveBeenCalledTimes(1);
-    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(modelConfig.listPresets).toHaveBeenCalledTimes(0);
+    expect(countMutationCalls(fetchMock)).toBe(1);
     expect(page.container.textContent).toContain("GPT-4.1 Mini");
     cleanupAdminHttpPage(page);
   });
@@ -192,7 +198,7 @@ describe("ConfigurePage (HTTP) models", () => {
     await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "models-save"));
     await flush();
 
-    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(countMutationCalls(fetchMock)).toBe(1);
     expect(page.container.textContent).toContain("Renamed preset");
     cleanupAdminHttpPage(page);
   });
@@ -212,7 +218,7 @@ describe("ConfigurePage (HTTP) models", () => {
     click(getByTestId<HTMLElement>(document.body, "confirm-danger-checkbox"));
     await clickAndFlush(confirmButton);
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(countMutationCalls(fetchMock)).toBe(1);
     expect(document.body.textContent).toContain(
       "Choose replacement presets or None before removing this model.",
     );
@@ -224,7 +230,7 @@ describe("ConfigurePage (HTTP) models", () => {
     await clickAndFlush(confirmButton);
     await flush();
 
-    expect(fetchMock).toHaveBeenCalledTimes(5);
+    expect(countMutationCalls(fetchMock)).toBe(2);
     expect(page.container.textContent).not.toContain("Default (openai/gpt-4.1)");
     cleanupAdminHttpPage(page);
   });

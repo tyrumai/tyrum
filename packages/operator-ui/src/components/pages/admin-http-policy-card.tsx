@@ -2,7 +2,12 @@ import { TyrumHttpClientError } from "@tyrum/client/browser";
 import type { OperatorCore } from "@tyrum/operator-core";
 import * as React from "react";
 import type { AdminHttpClient } from "./admin-http-shared.js";
-import { useAdminHttpClient, useAdminMutationHttpClient } from "./admin-http-shared.js";
+import {
+  AdminAccessGateCard,
+  isAdminAccessHttpError,
+  useAdminHttpClient,
+  useAdminMutationHttpClient,
+} from "./admin-http-shared.js";
 import {
   PolicyConfigSection,
   type PolicyConfigDeployment,
@@ -109,7 +114,7 @@ async function loadOptionalPolicyConfig<T>(
 }
 
 export function AdminHttpPolicyCard({
-  core: _core,
+  core,
   canMutate,
   requestEnter,
 }: {
@@ -129,6 +134,7 @@ export function AdminHttpPolicyCard({
   const [tools, setTools] = React.useState<PolicyToolOption[]>([]);
   const [loadBusy, setLoadBusy] = React.useState(false);
   const [loadError, setLoadError] = React.useState<unknown>(null);
+  const [requiresAdminAccess, setRequiresAdminAccess] = React.useState(false);
   const [saveBusy, setSaveBusy] = React.useState(false);
   const [saveError, setSaveError] = React.useState<unknown>(null);
   const [revertBusy, setRevertBusy] = React.useState(false);
@@ -173,16 +179,33 @@ export function AdminHttpPolicyCard({
       setOverrides(overridesResult.overrides);
       setAgents(normalizeAgentOptions(agentResult.agents));
       setTools(normalizeToolOptions(toolResult.tools));
+      setRequiresAdminAccess(false);
     } catch (error) {
+      if (isAdminAccessHttpError(error)) {
+        core.elevatedModeStore.exit();
+        setRequiresAdminAccess(true);
+        setLoadError(null);
+        return;
+      }
       setLoadError(error);
     } finally {
       setLoadBusy(false);
     }
-  }, [http]);
+  }, [core.elevatedModeStore, http]);
 
   React.useEffect(() => {
     void loadAll();
   }, [loadAll]);
+
+  if (requiresAdminAccess) {
+    return (
+      <AdminAccessGateCard
+        title="Authorize admin access to load policy configuration"
+        description="Policy configuration reads and writes require temporary admin access."
+        onAuthorize={requestEnter}
+      />
+    );
+  }
 
   return (
     <div className="grid gap-6" data-testid="admin-http-policy">

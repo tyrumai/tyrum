@@ -258,6 +258,36 @@ describe("BrowserNodeProvider", () => {
     }
   });
 
+  it("shows a distinct effective capability description when the executor is active", async () => {
+    const { BrowserNodeProvider } = await import("../../src/browser-node/browser-node-provider.js");
+    const { BrowserCapabilitiesPage } =
+      await import("../../src/components/pages/platform/browser-capabilities-page.js");
+
+    stubLocalStorage({ "tyrum.operator-ui.browserNode.enabled": "1" });
+    stubBrowserApis();
+
+    const testRoot = createTestRoot();
+    act(() => {
+      testRoot.root.render(
+        React.createElement(
+          BrowserNodeProvider,
+          { wsUrl: "ws://example.test/ws-1" },
+          React.createElement(BrowserCapabilitiesPage),
+        ),
+      );
+    });
+
+    try {
+      await flushEffects();
+      await flushEffects();
+
+      expect(document.body.textContent).toContain("Effective available · active");
+      expect(document.body.textContent).not.toContain("Effective available · available");
+    } finally {
+      cleanupTestRoot(testRoot);
+    }
+  });
+
   it("clears the consent dialog when wsUrl changes", async () => {
     const { BrowserNodeProvider } = await import("../../src/browser-node/browser-node-provider.js");
     const { BrowserCapabilitiesPage } =

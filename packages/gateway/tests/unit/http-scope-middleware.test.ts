@@ -48,6 +48,18 @@ describe("HTTP scope middleware route mapping", () => {
   });
 
   it("maps tenant admin surfaces to operator.admin", () => {
+    expect(resolveHttpRouteRequiredScopes({ method: "GET", routePath: "/agents" })).toEqual([
+      "operator.admin",
+    ]);
+    expect(resolveHttpRouteRequiredScopes({ method: "POST", routePath: "/agents" })).toEqual([
+      "operator.admin",
+    ]);
+    expect(resolveHttpRouteRequiredScopes({ method: "GET", routePath: "/agents/:key" })).toEqual([
+      "operator.admin",
+    ]);
+    expect(resolveHttpRouteRequiredScopes({ method: "DELETE", routePath: "/agents/:key" })).toEqual(
+      ["operator.admin"],
+    );
     expect(resolveHttpRouteRequiredScopes({ method: "GET", routePath: "/auth/pins" })).toEqual([
       "operator.admin",
     ]);
@@ -57,6 +69,24 @@ describe("HTTP scope middleware route mapping", () => {
     expect(resolveHttpRouteRequiredScopes({ method: "GET", routePath: "/secrets" })).toEqual([
       "operator.admin",
     ]);
+    expect(
+      resolveHttpRouteRequiredScopes({ method: "GET", routePath: "/desktop-environment-hosts" }),
+    ).toEqual(["operator.admin"]);
+    expect(
+      resolveHttpRouteRequiredScopes({ method: "GET", routePath: "/desktop-environments" }),
+    ).toEqual(["operator.admin"]);
+    expect(
+      resolveHttpRouteRequiredScopes({
+        method: "PATCH",
+        routePath: "/desktop-environments/:environmentId",
+      }),
+    ).toEqual(["operator.admin"]);
+    expect(
+      resolveHttpRouteRequiredScopes({
+        method: "POST",
+        routePath: "/desktop-environments/:environmentId/reset",
+      }),
+    ).toEqual(["operator.admin"]);
     expect(
       resolveHttpRouteRequiredScopes({ method: "POST", routePath: "/snapshot/import" }),
     ).toEqual(["operator.admin"]);

@@ -256,7 +256,7 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
 
       <div className="flex min-h-0 min-w-0 flex-1">
         <div
-          className="hidden h-full w-[180px] shrink-0 flex-col border-r border-border bg-bg-subtle/30 lg:flex"
+          className="hidden h-full w-[clamp(220px,24vw,300px)] shrink-0 flex-col border-r border-border bg-bg-subtle/30 lg:flex"
           data-testid="agents-list-panel"
         >
           <div className="flex h-14 shrink-0 items-center justify-between border-b border-border px-3">
@@ -332,12 +332,20 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
                           setSelectedAgentKey(agent.agentKey);
                         }}
                       >
-                        <div className="break-all text-sm font-medium text-fg">
+                        <div
+                          className="truncate text-sm font-medium text-fg"
+                          title={agent.displayName}
+                        >
                           {agent.displayName}
                         </div>
-                        <div className="font-mono text-xs text-fg-muted break-all">
-                          {agent.agentKey}
-                        </div>
+                        {agent.displayName !== agent.agentKey ? (
+                          <div
+                            className="truncate font-mono text-xs text-fg-muted"
+                            title={agent.agentKey}
+                          >
+                            Key {agent.agentKey}
+                          </div>
+                        ) : null}
                         <div className="flex items-center gap-2 text-xs opacity-80">
                           <StatusDot variant={active ? "success" : "neutral"} pulse={active} />
                           {active ? "Active" : "Idle"}

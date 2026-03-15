@@ -484,4 +484,33 @@ describe("layout regression harness", () => {
       await page.close();
     }
   });
+
+  it(
+    "uses a mobile section picker for configure without horizontal overflow",
+    {
+      timeout: 30_000,
+    },
+    async () => {
+      const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+      try {
+        await page.goto(`${baseUrl}?route=configure`, { waitUntil: "load" });
+        await page.waitForSelector('[data-testid="configure-section-select"]');
+
+        await assertNoHorizontalOverflow(page, [
+          "[data-layout-content]",
+          '[data-testid="configure-section-select"]',
+        ]);
+
+        await page.selectOption('[data-testid="configure-section-select"]', "tools");
+        await page.waitForSelector('[role="tabpanel"][data-state="active"]');
+
+        expect(
+          await page.locator('[data-testid="configure-tab-strip"]').getAttribute("class"),
+        ).toContain("hidden");
+        expect(await page.locator("body").textContent()).toContain("Filter tools");
+      } finally {
+        await page.close();
+      }
+    },
+  );
 });

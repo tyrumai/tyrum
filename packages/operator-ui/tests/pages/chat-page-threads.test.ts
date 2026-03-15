@@ -45,4 +45,38 @@ describe("ChatThreadsPanel", () => {
 
     cleanupTestRoot(testRoot);
   });
+
+  it("renders a clear empty-state action to start a chat", () => {
+    const onNewChat = vi.fn();
+    const testRoot = renderIntoDocument(
+      e(ChatThreadsPanel, {
+        splitView: true,
+        connected: true,
+        loading: false,
+        agentsLoading: false,
+        errorMessage: null,
+        threads: [],
+        activeSessionId: null,
+        onRefresh: vi.fn(),
+        onLoadMore: vi.fn(),
+        canLoadMore: false,
+        onOpenThread: vi.fn(),
+        agentId: "default",
+        agents: [{ agent_id: "default", label: "Default" }],
+        onAgentChange: vi.fn(),
+        onNewChat,
+      }),
+    );
+
+    const button = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="chat-empty-threads-new"]',
+    );
+    expect(button).not.toBeNull();
+    expect(button?.textContent).toContain("Start new chat");
+
+    button?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(onNewChat).toHaveBeenCalledTimes(1);
+
+    cleanupTestRoot(testRoot);
+  });
 });

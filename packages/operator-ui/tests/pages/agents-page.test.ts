@@ -276,6 +276,37 @@ describe("AgentsPage", () => {
     cleanupTestRoot(testRoot);
   });
 
+  it("uses a wider desktop rail and avoids duplicating raw keys when no friendly name exists", async () => {
+    const list = vi.fn(async () => ({
+      agents: [
+        {
+          agent_key: "00000000-0000-4000-8000-000000000002",
+          agent_id: "11111111-1111-4111-8111-111111111111",
+          can_delete: true,
+          persona: { name: "00000000-0000-4000-8000-000000000002" },
+        },
+      ],
+    }));
+    const { core } = createCore({ list });
+
+    const testRoot = renderIntoDocument(React.createElement(AgentsPage, { core }));
+    await flush();
+
+    const listPanel = testRoot.container.querySelector<HTMLElement>(
+      '[data-testid="agents-list-panel"]',
+    );
+    const agentButton = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="agents-select-00000000-0000-4000-8000-000000000002"]',
+    );
+
+    expect(listPanel?.className).toContain("w-[clamp(220px,24vw,300px)]");
+    expect(agentButton?.textContent?.match(/00000000-0000-4000-8000-000000000002/g)?.length).toBe(
+      1,
+    );
+
+    cleanupTestRoot(testRoot);
+  });
+
   it("creates a managed agent from the editor", async () => {
     const list = vi
       .fn()

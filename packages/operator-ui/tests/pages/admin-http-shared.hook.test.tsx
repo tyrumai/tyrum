@@ -37,7 +37,7 @@ afterEach(() => {
 });
 
 describe("useAdminHttpClient", () => {
-  it("returns the baseline read client without adding an elevated mode subscription", () => {
+  it("returns the baseline read client until elevated access becomes active", () => {
     const { baseStore, core, readHttp, getSubscribeCalls } = createTestCore();
     let testRoot: TestRoot | null = null;
     let resolvedClient: OperatorCore["http"] | null = null;
@@ -55,7 +55,16 @@ describe("useAdminHttpClient", () => {
       );
 
       expect(resolvedClient).toBe(readHttp);
-      expect(getSubscribeCalls()).toBe(1);
+      expect(getSubscribeCalls()).toBe(2);
+
+      act(() => {
+        baseStore.enter({
+          elevatedToken: "read-token",
+          expiresAt: new Date(Date.now() + 60_000).toISOString(),
+        });
+      });
+
+      expect(resolvedClient).not.toBe(readHttp);
     } finally {
       if (testRoot) cleanupTestRoot(testRoot);
       baseStore.dispose();

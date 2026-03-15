@@ -2,6 +2,7 @@
 
 import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { stubAdminHttpFetch } from "../admin-http-fetch-test-support.js";
 import { setNativeValue } from "../test-utils.js";
 import { ADMIN_HTTP_EXECUTION_PROFILE_IDS } from "./admin-page.http.models.shared.js";
 import { setupFirstAssignmentSaveScenario } from "./admin-page.http.models.test-support.js";
@@ -83,6 +84,7 @@ describe("ConfigurePage (HTTP)", () => {
 describe("ConfigurePage (HTTP) routing config", () => {
   it("filters structured routing rules", async () => {
     const { core } = createAdminHttpTestCore();
+    stubAdminHttpFetch(core);
     const page = renderAdminHttpConfigurePage(core);
 
     await switchHttpTab(page.container, "admin-http-tab-routing-config");
@@ -101,7 +103,7 @@ describe("ConfigurePage (HTTP) routing config", () => {
 
   it("adds a thread override from the structured dialog", async () => {
     const { core, routingConfigUpdate } = createAdminHttpTestCore();
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const { writeSpy } = stubAdminHttpFetch(core, async (input: RequestInfo | URL, init) => {
       expectAuthorizedJsonRequest(input, init, {
         url: "http://example.test/routing/config",
         method: "PUT",
@@ -124,7 +126,6 @@ describe("ConfigurePage (HTTP) routing config", () => {
       });
       return jsonResponse({ revision: 2, config: { v: 1 } }, 201);
     });
-    vi.stubGlobal("fetch", fetchMock);
 
     const page = renderAdminHttpConfigurePage(core);
     await switchHttpTab(page.container, "admin-http-tab-routing-config");
@@ -141,13 +142,13 @@ describe("ConfigurePage (HTTP) routing config", () => {
     await flush();
 
     expect(routingConfigUpdate).toHaveBeenCalledTimes(0);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(writeSpy).toHaveBeenCalledTimes(1);
     cleanupAdminHttpPage(page);
   });
 
   it("adds an account-scoped default route from the structured dialog", async () => {
     const { core } = createAdminHttpTestCore();
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const { writeSpy } = stubAdminHttpFetch(core, async (input: RequestInfo | URL, init) => {
       expectAuthorizedJsonRequest(input, init, {
         url: "http://example.test/routing/config",
         method: "PUT",
@@ -170,7 +171,6 @@ describe("ConfigurePage (HTTP) routing config", () => {
       });
       return jsonResponse({ revision: 2, config: { v: 1 } }, 201);
     });
-    vi.stubGlobal("fetch", fetchMock);
 
     const page = renderAdminHttpConfigurePage(core);
     await switchHttpTab(page.container, "admin-http-tab-routing-config");
@@ -180,13 +180,13 @@ describe("ConfigurePage (HTTP) routing config", () => {
     await flush();
     await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "channels-rule-save"));
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(writeSpy).toHaveBeenCalledTimes(1);
     cleanupAdminHttpPage(page);
   });
 
   it("removes a routing rule via the row action", async () => {
     const { core, routingConfigUpdate } = createAdminHttpTestCore();
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const { writeSpy } = stubAdminHttpFetch(core, async (input: RequestInfo | URL, init) => {
       expectAuthorizedJsonRequest(input, init, {
         url: "http://example.test/routing/config",
         method: "PUT",
@@ -205,7 +205,6 @@ describe("ConfigurePage (HTTP) routing config", () => {
       });
       return jsonResponse({ revision: 2, config: { v: 1 } }, 201);
     });
-    vi.stubGlobal("fetch", fetchMock);
 
     const page = renderAdminHttpConfigurePage(core);
     await switchHttpTab(page.container, "admin-http-tab-routing-config");
@@ -221,13 +220,13 @@ describe("ConfigurePage (HTTP) routing config", () => {
     await flush();
 
     expect(routingConfigUpdate).toHaveBeenCalledTimes(0);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(writeSpy).toHaveBeenCalledTimes(1);
     cleanupAdminHttpPage(page);
   });
 
   it("reverts from the structured history table", async () => {
     const { core, routingConfigRevert } = createAdminHttpTestCore();
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const { writeSpy } = stubAdminHttpFetch(core, async (input: RequestInfo | URL, init) => {
       expectAuthorizedJsonRequest(input, init, {
         url: "http://example.test/routing/config/revert",
         method: "POST",
@@ -235,7 +234,6 @@ describe("ConfigurePage (HTTP) routing config", () => {
       });
       return jsonResponse({ revision: 2, config: { v: 1 } }, 201);
     });
-    vi.stubGlobal("fetch", fetchMock);
 
     const page = renderAdminHttpConfigurePage(core);
     await switchHttpTab(page.container, "admin-http-tab-routing-config");
@@ -251,7 +249,7 @@ describe("ConfigurePage (HTTP) routing config", () => {
     await flush();
 
     expect(routingConfigRevert).toHaveBeenCalledTimes(0);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(writeSpy).toHaveBeenCalledTimes(1);
     cleanupAdminHttpPage(page);
   });
 });
