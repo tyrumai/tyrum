@@ -43,9 +43,7 @@ describe("AgentRuntime", () => {
     }
   });
 
-  it(
-    "passes an abortSignal to generateText for execution timeouts",
-    async () => {
+  it("passes an abortSignal to generateText for execution timeouts", async () => {
     generateTextMock.mockImplementation(async (input) => ({
       text: isTitleGenerateRequest(input) ? "Generated session title" : "ok",
       steps: [],
@@ -80,7 +78,5 @@ describe("AgentRuntime", () => {
       .find((entry) => !isTitleGenerateRequest(entry)) as { abortSignal?: AbortSignal } | undefined;
     expect(call).toBeDefined();
     expect(call?.abortSignal).toBeInstanceOf(AbortSignal);
-    },
-    15_000,
-  );
+  }, 15_000);
 });
