@@ -129,30 +129,54 @@ describe.skipIf(!canRunPlaywright && !isCi)("operator UI real-browser smoke (/ui
     const targetUrl = `${gateway.baseUrl}/ui?token=${encodeURIComponent(gateway.adminToken)}`;
 
     try {
+      async function ensureOperatorShellVisible(): Promise<void> {
+        const visibleUiState = await Promise.race([
+          page!
+            .waitForSelector('[data-testid="nav-dashboard"]', {
+              state: "visible",
+              timeout: 30_000,
+            })
+            .then(() => "dashboard" as const),
+          page!
+            .waitForSelector('[data-testid="first-run-onboarding"]', {
+              state: "visible",
+              timeout: 30_000,
+            })
+            .then(() => "onboarding" as const),
+        ]);
+
+        if (visibleUiState === "dashboard") {
+          return;
+        }
+
+        await page!.getByRole("button", { name: "Skip setup" }).click();
+        await page!.waitForSelector('[data-testid="nav-dashboard"]', {
+          state: "visible",
+          timeout: 30_000,
+        });
+      }
+
+      async function authorizeAdminAccess(): Promise<void> {
+        const trigger = page!.getByRole("button", { name: "Authorize admin access" }).first();
+        await trigger.click();
+        await page!.waitForSelector('[data-testid="elevated-mode-dialog"]', {
+          state: "visible",
+          timeout: 10_000,
+        });
+        await page!.getByTestId("elevated-mode-confirm").check();
+        await page!.getByTestId("elevated-mode-submit").click();
+        await page!.waitForSelector('[data-testid="elevated-mode-dialog"]', {
+          state: "hidden",
+          timeout: 10_000,
+        });
+      }
+
       const res = await page.goto(targetUrl, { waitUntil: "domcontentloaded" });
       if (res && res.status() >= 400) {
         throw new Error(`navigation failed: HTTP ${String(res.status())} ${targetUrl}`);
       }
 
-      const visibleUiState = await Promise.race([
-        page
-          .waitForSelector('[data-testid="nav-dashboard"]', {
-            state: "visible",
-            timeout: 30_000,
-          })
-          .then(() => "dashboard" as const),
-        page
-          .waitForSelector('[data-testid="first-run-onboarding"]', {
-            state: "visible",
-            timeout: 30_000,
-          })
-          .then(() => "onboarding" as const),
-      ]);
-
-      if (visibleUiState === "onboarding") {
-        expect(await page.locator('[data-testid="nav-dashboard"]').count()).toBe(0);
-        expect(await page.isVisible('[data-testid="first-run-onboarding"]')).toBe(true);
-      }
+      await ensureOperatorShellVisible();
 
       await page.waitForFunction(
         () => !new URL(window.location.href).searchParams.has("token"),
@@ -163,6 +187,59 @@ describe.skipIf(!canRunPlaywright && !isCi)("operator UI real-browser smoke (/ui
       const finalUrl = new URL(page.url());
       expect(finalUrl.pathname === "/ui" || finalUrl.pathname.startsWith("/ui/")).toBe(true);
       expect(finalUrl.searchParams.has("token")).toBe(false);
+
+      await page.getByTestId("nav-chat").click();
+      await page.waitForSelector('[data-testid="chat-empty-threads-new"]', {
+        state: "visible",
+        timeout: 10_000,
+      });
+
+      await page.getByTestId("nav-desktop-environments").click();
+      await page.waitForSelector('[data-testid="admin-access-gate"]', {
+        state: "visible",
+        timeout: 10_000,
+      });
+      await authorizeAdminAccess();
+      await page.waitForSelector("text=Desktop Environments", {
+        state: "visible",
+        timeout: 10_000,
+      });
+      await page.waitForFunction(
+        () =>
+          !document.body.textContent?.includes("route is not scope-authorized for scoped tokens"),
+        undefined,
+        { timeout: 10_000 },
+      );
+
+      await page.getByTestId("nav-configure").click();
+      await page.waitForSelector('[data-testid="admin-http-tab-policy"]', {
+        state: "visible",
+        timeout: 10_000,
+      });
+      await page.getByTestId("admin-http-tab-policy").click();
+      await page.waitForSelector('[data-testid="admin-http-policy"]', {
+        state: "visible",
+        timeout: 10_000,
+      });
+      expect(await page.locator("body").textContent()).not.toContain(
+        "route is not scope-authorized for scoped tokens",
+      );
+
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.waitForSelector('[data-testid="configure-section-select"]', {
+        state: "visible",
+        timeout: 10_000,
+      });
+      await page.selectOption('[data-testid="configure-section-select"]', "tools");
+      await page.waitForFunction(
+        () => document.body.textContent?.includes("Filter tools") ?? false,
+        undefined,
+        { timeout: 10_000 },
+      );
+      const horizontalOverflow = await page.evaluate(() =>
+        Math.max(0, document.documentElement.scrollWidth - window.innerWidth),
+      );
+      expect(horizontalOverflow).toBeLessThanOrEqual(1);
     } catch (error) {
       throw new Error(
         formatOperatorUiSmokeDiagnostics({

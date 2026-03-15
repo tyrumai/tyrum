@@ -109,7 +109,19 @@ export function ChatThreadsPanel({
           {loading && threads.length === 0 ? (
             <div className="p-4 text-sm text-fg-muted">Loading…</div>
           ) : threads.length === 0 ? (
-            <div className="p-4 text-sm text-fg-muted">No chats yet.</div>
+            <div className="grid gap-3 p-4">
+              <div className="text-sm text-fg-muted">No chats yet.</div>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                data-testid="chat-empty-threads-new"
+                disabled={!connected || agentsLoading}
+                onClick={onNewChat}
+              >
+                Start new chat
+              </Button>
+            </div>
           ) : (
             <ScrollArea className="h-full">
               <div className="grid gap-0.5 p-2">

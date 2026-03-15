@@ -71,9 +71,12 @@ export function resolveHttpRouteRequiredScopes(input: {
 
   // Tenant administration surfaces.
   if (
+    matchesPathPrefixSegment(routePath, "/agents") ||
     matchesPathPrefixSegment(routePath, "/auth") ||
     matchesPathPrefixSegment(routePath, "/audit") ||
     matchesPathPrefixSegment(routePath, "/config") ||
+    matchesPathPrefixSegment(routePath, "/desktop-environment-hosts") ||
+    matchesPathPrefixSegment(routePath, "/desktop-environments") ||
     matchesPathPrefixSegment(routePath, "/policy") ||
     matchesPathPrefixSegment(routePath, "/routing") ||
     matchesPathPrefixSegment(routePath, "/plugins") ||
@@ -133,8 +136,11 @@ export function createHttpScopeAuthorizationMiddleware(opts?: {
     // but fall back to the concrete request path to avoid failing open when route
     // metadata isn't exposed (ex: mocked matchedRoutes or unsupported router composition).
     const routePath = resolveHonoRoutePath(c);
-
-    const requiredScopes = resolveScopes({ method: c.req.method, routePath });
+    const requestPath = c.req.path;
+    let requiredScopes = resolveScopes({ method: c.req.method, routePath });
+    if (!requiredScopes && routePath !== requestPath) {
+      requiredScopes = resolveScopes({ method: c.req.method, routePath: requestPath });
+    }
     if (!requiredScopes) {
       await audit?.recordAuthzDenied({
         surface: "http",

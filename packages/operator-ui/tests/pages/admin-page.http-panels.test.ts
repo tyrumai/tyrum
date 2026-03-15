@@ -2,7 +2,7 @@
 
 import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanupTestRoot, setNativeValue } from "../test-utils.js";
+import { cleanupTestRoot, setNativeValue, stubMatchMedia } from "../test-utils.js";
 import {
   createPanelsCore,
   renderStrictAdminConfigurePage,
@@ -51,6 +51,27 @@ describe("ConfigurePage (strict admin tabs)", () => {
       ).not.toBeNull();
     } finally {
       cleanupTestRoot(testRoot);
+    }
+  });
+
+  it("uses a section picker instead of the tab strip on mobile widths", () => {
+    const matchMedia = stubMatchMedia("(max-width: 767px)", true);
+    const { core } = createPanelsCore(false);
+    const testRoot = renderStrictAdminConfigurePage(core);
+
+    try {
+      const sectionSelect = testRoot.container.querySelector<HTMLSelectElement>(
+        '[data-testid="configure-section-select"]',
+      );
+      const tabStrip = testRoot.container.querySelector('[data-testid="configure-tab-strip"]');
+
+      expect(sectionSelect).not.toBeNull();
+      expect(sectionSelect?.value).toBe("general");
+      expect(sectionSelect?.textContent).toContain("Commands");
+      expect(tabStrip?.className).toContain("hidden");
+    } finally {
+      cleanupTestRoot(testRoot);
+      matchMedia.cleanup();
     }
   });
 

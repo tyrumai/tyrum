@@ -1,11 +1,27 @@
 import type { ActivityEvent } from "@tyrum/operator-core";
+import type { StatusResponse } from "@tyrum/client";
 import type { StatusDotVariant } from "../ui/status-dot.js";
 import * as React from "react";
+import { Badge } from "../ui/badge.js";
+import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { Skeleton } from "../ui/skeleton.js";
 import { StatusDot } from "../ui/status-dot.js";
 import { cn } from "../../lib/cn.js";
 import { formatRelativeTime } from "../../utils/format-relative-time.js";
+
+type ConfigHealthIssue = NonNullable<StatusResponse["config_health"]>["issues"][number];
+const MAX_VISIBLE_CONFIG_HEALTH_ISSUES = 3;
+
+function getConfigHealthAction(issue: ConfigHealthIssue): {
+  label: "Configure" | "Agents";
+  routeId: "configure" | "agents";
+} {
+  if (issue.target.kind === "agent") {
+    return { label: "Agents", routeId: "agents" };
+  }
+  return { label: "Configure", routeId: "configure" };
+}
 
 // ---------------------------------------------------------------------------
 // KPI Card
@@ -206,6 +222,141 @@ export function WorkDistributionBar({
             </div>
           </>
         )}
+      </CardContent>
+    </Card>
+  );
+}
+
+export function ConfigHealthCard({
+  issues,
+  onNavigate,
+  onboardingAvailable = false,
+  onOpenOnboarding,
+}: {
+  issues: ConfigHealthIssue[];
+  onNavigate?: (id: string) => void;
+  onboardingAvailable?: boolean;
+  onOpenOnboarding?: () => void;
+}) {
+  const [showAllIssues, setShowAllIssues] = React.useState(false);
+
+  React.useEffect(() => {
+    if (issues.length <= MAX_VISIBLE_CONFIG_HEALTH_ISSUES && showAllIssues) {
+      setShowAllIssues(false);
+    }
+  }, [issues.length, showAllIssues]);
+
+  const issueCounts = React.useMemo(
+    () =>
+      issues.reduce(
+        (counts, issue) => {
+          if (issue.severity === "error") {
+            counts.error += 1;
+          } else {
+            counts.warning += 1;
+          }
+          return counts;
+        },
+        { error: 0, warning: 0 },
+      ),
+    [issues],
+  );
+
+  const visibleIssues = showAllIssues ? issues : issues.slice(0, MAX_VISIBLE_CONFIG_HEALTH_ISSUES);
+  const hiddenIssuesCount = Math.max(0, issues.length - visibleIssues.length);
+
+  return (
+    <Card data-testid="dashboard-config-health">
+      <CardHeader className="pb-2.5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="grid gap-1">
+            <h3 className="text-sm font-semibold">Configuration Health</h3>
+            <div className="text-sm text-fg-muted">
+              Resolve configuration issues before agents can run reliably.
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-xs text-fg-muted">
+              {issueCounts.error > 0 ? (
+                <Badge variant="danger">{issueCounts.error} errors</Badge>
+              ) : null}
+              {issueCounts.warning > 0 ? (
+                <Badge variant="warning">{issueCounts.warning} warnings</Badge>
+              ) : null}
+              {issues.length > MAX_VISIBLE_CONFIG_HEALTH_ISSUES ? (
+                <span>
+                  Showing {visibleIssues.length} of {issues.length} issues.
+                </span>
+              ) : null}
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {issues.length > MAX_VISIBLE_CONFIG_HEALTH_ISSUES ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                data-testid="dashboard-config-health-toggle"
+                onClick={() => {
+                  setShowAllIssues((current) => !current);
+                }}
+              >
+                {showAllIssues ? "Show fewer issues" : `Show all ${issues.length} issues`}
+              </Button>
+            ) : null}
+            {onboardingAvailable && onOpenOnboarding ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                data-testid="dashboard-resume-setup"
+                onClick={() => {
+                  onOpenOnboarding();
+                }}
+              >
+                Resume Setup
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="grid gap-3">
+        {visibleIssues.map((issue, index) => {
+          const action = getConfigHealthAction(issue);
+          return (
+            <div
+              key={`${issue.code}:${issue.target.kind}:${issue.target.id ?? "deployment"}:${index}`}
+              className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-border/70 px-3 py-3"
+            >
+              <div className="grid gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant={issue.severity === "error" ? "danger" : "warning"}>
+                    {issue.severity}
+                  </Badge>
+                  <div className="text-sm font-medium text-fg">{issue.message}</div>
+                </div>
+                {issue.target.id ? (
+                  <div className="text-xs text-fg-muted">
+                    {issue.target.kind === "agent" ? "Agent" : "Target"}: {issue.target.id}
+                  </div>
+                ) : null}
+              </div>
+              {onNavigate ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => onNavigate(action.routeId)}
+                >
+                  {action.label}
+                </Button>
+              ) : null}
+            </div>
+          );
+        })}
+        {hiddenIssuesCount > 0 && !showAllIssues ? (
+          <div className="text-sm text-fg-muted">
+            {hiddenIssuesCount} more issues hidden until you expand this list.
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   );

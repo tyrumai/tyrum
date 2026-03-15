@@ -4,9 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { OperatorCore } from "../../../operator-core/src/index.js";
 import { createStore } from "../../../operator-core/src/store.js";
-import type { ActivityState } from "../../../operator-core/src/stores/activity-store.js";
 import { AppShell } from "../../src/components/layout/app-shell.js";
 import { DashboardPage } from "../../src/components/pages/dashboard-page.js";
 import { sampleNodeInventoryResponse } from "../operator-ui.http-fixture-data.js";
@@ -16,97 +14,7 @@ import {
   stubAppShellContentWidth,
   stubMatchMedia,
 } from "../test-utils.js";
-
-const emptyActivityState: ActivityState = {
-  agentsById: {},
-  agentIds: [],
-  workstreamsById: {},
-  workstreamIds: [],
-  selectedAgentId: null,
-  selectedWorkstreamId: null,
-};
-
-function createMockActivityStore() {
-  const { store } = createStore<ActivityState>(emptyActivityState);
-  return {
-    ...store,
-    clearSelection: vi.fn(),
-    selectWorkstream: vi.fn(),
-  };
-}
-
-function createMockCore(overrides?: Partial<Record<string, unknown>>) {
-  const { store: connectionStore, setState: setConnectionState } = createStore({
-    status: "disconnected" as string,
-    clientId: null,
-    recovering: false,
-    lastDisconnect: null,
-    transportError: null,
-  });
-
-  const { store: statusStore } = createStore({
-    status: null,
-    usage: null,
-    presenceByInstanceId: {},
-    loading: { status: false, usage: false, presence: false },
-    error: { status: null, usage: null, presence: null },
-    lastSyncedAt: null,
-  });
-
-  const { store: approvalsStore } = createStore({
-    byId: {},
-    pendingIds: [] as string[],
-    loading: false,
-    error: null,
-    lastSyncedAt: null,
-  });
-
-  const { store: pairingStore } = createStore({
-    byId: {},
-    pendingIds: [] as string[],
-    loading: false,
-    error: null,
-    lastSyncedAt: null,
-  });
-
-  const { store: runsStore } = createStore({
-    runsById: {},
-    stepsById: {},
-    attemptsById: {},
-    stepIdsByRunId: {},
-    attemptIdsByStepId: {},
-  });
-
-  const { store: workboardStore } = createStore({
-    items: [] as unknown[],
-    supported: null as boolean | null,
-    tasksByWorkItemId: {},
-    loading: false,
-    error: null,
-    lastSyncedAt: null,
-  });
-
-  const activityStore = createMockActivityStore();
-  const nodesList = vi.fn(async () => sampleNodeInventoryResponse());
-
-  const core = {
-    connectionStore,
-    statusStore,
-    approvalsStore,
-    pairingStore,
-    runsStore,
-    workboardStore,
-    activityStore,
-    http: {
-      nodes: {
-        list: nodesList,
-      },
-    },
-    ...overrides,
-  } as unknown as OperatorCore;
-
-  return { core, setConnectionState, nodesList };
-}
+import { createMockCore } from "./dashboard-page.test-support.js";
 
 describe("DashboardPage", () => {
   afterEach(() => {

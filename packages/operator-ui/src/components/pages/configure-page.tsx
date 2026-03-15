@@ -13,8 +13,10 @@ import { AdminHttpSecretsPanel } from "./admin-http-secrets.js";
 import { AdminWsCommandPanel } from "./admin-ws-command-panel.js";
 import { AdminMutationGate } from "./admin-http-shared.js";
 import { ConfigureGeneralPanel } from "./configure-general-panel.js";
+import { useMediaQuery } from "../../hooks/use-media-query.js";
 import { ThemeProvider, useThemeOptional } from "../../hooks/use-theme.js";
 import { useReconnectScrollArea, useReconnectTabState } from "../../reconnect-ui-state.js";
+import { Select } from "../ui/select.js";
 
 export interface ConfigurePageProps {
   core: OperatorCore;
@@ -33,12 +35,31 @@ type ConfigurePageTab =
   | "device-tokens"
   | "commands";
 
+const CONFIGURE_TAB_OPTIONS: ReadonlyArray<{
+  value: ConfigurePageTab;
+  label: string;
+  testId: string;
+}> = [
+  { value: "general", label: "General", testId: "configure-tab-general" },
+  { value: "policy", label: "Policy", testId: "admin-http-tab-policy" },
+  { value: "providers", label: "Providers", testId: "admin-http-tab-providers" },
+  { value: "models", label: "Models", testId: "admin-http-tab-models" },
+  { value: "audit", label: "Audit", testId: "admin-http-tab-audit" },
+  { value: "routing-config", label: "Channels", testId: "admin-http-tab-routing-config" },
+  { value: "location", label: "Location", testId: "admin-http-tab-location" },
+  { value: "secrets", label: "Secrets", testId: "admin-http-tab-secrets" },
+  { value: "tools", label: "Tools", testId: "admin-http-tab-tools" },
+  { value: "device-tokens", label: "Tokens", testId: "admin-http-tab-gateway" },
+  { value: "commands", label: "Commands", testId: "admin-ws-tab-commands" },
+] as const;
+
 function ConfigurePageContent({ core }: ConfigurePageProps) {
   const [activeTab, setActiveTab] = useReconnectTabState<ConfigurePageTab>(
     "configure.tab",
     "general",
   );
   const scrollAreaRef = useReconnectScrollArea(`configure:${activeTab}:page`);
+  const isMobileViewport = useMediaQuery("(max-width: 767px)");
 
   return (
     <AppPage
@@ -53,41 +74,34 @@ function ConfigurePageContent({ core }: ConfigurePageProps) {
         }}
         className="grid gap-3"
       >
-        <div className="overflow-x-auto pb-1" data-testid="configure-tab-strip">
+        {isMobileViewport ? (
+          <div className="md:hidden">
+            <Select
+              label="Section"
+              value={activeTab}
+              data-testid="configure-section-select"
+              onChange={(event) => {
+                setActiveTab(event.currentTarget.value as ConfigurePageTab);
+              }}
+            >
+              {CONFIGURE_TAB_OPTIONS.map((tab) => (
+                <option key={tab.value} value={tab.value}>
+                  {tab.label}
+                </option>
+              ))}
+            </Select>
+          </div>
+        ) : null}
+        <div
+          className={isMobileViewport ? "hidden" : "overflow-x-auto pb-1"}
+          data-testid="configure-tab-strip"
+        >
           <TabsList aria-label="Configure sections" className="min-w-max flex-nowrap">
-            <TabsTrigger value="general" data-testid="configure-tab-general">
-              General
-            </TabsTrigger>
-            <TabsTrigger value="policy" data-testid="admin-http-tab-policy">
-              Policy
-            </TabsTrigger>
-            <TabsTrigger value="providers" data-testid="admin-http-tab-providers">
-              Providers
-            </TabsTrigger>
-            <TabsTrigger value="models" data-testid="admin-http-tab-models">
-              Models
-            </TabsTrigger>
-            <TabsTrigger value="audit" data-testid="admin-http-tab-audit">
-              Audit
-            </TabsTrigger>
-            <TabsTrigger value="routing-config" data-testid="admin-http-tab-routing-config">
-              Channels
-            </TabsTrigger>
-            <TabsTrigger value="location" data-testid="admin-http-tab-location">
-              Location
-            </TabsTrigger>
-            <TabsTrigger value="secrets" data-testid="admin-http-tab-secrets">
-              Secrets
-            </TabsTrigger>
-            <TabsTrigger value="tools" data-testid="admin-http-tab-tools">
-              Tools
-            </TabsTrigger>
-            <TabsTrigger value="device-tokens" data-testid="admin-http-tab-gateway">
-              Tokens
-            </TabsTrigger>
-            <TabsTrigger value="commands" data-testid="admin-ws-tab-commands">
-              Commands
-            </TabsTrigger>
+            {CONFIGURE_TAB_OPTIONS.map((tab) => (
+              <TabsTrigger key={tab.value} value={tab.value} data-testid={tab.testId}>
+                {tab.label}
+              </TabsTrigger>
+            ))}
           </TabsList>
         </div>
 

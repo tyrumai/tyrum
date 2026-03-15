@@ -1,10 +1,9 @@
 import {
   isElevatedModeActive,
   type ElevatedModeState,
-  type ExternalStore,
   type OperatorCore,
 } from "@tyrum/operator-core";
-import { TyrumClient, createTyrumHttpClient } from "@tyrum/client/browser";
+import { TyrumClient, TyrumHttpClientError, createTyrumHttpClient } from "@tyrum/client/browser";
 import { useMemo, type ReactNode } from "react";
 import { useOperatorStore } from "../../use-operator-store.js";
 import { resolveTyrumHttpFetch } from "../../utils/tyrum-http-fetch.js";
@@ -15,18 +14,15 @@ import { Alert } from "../ui/alert.js";
 
 export type AdminHttpClient = OperatorCore["http"];
 
-const INACTIVE_ELEVATED_MODE_STATE: ElevatedModeState = {
-  status: "inactive",
-  elevatedToken: null,
-  enteredAt: null,
-  expiresAt: null,
-  remainingMs: null,
-};
-
-const INACTIVE_ELEVATED_MODE_STORE: ExternalStore<ElevatedModeState> = {
-  subscribe: () => () => {},
-  getSnapshot: () => INACTIVE_ELEVATED_MODE_STATE,
-};
+export function isAdminAccessHttpError(error: unknown): boolean {
+  return (
+    error instanceof TyrumHttpClientError &&
+    error.status === 403 &&
+    error.error === "forbidden" &&
+    (error.message === "insufficient scope" ||
+      error.message === "route is not scope-authorized for scoped tokens")
+  );
+}
 
 function createElevatedAdminHttpClient(input: {
   core: OperatorCore;
@@ -62,15 +58,17 @@ export function useAdminHttpClient(options?: {
 }): AdminHttpClient | null {
   const { core, mode } = useElevatedModeUiContext();
   const access = options?.access ?? "read";
-  const elevatedMode = useOperatorStore(
-    access === "strict" ? core.elevatedModeStore : INACTIVE_ELEVATED_MODE_STORE,
+  const elevatedMode = useOperatorStore(core.elevatedModeStore);
+  const elevatedHttp = useMemo(
+    () => createElevatedAdminHttpClient({ core, mode, elevatedMode }),
+    [core, elevatedMode, mode],
   );
-  const strictHttp = useMemo(() => {
-    if (access !== "strict") return null;
-    return createElevatedAdminHttpClient({ core, mode, elevatedMode });
-  }, [access, core, elevatedMode, mode]);
 
-  return access === "strict" ? strictHttp : core.http;
+  if (access === "strict") {
+    return elevatedHttp;
+  }
+
+  return elevatedHttp ?? core.http;
 }
 
 export function useAdminMutationHttpClient(): AdminHttpClient | null {
@@ -92,6 +90,35 @@ export function useAdminMutationAccess(core: OperatorCore): {
   return { canMutate: isElevatedModeActive(elevatedMode), requestEnter };
 }
 
+export function AdminAccessGateCard({
+  title = "Authorize admin access to continue",
+  description = "Admin configuration and dangerous operator actions require temporary admin access.",
+  onAuthorize,
+}: {
+  title?: string;
+  description?: string;
+  onAuthorize: () => void;
+}) {
+  return (
+    <Card data-testid="admin-access-gate">
+      <CardContent className="grid gap-4 pt-6">
+        <Alert variant="warning" title={title} description={description} />
+      </CardContent>
+      <CardFooter>
+        <Button
+          type="button"
+          data-testid="admin-access-enter"
+          onClick={() => {
+            onAuthorize();
+          }}
+        >
+          Authorize admin access
+        </Button>
+      </CardFooter>
+    </Card>
+  );
+}
+
 export function AdminMutationGate({
   core,
   title = "Authorize admin access to continue",
@@ -110,22 +137,13 @@ export function AdminMutationGate({
   }
 
   return (
-    <Card data-testid="admin-access-gate">
-      <CardContent className="grid gap-4 pt-6">
-        <Alert variant="warning" title={title} description={description} />
-      </CardContent>
-      <CardFooter>
-        <Button
-          type="button"
-          data-testid="admin-access-enter"
-          onClick={() => {
-            requestEnter();
-          }}
-        >
-          Authorize admin access
-        </Button>
-      </CardFooter>
-    </Card>
+    <AdminAccessGateCard
+      title={title}
+      description={description}
+      onAuthorize={() => {
+        requestEnter();
+      }}
+    />
   );
 }
 

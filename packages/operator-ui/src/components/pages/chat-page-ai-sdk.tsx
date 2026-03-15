@@ -474,7 +474,7 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
               transport={transport}
             />
           ) : (
-            <div className="flex flex-1 items-center justify-center px-6 text-sm text-fg-muted">
+            <div className="flex flex-1 items-center justify-center px-6">
               {active.error ? (
                 <Alert
                   variant="error"
@@ -482,7 +482,21 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
                   description={active.error}
                 />
               ) : (
-                "Select a conversation or start a new chat."
+                <div className="grid max-w-sm justify-items-center gap-3 text-center">
+                  <div className="text-sm text-fg-muted">
+                    Select a conversation or start a new chat.
+                  </div>
+                  <button
+                    type="button"
+                    data-testid="chat-empty-conversation-new"
+                    className="rounded-md border border-border bg-bg-subtle px-3 py-2 text-sm font-medium text-fg transition-colors hover:bg-bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+                    onClick={() => {
+                      void startNewChat();
+                    }}
+                  >
+                    Start new chat
+                  </button>
+                </div>
               )}
             </div>
           )

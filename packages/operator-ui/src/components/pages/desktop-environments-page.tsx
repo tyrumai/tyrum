@@ -15,7 +15,9 @@ import {
 import { useApiAction } from "../../hooks/use-api-action.js";
 import { AppPage } from "../layout/app-page.js";
 import {
+  AdminAccessGateCard,
   AdminMutationGate,
+  isAdminAccessHttpError,
   useAdminHttpClient,
   useAdminMutationAccess,
   type AdminHttpClient,
@@ -40,6 +42,7 @@ export function DesktopEnvironmentsPage({ core }: { core: OperatorCore }) {
   const [environments, setEnvironments] = useState<readonly DesktopEnvironment[]>([]);
   const [environmentsLoading, setEnvironmentsLoading] = useState(false);
   const [environmentsError, setEnvironmentsError] = useState<string | null>(null);
+  const [requiresAdminAccess, setRequiresAdminAccess] = useState(false);
   const [logsById, setLogsById] = useState<Record<string, DesktopEnvironmentLogsState | undefined>>(
     {},
   );
@@ -94,8 +97,15 @@ export function DesktopEnvironmentsPage({ core }: { core: OperatorCore }) {
       if (adminHttpRef.current !== httpClient) return;
       setHosts(result.hosts);
       setHostsError(null);
+      setRequiresAdminAccess(false);
     } catch (error) {
       if (adminHttpRef.current !== httpClient) return;
+      if (isAdminAccessHttpError(error)) {
+        core.elevatedModeStore.exit();
+        setRequiresAdminAccess(true);
+        setHostsError(null);
+        return;
+      }
       setHostsError(toErrorMessage(error));
     } finally {
       if (adminHttpRef.current === httpClient) {
@@ -120,8 +130,15 @@ export function DesktopEnvironmentsPage({ core }: { core: OperatorCore }) {
         ),
       );
       setEnvironmentsError(null);
+      setRequiresAdminAccess(false);
     } catch (error) {
       if (adminHttpRef.current !== httpClient) return;
+      if (isAdminAccessHttpError(error)) {
+        core.elevatedModeStore.exit();
+        setRequiresAdminAccess(true);
+        setEnvironmentsError(null);
+        return;
+      }
       setEnvironmentsError(toErrorMessage(error));
     } finally {
       if (adminHttpRef.current === httpClient) {
@@ -149,6 +166,12 @@ export function DesktopEnvironmentsPage({ core }: { core: OperatorCore }) {
     }
     void refreshPageData(adminHttp);
   }, [adminHttp]);
+
+  useEffect(() => {
+    if (!requiresAdminAccess || !adminHttp) return;
+    setRequiresAdminAccess(false);
+    void refreshPageData(adminHttp);
+  }, [adminHttp, requiresAdminAccess]);
 
   const selectedEnvironment =
     selectedEnvironmentId === null
@@ -294,7 +317,13 @@ export function DesktopEnvironmentsPage({ core }: { core: OperatorCore }) {
         mutationError={mutation.error ? toErrorMessage(mutation.error) : null}
       />
 
-      {!adminHttp ? (
+      {requiresAdminAccess ? (
+        <AdminAccessGateCard
+          title="Authorize admin access to load desktop environments"
+          description="Desktop environment hosts, environments, and mutations require temporary admin access."
+          onAuthorize={requestEnter}
+        />
+      ) : !adminHttp ? (
         <AdminMutationGate
           core={core}
           title="Authorize admin access to load desktop environments"

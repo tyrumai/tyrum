@@ -2,6 +2,7 @@
 
 import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { TyrumHttpClientError } from "@tyrum/client/browser";
 import { setNativeValue } from "../test-utils.js";
 import {
   cleanupAdminHttpPage,
@@ -27,6 +28,53 @@ afterEach(() => {
 });
 
 describe("ConfigurePage (HTTP) policy elevated mode prompts", () => {
+  it("falls back to the admin access gate when policy reads lose admin scope", async () => {
+    const { core } = createAdminHttpTestCore();
+    const forbiddenError = new TyrumHttpClientError("http_error", "insufficient scope", {
+      status: 403,
+      error: "forbidden",
+    });
+    core.http.policy.getBundle = vi.fn(async () => {
+      throw forbiddenError;
+    });
+    core.http.policy.listOverrides = vi.fn(async () => {
+      throw forbiddenError;
+    });
+    core.http.policyConfig!.getDeployment = vi.fn(async () => {
+      throw forbiddenError;
+    });
+    core.http.policyConfig!.listDeploymentRevisions = vi.fn(async () => {
+      throw forbiddenError;
+    });
+    core.http.agents!.list = vi.fn(async () => {
+      throw forbiddenError;
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ error: "forbidden", message: "insufficient scope" }), {
+            status: 403,
+            headers: { "content-type": "application/json" },
+          }),
+      ),
+    );
+
+    const page = renderAdminHttpConfigurePage(core);
+    await switchHttpTab(page.container, "admin-http-tab-policy");
+    await flush();
+    await flush();
+
+    expect(document.body.querySelector("[data-testid='admin-access-gate']")).not.toBeNull();
+    expect(document.body.textContent).toContain(
+      "Authorize admin access to load policy configuration",
+    );
+    expect(document.body.textContent).not.toContain("insufficient scope");
+    expect(page.container.querySelector("[data-testid='admin-http-policy']")).toBeNull();
+
+    cleanupAdminHttpPage(page);
+  });
+
   it("re-prompts for Elevated Mode if policy save is confirmed after elevated access expires", async () => {
     const { core } = createAdminHttpTestCore();
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {

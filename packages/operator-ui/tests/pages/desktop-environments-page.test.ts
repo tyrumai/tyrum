@@ -3,6 +3,7 @@
 import React, { act } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF } from "@tyrum/schemas";
+import { TyrumHttpClientError } from "@tyrum/client/browser";
 import { createBearerTokenAuth, createOperatorCore } from "../../../operator-core/src/index.js";
 import { DesktopEnvironmentsPage } from "../../src/components/pages/desktop-environments-page.js";
 import { cleanupTestRoot, click, renderIntoDocument } from "../test-utils.js";
@@ -21,6 +22,35 @@ vi.mock("../../src/components/pages/admin-http-shared.js", async () => {
       canMutate,
       requestEnter,
     }),
+    isAdminAccessHttpError: (error: unknown) =>
+      error instanceof TyrumHttpClientError &&
+      error.status === 403 &&
+      error.error === "forbidden" &&
+      error.message === "insufficient scope",
+    AdminAccessGateCard: ({
+      title = "Authorize admin access to continue",
+      description = "Admin access required.",
+    }: {
+      title?: string;
+      description?: string;
+    }) =>
+      ReactModule.createElement(
+        "div",
+        { "data-testid": "admin-access-gate" },
+        ReactModule.createElement("div", null, title),
+        ReactModule.createElement("div", null, description),
+        ReactModule.createElement(
+          "button",
+          {
+            type: "button",
+            "data-testid": "admin-access-enter",
+            onClick: () => {
+              requestEnter();
+            },
+          },
+          "Authorize admin access",
+        ),
+      ),
     AdminMutationGate: ({
       children,
       title = "Authorize admin access to continue",
@@ -139,6 +169,45 @@ describe("DesktopEnvironmentsPage", () => {
       click(enterButton!);
     });
     expect(requestEnter).toHaveBeenCalledTimes(1);
+
+    cleanupTestRoot(testRoot);
+    core.dispose();
+  });
+
+  it("falls back to the admin access gate when a desktop inventory load loses admin scope", async () => {
+    const ws = new FakeWsClient();
+    const { http } = createFakeHttpClient();
+    adminHttpClient = http;
+    const forbiddenError = new TyrumHttpClientError("http_error", "insufficient scope", {
+      status: 403,
+      error: "forbidden",
+    });
+    http.desktopEnvironmentHosts.list.mockImplementation(async () => {
+      adminHttpClient = null;
+      canMutate = false;
+      throw forbiddenError;
+    });
+    http.desktopEnvironments.list.mockImplementation(async () => {
+      adminHttpClient = null;
+      canMutate = false;
+      throw forbiddenError;
+    });
+
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test"),
+      deps: { ws, http },
+    });
+    const testRoot = renderIntoDocument(React.createElement(DesktopEnvironmentsPage, { core }));
+    await waitForAssertion(() => {
+      expect(testRoot.container.querySelector("[data-testid='admin-access-gate']")).not.toBeNull();
+    });
+
+    expect(testRoot.container.textContent).toContain(
+      "Authorize admin access to load desktop environments",
+    );
+    expect(testRoot.container.textContent).not.toContain("insufficient scope");
 
     cleanupTestRoot(testRoot);
     core.dispose();
