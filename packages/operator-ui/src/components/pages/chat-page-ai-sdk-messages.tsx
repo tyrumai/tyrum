@@ -3,7 +3,6 @@ import type { OperatorCore } from "@tyrum/operator-core";
 import type { UIMessage } from "ai";
 import type { ResolveApprovalInput } from "@tyrum/operator-core";
 import { useEffect, useLayoutEffect, useRef } from "react";
-import type { ReasoningDisplayMode } from "./chat-page-ai-sdk-types.js";
 import { MessageCard } from "./chat-page-ai-sdk-message-card.js";
 
 const CHAT_AUTOSCROLL_THRESHOLD_PX = 40;
@@ -19,7 +18,6 @@ export function AiSdkChatMessageList({
   core,
   messages,
   onResolveApproval,
-  reasoningMode,
   renderMode,
   resolvingApproval,
   working,
@@ -28,7 +26,6 @@ export function AiSdkChatMessageList({
   core: OperatorCore;
   messages: UIMessage[];
   onResolveApproval: (input: ResolveApprovalInput) => void;
-  reasoningMode: ReasoningDisplayMode;
   renderMode: "markdown" | "text";
   resolvingApproval: { approvalId: string; state: "always" | "approved" | "denied" } | null;
   working: boolean;
@@ -76,7 +73,6 @@ export function AiSdkChatMessageList({
               core={core}
               message={message}
               onResolveApproval={onResolveApproval}
-              reasoningMode={reasoningMode}
               renderMode={renderMode}
               resolvingApproval={resolvingApproval}
             />

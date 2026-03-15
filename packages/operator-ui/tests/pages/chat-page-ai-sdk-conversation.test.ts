@@ -59,13 +59,12 @@ describe("AiSdkConversation", () => {
     toastErrorMock.mockReset();
   });
 
-  it("sends messages and updates render toggles", async () => {
+  it("sends messages and updates the markdown toggle", async () => {
     const chatState = makeUseChatState();
     useChatMock.mockReturnValue(chatState);
 
     const onDelete = vi.fn();
     const onRenderModeChange = vi.fn();
-    const onReasoningModeChange = vi.fn();
     const onSessionMessages = vi.fn();
     const resolveAttachedNodeId = vi.fn(async () => "node-1");
     const sessionClient = {
@@ -84,12 +83,10 @@ describe("AiSdkConversation", () => {
         onDelete,
         onResolveApproval: vi.fn(),
         onRenderModeChange,
-        onReasoningModeChange,
         onSessionMessages,
         renderMode: "markdown",
         resolvingApproval: null,
         resolveAttachedNodeId,
-        reasoningMode: "collapsed",
         session: {
           session_id: "session-1",
           thread_id: "thread-1",
@@ -125,16 +122,14 @@ describe("AiSdkConversation", () => {
     const textToggle = Array.from(testRoot.container.querySelectorAll("button")).find(
       (button) => button.textContent === "Text",
     );
-    const expandedToggle = Array.from(testRoot.container.querySelectorAll("button")).find(
-      (button) => button.textContent === "expanded",
-    );
     click(textToggle as HTMLElement);
-    click(expandedToggle as HTMLElement);
     click(testRoot.container.querySelector("[data-testid='chat-delete']") as HTMLElement);
 
     expect(onRenderModeChange).toHaveBeenCalledWith("text");
-    expect(onReasoningModeChange).toHaveBeenCalledWith("expanded");
     expect(onDelete).toHaveBeenCalledOnce();
+    expect(testRoot.container.textContent).not.toContain("expanded");
+    expect(testRoot.container.textContent).not.toContain("collapsed");
+    expect(testRoot.container.textContent).not.toContain("hidden");
 
     cleanupTestRoot(testRoot);
   });
@@ -166,12 +161,10 @@ describe("AiSdkConversation", () => {
       onDelete: vi.fn(),
       onResolveApproval: vi.fn(),
       onRenderModeChange: vi.fn(),
-      onReasoningModeChange: vi.fn(),
       onSessionMessages,
       renderMode: "markdown" as const,
       resolvingApproval: null,
       resolveAttachedNodeId: vi.fn(async () => null),
-      reasoningMode: "collapsed" as const,
       session: {
         session_id: "session-1",
         thread_id: "thread-1",
@@ -217,12 +210,10 @@ describe("AiSdkConversation", () => {
         onDelete: vi.fn(),
         onResolveApproval: vi.fn(),
         onRenderModeChange: vi.fn(),
-        onReasoningModeChange: vi.fn(),
         onSessionMessages: vi.fn(),
         renderMode: "markdown",
         resolvingApproval: null,
         resolveAttachedNodeId,
-        reasoningMode: "collapsed",
         session: {
           session_id: "session-1",
           thread_id: "thread-1",
@@ -272,12 +263,10 @@ describe("AiSdkConversation", () => {
         onDelete: vi.fn(),
         onResolveApproval: vi.fn(),
         onRenderModeChange: vi.fn(),
-        onReasoningModeChange: vi.fn(),
         onSessionMessages: vi.fn(),
         renderMode: "markdown",
         resolvingApproval: null,
         resolveAttachedNodeId: vi.fn(async () => null),
-        reasoningMode: "collapsed",
         session: {
           session_id: "session-1",
           thread_id: "thread-1",
@@ -326,12 +315,10 @@ describe("AiSdkConversation", () => {
         onDelete: vi.fn(),
         onResolveApproval: vi.fn(),
         onRenderModeChange: vi.fn(),
-        onReasoningModeChange: vi.fn(),
         onSessionMessages: vi.fn(),
         renderMode: "markdown",
         resolvingApproval: null,
         resolveAttachedNodeId: vi.fn(async () => null),
-        reasoningMode: "collapsed",
         session: {
           session_id: "session-1",
           thread_id: "thread-1",

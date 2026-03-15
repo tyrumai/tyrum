@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { UIMessage } from "ai";
 import type { OperatorCore } from "../../../operator-core/src/index.js";
 import { MessageCard } from "../../src/components/pages/chat-page-ai-sdk-message-card.js";
-import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
+import { click, cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
 
 const e = React.createElement;
 
@@ -16,11 +16,18 @@ function renderMessageCard(message: UIMessage, core?: OperatorCore) {
       core,
       message,
       onResolveApproval: vi.fn(),
-      reasoningMode: "collapsed",
       renderMode: "text",
       resolvingApproval: null,
     }),
   );
+}
+
+function findToggle(container: HTMLElement, label: string): HTMLButtonElement {
+  const toggle = Array.from(container.querySelectorAll("button")).find(
+    (button) => button.textContent?.trim() === label,
+  );
+  expect(toggle).toBeInstanceOf(HTMLButtonElement);
+  return toggle as HTMLButtonElement;
 }
 
 describe("MessageCard", () => {
@@ -34,7 +41,6 @@ describe("MessageCard", () => {
           parts: [{ type: "text", text: "averylongtokenwithoutspaces".repeat(10) }],
         } as unknown as UIMessage,
         onResolveApproval: vi.fn(),
-        reasoningMode: "collapsed",
         renderMode: "markdown",
         resolvingApproval: null,
       }),
@@ -67,7 +73,6 @@ describe("MessageCard", () => {
           ],
         } as unknown as UIMessage,
         onResolveApproval: vi.fn(),
-        reasoningMode: "collapsed",
         renderMode: "text",
         resolvingApproval: null,
       }),
@@ -78,6 +83,157 @@ describe("MessageCard", () => {
     expect(dataPre?.className).toContain("whitespace-pre-wrap");
     expect(dataPre?.className).toContain("break-words");
     expect(dataPre?.className).toContain("[overflow-wrap:anywhere]");
+
+    cleanupTestRoot(testRoot);
+  });
+
+  it("keeps the reasoning header fixed and lets the user toggle while streaming", () => {
+    const testRoot = renderMessageCard({
+      id: "assistant-reasoning-streaming",
+      role: "assistant",
+      parts: [{ type: "reasoning", text: "Inspecting context", state: "streaming" }],
+    } as unknown as UIMessage);
+
+    const toggle = findToggle(testRoot.container, "Thinking");
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(testRoot.container.textContent).toContain("Inspecting context");
+
+    act(() => {
+      click(toggle);
+    });
+    expect(findToggle(testRoot.container, "Thinking").getAttribute("aria-expanded")).toBe("false");
+    expect(testRoot.container.textContent).not.toContain("Inspecting context");
+
+    act(() => {
+      click(findToggle(testRoot.container, "Thinking"));
+    });
+    expect(findToggle(testRoot.container, "Thinking").getAttribute("aria-expanded")).toBe("true");
+    expect(testRoot.container.textContent).toContain("Inspecting context");
+
+    cleanupTestRoot(testRoot);
+  });
+
+  it("auto-collapses reasoning once streaming completes", () => {
+    const message = {
+      id: "assistant-reasoning-done",
+      role: "assistant",
+      parts: [{ type: "reasoning", text: "Inspecting context", state: "streaming" }],
+    } as unknown as UIMessage;
+    const testRoot = renderMessageCard(message);
+
+    act(() => {
+      testRoot.root.render(
+        e(MessageCard, {
+          approvalsById: {},
+          message: {
+            ...message,
+            parts: [{ type: "reasoning", text: "Inspecting context", state: "done" }],
+          },
+          onResolveApproval: vi.fn(),
+          renderMode: "text",
+          resolvingApproval: null,
+        }),
+      );
+    });
+
+    const toggle = findToggle(testRoot.container, "Thinking");
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(testRoot.container.textContent).not.toContain("Inspecting context");
+
+    cleanupTestRoot(testRoot);
+  });
+
+  it("keeps tool headers to the tool name and lets the user toggle while active", () => {
+    const testRoot = renderMessageCard({
+      id: "assistant-tool-active",
+      role: "assistant",
+      parts: [
+        {
+          type: "dynamic-tool",
+          toolName: "web_search",
+          toolCallId: "tool-call-1",
+          state: "input-available",
+          input: { query: "latest docs" },
+        },
+      ],
+    } as unknown as UIMessage);
+
+    const toggle = findToggle(testRoot.container, "web_search");
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(testRoot.container.textContent).toContain("latest docs");
+    expect(testRoot.container.textContent).not.toContain("tool-call-1");
+
+    act(() => {
+      click(toggle);
+    });
+    expect(findToggle(testRoot.container, "web_search").getAttribute("aria-expanded")).toBe(
+      "false",
+    );
+    expect(testRoot.container.textContent).not.toContain("latest docs");
+    expect(findToggle(testRoot.container, "web_search").textContent?.trim()).toBe("web_search");
+
+    act(() => {
+      click(findToggle(testRoot.container, "web_search"));
+    });
+    expect(findToggle(testRoot.container, "web_search").getAttribute("aria-expanded")).toBe("true");
+    expect(testRoot.container.textContent).toContain("latest docs");
+
+    cleanupTestRoot(testRoot);
+  });
+
+  it("auto-collapses tool calls once they finish and only shows input/output when expanded", () => {
+    const message = {
+      id: "assistant-tool-finished",
+      role: "assistant",
+      parts: [
+        {
+          type: "dynamic-tool",
+          toolName: "web_search",
+          toolCallId: "tool-call-1",
+          state: "input-available",
+          input: { query: "latest docs" },
+        },
+      ],
+    } as unknown as UIMessage;
+    const testRoot = renderMessageCard(message);
+
+    act(() => {
+      testRoot.root.render(
+        e(MessageCard, {
+          approvalsById: {},
+          message: {
+            ...message,
+            parts: [
+              {
+                type: "dynamic-tool",
+                toolName: "web_search",
+                toolCallId: "tool-call-1",
+                state: "output-available",
+                input: { query: "latest docs" },
+                output: { result: "ok" },
+              },
+            ],
+          },
+          onResolveApproval: vi.fn(),
+          renderMode: "text",
+          resolvingApproval: null,
+        }),
+      );
+    });
+
+    const toggle = findToggle(testRoot.container, "web_search");
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(testRoot.container.textContent).not.toContain("latest docs");
+    expect(testRoot.container.textContent).not.toContain("result");
+    expect(testRoot.container.textContent).not.toContain("tool-call-1");
+
+    act(() => {
+      click(toggle);
+    });
+    expect(findToggle(testRoot.container, "web_search").getAttribute("aria-expanded")).toBe("true");
+    expect(testRoot.container.textContent).toContain("latest docs");
+    expect(testRoot.container.textContent).toContain("result");
+    expect(testRoot.container.textContent).not.toContain("tool-call-1");
 
     cleanupTestRoot(testRoot);
   });
@@ -172,32 +328,6 @@ describe("MessageCard", () => {
     cleanupTestRoot(testRoot);
   });
 
-  it("renders dynamic tool parts through the existing tool path", () => {
-    const testRoot = renderMessageCard({
-      id: "assistant-dynamic-tool",
-      role: "assistant",
-      parts: [
-        {
-          type: "dynamic-tool",
-          toolName: "web_search",
-          toolCallId: "tool-call-1",
-          state: "output-available",
-          input: { query: "latest docs" },
-          output: { result: "ok" },
-        },
-      ],
-    } as unknown as UIMessage);
-
-    expect(testRoot.container.textContent).toContain("web_search");
-    expect(testRoot.container.textContent).toContain("call tool-call-1");
-    expect(testRoot.container.textContent).toContain("output available");
-    expect(testRoot.container.textContent).toContain("latest docs");
-    expect(testRoot.container.textContent).toContain("result");
-    expect(testRoot.container.textContent).not.toContain("Unsupported part");
-
-    cleanupTestRoot(testRoot);
-  });
-
   it("renders inline artifact previews for tool output with a run id", async () => {
     const getBytes = vi.fn(async () => ({
       kind: "bytes" as const,
@@ -266,6 +396,10 @@ describe("MessageCard", () => {
       } as unknown as UIMessage,
       core,
     );
+
+    act(() => {
+      click(findToggle(testRoot.container, "tool.node.dispatch"));
+    });
 
     await act(async () => {
       await Promise.resolve();
