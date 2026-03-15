@@ -25,10 +25,11 @@ const GATEWAY_WS_STORAGE_KEY = "tyrum-gateway-ws";
 const OPERATOR_TOKEN_STORAGE_KEY = "tyrum-operator-token";
 
 function scrubAuthTokenFromUrl(): void {
-  const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
-  const stripped = stripAuthTokenFromUrl(window.location.href);
-  if (stripped === current) return;
-  window.history.replaceState(window.history.state, "", stripped);
+  window.history.replaceState(
+    window.history.state,
+    "",
+    stripAuthTokenFromUrl(window.location.href),
+  );
 }
 
 function resolveGatewayHttpBaseUrl(): string {
@@ -94,8 +95,7 @@ function resolveGatewayWsUrl(): string {
   const override = import.meta.env.VITE_GATEWAY_WS_URL?.trim();
   if (override) return override;
 
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${protocol}//${window.location.host}/ws`;
+  return `${window.location.origin.replace(/^http/, "ws")}/ws`;
 }
 
 const container = document.getElementById("root");

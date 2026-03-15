@@ -171,6 +171,7 @@ describe("apps/web main bootstrap", () => {
     vi.restoreAllMocks();
     vi.resetModules();
     vi.clearAllMocks();
+    vi.unstubAllEnvs();
     localStorage.clear();
     document.body.innerHTML = "";
   });
@@ -266,6 +267,52 @@ describe("apps/web main bootstrap", () => {
     expect(core.connect).toHaveBeenCalledTimes(1);
     expect(replaceStateSpy).not.toHaveBeenCalled();
     expect(getRenderedOperatorUiProps(root).webAuthPersistence.hasStoredToken).toBe(true);
+  });
+
+  it("prefers stored gateway URLs over browser defaults", async () => {
+    const { operatorCore, root, urlAuth } = await arrangeBootstrap("/ui");
+
+    localStorage.setItem("tyrum-gateway-http", "http://stored-gateway.internal");
+    localStorage.setItem("tyrum-gateway-ws", "ws://stored-gateway.internal/ws");
+    vi.mocked(urlAuth.readAuthTokenFromUrl).mockReturnValue(undefined);
+    vi.mocked(urlAuth.stripAuthTokenFromUrl).mockReturnValue("/ui");
+
+    await import("../src/main.tsx");
+
+    expect(operatorCore.createTyrumHttpClient).toHaveBeenCalledWith({
+      baseUrl: "http://stored-gateway.internal",
+      auth: { type: "bearer", token: "baseline" },
+    });
+    expect(operatorCore.createOperatorCoreManager).toHaveBeenCalledWith(
+      expect.objectContaining({
+        httpBaseUrl: "http://stored-gateway.internal",
+        wsUrl: "ws://stored-gateway.internal/ws",
+      }),
+    );
+    expect(getRenderedOperatorUiProps(root).webAuthPersistence.hasStoredToken).toBe(false);
+  });
+
+  it("uses VITE gateway overrides when storage is empty", async () => {
+    vi.stubEnv("VITE_GATEWAY_HTTP_BASE_URL", "  https://env-gateway.example.test/api  ");
+    vi.stubEnv("VITE_GATEWAY_WS_URL", "  wss://env-gateway.example.test/ws  ");
+
+    const { operatorCore, urlAuth } = await arrangeBootstrap("/ui");
+
+    vi.mocked(urlAuth.readAuthTokenFromUrl).mockReturnValue(undefined);
+    vi.mocked(urlAuth.stripAuthTokenFromUrl).mockReturnValue("/ui");
+
+    await import("../src/main.tsx");
+
+    expect(operatorCore.createTyrumHttpClient).toHaveBeenCalledWith({
+      baseUrl: "https://env-gateway.example.test/api",
+      auth: { type: "bearer", token: "baseline" },
+    });
+    expect(operatorCore.createOperatorCoreManager).toHaveBeenCalledWith(
+      expect.objectContaining({
+        httpBaseUrl: "https://env-gateway.example.test/api",
+        wsUrl: "wss://env-gateway.example.test/ws",
+      }),
+    );
   });
 
   it("uses empty bearer auth with no saved token and stays on the connect page", async () => {
