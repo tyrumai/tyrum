@@ -167,12 +167,6 @@ export function DesktopEnvironmentsPage({ core }: { core: OperatorCore }) {
     void refreshPageData(adminHttp);
   }, [adminHttp]);
 
-  useEffect(() => {
-    if (!requiresAdminAccess || !adminHttp) return;
-    setRequiresAdminAccess(false);
-    void refreshPageData(adminHttp);
-  }, [adminHttp, requiresAdminAccess]);
-
   const selectedEnvironment =
     selectedEnvironmentId === null
       ? null

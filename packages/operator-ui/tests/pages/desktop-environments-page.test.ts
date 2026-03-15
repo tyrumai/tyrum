@@ -213,6 +213,74 @@ describe("DesktopEnvironmentsPage", () => {
     core.dispose();
   });
 
+  it("reloads desktop inventory only once when admin access is re-granted", async () => {
+    const ws = new FakeWsClient();
+    const { http } = createFakeHttpClient();
+    adminHttpClient = http;
+    const forbiddenError = new TyrumHttpClientError("http_error", "insufficient scope", {
+      status: 403,
+      error: "forbidden",
+    });
+
+    http.desktopEnvironmentHosts.list
+      .mockImplementationOnce(async () => {
+        adminHttpClient = null;
+        throw forbiddenError;
+      })
+      .mockResolvedValue({
+        status: "ok",
+        hosts: [
+          {
+            host_id: "host-1",
+            label: "Primary runtime",
+            version: "0.1.0",
+            docker_available: true,
+            healthy: true,
+            last_seen_at: "2026-03-10T12:00:00.000Z",
+            last_error: null,
+          },
+        ],
+      });
+    http.desktopEnvironments.list
+      .mockImplementationOnce(async () => {
+        adminHttpClient = null;
+        throw forbiddenError;
+      })
+      .mockResolvedValue({
+        status: "ok",
+        environments: [createEnvironment()],
+      });
+
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test"),
+      deps: { ws, http },
+    });
+    const testRoot = renderIntoDocument(React.createElement(DesktopEnvironmentsPage, { core }));
+
+    await waitForAssertion(() => {
+      expect(http.desktopEnvironmentHosts.list).toHaveBeenCalledTimes(1);
+      expect(http.desktopEnvironments.list).toHaveBeenCalledTimes(1);
+    });
+
+    adminHttpClient = http;
+    canMutate = true;
+    await act(async () => {
+      testRoot.root.render(React.createElement(DesktopEnvironmentsPage, { core }));
+      await Promise.resolve();
+    });
+    await waitForAssertion(() => {
+      expect(testRoot.container.textContent).toContain("Research desktop");
+    });
+
+    expect(http.desktopEnvironmentHosts.list).toHaveBeenCalledTimes(2);
+    expect(http.desktopEnvironments.list).toHaveBeenCalledTimes(2);
+
+    cleanupTestRoot(testRoot);
+    core.dispose();
+  });
+
   it("renders managed hosts and a gateway takeover link via admin http", async () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();

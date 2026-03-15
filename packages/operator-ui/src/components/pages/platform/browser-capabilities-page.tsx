@@ -20,7 +20,20 @@ function describeEffectiveCapabilityState(input: {
       ? "inactive until the browser executor is enabled"
       : "inactive while the browser executor is disabled";
   }
-  return input.capabilityEnabled ? input.availabilityStatus : "disabled";
+  if (!input.capabilityEnabled) {
+    return "disabled";
+  }
+
+  switch (input.availabilityStatus) {
+    case "available":
+      return "active";
+    case "unknown":
+      return "waiting for browser permission or runtime checks";
+    case "unavailable":
+      return "enabled but unavailable in this browser";
+    default:
+      return input.availabilityStatus;
+  }
 }
 
 export function BrowserCapabilitiesPage() {
