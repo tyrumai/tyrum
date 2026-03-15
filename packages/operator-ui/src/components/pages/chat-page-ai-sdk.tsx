@@ -448,6 +448,7 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
             <AiSdkConversation
               key={activeSession.session_id}
               approvalsById={approvals.byId}
+              core={core}
               onBack={
                 lgUp
                   ? undefined

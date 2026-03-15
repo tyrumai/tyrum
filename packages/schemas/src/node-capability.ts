@@ -126,6 +126,19 @@ export const NodeActionDispatchError = z
     code: DispatchErrorCode,
     message: z.string().trim().min(1),
     retryable: z.boolean(),
+    details: z
+      .object({
+        issues: z.array(
+          z
+            .object({
+              path: z.string().trim().min(1),
+              message: z.string().trim().min(1),
+            })
+            .strict(),
+        ),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 export type NodeActionDispatchError = z.infer<typeof NodeActionDispatchError>;
@@ -134,6 +147,7 @@ export const NodeActionDispatchResponse = z
   .object({
     status: z.literal("ok"),
     task_id: z.string().trim().min(1),
+    run_id: z.string().trim().min(1).optional(),
     node_id: NodeId,
     capability: CapabilityDescriptor.shape.id,
     action_name: z.string().trim().min(1),

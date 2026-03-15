@@ -302,6 +302,18 @@ export const DesktopSnapshotResult = z
   .strict();
 export type DesktopSnapshotResult = z.infer<typeof DesktopSnapshotResult>;
 
+export const DesktopScreenshotResult = z
+  .object({
+    type: z.literal("screenshot"),
+    mime: z.string().trim().min(1),
+    width: z.number().int().positive(),
+    height: z.number().int().positive(),
+    timestamp: z.string().datetime(),
+    bytesBase64: z.string().min(1),
+  })
+  .strict();
+export type DesktopScreenshotResult = z.infer<typeof DesktopScreenshotResult>;
+
 export const DesktopQueryMatch = z.discriminatedUnion("kind", [
   z
     .object({

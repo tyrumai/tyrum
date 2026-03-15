@@ -6,6 +6,7 @@ import {
   type NodeActionDispatchRequest,
   type NodeActionDispatchResponse as NodeActionDispatchResponseT,
 } from "@tyrum/schemas";
+import { ZodError } from "zod";
 import {
   NoCapableNodeError,
   NodeDispatchDeniedError,
@@ -50,8 +51,91 @@ export function dispatchError(
   code: DispatchErrorCode,
   message: string,
   retryable = false,
+  details?: NodeActionDispatchError["details"],
 ): NodeActionDispatchError {
-  return { code, message, retryable };
+  return details ? { code, message, retryable, details } : { code, message, retryable };
+}
+
+type ValidationIssue = NonNullable<
+  NonNullable<NodeActionDispatchError["details"]>["issues"]
+>[number];
+
+function joinIssuePath(path: readonly PropertyKey[]): string {
+  const joined = path
+    .map((segment) => String(segment).trim())
+    .filter((segment) => segment.length > 0)
+    .join(".");
+  return joined.length > 0 ? joined : "input";
+}
+
+function flattenZodIssues(
+  error: ZodError,
+  parentPath: readonly PropertyKey[] = [],
+  issues: ValidationIssue[] = [],
+): ValidationIssue[] {
+  for (const issue of error.issues) {
+    if (
+      issue.code === "invalid_union" &&
+      "errors" in issue &&
+      Array.isArray(issue.errors) &&
+      issue.errors.length > 0
+    ) {
+      const preferredNested =
+        issue.errors.find((entry) =>
+          entry.some(
+            (nested) =>
+              nested.code === "invalid_type" &&
+              nested.path.length === 0 &&
+              String(nested.message).toLowerCase().includes("received undefined"),
+          ),
+        ) ?? issue.errors[0];
+      if (preferredNested) {
+        const nestedIssues = preferredNested.map((nested) =>
+          Object.assign({}, nested, {
+            path: [...parentPath, ...issue.path, ...nested.path],
+          }),
+        );
+        const nestedError = new ZodError(nestedIssues);
+        flattenZodIssues(nestedError, [], issues);
+        continue;
+      }
+    }
+
+    issues.push({
+      path: joinIssuePath([...parentPath, ...issue.path]),
+      message: issue.message,
+    });
+  }
+  return issues;
+}
+
+function summarizeValidationIssues(issues: readonly ValidationIssue[]): string {
+  const first = issues[0];
+  if (!first) {
+    return "invalid input";
+  }
+  if (first.path === "display" && first.message.toLowerCase().includes("undefined")) {
+    return "invalid input: display is required; use 'primary', 'all', or { id }";
+  }
+  if (first.message.toLowerCase().includes("received undefined")) {
+    return `invalid input: missing required field '${first.path}'`;
+  }
+  return `invalid input: ${first.path} ${first.message}`;
+}
+
+export function normalizeValidationFailure(error: unknown): NodeActionDispatchError {
+  if (!(error instanceof ZodError)) {
+    const message = error instanceof Error ? error.message : String(error);
+    return dispatchError("invalid_input", message);
+  }
+
+  const issues = flattenZodIssues(error);
+  return dispatchError(
+    "invalid_input",
+    summarizeValidationIssues(issues),
+    false,
+    issues.length > 0 ? { issues } : undefined,
+  );
 }
 
 export function preflightFailure(

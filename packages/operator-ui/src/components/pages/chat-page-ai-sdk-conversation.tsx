@@ -1,5 +1,6 @@
 import type { Approval } from "@tyrum/client";
 import type { ResolveApprovalInput } from "@tyrum/operator-core";
+import type { OperatorCore } from "@tyrum/operator-core";
 import { useChat } from "@ai-sdk/react";
 import type { UIMessage } from "ai";
 import { ChevronLeft, Send, Trash2 } from "lucide-react";
@@ -75,6 +76,7 @@ function ReasoningToggle({
 
 export function AiSdkConversation({
   approvalsById,
+  core,
   onBack,
   onDelete,
   onResolveApproval,
@@ -90,6 +92,7 @@ export function AiSdkConversation({
   transport,
 }: {
   approvalsById: Record<string, Approval>;
+  core: OperatorCore;
   onBack?: () => void;
   onDelete: () => void;
   onResolveApproval: (input: ResolveApprovalInput) => void;
@@ -225,6 +228,7 @@ export function AiSdkConversation({
 
       <AiSdkChatMessageList
         approvalsById={approvalsById}
+        core={core}
         messages={chat.messages}
         onResolveApproval={onResolveApproval}
         reasoningMode={reasoningMode}

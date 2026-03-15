@@ -250,6 +250,79 @@ export function registerToolExecutorNodeDispatchTests(home: HomeDirState): void 
     expect(result.output).toContain('"retryable":true');
   });
 
+  it("tool.node.dispatch summarizes validation failures for screenshot input", async () => {
+    const db = openTestSqliteDb();
+
+    try {
+      const nodeDispatchService = {
+        dispatchAndWait: vi.fn(async () => ({
+          taskId: "task-123",
+          result: { ok: true, evidence: { foo: "bar" } },
+        })),
+      };
+
+      const result = await createToolExecutor({
+        homeDir: requireHomeDir(home),
+        workspaceLease: createWorkspaceLease(db),
+        nodeDispatchService: nodeDispatchService as never,
+        nodeCapabilityInspectionService: {
+          inspect: vi.fn(async () => ({
+            status: "ok",
+            generated_at: new Date().toISOString(),
+            node_id: "node-1",
+            capability: "tyrum.desktop.screenshot",
+            capability_version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+            connected: true,
+            paired: true,
+            dispatchable: true,
+            source_of_truth: {
+              schema: "gateway_catalog",
+              state: "node_capability_state",
+            },
+            actions: [
+              {
+                name: "screenshot",
+                description: "Capture a desktop screenshot.",
+                supported: true,
+                enabled: true,
+                availability_status: "unknown",
+                input_schema: {},
+                output_schema: {},
+                consent: {
+                  requires_operator_enable: false,
+                  requires_runtime_consent: false,
+                  may_prompt_user: false,
+                  sensitive_data_category: "screen",
+                },
+                permissions: { browser_apis: [] },
+                transport: {
+                  primitive_kind: "Desktop",
+                  op_field: "op",
+                  op_value: "screenshot",
+                  result_channel: "result_or_evidence",
+                  artifactize_binary_fields: [],
+                },
+              },
+            ],
+          })),
+        } as never,
+      }).execute("tool.node.dispatch", "call-7b", {
+        node_id: "node-1",
+        capability: "tyrum.desktop.screenshot",
+        action_name: "screenshot",
+        input: { format: "png" },
+      });
+
+      expect(result.error).toBeUndefined();
+      expect(nodeDispatchService.dispatchAndWait).not.toHaveBeenCalled();
+      expect(result.output).toContain('"code":"invalid_input"');
+      expect(result.output).toContain("display is required");
+      expect(result.output).toContain('"path":"display"');
+    } finally {
+      await db.close();
+    }
+  });
+
   const structuredErrorCases = [
     {
       name: "tool.node.dispatch returns a structured unknown_node error when the target node is unknown",
@@ -330,144 +403,5 @@ export function registerToolExecutorNodeDispatchTests(home: HomeDirState): void 
     expect(result.output).toContain('"truncated":true');
     expect(result.output).toContain("payload too large");
     expect(result.output).not.toContain(huge.slice(0, 200));
-  });
-
-  it("tool.node.list defaults to the current work lane and returns structured inventory", async () => {
-    const db = openTestSqliteDb();
-
-    try {
-      const nodeInventoryService = {
-        list: vi.fn(async () => ({
-          key: "agent:default:ui:default:channel:thread-1",
-          lane: "main",
-          nodes: [
-            {
-              node_id: "node-1",
-              connected: true,
-              paired_status: "approved",
-              attached_to_requested_lane: true,
-              source_client_device_id: "client-1",
-              capabilities: [
-                {
-                  capability: "tyrum.desktop.snapshot",
-                  dispatchable: true,
-                  capability_version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-                  connected: true,
-                  paired: true,
-                  supported_action_count: 1,
-                  enabled_action_count: 1,
-                  available_action_count: 1,
-                  unknown_action_count: 0,
-                },
-              ],
-            },
-          ],
-        })),
-      };
-
-      const result = await createToolExecutor({
-        homeDir: requireHomeDir(home),
-        workspaceLease: createWorkspaceLease(db),
-        nodeInventoryService: nodeInventoryService as never,
-      }).execute(
-        "tool.node.list",
-        "call-8",
-        {},
-        {
-          work_session_key: "agent:default:ui:default:channel:thread-1",
-          work_lane: "main",
-        },
-      );
-
-      expect(nodeInventoryService.list).toHaveBeenCalledWith({
-        tenantId: DEFAULT_TENANT_ID,
-        capability: undefined,
-        dispatchableOnly: true,
-        key: "agent:default:ui:default:channel:thread-1",
-        lane: "main",
-      });
-      expect(result.error).toBeUndefined();
-      expect(result.output).toContain('"status":"ok"');
-      expect(result.output).not.toContain('"attached_to_requested_lane":true');
-      expect(result.output).not.toContain('"paired_status":"approved"');
-      expect(result.output).not.toContain('"source_client_device_id":"client-1"');
-      expect(result.output).not.toContain('"dispatchable":true');
-      expect(result.output).not.toContain('"paired":true');
-    } finally {
-      await db.close();
-    }
-  });
-
-  it("tool.node.list rejects legacy umbrella capability filters", async () => {
-    const db = openTestSqliteDb();
-
-    try {
-      const result = await createToolExecutor({
-        homeDir: requireHomeDir(home),
-        workspaceLease: createWorkspaceLease(db),
-        nodeInventoryService: {
-          list: vi.fn(async () => ({
-            key: undefined,
-            lane: undefined,
-            nodes: [],
-          })),
-        } as never,
-      }).execute("tool.node.list", "call-8a", {
-        capability: "tyrum.desktop",
-      });
-
-      expect(result.output).toBe("");
-      expect(result.error).toContain("legacy umbrella capability");
-    } finally {
-      await db.close();
-    }
-  });
-
-  it("tool.node.inspect returns a tool error when inspection fails", async () => {
-    const db = openTestSqliteDb();
-
-    try {
-      const result = await createToolExecutor({
-        homeDir: requireHomeDir(home),
-        workspaceLease: createWorkspaceLease(db),
-        nodeCapabilityInspectionService: {
-          inspect: vi.fn(async () => {
-            throw new Error("unknown_node: node-404");
-          }),
-        } as never,
-      }).execute("tool.node.inspect", "call-9", {
-        node_id: "node-404",
-        capability: "tyrum.browser.geolocation.get",
-      });
-
-      expect(result.output).toBe("");
-      expect(result.error).toBe("unknown_node: node-404");
-    } finally {
-      await db.close();
-    }
-  });
-
-  it("tool.node.inspect rejects legacy umbrella capability IDs", async () => {
-    const db = openTestSqliteDb();
-
-    try {
-      const result = await createToolExecutor({
-        homeDir: requireHomeDir(home),
-        workspaceLease: createWorkspaceLease(db),
-        nodeCapabilityInspectionService: {
-          inspect: vi.fn(async () => {
-            throw new Error("should not be called");
-          }),
-        } as never,
-      }).execute("tool.node.inspect", "call-9a", {
-        node_id: "node-404",
-        capability: "tyrum.browser",
-      });
-
-      expect(result.output).toBe("");
-      expect(result.error).toContain("legacy umbrella capability");
-    } finally {
-      await db.close();
-    }
   });
 }

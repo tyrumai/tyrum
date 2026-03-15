@@ -1,4 +1,5 @@
 import type { Approval } from "@tyrum/client";
+import type { OperatorCore } from "@tyrum/operator-core";
 import type { UIMessage } from "ai";
 import type { ResolveApprovalInput } from "@tyrum/operator-core";
 import { useEffect, useLayoutEffect, useRef } from "react";
@@ -15,6 +16,7 @@ function isBottomLocked(element: HTMLElement): boolean {
 
 export function AiSdkChatMessageList({
   approvalsById,
+  core,
   messages,
   onResolveApproval,
   reasoningMode,
@@ -23,6 +25,7 @@ export function AiSdkChatMessageList({
   working,
 }: {
   approvalsById: Record<string, Approval>;
+  core: OperatorCore;
   messages: UIMessage[];
   onResolveApproval: (input: ResolveApprovalInput) => void;
   reasoningMode: ReasoningDisplayMode;
@@ -70,6 +73,7 @@ export function AiSdkChatMessageList({
             <MessageCard
               key={message.id}
               approvalsById={approvalsById}
+              core={core}
               message={message}
               onResolveApproval={onResolveApproval}
               reasoningMode={reasoningMode}

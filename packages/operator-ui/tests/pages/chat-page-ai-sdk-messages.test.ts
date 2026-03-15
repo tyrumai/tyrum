@@ -3,9 +3,11 @@
 import React from "react";
 import { describe, expect, it, vi } from "vitest";
 import type { UIMessage } from "ai";
+import type { OperatorCore } from "../../../operator-core/src/index.js";
 import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
 
 const e = React.createElement;
+const testCore = { http: {} } as unknown as OperatorCore;
 
 vi.mock("../../src/components/pages/chat-page-ai-sdk-message-card.js", () => ({
   MessageCard: ({ message }: { message: { id: string } }) =>
@@ -19,6 +21,7 @@ describe("AiSdkChatMessageList", () => {
     const testRoot = renderIntoDocument(
       e(AiSdkChatMessageList, {
         approvalsById: {},
+        core: testCore,
         messages: [],
         onResolveApproval: vi.fn(),
         reasoningMode: "collapsed",
@@ -46,6 +49,7 @@ describe("AiSdkChatMessageList", () => {
     const testRoot = renderIntoDocument(
       e(AiSdkChatMessageList, {
         approvalsById: {},
+        core: testCore,
         messages,
         onResolveApproval: vi.fn(),
         reasoningMode: "collapsed",
