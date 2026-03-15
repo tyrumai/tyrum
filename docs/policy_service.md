@@ -1,6 +1,6 @@
 # Policy Check Service Skeleton
 
-The policy check service provides the constitutional guardrails enforced outside the model for spend, PII, and legal/channel reviews. See the architecture docs for enforcement layering and approvals: [Sandbox and Policy](./architecture/sandbox-policy.md) and [Approvals](./architecture/approvals.md). The current milestone exposes a stateless HTTP API with static rules to unblock downstream integrations and testing.
+The policy check service provides the constitutional guardrails enforced outside the model for spend, PII, and legal/channel reviews. See the architecture docs for enforcement layering and approvals: [Sandbox and Policy](/architecture/sandbox-policy) and [Approvals](/architecture/approvals). The current milestone exposes a stateless HTTP API with static rules to unblock downstream integrations and testing.
 
 ## Endpoints
 

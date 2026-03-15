@@ -9,7 +9,10 @@ const repoRoot = resolve(__dirname, "../../..");
 
 describe("Memory architecture docs (Issue #666)", () => {
   it("documents MCP-native memory prompt seeding and in-turn tools", async () => {
-    const memoryDoc = await readFile(resolve(repoRoot, "docs/architecture/memory.md"), "utf8");
+    const memoryDoc = await readFile(
+      resolve(repoRoot, "docs/architecture/agent/memory/index.md"),
+      "utf8",
+    );
 
     expect(memoryDoc).toMatch(/MCP-native capability/i);
     expect(memoryDoc).toMatch(/mcp\.memory\.seed\b/);

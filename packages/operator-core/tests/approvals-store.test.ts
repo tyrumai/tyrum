@@ -75,7 +75,7 @@ describe("approvals-store", () => {
       agent_id: "33333333-3333-4333-8333-333333333333",
       workspace_id: "44444444-4444-4444-8444-444444444444",
       tool_id: "read",
-      pattern: "read:docs/architecture/approvals.md",
+      pattern: "read:docs/architecture/gateway/approvals.md",
       created_from_approval_id: approval.approval_id,
     } as const;
     const ws = {

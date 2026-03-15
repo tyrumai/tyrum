@@ -2,7 +2,7 @@
 
 Requests are typed operations initiated by either peer (gateway, client, or node). Responses are typed replies correlated by `request_id`.
 
-The wire shapes are defined by shared, versioned contracts (see [Contracts](../contracts.md)).
+The wire shapes are defined by shared, versioned contracts (see [Contracts](/architecture/contracts)).
 
 ## Request envelope
 

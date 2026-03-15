@@ -66,7 +66,7 @@ export function createPlaybookRoutes(deps: PlaybookRouteDeps): Hono {
   /**
    * Playbook runtime envelope contract (run / resume).
    *
-   * See: docs/architecture/playbooks.md
+   * See: docs/architecture/gateway/playbooks.md
    */
   app.post("/playbooks/runtime", async (c) => {
     if (!deps.engine || !deps.policyService || !deps.approvalDal || !deps.db) {

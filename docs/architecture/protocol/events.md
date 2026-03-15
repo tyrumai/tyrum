@@ -2,7 +2,7 @@
 
 Events are gateway-emitted, server-push messages delivered to connected clients (and sometimes nodes). Events make the system observable and keep operator interfaces in sync without polling.
 
-The wire shapes are defined by shared, versioned contracts (see [Contracts](../contracts.md)).
+The wire shapes are defined by shared, versioned contracts (see [Contracts](/architecture/contracts)).
 
 ## Event envelope
 
@@ -18,7 +18,7 @@ authoritative. This page mirrors that contract for operator and implementation g
 ## Common event categories
 
 - **Connection lifecycle:** connected/disconnected, heartbeat timeouts.
-- **Presence:** gateway/client/node presence upserts, prunes, and snapshots (see [Presence](../presence.md)).
+- **Presence:** gateway/client/node presence upserts, prunes, and snapshots (see [Presence](/architecture/presence)).
 - **Pairing:** node pairing state changes, including approval and revocation.
 - **Node capability readiness:** nodes report capability readiness (for example `capability.ready`).
 - **Approvals:** approval state changes, expiry, and linked policy override lifecycle.
@@ -126,4 +126,4 @@ stream (protocol revision `2`), aligned to the current exported schemas.
 - Event dedupe is bounded and `event_id`-based across reconnects.
 - Reconnect uses exponential backoff and preserves dedupe/replay safety guarantees across socket churn.
 
-In clustered deployments, events are delivered to the owning gateway edge via the **backplane/outbox** abstraction (see [Backplane](../backplane.md)).
+In clustered deployments, events are delivered to the owning gateway edge via the **backplane/outbox** abstraction (see [Backplane](/architecture/backplane)).

@@ -1,142 +1,77 @@
 # Architecture
 
-Tyrum is a WebSocket-first autonomous worker agent platform built around a long-lived gateway that coordinates durable execution, approvals, and audit evidence.
+Tyrum is a WebSocket-first autonomous worker platform built around a long-lived gateway, a durable agent runtime, and explicit safety boundaries for execution, approvals, and audit evidence.
 
-## Positioning
+## Purpose
 
-Tyrum is an autonomous worker.
+Tyrum is designed to scale from a local personal assistant to a shareable remote coworker without changing its core architectural promises. The same system should stay understandable and safe whether it is running on one laptop or across multiple processes and hosts.
 
-- In the simplest case, it’s a **personal assistant** you run for yourself.
-- In richer deployments, it’s a **remote coworker** you can share with a team.
+The architecture is intentionally conservative. Tyrum favors durable state, explicit policy boundaries, resumable execution, and typed interfaces over optimistic prompt-only behavior. That bias is visible across the entire system: transport is typed, work is durable, risky actions are approval-gated, and observable evidence is preferred over narrative claims.
 
-The same core architecture scales from “one assistant” to “many coworkers” without turning into an un-auditable pile of prompts and cronjobs: durable execution, least-privilege authorization, explicit approvals, and evidence-backed audit trails.
+## Core building blocks
 
-## Engineering bar
-
-Tyrum’s architecture is intentionally conservative:
-
-- **Security best practices, secure by default:** local-first binding, explicit auth, least privilege, and defense-in-depth enforcement (not prompt-only “safety”).
-- **Industry-standard primitives:** idempotency keys, durable outbox/eventing, leases/locks, auditable change control, and typed contracts at trust boundaries.
-- **Avoid common agent anti-patterns:** opaque side effects, non-resumable runs, unbounded tool access, and “done” without postconditions/evidence.
-- **Maintainability:** a small core with clear ownership boundaries and verifiable invariants.
-- **Extensibility without weakening safety:** plugins, nodes, MCP, and channels extend capability, but remain policy-gated and contract-validated.
+- **Gateway control plane:** Owns connectivity, routing, policy enforcement, approvals, execution coordination, and extension boundaries. See [Gateway](/architecture/gateway).
+- **Agent runtime:** Owns the configured persona, workspace, memory, model selection, messages, and work state that make one Tyrum agent coherent over time. See [Agent](/architecture/agent).
+- **Protocol and contracts:** Define the typed message surfaces and validation boundaries between the gateway, clients, and nodes. See [Protocol](/architecture/protocol).
+- **Operator surfaces:** Let humans observe state, steer execution, review evidence, and resolve approvals across desktop, web, mobile, CLI, and TUI clients. See [Client](/architecture/client).
+- **Capability providers:** Keep device-specific or environment-specific execution behind paired, authorized nodes instead of baking those interfaces into the gateway. See [Node](/architecture/node).
+- **State, evidence, and deployment:** Provide the durable data, event delivery, and deployment coordination primitives that keep the system reliable in both local and clustered forms. See [Scaling and High Availability](/architecture/scaling-ha).
 
 ## High-level topology
 
 ```mermaid
 flowchart LR
-  subgraph Operator["Operator surfaces"]
-    C["Client<br/>(Desktop • CLI/TUI • Web App • Mobile)"]
+  subgraph Surfaces["Operator surfaces"]
+    Client["Clients<br/>(Desktop • Web • Mobile • CLI/TUI)"]
   end
 
   subgraph Runtime["Tyrum runtime"]
-    G["Gateway<br/>(long-lived service)"]
-    DB[("State + logs<br/>StateStore (SQLite/Postgres)")]
-    AS[("Artifact store<br/>(FS/S3-compatible)")]
-    EV["Event backplane"]
-    ENG["Execution engine"]
-    WB["WorkBoard<br/>(work state + drilldown)"]
-    APPR["Approvals"]
-    SCH["Scheduler"]
-    PB["Playbook runtime"]
-    SEC["Secret provider"]
+    Gateway["Gateway control plane"]
+    Agent["Agent runtime"]
+    Protocol["Protocol + contracts"]
+    State["State + evidence<br/>(StateStore, artifacts, backplane)"]
   end
 
-  subgraph Devices["Companion devices"]
-    N["Node<br/>(capability provider)"]
+  subgraph Providers["Capability and integration plane"]
+    Node["Nodes"]
+    Ext["Tools • MCP • Channels • Models"]
   end
 
-  subgraph Integrations["Integrations"]
-    M["Model providers<br/>(provider/model)"]
-    CH["Channels<br/>(Telegram • …)"]
-    EXT["External systems<br/>(tools / MCP)"]
-  end
-
-  C <--> |"WebSocket<br/>requests/responses + events"| G
-  N <--> |"WebSocket<br/>capability RPC + events"| G
-  G <--> DB
-  ENG <--> AS
-  WB <--> DB
-  G --> EV
-  EV --> C
-  G --> ENG
-  G --> WB
-  ENG --> WB
-  SCH <--> DB
-  SCH --> ENG
-  ENG --> APPR
-  ENG --> PB
-  G <--> SEC
-  G <--> M
-  G <--> CH
-  G <--> EXT
+  Client <--> Gateway
+  Gateway <--> Protocol
+  Gateway <--> Agent
+  Gateway <--> State
+  Agent <--> State
+  Gateway <--> Node
+  Gateway <--> Ext
 ```
 
-## Building blocks
+## Primary runtime flows
 
-- **Gateway:** the long-lived service that owns edge connectivity (WebSocket), routing, and contract validation. See [Gateway](./gateway/index.md).
-- **StateStore:** durable state and logs (for example SQLite for single-host deployments; Postgres for HA/scale). See [Scaling and high availability](./scaling-ha.md).
-- **Event backplane:** cross-instance delivery via a durable outbox (in-process for replica count = 1; shared for clusters). See [Backplane](./backplane.md), [Scaling and high availability](./scaling-ha.md), and [Events](./protocol/events.md).
-- **Execution engine:** the durable orchestration runtime (retries, idempotency, pause/resume, evidence). See [Execution engine](./execution-engine.md).
-- **WorkBoard:** workspace-scoped work tracking (Kanban) plus a drilldown "global workspace" for artifacts/decisions/signals that keeps interactive sessions responsive by delegating long-running work. See [Work board and delegated execution](./workboard.md).
-- **Workers:** step executors that claim work (leases), perform side effects, and publish results/events. See [Execution engine](./execution-engine.md).
-- **ToolRunner:** a workspace-mounted execution context that runs filesystem/CLI tools. In single-host deployments it can be a local subprocess; in clusters it is typically a sandboxed job/pod. See [Scaling and high availability](./scaling-ha.md).
-- **Scheduler:** cron/watchers/heartbeat enqueuers coordinated by DB-leases. See [Automation](./automation.md).
-- **Playbooks:** deterministic workflow specs executed by the runtime (approval gates + resume tokens).
-- **Approvals:** durable operator confirmation requests that gate risky actions and pause/resume workflows.
-- **Secrets:** a first-class boundary; raw secrets stay behind a secret provider and are referenced via handles.
-- **Auth profiles:** provider credentials (API keys/OAuth) expressed as metadata + secret handles for deterministic selection and rotation. See [Provider Auth and Onboarding](./auth.md).
-- **Artifacts:** evidence objects stored outside the StateStore with policy-gated access. See [Artifacts](./artifacts.md).
-- **Client:** an operator interface connected to the gateway (for example desktop/web/CLI/TUI/mobile).
-- **Node:** a capability provider connected to the gateway (for example desktop/mobile/headless nodes).
-- **Protocol:** typed WebSocket messages (requests/responses and server-push events).
-- **Contracts:** versioned schemas used to validate protocol messages and extension boundaries.
+### Interactive operator flow
 
-## Design principles
+1. A client connects to the gateway over the typed protocol and sends a request or message.
+2. The gateway routes the request into the relevant agent runtime and, when needed, into the execution engine.
+3. Progress, approvals, and outcomes stream back to clients as events with durable state behind them.
 
-- **Local-first by default:** safe defaults assume localhost binding and explicit access control.
-- **Typed boundaries:** inputs/outputs are validated at the edges (protocol, tools, plugins).
-- **Least privilege:** capabilities and tools are scoped; high-risk actions require explicit policy/approvals.
-- **Evidence over confidence:** state changes require postconditions and artifacts when feasible; unverifiable outcomes must not be reported as “done”.
-- **Resumable execution:** long-running work can pause for approvals/takeover and resume without repeating completed steps.
-- **Secrets by handle:** the model never sees raw credentials; executors use secret handles with policy-gated resolution.
-- **Auditability:** important actions emit events and can be persisted for troubleshooting and compliance.
-- **Extensible core:** gateway plugins, tools, skills, nodes, and MCP servers extend behavior without changing the gateway core.
+### Durable background execution flow
 
-## Architecture commitments
+1. The agent runtime or automation layer captures work and hands it to the execution engine.
+2. The execution engine coordinates workers, tools, approvals, and evidence using durable state and policy checks.
+3. Results are persisted, emitted as events, and reflected back into the agent's work state, memory, and operator surfaces.
 
-- **Ops ergonomics:** onboarding and diagnostics default to a hardened configuration.
-- **Plugins:** require manifests + config schemas, make risky tools opt-in, and harden discovery/install (path/ownership checks, safe dependency rules).
-- **Scale validation:** reference deployments and a failure-matrix test suite are hard gates.
-- **Integration quality bar:** channels and node capabilities are idempotent, approval-gated, and evidence-rich.
+## Key decisions and tradeoffs
 
-## Where to start
+- **WebSocket-first control plane:** Tyrum optimizes for long-lived interactive control and event delivery rather than a request-only HTTP model.
+- **Durable runtime over prompt memory:** Work state, approvals, and evidence are externalized so correctness does not depend on transcript recall.
+- **Device capabilities outside the gateway:** Desktop, mobile, and other device-specific actions live behind nodes so the gateway stays policy-centric and deployable.
+- **One logical architecture across deployment sizes:** Single-host installs and clustered deployments keep the same core semantics, with coordination primitives present in both.
 
-- [Scaling and high availability](./scaling-ha.md)
-- [Gateway](./gateway/index.md)
-- [API surfaces (WebSocket vs HTTP)](./api-surfaces.md)
-- [Identity](./identity.md)
-- [Execution engine](./execution-engine.md)
-- [Work board and delegated execution](./workboard.md)
-- [Messages and Sessions](./messages-sessions.md)
-- [Memory](./memory.md)
-- [Playbooks](./playbooks.md)
-- [Approvals](./approvals.md)
-- [Policy overrides (approve-always)](./policy-overrides.md)
-- [Secrets](./secrets.md)
-- [Provider Auth and Onboarding](./auth.md)
-- [Artifacts](./artifacts.md)
-- [Backplane (outbox contract)](./backplane.md)
-- [Sandbox and policy](./sandbox-policy.md)
-- [Observability](./observability.md)
-- [Data lifecycle and retention](./data-lifecycle.md)
-- [Operational table maintenance contract](./operational-maintenance.md)
-- [Gateway data model map (v2)](./data-model-map.md)
-- [Gateway FK audit](./data-model-fk-audit.md)
-- [Presence](./presence.md)
-- [Client](./client.md)
-- [Node](./node.md)
-- [Protocol](./protocol/index.md)
-- [Workspace](./workspace.md)
-- [Sessions and lanes](./sessions-lanes.md)
-- [Glossary](./glossary.md)
+## Drill-down
+
+- [Gateway](/architecture/gateway)
+- [Agent](/architecture/agent)
+- [Protocol](/architecture/protocol)
+- [Client](/architecture/client)
+- [Node](/architecture/node)
+- [Scaling and High Availability](/architecture/scaling-ha)

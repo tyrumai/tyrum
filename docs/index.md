@@ -14,8 +14,8 @@ Public user-facing docs for install, onboarding, and architecture.
 
 - [Architecture Overview](./architecture/index.md)
 - [Gateway](./architecture/gateway/index.md)
-- [Client](./architecture/client.md)
-- [Node](./architecture/node.md)
+- [Client](./architecture/client/index.md)
+- [Node](./architecture/node/index.md)
 
 ## Advanced Guides
 
