@@ -125,7 +125,6 @@ export function registerHttpClientPolicyTests(): void {
       bundle: {
         v: 1,
         tools: {
-          default: "deny",
           allow: ["tool.fs.read"],
           require_approval: [],
           deny: [],
@@ -151,7 +150,6 @@ export function registerHttpClientPolicyTests(): void {
           },
         },
         tools: {
-          default: "deny",
           allow: ["read"],
           require_approval: [],
           deny: [],
