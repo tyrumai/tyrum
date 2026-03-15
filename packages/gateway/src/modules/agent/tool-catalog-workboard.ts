@@ -102,21 +102,6 @@ const WORKBOARD_TOOL_METADATA = {
   "workboard.state.set": {
     description: "Set a WorkBoard state entry.",
   },
-  "workboard.subagent.list": {
-    description: "List subagents for the current work scope.",
-  },
-  "workboard.subagent.get": {
-    description: "Fetch a subagent by id.",
-  },
-  "workboard.subagent.spawn": {
-    description: "Spawn a helper subagent and run a bounded prompt through it.",
-  },
-  "workboard.subagent.send": {
-    description: "Send another prompt to an existing subagent.",
-  },
-  "workboard.subagent.close": {
-    description: "Request subagent closure.",
-  },
   "workboard.clarification.list": {
     description: "List clarification requests for the current work scope.",
   },

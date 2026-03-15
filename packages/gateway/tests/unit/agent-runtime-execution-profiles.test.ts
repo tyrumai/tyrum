@@ -207,4 +207,54 @@ describe("AgentRuntime (execution profiles)", () => {
       "write",
     ]);
   });
+
+  it("keeps interaction broad while narrowing its workboard exposure", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-interaction-"));
+    container = await createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+    });
+
+    await new AgentConfigDal(container.db).set({
+      tenantId: DEFAULT_TENANT_ID,
+      agentId: DEFAULT_AGENT_ID,
+      config: AgentConfig.parse({
+        model: { model: "openai/gpt-4.1" },
+        skills: { enabled: [] },
+        mcp: {
+          enabled: [],
+          server_settings: { memory: { enabled: false } },
+        },
+        tools: { allow: ["*"] },
+        sessions: { ttl_days: 30, max_turns: 20 },
+      }),
+      createdBy: { kind: "test" },
+      reason: "test",
+    });
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: createStubLanguageModel("ok"),
+      fetchImpl: fetch404,
+      turnEngineWaitMs: 30_000,
+    });
+
+    await runtime.turn({
+      channel: "test",
+      thread_id: "thread-interaction",
+      message: "inspect state and delegate helper work",
+    });
+
+    const selectedTools = runtime.getLastContextReport()?.selected_tools ?? [];
+    expect(selectedTools).toContain("write");
+    expect(selectedTools).toContain("bash");
+    expect(selectedTools).toContain("subagent.spawn");
+    expect(selectedTools).toContain("workboard.capture");
+    expect(selectedTools).toContain("workboard.item.list");
+    expect(selectedTools).toContain("workboard.clarification.answer");
+    expect(selectedTools).not.toContain("workboard.item.update");
+    expect(selectedTools).not.toContain("workboard.clarification.request");
+    expect(selectedTools).not.toContain("workboard.subagent.spawn");
+  });
 });

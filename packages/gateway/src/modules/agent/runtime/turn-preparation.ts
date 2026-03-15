@@ -107,19 +107,19 @@ export async function prepareTurn(
   input: AgentTurnRequestT,
   exec?: TurnExecutionContext,
 ): Promise<PreparedTurn> {
-  const resolved = resolveAgentTurnInput(input);
-  const automation = resolveAutomationMetadata(resolved.metadata);
-  const laneQueueScope = resolveLaneQueueScope(resolved.metadata);
+  const resolvedInput = resolveAgentTurnInput(input);
+  const automation = resolveAutomationMetadata(resolvedInput.metadata);
+  const laneQueueScope = resolveLaneQueueScope(resolvedInput.metadata);
 
   const { agentKey, workspaceKey, ctx, containerKind, connectorKey, accountKey } =
-    await resolveIdentityAndContext(deps, input, resolved);
+    await resolveIdentityAndContext(deps, input, resolvedInput);
 
   const session = await deps.sessionDal.getOrCreate({
     tenantId: deps.tenantId,
     scopeKeys: { agentKey, workspaceKey },
     connectorKey,
     accountKey,
-    providerThreadId: resolved.thread_id,
+    providerThreadId: resolvedInput.thread_id,
     containerKind,
   });
 
@@ -137,10 +137,24 @@ export async function prepareTurn(
   const mainLaneSessionKey = resolveMainLaneSessionKey({
     agentId: agentKey,
     workspaceId: workspaceKey,
-    resolved,
+    resolved: resolvedInput,
     containerKind,
-    deliveryAccount: resolved.envelope?.delivery.account,
+    deliveryAccount: resolvedInput.envelope?.delivery.account,
   });
+  const resolved: ResolvedAgentTurnInput = {
+    ...resolvedInput,
+    metadata: {
+      ...resolvedInput.metadata,
+      work_session_key:
+        typeof resolvedInput.metadata?.["work_session_key"] === "string"
+          ? resolvedInput.metadata["work_session_key"]
+          : mainLaneSessionKey,
+      work_lane:
+        typeof resolvedInput.metadata?.["work_lane"] === "string"
+          ? resolvedInput.metadata["work_lane"]
+          : "main",
+    },
+  };
 
   const executionProfile = await resolveExecutionProfile(
     {

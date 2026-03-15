@@ -96,7 +96,9 @@ describe("AgentRuntime (intake delegation)", () => {
     expect(events.some((evt) => evt.kind === "intake.mode_selected")).toBe(true);
 
     const { subagents } = await workboard.listSubagents({ scope });
-    expect(subagents.some((s) => s.work_item_id === workItemId)).toBe(true);
+    const delegatedSubagent = subagents.find((subagent) => subagent.work_item_id === workItemId);
+    expect(delegatedSubagent).toBeDefined();
+    expect(delegatedSubagent?.parent_session_key).toBe(items[0]?.created_from_session_key);
   });
 
   it("delegates when an intake_mode override exists for the session key", async () => {

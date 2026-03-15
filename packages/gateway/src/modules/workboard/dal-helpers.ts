@@ -447,6 +447,7 @@ export interface RawSubagentRow {
   tenant_id: string;
   agent_id: string;
   workspace_id: string;
+  parent_session_key: string | null;
   work_item_id: string | null;
   work_item_task_id: string | null;
   execution_profile: string;
@@ -468,6 +469,7 @@ export function toSubagent(raw: RawSubagentRow): SubagentDescriptor {
     tenant_id: raw.tenant_id,
     agent_id: raw.agent_id,
     workspace_id: raw.workspace_id,
+    parent_session_key: raw.parent_session_key ?? undefined,
     work_item_id: raw.work_item_id ?? undefined,
     work_item_task_id: raw.work_item_task_id ?? undefined,
     execution_profile: raw.execution_profile,

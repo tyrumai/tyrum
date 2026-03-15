@@ -138,25 +138,41 @@ describe("WorkBoard tools and orchestration", () => {
     ).toBe(true);
   });
 
-  it("does not expose manual subagent management tools to the interaction profile", async () => {
-    const profile = getExecutionProfile("interaction");
+  it("keeps interaction broad while denying privileged workboard mutators", async () => {
+    const interaction = getExecutionProfile("interaction");
     expect(
       isToolAllowedWithDenylist(
-        profile.tool_allowlist,
-        profile.tool_denylist,
+        interaction.tool_allowlist,
+        interaction.tool_denylist,
+        "workboard.item.update",
+      ),
+    ).toBe(false);
+    expect(
+      isToolAllowedWithDenylist(
+        interaction.tool_allowlist,
+        interaction.tool_denylist,
+        "workboard.capture",
+      ),
+    ).toBe(true);
+    expect(
+      isToolAllowedWithDenylist(
+        interaction.tool_allowlist,
+        interaction.tool_denylist,
+        "subagent.spawn",
+      ),
+    ).toBe(true);
+
+    const planner = getExecutionProfile("planner");
+    expect(
+      isToolAllowedWithDenylist(planner.tool_allowlist, planner.tool_denylist, "subagent.spawn"),
+    ).toBe(true);
+    expect(
+      isToolAllowedWithDenylist(
+        planner.tool_allowlist,
+        planner.tool_denylist,
         "workboard.subagent.spawn",
       ),
     ).toBe(false);
-    expect(
-      isToolAllowedWithDenylist(
-        profile.tool_allowlist,
-        profile.tool_denylist,
-        "workboard.subagent.send",
-      ),
-    ).toBe(false);
-    expect(
-      isToolAllowedWithDenylist(profile.tool_allowlist, profile.tool_denylist, "workboard.capture"),
-    ).toBe(true);
   });
 
   it("creates one planner subagent per backlog item and completes planner tasks", async () => {
@@ -199,6 +215,7 @@ describe("WorkBoard tools and orchestration", () => {
     });
     expect(subagents.subagents).toHaveLength(1);
     expect(subagents.subagents[0]?.status).toBe("paused");
+    expect(subagents.subagents[0]?.parent_session_key).toBe(item.created_from_session_key);
 
     const tasks = await workboard.listTasks({
       scope,
@@ -330,5 +347,6 @@ describe("WorkBoard tools and orchestration", () => {
       limit: 10,
     });
     expect(subagents.subagents[0]?.status).toBe("closed");
+    expect(subagents.subagents[0]?.parent_session_key).toBe(item.created_from_session_key);
   });
 });
