@@ -12,6 +12,7 @@ import {
 export interface WorkboardState {
   items: WorkItem[];
   tasksByWorkItemId: WorkTasksByWorkItemId;
+  scopeKeys: WorkboardScopeKeys;
   supported: boolean | null;
   loading: boolean;
   error: string | null;
@@ -20,14 +21,29 @@ export interface WorkboardState {
 
 export interface WorkboardStore extends ExternalStore<WorkboardState> {
   refreshList(): Promise<void>;
+  setScopeKeys(scopeKeys: Partial<WorkboardScopeKeys>): void;
   upsertWorkItem(item: WorkItem): void;
   resetSupportProbe(): void;
 }
 
-const DEFAULT_SCOPE_KEYS = {
+export interface WorkboardScopeKeys {
+  agent_key: string;
+  workspace_key: string;
+}
+
+const DEFAULT_SCOPE_KEYS: WorkboardScopeKeys = {
   agent_key: "default",
   workspace_key: "default",
 } as const;
+
+function normalizeScopeKeys(scopeKeys?: Partial<WorkboardScopeKeys>): WorkboardScopeKeys {
+  const agentKey = scopeKeys?.agent_key?.trim() || DEFAULT_SCOPE_KEYS.agent_key;
+  const workspaceKey = scopeKeys?.workspace_key?.trim() || DEFAULT_SCOPE_KEYS.workspace_key;
+  return {
+    agent_key: agentKey,
+    workspace_key: workspaceKey,
+  };
+}
 
 function isUnsupportedRequestForWorkList(errorMessage: string): boolean {
   return errorMessage.includes("work.list failed: unsupported_request");
@@ -41,6 +57,7 @@ export function createWorkboardStore(ws: OperatorWsClient): {
   const { store, setState } = createStore<WorkboardState>({
     items: [],
     tasksByWorkItemId: {},
+    scopeKeys: DEFAULT_SCOPE_KEYS,
     supported: null,
     loading: false,
     error: null,
@@ -55,6 +72,31 @@ export function createWorkboardStore(ws: OperatorWsClient): {
     setState((prev) => {
       if (prev.supported !== false) return prev;
       return { ...prev, supported: null, error: null };
+    });
+  }
+
+  function setScopeKeys(scopeKeys: Partial<WorkboardScopeKeys>): void {
+    const nextScopeKeys = normalizeScopeKeys(scopeKeys);
+    refreshRunId += 1;
+    activeRefreshRunId = null;
+    bufferedWorkItemUpserts = new Map<string, WorkItem>();
+
+    setState((prev) => {
+      if (
+        prev.scopeKeys.agent_key === nextScopeKeys.agent_key &&
+        prev.scopeKeys.workspace_key === nextScopeKeys.workspace_key
+      ) {
+        return prev;
+      }
+      return {
+        ...prev,
+        items: [],
+        tasksByWorkItemId: {},
+        scopeKeys: nextScopeKeys,
+        loading: false,
+        error: null,
+        lastSyncedAt: null,
+      };
     });
   }
 
@@ -89,7 +131,8 @@ export function createWorkboardStore(ws: OperatorWsClient): {
     }));
 
     try {
-      const result = await ws.workList({ ...DEFAULT_SCOPE_KEYS, limit: 200 });
+      const scopeKeys = store.getSnapshot().scopeKeys;
+      const result = await ws.workList({ ...scopeKeys, limit: 200 });
       if (activeRefreshRunId !== runId) return;
       const buffered = bufferedWorkItemUpserts;
 
@@ -137,6 +180,7 @@ export function createWorkboardStore(ws: OperatorWsClient): {
     store: {
       ...store,
       refreshList,
+      setScopeKeys,
       upsertWorkItem: handleWorkItemUpsert,
       resetSupportProbe,
     },

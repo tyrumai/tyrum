@@ -60,6 +60,7 @@ import {
   type WorkScope,
   type TransitionItem,
 } from "./workboard-handlers-shared.js";
+import { broadcastWorkItemCreated } from "../../modules/workboard/item-broadcast.js";
 import { maybeEmitWorkItemOverlapWarningArtifact } from "./workboard-overlap-warning.js";
 
 async function maybeEnqueueTransitionNotification(params: {
@@ -103,7 +104,7 @@ const workboardHandlers: Record<string, WorkboardHandler> = {
         item: payload.item,
         createdFromSessionKey: `agent:${keys.agentKey}:main`,
       });
-      broadcastAgentEvent(scope.tenant_id, "work.item.created", item.agent_id, { item }, deps);
+      broadcastWorkItemCreated({ item, deps });
       await maybeEmitWorkItemOverlapWarningArtifact({ dal, scope, item, deps });
       return okResult(msg, WsWorkCreateResult.parse({ item }));
     },

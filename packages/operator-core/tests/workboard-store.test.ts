@@ -41,11 +41,39 @@ describe("workboard-store", () => {
       workspace_key: "default",
       limit: 200,
     });
+    expect(snapshot.scopeKeys).toEqual({
+      agent_key: "default",
+      workspace_key: "default",
+    });
     expect(snapshot.supported).toBe(true);
     expect(snapshot.loading).toBe(false);
     expect(snapshot.error).toBe(null);
     expect(snapshot.lastSyncedAt).toEqual(expect.any(String));
     expect(snapshot.items.map((item) => item.work_item_id)).toEqual(["w-buffered", "w1"]);
+  });
+
+  it("uses updated scope keys after a scope change", async () => {
+    const ws = {
+      workList: vi.fn(async () => ({ items: [] })),
+    } as any;
+
+    const { store } = createWorkboardStore(ws);
+    store.setScopeKeys({ agent_key: "planner", workspace_key: "ops" });
+
+    const scopedSnapshot = store.getSnapshot();
+    expect(scopedSnapshot.scopeKeys).toEqual({
+      agent_key: "planner",
+      workspace_key: "ops",
+    });
+    expect(scopedSnapshot.items).toEqual([]);
+
+    await store.refreshList();
+
+    expect(ws.workList).toHaveBeenCalledWith({
+      agent_key: "planner",
+      workspace_key: "ops",
+      limit: 200,
+    });
   });
 
   it("marks WorkBoard as unsupported on the gateway unsupported_request error", async () => {

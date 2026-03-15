@@ -23,6 +23,7 @@ import type { McpManager } from "./mcp-manager.js";
 import type { NodeDispatchService } from "./node-dispatch-service.js";
 import type { NodeCapabilityInspectionService } from "../node/capability-inspection-service.js";
 import type { AgentRegistry } from "./registry.js";
+import type { WorkboardBroadcastDeps } from "../workboard/item-broadcast.js";
 import {
   DEFAULT_DNS_LOOKUP,
   type DnsLookupFn,
@@ -59,6 +60,7 @@ export class ToolExecutor {
     private readonly nodeCapabilityInspectionService?: NodeCapabilityInspectionService,
     private readonly memoryToolRuntime?: AgentMemoryToolRuntime,
     private readonly agents?: AgentRegistry,
+    private readonly workboardBroadcastDeps?: WorkboardBroadcastDeps,
   ) {}
 
   private workspaceLeaseOwner(toolCallId: string): string {
@@ -262,6 +264,7 @@ export class ToolExecutor {
       {
         workspaceLease: this.workspaceLease,
         agents: this.agents,
+        broadcastDeps: this.workboardBroadcastDeps,
       },
       toolId,
       toolCallId,

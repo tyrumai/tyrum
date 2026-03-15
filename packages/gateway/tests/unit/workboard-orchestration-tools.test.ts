@@ -13,7 +13,9 @@ import { WorkboardOrchestrator } from "../../src/modules/workboard/orchestrator.
 import { WorkboardDal } from "../../src/modules/workboard/dal.js";
 import type { AgentRegistry } from "../../src/modules/agent/registry.js";
 import { SessionLaneNodeAttachmentDal } from "../../src/modules/agent/session-lane-node-attachment-dal.js";
+import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
+import { makeClient } from "./ws-workboard.test-support.js";
 
 function createFakeAgents(reply: string): AgentRegistry {
   return {
@@ -173,6 +175,112 @@ describe("WorkBoard tools and orchestration", () => {
         "workboard.subagent.spawn",
       ),
     ).toBe(false);
+  });
+
+  it("broadcasts work.item.created when workboard.capture adds backlog work", async () => {
+    db = openTestSqliteDb();
+    const cm = new ConnectionManager();
+    const { ws } = makeClient(cm);
+    const scope = {
+      tenant_id: DEFAULT_TENANT_ID,
+      agent_id: DEFAULT_AGENT_ID,
+      workspace_id: DEFAULT_WORKSPACE_ID,
+    } as const;
+
+    const result = await executeWorkboardTool(
+      {
+        workspaceLease: {
+          db,
+          tenantId: DEFAULT_TENANT_ID,
+          agentId: DEFAULT_AGENT_ID,
+          workspaceId: DEFAULT_WORKSPACE_ID,
+        },
+        broadcastDeps: { connectionManager: cm },
+      },
+      "workboard.capture",
+      "tool-call-capture-1",
+      { title: "Captured with broadcast" },
+      { work_session_key: "agent:default:test:default:channel:thread-capture-broadcast" },
+    );
+
+    expect(result?.error).toBeUndefined();
+    const output = JSON.parse(result?.output ?? "{}") as {
+      work_item_id?: string;
+      status?: string;
+      refinement_phase?: string;
+    };
+    expect(output.work_item_id).toBeTruthy();
+    expect(output.refinement_phase).toBe("new");
+
+    expect(ws.send).toHaveBeenCalledTimes(1);
+    const event = JSON.parse(String(ws.send.mock.calls[0]?.[0] ?? "{}")) as {
+      type?: string;
+      payload?: { item?: { work_item_id?: string; title?: string; status?: string } };
+    };
+    expect(event.type).toBe("work.item.created");
+    expect(event.payload?.item?.work_item_id).toBe(output.work_item_id);
+    expect(event.payload?.item?.title).toBe("Captured with broadcast");
+    expect(event.payload?.item?.status).toBe(output.status);
+
+    const workboard = new WorkboardDal(db);
+    const item = await workboard.getItem({
+      scope,
+      work_item_id: output.work_item_id ?? "",
+    });
+    expect(item?.title).toBe("Captured with broadcast");
+    const tasks = await workboard.listTasks({
+      scope,
+      work_item_id: output.work_item_id ?? "",
+    });
+    expect(
+      tasks.some((task) => task.execution_profile === "planner" && task.status === "queued"),
+    ).toBe(true);
+  });
+
+  it("still captures work when broadcast deps are unavailable", async () => {
+    db = openTestSqliteDb();
+    const scope = {
+      tenant_id: DEFAULT_TENANT_ID,
+      agent_id: DEFAULT_AGENT_ID,
+      workspace_id: DEFAULT_WORKSPACE_ID,
+    } as const;
+
+    const result = await executeWorkboardTool(
+      {
+        workspaceLease: {
+          db,
+          tenantId: DEFAULT_TENANT_ID,
+          agentId: DEFAULT_AGENT_ID,
+          workspaceId: DEFAULT_WORKSPACE_ID,
+        },
+      },
+      "workboard.capture",
+      "tool-call-capture-2",
+      { title: "Captured without broadcast" },
+      { work_session_key: "agent:default:test:default:channel:thread-capture-without-broadcast" },
+    );
+
+    expect(result?.error).toBeUndefined();
+    const output = JSON.parse(result?.output ?? "{}") as {
+      work_item_id?: string;
+      refinement_phase?: string;
+    };
+    expect(output.work_item_id).toBeTruthy();
+    expect(output.refinement_phase).toBe("new");
+
+    const workboard = new WorkboardDal(db);
+    const item = await workboard.getItem({
+      scope,
+      work_item_id: output.work_item_id ?? "",
+    });
+    expect(item?.title).toBe("Captured without broadcast");
+    const tasks = await workboard.listTasks({
+      scope,
+      work_item_id: output.work_item_id ?? "",
+    });
+    expect(
+      tasks.some((task) => task.execution_profile === "planner" && task.status === "queued"),
+    ).toBe(true);
   });
 
   it("creates one planner subagent per backlog item and completes planner tasks", async () => {
