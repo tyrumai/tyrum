@@ -87,6 +87,17 @@ describe("LocalStepExecutor policy enforcement", () => {
     });
   }
 
+  function exaSearchAction() {
+    return ActionPrimitive.parse({
+      type: "Mcp",
+      args: {
+        server_id: "exa",
+        tool_name: "web_search_exa",
+        input: { query: "hello world" },
+      },
+    });
+  }
+
   it("passes resolved secret scopes into executor-side tool-call policy evaluation", async () => {
     const { executor, evaluateSecretsFromSnapshot, evaluateToolCallFromSnapshot } =
       await makeMockedPolicyExecutor({
@@ -143,6 +154,30 @@ describe("LocalStepExecutor policy enforcement", () => {
     expect(evaluateToolCallFromSnapshot).toHaveBeenCalledWith(
       expect.objectContaining({
         agentId: "00000000-0000-4000-8000-000000000002",
+      }),
+    );
+  });
+
+  it("preserves builtin MCP read-only effects during workflow policy evaluation", async () => {
+    const { executor, evaluateToolCallFromSnapshot } = await makeMockedPolicyExecutor({
+      secretsDecision: "allow",
+      toolDecision: "deny",
+    });
+
+    const res = await executor.execute(
+      exaSearchAction(),
+      "plan-policy-mcp-effect",
+      0,
+      5_000,
+      policyContext(null),
+    );
+
+    expect(res.success).toBe(false);
+    expect(res.error).toContain("policy denied websearch");
+    expect(evaluateToolCallFromSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toolId: "websearch",
+        toolEffect: "read_only",
       }),
     );
   });

@@ -37,6 +37,26 @@ describe("toolCallFromAction", () => {
     });
   });
 
+  it("normalizes builtin Exa MCP actions to builtin tool ids", () => {
+    const tool = toolCallFromAction({
+      type: "Mcp",
+      args: {
+        server_id: "exa",
+        tool_name: "web_search_exa",
+        input: {
+          query: "hello world",
+        },
+      },
+    });
+
+    expect(tool).toEqual({
+      toolId: "websearch",
+      matchTarget: canonicalizeToolMatchTarget("websearch", {
+        query: "hello world",
+      }),
+    });
+  });
+
   it("falls back to action-based tool ids for non-tool actions", () => {
     const tool = toolCallFromAction({
       type: "Message",
