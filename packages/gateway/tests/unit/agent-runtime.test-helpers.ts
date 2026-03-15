@@ -47,19 +47,27 @@ export function makeContextReport(
 export function createToolSetBuilder(input: {
   home: string;
   container: GatewayContainer;
-  policyService: unknown;
+  policyService: Partial<ConstructorParameters<typeof ToolSetBuilder>[0]["policyService"]>;
   secretProvider?: unknown;
   plugins?: unknown;
 }): ToolSetBuilder {
+  const policyService = {
+    isEnabled: () => false,
+    isObserveOnly: () => false,
+    evaluateToolCall: async () => ({
+      decision: "allow" as const,
+      applied_override_ids: [] as string[],
+    }),
+    ...input.policyService,
+  } as ConstructorParameters<typeof ToolSetBuilder>[0]["policyService"];
+
   return new ToolSetBuilder({
     home: input.home,
     roleToolAllowlist: ["*"],
     tenantId: DEFAULT_TENANT_ID,
     agentId: DEFAULT_AGENT_ID,
     workspaceId: DEFAULT_WORKSPACE_ID,
-    policyService: input.policyService as unknown as ConstructorParameters<
-      typeof ToolSetBuilder
-    >[0]["policyService"],
+    policyService,
     approvalDal: input.container.approvalDal,
     approvalWaitMs: 120_000,
     approvalPollMs: 500,

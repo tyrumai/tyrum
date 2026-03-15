@@ -307,6 +307,10 @@ describe("AgentRuntime.turnStream", () => {
       policyService: {
         isEnabled: () => false,
         isObserveOnly: () => false,
+        evaluateToolCall: async () => ({
+          decision: "allow" as const,
+          applied_override_ids: [],
+        }),
       } as never,
     });
 
@@ -319,7 +323,6 @@ describe("AgentRuntime.turnStream", () => {
 
     expect(result.reply).toBe("Captured retro work.");
     expect(result.used_tools).toEqual(["workboard.capture"]);
-
     const workboard = new WorkboardDal(container.db);
     const { items } = await workboard.listItems({
       scope: {
