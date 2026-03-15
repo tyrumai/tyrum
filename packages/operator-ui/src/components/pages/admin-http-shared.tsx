@@ -27,13 +27,14 @@ export function isAdminAccessHttpError(error: unknown): boolean {
 function createElevatedAdminHttpClient(input: {
   core: OperatorCore;
   mode: ReturnType<typeof useElevatedModeUiContext>["mode"];
-  elevatedMode: ElevatedModeState;
+  elevatedStatus: ElevatedModeState["status"];
+  elevatedToken: ElevatedModeState["elevatedToken"];
 }): AdminHttpClient | null {
-  if (input.elevatedMode.status !== "active" || !input.elevatedMode.elevatedToken) return null;
+  if (input.elevatedStatus !== "active" || !input.elevatedToken) return null;
 
   return createTyrumHttpClient({
     baseUrl: input.core.httpBaseUrl,
-    auth: { type: "bearer", token: input.elevatedMode.elevatedToken },
+    auth: { type: "bearer", token: input.elevatedToken },
     fetch: resolveTyrumHttpFetch(input.mode),
   });
 }
@@ -59,9 +60,17 @@ export function useAdminHttpClient(options?: {
   const { core, mode } = useElevatedModeUiContext();
   const access = options?.access ?? "read";
   const elevatedMode = useOperatorStore(core.elevatedModeStore);
+  const elevatedStatus = elevatedMode.status;
+  const elevatedToken = elevatedMode.elevatedToken;
   const elevatedHttp = useMemo(
-    () => createElevatedAdminHttpClient({ core, mode, elevatedMode }),
-    [core, elevatedMode, mode],
+    () =>
+      createElevatedAdminHttpClient({
+        core,
+        mode,
+        elevatedStatus,
+        elevatedToken,
+      }),
+    [core.httpBaseUrl, elevatedStatus, elevatedToken, mode],
   );
 
   if (access === "strict") {
@@ -74,10 +83,18 @@ export function useAdminHttpClient(options?: {
 export function useAdminMutationHttpClient(): AdminHttpClient | null {
   const { core, mode } = useElevatedModeUiContext();
   const elevatedMode = useOperatorStore(core.elevatedModeStore);
+  const elevatedStatus = elevatedMode.status;
+  const elevatedToken = elevatedMode.elevatedToken;
 
   return useMemo(
-    () => createElevatedAdminHttpClient({ core, mode, elevatedMode }),
-    [core, elevatedMode, mode],
+    () =>
+      createElevatedAdminHttpClient({
+        core,
+        mode,
+        elevatedStatus,
+        elevatedToken,
+      }),
+    [core.httpBaseUrl, elevatedStatus, elevatedToken, mode],
   );
 }
 
