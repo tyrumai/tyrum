@@ -151,7 +151,6 @@ export function BrowserNodeProvider({
     }
   }, []);
 
-  const clientRef = useRef<TyrumClient | null>(null);
   const lifecycleRef = useRef<ManagedNodeClientLifecycle<TyrumClient> | null>(null);
   const providerRef = useRef<ReturnType<typeof createBrowserCapabilityProvider> | null>(null);
 
@@ -178,7 +177,6 @@ export function BrowserNodeProvider({
 
       lifecycleRef.current?.dispose();
       lifecycleRef.current = null;
-      clientRef.current = null;
       providerRef.current = null;
       return;
     }
@@ -218,9 +216,6 @@ export function BrowserNodeProvider({
           mode: "browser-node",
         },
       });
-
-      clientRef.current = client;
-
       const baseProvider = createBrowserCapabilityProvider({ requestConsent });
       const provider = {
         ...baseProvider,
@@ -301,7 +296,6 @@ export function BrowserNodeProvider({
       clearConsentQueue();
       lifecycleRef.current?.dispose();
       lifecycleRef.current = null;
-      clientRef.current = null;
       providerRef.current = null;
     };
   }, [clearConsentQueue, enabled, requestConsent, wsUrl]);

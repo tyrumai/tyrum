@@ -118,7 +118,6 @@ export function useMobileNode(options: UseMobileNodeOptions): {
     }
   }, [state]);
 
-  const clientRef = useRef<TyrumClient | null>(null);
   const lifecycleRef = useRef<ManagedNodeClientLifecycle<TyrumClient> | null>(null);
   const retry = useCallback(() => {
     setReloadVersion((current) => current + 1);
@@ -137,7 +136,6 @@ export function useMobileNode(options: UseMobileNodeOptions): {
     if (!wsUrl || !token || !enabled) {
       lifecycleRef.current?.dispose();
       lifecycleRef.current = null;
-      clientRef.current = null;
       setStatus("disconnected");
       setDeviceId(null);
       if (!Capacitor.isNativePlatform()) {
@@ -151,7 +149,6 @@ export function useMobileNode(options: UseMobileNodeOptions): {
     if (!Capacitor.isNativePlatform()) {
       lifecycleRef.current?.dispose();
       lifecycleRef.current = null;
-      clientRef.current = null;
       setStatus("disconnected");
       setDeviceId(null);
       setError("Local mobile node support is only enabled on Capacitor iOS and Android targets.");
@@ -193,8 +190,6 @@ export function useMobileNode(options: UseMobileNodeOptions): {
           mode: "mobile-node",
         },
       });
-      clientRef.current = client;
-
       const provider = createMobileCapabilityProvider(platform);
       const locationStream = createMobileLocationBeaconStream({
         client,
@@ -254,7 +249,6 @@ export function useMobileNode(options: UseMobileNodeOptions): {
       lifecycleRef.current?.dispose();
       lifecycleRef.current = null;
       void locationStreamRef.current?.stop();
-      clientRef.current = null;
       locationStreamRef.current = null;
     };
   }, [enabled, platform, reloadVersion, token, wsUrl]);

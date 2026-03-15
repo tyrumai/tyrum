@@ -60,6 +60,7 @@ RUN apt-get update \
 WORKDIR /app
 
 COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/scripts ./scripts
 
 COPY --from=builder /app/packages/schemas/package.json ./packages/schemas/package.json
 COPY --from=builder /app/packages/schemas/dist ./packages/schemas/dist
