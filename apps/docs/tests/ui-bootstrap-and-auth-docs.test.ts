@@ -8,14 +8,16 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "../../..");
 
 describe("UI bootstrap and auth docs (Issue #568)", () => {
-  it("updates install + getting started docs for /ui and /auth/session cookie bootstrap", async () => {
+  it("updates install + getting started docs for /ui and direct bearer-token bootstrap", async () => {
     const installDoc = await readFile(resolve(repoRoot, "docs/install.md"), "utf8");
     expect(installDoc).toMatch(/\/ui\b/);
-    expect(installDoc).toMatch(/\/auth\/session\b/);
+    expect(installDoc).toMatch(/direct bearer-token auth/i);
+    expect(installDoc).toMatch(/local storage/i);
     expect(installDoc).not.toMatch(/\/app\b/);
 
     const gettingStartedDoc = await readFile(resolve(repoRoot, "docs/getting-started.md"), "utf8");
     expect(gettingStartedDoc).toMatch(/\/ui\b/);
+    expect(gettingStartedDoc).toMatch(/browser local storage/i);
     expect(gettingStartedDoc).not.toMatch(/\/app\b/);
     expect(gettingStartedDoc).not.toMatch(/\btyrum-gateway\b/);
 
@@ -40,13 +42,21 @@ describe("UI bootstrap and auth docs (Issue #568)", () => {
     expect(requestsDoc).not.toMatch(/`connect`\s+—\s+legacy handshake/i);
   });
 
-  it("does not document query-token auth in URLs", async () => {
+  it("limits query-token bootstrap docs to install and getting started", async () => {
     const docsDir = resolve(repoRoot, "docs");
     const mdFiles = await listMarkdownFiles(docsDir);
+    const allowedDocs = new Set([
+      resolve(repoRoot, "docs/getting-started.md"),
+      resolve(repoRoot, "docs/install.md"),
+    ]);
 
     const urlTokenPattern = /[?&](?:access_)?token=/i;
     for (const file of mdFiles) {
       const content = await readFile(file, "utf8");
+      if (allowedDocs.has(file)) {
+        expect(content).toMatch(urlTokenPattern);
+        continue;
+      }
       expect(content).not.toMatch(urlTokenPattern);
     }
 
