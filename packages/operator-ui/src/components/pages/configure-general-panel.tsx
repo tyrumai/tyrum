@@ -1,8 +1,14 @@
+import type { OperatorCore } from "@tyrum/operator-core";
 import { Monitor, Moon, Sun } from "lucide-react";
+import { useState } from "react";
+import type { OperatorUiMode } from "../../app.js";
 import { useHostApiOptional } from "../../host/host-api.js";
 import { useTheme, type ThemeMode } from "../../hooks/use-theme.js";
 import { cn } from "../../lib/cn.js";
+import { formatErrorMessage } from "../../utils/format-error-message.js";
+import type { WebAuthPersistence } from "../../web-auth.js";
 import { Alert } from "../ui/alert.js";
+import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { DesktopUpdatesCard } from "../updates/desktop-updates-card.js";
 
@@ -38,10 +44,35 @@ const THEME_OPTIONS: ThemeOption[] = [
   },
 ];
 
-export function ConfigureGeneralPanel() {
+export function ConfigureGeneralPanel({
+  core,
+  mode,
+  webAuthPersistence,
+}: {
+  core: OperatorCore;
+  mode: OperatorUiMode;
+  webAuthPersistence?: WebAuthPersistence;
+}) {
   const theme = useTheme();
   const host = useHostApiOptional();
   const desktopApi = host?.kind === "desktop" ? host.api : null;
+  const [webAuthBusy, setWebAuthBusy] = useState(false);
+  const [webAuthError, setWebAuthError] = useState<string | null>(null);
+  const activeWebAuth = mode === "web" ? webAuthPersistence : undefined;
+
+  const forgetSavedToken = async (): Promise<void> => {
+    if (!activeWebAuth?.hasStoredToken) return;
+    setWebAuthBusy(true);
+    setWebAuthError(null);
+    try {
+      core.disconnect();
+      await activeWebAuth.clearToken();
+    } catch (error) {
+      setWebAuthError(formatErrorMessage(error));
+    } finally {
+      setWebAuthBusy(false);
+    }
+  };
 
   return (
     <div className="grid gap-5" data-testid="configure-general-panel">
@@ -84,6 +115,43 @@ export function ConfigureGeneralPanel() {
           </div>
         </CardContent>
       </Card>
+
+      {activeWebAuth ? (
+        <Card data-testid="configure-web-auth">
+          <CardHeader className="pb-2.5">
+            <div className="text-sm font-medium text-fg">Browser token</div>
+            <div className="text-sm text-fg-muted">
+              Manage the operator token saved in this browser for automatic reconnects.
+            </div>
+          </CardHeader>
+          <CardContent className="grid gap-3">
+            <Alert
+              variant="info"
+              title={activeWebAuth.hasStoredToken ? "Token saved" : "No saved token"}
+              description={
+                activeWebAuth.hasStoredToken
+                  ? "This browser will keep using the saved operator token until you replace or forget it."
+                  : "Connect with a tenant admin token to save it in this browser."
+              }
+            />
+            {activeWebAuth.hasStoredToken ? (
+              <Button
+                data-testid="configure-web-auth-clear"
+                variant="secondary"
+                isLoading={webAuthBusy}
+                onClick={() => {
+                  void forgetSavedToken();
+                }}
+              >
+                Forget saved token
+              </Button>
+            ) : null}
+            {webAuthError ? (
+              <Alert variant="error" title="Forget failed" description={webAuthError} />
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
 
       {desktopApi ? (
         <DesktopUpdatesCard

@@ -3,9 +3,7 @@ import { createRoot } from "react-dom/client";
 import {
   createElevatedModeStore,
   createBearerTokenAuth,
-  createBrowserCookieAuth,
   createDeviceIdentity,
-  createGatewayAuthSession,
   createOperatorCore,
   createOperatorCoreManager,
   createTyrumHttpClient,
@@ -16,10 +14,15 @@ import {
   OperatorUiApp,
   OperatorUiHostProvider,
   type AdminAccessController,
+  type WebAuthPersistence,
 } from "@tyrum/operator-ui";
 import "@tyrum/operator-ui/globals.css";
 import { reloadPage } from "./reload-page.js";
 import { readAuthTokenFromUrl, stripAuthTokenFromUrl } from "./url-auth.js";
+
+const GATEWAY_HTTP_STORAGE_KEY = "tyrum-gateway-http";
+const GATEWAY_WS_STORAGE_KEY = "tyrum-gateway-ws";
+const OPERATOR_TOKEN_STORAGE_KEY = "tyrum-operator-token";
 
 function scrubAuthTokenFromUrl(): void {
   const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
@@ -30,7 +33,7 @@ function scrubAuthTokenFromUrl(): void {
 
 function resolveGatewayHttpBaseUrl(): string {
   try {
-    const stored = localStorage.getItem("tyrum-gateway-http");
+    const stored = localStorage.getItem(GATEWAY_HTTP_STORAGE_KEY);
     if (stored) return stored;
   } catch {}
   const override = import.meta.env.VITE_GATEWAY_HTTP_BASE_URL?.trim();
@@ -38,22 +41,54 @@ function resolveGatewayHttpBaseUrl(): string {
   return window.location.origin;
 }
 
-function resolveAuthFromLocation(httpBaseUrl: string): {
-  auth: ReturnType<typeof createBearerTokenAuth | typeof createBrowserCookieAuth>;
-  connectOnLoad: boolean;
-} {
-  const token = readAuthTokenFromUrl(window.location.href);
-  scrubAuthTokenFromUrl();
-  if (token) {
-    void createGatewayAuthSession({ token, httpBaseUrl }).catch(() => {});
-    return { auth: createBearerTokenAuth(token), connectOnLoad: true };
+function readStoredOperatorToken(): string | null {
+  try {
+    const stored = localStorage.getItem(OPERATOR_TOKEN_STORAGE_KEY)?.trim();
+    return stored ? stored : null;
+  } catch {
+    return null;
   }
-  return { auth: createBrowserCookieAuth(), connectOnLoad: false };
+}
+
+function storeOperatorToken(token: string): void {
+  localStorage.setItem(OPERATOR_TOKEN_STORAGE_KEY, token);
+}
+
+function clearStoredOperatorToken(): void {
+  localStorage.removeItem(OPERATOR_TOKEN_STORAGE_KEY);
+}
+
+function resolveAuthFromLocation(): {
+  auth: ReturnType<typeof createBearerTokenAuth>;
+  connectOnLoad: boolean;
+  hasStoredToken: boolean;
+} {
+  const tokenFromUrl = readAuthTokenFromUrl(window.location.href);
+  if (tokenFromUrl) {
+    let hasStoredToken = false;
+    try {
+      storeOperatorToken(tokenFromUrl);
+      hasStoredToken = true;
+    } catch {}
+    scrubAuthTokenFromUrl();
+    return {
+      auth: createBearerTokenAuth(tokenFromUrl),
+      connectOnLoad: true,
+      hasStoredToken,
+    };
+  }
+
+  const storedToken = readStoredOperatorToken();
+  return {
+    auth: createBearerTokenAuth(storedToken ?? ""),
+    connectOnLoad: storedToken !== null,
+    hasStoredToken: storedToken !== null,
+  };
 }
 
 function resolveGatewayWsUrl(): string {
   try {
-    const stored = localStorage.getItem("tyrum-gateway-ws");
+    const stored = localStorage.getItem(GATEWAY_WS_STORAGE_KEY);
     if (stored) return stored;
   } catch {}
   const override = import.meta.env.VITE_GATEWAY_WS_URL?.trim();
@@ -73,7 +108,7 @@ async function bootstrap(): Promise<void> {
   const deviceIdentity = await createDeviceIdentity();
   const elevatedModeStore = createElevatedModeStore();
   const httpBaseUrl = resolveGatewayHttpBaseUrl();
-  const resolvedAuth = resolveAuthFromLocation(httpBaseUrl);
+  const resolvedAuth = resolveAuthFromLocation();
   const baselineHttp = createTyrumHttpClient({
     baseUrl: httpBaseUrl,
     auth: httpAuthForAuth(resolvedAuth.auth),
@@ -100,6 +135,18 @@ async function bootstrap(): Promise<void> {
     manager.getCore().connect();
   }
 
+  const webAuthPersistence: WebAuthPersistence = {
+    hasStoredToken: resolvedAuth.hasStoredToken,
+    saveToken(token) {
+      storeOperatorToken(token);
+      reloadPage();
+    },
+    clearToken() {
+      clearStoredOperatorToken();
+      reloadPage();
+    },
+  };
+
   const root = createRoot(rootContainer);
   const render = (): void => {
     root.render(
@@ -112,11 +159,12 @@ async function bootstrap(): Promise<void> {
             onReloadPage={reloadPage}
             onReconfigureGateway={(httpUrl, wsUrl) => {
               try {
-                localStorage.setItem("tyrum-gateway-http", httpUrl);
-                localStorage.setItem("tyrum-gateway-ws", wsUrl);
+                localStorage.setItem(GATEWAY_HTTP_STORAGE_KEY, httpUrl);
+                localStorage.setItem(GATEWAY_WS_STORAGE_KEY, wsUrl);
               } catch {}
               reloadPage();
             }}
+            webAuthPersistence={webAuthPersistence}
           />
         </OperatorUiHostProvider>
       </React.StrictMode>,

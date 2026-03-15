@@ -1,4 +1,5 @@
 import type { OperatorCore } from "@tyrum/operator-core";
+import type { OperatorUiMode } from "../../app.js";
 import { AuditPanel } from "../admin-http/audit-panel.js";
 import { AppPage } from "../layout/app-page.js";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs.js";
@@ -17,9 +18,12 @@ import { useMediaQuery } from "../../hooks/use-media-query.js";
 import { ThemeProvider, useThemeOptional } from "../../hooks/use-theme.js";
 import { useReconnectScrollArea, useReconnectTabState } from "../../reconnect-ui-state.js";
 import { Select } from "../ui/select.js";
+import type { WebAuthPersistence } from "../../web-auth.js";
 
 export interface ConfigurePageProps {
   core: OperatorCore;
+  mode: OperatorUiMode;
+  webAuthPersistence?: WebAuthPersistence;
 }
 
 type ConfigurePageTab =
@@ -53,7 +57,7 @@ const CONFIGURE_TAB_OPTIONS: ReadonlyArray<{
   { value: "commands", label: "Commands", testId: "admin-ws-tab-commands" },
 ] as const;
 
-function ConfigurePageContent({ core }: ConfigurePageProps) {
+function ConfigurePageContent({ core, mode, webAuthPersistence }: ConfigurePageProps) {
   const [activeTab, setActiveTab] = useReconnectTabState<ConfigurePageTab>(
     "configure.tab",
     "general",
@@ -106,7 +110,7 @@ function ConfigurePageContent({ core }: ConfigurePageProps) {
         </div>
 
         <TabsContent value="general">
-          <ConfigureGeneralPanel />
+          <ConfigureGeneralPanel core={core} mode={mode} webAuthPersistence={webAuthPersistence} />
         </TabsContent>
 
         <TabsContent value="policy">

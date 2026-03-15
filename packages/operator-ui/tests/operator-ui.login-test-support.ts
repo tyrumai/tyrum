@@ -1,64 +1,107 @@
 import { expect, it, vi } from "vitest";
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import {
-  createBearerTokenAuth,
-  createBrowserCookieAuth,
-  createOperatorCore,
-} from "../../operator-core/src/index.js";
+import { createBearerTokenAuth, createOperatorCore } from "../../operator-core/src/index.js";
 import { OperatorUiApp } from "../src/index.js";
+import { createDeferred } from "./operator-ui.test-support.js";
 import { FakeWsClient, createFakeHttpClient } from "./operator-ui.test-fixtures.js";
+
+type WebAuthPersistence = {
+  hasStoredToken: boolean;
+  saveToken?: (token: string) => Promise<void> | void;
+  clearToken?: () => Promise<void> | void;
+};
+
+function renderWebOperatorApp(params?: {
+  authToken?: string;
+  ws?: FakeWsClient;
+  webAuthPersistence?: WebAuthPersistence;
+}): {
+  container: HTMLDivElement;
+  root: Root;
+  ws: FakeWsClient;
+} {
+  const ws = params?.ws ?? new FakeWsClient(false);
+  const { http } = createFakeHttpClient();
+  const core = createOperatorCore({
+    wsUrl: "ws://example.test/ws",
+    httpBaseUrl: "http://example.test",
+    auth: createBearerTokenAuth(params?.authToken ?? ""),
+    deps: { ws, http },
+  });
+
+  const webAuthPersistence = params?.webAuthPersistence
+    ? {
+        hasStoredToken: params.webAuthPersistence.hasStoredToken,
+        saveToken: params.webAuthPersistence.saveToken ?? vi.fn(),
+        clearToken: params.webAuthPersistence.clearToken ?? vi.fn(),
+      }
+    : undefined;
+
+  const container = document.createElement("div");
+  document.body.appendChild(container);
+
+  let root: Root | null = null;
+  act(() => {
+    root = createRoot(container);
+    root.render(
+      React.createElement(OperatorUiApp, {
+        core,
+        mode: "web",
+        webAuthPersistence,
+      }),
+    );
+  });
+
+  if (!root) {
+    throw new Error("Failed to create React root.");
+  }
+
+  return { container, root, ws };
+}
+
+function cleanup(root: Root, container: HTMLDivElement): void {
+  act(() => {
+    root.unmount();
+  });
+  container.remove();
+}
+
+function getTokenField(container: HTMLElement): HTMLInputElement {
+  const tokenField = container.querySelector<HTMLInputElement>('[data-testid="login-token"]');
+  expect(tokenField).not.toBeNull();
+  return tokenField!;
+}
+
+function getLoginButton(container: HTMLElement): HTMLButtonElement {
+  const loginButton = container.querySelector<HTMLButtonElement>('[data-testid="login-button"]');
+  expect(loginButton).not.toBeNull();
+  return loginButton!;
+}
+
+function setInputValue(input: HTMLInputElement, value: string): void {
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+  if (!setter) {
+    throw new Error("Failed to resolve input value setter");
+  }
+  setter.call(input, value);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+}
 
 function registerLoginFormTests(): void {
   it("disables browser assistance on the login token field", () => {
-    const ws = new FakeWsClient(false);
-    const { http } = createFakeHttpClient();
-    const core = createOperatorCore({
-      wsUrl: "ws://example.test/ws",
-      httpBaseUrl: "http://example.test",
-      auth: createBrowserCookieAuth(),
-      deps: { ws, http },
-    });
+    const { container, root } = renderWebOperatorApp();
 
-    const container = document.createElement("div");
-    document.body.appendChild(container);
+    const tokenField = getTokenField(container);
+    expect(tokenField.getAttribute("spellcheck")).toBe("false");
+    expect(tokenField.getAttribute("autocapitalize")).toBe("none");
+    expect(tokenField.getAttribute("autocorrect")).toBe("off");
 
-    let root: Root | null = null;
-    act(() => {
-      root = createRoot(container);
-      root.render(React.createElement(OperatorUiApp, { core, mode: "web" }));
-    });
-
-    const tokenField = container.querySelector<HTMLTextAreaElement>('[data-testid="login-token"]');
-    expect(tokenField).not.toBeNull();
-    expect(tokenField!.getAttribute("spellcheck")).toBe("false");
-    expect(tokenField!.getAttribute("autocapitalize")).toBe("none");
-    expect(tokenField!.getAttribute("autocorrect")).toBe("off");
-
-    act(() => {
-      root?.unmount();
-    });
-    container.remove();
+    cleanup(root, container);
   });
 
   it("wraps the connect screen in a scroll area", () => {
-    const ws = new FakeWsClient(false);
-    const { http } = createFakeHttpClient();
-    const core = createOperatorCore({
-      wsUrl: "ws://example.test/ws",
-      httpBaseUrl: "http://example.test",
-      auth: createBrowserCookieAuth(),
-      deps: { ws, http },
-    });
-
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-
-    let root: Root | null = null;
-    act(() => {
-      root = createRoot(container);
-      root.render(React.createElement(OperatorUiApp, { core, mode: "web" }));
-    });
+    const { container, root } = renderWebOperatorApp();
 
     const scrollArea = container.querySelector<HTMLElement>("[data-scroll-area-root]");
     expect(scrollArea).not.toBeNull();
@@ -69,327 +112,220 @@ function registerLoginFormTests(): void {
     expect(container.textContent).toContain("default-tenant-admin");
     expect(container.textContent).toContain("tyrum tokens issue-default-tenant-admin");
 
-    act(() => {
-      root?.unmount();
-    });
-    container.remove();
+    cleanup(root, container);
   });
 
-  it("sets aria-busy on the login button while logging in", async () => {
-    let resolveFetch: ((response: Response) => void) | null = null;
-    const fetchPromise = new Promise<Response>((resolve) => {
-      resolveFetch = resolve;
-    });
-    const fetchMock = vi.fn(async () => fetchPromise);
-    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
-
-    const ws = new FakeWsClient(false);
-    const { http } = createFakeHttpClient();
-    const core = createOperatorCore({
-      wsUrl: "ws://example.test/ws",
-      httpBaseUrl: "http://example.test",
-      auth: createBrowserCookieAuth(),
-      deps: { ws, http },
+  it("sets aria-busy on the login button while saving a token", async () => {
+    const saveToken = vi.fn();
+    const deferred = createDeferred<void>();
+    saveToken.mockReturnValue(deferred.promise);
+    const { container, root } = renderWebOperatorApp({
+      webAuthPersistence: {
+        hasStoredToken: false,
+        saveToken,
+      },
     });
 
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-
-    let root: Root | null = null;
+    const tokenField = getTokenField(container);
     act(() => {
-      root = createRoot(container);
-      root.render(React.createElement(OperatorUiApp, { core, mode: "web" }));
+      setInputValue(tokenField, "test-token");
     });
 
-    const tokenField = container.querySelector<HTMLTextAreaElement>('[data-testid="login-token"]');
-    expect(tokenField).not.toBeNull();
-    act(() => {
-      tokenField!.value = "test-token";
-    });
-
-    const loginButton = container.querySelector<HTMLButtonElement>('[data-testid="login-button"]');
-    expect(loginButton).not.toBeNull();
-
+    const loginButton = getLoginButton(container);
     await act(async () => {
-      loginButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      loginButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       await Promise.resolve();
     });
 
-    const liveButton = container.querySelector<HTMLButtonElement>('[data-testid="login-button"]');
-    expect(liveButton?.getAttribute("aria-busy")).toBe("true");
+    const liveButton = getLoginButton(container);
+    expect(saveToken).toHaveBeenCalledWith("test-token");
+    expect(liveButton.getAttribute("aria-busy")).toBe("true");
 
-    resolveFetch?.(new Response(null, { status: 204 }));
+    deferred.resolve();
     await act(async () => {
       await Promise.resolve();
     });
 
-    act(() => {
-      root?.unmount();
-    });
-    container.remove();
+    cleanup(root, container);
   });
 
-  it("logs in via /auth/session in web mode", async () => {
-    const fetchMock = vi.fn(async () => new Response(null, { status: 204 }));
-    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
-
-    const ws = new FakeWsClient(false);
-    const { http } = createFakeHttpClient();
-    const core = createOperatorCore({
-      wsUrl: "ws://example.test/ws",
-      httpBaseUrl: "http://example.test",
-      auth: createBrowserCookieAuth(),
-      deps: { ws, http },
+  it("saves a trimmed browser token and waits for reload instead of connecting immediately", async () => {
+    const saveToken = vi.fn(async () => {});
+    const { container, root, ws } = renderWebOperatorApp({
+      webAuthPersistence: {
+        hasStoredToken: false,
+        saveToken,
+      },
     });
 
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-
-    let root: Root | null = null;
+    const tokenField = getTokenField(container);
     act(() => {
-      root = createRoot(container);
-      root.render(React.createElement(OperatorUiApp, { core, mode: "web" }));
+      setInputValue(tokenField, "  test-token  ");
     });
 
-    const tokenField = container.querySelector<HTMLTextAreaElement>('[data-testid="login-token"]');
-    expect(tokenField).not.toBeNull();
-
-    act(() => {
-      tokenField!.value = "  test-token  ";
-    });
-
-    const loginButton = container.querySelector<HTMLButtonElement>('[data-testid="login-button"]');
-    expect(loginButton).not.toBeNull();
-
+    const loginButton = getLoginButton(container);
     await act(async () => {
-      loginButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      loginButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       await Promise.resolve();
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(ws.connect).toHaveBeenCalledTimes(1);
+    expect(saveToken).toHaveBeenCalledTimes(1);
+    expect(saveToken).toHaveBeenCalledWith("test-token");
+    expect(ws.connect).toHaveBeenCalledTimes(0);
 
-    act(() => {
-      root?.unmount();
-    });
-    container.remove();
+    cleanup(root, container);
   });
 
-  it("rejects blank tokens on the login page", async () => {
-    const fetchMock = vi.fn(async () => new Response(null, { status: 204 }));
-    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
-
-    const ws = new FakeWsClient(false);
-    const { http } = createFakeHttpClient();
-    const core = createOperatorCore({
-      wsUrl: "ws://example.test/ws",
-      httpBaseUrl: "http://example.test",
-      auth: createBrowserCookieAuth(),
-      deps: { ws, http },
+  it("rejects blank tokens on the login page when nothing is saved", async () => {
+    const { container, root, ws } = renderWebOperatorApp({
+      webAuthPersistence: {
+        hasStoredToken: false,
+      },
     });
 
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-
-    let root: Root | null = null;
-    act(() => {
-      root = createRoot(container);
-      root.render(React.createElement(OperatorUiApp, { core, mode: "web" }));
-    });
-
-    const loginButton = container.querySelector<HTMLButtonElement>('[data-testid="login-button"]');
-    expect(loginButton).not.toBeNull();
-
+    const loginButton = getLoginButton(container);
     await act(async () => {
-      loginButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      loginButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       await Promise.resolve();
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(0);
+    expect(ws.connect).toHaveBeenCalledTimes(0);
     expect(container.textContent).toContain("Token is required");
 
-    act(() => {
-      root?.unmount();
+    cleanup(root, container);
+  });
+
+  it("reconnects with the saved token when the field is left blank", async () => {
+    const { container, root, ws } = renderWebOperatorApp({
+      webAuthPersistence: {
+        hasStoredToken: true,
+      },
     });
-    container.remove();
+
+    expect(container.textContent).toContain("Saved token available");
+    expect(container.textContent).toContain("Forget saved token");
+
+    const loginButton = getLoginButton(container);
+    await act(async () => {
+      loginButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(ws.connect).toHaveBeenCalledTimes(1);
+    expect(container.textContent).not.toContain("Token is required");
+
+    cleanup(root, container);
+  });
+
+  it("replaces the saved token when a new token is entered", async () => {
+    const saveToken = vi.fn(async () => {});
+    const { container, root, ws } = renderWebOperatorApp({
+      webAuthPersistence: {
+        hasStoredToken: true,
+        saveToken,
+      },
+    });
+
+    const tokenField = getTokenField(container);
+    act(() => {
+      setInputValue(tokenField, "  replacement-token  ");
+    });
+
+    const loginButton = getLoginButton(container);
+    await act(async () => {
+      loginButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(saveToken).toHaveBeenCalledWith("replacement-token");
+    expect(ws.connect).toHaveBeenCalledTimes(0);
+
+    cleanup(root, container);
+  });
+
+  it("forgets the saved token from the connect page", async () => {
+    const clearToken = vi.fn(async () => {});
+    const { container, root } = renderWebOperatorApp({
+      webAuthPersistence: {
+        hasStoredToken: true,
+        clearToken,
+      },
+    });
+
+    const forgetButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="forget-saved-token-button"]',
+    );
+    expect(forgetButton).not.toBeNull();
+
+    await act(async () => {
+      forgetButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(clearToken).toHaveBeenCalledTimes(1);
+
+    cleanup(root, container);
   });
 }
 
 function registerLoginErrorTests(): void {
-  it("surfaces gateway errors when login fails", async () => {
-    const fetchMock = vi.fn(async () => {
-      return new Response(JSON.stringify({ error: "unauthorized", message: "invalid token" }), {
-        status: 401,
-        headers: { "content-type": "application/json" },
-      });
+  it("surfaces persistence errors when saving a token fails", async () => {
+    const saveToken = vi.fn(async () => {
+      throw new Error("storage exploded");
     });
-    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
-
-    const ws = new FakeWsClient(false);
-    const { http } = createFakeHttpClient();
-    const core = createOperatorCore({
-      wsUrl: "ws://example.test/ws",
-      httpBaseUrl: "http://example.test",
-      auth: createBrowserCookieAuth(),
-      deps: { ws, http },
+    const { container, root, ws } = renderWebOperatorApp({
+      webAuthPersistence: {
+        hasStoredToken: false,
+        saveToken,
+      },
     });
 
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-
-    let root: Root | null = null;
+    const tokenField = getTokenField(container);
     act(() => {
-      root = createRoot(container);
-      root.render(React.createElement(OperatorUiApp, { core, mode: "web" }));
+      setInputValue(tokenField, "test-token");
     });
 
-    const tokenField = container.querySelector<HTMLTextAreaElement>('[data-testid="login-token"]');
-    expect(tokenField).not.toBeNull();
-
-    act(() => {
-      tokenField!.value = "test-token";
-    });
-
-    const loginButton = container.querySelector<HTMLButtonElement>('[data-testid="login-button"]');
-    expect(loginButton).not.toBeNull();
-
+    const loginButton = getLoginButton(container);
     await act(async () => {
-      loginButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      loginButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       await Promise.resolve();
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(ws.connect).toHaveBeenCalledTimes(0);
-    expect(container.textContent).toContain("invalid token");
+    expect(container.textContent).toContain("storage exploded");
 
-    act(() => {
-      root?.unmount();
-    });
-    container.remove();
+    cleanup(root, container);
   });
 
-  it("surfaces json error codes when login fails without a message field", async () => {
-    const fetchMock = vi.fn(async () => {
-      return new Response(JSON.stringify({ error: "unauthorized" }), {
-        status: 401,
-        headers: { "content-type": "application/json" },
-      });
+  it("surfaces persistence errors when forgetting a saved token fails", async () => {
+    const clearToken = vi.fn(async () => {
+      throw new Error("clear exploded");
     });
-    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
-
-    const ws = new FakeWsClient(false);
-    const { http } = createFakeHttpClient();
-    const core = createOperatorCore({
-      wsUrl: "ws://example.test/ws",
-      httpBaseUrl: "http://example.test",
-      auth: createBrowserCookieAuth(),
-      deps: { ws, http },
+    const { container, root } = renderWebOperatorApp({
+      webAuthPersistence: {
+        hasStoredToken: true,
+        clearToken,
+      },
     });
 
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-
-    let root: Root | null = null;
-    act(() => {
-      root = createRoot(container);
-      root.render(React.createElement(OperatorUiApp, { core, mode: "web" }));
-    });
-
-    const tokenField = container.querySelector<HTMLTextAreaElement>('[data-testid="login-token"]');
-    expect(tokenField).not.toBeNull();
-
-    act(() => {
-      tokenField!.value = "test-token";
-    });
-
-    const loginButton = container.querySelector<HTMLButtonElement>('[data-testid="login-button"]');
-    expect(loginButton).not.toBeNull();
+    const forgetButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="forget-saved-token-button"]',
+    );
+    expect(forgetButton).not.toBeNull();
 
     await act(async () => {
-      loginButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      forgetButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       await Promise.resolve();
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(ws.connect).toHaveBeenCalledTimes(0);
-    expect(container.textContent).toContain("unauthorized");
+    expect(container.textContent).toContain("clear exploded");
 
-    act(() => {
-      root?.unmount();
-    });
-    container.remove();
-  });
-
-  it("surfaces text errors when login fails with non-json response", async () => {
-    const fetchMock = vi.fn(async () => {
-      return new Response("gateway exploded", {
-        status: 500,
-        headers: { "content-type": "text/plain" },
-      });
-    });
-    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
-
-    const ws = new FakeWsClient(false);
-    const { http } = createFakeHttpClient();
-    const core = createOperatorCore({
-      wsUrl: "ws://example.test/ws",
-      httpBaseUrl: "http://example.test",
-      auth: createBrowserCookieAuth(),
-      deps: { ws, http },
-    });
-
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-
-    let root: Root | null = null;
-    act(() => {
-      root = createRoot(container);
-      root.render(React.createElement(OperatorUiApp, { core, mode: "web" }));
-    });
-
-    const tokenField = container.querySelector<HTMLTextAreaElement>('[data-testid="login-token"]');
-    expect(tokenField).not.toBeNull();
-
-    act(() => {
-      tokenField!.value = "test-token";
-    });
-
-    const loginButton = container.querySelector<HTMLButtonElement>('[data-testid="login-button"]');
-    expect(loginButton).not.toBeNull();
-
-    await act(async () => {
-      loginButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      await Promise.resolve();
-    });
-
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(ws.connect).toHaveBeenCalledTimes(0);
-    expect(container.textContent).toContain("gateway exploded");
-
-    act(() => {
-      root?.unmount();
-    });
-    container.remove();
+    cleanup(root, container);
   });
 
   it("surfaces disconnect details on the connect page", () => {
     const ws = new FakeWsClient(false);
-    const { http } = createFakeHttpClient();
-    const core = createOperatorCore({
-      wsUrl: "ws://example.test/ws",
-      httpBaseUrl: "http://example.test",
-      auth: createBrowserCookieAuth(),
-      deps: { ws, http },
-    });
-
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-
-    let root: Root | null = null;
-    act(() => {
-      root = createRoot(container);
-      root.render(React.createElement(OperatorUiApp, { core, mode: "web" }));
-    });
+    const { container, root } = renderWebOperatorApp({ ws });
 
     act(() => {
       ws.emit("disconnected", { code: 4001, reason: "unauthorized" });
@@ -399,10 +335,7 @@ function registerLoginErrorTests(): void {
     expect(container.textContent).toContain("unauthorized");
     expect(container.textContent).toContain("4001");
 
-    act(() => {
-      root?.unmount();
-    });
-    container.remove();
+    cleanup(root, container);
   });
 
   it("keeps the app shell visible while recovering from a transient disconnect", () => {
@@ -426,7 +359,6 @@ function registerLoginErrorTests(): void {
         root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
       });
 
-      // Shell is visible while connected.
       expect(container.querySelector('[data-testid="nav-dashboard"]')).not.toBeNull();
 
       act(() => {
@@ -438,7 +370,6 @@ function registerLoginErrorTests(): void {
         });
       });
 
-      // Still visible while recovering (connecting).
       expect(container.querySelector('[data-testid="nav-dashboard"]')).not.toBeNull();
       expect(container.querySelector('[data-testid="login-button"]')).toBeNull();
 
@@ -446,8 +377,6 @@ function registerLoginErrorTests(): void {
         vi.advanceTimersByTime(10_001);
       });
 
-      // After grace expires, fall back to the connect screen but stay in a
-      // visible reconnecting state if a retry is scheduled.
       expect(container.querySelector('[data-testid="login-button"]')).not.toBeNull();
       expect(container.querySelector('[data-testid="nav-dashboard"]')).toBeNull();
       expect(container.querySelector('[data-testid="login-button"]')?.textContent).toContain(
@@ -462,8 +391,6 @@ function registerLoginErrorTests(): void {
         ws.emit("disconnected", { code: 1006, reason: "still down" });
       });
 
-      // Once gated, repeated transient disconnect events should not re-show shell,
-      // and should keep showing a reconnecting state on the connect page.
       expect(container.querySelector('[data-testid="login-button"]')).not.toBeNull();
       expect(container.querySelector('[data-testid="nav-dashboard"]')).toBeNull();
       expect(container.querySelector('[data-testid="login-button"]')?.textContent).toContain(

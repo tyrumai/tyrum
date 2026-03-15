@@ -57,11 +57,11 @@ When the gateway is running, it serves the operator web UI as a single-page app 
 
 - `http://127.0.0.1:8788/ui`
 
-Browser login uses a cookie bootstrap flow:
+Browser login uses direct bearer-token auth:
 
-- The UI sends your admin token to `POST /auth/session` once (`{ "token": "<admin token>" }`).
-- The gateway sets an `HttpOnly` auth cookie for the browser.
-- Subsequent HTTP and WebSocket requests authenticate via that cookie (tokens are never placed in URLs).
+- The UI stores your admin token in browser local storage after you paste it once.
+- Subsequent HTTP and WebSocket requests authenticate directly with that saved token.
+- `/ui?token=<admin token>` is supported as a one-time bootstrap path; the UI persists the token and then strips it from the URL.
 
 On first startup, the gateway prints bootstrap tokens to stdout once:
 

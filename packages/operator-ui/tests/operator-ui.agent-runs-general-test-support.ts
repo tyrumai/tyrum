@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { toast } from "sonner";
 import { createBearerTokenAuth, createOperatorCore } from "../../operator-core/src/index.js";
 import { OperatorUiApp } from "../src/index.js";
+import { ConfigurePage } from "../src/components/pages/configure-page.js";
 import { waitForSelector, openConfigureGeneral } from "./operator-ui.test-support.js";
 import {
   FakeWsClient,
@@ -25,6 +26,9 @@ export function registerAgentRunsGeneralTests(): void {
       httpBaseUrl: "http://example.test",
       auth: createBearerTokenAuth("test"),
       deps: { ws, http },
+    });
+    act(() => {
+      core.connect();
     });
 
     const container = document.createElement("div");
@@ -170,6 +174,9 @@ export function registerAgentRunsGeneralTests(): void {
       auth: createBearerTokenAuth("test"),
       deps: { ws, http },
     });
+    act(() => {
+      core.connect();
+    });
 
     const container = document.createElement("div");
     document.body.appendChild(container);
@@ -185,6 +192,108 @@ export function registerAgentRunsGeneralTests(): void {
     expect(container.querySelector('[data-testid="configure-general-panel"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="configure-theme"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="configure-update"]')).not.toBeNull();
+
+    act(() => {
+      root?.unmount();
+    });
+    container.remove();
+  });
+
+  it("shows browser token status in Configure general and forgets the saved token", async () => {
+    const clearToken = vi.fn(async () => {});
+    const ws = new FakeWsClient();
+    const { http } = createFakeHttpClient();
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test"),
+      deps: { ws, http },
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    act(() => {
+      root = createRoot(container);
+      root.render(
+        React.createElement(ConfigurePage, {
+          core,
+          mode: "web",
+          webAuthPersistence: {
+            hasStoredToken: true,
+            saveToken: vi.fn(),
+            clearToken,
+          },
+        }),
+      );
+    });
+
+    expect(container.querySelector('[data-testid="configure-web-auth"]')).not.toBeNull();
+    expect(container.textContent).toContain("Token saved");
+
+    const clearButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="configure-web-auth-clear"]',
+    );
+    expect(clearButton).not.toBeNull();
+
+    await act(async () => {
+      clearButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(clearToken).toHaveBeenCalledTimes(1);
+    expect(ws.disconnect).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      root?.unmount();
+    });
+    container.remove();
+  });
+
+  it("shows an error in Configure general when forgetting the saved token fails", async () => {
+    const clearToken = vi.fn(async () => {
+      throw new Error("forget failed");
+    });
+    const ws = new FakeWsClient();
+    const { http } = createFakeHttpClient();
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test"),
+      deps: { ws, http },
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    act(() => {
+      root = createRoot(container);
+      root.render(
+        React.createElement(ConfigurePage, {
+          core,
+          mode: "web",
+          webAuthPersistence: {
+            hasStoredToken: true,
+            saveToken: vi.fn(),
+            clearToken,
+          },
+        }),
+      );
+    });
+
+    const clearButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="configure-web-auth-clear"]',
+    );
+    expect(clearButton).not.toBeNull();
+
+    await act(async () => {
+      clearButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain("forget failed");
 
     act(() => {
       root?.unmount();

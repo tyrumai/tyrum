@@ -4,10 +4,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tyrum/operator-core/browser", () => ({
   createBearerTokenAuth: vi.fn(),
-  createBrowserCookieAuth: vi.fn(),
   createDeviceIdentity: vi.fn(),
   createElevatedModeStore: vi.fn(),
-  createGatewayAuthSession: vi.fn(),
   createOperatorCore: vi.fn(),
   createOperatorCoreManager: vi.fn(),
   createTyrumHttpClient: vi.fn(),
@@ -41,6 +39,12 @@ vi.mock("../src/reload-page.js", () => ({
 describe("apps/web main bootstrap", () => {
   type RootMock = { render: ReturnType<typeof vi.fn> };
 
+  type WebAuthPersistence = {
+    hasStoredToken: boolean;
+    saveToken: (token: string) => void;
+    clearToken: () => void;
+  };
+
   type OperatorUiAppProps = {
     adminAccessController?: {
       enter: () => Promise<void>;
@@ -48,6 +52,7 @@ describe("apps/web main bootstrap", () => {
     };
     onReloadPage: () => void;
     onReconfigureGateway: (httpUrl: string, wsUrl: string) => void;
+    webAuthPersistence: WebAuthPersistence;
   };
 
   const setupDom = (url: string): ReturnType<typeof vi.spyOn> => {
@@ -118,6 +123,10 @@ describe("apps/web main bootstrap", () => {
         revoke: vi.fn(),
       },
     } as never);
+    vi.mocked(operatorCore.createBearerTokenAuth).mockImplementation(((token: string) => ({
+      type: "bearer-token",
+      token,
+    })) as typeof operatorCore.createBearerTokenAuth);
 
     const { manager, unsubscribe, core } = makeManagerMock();
     vi.mocked(operatorCore.createOperatorCoreManager).mockReturnValue(
@@ -162,10 +171,11 @@ describe("apps/web main bootstrap", () => {
     vi.restoreAllMocks();
     vi.resetModules();
     vi.clearAllMocks();
+    localStorage.clear();
     document.body.innerHTML = "";
   });
 
-  it("creates the operator core manager and scrubs auth token from the URL", async () => {
+  it("uses a URL token as bearer auth, persists it, and strips it from the URL", async () => {
     const {
       elevatedModeStore,
       core,
@@ -176,16 +186,9 @@ describe("apps/web main bootstrap", () => {
       root,
       unsubscribe,
       urlAuth,
-    } = await arrangeBootstrap("/ui?token=test#hash");
+    } = await arrangeBootstrap("/ui?token=test-token#hash");
 
-    const bearerAuth = { type: "bearer-token", token: "test-token" } as const;
-    vi.mocked(operatorCore.createBearerTokenAuth).mockReturnValue(
-      bearerAuth as unknown as ReturnType<typeof operatorCore.createBearerTokenAuth>,
-    );
-
-    vi.mocked(operatorCore.createGatewayAuthSession).mockResolvedValue(
-      new Response(null, { status: 204 }),
-    );
+    const setItemSpy = vi.spyOn(Storage.prototype, "setItem");
 
     vi.mocked(urlAuth.readAuthTokenFromUrl).mockReturnValue("test-token");
     vi.mocked(urlAuth.stripAuthTokenFromUrl).mockReturnValue("/ui#hash");
@@ -196,18 +199,13 @@ describe("apps/web main bootstrap", () => {
     const expectedWsUrl = `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/ws`;
 
     expect(operatorCore.createBearerTokenAuth).toHaveBeenCalledWith("test-token");
-    expect(operatorCore.createGatewayAuthSession).toHaveBeenCalledWith(
-      expect.objectContaining({
-        token: "test-token",
-        httpBaseUrl: expectedHttpBaseUrl,
-      }),
-    );
+    expect(setItemSpy).toHaveBeenCalledWith("tyrum-operator-token", "test-token");
     expect(operatorCore.createDeviceIdentity).toHaveBeenCalledTimes(1);
     expect(operatorCore.createOperatorCoreManager).toHaveBeenCalledWith(
       expect.objectContaining({
         wsUrl: expectedWsUrl,
         httpBaseUrl: expectedHttpBaseUrl,
-        baselineAuth: bearerAuth,
+        baselineAuth: { type: "bearer-token", token: "test-token" },
         elevatedModeStore,
         createCore: expect.any(Function),
       }),
@@ -216,13 +214,13 @@ describe("apps/web main bootstrap", () => {
     managerArgs?.createCore?.({
       wsUrl: expectedWsUrl,
       httpBaseUrl: expectedHttpBaseUrl,
-      auth: bearerAuth,
+      auth: { type: "bearer-token", token: "test-token" },
       elevatedModeStore,
     });
     expect(operatorCore.createOperatorCore).toHaveBeenCalledWith({
       wsUrl: expectedWsUrl,
       httpBaseUrl: expectedHttpBaseUrl,
-      auth: bearerAuth,
+      auth: { type: "bearer-token", token: "test-token" },
       elevatedModeStore,
       deviceIdentity,
     });
@@ -230,64 +228,72 @@ describe("apps/web main bootstrap", () => {
     expect(replaceStateSpy).toHaveBeenCalledWith(expect.anything(), "", "/ui#hash");
     expect(root.render).toHaveBeenCalled();
 
+    const props = getRenderedOperatorUiProps(root);
+    expect(props.webAuthPersistence.hasStoredToken).toBe(true);
+
     expectDisposedOnUnload({ unsubscribe, manager, elevatedModeStore });
   });
 
-  it("uses browser cookie auth when no token is present and does not rewrite the URL", async () => {
-    const {
-      elevatedModeStore,
-      core,
-      manager,
-      operatorCore,
-      replaceStateSpy,
-      root,
-      unsubscribe,
-      urlAuth,
-    } = await arrangeBootstrap("/ui");
+  it("prefers a URL token over an already-saved browser token", async () => {
+    const { core, operatorCore, replaceStateSpy, urlAuth } =
+      await arrangeBootstrap("/ui?token=url-token");
 
-    const cookieAuth = { type: "browser-cookie" } as const;
-    vi.mocked(operatorCore.createBrowserCookieAuth).mockReturnValue(
-      cookieAuth as unknown as ReturnType<typeof operatorCore.createBrowserCookieAuth>,
-    );
+    localStorage.setItem("tyrum-operator-token", "stored-token");
+    const setItemSpy = vi.spyOn(Storage.prototype, "setItem");
+
+    vi.mocked(urlAuth.readAuthTokenFromUrl).mockReturnValue("url-token");
+    vi.mocked(urlAuth.stripAuthTokenFromUrl).mockReturnValue("/ui");
+
+    await import("../src/main.tsx");
+
+    expect(operatorCore.createBearerTokenAuth).toHaveBeenCalledWith("url-token");
+    expect(operatorCore.createBearerTokenAuth).not.toHaveBeenCalledWith("stored-token");
+    expect(setItemSpy).toHaveBeenCalledWith("tyrum-operator-token", "url-token");
+    expect(core.connect).toHaveBeenCalledTimes(1);
+    expect(replaceStateSpy).toHaveBeenCalledWith(expect.anything(), "", "/ui");
+  });
+
+  it("auto-connects with a stored token when there is no URL token", async () => {
+    const { core, operatorCore, replaceStateSpy, root, urlAuth } = await arrangeBootstrap("/ui");
+
+    localStorage.setItem("tyrum-operator-token", "stored-token");
+    vi.mocked(urlAuth.readAuthTokenFromUrl).mockReturnValue(undefined);
+    vi.mocked(urlAuth.stripAuthTokenFromUrl).mockReturnValue("/ui");
+
+    await import("../src/main.tsx");
+
+    expect(operatorCore.createBearerTokenAuth).toHaveBeenCalledWith("stored-token");
+    expect(core.connect).toHaveBeenCalledTimes(1);
+    expect(replaceStateSpy).not.toHaveBeenCalled();
+    expect(getRenderedOperatorUiProps(root).webAuthPersistence.hasStoredToken).toBe(true);
+  });
+
+  it("uses empty bearer auth with no saved token and stays on the connect page", async () => {
+    const { core, operatorCore, replaceStateSpy, root, urlAuth } = await arrangeBootstrap("/ui");
 
     vi.mocked(urlAuth.readAuthTokenFromUrl).mockReturnValue(undefined);
     vi.mocked(urlAuth.stripAuthTokenFromUrl).mockReturnValue("/ui");
 
     await import("../src/main.tsx");
 
-    expect(operatorCore.createBrowserCookieAuth).toHaveBeenCalledTimes(1);
-    expect(operatorCore.createDeviceIdentity).toHaveBeenCalledTimes(1);
-    expect(operatorCore.createBearerTokenAuth).not.toHaveBeenCalled();
-    expect(operatorCore.createGatewayAuthSession).not.toHaveBeenCalled();
-    expect(operatorCore.createOperatorCoreManager).toHaveBeenCalledWith(
-      expect.objectContaining({
-        baselineAuth: cookieAuth,
-        elevatedModeStore,
-        createCore: expect.any(Function),
-      }),
-    );
+    expect(operatorCore.createBearerTokenAuth).toHaveBeenCalledWith("");
     expect(core.connect).not.toHaveBeenCalled();
     expect(replaceStateSpy).not.toHaveBeenCalled();
-    expect(root.render).toHaveBeenCalled();
-
-    expectDisposedOnUnload({ unsubscribe, manager, elevatedModeStore });
+    expect(getRenderedOperatorUiProps(root).webAuthPersistence.hasStoredToken).toBe(false);
   });
 
   it("throws when the root element is missing", async () => {
     await expect(import("../src/main.tsx")).rejects.toThrow("Missing root element (#root).");
   });
 
-  it("re-renders on manager updates and persists gateway reconfiguration before reloading", async () => {
-    const { operatorCore, manager, reloadPage, root, urlAuth } = await arrangeBootstrap("/ui");
+  it("re-renders on manager updates and wires reload, gateway, and token persistence actions", async () => {
+    const { manager, reloadPage, root, urlAuth } = await arrangeBootstrap("/ui");
 
-    const cookieAuth = { type: "browser-cookie" } as const;
-    vi.mocked(operatorCore.createBrowserCookieAuth).mockReturnValue(
-      cookieAuth as unknown as ReturnType<typeof operatorCore.createBrowserCookieAuth>,
-    );
     vi.mocked(urlAuth.readAuthTokenFromUrl).mockReturnValue(undefined);
     vi.mocked(urlAuth.stripAuthTokenFromUrl).mockReturnValue("/ui");
 
     const setItemSpy = vi.spyOn(Storage.prototype, "setItem");
+    const removeItemSpy = vi.spyOn(Storage.prototype, "removeItem");
 
     await import("../src/main.tsx");
 
@@ -301,21 +307,22 @@ describe("apps/web main bootstrap", () => {
     const props = getRenderedOperatorUiProps(root);
     expect(typeof props.adminAccessController?.enter).toBe("function");
     expect(typeof props.adminAccessController?.exit).toBe("function");
+
     props.onReloadPage();
+    props.webAuthPersistence.saveToken("next-token");
+    props.webAuthPersistence.clearToken();
     props.onReconfigureGateway("http://gateway.internal", "ws://gateway.internal/ws");
 
+    expect(setItemSpy).toHaveBeenCalledWith("tyrum-operator-token", "next-token");
+    expect(removeItemSpy).toHaveBeenCalledWith("tyrum-operator-token");
     expect(setItemSpy).toHaveBeenCalledWith("tyrum-gateway-http", "http://gateway.internal");
     expect(setItemSpy).toHaveBeenCalledWith("tyrum-gateway-ws", "ws://gateway.internal/ws");
-    expect(reloadPage.reloadPage).toHaveBeenCalledTimes(2);
+    expect(reloadPage.reloadPage).toHaveBeenCalledTimes(4);
   });
 
   it("still reloads when gateway reconfiguration cannot be persisted", async () => {
-    const { operatorCore, reloadPage, root, urlAuth } = await arrangeBootstrap("/ui");
+    const { reloadPage, root, urlAuth } = await arrangeBootstrap("/ui");
 
-    const cookieAuth = { type: "browser-cookie" } as const;
-    vi.mocked(operatorCore.createBrowserCookieAuth).mockReturnValue(
-      cookieAuth as unknown as ReturnType<typeof operatorCore.createBrowserCookieAuth>,
-    );
     vi.mocked(urlAuth.readAuthTokenFromUrl).mockReturnValue(undefined);
     vi.mocked(urlAuth.stripAuthTokenFromUrl).mockReturnValue("/ui");
 
@@ -330,5 +337,22 @@ describe("apps/web main bootstrap", () => {
 
     expect(setItemSpy).toHaveBeenCalledTimes(1);
     expect(reloadPage.reloadPage).toHaveBeenCalledTimes(1);
+  });
+
+  it("surfaces token persistence failures to the caller instead of reloading", async () => {
+    const { reloadPage, root, urlAuth } = await arrangeBootstrap("/ui");
+
+    vi.mocked(urlAuth.readAuthTokenFromUrl).mockReturnValue(undefined);
+    vi.mocked(urlAuth.stripAuthTokenFromUrl).mockReturnValue("/ui");
+
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("storage unavailable");
+    });
+
+    await import("../src/main.tsx");
+
+    const props = getRenderedOperatorUiProps(root);
+    expect(() => props.webAuthPersistence.saveToken("broken-token")).toThrow("storage unavailable");
+    expect(reloadPage.reloadPage).not.toHaveBeenCalled();
   });
 });
