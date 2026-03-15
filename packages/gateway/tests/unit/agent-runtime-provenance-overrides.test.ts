@@ -224,13 +224,13 @@ describe("AgentRuntime - provenance and policy overrides", () => {
     );
 
     const result = await toolSet["read"]!.execute({
-      path: " ./docs//architecture/../policy-overrides.md ",
+      path: " ./docs//architecture/gateway/./policy-overrides.md ",
     });
 
     expect(result).toBe("ok");
     expect(policyService.evaluateToolCall).toHaveBeenCalledWith(
       expect.objectContaining({
-        toolMatchTarget: "read:docs/policy-overrides.md",
+        toolMatchTarget: "read:docs/architecture/gateway/policy-overrides.md",
       }),
     );
     expect(approvalSpy).toHaveBeenCalledWith(
@@ -245,7 +245,7 @@ describe("AgentRuntime - provenance and policy overrides", () => {
         suggested_overrides: [
           {
             tool_id: "read",
-            pattern: "read:docs/policy-overrides.md",
+            pattern: "read:docs/architecture/gateway/policy-overrides.md",
             workspace_id: DEFAULT_WORKSPACE_ID,
           },
         ],

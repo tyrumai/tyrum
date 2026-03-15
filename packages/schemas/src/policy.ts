@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-// Canonical policy decision vocabulary (docs/architecture/sandbox-policy.md).
+// Canonical policy decision vocabulary (docs/architecture/gateway/sandbox-policy/index.md).
 export const Decision = z.enum(["allow", "require_approval", "deny"]);
 export type Decision = z.infer<typeof Decision>;
 
@@ -9,7 +9,7 @@ export const RuleKind = z.enum([
   "pii_guardrail",
   "legal_compliance",
   "connector_scope",
-  // Tool-policy domains (docs/architecture/sandbox-policy.md, tools.md).
+  // Tool-policy domains (docs/architecture/gateway/sandbox-policy/index.md, docs/architecture/gateway/tools.md).
   "tool_policy",
   "network_egress",
   "secrets",

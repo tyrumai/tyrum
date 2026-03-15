@@ -82,7 +82,7 @@ pnpm format:check
 
 If your PR changes database migrations under `packages/gateway/migrations/*`, also verify:
 
-- Naming conventions are followed (PK/FK/timestamps): `docs/architecture/db-naming-conventions.md`
+- Naming conventions are followed (PK/FK/timestamps): `docs/architecture/scaling-ha/db-naming-conventions.md`
 - SQLite and Postgres stay aligned: `pnpm test packages/gateway/tests/contract/schema-contract.test.ts`
 
 ### Coverage (optional locally, enforced in CI)

@@ -7,10 +7,10 @@ describe("canonicalizeToolMatchTarget", () => {
 
   it("canonicalizes fs paths with stable workspace-relative formatting", () => {
     const target = canonicalizeToolMatchTarget("read", {
-      path: " ./docs//architecture/../policy-overrides.md ",
+      path: " ./docs//architecture/gateway/./policy-overrides.md ",
     });
 
-    expect(target).toBe("read:docs/policy-overrides.md");
+    expect(target).toBe("read:docs/architecture/gateway/policy-overrides.md");
   });
 
   it("rejects parent traversal that would escape the workspace boundary", () => {
@@ -29,21 +29,21 @@ describe("canonicalizeToolMatchTarget", () => {
   it("canonicalizes absolute fs paths within the workspace to workspace-relative targets", () => {
     const target = canonicalizeWithHome(
       "read",
-      { path: "/workspace/docs//architecture/../policy-overrides.md" },
+      { path: "/workspace/docs//architecture/gateway/./policy-overrides.md" },
       "/workspace",
     );
 
-    expect(target).toBe("read:docs/policy-overrides.md");
+    expect(target).toBe("read:docs/architecture/gateway/policy-overrides.md");
   });
 
   it("canonicalizes Windows drive paths within the workspace to workspace-relative targets", () => {
     const target = canonicalizeWithHome(
       "read",
-      { path: "C:\\workspace\\docs\\policy-overrides.md" },
+      { path: "C:\\workspace\\docs\\architecture\\gateway\\policy-overrides.md" },
       "C:\\workspace",
     );
 
-    expect(target).toBe("read:docs/policy-overrides.md");
+    expect(target).toBe("read:docs/architecture/gateway/policy-overrides.md");
   });
 
   it("canonicalizes '.' to an explicit workspace-root target", () => {

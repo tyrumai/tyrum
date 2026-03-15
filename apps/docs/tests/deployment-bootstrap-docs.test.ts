@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFile, stat } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { listMarkdownFiles } from "./markdown-utils.js";
 
@@ -16,7 +16,32 @@ function extractMarkdownLinks(markdown: string): string[] {
 function isLocalMarkdownLink(target: string): boolean {
   if (!target || target.startsWith("#")) return false;
   if (/^(https?:|mailto:|tel:|data:)/i.test(target)) return false;
+  if (target.includes("<") || target.includes(">")) return false;
   return true;
+}
+
+function normalizeDocsRoute(route: string): string {
+  if (route === "/") return route;
+  const trimmed = route.endsWith("/") ? route.slice(0, -1) : route;
+  return trimmed.length === 0 ? "/" : trimmed;
+}
+
+function extractSlug(markdown: string): string | null {
+  const frontmatterMatch = markdown.match(/^---\n([\s\S]*?)\n---\n/);
+  if (!frontmatterMatch) return null;
+
+  const slugMatch = frontmatterMatch[1].match(/(?:^|\n)slug:\s*([^\n]+)/);
+  return slugMatch?.[1]?.trim() ?? null;
+}
+
+function inferDocsRoute(file: string): string {
+  const docsRelativePath = relative(docsRoot, file).replace(/\\/g, "/");
+  const withoutExtension = docsRelativePath.replace(/\.mdx?$/, "");
+  if (withoutExtension === "index") return "/";
+  if (withoutExtension.endsWith("/index")) {
+    return `/${withoutExtension.slice(0, -"/index".length)}`;
+  }
+  return `/${withoutExtension}`;
 }
 
 async function readRepoFile(path: string): Promise<string> {
@@ -56,6 +81,15 @@ describe("deployment bootstrap docs", () => {
       resolve(repoRoot, "apps/desktop/README.md"),
       ...(await listMarkdownFiles(docsRoot)),
     ];
+    const docsRouteTargets = new Set<string>();
+
+    for (const file of markdownFiles) {
+      if (!file.startsWith(docsRoot)) continue;
+      const content = await readFile(file, "utf8");
+      docsRouteTargets.add(normalizeDocsRoute(inferDocsRoute(file)));
+      const slug = extractSlug(content);
+      if (slug) docsRouteTargets.add(normalizeDocsRoute(slug));
+    }
 
     for (const file of markdownFiles) {
       const content = await readFile(file, "utf8");
@@ -64,6 +98,19 @@ describe("deployment bootstrap docs", () => {
       for (const link of links) {
         const linkPath = link.split("#", 1)[0]?.split("?", 1)[0] ?? "";
         if (linkPath.length === 0) continue;
+
+        if (linkPath.startsWith("/")) {
+          const normalizedRoute = normalizeDocsRoute(linkPath);
+          if (docsRouteTargets.has(normalizedRoute)) continue;
+
+          const repoAbsolutePath = resolve(repoRoot, `.${linkPath}`);
+          const info = await stat(repoAbsolutePath);
+          expect(
+            info.isFile() || info.isDirectory(),
+            `broken absolute markdown link in ${file}: ${link}`,
+          ).toBe(true);
+          continue;
+        }
 
         const targetPath = resolve(dirname(file), linkPath);
         const info = await stat(targetPath);
