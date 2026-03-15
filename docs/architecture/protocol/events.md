@@ -6,8 +6,11 @@ The wire shapes are defined by shared, versioned contracts (see [Contracts](../c
 
 ## Event envelope
 
-- `event_id`: unique id for dedupe. For `approval.resolved`, `pairing.resolved`, and `policy_override.created`, the gateway persists event identity so re-emission of the same transition reuses the same `event_id`.
-- `type`: event name (for example `run.updated`, `approval.requested`, `artifact.created`, `capability.ready`, `attempt.evidence`).
+For current event names and payloads, treat the schema exports in `packages/schemas` as
+authoritative. This page mirrors that contract for operator and implementation guidance.
+
+- `event_id`: unique id for dedupe. For `approval.updated`, `pairing.updated`, and `policy_override.created`, the gateway persists event identity so re-emission of the same transition reuses the same `event_id`.
+- `type`: event name (for example `run.updated`, `approval.updated`, `artifact.created`, `capability.ready`, `attempt.evidence`).
 - `occurred_at`: timestamp.
 - `scope`: routing scope (global, agent, session key/lane, run, node, or client).
 - `payload`: typed fields defined by a contract.
@@ -16,9 +19,9 @@ The wire shapes are defined by shared, versioned contracts (see [Contracts](../c
 
 - **Connection lifecycle:** connected/disconnected, heartbeat timeouts.
 - **Presence:** gateway/client/node presence upserts, prunes, and snapshots (see [Presence](../presence.md)).
-- **Pairing:** node requested/approved/denied/revoked.
+- **Pairing:** node pairing state changes, including approval and revocation.
 - **Node capability readiness:** nodes report capability readiness (for example `capability.ready`).
-- **Approvals:** requests/resolutions, expiry.
+- **Approvals:** approval state changes, expiry, and linked policy override lifecycle.
 - **Execution engine:** run queued/started/paused/resumed/completed/failed; step started/completed; retries and budget events.
 - **Evidence:** artifacts captured/attached; postconditions passed/failed.
 - **Agent runtime:** plan/workflow selection and high-level intent updates.
@@ -29,12 +32,12 @@ The wire shapes are defined by shared, versioned contracts (see [Contracts](../c
 
 ## Event catalog (v1)
 
-This is the canonical list of `type` values and payload contracts for the v1 WebSocket event stream (protocol revision `2`).
+This is the documented list of `type` values and payload contracts for the v1 WebSocket event
+stream (protocol revision `2`), aligned to the current exported schemas.
 
 ### Approvals and policy
 
-- `approval.requested` — `{ approval: Approval }`
-- `approval.resolved` — `{ approval: Approval }`
+- `approval.updated` — `{ approval: Approval }`
 - `policy_override.created` — `{ override: PolicyOverride }`
 - `policy_override.revoked` — `{ override: PolicyOverride }`
 - `policy_override.expired` — `{ override: PolicyOverride }`
@@ -72,9 +75,7 @@ This is the canonical list of `type` values and payload contracts for the v1 Web
 
 ### Pairing and presence
 
-- `pairing.requested` — `{ pairing: NodePairingRequest }`
-- `pairing.approved` — `{ pairing: NodePairingRequest, scoped_token }`
-- `pairing.resolved` — `{ pairing: NodePairingRequest }`
+- `pairing.updated` — `{ pairing: NodePairingRequest, scoped_token? }`
 - `presence.upserted` — `{ entry: PresenceEntry }`
 - `presence.pruned` — `{ instance_id }`
 
@@ -101,11 +102,12 @@ This is the canonical list of `type` values and payload contracts for the v1 Web
 
 ## Notes
 
-- Some gateway→peer interactions are modeled as **requests** (with responses) rather than events, for example `task.execute` and `approval.request`.
+- Some gateway→peer interactions are modeled as **requests** (with responses) rather than events,
+  for example `task.execute` and `approval.resolve`.
 - Events are **tenant-scoped**. The gateway delivers an event only to peers authenticated within the same `tenant_id`.
 - Stable event identity is currently persisted for:
-  - `approval.resolved` (per approval transition)
-  - `pairing.resolved` (per pairing transition/status)
+  - `approval.updated` (per approval transition/status)
+  - `pairing.updated` (per pairing transition/status)
   - `policy_override.created` (per override)
 
 ## Delivery expectations
@@ -113,7 +115,9 @@ This is the canonical list of `type` values and payload contracts for the v1 Web
 - Events are delivered **at-least-once**. Consumers must tolerate duplicates and implement idempotent handling.
 - Consumers should tolerate **unknown `type` values** (forward-compat) and ignore events they don't recognize.
 - Deduplicate using `event_id` (and treat `occurred_at` as informational, not a strict ordering guarantee).
-- Re-emitting the same `approval.resolved`, `pairing.resolved`, or `policy_override.created` transition preserves the original `event_id`; other event types may still receive fresh ids when independently re-emitted.
+- Re-emitting the same `approval.updated`, `pairing.updated`, or `policy_override.created`
+  transition preserves the original `event_id`; other event types may still receive fresh ids when
+  independently re-emitted.
 - Clients should tolerate reconnect and resubscribe without losing safety invariants; durable state in the StateStore remains the source of truth.
 
 ### Client SDK semantics

@@ -7,6 +7,10 @@ Contracts define the shapes and semantics of Tyrum interfaces. They are used to 
 - Plugin registration surfaces
 - Stored event payloads (so persisted data stays interpretable over time)
 
+For schema-backed interfaces, the exported contracts in `packages/schemas` are the authoritative
+source of truth. Architecture docs may summarize or explain those interfaces, but the schema
+definitions govern the actual wire and validation behavior.
+
 ## Contract formats
 
 Tyrum contracts are:

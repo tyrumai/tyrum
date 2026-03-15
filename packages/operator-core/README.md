@@ -1,6 +1,7 @@
 # `@tyrum/operator-core`
 
 Shared, renderer-agnostic operator state + actions built on top of `@tyrum/client` (WS + HTTP).
+This package is the client-side foundation used by the web app, desktop app, mobile app, and TUI.
 
 ## Usage
 
@@ -123,6 +124,44 @@ const connection = useSyncExternalStore(
 - `refreshStatus()`
 - `refreshUsage(query?)`
 - `refreshPresence()`
+
+### `workboardStore`
+
+Tracks WorkBoard items, tasks, drilldown records, and selection state for the operator work view.
+
+### `chatStore`
+
+Tracks session/chat threads, active session state, and live AI SDK chat updates used by operator
+clients.
+
+### `agentStatusStore`
+
+Tracks agent inventory and high-level status summaries used by the operator dashboard and agent
+management surfaces.
+
+### `desktopEnvironmentHostsStore` / `desktopEnvironmentsStore`
+
+Track gateway-managed desktop environment hosts, lifecycle state, logs, and related admin actions.
+
+### `elevatedModeStore`
+
+Tracks time-bounded elevated mode used to unlock admin or mutating operations from operator
+surfaces.
+
+### `autoSyncStore`
+
+Tracks background sync work scheduled after reconnects and explicit refreshes.
+
+## Surface summary
+
+`createOperatorCore()` returns a single object that owns:
+
+- WebSocket + HTTP clients
+- connection lifecycle controls
+- elevated-mode state
+- approvals, runs, pairing, status, workboard, chat, activity, and agent-status stores
+- desktop-environment stores for operator/admin surfaces
+- reconnect-driven best-effort resync via `syncAllNow()`
 
 ## Reconnect semantics
 
