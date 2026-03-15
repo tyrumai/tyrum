@@ -213,6 +213,67 @@ describe("DesktopEnvironmentsPage", () => {
     core.dispose();
   });
 
+  it("keeps the admin access gate visible when one desktop inventory request loses scope", async () => {
+    let resolveEnvironments:
+      | ((value: {
+          status: "ok";
+          environments: readonly ReturnType<typeof createEnvironment>[];
+        }) => void)
+      | null = null;
+
+    const ws = new FakeWsClient();
+    const { http } = createFakeHttpClient();
+    adminHttpClient = http;
+    const forbiddenError = new TyrumHttpClientError("http_error", "insufficient scope", {
+      status: 403,
+      error: "forbidden",
+    });
+    http.desktopEnvironmentHosts.list.mockImplementation(async () => {
+      adminHttpClient = null;
+      canMutate = false;
+      throw forbiddenError;
+    });
+    http.desktopEnvironments.list.mockImplementation(
+      async () =>
+        await new Promise((resolve) => {
+          resolveEnvironments = resolve;
+        }),
+    );
+
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test"),
+      deps: { ws, http },
+    });
+    const testRoot = renderIntoDocument(React.createElement(DesktopEnvironmentsPage, { core }));
+
+    await waitForAssertion(() => {
+      expect(http.desktopEnvironmentHosts.list).toHaveBeenCalledTimes(1);
+      expect(http.desktopEnvironments.list).toHaveBeenCalledTimes(1);
+      expect(resolveEnvironments).not.toBeNull();
+    });
+
+    await act(async () => {
+      resolveEnvironments?.({
+        status: "ok",
+        environments: [createEnvironment()],
+      });
+      await Promise.resolve();
+    });
+
+    await waitForAssertion(() => {
+      expect(testRoot.container.querySelector("[data-testid='admin-access-gate']")).not.toBeNull();
+    });
+    expect(testRoot.container.textContent).toContain(
+      "Authorize admin access to load desktop environments",
+    );
+    expect(testRoot.container.textContent).not.toContain("insufficient scope");
+
+    cleanupTestRoot(testRoot);
+    core.dispose();
+  });
+
   it("reloads desktop inventory only once when admin access is re-granted", async () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();

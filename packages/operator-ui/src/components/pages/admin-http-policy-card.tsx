@@ -197,12 +197,6 @@ export function AdminHttpPolicyCard({
     void loadAll();
   }, [loadAll]);
 
-  React.useEffect(() => {
-    if (!requiresAdminAccess || !canMutate) return;
-    setRequiresAdminAccess(false);
-    void loadAll();
-  }, [canMutate, loadAll, requiresAdminAccess]);
-
   if (requiresAdminAccess) {
     return (
       <AdminAccessGateCard

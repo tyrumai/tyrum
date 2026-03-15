@@ -29,6 +29,8 @@ function toErrorMessage(error: unknown): string {
   return String(error);
 }
 
+type RefreshResult = "admin-access-required" | "error" | "ok" | "stale";
+
 export function DesktopEnvironmentsPage({ core }: { core: OperatorCore }) {
   const adminHttp = useAdminHttpClient({ access: "strict" });
   const adminHttpRef = useRef<AdminHttpClient | null>(adminHttp);
@@ -89,24 +91,34 @@ export function DesktopEnvironmentsPage({ core }: { core: OperatorCore }) {
     setSelectedEnvironmentId(environments[0]?.environment_id ?? null);
   }, [environments, pendingSelectedEnvironmentId, selectedEnvironmentId]);
 
-  async function refreshHosts(httpClient: AdminHttpClient): Promise<void> {
+  async function refreshHosts(
+    httpClient: AdminHttpClient,
+    options: { updateAdminAccess?: boolean } = {},
+  ): Promise<RefreshResult> {
+    const updateAdminAccess = options.updateAdminAccess ?? true;
     setHostsLoading(true);
     setHostsError(null);
     try {
       const result = await httpClient.desktopEnvironmentHosts.list();
-      if (adminHttpRef.current !== httpClient) return;
+      if (adminHttpRef.current !== httpClient) return "stale";
       setHosts(result.hosts);
       setHostsError(null);
-      setRequiresAdminAccess(false);
+      if (updateAdminAccess) {
+        setRequiresAdminAccess(false);
+      }
+      return "ok";
     } catch (error) {
-      if (adminHttpRef.current !== httpClient) return;
+      if (adminHttpRef.current !== httpClient) return "stale";
       if (isAdminAccessHttpError(error)) {
         core.elevatedModeStore.exit();
-        setRequiresAdminAccess(true);
+        if (updateAdminAccess) {
+          setRequiresAdminAccess(true);
+        }
         setHostsError(null);
-        return;
+        return "admin-access-required";
       }
       setHostsError(toErrorMessage(error));
+      return "error";
     } finally {
       if (adminHttpRef.current === httpClient) {
         setHostsLoading(false);
@@ -114,12 +126,16 @@ export function DesktopEnvironmentsPage({ core }: { core: OperatorCore }) {
     }
   }
 
-  async function refreshEnvironments(httpClient: AdminHttpClient): Promise<void> {
+  async function refreshEnvironments(
+    httpClient: AdminHttpClient,
+    options: { updateAdminAccess?: boolean } = {},
+  ): Promise<RefreshResult> {
+    const updateAdminAccess = options.updateAdminAccess ?? true;
     setEnvironmentsLoading(true);
     setEnvironmentsError(null);
     try {
       const result = await httpClient.desktopEnvironments.list();
-      if (adminHttpRef.current !== httpClient) return;
+      if (adminHttpRef.current !== httpClient) return "stale";
       setEnvironments(result.environments);
       setLogsById((current) =>
         Object.fromEntries(
@@ -130,16 +146,22 @@ export function DesktopEnvironmentsPage({ core }: { core: OperatorCore }) {
         ),
       );
       setEnvironmentsError(null);
-      setRequiresAdminAccess(false);
+      if (updateAdminAccess) {
+        setRequiresAdminAccess(false);
+      }
+      return "ok";
     } catch (error) {
-      if (adminHttpRef.current !== httpClient) return;
+      if (adminHttpRef.current !== httpClient) return "stale";
       if (isAdminAccessHttpError(error)) {
         core.elevatedModeStore.exit();
-        setRequiresAdminAccess(true);
+        if (updateAdminAccess) {
+          setRequiresAdminAccess(true);
+        }
         setEnvironmentsError(null);
-        return;
+        return "admin-access-required";
       }
       setEnvironmentsError(toErrorMessage(error));
+      return "error";
     } finally {
       if (adminHttpRef.current === httpClient) {
         setEnvironmentsLoading(false);
@@ -148,7 +170,18 @@ export function DesktopEnvironmentsPage({ core }: { core: OperatorCore }) {
   }
 
   async function refreshPageData(httpClient: AdminHttpClient): Promise<void> {
-    await Promise.all([refreshHosts(httpClient), refreshEnvironments(httpClient)]);
+    const [hostsResult, environmentsResult] = await Promise.all([
+      refreshHosts(httpClient, { updateAdminAccess: false }),
+      refreshEnvironments(httpClient, { updateAdminAccess: false }),
+    ]);
+    if (adminHttpRef.current !== httpClient) {
+      return;
+    }
+    if (hostsResult === "admin-access-required" || environmentsResult === "admin-access-required") {
+      setRequiresAdminAccess(true);
+      return;
+    }
+    setRequiresAdminAccess(false);
   }
 
   useEffect(() => {

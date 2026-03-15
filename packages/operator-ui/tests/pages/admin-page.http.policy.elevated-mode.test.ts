@@ -27,6 +27,20 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+async function waitForAssertion(assertion: () => void, attempts = 8): Promise<void> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      assertion();
+      return;
+    } catch (error) {
+      lastError = error;
+      await flush();
+    }
+  }
+  throw lastError;
+}
+
 describe("ConfigurePage (HTTP) policy elevated mode prompts", () => {
   it("falls back to the admin access gate when policy reads lose admin scope", async () => {
     const { core } = createAdminHttpTestCore();
@@ -71,6 +85,77 @@ describe("ConfigurePage (HTTP) policy elevated mode prompts", () => {
     );
     expect(document.body.textContent).not.toContain("insufficient scope");
     expect(page.container.querySelector("[data-testid='admin-http-policy']")).toBeNull();
+
+    cleanupAdminHttpPage(page);
+  });
+
+  it("reloads policy reads only once when elevated mode is re-entered", async () => {
+    let allowReads = false;
+    const { core } = createAdminHttpTestCore();
+    const forbiddenError = new TyrumHttpClientError("http_error", "insufficient scope", {
+      status: 403,
+      error: "forbidden",
+    });
+    core.http.policy.getBundle = vi.fn(async () => {
+      throw forbiddenError;
+    });
+    core.http.policy.listOverrides = vi.fn(async () => {
+      throw forbiddenError;
+    });
+    core.http.policyConfig!.getDeployment = vi.fn(async () => {
+      throw forbiddenError;
+    });
+    core.http.policyConfig!.listDeploymentRevisions = vi.fn(async () => {
+      throw forbiddenError;
+    });
+    core.http.agents!.list = vi.fn(async () => {
+      throw forbiddenError;
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const writableConfigResponse = policyPageWritableConfigGetResponse(input, init);
+      const getResponse = policyPageGetResponse(input, init);
+      const readResponse = writableConfigResponse ?? getResponse;
+      if (readResponse) {
+        if (!allowReads) {
+          return new Response(
+            JSON.stringify({ error: "forbidden", message: "insufficient scope" }),
+            {
+              status: 403,
+              headers: { "content-type": "application/json" },
+            },
+          );
+        }
+        return readResponse;
+      }
+      throw new Error(`Unexpected mutation request to ${requestUrl(input)}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const page = renderAdminHttpConfigurePage(core);
+    await switchHttpTab(page.container, "admin-http-tab-policy");
+    await waitForAssertion(() => {
+      expect(document.body.querySelector("[data-testid='admin-access-gate']")).not.toBeNull();
+    });
+
+    allowReads = true;
+    act(() => {
+      core.elevatedModeStore.enter({
+        elevatedToken: "test-elevated-token",
+        expiresAt: "2026-03-01T00:02:00.000Z",
+      });
+    });
+
+    await waitForAssertion(() => {
+      expect(page.container.querySelector("[data-testid='admin-http-policy']")).not.toBeNull();
+    });
+
+    expect(
+      fetchMock.mock.calls.filter(
+        ([input, init]) =>
+          requestUrl(input as RequestInfo | URL) === "http://example.test/policy/bundle" &&
+          (init?.method ?? "GET") === "GET",
+      ),
+    ).toHaveLength(2);
 
     cleanupAdminHttpPage(page);
   });
