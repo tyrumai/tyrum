@@ -33,6 +33,8 @@ export interface CapabilityProvider {
   execute(action: ActionPrimitive, ctx?: TaskExecuteContext): Promise<TaskResult>;
 }
 
+type AutoExecuteClient = Pick<TyrumClient, "on" | "respondTaskExecute">;
+
 // ---------------------------------------------------------------------------
 // autoExecute
 // ---------------------------------------------------------------------------
@@ -41,7 +43,7 @@ export interface CapabilityProvider {
  * Wires {@link CapabilityProvider}s to a {@link TyrumClient} -- automatically
  * executes dispatched tasks using the matching provider and reports results.
  */
-export function autoExecute(client: TyrumClient, providers: CapabilityProvider[]): void {
+export function autoExecute(client: AutoExecuteClient, providers: CapabilityProvider[]): void {
   const capMap = new Map<ClientCapability, CapabilityProvider>();
   for (const provider of providers) {
     capMap.set(provider.capability, provider);

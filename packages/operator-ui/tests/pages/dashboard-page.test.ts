@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { createStore } from "../../../operator-core/src/store.js";
 import { AppShell } from "../../src/components/layout/app-shell.js";
 import { DashboardPage } from "../../src/components/pages/dashboard-page.js";
-import { sampleNodeInventoryResponse } from "../operator-ui.http-fixture-data.js";
+import { sampleNodeInventoryResponse } from "../operator-ui.data-fixtures.js";
 import {
   cleanupTestRoot,
   renderIntoDocument,

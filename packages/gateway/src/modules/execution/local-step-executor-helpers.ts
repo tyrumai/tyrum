@@ -1,9 +1,11 @@
 import type { SecretProvider } from "../secret/provider.js";
+import {
+  createSecretHandleResolver,
+  resolveSecretsWithHandles,
+} from "../secret/handle-resolver.js";
 import type { PlaybookOutputContract } from "./playbook-output-contract.js";
 import { validateJsonAgainstSchema } from "./playbook-output-contract.js";
 import { resolve, relative, isAbsolute } from "node:path";
-
-const SECRET_HANDLE_PREFIX = "secret:";
 
 export function enforceJsonOutputContract(
   contract: PlaybookOutputContract | undefined,
@@ -139,40 +141,5 @@ export async function resolveSecrets(
   secretProvider: SecretProvider | undefined,
 ): Promise<{ resolved: unknown; secrets: string[] }> {
   if (!secretProvider) return { resolved: args, secrets: [] };
-
-  const handles = await secretProvider.list();
-  const handleById = new Map(handles.map((h) => [h.handle_id, h]));
-
-  const secrets: string[] = [];
-
-  const walk = async (value: unknown): Promise<unknown> => {
-    if (typeof value === "string" && value.startsWith(SECRET_HANDLE_PREFIX)) {
-      const handleId = value.slice(SECRET_HANDLE_PREFIX.length);
-      const handle = handleById.get(handleId);
-      const resolved = handle ? await secretProvider.resolve(handle) : null;
-      if (resolved !== null) {
-        secrets.push(resolved);
-        return resolved;
-      }
-      return value;
-    }
-
-    if (Array.isArray(value)) {
-      return Promise.all(value.map(walk));
-    }
-
-    if (value !== null && typeof value === "object") {
-      const entries = Object.entries(value as Record<string, unknown>);
-      const out: Record<string, unknown> = {};
-      for (const [k, v] of entries) {
-        out[k] = await walk(v);
-      }
-      return out;
-    }
-
-    return value;
-  };
-
-  const resolved = await walk(args);
-  return { resolved, secrets };
+  return await resolveSecretsWithHandles(args, createSecretHandleResolver(secretProvider));
 }

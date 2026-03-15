@@ -10,6 +10,7 @@ import {
   type TyrumRequestOptions,
 } from "./http/index.js";
 import type { TyrumHttpClientOptions as BaseTyrumHttpClientOptions } from "./http/shared.js";
+import { createManagedNodeClientLifecycle } from "./managed-node-client.js";
 import {
   TyrumClient as BaseTyrumClient,
   type TyrumClientDynamicSchema,
@@ -48,6 +49,7 @@ export function createTyrumHttpClient(
 export {
   normalizeFingerprint256,
   createBrowserLocalStorageDeviceIdentityStorage,
+  createManagedNodeClientLifecycle,
   TyrumHttpClientError,
 };
 export * from "./public-device-identity.js";
@@ -64,3 +66,4 @@ export type {
   TyrumRequestOptions,
 };
 export { VERSION };
+export type { ManagedNodeClient, ManagedNodeClientLifecycle } from "./managed-node-client.js";

@@ -3,6 +3,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import React, { act, useEffect } from "react";
 import { cleanupTestRoot, createTestRoot } from "../test-utils.js";
+import { createManagedNodeClientLifecycleMock } from "../../../client/tests/managed-node-client.test-support.js";
+
+const clientInstances: FakeTyrumClient[] = [];
 
 vi.mock("sonner", () => ({
   toast: {
@@ -16,6 +19,10 @@ type TyrumClientHandler = (evt?: unknown) => void;
 class FakeTyrumClient {
   #handlers = new Map<string, Set<TyrumClientHandler>>();
   readonly capabilityReady = vi.fn(async () => {});
+
+  constructor() {
+    clientInstances.push(this);
+  }
 
   on(event: string, handler: TyrumClientHandler): void {
     const set = this.#handlers.get(event) ?? new Set();
@@ -36,6 +43,10 @@ class FakeTyrumClient {
     this.#emit("disconnected");
   }
 
+  emit(event: string, evt?: unknown): void {
+    this.#emit(event, evt);
+  }
+
   #emit(event: string, evt?: unknown): void {
     const set = this.#handlers.get(event);
     if (!set) return;
@@ -45,17 +56,25 @@ class FakeTyrumClient {
   }
 }
 
-vi.mock("@tyrum/client/browser", () => ({
-  autoExecute: vi.fn(),
-  createBrowserLocalStorageDeviceIdentityStorage: vi.fn((_key: string) => ({})),
-  formatDeviceIdentityError: vi.fn((err: unknown) => String(err)),
-  loadOrCreateDeviceIdentity: vi.fn(async () => ({
-    deviceId: "device-1",
-    publicKey: "pub-1",
-    privateKey: "priv-1",
-  })),
-  TyrumClient: FakeTyrumClient,
-}));
+vi.mock("@tyrum/client/browser", () => {
+  const autoExecute = vi.fn();
+
+  return {
+    autoExecute,
+    createManagedNodeClientLifecycle: createManagedNodeClientLifecycleMock({
+      autoExecute,
+      requireConnectedObject: true,
+    }),
+    createBrowserLocalStorageDeviceIdentityStorage: vi.fn((_key: string) => ({})),
+    formatDeviceIdentityError: vi.fn((err: unknown) => String(err)),
+    loadOrCreateDeviceIdentity: vi.fn(async () => ({
+      deviceId: "device-1",
+      publicKey: "pub-1",
+      privateKey: "priv-1",
+    })),
+    TyrumClient: FakeTyrumClient,
+  };
+});
 
 function stubLocalStorage(initial?: Record<string, string>): void {
   const store = new Map<string, string>(Object.entries(initial ?? {}));
@@ -103,6 +122,7 @@ async function clickButton(label: string): Promise<void> {
 }
 
 afterEach(() => {
+  clientInstances.length = 0;
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
@@ -329,6 +349,62 @@ describe("BrowserNodeProvider", () => {
       });
 
       expect(document.querySelector("[data-testid='browser-node-consent-dialog']")).toBeNull();
+    } finally {
+      cleanupTestRoot(testRoot);
+    }
+  });
+
+  it("surfaces disconnect and transport errors through browser node state", async () => {
+    const { BrowserNodeProvider, useBrowserNode } =
+      await import("../../src/browser-node/browser-node-provider.js");
+
+    stubLocalStorage({ "tyrum.operator-ui.browserNode.enabled": "1" });
+    stubBrowserApis();
+
+    let capturedApi: any = null;
+
+    function ApiCapture({ onChange }: { onChange: (api: unknown) => void }) {
+      const api = useBrowserNode();
+      useEffect(() => {
+        onChange(api);
+      }, [api, onChange]);
+      return null;
+    }
+
+    const testRoot = createTestRoot();
+    act(() => {
+      testRoot.root.render(
+        React.createElement(
+          BrowserNodeProvider,
+          { wsUrl: "ws://example.test/ws-1" },
+          React.createElement(ApiCapture, { onChange: (api) => (capturedApi = api) }),
+        ),
+      );
+    });
+
+    try {
+      await flushEffects();
+      await flushEffects();
+
+      const client = clientInstances.at(0);
+      expect(client).toBeDefined();
+      expect(capturedApi.status).toBe("connected");
+
+      await act(async () => {
+        client?.emit("transport_error", { message: "network down" });
+        await Promise.resolve();
+      });
+
+      expect(capturedApi.error).toBe("network down");
+      expect(capturedApi.status).toBe("connected");
+
+      await act(async () => {
+        client?.emit("disconnected");
+        await Promise.resolve();
+      });
+
+      expect(capturedApi.status).toBe("disconnected");
+      expect(capturedApi.clientId).toBeNull();
     } finally {
       cleanupTestRoot(testRoot);
     }

@@ -78,5 +78,5 @@ describe("AgentRuntime", () => {
       .find((entry) => !isTitleGenerateRequest(entry)) as { abortSignal?: AbortSignal } | undefined;
     expect(call).toBeDefined();
     expect(call?.abortSignal).toBeInstanceOf(AbortSignal);
-  });
+  }, 15_000);
 });

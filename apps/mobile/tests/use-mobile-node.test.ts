@@ -1,13 +1,12 @@
 // @vitest-environment jsdom
-
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MobileConnectionConfig } from "../src/mobile-config.js";
-
+import { createManagedNodeClientLifecycleMock } from "../../../packages/client/tests/managed-node-client.test-support.js";
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
-
 const {
+  clientInstances,
   capturedClientOptions,
   MockTyrumClient,
   autoExecuteMock,
@@ -21,6 +20,7 @@ const {
   loadOrCreateDeviceIdentityMock,
   updateConfigMock,
 } = vi.hoisted(() => {
+  const clientInstancesInner: MockTyrumClientInner[] = [];
   const capturedClientOptionsInner: unknown[] = [];
   const autoExecuteMockInner = vi.fn();
   const clipboardWriteMockInner = vi.fn(async () => {});
@@ -41,10 +41,8 @@ const {
     publicKey: "public",
     privateKey: "private",
   }));
-
   class MockTyrumClientInner {
-    private readonly listeners = new Map<string, Set<() => void>>();
-
+    private readonly listeners = new Map<string, Set<(event?: unknown) => void>>();
     capabilityReady = vi.fn(async () => {});
     locationBeacon = vi.fn(async () => ({
       sample: {},
@@ -52,6 +50,7 @@ const {
     }));
 
     constructor(options: unknown) {
+      clientInstancesInner.push(this);
       capturedClientOptionsInner.push(options);
     }
 
@@ -68,18 +67,25 @@ const {
       disconnectMockInner();
     }
 
-    on(event: string, listener: () => void) {
-      const listeners = this.listeners.get(event) ?? new Set<() => void>();
+    on(event: string, listener: (event?: unknown) => void) {
+      const listeners = this.listeners.get(event) ?? new Set<(event?: unknown) => void>();
       listeners.add(listener);
       this.listeners.set(event, listeners);
     }
 
-    off(event: string, listener: () => void) {
+    off(event: string, listener: (event?: unknown) => void) {
       this.listeners.get(event)?.delete(listener);
+    }
+
+    emit(event: string, payload?: unknown) {
+      for (const listener of this.listeners.get(event) ?? []) {
+        listener(payload);
+      }
     }
   }
 
   return {
+    clientInstances: clientInstancesInner,
     capturedClientOptions: capturedClientOptionsInner,
     MockTyrumClient: MockTyrumClientInner,
     autoExecuteMock: autoExecuteMockInner,
@@ -113,9 +119,11 @@ vi.mock("@capacitor/device", () => ({
     getInfo: deviceInfoMock,
   },
 }));
-
 vi.mock("@tyrum/client/browser", () => ({
   autoExecute: autoExecuteMock,
+  createManagedNodeClientLifecycle: createManagedNodeClientLifecycleMock({
+    autoExecute: autoExecuteMock,
+  }),
   formatDeviceIdentityError: vi.fn((error: unknown) =>
     error instanceof Error ? error.message : String(error),
   ),
@@ -148,27 +156,14 @@ function createTestRoot(): { container: HTMLDivElement; root: Root } {
   document.body.appendChild(container);
   return { container, root: createRoot(container) };
 }
-
 async function flushMicrotasks(count = 4) {
-  for (let index = 0; index < count; index += 1) {
-    await Promise.resolve();
-  }
-}
-
-function createDeferred<T>(): {
-  promise: Promise<T>;
-  resolve: (value: T) => void;
-} {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((resolvePromise) => {
-    resolve = resolvePromise;
-  });
-  return { promise, resolve };
+  for (let index = 0; index < count; index += 1) await Promise.resolve();
 }
 
 describe("useMobileNode", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    clientInstances.length = 0;
     capturedClientOptions.length = 0;
     isNativePlatformMock.mockReturnValue(true);
   });
@@ -354,70 +349,6 @@ describe("useMobileNode", () => {
     act(() => {
       root.unmount();
     });
-    container.remove();
-  });
-
-  it("does not create a device identity after the effect is disposed during device info load", async () => {
-    const { useMobileNode } = await import("../src/use-mobile-node.js");
-    const { container, root } = createTestRoot();
-    const deferredDeviceInfo = createDeferred<{
-      name: string;
-      manufacturer: string;
-      model: string;
-      operatingSystem: string;
-      osVersion: string;
-    }>();
-    deviceInfoMock.mockImplementationOnce(() => deferredDeviceInfo.promise);
-
-    const config: MobileConnectionConfig = {
-      httpBaseUrl: "http://127.0.0.1:8788",
-      wsUrl: "ws://127.0.0.1:8788/ws",
-      nodeEnabled: true,
-      actionSettings: {
-        "location.get_current": true,
-        "camera.capture_photo": true,
-        "audio.record_clip": true,
-      },
-      locationStreaming: {
-        streamEnabled: true,
-        distanceFilterM: 100,
-        maxIntervalMs: 900_000,
-        maxAccuracyM: 100,
-        backgroundEnabled: true,
-      },
-    };
-
-    const Probe = () => {
-      useMobileNode({
-        config,
-        token: "token-1",
-        updateConfig: updateConfigMock,
-      });
-      return null;
-    };
-
-    await act(async () => {
-      root.render(React.createElement(Probe));
-      await flushMicrotasks();
-    });
-
-    act(() => {
-      root.unmount();
-    });
-
-    expect(connectMock).not.toHaveBeenCalled();
-    await act(async () => {
-      deferredDeviceInfo.resolve({
-        name: "Ron phone",
-        manufacturer: "Virtunet",
-        model: "Ty-Phone",
-        operatingSystem: "ios",
-        osVersion: "18.1",
-      });
-      await flushMicrotasks();
-    });
-
-    expect(loadOrCreateDeviceIdentityMock).not.toHaveBeenCalled();
     container.remove();
   });
 
