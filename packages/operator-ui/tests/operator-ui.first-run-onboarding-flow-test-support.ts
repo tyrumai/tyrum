@@ -3,6 +3,7 @@ import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { createBearerTokenAuth, createOperatorCore } from "../../operator-core/src/index.js";
 import { OperatorUiApp } from "../src/index.js";
+import { stubAdminHttpFetch } from "./admin-http-fetch-test-support.js";
 import {
   TEST_DEVICE_IDENTITY,
   requestInfoToUrl,
@@ -17,8 +18,8 @@ import {
 import {
   buildIssueStatusResponse,
   cleanup,
-  createActiveProviderGroup,
   createAgentConfigResponse,
+  createConfiguredProviderGroup,
   findButtonByText,
   setInputByLabel,
   unassignedAssignments,
@@ -29,7 +30,7 @@ export function registerFirstRunOnboardingFlowTests(): void {
     const { local } = stubPersistentStorage();
     const ws = new FakeWsClient();
     const { http, statusGet } = createFakeHttpClient();
-    let providers: ReturnType<typeof createActiveProviderGroup>[] = [];
+    let providers: ReturnType<typeof createConfiguredProviderGroup>[] = [];
     let presets: Array<{
       preset_id: string;
       preset_key: string;
@@ -95,7 +96,19 @@ export function registerFirstRunOnboardingFlowTests(): void {
     http.modelConfig.listAssignments = vi.fn(async () => ({ status: "ok" as const, assignments }));
     http.agentConfig.get = vi.fn(async () => agentConfig);
 
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("baseline"),
+      deviceIdentity: TEST_DEVICE_IDENTITY,
+      deps: { ws, http },
+    });
+    core.elevatedModeStore.enter({
+      elevatedToken: "test-elevated-token",
+      expiresAt: "2099-01-01T00:00:00.000Z",
+    });
+
+    const { writeSpy: fetchMock } = stubAdminHttpFetch(core, async (input, init) => {
       const url = requestInfoToUrl(input);
       const headers = new Headers(init?.headers);
       expect(headers.get("authorization")).toBe("Bearer test-elevated-token");
@@ -106,7 +119,7 @@ export function registerFirstRunOnboardingFlowTests(): void {
           provider_key: string;
           method_key: string;
         };
-        const providerGroup = createActiveProviderGroup();
+        const providerGroup = createConfiguredProviderGroup();
         providers = [
           {
             ...providerGroup,
@@ -187,19 +200,6 @@ export function registerFirstRunOnboardingFlowTests(): void {
 
       throw new Error(`Unexpected fetch call: ${url}`);
     });
-    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
-
-    const core = createOperatorCore({
-      wsUrl: "ws://example.test/ws",
-      httpBaseUrl: "http://example.test",
-      auth: createBearerTokenAuth("baseline"),
-      deviceIdentity: TEST_DEVICE_IDENTITY,
-      deps: { ws, http },
-    });
-    core.elevatedModeStore.enter({
-      elevatedToken: "test-elevated-token",
-      expiresAt: "2099-01-01T00:00:00.000Z",
-    });
 
     const container = document.createElement("div");
     document.body.appendChild(container);
@@ -213,14 +213,16 @@ export function registerFirstRunOnboardingFlowTests(): void {
 
     await waitForSelector(container, '[data-testid="first-run-onboarding-step-provider"]');
     setInputByLabel(container, "API key", "secret-key");
+    setInputByLabel(container, "Display name", "OpenAI");
     await act(async () => {
       findButtonByText(container, "Save provider account")?.dispatchEvent(
         new MouseEvent("click", { bubbles: true }),
       );
       await Promise.resolve();
     });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
 
-    await waitForSelector(container, '[data-testid="first-run-onboarding-step-preset"]');
+    await waitForSelector(container, '[data-testid="first-run-onboarding-step-preset"]', 200);
     setInputByLabel(container, "Display name", "Onboarding Default");
     await act(async () => {
       findButtonByText(container, "Save model preset")?.dispatchEvent(
@@ -268,20 +270,6 @@ export function registerFirstRunOnboardingFlowTests(): void {
         },
       ]),
     );
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
-        const url = requestInfoToUrl(input);
-        if (!url.endsWith("/config/providers/accounts")) {
-          throw new Error(`Unexpected fetch call: ${url}`);
-        }
-        return new Response(
-          JSON.stringify({ error: "provider_create_failed", message: "invalid api key" }),
-          { status: 400, headers: { "content-type": "application/json" } },
-        );
-      }) as unknown as typeof fetch,
-    );
-
     const core = createOperatorCore({
       wsUrl: "ws://example.test/ws",
       httpBaseUrl: "http://example.test",
@@ -292,6 +280,16 @@ export function registerFirstRunOnboardingFlowTests(): void {
     core.elevatedModeStore.enter({
       elevatedToken: "test-elevated-token",
       expiresAt: "2099-01-01T00:00:00.000Z",
+    });
+    stubAdminHttpFetch(core, async (input) => {
+      const url = requestInfoToUrl(input);
+      if (!url.endsWith("/config/providers/accounts")) {
+        throw new Error(`Unexpected fetch call: ${url}`);
+      }
+      return new Response(
+        JSON.stringify({ error: "provider_create_failed", message: "invalid api key" }),
+        { status: 400, headers: { "content-type": "application/json" } },
+      );
     });
 
     const container = document.createElement("div");
@@ -306,6 +304,7 @@ export function registerFirstRunOnboardingFlowTests(): void {
 
     await waitForSelector(container, '[data-testid="first-run-onboarding-step-provider"]');
     setInputByLabel(container, "API key", "bad-key");
+    setInputByLabel(container, "Display name", "OpenAI");
     await act(async () => {
       findButtonByText(container, "Save provider account")?.dispatchEvent(
         new MouseEvent("click", { bubbles: true }),
@@ -323,32 +322,9 @@ export function registerFirstRunOnboardingFlowTests(): void {
 
   it("saves the default agent model through elevated admin http", async () => {
     stubPersistentStorage();
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = requestInfoToUrl(input);
-      if (!url.endsWith("/config/agents/default")) {
-        throw new Error(`Unexpected fetch call: ${url}`);
-      }
-
-      const headers = new Headers(init?.headers);
-      expect(init?.method).toBe("PUT");
-      expect(headers.get("authorization")).toBe("Bearer test-elevated-token");
-
-      const body = JSON.parse(String(init?.body)) as {
-        config: { model: { model: string | null } };
-        reason?: string;
-      };
-      expect(body.config.model.model).toBe("openai/gpt-4.1");
-      expect(body.reason).toBe("onboarding: set default agent primary model");
-
-      return new Response(JSON.stringify(createAgentConfigResponse("openai/gpt-4.1")), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      });
-    });
-    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
-
     const ws = new FakeWsClient();
     const { http, statusGet, agentConfigGet } = createFakeHttpClient();
+    let agentConfigResponse = createAgentConfigResponse(null);
     statusGet.mockResolvedValue(
       buildIssueStatusResponse([
         {
@@ -361,9 +337,71 @@ export function registerFirstRunOnboardingFlowTests(): void {
     );
     http.providerConfig.listProviders = vi.fn(async () => ({
       status: "ok" as const,
-      providers: [createActiveProviderGroup()],
+      providers: [createConfiguredProviderGroup()],
     }));
-    agentConfigGet.mockResolvedValue(createAgentConfigResponse(null));
+    agentConfigGet.mockImplementation(async () => agentConfigResponse);
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestInfoToUrl(input);
+      const method = init?.method ?? "GET";
+
+      if (method === "GET" && url.endsWith("/config/providers/registry")) {
+        return new Response(JSON.stringify(await http.providerConfig.listRegistry()), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (method === "GET" && url.endsWith("/config/providers")) {
+        return new Response(JSON.stringify(await http.providerConfig.listProviders()), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (method === "GET" && url.endsWith("/config/models/presets")) {
+        return new Response(JSON.stringify(await http.modelConfig.listPresets()), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (method === "GET" && url.endsWith("/config/models/presets/available")) {
+        return new Response(JSON.stringify(await http.modelConfig.listAvailable()), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (method === "GET" && url.endsWith("/config/models/assignments")) {
+        return new Response(JSON.stringify(await http.modelConfig.listAssignments()), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (method === "GET" && url.endsWith("/config/agents/default")) {
+        return new Response(JSON.stringify(agentConfigResponse), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (method !== "PUT" || !url.endsWith("/config/agents/default")) {
+        throw new Error(`Unexpected fetch call: ${method} ${url}`);
+      }
+
+      const headers = new Headers(init?.headers);
+      expect(headers.get("authorization")).toBe("Bearer test-elevated-token");
+
+      const body = JSON.parse(String(init?.body)) as {
+        config: { model: { model: string | null } };
+        reason?: string;
+      };
+      expect(body.config.model.model).toBe("openai/gpt-4.1");
+      expect(body.reason).toBe("onboarding: set default agent primary model");
+
+      agentConfigResponse = createAgentConfigResponse("openai/gpt-4.1");
+      return new Response(JSON.stringify(agentConfigResponse), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
 
     const core = createOperatorCore({
       wsUrl: "ws://example.test/ws",
@@ -387,7 +425,7 @@ export function registerFirstRunOnboardingFlowTests(): void {
       await Promise.resolve();
     });
 
-    await waitForSelector(container, '[data-testid="first-run-onboarding-step-agent"]');
+    await waitForSelector(container, '[data-testid="first-run-onboarding-step-agent"]', 200);
 
     const saveButton = findButtonByText(container, "Save default agent");
     expect(saveButton).not.toBeNull();
@@ -396,7 +434,10 @@ export function registerFirstRunOnboardingFlowTests(): void {
       await Promise.resolve();
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const mutationCalls = fetchMock.mock.calls.filter(
+      ([, init]) => (init?.method ?? "GET") !== "GET",
+    );
+    expect(mutationCalls).toHaveLength(1);
 
     cleanup(root, container);
   });

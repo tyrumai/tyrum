@@ -1,6 +1,7 @@
 import { vi } from "vitest";
 import { TyrumHttpClientError } from "@tyrum/client/browser";
 import { createElevatedModeStore, type OperatorCore } from "../../../operator-core/src/index.js";
+import { stubAdminHttpFetch } from "../admin-http-fetch-test-support.js";
 import { createLocationFixture } from "./admin-page.http-location-fixture-support.js";
 import {
   TEST_TIMESTAMP,
@@ -215,7 +216,7 @@ export function createAdminHttpTestCore(): {
           agents: [
             {
               agent_key: "default",
-              agent_id: "agent-1",
+              agent_id: "00000000-0000-4000-8000-000000000001",
               has_config: true,
               persona: {
                 name: "Default",
@@ -227,7 +228,7 @@ export function createAdminHttpTestCore(): {
             },
             {
               agent_key: "agent-b",
-              agent_id: "agent-2",
+              agent_id: "00000000-0000-4000-8000-000000000002",
               has_config: true,
               persona: {
                 name: "Agent B",
@@ -454,6 +455,8 @@ export function createAdminHttpTestCore(): {
       location: locationApi,
     },
   } as unknown as OperatorCore;
+
+  stubAdminHttpFetch(core);
 
   return {
     core,

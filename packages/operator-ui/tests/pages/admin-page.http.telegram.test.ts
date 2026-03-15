@@ -2,6 +2,7 @@
 
 import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { stubAdminHttpFetch } from "../admin-http-fetch-test-support.js";
 import { setNativeValue } from "../test-utils.js";
 import {
   cleanupAdminHttpPage,
@@ -24,6 +25,7 @@ afterEach(() => {
 describe("ConfigurePage (HTTP) channel configs", () => {
   it("renders configured channels collapsed by default and expands an instance inline", async () => {
     const { core } = createAdminHttpTestCore();
+    stubAdminHttpFetch(core);
     const page = renderAdminHttpConfigurePage(core);
 
     await switchHttpTab(page.container, "admin-http-tab-routing-config");
@@ -46,7 +48,7 @@ describe("ConfigurePage (HTTP) channel configs", () => {
 
   it("adds a Telegram channel from the top-level add action", async () => {
     const { core } = createAdminHttpTestCore();
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const { writeSpy } = stubAdminHttpFetch(core, async (input: RequestInfo | URL, init) => {
       expectAuthorizedJsonRequest(input, init, {
         url: "http://example.test/routing/channels/configs",
         method: "POST",
@@ -73,7 +75,6 @@ describe("ConfigurePage (HTTP) channel configs", () => {
         201,
       );
     });
-    vi.stubGlobal("fetch", fetchMock);
 
     const page = renderAdminHttpConfigurePage(core);
     await switchHttpTab(page.container, "admin-http-tab-routing-config");
@@ -111,14 +112,14 @@ describe("ConfigurePage (HTTP) channel configs", () => {
       getByTestId<HTMLButtonElement>(document.body, "channels-instance-create-save"),
     );
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(writeSpy).toHaveBeenCalledTimes(1);
     expect(page.container.textContent).toContain("alerts");
     cleanupAdminHttpPage(page);
   });
 
   it("saves an expanded Telegram account and prefers clear flags over typed secrets", async () => {
     const { core } = createAdminHttpTestCore();
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const { writeSpy } = stubAdminHttpFetch(core, async (input: RequestInfo | URL, init) => {
       expectAuthorizedJsonRequest(input, init, {
         url: "http://example.test/routing/channels/configs/telegram/default",
         method: "PATCH",
@@ -140,7 +141,6 @@ describe("ConfigurePage (HTTP) channel configs", () => {
         },
       });
     });
-    vi.stubGlobal("fetch", fetchMock);
 
     const page = renderAdminHttpConfigurePage(core);
     await switchHttpTab(page.container, "admin-http-tab-routing-config");
@@ -179,13 +179,13 @@ describe("ConfigurePage (HTTP) channel configs", () => {
       getByTestId<HTMLButtonElement>(page.container, "channels-instance-save-default"),
     );
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(writeSpy).toHaveBeenCalledTimes(1);
     cleanupAdminHttpPage(page);
   });
 
   it("deletes a configured Telegram account", async () => {
     const { core } = createAdminHttpTestCore();
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const { writeSpy } = stubAdminHttpFetch(core, async (input: RequestInfo | URL, init) => {
       expect(String(input)).toBe("http://example.test/routing/channels/configs/telegram/ops");
       expect(init?.method).toBe("DELETE");
       expect(new Headers(init?.headers).get("authorization")).toBe("Bearer test-elevated-token");
@@ -195,7 +195,6 @@ describe("ConfigurePage (HTTP) channel configs", () => {
         account_key: "ops",
       });
     });
-    vi.stubGlobal("fetch", fetchMock);
 
     const page = renderAdminHttpConfigurePage(core);
     await switchHttpTab(page.container, "admin-http-tab-routing-config");
@@ -208,7 +207,7 @@ describe("ConfigurePage (HTTP) channel configs", () => {
     click(getByTestId<HTMLElement>(document.body, "confirm-danger-checkbox"));
     await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "confirm-danger-confirm"));
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(writeSpy).toHaveBeenCalledTimes(1);
     expect(page.container.querySelector("[data-testid='channels-instance-card-ops']")).toBeNull();
     cleanupAdminHttpPage(page);
   });

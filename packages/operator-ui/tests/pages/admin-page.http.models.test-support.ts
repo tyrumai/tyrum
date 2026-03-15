@@ -27,6 +27,11 @@ export function setupFirstAssignmentSaveScenario(core: OperatorCore) {
     models: [createAvailableModel()],
     assignments: createUnassignedAssignmentsForAllProfiles(),
   });
+  stubModelsFetch({
+    presets: [presetDefault, presetReview],
+    models: [createAvailableModel()],
+    assignments: createUnassignedAssignmentsForAllProfiles(),
+  });
 
   return { presetReview };
 }
