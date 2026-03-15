@@ -7,6 +7,12 @@ export interface LogFields {
   [key: string]: unknown;
 }
 
+export interface LoggerOptions {
+  level?: LogLevel;
+  base?: LogFields;
+  logStackTraces?: boolean;
+}
+
 const consoleDestination = new Writable({
   write(chunk, _encoding, callback) {
     const line = chunk instanceof Buffer ? chunk.toString("utf8") : String(chunk);
@@ -34,24 +40,60 @@ function createPinoLogger(level: LogLevel, base: LogFields): PinoLogger {
   );
 }
 
+function serializeError(error: Error, logStackTraces: boolean): LogFields {
+  return {
+    type: error.name,
+    message: error.message,
+    ...(logStackTraces && error.stack ? { stack: error.stack } : {}),
+  };
+}
+
+function normalizeLogFields(fields: LogFields, logStackTraces: boolean): LogFields {
+  let normalized: LogFields | undefined;
+
+  for (const [key, value] of Object.entries(fields)) {
+    if (!(value instanceof Error)) {
+      if (normalized) {
+        normalized[key] = value;
+      }
+      continue;
+    }
+
+    normalized ??= { ...fields };
+    normalized[key] = serializeError(value, logStackTraces);
+  }
+
+  return normalized ?? fields;
+}
+
 export class Logger {
   private readonly level: LogLevel;
   private readonly base: LogFields;
+  private readonly logStackTraces: boolean;
   private readonly inner: PinoLogger;
 
   constructor(
-    opts?: { level?: LogLevel; base?: LogFields },
-    inner: PinoLogger = createPinoLogger(opts?.level ?? "info", opts?.base ?? {}),
+    opts?: LoggerOptions,
+    inner: PinoLogger = createPinoLogger(
+      opts?.level ?? "info",
+      normalizeLogFields(opts?.base ?? {}, Boolean(opts?.logStackTraces)),
+    ),
   ) {
     this.level = opts?.level ?? "info";
-    this.base = opts?.base ?? {};
+    this.base = normalizeLogFields(opts?.base ?? {}, Boolean(opts?.logStackTraces));
+    this.logStackTraces = Boolean(opts?.logStackTraces);
     this.inner = inner;
   }
 
   child(fields: LogFields): Logger {
+    const normalizedFields = normalizeLogFields(fields, this.logStackTraces);
     return new Logger(
-      { level: this.level, base: { ...this.base, ...fields } },
-      this.inner.child(fields),
+      {
+        level: this.level,
+        base: { ...this.base, ...normalizedFields },
+        logStackTraces: this.logStackTraces,
+      },
+      this.inner.child(normalizedFields),
     );
   }
 
@@ -72,6 +114,6 @@ export class Logger {
   }
 
   private emit(level: Exclude<LogLevel, "silent">, msg: string, fields: LogFields = {}): void {
-    this.inner[level](fields, msg);
+    this.inner[level](normalizeLogFields(fields, this.logStackTraces), msg);
   }
 }

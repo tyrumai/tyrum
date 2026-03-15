@@ -162,6 +162,7 @@ export function wireContainer(
   const redactionEngine = opts?.redactionEngine ?? new RedactionEngine();
   const logger = new Logger({
     level: config.loggerLevel ?? deploymentConfig.logging.level ?? "info",
+    logStackTraces: config.logStackTraces,
     base: { service: "tyrum-gateway" },
   });
   const secretResolutionAuditDal = new SecretResolutionAuditDalImpl(db, logger);

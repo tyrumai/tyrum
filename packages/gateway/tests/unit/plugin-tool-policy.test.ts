@@ -1,6 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { ToolDescriptor } from "../../src/modules/agent/tools.js";
-import type { PolicyService } from "../../src/modules/policy/service.js";
 import { resolvePolicyGatedPluginToolExposure } from "../../src/modules/agent/runtime/plugin-tool-policy.js";
 
 const SIDE_EFFECTING_PLUGIN_TOOL: ToolDescriptor = {
@@ -30,51 +29,20 @@ const READ_ONLY_PLUGIN_TOOL: ToolDescriptor = {
 };
 
 describe("resolvePolicyGatedPluginToolExposure", () => {
-  it("normalizes plugin tool ids without consulting policy state", async () => {
-    const loadEffectiveBundle = vi.fn();
-    const policyService = {
-      isEnabled: () => true,
-      isObserveOnly: () => false,
-      loadEffectiveBundle,
-    } as unknown as PolicyService;
-
+  it("returns copied allowlist and plugin tool arrays", async () => {
+    const allowlist = ["read"];
+    const pluginTools = [SIDE_EFFECTING_PLUGIN_TOOL, READ_ONLY_PLUGIN_TOOL];
     const result = await resolvePolicyGatedPluginToolExposure({
-      policyService,
-      tenantId: "tenant-a",
-      agentId: "agent-a",
-      allowlist: ["read"],
-      pluginTools: [
-        { ...SIDE_EFFECTING_PLUGIN_TOOL, id: " plugin.echo.danger " },
-        READ_ONLY_PLUGIN_TOOL,
-      ],
+      allowlist,
+      pluginTools,
     });
 
-    expect(loadEffectiveBundle).not.toHaveBeenCalled();
     expect(result.allowlist).toEqual(["read"]);
     expect(result.pluginTools.map((tool) => tool.id)).toEqual([
       "plugin.echo.danger",
       "plugin.echo.readonly",
     ]);
-  });
-
-  it("returns the normalized allowlist and plugin tools when policy is disabled", async () => {
-    const loadEffectiveBundle = vi.fn();
-    const policyService = {
-      isEnabled: () => false,
-      isObserveOnly: () => false,
-      loadEffectiveBundle,
-    } as unknown as PolicyService;
-
-    const result = await resolvePolicyGatedPluginToolExposure({
-      policyService,
-      tenantId: "tenant-a",
-      agentId: "agent-a",
-      allowlist: ["plugin.echo.danger"],
-      pluginTools: [{ ...SIDE_EFFECTING_PLUGIN_TOOL, id: " plugin.echo.danger " }],
-    });
-
-    expect(loadEffectiveBundle).not.toHaveBeenCalled();
-    expect(result.allowlist).toEqual(["plugin.echo.danger"]);
-    expect(result.pluginTools.map((tool) => tool.id)).toEqual(["plugin.echo.danger"]);
+    expect(result.allowlist).not.toBe(allowlist);
+    expect(result.pluginTools).not.toBe(pluginTools);
   });
 });

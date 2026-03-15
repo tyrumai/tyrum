@@ -155,7 +155,7 @@ describe("turn preparation runtime helpers", () => {
 
   it("keeps object-root top-level oneOf schemas after provider-safe normalization", async () => {
     vi.spyOn(ToolSetBuilder.prototype, "resolvePolicyGatedPluginToolExposure").mockImplementation(
-      async ({ allowlist, pluginTools }) => ({
+      ({ allowlist, pluginTools }) => ({
         allowlist: [...allowlist],
         pluginTools: [...pluginTools],
       }),
@@ -257,7 +257,7 @@ describe("turn preparation runtime helpers", () => {
 
   it("warns once per invalid tool schema even when the tool is reused for pre-turn lookup", async () => {
     vi.spyOn(ToolSetBuilder.prototype, "resolvePolicyGatedPluginToolExposure").mockImplementation(
-      async ({ allowlist, pluginTools }) => ({
+      ({ allowlist, pluginTools }) => ({
         allowlist: [...allowlist],
         pluginTools: [...pluginTools],
       }),
@@ -330,5 +330,96 @@ describe("turn preparation runtime helpers", () => {
       error:
         'mcp.invalid.schema: input schema must have a top-level JSON Schema object root (`type: "object"`)',
     });
+  });
+
+  it("normalizes plugin tool ids before policy gating", async () => {
+    const policySpy = vi
+      .spyOn(ToolSetBuilder.prototype, "resolvePolicyGatedPluginToolExposure")
+      .mockImplementation(({ allowlist, pluginTools }) => ({
+        allowlist: [...allowlist],
+        pluginTools: [...pluginTools],
+      }));
+
+    const logger = { warn: vi.fn() };
+    await resolveToolsAndMemory(
+      {
+        tenantId: "tenant-1",
+        home: "/workspace",
+        contextStore: {} as never,
+        agentId: "agent-1",
+        workspaceId: "workspace-1",
+        mcpManager: {
+          listToolDescriptors: vi.fn().mockResolvedValue([]),
+        } as never,
+        plugins: {
+          getToolDescriptors: vi.fn().mockReturnValue([
+            {
+              id: " plugin.echo.readonly ",
+              description: "Read plugin state.",
+              effect: "read_only" as const,
+              keywords: ["read"],
+              inputSchema: {
+                type: "object",
+                properties: {},
+                required: [],
+                additionalProperties: false,
+              },
+            },
+            {
+              id: "   ",
+              description: "Ignored blank id.",
+              effect: "read_only" as const,
+              keywords: ["blank"],
+              inputSchema: {
+                type: "object",
+                properties: {},
+                required: [],
+                additionalProperties: false,
+              },
+            },
+          ]),
+        } as never,
+        policyService: {} as never,
+        approvalNotifier: {} as never,
+        approvalWaitMs: 1_000,
+        approvalPollMs: 100,
+        sessionDal: {} as never,
+        secretProvider: undefined,
+        opts: {
+          container: {
+            deploymentConfig: {},
+            db: {} as never,
+            approvalDal: {} as never,
+            logger,
+            redactionEngine: {} as never,
+          },
+        } as never,
+      },
+      {
+        config: AgentConfig.parse({
+          model: { model: "openai/gpt-4.1" },
+        }),
+        identity: {} as never,
+        skills: [],
+        mcpServers: [],
+      },
+      {
+        tenant_id: "tenant-1",
+        agent_id: "agent-1",
+        workspace_id: "workspace-1",
+      } as never,
+      {
+        message: "use the plugin tool",
+      } as never,
+      {
+        id: "interaction",
+        profile: getExecutionProfile("interaction"),
+        source: "interaction_default",
+      },
+    );
+
+    const policyInput = policySpy.mock.calls[0]?.[0];
+    expect(policyInput?.pluginTools.map((tool) => tool.id)).toEqual(["plugin.echo.readonly"]);
+    expect(policyInput?.allowlist).toContain("plugin.echo.readonly");
   });
 });

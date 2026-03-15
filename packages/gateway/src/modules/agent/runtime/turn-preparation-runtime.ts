@@ -398,7 +398,7 @@ export async function resolveToolsAndMemory(
     ...pluginToolsRaw,
   ]).map((tool) => tool.id);
   const { allowlist: toolAllowlist, pluginTools } =
-    await toolSetBuilder.resolvePolicyGatedPluginToolExposure({
+    toolSetBuilder.resolvePolicyGatedPluginToolExposure({
       allowlist: baseToolAllowlist,
       pluginTools: pluginToolsRaw,
     });

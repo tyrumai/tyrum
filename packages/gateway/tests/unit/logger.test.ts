@@ -54,4 +54,38 @@ describe("Logger", () => {
 
     expect(logSpy).not.toHaveBeenCalled();
   });
+
+  it("serializes Error fields without stacks by default", () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const logger = new Logger({ level: "error", base: { service: "tyrum-gateway" } });
+
+    logger.error("gateway.failed", { error: new Error("boom") });
+
+    const record = JSON.parse(String(logSpy.mock.calls[0]?.[0])) as Record<string, unknown>;
+    const error = record["error"] as Record<string, unknown>;
+    expect(error).toMatchObject({
+      type: "Error",
+      message: "boom",
+    });
+    expect(error).not.toHaveProperty("stack");
+  });
+
+  it("includes Error stacks when logStackTraces is enabled", () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const logger = new Logger({
+      level: "error",
+      base: { service: "tyrum-gateway" },
+      logStackTraces: true,
+    });
+
+    logger.error("gateway.failed", { error: new Error("boom") });
+
+    const record = JSON.parse(String(logSpy.mock.calls[0]?.[0])) as Record<string, unknown>;
+    const error = record["error"] as Record<string, unknown>;
+    expect(error).toMatchObject({
+      type: "Error",
+      message: "boom",
+      stack: expect.stringContaining("Error: boom"),
+    });
+  });
 });
