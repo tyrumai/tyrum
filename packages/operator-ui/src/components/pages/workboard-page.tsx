@@ -12,9 +12,7 @@ import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { useAppShellMinWidth } from "../layout/app-shell.js";
 import { AppPageToolbar } from "../layout/app-page.js";
 import { Alert } from "../ui/alert.js";
-import { Button } from "../ui/button.js";
 import { ScrollArea } from "../ui/scroll-area.js";
-import { StatusDot, type StatusDotVariant } from "../ui/status-dot.js";
 import {
   WORK_ITEM_STATUSES,
   groupWorkItemsByStatus,
@@ -27,38 +25,35 @@ import {
   type WorkStateKvEntry,
 } from "../workboard/workboard-store.js";
 import { WorkBoardDrilldown } from "./workboard-page-drilldown.js";
+import { WorkboardToolbarActions } from "./workboard-page-scope-controls.js";
 import { STATUS_LABELS, WorkStatusList, WorkStatusPanel } from "./workboard-page.shared.js";
 
-export type WorkBoardPageProps = {
-  core: OperatorCore;
-};
+export type WorkBoardPageProps = { core: OperatorCore };
 
-const DEFAULT_SCOPE_KEYS = {
-  agent_key: "default",
-  workspace_key: "default",
-} as const;
 const DESKTOP_BOARD_GRID_STYLE = {
   gridTemplateColumns: `repeat(${WORK_ITEM_STATUSES.length}, minmax(0, 1fr))`,
 } as const;
 
 const WORKBOARD_DESKTOP_BOARD_MIN_WIDTH_PX = 1120;
 const WORKBOARD_DESKTOP_CONTENT_WIDTH_PX = WORKBOARD_DESKTOP_BOARD_MIN_WIDTH_PX + 40;
-const DESKTOP_BOARD_MIN_WIDTH_STYLE = {
-  minWidth: WORKBOARD_DESKTOP_BOARD_MIN_WIDTH_PX,
-} as const;
+const DESKTOP_BOARD_MIN_WIDTH_STYLE = { minWidth: WORKBOARD_DESKTOP_BOARD_MIN_WIDTH_PX } as const;
 
-function makeAgentScope(): WorkStateKVScope {
-  return { kind: "agent", ...DEFAULT_SCOPE_KEYS };
+function makeAgentScope(scopeKeys: { agent_key: string; workspace_key: string }): WorkStateKVScope {
+  return { kind: "agent", ...scopeKeys };
 }
 
-function makeWorkItemScope(workItemId: string): WorkStateKVScope {
-  return { kind: "work_item", ...DEFAULT_SCOPE_KEYS, work_item_id: workItemId };
+function makeWorkItemScope(
+  scopeKeys: { agent_key: string; workspace_key: string },
+  workItemId: string,
+): WorkStateKVScope {
+  return { kind: "work_item", ...scopeKeys, work_item_id: workItemId };
 }
 
 export function WorkBoardPage({ core }: WorkBoardPageProps) {
   const connection = useOperatorStore(core.connectionStore);
   const isConnected = connection.status === "connected";
   const workboard = useOperatorStore(core.workboardStore);
+  const currentScopeKeys = workboard.scopeKeys;
   const desktopBoard = useAppShellMinWidth(WORKBOARD_DESKTOP_CONTENT_WIDTH_PX);
 
   const selectedIdRef = useRef<string | null>(null);
@@ -76,6 +71,10 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
   const [signals, setSignals] = useState<WorkSignal[]>([]);
   const [agentKvEntries, setAgentKvEntries] = useState<WorkStateKvEntry[]>([]);
   const [workItemKvEntries, setWorkItemKvEntries] = useState<WorkStateKvEntry[]>([]);
+
+  useEffect(() => {
+    setSelectedWorkItemId(null);
+  }, [currentScopeKeys.agent_key, currentScopeKeys.workspace_key]);
 
   useEffect(() => {
     selectedIdRef.current = selectedWorkItemId;
@@ -105,11 +104,6 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
     });
   }, [selectedWorkItemId, workboard.items]);
 
-  const reconnect = useCallback(() => {
-    core.disconnect();
-    core.connect();
-  }, [core]);
-
   const transitionSelected = useCallback(
     async (status: WorkItem["status"], reason: string): Promise<void> => {
       if (!isConnected) return;
@@ -119,7 +113,7 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
       setDrilldownError(null);
       try {
         const res = await core.ws.workTransition({
-          ...DEFAULT_SCOPE_KEYS,
+          ...currentScopeKeys,
           work_item_id: selectedWorkItemId,
           status,
           reason,
@@ -136,7 +130,7 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
         setTransitionTarget(null);
       }
     },
-    [core.ws, core.workboardStore, isConnected, selectedWorkItemId],
+    [core.ws, core.workboardStore, currentScopeKeys, isConnected, selectedWorkItemId],
   );
 
   useEffect(() => {
@@ -173,7 +167,7 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
       const selectedId = selectedIdRef.current;
       if (!selectedId) return;
       void core.ws
-        .workSignalGet({ ...DEFAULT_SCOPE_KEYS, signal_id: event.payload.signal_id })
+        .workSignalGet({ ...currentScopeKeys, signal_id: event.payload.signal_id })
         .then((res) => {
           if (disposed) return;
           if (res.signal.work_item_id !== selectedIdRef.current) return;
@@ -219,7 +213,7 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
       core.ws.off("work.signal.fired", onWorkSignalFired);
       core.ws.off("work.state_kv.updated", onWorkStateKvUpdated);
     };
-  }, [core.ws, isConnected]);
+  }, [core.ws, currentScopeKeys, isConnected]);
 
   useEffect(() => {
     if (!isConnected || !selectedWorkItemId) {
@@ -242,24 +236,26 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
       try {
         const [workItemRes, artifactsRes, decisionsRes, signalsRes, agentKvRes, workItemKvRes] =
           await Promise.all([
-            core.ws.workGet({ ...DEFAULT_SCOPE_KEYS, work_item_id: selectedWorkItemId }),
+            core.ws.workGet({ ...currentScopeKeys, work_item_id: selectedWorkItemId }),
             core.ws.workArtifactList({
-              ...DEFAULT_SCOPE_KEYS,
+              ...currentScopeKeys,
               work_item_id: selectedWorkItemId,
               limit: 200,
             }),
             core.ws.workDecisionList({
-              ...DEFAULT_SCOPE_KEYS,
+              ...currentScopeKeys,
               work_item_id: selectedWorkItemId,
               limit: 200,
             }),
             core.ws.workSignalList({
-              ...DEFAULT_SCOPE_KEYS,
+              ...currentScopeKeys,
               work_item_id: selectedWorkItemId,
               limit: 200,
             }),
-            core.ws.workStateKvList({ scope: makeAgentScope() }),
-            core.ws.workStateKvList({ scope: makeWorkItemScope(selectedWorkItemId) }),
+            core.ws.workStateKvList({ scope: makeAgentScope(currentScopeKeys) }),
+            core.ws.workStateKvList({
+              scope: makeWorkItemScope(currentScopeKeys, selectedWorkItemId),
+            }),
           ]);
 
         if (cancelled) return;
@@ -284,7 +280,7 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
     return () => {
       cancelled = true;
     };
-  }, [core.ws, isConnected, selectedWorkItemId]);
+  }, [core.ws, currentScopeKeys, isConnected, selectedWorkItemId]);
 
   const tasksForSelected = selectTasksForSelectedWorkItem(
     workboard.tasksByWorkItemId,
@@ -306,13 +302,6 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
     [taskList],
   );
 
-  const connectionDotVariant: StatusDotVariant =
-    connection.status === "connected"
-      ? "success"
-      : connection.status === "connecting"
-        ? "warning"
-        : "neutral";
-
   const canMarkReadySelected = selectedItem?.status === "backlog";
   const canResumeSelected = selectedItem?.status === "blocked";
   const canCancelSelected =
@@ -320,21 +309,18 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
     selectedItem?.status === "doing" ||
     selectedItem?.status === "blocked";
 
-  const toolbarActions = (
-    <>
-      <div className="flex items-center gap-2 text-sm text-fg-muted">
-        <StatusDot variant={connectionDotVariant} pulse={connection.status === "connecting"} />
-        {connection.status}
-      </div>
-      <Button variant="secondary" size="sm" onClick={reconnect}>
-        Reconnect
-      </Button>
-    </>
-  );
-
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-bg">
-      <AppPageToolbar actions={toolbarActions} />
+      <AppPageToolbar
+        actions={
+          <WorkboardToolbarActions
+            connectionStatus={connection.status}
+            core={core}
+            isConnected={isConnected}
+            scopeKeys={currentScopeKeys}
+          />
+        }
+      />
 
       {desktopBoard ? (
         <div className="min-h-0 flex-1 overflow-hidden">

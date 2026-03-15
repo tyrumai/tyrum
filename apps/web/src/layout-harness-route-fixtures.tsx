@@ -236,6 +236,13 @@ export function createWorkboardCore(): OperatorCore {
     ws: {
       ...createEventWsStub(),
     },
+    http: {
+      agents: {
+        list: async () => ({
+          agents: [{ agent_key: "default", persona: { name: "Default Agent" } }],
+        }),
+      },
+    },
     connect() {},
     disconnect() {},
   } as unknown as OperatorCore;

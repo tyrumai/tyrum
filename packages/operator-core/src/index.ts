@@ -88,7 +88,11 @@ export type {
 export type { Pairing, PairingState, PairingStore } from "./stores/pairing-store.js";
 export type { RunsState, RunsStore } from "./stores/runs-store.js";
 export type { OperatorPresenceEntry, StatusState, StatusStore } from "./stores/status-store.js";
-export type { WorkboardState, WorkboardStore } from "./stores/workboard-store.js";
+export type {
+  WorkboardScopeKeys,
+  WorkboardState,
+  WorkboardStore,
+} from "./stores/workboard-store.js";
 export type {
   ChatActiveSessionState,
   ChatAgent,

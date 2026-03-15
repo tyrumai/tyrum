@@ -2,12 +2,14 @@ import type { AgentRegistry } from "./registry.js";
 import type { ToolResult, WorkspaceLeaseConfig } from "./tool-executor-shared.js";
 import type { SqlDb } from "../../statestore/types.js";
 import type { WorkScope } from "@tyrum/schemas";
+import type { WorkboardBroadcastDeps } from "../workboard/item-broadcast.js";
 import { WorkboardDal } from "../workboard/dal.js";
 export { resolveAgentKeyById, runSubagentTurn } from "../workboard/subagent-runtime-support.js";
 
 export type WorkboardToolExecutorContext = {
   workspaceLease?: WorkspaceLeaseConfig;
   agents?: AgentRegistry;
+  broadcastDeps?: WorkboardBroadcastDeps;
 };
 
 export function asRecord(value: unknown): Record<string, unknown> | null {

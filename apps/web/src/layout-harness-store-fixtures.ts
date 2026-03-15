@@ -159,12 +159,17 @@ export function createWorkboardStore() {
         },
       ],
       tasksByWorkItemId: {},
+      scopeKeys: {
+        agent_key: "default",
+        workspace_key: "default",
+      },
       supported: true,
       loading: false,
       error: null,
       lastSyncedAt: "2026-03-08T00:00:00.000Z",
     }).store,
     refreshList: async () => {},
+    setScopeKeys: () => {},
     resetSupportProbe: () => {},
     upsertWorkItem: () => {},
   };

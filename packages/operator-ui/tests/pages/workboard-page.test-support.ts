@@ -21,6 +21,7 @@ function createWorkboardStore(snapshot?: Partial<Record<string, unknown>>) {
   let state = {
     items: [],
     tasksByWorkItemId: {},
+    scopeKeys: { ...DEFAULT_SCOPE_KEYS },
     supported: null,
     loading: false,
     error: null,
@@ -37,6 +38,26 @@ function createWorkboardStore(snapshot?: Partial<Record<string, unknown>>) {
     },
     getSnapshot: () => state,
     refreshList: vi.fn(async () => {}),
+    setScopeKeys: vi.fn((scopeKeys: Record<string, unknown>) => {
+      state = {
+        ...state,
+        items: [],
+        tasksByWorkItemId: {},
+        scopeKeys: {
+          agent_key:
+            typeof scopeKeys.agent_key === "string" && scopeKeys.agent_key.trim().length > 0
+              ? scopeKeys.agent_key.trim()
+              : DEFAULT_SCOPE_KEYS.agent_key,
+          workspace_key:
+            typeof scopeKeys.workspace_key === "string" && scopeKeys.workspace_key.trim().length > 0
+              ? scopeKeys.workspace_key.trim()
+              : DEFAULT_SCOPE_KEYS.workspace_key,
+        },
+        error: null,
+        lastSyncedAt: null,
+      };
+      for (const listener of listeners) listener();
+    }),
     resetSupportProbe: vi.fn(() => {}),
     upsertWorkItem: (item: any) => {
       state = {
@@ -131,14 +152,22 @@ export function createCore(
 ) {
   const ws = createWsStub(wsOverrides);
   const workboard = createWorkboardStore(workboardSnapshot);
+  const http = {
+    agents: {
+      list: vi.fn(async () => ({
+        agents: [{ agent_key: "default", persona: { name: "Default" } }],
+      })),
+    },
+  };
   const core = {
     connectionStore: createConnectionStore(status),
     workboardStore: workboard.store,
+    http,
     ws,
     connect: vi.fn(),
     disconnect: vi.fn(),
   } as unknown as OperatorCore;
-  return { core, ws, workboard };
+  return { core, ws, workboard, http };
 }
 
 export async function flushEffects(): Promise<void> {

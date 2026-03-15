@@ -1,5 +1,6 @@
 import { LaneQueueSignalDal } from "../lanes/queue-signal-dal.js";
 import { WorkboardDal } from "../workboard/dal.js";
+import { broadcastWorkItemCreated } from "../workboard/item-broadcast.js";
 import { SubagentService } from "../workboard/subagent-service.js";
 import { requireHelperExecutionProfile } from "./subagent-helper-profiles.js";
 import type { ToolExecutionAudit, ToolResult } from "./tool-executor-shared.js";
@@ -77,6 +78,7 @@ async function createCapture(
       source_session_key: createdFromSessionKey,
     },
   });
+  broadcastWorkItemCreated({ item, deps: context.broadcastDeps });
 
   return jsonResult(toolCallId, {
     work_item_id: item.work_item_id,

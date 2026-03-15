@@ -345,6 +345,58 @@ describe("WorkBoardPage", () => {
     }
   });
 
+  it("uses the current workboard scope for drilldown requests", async () => {
+    const workItem = makeWorkItem({
+      work_item_id: "wi-scope",
+      agent_id: "agent-scope",
+      workspace_id: "workspace-scope",
+    });
+    const { core, ws } = createCore(
+      "connected",
+      {
+        workGet: vi.fn(async () => ({ item: workItem })),
+        workArtifactList: vi.fn(async () => ({ artifacts: [] })),
+        workDecisionList: vi.fn(async () => ({ decisions: [] })),
+        workSignalList: vi.fn(async () => ({ signals: [] })),
+        workStateKvList: vi.fn(async () => ({ entries: [] })),
+      },
+      {
+        items: [workItem],
+        scopeKeys: { agent_key: "planner", workspace_key: "ops" },
+        supported: true,
+      },
+    );
+
+    const testRoot = renderIntoDocument(React.createElement(WorkBoardPage, { core }));
+    try {
+      await flushEffects();
+
+      const scopedCard = testRoot.container.querySelector<HTMLButtonElement>(
+        '[data-testid="work-item-wi-scope"]',
+      );
+      expect(scopedCard).not.toBeNull();
+
+      await act(async () => {
+        scopedCard!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await Promise.resolve();
+      });
+
+      expect(ws.workGet).toHaveBeenCalledWith({
+        agent_key: "planner",
+        workspace_key: "ops",
+        work_item_id: "wi-scope",
+      });
+      expect(ws.workArtifactList).toHaveBeenCalledWith({
+        agent_key: "planner",
+        workspace_key: "ops",
+        work_item_id: "wi-scope",
+        limit: 200,
+      });
+    } finally {
+      cleanupTestRoot(testRoot);
+    }
+  });
+
   it("shows unsupported-request message when work.list is not available", async () => {
     const { core } = createCore("connected", undefined, {
       supported: false,
