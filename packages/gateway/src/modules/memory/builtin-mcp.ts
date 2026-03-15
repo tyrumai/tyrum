@@ -5,7 +5,6 @@ import {
   type McpServerSpec as McpServerSpecT,
 } from "@tyrum/schemas";
 import { z } from "zod";
-import type { ToolRisk } from "../agent/tools.js";
 import { makeToolResult } from "../agent/tool-executor-local-utils.js";
 import type { ToolResult } from "../agent/tool-executor-shared.js";
 import type { McpToolInfo } from "../agent/mcp-manager.js";
@@ -14,8 +13,7 @@ import type { AgentMemoryToolRuntime } from "./agent-tool-runtime.js";
 export const BUILTIN_MEMORY_SERVER_ID = "memory";
 
 export type BuiltinMcpToolInfo = McpToolInfo & {
-  risk?: ToolRisk;
-  requiresConfirmation?: boolean;
+  effect?: "read_only" | "state_changing";
   keywords?: string[];
 };
 
@@ -105,8 +103,7 @@ export const BUILTIN_MEMORY_MCP_TOOLS: readonly BuiltinMcpToolInfo[] = [
     name: "seed",
     description:
       "Return prompt-ready durable memory relevant to the current user request. Use this as pre-turn recall context; the gateway may invoke it automatically before a turn.",
-    risk: "low",
-    requiresConfirmation: false,
+    effect: "read_only",
     keywords: ["memory", "seed", "recall", "preferences", "context"],
     inputSchema: {
       type: "object",
@@ -133,8 +130,7 @@ export const BUILTIN_MEMORY_MCP_TOOLS: readonly BuiltinMcpToolInfo[] = [
     name: "search",
     description:
       "Search this agent's durable memory for facts, notes, procedures, and episodes. Use when prior preferences, lessons, or context may matter.",
-    risk: "low",
-    requiresConfirmation: false,
+    effect: "read_only",
     keywords: ["memory", "search", "recall", "preferences", "knowledge"],
     inputSchema: {
       type: "object",
@@ -163,8 +159,7 @@ export const BUILTIN_MEMORY_MCP_TOOLS: readonly BuiltinMcpToolInfo[] = [
     name: "write",
     description:
       "Persist durable memory for this agent when the turn yields stable, reusable information. Use facts, notes, procedures, or episodes. Required fields by kind: fact requires key and value; note and procedure require body_md; episode requires summary_md. Do not store secrets, raw transcripts, or boilerplate.",
-    risk: "medium",
-    requiresConfirmation: false,
+    effect: "state_changing",
     keywords: ["memory", "remember", "store", "write", "fact", "procedure"],
     inputSchema: {
       type: "object",

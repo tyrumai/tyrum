@@ -53,6 +53,7 @@ export function createToolSetBuilder(input: {
 }): ToolSetBuilder {
   return new ToolSetBuilder({
     home: input.home,
+    roleToolAllowlist: ["*"],
     tenantId: DEFAULT_TENANT_ID,
     agentId: DEFAULT_AGENT_ID,
     workspaceId: DEFAULT_WORKSPACE_ID,

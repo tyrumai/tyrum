@@ -244,8 +244,7 @@ export const McpToolMetadataOverride = z
   .object({
     description_override: z.string().trim().min(1).optional(),
     description_append: z.string().trim().min(1).optional(),
-    risk: z.enum(["low", "medium", "high"]).optional(),
-    requires_confirmation: z.boolean().optional(),
+    effect: z.enum(["read_only", "state_changing"]).optional(),
   })
   .strict()
   .superRefine((value, ctx) => {

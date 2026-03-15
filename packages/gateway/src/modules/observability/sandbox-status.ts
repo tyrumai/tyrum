@@ -6,7 +6,7 @@ import type { SandboxStatus } from "./status-details.js";
 export async function loadSandboxStatus(input: {
   tenantId: string;
   policyService: PolicyService | undefined;
-  policyStatus?: { enabled: boolean; observe_only: boolean; effective_sha256: string };
+  policyStatus?: { observe_only: boolean; effective_sha256: string };
   toolrunnerHardeningProfile?: SandboxHardeningProfile;
 }): Promise<SandboxStatus | null> {
   if (!input.policyService) return null;
@@ -24,8 +24,7 @@ export async function loadSandboxStatus(input: {
   }
 
   return {
-    mode: !status.enabled ? "disabled" : status.observe_only ? "observe" : "enforce",
-    policy_enabled: status.enabled,
+    mode: status.observe_only ? "observe" : "enforce",
     policy_observe_only: status.observe_only,
     effective_policy_sha256: status.effective_sha256,
     hardening_profile: input.toolrunnerHardeningProfile ?? "baseline",

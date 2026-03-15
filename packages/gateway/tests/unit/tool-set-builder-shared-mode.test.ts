@@ -37,7 +37,10 @@ describe("ToolSetBuilder shared mode", () => {
       policyService: {
         isEnabled: () => false,
         isObserveOnly: () => false,
-        evaluateToolCall: vi.fn(),
+        evaluateToolCall: vi.fn(async () => ({
+          decision: "allow",
+          applied_override_ids: [],
+        })),
       } as never,
       approvalDal: {} as never,
       approvalWaitMs: 120_000,
@@ -50,8 +53,7 @@ describe("ToolSetBuilder shared mode", () => {
         {
           id: "plugin.echo.echo",
           description: "Echo back a string.",
-          risk: "low",
-          requires_confirmation: false,
+          effect: "read_only",
           keywords: [],
           inputSchema: {
             type: "object",

@@ -2,24 +2,18 @@ import type {
   PolicyBundle as PolicyBundleT,
   Decision,
   PolicyDecision as PolicyDecisionT,
-  RuleDecision as RuleDecisionT,
 } from "@tyrum/schemas";
 import { canonicalizeToolId } from "@tyrum/schemas";
 import { wildcardMatch } from "./wildcard.js";
 import type { Logger } from "../observability/logger.js";
-import {
-  evaluateDomain,
-  mostRestrictiveDecision,
-  normalizeDomain,
-  normalizeUrlForPolicy,
-} from "./domain.js";
+import { evaluateDomain, mostRestrictiveDecision, normalizeDomain } from "./domain.js";
 import { defaultPolicyBundle } from "./bundle-loader.js";
 import type { PolicySnapshotDal, PolicySnapshotRow } from "./snapshot-dal.js";
 import type { PolicyOverrideDal } from "./override-dal.js";
 import { sha256HexFromString, stableJsonStringify } from "./canonical-json.js";
 import { mergePolicyBundles } from "./bundle-merge.js";
-import { expandLegacyNodeDispatchOverridePatterns } from "./node-dispatch-override-patterns.js";
 import type { GatewayConfigStore } from "../runtime-state/gateway-config-store.js";
+import { evaluateToolCallAgainstBundle, type ToolEffect } from "./tool-evaluation.js";
 
 export interface PolicyEvaluation {
   decision: Decision;
@@ -45,7 +39,6 @@ export class PolicyService {
       overrideDal: PolicyOverrideDal;
       logger?: Logger;
       deploymentPolicy?: {
-        enabled?: boolean;
         mode?: string;
         bundlePath?: string;
       };
@@ -53,10 +46,6 @@ export class PolicyService {
       configStore?: GatewayConfigStore;
     },
   ) {}
-
-  isEnabled(): boolean {
-    return this.opts.deploymentPolicy?.enabled ?? true;
-  }
 
   isObserveOnly(): boolean {
     const mode = this.opts.deploymentPolicy?.mode?.trim().toLowerCase();
@@ -113,6 +102,8 @@ export class PolicyService {
     secretScopes?: string[];
     playbookBundle?: PolicyBundleT;
     inputProvenance?: { source: string; trusted: boolean };
+    toolEffect?: ToolEffect;
+    roleAllowed?: boolean;
   }): Promise<PolicyEvaluation> {
     const toolId = canonicalizeToolId(params.toolId);
     const effective = await this.loadEffectiveBundle({
@@ -121,7 +112,7 @@ export class PolicyService {
       agentId: params.agentId,
     });
     const snapshot = await this.getOrCreateSnapshot(params.tenantId, effective.bundle);
-    return await this.evaluateToolCallAgainstBundle({
+    return await evaluateToolCallAgainstBundle({
       tenantId: params.tenantId,
       bundle: effective.bundle,
       snapshot,
@@ -132,6 +123,9 @@ export class PolicyService {
       url: params.url,
       secretScopes: params.secretScopes,
       inputProvenance: params.inputProvenance,
+      toolEffect: params.toolEffect,
+      roleAllowed: params.roleAllowed,
+      overrideDal: this.opts.overrideDal,
     });
   }
 
@@ -145,6 +139,8 @@ export class PolicyService {
     url?: string;
     secretScopes?: string[];
     inputProvenance?: { source: string; trusted: boolean };
+    toolEffect?: ToolEffect;
+    roleAllowed?: boolean;
   }): Promise<PolicyEvaluation> {
     const toolId = canonicalizeToolId(params.toolId);
     const snapshot = await this.opts.snapshotDal.getById(params.tenantId, params.policySnapshotId);
@@ -167,7 +163,7 @@ export class PolicyService {
       };
     }
 
-    return await this.evaluateToolCallAgainstBundle({
+    return await evaluateToolCallAgainstBundle({
       tenantId: params.tenantId,
       bundle: snapshot.bundle,
       snapshot,
@@ -178,6 +174,9 @@ export class PolicyService {
       url: params.url,
       secretScopes: params.secretScopes,
       inputProvenance: params.inputProvenance,
+      toolEffect: params.toolEffect,
+      roleAllowed: params.roleAllowed,
+      overrideDal: this.opts.overrideDal,
     });
   }
 
@@ -262,117 +261,6 @@ export class PolicyService {
     };
   }
 
-  private async evaluateToolCallAgainstBundle(params: {
-    tenantId: string;
-    bundle: PolicyBundleT;
-    snapshot: PolicySnapshotRow;
-    agentId: string;
-    workspaceId?: string;
-    toolId: string;
-    toolMatchTarget: string;
-    url?: string;
-    secretScopes?: string[];
-    inputProvenance?: { source: string; trusted: boolean };
-  }): Promise<PolicyEvaluation> {
-    const toolsDomain = normalizeDomain(params.bundle.tools, "require_approval");
-    const egressDomain = normalizeDomain(params.bundle.network_egress, "require_approval");
-    const secretsDomain = normalizeDomain(params.bundle.secrets, "require_approval");
-
-    let toolDecision = evaluateDomain(toolsDomain, params.toolId);
-    const rules: RuleDecisionT[] = [
-      {
-        rule: "tool_policy",
-        outcome: toolDecision,
-        detail: `tool_id=${params.toolId}`,
-      },
-    ];
-
-    if (
-      params.bundle.provenance?.untrusted_shell_requires_approval === true &&
-      params.inputProvenance?.trusted === false &&
-      params.toolId.trim() === "bash"
-    ) {
-      toolDecision = mostRestrictiveDecision(toolDecision, "require_approval");
-      rules.push({
-        rule: "provenance",
-        outcome: "require_approval",
-        detail: `untrusted_shell_requires_approval=true (source=${params.inputProvenance?.source ?? "unknown"})`,
-      });
-    }
-
-    let egressDecision: Decision = "allow";
-    if (params.url) {
-      const normalizedUrl = normalizeUrlForPolicy(params.url);
-      if (normalizedUrl.length > 0) {
-        egressDecision = evaluateDomain(egressDomain, normalizedUrl);
-        rules.push({
-          rule: "network_egress",
-          outcome: egressDecision,
-          detail: normalizedUrl,
-        });
-      }
-    }
-
-    let secretsDecision: Decision = "allow";
-    if (params.secretScopes && params.secretScopes.length > 0) {
-      let decision: Decision = "allow";
-      for (const scope of params.secretScopes) {
-        decision = mostRestrictiveDecision(decision, evaluateDomain(secretsDomain, scope));
-      }
-      secretsDecision = decision;
-      rules.push({
-        rule: "secrets",
-        outcome: secretsDecision,
-        detail: `scopes=${params.secretScopes.length}`,
-      });
-    }
-
-    let decision = mostRestrictiveDecision(
-      toolDecision,
-      mostRestrictiveDecision(egressDecision, secretsDecision),
-    );
-
-    const appliedOverrides: string[] = [];
-    if (decision === "require_approval" && toolDecision === "require_approval") {
-      const overrides = await this.opts.overrideDal.listActiveForTool({
-        tenantId: params.tenantId,
-        agentId: params.agentId,
-        workspaceId: params.workspaceId,
-        toolId: params.toolId,
-      });
-      for (const override of overrides) {
-        if (
-          expandLegacyNodeDispatchOverridePatterns(override.pattern).some((pattern) =>
-            wildcardMatch(pattern, params.toolMatchTarget),
-          )
-        ) {
-          appliedOverrides.push(override.policy_override_id);
-        }
-      }
-      if (appliedOverrides.length > 0) {
-        toolDecision = "allow";
-        decision = mostRestrictiveDecision(
-          toolDecision,
-          mostRestrictiveDecision(egressDecision, secretsDecision),
-        );
-        rules.push({
-          rule: "policy_override",
-          outcome: "allow",
-          detail: `applied_overrides=${appliedOverrides.join(",")}`,
-        });
-      }
-    }
-
-    const decisionRecord: PolicyDecisionT = { decision, rules };
-
-    return {
-      decision,
-      policy_snapshot: params.snapshot,
-      applied_override_ids: appliedOverrides.length > 0 ? appliedOverrides : undefined,
-      decision_record: decisionRecord,
-    };
-  }
-
   async evaluateConnectorAction(params: {
     tenantId: string;
     agentId: string;
@@ -416,19 +304,16 @@ export class PolicyService {
   }
 
   async getStatus(scope: { tenantId: string; agentId?: string }): Promise<{
-    enabled: boolean;
     observe_only: boolean;
     effective_sha256: string;
     sources: { deployment: string; agent: string | null };
   }> {
-    const enabled = this.isEnabled();
     const observeOnly = this.isObserveOnly();
 
     const tenantId = scope.tenantId?.trim();
     if (!tenantId) throw new Error("tenantId is required to read policy status");
     const effective = await this.loadEffectiveBundle({ tenantId, agentId: scope.agentId });
     return {
-      enabled,
       observe_only: observeOnly,
       effective_sha256: effective.sha256,
       sources: {

@@ -367,14 +367,12 @@ describe("DashboardPage", () => {
         is_exposed: false,
         auth: { enabled: true },
         policy: {
-          enabled: true,
           observe_only: false,
           effective_sha256: "policy-sha",
           sources: { deployment: "default", agent: null },
         },
         sandbox: {
           mode: "enforce",
-          policy_enabled: true,
           policy_observe_only: false,
           effective_policy_sha256: "policy-sha",
           hardening_profile: "hardened",

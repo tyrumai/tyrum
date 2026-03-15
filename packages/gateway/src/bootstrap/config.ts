@@ -4,6 +4,7 @@ import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DeploymentConfig } from "@tyrum/schemas";
 import type { GatewayContainer } from "../container.js";
+import type { LogLevel } from "../modules/observability/logger.js";
 import type { SqlDb } from "../statestore/types.js";
 import { ensureAgentConfigSeeded } from "../modules/agent/default-config.js";
 import { DEFAULT_AGENT_KEY } from "../modules/identity/scope.js";
@@ -22,6 +23,8 @@ export type GatewayStartOptions = {
   host?: string;
   port?: number;
   migrationsDir?: string;
+  debug?: boolean;
+  logLevel?: LogLevel;
   trustedProxies?: string;
   tlsReady?: boolean;
   tlsSelfSigned?: boolean;
@@ -149,6 +152,14 @@ function resolveTruthyEnvFlag(name: string): boolean {
   }
 }
 
+const LOG_LEVELS = ["debug", "info", "warn", "error", "silent"] as const;
+
+function parseLogLevelValue(value: string | undefined): LogLevel | undefined {
+  const normalized = value?.trim().toLowerCase();
+  if (!normalized) return undefined;
+  return LOG_LEVELS.includes(normalized as LogLevel) ? (normalized as LogLevel) : undefined;
+}
+
 function resolveOptionalCliString(value?: string): string | undefined {
   const trimmed = value?.trim();
   return trimmed && trimmed.length > 0 ? trimmed : undefined;
@@ -156,6 +167,35 @@ function resolveOptionalCliString(value?: string): string | undefined {
 
 export function resolveSnapshotImportEnabled(snapshotImportOverride?: boolean): boolean {
   return Boolean(snapshotImportOverride) || resolveTruthyEnvFlag("TYRUM_SNAPSHOT_IMPORT_ENABLED");
+}
+
+export function resolveGatewayLogLevel(params: {
+  logLevelOverride?: LogLevel;
+  debugOverride?: boolean;
+}): LogLevel | undefined {
+  if (params.logLevelOverride) {
+    return params.logLevelOverride;
+  }
+
+  const envLevel =
+    parseLogLevelValue(process.env["TYRUM_LOG_LEVEL"]) ??
+    parseLogLevelValue(process.env["GATEWAY_LOG_LEVEL"]);
+  if (envLevel) {
+    return envLevel;
+  }
+
+  if (params.debugOverride || resolveTruthyEnvFlag("TYRUM_DEBUG")) {
+    return "debug";
+  }
+
+  return undefined;
+}
+
+export function resolveGatewayLogStackTraces(params: {
+  logLevelOverride?: LogLevel;
+  debugOverride?: boolean;
+}): boolean | undefined {
+  return resolveGatewayLogLevel(params) === "debug" ? true : undefined;
 }
 
 export function buildStartupDefaultDeploymentConfig(

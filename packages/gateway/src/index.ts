@@ -25,6 +25,8 @@ export {
   assertSplitRoleUsesPostgres,
   buildStartupDefaultDeploymentConfig,
   ensureDatabaseDirectory,
+  resolveGatewayLogLevel,
+  resolveGatewayLogStackTraces,
   resolveSnapshotImportEnabled,
 } from "./bootstrap/config.js";
 export { parseCliArgs, resolveGatewayUpdateTarget, runCli } from "./bootstrap/cli.js";

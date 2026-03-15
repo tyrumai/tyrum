@@ -165,8 +165,7 @@ describe("turn preparation runtime helpers", () => {
     const normalizableTool = {
       id: "mcp.memory.write",
       description: "Persist durable memory.",
-      risk: "medium" as const,
-      requires_confirmation: false,
+      effect: "read_only" as const,
       keywords: ["memory", "write"],
       inputSchema: {
         type: "object",
@@ -268,8 +267,7 @@ describe("turn preparation runtime helpers", () => {
     const invalidTool = {
       id: "mcp.invalid.schema",
       description: "Invalid MCP tool",
-      risk: "low" as const,
-      requires_confirmation: false,
+      effect: "read_only" as const,
       keywords: ["invalid"],
       inputSchema: { type: "string" },
     };

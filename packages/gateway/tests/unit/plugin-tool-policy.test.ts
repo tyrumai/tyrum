@@ -6,8 +6,7 @@ import { resolvePolicyGatedPluginToolExposure } from "../../src/modules/agent/ru
 const SIDE_EFFECTING_PLUGIN_TOOL: ToolDescriptor = {
   id: "plugin.echo.danger",
   description: "Perform a dangerous plugin action.",
-  risk: "high",
-  requires_confirmation: true,
+  effect: "state_changing",
   keywords: ["danger"],
   inputSchema: {
     type: "object",
@@ -20,8 +19,7 @@ const SIDE_EFFECTING_PLUGIN_TOOL: ToolDescriptor = {
 const READ_ONLY_PLUGIN_TOOL: ToolDescriptor = {
   id: "plugin.echo.readonly",
   description: "Read plugin state.",
-  risk: "low",
-  requires_confirmation: false,
+  effect: "read_only",
   keywords: ["read"],
   inputSchema: {
     type: "object",
@@ -32,20 +30,8 @@ const READ_ONLY_PLUGIN_TOOL: ToolDescriptor = {
 };
 
 describe("resolvePolicyGatedPluginToolExposure", () => {
-  it("passes tenant and agent scope to the effective policy bundle lookup", async () => {
-    const loadEffectiveBundle = vi.fn(async (_scope: { tenantId: string; agentId?: string }) => ({
-      bundle: {
-        v: 1,
-        tools: {
-          default: "deny" as const,
-          allow: [],
-          require_approval: ["plugin.echo.danger"],
-          deny: [],
-        },
-      },
-      sha256: "sha-1",
-      sources: { deployment: "default", agent: null, playbook: null },
-    }));
+  it("normalizes plugin tool ids without consulting policy state", async () => {
+    const loadEffectiveBundle = vi.fn();
     const policyService = {
       isEnabled: () => true,
       isObserveOnly: () => false,
@@ -63,18 +49,15 @@ describe("resolvePolicyGatedPluginToolExposure", () => {
       ],
     });
 
-    expect(loadEffectiveBundle).toHaveBeenCalledWith({
-      tenantId: "tenant-a",
-      agentId: "agent-a",
-    });
-    expect(result.allowlist).toEqual(["read", "plugin.echo.danger"]);
+    expect(loadEffectiveBundle).not.toHaveBeenCalled();
+    expect(result.allowlist).toEqual(["read"]);
     expect(result.pluginTools.map((tool) => tool.id)).toEqual([
       "plugin.echo.danger",
       "plugin.echo.readonly",
     ]);
   });
 
-  it("does not load a scoped bundle when deployment policy is disabled", async () => {
+  it("returns the normalized allowlist and plugin tools when policy is disabled", async () => {
     const loadEffectiveBundle = vi.fn();
     const policyService = {
       isEnabled: () => false,

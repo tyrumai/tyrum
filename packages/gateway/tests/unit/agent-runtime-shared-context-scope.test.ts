@@ -243,8 +243,7 @@ describe("AgentRuntime shared context scopes", () => {
           {
             id: "mcp.weather.forecast",
             description: "Weather forecast",
-            risk: "medium",
-            requires_confirmation: true,
+            effect: "state_changing",
             keywords: ["weather"],
           },
         ],
@@ -256,8 +255,7 @@ describe("AgentRuntime shared context scopes", () => {
           {
             id: "custom.plugin.echo",
             description: "Echo text",
-            risk: "low" as const,
-            requires_confirmation: false,
+            effect: "read_only" as const,
             keywords: ["echo"],
           },
         ],

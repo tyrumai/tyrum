@@ -6,8 +6,7 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
   {
     id: "read",
     description: "Read files from the local filesystem.",
-    risk: "low",
-    requires_confirmation: false,
+    effect: "read_only",
     keywords: ["read", "file", "open", "inspect", "view", "log"],
     source: "builtin",
     family: "filesystem",
@@ -31,8 +30,7 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
   {
     id: "write",
     description: "Write a file in the local filesystem.",
-    risk: "high",
-    requires_confirmation: true,
+    effect: "state_changing",
     keywords: ["write", "edit", "update", "patch", "create", "file"],
     source: "builtin",
     family: "filesystem",
@@ -49,8 +47,7 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
   {
     id: "edit",
     description: "Edit an existing file by replacing exact text.",
-    risk: "high",
-    requires_confirmation: true,
+    effect: "state_changing",
     keywords: ["edit", "replace", "patch", "update", "string", "file"],
     source: "builtin",
     family: "filesystem",
@@ -72,8 +69,7 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
   {
     id: "apply_patch",
     description: "Apply a structured patch using the Codex *** Begin Patch format.",
-    risk: "high",
-    requires_confirmation: true,
+    effect: "state_changing",
     keywords: ["patch", "diff", "apply", "edit", "update", "file"],
     source: "builtin",
     family: "filesystem",
@@ -89,8 +85,7 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
   {
     id: "bash",
     description: "Execute shell commands on the local machine.",
-    risk: "high",
-    requires_confirmation: true,
+    effect: "state_changing",
     keywords: ["run", "command", "shell", "terminal", "execute", "build"],
     source: "builtin",
     family: "shell",
@@ -111,8 +106,7 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
   {
     id: "glob",
     description: "Find files in the workspace using a glob pattern.",
-    risk: "low",
-    requires_confirmation: false,
+    effect: "read_only",
     keywords: ["glob", "files", "find", "match", "pattern", "search"],
     source: "builtin",
     family: "filesystem",
@@ -129,8 +123,7 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
   {
     id: "grep",
     description: "Search files in the workspace for text or a regular expression.",
-    risk: "low",
-    requires_confirmation: false,
+    effect: "read_only",
     keywords: ["grep", "search", "regex", "text", "find", "pattern"],
     source: "builtin",
     family: "filesystem",
@@ -150,8 +143,7 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
   {
     id: "websearch",
     description: "Search the web via Exa's hosted MCP server.",
-    risk: "medium",
-    requires_confirmation: true,
+    effect: "read_only",
     keywords: ["search", "web", "internet", "research", "exa", "lookup"],
     source: "builtin_mcp",
     family: "web",
@@ -174,8 +166,7 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
   {
     id: "webfetch",
     description: "Fetch and normalize web content via Exa's hosted MCP server.",
-    risk: "medium",
-    requires_confirmation: true,
+    effect: "read_only",
     keywords: ["fetch", "crawl", "web", "url", "extract", "research"],
     source: "builtin_mcp",
     family: "web",
@@ -202,8 +193,7 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
   {
     id: "codesearch",
     description: "Search for code or documentation context via Exa's hosted MCP server.",
-    risk: "medium",
-    requires_confirmation: true,
+    effect: "read_only",
     keywords: ["code", "docs", "search", "reference", "api", "exa"],
     source: "builtin_mcp",
     family: "web",
@@ -221,8 +211,7 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
   {
     id: "tool.node.list",
     description: "List connected and dispatchable nodes for the current lane or a specified lane.",
-    risk: "low",
-    requires_confirmation: false,
+    effect: "read_only",
     keywords: ["node", "device", "inventory", "list", "discover"],
     source: "builtin",
     family: "node",
@@ -253,8 +242,7 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
   {
     id: "tool.node.inspect",
     description: "Inspect the enabled actions for a specific connected node capability.",
-    risk: "low",
-    requires_confirmation: false,
+    effect: "read_only",
     keywords: ["node", "device", "inspect", "capability", "actions"],
     source: "builtin",
     family: "node",
@@ -277,8 +265,7 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
   {
     id: "tool.node.dispatch",
     description: "Dispatch a specific capability action to a connected node.",
-    risk: "high",
-    requires_confirmation: true,
+    effect: "state_changing",
     keywords: ["node", "device", "screen", "automation", "dispatch"],
     source: "builtin",
     family: "node",
@@ -314,8 +301,7 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
   {
     id: "tool.automation.schedule.list",
     description: "List automation schedules for the current or specified agent/workspace scope.",
-    risk: "low",
-    requires_confirmation: false,
+    effect: "read_only",
     keywords: ["automation", "schedule", "heartbeat", "cron", "list"],
     source: "builtin",
     family: "automation",
@@ -332,8 +318,7 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
   {
     id: "tool.automation.schedule.get",
     description: "Fetch a single automation schedule by id.",
-    risk: "low",
-    requires_confirmation: false,
+    effect: "read_only",
     keywords: ["automation", "schedule", "heartbeat", "cron", "get"],
     source: "builtin",
     family: "automation",
@@ -350,8 +335,7 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
   {
     id: "tool.automation.schedule.create",
     description: "Create a recurring automation schedule such as a heartbeat or cron job.",
-    risk: "medium",
-    requires_confirmation: true,
+    effect: "state_changing",
     keywords: ["automation", "schedule", "heartbeat", "cron", "create"],
     source: "builtin",
     family: "automation",
@@ -386,8 +370,7 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
   {
     id: "tool.automation.schedule.update",
     description: "Update an existing automation schedule.",
-    risk: "medium",
-    requires_confirmation: true,
+    effect: "state_changing",
     keywords: ["automation", "schedule", "heartbeat", "cron", "update"],
     source: "builtin",
     family: "automation",
@@ -414,8 +397,7 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
   {
     id: "tool.automation.schedule.pause",
     description: "Pause an automation schedule without deleting it.",
-    risk: "medium",
-    requires_confirmation: true,
+    effect: "state_changing",
     keywords: ["automation", "schedule", "pause", "disable"],
     source: "builtin",
     family: "automation",
@@ -431,8 +413,7 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
   {
     id: "tool.automation.schedule.resume",
     description: "Resume a paused automation schedule.",
-    risk: "medium",
-    requires_confirmation: true,
+    effect: "state_changing",
     keywords: ["automation", "schedule", "resume", "enable"],
     source: "builtin",
     family: "automation",
@@ -448,8 +429,7 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
   {
     id: "tool.automation.schedule.delete",
     description: "Delete an automation schedule.",
-    risk: "high",
-    requires_confirmation: true,
+    effect: "state_changing",
     keywords: ["automation", "schedule", "delete", "remove"],
     source: "builtin",
     family: "automation",

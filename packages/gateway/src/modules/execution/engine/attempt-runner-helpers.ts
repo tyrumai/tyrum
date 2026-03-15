@@ -1,6 +1,7 @@
 import type { SqlDb } from "../../../statestore/types.js";
 import type { PolicyService } from "../../policy/service.js";
 import type { Logger } from "../../observability/logger.js";
+import { resolveBuiltinToolEffect } from "../../agent/tools.js";
 import { toolCallFromAction } from "./tool-call.js";
 import type {
   AttemptOutcome,
@@ -38,7 +39,7 @@ export async function persistAttemptPolicyContext(
     "UPDATE execution_attempts SET policy_snapshot_id = ? WHERE tenant_id = ? AND attempt_id = ?",
     [policySnapshotId, opts.tenantId, opts.attemptId],
   );
-  if (!deps.policyService?.isEnabled()) return;
+  if (!deps.policyService) return;
 
   const tool = toolCallFromAction(opts.action);
   const secretScopes = await deps.resolveSecretScopesFromArgs(
@@ -56,6 +57,7 @@ export async function persistAttemptPolicyContext(
     url: tool.url,
     secretScopes: secretScopes.length > 0 ? secretScopes : undefined,
     inputProvenance: { source: "workflow", trusted: true },
+    toolEffect: resolveBuiltinToolEffect(tool.toolId),
   });
 
   await deps.db.run(

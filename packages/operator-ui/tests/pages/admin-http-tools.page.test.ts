@@ -71,7 +71,6 @@ describe("ConfigurePage (HTTP) tools", () => {
     await flush();
 
     expect(page.container.textContent).toContain("plugin.echo.say");
-    expect(page.container.textContent).not.toContain("read");
     expect(
       page.container.querySelector("[data-testid='admin-http-tools-group-built_in']"),
     ).toBeNull();

@@ -16,46 +16,29 @@ describe("selectToolDirectory", () => {
     expect(tools.map((t) => t.id)).toContain("bash");
   });
 
-  it("can exclude confirmation-required tools when explicitly disabled", () => {
-    const tools = selectToolDirectory("run shell command", ["bash"], [], 8, false);
-
-    expect(tools.map((t) => t.id)).not.toContain("bash");
-  });
-
   it("excludes gateway-local fs and exec tools in shared mode", () => {
     const tools = selectToolDirectory(
       "read a file and run a command",
       ["read", "write", "bash", "webfetch"],
       [],
       8,
-      true,
       "shared",
     );
 
     expect(tools.map((t) => t.id)).toEqual(["webfetch"]);
   });
 
-  it("applies confirmation filtering to MCP tools", () => {
+  it("includes matching MCP tools regardless of effect classification", () => {
     const mcpTool: ToolDescriptor = {
       id: "mcp.calendar.list_events",
       description: "List calendar events",
-      risk: "medium",
-      requires_confirmation: true,
+      effect: "state_changing",
       keywords: ["calendar"],
       inputSchema: { type: "object" },
     };
 
-    const filtered = selectToolDirectory(
-      "calendar events",
-      ["mcp.calendar.*"],
-      [mcpTool],
-      8,
-      false,
-    );
-    expect(filtered.map((t) => t.id)).not.toContain("mcp.calendar.list_events");
-
-    const allowed = selectToolDirectory("calendar events", ["mcp.calendar.*"], [mcpTool], 8, true);
-    expect(allowed.map((t) => t.id)).toContain("mcp.calendar.list_events");
+    const selected = selectToolDirectory("calendar events", ["mcp.calendar.*"], [mcpTool], 8);
+    expect(selected.map((t) => t.id)).toContain("mcp.calendar.list_events");
   });
 });
 

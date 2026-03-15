@@ -474,7 +474,6 @@ export async function buildStatusPayload(deps: CommandDeps): Promise<{
     policyService: deps.policyService,
     policyStatus: policy
       ? {
-          enabled: policy.enabled,
           observe_only: policy.observe_only,
           effective_sha256: policy.effective_sha256,
         }

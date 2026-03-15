@@ -19,14 +19,12 @@ describe("/status policy consistency", () => {
         calls += 1;
         if (calls === 1) {
           return {
-            enabled: true,
             observe_only: false,
             effective_sha256: "policy-a",
             sources: { deployment: "a", agent: null },
           };
         }
         return {
-          enabled: false,
           observe_only: true,
           effective_sha256: "policy-b",
           sources: { deployment: "b", agent: null },
@@ -65,7 +63,6 @@ describe("/status policy consistency", () => {
     const sandbox = payload["sandbox"] as Record<string, unknown>;
 
     expect(calls).toBe(1);
-    expect(policy["enabled"]).toBe(sandbox["policy_enabled"]);
     expect(policy["observe_only"]).toBe(sandbox["policy_observe_only"]);
     expect(policy["effective_sha256"]).toBe(sandbox["effective_policy_sha256"]);
   });

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { HttpTransport, type TyrumRequestOptions } from "./shared.js";
 
 const ToolRegistrySource = z.enum(["builtin", "builtin_mcp", "mcp", "plugin"]);
-const ToolRisk = z.enum(["low", "medium", "high"]);
+const ToolEffect = z.enum(["read_only", "state_changing"]);
 
 const ToolRegistryBackingServer = z
   .object({
@@ -26,8 +26,7 @@ const ToolRegistryEntry = z
     source: ToolRegistrySource,
     canonical_id: z.string().trim().min(1),
     description: z.string(),
-    risk: ToolRisk,
-    requires_confirmation: z.boolean(),
+    effect: ToolEffect,
     effective_exposure: z
       .object({
         enabled: z.boolean(),

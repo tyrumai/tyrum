@@ -21,7 +21,7 @@ export type PolicyKeySensitivityRow = {
 };
 
 export type PolicyDomainFormState = {
-  defaultDecision: PolicyDecisionValue;
+  defaultDecision?: PolicyDecisionValue;
   allow: PolicyStringRow[];
   requireApproval: PolicyStringRow[];
   deny: PolicyStringRow[];
@@ -113,6 +113,23 @@ function createDomainFormState(
   };
 }
 
+function createToolDomainFormState(
+  value:
+    | {
+        allow?: string[];
+        require_approval?: string[];
+        deny?: string[];
+      }
+    | undefined,
+  prefix: string,
+): PolicyDomainFormState {
+  return {
+    allow: createStringRows(value?.allow ?? [], `${prefix}-allow`),
+    requireApproval: createStringRows(value?.require_approval ?? [], `${prefix}-approval`),
+    deny: createStringRows(value?.deny ?? [], `${prefix}-deny`),
+  };
+}
+
 function parsePositiveInt(raw: string): number | undefined {
   const trimmed = raw.trim();
   if (!trimmed) return undefined;
@@ -190,15 +207,27 @@ function expandToolIds(value: string): readonly string[] {
   return canonicalizeToolIdList([value]);
 }
 
-function toDomainBundle(value: PolicyDomainFormState, normalizeToolIds = false) {
+function toDomainBundle(
+  value: PolicyDomainFormState,
+  fallbackDefault: PolicyDecisionValue,
+  normalizeToolIds = false,
+) {
   return {
-    default: value.defaultDecision,
+    default: value.defaultDecision ?? fallbackDefault,
     allow: normalizeStringRows(value.allow, normalizeToolIds ? expandToolIds : undefined),
     require_approval: normalizeStringRows(
       value.requireApproval,
       normalizeToolIds ? expandToolIds : undefined,
     ),
     deny: normalizeStringRows(value.deny, normalizeToolIds ? expandToolIds : undefined),
+  };
+}
+
+function toToolDomainBundle(value: PolicyDomainFormState) {
+  return {
+    allow: normalizeStringRows(value.allow, expandToolIds),
+    require_approval: normalizeStringRows(value.requireApproval, expandToolIds),
+    deny: normalizeStringRows(value.deny, expandToolIds),
   };
 }
 
@@ -255,7 +284,7 @@ export function policyBundleToFormState(bundle: PolicyBundleT): PolicyFormState 
     approvals: {
       autoReviewMode: bundle.approvals?.auto_review?.mode ?? "auto_review",
     },
-    tools: createDomainFormState(bundle.tools, "deny", "tools"),
+    tools: createToolDomainFormState(bundle.tools, "tools"),
     networkEgress: createDomainFormState(bundle.network_egress, "deny", "network-egress"),
     secrets: createDomainFormState(bundle.secrets, "deny", "secrets"),
     connectors: createDomainFormState(bundle.connectors, "deny", "connectors"),
@@ -330,10 +359,10 @@ export function policyFormStateToBundle(state: PolicyFormState): PolicyBundleT {
         mode: state.approvals.autoReviewMode,
       },
     },
-    tools: toDomainBundle(state.tools, true),
-    network_egress: toDomainBundle(state.networkEgress),
-    secrets: toDomainBundle(state.secrets),
-    connectors: toDomainBundle(state.connectors),
+    tools: toToolDomainBundle(state.tools),
+    network_egress: toDomainBundle(state.networkEgress, "deny"),
+    secrets: toDomainBundle(state.secrets, "deny"),
+    connectors: toDomainBundle(state.connectors, "deny"),
     artifacts: {
       default: state.artifacts.defaultDecision,
       retention:

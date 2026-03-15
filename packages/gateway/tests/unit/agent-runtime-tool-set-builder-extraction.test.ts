@@ -47,8 +47,7 @@ describe("ToolSetBuilder webfetch extraction", () => {
         {
           id: "webfetch",
           description: "Fetch web content",
-          risk: "medium",
-          requires_confirmation: false,
+          effect: "read_only",
           keywords: [],
           inputSchema: { type: "object", additionalProperties: true },
         },
@@ -107,8 +106,7 @@ describe("ToolSetBuilder webfetch extraction", () => {
         {
           id: "webfetch",
           description: "Fetch web content",
-          risk: "medium",
-          requires_confirmation: false,
+          effect: "read_only",
           keywords: [],
           inputSchema: { type: "object", additionalProperties: true },
         },
@@ -164,8 +162,7 @@ describe("ToolSetBuilder webfetch extraction", () => {
         {
           id: "webfetch",
           description: "Fetch web content",
-          risk: "medium",
-          requires_confirmation: false,
+          effect: "read_only",
           keywords: [],
           inputSchema: { type: "object", additionalProperties: true },
         },

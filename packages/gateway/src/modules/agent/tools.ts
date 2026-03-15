@@ -2,14 +2,13 @@ import { createHash } from "node:crypto";
 import type { GatewayStateMode } from "../runtime-state/mode.js";
 import { BUILTIN_TOOL_REGISTRY } from "./tool-catalog.js";
 
-export type ToolRisk = "low" | "medium" | "high";
+export type ToolEffect = "read_only" | "state_changing";
 export type ToolSource = "builtin" | "builtin_mcp" | "mcp" | "plugin";
 
 export interface ToolDescriptor {
   id: string;
   description: string;
-  risk: ToolRisk;
-  requires_confirmation: boolean;
+  effect: ToolEffect;
   keywords: readonly string[];
   inputSchema?: Record<string, unknown>;
   source?: ToolSource;
@@ -153,11 +152,6 @@ function scoreTool(tool: ToolDescriptor, normalizedPrompt: string): number {
       score += 1;
     }
   }
-
-  if (tool.risk === "low") {
-    score += 0.25;
-  }
-
   return score;
 }
 
@@ -176,12 +170,15 @@ export function listBuiltinToolDescriptors(): ToolDescriptor[] {
   return BUILTIN_TOOL_REGISTRY.map((tool) => ({ ...tool }));
 }
 
+export function resolveBuiltinToolEffect(toolId: string): ToolEffect | undefined {
+  return BUILTIN_TOOL_REGISTRY.find((tool) => tool.id === toolId)?.effect;
+}
+
 export function selectToolDirectory(
   userPrompt: string,
   allowlist: readonly string[],
   mcpTools: readonly ToolDescriptor[],
   limit = 8,
-  allowRequiresConfirmation = true,
   stateMode: GatewayStateMode = "local",
 ): ToolDescriptor[] {
   const available: ToolDescriptor[] = [];
@@ -189,18 +186,14 @@ export function selectToolDirectory(
   for (const tool of BUILTIN_TOOL_REGISTRY) {
     if (
       isBuiltinToolAvailableInStateMode(tool.id, stateMode) &&
-      isToolAllowed(allowlist, tool.id) &&
-      (allowRequiresConfirmation || !tool.requires_confirmation)
+      isToolAllowed(allowlist, tool.id)
     ) {
       available.push(tool);
     }
   }
 
   for (const tool of mcpTools) {
-    if (
-      isToolAllowed(allowlist, tool.id) &&
-      (allowRequiresConfirmation || !tool.requires_confirmation)
-    ) {
+    if (isToolAllowed(allowlist, tool.id)) {
       available.push(tool);
     }
   }

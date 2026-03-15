@@ -123,11 +123,11 @@ const WORKBOARD_TOOL_METADATA = {
   }
 >;
 
-function classifyWorkboardToolRisk(id: WorkboardToolId): "low" | "medium" {
+function classifyWorkboardToolEffect(id: WorkboardToolId): ToolDescriptor["effect"] {
   if (id.endsWith(".list") || id.endsWith(".get")) {
-    return "low";
+    return "read_only";
   }
-  return "medium";
+  return "state_changing";
 }
 
 export const WORKBOARD_TOOL_REGISTRY: readonly ToolDescriptor[] = (
@@ -137,8 +137,7 @@ export const WORKBOARD_TOOL_REGISTRY: readonly ToolDescriptor[] = (
   return {
     id,
     description: metadata.description,
-    risk: classifyWorkboardToolRisk(id),
-    requires_confirmation: false,
+    effect: classifyWorkboardToolEffect(id),
     keywords: "keywords" in metadata ? metadata.keywords : DEFAULT_WORKBOARD_KEYWORDS,
     source: "builtin",
     family: "workboard",

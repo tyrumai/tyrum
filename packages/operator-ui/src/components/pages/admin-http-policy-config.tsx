@@ -176,10 +176,11 @@ export function PolicyConfigSection(props: PolicyConfigSectionProps): React.Reac
         </Card>
         <DomainEditor
           title="Tools"
-          description="Define the baseline tool behavior for the whole deployment."
+          description="Refine the effect-driven baseline. Read-only tools allow by default and state-changing tools require approval by default."
           state={formState.tools}
           testIdPrefix="policy-config-tools"
           toolMode={true}
+          showDefaultDecision={false}
           onChange={(next) => setFormState((prev) => (prev ? { ...prev, tools: next } : prev))}
         />
         <DomainEditor

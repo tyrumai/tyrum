@@ -114,17 +114,29 @@ export class PluginRegistry {
   }
   getToolDescriptors(): ToolDescriptor[] {
     return [...this.plugins.values()].flatMap((plugin) =>
-      [...plugin.tools.values()].map((tool) => ({
-        id: tool.descriptor.id,
-        description: tool.descriptor.description,
-        risk: tool.descriptor.risk,
-        requires_confirmation: tool.descriptor.requires_confirmation,
-        keywords: tool.descriptor.keywords,
-        inputSchema: tool.descriptor.inputSchema,
-        source: "plugin" as const,
-        family: tool.descriptor.family ?? "plugin",
-        backingServerId: tool.descriptor.backingServerId,
-      })),
+      [...plugin.tools.values()].map((tool) => {
+        const effect =
+          tool.descriptor.effect === "read_only" || tool.descriptor.effect === "state_changing"
+            ? tool.descriptor.effect
+            : undefined;
+        if (!effect) {
+          this.opts.logger.warn("plugins.tool_effect_missing", {
+            plugin_id: plugin.manifest.id,
+            tool_id: tool.descriptor.id,
+            default_effect: "state_changing",
+          });
+        }
+        return {
+          id: tool.descriptor.id,
+          description: tool.descriptor.description,
+          effect: effect ?? "state_changing",
+          keywords: tool.descriptor.keywords,
+          inputSchema: tool.descriptor.inputSchema,
+          source: "plugin" as const,
+          family: tool.descriptor.family ?? "plugin",
+          backingServerId: tool.descriptor.backingServerId,
+        };
+      }),
     );
   }
 

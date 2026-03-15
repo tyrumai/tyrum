@@ -31,6 +31,8 @@ import {
   assertSplitRoleUsesPostgres,
   buildStartupDefaultDeploymentConfig,
   parseCliArgs,
+  resolveGatewayLogLevel,
+  resolveGatewayLogStackTraces,
   resolveSnapshotImportEnabled,
   resolveGatewayUpdateTarget,
   runCli,
@@ -91,6 +93,7 @@ describe("gateway CLI argument parsing", () => {
     expect(
       parseCliArgs([
         "all",
+        "--debug",
         "--tls-ready",
         "--tls-self-signed",
         "--allow-insecure-http",
@@ -102,12 +105,24 @@ describe("gateway CLI argument parsing", () => {
     ).toEqual({
       kind: "start",
       role: "all",
+      debug: true,
       tlsReady: true,
       tlsSelfSigned: true,
       allowInsecureHttp: true,
       engineApiEnabled: true,
       snapshotImportEnabled: true,
       trustedProxies: "10.0.0.0/8,192.168.0.0/16",
+    });
+  });
+
+  it("parses explicit log-level overrides", () => {
+    expect(parseCliArgs(["start", "--log-level", "debug"])).toEqual({
+      kind: "start",
+      logLevel: "debug",
+    });
+    expect(parseCliArgs(["--log-level", "warn"])).toEqual({
+      kind: "start",
+      logLevel: "warn",
     });
   });
 
@@ -184,6 +199,10 @@ describe("gateway CLI argument parsing", () => {
       message: "--trusted-proxies requires a non-empty value",
     },
     {
+      argv: ["start", "--log-level", "verbose"],
+      message: "--log-level must be one of debug|info|warn|error|silent",
+    },
+    {
       argv: ["toolrunner", "--payload-b64", ""],
       message: "--payload-b64 requires a non-empty value",
     },
@@ -251,6 +270,39 @@ describe("snapshot import enablement", () => {
     } finally {
       if (previous === undefined) delete process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"];
       else process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"] = previous;
+    }
+  });
+});
+
+describe("gateway log-level resolution", () => {
+  it("prefers explicit CLI log-level overrides", () => {
+    expect(resolveGatewayLogLevel({ logLevelOverride: "warn", debugOverride: true })).toBe("warn");
+    expect(resolveGatewayLogStackTraces({ logLevelOverride: "warn", debugOverride: true })).toBe(
+      undefined,
+    );
+  });
+
+  it("treats debug mode as a runtime debug logger override", () => {
+    expect(resolveGatewayLogLevel({ debugOverride: true })).toBe("debug");
+    expect(resolveGatewayLogStackTraces({ debugOverride: true })).toBe(true);
+  });
+
+  it("supports env-driven debug logging for embedded launches", () => {
+    const previousLevel = process.env["TYRUM_LOG_LEVEL"];
+    const previousDebug = process.env["TYRUM_DEBUG"];
+
+    process.env["TYRUM_LOG_LEVEL"] = "error";
+    process.env["TYRUM_DEBUG"] = "1";
+
+    try {
+      expect(resolveGatewayLogLevel({})).toBe("error");
+      expect(resolveGatewayLogStackTraces({})).toBe(undefined);
+    } finally {
+      if (previousLevel === undefined) delete process.env["TYRUM_LOG_LEVEL"];
+      else process.env["TYRUM_LOG_LEVEL"] = previousLevel;
+
+      if (previousDebug === undefined) delete process.env["TYRUM_DEBUG"];
+      else process.env["TYRUM_DEBUG"] = previousDebug;
     }
   });
 });

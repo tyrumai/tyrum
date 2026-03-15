@@ -86,8 +86,7 @@ describe("AgentRuntime - provenance and policy overrides", () => {
       {
         id: "bash",
         description: "Execute shell commands on the local machine.",
-        risk: "high" as const,
-        requires_confirmation: true,
+        effect: "state_changing" as const,
         keywords: [],
         inputSchema: {
           type: "object",
@@ -99,8 +98,7 @@ describe("AgentRuntime - provenance and policy overrides", () => {
       {
         id: "webfetch",
         description: "Make outbound HTTP requests.",
-        risk: "medium" as const,
-        requires_confirmation: true,
+        effect: "state_changing" as const,
         keywords: [],
         inputSchema: {
           type: "object",
@@ -192,8 +190,7 @@ describe("AgentRuntime - provenance and policy overrides", () => {
     const toolDesc = {
       id: "read",
       description: "Read files from workspace.",
-      risk: "high" as const,
-      requires_confirmation: false,
+      effect: "state_changing" as const,
       keywords: [],
       inputSchema: {
         type: "object",
@@ -284,8 +281,7 @@ describe("AgentRuntime - provenance and policy overrides", () => {
     const toolDesc = {
       id: "tool.node.dispatch",
       description: "Dispatch tasks to connected node capabilities.",
-      risk: "high" as const,
-      requires_confirmation: true,
+      effect: "state_changing" as const,
       keywords: [],
       inputSchema: {
         type: "object",
@@ -393,8 +389,7 @@ describe("AgentRuntime - provenance and policy overrides", () => {
     const toolDesc = {
       id: "bash",
       description: "Execute shell commands.",
-      risk: "high" as const,
-      requires_confirmation: true,
+      effect: "state_changing" as const,
       keywords: [],
       inputSchema: {
         type: "object",

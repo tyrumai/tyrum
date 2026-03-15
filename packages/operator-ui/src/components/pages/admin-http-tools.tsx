@@ -16,9 +16,8 @@ import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { Input } from "../ui/input.js";
 
 type SourceFilter = ToolRegistryEntry["source"] | "all";
-type RiskFilter = ToolRegistryEntry["risk"] | "all";
+type EffectFilter = ToolRegistryEntry["effect"] | "all";
 type ExposureFilter = ToolRegistryEntry["effective_exposure"]["reason"] | "all";
-type ConfirmationFilter = "all" | "required" | "not_required";
 
 const GROUP_ORDER: ToolGroupId[] = ["built_in", "extensions"];
 
@@ -30,11 +29,10 @@ const SOURCE_OPTIONS: Array<{ value: SourceFilter; label: string }> = [
   { value: "plugin", label: "Plugin" },
 ];
 
-const RISK_OPTIONS: Array<{ value: RiskFilter; label: string }> = [
+const EFFECT_OPTIONS: Array<{ value: EffectFilter; label: string }> = [
   { value: "all", label: "All" },
-  { value: "low", label: "Low" },
-  { value: "medium", label: "Medium" },
-  { value: "high", label: "High" },
+  { value: "read_only", label: "Read-only" },
+  { value: "state_changing", label: "State-changing" },
 ];
 
 const EXPOSURE_OPTIONS: Array<{ value: ExposureFilter; label: string }> = [
@@ -42,12 +40,6 @@ const EXPOSURE_OPTIONS: Array<{ value: ExposureFilter; label: string }> = [
   { value: "enabled", label: "Exposed" },
   { value: "disabled_by_agent_allowlist", label: "Allowlist blocked" },
   { value: "disabled_by_state_mode", label: "State-mode blocked" },
-];
-
-const CONFIRMATION_OPTIONS: Array<{ value: ConfirmationFilter; label: string }> = [
-  { value: "all", label: "All" },
-  { value: "required", label: "Confirm required" },
-  { value: "not_required", label: "No confirm" },
 ];
 
 function matchesTextFilter(tool: ToolRegistryEntry, query: string): boolean {
@@ -77,28 +69,19 @@ function matchesFacetFilters(
   tool: ToolRegistryEntry,
   filters: {
     source: SourceFilter;
-    risk: RiskFilter;
+    effect: EffectFilter;
     exposure: ExposureFilter;
-    confirmation: ConfirmationFilter;
   },
 ): boolean {
   if (filters.source !== "all" && tool.source !== filters.source) {
     return false;
   }
 
-  if (filters.risk !== "all" && tool.risk !== filters.risk) {
+  if (filters.effect !== "all" && tool.effect !== filters.effect) {
     return false;
   }
 
   if (filters.exposure !== "all" && tool.effective_exposure.reason !== filters.exposure) {
-    return false;
-  }
-
-  if (filters.confirmation === "required" && !tool.requires_confirmation) {
-    return false;
-  }
-
-  if (filters.confirmation === "not_required" && tool.requires_confirmation) {
     return false;
   }
 
@@ -121,9 +104,8 @@ export function ToolRegistryCard({ core }: { core: OperatorCore }): React.ReactE
   const [expandedIds, setExpandedIds] = React.useState<Set<string>>(() => new Set());
   const [filter, setFilter] = React.useState("");
   const [sourceFilter, setSourceFilter] = React.useState<SourceFilter>("all");
-  const [riskFilter, setRiskFilter] = React.useState<RiskFilter>("all");
+  const [effectFilter, setEffectFilter] = React.useState<EffectFilter>("all");
   const [exposureFilter, setExposureFilter] = React.useState<ExposureFilter>("all");
-  const [confirmationFilter, setConfirmationFilter] = React.useState<ConfirmationFilter>("all");
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
@@ -160,12 +142,11 @@ export function ToolRegistryCard({ core }: { core: OperatorCore }): React.ReactE
           matchesTextFilter(tool, filter.trim()) &&
           matchesFacetFilters(tool, {
             source: sourceFilter,
-            risk: riskFilter,
+            effect: effectFilter,
             exposure: exposureFilter,
-            confirmation: confirmationFilter,
           }),
       ),
-    [confirmationFilter, exposureFilter, filter, riskFilter, sourceFilter, tools],
+    [effectFilter, exposureFilter, filter, sourceFilter, tools],
   );
   const groupedTools = React.useMemo(() => buildGroups(filteredTools), [filteredTools]);
 
@@ -248,11 +229,11 @@ export function ToolRegistryCard({ core }: { core: OperatorCore }): React.ReactE
               testIdPrefix="admin-http-tools-filter-source"
             />
             <FacetFilterGroup
-              label="Risk"
-              value={riskFilter}
-              options={RISK_OPTIONS}
-              onChange={setRiskFilter}
-              testIdPrefix="admin-http-tools-filter-risk"
+              label="Effect"
+              value={effectFilter}
+              options={EFFECT_OPTIONS}
+              onChange={setEffectFilter}
+              testIdPrefix="admin-http-tools-filter-effect"
             />
             <FacetFilterGroup
               label="Exposure"
@@ -260,13 +241,6 @@ export function ToolRegistryCard({ core }: { core: OperatorCore }): React.ReactE
               options={EXPOSURE_OPTIONS}
               onChange={setExposureFilter}
               testIdPrefix="admin-http-tools-filter-exposure"
-            />
-            <FacetFilterGroup
-              label="Confirmation"
-              value={confirmationFilter}
-              options={CONFIRMATION_OPTIONS}
-              onChange={setConfirmationFilter}
-              testIdPrefix="admin-http-tools-filter-confirmation"
             />
           </div>
         </div>

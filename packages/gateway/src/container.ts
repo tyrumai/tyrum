@@ -61,7 +61,7 @@ import type { ArtifactStore } from "./modules/artifact/store.js";
 import { createArtifactStore } from "./modules/artifact/create-artifact-store.js";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { Logger } from "./modules/observability/logger.js";
+import { Logger, type LogLevel } from "./modules/observability/logger.js";
 import { SqliteDb } from "./statestore/sqlite.js";
 import { PostgresDb } from "./statestore/postgres.js";
 import { isPostgresDbUri } from "./statestore/db-uri.js";
@@ -84,6 +84,7 @@ export interface GatewayContainerConfig {
   dbPath: string;
   migrationsDir: string;
   tyrumHome?: string;
+  loggerLevel?: LogLevel;
   logStackTraces?: boolean;
 }
 
@@ -160,7 +161,7 @@ export function wireContainer(
   const contextReportDal = new ContextReportDalImpl(db);
   const redactionEngine = opts?.redactionEngine ?? new RedactionEngine();
   const logger = new Logger({
-    level: deploymentConfig.logging.level ?? "info",
+    level: config.loggerLevel ?? deploymentConfig.logging.level ?? "info",
     base: { service: "tyrum-gateway" },
   });
   const secretResolutionAuditDal = new SecretResolutionAuditDalImpl(db, logger);

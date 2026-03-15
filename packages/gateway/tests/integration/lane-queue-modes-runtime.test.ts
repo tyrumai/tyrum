@@ -112,8 +112,7 @@ describe("AgentRuntime lane queue modes", () => {
         {
           id: "tool.test",
           description: "test tool",
-          risk: "low",
-          requires_confirmation: false,
+          effect: "read_only",
           keywords: ["test"],
           inputSchema: { type: "object", additionalProperties: true },
         },
@@ -218,8 +217,7 @@ describe("AgentRuntime lane queue modes", () => {
         {
           id: "tool.test",
           description: "test tool",
-          risk: "low",
-          requires_confirmation: false,
+          effect: "read_only",
           keywords: ["test"],
           inputSchema: { type: "object", additionalProperties: true },
         },

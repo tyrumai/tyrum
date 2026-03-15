@@ -27,8 +27,7 @@ describe("tool registry routes", () => {
         {
           id: "mcp.exa.web_search_exa",
           description: "Search the web with Exa.",
-          risk: "medium",
-          requires_confirmation: true,
+          effect: "state_changing",
           keywords: ["mcp", "exa", "search"],
           inputSchema: {
             type: "object",
@@ -95,8 +94,7 @@ describe("tool registry routes", () => {
               {
                 id: "plugin.echo.say",
                 description: "Echo text back to the caller.",
-                risk: "low" as const,
-                requires_confirmation: false,
+                effect: "read_only" as const,
                 keywords: ["echo"],
                 inputSchema: {
                   type: "object",
@@ -106,8 +104,7 @@ describe("tool registry routes", () => {
               {
                 id: "plugin.echo.invalid",
                 description: "Invalid schema tool.",
-                risk: "low" as const,
-                requires_confirmation: false,
+                effect: "read_only" as const,
                 keywords: ["echo"],
                 inputSchema: {
                   oneOf: [{ type: "object", properties: {} }],
@@ -116,15 +113,13 @@ describe("tool registry routes", () => {
               {
                 id: "plugin.echo.optional",
                 description: "Echo text back without an explicit schema.",
-                risk: "low" as const,
-                requires_confirmation: false,
+                effect: "read_only" as const,
                 keywords: ["echo"],
               },
               {
                 id: "plugin.echo.union",
                 description: "Echo text or markdown back to the caller.",
-                risk: "low" as const,
-                requires_confirmation: false,
+                effect: "read_only" as const,
                 keywords: ["echo"],
                 inputSchema: {
                   type: "object",
@@ -183,8 +178,7 @@ describe("tool registry routes", () => {
                       descriptor: {
                         id: "plugin.echo.say",
                         description: "Echo text back to the caller.",
-                        risk: "low" as const,
-                        requires_confirmation: false,
+                        effect: "read_only" as const,
                         keywords: ["echo"],
                       },
                       execute: vi.fn(),

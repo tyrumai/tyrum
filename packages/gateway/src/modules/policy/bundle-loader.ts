@@ -20,8 +20,7 @@ export function defaultPolicyBundle(): PolicyBundleT {
   return PolicyBundle.parse({
     v: 1,
     tools: {
-      default: "require_approval",
-      allow: ["read", "mcp.memory.*"],
+      allow: [],
       require_approval: [],
       deny: [],
     },

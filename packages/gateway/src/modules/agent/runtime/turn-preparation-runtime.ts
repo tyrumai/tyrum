@@ -368,10 +368,30 @@ export async function resolveToolsAndMemory(
   const mcpTools = canDiscoverMcpTools(ctx.config.tools)
     ? await deps.mcpManager.listToolDescriptors(ctx.mcpServers)
     : [];
-  const toolSetBuilderDeps = buildToolSetBuilderDeps(deps, session);
+  const toolSetBuilderDeps = buildToolSetBuilderDeps(deps, session, executionProfile.profile);
   const toolSetBuilder = new ToolSetBuilder(toolSetBuilderDeps);
   const builtinTools = listBuiltinToolDescriptors();
-  const pluginToolsRaw = deps.plugins?.getToolDescriptors() ?? [];
+  const pluginToolsRaw: ToolDescriptor[] = [];
+  for (const tool of deps.plugins?.getToolDescriptors() ?? []) {
+    const id = tool.id.trim();
+    if (!id) {
+      continue;
+    }
+    if (id === tool.id) {
+      pluginToolsRaw.push(tool);
+      continue;
+    }
+    pluginToolsRaw.push({
+      id,
+      description: tool.description,
+      effect: tool.effect,
+      keywords: tool.keywords,
+      inputSchema: tool.inputSchema,
+      source: tool.source,
+      family: tool.family,
+      backingServerId: tool.backingServerId,
+    });
+  }
   const baseToolAllowlist = materializeAllowedAgentIds(ctx.config.tools, [
     ...builtinTools,
     ...mcpTools,
@@ -388,7 +408,6 @@ export async function resolveToolsAndMemory(
     toolAllowlist,
     [...mcpTools, ...pluginTools],
     Number.POSITIVE_INFINITY,
-    true,
     stateMode,
   );
   const validatedToolCache = new Map<string, ToolDescriptor | null>();
@@ -461,10 +480,13 @@ export function buildToolSetBuilderDeps(
     | "plugins"
   >,
   session: Pick<SessionRow, "tenant_id" | "agent_id" | "workspace_id">,
+  executionProfile?: Pick<ResolvedExecutionProfile["profile"], "tool_allowlist" | "tool_denylist">,
 ): ToolSetBuilderDeps {
   return {
     home: deps.home,
     stateMode: resolveGatewayStateMode(deps.opts.container.deploymentConfig),
+    roleToolAllowlist: executionProfile?.tool_allowlist,
+    roleToolDenylist: executionProfile?.tool_denylist,
     tenantId: session.tenant_id,
     agentId: session.agent_id,
     workspaceId: session.workspace_id,

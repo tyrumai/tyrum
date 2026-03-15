@@ -45,7 +45,6 @@ type PolicyHttpClient = AdminHttpClient & {
       tools: Array<{
         canonical_id: string;
         description: string;
-        risk: "low" | "medium" | "high";
       }>;
     }>;
   };
@@ -76,14 +75,12 @@ function normalizeToolOptions(
   tools: Array<{
     canonical_id: string;
     description: string;
-    risk: "low" | "medium" | "high";
   }>,
 ): PolicyToolOption[] {
   return tools
     .map((tool) => ({
       toolId: tool.canonical_id.trim(),
       description: tool.description,
-      risk: tool.risk,
     }))
     .filter((tool) => tool.toolId)
     .toSorted((left, right) => left.toolId.localeCompare(right.toolId));

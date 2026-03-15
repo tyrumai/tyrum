@@ -140,7 +140,7 @@ export async function runPreTurnHydration(params: {
     try {
       const toolCallId = `preturn-${randomUUID()}`;
       const policyState = await policyRuntime.resolveToolCallPolicyState({
-        toolDesc: { ...tool, requires_confirmation: false },
+        toolDesc: tool,
         toolCallId,
         args,
         inputProvenance: { source: "system", trusted: true },

@@ -222,7 +222,7 @@ export async function maybeDeliverAutomationReply(
 
   let decision: "allow" | "deny" | "require_approval" = "allow";
   let policySnapshotId: string | undefined;
-  if (deps.policyService.isEnabled()) {
+  if (deps.policyService) {
     try {
       const parsedSource = parseChannelSourceKey(route.source);
       const matchTarget =
@@ -251,11 +251,7 @@ export async function maybeDeliverAutomationReply(
     decision = "allow";
   }
 
-  if (
-    decision === "deny" &&
-    deps.policyService.isEnabled() &&
-    !deps.policyService.isObserveOnly()
-  ) {
+  if (decision === "deny" && deps.policyService && !deps.policyService.isObserveOnly()) {
     return;
   }
 

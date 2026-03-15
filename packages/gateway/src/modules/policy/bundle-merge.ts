@@ -33,6 +33,38 @@ function mergeDomain(
   };
 }
 
+function mergeToolDomain(
+  domains: Array<
+    | {
+        allow?: readonly string[];
+        require_approval?: readonly string[];
+        deny?: readonly string[];
+      }
+    | undefined
+  >,
+): {
+  allow: string[];
+  require_approval: string[];
+  deny: string[];
+} {
+  let allow: string[] = [];
+  let requireApproval: string[] = [];
+  let deny: string[] = [];
+
+  for (const domain of domains) {
+    if (!domain) continue;
+    allow = unionStrings(allow, domain.allow ?? []);
+    requireApproval = unionStrings(requireApproval, domain.require_approval ?? []);
+    deny = unionStrings(deny, domain.deny ?? []);
+  }
+
+  return {
+    allow,
+    require_approval: requireApproval,
+    deny,
+  };
+}
+
 function isPositiveFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value > 0;
 }
@@ -114,12 +146,7 @@ function mergeByLabelSensitivity(
 export function mergePolicyBundles(bundles: Array<PolicyBundleT | undefined>): PolicyBundleT {
   const base = PolicyBundle.parse({ v: 1 });
 
-  const tools = mergeDomain(
-    bundles.map((bundle) =>
-      bundle?.tools ? normalizeDomain(bundle.tools, "require_approval") : undefined,
-    ),
-    normalizeDomain(base.tools, "require_approval").default,
-  );
+  const tools = mergeToolDomain(bundles.map((bundle) => bundle?.tools));
   const networkEgress = mergeDomain(
     bundles.map((bundle) =>
       bundle?.network_egress

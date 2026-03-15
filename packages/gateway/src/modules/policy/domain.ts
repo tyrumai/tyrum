@@ -17,7 +17,7 @@ export function mostRestrictiveDecision(a: Decision, b: Decision): Decision {
 export function normalizeDomain(
   value:
     | {
-        default: Decision;
+        default?: Decision;
         allow: string[];
         require_approval: string[];
         deny: string[];
@@ -29,7 +29,7 @@ export function normalizeDomain(
     return { default: fallbackDefault, allow: [], require_approval: [], deny: [] };
   }
   return {
-    default: value.default,
+    default: value.default ?? fallbackDefault,
     allow: value.allow ?? [],
     require_approval: value.require_approval ?? [],
     deny: value.deny ?? [],

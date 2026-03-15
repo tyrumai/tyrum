@@ -53,8 +53,7 @@ describe("AgentRuntime MCP tool exposure", () => {
         {
           id: "mcp.calendar.events_list",
           description: "List calendar events.",
-          risk: "medium" as const,
-          requires_confirmation: true,
+          effect: "state_changing" as const,
           keywords: ["calendar", "events"],
           inputSchema: {
             type: "object",
@@ -66,8 +65,7 @@ describe("AgentRuntime MCP tool exposure", () => {
         {
           id: "mcp.calendar.events_create",
           description: "Create calendar events.",
-          risk: "medium" as const,
-          requires_confirmation: true,
+          effect: "state_changing" as const,
           keywords: ["calendar", "create"],
           inputSchema: {
             type: "object",

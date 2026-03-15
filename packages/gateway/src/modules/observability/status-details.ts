@@ -18,8 +18,7 @@ import {
 } from "./status-details-helpers.js";
 
 export type SandboxStatus = {
-  mode: "disabled" | "observe" | "enforce";
-  policy_enabled: boolean;
+  mode: "observe" | "enforce";
   policy_observe_only: boolean;
   effective_policy_sha256: string;
   hardening_profile: SandboxHardeningProfile;
@@ -47,7 +46,7 @@ export interface StatusDetailsDeps {
   tenantId: string;
   db?: SqlDb;
   policyService?: PolicyService;
-  policyStatus?: { enabled: boolean; observe_only: boolean; effective_sha256: string };
+  policyStatus?: { observe_only: boolean; effective_sha256: string };
   toolrunnerHardeningProfile?: SandboxHardeningProfile;
   agents?: AgentRegistry;
   modelsDev?: ModelsDevService;

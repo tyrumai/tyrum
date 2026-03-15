@@ -39,9 +39,9 @@ describe("AgentRuntime - plugin tool gating", () => {
     };
 
     const policyService = {
-      isEnabled: () => false,
+      isEnabled: () => true,
       isObserveOnly: () => false,
-      evaluateToolCall: vi.fn(),
+      evaluateToolCall: vi.fn(async () => ({ decision: "allow" as const })),
     };
 
     const toolSetBuilder = createToolSetBuilder({
@@ -54,8 +54,7 @@ describe("AgentRuntime - plugin tool gating", () => {
     const toolDesc = {
       id: "plugin.echo.echo",
       description: "Echo back a string.",
-      risk: "low" as const,
-      requires_confirmation: false,
+      effect: "read_only" as const,
       keywords: [],
       inputSchema: {
         type: "object",
@@ -99,7 +98,7 @@ describe("AgentRuntime - plugin tool gating", () => {
     expect(res).not.toContain("ignore previous instructions");
   });
 
-  it("does not expose side-effecting plugin tools unless opted-in via policy bundle", async () => {
+  it("exposes state-changing plugin tools when the agent config allows them", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
     container = await createContainer({
       dbPath: ":memory:",
@@ -118,69 +117,7 @@ describe("AgentRuntime - plugin tool gating", () => {
         {
           id: "plugin.echo.danger",
           description: "Do a dangerous thing.",
-          risk: "high" as const,
-          requires_confirmation: true,
-          keywords: ["danger"],
-          inputSchema: {
-            type: "object",
-            properties: {},
-            required: [],
-            additionalProperties: false,
-          },
-        },
-      ]),
-    };
-
-    const runtime = new AgentRuntime({
-      container,
-      home: homeDir,
-      languageModel: createStubLanguageModel("hello"),
-      fetchImpl: fetch404,
-      plugins: plugins as unknown as ConstructorParameters<typeof AgentRuntime>[0]["plugins"],
-    });
-
-    await runtime.turn({
-      channel: "test",
-      thread_id: "thread-1",
-      message: "danger",
-    });
-
-    const report = runtime.getLastContextReport();
-    expect(report).toBeDefined();
-    expect(report!.selected_tools).not.toContain("plugin.echo.danger");
-  });
-
-  it("exposes side-effecting plugin tools when opted-in via policy bundle", async () => {
-    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
-    container = await createContainer({
-      dbPath: ":memory:",
-      migrationsDir,
-      tyrumHome: homeDir,
-    });
-
-    await writeFile(
-      join(homeDir, "agent.yml"),
-      `model:\n  model: openai/gpt-4.1\nskills:\n  enabled: []\nmcp:\n  enabled: []\ntools:\n  allow:\n    - read\nsessions:\n  ttl_days: 30\n  max_turns: 20\nmemory:\n  v1: { enabled: false }\n`,
-      "utf-8",
-    );
-
-    await seedDeploymentPolicyBundle(container.db, {
-      v: 1,
-      tools: {
-        default: "require_approval",
-        allow: ["read"],
-        require_approval: ["plugin.echo.danger"],
-        deny: [],
-      },
-    });
-
-    const plugins = {
-      getToolDescriptors: vi.fn(() => [
-        {
-          id: "plugin.echo.danger",
-          description: "Do a dangerous thing.",
-          risk: "high" as const,
-          requires_confirmation: true,
+          effect: "state_changing" as const,
           keywords: ["danger"],
           inputSchema: {
             type: "object",
@@ -211,7 +148,7 @@ describe("AgentRuntime - plugin tool gating", () => {
     expect(report!.selected_tools).toContain("plugin.echo.danger");
   });
 
-  it("normalizes plugin tool ids when evaluating policy-gated exposure", async () => {
+  it("still exposes plugin tools when the agent config default mode remains permissive", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
     container = await createContainer({
       dbPath: ":memory:",
@@ -238,10 +175,59 @@ describe("AgentRuntime - plugin tool gating", () => {
     const plugins = {
       getToolDescriptors: vi.fn(() => [
         {
+          id: "plugin.echo.danger",
+          description: "Do a dangerous thing.",
+          effect: "state_changing" as const,
+          keywords: ["danger"],
+          inputSchema: {
+            type: "object",
+            properties: {},
+            required: [],
+            additionalProperties: false,
+          },
+        },
+      ]),
+    };
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: createStubLanguageModel("hello"),
+      fetchImpl: fetch404,
+      plugins: plugins as unknown as ConstructorParameters<typeof AgentRuntime>[0]["plugins"],
+    });
+
+    await runtime.turn({
+      channel: "test",
+      thread_id: "thread-1",
+      message: "danger",
+    });
+
+    const report = runtime.getLastContextReport();
+    expect(report).toBeDefined();
+    expect(report!.selected_tools).toContain("plugin.echo.danger");
+  });
+
+  it("normalizes plugin tool ids when exposing them from the agent allowlist", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
+    container = await createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+      tyrumHome: homeDir,
+    });
+
+    await writeFile(
+      join(homeDir, "agent.yml"),
+      `model:\n  model: openai/gpt-4.1\nskills:\n  enabled: []\nmcp:\n  enabled: []\ntools:\n  allow:\n    - read\n    - plugin.echo.danger\nsessions:\n  ttl_days: 30\n  max_turns: 20\nmemory:\n  v1: { enabled: false }\n`,
+      "utf-8",
+    );
+
+    const plugins = {
+      getToolDescriptors: vi.fn(() => [
+        {
           id: "  plugin.echo.danger  ",
           description: "Do a dangerous thing.",
-          risk: "high" as const,
-          requires_confirmation: true,
+          effect: "state_changing" as const,
           keywords: ["danger"],
           inputSchema: {
             type: "object",

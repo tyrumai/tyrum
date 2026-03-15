@@ -284,16 +284,14 @@ describe("McpServerSpec", () => {
       tool_overrides: {
         sync: {
           description_append: "Use for durable calendar hydration.",
-          risk: "low",
-          requires_confirmation: false,
+          effect: "read_only",
         },
       },
     });
 
     expect(parsed.tool_overrides?.["sync"]).toEqual({
       description_append: "Use for durable calendar hydration.",
-      risk: "low",
-      requires_confirmation: false,
+      effect: "read_only",
     });
   });
 

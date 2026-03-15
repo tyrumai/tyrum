@@ -4,8 +4,8 @@ import { WORKBOARD_TOOL_REGISTRY } from "../../src/modules/agent/tool-catalog-wo
 import { WORKBOARD_TOOL_INPUT_SCHEMAS } from "../../src/modules/agent/tool-catalog-workboard-schemas.js";
 import type { ToolDescriptor } from "../../src/modules/agent/tools.js";
 
-function toolRisk(id: string): "low" | "medium" | undefined {
-  return WORKBOARD_TOOL_REGISTRY.find((tool) => tool.id === id)?.risk;
+function toolEffect(id: string): "read_only" | "state_changing" | undefined {
+  return WORKBOARD_TOOL_REGISTRY.find((tool) => tool.id === id)?.effect;
 }
 
 function toolSchema(id: string): Record<string, unknown> | undefined {
@@ -19,24 +19,24 @@ function expectToolSchema(id: string): Record<string, unknown> {
 }
 
 describe("WorkBoard tool metadata", () => {
-  it("marks state-mutating workboard tools as medium risk", () => {
-    expect(toolRisk("workboard.item.transition")).toBe("medium");
-    expect(toolRisk("workboard.state.set")).toBe("medium");
-    expect(toolRisk("workboard.clarification.request")).toBe("medium");
-    expect(toolRisk("workboard.clarification.answer")).toBe("medium");
-    expect(toolRisk("workboard.clarification.cancel")).toBe("medium");
+  it("marks state-mutating workboard tools as state-changing", () => {
+    expect(toolEffect("workboard.item.transition")).toBe("state_changing");
+    expect(toolEffect("workboard.state.set")).toBe("state_changing");
+    expect(toolEffect("workboard.clarification.request")).toBe("state_changing");
+    expect(toolEffect("workboard.clarification.answer")).toBe("state_changing");
+    expect(toolEffect("workboard.clarification.cancel")).toBe("state_changing");
   });
 
-  it("keeps read-only workboard tools as low risk", () => {
-    expect(toolRisk("workboard.item.list")).toBe("low");
-    expect(toolRisk("workboard.state.get")).toBe("low");
-    expect(toolRisk("workboard.clarification.list")).toBe("low");
+  it("keeps read-only workboard tools as read-only", () => {
+    expect(toolEffect("workboard.item.list")).toBe("read_only");
+    expect(toolEffect("workboard.state.get")).toBe("read_only");
+    expect(toolEffect("workboard.clarification.list")).toBe("read_only");
   });
 
   it("does not expose workboard.subagent.* in the model-facing workboard registry", () => {
-    expect(toolRisk("workboard.subagent.spawn")).toBeUndefined();
-    expect(toolRisk("workboard.subagent.send")).toBeUndefined();
-    expect(toolRisk("workboard.subagent.close")).toBeUndefined();
+    expect(toolEffect("workboard.subagent.spawn")).toBeUndefined();
+    expect(toolEffect("workboard.subagent.send")).toBeUndefined();
+    expect(toolEffect("workboard.subagent.close")).toBeUndefined();
   });
 
   it("keeps interaction broad while explicitly denying workboard mutators", () => {

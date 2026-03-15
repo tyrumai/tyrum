@@ -100,8 +100,7 @@ export function policyPageGetResponse(
           source: "builtin",
           canonical_id: "read",
           description: "Read files from disk.",
-          risk: "low",
-          requires_confirmation: false,
+          effect: "read_only",
           effective_exposure: {
             enabled: true,
             reason: "enabled",

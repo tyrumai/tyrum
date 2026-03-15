@@ -39,8 +39,7 @@ type ToolRegistryEntry = {
   source: "builtin" | "builtin_mcp" | "mcp" | "plugin";
   canonical_id: string;
   description: string;
-  risk: ToolDescriptor["risk"];
-  requires_confirmation: boolean;
+  effect: ToolDescriptor["effect"];
   effective_exposure: ToolEffectiveExposure;
   family?: string;
   keywords?: string[];
@@ -87,8 +86,7 @@ function toBaseEntry(
     source,
     canonical_id: descriptor.id,
     description: descriptor.description,
-    risk: descriptor.risk,
-    requires_confirmation: descriptor.requires_confirmation,
+    effect: descriptor.effect,
     effective_exposure: effectiveExposure,
     family: descriptor.family,
     keywords: descriptor.keywords.length > 0 ? [...descriptor.keywords] : undefined,
@@ -106,8 +104,7 @@ function toPluginEntry(
     source: base.source,
     canonical_id: base.canonical_id,
     description: base.description,
-    risk: base.risk,
-    requires_confirmation: base.requires_confirmation,
+    effect: base.effect,
     effective_exposure: base.effective_exposure,
     family: base.family,
     keywords: base.keywords,
@@ -125,8 +122,7 @@ function toBuiltinEntry(
     source: base.source,
     canonical_id: base.canonical_id,
     description: base.description,
-    risk: base.risk,
-    requires_confirmation: base.requires_confirmation,
+    effect: base.effect,
     effective_exposure: base.effective_exposure,
     family: base.family,
     keywords: base.keywords,

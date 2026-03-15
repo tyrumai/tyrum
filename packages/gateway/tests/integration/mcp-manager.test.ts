@@ -59,8 +59,7 @@ describe("McpManager (stdio)", () => {
       tool_overrides: {
         echo: {
           description_append: "Use this for prompt-seeded recall.",
-          risk: "low",
-          requires_confirmation: false,
+          effect: "read_only",
         },
       },
     };
@@ -69,8 +68,7 @@ describe("McpManager (stdio)", () => {
     expect(tools).toContainEqual(
       expect.objectContaining({
         id: "mcp.mock.echo",
-        risk: "low",
-        requires_confirmation: false,
+        effect: "read_only",
       }),
     );
     const echo = tools.find((tool) => tool.id === "mcp.mock.echo");

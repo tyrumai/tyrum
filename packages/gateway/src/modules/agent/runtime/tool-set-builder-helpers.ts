@@ -48,6 +48,8 @@ export type ToolSetBuilderRedactionEngine = { redactText: (text: string) => { re
 export interface ToolSetBuilderDeps {
   home: string;
   stateMode?: GatewayStateMode;
+  roleToolAllowlist?: readonly string[];
+  roleToolDenylist?: readonly string[];
   tenantId: string;
   agentId: string;
   workspaceId: string;
