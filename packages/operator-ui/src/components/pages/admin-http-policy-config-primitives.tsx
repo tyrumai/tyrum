@@ -126,6 +126,7 @@ export function DomainEditor(props: {
   state: PolicyDomainFormState;
   onChange: (next: PolicyDomainFormState) => void;
   toolMode?: boolean;
+  showDefaultDecision?: boolean;
   testIdPrefix: string;
 }): React.ReactElement {
   const updateRows = (
@@ -149,13 +150,15 @@ export function DomainEditor(props: {
         <SectionHeading title={props.title} description={props.description} />
       </CardHeader>
       <CardContent className="grid gap-4">
-        <DecisionSelect
-          label="Default decision"
-          value={props.state.defaultDecision}
-          helperText="Applied when no more specific rule matches."
-          testId={`${props.testIdPrefix}-default`}
-          onChange={(next) => props.onChange({ ...props.state, defaultDecision: next })}
-        />
+        {props.showDefaultDecision !== false ? (
+          <DecisionSelect
+            label="Default decision"
+            value={props.state.defaultDecision ?? "deny"}
+            helperText="Applied when no more specific rule matches."
+            testId={`${props.testIdPrefix}-default`}
+            onChange={(next) => props.onChange({ ...props.state, defaultDecision: next })}
+          />
+        ) : null}
         <div className="grid gap-4 xl:grid-cols-3">
           <StringListEditor
             title="Allow"

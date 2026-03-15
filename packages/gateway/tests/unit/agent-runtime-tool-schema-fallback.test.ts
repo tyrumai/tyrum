@@ -43,8 +43,7 @@ describe("ToolSetBuilder schema fallback", () => {
         {
           id: "plugin.echo.say",
           description: "Echo text back to the caller.",
-          risk: "low",
-          requires_confirmation: false,
+          effect: "read_only",
           keywords: ["echo"],
         },
       ],

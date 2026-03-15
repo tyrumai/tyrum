@@ -2,6 +2,7 @@ import type { ActionPrimitive as ActionPrimitiveT } from "@tyrum/schemas";
 import { requireTenantIdValue } from "../identity/scope.js";
 import type { PolicyService } from "../policy/service.js";
 import type { SecretProvider } from "../secret/provider.js";
+import { resolveBuiltinToolEffect } from "../agent/tools.js";
 import type { StepExecutionContext, StepResult } from "./engine.js";
 import { deriveAgentIdFromKey } from "./gateway-step-executor-types.js";
 import { resolveSecretScopesFromArgs } from "./gateway-step-executor-helpers.js";
@@ -16,7 +17,7 @@ export async function maybeEnforceLocalExecutorPolicy(input: {
   isPolicyApprovalApproved?: (tenantId: string, approvalId: string) => Promise<boolean>;
 }): Promise<StepResult | undefined> {
   const policy = input.policyService;
-  if (!policy || !policy.isEnabled() || policy.isObserveOnly()) {
+  if (!policy || policy.isObserveOnly()) {
     return undefined;
   }
 
@@ -97,6 +98,7 @@ export async function maybeEnforceLocalExecutorPolicy(input: {
     url: tool.url,
     secretScopes: secretScopes.length > 0 ? secretScopes : undefined,
     inputProvenance: { source: "workflow", trusted: true },
+    toolEffect: resolveBuiltinToolEffect(tool.toolId),
   });
   if (decision.decision === "deny") {
     return {

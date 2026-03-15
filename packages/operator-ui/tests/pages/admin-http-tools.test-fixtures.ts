@@ -5,8 +5,7 @@ export const DETAILED_TOOL_REGISTRY_FIXTURE = {
       source: "builtin",
       canonical_id: "read",
       description: "Read files from disk.",
-      risk: "low",
-      requires_confirmation: false,
+      effect: "read_only",
       effective_exposure: {
         enabled: true,
         reason: "enabled",
@@ -45,8 +44,7 @@ export const DETAILED_TOOL_REGISTRY_FIXTURE = {
       source: "builtin_mcp",
       canonical_id: "websearch",
       description: "Search the web via Exa.",
-      risk: "medium",
-      requires_confirmation: true,
+      effect: "state_changing",
       effective_exposure: {
         enabled: true,
         reason: "enabled",
@@ -64,8 +62,7 @@ export const DETAILED_TOOL_REGISTRY_FIXTURE = {
       source: "mcp",
       canonical_id: "mcp.exa.web_search_exa",
       description: "Search via a shared MCP server.",
-      risk: "medium",
-      requires_confirmation: true,
+      effect: "state_changing",
       effective_exposure: {
         enabled: false,
         reason: "disabled_by_state_mode",
@@ -83,8 +80,7 @@ export const DETAILED_TOOL_REGISTRY_FIXTURE = {
       source: "plugin",
       canonical_id: "plugin.echo.say",
       description: "Echo text back to the caller.",
-      risk: "low",
-      requires_confirmation: false,
+      effect: "read_only",
       effective_exposure: {
         enabled: false,
         reason: "disabled_by_agent_allowlist",

@@ -256,6 +256,7 @@ describe("/context", () => {
     expect(readTool).toBeTruthy();
     expect(readTool).not.toHaveProperty("risk");
     expect(readTool).not.toHaveProperty("requires_confirmation");
+    expect(readTool).not.toHaveProperty("effect");
     expect(readTool).not.toHaveProperty("keywords");
 
     await agents?.shutdown();

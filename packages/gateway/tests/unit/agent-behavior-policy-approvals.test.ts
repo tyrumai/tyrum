@@ -18,6 +18,7 @@ import {
   setupTestEnv,
   teardownTestEnv,
 } from "./agent-runtime.test-helpers.js";
+import { seedApprovalPolicy, usage } from "./agent-behavior-policy-approvals.test-support.js";
 
 vi.mock("../../src/modules/agent/runtime/tool-set-builder-helpers.js", async (importOriginal) => {
   const original =
@@ -71,22 +72,6 @@ function rememberOpsDecision(latestUserText: string) {
         },
       }
     : undefined;
-}
-
-function usage() {
-  return {
-    inputTokens: {
-      total: 10,
-      noCache: 10,
-      cacheRead: undefined,
-      cacheWrite: undefined,
-    },
-    outputTokens: {
-      total: 5,
-      text: 5,
-      reasoning: undefined,
-    },
-  };
 }
 
 async function waitForPendingApproval(container: GatewayContainer): Promise<{
@@ -251,8 +236,9 @@ describe("Agent behavior - policy and approvals", () => {
   });
 
   it("keeps approval requirements even when memory suggests the action should happen by default", async () => {
-    ({ homeDir, container } = await setupTestEnv());
+    ({ homeDir, container } = await setupTestEnv({ policyMode: "enforce" }));
     await seedAgentConfig(container, { config: makeApprovalConfig() });
+    await seedApprovalPolicy(container);
 
     const rememberRuntime = new AgentRuntime({
       container,
@@ -366,8 +352,9 @@ describe("Agent behavior - policy and approvals", () => {
   });
 
   it("executes the approved tool exactly once through runtime.turn()", async () => {
-    ({ homeDir, container } = await setupTestEnv());
+    ({ homeDir, container } = await setupTestEnv({ policyMode: "enforce" }));
     await seedAgentConfig(container, { config: makeApprovalConfig() });
+    await seedApprovalPolicy(container);
 
     const rememberRuntime = new AgentRuntime({
       container,
@@ -443,8 +430,9 @@ describe("Agent behavior - policy and approvals", () => {
   });
 
   it("does not execute the tool or append an assistant reply when approval is denied", async () => {
-    ({ homeDir, container } = await setupTestEnv());
+    ({ homeDir, container } = await setupTestEnv({ policyMode: "enforce" }));
     await seedAgentConfig(container, { config: makeApprovalConfig() });
+    await seedApprovalPolicy(container);
 
     const markerPath = join(homeDir, "approval-denied-marker.txt");
     const policyService = {
@@ -496,8 +484,9 @@ describe("Agent behavior - policy and approvals", () => {
   });
 
   it("does not execute the tool when approval expires before resume", async () => {
-    ({ homeDir, container } = await setupTestEnv());
+    ({ homeDir, container } = await setupTestEnv({ policyMode: "enforce" }));
     await seedAgentConfig(container, { config: makeApprovalConfig() });
+    await seedApprovalPolicy(container);
 
     const markerPath = join(homeDir, "approval-expired-marker.txt");
     const policyService = {

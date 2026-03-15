@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createContainer, createContainerAsync } from "../../src/container.js";
@@ -64,6 +64,26 @@ describe("createContainer", () => {
     );
 
     expect(container.deploymentConfig.websocket.maxBufferedBytes).toBe(8192);
+    await container.db.close();
+  });
+
+  it("passes logStackTraces into the shared logger", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const container = createContainer(
+      { dbPath: ":memory:", migrationsDir, logStackTraces: true },
+      { deploymentConfig: DeploymentConfig.parse({}) },
+    );
+
+    container.logger.error("gateway.failed", { error: new Error("boom") });
+
+    const record = JSON.parse(String(logSpy.mock.calls[0]?.[0])) as Record<string, unknown>;
+    const error = record["error"] as Record<string, unknown>;
+    expect(error).toMatchObject({
+      type: "Error",
+      message: "boom",
+      stack: expect.stringContaining("Error: boom"),
+    });
+
     await container.db.close();
   });
 

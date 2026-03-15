@@ -230,8 +230,7 @@ describe("AgentRuntime - session lifecycle and policy", () => {
     const toolDesc = {
       id: "bash",
       description: "Execute shell commands on the local machine.",
-      risk: "high" as const,
-      requires_confirmation: true,
+      effect: "state_changing" as const,
       keywords: [],
       inputSchema: {
         type: "object",
@@ -268,7 +267,7 @@ describe("AgentRuntime - session lifecycle and policy", () => {
 
     expect(res).toBe("ok");
     expect(policyService.evaluateToolCall).toHaveBeenCalledTimes(1);
-    expect(approvalSpy).toHaveBeenCalledTimes(1);
+    expect(approvalSpy).toHaveBeenCalledTimes(0);
     expect(toolExecutor.execute).toHaveBeenCalledTimes(1);
     expect(usedTools.has("bash")).toBe(true);
   });
@@ -281,9 +280,9 @@ describe("AgentRuntime - session lifecycle and policy", () => {
     });
 
     const policyService = {
-      isEnabled: () => false,
+      isEnabled: () => true,
       isObserveOnly: () => false,
-      evaluateToolCall: vi.fn(),
+      evaluateToolCall: vi.fn(async () => ({ decision: "allow" as const })),
     };
 
     const toolSetBuilder = createToolSetBuilder({ home: homeDir, container, policyService });
@@ -291,8 +290,7 @@ describe("AgentRuntime - session lifecycle and policy", () => {
     const toolDesc = {
       id: "bash",
       description: "Execute shell commands on the local machine.",
-      risk: "high" as const,
-      requires_confirmation: false,
+      effect: "state_changing" as const,
       keywords: [],
       inputSchema: {
         type: "object",
@@ -352,9 +350,9 @@ describe("AgentRuntime - session lifecycle and policy", () => {
     });
 
     const policyService = {
-      isEnabled: () => false,
+      isEnabled: () => true,
       isObserveOnly: () => false,
-      evaluateToolCall: vi.fn(),
+      evaluateToolCall: vi.fn(async () => ({ decision: "require_approval" as const })),
     };
 
     const toolSetBuilder = createToolSetBuilder({ home: homeDir, container, policyService });
@@ -383,8 +381,7 @@ describe("AgentRuntime - session lifecycle and policy", () => {
     const toolDesc = {
       id: "bash",
       description: "Execute shell commands on the local machine.",
-      risk: "high" as const,
-      requires_confirmation: true,
+      effect: "state_changing" as const,
       keywords: [],
       inputSchema: {
         type: "object",
@@ -448,9 +445,9 @@ describe("AgentRuntime - session lifecycle and policy", () => {
     };
 
     const policyService = {
-      isEnabled: () => false,
+      isEnabled: () => true,
       isObserveOnly: () => false,
-      evaluateToolCall: vi.fn(),
+      evaluateToolCall: vi.fn(async () => ({ decision: "require_approval" as const })),
     };
 
     const toolSetBuilder = createToolSetBuilder({
@@ -472,6 +469,7 @@ describe("AgentRuntime - session lifecycle and policy", () => {
         source: "agent-tool-execution",
         tool_id: "bash",
         tool_call_id: "tc-secret",
+        tool_match_target: "echo from-secret",
         ai_sdk: {
           tool_args_handle: {
             handle_id: "h1",
@@ -482,12 +480,16 @@ describe("AgentRuntime - session lifecycle and policy", () => {
         },
       },
     });
+    await container.approvalDal.respond({
+      tenantId: DEFAULT_TENANT_ID,
+      approvalId: approval.approval_id,
+      decision: "approved",
+    });
 
     const toolDesc = {
       id: "bash",
       description: "Execute shell commands on the local machine.",
-      risk: "high" as const,
-      requires_confirmation: false,
+      effect: "state_changing" as const,
       keywords: [],
       inputSchema: {
         type: "object",

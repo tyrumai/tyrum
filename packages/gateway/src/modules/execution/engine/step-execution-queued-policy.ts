@@ -11,6 +11,7 @@ import {
   normalizeDomain,
   normalizeUrlForPolicy,
 } from "../../policy/domain.js";
+import { resolveBuiltinToolEffect } from "../../agent/tools.js";
 import { normalizeDbDateTime } from "../../../utils/db-time.js";
 import { safeJsonParse } from "../../../utils/json.js";
 import { buildExecutionPolicyApprovalContext } from "../policy-approval-context.js";
@@ -243,11 +244,9 @@ async function evaluateSnapshotToolDecisionTx(
   }
 
   if (snapshotState === "invalid") {
-    return deps.policyService?.isEnabled() && deps.policyService.isObserveOnly()
-      ? "allow"
-      : "require_approval";
+    return deps.policyService && deps.policyService.isObserveOnly() ? "allow" : "require_approval";
   }
-  if (deps.policyService?.isEnabled()) {
+  if (deps.policyService) {
     const evaluation = await deps.policyService.evaluateToolCallFromSnapshot({
       tenantId: run.tenant_id,
       policySnapshotId,
@@ -257,6 +256,7 @@ async function evaluateSnapshotToolDecisionTx(
       toolMatchTarget: tool.matchTarget,
       url: tool.url,
       inputProvenance: { source: "workflow", trusted: true },
+      toolEffect: resolveBuiltinToolEffect(tool.toolId),
     });
     return deps.policyService.isObserveOnly() ? "allow" : evaluation.decision;
   }
@@ -379,7 +379,6 @@ export async function maybeHandleSecretsPolicyTx(
   const policy = ctx.deps.policyService;
   if (
     !policy ||
-    !policy.isEnabled() ||
     policy.isObserveOnly() ||
     !parsedAction ||
     (actionType !== "CLI" && actionType !== "Http")

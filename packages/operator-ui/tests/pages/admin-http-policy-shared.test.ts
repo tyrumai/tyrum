@@ -13,7 +13,7 @@ describe("admin-http-policy-shared", () => {
     });
 
     expect(formState.approvals.autoReviewMode).toBe("auto_review");
-    expect(formState.tools.defaultDecision).toBe("deny");
+    expect(formState.tools.defaultDecision).toBeUndefined();
     expect(formState.networkEgress.defaultDecision).toBe("deny");
     expect(formState.secrets.defaultDecision).toBe("deny");
     expect(formState.connectors.defaultDecision).toBe("deny");
@@ -28,7 +28,7 @@ describe("admin-http-policy-shared", () => {
     );
 
     expect(bundle.approvals.auto_review.mode).toBe("auto_review");
-    expect(bundle.tools?.default).toBe("deny");
+    expect(bundle.tools).toEqual({ allow: [], require_approval: [], deny: [] });
     expect(bundle.network_egress?.default).toBe("deny");
     expect(bundle.secrets?.default).toBe("deny");
     expect(bundle.connectors?.default).toBe("deny");
@@ -41,7 +41,6 @@ describe("admin-http-policy-shared", () => {
         autoReviewMode: "manual_only",
       },
       tools: {
-        defaultDecision: "deny",
         allow: allowRows,
         requireApproval: [],
         deny: [],
@@ -98,7 +97,6 @@ describe("admin-http-policy-shared", () => {
         autoReviewMode: "auto_review",
       },
       tools: {
-        defaultDecision: "deny",
         allow: [],
         requireApproval: [],
         deny: [],

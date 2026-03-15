@@ -54,8 +54,7 @@ describe("formatSkillsPrompt", () => {
       {
         id: "bash",
         description: "Execute shell commands on the local machine.",
-        risk: "high",
-        requires_confirmation: true,
+        effect: "state_changing",
         keywords: [],
       },
     ]);

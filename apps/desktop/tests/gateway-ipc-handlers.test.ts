@@ -143,6 +143,64 @@ describe("registerGatewayIpc handlers", () => {
     });
   });
 
+  it("mirrors embedded gateway logs to the main-process console when TYRUM_DEBUG=1", async () => {
+    const previousDebug = process.env["TYRUM_DEBUG"];
+    process.env["TYRUM_DEBUG"] = "1";
+    const sentEvents: Array<{ channel: string; payload: unknown }> = [];
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    try {
+      const { manager } = await registerGatewayIpcForTest(sentEvents);
+      const mgr = manager as MockGatewayManager;
+
+      mgr.emit("log", {
+        level: "info",
+        message: '{"msg":"planner debug line"}',
+        timestamp: "2026-03-15T12:00:00.000Z",
+      });
+
+      expect(logSpy).toHaveBeenCalledWith(
+        '[embedded-gateway 2026-03-15T12:00:00.000Z] {"msg":"planner debug line"}',
+      );
+      expect(sentEvents).toContainEqual({
+        channel: "log:entry",
+        payload: {
+          source: "gateway",
+          level: "info",
+          message: '{"msg":"planner debug line"}',
+          timestamp: "2026-03-15T12:00:00.000Z",
+        },
+      });
+    } finally {
+      logSpy.mockRestore();
+      if (previousDebug === undefined) delete process.env["TYRUM_DEBUG"];
+      else process.env["TYRUM_DEBUG"] = previousDebug;
+    }
+  });
+
+  it("does not mirror embedded gateway logs to console without TYRUM_DEBUG=1", async () => {
+    const previousDebug = process.env["TYRUM_DEBUG"];
+    delete process.env["TYRUM_DEBUG"];
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    try {
+      const { manager } = await registerGatewayIpcForTest();
+      const mgr = manager as MockGatewayManager;
+
+      mgr.emit("log", {
+        level: "info",
+        message: '{"msg":"planner debug line"}',
+        timestamp: "2026-03-15T12:00:00.000Z",
+      });
+
+      expect(logSpy).not.toHaveBeenCalled();
+    } finally {
+      logSpy.mockRestore();
+      if (previousDebug === undefined) delete process.env["TYRUM_DEBUG"];
+      else process.env["TYRUM_DEBUG"] = previousDebug;
+    }
+  });
+
   it("returns embedded auth and display UI URLs", async () => {
     await registerGatewayIpcForTest();
     const handler = getRegisteredHandler("gateway:operator-connection");

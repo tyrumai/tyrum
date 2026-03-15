@@ -268,7 +268,7 @@ export function createArtifactRoutes(deps: ArtifactRouteDeps): Hono {
       return c.json(ARTIFACT_NOT_FOUND_BODY, 404);
     }
 
-    if (deps.policyService?.isEnabled() && !deps.policyService.isObserveOnly()) {
+    if (deps.policyService && !deps.policyService.isObserveOnly()) {
       const decision = await evaluateAccessDecision(deps, row);
       if (decision !== "allow") {
         const code = decision === "deny" ? "forbidden" : "require_approval";
@@ -342,7 +342,7 @@ export function createArtifactRoutes(deps: ArtifactRouteDeps): Hono {
       return c.json(ARTIFACT_NOT_FOUND_BODY, 404);
     }
 
-    if (deps.policyService?.isEnabled() && !deps.policyService.isObserveOnly()) {
+    if (deps.policyService && !deps.policyService.isObserveOnly()) {
       const decision = await evaluateAccessDecision(deps, row);
       if (decision !== "allow") {
         const code = decision === "deny" ? "forbidden" : "require_approval";

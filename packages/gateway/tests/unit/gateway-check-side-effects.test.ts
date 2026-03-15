@@ -75,7 +75,7 @@ describe("tyrum check side effects", () => {
     try {
       expect(await pathExists(tokenPath)).toBe(false);
       const { runCli } = await import("../../src/index.js");
-      const exitCode = await runCli(["check", "--migrations-dir", migrationsDir]);
+      const exitCode = await runCli(["check", "--home", home, "--migrations-dir", migrationsDir]);
       if (exitCode !== 0) {
         const errors = errorMock.mock.calls.map((args) => args.join(" ")).join("\n");
         const logs = logMock.mock.calls.map((args) => args.join(" ")).join("\n");

@@ -271,7 +271,7 @@ async function maybeHandleToolApproval(input: {
   context: ToolExecutionContext;
 }): Promise<string | undefined> {
   const policy = input.deps.policyService;
-  if (policy.isEnabled() && input.state.policyDecision === "deny" && !policy.isObserveOnly()) {
+  if (input.state.policyDecision === "deny" && !policy.isObserveOnly()) {
     return JSON.stringify({
       error: `policy denied tool execution for '${input.toolDesc.id}'`,
       decision: "deny",

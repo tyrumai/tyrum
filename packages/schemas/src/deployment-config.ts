@@ -142,7 +142,6 @@ export type DeploymentConfigModelsDev = z.infer<typeof DeploymentConfigModelsDev
 
 export const DeploymentConfigPolicy = z
   .object({
-    enabled: z.boolean().default(true),
     mode: z.string().trim().min(1).optional(),
     bundlePath: z.string().trim().min(1).optional(),
   })

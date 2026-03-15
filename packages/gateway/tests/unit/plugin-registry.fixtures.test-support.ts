@@ -73,8 +73,7 @@ export function registerPlugin() {
         descriptor: {
           id: "plugin.${pluginId}.echo",
           description: "Echo back a string.",
-          risk: "low",
-          requires_confirmation: false,
+          effect: "read_only",
           keywords: ["${pluginId}"],
           inputSchema: {
             type: "object",
@@ -123,8 +122,7 @@ export function registerPlugin({ manifest }) {
         descriptor: {
           id: "plugin.echo.undeclared",
           description: "Should remain undeclared by static manifest.",
-          risk: "low",
-          requires_confirmation: false,
+          effect: "read_only",
           keywords: ["echo"],
           inputSchema: {
             type: "object",

@@ -33,7 +33,6 @@ export function registerHttpClientPolicyTests(): void {
         bundle: {
           v: 1,
           tools: {
-            default: "require_approval",
             allow: ["read"],
             require_approval: ["bash"],
             deny: [],
@@ -50,7 +49,11 @@ export function registerHttpClientPolicyTests(): void {
 
     const result = await client.policyConfig.getDeployment();
     expect(result.revision).toBe(3);
-    expect(result.bundle.tools?.default).toBe("require_approval");
+    expect(result.bundle.tools).toEqual({
+      allow: ["read"],
+      require_approval: ["bash"],
+      deny: [],
+    });
 
     const [url, init] = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [
       string,
@@ -104,7 +107,6 @@ export function registerHttpClientPolicyTests(): void {
         bundle: {
           v: 1,
           tools: {
-            default: "deny",
             allow: ["read"],
             require_approval: [],
             deny: [],
@@ -123,7 +125,6 @@ export function registerHttpClientPolicyTests(): void {
       bundle: {
         v: 1,
         tools: {
-          default: "deny",
           allow: ["tool.fs.read"],
           require_approval: [],
           deny: [],
@@ -149,7 +150,6 @@ export function registerHttpClientPolicyTests(): void {
           },
         },
         tools: {
-          default: "deny",
           allow: ["read"],
           require_approval: [],
           deny: [],

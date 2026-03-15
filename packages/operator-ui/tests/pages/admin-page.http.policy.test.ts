@@ -332,12 +332,15 @@ describe("ConfigurePage (HTTP) policy + config", () => {
     await flush();
     await flush();
 
-    const toolsDefault = getByTestId<HTMLSelectElement>(
-      page.container,
-      "policy-config-tools-default",
-    );
-    setSelectValue(toolsDefault, "allow");
-    expect(toolsDefault.value).toBe("allow");
+    act(() => {
+      setNativeValue(
+        getByTestId<HTMLInputElement>(page.container, "policy-config-tools-allow-row-0"),
+        "glob",
+      );
+    });
+    expect(
+      getByTestId<HTMLInputElement>(page.container, "policy-config-tools-allow-row-0").value,
+    ).toBe("glob");
 
     await clickAndFlush(getByTestId<HTMLButtonElement>(page.container, "policy-config-refresh"));
     await flush();
@@ -347,8 +350,8 @@ describe("ConfigurePage (HTTP) policy + config", () => {
     expect(page.container.textContent).toContain("Policy history failed to load");
     expect(getByTestId<HTMLElement>(page.container, "policy-config-save-card")).not.toBeNull();
     expect(
-      getByTestId<HTMLSelectElement>(page.container, "policy-config-tools-default").value,
-    ).toBe("allow");
+      getByTestId<HTMLInputElement>(page.container, "policy-config-tools-allow-row-0").value,
+    ).toBe("glob");
 
     cleanupAdminHttpPage(page);
   });
@@ -367,8 +370,7 @@ describe("ConfigurePage (HTTP) policy + config", () => {
           bundle: {
             v: 1,
             tools: {
-              default: "allow",
-              allow: ["read"],
+              allow: ["glob"],
               require_approval: [],
               deny: [],
             },
@@ -401,7 +403,7 @@ describe("ConfigurePage (HTTP) policy + config", () => {
           revision: 1,
           bundle: {
             v: 1,
-            tools: { default: "allow", allow: ["read"], require_approval: [], deny: [] },
+            tools: { allow: ["glob"], require_approval: [], deny: [] },
           },
           created_at: "2026-03-01T00:00:00.000Z",
           created_by: { kind: "tenant.token", token_id: "token-1" },
@@ -418,10 +420,12 @@ describe("ConfigurePage (HTTP) policy + config", () => {
     await flush();
     await flush();
 
-    setSelectValue(
-      getByTestId<HTMLSelectElement>(page.container, "policy-config-tools-default"),
-      "allow",
-    );
+    act(() => {
+      setNativeValue(
+        getByTestId<HTMLInputElement>(page.container, "policy-config-tools-allow-row-0"),
+        "glob",
+      );
+    });
     act(() => {
       setNativeValue(
         getByTestId<HTMLInputElement>(page.container, "policy-config-save-reason"),

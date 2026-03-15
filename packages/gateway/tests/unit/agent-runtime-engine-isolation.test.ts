@@ -228,7 +228,10 @@ describe("AgentRuntime - engine isolation and backoff", () => {
     const policyService = {
       isEnabled: () => false,
       isObserveOnly: () => false,
-      evaluateToolCall: vi.fn(),
+      evaluateToolCall: vi.fn(async () => ({
+        decision: "require_approval",
+        applied_override_ids: [],
+      })),
     };
 
     const usage = () => ({

@@ -12,8 +12,7 @@ import type {
 const memorySeedTool: ToolDescriptor = {
   id: "mcp.memory.seed",
   description: "Seed pre-turn memory context.",
-  risk: "low",
-  requires_confirmation: false,
+  effect: "read_only",
   keywords: [],
   inputSchema: {
     type: "object",
@@ -53,7 +52,10 @@ function createToolSetBuilderDeps(policyService: Partial<ToolSetBuilderDeps["pol
     policyService: {
       isEnabled: () => false,
       isObserveOnly: () => false,
-      evaluateToolCall: vi.fn(),
+      evaluateToolCall: vi.fn(async () => ({
+        decision: "allow",
+        applied_override_ids: [],
+      })),
       ...policyService,
     },
     approvalDal: {} as never,

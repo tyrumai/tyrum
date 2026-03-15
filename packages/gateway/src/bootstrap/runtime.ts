@@ -29,6 +29,8 @@ import {
   resolveGatewayDbPath,
   resolveGatewayHome,
   resolveGatewayHost,
+  resolveGatewayLogLevel,
+  resolveGatewayLogStackTraces,
   resolveGatewayMigrationsDir,
   resolveGatewayPort,
   seedDefaultAgentConfig,
@@ -142,6 +144,14 @@ async function createGatewayBootContext(
   }
   const host = hostSplit.host;
   const port = resolveGatewayPort(params.port);
+  const loggerLevel = resolveGatewayLogLevel({
+    logLevelOverride: params.logLevel,
+    debugOverride: params.debug,
+  });
+  const logStackTraces = resolveGatewayLogStackTraces({
+    logLevelOverride: params.logLevel,
+    debugOverride: params.debug,
+  });
 
   const dbPath = resolveGatewayDbPath(tyrumHome, params.db);
   const migrationsDir = resolveGatewayMigrationsDir(dbPath, params.migrationsDir);
@@ -176,6 +186,8 @@ async function createGatewayBootContext(
       dbPath,
       migrationsDir,
       tyrumHome,
+      ...(loggerLevel !== undefined ? { loggerLevel } : {}),
+      ...(logStackTraces !== undefined ? { logStackTraces } : {}),
     },
     { deploymentConfig },
   );

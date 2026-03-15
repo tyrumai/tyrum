@@ -195,13 +195,13 @@ describe("AgentRuntime (execution profiles)", () => {
     });
 
     expect(runtime.getLastContextReport()?.selected_tools).toEqual([
-      "glob",
-      "grep",
-      "read",
       "apply_patch",
       "bash",
       "codesearch",
       "edit",
+      "glob",
+      "grep",
+      "read",
       "webfetch",
       "websearch",
       "write",

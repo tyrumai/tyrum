@@ -140,8 +140,7 @@ export function registerHttpClientOpsAdminTests(): void {
             source: "builtin",
             canonical_id: "read",
             description: "Read files from disk.",
-            risk: "low",
-            requires_confirmation: false,
+            effect: "read_only",
             effective_exposure: {
               enabled: true,
               reason: "enabled",
@@ -159,8 +158,7 @@ export function registerHttpClientOpsAdminTests(): void {
             source: "builtin_mcp",
             canonical_id: "websearch",
             description: "Search the web.",
-            risk: "medium",
-            requires_confirmation: true,
+            effect: "state_changing",
             effective_exposure: {
               enabled: true,
               reason: "enabled",

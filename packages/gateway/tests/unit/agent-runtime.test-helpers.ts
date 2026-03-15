@@ -47,18 +47,27 @@ export function makeContextReport(
 export function createToolSetBuilder(input: {
   home: string;
   container: GatewayContainer;
-  policyService: unknown;
+  policyService: Partial<ConstructorParameters<typeof ToolSetBuilder>[0]["policyService"]>;
   secretProvider?: unknown;
   plugins?: unknown;
 }): ToolSetBuilder {
+  const policyService = {
+    isEnabled: () => false,
+    isObserveOnly: () => false,
+    evaluateToolCall: async () => ({
+      decision: "allow" as const,
+      applied_override_ids: [] as string[],
+    }),
+    ...input.policyService,
+  } as ConstructorParameters<typeof ToolSetBuilder>[0]["policyService"];
+
   return new ToolSetBuilder({
     home: input.home,
+    roleToolAllowlist: ["*"],
     tenantId: DEFAULT_TENANT_ID,
     agentId: DEFAULT_AGENT_ID,
     workspaceId: DEFAULT_WORKSPACE_ID,
-    policyService: input.policyService as unknown as ConstructorParameters<
-      typeof ToolSetBuilder
-    >[0]["policyService"],
+    policyService,
     approvalDal: input.container.approvalDal,
     approvalWaitMs: 120_000,
     approvalPollMs: 500,
@@ -111,31 +120,53 @@ export async function seedAgentConfig(
   });
 }
 
-export async function setupTestEnv(): Promise<{
+export async function setupTestEnv(input?: {
+  policyMode?: "observe" | "observe-only" | "enforce";
+}): Promise<{
   homeDir: string;
   container: GatewayContainer;
 }> {
   const homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
-  const container = await createContainer({
-    dbPath: ":memory:",
-    migrationsDir,
-    tyrumHome: homeDir,
-  });
+  const container = await createContainer(
+    {
+      dbPath: ":memory:",
+      migrationsDir,
+      tyrumHome: homeDir,
+    },
+    {
+      deploymentConfig: {
+        policy: {
+          mode: input?.policyMode ?? "observe",
+        },
+      },
+    },
+  );
   return { homeDir, container };
 }
 
-export async function setupFileBackedTestEnv(): Promise<{
+export async function setupFileBackedTestEnv(input?: {
+  policyMode?: "observe" | "observe-only" | "enforce";
+}): Promise<{
   homeDir: string;
   dbPath: string;
   container: GatewayContainer;
 }> {
   const homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
   const dbPath = join(homeDir, "gateway.sqlite");
-  const container = await createContainer({
-    dbPath,
-    migrationsDir,
-    tyrumHome: homeDir,
-  });
+  const container = await createContainer(
+    {
+      dbPath,
+      migrationsDir,
+      tyrumHome: homeDir,
+    },
+    {
+      deploymentConfig: {
+        policy: {
+          mode: input?.policyMode ?? "observe",
+        },
+      },
+    },
+  );
   return { homeDir, dbPath, container };
 }
 
@@ -143,13 +174,23 @@ export async function restartFileBackedContainer(input: {
   homeDir: string;
   dbPath: string;
   container?: GatewayContainer;
+  policyMode?: "observe" | "observe-only" | "enforce";
 }): Promise<GatewayContainer> {
   await input.container?.db.close();
-  return await createContainer({
-    dbPath: input.dbPath,
-    migrationsDir,
-    tyrumHome: input.homeDir,
-  });
+  return await createContainer(
+    {
+      dbPath: input.dbPath,
+      migrationsDir,
+      tyrumHome: input.homeDir,
+    },
+    {
+      deploymentConfig: {
+        policy: {
+          mode: input.policyMode ?? "observe",
+        },
+      },
+    },
+  );
 }
 
 export async function teardownTestEnv(env: {

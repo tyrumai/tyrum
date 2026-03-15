@@ -288,13 +288,14 @@ export function dispatchTask(
     action.type,
     action.args,
   )}`;
-  const policyEnabled = deps.policyService?.isEnabled() ?? false;
+  const policyEnabled = deps.policyService !== undefined;
   const policyEvalPromise = policyEnabled
     ? deps.policyService!.evaluateToolCall({
         tenantId: scope.tenantId,
         agentId: "default",
         toolId: "tool.node.dispatch",
         toolMatchTarget,
+        toolEffect: "state_changing",
       })
     : undefined;
 

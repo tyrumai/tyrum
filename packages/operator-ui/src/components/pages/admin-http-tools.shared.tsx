@@ -21,10 +21,8 @@ export const SOURCE_LABELS: Record<ToolRegistryEntry["source"], string> = {
   plugin: "Plugin",
 };
 
-export function riskBadgeVariant(risk: ToolRegistryEntry["risk"]): BadgeVariant {
-  if (risk === "high") return "danger";
-  if (risk === "medium") return "warning";
-  return "success";
+export function effectBadgeVariant(effect: ToolRegistryEntry["effect"]): BadgeVariant {
+  return effect === "state_changing" ? "warning" : "success";
 }
 
 export function exposureBadge(tool: ToolRegistryEntry): {
@@ -212,8 +210,7 @@ export function ToolTableSection({
             <tr>
               <th className="px-3 py-2 font-medium">Tool</th>
               <th className="px-3 py-2 font-medium">Source</th>
-              <th className="px-3 py-2 font-medium">Risk</th>
-              <th className="px-3 py-2 font-medium">Confirm</th>
+              <th className="px-3 py-2 font-medium">Effect</th>
               <th className="px-3 py-2 font-medium">Exposure</th>
               <th className="px-3 py-2 font-medium text-right">Details</th>
             </tr>
@@ -235,12 +232,7 @@ export function ToolTableSection({
                       <Badge variant="outline">{SOURCE_LABELS[tool.source]}</Badge>
                     </td>
                     <td className="px-3 py-3">
-                      <Badge variant={riskBadgeVariant(tool.risk)}>{tool.risk}</Badge>
-                    </td>
-                    <td className="px-3 py-3">
-                      <Badge variant={tool.requires_confirmation ? "warning" : "default"}>
-                        {tool.requires_confirmation ? "Required" : "No"}
-                      </Badge>
+                      <Badge variant={effectBadgeVariant(tool.effect)}>{tool.effect}</Badge>
                     </td>
                     <td className="px-3 py-3">
                       <Badge variant={exposure.variant}>{exposure.label}</Badge>
@@ -260,7 +252,7 @@ export function ToolTableSection({
                       className="border-t border-border/70"
                       data-testid={`admin-http-tools-details-${tool.canonical_id}`}
                     >
-                      <td className="px-3 py-3" colSpan={6}>
+                      <td className="px-3 py-3" colSpan={5}>
                         <ToolDetailPanel tool={tool} />
                       </td>
                     </tr>
@@ -290,10 +282,7 @@ export function ToolTableSection({
                   <Badge variant="outline">{SOURCE_LABELS[tool.source]}</Badge>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Badge variant={riskBadgeVariant(tool.risk)}>{tool.risk}</Badge>
-                  <Badge variant={tool.requires_confirmation ? "warning" : "default"}>
-                    {tool.requires_confirmation ? "Confirm required" : "No confirm"}
-                  </Badge>
+                  <Badge variant={effectBadgeVariant(tool.effect)}>{tool.effect}</Badge>
                   <Badge variant={exposure.variant}>{exposure.label}</Badge>
                 </div>
               </div>

@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { configureCommander, normalizeCommanderError } from "@tyrum/cli-utils";
 import { Command } from "commander";
 import { installPluginFromDir } from "../modules/plugins/installer.js";
+import type { LogLevel } from "../modules/observability/logger.js";
 import { runToolRunnerFromStdio } from "../toolrunner.js";
 import { VERSION } from "../version.js";
 import { resolveGatewayHome, type GatewayStartOptions } from "./config.js";
@@ -45,6 +46,20 @@ function parsePortFlag(value: string): number {
     throw new Error(`--port must be an integer between 1 and 65535 (got '${value}')`);
   }
   return parsed;
+}
+
+function parseLogLevelFlag(value: string): LogLevel {
+  const normalized = value.trim().toLowerCase();
+  if (
+    normalized === "debug" ||
+    normalized === "info" ||
+    normalized === "warn" ||
+    normalized === "error" ||
+    normalized === "silent"
+  ) {
+    return normalized;
+  }
+  throw new Error(`--log-level must be one of debug|info|warn|error|silent (got '${value}')`);
 }
 
 function parseNonEmptyStringFlag(flag: string, value: string): string {
@@ -128,6 +143,8 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
       .option("--host <host>")
       .option("--port <port>", "port", parsePortFlag)
       .option("--role <role>", "role", parseRoleFlag)
+      .option("--debug")
+      .option("--log-level <level>", "log level", parseLogLevelFlag)
       .option("--trusted-proxies <list>")
       .option("--tls-ready")
       .option("--tls-self-signed")
@@ -142,6 +159,8 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
           host?: string;
           port?: number;
           role?: GatewayRole;
+          debug?: boolean;
+          logLevel?: LogLevel;
           trustedProxies?: string;
           tlsReady?: boolean;
           tlsSelfSigned?: boolean;
@@ -162,6 +181,8 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
             ...(host !== undefined ? { host } : {}),
             ...(options.port !== undefined ? { port: options.port } : {}),
             ...(role !== undefined ? { role } : {}),
+            ...(options.debug ? { debug: true } : {}),
+            ...(options.logLevel !== undefined ? { logLevel: options.logLevel } : {}),
             ...(trustedProxies !== undefined ? { trustedProxies } : {}),
             ...(options.tlsReady ? { tlsReady: true } : {}),
             ...(options.tlsSelfSigned ? { tlsSelfSigned: true } : {}),

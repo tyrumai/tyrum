@@ -309,7 +309,7 @@ export async function processTelegramBatch(
       .getPolicyService === "function"
       ? deps.agents.getPolicyService(agentId)
       : undefined;
-  if (policyService?.isEnabled()) {
+  if (policyService) {
     connectorMatchTarget =
       accountId === DEFAULT_CHANNEL_ACCOUNT_ID
         ? `${source}:${leader.thread_id}`
@@ -357,7 +357,7 @@ export async function processTelegramBatch(
     decision = "allow";
   }
 
-  if (policyService?.isEnabled() && !policyService.isObserveOnly() && decision === "deny") {
+  if (policyService && !policyService.isObserveOnly() && decision === "deny") {
     for (const row of rows) {
       await deps.inbox.markFailed(row.inbox_id, deps.owner, "policy denied outbound send");
     }
@@ -413,7 +413,7 @@ export async function processTelegramBatch(
           key: leader.key,
           lane: leader.lane,
           policy_snapshot_id: policySnapshotId,
-          policy: policyService?.isEnabled()
+          policy: policyService
             ? {
                 policy_snapshot_id: policySnapshotId,
                 agent_id: sessionScope.agent_id,

@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 
+import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { setNativeValue } from "../test-utils.js";
 import {
   cleanupAdminHttpPage,
   click,
@@ -11,7 +13,6 @@ import {
   getByTestId,
   jsonResponse,
   renderAdminHttpConfigurePage,
-  setSelectValue,
   switchHttpTab,
 } from "./admin-page.http.test-support.js";
 import {
@@ -32,7 +33,6 @@ describe("ConfigurePage (HTTP) policy deployment bundle", () => {
     let deploymentBundle = {
       v: 1 as const,
       tools: {
-        default: "require_approval" as const,
         allow: ["read"],
         require_approval: [],
         deny: [],
@@ -105,8 +105,9 @@ describe("ConfigurePage (HTTP) policy deployment bundle", () => {
             bundle: {
               ...deploymentBundle,
               tools: {
-                ...deploymentBundle.tools,
-                default: "allow",
+                allow: ["glob"],
+                require_approval: deploymentBundle.tools.require_approval,
+                deny: deploymentBundle.tools.deny,
               },
             },
           },
@@ -115,8 +116,9 @@ describe("ConfigurePage (HTTP) policy deployment bundle", () => {
         deploymentBundle = {
           ...deploymentBundle,
           tools: {
-            ...deploymentBundle.tools,
-            default: "allow",
+            allow: ["glob"],
+            require_approval: deploymentBundle.tools.require_approval,
+            deny: deploymentBundle.tools.deny,
           },
         };
         return jsonResponse({
@@ -141,10 +143,12 @@ describe("ConfigurePage (HTTP) policy deployment bundle", () => {
     await flush();
     await flush();
 
-    setSelectValue(
-      getByTestId<HTMLSelectElement>(page.container, "policy-config-tools-default"),
-      "allow",
-    );
+    act(() => {
+      setNativeValue(
+        getByTestId<HTMLInputElement>(page.container, "policy-config-tools-allow-row-0"),
+        "glob",
+      );
+    });
 
     click(getByTestId<HTMLButtonElement>(page.container, "policy-config-save"));
     click(getByTestId<HTMLElement>(document.body, "confirm-danger-checkbox"));

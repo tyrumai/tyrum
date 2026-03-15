@@ -65,22 +65,33 @@ const ArtifactQuotaPolicy = z
   })
   .strict();
 
+function stripLegacyToolDefault(value: unknown): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return value;
+  }
+  const { default: _legacyDefault, ...rest } = value as Record<string, unknown>;
+  void _legacyDefault;
+  return rest;
+}
+
 export const PolicyBundleV1 = z
   .object({
     v: z.literal(1),
 
-    tools: z
-      .object({
-        default: Decision.default("deny"),
-        allow: z.array(z.string().trim().min(1)).default([]).overwrite(canonicalizeToolIdList),
-        require_approval: z
-          .array(z.string().trim().min(1))
-          .default([])
-          .overwrite(canonicalizeToolIdList),
-        deny: z.array(z.string().trim().min(1)).default([]).overwrite(canonicalizeToolIdList),
-      })
-      .strict()
-      .optional(),
+    tools: z.preprocess(
+      stripLegacyToolDefault,
+      z
+        .object({
+          allow: z.array(z.string().trim().min(1)).default([]).overwrite(canonicalizeToolIdList),
+          require_approval: z
+            .array(z.string().trim().min(1))
+            .default([])
+            .overwrite(canonicalizeToolIdList),
+          deny: z.array(z.string().trim().min(1)).default([]).overwrite(canonicalizeToolIdList),
+        })
+        .strict()
+        .optional(),
+    ),
 
     network_egress: z
       .object({

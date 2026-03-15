@@ -167,7 +167,7 @@ export async function prepareTurn(
 
   const guardianReviewRequest = resolveGuardianReviewRequest(resolved.metadata);
   const guardianReviewToolSetBuilder = guardianReviewRequest
-    ? new ToolSetBuilder(buildToolSetBuilderDeps(deps, session))
+    ? new ToolSetBuilder(buildToolSetBuilderDeps(deps, session, executionProfile.profile))
     : undefined;
   const normalTurnContext = guardianReviewRequest
     ? undefined

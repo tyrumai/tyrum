@@ -1,0 +1,180 @@
+import type {
+  PolicyBundle as PolicyBundleT,
+  Decision,
+  PolicyDecision as PolicyDecisionT,
+  RuleDecision as RuleDecisionT,
+} from "@tyrum/schemas";
+import { wildcardMatch } from "./wildcard.js";
+import {
+  evaluateDomain,
+  mostRestrictiveDecision,
+  normalizeDomain,
+  normalizeUrlForPolicy,
+} from "./domain.js";
+import { expandLegacyNodeDispatchOverridePatterns } from "./node-dispatch-override-patterns.js";
+import type { PolicyOverrideDal } from "./override-dal.js";
+import type { PolicySnapshotRow } from "./snapshot-dal.js";
+
+export type ToolEffect = "read_only" | "state_changing";
+
+export async function evaluateToolCallAgainstBundle(params: {
+  tenantId: string;
+  bundle: PolicyBundleT;
+  snapshot: PolicySnapshotRow;
+  agentId: string;
+  workspaceId?: string;
+  toolId: string;
+  toolMatchTarget: string;
+  url?: string;
+  secretScopes?: string[];
+  inputProvenance?: { source: string; trusted: boolean };
+  toolEffect?: ToolEffect;
+  roleAllowed?: boolean;
+  overrideDal: PolicyOverrideDal;
+}): Promise<{
+  decision: Decision;
+  policy_snapshot?: PolicySnapshotRow;
+  applied_override_ids?: string[];
+  decision_record?: PolicyDecisionT;
+}> {
+  const toolsDomain = normalizeDomain(params.bundle.tools, "require_approval");
+  const egressDomain = normalizeDomain(params.bundle.network_egress, "require_approval");
+  const secretsDomain = normalizeDomain(params.bundle.secrets, "require_approval");
+
+  const explicitToolDecision = evaluateToolDecisionOverride(toolsDomain, params.toolId);
+  let toolDecision: Decision;
+  const rules: RuleDecisionT[] = [];
+
+  if (params.roleAllowed === false) {
+    toolDecision = "deny";
+    rules.push({
+      rule: "tool_policy",
+      outcome: "deny",
+      detail: `tool_id=${params.toolId};source=role_ceiling`,
+    });
+  } else {
+    toolDecision =
+      explicitToolDecision ??
+      (params.toolEffect === "read_only"
+        ? "allow"
+        : params.toolEffect === "state_changing"
+          ? "require_approval"
+          : evaluateDomain(toolsDomain, params.toolId));
+    rules.push({
+      rule: "tool_policy",
+      outcome: toolDecision,
+      detail:
+        explicitToolDecision === undefined
+          ? `tool_id=${params.toolId};default=${params.toolEffect ?? "bundle"}`
+          : `tool_id=${params.toolId};source=explicit_rule`,
+    });
+  }
+
+  if (
+    params.bundle.provenance?.untrusted_shell_requires_approval === true &&
+    params.inputProvenance?.trusted === false &&
+    params.toolId.trim() === "bash"
+  ) {
+    toolDecision = mostRestrictiveDecision(toolDecision, "require_approval");
+    rules.push({
+      rule: "provenance",
+      outcome: "require_approval",
+      detail: `untrusted_shell_requires_approval=true (source=${params.inputProvenance?.source ?? "unknown"})`,
+    });
+  }
+
+  let egressDecision: Decision = "allow";
+  if (params.url) {
+    const normalizedUrl = normalizeUrlForPolicy(params.url);
+    if (normalizedUrl.length > 0) {
+      egressDecision = evaluateDomain(egressDomain, normalizedUrl);
+      rules.push({
+        rule: "network_egress",
+        outcome: egressDecision,
+        detail: normalizedUrl,
+      });
+    }
+  }
+
+  let secretsDecision: Decision = "allow";
+  if (params.secretScopes && params.secretScopes.length > 0) {
+    let decision: Decision = "allow";
+    for (const scope of params.secretScopes) {
+      decision = mostRestrictiveDecision(decision, evaluateDomain(secretsDomain, scope));
+    }
+    secretsDecision = decision;
+    rules.push({
+      rule: "secrets",
+      outcome: secretsDecision,
+      detail: `scopes=${params.secretScopes.length}`,
+    });
+  }
+
+  let decision = mostRestrictiveDecision(
+    toolDecision,
+    mostRestrictiveDecision(egressDecision, secretsDecision),
+  );
+
+  const appliedOverrides: string[] = [];
+  if (
+    params.roleAllowed !== false &&
+    decision === "require_approval" &&
+    toolDecision === "require_approval"
+  ) {
+    const overrides = await params.overrideDal.listActiveForTool({
+      tenantId: params.tenantId,
+      agentId: params.agentId,
+      workspaceId: params.workspaceId,
+      toolId: params.toolId,
+    });
+    for (const override of overrides) {
+      if (
+        expandLegacyNodeDispatchOverridePatterns(override.pattern).some((pattern) =>
+          wildcardMatch(pattern, params.toolMatchTarget),
+        )
+      ) {
+        appliedOverrides.push(override.policy_override_id);
+      }
+    }
+    if (appliedOverrides.length > 0) {
+      toolDecision = "allow";
+      decision = mostRestrictiveDecision(
+        toolDecision,
+        mostRestrictiveDecision(egressDecision, secretsDecision),
+      );
+      rules.push({
+        rule: "policy_override",
+        outcome: "allow",
+        detail: `applied_overrides=${appliedOverrides.join(",")}`,
+      });
+    }
+  }
+
+  const decisionRecord: PolicyDecisionT = { decision, rules };
+
+  return {
+    decision,
+    policy_snapshot: params.snapshot,
+    applied_override_ids: appliedOverrides.length > 0 ? appliedOverrides : undefined,
+    decision_record: decisionRecord,
+  };
+}
+
+function evaluateToolDecisionOverride(
+  domain: ReturnType<typeof normalizeDomain>,
+  matchTarget: string,
+): Decision | undefined {
+  const target = matchTarget.trim();
+
+  for (const pat of domain.deny) {
+    if (wildcardMatch(pat, target)) return "deny";
+  }
+  for (const pat of domain.require_approval) {
+    if (wildcardMatch(pat, target)) return "require_approval";
+  }
+  for (const pat of domain.allow) {
+    if (wildcardMatch(pat, target)) return "allow";
+  }
+
+  return undefined;
+}

@@ -41,8 +41,7 @@ describe("awaitApprovalForToolExecution", () => {
     const tool = {
       id: "bash",
       description: "Execute shell commands.",
-      risk: "high",
-      requires_confirmation: true,
+      effect: "state_changing",
       keywords: [],
       inputSchema: { type: "object" },
     } satisfies ToolDescriptor;

@@ -32,11 +32,11 @@ const SUBAGENT_TOOL_METADATA = {
   }
 >;
 
-function classifySubagentToolRisk(id: SubagentToolId): "low" | "medium" {
+function classifySubagentToolEffect(id: SubagentToolId): ToolDescriptor["effect"] {
   if (id === "subagent.list" || id === "subagent.get") {
-    return "low";
+    return "read_only";
   }
-  return "medium";
+  return "state_changing";
 }
 
 export const SUBAGENT_TOOL_REGISTRY: readonly ToolDescriptor[] = (
@@ -46,8 +46,7 @@ export const SUBAGENT_TOOL_REGISTRY: readonly ToolDescriptor[] = (
   return {
     id,
     description: metadata.description,
-    risk: classifySubagentToolRisk(id),
-    requires_confirmation: false,
+    effect: classifySubagentToolEffect(id),
     keywords: "keywords" in metadata ? metadata.keywords : DEFAULT_SUBAGENT_KEYWORDS,
     source: "builtin",
     family: "subagent",

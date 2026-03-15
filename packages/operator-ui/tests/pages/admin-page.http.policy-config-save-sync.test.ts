@@ -3,14 +3,13 @@
 import React, { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PolicyConfigSection } from "../../src/components/pages/admin-http-policy-config.js";
-import { renderIntoDocument } from "../test-utils.js";
+import { renderIntoDocument, setNativeValue } from "../test-utils.js";
 import {
   cleanupAdminHttpPage,
   click,
   clickAndFlush,
   flush,
   getByTestId,
-  setSelectValue,
 } from "./admin-page.http.test-support.js";
 
 afterEach(() => {
@@ -28,8 +27,7 @@ describe("PolicyConfigSection save sync", () => {
         },
       },
       tools: {
-        default: "allow" as const,
-        allow: ["read"],
+        allow: ["glob"],
         require_approval: [],
         deny: [],
       },
@@ -67,7 +65,6 @@ describe("PolicyConfigSection save sync", () => {
               },
             },
             tools: {
-              default: "require_approval",
               allow: ["read"],
               require_approval: [],
               deny: [],
@@ -106,7 +103,6 @@ describe("PolicyConfigSection save sync", () => {
               },
             },
             tools: {
-              default: "require_approval",
               allow: ["read"],
               require_approval: [],
               deny: [],
@@ -154,10 +150,12 @@ describe("PolicyConfigSection save sync", () => {
 
     await flush();
 
-    setSelectValue(
-      getByTestId<HTMLSelectElement>(page.container, "policy-config-tools-default"),
-      "allow",
-    );
+    act(() => {
+      setNativeValue(
+        getByTestId<HTMLInputElement>(page.container, "policy-config-tools-allow-row-0"),
+        "glob",
+      );
+    });
     click(getByTestId<HTMLButtonElement>(page.container, "policy-config-save"));
     click(getByTestId<HTMLElement>(document.body, "confirm-danger-checkbox"));
     await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "confirm-danger-confirm"));

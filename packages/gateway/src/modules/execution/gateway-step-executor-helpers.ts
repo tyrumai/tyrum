@@ -16,6 +16,7 @@ import {
   normalizeDomain,
   normalizeUrlForPolicy,
 } from "../policy/domain.js";
+import { resolveBuiltinToolEffect } from "../agent/tools.js";
 import { collectSecretHandleIds } from "../secret/collect-secret-handle-ids.js";
 import { createSecretHandleResolver } from "../secret/handle-resolver.js";
 import type { SecretProvider } from "../secret/provider.js";
@@ -122,7 +123,7 @@ export async function evaluateToolCallDecision(input: {
   secretScopes: readonly string[];
 }): Promise<DecisionT> {
   const policy = input.container.policyService;
-  if (policy?.isEnabled()) {
+  if (policy) {
     const evaluation = await policy.evaluateToolCallFromSnapshot({
       tenantId: input.tenantId,
       policySnapshotId: input.policySnapshotId,
@@ -133,6 +134,7 @@ export async function evaluateToolCallDecision(input: {
       url: input.url,
       secretScopes: input.secretScopes.length > 0 ? [...input.secretScopes] : undefined,
       inputProvenance: { source: "workflow", trusted: true },
+      toolEffect: resolveBuiltinToolEffect(input.toolId),
     });
     return policy.isObserveOnly() ? "allow" : evaluation.decision;
   }

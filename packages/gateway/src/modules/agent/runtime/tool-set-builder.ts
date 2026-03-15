@@ -44,16 +44,10 @@ export class ToolSetBuilder {
     });
   }
 
-  async resolvePolicyGatedPluginToolExposure(params: {
+  resolvePolicyGatedPluginToolExposure(params: {
     allowlist: readonly string[];
     pluginTools: readonly ToolDescriptor[];
-  }): Promise<{ allowlist: string[]; pluginTools: ToolDescriptor[] }> {
-    return await resolvePolicyGatedPluginToolExposure({
-      policyService: this.deps.policyService,
-      tenantId: this.deps.tenantId,
-      agentId: this.deps.agentId,
-      allowlist: params.allowlist,
-      pluginTools: params.pluginTools,
-    });
+  }): { allowlist: string[]; pluginTools: ToolDescriptor[] } {
+    return resolvePolicyGatedPluginToolExposure(params);
   }
 }

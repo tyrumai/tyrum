@@ -26,8 +26,7 @@ interface McpRemoteSpec {
     {
       description_override?: string;
       description_append?: string;
-      risk?: ToolDescriptor["risk"];
-      requires_confirmation?: boolean;
+      effect?: ToolDescriptor["effect"];
     }
   >;
 }
@@ -53,8 +52,7 @@ interface McpStdioSpec {
     {
       description_override?: string;
       description_append?: string;
-      risk?: ToolDescriptor["risk"];
-      requires_confirmation?: boolean;
+      effect?: ToolDescriptor["effect"];
     }
   >;
 }
@@ -67,8 +65,7 @@ export interface McpToolInfo {
   name: string;
   description?: string;
   inputSchema?: unknown;
-  risk?: ToolDescriptor["risk"];
-  requiresConfirmation?: boolean;
+  effect?: ToolDescriptor["effect"];
   keywords?: string[];
 }
 
@@ -151,7 +148,7 @@ function applyDescriptionOverride(
   return baseDescription;
 }
 
-function toDescriptor(spec: McpServerSpecT, tool: McpToolInfo): ToolDescriptor {
+function toDescriptor(spec: McpServerSpecT, tool: McpToolInfo, logger?: Logger): ToolDescriptor {
   const toolId = `mcp.${spec.id}.${tool.name}`;
   const baseDescription = tool.description?.trim().length
     ? `${tool.description.trim()} (server=${spec.name})`
@@ -160,11 +157,21 @@ function toDescriptor(spec: McpServerSpecT, tool: McpToolInfo): ToolDescriptor {
     asRemote(spec)?.tool_overrides?.[tool.name] ?? asStdio(spec).tool_overrides?.[tool.name];
   const description = applyDescriptionOverride(baseDescription, override);
 
+  const effect = override?.effect ?? tool.effect;
+  if (!effect) {
+    logger?.warn("mcp.tool_effect_missing", {
+      server_id: spec.id,
+      server_name: spec.name,
+      tool_name: tool.name,
+      tool_id: toolId,
+      default_effect: "state_changing",
+    });
+  }
+
   return {
     id: toolId,
     description,
-    risk: override?.risk ?? tool.risk ?? "medium",
-    requires_confirmation: override?.requires_confirmation ?? tool.requiresConfirmation ?? true,
+    effect: effect ?? "state_changing",
     keywords: [
       "mcp",
       spec.id.toLowerCase(),
@@ -342,7 +349,7 @@ export class McpManager {
   async listServerToolDescriptors(server: McpServerSpecT): Promise<readonly ToolDescriptor[]> {
     if (!server.enabled) return [];
     if (server.id === BUILTIN_MEMORY_SERVER_ID) {
-      return BUILTIN_MEMORY_MCP_TOOLS.map((tool) => toDescriptor(server, tool));
+      return BUILTIN_MEMORY_MCP_TOOLS.map((tool) => toDescriptor(server, tool, this.logger));
     }
     const entry = this.ensureEntry(server);
 
@@ -396,7 +403,7 @@ export class McpManager {
         cursor = nextCursor;
       }
 
-      const descriptors = allTools.map((t) => toDescriptor(entry.spec, t));
+      const descriptors = allTools.map((t) => toDescriptor(entry.spec, t, this.logger));
       entry.toolsCache = allTools;
       entry.descriptorCache = descriptors;
       entry.discoveryFailureCount = undefined;

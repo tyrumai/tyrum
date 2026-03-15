@@ -34,7 +34,6 @@ export type PolicyAgentOption = {
 export type PolicyToolOption = {
   toolId: string;
   description: string;
-  risk: "low" | "medium" | "high";
 };
 
 export interface PolicyOverridesSectionProps {

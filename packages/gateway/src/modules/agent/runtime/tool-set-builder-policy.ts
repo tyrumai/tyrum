@@ -1,5 +1,6 @@
 import type { ModelMessage } from "ai";
 import type { ToolDescriptor } from "../tools.js";
+import { isBuiltinToolAvailableInStateMode, isToolAllowedWithDenylist } from "../tools.js";
 import { collectSecretHandleIds } from "../../secret/collect-secret-handle-ids.js";
 import { createSecretHandleResolver } from "../../secret/handle-resolver.js";
 import { canonicalizeToolMatchTarget } from "../../policy/match-target.js";
@@ -150,27 +151,27 @@ async function resolveToolCallPolicyState(input: {
 
   const matchTarget = canonicalizeToolMatchTarget(input.toolDesc.id, input.args, input.deps.home);
   const policy = input.deps.policyService;
-  const policyEnabled = policy.isEnabled();
+  const roleAllowed = isRoleAllowedForTool(input.deps, input.toolDesc);
 
   let policyDecision: ToolCallPolicyState["policyDecision"];
   let policySnapshotId: string | undefined;
   let appliedOverrideIds: string[] | undefined;
 
-  if (policyEnabled) {
-    const evaluation = await policy.evaluateToolCall({
-      tenantId: input.deps.tenantId,
-      agentId: input.deps.agentId,
-      workspaceId: input.deps.workspaceId,
-      toolId: input.toolDesc.id,
-      toolMatchTarget: matchTarget,
-      url: resolveToolUrl(input.toolDesc.id, input.args),
-      secretScopes: await resolveSecretScopes(input.deps, input.args),
-      inputProvenance: input.inputProvenance,
-    });
-    policyDecision = evaluation.decision;
-    policySnapshotId = evaluation.policy_snapshot?.policy_snapshot_id;
-    appliedOverrideIds = evaluation.applied_override_ids;
-  }
+  const evaluation = await policy.evaluateToolCall({
+    tenantId: input.deps.tenantId,
+    agentId: input.deps.agentId,
+    workspaceId: input.deps.workspaceId,
+    toolId: input.toolDesc.id,
+    toolMatchTarget: matchTarget,
+    url: resolveToolUrl(input.toolDesc.id, input.args),
+    secretScopes: await resolveSecretScopes(input.deps, input.args),
+    inputProvenance: input.inputProvenance,
+    toolEffect: input.toolDesc.effect,
+    roleAllowed,
+  });
+  policyDecision = evaluation.decision;
+  policySnapshotId = evaluation.policy_snapshot?.policy_snapshot_id;
+  appliedOverrideIds = evaluation.applied_override_ids;
 
   const state: ToolCallPolicyState = {
     toolDesc: input.toolDesc,
@@ -181,7 +182,7 @@ async function resolveToolCallPolicyState(input: {
     policyDecision,
     policySnapshotId,
     appliedOverrideIds,
-    suggestedOverrides: policyEnabled
+    suggestedOverrides: roleAllowed
       ? suggestedOverridesForToolCall({
           toolId: input.toolDesc.id,
           matchTarget,
@@ -189,14 +190,26 @@ async function resolveToolCallPolicyState(input: {
         })
       : undefined,
     approvalStepIndex: existing?.approvalStepIndex,
-    shouldRequireApproval:
-      policyEnabled && !policy.isObserveOnly()
-        ? policyDecision === "require_approval"
-        : input.toolDesc.requires_confirmation,
+    shouldRequireApproval: !policy.isObserveOnly() && policyDecision === "require_approval",
   };
 
   input.toolCallPolicyStates?.set(input.toolCallId, state);
   return state;
+}
+
+function isRoleAllowedForTool(deps: ToolSetBuilderDeps, toolDesc: ToolDescriptor): boolean {
+  const allowlist = deps.roleToolAllowlist;
+  if (!allowlist) {
+    return true;
+  }
+  if (
+    (toolDesc.source === undefined || toolDesc.source === "builtin") &&
+    deps.stateMode &&
+    !isBuiltinToolAvailableInStateMode(toolDesc.id, deps.stateMode)
+  ) {
+    return false;
+  }
+  return isToolAllowedWithDenylist(allowlist, deps.roleToolDenylist, toolDesc.id);
 }
 
 function resolveToolUrl(toolId: string, args: unknown): string | undefined {

@@ -89,7 +89,7 @@ export async function enqueueWorkItemStateChangeNotification(input: {
   let policySnapshotId: string | undefined;
 
   const policyService = input.policyService;
-  if (policyService?.isEnabled()) {
+  if (policyService) {
     try {
       const parsedSource = parseChannelSourceKey(route.source);
       const matchTarget =
@@ -118,7 +118,7 @@ export async function enqueueWorkItemStateChangeNotification(input: {
     decision = "allow";
   }
 
-  if (decision === "deny" && policyService?.isEnabled() && !policyService.isObserveOnly()) {
+  if (decision === "deny" && policyService && !policyService.isObserveOnly()) {
     return { enqueued: false, skipped_reason: "policy_denied" };
   }
 

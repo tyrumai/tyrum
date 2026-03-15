@@ -82,7 +82,6 @@ const AuthStatus = z
 
 const PolicyStatus = z
   .object({
-    enabled: z.boolean(),
     observe_only: z.boolean(),
     effective_sha256: z.string().trim().min(1),
     sources: z
@@ -96,8 +95,7 @@ const PolicyStatus = z
 
 const SandboxStatus = z
   .object({
-    mode: z.enum(["disabled", "observe", "enforce"]),
-    policy_enabled: z.boolean(),
+    mode: z.enum(["observe", "enforce"]),
     policy_observe_only: z.boolean(),
     effective_policy_sha256: z.string().trim().min(1),
     hardening_profile: z.enum(["baseline", "hardened"]),

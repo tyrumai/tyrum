@@ -32,7 +32,6 @@ const DASHBOARD_WIDE_CONTENT_WIDTH_PX = 768;
 function getPolicyModeLabel(status: StatusResponse | null): string {
   if (status?.sandbox) return status.sandbox.mode;
   if (!status?.policy) return "-";
-  if (!status.policy.enabled) return "disabled";
   return status.policy.observe_only ? "observe" : "enforce";
 }
 
