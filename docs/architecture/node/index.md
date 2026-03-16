@@ -4,7 +4,7 @@ slug: /architecture/node
 
 # Node
 
-A node is a companion runtime that connects to the gateway with `role: node` and exposes authorized capabilities such as desktop automation, camera access, or other device-local execution.
+A node is a companion runtime that connects to the gateway with `role: node` and exposes authorized capabilities such as desktop automation, browser APIs, mobile sensors, camera access, or other device-local execution.
 
 ## Mission
 
@@ -23,8 +23,12 @@ Nodes are "remote hands", so Tyrum treats node capabilities as high-risk by defa
 Nodes can run on a variety of devices:
 
 - Desktop node (Windows/Linux/macOS)
+- Browser node (web host exposing browser APIs such as location, camera, and microphone)
 - Mobile node (iOS/Android)
+- Gateway-managed desktop environment node (sandboxed desktop runtime bootstrapped by the gateway)
 - Headless node (server or embedded device)
+
+Browser and mobile nodes are often embedded in operator hosts, but they still connect and are governed as nodes. See [Embedded Local Nodes](/architecture/client/embedded-local-nodes). Gateway-managed sandbox nodes are described in [Desktop Environments](/architecture/gateway/desktop-environments).
 
 ## Responsibilities
 
@@ -48,10 +52,11 @@ Nodes can run on a variety of devices:
 - **Pairing and authorization:** device identity, scoped authorization, and revocation handling.
 - **Capability advertisement:** stable descriptions of what the node can execute.
 - **Capability execution:** local device/system calls plus evidence capture and readiness checks.
+- **Bootstrap/orchestration hooks:** optional host-provided bootstrap material for embedded or gateway-managed nodes without relaxing the node trust boundary.
 
 ## Inputs, outputs, and dependencies
 
-- **Inputs:** pairing flows, capability RPC, policy-gated execution requests, and local OS permission prompts.
+- **Inputs:** pairing flows, capability RPC, policy-gated execution requests, local OS permission prompts, and optional host-provided bootstrap material for embedded or managed runtimes.
 - **Outputs:** capability results, evidence artifacts, readiness signals, and error/failure reports.
 - **Dependencies:** gateway control plane, protocol/contracts, pairing records, and local device/runtime APIs.
 
@@ -84,6 +89,7 @@ Tradeoffs:
 - When a node connects without an active pairing record, the gateway creates a pairing request for the node device.
 - Local nodes can be auto-approved by explicit policy; remote nodes require explicit operator approval.
 - Pairing results in a scoped authorization such as a node-scoped token and a capability allowlist that can later be revoked.
+- Embedded local nodes may be bootstrapped by an operator host, and gateway-managed desktop environments may be approved by explicit management policy, but both still resolve to durable pairing records and capability allowlists.
 
 ```mermaid
 sequenceDiagram
@@ -122,6 +128,8 @@ Pairing binds a node device identity to an explicit authorization record:
 - capability allowlist (specific capability names and versions)
 - optional operator-defined labels
 
+Managed node forms may start from a narrower initial allowlist than standalone nodes. For example, gateway-managed desktop environments are expected to receive a bounded desktop capability allowlist rather than inheriting broad device access.
+
 Capability execution requests are authorized against the node's pairing record and the effective policy snapshot for the run. Authorization is deny-by-default: the gateway only dispatches a capability request to a node when that node is allowed to execute it.
 
 ## Revocation
@@ -137,4 +145,6 @@ Revocation removes the pairing authorization and invalidates scoped tokens. A re
 ## Drill-down
 
 - [Architecture](/architecture)
+- [Embedded Local Nodes](/architecture/client/embedded-local-nodes)
+- [Desktop Environments](/architecture/gateway/desktop-environments)
 - [Capabilities](/architecture/capabilities)

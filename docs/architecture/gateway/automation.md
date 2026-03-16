@@ -12,12 +12,14 @@ Automation lets Tyrum act on schedules and triggers while keeping behavior obser
 - **Webhooks:** an HTTP endpoint for external triggers (scoped and authenticated).
 - **Cron jobs:** scheduled tasks with their own lane/session context.
 - **Heartbeat:** a periodic run in the main session (lane `heartbeat`) that batches multiple checks and follow-ups.
+- **Location triggers:** durable rules keyed to saved-place or POI-category events that dispatch an `agent_turn`, explicit `steps`, or a `playbook`. See [Location automation](/architecture/gateway/location-automation).
 - **WorkSignals:** durable time- or event-based triggers attached to a WorkItem/workspace that enqueue explicit follow-up work (see [Work board and delegated execution](/architecture/workboard)).
 
-## When to use heartbeat vs cron
+## When to use heartbeat vs cron vs location triggers
 
 - Use **heartbeat** when the agent should be context-aware and prioritize across multiple signals inside the main session.
 - Use **cron** for independent, narrow tasks that should run on a fixed schedule.
+- Use **location triggers** when work should fire because a paired device entered, exited, or dwelled at a place/category rather than because time elapsed.
 - WorkSignals can be realized as heartbeat-driven checks (context-aware) or as cron/watchers (narrow); the key invariant is that firings are durable, deduped, and policy-gated.
 
 ## Schedule model
@@ -38,6 +40,16 @@ Automation lets Tyrum act on schedules and triggers while keeping behavior obser
 - The default heartbeat runs every 30 minutes, uses `agent_turn` execution, and defaults to `quiet` delivery.
 - Seeded defaults are idempotent: restarting the gateway or revisiting the same scope does not create duplicates.
 - Deleting the seeded default heartbeat leaves a tombstone so it is not recreated automatically. Pausing it keeps the schedule but prevents future firings until resumed.
+
+## Location-aware automation
+
+Location-aware automation is configured separately from schedule-based automation because it depends on durable location events rather than clock time.
+
+- Trigger conditions can target a `saved_place` or a `poi_category` transition.
+- Execution modes remain aligned with the rest of the automation system: `agent_turn`, `steps`, and `playbook`.
+- Delivery modes stay consistent with other automations (`quiet` vs `notify`).
+
+See [Location automation](/architecture/gateway/location-automation) for the beacon, event, and storage model behind these triggers.
 
 ## Safety expectations
 

@@ -30,8 +30,9 @@ This page defines how Tyrum preserves the same logical architecture across deplo
 ## Internal building blocks
 
 - **Runtime roles:** gateway edges, workers, schedulers, and ToolRunner execution contexts.
+- **Managed device runtimes:** optional desktop-runtime hosts that reconcile gateway-managed sandbox environments.
 - **Durable coordination:** StateStore, outbox/backplane, leases, idempotency, and lane serialization.
-- **Workspace and artifact durability:** workspace mounts, durable artifacts, and storage expectations across deployment shapes.
+- **Workspace and artifact durability:** workspace mounts, durable artifacts, managed desktop environment state, and storage expectations across deployment shapes.
 - **Operational validation:** failure-matrix testing, table maintenance, and storage/DB-specific constraints.
 
 ## Interfaces, inputs, outputs, and dependencies
@@ -95,17 +96,19 @@ These are the logical building blocks that appear in all deployments:
 - **Workers:** step executors that claim work and perform side effects via tools/nodes/MCP.
 - **ToolRunner:** an execution context that mounts a workspace filesystem and runs tool steps. In a single-host deployment it can be a local subprocess; in a cluster it is typically a sandboxed job/pod.
 - **Schedulers:** cron/watchers/heartbeat triggers that enqueue work (must be cluster-safe; see below).
+- **Desktop runtime hosts:** optional reconciler processes that start/stop gateway-managed desktop environments and keep their paired node state healthy.
 - **StateStore:** the system of record for durable state and logs (SQLite locally; Postgres for HA/scale).
 - **Event backplane:** a cross-instance delivery mechanism for events/commands in clustered deployments.
 - **Secret provider:** resolves secret handles to raw values in trusted execution contexts.
 
 ## Runtime roles
 
-Containerized deployments run three long-lived roles:
+Containerized deployments run three core long-lived roles, plus an optional managed desktop role when gateway-managed desktop environments are enabled:
 
 - **`gateway-edge`**: WebSocket/HTTP edge, auth, contract validation, routing, and the execution engine control plane.
 - **`worker`**: claims work and performs step execution (side effects) via tools/nodes/MCP.
 - **`scheduler`**: cron/watchers/heartbeat triggers coordinated by DB leases.
+- **`desktop-runtime`**: reconciles gateway-managed desktop environments, owns container lifecycle for those sandboxes, and applies the bounded managed-pairing policy for the sandbox node runtime.
 
 ### Packaging
 
@@ -113,6 +116,8 @@ Tyrum is distributed as container images that run any of the runtime roles via e
 
 - `docker-compose` for single-host installs
 - Helm for clustered installs
+
+When `role=all` is used, the desktop-runtime responsibilities can be co-located with the gateway edge on the same process/host. Split-role deployments that use gateway-managed desktop environments should run at least one healthy `desktop-runtime` instance.
 
 ## StateStore
 
