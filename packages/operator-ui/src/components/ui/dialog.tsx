@@ -38,14 +38,15 @@ export const DialogContent = React.forwardRef<
       <DialogPrimitive.Content
         ref={ref}
         className={cn(
-          "fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2",
-          "rounded-lg border border-border bg-bg-card p-4 text-fg shadow-md",
+          "fixed left-1/2 top-1/2 z-50 flex w-full max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col",
+          "max-h-[calc(100dvh-2rem)]",
+          "rounded-lg border border-border bg-bg-card text-fg shadow-md",
           "data-[state=open]:tyrum-animate-dialog-in data-[state=closed]:tyrum-animate-dialog-out",
           className,
         )}
         {...props}
       >
-        {children}
+        <div className="min-h-0 flex-1 overflow-y-auto p-4">{children}</div>
         <DialogPrimitive.Close
           aria-label="Close"
           className={cn(
