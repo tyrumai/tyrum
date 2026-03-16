@@ -164,7 +164,12 @@ function SidebarNav({
 
   return (
     <TooltipProvider>
-      <nav className={cn("flex flex-1 flex-col gap-1 py-2", collapsed ? "px-1" : "px-2")}>
+      <nav
+        className={cn(
+          "flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto py-2",
+          collapsed ? "px-1" : "px-2",
+        )}
+      >
         {items.map(renderNavItem)}
         {showSecondaryItems ? (
           <>
@@ -405,7 +410,7 @@ function SidebarFooter({
   return (
     <div
       className={cn(
-        "mt-auto flex flex-col gap-1.5 border-t border-border",
+        "mt-auto flex shrink-0 flex-col gap-1.5 border-t border-border",
         collapsed ? "p-2" : "p-3",
       )}
     >
@@ -486,7 +491,7 @@ export function Sidebar({
   return (
     <aside
       className={cn(
-        "flex h-screen shrink-0 flex-col border-r border-border bg-bg-subtle transition-[width] duration-200",
+        "flex h-full shrink-0 flex-col border-r border-border bg-bg-subtle transition-[width] duration-200",
         collapsed ? "w-14" : "w-56",
         className,
       )}

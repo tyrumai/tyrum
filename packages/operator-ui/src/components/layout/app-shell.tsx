@@ -90,7 +90,7 @@ export function AppShell({
               className={cn(
                 "flex flex-1 min-h-0 flex-col overflow-x-hidden",
                 fullBleed || viewportLocked ? "overflow-y-hidden" : "overflow-y-auto",
-                showMobileNav ? "pb-[calc(3.5rem+env(safe-area-inset-bottom))]" : null,
+                showMobileNav ? "pb-[calc(4rem+env(safe-area-inset-bottom))]" : null,
               )}
             >
               {fullBleed ? (
