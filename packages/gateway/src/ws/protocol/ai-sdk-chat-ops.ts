@@ -31,6 +31,7 @@ import {
   toSessionSummary,
   toStoredChatMessages,
 } from "./ai-sdk-chat-shared.js";
+import { createAiSdkChatLiveState } from "./ai-sdk-chat-live-state.js";
 
 export async function handleAiSdkChatMessage(
   client: ConnectedClient,
@@ -146,7 +147,8 @@ async function handleChatSessionGetMessage(
   }
 
   try {
-    const looked = await createSessionDal(deps).getWithDeliveryByKey({
+    const sessionDal = createSessionDal(deps);
+    const looked = await sessionDal.getWithDeliveryByKey({
       tenantId: auth.tenantId,
       sessionKey: parsed.data.payload.session_id,
     });
@@ -320,7 +322,8 @@ async function handleChatSessionSendMessage(
   }
 
   try {
-    const looked = await createSessionDal(deps).getWithDeliveryByKey({
+    const sessionDal = createSessionDal(deps);
+    const looked = await sessionDal.getWithDeliveryByKey({
       tenantId: auth.tenantId,
       sessionKey: parsed.data.payload.session_id,
     });
@@ -335,10 +338,10 @@ async function handleChatSessionSendMessage(
       trigger: parsed.data.payload.trigger,
     });
 
-    await createSessionDal(deps).replaceMessages({
+    await sessionDal.replaceMessages({
       tenantId: auth.tenantId,
       sessionId: looked.session.session_id,
-      messages: toStoredChatMessages(split.previousMessages),
+      messages: toStoredChatMessages(split.originalMessages),
       updatedAt: new Date().toISOString(),
     });
 
@@ -360,7 +363,12 @@ async function handleChatSessionSendMessage(
     });
 
     let approvalRequested = false;
+    let approvalSnapshotPersisted = false;
     let completedMessages: UIMessage[] | null = null;
+    const liveState = createAiSdkChatLiveState({
+      createMessageId: () => randomUUID(),
+      messages: split.originalMessages,
+    });
     const streamId = createAiSdkChatStream({
       agentId: looked.session.agent_id,
       clientId: client.id,
@@ -375,7 +383,7 @@ async function handleChatSessionSendMessage(
         const messages = canonicalizeUiMessages(event.messages);
         approvalRequested = hasApprovalRequest(responseMessage);
         completedMessages = messages;
-        await createSessionDal(deps).replaceMessages({
+        await sessionDal.replaceMessages({
           tenantId: auth.tenantId,
           sessionId: looked.session.session_id,
           messages: toStoredChatMessages(messages),
@@ -387,6 +395,17 @@ async function handleChatSessionSendMessage(
     void (async () => {
       try {
         for await (const chunk of uiStream) {
+          liveState.applyChunk(chunk);
+          if (!approvalSnapshotPersisted && liveState.hasApprovalRequest()) {
+            approvalRequested = true;
+            approvalSnapshotPersisted = true;
+            await sessionDal.replaceMessages({
+              tenantId: auth.tenantId,
+              sessionId: looked.session.session_id,
+              messages: toStoredChatMessages(liveState.getMessages()),
+              updatedAt: new Date().toISOString(),
+            });
+          }
           emitAiSdkChatChunk({
             chunk,
             connectionManager: deps.connectionManager,
@@ -397,7 +416,7 @@ async function handleChatSessionSendMessage(
         if (!approvalRequested) {
           await turn.finalize();
           if (completedMessages) {
-            await createSessionDal(deps).replaceMessages({
+            await sessionDal.replaceMessages({
               tenantId: auth.tenantId,
               sessionId: looked.session.session_id,
               messages: toStoredChatMessages(completedMessages),
@@ -411,6 +430,23 @@ async function handleChatSessionSendMessage(
           streamId,
         });
       } catch (err) {
+        if (liveState.hasAssistantProgress()) {
+          try {
+            await sessionDal.replaceMessages({
+              tenantId: auth.tenantId,
+              sessionId: looked.session.session_id,
+              messages: toStoredChatMessages(liveState.getMessages()),
+              updatedAt: new Date().toISOString(),
+            });
+          } catch (persistErr) {
+            deps.logger?.error("ws.chat_session_stream_snapshot_failed", {
+              client_id: client.id,
+              error: persistErr instanceof Error ? persistErr.message : String(persistErr),
+              session_id: looked.session.session_id,
+              stream_id: streamId,
+            });
+          }
+        }
         failAiSdkChatStream({
           connectionManager: deps.connectionManager,
           errorMessage: err instanceof Error ? err.message : String(err),

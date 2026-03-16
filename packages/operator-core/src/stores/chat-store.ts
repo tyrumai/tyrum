@@ -2,12 +2,14 @@ import type { OperatorHttpClient, OperatorWsClient } from "../deps.js";
 import { createStore } from "../store.js";
 import {
   deleteActive,
+  hydrateActiveSession,
   loadMoreSessions,
   newChat,
   openSession,
   refreshAgents,
   refreshSessions,
   setAgentId,
+  updateActiveMessages,
 } from "./chat-store.actions.js";
 import {
   createInitialChatState,
@@ -43,6 +45,8 @@ export function createChatStore(ws: OperatorWsClient, http: OperatorHttpClient):
     refreshSessions: () => refreshSessions(ctx),
     loadMoreSessions: () => loadMoreSessions(ctx),
     openSession: (sessionId) => openSession(ctx, sessionId),
+    hydrateActiveSession: (session) => hydrateActiveSession(ctx, session),
+    updateActiveMessages: (messages) => updateActiveMessages(ctx, messages),
     newChat: () => newChat(ctx),
     deleteActive: () => deleteActive(ctx),
   };

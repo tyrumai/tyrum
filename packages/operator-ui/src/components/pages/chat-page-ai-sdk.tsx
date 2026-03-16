@@ -2,8 +2,6 @@ import {
   createTyrumAiSdkChatSessionClient,
   createTyrumAiSdkChatTransport,
   supportsTyrumAiSdkChatSocket,
-  type TyrumAiSdkChatSession,
-  type TyrumAiSdkChatSessionSummary,
 } from "@tyrum/client";
 import type { OperatorCore, ResolveApprovalInput } from "@tyrum/operator-core";
 import type { UIMessage } from "ai";
@@ -18,12 +16,7 @@ import { Spinner } from "../ui/spinner.js";
 import { useAppShellMinWidth } from "../layout/app-shell.js";
 import { ChatThreadsPanel } from "./chat-page-threads.js";
 import { AiSdkConversation } from "./chat-page-ai-sdk-conversation.js";
-import {
-  applySessionMessages,
-  buildPreview,
-  patchSessionList,
-  toThreadSummary,
-} from "./chat-page-ai-sdk-shared.js";
+import { toThreadSummary } from "./chat-page-ai-sdk-shared.js";
 
 const CHAT_TWO_PANEL_CONTENT_WIDTH_PX = 800;
 
@@ -49,7 +42,6 @@ function formatChatAgentLabel(input: {
 function normalizeChatAgentOptions(
   input: Array<{
     agent_id: string;
-    agent_key?: string;
     persona?: { name?: string };
   }>,
 ): ChatAgentOption[] {
@@ -67,23 +59,10 @@ function normalizeChatAgentOptions(
   return [...byId.values()];
 }
 
-type SessionListState = {
-  error: string | null;
-  loading: boolean;
-  nextCursor: string | null;
-  sessions: TyrumAiSdkChatSessionSummary[];
-};
-
-type ActiveSessionState = {
-  error: string | null;
-  loading: boolean;
-  session: TyrumAiSdkChatSession | null;
-  sessionId: string | null;
-};
-
 export function AiSdkChatPage({ core }: { core: OperatorCore }) {
   const connection = useOperatorStore(core.connectionStore);
   const approvals = useOperatorStore(core.approvalsStore);
+  const chat = useOperatorStore(core.chatStore);
   const lgUp = useAppShellMinWidth(CHAT_TWO_PANEL_CONTENT_WIDTH_PX);
   const browserNode = useBrowserNodeOptional();
   const host = useHostApiOptional();
@@ -98,22 +77,6 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
     [socket],
   );
 
-  const [agents, setAgents] = useState<ChatAgentOption[]>([]);
-  const [agentsError, setAgentsError] = useState<string | null>(null);
-  const [agentsLoading, setAgentsLoading] = useState(false);
-  const [agentId, setAgentId] = useState("default");
-  const [sessions, setSessions] = useState<SessionListState>({
-    error: null,
-    loading: false,
-    nextCursor: null,
-    sessions: [],
-  });
-  const [active, setActive] = useState<ActiveSessionState>({
-    error: null,
-    loading: false,
-    session: null,
-    sessionId: null,
-  });
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [mobileView, setMobileView] = useState<"conversation" | "threads">("threads");
   const [renderMode, setRenderMode] = useState<"markdown" | "text">("markdown");
@@ -123,178 +86,81 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
   } | null>(null);
 
   const isConnected = connection.status === "connected";
-  const threads = useMemo(() => sessions.sessions.map(toThreadSummary), [sessions.sessions]);
-  const activeSession = active.session;
+  const agents = useMemo(() => normalizeChatAgentOptions(chat.agents.agents), [chat.agents.agents]);
+  const threads = useMemo(
+    () => chat.sessions.sessions.map(toThreadSummary),
+    [chat.sessions.sessions],
+  );
+  const activeSession = chat.active.session;
+  const sessionsError = chat.sessions.error?.message ?? null;
+  const agentsError = chat.agents.error?.message ?? null;
+  const activeError = chat.active.error?.message ?? null;
 
   useEffect(() => {
-    if (!lgUp && !active.sessionId) {
+    if (!lgUp && !chat.active.sessionId) {
       setMobileView("threads");
     }
-  }, [active.sessionId, lgUp]);
+  }, [chat.active.sessionId, lgUp]);
 
   useEffect(() => {
     if (!isConnected) {
       return;
     }
-    let cancelled = false;
-    setAgentsLoading(true);
-    void core.http.agents
-      .list()
-      .then((result) => {
-        if (cancelled) {
-          return;
-        }
-        const nextAgents = normalizeChatAgentOptions(result.agents);
-        setAgents(nextAgents);
-        const firstAgent = nextAgents[0];
-        if (firstAgent) {
-          setAgentId((current) =>
-            nextAgents.some((agent) => agent.agent_id === current) ? current : firstAgent.agent_id,
-          );
-        }
-        setAgentsError(null);
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          setAgentsError(error instanceof Error ? error.message : String(error));
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setAgentsLoading(false);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [core.http.agents, isConnected]);
-
-  const refreshSessions = useCallback(
-    async (cursor?: string): Promise<void> => {
-      if (!sessionClient) {
-        return;
-      }
-      setSessions((current) => ({ ...current, error: null, loading: true }));
-      try {
-        const result = await sessionClient.list({
-          agent_id: agentId,
-          cursor,
-          limit: 50,
-        });
-        setSessions((current) => ({
-          error: null,
-          loading: false,
-          nextCursor: result.next_cursor ?? null,
-          sessions: cursor ? [...current.sessions, ...result.sessions] : result.sessions,
-        }));
-      } catch (error) {
-        setSessions((current) => ({
-          ...current,
-          error: error instanceof Error ? error.message : String(error),
-          loading: false,
-        }));
-      }
-    },
-    [agentId, sessionClient],
-  );
+    void core.chatStore.refreshAgents({ includeDefault: true });
+  }, [core.chatStore, isConnected]);
 
   useEffect(() => {
-    if (!isConnected || !sessionClient) {
+    const firstAgent = chat.agents.agents[0];
+    if (!firstAgent) {
       return;
     }
-    void refreshSessions();
-  }, [isConnected, refreshSessions, sessionClient]);
-
-  const openSession = useCallback(
-    async (sessionId: string): Promise<void> => {
-      if (!sessionClient) {
-        return;
-      }
-      setActive({
-        error: null,
-        loading: true,
-        session: null,
-        sessionId,
-      });
-      try {
-        const session = await sessionClient.get({ session_id: sessionId });
-        setActive({
-          error: null,
-          loading: false,
-          session,
-          sessionId,
-        });
-        if (!lgUp) {
-          setMobileView("conversation");
-        }
-      } catch (error) {
-        setActive({
-          error: error instanceof Error ? error.message : String(error),
-          loading: false,
-          session: null,
-          sessionId,
-        });
-      }
-    },
-    [lgUp, sessionClient],
-  );
+    if (chat.agents.agents.some((agent) => agent.agent_id === chat.agentId)) {
+      return;
+    }
+    core.chatStore.setAgentId(firstAgent.agent_id);
+  }, [chat.agentId, chat.agents.agents, core.chatStore]);
 
   useEffect(() => {
-    if (!lgUp || active.sessionId || active.loading) {
+    if (!isConnected) {
       return;
     }
-    const firstSession = sessions.sessions[0];
+    void core.chatStore.refreshSessions();
+  }, [chat.agentId, core.chatStore, isConnected]);
+
+  useEffect(() => {
+    if (!lgUp || chat.active.sessionId || chat.active.loading) {
+      return;
+    }
+    const firstSession = chat.sessions.sessions[0];
     if (!firstSession) {
       return;
     }
-    void openSession(firstSession.session_id);
-  }, [active.loading, active.sessionId, lgUp, openSession, sessions.sessions]);
+    void core.chatStore.openSession(firstSession.session_id);
+  }, [chat.active.loading, chat.active.sessionId, chat.sessions.sessions, core.chatStore, lgUp]);
 
   const startNewChat = useCallback(async (): Promise<void> => {
-    if (!sessionClient) {
+    await core.chatStore.newChat();
+    const next = core.chatStore.getSnapshot();
+    if (next.sessions.error) {
+      toast.error(next.sessions.error.message);
       return;
     }
-    try {
-      const session = await sessionClient.create({ agent_id: agentId });
-      setSessions((current) => ({
-        ...current,
-        sessions: patchSessionList(current.sessions, session),
-      }));
-      setActive({
-        error: null,
-        loading: false,
-        session,
-        sessionId: session.session_id,
-      });
-      if (!lgUp) {
-        setMobileView("conversation");
-      }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : String(error));
+    if (!lgUp && next.active.sessionId) {
+      setMobileView("conversation");
     }
-  }, [agentId, lgUp, sessionClient]);
+  }, [core.chatStore, lgUp]);
 
   const deleteActive = useCallback(async (): Promise<void> => {
-    const session = active.session;
-    if (!sessionClient || !session) {
+    const sessionId = core.chatStore.getSnapshot().active.sessionId;
+    if (!sessionId) {
       return;
     }
-    try {
-      await sessionClient.delete({ session_id: session.session_id });
-      setSessions((current) => ({
-        ...current,
-        sessions: current.sessions.filter((entry) => entry.session_id !== session.session_id),
-      }));
-      setActive({
-        error: null,
-        loading: false,
-        session: null,
-        sessionId: null,
-      });
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : String(error));
+    await core.chatStore.deleteActive();
+    const next = core.chatStore.getSnapshot().active;
+    if (next.sessionId === sessionId && next.error) {
+      toast.error(next.error.message);
     }
-  }, [active.session, sessionClient]);
+  }, [core.chatStore]);
 
   const resolveAttachedNodeId = useCallback(async (): Promise<string | null> => {
     if (browserNode?.status === "connected" && browserNode.deviceId) {
@@ -340,32 +206,15 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
     [core.approvalsStore],
   );
 
-  const handleSessionMessages = useCallback((sessionId: string, messages: UIMessage[]) => {
-    setActive((current) => {
-      if (!current.session || current.session.session_id !== sessionId) {
-        return current;
+  const handleSessionMessages = useCallback(
+    (sessionId: string, messages: UIMessage[]) => {
+      if (core.chatStore.getSnapshot().active.sessionId !== sessionId) {
+        return;
       }
-      const nextSession = applySessionMessages(current.session, messages);
-      return { ...current, session: nextSession };
-    });
-    setSessions((current) => {
-      const sessionSummary = current.sessions.find((entry) => entry.session_id === sessionId);
-      if (!sessionSummary) {
-        return current;
-      }
-      const nextSession: TyrumAiSdkChatSession = {
-        ...sessionSummary,
-        messages,
-        message_count: messages.length,
-        last_message: buildPreview(messages),
-        updated_at: new Date().toISOString(),
-      };
-      return {
-        ...current,
-        sessions: patchSessionList(current.sessions, nextSession),
-      };
-    });
-  }, []);
+      core.chatStore.updateActiveMessages(messages);
+    },
+    [core.chatStore],
+  );
 
   const handleConversationMessages = useCallback(
     (messages: UIMessage[]) => {
@@ -408,28 +257,29 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
           <ChatThreadsPanel
             splitView={lgUp}
             connected={isConnected}
-            loading={sessions.loading}
-            agentsLoading={agentsLoading}
-            errorMessage={sessions.error}
+            loading={chat.sessions.loading}
+            agentsLoading={chat.agents.loading}
+            errorMessage={sessionsError}
             threads={threads}
-            activeSessionId={active.sessionId}
+            activeSessionId={chat.active.sessionId}
             onRefresh={() => {
-              void refreshSessions();
+              void core.chatStore.refreshSessions();
             }}
             onLoadMore={() => {
-              if (!sessions.nextCursor) {
-                return;
-              }
-              void refreshSessions(sessions.nextCursor);
+              void core.chatStore.loadMoreSessions();
             }}
-            canLoadMore={Boolean(sessions.nextCursor)}
+            canLoadMore={Boolean(chat.sessions.nextCursor)}
             onOpenThread={(sessionId) => {
-              void openSession(sessionId);
+              void core.chatStore.openSession(sessionId).then(() => {
+                if (!lgUp && core.chatStore.getSnapshot().active.sessionId === sessionId) {
+                  setMobileView("conversation");
+                }
+              });
             }}
-            agentId={agentId}
+            agentId={chat.agentId}
             agents={agents}
             onAgentChange={(value) => {
-              setAgentId(value);
+              core.chatStore.setAgentId(value);
             }}
             onNewChat={() => {
               void startNewChat();
@@ -438,7 +288,7 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
         ) : null}
 
         {showConversation ? (
-          active.loading ? (
+          chat.active.loading ? (
             <div className="flex flex-1 items-center justify-center">
               <Spinner />
             </div>
@@ -471,11 +321,11 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
             />
           ) : (
             <div className="flex flex-1 items-center justify-center px-6">
-              {active.error ? (
+              {activeError ? (
                 <Alert
                   variant="error"
                   title="Failed to load conversation"
-                  description={active.error}
+                  description={activeError}
                 />
               ) : (
                 <div className="grid max-w-sm justify-items-center gap-3 text-center">
@@ -507,7 +357,7 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
         confirmLabel="Delete"
         onConfirm={async () => {
           await deleteActive();
-          if (!lgUp) {
+          if (!lgUp && !core.chatStore.getSnapshot().active.sessionId) {
             setMobileView("threads");
           }
         }}

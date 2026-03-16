@@ -1,5 +1,5 @@
 import type { OperatorCore } from "@tyrum/operator-core";
-import { Suspense, useEffect, useRef, type ReactNode } from "react";
+import { Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import { AdminAccessProvider } from "./elevated-mode.js";
 import { ErrorBoundary } from "./components/error/error-boundary.js";
 import { AppShell } from "./components/layout/app-shell.js";
@@ -31,6 +31,20 @@ export interface OperatorUiAppProps {
   onReloadPage?: () => void;
   onReconfigureGateway?: (httpUrl: string, wsUrl: string) => void;
   webAuthPersistence?: WebAuthPersistence;
+}
+
+const coreInstanceIds = new WeakMap<object, number>();
+let nextCoreInstanceId = 1;
+
+function getCoreInstanceId(core: OperatorCore): number {
+  const coreObject = core as object;
+  const existing = coreInstanceIds.get(coreObject);
+  if (existing !== undefined) {
+    return existing;
+  }
+  const created = nextCoreInstanceId++;
+  coreInstanceIds.set(coreObject, created);
+  return created;
 }
 
 export function OperatorUiApp({
@@ -114,7 +128,48 @@ function OperatorUiAppRoot({
     hostApi: host?.kind === "desktop" ? host.api : null,
   });
   const routeDefinition = getOperatorRouteDefinition(viewModel.route);
+  const chatRouteDefinition = getOperatorRouteDefinition("chat");
   const navigationBlocked = onboarding.isOpen;
+  const [retainChatRoute, setRetainChatRoute] = useState(viewModel.route === "chat");
+  const chatHostKey = `${reconnectUiScopeKey}:${getCoreInstanceId(core)}`;
+  const previousReconnectUiScopeKey = useRef(reconnectUiScopeKey);
+
+  useEffect(() => {
+    if (viewModel.route === "chat") {
+      setRetainChatRoute(true);
+    }
+  }, [viewModel.route]);
+
+  useEffect(() => {
+    if (previousReconnectUiScopeKey.current === reconnectUiScopeKey) {
+      return;
+    }
+    previousReconnectUiScopeKey.current = reconnectUiScopeKey;
+    setRetainChatRoute(false);
+  }, [reconnectUiScopeKey]);
+
+  useEffect(() => {
+    if (viewModel.showConnectPage || onboarding.isOpen) {
+      setRetainChatRoute(false);
+    }
+  }, [onboarding.isOpen, viewModel.showConnectPage]);
+
+  const routeRenderContext = {
+    core,
+    mode,
+    hostKind,
+    navigate: viewModel.navigate,
+    onboardingAvailable: onboarding.available,
+    onOpenOnboarding: onboarding.open,
+    onReloadPage,
+    onReconfigureGateway,
+    webAuthPersistence,
+  } as const;
+  const showRetainedChat =
+    chatRouteDefinition &&
+    !viewModel.showConnectPage &&
+    !onboarding.isOpen &&
+    (retainChatRoute || viewModel.route === "chat");
 
   const shell = (
     <AppShell
@@ -162,15 +217,7 @@ function OperatorUiAppRoot({
               <ScrollArea className="h-full w-full">
                 <div className="mx-auto flex min-h-full w-full max-w-lg items-start px-4 py-6 md:items-center md:py-10">
                   <Suspense fallback={<OperatorRouteFallback />}>
-                    {CONNECT_PAGE_RENDER({
-                      core,
-                      mode,
-                      hostKind,
-                      navigate: viewModel.navigate,
-                      onReloadPage,
-                      onReconfigureGateway,
-                      webAuthPersistence,
-                    })}
+                    {CONNECT_PAGE_RENDER(routeRenderContext)}
                   </Suspense>
                 </div>
               </ScrollArea>
@@ -187,17 +234,21 @@ function OperatorUiAppRoot({
             />
           ) : (
             <Suspense fallback={<OperatorRouteFallback />}>
-              {routeDefinition?.render({
-                core,
-                mode,
-                hostKind,
-                navigate: viewModel.navigate,
-                onboardingAvailable: onboarding.available,
-                onOpenOnboarding: onboarding.open,
-                onReloadPage,
-                onReconfigureGateway,
-                webAuthPersistence,
-              }) ?? null}
+              <>
+                {showRetainedChat ? (
+                  <div
+                    key={chatHostKey}
+                    className={viewModel.route === "chat" ? "contents" : "hidden"}
+                    data-testid="retained-chat-route"
+                    aria-hidden={viewModel.route === "chat" ? undefined : true}
+                  >
+                    {chatRouteDefinition.render(routeRenderContext)}
+                  </div>
+                ) : null}
+                {viewModel.route === "chat"
+                  ? null
+                  : (routeDefinition?.render(routeRenderContext) ?? null)}
+              </>
             </Suspense>
           )}
         </AdminAccessProvider>
