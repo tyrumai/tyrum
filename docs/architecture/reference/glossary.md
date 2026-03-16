@@ -43,6 +43,10 @@ An out-of-process extension runtime that exposes typed operations to the gateway
 - **Node:** a paired device runtime that exposes capabilities over the Tyrum WebSocket protocol.
 - **MCP server:** a local/out-of-process server that exposes a catalog of tools over the MCP protocol.
 
+## Browser node
+
+A browser-hosted node runtime that connects as `role: node` and exposes browser APIs such as geolocation, camera capture, and microphone recording.
+
 ## Channel
 
 An external messaging surface (WhatsApp, Telegram, Discord, etc.) integrated via a connector.
@@ -50,6 +54,10 @@ An external messaging surface (WhatsApp, Telegram, Discord, etc.) integrated via
 ## Client
 
 An operator interface connected to the gateway (`role: client`) that sends requests, receives events, and performs approvals.
+
+## Embedded local node
+
+A node runtime bootstrapped by an operator host (for example browser or mobile) that still connects and is paired separately from the client host.
 
 ## Contract
 
@@ -147,6 +155,10 @@ A component that enqueues work from time-based triggers (cron/watchers/heartbeat
 
 A time-bounded claim stored in the StateStore that coordinates ownership of work or schedules across instances.
 
+## Location trigger
+
+A durable automation rule that fires from a location event such as entering, exiting, or dwelling at a saved place or POI category.
+
 ## Outbox
 
 A durable event log/table used to publish events reliably to the backplane (supporting replay and recovery).
@@ -166,6 +178,10 @@ A delegated execution context that shares an agent's identity boundary but runs 
 ## Node
 
 A capability provider connected to the gateway (`role: node`) that executes device-specific operations.
+
+## Desktop environment
+
+A gateway-managed sandbox desktop that boots a paired desktop node and is controlled through the gateway admin plane.
 
 ## Request/Response
 
@@ -202,6 +218,14 @@ A concrete execution attempt of a playbook (or ad-hoc workflow spec) by the exec
 ## Approval
 
 A durable operator confirmation request that gates risky or side-effecting steps. Approvals can pause a workflow run and produce a **resume token** that allows safe continuation after approval/denial.
+
+## Guardian review
+
+An automated reviewer pass that evaluates an approval or node pairing before final human resolution and can either approve it or escalate it to `awaiting_human`.
+
+## Review entry
+
+A durable audit record for one guardian, human, or system review pass attached to an approval or node pairing.
 
 ## Resume token
 
@@ -254,6 +278,10 @@ An intermediate representation of Markdown used for channel-safe chunking and re
 ## Presence
 
 A best-effort, TTL-bounded view of the gateway, connected clients, and connected nodes, used for operator visibility (“Instances”).
+
+## Saved place
+
+A named geofenced location in an agent’s location profile that can produce enter/exit/dwell events and drive location automation.
 
 ## Typing indicator
 

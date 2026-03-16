@@ -12,6 +12,7 @@ import { ThemeProvider, useThemeOptional } from "./hooks/use-theme.js";
 import { BrowserNodeProvider } from "./browser-node/browser-node-provider.js";
 import { getDesktopApi } from "./desktop-api.js";
 import { OperatorUiHostProvider, useHostApiOptional, type HostKind } from "./host/host-api.js";
+import { LocalNodeAutoApprovalBridge } from "./local-node-auto-approval.js";
 import { CONNECT_PAGE_RENDER, getOperatorRouteDefinition } from "./operator-routes.js";
 import { RetainedUiStateProvider } from "./reconnect-ui-state.js";
 import { useOperatorAppViewModel } from "./use-operator-app-view-model.js";
@@ -212,6 +213,7 @@ function OperatorUiAppRoot({
     >
       <RetainedUiStateProvider scopeKey={reconnectUiScopeKey}>
         <AdminAccessProvider core={core} mode={mode} adminAccessController={adminAccessController}>
+          <LocalNodeAutoApprovalBridge />
           {viewModel.showConnectPage ? (
             <div className="flex min-h-0 flex-1 overflow-hidden">
               <ScrollArea className="h-full w-full">

@@ -134,6 +134,7 @@ export function createFakeHttpClient(): {
   presenceList: ReturnType<typeof vi.fn>;
   nodesList: ReturnType<typeof vi.fn>;
   pairingsList: ReturnType<typeof vi.fn>;
+  pairingsGet: ReturnType<typeof vi.fn>;
   pairingsApprove: ReturnType<typeof vi.fn>;
   pairingsDeny: ReturnType<typeof vi.fn>;
   pairingsRevoke: ReturnType<typeof vi.fn>;
@@ -155,6 +156,9 @@ export function createFakeHttpClient(): {
   const nodesList = vi.fn(async () => sampleNodeInventoryResponse());
   const pairingsList = vi.fn(
     async () => ({ status: "ok", pairings: [samplePairingRequestPending()] }) as const,
+  );
+  const pairingsGet = vi.fn(
+    async () => ({ status: "ok", pairing: samplePairingRequestPending() }) as const,
   );
   const pairingsApprove = vi.fn(
     async () => ({ status: "ok", pairing: samplePairingRequestPending() }) as const,
@@ -424,6 +428,7 @@ export function createFakeHttpClient(): {
     },
     pairings: {
       list: pairingsList,
+      get: pairingsGet,
       approve: pairingsApprove,
       deny: pairingsDeny,
       revoke: pairingsRevoke,
@@ -474,6 +479,7 @@ export function createFakeHttpClient(): {
     presenceList,
     nodesList,
     pairingsList,
+    pairingsGet,
     pairingsApprove,
     pairingsDeny,
     pairingsRevoke,

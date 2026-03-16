@@ -11,6 +11,8 @@ describe("tokens.css", () => {
 
     expect(fontSansLine).toBeDefined();
     expect(fontSansLine).not.toContain('"Outfit"');
+    expect(fontSansLine).not.toContain('"IBM Plex Sans"');
+    expect(fontSansLine).not.toContain('"Inter"');
   });
 
   it("avoids the banned fallback-heavy font stack", () => {

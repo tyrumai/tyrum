@@ -4,6 +4,13 @@ Events are gateway-emitted, server-push messages delivered to connected clients 
 
 The wire shapes are defined by shared, versioned contracts (see [Contracts](/architecture/contracts)).
 
+## Parent concepts
+
+- [Protocol](/architecture/protocol)
+- [Approvals](/architecture/approvals)
+- [Reviews](/architecture/gateway/reviews)
+- [Node](/architecture/node)
+
 ## Event envelope
 
 For current event names and payloads, treat the schema exports in `packages/schemas` as
@@ -37,7 +44,7 @@ stream (protocol revision `2`), aligned to the current exported schemas.
 
 ### Approvals and policy
 
-- `approval.updated` — `{ approval: Approval }`
+- `approval.updated` — `{ approval: Approval }` (includes review-progress states such as `queued`, `reviewing`, and `awaiting_human` plus `latest_review`/`reviews`)
 - `policy_override.created` — `{ override: PolicyOverride }`
 - `policy_override.revoked` — `{ override: PolicyOverride }`
 - `policy_override.expired` — `{ override: PolicyOverride }`
@@ -75,7 +82,7 @@ stream (protocol revision `2`), aligned to the current exported schemas.
 
 ### Pairing and presence
 
-- `pairing.updated` — `{ pairing: NodePairingRequest, scoped_token? }`
+- `pairing.updated` — `{ pairing: NodePairingRequest, scoped_token? }` (includes guardian-review progress and attached review records on the pairing object)
 - `presence.upserted` — `{ entry: PresenceEntry }`
 - `presence.pruned` — `{ instance_id }`
 
@@ -104,6 +111,7 @@ stream (protocol revision `2`), aligned to the current exported schemas.
 
 - Some gateway→peer interactions are modeled as **requests** (with responses) rather than events,
   for example `task.execute` and `approval.resolve`.
+- Guardian review does not introduce a separate public `review.updated` event type; review progress is carried on `approval.updated` and `pairing.updated`.
 - Events are **tenant-scoped**. The gateway delivers an event only to peers authenticated within the same `tenant_id`.
 - Stable event identity is currently persisted for:
   - `approval.updated` (per approval transition/status)

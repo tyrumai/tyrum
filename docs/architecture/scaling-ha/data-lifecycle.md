@@ -89,6 +89,29 @@ Example deployment config:
 }
 ```
 
+## Review, managed-runtime, and location retention
+
+These surfaces are smaller than transcripts, but they are architecture-significant because they answer safety and context questions that operators will ask later.
+
+### Review records
+
+- `approvals`, `node_pairings`, and `review_entries` form part of the durable safety/audit chain.
+- Review rows should stay retained long enough to answer who reviewed what, why it escalated, and which evidence justified the final decision.
+- If long-term retention pressure exists, prune review evidence bodies before deleting the parent approval/pairing audit record entirely.
+
+### Managed desktop environments
+
+- `desktop_environment_hosts` and `desktop_environments` are durable control-plane inventory, not ephemeral cache rows.
+- Environment status and runtime metadata should survive restarts so operators can understand the last known state of a sandbox.
+- Attached desktop-environment logs are bounded operational evidence and should be retained on shorter windows than the canonical environment record.
+
+### Location data
+
+- `location_profiles`, `location_places`, and `automation_triggers` are durable operator configuration and should be retained until explicitly changed or deleted.
+- `location_subject_states` are the current derived state needed for correct enter/exit/dwell evaluation and should be retained while the profile is active.
+- `location_samples` and `location_events` are high-sensitivity history. Retain them under explicit windows that balance audit/debug value against privacy and storage cost.
+- If aggressive pruning is required, remove old raw samples first, then old location events, while keeping enough history to explain recent trigger firings.
+
 ### Artifact bytes (FS/S3)
 
 Artifact bytes live outside the StateStore; the StateStore holds metadata and durable linkage.

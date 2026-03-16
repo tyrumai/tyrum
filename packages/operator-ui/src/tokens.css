@@ -1,17 +1,17 @@
 @theme {
-  --font-sans: "IBM Plex Sans", "Avenir Next", "Helvetica Neue", sans-serif;
+  --font-sans: "DM Sans Variable", "DM Sans", "Avenir Next", "Helvetica Neue", sans-serif;
 
-  --color-indigo-50: oklch(96.2% 0.018 272.314);
-  --color-indigo-100: oklch(93% 0.034 272.788);
-  --color-indigo-200: oklch(87% 0.065 274.039);
-  --color-indigo-300: oklch(78.5% 0.115 274.713);
-  --color-indigo-400: oklch(67.3% 0.182 276.935);
-  --color-indigo-500: oklch(58.5% 0.233 277.117);
-  --color-indigo-600: oklch(51.1% 0.262 276.966);
-  --color-indigo-700: oklch(45.7% 0.24 277.023);
-  --color-indigo-800: oklch(39.8% 0.195 277.366);
-  --color-indigo-900: oklch(35.9% 0.144 278.697);
-  --color-indigo-950: oklch(25.7% 0.09 281.288);
+  --color-copper-50: oklch(97% 0.012 70);
+  --color-copper-100: oklch(93% 0.028 68);
+  --color-copper-200: oklch(86% 0.058 65);
+  --color-copper-300: oklch(77% 0.098 58);
+  --color-copper-400: oklch(68% 0.135 52);
+  --color-copper-500: oklch(60% 0.155 46);
+  --color-copper-600: oklch(53% 0.148 42);
+  --color-copper-700: oklch(47% 0.128 40);
+  --color-copper-800: oklch(40% 0.100 38);
+  --color-copper-900: oklch(34% 0.072 36);
+  --color-copper-950: oklch(24% 0.040 34);
 
   /* Semantic app colors (theme-specific values live in themes.css). */
   --color-bg: var(--tyrum-color-bg);
@@ -64,13 +64,13 @@
   --radius-3xl: 0.875rem;
 
   /* Shadows. */
-  --shadow-2xs: 0 1px rgb(0 0 0 / 0.05);
-  --shadow-xs: 0 1px 2px rgb(0 0 0 / 0.05);
-  --shadow-sm: 0 1px 3px rgb(0 0 0 / 0.08);
-  --shadow-md: 0 2px 8px rgb(0 0 0 / 0.1);
-  --shadow-lg: 0 4px 10px rgb(0 0 0 / 0.12);
-  --shadow-xl: 0 6px 12px rgb(0 0 0 / 0.14);
-  --shadow-2xl: 0 8px 16px rgb(0 0 0 / 0.16);
+  --shadow-2xs: 0 1px rgb(0 0 0 / 0.12);
+  --shadow-xs: 0 1px 2px rgb(0 0 0 / 0.15);
+  --shadow-sm: 0 1px 3px rgb(0 0 0 / 0.20);
+  --shadow-md: 0 2px 8px rgb(0 0 0 / 0.25);
+  --shadow-lg: 0 4px 12px rgb(0 0 0 / 0.30);
+  --shadow-xl: 0 8px 20px rgb(0 0 0 / 0.35);
+  --shadow-2xl: 0 12px 28px rgb(0 0 0 / 0.40);
 
   /* Z-index scale (for use in app CSS/components). */
   --z-0: 0;
@@ -80,4 +80,11 @@
   --z-40: 40;
   --z-50: 50;
   --z-60: 60;
+
+  /* Motion. */
+  --duration-fast: 100ms;
+  --duration-normal: 200ms;
+  --duration-slow: 350ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
 }
