@@ -90,7 +90,7 @@ The protocol uses run-scoped identifiers such as `run_id`, `step_id`, and `attem
 
 ## Key decisions and tradeoffs
 
-- **WebSocket-first control plane:** Tyrum optimizes for long-lived interactive state and event streaming rather than a request-only API model.
+- **Interactive control plane over WebSocket:** Tyrum optimizes for long-lived interactive state and event streaming rather than a request-only API model.
 - **Typed protocol over implicit conventions:** compatibility, retries, and reconnect behavior are explicit so the runtime stays understandable under failure.
 - **HTTP as a complementary surface:** HTTP handles bootstrap, resources, and callbacks, but does not replace the typed control model.
 

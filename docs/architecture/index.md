@@ -1,6 +1,6 @@
 # Architecture
 
-Tyrum is a WebSocket-first autonomous worker platform built around a long-lived gateway, a durable agent runtime, and explicit safety boundaries for execution, approvals, and audit evidence.
+Tyrum is an autonomous worker platform built around a gateway, an agent runtime, and safety boundaries for execution, approvals, and audit evidence.
 
 ## Purpose
 
@@ -62,7 +62,7 @@ flowchart LR
 
 ## Key decisions and tradeoffs
 
-- **WebSocket-first control plane:** Tyrum optimizes for long-lived interactive control and event delivery rather than a request-only HTTP model.
+- **Interactive control plane over WebSocket:** Tyrum optimizes for long-lived interactive control and event delivery rather than a request-only HTTP model.
 - **Durable runtime over prompt memory:** Work state, approvals, and evidence are externalized so correctness does not depend on transcript recall.
 - **Device capabilities outside the gateway:** Desktop, mobile, and other device-specific actions live behind nodes so the gateway stays policy-centric and deployable.
 - **Capability boundaries survive co-location:** browser and mobile operator hosts may embed a node runtime, but capability execution still stays on the node side of the trust boundary.

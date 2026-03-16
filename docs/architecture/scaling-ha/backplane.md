@@ -4,7 +4,7 @@ slug: /architecture/backplane
 
 # Backplane (Outbox Contract)
 
-Tyrum is WebSocket-first: most operator UX is powered by server-push events delivered over long-lived WebSocket connections.
+Most operator UX is powered by server-push events delivered over WebSocket connections.
 When the gateway is replicated, only the edge instance that owns a connection can write to that socket. The **backplane** is the cross-instance mechanism that makes “cluster with N replicas” behave like “cluster with 1 replica” for event delivery.
 
 This page defines the required _behavior_ of the backplane and its durable outbox, independent of any specific implementation (polling, Postgres `LISTEN/NOTIFY`, external pub/sub, etc.).

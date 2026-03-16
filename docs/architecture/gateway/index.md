@@ -29,7 +29,7 @@ The gateway exists so Tyrum has one authoritative runtime boundary for interacti
 
 ## Internal building blocks
 
-- **Protocol and transport handling:** WebSocket-first connectivity, HTTP resource surfaces, and message validation.
+- **Protocol and transport handling:** WebSocket connectivity, HTTP resource surfaces, and message validation.
 - **Execution and safety controls:** execution engine, approvals, reviews, policy, automation, and audit/event emission.
 - **Managed runtime surfaces:** node pairing/orchestration, gateway-managed desktop environments, and location-aware automation control APIs.
 - **Extension surface:** tools, plugins, skills, MCP, and provider integrations.

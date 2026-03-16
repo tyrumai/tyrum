@@ -42,7 +42,7 @@ Clients exist so operators can interact with Tyrum's control plane without coupl
 
 ## Invariants and constraints
 
-- Clients are WebSocket-first for interactive state and event delivery.
+- Clients use WebSocket for interactive state and event delivery.
 - When a client host also runs a local node, the client and node remain separate peers with separate device identities, pairing state, and presence.
 - Administrative actions must remain scoped, auditable, and compatible with elevated-mode controls.
 

@@ -140,9 +140,9 @@ The gateway supports snapshot export/import for the durable tables required to r
 - imports preserve stable identifiers (`session_key`, `run_id`, `step_id`, `attempt_id`, `approval_id`, `artifact_id`) and hashes
 - snapshot bundles declare whether they include artifact bytes (and for which sensitivity classes), and include artifact retention lifecycle metadata needed to interpret "missing bytes" states
 
-## WebSocket-first event delivery (the "WS reality")
+## Event delivery over WebSocket
 
-Tyrum is **WebSocket-first**: typed requests/responses plus server-push events are the primary operator interface transport (see [Protocol](/architecture/protocol)).
+Typed requests/responses plus server-push events over WebSocket are the primary operator interface transport (see [Protocol](/architecture/protocol)).
 
 A WebSocket connection is a single long-lived TCP connection. Practically that means:
 
