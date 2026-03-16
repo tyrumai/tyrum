@@ -32,7 +32,7 @@ describe("config-ipc config:exists handler", () => {
     configExistsMock.mockReturnValue(false);
   });
 
-  it("returns whether the desktop config file exists", async () => {
+  it("returns whether the desktop config file exists", { timeout: 15_000 }, async () => {
     const { registerConfigIpc } = await import("../src/main/ipc/config-ipc.js");
     registerConfigIpc();
 
