@@ -12,6 +12,8 @@ import { toast } from "sonner";
 import { isRecord } from "../../utils/is-record.js";
 import { useClipboard } from "../../utils/clipboard.js";
 
+const TAGGED_DATA_JSON_PATTERN = /^<data source="[^"]+">\s*([\s\S]*?)\s*<\/data>$/u;
+
 export function readCreatedAt(message: UIMessage): string | null {
   const metadata = isRecord(message.metadata) ? message.metadata : null;
   const createdAt =
@@ -42,6 +44,37 @@ export function stringifyPart(value: unknown): string {
     return value;
   }
   return JSON.stringify(value, null, 2);
+}
+
+function parseJsonText(value: string): unknown | undefined {
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return undefined;
+  }
+}
+
+export function normalizeToolOutputForDisplay(value: unknown): {
+  displayValue: unknown;
+  isStructured: boolean;
+} {
+  if (typeof value !== "string") {
+    return { displayValue: value, isStructured: true };
+  }
+
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return { displayValue: value, isStructured: false };
+  }
+
+  const taggedMatch = trimmed.match(TAGGED_DATA_JSON_PATTERN);
+  const candidate = taggedMatch?.[1]?.trim() ?? trimmed;
+  const parsed = parseJsonText(candidate);
+  if (parsed === undefined) {
+    return { displayValue: value, isStructured: false };
+  }
+
+  return { displayValue: parsed, isStructured: true };
 }
 
 export function copyToClipboard(clipboard: ReturnType<typeof useClipboard>, value: string): void {
