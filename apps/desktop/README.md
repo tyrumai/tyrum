@@ -79,17 +79,24 @@ Config:
 
 ## Packaging assets (icons)
 
-Electron-builder consumes icons from `apps/desktop/build/`:
+The canonical mascot source now lives in `assets/brand/` and the consumer-specific desktop outputs
+still live in `apps/desktop/build/`:
 
-- Source: `build/icon.svg` (authoritative)
+- Source of truth: `../../assets/brand/app-icon.svg`
+- Generated desktop mirror: `build/icon.svg`
 - Generated (committed):
   - `build/icon.icns` (macOS)
   - `build/icon.ico` (Windows + NSIS)
   - `build/icons/*.png` (Linux icon set)
+  - `build/tray-macos-template.svg` (shared monochrome mascot template for the macOS tray icon)
+
+The same generator also refreshes web, docs, and mobile launcher assets from that shared source.
 
 To regenerate deterministically (requires `magick` from ImageMagick):
 
 ```bash
+pnpm icons:generate
+# or
 pnpm --filter tyrum-desktop icons:generate
 ```
 

@@ -6,6 +6,7 @@ protocols:
     - tyrum
 directories:
   output: release
+npmRebuild: false
 publish:
   - provider: github
     owner: rhernaus
@@ -26,6 +27,8 @@ extraResources:
     to: gateway/node_modules
   - from: build/icons/32x32.png
     to: tray/32x32.png
+  - from: build/tray-macos-template.svg
+    to: tray/macos-template.svg
 mac:
   icon: build/icon.icns
   target: [dmg, zip]
@@ -47,6 +50,7 @@ linux:
   target: [AppImage, tar.gz]
   category: Utility
   desktop:
-    Name: Tyrum
-    Comment: Tyrum desktop app
-    StartupWMClass: Tyrum
+    entry:
+      Name: Tyrum
+      Comment: Tyrum desktop app
+      StartupWMClass: Tyrum

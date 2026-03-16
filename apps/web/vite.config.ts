@@ -10,6 +10,7 @@ const repoRoot = resolve(__dirname, "../..");
 
 export default defineConfig({
   root: "src",
+  publicDir: "../public",
   base: "/ui/",
   plugins: [tailwindcss(), react()],
   resolve: {

@@ -1,5 +1,5 @@
 import * as electron from "electron";
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, posix as posixPath } from "node:path";
 import type { DesktopNodeConfig } from "./config/schema.js";
@@ -13,6 +13,7 @@ import type { NavigationRequest } from "./menu.js";
 
 const BACKGROUND_LAUNCH_ARG = "--background";
 const LINUX_AUTOSTART_FILENAME = "tyrum.desktop";
+const MAC_TRAY_TEMPLATE_FILENAME = "macos-template.svg";
 
 type LoginItemSettings = {
   openAtLogin?: boolean;
@@ -78,14 +79,18 @@ export type BackgroundModeDependencies = {
   moduleDir?: string;
 };
 
-function buildMacTrayIconDataUrl(): string {
-  const svg = [
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 18 18">',
-    '<path fill="black" d="M3 3h12v2H10v10H8V5H3z"/>',
-    '<path fill="black" d="M6 8h6v2H6z"/>',
-    "</svg>",
-  ].join("");
+function buildMacTrayIconDataUrl(svg: string): string {
   return `data:image/svg+xml;base64,${Buffer.from(svg, "utf8").toString("base64")}`;
+}
+
+function resolveMacTrayTemplatePath(input: {
+  isPackaged: boolean;
+  resourcesPath: string;
+  moduleDir: string;
+}): string {
+  return input.isPackaged
+    ? join(input.resourcesPath, "tray", MAC_TRAY_TEMPLATE_FILENAME)
+    : join(input.moduleDir, "../../build/tray-macos-template.svg");
 }
 
 function quoteDesktopExecArg(value: string): string {
@@ -311,13 +316,22 @@ export class BackgroundModeController {
 
   private resolveTrayImage(): unknown {
     const nativeImageImpl = this.getNativeImageImpl();
+    const isPackaged = this.electronApp.isPackaged === true;
     if (this.platform === "darwin") {
-      const image = nativeImageImpl.createFromDataURL(buildMacTrayIconDataUrl());
+      const trayTemplateSvg = readFileSync(
+        resolveMacTrayTemplatePath({
+          isPackaged,
+          resourcesPath: this.resourcesPath,
+          moduleDir: this.moduleDir,
+        }),
+        "utf8",
+      );
+      const image = nativeImageImpl.createFromDataURL(buildMacTrayIconDataUrl(trayTemplateSvg));
       image.setTemplateImage?.(true);
       return image;
     }
 
-    const assetPath = this.electronApp.isPackaged
+    const assetPath = isPackaged
       ? join(this.resourcesPath, "tray", "32x32.png")
       : join(this.moduleDir, "../../build/icons/32x32.png");
     return nativeImageImpl.createFromPath(assetPath);
