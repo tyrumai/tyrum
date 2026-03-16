@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type {
   DesktopEnvironmentGetResult,
   DesktopEnvironmentHostListResult,
@@ -5,8 +6,10 @@ import type {
 import { Boxes, Play, RefreshCw, RotateCcw, Square, Trash2 } from "lucide-react";
 import {
   buildTakeoverHref,
+  describeHostAvailability,
   environmentStatusVariant,
   hostStatusVariant,
+  isHostAvailable,
 } from "./desktop-environments-page.shared.js";
 import { formatRelativeTime } from "../../utils/format-relative-time.js";
 import { Alert } from "../ui/alert.js";
@@ -16,6 +19,7 @@ import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { Input } from "../ui/input.js";
 import { Select } from "../ui/select.js";
 import { Textarea } from "../ui/textarea.js";
+export { RuntimeDefaultsCard } from "./desktop-environments-page.runtime-defaults-card.js";
 
 export type DesktopEnvironment = DesktopEnvironmentGetResult["environment"];
 export type DesktopEnvironmentHost = DesktopEnvironmentHostListResult["hosts"][number];
@@ -41,10 +45,12 @@ function DesktopErrorOutput({ message, testId }: { message: string; testId?: str
 export function DesktopEnvironmentsSummaryCard({
   hostsError,
   environmentsError,
+  availabilityWarning,
   mutationError,
 }: {
   hostsError: string | null;
   environmentsError: string | null;
+  availabilityWarning: ReactNode;
   mutationError: string | null;
 }) {
   const hasLoadError = hostsError || environmentsError;
@@ -71,6 +77,13 @@ export function DesktopEnvironmentsSummaryCard({
         ) : null}
         {mutationError ? (
           <Alert variant="error" title="Last action failed" description={mutationError} />
+        ) : null}
+        {availabilityWarning ? (
+          <Alert
+            variant="warning"
+            title="Desktop environment mutations are blocked"
+            description={availabilityWarning}
+          />
         ) : null}
       </CardContent>
     </Card>
@@ -102,17 +115,23 @@ export function DesktopEnvironmentHostsCard({
                 <div className="truncate text-xs text-fg-muted">{host.host_id}</div>
               </div>
               <Badge variant={hostStatusVariant(host)}>
-                {host.healthy ? "healthy" : "degraded"}
+                {isHostAvailable(host) ? "available" : "unavailable"}
               </Badge>
             </div>
             <div className="mt-2 flex flex-wrap gap-2 text-xs text-fg-muted">
               <span>{host.version ?? "unknown version"}</span>
+              <span>{host.healthy ? "healthy" : "host unhealthy"}</span>
               <span>{host.docker_available ? "docker ready" : "docker unavailable"}</span>
               <span>
                 {host.last_seen_at ? `seen ${formatRelativeTime(host.last_seen_at)}` : "never seen"}
               </span>
             </div>
-            {host.last_error ? (
+            {!isHostAvailable(host) ? (
+              <DesktopErrorOutput
+                message={describeHostAvailability(host)}
+                testId={`desktop-host-error-${host.host_id}`}
+              />
+            ) : host.last_error ? (
               <DesktopErrorOutput
                 message={host.last_error}
                 testId={`desktop-host-error-${host.host_id}`}
@@ -132,6 +151,7 @@ export function CreateDesktopEnvironmentCard({
   createImageRef,
   isLoading,
   defaultImageRef,
+  blockingMessage,
   onHostChange,
   onLabelChange,
   onImageRefChange,
@@ -143,6 +163,7 @@ export function CreateDesktopEnvironmentCard({
   createImageRef: string;
   isLoading: boolean;
   defaultImageRef: string;
+  blockingMessage: ReactNode;
   onHostChange: (value: string) => void;
   onLabelChange: (value: string) => void;
   onImageRefChange: (value: string) => void;
@@ -154,17 +175,22 @@ export function CreateDesktopEnvironmentCard({
         <div className="text-sm font-medium text-fg">Create desktop environment</div>
       </CardHeader>
       <CardContent className="grid gap-3">
+        {blockingMessage ? (
+          <Alert variant="warning" title="Creation is unavailable" description={blockingMessage} />
+        ) : null}
         <Select
           label="Runtime host"
           value={createHostId}
           onChange={(event) => {
             onHostChange(event.target.value);
           }}
-          disabled={hosts.length === 0 || isLoading}
+          disabled={hosts.every((host) => !isHostAvailable(host)) || isLoading}
         >
           {hosts.map((host) => (
-            <option key={host.host_id} value={host.host_id}>
-              {host.label}
+            <option key={host.host_id} value={host.host_id} disabled={!isHostAvailable(host)}>
+              {isHostAvailable(host)
+                ? host.label
+                : `${host.label} (${describeHostAvailability(host)})`}
             </option>
           ))}
         </Select>
@@ -187,7 +213,11 @@ export function CreateDesktopEnvironmentCard({
           disabled={isLoading}
         />
         <Button
-          disabled={hosts.length === 0 || isLoading || createHostId.trim().length === 0}
+          disabled={
+            hosts.every((host) => !isHostAvailable(host)) ||
+            isLoading ||
+            createHostId.trim().length === 0
+          }
           isLoading={isLoading}
           onClick={onCreate}
           data-testid="desktop-environments-create-button"
@@ -278,6 +308,8 @@ export function SelectedDesktopEnvironmentCard({
   selectedEnvironment,
   selectedHost,
   selectedLogs,
+  canStart,
+  startBlockedReason,
   isLoading,
   onStart,
   onStop,
@@ -289,6 +321,8 @@ export function SelectedDesktopEnvironmentCard({
   selectedEnvironment: DesktopEnvironment | null;
   selectedHost: DesktopEnvironmentHost | null;
   selectedLogs: DesktopEnvironmentLogsState | undefined;
+  canStart: boolean;
+  startBlockedReason: ReactNode;
   isLoading: boolean;
   onStart: () => void;
   onStop: () => void;
@@ -335,10 +369,17 @@ export function SelectedDesktopEnvironmentCard({
                 )}
               </div>
             </div>
+            {startBlockedReason ? (
+              <Alert
+                variant="warning"
+                title="Start is unavailable on this host"
+                description={startBlockedReason}
+              />
+            ) : null}
             <div className="flex flex-wrap gap-2">
               <Button
                 size="sm"
-                disabled={isLoading}
+                disabled={isLoading || !canStart}
                 onClick={onStart}
                 data-testid={`desktop-environment-start-${selectedEnvironment.environment_id}`}
               >

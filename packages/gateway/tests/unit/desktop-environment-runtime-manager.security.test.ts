@@ -4,12 +4,14 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
+  ensureImageAvailableMock,
   inspectContainerMock,
   loadOrCreateDesktopEnvironmentIdentityMock,
   readContainerLogsMock,
   readTakeoverUrlMock,
   runDockerMock,
 } = vi.hoisted(() => ({
+  ensureImageAvailableMock: vi.fn(async () => {}),
   inspectContainerMock: vi.fn(),
   loadOrCreateDesktopEnvironmentIdentityMock: vi.fn(),
   readContainerLogsMock: vi.fn(async () => []),
@@ -24,6 +26,7 @@ vi.mock("../../src/modules/desktop-environments/device-identity.js", () => ({
 vi.mock("../../src/modules/desktop-environments/docker-cli.js", () => ({
   combineDockerError: vi.fn((hint: string) => hint),
   containerNameForEnvironment: vi.fn((environmentId: string) => `container-${environmentId}`),
+  ensureImageAvailable: ensureImageAvailableMock,
   inspectContainer: inspectContainerMock,
   readContainerLogs: readContainerLogsMock,
   readTakeoverUrl: readTakeoverUrlMock,

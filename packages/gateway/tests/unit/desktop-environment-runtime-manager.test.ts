@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const {
   combineDockerErrorMock,
   containerNameForEnvironmentMock,
+  ensureImageAvailableMock,
   inspectContainerMock,
   loadOrCreateDesktopEnvironmentIdentityMock,
   readContainerLogsMock,
@@ -15,6 +16,7 @@ const {
 } = vi.hoisted(() => ({
   combineDockerErrorMock: vi.fn((hint: string) => hint),
   containerNameForEnvironmentMock: vi.fn((environmentId: string) => `container-${environmentId}`),
+  ensureImageAvailableMock: vi.fn(async () => {}),
   inspectContainerMock: vi.fn(),
   loadOrCreateDesktopEnvironmentIdentityMock: vi.fn(),
   readContainerLogsMock: vi.fn(async () => []),
@@ -30,6 +32,7 @@ vi.mock("../../src/modules/desktop-environments/device-identity.js", () => ({
 vi.mock("../../src/modules/desktop-environments/docker-cli.js", () => ({
   combineDockerError: combineDockerErrorMock,
   containerNameForEnvironment: containerNameForEnvironmentMock,
+  ensureImageAvailable: ensureImageAvailableMock,
   inspectContainer: inspectContainerMock,
   readContainerLogs: readContainerLogsMock,
   readTakeoverUrl: readTakeoverUrlMock,
@@ -70,6 +73,11 @@ describe("DesktopEnvironmentRuntimeManager", () => {
 
   beforeEach(async () => {
     tyrumHome = await mkdtemp(join(tmpdir(), "tyrum-runtime-manager-"));
+    combineDockerErrorMock.mockImplementation((hint: string) => hint);
+    containerNameForEnvironmentMock.mockImplementation(
+      (environmentId: string) => `container-${environmentId}`,
+    );
+    ensureImageAvailableMock.mockImplementation(async () => {});
     loadOrCreateDesktopEnvironmentIdentityMock.mockImplementation(async (identityPath: string) => {
       const match =
         /desktop-environments\/([^/]+)\/identity\/desktop-node\/device-identity\.json$/u.exec(
@@ -82,6 +90,10 @@ describe("DesktopEnvironmentRuntimeManager", () => {
         privateKey: `private-${environmentId}`,
       };
     });
+    readContainerLogsMock.mockImplementation(async () => []);
+    readTakeoverUrlMock.mockImplementation(() => "http://127.0.0.1:6080/vnc.html?autoconnect=true");
+    removeContainerMock.mockImplementation(async () => {});
+    runDockerMock.mockImplementation(async () => ({ status: 0, stdout: "started\n", stderr: "" }));
     const inspectCounts = new Map<string, number>();
     inspectContainerMock.mockImplementation(async (containerName: string) => {
       const count = inspectCounts.get(containerName) ?? 0;
@@ -192,6 +204,44 @@ describe("DesktopEnvironmentRuntimeManager", () => {
       }),
     );
   });
+
+  it("ensures the image is available before starting a missing environment", async () => {
+    const callOrder: string[] = [];
+    ensureImageAvailableMock.mockImplementation(async () => {
+      callOrder.push("ensure-image");
+    });
+    runDockerMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === "run") {
+        callOrder.push("docker-run");
+      }
+      return { status: 0, stdout: "started\n", stderr: "" };
+    });
+
+    const environmentDal = {
+      listByHost: vi.fn(async () => [
+        createEnvironment({ environment_id: "env-1", label: "First", status: "starting" }),
+      ]),
+      updateRuntime: vi.fn(async () => {}),
+    };
+    const nodePairingDal = {
+      getByNodeId: vi.fn(async () => ({ pairing_id: 101, status: "queued" })),
+      resolve: vi.fn(async () => ({ pairing: { status: "approved" } })),
+    };
+    const authTokens = {
+      issueToken: vi.fn(async ({ deviceId }: { deviceId: string }) => {
+        callOrder.push("issue-token");
+        return { token: `token-${deviceId}` };
+      }),
+    };
+    const logger = { error: vi.fn() };
+    const runtimeManager = createRuntimeManager(environmentDal, nodePairingDal, authTokens, logger);
+
+    await runtimeManager.reconcileAll();
+
+    expect(ensureImageAvailableMock).toHaveBeenCalledWith(TEST_IMAGE);
+    expect(callOrder.slice(0, 3)).toEqual(["ensure-image", "issue-token", "docker-run"]);
+  });
+
   it("does not retry errored environments by issuing fresh tokens on every tick", async () => {
     inspectContainerMock.mockResolvedValue(null);
     const environmentDal = {
@@ -218,6 +268,7 @@ describe("DesktopEnvironmentRuntimeManager", () => {
     await runtimeManager.reconcileAll();
 
     expect(authTokens.issueToken).not.toHaveBeenCalled();
+    expect(ensureImageAvailableMock).not.toHaveBeenCalled();
     expect(runDockerMock).not.toHaveBeenCalled();
     expect(environmentDal.updateRuntime).not.toHaveBeenCalled();
     expect(nodePairingDal.getByNodeId).not.toHaveBeenCalled();
@@ -273,6 +324,39 @@ describe("DesktopEnvironmentRuntimeManager", () => {
         environmentId: "env-1",
         status: "running",
         lastError: null,
+      }),
+    );
+  });
+
+  it("records an error when the image pull check fails", async () => {
+    inspectContainerMock.mockResolvedValue(null);
+    ensureImageAvailableMock.mockRejectedValue(new Error("pull failed"));
+
+    const environmentDal = {
+      listByHost: vi.fn(async () => [
+        createEnvironment({ environment_id: "env-1", label: "Broken", status: "starting" }),
+      ]),
+      updateRuntime: vi.fn(async () => {}),
+    };
+    const nodePairingDal = {
+      getByNodeId: vi.fn(),
+      resolve: vi.fn(),
+    };
+    const authTokens = {
+      issueToken: vi.fn(),
+    };
+    const logger = { error: vi.fn() };
+    const runtimeManager = createRuntimeManager(environmentDal, nodePairingDal, authTokens, logger);
+
+    await runtimeManager.reconcileAll();
+
+    expect(authTokens.issueToken).not.toHaveBeenCalled();
+    expect(environmentDal.updateRuntime).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenantId: "tenant-1",
+        environmentId: "env-1",
+        status: "error",
+        lastError: "pull failed",
       }),
     );
   });

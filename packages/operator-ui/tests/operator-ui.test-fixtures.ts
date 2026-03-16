@@ -25,6 +25,10 @@ import {
   createModelConfigHttpFixtures,
   createProviderConfigHttpFixtures,
 } from "./operator-ui.admin-http-fixtures.js";
+import {
+  sampleDesktopEnvironment,
+  sampleDesktopEnvironmentHost,
+} from "./operator-ui.desktop-environment-fixtures.js";
 import { createExtensionsHttpFixtures } from "./operator-ui.extensions-http-fixtures.js";
 export { FakeWsClient } from "./operator-ui.ws-test-fixtures.js";
 
@@ -89,36 +93,6 @@ function sampleManagedAgentDetail(agentKey: string) {
     config_sha256: "a".repeat(64),
     identity_sha256: "b".repeat(64),
   };
-}
-
-function sampleDesktopEnvironmentHost() {
-  return {
-    host_id: "host-1",
-    label: "Primary runtime",
-    version: "0.1.0",
-    docker_available: true,
-    healthy: true,
-    last_seen_at: "2026-03-10T12:00:00.000Z",
-    last_error: null,
-  } as const;
-}
-
-function sampleDesktopEnvironment() {
-  return {
-    environment_id: "env-1",
-    host_id: "host-1",
-    label: "Research desktop",
-    image_ref: "registry.example.test/desktop@sha256:1234",
-    managed_kind: "docker",
-    status: "running",
-    desired_running: true,
-    node_id: "node-desktop-1",
-    takeover_url: "http://127.0.0.1:8788/desktop-environments/env-1/takeover",
-    last_seen_at: "2026-03-10T12:00:00.000Z",
-    last_error: null,
-    created_at: "2026-03-10T12:00:00.000Z",
-    updated_at: "2026-03-10T12:00:00.000Z",
-  } as const;
 }
 
 export function createFakeHttpClient(): {
@@ -234,6 +208,30 @@ export function createFakeHttpClient(): {
   );
   const desktopEnvironmentsList = vi.fn(
     async () => ({ status: "ok", environments: [sampleDesktopEnvironment()] }) as const,
+  );
+  const desktopEnvironmentsGetDefaults = vi.fn(
+    async () =>
+      ({
+        status: "ok",
+        default_image_ref: "ghcr.io/rhernaus/tyrum-desktop-sandbox:stable",
+        revision: 1,
+        created_at: "2026-03-10T12:00:00.000Z",
+        created_by: { kind: "tenant.token", token_id: "token-1" },
+        reason: null,
+        reverted_from_revision: null,
+      }) as const,
+  );
+  const desktopEnvironmentsUpdateDefaults = vi.fn(
+    async (input: { default_image_ref: string; reason?: string }) =>
+      ({
+        status: "ok",
+        default_image_ref: input.default_image_ref,
+        revision: 2,
+        created_at: "2026-03-10T12:00:00.000Z",
+        created_by: { kind: "tenant.token", token_id: "token-1" },
+        reason: input.reason ?? null,
+        reverted_from_revision: null,
+      }) as const,
   );
   const policyGetBundle = vi.fn(
     async () =>
@@ -392,10 +390,12 @@ export function createFakeHttpClient(): {
     },
     desktopEnvironments: {
       list: desktopEnvironmentsList,
+      getDefaults: desktopEnvironmentsGetDefaults,
       get: vi.fn(async () => ({ status: "ok", environment: sampleDesktopEnvironment() }) as const),
       create: vi.fn(
         async () => ({ status: "ok", environment: sampleDesktopEnvironment() }) as const,
       ),
+      updateDefaults: desktopEnvironmentsUpdateDefaults,
       update: vi.fn(
         async () => ({ status: "ok", environment: sampleDesktopEnvironment() }) as const,
       ),

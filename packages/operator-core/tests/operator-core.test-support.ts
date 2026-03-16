@@ -229,9 +229,33 @@ export function createFakeHttpClient(): FakeHttpClient {
         calls.desktopEnvironmentsList++;
         return { status: "ok", environments: [sampleDesktopEnvironment()] } as const;
       }),
+      getDefaults: vi.fn(
+        async () =>
+          ({
+            status: "ok",
+            default_image_ref: "ghcr.io/rhernaus/tyrum-desktop-sandbox:stable",
+            revision: 1,
+            created_at: "2026-03-10T12:00:00.000Z",
+            created_by: { kind: "tenant.token", token_id: "token-1" },
+            reason: null,
+            reverted_from_revision: null,
+          }) as const,
+      ),
       get: vi.fn(async () => ({ status: "ok", environment: sampleDesktopEnvironment() }) as const),
       create: vi.fn(
         async () => ({ status: "ok", environment: sampleDesktopEnvironment() }) as const,
+      ),
+      updateDefaults: vi.fn(
+        async (input: { default_image_ref: string; reason?: string }) =>
+          ({
+            status: "ok",
+            default_image_ref: input.default_image_ref,
+            revision: 2,
+            created_at: "2026-03-10T12:00:00.000Z",
+            created_by: { kind: "tenant.token", token_id: "token-1" },
+            reason: input.reason ?? null,
+            reverted_from_revision: null,
+          }) as const,
       ),
       update: vi.fn(
         async () => ({ status: "ok", environment: sampleDesktopEnvironment() }) as const,

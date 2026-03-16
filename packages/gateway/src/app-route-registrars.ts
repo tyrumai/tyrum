@@ -177,6 +177,8 @@ export function registerSystemAndPublicRoutes(context: AppRouteContext): void {
   context.app.route(
     "/",
     createDesktopEnvironmentRoutes({
+      db: context.container.db,
+      defaultDeploymentConfig: context.container.deploymentConfig,
       hostDal: context.routeDeps.desktopEnvironmentHostDal,
       environmentDal: context.routeDeps.desktopEnvironmentDal,
       lifecycleService:

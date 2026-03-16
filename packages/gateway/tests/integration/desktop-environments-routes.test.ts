@@ -22,8 +22,41 @@ import { createTestApp } from "./helpers.js";
 import { type DesktopEnvironmentLifecycle } from "../../src/modules/desktop-environments/lifecycle-service.js";
 
 describe("desktop environment routes", () => {
-  it("uses the shared default image when image_ref is omitted", async () => {
-    const { app, container } = await createTestApp();
+  it("reads and updates the configured default image ref", async () => {
+    const { app } = await createTestApp();
+
+    const defaultsRes = await app.request("/config/desktop-environments/defaults");
+    expect(defaultsRes.status).toBe(200);
+    await expect(defaultsRes.json()).resolves.toMatchObject({
+      default_image_ref: DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF,
+      revision: 1,
+    });
+
+    const updateRes = await app.request("/config/desktop-environments/defaults", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        default_image_ref: "ghcr.io/rhernaus/tyrum-desktop-sandbox:stable",
+        reason: "promote stable image",
+      }),
+    });
+
+    expect(updateRes.status).toBe(200);
+    await expect(updateRes.json()).resolves.toMatchObject({
+      default_image_ref: "ghcr.io/rhernaus/tyrum-desktop-sandbox:stable",
+      revision: 2,
+      reason: "promote stable image",
+    });
+  });
+
+  it("uses the configured default image when image_ref is omitted", async () => {
+    const { app, container } = await createTestApp({
+      deploymentConfig: {
+        desktopEnvironments: {
+          defaultImageRef: "ghcr.io/rhernaus/tyrum-desktop-sandbox:stable",
+        },
+      },
+    });
     const hostDal = new DesktopEnvironmentHostDal(container.db);
 
     await hostDal.upsert({
@@ -49,8 +82,38 @@ describe("desktop environment routes", () => {
     expect(createRes.status).toBe(201);
     await expect(createRes.json()).resolves.toMatchObject({
       environment: {
-        image_ref: DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF,
+        image_ref: "ghcr.io/rhernaus/tyrum-desktop-sandbox:stable",
       },
+    });
+  });
+
+  it("returns conflict when create targets a host without docker availability", async () => {
+    const { app, container } = await createTestApp();
+    const hostDal = new DesktopEnvironmentHostDal(container.db);
+
+    await hostDal.upsert({
+      hostId: "host-1",
+      label: "Primary runtime",
+      version: "0.1.0",
+      dockerAvailable: false,
+      healthy: true,
+      lastSeenAt: "2026-01-01T00:00:00.000Z",
+      lastError: "Cannot connect to the Docker daemon",
+    });
+
+    const createRes = await app.request("/desktop-environments", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        host_id: "host-1",
+        label: "Research desktop",
+      }),
+    });
+
+    expect(createRes.status).toBe(409);
+    await expect(createRes.json()).resolves.toMatchObject({
+      error: "conflict",
+      message: expect.stringContaining("Cannot connect to the Docker daemon"),
     });
   });
 
@@ -160,6 +223,97 @@ describe("desktop environment routes", () => {
     expect(deleteEnvironment).toHaveBeenCalledWith({
       tenantId: DEFAULT_TENANT_ID,
       environmentId,
+    });
+  });
+
+  it("requeues an errored environment when the image ref changes", async () => {
+    const { app, container } = await createTestApp();
+    const hostDal = new DesktopEnvironmentHostDal(container.db);
+    const environmentDal = new DesktopEnvironmentDal(container.db);
+
+    await hostDal.upsert({
+      hostId: "host-1",
+      label: "Primary runtime",
+      version: "0.1.0",
+      dockerAvailable: true,
+      healthy: true,
+      lastSeenAt: "2026-01-01T00:00:00.000Z",
+      lastError: null,
+    });
+
+    const environment = await environmentDal.create({
+      tenantId: DEFAULT_TENANT_ID,
+      hostId: "host-1",
+      label: "Research desktop",
+      imageRef: "registry.example.test/desktop:broken",
+      desiredRunning: true,
+    });
+    await environmentDal.updateRuntime({
+      tenantId: DEFAULT_TENANT_ID,
+      environmentId: environment.environment_id,
+      status: "error",
+      nodeId: "node-desktop-1",
+      takeoverUrl: "http://127.0.0.1:6080/vnc.html?autoconnect=true",
+      logs: ["pull failed"],
+      lastError: "pull failed",
+    });
+
+    const patchRes = await app.request(`/desktop-environments/${environment.environment_id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        image_ref: "registry.example.test/desktop:fixed",
+      }),
+    });
+
+    expect(patchRes.status).toBe(200);
+    await expect(patchRes.json()).resolves.toMatchObject({
+      environment: {
+        environment_id: environment.environment_id,
+        image_ref: "registry.example.test/desktop:fixed",
+        desired_running: true,
+        status: "pending",
+        node_id: null,
+        takeover_url: null,
+        last_error: null,
+      },
+    });
+  });
+
+  it("returns conflict when start targets an unavailable host", async () => {
+    const { app, container } = await createTestApp();
+    const hostDal = new DesktopEnvironmentHostDal(container.db);
+    const environmentDal = new DesktopEnvironmentDal(container.db);
+
+    await hostDal.upsert({
+      hostId: "host-1",
+      label: "Primary runtime",
+      version: "0.1.0",
+      dockerAvailable: false,
+      healthy: true,
+      lastSeenAt: "2026-01-01T00:00:00.000Z",
+      lastError: "Cannot connect to the Docker daemon",
+    });
+
+    const environment = await environmentDal.create({
+      tenantId: DEFAULT_TENANT_ID,
+      hostId: "host-1",
+      label: "Research desktop",
+      imageRef: "registry.example.test/desktop:latest",
+      desiredRunning: false,
+    });
+
+    const startRes = await app.request(
+      `/desktop-environments/${environment.environment_id}/start`,
+      {
+        method: "POST",
+      },
+    );
+
+    expect(startRes.status).toBe(409);
+    await expect(startRes.json()).resolves.toMatchObject({
+      error: "conflict",
+      message: expect.stringContaining("Cannot connect to the Docker daemon"),
     });
   });
 

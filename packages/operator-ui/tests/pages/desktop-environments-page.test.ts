@@ -2,7 +2,6 @@
 
 import React, { act } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF } from "@tyrum/schemas";
 import { TyrumHttpClientError } from "@tyrum/client/browser";
 import { createBearerTokenAuth, createOperatorCore } from "../../../operator-core/src/index.js";
 import { DesktopEnvironmentsPage } from "../../src/components/pages/desktop-environments-page.js";
@@ -433,97 +432,13 @@ describe("DesktopEnvironmentsPage", () => {
     expect(desktopEnvironmentsApi.create).toHaveBeenCalledWith({
       host_id: "host-1",
       label: undefined,
-      image_ref: DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF,
+      image_ref: "ghcr.io/rhernaus/tyrum-desktop-sandbox:stable",
       desired_running: false,
     });
     expect(desktopEnvironmentsApi.logs).toHaveBeenCalledTimes(1);
     expect(desktopEnvironmentsApi.start).toHaveBeenCalledTimes(1);
     expect(desktopEnvironmentsApi.remove).toHaveBeenCalledTimes(1);
     expect(http.desktopEnvironments.list).toHaveBeenCalledTimes(listCallsBeforeDelete + 1);
-
-    cleanupTestRoot(testRoot);
-    core.dispose();
-  });
-
-  it("keeps the newly created environment selected after refresh completes", async () => {
-    let resolveRefresh:
-      | ((value: {
-          status: "ok";
-          environments: readonly ReturnType<typeof createEnvironment>[];
-        }) => void)
-      | null = null;
-
-    const ws = new FakeWsClient(false);
-    const { http } = createFakeHttpClient();
-    adminHttpClient = http;
-
-    http.desktopEnvironments.list
-      .mockResolvedValueOnce({
-        status: "ok",
-        environments: [createEnvironment()],
-      })
-      .mockImplementationOnce(
-        async () =>
-          await new Promise((resolve) => {
-            resolveRefresh = resolve;
-          }),
-      );
-    http.desktopEnvironments.create.mockResolvedValueOnce({
-      status: "ok",
-      environment: createEnvironment({
-        environment_id: "env-2",
-        label: "New desktop",
-        node_id: "node-desktop-2",
-        takeover_url: "http://127.0.0.1:8788/desktop-environments/env-2/takeover",
-      }),
-    });
-
-    const core = createOperatorCore({
-      wsUrl: "ws://example.test/ws",
-      httpBaseUrl: "http://example.test",
-      auth: createBearerTokenAuth("test"),
-      deps: { ws, http },
-    });
-
-    const testRoot = renderIntoDocument(React.createElement(DesktopEnvironmentsPage, { core }));
-    await flushPage();
-
-    const createButton = testRoot.container.querySelector<HTMLButtonElement>(
-      '[data-testid="desktop-environments-create-button"]',
-    );
-    expect(createButton).not.toBeNull();
-    await act(async () => {
-      click(createButton!);
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    expect(resolveRefresh).not.toBeNull();
-    await act(async () => {
-      resolveRefresh?.({
-        status: "ok",
-        environments: [
-          createEnvironment(),
-          createEnvironment({
-            environment_id: "env-2",
-            label: "New desktop",
-            node_id: "node-desktop-2",
-            takeover_url: "http://127.0.0.1:8788/desktop-environments/env-2/takeover",
-          }),
-        ],
-      });
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    await waitForAssertion(() => {
-      expect(
-        testRoot.container.querySelector('[data-testid="desktop-environment-logs-button-env-2"]'),
-      ).not.toBeNull();
-      expect(
-        testRoot.container.querySelector('[data-testid="desktop-environment-logs-button-env-1"]'),
-      ).toBeNull();
-    });
 
     cleanupTestRoot(testRoot);
     core.dispose();

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { DeploymentConfig as DeploymentConfigT } from "@tyrum/schemas";
 import { IntervalScheduler, resolvePositiveInt } from "../lifecycle/scheduler.js";
 import type { Logger } from "../observability/logger.js";
 import type { SqlDb } from "../../statestore/types.js";
@@ -27,6 +28,7 @@ export class WorkboardDispatcher {
       db: SqlDb;
       agents: AgentRegistry;
       sessionLaneNodeAttachmentDal: SessionLaneNodeAttachmentDal;
+      defaultDeploymentConfig: DeploymentConfigT;
       owner?: string;
       logger?: Logger;
       tickMs?: number;
@@ -162,6 +164,7 @@ export class WorkboardDispatcher {
           subagentSessionKey: sessionKey,
           subagentLane: "subagent",
           label: `executor:${workItemId}`,
+          defaultDeploymentConfig: this.opts.defaultDeploymentConfig,
         })
       : undefined;
 

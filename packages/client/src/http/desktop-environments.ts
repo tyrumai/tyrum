@@ -1,5 +1,7 @@
 import {
   DesktopEnvironmentCreateRequest,
+  DesktopEnvironmentDefaultsResponse,
+  DesktopEnvironmentDefaultsUpdateRequest,
   DesktopEnvironmentDeleteResponse,
   DesktopEnvironmentGetResponse,
   DesktopEnvironmentHostListResponse,
@@ -23,6 +25,10 @@ export type DesktopEnvironmentUpdateInput = Parameters<
 export type DesktopEnvironmentMutateResult = DesktopEnvironmentMutateResponse;
 export type DesktopEnvironmentDeleteResult = DesktopEnvironmentDeleteResponse;
 export type DesktopEnvironmentLogsResult = DesktopEnvironmentLogsResponse;
+export type DesktopEnvironmentDefaultsResult = DesktopEnvironmentDefaultsResponse;
+export type DesktopEnvironmentDefaultsUpdateInput = Parameters<
+  typeof DesktopEnvironmentDefaultsUpdateRequest.parse
+>[0];
 
 export interface DesktopEnvironmentHostsApi {
   list(options?: TyrumRequestOptions): Promise<DesktopEnvironmentHostListResult>;
@@ -31,10 +37,15 @@ export interface DesktopEnvironmentHostsApi {
 export interface DesktopEnvironmentsApi {
   list(options?: TyrumRequestOptions): Promise<DesktopEnvironmentListResult>;
   get(environmentId: string, options?: TyrumRequestOptions): Promise<DesktopEnvironmentGetResult>;
+  getDefaults(options?: TyrumRequestOptions): Promise<DesktopEnvironmentDefaultsResult>;
   create(
     input: DesktopEnvironmentCreateInput,
     options?: TyrumRequestOptions,
   ): Promise<DesktopEnvironmentMutateResult>;
+  updateDefaults(
+    input: DesktopEnvironmentDefaultsUpdateInput,
+    options?: TyrumRequestOptions,
+  ): Promise<DesktopEnvironmentDefaultsResult>;
   update(
     environmentId: string,
     input: DesktopEnvironmentUpdateInput,
@@ -97,6 +108,14 @@ export function createDesktopEnvironmentsApi(transport: HttpTransport): DesktopE
         signal: options?.signal,
       });
     },
+    async getDefaults(options) {
+      return await transport.request({
+        method: "GET",
+        path: "/config/desktop-environments/defaults",
+        response: DesktopEnvironmentDefaultsResponse,
+        signal: options?.signal,
+      });
+    },
     async create(input, options) {
       const parsedInput = validateOrThrow(
         DesktopEnvironmentCreateRequest,
@@ -108,6 +127,20 @@ export function createDesktopEnvironmentsApi(transport: HttpTransport): DesktopE
         path: "/desktop-environments",
         body: parsedInput,
         response: DesktopEnvironmentMutateResponse,
+        signal: options?.signal,
+      });
+    },
+    async updateDefaults(input, options) {
+      const parsedInput = validateOrThrow(
+        DesktopEnvironmentDefaultsUpdateRequest,
+        input,
+        "desktop environment defaults update input",
+      );
+      return await transport.request({
+        method: "PUT",
+        path: "/config/desktop-environments/defaults",
+        body: parsedInput,
+        response: DesktopEnvironmentDefaultsResponse,
         signal: options?.signal,
       });
     },

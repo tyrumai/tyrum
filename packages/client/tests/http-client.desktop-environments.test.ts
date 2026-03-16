@@ -64,6 +64,28 @@ describe("desktop environment HTTP client", () => {
   it("creates, mutates, and fetches logs for a desktop environment", async () => {
     const fetch = makeFetchMock(async (input, init) => {
       const url = String(input);
+      if (url.endsWith("/config/desktop-environments/defaults") && init?.method === "GET") {
+        return jsonResponse({
+          status: "ok",
+          default_image_ref: "ghcr.io/rhernaus/tyrum-desktop-sandbox:stable",
+          revision: 1,
+          created_at: "2026-01-01T00:00:00.000Z",
+          created_by: { kind: "tenant.token", token_id: "token-1" },
+          reason: null,
+          reverted_from_revision: null,
+        });
+      }
+      if (url.endsWith("/config/desktop-environments/defaults") && init?.method === "PUT") {
+        return jsonResponse({
+          status: "ok",
+          default_image_ref: "ghcr.io/rhernaus/tyrum-desktop-sandbox:sha-1234",
+          revision: 2,
+          created_at: "2026-01-01T00:00:02.000Z",
+          created_by: { kind: "tenant.token", token_id: "token-1" },
+          reason: "roll forward",
+          reverted_from_revision: null,
+        });
+      }
       if (url.endsWith("/desktop-environments") && init?.method === "POST") {
         return jsonResponse(
           {
@@ -118,6 +140,11 @@ describe("desktop environment HTTP client", () => {
     });
     const client = createTestClient({ fetch });
 
+    const defaults = await client.desktopEnvironments.getDefaults();
+    const updatedDefaults = await client.desktopEnvironments.updateDefaults({
+      default_image_ref: "ghcr.io/rhernaus/tyrum-desktop-sandbox:sha-1234",
+      reason: "roll forward",
+    });
     const created = await client.desktopEnvironments.create({
       host_id: "host-1",
       label: "Research desktop",
@@ -127,12 +154,16 @@ describe("desktop environment HTTP client", () => {
     const started = await client.desktopEnvironments.start("env-1");
     const logs = await client.desktopEnvironments.logs("env-1");
 
+    expect(defaults.default_image_ref).toBe("ghcr.io/rhernaus/tyrum-desktop-sandbox:stable");
+    expect(updatedDefaults.default_image_ref).toBe(
+      "ghcr.io/rhernaus/tyrum-desktop-sandbox:sha-1234",
+    );
     expect(created.environment.environment_id).toBe("env-1");
     expect(started.environment.status).toBe("starting");
     expect(logs.logs).toEqual(["desktop runtime booting", "desktop runtime ready"]);
 
     const [createUrl, createInit] = (fetch as unknown as ReturnType<typeof vi.fn>).mock
-      .calls[0] as [string, RequestInit];
+      .calls[2] as [string, RequestInit];
     expect(createUrl).toBe("https://gateway.example/desktop-environments");
     expect(createInit.method).toBe("POST");
     expect(getHeader(createInit, "authorization")).toBe("Bearer root-token");

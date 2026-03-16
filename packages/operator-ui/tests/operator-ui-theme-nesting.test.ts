@@ -67,8 +67,28 @@ const stubHttp: OperatorHttpClient = {
   },
   desktopEnvironments: {
     list: async () => ({ status: "ok", environments: [] }) as never,
+    getDefaults: async () =>
+      ({
+        status: "ok",
+        default_image_ref: "ghcr.io/rhernaus/tyrum-desktop-sandbox:stable",
+        revision: 1,
+        created_at: "2026-03-10T12:00:00.000Z",
+        created_by: { kind: "tenant.token", token_id: "token-1" },
+        reason: null,
+        reverted_from_revision: null,
+      }) as never,
     get: async () => ({ status: "ok", environment: null }) as never,
     create: async () => ({ status: "ok", environment: null }) as never,
+    updateDefaults: async (input: { default_image_ref: string; reason?: string }) =>
+      ({
+        status: "ok",
+        default_image_ref: input.default_image_ref,
+        revision: 2,
+        created_at: "2026-03-10T12:00:00.000Z",
+        created_by: { kind: "tenant.token", token_id: "token-1" },
+        reason: input.reason ?? null,
+        reverted_from_revision: null,
+      }) as never,
     update: async () => ({ status: "ok", environment: null }) as never,
     start: async () => ({ status: "ok", environment: null }) as never,
     stop: async () => ({ status: "ok", environment: null }) as never,
