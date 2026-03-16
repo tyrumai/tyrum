@@ -41,7 +41,7 @@ function ReadonlyConnectionContent({
 function EditableConnectionContent({ fields }: { fields: DesktopConnectionFields }) {
   const clipboard = useClipboard();
 
-  const savedModeLabel = fields.connectionMode === "embedded" ? "Embedded" : "Remote";
+  const savedModeLabel = fields.savedConnectionMode === "embedded" ? "Embedded" : "Remote";
   const currentTokenHelperText = fields.currentTokenLoading
     ? "Loading current gateway token…"
     : fields.currentTokenError

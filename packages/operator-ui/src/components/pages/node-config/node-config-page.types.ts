@@ -40,6 +40,8 @@ export type NodeConnectionInfo =
 
 export interface DesktopConnectionFields {
   connectionMode: "embedded" | "remote";
+  /** The persisted connection mode (used for helper text when form is dirty). */
+  savedConnectionMode: "embedded" | "remote";
   port: number;
   remoteUrl: string;
   remoteToken: string;
