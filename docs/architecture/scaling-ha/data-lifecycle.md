@@ -4,7 +4,7 @@ slug: /architecture/data-lifecycle
 
 # Data lifecycle and retention
 
-Tyrum is durable by design: the StateStore is the source of truth for sessions, execution, approvals, and audit evidence.
+The StateStore is the source of truth for sessions, execution, approvals, and audit evidence.
 That durability must be paired with explicit **retention** and **deletion** rules so deployments remain operable (bounded cost), safe (privacy), and explainable (audit).
 
 This page summarizes lifecycle expectations across the major data surfaces. Most sections stay implementation-agnostic, but the session/channel transcript surfaces below document the current retention contract and deployment knobs because they are high-volume by default.
@@ -134,7 +134,7 @@ Lifecycle expectations:
 
 ## Memory budgets (special case)
 
-Agent memory is durable by design, but must remain bounded for cost and operability. The default lifecycle model is **budget-based**, not time-based:
+Agent memory persists across restarts, but must remain bounded for cost and operability. The default lifecycle model is **budget-based**, not time-based:
 
 - Inactivity must not cause forgetting.
 - When budgets are exceeded, the system performs consolidation and eviction until back under budget.
@@ -143,7 +143,7 @@ Agent memory is durable by design, but must remain bounded for cost and operabil
 
 ## WorkBoard budgets (special case)
 
-The WorkBoard is durable by design (work state must survive restarts and multi-channel use), but its drilldown surfaces must remain bounded for cost and operator usability.
+The WorkBoard must persist across restarts and multi-channel use, but its drilldown surfaces must remain bounded for cost and operator usability.
 
 Lifecycle expectations:
 

@@ -4,7 +4,7 @@ slug: /architecture/api-surfaces
 
 # API surfaces (WebSocket vs HTTP)
 
-Tyrum is **WebSocket-first**, but not WebSocket-only. The Gateway exposes two operator-facing API surfaces:
+The gateway uses WebSocket for interactive control, but it is not WebSocket-only. It exposes two operator-facing API surfaces:
 
 - **WebSocket protocol (control plane):** typed requests/responses plus server-push events.
 - **HTTP API (resource plane):** bootstrap/auth flows, resource/blob transfer, and callback/webhook endpoints.
@@ -31,7 +31,7 @@ Use WebSocket for **interactive, eventful, low-latency control plane** work:
 - any UX that benefits from immediate server-push updates
 - any operation where you want a single connection to carry: requests + events + heartbeats
 
-In practice: most operator interactions should be WS-first, even if some backing data is fetched over HTTP.
+In practice: most operator interactions should use WebSocket, even if some backing data is fetched over HTTP.
 
 ## When to use HTTP
 

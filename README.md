@@ -1,6 +1,6 @@
 # Tyrum
 
-Tyrum is a self-hosted autonomous worker agent platform built around a single gateway runtime. It is local-first by default, serves an operator UI at `/ui`, and uses authenticated HTTP and WebSocket access for automation, approvals, and auditability.
+Tyrum is an autonomous worker platform built around a gateway, an agent runtime, and safety boundaries for execution, approvals, and audit evidence. It is self-hosted, serves an operator UI at `/ui`, and exposes authenticated HTTP and WebSocket access.
 
 The repository contains the gateway runtime, the client SDK, shared schemas, the desktop app, and the public docs site. Detailed architecture, deployment, and feature documentation lives under [`docs/`](docs/index.md).
 
