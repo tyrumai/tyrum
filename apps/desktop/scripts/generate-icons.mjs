@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { Icns, IcnsImage } from "@fiahfy/icns";
 import { Ico, IcoImage } from "@fiahfy/ico";
@@ -11,6 +11,7 @@ const PNG_ARGS = [
   "-define",
   "png:compression-level=9",
 ];
+const EMPTY_SVG_PATH_PATTERN = /^\s*<path d=""[^>]*\/>\r?\n?/gmu;
 
 function run(cmd, args) {
   execFileSync(cmd, args, { stdio: "inherit" });
@@ -91,16 +92,18 @@ function buildIcoBuffer(pngPaths) {
   return ico.data;
 }
 
+function stripEmptySvgPaths(svgContents) {
+  return svgContents.replace(EMPTY_SVG_PATH_PATTERN, "");
+}
+
 function createMacTrayTemplateSvg(sourceSvgContents) {
   return sourceSvgContents
     .replace(/fill="[^"]*"/gu, 'fill="black"')
     .replace(/aria-label="[^"]*"/u, 'aria-label="Tyrum macOS tray icon"');
 }
 
-function generateDesktopAssets(paths) {
-  const sourceSvgContents = readFileSync(paths.sourceSvg, "utf8");
-  copyFileSync(paths.sourceSvg, paths.desktopSourceSvg);
-
+function generateDesktopAssets(paths, sourceSvgContents) {
+  writeFileSync(paths.desktopSourceSvg, sourceSvgContents);
   const macTrayTemplateSvg = createMacTrayTemplateSvg(sourceSvgContents);
   writeFileSync(paths.sharedMacTrayTemplateSvg, macTrayTemplateSvg);
   writeFileSync(paths.desktopMacTrayTemplateSvg, macTrayTemplateSvg);
@@ -143,7 +146,7 @@ function generateDesktopAssets(paths) {
   writeFileSync(paths.desktopIcns, icns.data);
 }
 
-function generateWebAndDocsAssets(paths) {
+function generateWebAndDocsAssets(paths, sourceSvgContents) {
   ensureDir(paths.webPublicDir);
   ensureDir(paths.webBrandDir);
   ensureDir(paths.docsBrandDir);
@@ -157,15 +160,15 @@ function generateWebAndDocsAssets(paths) {
   renderPng(paths.sourceSvg, 180, join(paths.webPublicDir, "apple-touch-icon.png"));
   renderSocialCard(paths.sourceSvg, join(paths.docsBrandDir, "social-card.png"));
 
-  copyFileSync(paths.sourceSvg, join(paths.webBrandDir, "app-icon.svg"));
-  copyFileSync(paths.sourceSvg, join(paths.docsBrandDir, "app-icon.svg"));
-  copyFileSync(
-    join(paths.desktopIconsDir, "512x512.png"),
+  writeFileSync(join(paths.webBrandDir, "app-icon.svg"), sourceSvgContents);
+  writeFileSync(join(paths.docsBrandDir, "app-icon.svg"), sourceSvgContents);
+  writeFileSync(
     join(paths.webBrandDir, "app-icon-512.png"),
+    readFileSync(join(paths.desktopIconsDir, "512x512.png")),
   );
-  copyFileSync(
-    join(paths.desktopIconsDir, "512x512.png"),
+  writeFileSync(
     join(paths.docsBrandDir, "app-icon-512.png"),
+    readFileSync(join(paths.desktopIconsDir, "512x512.png")),
   );
 }
 
@@ -239,8 +242,10 @@ const paths = {
   ),
 };
 
-generateDesktopAssets(paths);
-generateWebAndDocsAssets(paths);
+const sourceSvgContents = stripEmptySvgPaths(readFileSync(sourceSvg, "utf8"));
+
+generateDesktopAssets(paths, sourceSvgContents);
+generateWebAndDocsAssets(paths, sourceSvgContents);
 generateMobileAssets(paths);
 
 console.log(`Generated shared brand assets from ${sourceSvg}`);

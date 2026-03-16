@@ -60,8 +60,9 @@ describe("desktop packaging configuration", () => {
     const icnsPath = join(__dirname, "..", "build", "icon.icns");
     const icoPath = join(__dirname, "..", "build", "icon.ico");
     const pngPath = join(__dirname, "..", "build", "icons", "512x512.png");
+    const sourceSvgPath = join(__dirname, "..", "build", "icon.svg");
     const trayTemplatePath = join(__dirname, "..", "build", "tray-macos-template.svg");
-    const requiredPaths = [icnsPath, icoPath, pngPath, trayTemplatePath];
+    const requiredPaths = [icnsPath, icoPath, pngPath, sourceSvgPath, trayTemplatePath];
 
     for (const path of requiredPaths) {
       expect(existsSync(path)).toBe(true);
@@ -96,8 +97,12 @@ describe("desktop packaging configuration", () => {
     const pngHeader = readFileSync(pngPath).subarray(0, 8);
     expect(Array.from(pngHeader)).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
+    const sourceSvg = readFileSync(sourceSvgPath, "utf8");
+    expect(sourceSvg).not.toContain('<path d=""');
+
     const trayTemplate = readFileSync(trayTemplatePath, "utf8");
     expect(trayTemplate).toContain("<svg");
     expect(trayTemplate).toContain('fill="black"');
+    expect(trayTemplate).not.toContain('<path d=""');
   });
 });
