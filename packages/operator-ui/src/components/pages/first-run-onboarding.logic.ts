@@ -14,9 +14,10 @@ import {
 import {
   EXECUTION_PROFILE_IDS,
   emptyDialogState,
-  modelRefFor,
+  filterAvailableModels,
   normalizeAssignments,
   normalizeDialogState,
+  reconcileModelDialogState,
   splitModelRef,
   type Assignment,
   type AvailableModel,
@@ -263,6 +264,7 @@ export function useOnboardingDrafts(data: OnboardingDataState) {
   const [providerState, setProviderState] = React.useState<ProviderFormState>(emptyFormState());
   const [providerFilter, setProviderFilter] = React.useState("");
   const [modelState, setModelState] = React.useState<ModelDialogState>(emptyDialogState());
+  const [modelFilter, setModelFilter] = React.useState("");
   const [selectedPresetKey, setSelectedPresetKey] = React.useState("");
   const [assignmentDraft, setAssignmentDraft] = React.useState<Record<string, string | null>>({});
   const [assignmentTouched, setAssignmentTouched] = React.useState(false);
@@ -281,6 +283,10 @@ export function useOnboardingDrafts(data: OnboardingDataState) {
       );
     });
   }, [providerFilter, supportedProviders]);
+  const filteredAvailableModels = React.useMemo(
+    () => filterAvailableModels(data.availableModels, modelFilter),
+    [data.availableModels, modelFilter],
+  );
   const selectedProvider = supportedProviders.find(
     (provider) => provider.provider_key === providerState.providerKey,
   );
@@ -303,16 +309,23 @@ export function useOnboardingDrafts(data: OnboardingDataState) {
   }, [data.registry]);
 
   React.useEffect(() => {
-    setModelState((current) => {
-      if (
-        current.modelRef &&
-        data.availableModels.some((model) => modelRefFor(model) === current.modelRef)
-      ) {
-        return current;
-      }
-      return normalizeDialogState({ availableModels: data.availableModels });
-    });
+    setModelFilter("");
   }, [data.availableModels]);
+
+  React.useEffect(() => {
+    setModelState((current) => {
+      const nextState =
+        current.modelRef || current.displayName.trim() || modelFilter.trim()
+          ? current
+          : normalizeDialogState({ availableModels: data.availableModels });
+
+      return reconcileModelDialogState({
+        currentState: nextState,
+        filteredModels: filteredAvailableModels,
+        availableModels: data.availableModels,
+      });
+    });
+  }, [data.availableModels, filteredAvailableModels, modelFilter]);
 
   React.useEffect(() => {
     setSelectedPresetKey((current) =>
@@ -338,7 +351,9 @@ export function useOnboardingDrafts(data: OnboardingDataState) {
 
   return {
     assignmentDraft,
+    filteredAvailableModels,
     filteredProviders,
+    modelFilter,
     modelState,
     providerFilter,
     providerState,
@@ -347,6 +362,7 @@ export function useOnboardingDrafts(data: OnboardingDataState) {
     selectedProvider,
     setAssignmentDraft,
     setAssignmentTouched,
+    setModelFilter,
     setModelState,
     setProviderFilter,
     setProviderState,

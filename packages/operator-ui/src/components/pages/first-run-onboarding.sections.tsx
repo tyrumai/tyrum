@@ -18,9 +18,11 @@ import {
   EXECUTION_PROFILE_LABELS,
   REASONING_OPTIONS,
   REASONING_VISIBILITY_OPTIONS,
+  type AvailableModel,
   type ModelDialogState,
   type ModelPreset,
 } from "./admin-http-models.shared.js";
+import { ModelPickerField } from "./model-picker-field.js";
 import { OnboardingStepFrame } from "./first-run-onboarding.parts.js";
 import { ProviderPickerField } from "./provider-picker-field.js";
 
@@ -260,59 +262,47 @@ export function OnboardingProviderStep({
 }
 
 export function OnboardingPresetStep({
-  availableModels,
+  filteredAvailableModels,
   busy,
   canSave,
+  modelFilter,
   modelState,
+  onModelFilterChange,
   onModelSave,
+  onModelSelectionChange,
   onModelStateChange,
 }: {
-  availableModels: Array<{
-    modelRef: string;
-    label: string;
-    modelName: string;
-  }>;
+  filteredAvailableModels: AvailableModel[];
   busy: boolean;
   canSave: boolean;
+  modelFilter: string;
   modelState: ModelDialogState;
+  onModelFilterChange: (value: string) => void;
   onModelSave: () => void;
+  onModelSelectionChange: (modelRef: string) => void;
   onModelStateChange: (updater: (current: ModelDialogState) => ModelDialogState) => void;
 }): React.ReactElement {
   return (
     <OnboardingStepFrame stepId="preset">
       <div className="grid gap-4" data-testid="first-run-onboarding-step-preset">
+        <Input
+          label="Display name"
+          value={modelState.displayName}
+          onChange={(event) => {
+            onModelStateChange((current) => ({
+              ...current,
+              displayName: event.currentTarget.value,
+            }));
+          }}
+        />
+        <ModelPickerField
+          filteredModels={filteredAvailableModels}
+          modelFilter={modelFilter}
+          onModelFilterChange={onModelFilterChange}
+          onSelectModel={onModelSelectionChange}
+          selectedModelRef={modelState.modelRef}
+        />
         <div className="grid gap-4 md:grid-cols-2">
-          <Input
-            label="Display name"
-            value={modelState.displayName}
-            onChange={(event) => {
-              onModelStateChange((current) => ({
-                ...current,
-                displayName: event.currentTarget.value,
-              }));
-            }}
-          />
-          <Select
-            label="Model"
-            value={modelState.modelRef}
-            onChange={(event) => {
-              onModelStateChange((current) => ({
-                ...current,
-                modelRef: event.currentTarget.value,
-                displayName:
-                  current.displayName.trim().length > 0
-                    ? current.displayName
-                    : (availableModels.find((model) => model.modelRef === event.currentTarget.value)
-                        ?.modelName ?? current.displayName),
-              }));
-            }}
-          >
-            {availableModels.map((model) => (
-              <option key={model.modelRef} value={model.modelRef}>
-                {model.label}
-              </option>
-            ))}
-          </Select>
           <Select
             label="Reasoning effort"
             value={modelState.reasoningEffort}
