@@ -63,6 +63,13 @@ class LocalAgentContextStore implements AgentContextStore {
        LIMIT 1`,
       [scope.tenantId, scope.agentId],
     );
+    const agentId =
+      resolvedAgentRow?.agent_id ??
+      (await this.identityScopeDal.resolveAgentId(scope.tenantId, scope.agentId));
+    if (!agentId) {
+      throw new Error(`agent not found for tenant_id=${scope.tenantId}, agent_id=${scope.agentId}`);
+    }
+
     const resolvedWorkspaceRow = await this.db.get<{ workspace_id: string }>(
       `SELECT workspace_id
        FROM workspaces
@@ -70,49 +77,20 @@ class LocalAgentContextStore implements AgentContextStore {
        LIMIT 1`,
       [scope.tenantId, scope.workspaceId],
     );
+    const workspaceId =
+      resolvedWorkspaceRow?.workspace_id ??
+      (await this.identityScopeDal.resolveWorkspaceId(scope.tenantId, scope.workspaceId));
+    if (!workspaceId) {
+      throw new Error(
+        `workspace not found for tenant_id=${scope.tenantId}, workspace_id=${scope.workspaceId}`,
+      );
+    }
 
-    return {
-      tenantId: scope.tenantId,
-      agentId:
-        resolvedAgentRow?.agent_id ??
-        (await this.identityScopeDal.ensureAgentId(scope.tenantId, scope.agentId)),
-      workspaceId:
-        resolvedWorkspaceRow?.workspace_id ??
-        (await this.identityScopeDal.ensureWorkspaceId(scope.tenantId, scope.workspaceId)),
-    };
-  }
-
-  private async ensureScopeRows(scope: AgentContextScope): Promise<AgentContextScope> {
-    await this.db.run(
-      `INSERT INTO tenants (tenant_id, tenant_key)
-       VALUES (?, ?)
-       ON CONFLICT (tenant_id) DO NOTHING`,
-      [scope.tenantId, scope.tenantId],
-    );
-    const resolved = await this.resolveScopeIds(scope);
-    await this.db.run(
-      `INSERT INTO agents (tenant_id, agent_id, agent_key)
-       VALUES (?, ?, ?)
-       ON CONFLICT (tenant_id, agent_id) DO NOTHING`,
-      [resolved.tenantId, resolved.agentId, resolved.agentId],
-    );
-    await this.db.run(
-      `INSERT INTO workspaces (tenant_id, workspace_id, workspace_key)
-       VALUES (?, ?, ?)
-       ON CONFLICT (tenant_id, workspace_id) DO NOTHING`,
-      [resolved.tenantId, resolved.workspaceId, resolved.workspaceId],
-    );
-    await this.db.run(
-      `INSERT INTO agent_workspaces (tenant_id, agent_id, workspace_id)
-       VALUES (?, ?, ?)
-       ON CONFLICT (tenant_id, agent_id, workspace_id) DO NOTHING`,
-      [resolved.tenantId, resolved.agentId, resolved.workspaceId],
-    );
-    return resolved;
+    return { tenantId: scope.tenantId, agentId, workspaceId };
   }
 
   private async ensureIdentity(scope: AgentContextScope): Promise<IdentityPackT> {
-    const resolved = await this.ensureScopeRows(scope);
+    const resolved = await this.resolveScopeIds(scope);
     const revision = await this.identityDal.ensureSeeded({
       tenantId: resolved.tenantId,
       agentId: resolved.agentId,

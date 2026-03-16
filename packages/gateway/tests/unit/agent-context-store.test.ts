@@ -32,6 +32,22 @@ describe("LocalAgentContextStore", () => {
     await container.db.close();
   });
 
+  async function setupLocalScope() {
+    const store = createLocalAgentContextStore({
+      db: container.db,
+      home: homeDir,
+      identityScopeDal: container.identityScopeDal,
+    });
+    const tenantId = await container.identityScopeDal.ensureTenantId("tenant-local");
+    const agentId = await container.identityScopeDal.ensureAgentId(tenantId, "default");
+    const workspaceId = await container.identityScopeDal.ensureWorkspaceId(
+      tenantId,
+      DEFAULT_WORKSPACE_KEY,
+    );
+    await container.identityScopeDal.ensureMembership(tenantId, agentId, workspaceId);
+    return { store, tenantId, agentId, workspaceId };
+  }
+
   it("loads identity from DB and skills/mcp from the local workspace", async () => {
     await mkdir(join(homeDir, "skills/file-reader"), { recursive: true });
     await mkdir(join(homeDir, "mcp/calendar"), { recursive: true });
@@ -61,19 +77,7 @@ args:
       "utf-8",
     );
 
-    const store = createLocalAgentContextStore({
-      db: container.db,
-      home: homeDir,
-      identityScopeDal: container.identityScopeDal,
-    });
-    const tenantId = await container.identityScopeDal.ensureTenantId("tenant-local");
-    const agentId = await container.identityScopeDal.ensureAgentId(tenantId, "default");
-    const workspaceId = await container.identityScopeDal.ensureWorkspaceId(
-      tenantId,
-      DEFAULT_WORKSPACE_KEY,
-    );
-    await container.identityScopeDal.ensureMembership(tenantId, agentId, workspaceId);
-    const scope = { tenantId, agentId, workspaceId };
+    const { store, ...scope } = await setupLocalScope();
     const config = AgentConfig.parse({
       model: { model: "openai/gpt-4.1" },
       skills: { enabled: ["file-reader"], workspace_trusted: true },
@@ -366,18 +370,7 @@ cwd: .
   });
 
   it("resolves runtime scope keys to durable ids before seeding local identity", async () => {
-    const store = createLocalAgentContextStore({
-      db: container.db,
-      home: homeDir,
-      identityScopeDal: container.identityScopeDal,
-    });
-    const tenantId = await container.identityScopeDal.ensureTenantId("tenant-local");
-    const agentId = await container.identityScopeDal.ensureAgentId(tenantId, "default");
-    const workspaceId = await container.identityScopeDal.ensureWorkspaceId(
-      tenantId,
-      DEFAULT_WORKSPACE_KEY,
-    );
-    await container.identityScopeDal.ensureMembership(tenantId, agentId, workspaceId);
+    const { store, tenantId, agentId } = await setupLocalScope();
 
     await store.ensureAgentContext({
       tenantId,
@@ -396,6 +389,27 @@ cwd: .
 
     const identity = await new AgentIdentityDal(container.db).getLatest({ tenantId, agentId });
     expect(identity?.identity.meta.name).toBe("Tyrum");
+  });
+
+  it("does not create a spurious agent row when a UUID is passed as agentId", async () => {
+    const { store, tenantId, agentId, workspaceId } = await setupLocalScope();
+    await store.ensureAgentContext({ tenantId, agentId, workspaceId });
+    const agents = await container.db.all<{ agent_key: string }>(
+      `SELECT agent_key FROM agents WHERE tenant_id = ? ORDER BY agent_key ASC`,
+      [tenantId],
+    );
+    expect(agents.map((r) => r.agent_key)).toEqual(["default"]);
+  });
+
+  it("throws when scope references a non-existent agent", async () => {
+    const { store, tenantId, workspaceId } = await setupLocalScope();
+    await expect(
+      store.ensureAgentContext({
+        tenantId,
+        agentId: "00000000-0000-4000-8000-999999999999",
+        workspaceId,
+      }),
+    ).rejects.toThrow(/agent not found/);
   });
 });
 
