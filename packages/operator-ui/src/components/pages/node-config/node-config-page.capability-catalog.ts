@@ -1,14 +1,5 @@
-import {
-  Camera,
-  Globe,
-  Link2,
-  MapPin,
-  Mic,
-  Monitor,
-  Terminal,
-  type LucideIcon,
-} from "lucide-react";
-import type { CapabilityCatalogEntry, PlatformKind } from "./node-config-page.types.js";
+import { Camera, Globe, Link2, MapPin, Mic, Monitor, Terminal } from "lucide-react";
+import type { CapabilityCatalogEntry } from "./node-config-page.types.js";
 
 /**
  * Static catalog of all known capabilities and which platforms support them.
@@ -68,13 +59,6 @@ export const CAPABILITY_CATALOG: readonly CapabilityCatalogEntry[] = [
     platforms: ["browser", "mobile"],
   },
 ] as const;
-
-/** Return catalog entries available for a given platform. */
-export function getCapabilitiesForPlatform(
-  platform: PlatformKind,
-): readonly CapabilityCatalogEntry[] {
-  return CAPABILITY_CATALOG.filter((entry) => entry.platforms.includes(platform));
-}
 
 /** Look up a catalog entry by key. */
 export function getCatalogEntry(key: string): CapabilityCatalogEntry | undefined {
@@ -176,8 +160,3 @@ export const DESKTOP_ACTIONS: ReadonlyArray<{
     description: "Wait for a UI condition before continuing.",
   },
 ];
-
-/** Icon lookup by capability key (convenience for adapters). */
-export function getCapabilityIcon(key: string): LucideIcon {
-  return getCatalogEntry(key)?.icon ?? Globe;
-}

@@ -1,4 +1,4 @@
-import { createElement, useCallback, useMemo, useRef, useState } from "react";
+import { createElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { DesktopApi } from "../../../desktop-api.js";
 import { formatErrorMessage } from "../../../utils/format-error-message.js";
 import type { CapFlags } from "../../../utils/permission-profile.js";
@@ -87,8 +87,12 @@ export function useDesktopCapabilities(input: UseDesktopCapabilitiesInput): Norm
 
   const mountedRef = useRef(true);
 
-  // Keep mountedRef in sync (no cleanup needed — the parent manages unmount).
-  mountedRef.current = true;
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   // ── macOS permission handlers ───────────────────────────────────────────
 

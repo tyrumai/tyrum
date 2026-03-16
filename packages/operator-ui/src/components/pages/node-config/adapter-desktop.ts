@@ -209,9 +209,17 @@ export function useNodeConfigDesktop(
     setSaveError(null);
 
     try {
-      const current = securityRef.current;
-      await api.setConfig(securityToPersistedPayload(current));
+      const snapshotBeforeSave = securityRef.current;
+      await api.setConfig(securityToPersistedPayload(snapshotBeforeSave));
       if (!mountedRef.current) return;
+
+      // If state changed while save was in flight, persist again.
+      if (securityRef.current !== snapshotBeforeSave) {
+        savingRef.current = false;
+        void persistSecurityNow();
+        return;
+      }
+
       setSaveStatus("saved");
       if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
       savedTimerRef.current = setTimeout(() => {
