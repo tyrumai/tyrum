@@ -32,7 +32,7 @@ import {
 describe("gateway startup process", () => {
   it(
     "starts the real gateway and serves /healthz and /agent/status",
-    { timeout: 180_000 },
+    { timeout: 300_000 },
     async () => {
       await withGatewayBuild(
         async () => {

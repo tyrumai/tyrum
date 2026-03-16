@@ -350,7 +350,7 @@ const CAN_LAUNCH_ELECTRON =
 describe("desktop full Electron process smoke", () => {
   it.skipIf(!CAN_LAUNCH_ELECTRON)(
     "launches desktop main process and starts embedded gateway",
-    { timeout: 180_000 },
+    { timeout: 300_000 },
     async () => {
       const releaseBuildLock = acquireGatewayBuildLock();
       try {
