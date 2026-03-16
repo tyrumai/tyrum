@@ -5,9 +5,8 @@ import { useOperatorStore } from "../../use-operator-store.js";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { AppPage } from "../layout/app-page.js";
 import { Alert } from "../ui/alert.js";
-import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
-import { Card, CardContent, CardFooter, CardHeader } from "../ui/card.js";
+import { Card, CardContent } from "../ui/card.js";
 import { useElevatedModeUiContext } from "../elevated-mode/elevated-mode-provider.js";
 import { useAdminMutationAccess, useAdminMutationHttpClient } from "./admin-http-shared.js";
 import {
@@ -25,11 +24,12 @@ import {
   useOnboardingDrafts,
 } from "./first-run-onboarding.logic.js";
 import {
+  buildOnboardingProgressItems,
   getRelevantOnboardingIssues,
   resolveFirstRunOnboardingStep,
-  summarizeOnboardingIssues,
   type FirstRunOnboardingStepId,
 } from "./first-run-onboarding.shared.js";
+import { OnboardingProgressCard } from "./first-run-onboarding.parts.js";
 import {
   OnboardingAdminStep,
   OnboardingAgentStep,
@@ -59,7 +59,6 @@ export function FirstRunOnboardingPage({
   const mutationHttp = useAdminMutationHttpClient();
   const status = useOperatorStore(core.statusStore);
   const issues = getRelevantOnboardingIssues(status.status?.config_health.issues ?? []);
-  const issueBadges = React.useMemo(() => summarizeOnboardingIssues(issues), [issues]);
   const [submitBusy, setSubmitBusy] = React.useState(false);
   const [submitErrorMessage, setSubmitErrorMessage] = React.useState<string | null>(null);
   const { data, refresh } = useOnboardingData();
@@ -97,6 +96,7 @@ export function FirstRunOnboardingPage({
       presetCount: data.presets.length,
     });
   }, [activeProviderCount, canMutate, data.availableModels.length, data.presets.length, issues]);
+  const progressItems = React.useMemo(() => buildOnboardingProgressItems(step), [step]);
 
   const applyProviderSelection = React.useCallback(
     (providerKey: string) => {
@@ -284,16 +284,12 @@ export function FirstRunOnboardingPage({
   };
 
   return (
-    <AppPage
-      contentLayout="fill"
-      contentClassName="max-w-3xl gap-5"
-      data-testid="first-run-onboarding"
-    >
-      <Card
-        className="flex min-h-0 flex-1 flex-col overflow-hidden"
-        data-testid="first-run-onboarding-card"
+    <AppPage contentClassName="max-w-5xl gap-6" data-testid="first-run-onboarding">
+      <section
+        className="grid gap-4 rounded-2xl border border-border bg-bg-card px-5 py-5 shadow-sm md:grid-cols-[minmax(0,1fr)_auto] md:items-start"
+        data-testid="first-run-onboarding-header"
       >
-        <CardHeader className="shrink-0 pb-3">
+        <div className="grid gap-2">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="grid gap-2">
               <div className="flex items-center gap-2">
@@ -305,64 +301,12 @@ export function FirstRunOnboardingPage({
                 and resume later from the dashboard if needed.
               </div>
             </div>
-            <div className="flex shrink-0 flex-wrap items-center gap-2">
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => {
-                  if (step === "done") {
-                    onMarkCompleted();
-                    onClose();
-                    return;
-                  }
-                  onSkip();
-                }}
-              >
-                {step === "done" ? "Close" : "Skip setup"}
-              </Button>
-            </div>
           </div>
-        </CardHeader>
-        <CardContent
-          className="grid min-h-0 flex-1 gap-4 overflow-auto"
-          data-testid="first-run-onboarding-card-body"
-        >
-          {data.errorMessage ? (
-            <Alert
-              variant="error"
-              title="Unable to load onboarding data"
-              description={data.errorMessage}
-            />
-          ) : null}
-          {submitErrorMessage ? (
-            <Alert
-              variant="error"
-              title="Unable to save onboarding step"
-              description={submitErrorMessage}
-            />
-          ) : null}
-          {issueBadges.length > 0 ? (
-            <div className="grid gap-2">
-              <div className="text-sm font-medium text-fg">Setup items remaining</div>
-              <div className="flex flex-wrap gap-2">
-                {issueBadges.map((issue) => (
-                  <Badge
-                    key={issue.key}
-                    variant={issue.variant}
-                    data-testid={`first-run-onboarding-issue-${issue.key}`}
-                  >
-                    {issue.label}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-          ) : null}
-          {renderStep()}
-        </CardContent>
-        <CardFooter className="shrink-0 justify-between">
           <div className="text-xs text-fg-muted">
             Status is refreshed against the live gateway after each step.
           </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 md:justify-end">
           <Button
             type="button"
             variant="secondary"
@@ -372,8 +316,59 @@ export function FirstRunOnboardingPage({
           >
             Refresh
           </Button>
-        </CardFooter>
-      </Card>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => {
+              if (step === "done") {
+                onMarkCompleted();
+                onClose();
+                return;
+              }
+              onSkip();
+            }}
+          >
+            {step === "done" ? "Close" : "Skip setup"}
+          </Button>
+        </div>
+      </section>
+      {data.errorMessage ? (
+        <Alert
+          variant="error"
+          title="Unable to load onboarding data"
+          description={data.errorMessage}
+        />
+      ) : null}
+      {submitErrorMessage ? (
+        <Alert
+          variant="error"
+          title="Unable to save onboarding step"
+          description={submitErrorMessage}
+        />
+      ) : null}
+      {step === "done" ? (
+        <Card data-testid="first-run-onboarding-card">
+          <CardContent className="grid gap-4 pt-6" data-testid="first-run-onboarding-card-body">
+            {renderStep()}
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid items-start gap-4 xl:grid-cols-[19rem_minmax(0,1fr)]">
+          <OnboardingProgressCard items={progressItems} />
+          <Card
+            className="flex min-h-0 flex-col overflow-hidden"
+            data-testid="first-run-onboarding-card"
+            style={{ maxHeight: "calc(100vh - 14rem - 4px)" }}
+          >
+            <CardContent
+              className="grid min-h-0 flex-1 gap-4 overflow-auto pt-6"
+              data-testid="first-run-onboarding-card-body"
+            >
+              {renderStep()}
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </AppPage>
   );
 }

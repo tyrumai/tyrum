@@ -212,6 +212,11 @@ export function registerFirstRunOnboardingFlowTests(): void {
     });
 
     await waitForSelector(container, '[data-testid="first-run-onboarding-step-provider"]');
+    expect(
+      container
+        .querySelector('[data-testid="first-run-onboarding-progress-provider"]')
+        ?.getAttribute("data-status"),
+    ).toBe("current");
     setInputByLabel(container, "API key", "secret-key");
     setInputByLabel(container, "Display name", "OpenAI");
     await act(async () => {
@@ -223,6 +228,16 @@ export function registerFirstRunOnboardingFlowTests(): void {
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
     await waitForSelector(container, '[data-testid="first-run-onboarding-step-preset"]', 200);
+    expect(
+      container
+        .querySelector('[data-testid="first-run-onboarding-progress-provider"]')
+        ?.getAttribute("data-status"),
+    ).toBe("done");
+    expect(
+      container
+        .querySelector('[data-testid="first-run-onboarding-progress-preset"]')
+        ?.getAttribute("data-status"),
+    ).toBe("current");
     setInputByLabel(container, "Display name", "Onboarding Default");
     await act(async () => {
       findButtonByText(container, "Save model preset")?.dispatchEvent(

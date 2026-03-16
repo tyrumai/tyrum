@@ -58,8 +58,20 @@ export function registerFirstRunOnboardingStateTests(): void {
 
     await waitForSelector(container, '[data-testid="first-run-onboarding"]');
     expect(container.querySelector('[data-testid="nav-dashboard"]')).toBeNull();
-    expect(container.textContent).toContain("Setup items remaining");
-    expect(container.textContent).toContain("Provider account");
+    expect(container.textContent).toContain("Setup progress");
+    expect(
+      container.querySelector('[data-testid="first-run-onboarding-progress-provider"]'),
+    ).not.toBeNull();
+    expect(
+      container
+        .querySelector('[data-testid="first-run-onboarding-progress-admin"]')
+        ?.getAttribute("data-status"),
+    ).toBe("current");
+    expect(
+      container
+        .querySelector('[data-testid="first-run-onboarding-progress-provider"]')
+        ?.getAttribute("data-status"),
+    ).toBe("upcoming");
     expect(container.textContent).not.toContain("no_provider_accounts:deployment:");
 
     const skipButton = findButtonByText(container, "Skip setup");
@@ -433,6 +445,26 @@ export function registerFirstRunOnboardingStateTests(): void {
     });
 
     await waitForSelector(container, '[data-testid="first-run-onboarding-step-admin"]');
+    expect(
+      container.querySelector('[data-testid="first-run-onboarding-progress-admin"]'),
+    ).not.toBeNull();
+    expect(
+      container.querySelector('[data-testid="first-run-onboarding-progress-provider"]'),
+    ).not.toBeNull();
+    expect(
+      container.querySelector('[data-testid="first-run-onboarding-progress-preset"]'),
+    ).not.toBeNull();
+    expect(
+      container.querySelector('[data-testid="first-run-onboarding-progress-assignments"]'),
+    ).not.toBeNull();
+    expect(
+      container.querySelector('[data-testid="first-run-onboarding-progress-agent"]'),
+    ).not.toBeNull();
+    expect(
+      container
+        .querySelector('[data-testid="first-run-onboarding-progress-admin"]')
+        ?.getAttribute("data-status"),
+    ).toBe("current");
     const authorizeButton = findButtonByText(container, "Authorize admin access");
     expect(authorizeButton).not.toBeNull();
     await act(async () => {
@@ -444,6 +476,16 @@ export function registerFirstRunOnboardingStateTests(): void {
     expect(
       await waitForSelector(container, '[data-testid="first-run-onboarding-step-provider"]'),
     ).not.toBeNull();
+    expect(
+      container
+        .querySelector('[data-testid="first-run-onboarding-progress-admin"]')
+        ?.getAttribute("data-status"),
+    ).toBe("done");
+    expect(
+      container
+        .querySelector('[data-testid="first-run-onboarding-progress-provider"]')
+        ?.getAttribute("data-status"),
+    ).toBe("current");
 
     cleanup(root, container);
   });
