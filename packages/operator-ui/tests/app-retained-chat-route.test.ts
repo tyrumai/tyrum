@@ -77,6 +77,10 @@ vi.mock("../src/elevated-mode.js", () => ({
     e(React.Fragment, null, children),
 }));
 
+vi.mock("../src/local-node-auto-approval.js", () => ({
+  LocalNodeAutoApprovalBridge: () => null,
+}));
+
 vi.mock("../src/reconnect-ui-state.js", () => ({
   RetainedUiStateProvider: ({ children }: { children: React.ReactNode }) =>
     e(React.Fragment, null, children),
