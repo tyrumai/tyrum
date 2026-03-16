@@ -354,65 +354,67 @@ describe("desktop full Electron process smoke", () => {
     async () => {
       const releaseBuildLock = acquireGatewayBuildLock();
       try {
+        // Keep build outputs stable for the full Electron launch so concurrent
+        // test workers do not clean workspace dist artifacts mid-startup.
         ensureBuildArtifacts();
+
+        const port = await findAvailablePort();
+        const tempRoot = mkdtempSync(join(tmpdir(), "tyrum-electron-smoke-"));
+        const tyrumHome = join(tempRoot, ".tyrum");
+        const dbPath = join(tempRoot, "gateway", "gateway.db");
+        const healthUrl = `http://127.0.0.1:${port}/healthz`;
+        writeDesktopConfig(tyrumHome, port, dbPath);
+
+        let stdout = "";
+        let stderr = "";
+        let gatewayWasHealthy = false;
+        const launch = buildElectronLaunch(DESKTOP_MAIN_ENTRYPOINT, NEEDS_VIRTUAL_DISPLAY);
+
+        const child = spawn(launch.command, launch.args, {
+          cwd: REPO_ROOT,
+          detached: process.platform !== "win32",
+          env: {
+            ...process.env,
+            TYRUM_HOME: tyrumHome,
+            NODE_ENV: "test",
+            VITE_DEV_SERVER_URL: "about:blank",
+            ELECTRON_DISABLE_SANDBOX: "1",
+          },
+          stdio: ["ignore", "pipe", "pipe"],
+        });
+
+        child.stdout.setEncoding("utf8");
+        child.stderr.setEncoding("utf8");
+        child.stdout.on("data", (chunk: string) => {
+          stdout += chunk;
+        });
+        child.stderr.on("data", (chunk: string) => {
+          stderr += chunk;
+        });
+
+        const output = () => {
+          const probeReason = electronProbe.reason ? `\nProbe reason: ${electronProbe.reason}` : "";
+          const displayInfo = `\nLaunch: ${launch.command} ${launch.args.join(" ")}`;
+          return `--- stdout ---\n${stdout}\n--- stderr ---\n${stderr}${probeReason}${displayInfo}`;
+        };
+
+        try {
+          await waitForGatewayHealth(healthUrl, child, output);
+          gatewayWasHealthy = true;
+
+          const healthRes = await fetch(healthUrl);
+          expect(healthRes.status).toBe(200);
+          const healthBody = (await healthRes.json()) as { status: string };
+          expect(healthBody.status).toBe("ok");
+        } finally {
+          await stopElectronProcess(child);
+          if (gatewayWasHealthy) {
+            await waitForGatewayDown(healthUrl);
+          }
+          rmSync(tempRoot, { recursive: true, force: true });
+        }
       } finally {
         releaseBuildLock();
-      }
-
-      const port = await findAvailablePort();
-      const tempRoot = mkdtempSync(join(tmpdir(), "tyrum-electron-smoke-"));
-      const tyrumHome = join(tempRoot, ".tyrum");
-      const dbPath = join(tempRoot, "gateway", "gateway.db");
-      const healthUrl = `http://127.0.0.1:${port}/healthz`;
-      writeDesktopConfig(tyrumHome, port, dbPath);
-
-      let stdout = "";
-      let stderr = "";
-      let gatewayWasHealthy = false;
-      const launch = buildElectronLaunch(DESKTOP_MAIN_ENTRYPOINT, NEEDS_VIRTUAL_DISPLAY);
-
-      const child = spawn(launch.command, launch.args, {
-        cwd: REPO_ROOT,
-        detached: process.platform !== "win32",
-        env: {
-          ...process.env,
-          TYRUM_HOME: tyrumHome,
-          NODE_ENV: "test",
-          VITE_DEV_SERVER_URL: "about:blank",
-          ELECTRON_DISABLE_SANDBOX: "1",
-        },
-        stdio: ["ignore", "pipe", "pipe"],
-      });
-
-      child.stdout.setEncoding("utf8");
-      child.stderr.setEncoding("utf8");
-      child.stdout.on("data", (chunk: string) => {
-        stdout += chunk;
-      });
-      child.stderr.on("data", (chunk: string) => {
-        stderr += chunk;
-      });
-
-      const output = () => {
-        const probeReason = electronProbe.reason ? `\nProbe reason: ${electronProbe.reason}` : "";
-        const displayInfo = `\nLaunch: ${launch.command} ${launch.args.join(" ")}`;
-        return `--- stdout ---\n${stdout}\n--- stderr ---\n${stderr}${probeReason}${displayInfo}`;
-      };
-
-      try {
-        await waitForGatewayHealth(healthUrl, child, output);
-        gatewayWasHealthy = true;
-
-        const healthRes = await fetch(healthUrl);
-        expect(healthRes.status).toBe(200);
-        const healthBody = (await healthRes.json()) as { status: string };
-        expect(healthBody.status).toBe("ok");
-      } finally {
-        await stopElectronProcess(child);
-        if (gatewayWasHealthy) {
-          await waitForGatewayDown(healthUrl);
-        }
-        rmSync(tempRoot, { recursive: true, force: true });
       }
     },
   );
