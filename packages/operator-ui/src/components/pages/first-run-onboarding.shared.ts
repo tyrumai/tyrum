@@ -38,10 +38,50 @@ export type FirstRunOnboardingStepId =
   | "assignments"
   | "agent"
   | "done";
+export type FirstRunOnboardingRenderableStepId = Exclude<FirstRunOnboardingStepId, "done">;
 export type FirstRunOnboardingStoredState = {
   issueSignature?: string;
   status: "skipped" | "completed";
 };
+export type FirstRunOnboardingProgressStatus = "done" | "current" | "upcoming";
+export type FirstRunOnboardingProgressItem = {
+  id: FirstRunOnboardingRenderableStepId;
+  title: string;
+  detail: string;
+  status: FirstRunOnboardingProgressStatus;
+};
+
+export const FIRST_RUN_ONBOARDING_STEPS: ReadonlyArray<{
+  id: FirstRunOnboardingRenderableStepId;
+  title: string;
+  detail: string;
+}> = [
+  {
+    id: "admin",
+    title: "Authorize admin access",
+    detail: "Unlock temporary admin access once so Tyrum can save the initial configuration.",
+  },
+  {
+    id: "provider",
+    title: "Add a provider account",
+    detail: "Connect at least one model provider so Tyrum can discover available models.",
+  },
+  {
+    id: "preset",
+    title: "Create a model preset",
+    detail: "Save one reusable preset to use as the default setup target.",
+  },
+  {
+    id: "assignments",
+    title: "Assign execution profiles",
+    detail: "Apply a preset across the built-in execution profiles so runtime selection works.",
+  },
+  {
+    id: "agent",
+    title: "Set the default agent model",
+    detail: "Finish by giving the default agent a primary model so new sessions can run.",
+  },
+] as const;
 const ISSUE_BADGE_COPY: Partial<
   Record<FirstRunOnboardingIssue["code"], { key: string; label: string }>
 > = {
@@ -60,6 +100,10 @@ const ISSUE_BADGE_COPY: Partial<
   agent_provider_unconfigured: { key: "default-agent", label: "Default agent" },
   agent_model_unavailable: { key: "default-agent", label: "Default agent" },
 };
+
+const ONBOARDING_STEP_INDEX = new Map(
+  FIRST_RUN_ONBOARDING_STEPS.map((step, index) => [step.id, index] as const),
+);
 
 export function supportsFirstRunOnboarding(hostKind: "desktop" | "mobile" | "web"): boolean {
   return hostKind === "desktop" || hostKind === "web";
@@ -93,6 +137,31 @@ export function summarizeOnboardingIssues(
     }
   }
   return Array.from(summarized.values());
+}
+
+export function buildOnboardingProgressItems(
+  currentStep: FirstRunOnboardingStepId,
+): FirstRunOnboardingProgressItem[] {
+  const activeIndex =
+    currentStep === "done"
+      ? FIRST_RUN_ONBOARDING_STEPS.length
+      : (ONBOARDING_STEP_INDEX.get(currentStep) ?? 0);
+
+  return FIRST_RUN_ONBOARDING_STEPS.map((step, index) => {
+    const status =
+      currentStep === "done" || index < activeIndex
+        ? "done"
+        : index === activeIndex
+          ? "current"
+          : "upcoming";
+
+    return {
+      id: step.id,
+      title: step.title,
+      detail: step.detail,
+      status,
+    };
+  });
 }
 
 export function buildOnboardingIssueSignature(issues: readonly FirstRunOnboardingIssue[]): string {
