@@ -242,6 +242,9 @@ export function DesktopEnvironmentsPage({ core }: { core: OperatorCore }) {
   const selectedLogs = selectedEnvironmentId === null ? undefined : logsById[selectedEnvironmentId];
   const selectedHost = selectedEnvironment ? (hostById[selectedEnvironment.host_id] ?? null) : null;
   const blockingAvailabilityMessage = buildBlockingAvailabilityMessage(hosts);
+  const runtimeDefaultsSaveError = runtimeDefaults.runtimeDefaultsMutation.error
+    ? toErrorMessage(runtimeDefaults.runtimeDefaultsMutation.error)
+    : null;
   const selectedStartBlockedReason = !selectedEnvironment
     ? null
     : describeStartBlockedReason({
@@ -327,7 +330,6 @@ export function DesktopEnvironmentsPage({ core }: { core: OperatorCore }) {
       requestEnter();
       return;
     }
-
     void mutation.run(async () => {
       setLogsById((current) => ({
         ...current,
@@ -419,7 +421,8 @@ export function DesktopEnvironmentsPage({ core }: { core: OperatorCore }) {
               draftReason={runtimeDefaults.runtimeDefaultReasonDraft}
               isLoading={runtimeDefaults.runtimeDefaultsMutation.isLoading}
               isRefreshing={runtimeDefaults.runtimeDefaultsLoading}
-              error={runtimeDefaults.runtimeDefaultsError}
+              loadError={runtimeDefaults.runtimeDefaultsError}
+              saveError={runtimeDefaultsSaveError}
               onDefaultImageRefChange={runtimeDefaults.setRuntimeDefaultImageDraft}
               onReasonChange={runtimeDefaults.setRuntimeDefaultReasonDraft}
               onSave={runSaveRuntimeDefaults}

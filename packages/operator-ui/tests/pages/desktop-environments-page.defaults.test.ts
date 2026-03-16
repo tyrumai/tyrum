@@ -203,6 +203,52 @@ describe("DesktopEnvironmentsPage defaults and availability", () => {
     core.dispose();
   });
 
+  it("shows save errors when updating runtime defaults fails", async () => {
+    const ws = new FakeWsClient();
+    const { http } = createFakeHttpClient();
+    adminHttpClient = http;
+
+    http.desktopEnvironments.updateDefaults.mockRejectedValueOnce(
+      new TyrumHttpClientError("http_error", "save failed", {
+        status: 500,
+        error: "internal_error",
+      }),
+    );
+
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test"),
+      deps: { ws, http },
+    });
+    const testRoot = renderIntoDocument(React.createElement(DesktopEnvironmentsPage, { core }));
+    await flushPage();
+
+    const defaultImageInput = testRoot.container.querySelector<HTMLInputElement>(
+      '[data-testid="desktop-environments-default-image-input"]',
+    );
+    const saveButton = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="desktop-environments-default-image-save-button"]',
+    );
+
+    expect(defaultImageInput).not.toBeNull();
+    expect(saveButton).not.toBeNull();
+
+    await act(async () => {
+      setNativeValue(defaultImageInput!, "ghcr.io/rhernaus/tyrum-desktop-sandbox:broken");
+      click(saveButton!);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await flushPage();
+
+    expect(testRoot.container.textContent).toContain("Failed to save runtime defaults");
+    expect(testRoot.container.textContent).toContain("save failed");
+
+    cleanupTestRoot(testRoot);
+    core.dispose();
+  });
+
   it("falls back to the built-in default when the defaults API is unavailable", async () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();

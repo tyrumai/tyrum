@@ -10,7 +10,8 @@ export function RuntimeDefaultsCard({
   draftReason,
   isLoading,
   isRefreshing,
-  error,
+  loadError,
+  saveError,
   onDefaultImageRefChange,
   onReasonChange,
   onSave,
@@ -21,7 +22,8 @@ export function RuntimeDefaultsCard({
   draftReason: string;
   isLoading: boolean;
   isRefreshing: boolean;
-  error: string | null;
+  loadError: string | null;
+  saveError: string | null;
   onDefaultImageRefChange: (value: string) => void;
   onReasonChange: (value: string) => void;
   onSave: () => void;
@@ -39,8 +41,11 @@ export function RuntimeDefaultsCard({
             description="New environments will use the built-in desktop sandbox image fallback until the gateway is upgraded."
           />
         ) : null}
-        {error ? (
-          <Alert variant="error" title="Failed to load runtime defaults" description={error} />
+        {loadError ? (
+          <Alert variant="error" title="Failed to load runtime defaults" description={loadError} />
+        ) : null}
+        {saveError ? (
+          <Alert variant="error" title="Failed to save runtime defaults" description={saveError} />
         ) : null}
         <Input
           label="Default image ref"
