@@ -80,6 +80,101 @@ export function syncDisplayNameOnProviderChange(input: {
   return input.currentDisplayName;
 }
 
+export function getBooleanConfigDefaults(
+  method: ProviderMethod | undefined,
+): Record<string, boolean> {
+  return Object.fromEntries(
+    (method?.fields ?? [])
+      .filter((field) => field.kind === "config" && field.input === "boolean")
+      .map((field) => [field.key, false]),
+  );
+}
+
+export function selectProviderFormState(input: {
+  currentState: ProviderFormState;
+  providerKey: string;
+  supportedProviders: readonly ProviderRegistryEntry[];
+}): ProviderFormState {
+  const nextProvider = input.supportedProviders.find(
+    (provider) => provider.provider_key === input.providerKey,
+  );
+  const currentProviderName = input.supportedProviders.find(
+    (provider) => provider.provider_key === input.currentState.providerKey,
+  )?.name;
+  const nextMethod = nextProvider?.methods[0];
+
+  return {
+    providerKey: nextProvider?.provider_key ?? "",
+    methodKey: nextMethod?.method_key ?? "",
+    displayName: syncDisplayNameOnProviderChange({
+      currentDisplayName: input.currentState.displayName,
+      currentProviderName,
+      nextProviderName: nextProvider?.name,
+    }),
+    configValues: getBooleanConfigDefaults(nextMethod),
+    secretValues: {},
+  };
+}
+
+function clearProviderFormState(input: {
+  currentState: ProviderFormState;
+  supportedProviders: readonly ProviderRegistryEntry[];
+}): ProviderFormState {
+  if (
+    !input.currentState.providerKey &&
+    !input.currentState.methodKey &&
+    Object.keys(input.currentState.configValues).length === 0 &&
+    Object.keys(input.currentState.secretValues).length === 0
+  ) {
+    return input.currentState;
+  }
+
+  const currentProviderName = input.supportedProviders.find(
+    (provider) => provider.provider_key === input.currentState.providerKey,
+  )?.name;
+  const shouldClearDisplayName =
+    !input.currentState.displayName.trim() ||
+    input.currentState.displayName === (currentProviderName ?? "");
+
+  return {
+    ...input.currentState,
+    providerKey: "",
+    methodKey: "",
+    displayName: shouldClearDisplayName ? "" : input.currentState.displayName,
+    configValues: {},
+    secretValues: {},
+  };
+}
+
+export function reconcileProviderFormState(input: {
+  currentState: ProviderFormState;
+  filteredProviders: readonly ProviderRegistryEntry[];
+  supportedProviders: readonly ProviderRegistryEntry[];
+}): ProviderFormState {
+  if (
+    input.currentState.providerKey &&
+    input.filteredProviders.some(
+      (provider) => provider.provider_key === input.currentState.providerKey,
+    )
+  ) {
+    return input.currentState;
+  }
+
+  const firstVisibleProvider = input.filteredProviders[0];
+  if (firstVisibleProvider) {
+    return selectProviderFormState({
+      currentState: input.currentState,
+      providerKey: firstVisibleProvider.provider_key,
+      supportedProviders: input.supportedProviders,
+    });
+  }
+
+  return clearProviderFormState({
+    currentState: input.currentState,
+    supportedProviders: input.supportedProviders,
+  });
+}
+
 export function normalizeFormState(input: {
   registry: ProviderRegistryEntry[];
   providerKey?: string;

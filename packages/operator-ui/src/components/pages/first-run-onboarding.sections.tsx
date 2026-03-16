@@ -6,8 +6,10 @@ import { Checkbox } from "../ui/checkbox.js";
 import { Input } from "../ui/input.js";
 import { Select } from "../ui/select.js";
 import {
+  getBooleanConfigDefaults,
   getFieldBooleanValue,
   getFieldStringValue,
+  type ConfiguredProviderGroup,
   type ProviderFormState,
   type ProviderRegistryEntry,
 } from "./admin-http-providers.shared.js";
@@ -20,6 +22,7 @@ import {
   type ModelPreset,
 } from "./admin-http-models.shared.js";
 import { OnboardingStepFrame } from "./first-run-onboarding.parts.js";
+import { ProviderPickerField } from "./provider-picker-field.js";
 
 export function OnboardingDoneStep({
   onClose,
@@ -94,6 +97,7 @@ export function OnboardingAdminStep({
 export function OnboardingProviderStep({
   busy,
   canSave,
+  configuredProviders,
   filteredProviders,
   onProviderFilterChange,
   onProviderSave,
@@ -107,6 +111,7 @@ export function OnboardingProviderStep({
 }: {
   busy: boolean;
   canSave: boolean;
+  configuredProviders: ConfiguredProviderGroup[];
   filteredProviders: ProviderRegistryEntry[];
   onProviderFilterChange: (value: string) => void;
   onProviderSave: () => void;
@@ -121,24 +126,15 @@ export function OnboardingProviderStep({
   return (
     <OnboardingStepFrame stepId="provider">
       <div className="grid gap-4" data-testid="first-run-onboarding-step-provider">
+        <ProviderPickerField
+          configuredProviders={configuredProviders}
+          filteredProviders={filteredProviders}
+          onProviderFilterChange={onProviderFilterChange}
+          onSelectProvider={onProviderSelectionChange}
+          providerFilter={providerFilter}
+          selectedProviderKey={providerState.providerKey}
+        />
         <div className="grid gap-4 md:grid-cols-2">
-          <Input
-            label="Filter providers"
-            value={providerFilter}
-            onChange={(event) => onProviderFilterChange(event.currentTarget.value)}
-            placeholder="Search providers"
-          />
-          <Select
-            label="Provider"
-            value={providerState.providerKey}
-            onChange={(event) => onProviderSelectionChange(event.currentTarget.value)}
-          >
-            {filteredProviders.map((provider) => (
-              <option key={provider.provider_key} value={provider.provider_key}>
-                {provider.name}
-              </option>
-            ))}
-          </Select>
           <Select
             label="Authentication method"
             value={providerState.methodKey}
@@ -149,13 +145,7 @@ export function OnboardingProviderStep({
               onProviderStateChange((current) => ({
                 ...current,
                 methodKey: event.currentTarget.value,
-                configValues: nextMethod
-                  ? Object.fromEntries(
-                      nextMethod.fields
-                        .filter((field) => field.kind === "config" && field.input === "boolean")
-                        .map((field) => [field.key, false]),
-                    )
-                  : {},
+                configValues: getBooleanConfigDefaults(nextMethod),
                 secretValues: {},
               }));
             }}
@@ -177,6 +167,13 @@ export function OnboardingProviderStep({
             }}
           />
         </div>
+        {!selectedProvider ? (
+          <Alert
+            variant="warning"
+            title="No supported providers available"
+            description="The model catalog does not currently expose any supported provider setup flows."
+          />
+        ) : null}
         {(selectedRegistryProvider?.fields ?? []).map((field) => {
           if (field.kind === "config" && field.input === "boolean") {
             return (

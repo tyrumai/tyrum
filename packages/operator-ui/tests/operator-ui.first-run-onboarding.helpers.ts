@@ -131,8 +131,15 @@ function getControlByLabel<T extends HTMLElement>(
   return (doc?.getElementById(htmlFor) as T | null) ?? null;
 }
 
+export function getInputByLabel(
+  container: HTMLElement | Document,
+  label: string,
+): HTMLInputElement | null {
+  return getControlByLabel<HTMLInputElement>(container, label);
+}
+
 export function setInputByLabel(container: HTMLElement, label: string, value: string): void {
-  const input = getControlByLabel<HTMLInputElement>(container, label);
+  const input = getInputByLabel(container, label);
   expect(input).not.toBeNull();
   setControlledInputValue(input!, value);
 }

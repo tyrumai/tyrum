@@ -9,10 +9,7 @@ import { Button } from "../ui/button.js";
 import { Card, CardContent } from "../ui/card.js";
 import { useElevatedModeUiContext } from "../elevated-mode/elevated-mode-provider.js";
 import { useAdminMutationAccess, useAdminMutationHttpClient } from "./admin-http-shared.js";
-import {
-  syncDisplayNameOnProviderChange,
-  validateProviderForm,
-} from "./admin-http-providers.shared.js";
+import { selectProviderFormState, validateProviderForm } from "./admin-http-providers.shared.js";
 import { modelRefFor } from "./admin-http-models.shared.js";
 import {
   buildDefaultAgentConfigUpdate,
@@ -100,25 +97,12 @@ export function FirstRunOnboardingPage({
 
   const applyProviderSelection = React.useCallback(
     (providerKey: string) => {
-      const nextProvider = drafts.supportedProviders.find(
-        (provider) => provider.provider_key === providerKey,
-      );
       drafts.setProviderState((current) => {
-        const currentProviderName = drafts.supportedProviders.find(
-          (provider) => provider.provider_key === current.providerKey,
-        )?.name;
-        const nextMethod = nextProvider?.methods[0];
-        return {
-          providerKey: nextProvider?.provider_key ?? "",
-          methodKey: nextMethod?.method_key ?? "",
-          displayName: syncDisplayNameOnProviderChange({
-            currentDisplayName: current.displayName,
-            currentProviderName,
-            nextProviderName: nextProvider?.name,
-          }),
-          configValues: {},
-          secretValues: {},
-        };
+        return selectProviderFormState({
+          currentState: current,
+          providerKey,
+          supportedProviders: drafts.supportedProviders,
+        });
       });
     },
     [drafts],
@@ -172,6 +156,7 @@ export function FirstRunOnboardingPage({
         <OnboardingProviderStep
           busy={submitBusy}
           canSave={Boolean(mutationHttp)}
+          configuredProviders={data.providers}
           filteredProviders={drafts.filteredProviders}
           onProviderFilterChange={drafts.setProviderFilter}
           onProviderSave={() => {
