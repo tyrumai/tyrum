@@ -37,7 +37,7 @@ export interface SidebarProps extends React.HTMLAttributes<HTMLElement> {
 const STORAGE_KEY_SECONDARY = "tyrum-sidebar-secondary-collapsed";
 const STORAGE_KEY_SIDEBAR = "tyrum-sidebar-collapsed";
 const SIDEBAR_EXPANDED_ROW_LAYOUT =
-  "grid w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-x-2";
+  "box-border grid w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-x-2";
 
 function readStoredBool(key: string, defaultValue: boolean): boolean {
   try {
@@ -165,6 +165,7 @@ function SidebarNav({
   return (
     <TooltipProvider>
       <nav
+        data-testid="sidebar-nav"
         className={cn(
           "flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto py-2",
           collapsed ? "px-1" : "px-2",
@@ -195,6 +196,7 @@ function SidebarNav({
               </button>
             ) : !collapsed ? (
               <div
+                data-testid="sidebar-secondary-label"
                 className={cn(
                   "mt-2 py-1 text-xs font-medium text-fg-muted",
                   SIDEBAR_EXPANDED_ROW_LAYOUT,

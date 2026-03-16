@@ -164,6 +164,7 @@ export function LayoutHarnessApp() {
     { id: "desktop", label: "Desktop", icon: HarnessIcon },
     { id: "onboarding", label: "Onboarding", icon: HarnessIcon },
   ];
+  const secondaryNavItems = [{ id: "node-browser", label: "Browser", icon: HarnessIcon }];
 
   return (
     <AppShell
@@ -173,6 +174,8 @@ export function LayoutHarnessApp() {
       sidebar={
         <Sidebar
           items={navItems}
+          secondaryItems={secondaryNavItems}
+          secondaryLabel="Node"
           activeItemId={route}
           onNavigate={() => undefined}
           collapsible
