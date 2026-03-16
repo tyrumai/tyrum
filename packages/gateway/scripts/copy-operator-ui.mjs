@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const packageRoot = resolve(__dirname, "..");
+const isWindows = process.platform === "win32";
 
 function pnpmCommand() {
   return process.platform === "win32" ? "pnpm.cmd" : "pnpm";
@@ -24,7 +25,11 @@ function findWorkspaceRoot(startDir) {
 
 function tryBuildWeb(repoRoot) {
   const args = ["--filter", "@tyrum/web", "build"];
-  const result = spawnSync(pnpmCommand(), args, { cwd: repoRoot, stdio: "inherit" });
+  const result = spawnSync(pnpmCommand(), args, {
+    cwd: repoRoot,
+    shell: isWindows,
+    stdio: "inherit",
+  });
   if (result.status === 0) return;
 
   const isMissingPnpm = result.error && String(result.error.message || "").includes("ENOENT");
@@ -32,6 +37,7 @@ function tryBuildWeb(repoRoot) {
 
   const corepackResult = spawnSync("corepack", ["pnpm", ...args], {
     cwd: repoRoot,
+    shell: isWindows,
     stdio: "inherit",
   });
   if (corepackResult.status === 0) return;

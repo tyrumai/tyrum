@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { cp, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -246,6 +246,7 @@ describe("desktop embedded gateway startup", () => {
       // Move the staged artifact outside the repo so the gateway cannot discover
       // workspace apps/web/dist and must resolve its packaged operator UI bundle.
       await cp(STAGED_GATEWAY_DIR, copiedGatewayDir, { recursive: true });
+      const copiedBundledOperatorUiDirReal = realpathSync(copiedBundledOperatorUiDir);
 
       const port = await findAvailablePort();
       const dbHome = join(tempRoot, "home");
@@ -355,7 +356,7 @@ describe("desktop embedded gateway startup", () => {
           ),
         ).toBe(true);
         expect(
-          gatewayLogs.some((line) => line.includes(`assets_dir=${copiedBundledOperatorUiDir}`)),
+          gatewayLogs.some((line) => line.includes(`assets_dir=${copiedBundledOperatorUiDirReal}`)),
         ).toBe(true);
       } catch (error) {
         throw new Error(

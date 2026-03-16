@@ -24,4 +24,10 @@ describe("copy-operator-ui script", () => {
     expect(script).toContain('resourcePath.startsWith("/ui/")');
     expect(script).toContain("verifyCopiedOperatorUiBuild(destDir);");
   });
+
+  it("uses shell mode for nested workspace builds on Windows", () => {
+    const script = readCopyScript();
+    expect(script).toContain('const isWindows = process.platform === "win32";');
+    expect(script).toContain("shell: isWindows");
+  });
 });
