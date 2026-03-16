@@ -19,18 +19,29 @@ Approvals are **enforcement**, not prompt guidance.
 
 ## Approval lifecycle
 
-1. **Requested:** the gateway persists an approval request.
-2. **Resolved:** an operator approves/denies (or it expires).
-3. **Applied:** the waiting workflow/run resumes, cancels, or escalates.
+1. **Requested:** the gateway persists an approval request and initializes its review posture.
+2. **Reviewed:** the approval may move through `queued`, `reviewing`, and `awaiting_human` while guardian, system, or human review progresses.
+3. **Resolved:** the approval becomes `approved`, `denied`, `expired`, or `cancelled`.
+4. **Applied:** the waiting workflow/run resumes, cancels, or escalates.
 
 Approvals must be safe to process more than once (idempotent resolution handling).
+
+## Review integration
+
+Approvals are reviewable durable records, not a single pending bit:
+
+- `auto_review` policy starts a new approval in `queued` so the guardian review processor can claim it.
+- `manual_only` starts the approval in `awaiting_human` and skips guardian work.
+- `latest_review` and `reviews` attach the durable reviewer audit trail directly to the approval record.
+
+See [Reviews](./reviews.md) for the guardian/human/system review pipeline behind these intermediate states.
 
 ## Cluster notes
 
 Approvals are durable records in the StateStore and should behave correctly when multiple gateway instances (and multiple operator clients) are active:
 
 - **Any gateway edge instance can serve the approval queue** (read from the StateStore) and accept resolution requests.
-- **Atomic resolution:** apply `pending → approved|denied|expired` transitions in a single durable write so double-submission is safe.
+- **Atomic resolution:** apply terminal transitions from `queued|reviewing|awaiting_human` to `approved|denied|expired|cancelled` in a single durable write so double-submission is safe.
 - **Durable side effects:** engine resume/cancel is driven by a leased, durable action queue so retries and multi-instance deployments do not duplicate side effects.
 - **At-least-once events:** `approval.updated` events may be delivered more than once; clients
   should dedupe using event ids. Re-emission of the same approval transition reuses the persisted
@@ -53,14 +64,16 @@ Approvals are scoped to durable identifiers, including `tenant_id`, `approval_id
 An approval request should be explicit about impact and traceability:
 
 - `approval_id`
+- `approval_key`
 - `prompt` (operator-facing)
-- `kind` (`spend`, `pii`, `workflow_step`, `pairing`, …)
+- `motivation` (why the system is asking)
+- `kind` (`workflow_step`, `intent`, `retry`, `policy`, `budget`, `takeover`, `connector.send`, …)
 - `scope` (agent/session/run/step identifiers)
-- `risk` and `estimated_cost` (when applicable)
-- `items_preview` (capped, optional)
+- `context` (bounded, optional)
 - `suggested_overrides` (optional; bounded list of safe “approve always” patterns for tool-policy approvals)
 - `expires_at`
 - `resume_token` (when the approval gates a paused workflow)
+- `latest_review` / `reviews` (when guardian or system review has already initialized the approval)
 
 ## Resolution
 
@@ -108,7 +121,7 @@ When a workflow step requires approval:
 
 Approvals should be observable via gateway-emitted events:
 
-- `approval.updated`
+- `approval.updated` (including guardian-review progress such as `queued`, `reviewing`, or `awaiting_human`)
 - `policy_override.created` (when `mode=always` creates an override)
 - `policy_override.revoked` / `policy_override.expired`
 - `run.paused` (with reason: approval)
@@ -120,8 +133,10 @@ Approvals should be observable via gateway-emitted events:
 The control panel should expose:
 
 - An **approval queue** (filterable by agent/run/kind)
+- Visible guardian/human review state while an approval is still unresolved
 - Approval details (prompt, preview, linked evidence/artifacts)
 - Approve **once** / approve **always** / deny with clear consequences
 - “Always” UI that presents the bounded `suggested_overrides` list (scope + match target + pattern) and requires selecting one or more suggestions
 - A policy override inventory (list/describe/revoke) with links back to the approvals and runs that created each override
+- Review evidence and reviewer attribution when the approval has already passed through guardian or system review
 - Deep links from notifications into the approval detail view
