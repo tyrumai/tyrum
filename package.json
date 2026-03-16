@@ -14,7 +14,7 @@
     "pretypecheck": "pnpm --filter @tyrum/schemas build && pnpm --filter @tyrum/client build && pnpm --filter @tyrum/cli-utils build && pnpm --filter @tyrum/desktop-node build && pnpm --filter @tyrum/operator-core build && pnpm --filter @tyrum/operator-ui build && node -e \"const fs=require('node:fs'); fs.rmSync('packages/schemas/tsconfig.tsbuildinfo',{force:true}); fs.rmSync('packages/gateway/tsconfig.tsbuildinfo',{force:true})\"",
     "build": "pnpm -r run build",
     "clean": "find apps packages -type d -name dist -prune -exec rm -rf {} +",
-    "test:prepare": "node scripts/check-native-sqlite.mjs && pnpm --filter @tyrum/schemas build && pnpm --filter @tyrum/client build && pnpm --filter @tyrum/cli-utils build && pnpm --filter @tyrum/operator-core build && pnpm --filter @tyrum/operator-ui build && pnpm --filter @tyrum/web build",
+    "test:prepare": "node scripts/check-native-sqlite.mjs && pnpm --filter @tyrum/schemas build && pnpm --filter @tyrum/client build && pnpm --filter @tyrum/cli-utils build && pnpm --filter @tyrum/operator-core build && pnpm --filter @tyrum/operator-ui build && pnpm --filter @tyrum/gateway build && pnpm --filter @tyrum/web build",
     "pretest": "pnpm test:prepare",
     "test": "vitest run",
     "pretest:watch": "pnpm test:prepare",
