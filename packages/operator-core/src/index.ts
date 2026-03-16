@@ -7,7 +7,7 @@ export {
 } from "./auth.js";
 export type { OperatorAuthStrategy } from "./auth.js";
 
-export { createGatewayAuthSession } from "./auth-session.js";
+export { createGatewayAuthSession, clearGatewayAuthSession } from "./auth-session.js";
 export {
   approvalUpdatedAt,
   isApprovalBlockedStatus,

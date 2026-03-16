@@ -3,9 +3,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tyrum/operator-core/browser", () => ({
+  clearGatewayAuthSession: vi.fn(),
   createBearerTokenAuth: vi.fn(),
   createDeviceIdentity: vi.fn(),
   createElevatedModeStore: vi.fn(),
+  createGatewayAuthSession: vi.fn(),
   createOperatorCore: vi.fn(),
   createOperatorCoreManager: vi.fn(),
   createTyrumHttpClient: vi.fn(),
@@ -41,8 +43,8 @@ describe("apps/web main bootstrap", () => {
 
   type WebAuthPersistence = {
     hasStoredToken: boolean;
-    saveToken: (token: string) => void;
-    clearToken: () => void;
+    saveToken: (token: string) => Promise<void>;
+    clearToken: () => Promise<void>;
   };
 
   type OperatorUiAppProps = {
@@ -116,6 +118,12 @@ describe("apps/web main bootstrap", () => {
       deviceIdentity as unknown as Awaited<ReturnType<typeof operatorCore.createDeviceIdentity>>,
     );
     vi.mocked(operatorCore.createOperatorCore).mockReturnValue({} as never);
+    vi.mocked(operatorCore.createGatewayAuthSession).mockResolvedValue(
+      new Response(null, { status: 204 }),
+    );
+    vi.mocked(operatorCore.clearGatewayAuthSession).mockResolvedValue(
+      new Response(null, { status: 204 }),
+    );
     vi.mocked(operatorCore.httpAuthForAuth).mockReturnValue({ type: "bearer", token: "baseline" });
     vi.mocked(operatorCore.createTyrumHttpClient).mockReturnValue({
       deviceTokens: {
@@ -149,6 +157,12 @@ describe("apps/web main bootstrap", () => {
       urlAuth,
     };
   };
+
+  const jsonResponse = (status: number, body: unknown): Response =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { "content-type": "application/json" },
+    });
 
   const getRenderedOperatorUiProps = (root: RootMock): OperatorUiAppProps => {
     const strictModeElement = root.render.mock.calls.at(-1)?.[0] as {
@@ -200,6 +214,11 @@ describe("apps/web main bootstrap", () => {
     const expectedWsUrl = `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/ws`;
 
     expect(operatorCore.createBearerTokenAuth).toHaveBeenCalledWith("test-token");
+    expect(operatorCore.createGatewayAuthSession).toHaveBeenCalledWith({
+      token: "test-token",
+      httpBaseUrl: expectedHttpBaseUrl,
+      credentials: "include",
+    });
     expect(setItemSpy).toHaveBeenCalledWith("tyrum-operator-token", "test-token");
     expect(operatorCore.createDeviceIdentity).toHaveBeenCalledTimes(1);
     expect(operatorCore.createOperatorCoreManager).toHaveBeenCalledWith(
@@ -249,6 +268,11 @@ describe("apps/web main bootstrap", () => {
 
     expect(operatorCore.createBearerTokenAuth).toHaveBeenCalledWith("url-token");
     expect(operatorCore.createBearerTokenAuth).not.toHaveBeenCalledWith("stored-token");
+    expect(operatorCore.createGatewayAuthSession).toHaveBeenCalledWith({
+      token: "url-token",
+      httpBaseUrl: window.location.origin,
+      credentials: "include",
+    });
     expect(setItemSpy).toHaveBeenCalledWith("tyrum-operator-token", "url-token");
     expect(core.connect).toHaveBeenCalledTimes(1);
     expect(replaceStateSpy).toHaveBeenCalledWith(expect.anything(), "", "/ui");
@@ -264,9 +288,70 @@ describe("apps/web main bootstrap", () => {
     await import("../src/main.tsx");
 
     expect(operatorCore.createBearerTokenAuth).toHaveBeenCalledWith("stored-token");
+    expect(operatorCore.createGatewayAuthSession).toHaveBeenCalledWith({
+      token: "stored-token",
+      httpBaseUrl: window.location.origin,
+      credentials: "include",
+    });
     expect(core.connect).toHaveBeenCalledTimes(1);
     expect(replaceStateSpy).not.toHaveBeenCalled();
     expect(getRenderedOperatorUiProps(root).webAuthPersistence.hasStoredToken).toBe(true);
+  });
+
+  it("drops invalid stored tokens when browser session bootstrap is unauthorized", async () => {
+    const { core, operatorCore, root, urlAuth } = await arrangeBootstrap("/ui");
+
+    localStorage.setItem("tyrum-operator-token", "stored-token");
+    vi.mocked(urlAuth.readAuthTokenFromUrl).mockReturnValue(undefined);
+    vi.mocked(urlAuth.stripAuthTokenFromUrl).mockReturnValue("/ui");
+    vi.mocked(operatorCore.createGatewayAuthSession).mockResolvedValue(
+      jsonResponse(401, { error: "unauthorized", message: "invalid token" }),
+    );
+    const removeItemSpy = vi.spyOn(Storage.prototype, "removeItem");
+
+    await import("../src/main.tsx");
+
+    expect(operatorCore.createBearerTokenAuth).toHaveBeenCalledWith("stored-token");
+    expect(operatorCore.createBearerTokenAuth).toHaveBeenLastCalledWith("");
+    expect(removeItemSpy).toHaveBeenCalledWith("tyrum-operator-token");
+    expect(core.connect).not.toHaveBeenCalled();
+    expect(getRenderedOperatorUiProps(root).webAuthPersistence.hasStoredToken).toBe(false);
+  });
+
+  it("keeps bearer bootstrap when browser session sync fails transiently", async () => {
+    const { core, operatorCore, urlAuth } = await arrangeBootstrap("/ui");
+
+    localStorage.setItem("tyrum-operator-token", "stored-token");
+    vi.mocked(urlAuth.readAuthTokenFromUrl).mockReturnValue(undefined);
+    vi.mocked(urlAuth.stripAuthTokenFromUrl).mockReturnValue("/ui");
+    vi.mocked(operatorCore.createGatewayAuthSession).mockRejectedValue(
+      new Error("gateway unavailable"),
+    );
+
+    await import("../src/main.tsx");
+
+    expect(operatorCore.createBearerTokenAuth).toHaveBeenCalledWith("stored-token");
+    expect(core.connect).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps bearer bootstrap when browser session sync returns a transient 5xx response", async () => {
+    const { core, operatorCore, urlAuth } = await arrangeBootstrap("/ui");
+
+    localStorage.setItem("tyrum-operator-token", "stored-token");
+    vi.mocked(urlAuth.readAuthTokenFromUrl).mockReturnValue(undefined);
+    vi.mocked(urlAuth.stripAuthTokenFromUrl).mockReturnValue("/ui");
+    vi.mocked(operatorCore.createGatewayAuthSession).mockResolvedValue(
+      jsonResponse(503, {
+        error: "service_unavailable",
+        message: "Authentication service is unavailable; please try again later.",
+      }),
+    );
+
+    await import("../src/main.tsx");
+
+    expect(operatorCore.createBearerTokenAuth).toHaveBeenCalledWith("stored-token");
+    expect(core.connect).toHaveBeenCalledTimes(1);
+    expect(localStorage.getItem("tyrum-operator-token")).toBe("stored-token");
   });
 
   it("prefers stored gateway URLs over browser defaults", async () => {
@@ -334,7 +419,7 @@ describe("apps/web main bootstrap", () => {
   });
 
   it("re-renders on manager updates and wires reload, gateway, and token persistence actions", async () => {
-    const { manager, reloadPage, root, urlAuth } = await arrangeBootstrap("/ui");
+    const { manager, operatorCore, reloadPage, root, urlAuth } = await arrangeBootstrap("/ui");
 
     vi.mocked(urlAuth.readAuthTokenFromUrl).mockReturnValue(undefined);
     vi.mocked(urlAuth.stripAuthTokenFromUrl).mockReturnValue("/ui");
@@ -356,10 +441,19 @@ describe("apps/web main bootstrap", () => {
     expect(typeof props.adminAccessController?.exit).toBe("function");
 
     props.onReloadPage();
-    props.webAuthPersistence.saveToken("next-token");
-    props.webAuthPersistence.clearToken();
+    await props.webAuthPersistence.saveToken("next-token");
+    await props.webAuthPersistence.clearToken();
     props.onReconfigureGateway("http://gateway.internal", "ws://gateway.internal/ws");
 
+    expect(operatorCore.createGatewayAuthSession).toHaveBeenCalledWith({
+      token: "next-token",
+      httpBaseUrl: window.location.origin,
+      credentials: "include",
+    });
+    expect(operatorCore.clearGatewayAuthSession).toHaveBeenCalledWith({
+      httpBaseUrl: window.location.origin,
+      credentials: "include",
+    });
     expect(setItemSpy).toHaveBeenCalledWith("tyrum-operator-token", "next-token");
     expect(removeItemSpy).toHaveBeenCalledWith("tyrum-operator-token");
     expect(setItemSpy).toHaveBeenCalledWith("tyrum-gateway-http", "http://gateway.internal");
@@ -387,7 +481,7 @@ describe("apps/web main bootstrap", () => {
   });
 
   it("surfaces token persistence failures to the caller instead of reloading", async () => {
-    const { reloadPage, root, urlAuth } = await arrangeBootstrap("/ui");
+    const { operatorCore, reloadPage, root, urlAuth } = await arrangeBootstrap("/ui");
 
     vi.mocked(urlAuth.readAuthTokenFromUrl).mockReturnValue(undefined);
     vi.mocked(urlAuth.stripAuthTokenFromUrl).mockReturnValue("/ui");
@@ -399,7 +493,38 @@ describe("apps/web main bootstrap", () => {
     await import("../src/main.tsx");
 
     const props = getRenderedOperatorUiProps(root);
-    expect(() => props.webAuthPersistence.saveToken("broken-token")).toThrow("storage unavailable");
+    await expect(props.webAuthPersistence.saveToken("broken-token")).rejects.toThrow(
+      "storage unavailable",
+    );
+    expect(operatorCore.clearGatewayAuthSession).toHaveBeenCalledWith({
+      httpBaseUrl: window.location.origin,
+      credentials: "include",
+    });
+    expect(reloadPage.reloadPage).not.toHaveBeenCalled();
+  });
+
+  it("keeps the saved token when logout fails", async () => {
+    const { operatorCore, reloadPage, root, urlAuth } = await arrangeBootstrap("/ui");
+
+    localStorage.setItem("tyrum-operator-token", "stored-token");
+    vi.mocked(urlAuth.readAuthTokenFromUrl).mockReturnValue(undefined);
+    vi.mocked(urlAuth.stripAuthTokenFromUrl).mockReturnValue("/ui");
+    vi.mocked(operatorCore.clearGatewayAuthSession).mockResolvedValue(
+      jsonResponse(503, {
+        error: "service_unavailable",
+        message: "Authentication service is unavailable; please try again later.",
+      }),
+    );
+    const removeItemSpy = vi.spyOn(Storage.prototype, "removeItem");
+
+    await import("../src/main.tsx");
+
+    const props = getRenderedOperatorUiProps(root);
+    await expect(props.webAuthPersistence.clearToken()).rejects.toThrow(
+      "Authentication service is unavailable; please try again later.",
+    );
+    expect(removeItemSpy).not.toHaveBeenCalled();
+    expect(localStorage.getItem("tyrum-operator-token")).toBe("stored-token");
     expect(reloadPage.reloadPage).not.toHaveBeenCalled();
   });
 });

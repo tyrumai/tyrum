@@ -10,6 +10,7 @@ import {
   DesktopEnvironmentListResponse,
   DesktopEnvironmentLogsResponse,
   DesktopEnvironmentMutateResponse,
+  DesktopEnvironmentTakeoverResponse,
   isDesktopEnvironmentHostAvailable,
   type DeploymentConfig as DeploymentConfigT,
   DesktopEnvironmentUpdateRequest,
@@ -300,6 +301,28 @@ export function createDesktopEnvironmentRoutes(deps: {
         status: "ok",
         environment_id: environmentId,
         logs,
+      }),
+    );
+  });
+
+  app.get("/desktop-environments/:environmentId/takeover-url", async (c) => {
+    requireAdmin(c);
+    const tenantId = requireTenantId(c);
+    const environment = await deps.environmentDal.get({
+      tenantId,
+      environmentId: c.req.param("environmentId"),
+    });
+    if (!environment) {
+      return c.json({ error: "not_found", message: "desktop environment not found" }, 404);
+    }
+    const takeoverUrl = readTrustedTakeoverUrl(environment.takeover_url);
+    if (!takeoverUrl) {
+      return c.json({ error: "conflict", message: "takeover unavailable" }, 409);
+    }
+    return c.json(
+      DesktopEnvironmentTakeoverResponse.parse({
+        status: "ok",
+        takeover_url: takeoverUrl,
       }),
     );
   });

@@ -9,6 +9,7 @@ import {
   DesktopEnvironmentListResponse,
   DesktopEnvironmentLogsResponse,
   DesktopEnvironmentMutateResponse,
+  DesktopEnvironmentTakeoverResponse,
   DesktopEnvironmentUpdateRequest,
 } from "@tyrum/schemas";
 import { HttpTransport, validateOrThrow, type TyrumRequestOptions } from "./shared.js";
@@ -25,6 +26,7 @@ export type DesktopEnvironmentUpdateInput = Parameters<
 export type DesktopEnvironmentMutateResult = DesktopEnvironmentMutateResponse;
 export type DesktopEnvironmentDeleteResult = DesktopEnvironmentDeleteResponse;
 export type DesktopEnvironmentLogsResult = DesktopEnvironmentLogsResponse;
+export type DesktopEnvironmentTakeoverResult = DesktopEnvironmentTakeoverResponse;
 export type DesktopEnvironmentDefaultsResult = DesktopEnvironmentDefaultsResponse;
 export type DesktopEnvironmentDefaultsUpdateInput = Parameters<
   typeof DesktopEnvironmentDefaultsUpdateRequest.parse
@@ -68,6 +70,10 @@ export interface DesktopEnvironmentsApi {
     options?: TyrumRequestOptions,
   ): Promise<DesktopEnvironmentMutateResult>;
   logs(environmentId: string, options?: TyrumRequestOptions): Promise<DesktopEnvironmentLogsResult>;
+  takeoverUrl(
+    environmentId: string,
+    options?: TyrumRequestOptions,
+  ): Promise<DesktopEnvironmentTakeoverResult>;
 }
 
 function environmentPath(environmentId: string): string {
@@ -195,6 +201,14 @@ export function createDesktopEnvironmentsApi(transport: HttpTransport): DesktopE
         method: "GET",
         path: `${environmentPath(environmentId)}/logs`,
         response: DesktopEnvironmentLogsResponse,
+        signal: options?.signal,
+      });
+    },
+    async takeoverUrl(environmentId, options) {
+      return await transport.request({
+        method: "GET",
+        path: `${environmentPath(environmentId)}/takeover-url`,
+        response: DesktopEnvironmentTakeoverResponse,
         signal: options?.signal,
       });
     },

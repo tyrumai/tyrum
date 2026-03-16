@@ -75,6 +75,13 @@ function createFakeHttpClient() {
       reset: vi.fn(async () => ({ status: "ok", environment: null })),
       remove: vi.fn(async () => ({ status: "ok", deleted: true })),
       logs: vi.fn(async () => ({ status: "ok", environment_id: "env-1", logs: [] })),
+      takeoverUrl: vi.fn(
+        async () =>
+          ({
+            status: "ok",
+            takeover_url: "http://127.0.0.1:6080/vnc.html?autoconnect=true",
+          }) as const,
+      ),
     },
   } as any;
 }

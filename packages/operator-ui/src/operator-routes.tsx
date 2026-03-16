@@ -67,7 +67,7 @@ const PairingPage = lazyNamed<{ core: OperatorCore }>(
   () => import("./components/pages/pairing-page.js"),
   "PairingPage",
 );
-const DesktopEnvironmentsPage = lazyNamed<{ core: OperatorCore }>(
+const DesktopEnvironmentsPage = lazyNamed<{ core: OperatorCore; mode?: OperatorUiMode }>(
   () => import("./components/pages/desktop-environments-page.js"),
   "DesktopEnvironmentsPage",
 );
@@ -216,7 +216,7 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
     navGroup: "sidebar",
     shortcut: false,
     hostKinds: SHARED_HOST_KINDS,
-    render: ({ core }) => <DesktopEnvironmentsPage core={core} />,
+    render: ({ core, mode }) => <DesktopEnvironmentsPage core={core} mode={mode} />,
   },
   {
     id: "configure",

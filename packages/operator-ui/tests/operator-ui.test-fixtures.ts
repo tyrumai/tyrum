@@ -425,6 +425,13 @@ export function createFakeHttpClient(): {
             logs: ["booting runtime", "runtime ready"],
           }) as const,
       ),
+      takeoverUrl: vi.fn(
+        async () =>
+          ({
+            status: "ok",
+            takeover_url: "http://127.0.0.1:6080/vnc.html?autoconnect=true",
+          }) as const,
+      ),
     },
     pairings: {
       list: pairingsList,

@@ -147,7 +147,9 @@ describe("DesktopEnvironmentsPage", () => {
     });
     const hostListCallsBeforeRender = http.desktopEnvironmentHosts.list.mock.calls.length;
     const environmentListCallsBeforeRender = http.desktopEnvironments.list.mock.calls.length;
-    const testRoot = renderIntoDocument(React.createElement(DesktopEnvironmentsPage, { core }));
+    const testRoot = renderIntoDocument(
+      React.createElement(DesktopEnvironmentsPage, { core, mode: "web" }),
+    );
     await flushPage();
 
     expect(testRoot.container.textContent).toContain(
@@ -341,20 +343,23 @@ describe("DesktopEnvironmentsPage", () => {
     core.dispose();
   });
 
-  it("renders managed hosts and a gateway takeover link via admin http", async () => {
+  it("renders the gateway takeover link in same-origin web mode", async () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
     adminHttpClient = http;
+    const httpBaseUrl = window.location.origin;
 
     const core = createOperatorCore({
       wsUrl: "ws://example.test/ws",
-      httpBaseUrl: "http://example.test",
+      httpBaseUrl,
       auth: createBearerTokenAuth("test"),
       deps: { ws, http },
     });
     const hostListCallsBeforeRender = http.desktopEnvironmentHosts.list.mock.calls.length;
     const environmentListCallsBeforeRender = http.desktopEnvironments.list.mock.calls.length;
-    const testRoot = renderIntoDocument(React.createElement(DesktopEnvironmentsPage, { core }));
+    const testRoot = renderIntoDocument(
+      React.createElement(DesktopEnvironmentsPage, { core, mode: "web" }),
+    );
     await flushPage();
 
     expect(testRoot.container.textContent).toContain("Gateway-managed desktop environments");
@@ -370,7 +375,46 @@ describe("DesktopEnvironmentsPage", () => {
     const takeoverLink = testRoot.container.querySelector<HTMLAnchorElement>(
       '[data-testid="desktop-environment-takeover-env-1"]',
     );
-    expect(takeoverLink?.href).toBe("http://example.test/desktop-environments/env-1/takeover");
+    expect(takeoverLink?.href).toBe(`${httpBaseUrl}/desktop-environments/env-1/takeover`);
+    expect(http.desktopEnvironments.takeoverUrl).not.toHaveBeenCalled();
+
+    cleanupTestRoot(testRoot);
+    core.dispose();
+  });
+
+  it("resolves a trusted takeover URL before opening takeover in cross-origin web mode", async () => {
+    const ws = new FakeWsClient();
+    const { http } = createFakeHttpClient();
+    adminHttpClient = http;
+    const openSpy = vi.spyOn(window, "open").mockReturnValue({} as Window);
+
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test"),
+      deps: { ws, http },
+    });
+    const testRoot = renderIntoDocument(
+      React.createElement(DesktopEnvironmentsPage, { core, mode: "web" }),
+    );
+    await flushPage();
+
+    const takeoverButton = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="desktop-environment-takeover-env-1"]',
+    );
+    expect(takeoverButton).not.toBeNull();
+
+    await act(async () => {
+      click(takeoverButton!);
+      await Promise.resolve();
+    });
+
+    expect(http.desktopEnvironments.takeoverUrl).toHaveBeenCalledWith("env-1");
+    expect(openSpy).toHaveBeenCalledWith(
+      "http://127.0.0.1:6080/vnc.html?autoconnect=true",
+      "_blank",
+      "noopener,noreferrer",
+    );
 
     cleanupTestRoot(testRoot);
     core.dispose();
