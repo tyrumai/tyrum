@@ -5,23 +5,35 @@ import type { BrowserWindow } from "electron";
 export class MockGatewayManager extends EventEmitter {
   public status: "stopped" | "starting" | "running" | "error" = "stopped";
   public lastStartOptions: unknown;
+  public startCalls = 0;
+  public stopCalls = 0;
+  public bootstrapToken: string | undefined = "tyrum-token.v1.bootstrap.token";
+  public issuedDefaultTenantAdminTokenValue = "tyrum-token.v1.issued.token";
+  public issueDefaultTenantAdminTokenCalls = 0;
 
   async start(opts?: unknown): Promise<void> {
     this.lastStartOptions = opts;
+    this.startCalls += 1;
     this.status = "running";
     this.emit("status-change", "running");
   }
 
   async stop(): Promise<void> {
+    this.stopCalls += 1;
     this.status = "stopped";
     this.emit("status-change", "stopped");
   }
 
   getBootstrapToken(label: string): string | undefined {
     if (label === "default-tenant-admin") {
-      return "tyrum-token.v1.bootstrap.token";
+      return this.bootstrapToken;
     }
     return undefined;
+  }
+
+  async issueDefaultTenantAdminToken(): Promise<string> {
+    this.issueDefaultTenantAdminTokenCalls += 1;
+    return this.issuedDefaultTenantAdminTokenValue;
   }
 }
 

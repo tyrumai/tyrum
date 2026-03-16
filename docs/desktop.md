@@ -24,6 +24,11 @@ Start an embedded gateway managed by the desktop app.
 1. Keep the default port (`8788`) or pick a free port.
 2. Click **Start Gateway**.
 
+Embedded mode stores its saved gateway token in the desktop config and recovers it automatically if
+that saved value is missing or can no longer be decrypted. If the gateway is provisioned with
+`GATEWAY_TOKEN` or `TYRUM_GATEWAY_TOKEN`, the desktop app reuses and persists that token for later
+embedded reconnects.
+
 When the desktop app is connected, it maintains two gateway connections on this machine:
 
 - an operator client connection for the UI
@@ -72,7 +77,9 @@ the dashboard if you want to use it.
 
 - Confirm the gateway is reachable from your machine (host/port/firewalls).
 - Confirm the WebSocket URL includes `/ws`.
-- If you changed `GATEWAY_TOKEN`, update the token used by the desktop app.
+- Remote mode: if you changed `GATEWAY_TOKEN`, update the token used by the desktop app.
+- Embedded mode: restarting the embedded gateway recovers a missing saved token automatically; you
+  should not need to delete the embedded gateway database just to regain access.
 
 ### macOS permissions
 
