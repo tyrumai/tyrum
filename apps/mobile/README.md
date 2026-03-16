@@ -1,6 +1,6 @@
 # `@tyrum/mobile`
 
-Capacitor mobile shell for Tyrum operator UI and the local iOS/Android node runtime.
+Capacitor mobile shell for Tyrum and the local iOS/Android node runtime.
 
 ## Prerequisites
 
@@ -73,7 +73,7 @@ Capacitor mobile shell for Tyrum operator UI and the local iOS/Android node runt
 - Expected smoke path:
   - app launches
   - bootstrap form saves
-  - operator UI connects
+  - Tyrum connects
   - the mobile platform page is visible
   - node enable/disable and action toggles persist after relaunch
 - Simulator notes:
@@ -101,7 +101,7 @@ Capacitor mobile shell for Tyrum operator UI and the local iOS/Android node runt
 - Expected smoke path:
   - app launches
   - bootstrap form saves
-  - operator UI connects
+  - Tyrum connects
   - the mobile platform page is visible
   - node enable/disable and action toggles persist after relaunch
 - Emulator notes:

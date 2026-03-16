@@ -43,7 +43,7 @@ function ErrorScreen({
     <div className="flex min-h-screen items-center justify-center bg-bg px-4 text-fg">
       <Card className="w-full max-w-lg">
         <CardContent className="grid gap-4 pt-6">
-          <Alert variant="error" title="Mobile app bootstrap failed" description={errorMessage} />
+          <Alert variant="error" title="Tyrum bootstrap failed" description={errorMessage} />
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={onReset}>
               Reset config
@@ -98,7 +98,7 @@ function MobileRoot() {
         <Alert
           variant="warning"
           title="Network unavailable"
-          description="Tyrum Mobile will reconnect automatically when the device is back online."
+          description="Tyrum will reconnect automatically when the device is back online."
         />
       ) : null}
       {bootstrapIntents.errorMessage && !setupDraft ? (
@@ -112,7 +112,7 @@ function MobileRoot() {
   );
 
   if (operator.busy && !operator.bootstrap && !operator.core) {
-    return <LoadingScreen label="Loading Tyrum Mobile…" />;
+    return <LoadingScreen label="Loading Tyrum…" />;
   }
 
   if (!bootstrap || setupDraft) {
@@ -143,7 +143,7 @@ function MobileRoot() {
 
   if (!operator.core || !operator.adminAccessController) {
     if (operator.busy) {
-      return <LoadingScreen label="Connecting to the Tyrum gateway…" />;
+      return <LoadingScreen label="Connecting to the gateway…" />;
     }
 
     if (operator.errorMessage) {
@@ -162,7 +162,7 @@ function MobileRoot() {
 
     return (
       <ErrorScreen
-        errorMessage="Operator core is unavailable."
+        errorMessage="Tyrum is unavailable."
         onRetry={operator.retry}
         onReset={() => {
           void operator.clearConfig();

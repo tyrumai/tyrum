@@ -43,7 +43,7 @@ export const SCOPE_PRESETS: ReadonlyArray<{
   scopes: readonly string[];
 }> = [
   { key: "read_only", label: "Read only", scopes: ["operator.read"] },
-  { key: "operator", label: "Operator", scopes: ["operator.read", "operator.write"] },
+  { key: "operator", label: "Standard", scopes: ["operator.read", "operator.write"] },
   { key: "approvals", label: "Approvals", scopes: ["operator.read", "operator.approvals"] },
   { key: "pairing", label: "Pairing", scopes: ["operator.read", "operator.pairing"] },
   {
@@ -217,7 +217,7 @@ export function defaultFormState(): TokenFormState {
   return {
     displayName: "",
     role: "client",
-    deviceId: "operator-ui",
+    deviceId: "tyrum",
     scopePreset: "read_only",
     selectedScopes: presetScopes("read_only"),
     expirationPreset: "24h",

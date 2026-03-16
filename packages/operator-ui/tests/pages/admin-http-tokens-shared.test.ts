@@ -21,7 +21,7 @@ describe("admin-http-tokens-shared", () => {
       tenant_id: "11111111-1111-4111-8111-111111111111",
       display_name: "Preset token",
       role: "client",
-      device_id: "operator-ui",
+      device_id: "tyrum",
       scopes: ["operator.read"],
       issued_at: "2026-02-01T00:00:00.000Z",
       expires_at: "2026-03-02T00:00:30.000Z",
@@ -47,7 +47,7 @@ describe("admin-http-tokens-shared", () => {
     ).toEqual({
       display_name: "Preset token renamed",
       role: "client",
-      device_id: "operator-ui",
+      device_id: "tyrum",
       scopes: ["operator.read"],
     });
   });

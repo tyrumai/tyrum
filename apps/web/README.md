@@ -1,13 +1,13 @@
 # `@tyrum/web`
 
-Standalone Vite operator web app for Tyrum.
+Standalone Vite web app for Tyrum.
 
 ## Purpose
 
 This app boots `@tyrum/operator-ui` in a browser environment and connects it to the gateway via
 `@tyrum/operator-core/browser`.
 
-The gateway can also serve a bundled operator UI at `/ui`. This app exists for standalone web
+The gateway can also serve the bundled Tyrum web app at `/ui`. This app exists for standalone web
 development and browser-focused iteration.
 
 ## Entry point

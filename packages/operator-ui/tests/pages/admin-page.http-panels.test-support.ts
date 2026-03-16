@@ -273,7 +273,7 @@ export function createPanelsCore(activeAdminMode: boolean): { core: OperatorCore
           token_id: "token-1",
           tenant_id: "11111111-1111-4111-8111-111111111111",
           role: "client",
-          device_id: "operator-ui",
+          device_id: "tyrum",
           scopes: [],
           issued_at: "2026-03-01T00:00:00.000Z",
         })),

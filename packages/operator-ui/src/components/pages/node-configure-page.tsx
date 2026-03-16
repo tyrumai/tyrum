@@ -84,7 +84,7 @@ function DesktopNodeConfigurePage({
   return (
     <AppPage contentClassName="max-w-6xl gap-4" scrollAreaRef={scrollAreaRef}>
       <div className="text-sm text-fg-muted">
-        Configure the local node runtime used by Tyrum Desktop.
+        Configure the local node runtime used by the desktop app.
       </div>
 
       <Tabs

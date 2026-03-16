@@ -19,7 +19,7 @@ This checklist covers manual smoke testing for the tracked native iOS and Androi
   - HTTP `http://127.0.0.1:8788`
   - WebSocket `ws://127.0.0.1:8788/ws`
   - bootstrap token
-- [ ] Operator UI connects after saving config
+- [ ] Tyrum connects after saving config
 - [ ] Mobile platform page is visible
 - [ ] Toggling node enabled state updates the UI and survives relaunch
 - [ ] Toggling mobile actions updates the UI and survives relaunch
@@ -35,7 +35,7 @@ This checklist covers manual smoke testing for the tracked native iOS and Androi
   - HTTP `http://10.0.2.2:8788`
   - WebSocket `ws://10.0.2.2:8788/ws`
   - bootstrap token
-- [ ] Operator UI connects after saving config
+- [ ] Tyrum connects after saving config
 - [ ] Mobile platform page is visible
 - [ ] Toggling node enabled state updates the UI and survives relaunch
 - [ ] Toggling mobile actions updates the UI and survives relaunch

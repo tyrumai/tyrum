@@ -10,7 +10,7 @@ describe("Desktop docs (Issue #841)", () => {
   it("adds desktop developer README", async () => {
     const readme = await readFile(resolve(repoRoot, "apps/desktop/README.md"), "utf8");
 
-    expect(readme).toMatch(/^# Tyrum Desktop/m);
+    expect(readme).toMatch(/^# Desktop app/m);
     expect(readme).toMatch(/^## Purpose/m);
     expect(readme).toMatch(/^## Prerequisites/m);
     expect(readme).toMatch(/^## Build/m);
@@ -26,7 +26,7 @@ describe("Desktop docs (Issue #841)", () => {
   it("adds desktop user docs", async () => {
     const doc = await readFile(resolve(repoRoot, "docs/desktop.md"), "utf8");
 
-    expect(doc).toMatch(/^# Tyrum Desktop/m);
+    expect(doc).toMatch(/^# Desktop app/m);
     expect(doc).toMatch(/^## Install/m);
     expect(doc).toMatch(/GitHub Releases/);
     expect(doc).toMatch(/^## First run/m);

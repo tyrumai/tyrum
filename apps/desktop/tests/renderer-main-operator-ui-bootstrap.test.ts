@@ -235,7 +235,7 @@ describe("desktop renderer main bootstrap", () => {
     if (!alert) {
       throw new Error("Alert element not found.");
     }
-    expect(alert.props.title).toBe("Operator connection unavailable");
+    expect(alert.props.title).toBe("Connection unavailable");
     expect(alert.props.description).toBe("boom");
 
     const button = findFirstElement(tree, (el) => el.type === ButtonMock);

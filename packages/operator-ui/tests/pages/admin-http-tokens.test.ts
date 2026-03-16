@@ -35,7 +35,7 @@ function createCore(): OperatorCore {
           tenant_id: "11111111-1111-4111-8111-111111111111",
           display_name: "Operator token",
           role: "client",
-          device_id: "operator-ui",
+          device_id: "tyrum",
           scopes: [],
           issued_at: "2026-03-01T00:00:00.000Z",
           updated_at: "2026-03-01T00:00:00.000Z",
@@ -203,7 +203,7 @@ describe("AuthTokensCard", () => {
             tenant_id: "11111111-1111-4111-8111-111111111111",
             display_name: "Operator token",
             role: "client",
-            device_id: "operator-ui",
+            device_id: "tyrum",
             scopes: [],
             issued_at: "2026-03-01T00:00:00.000Z",
             updated_at: "2026-03-01T00:00:00.000Z",
@@ -271,7 +271,7 @@ describe("AuthTokensCard", () => {
         tenant_id: "11111111-1111-4111-8111-111111111111",
         display_name: "Expired token",
         role: "client",
-        device_id: "operator-ui",
+        device_id: "tyrum",
         scopes: ["operator.read"],
         issued_at: "2026-02-01T00:00:00.000Z",
         expires_at: "2026-02-28T23:59:59.000Z",
@@ -331,7 +331,7 @@ describe("AuthTokensCard", () => {
         tenant_id: "11111111-1111-4111-8111-111111111111",
         display_name: "Preset token",
         role: "client" as const,
-        device_id: "operator-ui",
+        device_id: "tyrum",
         scopes: ["operator.read"],
         issued_at: "2026-02-01T00:00:00.000Z",
         expires_at: "2026-03-02T00:00:30.000Z",
@@ -366,7 +366,7 @@ describe("AuthTokensCard", () => {
       expect(findPatchPayload(fetchMock, "preset-token")).toEqual({
         display_name: "Preset token renamed",
         role: "client",
-        device_id: "operator-ui",
+        device_id: "tyrum",
         scopes: ["operator.read"],
       });
     } finally {
@@ -386,7 +386,7 @@ describe("AuthTokensCard", () => {
         tenant_id: "11111111-1111-4111-8111-111111111111",
         display_name: "Custom token",
         role: "client" as const,
-        device_id: "operator-ui",
+        device_id: "tyrum",
         scopes: ["operator.read"],
         issued_at: "2026-02-01T00:00:00.000Z",
         expires_at: "2026-03-05T12:34:56.000Z",
@@ -421,7 +421,7 @@ describe("AuthTokensCard", () => {
       expect(findPatchPayload(fetchMock, "custom-token")).toEqual({
         display_name: "Custom token renamed",
         role: "client",
-        device_id: "operator-ui",
+        device_id: "tyrum",
         scopes: ["operator.read"],
       });
     } finally {
@@ -441,7 +441,7 @@ describe("AuthTokensCard", () => {
         tenant_id: "11111111-1111-4111-8111-111111111111",
         display_name: "Timed token",
         role: "client" as const,
-        device_id: "operator-ui",
+        device_id: "tyrum",
         scopes: ["operator.read"],
         issued_at: "2026-02-01T00:00:00.000Z",
         expires_at: "2026-03-02T00:00:30.000Z",
@@ -478,7 +478,7 @@ describe("AuthTokensCard", () => {
       expect(findPatchPayload(fetchMock, "never-token")).toEqual({
         display_name: "Timed token",
         role: "client",
-        device_id: "operator-ui",
+        device_id: "tyrum",
         scopes: ["operator.read"],
         expires_at: null,
       });

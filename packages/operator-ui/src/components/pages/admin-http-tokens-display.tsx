@@ -68,7 +68,7 @@ function MobileBootstrapQrDialog({
         <DialogHeader>
           <DialogTitle>Mobile bootstrap QR</DialogTitle>
           <DialogDescription>
-            Scan this code in Tyrum Mobile or open the copied mobile link on the device.
+            Scan this code in Tyrum on your mobile device, or open the copied mobile link there.
           </DialogDescription>
         </DialogHeader>
 

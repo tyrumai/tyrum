@@ -339,7 +339,7 @@ describe("useMobileNode", () => {
       | undefined;
 
     expect(deviceInfoMock).toHaveBeenCalledTimes(1);
-    expect(clientOptions?.device?.label).toBe("Tyrum Mobile (Ron phone)");
+    expect(clientOptions?.device?.label).toBe("Tyrum mobile app (Ron phone)");
     expect(clientOptions?.device?.platform).toBe("ios");
     expect(clientOptions?.device?.version).toBe("18.1");
 

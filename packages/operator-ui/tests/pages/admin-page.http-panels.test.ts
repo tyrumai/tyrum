@@ -150,7 +150,7 @@ describe("ConfigurePage (strict admin tabs)", () => {
             token_id: "dev_test_id",
             tenant_id: "11111111-1111-4111-8111-111111111111",
             display_name: "Operator token",
-            device_id: "operator-ui",
+            device_id: "tyrum",
             role: "client",
             scopes: [],
             issued_at: "2026-03-01T00:00:00.000Z",
@@ -224,7 +224,7 @@ describe("ConfigurePage (strict admin tabs)", () => {
         display_name: "Operator token",
         role: "client",
         scopes: ["operator.read"],
-        device_id: "operator-ui",
+        device_id: "tyrum",
         ttl_seconds: 86400,
       });
     } finally {
@@ -249,7 +249,7 @@ describe("ConfigurePage (strict admin tabs)", () => {
                 tenant_id: "11111111-1111-4111-8111-111111111111",
                 display_name: "Expired token",
                 role: "client",
-                device_id: "operator-ui",
+                device_id: "tyrum",
                 scopes: ["operator.read"],
                 issued_at: "2026-02-01T00:00:00.000Z",
                 expires_at: "2026-02-28T23:59:59.000Z",

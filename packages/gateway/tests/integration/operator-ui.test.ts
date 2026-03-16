@@ -27,7 +27,7 @@ describe("operator UI static hosting (/ui)", () => {
         "<html>",
         "<head>",
         '<meta charset="utf-8">',
-        "<title>Tyrum Operator</title>",
+        "<title>Tyrum</title>",
         "</head>",
         "<body>",
         '<div id="root"></div>',
@@ -61,7 +61,7 @@ describe("operator UI static hosting (/ui)", () => {
     expect(res.headers.get("x-content-type-options")).toBe("nosniff");
     expect(res.headers.get("x-frame-options")).toBe("DENY");
     const html = await res.text();
-    expect(html).toContain("<title>Tyrum Operator</title>");
+    expect(html).toContain("<title>Tyrum</title>");
   });
 
   it("sets security headers on the SPA entry response (/ui/)", async () => {
