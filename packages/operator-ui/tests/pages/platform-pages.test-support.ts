@@ -2,9 +2,7 @@ import React, { act } from "react";
 import { expect, vi } from "vitest";
 import type { DesktopApi } from "../../src/desktop-api.js";
 import { BrowserNodeProvider } from "../../src/browser-node/browser-node-provider.js";
-import { NodeConfigurePage } from "../../src/components/pages/node-configure-page.js";
-import { BrowserCapabilitiesPage } from "../../src/components/pages/platform/browser-capabilities-page.js";
-import { MobilePlatformPage } from "../../src/components/pages/platform/mobile-platform-page.js";
+import { NodeConfigPage } from "../../src/components/pages/node-config/node-config-page.js";
 import { OperatorUiHostProvider } from "../../src/host/host-api.js";
 import type { MobileHostApi } from "../../src/host/host-api.js";
 import { cleanupTestRoot, renderIntoDocument, type TestRoot } from "../test-utils.js";
@@ -153,6 +151,41 @@ export async function clickSwitchAndFlush(container: HTMLElement, index: number)
   await clickElementAndFlush(toggle);
 }
 
+export async function clickSwitchByAriaLabelAndFlush(
+  container: HTMLElement,
+  ariaLabel: string,
+): Promise<void> {
+  const toggle = container.querySelector<HTMLButtonElement>(
+    `[role="switch"][aria-label="${ariaLabel}"]`,
+  );
+  expect(toggle).not.toBeNull();
+  await clickElementAndFlush(toggle);
+}
+
+export async function expandCapabilityCard(
+  container: HTMLElement,
+  capabilityLabel: string,
+): Promise<void> {
+  // Find the expand button near the capability whose label matches.
+  // Each capability card has a Switch with aria-label "Toggle <label>".
+  // The expand button is in the same card, with aria-label "Expand".
+  const switches = Array.from(
+    container.querySelectorAll<HTMLButtonElement>(
+      `[role="switch"][aria-label="Toggle ${capabilityLabel}"]`,
+    ),
+  );
+  expect(switches.length).toBeGreaterThan(0);
+  const card =
+    switches[0]!.closest('[class*="card"]') ??
+    switches[0]!.parentElement?.parentElement?.parentElement?.parentElement;
+  expect(card).not.toBeNull();
+  const expandButton = card?.querySelector<HTMLButtonElement>('[aria-label="Expand"]');
+  if (expandButton) {
+    await clickElementAndFlush(expandButton);
+  }
+  // If already expanded (aria-label="Collapse"), do nothing.
+}
+
 export async function clickTabAndFlush(container: HTMLElement, label: string): Promise<void> {
   const tab = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="tab"]')).find((el) =>
     el.textContent?.includes(label),
@@ -195,18 +228,22 @@ export async function withBrowserCapabilitiesPage(
     React.createElement(
       BrowserNodeProvider,
       { wsUrl: "ws://example.test/ws" },
-      React.createElement(BrowserCapabilitiesPage),
+      React.createElement(
+        OperatorUiHostProvider,
+        { value: { kind: "web" as const } },
+        React.createElement(NodeConfigPage),
+      ),
     ),
     run,
   );
 }
 
-export async function withDesktopNodeConfigurePage(
+export async function withDesktopNodeConfigPage(
   api: DesktopApi,
   run: (testRoot: TestRoot) => Promise<void> | void,
-  props?: React.ComponentProps<typeof NodeConfigurePage>,
+  props?: React.ComponentProps<typeof NodeConfigPage>,
 ): Promise<void> {
-  await withNodeConfigurePage({ kind: "desktop", api }, run, props);
+  await withNodeConfigPage({ kind: "desktop", api }, run, props);
 }
 
 export function createMobileHostApi(
@@ -268,18 +305,18 @@ export async function withMobilePlatformPage(
     React.createElement(
       OperatorUiHostProvider,
       { value: { kind: "mobile", api } },
-      React.createElement(MobilePlatformPage),
+      React.createElement(NodeConfigPage),
     ),
     run,
   );
 }
 
-export async function withHostNodeConfigurePage(
+export async function withHostNodeConfigPage(
   host: HostValue,
   run: (testRoot: TestRoot) => Promise<void> | void,
-  props?: React.ComponentProps<typeof NodeConfigurePage>,
+  props?: React.ComponentProps<typeof NodeConfigPage>,
 ): Promise<void> {
-  await withNodeConfigurePage(host, run, props);
+  await withNodeConfigPage(host, run, props);
 }
 
 async function clickElementAndFlush(element: HTMLElement | null | undefined): Promise<void> {
@@ -289,16 +326,16 @@ async function clickElementAndFlush(element: HTMLElement | null | undefined): Pr
   });
 }
 
-async function withNodeConfigurePage(
+async function withNodeConfigPage(
   host: HostValue,
   run: (testRoot: TestRoot) => Promise<void> | void,
-  props?: React.ComponentProps<typeof NodeConfigurePage>,
+  props?: React.ComponentProps<typeof NodeConfigPage>,
 ): Promise<void> {
   await withRenderedElement(
     React.createElement(
       OperatorUiHostProvider,
       { value: host },
-      React.createElement(NodeConfigurePage, props),
+      React.createElement(NodeConfigPage, props),
     ),
     run,
   );
@@ -315,3 +352,7 @@ async function withRenderedElement(
     cleanupTestRoot(testRoot);
   }
 }
+
+// Backward-compatible aliases for existing test call sites.
+export const withDesktopNodeConfigurePage = withDesktopNodeConfigPage;
+export const withHostNodeConfigurePage = withHostNodeConfigPage;

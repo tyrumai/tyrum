@@ -111,16 +111,6 @@ async function flushEffects(): Promise<void> {
   });
 }
 
-async function clickButton(label: string): Promise<void> {
-  const button = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find((el) =>
-    el.textContent?.includes(label),
-  );
-  expect(button).not.toBeUndefined();
-  await act(async () => {
-    button?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-  });
-}
-
 afterEach(() => {
   clientInstances.length = 0;
   vi.restoreAllMocks();
@@ -225,8 +215,6 @@ describe("BrowserNodeProvider", () => {
   it("cancels pending consent and persists disabled state", async () => {
     const { BrowserNodeProvider, useBrowserNode } =
       await import("../../src/browser-node/browser-node-provider.js");
-    const { BrowserCapabilitiesPage } =
-      await import("../../src/components/pages/platform/browser-capabilities-page.js");
 
     stubLocalStorage({ "tyrum.operator-ui.browserNode.enabled": "1" });
     stubBrowserApis();
@@ -247,12 +235,7 @@ describe("BrowserNodeProvider", () => {
         React.createElement(
           BrowserNodeProvider,
           { wsUrl: "ws://example.test/ws-1" },
-          React.createElement(
-            React.Fragment,
-            null,
-            React.createElement(ApiCapture, { onChange: (api) => (capturedApi = api) }),
-            React.createElement(BrowserCapabilitiesPage),
-          ),
+          React.createElement(ApiCapture, { onChange: (api) => (capturedApi = api) }),
         ),
       );
     });
@@ -261,7 +244,16 @@ describe("BrowserNodeProvider", () => {
       await flushEffects();
       await flushEffects();
 
-      await clickButton("Get location");
+      // Trigger the consent dialog by calling executeLocal directly.
+      await act(async () => {
+        void capturedApi.executeLocal({
+          op: "geolocation.get",
+          enable_high_accuracy: false,
+          timeout_ms: 30_000,
+          maximum_age_ms: 0,
+        });
+        await Promise.resolve();
+      });
       await flushEffects();
 
       expect(document.querySelector("[data-testid='browser-node-consent-dialog']")).not.toBeNull();
@@ -279,12 +271,21 @@ describe("BrowserNodeProvider", () => {
   });
 
   it("shows a distinct effective capability description when the executor is active", async () => {
-    const { BrowserNodeProvider } = await import("../../src/browser-node/browser-node-provider.js");
-    const { BrowserCapabilitiesPage } =
-      await import("../../src/components/pages/platform/browser-capabilities-page.js");
+    const { BrowserNodeProvider, useBrowserNode } =
+      await import("../../src/browser-node/browser-node-provider.js");
 
     stubLocalStorage({ "tyrum.operator-ui.browserNode.enabled": "1" });
     stubBrowserApis();
+
+    let capturedApi: any = null;
+
+    function ApiCapture({ onChange }: { onChange: (api: unknown) => void }) {
+      const api = useBrowserNode();
+      useEffect(() => {
+        onChange(api);
+      }, [api, onChange]);
+      return null;
+    }
 
     const testRoot = createTestRoot();
     act(() => {
@@ -292,7 +293,7 @@ describe("BrowserNodeProvider", () => {
         React.createElement(
           BrowserNodeProvider,
           { wsUrl: "ws://example.test/ws-1" },
-          React.createElement(BrowserCapabilitiesPage),
+          React.createElement(ApiCapture, { onChange: (api) => (capturedApi = api) }),
         ),
       );
     });
@@ -301,20 +302,35 @@ describe("BrowserNodeProvider", () => {
       await flushEffects();
       await flushEffects();
 
-      expect(document.body.textContent).toContain("Effective available · active");
-      expect(document.body.textContent).not.toContain("Effective available · available");
+      // When the executor is active and capabilities are enabled,
+      // the capability status should be "available" (not "unavailable").
+      expect(capturedApi).not.toBeNull();
+      expect(capturedApi.enabled).toBe(true);
+      expect(capturedApi.status).toBe("connected");
+
+      const states = capturedApi.capabilityStates;
+      expect(states["geolocation.get"].availability_status).toBe("available");
     } finally {
       cleanupTestRoot(testRoot);
     }
   });
 
   it("clears the consent dialog when wsUrl changes", async () => {
-    const { BrowserNodeProvider } = await import("../../src/browser-node/browser-node-provider.js");
-    const { BrowserCapabilitiesPage } =
-      await import("../../src/components/pages/platform/browser-capabilities-page.js");
+    const { BrowserNodeProvider, useBrowserNode } =
+      await import("../../src/browser-node/browser-node-provider.js");
 
     stubLocalStorage({ "tyrum.operator-ui.browserNode.enabled": "1" });
     stubBrowserApis();
+
+    let capturedApi: any = null;
+
+    function ApiCapture({ onChange }: { onChange: (api: unknown) => void }) {
+      const api = useBrowserNode();
+      useEffect(() => {
+        onChange(api);
+      }, [api, onChange]);
+      return null;
+    }
 
     const testRoot = createTestRoot();
 
@@ -323,7 +339,7 @@ describe("BrowserNodeProvider", () => {
         React.createElement(
           BrowserNodeProvider,
           { wsUrl: "ws://example.test/ws-1" },
-          React.createElement(BrowserCapabilitiesPage),
+          React.createElement(ApiCapture, { onChange: (api) => (capturedApi = api) }),
         ),
       );
     });
@@ -332,7 +348,16 @@ describe("BrowserNodeProvider", () => {
       await flushEffects();
       await flushEffects();
 
-      await clickButton("Get location");
+      // Trigger the consent dialog by calling executeLocal directly.
+      await act(async () => {
+        void capturedApi.executeLocal({
+          op: "geolocation.get",
+          enable_high_accuracy: false,
+          timeout_ms: 30_000,
+          maximum_age_ms: 0,
+        });
+        await Promise.resolve();
+      });
       await flushEffects();
 
       expect(document.querySelector("[data-testid='browser-node-consent-dialog']")).not.toBeNull();
@@ -342,7 +367,7 @@ describe("BrowserNodeProvider", () => {
           React.createElement(
             BrowserNodeProvider,
             { wsUrl: "ws://example.test/ws-2" },
-            React.createElement(BrowserCapabilitiesPage),
+            React.createElement(ApiCapture, { onChange: (api) => (capturedApi = api) }),
           ),
         );
         await Promise.resolve();

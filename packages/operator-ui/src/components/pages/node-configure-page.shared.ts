@@ -4,8 +4,6 @@ import {
   type Profile,
 } from "../../utils/permission-profile.js";
 
-export type DisplayProfile = Profile | "custom";
-
 export interface CliConfig {
   allowedCommands: string[];
   allowedWorkingDirs: string[];
@@ -20,12 +18,6 @@ export interface AllowlistDraftState {
   browserDomains: string;
   cliCommands: string;
   cliWorkingDirs: string;
-}
-
-export interface SaveResetTimers {
-  general: ReturnType<typeof setTimeout> | null;
-  profile: ReturnType<typeof setTimeout> | null;
-  security: ReturnType<typeof setTimeout> | null;
 }
 
 export interface SecurityState {
@@ -58,39 +50,6 @@ export const DEFAULT_CAPABILITIES = capabilitiesForProfile("safe");
 export const DEFAULT_CLI_CONFIG: CliConfig = { allowedCommands: [], allowedWorkingDirs: [] };
 export const DEFAULT_WEB_CONFIG: WebConfig = { allowedDomains: [], headless: true };
 
-export const PROFILE_OPTIONS: Array<{
-  id: DisplayProfile;
-  label: string;
-  description: string;
-  disabled?: boolean;
-}> = [
-  {
-    id: "safe",
-    label: "Safe",
-    description:
-      "Screenshot only. No input control, shell, browser, or web access. Best default for untrusted workloads.",
-  },
-  {
-    id: "balanced",
-    label: "Balanced",
-    description:
-      "Desktop, browser, shell, and web capabilities available with restrictive defaults. Recommended for most users.",
-  },
-  {
-    id: "poweruser",
-    label: "Power user",
-    description:
-      "Full local-node access with fewer restrictions. Use only when you trust the workloads and environment.",
-  },
-  {
-    id: "custom",
-    label: "Custom",
-    description:
-      "Selected automatically when your node settings differ from a preset. Choose a preset to reset back to a standard profile.",
-    disabled: true,
-  },
-];
-
 export const SHELL_COMMAND_NOTES = [
   "- Use one rule per line.",
   "- `*` allows all commands.",
@@ -108,16 +67,6 @@ export const BROWSER_DOMAIN_NOTES = [
   "- Subdomains are allowed automatically.",
   "- `*` allows all domains.",
 ];
-
-export function createProfilePreset(profile: Profile): SecurityState {
-  return {
-    profile,
-    overrides: {},
-    capabilities: capabilitiesForProfile(profile),
-    cli: cloneCliConfig(DEFAULT_CLI_CONFIG),
-    web: cloneWebConfig(DEFAULT_WEB_CONFIG),
-  };
-}
 
 export function readSecurityState(config: unknown): SecurityState {
   const parsed = config as Record<string, unknown>;
@@ -166,15 +115,6 @@ export function readConnectionState(config: unknown): ConnectionState {
     remoteTlsAllowSelfSigned: remote?.["tlsAllowSelfSigned"] === true,
     hasSavedRemoteToken: tokenRef.trim().length > 0,
   };
-}
-
-export function isSecurityPresetMatch(profile: Profile, security: SecurityState): boolean {
-  if (Object.keys(security.overrides).length > 0) return false;
-  return (
-    shallowEqualCapFlags(security.capabilities, capabilitiesForProfile(profile)) &&
-    areCliConfigsEqual(security.cli, DEFAULT_CLI_CONFIG) &&
-    areWebConfigsEqual(security.web, DEFAULT_WEB_CONFIG)
-  );
 }
 
 export function hasConnectionSettingsChanged(
@@ -294,53 +234,6 @@ export function createAllowlistDraftState(security: SecurityState): AllowlistDra
     cliCommands: joinAllowlistLines(security.cli.allowedCommands),
     cliWorkingDirs: joinAllowlistLines(security.cli.allowedWorkingDirs),
   };
-}
-
-export function areSecurityStatesEqual(left: SecurityState, right: SecurityState): boolean {
-  return (
-    left.profile === right.profile &&
-    shallowEqualBooleanRecord(left.overrides, right.overrides) &&
-    shallowEqualCapFlags(left.capabilities, right.capabilities) &&
-    areCliConfigsEqual(left.cli, right.cli) &&
-    areWebConfigsEqual(left.web, right.web)
-  );
-}
-
-function shallowEqualBooleanRecord(
-  left: Record<string, boolean>,
-  right: Record<string, boolean>,
-): boolean {
-  const leftKeys = Object.keys(left);
-  const rightKeys = Object.keys(right);
-  if (leftKeys.length !== rightKeys.length) return false;
-  return leftKeys.every((key) => left[key] === right[key]);
-}
-
-function shallowEqualCapFlags(left: CapFlags, right: CapFlags): boolean {
-  return (
-    left.desktop === right.desktop &&
-    left.playwright === right.playwright &&
-    left.cli === right.cli &&
-    left.http === right.http
-  );
-}
-
-function areCliConfigsEqual(left: CliConfig, right: CliConfig): boolean {
-  return (
-    areStringArraysEqual(left.allowedCommands, right.allowedCommands) &&
-    areStringArraysEqual(left.allowedWorkingDirs, right.allowedWorkingDirs)
-  );
-}
-
-function areWebConfigsEqual(left: WebConfig, right: WebConfig): boolean {
-  return (
-    left.headless === right.headless &&
-    areStringArraysEqual(left.allowedDomains, right.allowedDomains)
-  );
-}
-
-function areStringArraysEqual(left: string[], right: string[]): boolean {
-  return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
 export function describeMacPermissionSummary(snapshot: MacPermissionSnapshot | null): string {

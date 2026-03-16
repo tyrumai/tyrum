@@ -76,17 +76,9 @@ const ConfigurePage = lazyNamed<{
   mode: OperatorUiMode;
   webAuthPersistence?: WebAuthPersistence;
 }>(() => import("./components/pages/configure-page.js"), "ConfigurePage");
-const NodeConfigurePage = lazyNamed<{ onReloadPage?: () => void }>(
-  () => import("./components/pages/node-configure-page.js"),
-  "NodeConfigurePage",
-);
-const BrowserCapabilitiesPage = lazyNamed<Record<string, never>>(
-  () => import("./components/pages/platform/browser-capabilities-page.js"),
-  "BrowserCapabilitiesPage",
-);
-const MobilePlatformPage = lazyNamed<Record<string, never>>(
-  () => import("./components/pages/platform/mobile-platform-page.js"),
-  "MobilePlatformPage",
+const NodeConfigPage = lazyNamed<{ core?: OperatorCore; onReloadPage?: () => void }>(
+  () => import("./components/pages/node-config/node-config-page.js"),
+  "NodeConfigPage",
 );
 const ACTIVE_RUN_STATUSES: ExecutionRun["status"][] = ["queued", "running", "paused"];
 const SHARED_HOST_KINDS = ["desktop", "mobile", "web"] as const satisfies readonly HostKind[];
@@ -236,7 +228,7 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
     navGroup: "platformDesktop",
     shortcut: false,
     hostKinds: ["desktop"],
-    render: ({ onReloadPage }) => <NodeConfigurePage onReloadPage={onReloadPage} />,
+    render: ({ core, onReloadPage }) => <NodeConfigPage core={core} onReloadPage={onReloadPage} />,
   },
   {
     id: "browser",
@@ -245,7 +237,7 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
     navGroup: "platformWeb",
     shortcut: false,
     hostKinds: ["web"],
-    render: () => <BrowserCapabilitiesPage />,
+    render: ({ core }) => <NodeConfigPage core={core} />,
   },
   {
     id: "mobile",
@@ -254,7 +246,7 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
     navGroup: "platformMobile",
     shortcut: false,
     hostKinds: ["mobile"],
-    render: () => <MobilePlatformPage />,
+    render: ({ core }) => <NodeConfigPage core={core} />,
   },
 ];
 

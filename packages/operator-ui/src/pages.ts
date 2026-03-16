@@ -12,4 +12,4 @@ export type { ConfigurePageProps } from "./components/pages/configure-page.js";
 export { ConfigurePage } from "./components/pages/configure-page.js";
 export { AiSdkChatPage } from "./components/pages/chat-page-ai-sdk.js";
 export { SettingsPage } from "./components/pages/settings-page.js";
-export { NodeConfigurePage } from "./components/pages/node-configure-page.js";
+export { NodeConfigPage } from "./components/pages/node-config/node-config-page.js";

@@ -3,8 +3,33 @@ import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { createBearerTokenAuth, createOperatorCore } from "../../operator-core/src/index.js";
 import { OperatorUiApp } from "../src/index.js";
-import { clickButtonByTestId, clickTabByLabel } from "./operator-ui.test-support.js";
+import { clickButtonByTestId } from "./operator-ui.test-support.js";
 import { FakeWsClient, createFakeHttpClient } from "./operator-ui.test-fixtures.js";
+
+/**
+ * Find the Expand button inside a capability card identified by its label.
+ * The capability has a Switch with aria-label="Toggle <capabilityLabel>".
+ * The expand button is in the same card with aria-label="Expand".
+ */
+function findExpandButtonForCapability(
+  container: HTMLElement,
+  capabilityLabel: string,
+): HTMLButtonElement | null {
+  const capSwitch = container.querySelector<HTMLButtonElement>(
+    `[role="switch"][aria-label="Toggle ${capabilityLabel}"]`,
+  );
+  if (!capSwitch) return null;
+  // Walk up to the card boundary. The card is rendered with a Card component
+  // that creates a div. Walk up several levels to find the expand button sibling.
+  let node: HTMLElement | null = capSwitch;
+  for (let i = 0; i < 10; i++) {
+    node = node?.parentElement ?? null;
+    if (!node) return null;
+    const expandBtn = node.querySelector<HTMLButtonElement>('[aria-label="Expand"]');
+    if (expandBtn) return expandBtn;
+  }
+  return null;
+}
 
 function registerConnectDesktopBasicTests(): void {
   it("connects via the primary connect action", () => {
@@ -210,7 +235,7 @@ function registerConnectDesktopBasicTests(): void {
 }
 
 function registerConnectDesktopSettingsTests(): void {
-  it("disables node settings save while settings are saving", async () => {
+  it("auto-saves when toggling a capability on the desktop page", async () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
     const core = createOperatorCore({
@@ -220,11 +245,6 @@ function registerConnectDesktopSettingsTests(): void {
       deps: { ws, http },
     });
 
-    let resolveSetConfig: (() => void) | null = null;
-    const setConfigPromise = new Promise<void>((resolve) => {
-      resolveSetConfig = resolve;
-    });
-
     const desktopApi = {
       getConfig: vi.fn(async () => ({
         permissions: { profile: "balanced", overrides: {} },
@@ -232,9 +252,7 @@ function registerConnectDesktopSettingsTests(): void {
         cli: { allowedCommands: [], allowedWorkingDirs: [] },
         web: { allowedDomains: [], headless: true },
       })),
-      setConfig: vi.fn(async () => {
-        await setConfigPromise;
-      }),
+      setConfig: vi.fn(async () => {}),
       gateway: {
         getStatus: vi.fn(async () => ({ status: "running", port: 8788 })),
         start: vi.fn(async () => ({ status: "running", port: 8788 })),
@@ -265,37 +283,25 @@ function registerConnectDesktopSettingsTests(): void {
       await Promise.resolve();
     });
 
+    // Wait for config to load.
     await act(async () => {
-      clickTabByLabel(container, "Browser");
       await Promise.resolve();
     });
 
-    await act(async () => {
-      clickButtonByTestId(container, "node-capability-browser");
-      await Promise.resolve();
-    });
-
-    const saveButton = container.querySelector<HTMLButtonElement>(
-      '[data-testid="node-configure-save-security"]',
+    // In the new unified page, all capabilities are visible (no tabs).
+    // Toggle "Browser Automation" switch to trigger auto-save.
+    const browserSwitch = container.querySelector<HTMLButtonElement>(
+      '[role="switch"][aria-label="Toggle Browser Automation"]',
     );
-    expect(saveButton).not.toBeNull();
-    expect(saveButton!.disabled).toBe(false);
+    expect(browserSwitch).not.toBeNull();
 
     await act(async () => {
-      clickButtonByTestId(container, "node-configure-save-security");
+      browserSwitch?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       await Promise.resolve();
     });
 
-    const updatedSaveButton = container.querySelector<HTMLButtonElement>(
-      '[data-testid="node-configure-save-security"]',
-    );
-    expect(updatedSaveButton).not.toBeNull();
-    expect(updatedSaveButton!.disabled).toBe(true);
-
-    resolveSetConfig?.();
-    await act(async () => {
-      await Promise.resolve();
-    });
+    // Auto-save should have called setConfig.
+    expect(desktopApi.setConfig).toHaveBeenCalled();
 
     act(() => {
       root?.unmount();
@@ -360,32 +366,33 @@ function registerConnectDesktopSettingsTests(): void {
       await Promise.resolve();
     });
 
+    // Wait for config to load.
     await act(async () => {
-      clickTabByLabel(container, "Desktop");
       await Promise.resolve();
     });
 
-    const saveButton = container.querySelector<HTMLButtonElement>(
-      '[data-testid="node-configure-save-security"]',
-    );
-    expect(saveButton).not.toBeNull();
-    expect(saveButton!.textContent).toContain("Save Node Settings");
+    // In the new unified page, expand Desktop Automation card to see macOS permissions.
+    const expandButton = findExpandButtonForCapability(container, "Desktop Automation");
+    expect(expandButton).not.toBeNull();
 
-    const requestAccessibilityButton = container.querySelector<HTMLButtonElement>(
-      '[data-testid="node-request-accessibility"]',
-    );
-    expect(requestAccessibilityButton).not.toBeNull();
+    await act(async () => {
+      expandButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    // Find "Request Accessibility" button by text.
+    const requestAccessibilityButton = Array.from(
+      container.querySelectorAll<HTMLButtonElement>("button"),
+    ).find((el) => el.textContent?.includes("Request Accessibility"));
+    expect(requestAccessibilityButton).not.toBeUndefined();
 
     await act(async () => {
       requestAccessibilityButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       await Promise.resolve();
     });
 
-    const updatedSaveButton = container.querySelector<HTMLButtonElement>(
-      '[data-testid="node-configure-save-security"]',
-    );
-    expect(updatedSaveButton).not.toBeNull();
-    expect(updatedSaveButton!.textContent).not.toContain("Saving...");
+    // The auto-save status should NOT show "Saving..." from a permission request.
+    expect(container.textContent).not.toContain("Saving\u2026");
 
     resolvePermission?.();
     await act(async () => {
@@ -449,15 +456,25 @@ function registerConnectDesktopSettingsTests(): void {
       await Promise.resolve();
     });
 
+    // Wait for config to load.
     await act(async () => {
-      clickTabByLabel(container, "Desktop");
       await Promise.resolve();
     });
 
-    const requestAccessibilityButton = container.querySelector<HTMLButtonElement>(
-      '[data-testid="node-request-accessibility"]',
-    );
-    expect(requestAccessibilityButton).not.toBeNull();
+    // Expand Desktop Automation card to see macOS permissions.
+    const expandButton = findExpandButtonForCapability(container, "Desktop Automation");
+    expect(expandButton).not.toBeNull();
+
+    await act(async () => {
+      expandButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    // Find "Request Accessibility" button by text.
+    const requestAccessibilityButton = Array.from(
+      container.querySelectorAll<HTMLButtonElement>("button"),
+    ).find((el) => el.textContent?.includes("Request Accessibility"));
+    expect(requestAccessibilityButton).not.toBeUndefined();
 
     await act(async () => {
       requestAccessibilityButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));

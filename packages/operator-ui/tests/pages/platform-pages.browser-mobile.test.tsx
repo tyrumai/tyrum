@@ -4,7 +4,6 @@ import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   clickButtonAndFlush,
-  clickByTestIdAndFlush,
   clickSwitchAndFlush,
   createDesktopApi,
   createMobileHostApi,
@@ -24,19 +23,19 @@ afterEach(() => {
 });
 
 describe("Platform pages browser and mobile flows", () => {
-  it("renders the browser capabilities page", async () => {
+  it("renders the browser node config page", async () => {
     const storage = globalThis.localStorage;
     if (storage && typeof storage.removeItem === "function") {
       storage.removeItem("tyrum.operator-ui.browserNode.enabled");
     }
 
     await withBrowserCapabilitiesPage(({ container }) => {
+      // The unified NodeConfigPage shows the browser executor toggle.
       expect(container.textContent).toContain("Browser node executor");
-      expect(container.textContent).toContain("Executor status");
     });
   });
 
-  it("explains when capability toggles are configured but inactive because the executor is disabled", async () => {
+  it("renders browser capability sections on the config page", async () => {
     const storage = globalThis.localStorage;
     if (storage && typeof storage.removeItem === "function") {
       storage.removeItem("tyrum.operator-ui.browserNode.enabled");
@@ -44,19 +43,21 @@ describe("Platform pages browser and mobile flows", () => {
     }
 
     await withBrowserCapabilitiesPage(({ container }) => {
-      expect(container.textContent).toContain("Configured enabled");
-      expect(container.textContent).toContain("inactive until the browser executor is enabled");
-      expect(container.textContent).toContain("Enable the browser executor to run tests");
+      // The unified NodeConfigPage lists capability sections.
+      expect(container.textContent).toContain("Location");
+      expect(container.textContent).toContain("Camera");
+      expect(container.textContent).toContain("Audio");
     });
   });
 
-  it("renders the mobile platform page and toggles a mobile action", async () => {
+  it("renders the mobile node config page and toggles a mobile action", async () => {
     const mobileHostApi = createMobileHostApi();
 
     await withMobilePlatformPage(mobileHostApi, async ({ container }) => {
       await flushEffects();
 
-      expect(container.textContent).toContain("Mobile node executor");
+      // The unified NodeConfigPage shows the mobile executor with platform label.
+      expect(container.textContent).toContain("iOS node executor");
       expect(container.textContent).toContain("iOS");
       expect(container.textContent).toContain("Location");
 
@@ -69,13 +70,7 @@ describe("Platform pages browser and mobile flows", () => {
     });
   });
 
-  it("shows desktop page fallback states for non-desktop and missing desktop api", async () => {
-    await withHostNodeConfigurePage({ kind: "web" }, ({ container }) => {
-      expect(container.textContent).toContain(
-        "Node configuration is only available in the desktop app.",
-      );
-    });
-
+  it("shows desktop page fallback states for missing desktop api", async () => {
     await withHostNodeConfigurePage({ kind: "desktop", api: null }, ({ container }) => {
       expect(container.textContent).toContain("Desktop API not available.");
     });
@@ -132,7 +127,7 @@ describe("Platform pages browser and mobile flows", () => {
         });
 
         await clickSwitchAndFlush(container, 0);
-        await clickByTestIdAndFlush(container, "node-configure-save-connection");
+        await clickButtonAndFlush(container, "Save connection settings");
 
         expect(setConfig).toHaveBeenCalledTimes(1);
         expect(setConfig).toHaveBeenCalledWith({

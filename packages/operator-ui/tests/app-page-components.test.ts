@@ -22,8 +22,8 @@ describe("Operator UI app/page component structure", () => {
           exportName: "DesktopEnvironmentsPage",
         },
         {
-          specifier: "../src/components/pages/node-configure-page.js",
-          exportName: "NodeConfigurePage",
+          specifier: "../src/components/pages/node-config/node-config-page.js",
+          exportName: "NodeConfigPage",
         },
         { specifier: "../src/components/pages/settings-page.js", exportName: "SettingsPage" },
         { specifier: "../src/components/pages/configure-page.js", exportName: "ConfigurePage" },
