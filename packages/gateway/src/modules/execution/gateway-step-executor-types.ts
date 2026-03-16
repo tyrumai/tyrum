@@ -50,13 +50,15 @@ export function maybeTruncateText(
   return { text: decoder.decode(sliced), truncated: true };
 }
 
-export function deriveAgentIdFromKey(key: string): string {
+export function deriveAgentKeyFromKey(key: string): string {
   if (!key.startsWith("agent:")) return "default";
   const parts = key.split(":");
-  const agentId = parts.length > 1 ? parts[1] : undefined;
-  const trimmed = agentId?.trim() ?? "";
+  const agentKey = parts.length > 1 ? parts[1] : undefined;
+  const trimmed = agentKey?.trim() ?? "";
   return trimmed.length > 0 ? trimmed : "default";
 }
+
+export const deriveAgentIdFromKey = deriveAgentKeyFromKey;
 
 export function extractToolErrorMessage(err: unknown): string {
   if (err instanceof Error && err.message) return err.message;
