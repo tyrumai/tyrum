@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DeploymentConfig } from "../src/deployment-config.js";
+import { DeploymentConfig, DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF } from "../src/index.js";
 
 describe("DeploymentConfig lifecycle retention", () => {
   it("defaults state.mode to local", () => {
@@ -35,5 +35,11 @@ describe("DeploymentConfig lifecycle retention", () => {
 
     expect(parsed.lifecycle.sessions.ttlDays).toBe(14);
     expect(parsed.lifecycle.channels.terminalRetentionDays).toBe(3);
+  });
+
+  it("defaults desktop environments to the published sandbox image", () => {
+    const parsed = DeploymentConfig.parse({});
+
+    expect(parsed.desktopEnvironments.defaultImageRef).toBe(DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF);
   });
 });

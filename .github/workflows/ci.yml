@@ -60,6 +60,7 @@ jobs:
               - "apps/web/**"
               - "apps/docs/**"
               - "config/**"
+              - "docker/**"
               - "web/**"
               - "patches/**"
               - "Dockerfile"

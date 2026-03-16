@@ -1,24 +1,37 @@
 import { Hono } from "hono";
 import {
-  DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF,
   DesktopEnvironmentCreateRequest,
   DesktopEnvironmentDeleteResponse,
+  DesktopEnvironmentDefaultsResponse,
+  DesktopEnvironmentDefaultsUpdateRequest,
   DesktopEnvironmentGetResponse,
   DesktopEnvironmentHostListResponse,
   DesktopEnvironmentListResponse,
   DesktopEnvironmentLogsResponse,
   DesktopEnvironmentMutateResponse,
+  type DeploymentConfig as DeploymentConfigT,
   DesktopEnvironmentUpdateRequest,
 } from "@tyrum/schemas";
+import type { SqlDb } from "../statestore/types.js";
+import {
+  requireAuthClaims,
+  requireOperatorAdminAccess,
+  requireTenantId,
+} from "../modules/auth/claims.js";
+import { DeploymentConfigDal } from "../modules/config/deployment-config-dal.js";
 import {
   DesktopEnvironmentDal,
   DesktopEnvironmentHostDal,
 } from "../modules/desktop-environments/dal.js";
 import {
+  describeDesktopEnvironmentHostAvailability,
+  isDesktopEnvironmentHostAvailable,
+} from "../modules/desktop-environments/availability.js";
+import { readDesktopEnvironmentDefaultImageRef } from "../modules/desktop-environments/default-image.js";
+import {
   DesktopEnvironmentLifecycleUnavailableError,
   type DesktopEnvironmentLifecycle,
 } from "../modules/desktop-environments/lifecycle-service.js";
-import { requireOperatorAdminAccess, requireTenantId } from "../modules/auth/claims.js";
 
 const TRUSTED_TAKEOVER_HOSTNAMES = new Set(["127.0.0.1", "localhost", "[::1]"]);
 const TRUSTED_TAKEOVER_PATH = "/vnc.html";
@@ -45,11 +58,104 @@ function readTrustedTakeoverUrl(value: string | null): string | null {
 }
 
 export function createDesktopEnvironmentRoutes(deps: {
+  db: SqlDb;
+  defaultDeploymentConfig: DeploymentConfigT;
   hostDal: DesktopEnvironmentHostDal;
   environmentDal: DesktopEnvironmentDal;
   lifecycleService: DesktopEnvironmentLifecycle;
 }): Hono {
   const app = new Hono();
+  const deploymentConfigDal = new DeploymentConfigDal(deps.db);
+
+  function describeHostConflict(host: {
+    label: string;
+    docker_available: boolean;
+    healthy: boolean;
+    last_error: string | null;
+  }): string {
+    return `desktop environment host "${host.label}" is unavailable: ${describeDesktopEnvironmentHostAvailability(host)}`;
+  }
+
+  function desktopEnvironmentDefaultsResponse(params: {
+    defaultImageRef: string;
+    revision: number;
+    createdAt: string;
+    createdBy: unknown;
+    reason?: string;
+    revertedFromRevision?: number;
+  }) {
+    return DesktopEnvironmentDefaultsResponse.parse({
+      status: "ok",
+      default_image_ref: params.defaultImageRef,
+      revision: params.revision,
+      created_at: params.createdAt,
+      created_by: params.createdBy,
+      reason: params.reason ?? null,
+      reverted_from_revision: params.revertedFromRevision ?? null,
+    });
+  }
+
+  app.get("/config/desktop-environments/defaults", async (c) => {
+    requireAdmin(c);
+    const { defaultImageRef, revision } = await readDesktopEnvironmentDefaultImageRef({
+      deploymentConfigDal,
+      defaultConfig: deps.defaultDeploymentConfig,
+    });
+    return c.json(
+      desktopEnvironmentDefaultsResponse({
+        defaultImageRef,
+        revision: revision.revision,
+        createdAt: revision.createdAt,
+        createdBy: revision.createdBy,
+        reason: revision.reason,
+        revertedFromRevision: revision.revertedFromRevision,
+      }),
+    );
+  });
+
+  app.put("/config/desktop-environments/defaults", async (c) => {
+    requireAdmin(c);
+    const claims = requireAuthClaims(c);
+    let body: unknown;
+    try {
+      body = (await c.req.json()) as unknown;
+    } catch (error) {
+      void error;
+      return c.json({ error: "invalid_request", message: "invalid json" }, 400);
+    }
+    const parsed = DesktopEnvironmentDefaultsUpdateRequest.safeParse(body);
+    if (!parsed.success) {
+      return c.json({ error: "invalid_request", message: parsed.error.message }, 400);
+    }
+
+    const currentRevision = await deploymentConfigDal.ensureSeeded({
+      defaultConfig: deps.defaultDeploymentConfig,
+      createdBy: { kind: "bootstrap" },
+      reason: "seed",
+    });
+    const revision = await deploymentConfigDal.set({
+      config: {
+        ...currentRevision.config,
+        desktopEnvironments: {
+          ...currentRevision.config.desktopEnvironments,
+          defaultImageRef: parsed.data.default_image_ref,
+        },
+      },
+      createdBy: { kind: "tenant.token", token_id: claims.token_id },
+      reason: parsed.data.reason,
+    });
+
+    return c.json(
+      desktopEnvironmentDefaultsResponse({
+        defaultImageRef: revision.config.desktopEnvironments.defaultImageRef,
+        revision: revision.revision,
+        createdAt: revision.createdAt,
+        createdBy: revision.createdBy,
+        reason: revision.reason,
+        revertedFromRevision: revision.revertedFromRevision,
+      }),
+    );
+  });
 
   app.get("/desktop-environment-hosts", async (c) => {
     requireAdmin(c);
@@ -76,11 +182,18 @@ export function createDesktopEnvironmentRoutes(deps: {
     if (!host) {
       return c.json({ error: "invalid_request", message: "unknown host_id" }, 400);
     }
+    if (!isDesktopEnvironmentHostAvailable(host)) {
+      return c.json({ error: "conflict", message: describeHostConflict(host) }, 409);
+    }
+    const { defaultImageRef } = await readDesktopEnvironmentDefaultImageRef({
+      deploymentConfigDal,
+      defaultConfig: deps.defaultDeploymentConfig,
+    });
     const environment = await deps.environmentDal.create({
       tenantId,
       hostId: parsed.data.host_id,
       label: parsed.data.label,
-      imageRef: parsed.data.image_ref ?? DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF,
+      imageRef: parsed.data.image_ref ?? defaultImageRef,
       desiredRunning: parsed.data.desired_running ?? false,
     });
     return c.json(DesktopEnvironmentMutateResponse.parse({ status: "ok", environment }), 201);
@@ -143,6 +256,25 @@ export function createDesktopEnvironmentRoutes(deps: {
       requireAdmin(c);
       const tenantId = requireTenantId(c);
       const environmentId = c.req.param("environmentId");
+      if (action === "start") {
+        const existing = await deps.environmentDal.get({ tenantId, environmentId });
+        if (!existing) {
+          return c.json({ error: "not_found", message: "desktop environment not found" }, 404);
+        }
+        const host = await deps.hostDal.get(existing.host_id);
+        if (!host) {
+          return c.json(
+            {
+              error: "conflict",
+              message: `desktop environment host "${existing.host_id}" is unavailable: host not found`,
+            },
+            409,
+          );
+        }
+        if (!isDesktopEnvironmentHostAvailable(host)) {
+          return c.json({ error: "conflict", message: describeHostConflict(host) }, 409);
+        }
+      }
       const environment =
         action === "start"
           ? await deps.environmentDal.start({ tenantId, environmentId })

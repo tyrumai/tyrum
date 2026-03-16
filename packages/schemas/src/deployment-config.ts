@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { DateTimeSchema } from "./common.js";
+import { DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF } from "./desktop-environment.js";
 import { canonicalizeTelegramAllowedUserIds } from "./telegram.js";
 
 export const DeploymentConfigServer = z
@@ -206,6 +207,15 @@ export const DeploymentConfigLogging = z
   .strict();
 export type DeploymentConfigLogging = z.infer<typeof DeploymentConfigLogging>;
 
+export const DeploymentConfigDesktopEnvironments = z
+  .object({
+    defaultImageRef: z.string().trim().min(1).default(DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF),
+  })
+  .strict();
+export type DeploymentConfigDesktopEnvironments = z.infer<
+  typeof DeploymentConfigDesktopEnvironments
+>;
+
 export const DeploymentConfig = z
   .object({
     v: z.number().int().min(1).default(1),
@@ -226,6 +236,7 @@ export const DeploymentConfig = z
     lifecycle: DeploymentConfigLifecycle.prefault({}),
     logging: DeploymentConfigLogging.prefault({}),
     toolrunner: DeploymentConfigToolRunner.prefault({}),
+    desktopEnvironments: DeploymentConfigDesktopEnvironments.prefault({}),
   })
   .strict();
 export type DeploymentConfig = z.infer<typeof DeploymentConfig>;

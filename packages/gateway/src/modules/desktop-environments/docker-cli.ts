@@ -39,6 +39,12 @@ function isMissingContainerResult(result: DockerResult): boolean {
   );
 }
 
+function isMissingImageResult(result: DockerResult): boolean {
+  return /no such image|pull access denied|not found/iu.test(
+    [result.error, result.stderr, result.stdout].filter(Boolean).join("\n"),
+  );
+}
+
 export async function runDocker(
   args: string[],
   options?: { timeoutMs?: number; maxBufferBytes?: number },
@@ -125,6 +131,23 @@ export async function inspectContainer(
   const first = parsed[0];
   if (!first || typeof first !== "object") return null;
   return first as DockerInspectContainer;
+}
+
+export async function ensureImageAvailable(imageRef: string): Promise<void> {
+  const inspectResult = await runDocker(["image", "inspect", imageRef], { timeoutMs: 15_000 });
+  if (inspectResult.status === 0) return;
+  if (!isMissingImageResult(inspectResult)) {
+    throw new Error(
+      combineDockerError("failed to inspect desktop environment image", inspectResult),
+    );
+  }
+
+  const pullResult = await runDocker(["pull", imageRef], {
+    timeoutMs: 10 * 60 * 1_000,
+    maxBufferBytes: 32 * 1024 * 1024,
+  });
+  if (pullResult.status === 0) return;
+  throw new Error(combineDockerError("failed to pull desktop environment image", pullResult));
 }
 
 export async function readContainerLogs(containerName: string): Promise<string[]> {

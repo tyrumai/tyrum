@@ -2,7 +2,8 @@ import { z } from "zod";
 import { DateTimeSchema } from "./common.js";
 import { NodeId } from "./keys.js";
 
-export const DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF = "tyrum-desktop-sandbox:latest";
+export const DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF =
+  "ghcr.io/rhernaus/tyrum-desktop-sandbox:latest";
 
 export const DesktopEnvironmentId = z.string().trim().min(1);
 export const DesktopEnvironmentHostId = z.string().trim().min(1);
@@ -123,3 +124,26 @@ export const DesktopEnvironmentLogsResponse = z
   })
   .strict();
 export type DesktopEnvironmentLogsResponse = z.infer<typeof DesktopEnvironmentLogsResponse>;
+
+export const DesktopEnvironmentDefaultsResponse = z
+  .object({
+    status: z.literal("ok"),
+    default_image_ref: DesktopEnvironmentImageRef,
+    revision: z.number().int().nonnegative(),
+    created_at: DateTimeSchema.nullable(),
+    created_by: z.unknown().nullable(),
+    reason: z.string().trim().min(1).nullable(),
+    reverted_from_revision: z.number().int().positive().nullable(),
+  })
+  .strict();
+export type DesktopEnvironmentDefaultsResponse = z.infer<typeof DesktopEnvironmentDefaultsResponse>;
+
+export const DesktopEnvironmentDefaultsUpdateRequest = z
+  .object({
+    default_image_ref: DesktopEnvironmentImageRef,
+    reason: z.string().trim().min(1).optional(),
+  })
+  .strict();
+export type DesktopEnvironmentDefaultsUpdateRequest = z.infer<
+  typeof DesktopEnvironmentDefaultsUpdateRequest
+>;

@@ -1,0 +1,120 @@
+name: desktop-sandbox-image
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "docker/desktop-sandbox/**"
+      - "packages/schemas/**"
+      - "packages/cli-utils/**"
+      - "packages/client/**"
+      - "packages/desktop-node/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "tsconfig.json"
+      - "tsconfig.base.json"
+      - "scripts/**"
+      - "patches/**"
+      - ".github/workflows/desktop-sandbox-image.yml"
+  push:
+    branches: [main]
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE_NAME: ghcr.io/rhernaus/tyrum-desktop-sandbox
+
+jobs:
+  build:
+    name: Build Desktop Sandbox Image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - id: vars
+        name: Resolve publish tags
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          push_image=false
+          short_sha="${GITHUB_SHA::7}"
+          tags=""
+
+          if [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]]; then
+            pr_number="${{ github.event.pull_request.number }}"
+            tags="type=raw,value=pr-${pr_number}"
+          elif [[ "${GITHUB_REF}" == "refs/heads/main" ]]; then
+            push_image=true
+            tags=$'type=raw,value=main\n'
+            tags+="type=raw,value=sha-${short_sha}"
+          elif [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            push_image=true
+            tag_name="${GITHUB_REF_NAME}"
+            version="${tag_name#v}"
+            tags="type=raw,value=${version}"
+
+            if [[ "${tag_name}" == *"-beta."* ]]; then
+              tags+=$'\n''type=raw,value=beta'
+            elif [[ "${tag_name}" == *"-dev."* ]]; then
+              tags+=$'\n''type=raw,value=dev'
+            else
+              tags+=$'\n''type=raw,value=stable'
+              tags+=$'\n''type=raw,value=latest'
+            fi
+          else
+            echo "Unsupported ref ${GITHUB_REF}"
+            exit 1
+          fi
+
+          echo "push_image=${push_image}" >> "$GITHUB_OUTPUT"
+          {
+            echo "tags<<EOF"
+            printf '%s\n' "${tags}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        if: steps.vars.outputs.push_image == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        name: Compute image metadata
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: ${{ steps.vars.outputs.tags }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
+      - name: Build and optionally publish image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/desktop-sandbox/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: ${{ steps.vars.outputs.push_image == 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

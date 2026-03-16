@@ -237,9 +237,14 @@ export class DesktopEnvironmentDal {
       environmentId: input.environmentId,
     });
     if (!existing) return undefined;
+    const nextImageRef = input.imageRef ?? existing.image_ref;
+    const imageChanged = nextImageRef !== existing.image_ref;
     const desiredRunning = input.desiredRunning ?? existing.desired_running;
-    const status =
-      input.desiredRunning === undefined
+    const status = imageChanged
+      ? desiredRunning
+        ? "pending"
+        : "stopped"
+      : input.desiredRunning === undefined
         ? existing.status
         : desiredRunning
           ? existing.status === "running"
@@ -250,15 +255,22 @@ export class DesktopEnvironmentDal {
             : "stopping";
     const row = await this.db.get<RawEnvironmentRow>(
       `UPDATE desktop_environments
-       SET label = ?, image_ref = ?, desired_running = ?, status = ?, updated_at = ?
+       SET label = ?, image_ref = ?, desired_running = ?, status = ?,
+           node_id = ?, takeover_url = ?, last_seen_at = ?, last_error = ?, logs_json = ?,
+           updated_at = ?
        WHERE tenant_id = ? AND environment_id = ?
        RETURNING environment_id, host_id, label, image_ref, managed_kind, status, desired_running,
                  node_id, takeover_url, last_seen_at, last_error, logs_json, created_at, updated_at`,
       [
         input.label ?? existing.label ?? null,
-        input.imageRef ?? existing.image_ref,
+        nextImageRef,
         sqlBoolParam(this.db, desiredRunning),
         status,
+        imageChanged ? null : existing.node_id,
+        imageChanged ? null : existing.takeover_url,
+        imageChanged ? null : existing.last_seen_at,
+        imageChanged ? null : existing.last_error,
+        imageChanged ? "[]" : JSON.stringify(await this.getLogs(input)),
         new Date().toISOString(),
         this.requireTenantId(input.tenantId),
         input.environmentId,

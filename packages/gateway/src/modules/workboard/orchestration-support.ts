@@ -1,7 +1,15 @@
-import type { WorkItem, WorkItemTask, WorkScope } from "@tyrum/schemas";
-import { DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF } from "@tyrum/schemas";
+import {
+  DeploymentConfig,
+  type DeploymentConfig as DeploymentConfigT,
+  type WorkItem,
+  type WorkItemTask,
+  type WorkScope,
+} from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
+import { DeploymentConfigDal } from "../config/deployment-config-dal.js";
 import { DesktopEnvironmentDal, DesktopEnvironmentHostDal } from "../desktop-environments/dal.js";
+import { isDesktopEnvironmentHostAvailable } from "../desktop-environments/availability.js";
+import { readDesktopEnvironmentDefaultImageRef } from "../desktop-environments/default-image.js";
 import { DesktopEnvironmentLifecycleService } from "../desktop-environments/lifecycle-service.js";
 import type { SessionLaneNodeAttachmentDal } from "../agent/session-lane-node-attachment-dal.js";
 import { WorkboardDal } from "./dal.js";
@@ -42,21 +50,26 @@ export async function provisionManagedDesktop(params: {
   subagentSessionKey: string;
   subagentLane: string;
   label: string;
+  defaultDeploymentConfig?: DeploymentConfigT;
   updatedAtMs?: number;
 }): Promise<{ desktopEnvironmentId: string; attachedNodeId?: string } | undefined> {
   const hostDal = new DesktopEnvironmentHostDal(params.db);
   const hosts = await hostDal.list();
-  const host = hosts.find((candidate) => candidate.healthy && candidate.docker_available);
+  const host = hosts.find((candidate) => isDesktopEnvironmentHostAvailable(candidate));
   if (!host) {
     return undefined;
   }
 
+  const { defaultImageRef } = await readDesktopEnvironmentDefaultImageRef({
+    deploymentConfigDal: new DeploymentConfigDal(params.db),
+    defaultConfig: params.defaultDeploymentConfig ?? DeploymentConfig.parse({}),
+  });
   const environmentDal = new DesktopEnvironmentDal(params.db);
   const environment = await environmentDal.create({
     tenantId: params.tenantId,
     hostId: host.host_id,
     label: params.label,
-    imageRef: DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF,
+    imageRef: defaultImageRef,
     desiredRunning: true,
   });
 

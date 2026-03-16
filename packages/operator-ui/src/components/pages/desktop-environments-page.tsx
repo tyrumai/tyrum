@@ -1,18 +1,28 @@
 import type { OperatorCore } from "@tyrum/operator-core";
 import { RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { DEFAULT_IMAGE_REF } from "./desktop-environments-page.shared.js";
+import {
+  buildBlockingAvailabilityMessage,
+  describeStartBlockedReason,
+  DEFAULT_IMAGE_REF,
+  isHostAvailable,
+} from "./desktop-environments-page.shared.js";
 import {
   CreateDesktopEnvironmentCard,
   DesktopEnvironmentsSummaryCard,
   DesktopEnvironmentHostsCard,
   DesktopEnvironmentListCard,
+  RuntimeDefaultsCard,
   SelectedDesktopEnvironmentCard,
   type DesktopEnvironment,
   type DesktopEnvironmentHost,
   type DesktopEnvironmentLogsState,
 } from "./desktop-environments-page.sections.js";
-import { useApiAction } from "../../hooks/use-api-action.js";
+import {
+  toErrorMessage,
+  useDesktopEnvironmentRuntimeDefaults,
+} from "./desktop-environments-page.runtime-defaults.js";
+import type { RefreshResult } from "./desktop-environments-page.runtime-defaults.js";
 import { AppPage } from "../layout/app-page.js";
 import {
   AdminAccessGateCard,
@@ -22,14 +32,8 @@ import {
   useAdminMutationAccess,
   type AdminHttpClient,
 } from "./admin-http-shared.js";
+import { useApiAction } from "../../hooks/use-api-action.js";
 import { Button } from "../ui/button.js";
-
-function toErrorMessage(error: unknown): string {
-  if (error instanceof Error && error.message.length > 0) return error.message;
-  return String(error);
-}
-
-type RefreshResult = "admin-access-required" | "error" | "ok" | "stale";
 
 export function DesktopEnvironmentsPage({ core }: { core: OperatorCore }) {
   const adminHttp = useAdminHttpClient({ access: "strict" });
@@ -63,11 +67,35 @@ export function DesktopEnvironmentsPage({ core }: { core: OperatorCore }) {
     () => Object.fromEntries(hosts.map((host) => [host.host_id, host])),
     [hosts],
   );
+  const availableHosts = useMemo(() => hosts.filter((host) => isHostAvailable(host)), [hosts]);
+  const runtimeDefaults = useDesktopEnvironmentRuntimeDefaults({
+    isCurrentHttpClient: (httpClient) => adminHttpRef.current === httpClient,
+    syncCreateImageRefToDefault: (nextDefaultImageRef) => {
+      setCreateImageRef((current) => {
+        const trimmed = current.trim();
+        if (
+          trimmed.length === 0 ||
+          trimmed === runtimeDefaults.runtimeDefaultImageRef ||
+          trimmed === DEFAULT_IMAGE_REF
+        ) {
+          return nextDefaultImageRef;
+        }
+        return current;
+      });
+    },
+  });
 
   useEffect(() => {
-    const firstHostId = hosts[0]?.host_id;
-    if (createHostId.length === 0 && firstHostId) setCreateHostId(firstHostId);
-  }, [createHostId, hosts]);
+    const firstAvailableHostId = availableHosts[0]?.host_id ?? "";
+    if (createHostId.length === 0) {
+      if (firstAvailableHostId) setCreateHostId(firstAvailableHostId);
+      return;
+    }
+    const currentHost = hostById[createHostId];
+    if (!currentHost || !isHostAvailable(currentHost)) {
+      setCreateHostId(firstAvailableHostId);
+    }
+  }, [availableHosts, createHostId, hostById]);
 
   useEffect(() => {
     if (pendingSelectedEnvironmentId) {
@@ -170,14 +198,19 @@ export function DesktopEnvironmentsPage({ core }: { core: OperatorCore }) {
   }
 
   async function refreshPageData(httpClient: AdminHttpClient): Promise<void> {
-    const [hostsResult, environmentsResult] = await Promise.all([
+    const [hostsResult, environmentsResult, defaultsResult] = await Promise.all([
       refreshHosts(httpClient, { updateAdminAccess: false }),
       refreshEnvironments(httpClient, { updateAdminAccess: false }),
+      runtimeDefaults.refresh(httpClient),
     ]);
     if (adminHttpRef.current !== httpClient) {
       return;
     }
-    if (hostsResult === "admin-access-required" || environmentsResult === "admin-access-required") {
+    if (
+      hostsResult === "admin-access-required" ||
+      environmentsResult === "admin-access-required" ||
+      defaultsResult === "admin-access-required"
+    ) {
       setRequiresAdminAccess(true);
       return;
     }
@@ -195,6 +228,7 @@ export function DesktopEnvironmentsPage({ core }: { core: OperatorCore }) {
       setLogsById({});
       setSelectedEnvironmentId(null);
       setPendingSelectedEnvironmentId(null);
+      runtimeDefaults.reset();
       return;
     }
     void refreshPageData(adminHttp);
@@ -207,6 +241,15 @@ export function DesktopEnvironmentsPage({ core }: { core: OperatorCore }) {
         null);
   const selectedLogs = selectedEnvironmentId === null ? undefined : logsById[selectedEnvironmentId];
   const selectedHost = selectedEnvironment ? (hostById[selectedEnvironment.host_id] ?? null) : null;
+  const blockingAvailabilityMessage = buildBlockingAvailabilityMessage(hosts);
+  const selectedStartBlockedReason = !selectedEnvironment
+    ? null
+    : describeStartBlockedReason({
+        environmentHostId: selectedEnvironment.host_id,
+        host: selectedHost,
+      });
+  const canStartSelectedEnvironment =
+    selectedEnvironment !== null && selectedStartBlockedReason === null;
 
   function requireMutation(action: () => void): void {
     if (!canMutate) {
@@ -242,7 +285,7 @@ export function DesktopEnvironmentsPage({ core }: { core: OperatorCore }) {
         const created = await httpClient.desktopEnvironments.create({
           host_id: createHostId,
           label: createLabel.trim() || undefined,
-          image_ref: createImageRef.trim() || DEFAULT_IMAGE_REF,
+          image_ref: createImageRef.trim() || runtimeDefaults.runtimeDefaultImageRef,
           desired_running: false,
         });
         const createdEnvironmentId = created.environment.environment_id;
@@ -258,6 +301,12 @@ export function DesktopEnvironmentsPage({ core }: { core: OperatorCore }) {
         }
         return created.environment;
       });
+    });
+  }
+
+  function runSaveRuntimeDefaults(): void {
+    requireMutation(() => {
+      void runtimeDefaults.save(requireAdminHttp()).catch(() => {});
     });
   }
 
@@ -341,6 +390,7 @@ export function DesktopEnvironmentsPage({ core }: { core: OperatorCore }) {
       <DesktopEnvironmentsSummaryCard
         hostsError={hostsError}
         environmentsError={environmentsError}
+        availabilityWarning={blockingAvailabilityMessage}
         mutationError={mutation.error ? toErrorMessage(mutation.error) : null}
       />
 
@@ -362,13 +412,26 @@ export function DesktopEnvironmentsPage({ core }: { core: OperatorCore }) {
         <div className="grid gap-4 lg:grid-cols-[1.2fr_1.8fr]">
           <div className="grid gap-4">
             <DesktopEnvironmentHostsCard hosts={hosts} />
+            <RuntimeDefaultsCard
+              isSupported={runtimeDefaults.runtimeDefaultsSupported}
+              currentDefaultImageRef={runtimeDefaults.runtimeDefaultImageRef}
+              draftDefaultImageRef={runtimeDefaults.runtimeDefaultImageDraft}
+              draftReason={runtimeDefaults.runtimeDefaultReasonDraft}
+              isLoading={runtimeDefaults.runtimeDefaultsMutation.isLoading}
+              isRefreshing={runtimeDefaults.runtimeDefaultsLoading}
+              error={runtimeDefaults.runtimeDefaultsError}
+              onDefaultImageRefChange={runtimeDefaults.setRuntimeDefaultImageDraft}
+              onReasonChange={runtimeDefaults.setRuntimeDefaultReasonDraft}
+              onSave={runSaveRuntimeDefaults}
+            />
             <CreateDesktopEnvironmentCard
               hosts={hosts}
               createHostId={createHostId}
               createLabel={createLabel}
               createImageRef={createImageRef}
               isLoading={mutation.isLoading}
-              defaultImageRef={DEFAULT_IMAGE_REF}
+              defaultImageRef={runtimeDefaults.runtimeDefaultImageRef}
+              blockingMessage={blockingAvailabilityMessage}
               onHostChange={setCreateHostId}
               onLabelChange={setCreateLabel}
               onImageRefChange={setCreateImageRef}
@@ -391,6 +454,8 @@ export function DesktopEnvironmentsPage({ core }: { core: OperatorCore }) {
               selectedEnvironment={selectedEnvironment}
               selectedHost={selectedHost}
               selectedLogs={selectedLogs}
+              canStart={canStartSelectedEnvironment}
+              startBlockedReason={selectedStartBlockedReason}
               isLoading={mutation.isLoading}
               onStart={() => {
                 if (!selectedEnvironment) return;

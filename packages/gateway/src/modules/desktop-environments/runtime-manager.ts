@@ -12,6 +12,7 @@ import { loadOrCreateDesktopEnvironmentIdentity } from "./device-identity.js";
 import {
   combineDockerError,
   containerNameForEnvironment,
+  ensureImageAvailable,
   inspectContainer,
   readContainerLogs,
   readTakeoverUrl,
@@ -127,6 +128,7 @@ export class DesktopEnvironmentRuntimeManager {
     }
 
     if (!inspect) {
+      await ensureImageAvailable(environment.image_ref);
       const issuedToken = await this.authTokens.issueToken({
         tenantId: environment.tenant_id,
         role: "node",
