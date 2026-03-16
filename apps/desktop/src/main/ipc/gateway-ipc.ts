@@ -5,13 +5,9 @@ import {
   normalizeFingerprint256,
 } from "@tyrum/operator-core/node";
 import { GatewayManager } from "../gateway-manager.js";
-import { configExists, loadConfig, saveConfig } from "../config/store.js";
-import { decryptToken, encryptToken } from "../config/token-store.js";
-import { existsSync } from "node:fs";
-import { join } from "node:path";
-import { homedir } from "node:os";
+import { configExists, loadConfig } from "../config/store.js";
+import { decryptToken } from "../config/token-store.js";
 import { createWindowSender } from "./window-sender.js";
-import { resolveGatewayBin } from "../gateway-bin-path.js";
 import type { DesktopNodeConfig } from "../config/schema.js";
 import { getGatewayStatusSnapshot } from "./gateway-status.js";
 import {
@@ -21,6 +17,14 @@ import {
   parseGatewayHttpFetchInput,
   resolveGatewayHttpFetchUrl,
 } from "./gateway-ipc-helpers.js";
+import {
+  captureEmbeddedBootstrapToken,
+  ensureEmbeddedGatewayToken as ensureEmbeddedGatewayTokenFromState,
+  ensureEmbeddedGatewayTokenForRecoveryContext,
+  recoverEmbeddedGatewayAccessToken,
+  resolveEmbeddedGatewayRuntimeContext,
+  type EmbeddedGatewayTokenState,
+} from "./gateway-ipc-embedded-token.js";
 
 const sender = createWindowSender();
 let manager: GatewayManager | null = null,
@@ -120,132 +124,11 @@ export interface OperatorConnectionInfo {
   tlsAllowSelfSigned: boolean;
 }
 
-let startPromise: Promise<void> | null = null,
-  embeddedGatewayAccessToken: string | null = null;
-
-type EmbeddedGatewayTokenRecoveryContext = "running" | "started";
-
-const EMBEDDED_GATEWAY_TOKEN_RECOVERY_MESSAGES: Record<
-  EmbeddedGatewayTokenRecoveryContext,
-  {
-    missingTokenRefError: string;
-    decryptWarn: string;
-    decryptFailError: string;
-    invalidFormatWarn: string;
-    invalidFormatFailError: string;
-  }
-> = {
-  running: {
-    missingTokenRefError:
-      "Embedded gateway is running but the stored token is missing. Restart the embedded gateway from the Desktop app.",
-    decryptWarn:
-      "Failed to decrypt embedded gateway token while the gateway is running; refusing to rotate token.",
-    decryptFailError:
-      "Embedded gateway token could not be decrypted while the gateway is running. Restart the embedded gateway from the Desktop app.",
-    invalidFormatWarn:
-      "Invalid embedded gateway token format while the gateway is running; refusing to rotate token.",
-    invalidFormatFailError:
-      "Embedded gateway token has an invalid format while the gateway is running. Restart the embedded gateway from the Desktop app.",
-  },
-  started: {
-    missingTokenRefError:
-      "Embedded gateway started but the stored token is missing. Restart the embedded gateway from the Desktop app.",
-    decryptWarn: "Failed to decrypt embedded gateway token after start; refusing to rotate token.",
-    decryptFailError:
-      "Embedded gateway token could not be decrypted after starting. Restart the embedded gateway from the Desktop app.",
-    invalidFormatWarn:
-      "Invalid embedded gateway token format after start; refusing to rotate token.",
-    invalidFormatFailError:
-      "Embedded gateway token has an invalid format after starting. Restart the embedded gateway from the Desktop app.",
-  },
-};
-
-const TYRUM_TOKEN_PATTERN = /^tyrum-token\.v1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
-
-function isValidEmbeddedGatewayToken(token: string): boolean {
-  return TYRUM_TOKEN_PATTERN.test(token.trim());
-}
-
-function persistEmbeddedGatewayToken(config: DesktopNodeConfig, token: string): void {
-  config.embedded.tokenRef = encryptToken(token);
-  saveConfig(config);
-  embeddedGatewayAccessToken = token;
-}
-
-function resolveEmbeddedGatewayDbPath(config: DesktopNodeConfig, tyrumHome: string): string {
-  const configured = config.embedded.dbPath.trim();
-  if (configured) return configured;
-
-  const currentPath = join(tyrumHome, "gateway.db");
-  const legacyPath = join(tyrumHome, "gateway", "gateway.db");
-
-  try {
-    if (existsSync(currentPath)) return currentPath;
-  } catch {
-    // ignore
-  }
-
-  try {
-    if (existsSync(legacyPath)) return legacyPath;
-  } catch {
-    // ignore
-  }
-
-  return currentPath;
-}
-
-function loadEmbeddedGatewayAccessToken(
-  config: DesktopNodeConfig,
-  messages: {
-    missingTokenRefError: string;
-    decryptWarn: string;
-    decryptFailError: string;
-    invalidFormatWarn: string;
-    invalidFormatFailError: string;
-  },
-): string {
-  if (embeddedGatewayAccessToken) return embeddedGatewayAccessToken;
-
-  const tokenRef = config.embedded.tokenRef;
-  if (!tokenRef) {
-    throw new Error(messages.missingTokenRefError);
-  }
-
-  let decrypted: string;
-  try {
-    decrypted = decryptToken(tokenRef);
-  } catch (error) {
-    console.warn(messages.decryptWarn, error);
-    throw new Error(messages.decryptFailError);
-  }
-
-  if (!isValidEmbeddedGatewayToken(decrypted)) {
-    console.warn(messages.invalidFormatWarn, new Error("Invalid embedded gateway token format"));
-    throw new Error(messages.invalidFormatFailError);
-  }
-
-  embeddedGatewayAccessToken = decrypted;
-  return decrypted;
-}
-
-function recoverEmbeddedGatewayAccessToken(
-  config: DesktopNodeConfig,
-  context: EmbeddedGatewayTokenRecoveryContext,
-): string {
-  return loadEmbeddedGatewayAccessToken(config, EMBEDDED_GATEWAY_TOKEN_RECOVERY_MESSAGES[context]);
-}
+let startPromise: Promise<string> | null = null,
+  embeddedGatewayAccessToken: EmbeddedGatewayTokenState = { current: null };
 
 export function ensureEmbeddedGatewayToken(config: DesktopNodeConfig): string {
-  return loadEmbeddedGatewayAccessToken(config, {
-    missingTokenRefError:
-      "Embedded gateway token is missing. Start the embedded gateway from the Desktop app to bootstrap a token.",
-    decryptWarn: "Failed to decrypt embedded gateway token; restart the embedded gateway.",
-    decryptFailError:
-      "Embedded gateway token could not be decrypted. Restart the embedded gateway from the Desktop app.",
-    invalidFormatWarn: "Invalid embedded gateway token format; restart the embedded gateway.",
-    invalidFormatFailError:
-      "Embedded gateway token has an invalid format. Restart the embedded gateway from the Desktop app.",
-  });
+  return ensureEmbeddedGatewayTokenFromState(config, embeddedGatewayAccessToken);
 }
 
 function toHttpBaseUrlFromWsUrl(rawUrl: string): string | null {
@@ -283,18 +166,38 @@ function resolveOperatorHttpBaseUrl(config: DesktopNodeConfig): string {
 export function resolveOperatorConnection(config: DesktopNodeConfig): OperatorConnectionInfo {
   if (config.mode === "embedded") {
     const token = (() => {
-      if (embeddedGatewayAccessToken) return embeddedGatewayAccessToken;
+      if (embeddedGatewayAccessToken.current) return embeddedGatewayAccessToken.current;
       const mgr = manager;
       if (mgr?.status === "running") {
-        return recoverEmbeddedGatewayAccessToken(config, "running");
+        try {
+          return ensureEmbeddedGatewayTokenFromState(config, embeddedGatewayAccessToken);
+        } catch {
+          const bootstrap = captureEmbeddedBootstrapToken(mgr, config, embeddedGatewayAccessToken);
+          if (bootstrap) return bootstrap;
+          return ensureEmbeddedGatewayTokenForRecoveryContext(
+            config,
+            embeddedGatewayAccessToken,
+            "running",
+          );
+        }
       }
       if (startPromise) {
-        return recoverEmbeddedGatewayAccessToken(config, "started");
+        try {
+          return ensureEmbeddedGatewayTokenFromState(config, embeddedGatewayAccessToken);
+        } catch {
+          const bootstrap = mgr
+            ? captureEmbeddedBootstrapToken(mgr, config, embeddedGatewayAccessToken)
+            : undefined;
+          if (bootstrap) return bootstrap;
+          return ensureEmbeddedGatewayTokenForRecoveryContext(
+            config,
+            embeddedGatewayAccessToken,
+            "started",
+          );
+        }
       }
 
-      const ensured = ensureEmbeddedGatewayToken(config);
-      embeddedGatewayAccessToken = ensured;
-      return ensured;
+      return ensureEmbeddedGatewayTokenFromState(config, embeddedGatewayAccessToken);
     })();
     const port = config.embedded.port;
     return {
@@ -307,8 +210,6 @@ export function resolveOperatorConnection(config: DesktopNodeConfig): OperatorCo
     };
   }
 
-  // Remote deployments may still use opaque GATEWAY_TOKEN values, so do not
-  // apply the embedded bootstrap-token format check here.
   const token = config.remote.tokenRef ? decryptToken(config.remote.tokenRef) : "";
   const tlsCertFingerprint256 =
     typeof config.remote.tlsCertFingerprint256 === "string"
@@ -331,55 +232,75 @@ async function startEmbeddedGatewayWithConfig(
 ): Promise<string> {
   if (mgr.status === "running") {
     try {
-      return ensureEmbeddedGatewayToken(config);
+      return ensureEmbeddedGatewayTokenFromState(config, embeddedGatewayAccessToken);
     } catch {
-      const bootstrap = mgr.getBootstrapToken("default-tenant-admin");
-      if (bootstrap && isValidEmbeddedGatewayToken(bootstrap)) {
-        persistEmbeddedGatewayToken(config, bootstrap);
+      const bootstrap = captureEmbeddedBootstrapToken(mgr, config, embeddedGatewayAccessToken);
+      if (bootstrap) {
         return bootstrap;
       }
-      return recoverEmbeddedGatewayAccessToken(config, "running");
+      await mgr.stop();
+      embeddedGatewayAccessToken.current = null;
+      return await startEmbeddedGatewayWithConfig(mgr, loadConfig());
     }
   }
   if (startPromise) {
-    await startPromise;
-    return recoverEmbeddedGatewayAccessToken(config, "started");
+    return await startPromise;
   }
 
-  const tyrumHome = process.env["TYRUM_HOME"] ?? join(homedir(), ".tyrum");
-  const dbPath = resolveEmbeddedGatewayDbPath(config, tyrumHome);
-  const gatewayBin = resolveGatewayBin();
+  const runtimeContext = resolveEmbeddedGatewayRuntimeContext(config);
+  const starter = (async () => {
+    let token: string | null = null;
+    let recoveryError: Error | null = null;
+    try {
+      token = ensureEmbeddedGatewayTokenFromState(config, embeddedGatewayAccessToken);
+    } catch (error) {
+      recoveryError = error instanceof Error ? error : new Error(String(error));
+      try {
+        token = await recoverEmbeddedGatewayAccessToken(
+          config,
+          mgr,
+          runtimeContext,
+          embeddedGatewayAccessToken,
+        );
+        recoveryError = null;
+      } catch (recoveryFailure) {
+        recoveryError =
+          recoveryFailure instanceof Error ? recoveryFailure : new Error(String(recoveryFailure));
+      }
+    }
 
-  const starter = mgr.start({
-    gatewayBin: gatewayBin.path,
-    gatewayBinSource: gatewayBin.source,
-    port: config.embedded.port,
-    dbPath,
-    home: tyrumHome,
-    host: "127.0.0.1",
-  });
+    await mgr.start({
+      gatewayBin: runtimeContext.gatewayBin.path,
+      gatewayBinSource: runtimeContext.gatewayBin.source,
+      port: config.embedded.port,
+      dbPath: runtimeContext.dbPath,
+      home: runtimeContext.tyrumHome,
+      host: "127.0.0.1",
+    });
+
+    if (token) return token;
+    try {
+      return ensureEmbeddedGatewayTokenFromState(config, embeddedGatewayAccessToken);
+    } catch {
+      const bootstrap = captureEmbeddedBootstrapToken(mgr, config, embeddedGatewayAccessToken);
+      if (bootstrap) return bootstrap;
+    }
+
+    if (recoveryError) {
+      throw new Error(
+        `Embedded gateway started but automatic token recovery failed: ${recoveryError.message}`,
+      );
+    }
+    throw new Error("Embedded gateway started but no usable access token could be recovered.");
+  })();
   startPromise = starter;
   try {
-    await starter;
+    return await starter;
   } finally {
     if (startPromise === starter) {
       startPromise = null;
     }
   }
-
-  try {
-    return ensureEmbeddedGatewayToken(config);
-  } catch {
-    const bootstrap = mgr.getBootstrapToken("default-tenant-admin");
-    if (bootstrap && isValidEmbeddedGatewayToken(bootstrap)) {
-      persistEmbeddedGatewayToken(config, bootstrap);
-      return bootstrap;
-    }
-  }
-
-  throw new Error(
-    "Embedded gateway started but no bootstrap token was captured. Delete the embedded gateway database or issue a new token, then restart the embedded gateway.",
-  );
 }
 
 export async function startEmbeddedGatewayFromConfig(): Promise<{
@@ -410,7 +331,7 @@ async function handleGatewayStop(): Promise<{ status: "stopped" }> {
   const mgr = manager;
   if (!mgr) return { status: "stopped" };
   await mgr.stop();
-  embeddedGatewayAccessToken = null;
+  embeddedGatewayAccessToken.current = null;
   return { status: "stopped" };
 }
 
@@ -420,7 +341,8 @@ export async function resetGatewayIpcStateForTests(): Promise<void> {
     await manager?.stop();
   } catch {}
   manager?.removeAllListeners();
-  [manager, ipcRegistered, startPromise, embeddedGatewayAccessToken] = [null, false, null, null];
+  [manager, ipcRegistered, startPromise] = [null, false, null];
+  embeddedGatewayAccessToken.current = null;
   sender.setWindow(null);
   await destroyPinnedGatewayFetchState();
 }

@@ -18,6 +18,11 @@ export interface GatewayManagerOptions {
   host?: string;
 }
 
+type GatewayProcessOptions = Pick<
+  GatewayManagerOptions,
+  "gatewayBin" | "gatewayBinSource" | "dbPath" | "home"
+>;
+
 export interface GatewayLogEntry {
   level: "info" | "error";
   message: string;
@@ -162,6 +167,38 @@ function inferHomeFromDbPath(dbPath: string): string | undefined {
   }
 }
 
+function resolveGatewayMigrationsDir(gatewayBin: string): string | undefined {
+  const gatewayDir = dirname(gatewayBin);
+  const alongsideGateway = join(gatewayDir, "migrations");
+  if (existsSync(alongsideGateway)) {
+    const sqliteDir = join(alongsideGateway, "sqlite");
+    return existsSync(sqliteDir) ? sqliteDir : alongsideGateway;
+  }
+
+  // Monorepo layout: packages/gateway/dist/index.mjs -> packages/gateway/migrations
+  const monorepoMigrations = join(gatewayDir, "../migrations");
+  if (existsSync(monorepoMigrations)) {
+    const sqliteDir = join(monorepoMigrations, "sqlite");
+    return existsSync(sqliteDir) ? sqliteDir : monorepoMigrations;
+  }
+
+  return undefined;
+}
+
+function buildGatewayDbArgs(opts: GatewayProcessOptions): string[] {
+  const home = opts.home ?? inferHomeFromDbPath(opts.dbPath);
+  const args: string[] = [];
+  if (home) args.push("--home", home);
+  args.push("--db", opts.dbPath);
+
+  const migrationsDir = resolveGatewayMigrationsDir(opts.gatewayBin);
+  if (migrationsDir) {
+    args.push("--migrations-dir", migrationsDir);
+  }
+
+  return args;
+}
+
 function isElectronRuntime(versions: NodeJS.ProcessVersions = process.versions): boolean {
   return typeof versions.electron === "string" && versions.electron.length > 0;
 }
@@ -244,36 +281,95 @@ export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
     this.emit("status-change", status);
   }
 
+  async issueDefaultTenantAdminToken(opts: GatewayProcessOptions): Promise<string> {
+    const startupLogLines: string[] = [];
+    const tokens = new Map<string, string>();
+    const launch = resolveGatewayLaunchCommand({
+      gatewayBin: opts.gatewayBin,
+      gatewayBinSource: opts.gatewayBinSource,
+    });
+    const args = [
+      opts.gatewayBin,
+      "tokens",
+      "issue-default-tenant-admin",
+      ...buildGatewayDbArgs(opts),
+    ];
+    const proc = spawn(launch.command, args, {
+      env: {
+        ...process.env,
+        ...launch.env,
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    const stdoutProcessor = createBootstrapTokenChunkProcessor(tokens);
+    const stderrProcessor = createBootstrapTokenChunkProcessor(tokens);
+
+    proc.stdout?.on("data", (data: Buffer) => {
+      const redacted = stdoutProcessor.processChunk(data.toString());
+      if (redacted) {
+        appendStartupLogLines(startupLogLines, redacted);
+      }
+    });
+    proc.stderr?.on("data", (data: Buffer) => {
+      const redacted = stderrProcessor.processChunk(data.toString());
+      if (redacted) {
+        appendStartupLogLines(startupLogLines, redacted);
+      }
+    });
+
+    const exit = await new Promise<{ code: number | null; signal: string | null }>(
+      (resolve, reject) => {
+        proc.once("error", reject);
+        proc.once("exit", (code, signal) => {
+          const stdoutFlush = stdoutProcessor.flushRemainder();
+          if (stdoutFlush) {
+            appendStartupLogLines(startupLogLines, stdoutFlush);
+          }
+          const stderrFlush = stderrProcessor.flushRemainder();
+          if (stderrFlush) {
+            appendStartupLogLines(startupLogLines, stderrFlush);
+          }
+          resolve({ code, signal });
+        });
+      },
+    ).catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Gateway token recovery command failed to launch: ${message}`);
+    });
+
+    if (exit.code !== 0 || exit.signal !== null) {
+      const reason =
+        summarizeGatewayStartupFailure(startupLogLines) ??
+        `process exited (code ${String(exit.code)}, signal ${String(exit.signal)})`;
+      throw new Error(`Gateway token recovery command failed: ${reason}`);
+    }
+
+    const token = tokens.get("default-tenant-admin")?.trim();
+    if (!token) {
+      throw new Error(
+        "Gateway token recovery command completed without returning a default-tenant-admin token.",
+      );
+    }
+    return token;
+  }
+
   async start(opts: GatewayManagerOptions): Promise<void> {
     if (this.process) throw new Error("Gateway already running");
     this.setStatus("starting");
     this.bootstrapTokens.clear();
 
     const host = opts.host ?? "127.0.0.1";
-    const home = opts.home ?? inferHomeFromDbPath(opts.dbPath);
-    const gatewayDir = dirname(opts.gatewayBin);
-    const migrationsDir = (() => {
-      const alongsideGateway = join(gatewayDir, "migrations");
-      if (existsSync(alongsideGateway)) {
-        const sqliteDir = join(alongsideGateway, "sqlite");
-        return existsSync(sqliteDir) ? sqliteDir : alongsideGateway;
-      }
-
-      // Monorepo layout: packages/gateway/dist/index.mjs -> packages/gateway/migrations
-      const monorepoMigrations = join(gatewayDir, "../migrations");
-      if (existsSync(monorepoMigrations)) {
-        const sqliteDir = join(monorepoMigrations, "sqlite");
-        return existsSync(sqliteDir) ? sqliteDir : monorepoMigrations;
-      }
-
-      return undefined;
-    })();
     const startupLogLines: string[] = [];
-
-    const args: string[] = [opts.gatewayBin, "start", "--host", host, "--port", String(opts.port)];
-    if (home) args.push("--home", home);
-    args.push("--db", opts.dbPath);
-    if (migrationsDir) args.push("--migrations-dir", migrationsDir);
+    const args: string[] = [
+      opts.gatewayBin,
+      "start",
+      "--host",
+      host,
+      "--port",
+      String(opts.port),
+      ...buildGatewayDbArgs(opts),
+    ];
 
     const launch = resolveGatewayLaunchCommand({
       gatewayBin: opts.gatewayBin,

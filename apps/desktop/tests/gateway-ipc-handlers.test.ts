@@ -249,75 +249,103 @@ describe("registerGatewayIpc handlers", () => {
     await expect(handler!({} as never)).rejects.toThrow("not configured");
   });
 
-  it("rotates embedded token when persisted token cannot be decrypted", async () => {
+  it("recovers embedded token by issuing a replacement when decryption fails", async () => {
     decryptTokenMock.mockImplementationOnce(() => {
       throw new Error(
         "Error while decrypting the ciphertext provided to safeStorage.decryptString.",
       );
     });
-    await registerGatewayIpcForTest();
+    const { manager } = await registerGatewayIpcForTest();
+    const mgr = manager as MockGatewayManager;
     const handler = getRegisteredHandler("gateway:operator-connection");
     const connection = await handler!({} as never);
     expectConnection(connection, {
       mode: "embedded",
       wsUrl: "ws://127.0.0.1:8788/ws",
       httpBaseUrl: "http://127.0.0.1:8788/",
-      token: "tyrum-token.v1.bootstrap.token",
+      token: "tyrum-token.v1.issued.token",
     });
     expect(generateTokenMock).not.toHaveBeenCalled();
-    expect(encryptTokenMock).toHaveBeenCalledWith("tyrum-token.v1.bootstrap.token");
+    expect(mgr.issueDefaultTenantAdminTokenCalls).toBe(1);
+    expect(encryptTokenMock).toHaveBeenCalledWith("tyrum-token.v1.issued.token");
     expect(saveConfigMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        embedded: expect.objectContaining({ tokenRef: "enc:tyrum-token.v1.bootstrap.token" }),
+        embedded: expect.objectContaining({ tokenRef: "enc:tyrum-token.v1.issued.token" }),
       }),
     );
   });
 
-  it("bootstraps and persists the embedded token on first launch when tokenRef is missing", async () => {
+  it("issues and persists the embedded token on first launch when tokenRef is missing", async () => {
     testState.embeddedTokenRef = "";
-    await registerGatewayIpcForTest();
+    const { manager } = await registerGatewayIpcForTest();
+    const mgr = manager as MockGatewayManager;
     const handler = getRegisteredHandler("gateway:operator-connection");
     const connection = await handler!({} as never);
     expectConnection(connection, {
       mode: "embedded",
       wsUrl: "ws://127.0.0.1:8788/ws",
       httpBaseUrl: "http://127.0.0.1:8788/",
-      token: "tyrum-token.v1.bootstrap.token",
+      token: "tyrum-token.v1.issued.token",
     });
-    expect(encryptTokenMock).toHaveBeenCalledWith("tyrum-token.v1.bootstrap.token");
+    expect(mgr.issueDefaultTenantAdminTokenCalls).toBe(1);
+    expect(encryptTokenMock).toHaveBeenCalledWith("tyrum-token.v1.issued.token");
     expect(saveConfigMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        embedded: expect.objectContaining({ tokenRef: "enc:tyrum-token.v1.bootstrap.token" }),
+        embedded: expect.objectContaining({ tokenRef: "enc:tyrum-token.v1.issued.token" }),
       }),
     );
   });
 
-  it("reports invalid embedded token format distinctly from decryption failures (ensure)", async () => {
-    decryptTokenMock.mockImplementationOnce(() => "not-a-token");
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+  it("accepts opaque embedded gateway tokens", async () => {
+    decryptTokenMock.mockImplementationOnce(() => "opaque-embedded-token");
     const { ensureEmbeddedGatewayToken } = await import("../src/main/ipc/gateway-ipc.js");
     const { loadConfig } = await import("../src/main/config/store.js");
-    expect(() => ensureEmbeddedGatewayToken(loadConfig())).toThrow();
-    expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringMatching(/invalid embedded gateway token format/i),
-      expect.any(Error),
-    );
-    warnSpy.mockRestore();
+    expect(ensureEmbeddedGatewayToken(loadConfig())).toBe("opaque-embedded-token");
   });
 
-  it("reports invalid embedded token format distinctly from decryption failures (recover)", async () => {
-    decryptTokenMock.mockImplementationOnce(() => "not-a-token");
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const { resolveOperatorConnection, manager } = await registerGatewayIpcForTest();
-    const { loadConfig } = await import("../src/main/config/store.js");
-    const mgr = manager as { status: string };
+  it("uses the provisioned embedded token when the saved token is missing", async () => {
+    const previousGatewayToken = process.env["GATEWAY_TOKEN"];
+    process.env["GATEWAY_TOKEN"] = "opaque-provisioned-token";
+    testState.embeddedTokenRef = "";
+
+    try {
+      const { manager } = await registerGatewayIpcForTest();
+      const mgr = manager as MockGatewayManager;
+      mgr.bootstrapToken = undefined;
+      const handler = getRegisteredHandler("gateway:operator-connection");
+      const connection = await handler!({} as never);
+      expectConnection(connection, {
+        mode: "embedded",
+        wsUrl: "ws://127.0.0.1:8788/ws",
+        httpBaseUrl: "http://127.0.0.1:8788/",
+        token: "opaque-provisioned-token",
+      });
+      expect(mgr.issueDefaultTenantAdminTokenCalls).toBe(0);
+      expect(encryptTokenMock).toHaveBeenCalledWith("opaque-provisioned-token");
+    } finally {
+      if (previousGatewayToken === undefined) delete process.env["GATEWAY_TOKEN"];
+      else process.env["GATEWAY_TOKEN"] = previousGatewayToken;
+    }
+  });
+
+  it("restarts the embedded gateway and reissues a token when a running session has lost it", async () => {
+    testState.embeddedTokenRef = "";
+    const { manager } = await registerGatewayIpcForTest();
+    const mgr = manager as MockGatewayManager;
     mgr.status = "running";
-    expect(() => resolveOperatorConnection(loadConfig())).toThrow();
-    expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringMatching(/invalid embedded gateway token format/i),
-      expect.any(Error),
-    );
-    warnSpy.mockRestore();
+    mgr.bootstrapToken = undefined;
+
+    const handler = getRegisteredHandler("gateway:operator-connection");
+    const connection = await handler!({} as never);
+    expectConnection(connection, {
+      mode: "embedded",
+      wsUrl: "ws://127.0.0.1:8788/ws",
+      httpBaseUrl: "http://127.0.0.1:8788/",
+      token: "tyrum-token.v1.issued.token",
+    });
+    expect(mgr.stopCalls).toBe(1);
+    expect(mgr.startCalls).toBe(1);
+    expect(mgr.issueDefaultTenantAdminTokenCalls).toBe(1);
   });
 
   it("does not rotate embedded token when the gateway is already running", async () => {

@@ -207,6 +207,62 @@ describe("GatewayManager", () => {
     await gm.stop();
   });
 
+  it("issues a default tenant admin token via the embedded gateway bundle", async () => {
+    const gm = new GatewayManager();
+    const { proc, stdout } = mockStreamingProc();
+    spawnMock.mockReturnValue(proc as never);
+
+    queueMicrotask(() => {
+      stdout.emit("data", Buffer.from("tokens.issue-default-tenant-admin: ok\n"));
+      stdout.emit("data", Buffer.from("default-tenant-admin: tyrum-token.v1.issued.token\n"));
+      proc.exitCode = 0;
+      proc.emit("exit", 0, null);
+    });
+
+    const token = await gm.issueDefaultTenantAdminToken({
+      gatewayBin: "/nonexistent",
+      dbPath: "/tmp/test.db",
+    });
+
+    expect(token).toBe("tyrum-token.v1.issued.token");
+
+    const [, args, options] = spawnMock.mock.calls[0] ?? [];
+    expect(args).toEqual([
+      "/nonexistent",
+      "tokens",
+      "issue-default-tenant-admin",
+      "--home",
+      "/tmp",
+      "--db",
+      "/tmp/test.db",
+    ]);
+    const env = (options as { env?: Record<string, string> }).env;
+    expect(env?.["ELECTRON_RUN_AS_NODE"]).toBeUndefined();
+  });
+
+  it("redacts recovered tokens from token-issue failures", async () => {
+    const gm = new GatewayManager();
+    const { proc, stdout } = mockStreamingProc();
+    spawnMock.mockReturnValue(proc as never);
+
+    queueMicrotask(() => {
+      stdout.emit("data", Buffer.from("default-tenant-admin: tyrum-token.v1.secret.token\n"));
+      proc.exitCode = 1;
+      proc.emit("exit", 1, null);
+    });
+
+    const issue = gm.issueDefaultTenantAdminToken({
+      gatewayBin: "/nonexistent",
+      dbPath: "/tmp/test.db",
+    });
+
+    await expect(issue).rejects.toThrow("default-tenant-admin: [REDACTED]");
+    await issue.catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      expect(message).not.toContain("tyrum-token.v1.secret.token");
+    });
+  });
+
   it.each([
     {
       name: "uses Electron-as-Node for staged gateway bundles inside Electron",
