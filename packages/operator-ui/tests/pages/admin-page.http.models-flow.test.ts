@@ -6,6 +6,7 @@ import { stubAdminHttpFetch } from "../admin-http-fetch-test-support.js";
 import { setNativeValue } from "../test-utils.js";
 import {
   ADMIN_HTTP_EXECUTION_PROFILE_IDS,
+  createAvailableModel,
   setModelConfigResponses,
 } from "./admin-page.http.models.shared.js";
 import {
@@ -63,6 +64,14 @@ function getDialogSelect(dialog: HTMLElement, labelText: string): HTMLSelectElem
     throw new Error(`Expected label "${labelText}" to target a select.`);
   }
   return control;
+}
+
+function getModelFilterInput(dialog: HTMLElement): HTMLInputElement {
+  return getByTestId<HTMLInputElement>(dialog, "models-filter-input");
+}
+
+function getModelPickerOption(dialog: HTMLElement, modelRef: string): HTMLButtonElement {
+  return getByTestId<HTMLButtonElement>(dialog, `models-model-option-${modelRef}`);
 }
 
 describe("ConfigurePage (HTTP) models", () => {
@@ -126,23 +135,11 @@ describe("ConfigurePage (HTTP) models", () => {
 
     click(getByTestId<HTMLButtonElement>(page.container, "models-add-open"));
     const dialog = getByTestId<HTMLElement>(document.body, "models-preset-dialog");
-    expectPresent(
-      Array.from(dialog.querySelectorAll<HTMLInputElement>("input")).find(
-        (input) => input.type !== "hidden" && !input.readOnly,
-      ),
-    );
-
-    const modelSelect = getDialogSelect(dialog, "Model");
+    const displayNameInput = getDialogInput(dialog, "Display name");
     const reasoningEffortSelect = getDialogSelect(dialog, "Reasoning effort");
     expect(getDialogSelect(dialog, "Reasoning display").value).toBe("");
-    setSelectValue(modelSelect, "openai/gpt-4.1-mini");
-    expect(
-      expectPresent(
-        Array.from(dialog.querySelectorAll<HTMLInputElement>("input")).find(
-          (input) => input.type !== "hidden" && !input.readOnly,
-        ),
-      ).value,
-    ).toBe("GPT-4.1 Mini");
+    click(getModelPickerOption(dialog, "openai/gpt-4.1-mini"));
+    expect(displayNameInput.value).toBe("GPT-4.1 Mini");
     setSelectValue(reasoningEffortSelect, "high");
 
     await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "models-save"));
@@ -162,7 +159,7 @@ describe("ConfigurePage (HTTP) models", () => {
 
     click(getByTestId<HTMLButtonElement>(page.container, "models-add-open"));
     const dialog = getByTestId<HTMLElement>(document.body, "models-preset-dialog");
-    setSelectValue(getDialogSelect(dialog, "Model"), "openai/gpt-4.1-mini");
+    click(getModelPickerOption(dialog, "openai/gpt-4.1-mini"));
 
     await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "models-save"));
     await flush();
@@ -200,6 +197,114 @@ describe("ConfigurePage (HTTP) models", () => {
 
     expect(countMutationCalls(fetchMock)).toBe(1);
     expect(page.container.textContent).toContain("Renamed preset");
+    cleanupAdminHttpPage(page);
+  });
+
+  it("filters the model list, auto-selects the first match, and caps the visible list to five rows", async () => {
+    const { core } = createAdminHttpTestCore();
+    setModelConfigResponses(core, {
+      presets: [],
+      models: [
+        createAvailableModel(),
+        createAvailableModel({ model_id: "gpt-4.1-mini", model_name: "GPT-4.1 Mini" }),
+        createAvailableModel({
+          provider_key: "anthropic",
+          provider_name: "Anthropic",
+          model_id: "claude-3.7-sonnet",
+          model_name: "Claude 3.7 Sonnet",
+          family: "Claude",
+        }),
+        createAvailableModel({
+          provider_key: "meta",
+          provider_name: "Meta",
+          model_id: "llama-3.3-70b",
+          model_name: "Llama 3.3 70B",
+        }),
+        createAvailableModel({
+          provider_key: "google",
+          provider_name: "Google",
+          model_id: "gemma-3-27b",
+          model_name: "Gemma 3 27B",
+        }),
+        createAvailableModel({
+          provider_key: "mistral",
+          provider_name: "Mistral",
+          model_id: "mistral-large",
+          model_name: "Mistral Large",
+        }),
+      ],
+      assignments: [],
+    });
+    stubAdminHttpFetch(core);
+
+    const page = renderAdminHttpConfigurePage(core);
+    await openModelsTab(page.container);
+
+    click(getByTestId<HTMLButtonElement>(page.container, "models-add-open"));
+    const dialog = getByTestId<HTMLElement>(document.body, "models-preset-dialog");
+    const filterInput = getModelFilterInput(dialog);
+    const modelPicker = getByTestId<HTMLElement>(dialog, "models-model-picker");
+    const displayNameInput = getDialogInput(dialog, "Display name");
+
+    expect(modelPicker.style.height).toBe("21.25rem");
+    expect(displayNameInput.value).toBe("GPT-4.1");
+
+    act(() => {
+      setNativeValue(filterInput, "claude");
+    });
+
+    expect(dialog.querySelector("[data-testid='models-model-option-openai/gpt-4.1']")).toBeNull();
+    expect(
+      getModelPickerOption(dialog, "anthropic/claude-3.7-sonnet").getAttribute("aria-checked"),
+    ).toBe("true");
+    expect(displayNameInput.value).toBe("Claude 3.7 Sonnet");
+    cleanupAdminHttpPage(page);
+  });
+
+  it("preserves a custom display name across model filter changes", async () => {
+    const { core } = createAdminHttpTestCore();
+    setModelConfigResponses(core, {
+      presets: [],
+      models: [
+        createAvailableModel(),
+        createAvailableModel({ model_id: "gpt-4.1-mini", model_name: "GPT-4.1 Mini" }),
+      ],
+      assignments: [],
+    });
+    stubAdminHttpFetch(core);
+
+    const page = renderAdminHttpConfigurePage(core);
+    await openModelsTab(page.container);
+
+    click(getByTestId<HTMLButtonElement>(page.container, "models-add-open"));
+    const dialog = getByTestId<HTMLElement>(document.body, "models-preset-dialog");
+    const filterInput = getModelFilterInput(dialog);
+    const displayNameInput = getDialogInput(dialog, "Display name");
+
+    act(() => {
+      setNativeValue(displayNameInput, "Team preset");
+      setNativeValue(filterInput, "mini");
+    });
+
+    expect(getModelPickerOption(dialog, "openai/gpt-4.1-mini").getAttribute("aria-checked")).toBe(
+      "true",
+    );
+    expect(displayNameInput.value).toBe("Team preset");
+
+    act(() => {
+      setNativeValue(filterInput, "zzz");
+    });
+
+    expect(displayNameInput.value).toBe("Team preset");
+
+    act(() => {
+      setNativeValue(filterInput, "");
+    });
+
+    expect(getModelPickerOption(dialog, "openai/gpt-4.1").getAttribute("aria-checked")).toBe(
+      "true",
+    );
+    expect(displayNameInput.value).toBe("Team preset");
     cleanupAdminHttpPage(page);
   });
 

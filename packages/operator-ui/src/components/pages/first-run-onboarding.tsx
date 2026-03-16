@@ -10,7 +10,7 @@ import { Card, CardContent } from "../ui/card.js";
 import { useElevatedModeUiContext } from "../elevated-mode/elevated-mode-provider.js";
 import { useAdminMutationAccess, useAdminMutationHttpClient } from "./admin-http-shared.js";
 import { selectProviderFormState, validateProviderForm } from "./admin-http-providers.shared.js";
-import { modelRefFor } from "./admin-http-models.shared.js";
+import { selectModelDialogState } from "./admin-http-models.shared.js";
 import {
   buildDefaultAgentConfigUpdate,
   buildDefaultAssignments,
@@ -71,11 +71,6 @@ export function FirstRunOnboardingPage({
     drafts.selectedMethod,
     "create",
   );
-  const availableModelChoices = data.availableModels.map((model) => ({
-    modelRef: modelRefFor(model),
-    label: `${model.provider_name} / ${model.model_name}`,
-    modelName: model.model_name,
-  }));
 
   React.useEffect(() => {
     if (issues.length === 0) {
@@ -106,6 +101,19 @@ export function FirstRunOnboardingPage({
       });
     },
     [drafts],
+  );
+
+  const applyModelSelection = React.useCallback(
+    (modelRef: string) => {
+      drafts.setModelState((current) =>
+        selectModelDialogState({
+          currentState: current,
+          modelRef,
+          availableModels: data.availableModels,
+        }),
+      );
+    },
+    [data.availableModels, drafts],
   );
 
   const runMutation = React.useCallback(
@@ -186,10 +194,12 @@ export function FirstRunOnboardingPage({
     if (step === "preset") {
       return (
         <OnboardingPresetStep
-          availableModels={availableModelChoices}
           busy={submitBusy}
           canSave={Boolean(mutationHttp)}
+          filteredAvailableModels={drafts.filteredAvailableModels}
+          modelFilter={drafts.modelFilter}
           modelState={drafts.modelState}
+          onModelFilterChange={drafts.setModelFilter}
           onModelSave={() => {
             void runMutation(async () => {
               if (!mutationHttp) {
@@ -202,6 +212,7 @@ export function FirstRunOnboardingPage({
               drafts.setSelectedPresetKey(presetKey);
             });
           }}
+          onModelSelectionChange={applyModelSelection}
           onModelStateChange={drafts.setModelState}
         />
       );

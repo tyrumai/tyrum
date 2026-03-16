@@ -14,16 +14,20 @@ import { Input } from "../ui/input.js";
 import { Select } from "../ui/select.js";
 import {
   emptyDialogState,
+  filterAvailableModels,
   modelRefFor,
   normalizeDialogState,
+  reconcileModelDialogState,
   REASONING_OPTIONS,
   REASONING_VISIBILITY_OPTIONS,
+  selectModelDialogState,
   splitModelRef,
   type AvailableModel,
   type ModelConfigHttpClient,
   type ModelDialogState,
   type ModelPreset,
 } from "./admin-http-models.shared.js";
+import { ModelPickerField } from "./model-picker-field.js";
 
 export function ModelPresetDialog({
   open,
@@ -43,16 +47,46 @@ export function ModelPresetDialog({
   api: ModelConfigHttpClient["modelConfig"];
 }): React.ReactElement {
   const [state, setState] = React.useState<ModelDialogState>(emptyDialogState());
+  const [modelFilter, setModelFilter] = React.useState("");
   const [saving, setSaving] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
   const selectedModel = availableModels.find((model) => modelRefFor(model) === state.modelRef);
+  const filteredAvailableModels = React.useMemo(
+    () => filterAvailableModels(availableModels, modelFilter),
+    [availableModels, modelFilter],
+  );
 
   React.useEffect(() => {
     if (!open) return;
     setState(normalizeDialogState({ preset, availableModels }));
+    setModelFilter("");
     setSaving(false);
     setErrorMessage(null);
   }, [availableModels, open, preset]);
+
+  React.useEffect(() => {
+    if (!open || preset) return;
+    setState((current) =>
+      reconcileModelDialogState({
+        currentState: current,
+        filteredModels: filteredAvailableModels,
+        availableModels,
+      }),
+    );
+  }, [availableModels, filteredAvailableModels, open, preset]);
+
+  const applyModelSelection = React.useCallback(
+    (modelRef: string) => {
+      setState((current) =>
+        selectModelDialogState({
+          currentState: current,
+          modelRef,
+          availableModels,
+        }),
+      );
+    },
+    [availableModels],
+  );
 
   const submit = async (): Promise<void> => {
     if (!canMutate) {
@@ -135,28 +169,13 @@ export function ModelPresetDialog({
               helperText="The underlying model is fixed after creation."
             />
           ) : (
-            <Select
-              label="Model"
-              value={state.modelRef}
-              onChange={(event) => {
-                setState((current) => ({
-                  ...current,
-                  modelRef: event.currentTarget.value,
-                  displayName:
-                    current.displayName.trim().length > 0
-                      ? current.displayName
-                      : (availableModels.find(
-                          (model) => modelRefFor(model) === event.currentTarget.value,
-                        )?.model_name ?? current.displayName),
-                }));
-              }}
-            >
-              {availableModels.map((model) => (
-                <option key={modelRefFor(model)} value={modelRefFor(model)}>
-                  {model.provider_name} / {model.model_name}
-                </option>
-              ))}
-            </Select>
+            <ModelPickerField
+              filteredModels={filteredAvailableModels}
+              modelFilter={modelFilter}
+              onModelFilterChange={setModelFilter}
+              onSelectModel={applyModelSelection}
+              selectedModelRef={state.modelRef}
+            />
           )}
 
           <Select
@@ -193,13 +212,6 @@ export function ModelPresetDialog({
               </option>
             ))}
           </Select>
-
-          {selectedModel && !preset ? (
-            <div className="text-sm text-fg-muted">
-              Selected: {selectedModel.provider_name} / {selectedModel.model_name}
-            </div>
-          ) : null}
-
           {errorMessage ? (
             <Alert variant="error" title="Unable to save" description={errorMessage} />
           ) : null}
