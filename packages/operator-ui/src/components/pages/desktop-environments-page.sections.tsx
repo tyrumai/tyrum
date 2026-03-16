@@ -27,6 +27,17 @@ export interface DesktopEnvironmentLogsState {
   lastSyncedAt: string | null;
 }
 
+function DesktopErrorOutput({ message, testId }: { message: string; testId?: string }) {
+  return (
+    <pre
+      className="mt-2 max-h-40 overflow-auto whitespace-pre rounded-md border border-error/30 bg-error/10 px-3 py-2 font-mono text-xs text-error"
+      data-testid={testId}
+    >
+      {message}
+    </pre>
+  );
+}
+
 export function DesktopEnvironmentsSummaryCard({
   hostsError,
   environmentsError,
@@ -102,7 +113,10 @@ export function DesktopEnvironmentHostsCard({
               </span>
             </div>
             {host.last_error ? (
-              <div className="mt-2 text-xs text-error">{host.last_error}</div>
+              <DesktopErrorOutput
+                message={host.last_error}
+                testId={`desktop-host-error-${host.host_id}`}
+              />
             ) : null}
           </div>
         ))}
@@ -246,7 +260,10 @@ export function DesktopEnvironmentListCard({
                 </span>
               </div>
               {environment.last_error ? (
-                <div className="mt-2 text-xs text-error">{environment.last_error}</div>
+                <DesktopErrorOutput
+                  message={environment.last_error}
+                  testId={`desktop-environment-error-${environment.environment_id}`}
+                />
               ) : null}
             </button>
           );
