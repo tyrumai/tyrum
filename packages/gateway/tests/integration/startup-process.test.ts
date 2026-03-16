@@ -67,52 +67,55 @@ describe("gateway startup process", () => {
     "resumes agent tool-execution runs on denied approvals over WebSocket",
     { timeout: 180_000 },
     async () => {
-      await withGatewayBuild(async () => {
-        const gateway = await startGatewayFixture({ tempPrefix: "tyrum-gateway-ws-approval-" });
-        try {
-          const db = openTestDatabase(gateway.dbPath);
+      await withGatewayBuild(
+        async () => {
+          const gateway = await startGatewayFixture({ tempPrefix: "tyrum-gateway-ws-approval-" });
           try {
-            seedPausedApprovalRun(db, deniedApprovalFixture);
-
-            const ws = new WebSocket(
-              `ws://127.0.0.1:${gateway.port}/ws`,
-              authProtocols(gateway.tenantAdminToken),
-            );
+            const db = openTestDatabase(gateway.dbPath);
             try {
-              await waitForOpen(ws);
-              await completeHandshake(ws, {
-                requestIdPrefix: "r",
-                role: "client",
-                capabilities: [],
-              });
+              seedPausedApprovalRun(db, deniedApprovalFixture);
 
-              ws.send(
-                JSON.stringify({
-                  request_id: `approval-${deniedApprovalFixture.approvalId}`,
-                  type: "approval.resolve",
-                  payload: {
-                    approval_id: deniedApprovalFixture.approvalId,
-                    decision: "denied",
-                    reason: "denied in ws test",
-                  },
-                }),
+              const ws = new WebSocket(
+                `ws://127.0.0.1:${gateway.port}/ws`,
+                authProtocols(gateway.tenantAdminToken),
               );
+              try {
+                await waitForOpen(ws);
+                await completeHandshake(ws, {
+                  requestIdPrefix: "r",
+                  role: "client",
+                  capabilities: [],
+                });
 
-              const run = await waitForExecutionRunToLeavePaused(db, deniedApprovalFixture.runId);
-              expect(run.status).not.toBe("cancelled");
-              expect(run.pausedReason ?? null).toBeNull();
-            } finally {
-              if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
-                ws.close();
+                ws.send(
+                  JSON.stringify({
+                    request_id: `approval-${deniedApprovalFixture.approvalId}`,
+                    type: "approval.resolve",
+                    payload: {
+                      approval_id: deniedApprovalFixture.approvalId,
+                      decision: "denied",
+                      reason: "denied in ws test",
+                    },
+                  }),
+                );
+
+                const run = await waitForExecutionRunToLeavePaused(db, deniedApprovalFixture.runId);
+                expect(run.status).not.toBe("cancelled");
+                expect(run.pausedReason ?? null).toBeNull();
+              } finally {
+                if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+                  ws.close();
+                }
               }
+            } finally {
+              db.close();
             }
           } finally {
-            db.close();
+            await gateway.stopAndCleanup();
           }
-        } finally {
-          await gateway.stopAndCleanup();
-        }
-      });
+        },
+        { releaseAfterBuild: true },
+      );
     },
   );
 
@@ -120,57 +123,60 @@ describe("gateway startup process", () => {
     "cancels runs when an approval is approved but missing a resume token over WebSocket",
     { timeout: 180_000 },
     async () => {
-      await withGatewayBuild(async () => {
-        const gateway = await startGatewayFixture({
-          tempPrefix: "tyrum-gateway-ws-approval-missing-token-",
-        });
-        try {
-          const db = openTestDatabase(gateway.dbPath);
+      await withGatewayBuild(
+        async () => {
+          const gateway = await startGatewayFixture({
+            tempPrefix: "tyrum-gateway-ws-approval-missing-token-",
+          });
           try {
-            seedPausedApprovalRun(db, missingResumeTokenApprovalFixture);
-
-            const ws = new WebSocket(
-              `ws://127.0.0.1:${gateway.port}/ws`,
-              authProtocols(gateway.tenantAdminToken),
-            );
+            const db = openTestDatabase(gateway.dbPath);
             try {
-              await waitForOpen(ws);
-              await completeHandshake(ws, {
-                requestIdPrefix: "r",
-                role: "client",
-                capabilities: [],
-              });
+              seedPausedApprovalRun(db, missingResumeTokenApprovalFixture);
 
-              ws.send(
-                JSON.stringify({
-                  request_id: `approval-${missingResumeTokenApprovalFixture.approvalId}`,
-                  type: "approval.resolve",
-                  payload: {
-                    approval_id: missingResumeTokenApprovalFixture.approvalId,
-                    decision: "approved",
-                    reason: "approved in ws test (missing resume token)",
-                  },
-                }),
+              const ws = new WebSocket(
+                `ws://127.0.0.1:${gateway.port}/ws`,
+                authProtocols(gateway.tenantAdminToken),
               );
+              try {
+                await waitForOpen(ws);
+                await completeHandshake(ws, {
+                  requestIdPrefix: "r",
+                  role: "client",
+                  capabilities: [],
+                });
 
-              const status = await waitForExecutionRunStatus(
-                db,
-                missingResumeTokenApprovalFixture.runId,
-                "cancelled",
-              );
-              expect(status, gateway.output()).toBe("cancelled");
-            } finally {
-              if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
-                ws.close();
+                ws.send(
+                  JSON.stringify({
+                    request_id: `approval-${missingResumeTokenApprovalFixture.approvalId}`,
+                    type: "approval.resolve",
+                    payload: {
+                      approval_id: missingResumeTokenApprovalFixture.approvalId,
+                      decision: "approved",
+                      reason: "approved in ws test (missing resume token)",
+                    },
+                  }),
+                );
+
+                const status = await waitForExecutionRunStatus(
+                  db,
+                  missingResumeTokenApprovalFixture.runId,
+                  "cancelled",
+                );
+                expect(status, gateway.output()).toBe("cancelled");
+              } finally {
+                if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+                  ws.close();
+                }
               }
+            } finally {
+              db.close();
             }
           } finally {
-            db.close();
+            await gateway.stopAndCleanup();
           }
-        } finally {
-          await gateway.stopAndCleanup();
-        }
-      });
+        },
+        { releaseAfterBuild: true },
+      );
     },
   );
 

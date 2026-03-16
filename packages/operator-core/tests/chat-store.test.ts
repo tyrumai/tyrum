@@ -100,7 +100,7 @@ describe("chatStore", () => {
     expect(ws.requestDynamic).toHaveBeenCalled();
   });
 
-  it("opens a session but stores metadata only in active state", async () => {
+  it("opens a session and stores the full active transcript", async () => {
     const ws = createFakeWs();
     ws.sessionGet.mockResolvedValueOnce({ session: sampleGetSession("session-9") });
     const chat = createChatStore(ws as never, createFakeHttp() as never);
@@ -108,16 +108,53 @@ describe("chatStore", () => {
     await chat.openSession("session-9");
 
     expect(chat.getSnapshot().active.sessionId).toBe("session-9");
-    expect(chat.getSnapshot().active.session).toEqual(sampleListItem("session-9"));
+    expect(chat.getSnapshot().active.session).toEqual(sampleGetSession("session-9"));
   });
 
-  it("creates and deletes sessions without owning live message state", async () => {
+  it("updates the active session and thread preview when live messages change", async () => {
+    const ws = createFakeWs();
+    ws.sessionGet.mockResolvedValueOnce({ session: sampleGetSession("session-3") });
+    const chat = createChatStore(ws as never, createFakeHttp() as never);
+
+    await chat.openSession("session-3");
+    chat.updateActiveMessages([
+      {
+        id: "session-3-user-1",
+        role: "user",
+        parts: [{ type: "text", text: "hello" }],
+      },
+      {
+        id: "session-3-assistant-1",
+        role: "assistant",
+        parts: [{ type: "text", text: "Fresh assistant reply" }],
+      },
+    ]);
+
+    const snapshot = chat.getSnapshot();
+    expect(snapshot.active.session?.messages).toHaveLength(2);
+    expect(snapshot.active.session?.last_message).toEqual({
+      role: "assistant",
+      text: "Fresh assistant reply",
+    });
+    expect(snapshot.sessions.sessions[0]).toEqual(
+      expect.objectContaining({
+        session_id: "session-3",
+        message_count: 2,
+        last_message: {
+          role: "assistant",
+          text: "Fresh assistant reply",
+        },
+      }),
+    );
+  });
+
+  it("creates and deletes sessions while retaining live message state", async () => {
     const ws = createFakeWs();
     ws.sessionCreate.mockResolvedValueOnce(sampleGetSession("session-4"));
     const chat = createChatStore(ws as never, createFakeHttp() as never);
 
     await chat.newChat();
-    expect(chat.getSnapshot().active.session).toEqual(sampleListItem("session-4"));
+    expect(chat.getSnapshot().active.session).toEqual(sampleGetSession("session-4"));
     expect(chat.getSnapshot().sessions.sessions[0]).toEqual(sampleListItem("session-4"));
 
     await chat.deleteActive();

@@ -8,7 +8,6 @@ import {
   createActivityStore,
   createAgentStatusStore,
   createApprovalsStore,
-  createChatStore,
   createConnectionStore,
   createEventWsStub,
   createManagedAgentDetail,
@@ -18,6 +17,7 @@ import {
   createWorkboardStore,
 } from "./layout-harness-store-fixtures.js";
 import { createAiSdkChatWsStub } from "./layout-harness-chat-fixtures.js";
+import { createChatStore } from "./layout-harness-chat-store-fixtures.js";
 import { createHarnessAgentHttpFixtures } from "./layout-harness-agent-http-fixtures.js";
 import { createHarnessConfigureHttpFixtures } from "./layout-harness-configure-http-fixtures.js";
 

@@ -4,6 +4,7 @@ import React, { act } from "react";
 import { describe, expect, it, vi } from "vitest";
 import type { UIMessage } from "ai";
 import type { OperatorCore } from "../../../operator-core/src/index.js";
+import { createChatStore } from "../../../operator-core/src/stores/chat-store.js";
 import { createStore } from "../../../operator-core/src/store.js";
 import { click, cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
 
@@ -17,6 +18,11 @@ vi.mock("@tyrum/client", () => ({
   supportsTyrumAiSdkChatSocket: supportsSocketMock,
   createTyrumAiSdkChatSessionClient: createSessionClientMock,
   createTyrumAiSdkChatTransport: createTransportMock,
+}));
+
+vi.mock("@tyrum/client/browser", () => ({
+  supportsTyrumAiSdkChatSocket: supportsSocketMock,
+  createTyrumAiSdkChatSessionClient: createSessionClientMock,
 }));
 
 vi.mock("sonner", () => ({
@@ -187,10 +193,10 @@ describe("AiSdkChatPage integration", () => {
     };
     createSessionClientMock.mockReturnValue(sessionClient);
 
-    const agentsList = vi.fn(async () => ({
+    const agentList = vi.fn(async () => ({
       agents: [
-        { agent_id: "default", agent_key: "default", persona: { name: "Default" } },
-        { agent_id: "other", agent_key: "other", persona: { name: "Other" } },
+        { agent_key: "default", persona: { name: "Default" } },
+        { agent_key: "other", persona: { name: "Other" } },
       ],
     }));
     const { store: connectionStore } = createStore({
@@ -200,19 +206,26 @@ describe("AiSdkChatPage integration", () => {
       transportError: null,
     });
     const approvalsStore = createApprovalsStoreStub();
+    const ws = {
+      connected: true,
+      off: vi.fn(),
+      on: vi.fn(),
+      requestDynamic: vi.fn(),
+      onDynamicEvent: vi.fn(),
+      offDynamicEvent: vi.fn(),
+    };
+    const http = {
+      agentList: {
+        get: agentList,
+      },
+    };
+    const chatStore = createChatStore(ws as never, http as never);
     const core = {
       approvalsStore,
+      chatStore,
       connectionStore,
-      http: {
-        agents: {
-          list: agentsList,
-        },
-      },
-      ws: {
-        connected: true,
-        off: vi.fn(),
-        on: vi.fn(),
-      },
+      http,
+      ws,
     } as unknown as OperatorCore;
 
     const { AiSdkChatPage } = await import("../../src/components/pages/chat-page-ai-sdk.js");
@@ -221,10 +234,10 @@ describe("AiSdkChatPage integration", () => {
     await flushEffects();
     await flushEffects();
 
-    expect(agentsList).toHaveBeenCalledOnce();
+    expect(agentList).toHaveBeenCalledOnce();
     expect(sessionClient.list).toHaveBeenCalledWith({
       agent_id: "default",
-      cursor: undefined,
+      channel: "ui",
       limit: 50,
     });
     expect(sessionClient.get).toHaveBeenCalledWith({ session_id: "session-1" });
@@ -235,7 +248,7 @@ describe("AiSdkChatPage integration", () => {
       testRoot.container.querySelector("[data-testid='mock-new-chat']") as HTMLElement,
     );
 
-    expect(sessionClient.create).toHaveBeenCalledWith({ agent_id: "default" });
+    expect(sessionClient.create).toHaveBeenCalledWith({ agent_id: "default", channel: "ui" });
     expect(testRoot.container.textContent).toContain("session-2");
 
     await clickAndFlush(

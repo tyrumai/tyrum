@@ -30,8 +30,41 @@ describe("AiSdkChatPage", () => {
       transportError: null,
     });
     const approvalsStore = createApprovalsStoreStub();
+    const { store: chatStoreBase } = createStore({
+      agentId: "default",
+      agents: {
+        agents: [],
+        loading: false,
+        error: null,
+      },
+      sessions: {
+        sessions: [],
+        nextCursor: null,
+        loading: false,
+        error: null,
+      },
+      active: {
+        sessionId: null,
+        session: null,
+        loading: false,
+        error: null,
+      },
+    });
+    const chatStore = {
+      ...chatStoreBase,
+      setAgentId: vi.fn(),
+      refreshAgents: vi.fn(async () => undefined),
+      refreshSessions: vi.fn(async () => undefined),
+      loadMoreSessions: vi.fn(async () => undefined),
+      openSession: vi.fn(async () => undefined),
+      hydrateActiveSession: vi.fn(),
+      updateActiveMessages: vi.fn(),
+      newChat: vi.fn(async () => undefined),
+      deleteActive: vi.fn(async () => undefined),
+    };
     const core = {
       approvalsStore,
+      chatStore,
       connectionStore,
       http: {
         agents: {

@@ -1,4 +1,8 @@
-import type { TyrumAiSdkChatSessionSummary } from "@tyrum/client/browser";
+import type {
+  TyrumAiSdkChatSession,
+  TyrumAiSdkChatSessionSummary,
+  UIMessage,
+} from "@tyrum/client/browser";
 import type { AgentPersona } from "@tyrum/schemas";
 import type { OperatorHttpClient, OperatorWsClient } from "../deps.js";
 import type { OperatorCoreError } from "../operator-error.js";
@@ -24,7 +28,7 @@ export interface ChatSessionsState {
 
 export interface ChatActiveSessionState {
   sessionId: string | null;
-  session: TyrumAiSdkChatSessionSummary | null;
+  session: TyrumAiSdkChatSession | null;
   loading: boolean;
   error: OperatorCoreError | null;
 }
@@ -42,6 +46,8 @@ export interface ChatStore extends ExternalStore<ChatState> {
   refreshSessions(): Promise<void>;
   loadMoreSessions(): Promise<void>;
   openSession(sessionId: string): Promise<void>;
+  hydrateActiveSession(session: TyrumAiSdkChatSession | null): void;
+  updateActiveMessages(messages: UIMessage[]): void;
   newChat(): Promise<void>;
   deleteActive(): Promise<void>;
 }

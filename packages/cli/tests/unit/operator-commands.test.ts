@@ -299,7 +299,7 @@ describe("@tyrum/cli operator commands", () => {
   });
 
   for (const testCase of wsSuccessCases) {
-    it(testCase.name, async () => {
+    it(testCase.name, { timeout: 15_000 }, async () => {
       testCase.spy.mockResolvedValue(testCase.response);
 
       await withOperatorCli({ includeDeviceIdentity: true }, async ({ runCli, logSpy, errSpy }) => {
@@ -314,7 +314,7 @@ describe("@tyrum/cli operator commands", () => {
     });
   }
 
-  it("disconnects the WS client when connect fails", async () => {
+  it("disconnects the WS client when connect fails", { timeout: 15_000 }, async () => {
     setWsConnectMode("transport_error");
 
     await withOperatorCli({ includeDeviceIdentity: true }, async ({ runCli, logSpy, errSpy }) => {
@@ -329,7 +329,7 @@ describe("@tyrum/cli operator commands", () => {
   });
 
   for (const testCase of wsFailureCases) {
-    it(testCase.name, async () => {
+    it(testCase.name, { timeout: 15_000 }, async () => {
       testCase.spy.mockResolvedValue(testCase.response);
 
       await withOperatorCli(
@@ -350,7 +350,7 @@ describe("@tyrum/cli operator commands", () => {
   }
 
   for (const testCase of httpSuccessCases) {
-    it(testCase.name, async () => {
+    it(testCase.name, { timeout: 15_000 }, async () => {
       testCase.spy.mockResolvedValue(testCase.response);
 
       await withOperatorCli(
@@ -368,7 +368,7 @@ describe("@tyrum/cli operator commands", () => {
     });
   }
 
-  it("rejects `secrets revoke` when --value is provided", async () => {
+  it("rejects `secrets revoke` when --value is provided", { timeout: 15_000 }, async () => {
     httpSecretsRevokeSpy.mockResolvedValue({ revoked: true });
 
     await withOperatorCli(

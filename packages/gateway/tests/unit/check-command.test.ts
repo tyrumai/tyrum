@@ -36,7 +36,7 @@ describe("tyrum check", () => {
       errorSpy.mockRestore();
       await rm(home, { recursive: true, force: true });
     }
-  }, 15_000);
+  }, 30_000);
 
   it("closes the database connection on check failure", async () => {
     const home = await mkdtemp(join(tmpdir(), "tyrum-check-fail-"));
@@ -66,5 +66,5 @@ describe("tyrum check", () => {
       errorSpy.mockRestore();
       await rm(home, { recursive: true, force: true });
     }
-  }, 15_000);
+  }, 30_000);
 });

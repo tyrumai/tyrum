@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -30,13 +30,20 @@ function makeAgents(runtime: AgentRuntime, policyService: PolicyService): AgentR
   } as unknown as AgentRegistry;
 }
 
-export async function startSmokeGateway(opts: { modelReply: string }): Promise<{
+export async function startSmokeGateway(opts: {
+  agentConfigText?: string;
+  languageModel?: ConstructorParameters<typeof AgentRuntime>[0]["languageModel"];
+  modelReply?: string;
+}): Promise<{
   baseUrl: string;
   wsUrl: string;
   adminToken: string;
   stop: () => Promise<void>;
 }> {
   const tyrumHome = await mkdtemp(join(tmpdir(), "tyrum-e2e-smoke-turn-"));
+  if (opts.agentConfigText) {
+    await writeFile(join(tyrumHome, "agent.yml"), opts.agentConfigText, "utf-8");
+  }
 
   const container = createContainer({
     dbPath: ":memory:",
@@ -68,15 +75,17 @@ export async function startSmokeGateway(opts: { modelReply: string }): Promise<{
   const agentRuntime = new AgentRuntime({
     container,
     home: tyrumHome,
-    languageModel: createStubLanguageModel(opts.modelReply),
+    languageModel: opts.languageModel ?? createStubLanguageModel(opts.modelReply ?? "smoke-ok"),
   });
 
   const protocolDeps: ProtocolDeps = {
     connectionManager,
     db: container.db,
     agents: makeAgents(agentRuntime, container.policyService),
+    approvalDal: container.approvalDal,
     engine,
     policyService: container.policyService,
+    policyOverrideDal: container.policyOverrideDal,
     logger: container.logger,
     redactionEngine: container.redactionEngine,
   };
