@@ -353,10 +353,17 @@ export function FirstRunOnboardingPage({
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 xl:grid-cols-[19rem_minmax(0,1fr)]">
+        <div className="grid items-start gap-4 xl:grid-cols-[19rem_minmax(0,1fr)]">
           <OnboardingProgressCard items={progressItems} />
-          <Card data-testid="first-run-onboarding-card">
-            <CardContent className="grid gap-4 pt-6" data-testid="first-run-onboarding-card-body">
+          <Card
+            className="flex min-h-0 flex-col overflow-hidden"
+            data-testid="first-run-onboarding-card"
+            style={{ maxHeight: "calc(100vh - 14rem - 4px)" }}
+          >
+            <CardContent
+              className="grid min-h-0 flex-1 gap-4 overflow-auto pt-6"
+              data-testid="first-run-onboarding-card-body"
+            >
               {renderStep()}
             </CardContent>
           </Card>

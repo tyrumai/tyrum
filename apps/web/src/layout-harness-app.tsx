@@ -22,6 +22,7 @@ import {
   createConfigureCore,
   createDashboardCore,
   createDesktopApi,
+  createOnboardingDesktopApi,
   createOnboardingCore,
   createPairingCore,
   createWorkboardCore,
@@ -77,16 +78,20 @@ function createDesktopRoute(): React.ReactNode {
 
 function createOnboardingRoute(): React.ReactNode {
   const core = createOnboardingCore();
+  const desktopApi = createOnboardingDesktopApi();
+  (window as typeof window & { tyrumDesktop?: unknown }).tyrumDesktop = desktopApi;
   return (
-    <AdminAccessProvider core={core} mode="desktop">
-      <FirstRunOnboardingPage
-        core={core}
-        onClose={() => undefined}
-        onSkip={() => undefined}
-        onMarkCompleted={() => undefined}
-        onNavigate={() => undefined}
-      />
-    </AdminAccessProvider>
+    <OperatorUiHostProvider value={{ kind: "desktop", api: desktopApi }}>
+      <AdminAccessProvider core={core} mode="desktop">
+        <FirstRunOnboardingPage
+          core={core}
+          onClose={() => undefined}
+          onSkip={() => undefined}
+          onMarkCompleted={() => undefined}
+          onNavigate={() => undefined}
+        />
+      </AdminAccessProvider>
+    </OperatorUiHostProvider>
   );
 }
 

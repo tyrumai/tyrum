@@ -21,6 +21,14 @@ import { createAiSdkChatWsStub } from "./layout-harness-chat-fixtures.js";
 import { createHarnessAgentHttpFixtures } from "./layout-harness-agent-http-fixtures.js";
 import { createHarnessConfigureHttpFixtures } from "./layout-harness-configure-http-fixtures.js";
 
+function createJsonDesktopHttpResponse(body: unknown) {
+  return {
+    status: 200,
+    headers: { "content-type": "application/json" },
+    bodyText: JSON.stringify(body),
+  };
+}
+
 function createNodeConfig(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     mode: "embedded",
@@ -85,15 +93,6 @@ function createOnboardingAgentConfigResponse() {
         palette: "graphite",
         character: "architect",
       },
-      memory: {
-        enabled: true,
-        strategy: "summary",
-      },
-      instructions: "",
-      mcp: {
-        pre_turn_tools: [],
-        server_settings: {},
-      },
     },
     persona: {
       name: "Default Agent",
@@ -110,21 +109,74 @@ function createOnboardingAgentConfigResponse() {
 }
 
 function createUnassignedAssignments() {
+  return ["interaction", "explorer_ro", "reviewer_ro", "planner", "jury", "executor_rw"].map(
+    (execution_profile_id) => ({
+      execution_profile_id,
+      preset_key: null,
+      preset_display_name: null,
+      provider_key: null,
+      model_id: null,
+    }),
+  );
+}
+
+function createOnboardingRegistry() {
   return [
-    "interaction",
-    "explorer_ro",
-    "reviewer_ro",
-    "planner",
-    "jury",
-    "executor_rw",
-    "integrator",
-  ].map((execution_profile_id) => ({
-    execution_profile_id,
-    preset_key: null,
-    preset_display_name: null,
-    provider_key: null,
-    model_id: null,
-  }));
+    {
+      provider_key: "openai",
+      name: "OpenAI",
+      doc: null,
+      supported: true,
+      methods: [
+        {
+          method_key: "api_key",
+          label: "API key",
+          type: "api_key",
+          fields: [
+            {
+              key: "api_key",
+              label: "API key",
+              description: "Primary secret used for the provider account.",
+              kind: "secret" as const,
+              input: "password" as const,
+              required: true,
+            },
+            ...Array.from({ length: 12 }, (_, index) => ({
+              key: `config_${String(index + 1)}`,
+              label: `Config field ${String(index + 1)}`,
+              description:
+                "Extra fixture field to force the onboarding provider step to scroll within its card body.",
+              kind: "config" as const,
+              input: "text" as const,
+              required: false,
+            })),
+          ],
+        },
+      ],
+    },
+  ];
+}
+
+function createOnboardingHttpFixtures() {
+  const onboardingRegistry = createOnboardingRegistry();
+
+  return {
+    providerConfig: {
+      listRegistry: async () => ({ status: "ok" as const, providers: onboardingRegistry }),
+      listProviders: async () => ({ status: "ok" as const, providers: [] }),
+    },
+    modelConfig: {
+      listPresets: async () => ({ status: "ok" as const, presets: [] }),
+      listAvailable: async () => ({ status: "ok" as const, models: [] }),
+      listAssignments: async () => ({
+        status: "ok" as const,
+        assignments: createUnassignedAssignments(),
+      }),
+    },
+    agentConfig: {
+      get: async () => createOnboardingAgentConfigResponse(),
+    },
+  };
 }
 
 export function createDesktopApi(): DesktopApi {
@@ -150,6 +202,49 @@ export function createDesktopApi(): DesktopApi {
       disconnect: async () => ({ status: "disconnected" }),
     },
     onStatusChange: () => () => {},
+  } satisfies DesktopApi;
+}
+
+export function createOnboardingDesktopApi(): DesktopApi {
+  const fixtures = createOnboardingHttpFixtures();
+
+  return {
+    ...createDesktopApi(),
+    gateway: {
+      ...createDesktopApi().gateway,
+      httpFetch: async ({ url }) => {
+        const requestUrl = new URL(url, "http://127.0.0.1:8788");
+        const pathname = requestUrl.pathname;
+
+        if (pathname.endsWith("/config/providers/registry")) {
+          return createJsonDesktopHttpResponse(await fixtures.providerConfig.listRegistry());
+        }
+        if (pathname.endsWith("/config/providers")) {
+          return createJsonDesktopHttpResponse(await fixtures.providerConfig.listProviders());
+        }
+        if (pathname.endsWith("/config/models/presets/available")) {
+          return createJsonDesktopHttpResponse(await fixtures.modelConfig.listAvailable());
+        }
+        if (pathname.endsWith("/config/models/presets")) {
+          return createJsonDesktopHttpResponse(await fixtures.modelConfig.listPresets());
+        }
+        if (pathname.endsWith("/config/models/assignments")) {
+          return createJsonDesktopHttpResponse(await fixtures.modelConfig.listAssignments());
+        }
+        if (pathname.endsWith("/config/agents/default")) {
+          return createJsonDesktopHttpResponse(await fixtures.agentConfig.get());
+        }
+
+        return {
+          status: 404,
+          headers: { "content-type": "application/json" },
+          bodyText: JSON.stringify({
+            error: "not_found",
+            message: `Unhandled onboarding fixture request: ${pathname}`,
+          }),
+        };
+      },
+    },
   } satisfies DesktopApi;
 }
 
@@ -261,64 +356,13 @@ export function createOnboardingCore(): OperatorCore {
     elevatedToken: "layout-harness-elevated-token",
     expiresAt: "2099-01-01T00:00:00.000Z",
   });
-
-  const onboardingRegistry = [
-    {
-      provider_key: "openai",
-      name: "OpenAI",
-      doc: null,
-      supported: true,
-      accounts: [],
-      methods: [
-        {
-          method_key: "api_key",
-          label: "API key",
-          type: "api_key",
-          fields: [
-            {
-              key: "api_key",
-              label: "API key",
-              description: "Primary secret used for the provider account.",
-              kind: "secret",
-              input: "password",
-              required: true,
-            },
-            ...Array.from({ length: 12 }, (_, index) => ({
-              key: `config_${String(index + 1)}`,
-              label: `Config field ${String(index + 1)}`,
-              description:
-                "Extra fixture field to force the onboarding provider step to scroll within its card body.",
-              kind: "config" as const,
-              input: "text" as const,
-              required: false,
-            })),
-          ],
-        },
-      ],
-    },
-  ];
+  const fixtures = createOnboardingHttpFixtures();
 
   return {
     httpBaseUrl: "http://127.0.0.1:8788/",
     elevatedModeStore,
     statusStore: createOnboardingStatusStore(),
-    http: {
-      providerConfig: {
-        listRegistry: async () => ({ status: "ok" as const, providers: onboardingRegistry }),
-        listProviders: async () => ({ status: "ok" as const, providers: [] }),
-      },
-      modelConfig: {
-        listPresets: async () => ({ status: "ok" as const, presets: [] }),
-        listAvailable: async () => ({ status: "ok" as const, models: [] }),
-        listAssignments: async () => ({
-          status: "ok" as const,
-          assignments: createUnassignedAssignments(),
-        }),
-      },
-      agentConfig: {
-        get: async () => createOnboardingAgentConfigResponse(),
-      },
-    },
+    http: fixtures,
     syncAllNow: async () => {},
   } as unknown as OperatorCore;
 }
