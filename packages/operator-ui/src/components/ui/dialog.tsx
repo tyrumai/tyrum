@@ -38,25 +38,25 @@ export const DialogContent = React.forwardRef<
       <DialogPrimitive.Content
         ref={ref}
         className={cn(
-          "fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2",
-          "max-h-[calc(100dvh-2rem)] overflow-y-auto",
-          "rounded-lg border border-border bg-bg-card p-4 text-fg shadow-md",
+          "fixed left-1/2 top-1/2 z-50 flex w-full max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col",
+          "max-h-[calc(100dvh-2rem)]",
+          "rounded-lg border border-border bg-bg-card text-fg shadow-md",
           "data-[state=open]:tyrum-animate-dialog-in data-[state=closed]:tyrum-animate-dialog-out",
           className,
         )}
         {...props}
       >
+        <div className="min-h-0 flex-1 overflow-y-auto p-4">{children}</div>
         <DialogPrimitive.Close
           aria-label="Close"
           className={cn(
-            "sticky top-0 z-10 float-right rounded-md p-1 text-fg-muted opacity-70 transition-opacity hover:opacity-100",
+            "absolute right-4 top-4 rounded-md p-1 text-fg-muted opacity-70 transition-opacity hover:opacity-100",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
           )}
         >
           <X aria-hidden="true" className="h-4 w-4" />
           <VisuallyHidden.Root>Close</VisuallyHidden.Root>
         </DialogPrimitive.Close>
-        {children}
       </DialogPrimitive.Content>
     </DialogPortal>
   );
