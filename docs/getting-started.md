@@ -36,7 +36,7 @@ Open:
 
 - `http://127.0.0.1:8788/ui`
 
-On first visit, the UI prompts for your admin token and bootstraps a browser auth cookie via `POST /auth/session`.
+On first visit, the UI prompts for your admin token and stores it in browser local storage for direct bearer-token auth on later reloads. You can also open `/ui?token=<admin token>` once to bootstrap the same saved token and then strip it from the URL.
 
 If you did not provision tokens ahead of time, capture the `default-tenant-admin` bootstrap token from the gateway startup logs. The gateway prints bootstrap tokens once on first run.
 

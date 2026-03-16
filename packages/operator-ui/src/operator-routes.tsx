@@ -20,6 +20,7 @@ import { lazy, type LazyExoticComponent, type ComponentType, type ReactNode } fr
 import type { HostKind } from "./host/host-api.js";
 import type { OperatorUiMode } from "./app.js";
 import { ConnectPage } from "./components/pages/connect-page.js";
+import type { WebAuthPersistence } from "./web-auth.js";
 
 function lazyNamed<TProps>(
   loader: () => Promise<Record<string, unknown>>,
@@ -70,10 +71,11 @@ const DesktopEnvironmentsPage = lazyNamed<{ core: OperatorCore }>(
   () => import("./components/pages/desktop-environments-page.js"),
   "DesktopEnvironmentsPage",
 );
-const ConfigurePage = lazyNamed<{ core: OperatorCore }>(
-  () => import("./components/pages/configure-page.js"),
-  "ConfigurePage",
-);
+const ConfigurePage = lazyNamed<{
+  core: OperatorCore;
+  mode: OperatorUiMode;
+  webAuthPersistence?: WebAuthPersistence;
+}>(() => import("./components/pages/configure-page.js"), "ConfigurePage");
 const NodeConfigurePage = lazyNamed<{ onReloadPage?: () => void }>(
   () => import("./components/pages/node-configure-page.js"),
   "NodeConfigurePage",
@@ -113,6 +115,7 @@ export interface OperatorRouteRenderContext {
   onOpenOnboarding?: () => void;
   onReconfigureGateway?: (httpUrl: string, wsUrl: string) => void;
   onReloadPage?: () => void;
+  webAuthPersistence?: WebAuthPersistence;
 }
 
 export interface OperatorRouteDefinition {
@@ -222,7 +225,9 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
     navGroup: "sidebar",
     shortcut: true,
     hostKinds: SHARED_HOST_KINDS,
-    render: ({ core }) => <ConfigurePage core={core} />,
+    render: ({ core, mode, webAuthPersistence }) => (
+      <ConfigurePage core={core} mode={mode} webAuthPersistence={webAuthPersistence} />
+    ),
   },
   {
     id: "desktop",
@@ -258,6 +263,7 @@ export const CONNECT_PAGE_RENDER = (context: OperatorRouteRenderContext): ReactN
     core={context.core}
     mode={context.mode}
     onReconfigureGateway={context.onReconfigureGateway}
+    webAuthPersistence={context.webAuthPersistence}
   />
 );
 

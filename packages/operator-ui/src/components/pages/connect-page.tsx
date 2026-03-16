@@ -1,4 +1,4 @@
-import { type OperatorCore, createGatewayAuthSession } from "@tyrum/operator-core";
+import type { OperatorCore } from "@tyrum/operator-core";
 import { useEffect, useRef, useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import type { OperatorUiMode } from "../../app.js";
@@ -6,8 +6,9 @@ import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { Input } from "../ui/input.js";
 import { Alert } from "../ui/alert.js";
-import { readGatewayError } from "../../utils/gateway-error.js";
+import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { useOperatorStore } from "../../use-operator-store.js";
+import type { WebAuthPersistence } from "../../web-auth.js";
 
 function trimTrailingSlashes(value: string): string {
   let end = value.length;
@@ -21,10 +22,12 @@ export function ConnectPage({
   core,
   mode,
   onReconfigureGateway,
+  webAuthPersistence,
 }: {
   core: OperatorCore;
   mode: OperatorUiMode;
   onReconfigureGateway?: (httpUrl: string, wsUrl: string) => void;
+  webAuthPersistence?: WebAuthPersistence;
 }) {
   const connection = useOperatorStore(core.connectionStore);
   const [loginBusy, setLoginBusy] = useState(false);
@@ -35,6 +38,7 @@ export function ConnectPage({
 
   const tokenRef = useRef<HTMLInputElement | null>(null);
   const isWeb = mode === "web";
+  const hasSavedWebToken = isWeb && webAuthPersistence?.hasStoredToken === true;
 
   const lastDisconnect = connection.lastDisconnect;
   const nextRetryAtMs = connection.nextRetryAtMs;
@@ -88,6 +92,11 @@ export function ConnectPage({
 
     const trimmed = tokenRef.current?.value.trim() ?? "";
     if (!trimmed) {
+      if (hasSavedWebToken) {
+        setLoginError(null);
+        core.connect();
+        return;
+      }
       setLoginError("Token is required");
       return;
     }
@@ -95,20 +104,34 @@ export function ConnectPage({
     setLoginBusy(true);
     setLoginError(null);
     try {
-      const res = await createGatewayAuthSession({
-        token: trimmed,
-        httpBaseUrl: core.httpBaseUrl,
-      });
-      if (!res.ok) {
-        setLoginError(await readGatewayError(res));
-        return;
+      if (!webAuthPersistence) {
+        throw new Error("Browser token storage is unavailable.");
       }
+      await webAuthPersistence.saveToken(trimmed);
       if (tokenRef.current) {
         tokenRef.current.value = "";
       }
-      core.connect();
     } catch (error) {
-      setLoginError(error instanceof Error ? error.message : String(error));
+      setLoginError(formatErrorMessage(error));
+    } finally {
+      setLoginBusy(false);
+    }
+  };
+
+  const forgetSavedToken = async (): Promise<void> => {
+    if (!hasSavedWebToken) return;
+    setLoginBusy(true);
+    setLoginError(null);
+    try {
+      if (!webAuthPersistence) {
+        throw new Error("Browser token storage is unavailable.");
+      }
+      await webAuthPersistence.clearToken();
+      if (tokenRef.current) {
+        tokenRef.current.value = "";
+      }
+    } catch (error) {
+      setLoginError(formatErrorMessage(error));
     } finally {
       setLoginBusy(false);
     }
@@ -139,6 +162,14 @@ export function ConnectPage({
             />
           ) : null}
 
+          {hasSavedWebToken ? (
+            <Alert
+              variant="info"
+              title="Saved token available"
+              description="Leave the token field blank to reconnect with the saved token, paste a new token to replace it, or forget the saved token."
+            />
+          ) : null}
+
           {onReconfigureGateway ? (
             <Input
               id="gateway-url"
@@ -164,7 +195,11 @@ export function ConnectPage({
               spellCheck={false}
               autoCapitalize="none"
               autoCorrect="off"
-              helperText="Paste the tenant admin token from gateway startup or a newly issued recovery token."
+              helperText={
+                hasSavedWebToken
+                  ? "Leave blank to reconnect with the saved token, or paste a new token to replace it."
+                  : "Paste the tenant admin token from gateway startup or a newly issued recovery token."
+              }
               suffix={
                 <button
                   type="button"
@@ -180,15 +215,29 @@ export function ConnectPage({
             />
           ) : null}
 
-          <Button
-            data-testid="login-button"
-            isLoading={connectButtonBusy}
-            onClick={() => {
-              void loginOrConnect();
-            }}
-          >
-            {connectButtonLabel}
-          </Button>
+          <div className="grid gap-2">
+            <Button
+              data-testid="login-button"
+              isLoading={connectButtonBusy}
+              onClick={() => {
+                void loginOrConnect();
+              }}
+            >
+              {connectButtonLabel}
+            </Button>
+            {hasSavedWebToken ? (
+              <Button
+                data-testid="forget-saved-token-button"
+                variant="secondary"
+                disabled={connectButtonBusy}
+                onClick={() => {
+                  void forgetSavedToken();
+                }}
+              >
+                Forget saved token
+              </Button>
+            ) : null}
+          </div>
           {isConnecting ? (
             <Button
               data-testid="cancel-connect-button"

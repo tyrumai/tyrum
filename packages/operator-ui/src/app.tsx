@@ -16,6 +16,7 @@ import { CONNECT_PAGE_RENDER, getOperatorRouteDefinition } from "./operator-rout
 import { RetainedUiStateProvider } from "./reconnect-ui-state.js";
 import { useOperatorAppViewModel } from "./use-operator-app-view-model.js";
 import type { AdminAccessController } from "./elevated-mode.js";
+import type { WebAuthPersistence } from "./web-auth.js";
 import {
   FirstRunOnboardingPage,
   useFirstRunOnboardingController,
@@ -29,6 +30,7 @@ export interface OperatorUiAppProps {
   adminAccessController?: AdminAccessController;
   onReloadPage?: () => void;
   onReconfigureGateway?: (httpUrl: string, wsUrl: string) => void;
+  webAuthPersistence?: WebAuthPersistence;
 }
 
 export function OperatorUiApp({
@@ -37,6 +39,7 @@ export function OperatorUiApp({
   adminAccessController,
   onReloadPage,
   onReconfigureGateway,
+  webAuthPersistence,
 }: OperatorUiAppProps) {
   return (
     <ErrorBoundary onReloadPage={onReloadPage}>
@@ -47,6 +50,7 @@ export function OperatorUiApp({
           adminAccessController={adminAccessController}
           onReloadPage={onReloadPage}
           onReconfigureGateway={onReconfigureGateway}
+          webAuthPersistence={webAuthPersistence}
         />
       </OperatorUiAppHostBoundary>
     </ErrorBoundary>
@@ -75,9 +79,15 @@ function OperatorUiAppRoot({
   adminAccessController,
   onReloadPage,
   onReconfigureGateway,
+  webAuthPersistence,
 }: Pick<
   OperatorUiAppProps,
-  "core" | "mode" | "adminAccessController" | "onReloadPage" | "onReconfigureGateway"
+  | "core"
+  | "mode"
+  | "adminAccessController"
+  | "onReloadPage"
+  | "onReconfigureGateway"
+  | "webAuthPersistence"
 >) {
   const existingTheme = useThemeOptional();
   const host = useHostApiOptional();
@@ -159,6 +169,7 @@ function OperatorUiAppRoot({
                       navigate: viewModel.navigate,
                       onReloadPage,
                       onReconfigureGateway,
+                      webAuthPersistence,
                     })}
                   </Suspense>
                 </div>
@@ -185,6 +196,7 @@ function OperatorUiAppRoot({
                 onOpenOnboarding: onboarding.open,
                 onReloadPage,
                 onReconfigureGateway,
+                webAuthPersistence,
               }) ?? null}
             </Suspense>
           )}

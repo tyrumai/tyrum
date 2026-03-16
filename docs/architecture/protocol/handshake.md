@@ -60,7 +60,7 @@ The gateway validates the gateway access token during the WS upgrade.
 ### Preferred transports (in order)
 
 1. **`Authorization: Bearer <token>` header** when the client can set headers on the WebSocket upgrade request.
-2. **Secure cookie** for browser-based clients where cookie auth is appropriate for the deployment. The built-in operator UI bootstraps this cookie via `POST /auth/session`.
+2. **Secure cookie** for browser-based clients where cookie auth is appropriate for the deployment. The gateway still exposes compatibility endpoints such as `POST /auth/session` for deployments that choose cookie auth.
 3. **WebSocket subprotocol fallback** for constrained clients that cannot set headers.
 
 Tokens MUST NOT be placed in URLs.

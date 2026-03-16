@@ -4,16 +4,10 @@ import { ThemeProvider, useThemeOptional } from "../../hooks/use-theme.js";
 import { AppPage } from "../layout/app-page.js";
 import { ConfigureGeneralPanel } from "./configure-general-panel.js";
 
-function SettingsPageContent({
-  core: _core,
-  mode: _mode,
-}: {
-  core: OperatorCore;
-  mode: OperatorUiMode;
-}) {
+function SettingsPageContent({ core, mode }: { core: OperatorCore; mode: OperatorUiMode }) {
   return (
     <AppPage contentClassName="max-w-4xl gap-5">
-      <ConfigureGeneralPanel />
+      <ConfigureGeneralPanel core={core} mode={mode} />
     </AppPage>
   );
 }
