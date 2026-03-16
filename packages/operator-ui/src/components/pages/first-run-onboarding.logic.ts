@@ -26,7 +26,7 @@ import {
 import {
   buildProviderPayload,
   emptyFormState,
-  normalizeFormState,
+  reconcileProviderFormState,
   type ConfiguredProviderGroup,
   type ProviderFormState,
   type ProviderRegistryEntry,
@@ -289,17 +289,18 @@ export function useOnboardingDrafts(data: OnboardingDataState) {
     selectedProvider?.methods[0];
 
   React.useEffect(() => {
-    setProviderState((current) => {
-      if (
-        current.providerKey &&
-        supportedProviders.some((provider) => provider.provider_key === current.providerKey)
-      ) {
-        return current;
-      }
-      return normalizeFormState({ registry: data.registry });
-    });
+    setProviderState((current) =>
+      reconcileProviderFormState({
+        currentState: current,
+        filteredProviders,
+        supportedProviders,
+      }),
+    );
+  }, [filteredProviders, supportedProviders]);
+
+  React.useEffect(() => {
     setProviderFilter("");
-  }, [data.registry, supportedProviders]);
+  }, [data.registry]);
 
   React.useEffect(() => {
     setModelState((current) => {
