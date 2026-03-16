@@ -1,5 +1,5 @@
 import type { OperatorCore } from "@tyrum/operator-core";
-import type { ReactNode } from "react";
+import { useCallback, type ReactNode } from "react";
 import type { DesktopApi } from "../../../desktop-api.js";
 import { useHostApi, type OperatorUiHostApi } from "../../../host/host-api.js";
 import { useReconnectScrollArea } from "../../../reconnect-ui-state.js";
@@ -85,23 +85,20 @@ function BrowserNodeConfigPage({ core }: { core?: OperatorCore }) {
 // ─── Mobile inner component ─────────────────────────────────────────────────
 
 function MobileNodeConfigPage({
-  host,
   core,
 }: {
   host: Extract<OperatorUiHostApi, { kind: "mobile" }>;
   core?: OperatorCore;
 }) {
-  const dispatchTest = core
-    ? async (actionName: string, input: Record<string, unknown>): Promise<unknown> => {
-        // Mobile test dispatch delegates through the host API node if available
-        void host;
-        void actionName;
-        void input;
-        return Promise.resolve(undefined);
-      }
-    : undefined;
+  const dispatchTest = useCallback(
+    async (_actionName: string, _input: Record<string, unknown>): Promise<unknown> => {
+      // Mobile test dispatch placeholder — will delegate through core.http when wired.
+      return undefined;
+    },
+    [],
+  );
 
-  const model = useNodeConfigMobile({ dispatchTest });
+  const model = useNodeConfigMobile({ dispatchTest: core ? dispatchTest : undefined });
   return <NodeConfigPageLayout model={model} />;
 }
 

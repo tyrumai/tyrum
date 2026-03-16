@@ -211,11 +211,14 @@ export function useNodeConfigDesktop(
     try {
       const snapshotBeforeSave = securityRef.current;
       await api.setConfig(securityToPersistedPayload(snapshotBeforeSave));
-      if (!mountedRef.current) return;
+      if (!mountedRef.current) {
+        savingRef.current = false;
+        return;
+      }
 
       // If state changed while save was in flight, persist again.
+      savingRef.current = false;
       if (securityRef.current !== snapshotBeforeSave) {
-        savingRef.current = false;
         void persistSecurityNow();
         return;
       }
@@ -227,11 +230,10 @@ export function useNodeConfigDesktop(
         savedTimerRef.current = null;
       }, 2_000);
     } catch (error: unknown) {
+      savingRef.current = false;
       if (!mountedRef.current) return;
       setSaveStatus("error");
       setSaveError(formatErrorMessage(error));
-    } finally {
-      savingRef.current = false;
     }
   }, [api]);
 

@@ -200,16 +200,6 @@ export function buildConnectionSavePartial(connection: ConnectionState) {
   return partial;
 }
 
-export function cloneSecurityState(state: SecurityState): SecurityState {
-  return {
-    profile: state.profile,
-    overrides: { ...state.overrides },
-    capabilities: { ...state.capabilities },
-    cli: cloneCliConfig(state.cli),
-    web: cloneWebConfig(state.web),
-  };
-}
-
 export function cloneConnectionState(state: ConnectionState): ConnectionState {
   return { ...state };
 }
