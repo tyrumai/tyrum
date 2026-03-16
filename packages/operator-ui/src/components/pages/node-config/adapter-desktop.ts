@@ -76,7 +76,18 @@ export function useNodeConfigDesktop(
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const securityRef = useRef(security);
+  // Sync ref on render so persistSecurityNow always reads current state.
   securityRef.current = security;
+
+  /** Update security state and eagerly sync the ref so an immediate persist
+   *  reads the new value before React re-renders. */
+  const updateSecurity = useCallback((updater: (current: SecurityState) => SecurityState) => {
+    setSecurity((current) => {
+      const next = updater(current);
+      securityRef.current = next;
+      return next;
+    });
+  }, []);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savingRef = useRef(false);
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -259,32 +270,32 @@ export function useNodeConfigDesktop(
 
   const setCapability = useCallback(
     (key: keyof CapFlags, enabled: boolean) => {
-      setSecurity((current) => ({
+      updateSecurity((current) => ({
         ...current,
         capabilities: { ...current.capabilities, [key]: enabled },
       }));
       scheduleSecuritySave(true);
     },
-    [scheduleSecuritySave],
+    [scheduleSecuritySave, updateSecurity],
   );
 
   // ── Allowlist change handlers ─────────────────────────────────────────
 
   const updateBrowserDomains = useCallback(
     (value: string) => {
-      setSecurity((current) => ({
+      updateSecurity((current) => ({
         ...current,
         web: { ...current.web, allowedDomains: splitAllowlistLines(value) },
       }));
       setAllowlistDrafts((current) => ({ ...current, browserDomains: value }));
       scheduleSecuritySave(false);
     },
-    [scheduleSecuritySave],
+    [scheduleSecuritySave, updateSecurity],
   );
 
   const updateCliCommands = useCallback(
     (value: string) => {
-      setSecurity((current) => ({
+      updateSecurity((current) => ({
         ...current,
         cli: {
           ...current.cli,
@@ -294,12 +305,12 @@ export function useNodeConfigDesktop(
       setAllowlistDrafts((current) => ({ ...current, cliCommands: value }));
       scheduleSecuritySave(false);
     },
-    [scheduleSecuritySave],
+    [scheduleSecuritySave, updateSecurity],
   );
 
   const updateCliWorkingDirs = useCallback(
     (value: string) => {
-      setSecurity((current) => ({
+      updateSecurity((current) => ({
         ...current,
         cli: {
           ...current.cli,
@@ -309,20 +320,20 @@ export function useNodeConfigDesktop(
       setAllowlistDrafts((current) => ({ ...current, cliWorkingDirs: value }));
       scheduleSecuritySave(false);
     },
-    [scheduleSecuritySave],
+    [scheduleSecuritySave, updateSecurity],
   );
 
   // ── Browser headless toggle ───────────────────────────────────────────
 
   const setBrowserHeadless = useCallback(
     (headless: boolean) => {
-      setSecurity((current) => ({
+      updateSecurity((current) => ({
         ...current,
         web: { ...current.web, headless },
       }));
       scheduleSecuritySave(true);
     },
-    [scheduleSecuritySave],
+    [scheduleSecuritySave, updateSecurity],
   );
 
   // ── Executor toggle ───────────────────────────────────────────────────
