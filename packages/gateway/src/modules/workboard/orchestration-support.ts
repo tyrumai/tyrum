@@ -1,5 +1,6 @@
 import {
   DeploymentConfig,
+  isDesktopEnvironmentHostAvailable,
   type DeploymentConfig as DeploymentConfigT,
   type WorkItem,
   type WorkItemTask,
@@ -8,7 +9,6 @@ import {
 import type { SqlDb } from "../../statestore/types.js";
 import { DeploymentConfigDal } from "../config/deployment-config-dal.js";
 import { DesktopEnvironmentDal, DesktopEnvironmentHostDal } from "../desktop-environments/dal.js";
-import { isDesktopEnvironmentHostAvailable } from "../desktop-environments/availability.js";
 import { readDesktopEnvironmentDefaultImageRef } from "../desktop-environments/default-image.js";
 import { DesktopEnvironmentLifecycleService } from "../desktop-environments/lifecycle-service.js";
 import type { SessionLaneNodeAttachmentDal } from "../agent/session-lane-node-attachment-dal.js";

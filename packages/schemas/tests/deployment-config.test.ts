@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { DeploymentConfig, DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF } from "../src/index.js";
+import {
+  DeploymentConfig,
+  DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF,
+  describeDesktopEnvironmentHostAvailability,
+  isDesktopEnvironmentHostAvailable,
+} from "../src/index.js";
 
 describe("DeploymentConfig lifecycle retention", () => {
   it("defaults state.mode to local", () => {
@@ -41,5 +46,37 @@ describe("DeploymentConfig lifecycle retention", () => {
     const parsed = DeploymentConfig.parse({});
 
     expect(parsed.desktopEnvironments.defaultImageRef).toBe(DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF);
+  });
+
+  it("shares desktop host availability logic across packages", () => {
+    expect(
+      isDesktopEnvironmentHostAvailable({
+        docker_available: true,
+        healthy: true,
+      }),
+    ).toBe(true);
+    expect(
+      isDesktopEnvironmentHostAvailable({
+        docker_available: false,
+        healthy: true,
+      }),
+    ).toBe(false);
+  });
+
+  it("prefers the recorded host error when describing desktop availability", () => {
+    expect(
+      describeDesktopEnvironmentHostAvailability({
+        docker_available: false,
+        healthy: false,
+        last_error: "Cannot connect to the Docker daemon",
+      }),
+    ).toBe("Cannot connect to the Docker daemon");
+    expect(
+      describeDesktopEnvironmentHostAvailability({
+        docker_available: false,
+        healthy: true,
+        last_error: null,
+      }),
+    ).toBe("docker unavailable");
   });
 });

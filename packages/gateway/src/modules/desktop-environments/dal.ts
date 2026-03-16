@@ -240,23 +240,25 @@ export class DesktopEnvironmentDal {
     const nextImageRef = input.imageRef ?? existing.image_ref;
     const imageChanged = nextImageRef !== existing.image_ref;
     const desiredRunning = input.desiredRunning ?? existing.desired_running;
-    const status = imageChanged
-      ? desiredRunning
-        ? "pending"
-        : "stopped"
-      : input.desiredRunning === undefined
-        ? existing.status
-        : desiredRunning
-          ? existing.status === "running"
-            ? "running"
-            : "starting"
-          : existing.status === "stopped"
-            ? "stopped"
-            : "stopping";
+    const desiredRunningChanged = input.desiredRunning !== undefined;
+    const imageChangedParam = sqlBoolParam(this.db, imageChanged);
+    const desiredRunningChangedParam = sqlBoolParam(this.db, desiredRunningChanged);
     const row = await this.db.get<RawEnvironmentRow>(
       `UPDATE desktop_environments
-       SET label = ?, image_ref = ?, desired_running = ?, status = ?,
-           node_id = ?, takeover_url = ?, last_seen_at = ?, last_error = ?, logs_json = ?,
+       SET label = ?, image_ref = ?, desired_running = ?,
+           status = CASE
+             WHEN ? THEN ?
+             WHEN ? THEN CASE
+               WHEN ? THEN CASE WHEN status = 'running' THEN 'running' ELSE 'starting' END
+               ELSE CASE WHEN status = 'stopped' THEN 'stopped' ELSE 'stopping' END
+             END
+             ELSE status
+           END,
+           node_id = CASE WHEN ? THEN NULL ELSE node_id END,
+           takeover_url = CASE WHEN ? THEN NULL ELSE takeover_url END,
+           last_seen_at = CASE WHEN ? THEN NULL ELSE last_seen_at END,
+           last_error = CASE WHEN ? THEN NULL ELSE last_error END,
+           logs_json = CASE WHEN ? THEN '[]' ELSE logs_json END,
            updated_at = ?
        WHERE tenant_id = ? AND environment_id = ?
        RETURNING environment_id, host_id, label, image_ref, managed_kind, status, desired_running,
@@ -265,12 +267,15 @@ export class DesktopEnvironmentDal {
         input.label ?? existing.label ?? null,
         nextImageRef,
         sqlBoolParam(this.db, desiredRunning),
-        status,
-        imageChanged ? null : existing.node_id,
-        imageChanged ? null : existing.takeover_url,
-        imageChanged ? null : existing.last_seen_at,
-        imageChanged ? null : existing.last_error,
-        imageChanged ? "[]" : JSON.stringify(await this.getLogs(input)),
+        imageChangedParam,
+        desiredRunning ? "pending" : "stopped",
+        desiredRunningChangedParam,
+        sqlBoolParam(this.db, desiredRunning),
+        imageChangedParam,
+        imageChangedParam,
+        imageChangedParam,
+        imageChangedParam,
+        imageChangedParam,
         new Date().toISOString(),
         this.requireTenantId(input.tenantId),
         input.environmentId,

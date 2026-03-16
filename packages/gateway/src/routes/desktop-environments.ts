@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import {
+  describeDesktopEnvironmentHostAvailability,
   DesktopEnvironmentCreateRequest,
   DesktopEnvironmentDeleteResponse,
   DesktopEnvironmentDefaultsResponse,
@@ -9,6 +10,7 @@ import {
   DesktopEnvironmentListResponse,
   DesktopEnvironmentLogsResponse,
   DesktopEnvironmentMutateResponse,
+  isDesktopEnvironmentHostAvailable,
   type DeploymentConfig as DeploymentConfigT,
   DesktopEnvironmentUpdateRequest,
 } from "@tyrum/schemas";
@@ -23,10 +25,6 @@ import {
   DesktopEnvironmentDal,
   DesktopEnvironmentHostDal,
 } from "../modules/desktop-environments/dal.js";
-import {
-  describeDesktopEnvironmentHostAvailability,
-  isDesktopEnvironmentHostAvailable,
-} from "../modules/desktop-environments/availability.js";
 import { readDesktopEnvironmentDefaultImageRef } from "../modules/desktop-environments/default-image.js";
 import {
   DesktopEnvironmentLifecycleUnavailableError,

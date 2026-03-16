@@ -1,24 +1,14 @@
-import { DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF } from "@tyrum/schemas";
+import {
+  DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF,
+  describeDesktopEnvironmentHostAvailability,
+  isDesktopEnvironmentHostAvailable,
+} from "@tyrum/schemas";
 import type { BadgeVariant } from "../ui/badge.js";
 import { normalizeHttpUrl } from "../../utils/normalize-http-url.js";
 
 export const DEFAULT_IMAGE_REF = DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF;
-
-export function isHostAvailable(host: { docker_available: boolean; healthy: boolean }): boolean {
-  return host.healthy && host.docker_available;
-}
-
-export function describeHostAvailability(host: {
-  docker_available: boolean;
-  healthy: boolean;
-  last_error: string | null;
-}): string {
-  const lastError = host.last_error?.trim();
-  if (lastError) return lastError;
-  if (!host.docker_available) return "docker unavailable";
-  if (!host.healthy) return "host unhealthy";
-  return "docker ready";
-}
+export const isHostAvailable = isDesktopEnvironmentHostAvailable;
+export const describeHostAvailability = describeDesktopEnvironmentHostAvailability;
 
 export function buildBlockingAvailabilityMessage(
   hosts: ReadonlyArray<{

@@ -1,0 +1,114 @@
+import { afterEach, describe, expect, it } from "vitest";
+import {
+  DesktopEnvironmentDal,
+  DesktopEnvironmentHostDal,
+} from "../../src/modules/desktop-environments/dal.js";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
+import { createTestContainer } from "../integration/helpers.js";
+import type { SqlDb } from "../../src/statestore/types.js";
+
+describe("DesktopEnvironmentDal", () => {
+  const containers: Array<Awaited<ReturnType<typeof createTestContainer>>> = [];
+
+  afterEach(async () => {
+    while (containers.length > 0) {
+      await containers.pop()?.db.close();
+    }
+  });
+
+  it("preserves runtime fields when a label update races with runtime reconciliation", async () => {
+    const container = await createTestContainer();
+    containers.push(container);
+
+    const hostDal = new DesktopEnvironmentHostDal(container.db);
+    await hostDal.upsert({
+      hostId: "host-1",
+      label: "Primary runtime",
+      version: "0.1.0",
+      dockerAvailable: true,
+      healthy: true,
+      lastSeenAt: "2026-03-15T00:00:00.000Z",
+      lastError: null,
+    });
+
+    const directDal = new DesktopEnvironmentDal(container.db);
+    const environment = await directDal.create({
+      tenantId: DEFAULT_TENANT_ID,
+      hostId: "host-1",
+      label: "Research desktop",
+      imageRef: "ghcr.io/rhernaus/tyrum-desktop-sandbox:latest",
+      desiredRunning: true,
+    });
+
+    let injectedRuntimeUpdate = false;
+    const racingDb: SqlDb = {
+      kind: container.db.kind,
+      async get<T>(sql: string, params?: readonly unknown[]): Promise<T | undefined> {
+        if (!injectedRuntimeUpdate && sql.startsWith("UPDATE desktop_environments")) {
+          injectedRuntimeUpdate = true;
+          await directDal.updateRuntime({
+            tenantId: DEFAULT_TENANT_ID,
+            environmentId: environment.environment_id,
+            status: "running",
+            nodeId: "node-desktop-1",
+            takeoverUrl: "http://127.0.0.1:6080/vnc.html?autoconnect=true",
+            lastSeenAt: "2026-03-15T00:01:00.000Z",
+            lastError: null,
+            logs: ["desktop runtime ready"],
+          });
+        }
+        return await container.db.get<T>(sql, params);
+      },
+      async all<T>(sql: string, params?: readonly unknown[]): Promise<T[]> {
+        return await container.db.all<T>(sql, params);
+      },
+      async run(sql: string, params?: readonly unknown[]) {
+        return await container.db.run(sql, params);
+      },
+      async exec(sql: string): Promise<void> {
+        await container.db.exec(sql);
+      },
+      async transaction<T>(fn: (tx: SqlDb) => Promise<T>): Promise<T> {
+        return await container.db.transaction(fn);
+      },
+      async close(): Promise<void> {
+        await container.db.close();
+      },
+    };
+
+    const dal = new DesktopEnvironmentDal(racingDb);
+    const updated = await dal.update({
+      tenantId: DEFAULT_TENANT_ID,
+      environmentId: environment.environment_id,
+      label: "Renamed desktop",
+    });
+
+    expect(updated).toMatchObject({
+      label: "Renamed desktop",
+      status: "running",
+      node_id: "node-desktop-1",
+      takeover_url: "http://127.0.0.1:6080/vnc.html?autoconnect=true",
+      last_seen_at: "2026-03-15T00:01:00.000Z",
+      last_error: null,
+    });
+    await expect(
+      directDal.get({
+        tenantId: DEFAULT_TENANT_ID,
+        environmentId: environment.environment_id,
+      }),
+    ).resolves.toMatchObject({
+      label: "Renamed desktop",
+      status: "running",
+      node_id: "node-desktop-1",
+      takeover_url: "http://127.0.0.1:6080/vnc.html?autoconnect=true",
+      last_seen_at: "2026-03-15T00:01:00.000Z",
+      last_error: null,
+    });
+    await expect(
+      directDal.getLogs({
+        tenantId: DEFAULT_TENANT_ID,
+        environmentId: environment.environment_id,
+      }),
+    ).resolves.toEqual(["desktop runtime ready"]);
+  });
+});
