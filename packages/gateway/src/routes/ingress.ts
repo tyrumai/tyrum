@@ -16,8 +16,8 @@ import {
 import { resolveTelegramAgentId } from "../modules/channels/routing.js";
 import type { RoutingConfigDal } from "../modules/channels/routing-config-dal.js";
 import type { TelegramChannelRuntime } from "../modules/channels/telegram-runtime.js";
-import type { MemoryV1Dal } from "../modules/memory/v1-dal.js";
-import { recordMemoryV1SystemEpisode } from "../modules/memory/v1-episode-recorder.js";
+import type { MemoryDal } from "../modules/memory/memory-dal.js";
+import { recordMemorySystemEpisode } from "../modules/memory/memory-episode-recorder.js";
 import type { Logger } from "../modules/observability/logger.js";
 import { DEFAULT_TENANT_ID } from "../modules/identity/scope.js";
 import { safeDetail } from "../utils/safe-detail.js";
@@ -30,7 +30,7 @@ export interface IngressDeps {
   agents?: AgentRegistry;
   telegramQueue?: TelegramChannelQueue;
   routingConfigDal?: RoutingConfigDal;
-  memoryV1Dal?: MemoryV1Dal;
+  memoryDal?: MemoryDal;
   logger?: Logger;
 }
 
@@ -244,12 +244,12 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
         },
       });
 
-      if (deps.memoryV1Dal && formattingFallbacks.length > 0) {
+      if (deps.memoryDal && formattingFallbacks.length > 0) {
         const occurredAt = new Date().toISOString();
         const settled = await Promise.allSettled(
           formattingFallbacks.map(async (fallback) => {
-            await recordMemoryV1SystemEpisode(
-              deps.memoryV1Dal!,
+            await recordMemorySystemEpisode(
+              deps.memoryDal!,
               {
                 occurred_at: occurredAt,
                 channel: "telegram",

@@ -1,13 +1,9 @@
-import type {
-  MemoryItemFilter,
-  MemoryItemKind,
-  MemoryProvenance,
-  MemorySearchResponse,
-} from "@tyrum/schemas";
+import type { MemoryItemKind, MemoryProvenance } from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
-import type { MemorySearchInput, RawSearchRow } from "./v1-dal-types.js";
+import type { MemoryItemFilter, MemorySearchInput, MemorySearchResult } from "./types.js";
+import type { RawSearchRow } from "./memory-dal-types.js";
 import {
-  buildMemoryV1ItemQueryParts,
+  buildMemoryItemQueryParts,
   buildSnippet,
   extractSearchTerms,
   invalidRequestError,
@@ -15,7 +11,7 @@ import {
   normalizeTime,
   parseJson,
   uniqSortedStrings,
-} from "./v1-dal-helpers.js";
+} from "./memory-dal-helpers.js";
 
 type Scope = { tenantId: string; agentId: string };
 
@@ -167,7 +163,7 @@ export async function searchMemoryItems(
   db: SqlDb,
   input: MemorySearchInput,
   scope: Scope,
-): Promise<MemorySearchResponse> {
+): Promise<MemorySearchResult> {
   const query = input.query.trim();
   if (query.length === 0) {
     return { v: 1, hits: [], next_cursor: undefined };
@@ -197,7 +193,7 @@ export async function searchMemoryItems(
 
   const normalizedFilter = normalizeSearchFilter(input.filter);
 
-  const queryParts = buildMemoryV1ItemQueryParts({
+  const queryParts = buildMemoryItemQueryParts({
     tenantId: scope.tenantId,
     agentId: scope.agentId,
     filter: normalizedFilter,

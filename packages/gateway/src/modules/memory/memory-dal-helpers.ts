@@ -1,17 +1,16 @@
 import type {
   BuiltinMemoryServerSettings,
-  MemoryItemFilter,
   MemoryItemKind,
-  MemoryItemPatch,
   MemorySensitivity,
 } from "@tyrum/schemas";
 import { irToPlainText, markdownToIr } from "../markdown/ir.js";
+import type { MemoryItemFilter, MemoryItemPatch } from "./types.js";
 import type {
   Cursor,
-  MemoryV1BudgetLimits,
-  MemoryV1BudgetUsage,
+  MemoryBudgetLimits,
+  MemoryBudgetUsage,
   RawBudgetRow,
-} from "./v1-dal-types.js";
+} from "./memory-dal-types.js";
 
 export function normalizeTime(value: string | Date): string {
   return value instanceof Date ? value.toISOString() : value;
@@ -66,7 +65,7 @@ export function normalizeSnippet(value: string): string {
 
 export function normalizeBudgets(
   budgets: BuiltinMemoryServerSettings["budgets"],
-): MemoryV1BudgetLimits {
+): MemoryBudgetLimits {
   const maxTotalItems = Math.max(0, Math.floor(budgets.max_total_items));
   const maxTotalChars = Math.max(0, Math.floor(budgets.max_total_chars));
 
@@ -100,8 +99,8 @@ export function memoryItemCharCount(row: RawBudgetRow): number {
   return row.summary_md?.length ?? 0;
 }
 
-export function computeBudgetUsage(rows: readonly RawBudgetRow[]): MemoryV1BudgetUsage {
-  const usageByKind: MemoryV1BudgetUsage["per_kind"] = {
+export function computeBudgetUsage(rows: readonly RawBudgetRow[]): MemoryBudgetUsage {
+  const usageByKind: MemoryBudgetUsage["per_kind"] = {
     fact: { items: 0, chars: 0 },
     note: { items: 0, chars: 0 },
     procedure: { items: 0, chars: 0 },
@@ -123,7 +122,7 @@ export function computeBudgetUsage(rows: readonly RawBudgetRow[]): MemoryV1Budge
   return { total: { items: totalItems, chars: totalChars }, per_kind: usageByKind };
 }
 
-export function overBudget(usage: MemoryV1BudgetUsage, limits: MemoryV1BudgetLimits): boolean {
+export function overBudget(usage: MemoryBudgetUsage, limits: MemoryBudgetLimits): boolean {
   if (usage.total.items > limits.max_total_items) return true;
   if (usage.total.chars > limits.max_total_chars) return true;
   for (const kind of Object.keys(limits.per_kind) as MemoryItemKind[]) {
@@ -153,7 +152,7 @@ export function truncate(value: string, maxChars: number): string {
   return `${value.slice(0, max - 3)}...`;
 }
 
-export function buildMemoryV1ItemQueryParts(params: {
+export function buildMemoryItemQueryParts(params: {
   tenantId: string;
   agentId: string;
   filter?: MemoryItemFilter;

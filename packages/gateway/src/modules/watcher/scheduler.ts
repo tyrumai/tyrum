@@ -3,8 +3,8 @@ import type { GatewayEvents } from "../../event-bus.js";
 import type { ActionPrimitive, Lane as LaneT, Playbook } from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
 import { sqlActiveWhereClause } from "../../statestore/sql.js";
-import type { MemoryV1Dal } from "../memory/v1-dal.js";
-import { recordMemoryV1SystemEpisode } from "../memory/v1-episode-recorder.js";
+import type { MemoryDal } from "../memory/memory-dal.js";
+import { recordMemorySystemEpisode } from "../memory/memory-episode-recorder.js";
 import type { Logger } from "../observability/logger.js";
 import type { ExecutionEngine } from "../execution/engine.js";
 import type { PolicyService } from "../policy/service.js";
@@ -36,7 +36,7 @@ class LostFiringLeaseError extends Error {
 
 export interface WatcherSchedulerOptions {
   db: SqlDb;
-  memoryV1Dal: MemoryV1Dal;
+  memoryDal: MemoryDal;
   eventBus: Emitter<GatewayEvents>;
   owner?: string;
   logger?: Logger;
@@ -52,7 +52,7 @@ export interface WatcherSchedulerOptions {
 }
 export class WatcherScheduler {
   private readonly db: SqlDb;
-  private readonly memoryV1Dal: MemoryV1Dal;
+  private readonly memoryDal: MemoryDal;
   private readonly eventBus: Emitter<GatewayEvents>;
   private readonly owner: string;
   private readonly logger?: Logger;
@@ -70,7 +70,7 @@ export class WatcherScheduler {
 
   constructor(opts: WatcherSchedulerOptions) {
     this.db = opts.db;
-    this.memoryV1Dal = opts.memoryV1Dal;
+    this.memoryDal = opts.memoryDal;
     this.eventBus = opts.eventBus;
     this.owner = opts.owner?.trim() || "scheduler";
     this.logger = opts.logger;
@@ -192,8 +192,8 @@ export class WatcherScheduler {
     triggerType: string,
   ): Promise<void> {
     try {
-      await recordMemoryV1SystemEpisode(
-        this.memoryV1Dal,
+      await recordMemorySystemEpisode(
+        this.memoryDal,
         {
           occurred_at: new Date(firing.scheduled_at_ms).toISOString(),
           channel: "watcher",

@@ -5,7 +5,7 @@
  */
 
 import type { EventBus } from "./event-bus.js";
-import type { MemoryV1Dal } from "./modules/memory/v1-dal.js";
+import type { MemoryDal } from "./modules/memory/memory-dal.js";
 import type { EventLog } from "./modules/planner/event-log.js";
 import type { DiscoveryPipeline } from "./modules/discovery/pipeline.js";
 import type { RiskClassifier } from "./modules/risk/classifier.js";
@@ -33,7 +33,7 @@ import type { ChannelThreadDal } from "./modules/channels/thread-dal.js";
 import { DeploymentConfig, type DeploymentConfig as DeploymentConfigT } from "@tyrum/schemas";
 
 import { createEventBus } from "./event-bus.js";
-import { MemoryV1Dal as MemoryV1DalImpl } from "./modules/memory/v1-dal.js";
+import { MemoryDal as MemoryDalImpl } from "./modules/memory/memory-dal.js";
 import { EventLog as EventLogImpl } from "./modules/planner/event-log.js";
 import { ApprovalDal as ApprovalDalImpl } from "./modules/approval/dal.js";
 import {
@@ -92,7 +92,7 @@ export interface GatewayContainer {
   db: SqlDb;
   identityScopeDal: IdentityScopeDal;
   channelThreadDal: ChannelThreadDal;
-  memoryV1Dal: MemoryV1Dal;
+  memoryDal: MemoryDal;
   contextReportDal: ContextReportDal;
   secretResolutionAuditDal: SecretResolutionAuditDal;
   eventLog: EventLog;
@@ -157,7 +157,7 @@ export function wireContainer(
   const deploymentConfig = DeploymentConfig.parse(opts?.deploymentConfig ?? {});
   const identityScopeDal = new IdentityScopeDalImpl(db);
   const channelThreadDal = new ChannelThreadDalImpl(db);
-  const memoryV1Dal = new MemoryV1DalImpl(db);
+  const memoryDal = new MemoryDalImpl(db);
   const contextReportDal = new ContextReportDalImpl(db);
   const redactionEngine = opts?.redactionEngine ?? new RedactionEngine();
   const logger = new Logger({
@@ -181,7 +181,7 @@ export function wireContainer(
   const policySnapshotDal = new PolicySnapshotDalImpl(db);
   const policyOverrideDal = new PolicyOverrideDalImpl(db);
   const nodePairingDal = new NodePairingDalImpl(db);
-  const watcherProcessor = new WatcherProcessorImpl({ db, memoryV1Dal, eventBus });
+  const watcherProcessor = new WatcherProcessorImpl({ db, memoryDal, eventBus });
   const canvasDal = new CanvasDalImpl(db);
 
   const tyrumHome = config.tyrumHome ?? join(homedir(), ".tyrum");
@@ -236,7 +236,7 @@ export function wireContainer(
     db,
     identityScopeDal,
     channelThreadDal,
-    memoryV1Dal,
+    memoryDal,
     contextReportDal,
     secretResolutionAuditDal,
     eventLog,

@@ -172,7 +172,7 @@ describe("lifecycle hooks startup gating", () => {
               }),
             },
             channelThreadDal: {},
-            memoryV1Dal: {},
+            memoryDal: {},
             contextReportDal: {},
             secretResolutionAuditDal: {},
             eventLog: {},

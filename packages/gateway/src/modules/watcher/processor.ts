@@ -11,8 +11,8 @@ import { createHash, randomUUID } from "node:crypto";
 import type { GatewayEvents } from "../../event-bus.js";
 import type { SqlDb } from "../../statestore/types.js";
 import { sqlActiveWhereClause, sqlBoolParam } from "../../statestore/sql.js";
-import type { MemoryV1Dal } from "../memory/v1-dal.js";
-import { recordMemoryV1SystemEpisode } from "../memory/v1-episode-recorder.js";
+import type { MemoryDal } from "../memory/memory-dal.js";
+import { recordMemorySystemEpisode } from "../memory/memory-episode-recorder.js";
 import { WatcherFiringDal } from "./firing-dal.js";
 import { DEFAULT_AGENT_ID, DEFAULT_TENANT_ID, DEFAULT_WORKSPACE_ID } from "../identity/scope.js";
 
@@ -71,7 +71,7 @@ export interface WebhookTriggerEvent {
 
 export interface WatcherProcessorOptions {
   db: SqlDb;
-  memoryV1Dal: MemoryV1Dal;
+  memoryDal: MemoryDal;
   eventBus: Emitter<GatewayEvents>;
   /** Max entries for the webhook scheduled_at cursor cache (default: 10_000). Set to 0 to disable caching. */
   webhookScheduledAtCursorMaxEntries?: number;
@@ -135,7 +135,7 @@ function normalizeConfigForPlanId(input: { planId: string; triggerConfig: unknow
 
 export class WatcherProcessor {
   private readonly db: SqlDb;
-  private readonly memoryV1Dal: MemoryV1Dal;
+  private readonly memoryDal: MemoryDal;
   private readonly eventBus: Emitter<GatewayEvents>;
   private readonly firingDal: WatcherFiringDal;
   private readonly webhookScheduledAtCursorMaxEntries: number;
@@ -146,7 +146,7 @@ export class WatcherProcessor {
 
   constructor(opts: WatcherProcessorOptions) {
     this.db = opts.db;
-    this.memoryV1Dal = opts.memoryV1Dal;
+    this.memoryDal = opts.memoryDal;
     this.eventBus = opts.eventBus;
     this.firingDal = new WatcherFiringDal(opts.db);
     this.webhookScheduledAtCursorMaxEntries = (() => {
@@ -226,8 +226,8 @@ export class WatcherProcessor {
     for (const watcher of watchers) {
       if (!this.evaluateTrigger(watcher, event)) continue;
       try {
-        await recordMemoryV1SystemEpisode(
-          this.memoryV1Dal,
+        await recordMemorySystemEpisode(
+          this.memoryDal,
           {
             occurred_at: new Date().toISOString(),
             channel: "watcher",
@@ -258,8 +258,8 @@ export class WatcherProcessor {
     const watchers = await this.getActiveWatchersForPlan(DEFAULT_TENANT_ID, event.planId);
     for (const watcher of watchers) {
       try {
-        await recordMemoryV1SystemEpisode(
-          this.memoryV1Dal,
+        await recordMemorySystemEpisode(
+          this.memoryDal,
           {
             occurred_at: new Date().toISOString(),
             channel: "watcher",
@@ -442,8 +442,8 @@ export class WatcherProcessor {
     })();
 
     try {
-      await recordMemoryV1SystemEpisode(
-        this.memoryV1Dal,
+      await recordMemorySystemEpisode(
+        this.memoryDal,
         {
           occurred_at: new Date(event.timestampMs).toISOString(),
           channel: "watcher",

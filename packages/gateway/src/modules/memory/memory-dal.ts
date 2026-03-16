@@ -1,42 +1,44 @@
 import type {
   BuiltinMemoryServerSettings,
   MemoryDeletedBy,
-  MemoryForgetSelector,
   MemoryItem,
-  MemoryItemCreateInput,
-  MemoryItemFilter,
-  MemoryItemPatch,
   MemoryProvenance,
-  MemorySearchResponse,
   MemoryTombstone,
 } from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
 import { DEFAULT_AGENT_ID, DEFAULT_TENANT_ID } from "../identity/scope.js";
 import type {
-  MemorySearchInput,
-  MemoryV1ConsolidationResult,
+  MemoryConsolidationResult,
   RawMemoryItemRow,
   RawProvenanceRow,
   RawTagRow,
   RawTombstoneRow,
-} from "./v1-dal-types.js";
-export type { MemoryV1ConsolidationResult } from "./v1-dal-types.js";
+} from "./memory-dal-types.js";
+export type { MemoryConsolidationResult } from "./memory-dal-types.js";
+import type {
+  MemoryCreateInput,
+  MemoryForgetSelector,
+  MemoryItemFilter,
+  MemoryItemPatch,
+  MemorySearchInput,
+  MemorySearchResult,
+} from "./types.js";
 import {
-  buildMemoryV1ItemQueryParts,
+  buildMemoryItemQueryParts,
   decodeCursor,
   encodeCursor,
   normalizeTime,
   parseJson,
-} from "./v1-dal-helpers.js";
-export { buildMemoryV1ItemQueryParts } from "./v1-dal-helpers.js";
+} from "./memory-dal-helpers.js";
+export { buildMemoryItemQueryParts } from "./memory-dal-helpers.js";
 import {
   consolidateMemoryToBudgets,
   createMemoryItem,
   searchMemoryItems,
   updateMemoryItem,
-} from "./v1-dal-operations.js";
+} from "./memory-dal-operations.js";
 
-export class MemoryV1Dal {
+export class MemoryDal {
   constructor(private readonly db: SqlDb) {}
 
   private normalizeScope(scope?: { tenantId?: string; agentId?: string } | string): {
@@ -135,7 +137,7 @@ export class MemoryV1Dal {
   }): Promise<{ items: MemoryItem[]; next_cursor?: string }> {
     const scope = this.normalizeScope(params);
 
-    const { from, where, values, limit } = buildMemoryV1ItemQueryParts({
+    const { from, where, values, limit } = buildMemoryItemQueryParts({
       tenantId: scope.tenantId,
       agentId: scope.agentId,
       filter: params.filter,
@@ -249,7 +251,7 @@ export class MemoryV1Dal {
   }
 
   async create(
-    input: MemoryItemCreateInput,
+    input: MemoryCreateInput,
     scope?: { tenantId?: string; agentId?: string } | string,
   ): Promise<MemoryItem> {
     return createMemoryItem(this.db, input, this.normalizeScope(scope), this);
@@ -377,7 +379,7 @@ export class MemoryV1Dal {
   async search(
     input: MemorySearchInput,
     scope?: { tenantId?: string; agentId?: string } | string,
-  ): Promise<MemorySearchResponse> {
+  ): Promise<MemorySearchResult> {
     return searchMemoryItems(this.db, input, this.normalizeScope(scope));
   }
 
@@ -493,7 +495,7 @@ export class MemoryV1Dal {
     tenantId?: string;
     agentId?: string;
     budgets: BuiltinMemoryServerSettings["budgets"];
-  }): Promise<MemoryV1ConsolidationResult> {
+  }): Promise<MemoryConsolidationResult> {
     return consolidateMemoryToBudgets(this.db, this.normalizeScope(params), params.budgets, this);
   }
 }

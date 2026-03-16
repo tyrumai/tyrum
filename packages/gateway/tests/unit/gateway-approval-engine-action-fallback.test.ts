@@ -109,7 +109,7 @@ describe("gateway approval engine action fallback", () => {
             }),
           },
           channelThreadDal: {},
-          memoryV1Dal: {},
+          memoryDal: {},
           contextReportDal: {},
           secretResolutionAuditDal: {},
           eventLog: {},

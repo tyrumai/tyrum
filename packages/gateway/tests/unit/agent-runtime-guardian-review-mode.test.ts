@@ -64,7 +64,7 @@ describe("AgentRuntime guardian review mode", () => {
       }),
       fetchImpl: fetch404,
     });
-    const memoryCreateSpy = vi.spyOn(container.memoryV1Dal, "create");
+    const memoryCreateSpy = vi.spyOn(container.memoryDal, "create");
     const workboard = new WorkboardDal(container.db);
     const subagentId = "guardian-subagent-1";
     const scope = {

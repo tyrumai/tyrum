@@ -1,53 +1,16 @@
-import type { BuiltinMemoryServerSettings, MemoryItem, MemoryItemKind } from "@tyrum/schemas";
+import type {
+  BuiltinMemorySearchArgs,
+  BuiltinMemorySeedArgs,
+  BuiltinMemoryServerSettings,
+  BuiltinMemoryWriteArgs,
+  MemoryItem,
+  MemoryItemKind,
+} from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
-import type { MemoryV1Dal } from "./v1-dal.js";
-import { retrieveMemoryV1, buildMemoryV1Preview } from "./v1-retrieval.js";
-import { MemoryV1SemanticIndex } from "./v1-semantic-index.js";
-import { buildMemoryV1Digest } from "./v1-digest.js";
-
-type MemorySearchToolInput = {
-  query: string;
-  kinds?: MemoryItemKind[];
-  tags?: string[];
-  limit?: number;
-};
-
-type MemoryAddToolInput =
-  | {
-      kind: "fact";
-      key: string;
-      value: unknown;
-      confidence?: number;
-      observed_at?: string;
-      tags?: string[];
-      sensitivity?: "public" | "private";
-    }
-  | {
-      kind: "note";
-      body_md: string;
-      title?: string;
-      tags?: string[];
-      sensitivity?: "public" | "private";
-    }
-  | {
-      kind: "procedure";
-      body_md: string;
-      title?: string;
-      confidence?: number;
-      tags?: string[];
-      sensitivity?: "public" | "private";
-    }
-  | {
-      kind: "episode";
-      summary_md: string;
-      occurred_at?: string;
-      tags?: string[];
-      sensitivity?: "public" | "private";
-    };
-
-type MemorySeedToolInput = {
-  query: string;
-};
+import type { MemoryDal } from "./memory-dal.js";
+import { retrieveMemory, buildMemoryPreview } from "./memory-retrieval.js";
+import { MemorySemanticIndex } from "./memory-semantic-index.js";
+import { buildMemoryDigest } from "./memory-digest.js";
 
 type MemoryToolEmbeddingPipeline = {
   embed(text: string): Promise<number[]>;
@@ -55,7 +18,7 @@ type MemoryToolEmbeddingPipeline = {
 
 export interface AgentMemoryToolRuntimeOptions {
   db: SqlDb;
-  dal: MemoryV1Dal;
+  dal: MemoryDal;
   tenantId: string;
   agentId: string;
   sessionId: string;
@@ -100,7 +63,7 @@ function buildSearchHit(
     tags: item.tags,
     sensitivity: item.sensitivity,
     provenance: buildSearchProvenance(item),
-    preview: buildMemoryV1Preview(item),
+    preview: buildMemoryPreview(item),
   };
 
   if (item.kind === "fact") {
@@ -124,13 +87,13 @@ export class AgentMemoryToolRuntime {
     };
   }
 
-  private async createSemanticIndex(): Promise<MemoryV1SemanticIndex | undefined> {
+  private async createSemanticIndex(): Promise<MemorySemanticIndex | undefined> {
     if (!this.opts.config.semantic.enabled || !this.opts.resolveEmbeddingPipeline) {
       return undefined;
     }
     const pipeline = await this.opts.resolveEmbeddingPipeline();
     if (!pipeline) return undefined;
-    return new MemoryV1SemanticIndex({
+    return new MemorySemanticIndex({
       db: this.opts.db,
       tenantId: this.scope.tenantId,
       agentId: this.scope.agentId,
@@ -141,7 +104,7 @@ export class AgentMemoryToolRuntime {
     });
   }
 
-  async search(input: MemorySearchToolInput): Promise<Record<string, unknown>> {
+  async search(input: BuiltinMemorySearchArgs): Promise<Record<string, unknown>> {
     const limit = Math.max(1, Math.min(10, Math.floor(input.limit ?? 5)));
     const kinds = normalizeKinds(input.kinds);
     const tags = normalizeTags(input.tags);
@@ -168,7 +131,7 @@ export class AgentMemoryToolRuntime {
       semanticFallbackUsed = true;
     }
 
-    const retrieval = await retrieveMemoryV1({
+    const retrieval = await retrieveMemory({
       dal: this.opts.dal,
       tenantId: this.scope.tenantId,
       agentId: this.scope.agentId,
@@ -193,7 +156,7 @@ export class AgentMemoryToolRuntime {
     };
   }
 
-  async seed(input: MemorySeedToolInput): Promise<Record<string, unknown>> {
+  async seed(input: BuiltinMemorySeedArgs): Promise<Record<string, unknown>> {
     const semanticIndex = await this.createSemanticIndex().catch(() => undefined);
     const semanticSearch =
       semanticIndex &&
@@ -202,7 +165,7 @@ export class AgentMemoryToolRuntime {
         return await semanticIndex.search(query, semanticLimit);
       });
 
-    const digest = await buildMemoryV1Digest({
+    const digest = await buildMemoryDigest({
       dal: this.opts.dal,
       tenantId: this.scope.tenantId,
       agentId: this.scope.agentId,
@@ -219,7 +182,7 @@ export class AgentMemoryToolRuntime {
   }
 
   async add(
-    input: MemoryAddToolInput,
+    input: BuiltinMemoryWriteArgs,
     toolCallId: string,
     sourceToolId = "mcp.memory.write",
   ): Promise<Record<string, unknown>> {
@@ -300,7 +263,7 @@ export class AgentMemoryToolRuntime {
     };
   }
 
-  async write(input: MemoryAddToolInput, toolCallId: string): Promise<Record<string, unknown>> {
+  async write(input: BuiltinMemoryWriteArgs, toolCallId: string): Promise<Record<string, unknown>> {
     return await this.add(input, toolCallId, "mcp.memory.write");
   }
 }

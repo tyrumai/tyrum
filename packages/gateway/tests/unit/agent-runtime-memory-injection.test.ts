@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import type { GatewayContainer } from "../../src/container.js";
-import { MemoryV1Dal } from "../../src/modules/memory/v1-dal.js";
+import { MemoryDal } from "../../src/modules/memory/memory-dal.js";
 import { seedAgentConfig } from "./agent-runtime.test-helpers.js";
 import { createStubLanguageModel } from "./stub-language-model.js";
 
@@ -78,7 +78,7 @@ describe("AgentRuntime (memory MCP pre-turn injection)", () => {
       },
     });
 
-    const memory = new MemoryV1Dal(container.db);
+    const memory = new MemoryDal(container.db);
     const item = await memory.create({
       kind: "note",
       title: "Food prefs",
@@ -190,7 +190,7 @@ describe("AgentRuntime (memory MCP pre-turn injection)", () => {
         sessions: { ttl_days: 30, max_turns: 20 },
       },
     });
-    await container.memoryV1Dal.create({
+    await container.memoryDal.create({
       kind: "note",
       body_md: "remember that I prefer tea",
       tags: ["prefs"],
@@ -263,7 +263,7 @@ describe("AgentRuntime (memory MCP pre-turn injection)", () => {
       },
     });
 
-    const memory = new MemoryV1Dal(container.db);
+    const memory = new MemoryDal(container.db);
     const item = await memory.create({
       kind: "fact",
       key: "user_name",

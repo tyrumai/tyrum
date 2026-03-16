@@ -1,7 +1,7 @@
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import { BuiltinMemoryServerSettings } from "@tyrum/schemas";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
-import { MemoryV1Dal } from "../../src/modules/memory/v1-dal.js";
+import { MemoryDal } from "../../src/modules/memory/memory-dal.js";
 import { AgentMemoryToolRuntime } from "../../src/modules/memory/agent-tool-runtime.js";
 import { DEFAULT_AGENT_ID, DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
@@ -20,7 +20,7 @@ function embedDeterministic(text: string): number[] {
 
 describe("AgentMemoryToolRuntime", () => {
   const db = openTestSqliteDb();
-  const dal = new MemoryV1Dal(db);
+  const dal = new MemoryDal(db);
   const config = buildMemoryConfig();
 
   afterEach(async () => {

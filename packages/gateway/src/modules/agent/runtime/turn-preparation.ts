@@ -252,7 +252,7 @@ export async function prepareTurn(
   const memoryToolRuntime = memoryConfig.enabled
     ? new AgentMemoryToolRuntime({
         db: deps.opts.container.db,
-        dal: deps.opts.container.memoryV1Dal,
+        dal: deps.opts.container.memoryDal,
         tenantId: session.tenant_id,
         agentId: session.agent_id,
         sessionId: session.session_id,

@@ -1,16 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import mitt from "mitt";
-import { MemoryV1Dal } from "../../src/modules/memory/v1-dal.js";
+import { MemoryDal } from "../../src/modules/memory/memory-dal.js";
 import { WatcherProcessor } from "../../src/modules/watcher/processor.js";
 import type { GatewayEvents } from "../../src/event-bus.js";
-import { listWatcherEpisodes } from "../helpers/memory-v1-helpers.js";
+import { listWatcherEpisodes } from "../helpers/memory-helpers.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 
 describe("WatcherProcessor", () => {
   let db: SqliteDb;
   let didOpenDb = false;
-  let memoryV1Dal: MemoryV1Dal;
+  let memoryDal: MemoryDal;
   let eventBus: ReturnType<typeof mitt<GatewayEvents>>;
   let processor: WatcherProcessor;
 
@@ -18,9 +18,9 @@ describe("WatcherProcessor", () => {
     didOpenDb = false;
     db = openTestSqliteDb();
     didOpenDb = true;
-    memoryV1Dal = new MemoryV1Dal(db);
+    memoryDal = new MemoryDal(db);
     eventBus = mitt<GatewayEvents>();
-    processor = new WatcherProcessor({ db, memoryV1Dal, eventBus });
+    processor = new WatcherProcessor({ db, memoryDal, eventBus });
   });
 
   afterEach(async () => {
@@ -38,7 +38,7 @@ describe("WatcherProcessor", () => {
 
     await processor.onPlanCompleted({ planId: "plan-1", stepsExecuted: 5 });
 
-    const episodes = await listWatcherEpisodes(memoryV1Dal);
+    const episodes = await listWatcherEpisodes(memoryDal);
     expect(findEpisodeByType(episodes, "plan_completed")).toBeTruthy();
   });
 
@@ -47,7 +47,7 @@ describe("WatcherProcessor", () => {
 
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const createSpy = vi
-      .spyOn(memoryV1Dal, "create")
+      .spyOn(memoryDal, "create")
       .mockRejectedValue(new Error("episode recording failure"));
 
     await processor.onPlanCompleted({ planId: "plan-1", stepsExecuted: 5 });
@@ -70,7 +70,7 @@ describe("WatcherProcessor", () => {
 
     await processor.onPlanFailed({ planId: "plan-1", reason: "timeout" });
 
-    const episodes = await listWatcherEpisodes(memoryV1Dal);
+    const episodes = await listWatcherEpisodes(memoryDal);
     expect(findEpisodeByType(episodes, "plan_failed")).toBeTruthy();
     expect(await processor.listWatchers()).toHaveLength(0);
   });
@@ -80,7 +80,7 @@ describe("WatcherProcessor", () => {
 
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const createSpy = vi
-      .spyOn(memoryV1Dal, "create")
+      .spyOn(memoryDal, "create")
       .mockRejectedValue(new Error("episode recording failure"));
 
     await processor.onPlanFailed({ planId: "plan-1", reason: "timeout" });
@@ -123,7 +123,7 @@ describe("WatcherProcessor", () => {
 
     eventBus.emit("plan:completed", { planId: "plan-1", stepsExecuted: 3 });
     await new Promise((resolve) => setTimeout(resolve, 0));
-    const episodes = await listWatcherEpisodes(memoryV1Dal);
+    const episodes = await listWatcherEpisodes(memoryDal);
     expect(findEpisodeByType(episodes, "plan_completed")).toBeTruthy();
 
     processor.stop();
@@ -184,7 +184,7 @@ describe("WatcherProcessor", () => {
     });
     expect(replay).toBe(false);
 
-    const episodes = await listWatcherEpisodes(memoryV1Dal);
+    const episodes = await listWatcherEpisodes(memoryDal);
     expect(
       episodes.filter((e) => (e?.provenance?.metadata as any)?.event_type === "webhook_fired"),
     ).toHaveLength(1);
@@ -207,7 +207,7 @@ describe("WatcherProcessor", () => {
 
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const createSpy = vi
-      .spyOn(memoryV1Dal, "create")
+      .spyOn(memoryDal, "create")
       .mockRejectedValue(new Error("episode recording failure"));
 
     const recorded = await processor.recordWebhookTrigger(watcher!, {
@@ -265,7 +265,7 @@ describe("WatcherProcessor", () => {
     expect(firings[0]!.status).toBe("queued");
     expect(firings[0]!.scheduled_at_ms).toBe(timestampMs);
 
-    const episodes = await listWatcherEpisodes(memoryV1Dal);
+    const episodes = await listWatcherEpisodes(memoryDal);
     const fired = findEpisodeByType(episodes, "webhook_fired");
     expect(fired).toBeDefined();
     const payload = fired!.provenance.metadata as Record<string, unknown> | undefined;
@@ -402,7 +402,7 @@ describe("WatcherProcessor", () => {
   it("bounds webhook scheduled_at cursor map size", async () => {
     const limitedProcessor = new WatcherProcessor({
       db,
-      memoryV1Dal,
+      memoryDal,
       eventBus,
       webhookScheduledAtCursorMaxEntries: 3,
     });

@@ -99,7 +99,7 @@ describe("gateway shutdown signal buffering", () => {
               }),
             },
             channelThreadDal: {},
-            memoryV1Dal: {},
+            memoryDal: {},
             contextReportDal: {},
             secretResolutionAuditDal: {},
             eventLog: {},

@@ -9,7 +9,7 @@ import {
   DEFAULT_TENANT_ID,
   DEFAULT_WORKSPACE_ID,
 } from "../../src/modules/identity/scope.js";
-import { MemoryV1Dal } from "../../src/modules/memory/v1-dal.js";
+import { MemoryDal } from "../../src/modules/memory/memory-dal.js";
 import type { PolicyService } from "../../src/modules/policy/service.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { WatcherProcessor } from "../../src/modules/watcher/processor.js";
@@ -18,7 +18,7 @@ import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 
 export type WatcherSchedulerContext = {
   db: SqliteDb;
-  memoryV1Dal: MemoryV1Dal;
+  memoryDal: MemoryDal;
   eventBus: ReturnType<typeof mitt<GatewayEvents>>;
   processor: WatcherProcessor;
   scheduler: WatcherScheduler;
@@ -33,15 +33,15 @@ export function registerWatcherSchedulerLifecycle(): WatcherSchedulerState {
 
   beforeEach(() => {
     const db = openTestSqliteDb();
-    const memoryV1Dal = new MemoryV1Dal(db);
+    const memoryDal = new MemoryDal(db);
     const eventBus = mitt<GatewayEvents>();
 
     state.current = {
       db,
-      memoryV1Dal,
+      memoryDal,
       eventBus,
-      processor: new WatcherProcessor({ db, memoryV1Dal, eventBus }),
-      scheduler: new WatcherScheduler({ db, memoryV1Dal, eventBus, tickMs: 100 }),
+      processor: new WatcherProcessor({ db, memoryDal, eventBus }),
+      scheduler: new WatcherScheduler({ db, memoryDal, eventBus, tickMs: 100 }),
     };
   });
 
@@ -72,11 +72,11 @@ export function createAutomationScheduler(context: WatcherSchedulerContext): {
 } {
   const enqueuedInputs: Array<Record<string, unknown>> = [];
   const policyBundle = PolicyBundle.parse({ v: 1 });
-  const { db, eventBus, memoryV1Dal } = context;
+  const { db, eventBus, memoryDal } = context;
 
   const scheduler = new WatcherScheduler({
     db,
-    memoryV1Dal,
+    memoryDal,
     eventBus,
     owner: "scheduler-1",
     firingLeaseTtlMs: 10_000,

@@ -1,10 +1,12 @@
 import {
   type AgentConfig as AgentConfigT,
+  BuiltinMemorySearchArgs,
   BuiltinMemoryServerSettings,
+  BuiltinMemorySeedArgs,
+  BuiltinMemoryWriteArgs,
   type BuiltinMemoryServerSettings as BuiltinMemoryServerSettingsT,
   type McpServerSpec as McpServerSpecT,
 } from "@tyrum/schemas";
-import { z } from "zod";
 import { makeToolResult } from "../agent/tool-executor-local-utils.js";
 import type { ToolResult } from "../agent/tool-executor-shared.js";
 import type { McpToolInfo } from "../agent/mcp-manager.js";
@@ -16,76 +18,6 @@ export type BuiltinMcpToolInfo = McpToolInfo & {
   effect?: "read_only" | "state_changing";
   keywords?: string[];
 };
-
-const MemorySearchArgsSchema = z
-  .object({
-    query: z.string().trim().min(1),
-    kinds: z
-      .array(z.enum(["fact", "note", "procedure", "episode"]))
-      .max(4)
-      .optional(),
-    tags: z.array(z.string().trim().min(1)).max(20).optional(),
-    limit: z.number().int().min(1).max(10).optional(),
-  })
-  .strict();
-
-const MemoryWriteArgsSchema = z.discriminatedUnion("kind", [
-  z
-    .object({
-      kind: z.literal("fact"),
-      key: z.string().trim().min(1),
-      value: z.unknown(),
-      confidence: z.number().min(0).max(1).optional(),
-      observed_at: z.string().trim().min(1).optional(),
-      tags: z.array(z.string().trim().min(1)).max(20).optional(),
-      sensitivity: z.enum(["public", "private"]).optional(),
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal("note"),
-      title: z.string().trim().min(1).optional(),
-      body_md: z.string().trim().min(1),
-      tags: z.array(z.string().trim().min(1)).max(20).optional(),
-      sensitivity: z.enum(["public", "private"]).optional(),
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal("procedure"),
-      title: z.string().trim().min(1).optional(),
-      body_md: z.string().trim().min(1),
-      confidence: z.number().min(0).max(1).optional(),
-      tags: z.array(z.string().trim().min(1)).max(20).optional(),
-      sensitivity: z.enum(["public", "private"]).optional(),
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal("episode"),
-      summary_md: z.string().trim().min(1),
-      occurred_at: z.string().trim().min(1).optional(),
-      tags: z.array(z.string().trim().min(1)).max(20).optional(),
-      sensitivity: z.enum(["public", "private"]).optional(),
-    })
-    .strict(),
-]);
-
-const MemorySeedArgsSchema = z
-  .object({
-    query: z.string().trim().min(1),
-    turn: z
-      .object({
-        agent_id: z.string().trim().min(1),
-        workspace_id: z.string().trim().min(1).optional(),
-        session_id: z.string().trim().min(1),
-        channel: z.string().trim().min(1),
-        thread_id: z.string().trim().min(1),
-      })
-      .partial()
-      .optional(),
-  })
-  .strict();
 
 export function buildBuiltinMemoryServerSpec(): McpServerSpecT {
   return {
@@ -243,7 +175,7 @@ export async function executeBuiltinMemoryMcpTool(params: {
 
   const toolName = params.toolId.slice(`mcp.${BUILTIN_MEMORY_SERVER_ID}.`.length);
   if (toolName === "seed") {
-    const parsed = MemorySeedArgsSchema.safeParse(params.args);
+    const parsed = BuiltinMemorySeedArgs.safeParse(params.args);
     if (!parsed.success) {
       return invalidArgs(
         params.toolCallId,
@@ -266,7 +198,7 @@ export async function executeBuiltinMemoryMcpTool(params: {
   }
 
   if (toolName === "search") {
-    const parsed = MemorySearchArgsSchema.safeParse(params.args);
+    const parsed = BuiltinMemorySearchArgs.safeParse(params.args);
     if (!parsed.success) {
       return invalidArgs(
         params.toolCallId,
@@ -281,7 +213,7 @@ export async function executeBuiltinMemoryMcpTool(params: {
   }
 
   if (toolName === "write") {
-    const parsed = MemoryWriteArgsSchema.safeParse(params.args);
+    const parsed = BuiltinMemoryWriteArgs.safeParse(params.args);
     if (!parsed.success) {
       return invalidArgs(
         params.toolCallId,

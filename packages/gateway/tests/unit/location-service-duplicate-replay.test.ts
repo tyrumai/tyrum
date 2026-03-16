@@ -20,7 +20,7 @@ describe("LocationService duplicate replay handling", () => {
     });
     service = new LocationService(db, {
       identityScopeDal: container.identityScopeDal,
-      memoryV1Dal: container.memoryV1Dal,
+      memoryDal: container.memoryDal,
     });
   });
 

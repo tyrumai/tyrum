@@ -1,10 +1,11 @@
 import { randomUUID } from "node:crypto";
-import type { MemoryItem, MemoryItemCreateInput, MemoryItemPatch } from "@tyrum/schemas";
+import type { MemoryItem } from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
-import type { RawMemoryItemRow } from "./v1-dal-types.js";
-import { assertPatchCompatible, uniqSortedStrings } from "./v1-dal-helpers.js";
-export { searchMemoryItems } from "./v1-dal-search.js";
-export { consolidateMemoryToBudgets } from "./v1-dal-consolidation.js";
+import type { RawMemoryItemRow } from "./memory-dal-types.js";
+import type { MemoryCreateInput, MemoryItemPatch } from "./types.js";
+import { assertPatchCompatible, uniqSortedStrings } from "./memory-dal-helpers.js";
+export { searchMemoryItems } from "./memory-dal-search.js";
+export { consolidateMemoryToBudgets } from "./memory-dal-consolidation.js";
 
 type Scope = { tenantId: string; agentId: string };
 
@@ -14,7 +15,7 @@ type DalGetById = {
 
 export async function createMemoryItem(
   db: SqlDb,
-  input: MemoryItemCreateInput,
+  input: MemoryCreateInput,
   scope: Scope,
   dal: DalGetById,
 ): Promise<MemoryItem> {

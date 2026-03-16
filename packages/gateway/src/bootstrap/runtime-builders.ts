@@ -145,7 +145,7 @@ export async function createProtocolRuntime(
     policyService: context.container.policyService,
     locationService: new LocationService(context.container.db, {
       identityScopeDal: context.container.identityScopeDal,
-      memoryV1Dal: context.container.memoryV1Dal,
+      memoryDal: context.container.memoryDal,
       engine: edgeEngine,
       policyService: context.container.policyService,
       playbooks,
@@ -369,7 +369,7 @@ export async function startEdgeRuntime(
         typingMode: context.deploymentConfig.channels.typingMode,
         typingRefreshMs: context.deploymentConfig.channels.typingRefreshMs,
         typingAutomationEnabled: context.deploymentConfig.channels.typingAutomationEnabled,
-        memoryV1Dal: context.container.memoryV1Dal,
+        memoryDal: context.container.memoryDal,
         approvalDal: context.container.approvalDal,
         protocolDeps: protocol.protocolDeps,
         listEgressConnectors: async (tenantId) =>

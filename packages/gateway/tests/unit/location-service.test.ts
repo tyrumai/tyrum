@@ -21,7 +21,7 @@ describe("LocationService", () => {
     });
     service = new LocationService(db, {
       identityScopeDal: container.identityScopeDal,
-      memoryV1Dal: container.memoryV1Dal,
+      memoryDal: container.memoryDal,
     });
   });
 
@@ -156,7 +156,7 @@ describe("LocationService", () => {
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     service = new LocationService(db, {
       identityScopeDal: container.identityScopeDal,
-      memoryV1Dal: container.memoryV1Dal,
+      memoryDal: container.memoryDal,
       engine: {
         enqueuePlanInTx: vi.fn().mockResolvedValue({ runId: "run-1" }),
       } as never,

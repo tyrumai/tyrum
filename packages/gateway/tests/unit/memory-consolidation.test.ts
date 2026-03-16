@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
-import { MemoryV1Dal } from "../../src/modules/memory/v1-dal.js";
+import { MemoryDal } from "../../src/modules/memory/memory-dal.js";
 import { VectorDal } from "../../src/modules/memory/vector-dal.js";
 import type { BuiltinMemoryServerSettings } from "@tyrum/schemas";
 import { DEFAULT_AGENT_ID, DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
@@ -8,7 +8,7 @@ import { DEFAULT_AGENT_ID, DEFAULT_TENANT_ID } from "../../src/modules/identity/
 describe("Memory v1 consolidation pipeline", () => {
   it("returns under budget via dedupe + episodic consolidation (no eviction)", async () => {
     const db = openTestSqliteDb();
-    const dal = new MemoryV1Dal(db);
+    const dal = new MemoryDal(db);
     const vectorDal = new VectorDal(db);
 
     try {
@@ -181,7 +181,7 @@ describe("Memory v1 consolidation pipeline", () => {
     vi.setSystemTime(new Date("2026-02-19T12:00:00.000Z"));
 
     const db = openTestSqliteDb();
-    const dal = new MemoryV1Dal(db);
+    const dal = new MemoryDal(db);
     const vectorDal = new VectorDal(db);
 
     try {

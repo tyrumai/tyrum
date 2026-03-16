@@ -69,7 +69,7 @@ describe("Agent behavior - memory continuity", () => {
     expect(remembered.memory_written).toBe(true);
     expect(recalled.reply).toBe("Ron");
 
-    const notes = await container.memoryV1Dal.list({
+    const notes = await container.memoryDal.list({
       tenantId: DEFAULT_TENANT_ID,
       agentId: DEFAULT_AGENT_ID,
     });
@@ -185,7 +185,7 @@ describe("Agent behavior - memory continuity", () => {
 
     expect(recalled.reply).toBe("tea");
 
-    const items = await container.memoryV1Dal.list({});
+    const items = await container.memoryDal.list({});
     const original = items.items.find(
       (item) =>
         item.kind === "note" &&

@@ -11,7 +11,7 @@ import {
   type Playbook,
 } from "@tyrum/schemas";
 import type { IdentityScopeDal } from "../identity/scope.js";
-import type { MemoryV1Dal } from "../memory/v1-dal.js";
+import type { MemoryDal } from "../memory/memory-dal.js";
 import type { ExecutionEngine } from "../execution/engine.js";
 import type { PolicyService } from "../policy/service.js";
 import { PlaybookRunner } from "../playbook/runner.js";
@@ -33,7 +33,7 @@ const logger = new Logger({ base: { module: "location.service" } });
 
 export interface LocationServiceOptions {
   identityScopeDal: IdentityScopeDal;
-  memoryV1Dal: MemoryV1Dal;
+  memoryDal: MemoryDal;
   engine?: ExecutionEngine;
   policyService?: PolicyService;
   playbooks?: Playbook[];
@@ -366,7 +366,7 @@ export class LocationService {
           });
           events.push(nextEvent.event);
           await recordLocationEpisode(
-            this.opts.memoryV1Dal,
+            this.opts.memoryDal,
             input.tenantId,
             agentId,
             nextEvent.event,
@@ -419,7 +419,7 @@ export class LocationService {
   }): Promise<LocationEvent[]> {
     return await evaluateCategoryTriggerEvents({
       dal: this.dal,
-      memoryV1Dal: this.opts.memoryV1Dal,
+      memoryDal: this.opts.memoryDal,
       getPoiProvider: (kind) => this.getPoiProvider(kind),
       dispatchLocationTriggers: async (triggerInput) => {
         await this.dispatchLocationTriggers(triggerInput);

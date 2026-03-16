@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { MemoryItemFilter } from "@tyrum/schemas";
-import { buildMemoryV1ItemQueryParts } from "../../src/modules/memory/v1-dal.js";
+import { buildMemoryItemQueryParts } from "../../src/modules/memory/memory-dal.js";
+import type { MemoryItemFilter } from "../../src/modules/memory/types.js";
 
 function encodeCursor(cursor: { sort: string; id: string }): string {
   return Buffer.from(JSON.stringify(cursor), "utf8").toString("base64");
@@ -9,7 +9,7 @@ function encodeCursor(cursor: { sort: string; id: string }): string {
 const TENANT_ID = "00000000-0000-4000-8000-000000000001";
 const AGENT_ID = "00000000-0000-4000-8000-000000000002";
 
-describe("buildMemoryV1ItemQueryParts", () => {
+describe("buildMemoryItemQueryParts", () => {
   it("builds filters, provenance join, extra where, cursor, and clamps limit", () => {
     const filter: MemoryItemFilter = {
       kinds: ["fact", "note"],
@@ -23,7 +23,7 @@ describe("buildMemoryV1ItemQueryParts", () => {
       },
     };
 
-    const parts = buildMemoryV1ItemQueryParts({
+    const parts = buildMemoryItemQueryParts({
       tenantId: TENANT_ID,
       agentId: AGENT_ID,
       filter,
@@ -73,7 +73,7 @@ describe("buildMemoryV1ItemQueryParts", () => {
   });
 
   it("applies sensitivities filter when provided", () => {
-    const parts = buildMemoryV1ItemQueryParts({
+    const parts = buildMemoryItemQueryParts({
       tenantId: TENANT_ID,
       agentId: AGENT_ID,
       filter: { sensitivities: ["private", "sensitive"] },
@@ -84,7 +84,7 @@ describe("buildMemoryV1ItemQueryParts", () => {
   });
 
   it("avoids provenance join when provenance filter is empty", () => {
-    const parts = buildMemoryV1ItemQueryParts({
+    const parts = buildMemoryItemQueryParts({
       tenantId: TENANT_ID,
       agentId: AGENT_ID,
       filter: { provenance: { source_kinds: [] } },
@@ -98,7 +98,7 @@ describe("buildMemoryV1ItemQueryParts", () => {
   });
 
   it("normalizes filter arrays to avoid duplicate/blank SQL params", () => {
-    const parts = buildMemoryV1ItemQueryParts({
+    const parts = buildMemoryItemQueryParts({
       tenantId: TENANT_ID,
       agentId: AGENT_ID,
       filter: {
@@ -139,7 +139,7 @@ describe("buildMemoryV1ItemQueryParts", () => {
 
   it("can force provenance join for callers that always select provenance", () => {
     const parts = (
-      buildMemoryV1ItemQueryParts as unknown as (params: unknown) => {
+      buildMemoryItemQueryParts as unknown as (params: unknown) => {
         from: string;
       }
     )({

@@ -7,7 +7,7 @@ import {
 } from "@tyrum/schemas";
 import { sha256HexFromString } from "../../policy/canonical-json.js";
 import { redactSecretLikeText } from "./secrets.js";
-import { MemoryV1Dal } from "../../memory/v1-dal.js";
+import { MemoryDal } from "../../memory/memory-dal.js";
 import type { SessionRow } from "../session-dal.js";
 import type { SqlDb } from "../../../statestore/types.js";
 import { extractMessageText } from "./session-context-state.js";
@@ -79,8 +79,8 @@ export async function maybeRunPreCompactionMemoryFlush(
   },
 ): Promise<void> {
   const droppedMessages = input.droppedMessages ?? [];
-  const v1Enabled = resolvePreCompactionMemoryEnabled(input.ctx.config);
-  if (!v1Enabled) {
+  const memoryEnabled = resolvePreCompactionMemoryEnabled(input.ctx.config);
+  if (!memoryEnabled) {
     return;
   }
 
@@ -92,9 +92,9 @@ export async function maybeRunPreCompactionMemoryFlush(
   const flushKey = sha256HexFromString(`${input.session.session_id}\n${flushPromptText}`);
   const flushTag = `preflush:${flushKey}`;
 
-  if (v1Enabled) {
+  if (memoryEnabled) {
     try {
-      const memory = new MemoryV1Dal(deps.db);
+      const memory = new MemoryDal(deps.db);
       const existing = await memory.list({
         tenantId: input.session.tenant_id,
         agentId: deps.agentId,
@@ -106,7 +106,7 @@ export async function maybeRunPreCompactionMemoryFlush(
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      deps.logger.warn("memory.flush_v1_dedupe_failed", {
+      deps.logger.warn("memory.flush_dedupe_failed", {
         session_id: input.session.session_id,
         session_key: input.session.session_key,
         error: message,
@@ -169,9 +169,9 @@ export async function maybeRunPreCompactionMemoryFlush(
       });
     }
 
-    if (v1Enabled) {
+    if (memoryEnabled) {
       try {
-        const memory = new MemoryV1Dal(deps.db);
+        const memory = new MemoryDal(deps.db);
         await memory.create(
           {
             kind: "note",
@@ -194,7 +194,7 @@ export async function maybeRunPreCompactionMemoryFlush(
         );
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        deps.logger.warn("memory.flush_v1_write_failed", {
+        deps.logger.warn("memory.flush_write_failed", {
           session_id: input.session.session_id,
           session_key: input.session.session_key,
           error: message,

@@ -10,7 +10,7 @@ import { AgentRuntime } from "../../src/modules/agent/runtime.js";
 import { maybeRunPreCompactionMemoryFlush } from "../../src/modules/agent/runtime/pre-compaction-memory-flush.js";
 import { turnDirect } from "../../src/modules/agent/runtime/turn-direct.js";
 import { prepareTurn } from "../../src/modules/agent/runtime/turn-preparation.js";
-import { MemoryV1Dal } from "../../src/modules/memory/v1-dal.js";
+import { MemoryDal } from "../../src/modules/memory/memory-dal.js";
 import {
   checkpointJson,
   createMockMcpManager,
@@ -84,7 +84,7 @@ describe("Pre-compaction memory flush - advanced", () => {
 
     await flush();
     expect(listNonTitleGenerateCalls(languageModel)).toHaveLength(1);
-    const memory = new MemoryV1Dal(container.db);
+    const memory = new MemoryDal(container.db);
     const firstList = await memory.list({ tenantId, agentId, limit: 50 });
     expect(firstList.items).toHaveLength(1);
 

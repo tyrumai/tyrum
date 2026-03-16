@@ -1,10 +1,10 @@
 import type { BuiltinMemoryServerSettings, MemoryItem, MemoryItemKind } from "@tyrum/schemas";
-import { normalizeSnippet, truncate } from "./v1-dal-helpers.js";
-import type { MemoryV1SemanticSearchHit } from "./v1-semantic-index.js";
-import type { MemoryV1Dal } from "./v1-dal.js";
-import { retrieveMemoryV1 } from "./v1-retrieval.js";
+import { normalizeSnippet, truncate } from "./memory-dal-helpers.js";
+import type { MemorySemanticSearchHit } from "./memory-semantic-index.js";
+import type { MemoryDal } from "./memory-dal.js";
+import { retrieveMemory } from "./memory-retrieval.js";
 
-export type MemoryV1DigestResult = {
+export type MemoryDigestResult = {
   digest: string;
   included_item_ids: string[];
   keyword_hit_count: number;
@@ -100,14 +100,14 @@ function formatDigestLine(item: MemoryItem, maxChars: number): string {
   return line.length <= maxLineChars ? line : truncate(line, maxLineChars);
 }
 
-export async function buildMemoryV1Digest(params: {
-  dal: MemoryV1Dal;
+export async function buildMemoryDigest(params: {
+  dal: MemoryDal;
   tenantId: string;
   agentId: string;
   query: string;
   config: BuiltinMemoryServerSettings;
-  semanticSearch?: (query: string, limit: number) => Promise<MemoryV1SemanticSearchHit[]>;
-}): Promise<MemoryV1DigestResult> {
+  semanticSearch?: (query: string, limit: number) => Promise<MemorySemanticSearchHit[]>;
+}): Promise<MemoryDigestResult> {
   const config = params.config;
   if (!config.enabled) {
     return {
@@ -158,7 +158,7 @@ export async function buildMemoryV1Digest(params: {
   const query = params.query.trim();
   const retrieval = await (async () => {
     try {
-      return await retrieveMemoryV1({
+      return await retrieveMemory({
         dal: params.dal,
         tenantId: params.tenantId,
         agentId: params.agentId,

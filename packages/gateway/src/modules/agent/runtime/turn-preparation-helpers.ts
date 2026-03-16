@@ -3,9 +3,9 @@ import { resolveEmbeddingPipeline } from "./embedding-pipeline-resolution.js";
 import type { AgentRuntimeOptions } from "./types.js";
 import { ensureAgentConfigSeeded } from "../default-config.js";
 import {
-  MemoryV1SemanticIndex,
-  type MemoryV1SemanticSearchHit,
-} from "../../memory/v1-semantic-index.js";
+  MemorySemanticIndex,
+  type MemorySemanticSearchHit,
+} from "../../memory/memory-semantic-index.js";
 import { ScheduleService } from "../../automation/schedule-service.js";
 import { resolveGatewayStateMode } from "../../runtime-state/mode.js";
 import type { SecretProvider } from "../../secret/provider.js";
@@ -31,7 +31,7 @@ export async function semanticSearch(
   sessionId: string,
   tenantId: string,
   agentId: string,
-): Promise<MemoryV1SemanticSearchHit[]> {
+): Promise<MemorySemanticSearchHit[]> {
   try {
     const pipeline = await resolveEmbeddingPipeline({
       container: deps.opts.container,
@@ -44,7 +44,7 @@ export async function semanticSearch(
       agentId,
     });
     if (!pipeline) return [];
-    const index = new MemoryV1SemanticIndex({
+    const index = new MemorySemanticIndex({
       db: deps.opts.container.db,
       tenantId,
       agentId,
