@@ -8,7 +8,10 @@ import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 
 export const OBSERVED_AT = "2026-02-19T12:00:00Z";
 
-type MemoryItemByKind<K extends MemoryCreateInput["kind"]> = Extract<MemoryCreateInput, { kind: K }>;
+type MemoryItemByKind<K extends MemoryCreateInput["kind"]> = Extract<
+  MemoryCreateInput,
+  { kind: K }
+>;
 
 type ProvenanceOverrides = Partial<Omit<MemoryProvenance, "source_kind">>;
 
