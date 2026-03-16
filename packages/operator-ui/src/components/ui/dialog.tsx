@@ -46,17 +46,17 @@ export const DialogContent = React.forwardRef<
         )}
         {...props}
       >
-        {children}
         <DialogPrimitive.Close
           aria-label="Close"
           className={cn(
-            "absolute right-4 top-4 rounded-md p-1 text-fg-muted opacity-70 transition-opacity hover:opacity-100",
+            "sticky top-0 z-10 float-right rounded-md p-1 text-fg-muted opacity-70 transition-opacity hover:opacity-100",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
           )}
         >
           <X aria-hidden="true" className="h-4 w-4" />
           <VisuallyHidden.Root>Close</VisuallyHidden.Root>
         </DialogPrimitive.Close>
+        {children}
       </DialogPrimitive.Content>
     </DialogPortal>
   );
