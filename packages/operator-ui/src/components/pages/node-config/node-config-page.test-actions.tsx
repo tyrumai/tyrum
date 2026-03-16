@@ -52,7 +52,7 @@ export function TestActionsPanel({ testActions }: TestActionsPanelProps) {
 
     try {
       const rawResult = await action.onRun();
-      setResult(rawResult);
+      setResult(rawResult ?? null);
 
       if (isRecord(rawResult) && rawResult["success"] === true) {
         toast.success("Test action succeeded");

@@ -155,5 +155,4 @@ export interface CapabilityCatalogEntry {
   label: string;
   description: string;
   icon: LucideIcon;
-  platforms: readonly PlatformKind[];
 }

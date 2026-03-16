@@ -2,61 +2,51 @@ import { Camera, Globe, Link2, MapPin, Mic, Monitor, Terminal } from "lucide-rea
 import type { CapabilityCatalogEntry } from "./node-config-page.types.js";
 
 /**
- * Static catalog of all known capabilities and which platforms support them.
- * The UI renders only the entries whose `platforms` include the current platform.
+ * Static catalog of all known capability metadata (label, description, icon).
+ * Each platform adapter selects which capabilities to render by key.
  */
 export const CAPABILITY_CATALOG: readonly CapabilityCatalogEntry[] = [
-  // ── Desktop-only ──────────────────────────────────────────────────────────
   {
     key: "desktop",
     label: "Desktop Automation",
     description: "Screenshots, UI queries, mouse and keyboard input for local desktop automation.",
     icon: Monitor,
-    platforms: ["desktop"],
   },
   {
     key: "playwright",
     label: "Browser Automation",
     description: "Automated browser navigation, interaction, and page inspection via Playwright.",
     icon: Globe,
-    platforms: ["desktop"],
   },
   {
     key: "cli",
     label: "Shell",
     description: "Local command-line execution through the desktop node runtime.",
     icon: Terminal,
-    platforms: ["desktop"],
   },
   {
     key: "http",
     label: "Web (HTTP)",
     description: "Outbound HTTP access from the local node runtime.",
     icon: Link2,
-    platforms: ["desktop"],
   },
-
-  // ── Shared: Browser + Mobile ──────────────────────────────────────────────
   {
     key: "location",
     label: "Location",
     description: "Expose device geolocation to agents.",
     icon: MapPin,
-    platforms: ["browser", "mobile"],
   },
   {
     key: "camera",
     label: "Camera",
     description: "Expose still-photo capture from the device camera.",
     icon: Camera,
-    platforms: ["browser", "mobile"],
   },
   {
     key: "audio",
     label: "Audio",
     description: "Expose microphone recording from the device.",
     icon: Mic,
-    platforms: ["browser", "mobile"],
   },
 ] as const;
 
