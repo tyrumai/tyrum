@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { cp, rm } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -38,15 +38,44 @@ function tryBuildWeb(repoRoot) {
   process.exit(corepackResult.status ?? 1);
 }
 
+const HTML_RESOURCE_PATH = /(?:src|href)="([^"]+)"/gu;
+
+function getRootRelativeResourcePaths(indexHtml) {
+  return [...indexHtml.matchAll(HTML_RESOURCE_PATH)]
+    .map((match) => match[1])
+    .filter((resourcePath) => resourcePath.startsWith("/"));
+}
+
+function verifyCopiedOperatorUiBuild(destDir) {
+  const destIndex = resolve(destDir, "index.html");
+  if (!existsSync(destIndex)) {
+    throw new Error(`Bundled operator UI index missing after copy: ${destIndex}`);
+  }
+
+  const indexHtml = readFileSync(destIndex, "utf8");
+  const rootRelativeResources = getRootRelativeResourcePaths(indexHtml).filter((resourcePath) =>
+    resourcePath.startsWith("/ui/"),
+  );
+
+  if (rootRelativeResources.length === 0) {
+    throw new Error(`Bundled operator UI index did not reference any /ui/ assets: ${destIndex}`);
+  }
+
+  for (const resourcePath of rootRelativeResources) {
+    const copiedPath = resolve(destDir, resourcePath.slice("/ui/".length));
+    if (!existsSync(copiedPath)) {
+      throw new Error(`Bundled operator UI asset missing after copy: ${copiedPath}`);
+    }
+  }
+}
+
 async function main() {
   const repoRoot = findWorkspaceRoot(packageRoot);
   if (!repoRoot) return;
 
   const sourceDir = resolve(repoRoot, "apps/web/dist");
   const sourceIndex = resolve(sourceDir, "index.html");
-  if (!existsSync(sourceIndex)) {
-    tryBuildWeb(repoRoot);
-  }
+  tryBuildWeb(repoRoot);
 
   if (!existsSync(sourceIndex)) {
     throw new Error(`Operator UI build output missing after build: ${sourceIndex}`);
@@ -55,6 +84,7 @@ async function main() {
   const destDir = resolve(packageRoot, "dist/ui");
   await rm(destDir, { recursive: true, force: true });
   await cp(sourceDir, destDir, { recursive: true });
+  verifyCopiedOperatorUiBuild(destDir);
 }
 
 await main();
