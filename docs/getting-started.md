@@ -30,7 +30,7 @@ Override startup home/host/port with explicit CLI flags, for example:
 tyrum --home "$HOME/.tyrum-demo" --port 8789
 ```
 
-## 3. Open the operator UI (`/ui`)
+## 3. Open Tyrum in Your Browser (`/ui`)
 
 Open:
 

@@ -1,6 +1,6 @@
 # Desktop Sandbox (Linux + noVNC)
 
-The `desktop-sandbox` Docker Compose profile starts a reproducible Linux desktop (Xfce) with noVNC for operator takeover, plus a paired Tyrum Desktop node.
+The `desktop-sandbox` Docker Compose profile starts a reproducible Linux desktop (Xfce) with noVNC for operator takeover, plus a paired desktop-app node for Tyrum.
 
 ## Quickstart
 

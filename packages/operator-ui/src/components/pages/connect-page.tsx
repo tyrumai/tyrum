@@ -144,8 +144,8 @@ export function ConnectPage({
           <div className="text-lg font-semibold text-fg">Connect to Tyrum</div>
           <div className="text-sm text-fg-muted">
             {isWeb
-              ? "Enter a tenant admin token to start an operator session."
-              : "Connect to the local operator gateway."}
+              ? "Enter a tenant admin token to connect to Tyrum."
+              : "Connect to the local gateway."}
           </div>
         </CardHeader>
         <CardContent className="grid gap-4">

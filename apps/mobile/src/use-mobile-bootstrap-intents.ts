@@ -79,7 +79,7 @@ export function useMobileBootstrapIntents(): {
     try {
       const result = await CapacitorBarcodeScanner.scanBarcode({
         hint: CapacitorBarcodeScannerTypeHint.QR_CODE,
-        scanInstructions: "Scan the Tyrum Mobile bootstrap QR code.",
+        scanInstructions: "Scan the Tyrum bootstrap QR code.",
         scanButton: false,
       });
       try {

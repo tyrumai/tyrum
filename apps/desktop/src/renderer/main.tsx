@@ -161,10 +161,7 @@ function DesktopSetupWizard({ onConfigured }: { onConfigured: () => void }) {
     <div className="mx-auto mt-20 max-w-md w-full px-4" data-testid="desktop-setup-wizard">
       <Card>
         <CardContent className="grid gap-4 py-6">
-          <Alert
-            title="Set up Tyrum Desktop"
-            description="Choose Embedded or Remote mode to continue."
-          />
+          <Alert title="Set up Tyrum" description="Choose Embedded or Remote mode to continue." />
 
           <SetupModeButtons mode={mode} busy={busy} onModeChange={setMode} />
 
@@ -178,7 +175,7 @@ function DesktopSetupWizard({ onConfigured }: { onConfigured: () => void }) {
             />
           ) : (
             <div className="text-sm text-fg-muted">
-              Embedded mode runs an Operator gateway locally on this machine.
+              Embedded mode runs the gateway locally on this machine.
             </div>
           )}
 
@@ -228,8 +225,8 @@ function DesktopBootstrap() {
           <CardContent className="grid gap-4 py-6">
             <Alert
               variant="error"
-              title="Operator connection unavailable"
-              description={operatorCore.errorMessage ?? "Failed to initialize operator core."}
+              title="Connection unavailable"
+              description={operatorCore.errorMessage ?? "Failed to initialize Tyrum."}
             />
             <Button
               onClick={() => {

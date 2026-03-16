@@ -7,7 +7,7 @@ export function createAuthTokenHttpFixtures() {
       {
         token_id: "token-1",
         tenant_id: "11111111-1111-4111-8111-111111111111",
-        display_name: "Operator UI",
+        display_name: "Tyrum",
         role: "client" as const,
         device_id: TEST_DEVICE_IDENTITY.deviceId,
         scopes: ["operator.read"],
@@ -23,7 +23,7 @@ export function createAuthTokenHttpFixtures() {
     token: "tyrum-token.v1.token-id.secret",
     token_id: "token-1",
     tenant_id: "11111111-1111-4111-8111-111111111111",
-    display_name: "Operator UI",
+    display_name: "Tyrum",
     device_id: TEST_DEVICE_IDENTITY.deviceId,
     role: "client" as const,
     scopes: [
@@ -41,7 +41,7 @@ export function createAuthTokenHttpFixtures() {
     token: {
       token_id: "token-1",
       tenant_id: "11111111-1111-4111-8111-111111111111",
-      display_name: "Updated Operator UI",
+      display_name: "Updated Tyrum",
       device_id: TEST_DEVICE_IDENTITY.deviceId,
       role: "client" as const,
       scopes: ["operator.read", "operator.write"],

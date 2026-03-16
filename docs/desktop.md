@@ -1,6 +1,6 @@
-# Tyrum Desktop
+# Desktop app
 
-Tyrum Desktop is the Electron desktop app for running the Tyrum operator UI on your machine.
+The Tyrum desktop app is the Electron app for running Tyrum on your machine.
 
 ## Install
 
@@ -90,7 +90,7 @@ Some desktop capabilities require macOS permissions:
 
 Use **Diagnostics** to check and request missing permissions.
 If Screen Recording is missing, desktop screenshot tasks now fail with an explicit tool error instead
-of crashing Tyrum Desktop. After granting access, restart the app.
+of crashing Tyrum. After granting access, restart the app.
 
 ### Updates
 

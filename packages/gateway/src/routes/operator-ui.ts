@@ -138,7 +138,7 @@ function contentTypeForPath(path: string): string {
 }
 
 async function serveIndexHtml(assetsDir: string | undefined): Promise<string> {
-  if (!assetsDir) return "<!doctype html><title>Operator UI unavailable</title>";
+  if (!assetsDir) return "<!doctype html><title>Tyrum unavailable</title>";
   const indexPath = join(assetsDir, "index.html");
   return await readFile(indexPath, "utf-8");
 }

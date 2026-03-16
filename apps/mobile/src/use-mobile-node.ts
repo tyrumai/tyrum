@@ -37,17 +37,17 @@ function optionalTrimmedString(value: unknown): string | undefined {
 function buildMobileNodeLabel(platform: string, deviceInfo: DeviceInfo | null): string {
   const deviceName = optionalTrimmedString(deviceInfo?.name);
   if (deviceName) {
-    return `Tyrum Mobile (${deviceName})`;
+    return `Tyrum mobile app (${deviceName})`;
   }
 
   const manufacturer = optionalTrimmedString(deviceInfo?.manufacturer);
   const model = optionalTrimmedString(deviceInfo?.model);
   const deviceSummary = [manufacturer, model].filter((part) => part !== undefined).join(" ");
   if (deviceSummary) {
-    return `Tyrum Mobile (${deviceSummary})`;
+    return `Tyrum mobile app (${deviceSummary})`;
   }
 
-  return `tyrum mobile ${platform}`;
+  return `Tyrum mobile app (${platform})`;
 }
 
 async function loadNativeDeviceInfo(): Promise<DeviceInfo | null> {

@@ -51,9 +51,9 @@ Run:
 tyrum
 ```
 
-## Operator UI (`/ui`)
+## Tyrum in Your Browser (`/ui`)
 
-When the gateway is running, it serves the operator web UI as a single-page app at:
+When the gateway is running, it serves the Tyrum web app as a single-page app at:
 
 - `http://127.0.0.1:8788/ui`
 

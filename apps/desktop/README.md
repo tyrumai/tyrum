@@ -1,8 +1,8 @@
-# Tyrum Desktop
+# Desktop app
 
 ## Purpose
 
-Tyrum Desktop is the Electron-based desktop app for Tyrum. It bundles the operator UI and provides
+The Tyrum desktop app bundles the shared UI and provides
 desktop-local integrations (permissions, updates, deep links) plus embedded gateway/node workflows.
 
 This app lives in `apps/desktop/`.

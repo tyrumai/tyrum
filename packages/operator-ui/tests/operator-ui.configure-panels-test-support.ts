@@ -189,9 +189,9 @@ function registerConfigurePanelsNavTests(): void {
               {
                 token_id: "token-1",
                 tenant_id: "11111111-1111-4111-8111-111111111111",
-                display_name: "Operator UI",
+                display_name: "Tyrum",
                 role: "client",
-                device_id: "operator-ui",
+                device_id: "tyrum",
                 scopes: ["operator.read"],
                 issued_at: "2026-02-27T00:00:00.000Z",
                 expires_at: "2099-01-01T00:00:00.000Z",

@@ -133,7 +133,7 @@ export function MobileSetupPage({
         <Card>
           <CardContent className="grid gap-5 pt-6">
             <div className="grid gap-1">
-              <h1 className="text-lg font-semibold">Connect Tyrum Mobile</h1>
+              <h1 className="text-lg font-semibold">Connect Tyrum</h1>
               <p className="text-sm text-fg-muted">
                 Connect this app to an existing Tyrum gateway and use the phone as a local mobile
                 node for iOS or Android actions.
@@ -244,8 +244,8 @@ export function MobileSetupPage({
           <DialogHeader>
             <DialogTitle>Replace saved mobile config?</DialogTitle>
             <DialogDescription>
-              This will replace the current saved gateway connection and reconnect Tyrum Mobile to
-              the new endpoint.
+              This will replace the current saved gateway connection and reconnect Tyrum to the new
+              endpoint.
             </DialogDescription>
           </DialogHeader>
 
