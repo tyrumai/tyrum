@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF } from "@tyrum/schemas";
 import {
   DesktopEnvironmentDal,
   DesktopEnvironmentHostDal,
@@ -36,7 +37,7 @@ describe("DesktopEnvironmentDal", () => {
       tenantId: DEFAULT_TENANT_ID,
       hostId: "host-1",
       label: "Research desktop",
-      imageRef: "ghcr.io/rhernaus/tyrum-desktop-sandbox:latest",
+      imageRef: DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF,
       desiredRunning: true,
     });
 
