@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  clearGatewayAuthSession,
   createBearerTokenAuth,
   createBrowserCookieAuth,
   createGatewayAuthSession,
@@ -68,6 +69,22 @@ describe("@tyrum/operator-core auth", () => {
       credentials: "same-origin",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ token: "test-token" }),
+    });
+    expect(res.status).toBe(204);
+  });
+
+  it("posts gateway auth session logout requests", async () => {
+    const fetchSpy = vi.fn(async () => new Response(null, { status: 204 }));
+
+    const res = await clearGatewayAuthSession({
+      httpBaseUrl: "http://example.test",
+      fetch: fetchSpy,
+      credentials: "include",
+    });
+
+    expect(fetchSpy).toHaveBeenCalledWith("http://example.test/auth/logout", {
+      method: "POST",
+      credentials: "include",
     });
     expect(res.status).toBe(204);
   });

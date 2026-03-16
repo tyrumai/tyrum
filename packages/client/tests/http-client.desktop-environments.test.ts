@@ -168,4 +168,25 @@ describe("desktop environment HTTP client", () => {
     expect(createInit.method).toBe("POST");
     expect(getHeader(createInit, "authorization")).toBe("Bearer root-token");
   });
+
+  it("resolves a trusted takeover URL", async () => {
+    const fetch = makeFetchMock(async (input, init) => {
+      const url = String(input);
+      expect(url).toBe("https://gateway.example/desktop-environments/env-1/takeover-url");
+      expect(init?.method).toBe("GET");
+      expect(getHeader(init, "authorization")).toBe("Bearer root-token");
+      return jsonResponse({
+        status: "ok",
+        takeover_url: "http://127.0.0.1:6080/vnc.html?autoconnect=true",
+      });
+    });
+
+    const client = createTestClient({ fetch });
+    const result = await client.desktopEnvironments.takeoverUrl("env-1");
+
+    expect(result).toEqual({
+      status: "ok",
+      takeover_url: "http://127.0.0.1:6080/vnc.html?autoconnect=true",
+    });
+  });
 });

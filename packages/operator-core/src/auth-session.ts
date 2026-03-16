@@ -26,3 +26,24 @@ export async function createGatewayAuthSession(input: {
     body: JSON.stringify({ token }),
   });
 }
+
+export async function clearGatewayAuthSession(input?: {
+  httpBaseUrl?: string;
+  credentials?: RequestCredentials;
+  fetch?: typeof fetch;
+}): Promise<Response> {
+  const fetchFn = input?.fetch ?? globalThis.fetch;
+  if (typeof fetchFn !== "function") {
+    throw new Error("fetch is not available");
+  }
+
+  const credentials = input?.credentials ?? "same-origin";
+  const url = input?.httpBaseUrl
+    ? new URL("/auth/logout", input.httpBaseUrl).toString()
+    : "/auth/logout";
+
+  return await fetchFn(url, {
+    method: "POST",
+    credentials,
+  });
+}

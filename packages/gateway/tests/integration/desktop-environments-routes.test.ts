@@ -207,6 +207,13 @@ describe("desktop environment routes", () => {
     const logsBody = (await logsRes.json()) as { logs: string[] };
     expect(logsBody.logs).toEqual(["desktop runtime booting", "desktop runtime ready"]);
 
+    const takeoverUrlRes = await app.request(`/desktop-environments/${environmentId}/takeover-url`);
+    expect(takeoverUrlRes.status).toBe(200);
+    await expect(takeoverUrlRes.json()).resolves.toMatchObject({
+      status: "ok",
+      takeover_url: "http://127.0.0.1:6080/vnc.html?autoconnect=true",
+    });
+
     const takeoverRes = await app.request(`/desktop-environments/${environmentId}/takeover`, {
       redirect: "manual",
     });
@@ -435,12 +442,40 @@ describe("desktop environment routes", () => {
         redirect: "manual",
       },
     );
+    const takeoverUrlRes = await app.request(
+      `/desktop-environments/${environment.environment_id}/takeover-url`,
+    );
 
     expect(takeoverRes.status).toBe(409);
     expect(takeoverRes.headers.get("location")).toBeNull();
     await expect(takeoverRes.json()).resolves.toMatchObject({
       error: "conflict",
       message: "takeover unavailable",
+    });
+    expect(takeoverUrlRes.status).toBe(409);
+    await expect(takeoverUrlRes.json()).resolves.toMatchObject({
+      error: "conflict",
+      message: "takeover unavailable",
+    });
+  });
+
+  it("returns not found for takeover routes when the desktop environment does not exist", async () => {
+    const { app } = await createTestApp();
+
+    const takeoverRes = await app.request("/desktop-environments/missing-env/takeover", {
+      redirect: "manual",
+    });
+    const takeoverUrlRes = await app.request("/desktop-environments/missing-env/takeover-url");
+
+    expect(takeoverRes.status).toBe(404);
+    await expect(takeoverRes.json()).resolves.toMatchObject({
+      error: "not_found",
+      message: "desktop environment not found",
+    });
+    expect(takeoverUrlRes.status).toBe(404);
+    await expect(takeoverUrlRes.json()).resolves.toMatchObject({
+      error: "not_found",
+      message: "desktop environment not found",
     });
   });
 });

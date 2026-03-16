@@ -143,6 +143,14 @@ export const DesktopEnvironmentLogsResponse = z
   .strict();
 export type DesktopEnvironmentLogsResponse = z.infer<typeof DesktopEnvironmentLogsResponse>;
 
+export const DesktopEnvironmentTakeoverResponse = z
+  .object({
+    status: z.literal("ok"),
+    takeover_url: z.string().trim().url(),
+  })
+  .strict();
+export type DesktopEnvironmentTakeoverResponse = z.infer<typeof DesktopEnvironmentTakeoverResponse>;
+
 export const DesktopEnvironmentDefaultsResponse = z
   .object({
     status: z.literal("ok"),

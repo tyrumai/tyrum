@@ -95,6 +95,11 @@ const stubHttp: OperatorHttpClient = {
     reset: async () => ({ status: "ok", environment: null }) as never,
     remove: async () => ({ status: "ok", deleted: true }) as never,
     logs: async () => ({ status: "ok", environment_id: "env-1", logs: [] }) as never,
+    takeoverUrl: async () =>
+      ({
+        status: "ok",
+        takeover_url: "http://127.0.0.1:6080/vnc.html?autoconnect=true",
+      }) as never,
   },
 };
 

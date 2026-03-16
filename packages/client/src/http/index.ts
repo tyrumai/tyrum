@@ -67,6 +67,7 @@ export type {
   DesktopEnvironmentMutateResult,
   DesktopEnvironmentDeleteResult,
   DesktopEnvironmentLogsResult,
+  DesktopEnvironmentTakeoverResult,
 } from "./desktop-environments.js";
 export type { PolicyBundleResponse } from "./policy.js";
 export type {

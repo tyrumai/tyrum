@@ -12,7 +12,7 @@ docker compose --profile desktop-sandbox up -d --build
 - noVNC takeover: `http://localhost:6080/vnc.html?autoconnect=true`
 - Gateway UI: `http://localhost:8788/ui`
 
-> Security note: the sandbox desktop is intentionally unauthenticated in v1 (VNC/noVNC). The `desktop-sandbox` profile binds ports to `127.0.0.1` by default; do not expose it to untrusted networks.
+> Security note: the sandbox desktop is intentionally unauthenticated in v1 (VNC/noVNC). The `desktop-sandbox` profile binds ports to `127.0.0.1` by default; do not expose it to untrusted networks. Gateway takeover links still go through an admin-authenticated gateway route before redirecting to the local noVNC endpoint.
 
 ## Pairing and takeover
 

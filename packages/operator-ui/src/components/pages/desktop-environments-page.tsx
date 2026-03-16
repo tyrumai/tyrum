@@ -1,6 +1,7 @@
 import type { OperatorCore } from "@tyrum/operator-core";
 import { RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { OperatorUiMode } from "../../app.js";
 import {
   buildBlockingAvailabilityMessage,
   describeStartBlockedReason,
@@ -32,15 +33,22 @@ import {
   useAdminMutationAccess,
   type AdminHttpClient,
 } from "./admin-http-shared.js";
-import { useApiAction } from "../../hooks/use-api-action.js";
+import {
+  shouldUseCrossOriginTakeoverFallback,
+  useDesktopEnvironmentPageActions,
+} from "./desktop-environments-page.actions.js";
 import { Button } from "../ui/button.js";
 
-export function DesktopEnvironmentsPage({ core }: { core: OperatorCore }) {
+export function DesktopEnvironmentsPage({
+  core,
+  mode,
+}: {
+  core: OperatorCore;
+  mode?: OperatorUiMode;
+}) {
   const adminHttp = useAdminHttpClient({ access: "strict" });
   const adminHttpRef = useRef<AdminHttpClient | null>(adminHttp);
   const { canMutate, requestEnter } = useAdminMutationAccess(core);
-  const refreshAction = useApiAction<void>();
-  const mutation = useApiAction<unknown>();
 
   const [hosts, setHosts] = useState<readonly DesktopEnvironmentHost[]>([]);
   const [hostsLoading, setHostsLoading] = useState(false);
@@ -253,121 +261,36 @@ export function DesktopEnvironmentsPage({ core }: { core: OperatorCore }) {
       });
   const canStartSelectedEnvironment =
     selectedEnvironment !== null && selectedStartBlockedReason === null;
-
-  function requireMutation(action: () => void): void {
-    if (!canMutate) {
-      requestEnter();
-      return;
-    }
-    action();
-  }
-
-  function requireAdminHttp(): AdminHttpClient {
-    const httpClient = adminHttpRef.current;
-    if (!httpClient) {
-      throw new Error("Authorize admin access to continue.");
-    }
-    return httpClient;
-  }
-
-  function runRefresh(): void {
-    const httpClient = adminHttpRef.current;
-    if (!httpClient) {
-      requestEnter();
-      return;
-    }
-    void refreshAction.run(async () => {
-      await refreshPageData(httpClient);
-    });
-  }
-
-  function runCreate(): void {
-    requireMutation(() => {
-      void mutation.run(async () => {
-        const httpClient = requireAdminHttp();
-        const created = await httpClient.desktopEnvironments.create({
-          host_id: createHostId,
-          label: createLabel.trim() || undefined,
-          image_ref: createImageRef.trim() || runtimeDefaults.runtimeDefaultImageRef,
-          desired_running: false,
-        });
-        const createdEnvironmentId = created.environment.environment_id;
-        setPendingSelectedEnvironmentId(createdEnvironmentId);
-        setCreateLabel("");
-        try {
-          await refreshEnvironments(httpClient);
-        } catch (error) {
-          setPendingSelectedEnvironmentId((current) =>
-            current === createdEnvironmentId ? null : current,
-          );
-          throw error;
-        }
-        return created.environment;
-      });
-    });
-  }
-
-  function runSaveRuntimeDefaults(): void {
-    requireMutation(() => {
-      void runtimeDefaults.save(requireAdminHttp()).catch(() => {});
-    });
-  }
-
-  function runAction(action: (httpClient: AdminHttpClient) => Promise<unknown>): void {
-    requireMutation(() => {
-      void mutation.run(async () => {
-        const httpClient = requireAdminHttp();
-        const result = await action(httpClient);
-        await refreshEnvironments(httpClient);
-        return result;
-      });
-    });
-  }
-
-  function runRefreshLogs(environmentId: string): void {
-    const httpClient = adminHttpRef.current;
-    if (!httpClient) {
-      requestEnter();
-      return;
-    }
-    void mutation.run(async () => {
-      setLogsById((current) => ({
-        ...current,
-        [environmentId]: {
-          lines: current[environmentId]?.lines ?? [],
-          loading: true,
-          error: null,
-          lastSyncedAt: current[environmentId]?.lastSyncedAt ?? null,
-        },
-      }));
-
-      try {
-        const result = await httpClient.desktopEnvironments.logs(environmentId);
-        if (adminHttpRef.current !== httpClient) return;
-        setLogsById((current) => ({
-          ...current,
-          [environmentId]: {
-            lines: result.logs,
-            loading: false,
-            error: null,
-            lastSyncedAt: new Date().toISOString(),
-          },
-        }));
-      } catch (error) {
-        if (adminHttpRef.current !== httpClient) return;
-        setLogsById((current) => ({
-          ...current,
-          [environmentId]: {
-            lines: current[environmentId]?.lines ?? [],
-            loading: false,
-            error: toErrorMessage(error),
-            lastSyncedAt: current[environmentId]?.lastSyncedAt ?? null,
-          },
-        }));
-        throw error;
-      }
-    });
-  }
+  const useCrossOriginTakeoverFallback = shouldUseCrossOriginTakeoverFallback(
+    mode,
+    core.httpBaseUrl,
+  );
+  const {
+    mutation,
+    refreshAction,
+    runAction,
+    runCreate,
+    runOpenTakeover,
+    runRefresh,
+    runRefreshLogs,
+    runSaveRuntimeDefaults,
+    takeoverAction,
+  } = useDesktopEnvironmentPageActions({
+    adminHttpRef,
+    canMutate,
+    requestEnter,
+    refreshPageData,
+    refreshEnvironments,
+    saveRuntimeDefaults: runtimeDefaults.save,
+    createHostId,
+    createLabel,
+    createImageRef,
+    runtimeDefaultImageRef: runtimeDefaults.runtimeDefaultImageRef,
+    setPendingSelectedEnvironmentId,
+    setCreateLabel,
+    setLogsById,
+  });
+  const takeoverError = takeoverAction.error ? toErrorMessage(takeoverAction.error) : null;
 
   return (
     <AppPage
@@ -460,6 +383,15 @@ export function DesktopEnvironmentsPage({ core }: { core: OperatorCore }) {
               canStart={canStartSelectedEnvironment}
               startBlockedReason={selectedStartBlockedReason}
               isLoading={mutation.isLoading}
+              isTakeoverLoading={takeoverAction.isLoading}
+              takeoverError={takeoverError}
+              onOpenTakeover={
+                useCrossOriginTakeoverFallback && selectedEnvironment
+                  ? () => {
+                      runOpenTakeover(selectedEnvironment.environment_id);
+                    }
+                  : undefined
+              }
               onStart={() => {
                 if (!selectedEnvironment) return;
                 runAction(

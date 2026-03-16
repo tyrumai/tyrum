@@ -3,6 +3,8 @@ import { createRoot } from "react-dom/client";
 import {
   createElevatedModeStore,
   createBearerTokenAuth,
+  createGatewayAuthSession,
+  clearGatewayAuthSession,
   createDeviceIdentity,
   createOperatorCore,
   createOperatorCoreManager,
@@ -23,6 +25,12 @@ import { readAuthTokenFromUrl, stripAuthTokenFromUrl } from "./url-auth.js";
 const GATEWAY_HTTP_STORAGE_KEY = "tyrum-gateway-http";
 const GATEWAY_WS_STORAGE_KEY = "tyrum-gateway-ws";
 const OPERATOR_TOKEN_STORAGE_KEY = "tyrum-operator-token";
+
+type ResolvedWebAuth = {
+  auth: ReturnType<typeof createBearerTokenAuth>;
+  connectOnLoad: boolean;
+  hasStoredToken: boolean;
+};
 
 function scrubAuthTokenFromUrl(): void {
   window.history.replaceState(
@@ -87,6 +95,134 @@ function resolveAuthFromLocation(): {
   };
 }
 
+async function readResponseErrorMessage(response: Response, fallback: string): Promise<string> {
+  const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
+  try {
+    if (contentType.includes("application/json")) {
+      const body = (await response.json()) as {
+        error?: unknown;
+        message?: unknown;
+      };
+      const message = typeof body.message === "string" ? body.message.trim() : "";
+      if (message) return message;
+    } else {
+      const text = (await response.text()).trim();
+      if (text) return text;
+    }
+  } catch {
+    // Intentional: fall back to a deterministic status-based message.
+  }
+  return fallback;
+}
+
+async function ensureGatewayBrowserSession(params: {
+  token: string;
+  httpBaseUrl: string;
+}): Promise<void> {
+  const response = await createGatewayAuthSession({
+    token: params.token,
+    httpBaseUrl: params.httpBaseUrl,
+    credentials: "include",
+  });
+  if (response.status === 204) {
+    return;
+  }
+
+  throw new Error(
+    await readResponseErrorMessage(
+      response,
+      `Failed to create a browser auth session (HTTP ${String(response.status)}).`,
+    ),
+  );
+}
+
+async function ensureGatewayBrowserLogout(httpBaseUrl: string): Promise<void> {
+  const response = await clearGatewayAuthSession({
+    httpBaseUrl,
+    credentials: "include",
+  });
+  if (response.status === 204) {
+    return;
+  }
+
+  throw new Error(
+    await readResponseErrorMessage(
+      response,
+      `Failed to clear the browser auth session (HTTP ${String(response.status)}).`,
+    ),
+  );
+}
+
+async function syncGatewayBrowserSessionOnBootstrap(params: {
+  token: string;
+  httpBaseUrl: string;
+}): Promise<"ok" | "unauthorized" | "fallback"> {
+  try {
+    const response = await createGatewayAuthSession({
+      token: params.token,
+      httpBaseUrl: params.httpBaseUrl,
+      credentials: "include",
+    });
+    if (response.status === 204) {
+      return "ok";
+    }
+    if (response.status === 401 || response.status === 403) {
+      return "unauthorized";
+    }
+  } catch {
+    // Intentional: preserve bearer-token bootstrap when session sync fails transiently.
+  }
+
+  return "fallback";
+}
+
+async function resolveWebAuth(httpBaseUrl: string): Promise<ResolvedWebAuth> {
+  const resolvedAuth = resolveAuthFromLocation();
+  const token = resolvedAuth.auth.token.trim();
+  if (!token) {
+    return resolvedAuth;
+  }
+
+  const syncResult = await syncGatewayBrowserSessionOnBootstrap({
+    token,
+    httpBaseUrl,
+  });
+  if (syncResult !== "unauthorized") {
+    return resolvedAuth;
+  }
+
+  try {
+    clearStoredOperatorToken();
+  } catch {
+    // Intentional: browser storage may be unavailable; still drop back to the connect screen.
+  }
+
+  return {
+    auth: createBearerTokenAuth(""),
+    connectOnLoad: false,
+    hasStoredToken: false,
+  };
+}
+
+async function bestEffortClearGatewayBrowserSession(httpBaseUrl: string): Promise<void> {
+  try {
+    await ensureGatewayBrowserLogout(httpBaseUrl);
+  } catch {
+    // Intentional: avoid masking the original local persistence failure.
+  }
+}
+
+async function bestEffortRestoreGatewayBrowserSession(params: {
+  token: string;
+  httpBaseUrl: string;
+}): Promise<void> {
+  try {
+    await ensureGatewayBrowserSession(params);
+  } catch {
+    // Intentional: avoid masking the original local persistence failure.
+  }
+}
+
 function resolveGatewayWsUrl(): string {
   try {
     const stored = localStorage.getItem(GATEWAY_WS_STORAGE_KEY);
@@ -108,7 +244,7 @@ async function bootstrap(): Promise<void> {
   const deviceIdentity = await createDeviceIdentity();
   const elevatedModeStore = createElevatedModeStore();
   const httpBaseUrl = resolveGatewayHttpBaseUrl();
-  const resolvedAuth = resolveAuthFromLocation();
+  const resolvedAuth = await resolveWebAuth(httpBaseUrl);
   const baselineHttp = createTyrumHttpClient({
     baseUrl: httpBaseUrl,
     auth: httpAuthForAuth(resolvedAuth.auth),
@@ -137,12 +273,30 @@ async function bootstrap(): Promise<void> {
 
   const webAuthPersistence: WebAuthPersistence = {
     hasStoredToken: resolvedAuth.hasStoredToken,
-    saveToken(token) {
-      storeOperatorToken(token);
+    async saveToken(token) {
+      await ensureGatewayBrowserSession({ token, httpBaseUrl });
+      try {
+        storeOperatorToken(token);
+      } catch (error) {
+        await bestEffortClearGatewayBrowserSession(httpBaseUrl);
+        throw error;
+      }
       reloadPage();
     },
-    clearToken() {
-      clearStoredOperatorToken();
+    async clearToken() {
+      const savedToken = readStoredOperatorToken();
+      await ensureGatewayBrowserLogout(httpBaseUrl);
+      try {
+        clearStoredOperatorToken();
+      } catch (error) {
+        if (savedToken) {
+          await bestEffortRestoreGatewayBrowserSession({
+            token: savedToken,
+            httpBaseUrl,
+          });
+        }
+        throw error;
+      }
       reloadPage();
     },
   };

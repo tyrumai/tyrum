@@ -311,6 +311,9 @@ export function SelectedDesktopEnvironmentCard({
   canStart,
   startBlockedReason,
   isLoading,
+  isTakeoverLoading,
+  takeoverError,
+  onOpenTakeover,
   onStart,
   onStop,
   onReset,
@@ -324,6 +327,9 @@ export function SelectedDesktopEnvironmentCard({
   canStart: boolean;
   startBlockedReason: ReactNode;
   isLoading: boolean;
+  isTakeoverLoading: boolean;
+  takeoverError: string | null;
+  onOpenTakeover?: () => void;
   onStart: () => void;
   onStop: () => void;
   onReset: () => void;
@@ -352,23 +358,38 @@ export function SelectedDesktopEnvironmentCard({
               <div>{selectedEnvironment.node_id ?? "node not connected yet"}</div>
               <div>
                 {selectedEnvironment.takeover_url ? (
-                  <a
-                    href={
-                      buildTakeoverHref(coreHttpBaseUrl, selectedEnvironment.environment_id) ??
-                      selectedEnvironment.takeover_url
-                    }
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-fg underline underline-offset-4"
-                    data-testid={`desktop-environment-takeover-${selectedEnvironment.environment_id}`}
-                  >
-                    Open takeover
-                  </a>
+                  onOpenTakeover ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      isLoading={isTakeoverLoading}
+                      onClick={onOpenTakeover}
+                      data-testid={`desktop-environment-takeover-${selectedEnvironment.environment_id}`}
+                    >
+                      Open takeover
+                    </Button>
+                  ) : (
+                    <a
+                      href={
+                        buildTakeoverHref(coreHttpBaseUrl, selectedEnvironment.environment_id) ??
+                        selectedEnvironment.takeover_url
+                      }
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="text-fg underline underline-offset-4"
+                      data-testid={`desktop-environment-takeover-${selectedEnvironment.environment_id}`}
+                    >
+                      Open takeover
+                    </a>
+                  )
                 ) : (
                   "Takeover unavailable"
                 )}
               </div>
             </div>
+            {takeoverError ? (
+              <Alert variant="error" title="Takeover failed" description={takeoverError} />
+            ) : null}
             {startBlockedReason ? (
               <Alert
                 variant="warning"
