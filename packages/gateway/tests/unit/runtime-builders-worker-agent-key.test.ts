@@ -1,0 +1,134 @@
+import { DeploymentConfig } from "@tyrum/schemas";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { StepExecutionContext } from "../../src/modules/execution/engine.js";
+
+type DecideExecutorInput = {
+  request: {
+    channel: string;
+    thread_id: string;
+    message: string;
+  };
+  planId: string;
+  stepIndex: number;
+  timeoutMs: number;
+  context: StepExecutionContext;
+};
+
+type DecideExecutor = (
+  input: DecideExecutorInput,
+) => Promise<{ success: boolean; result: unknown }>;
+
+describe("createWorkerLoop runtime selection", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.resetModules();
+  });
+
+  it("resolves decide runtimes from the execution key instead of run.agent_id", async () => {
+    vi.resetModules();
+
+    let decideExecutor: DecideExecutor | undefined;
+    const executeDecideAction = vi.fn(async () => ({ reply: "", session_id: "session-1" }));
+    const getRuntime = vi.fn(async () => ({ executeDecideAction }));
+
+    vi.doMock("../../src/bootstrap/runtime-builders-engine.js", () => ({
+      createExecutionEngine: vi.fn(() => ({ kind: "execution-engine" })),
+    }));
+
+    vi.doMock("../../src/modules/execution/toolrunner-step-executor.js", () => ({
+      createToolRunnerStepExecutor: vi.fn(() => ({ kind: "toolrunner" })),
+    }));
+
+    vi.doMock("../../src/modules/execution/kubernetes-toolrunner-step-executor.js", () => ({
+      createKubernetesToolRunnerStepExecutor: vi.fn(() => ({ kind: "kubernetes-toolrunner" })),
+    }));
+
+    vi.doMock("../../src/modules/execution/node-dispatch-step-executor.js", () => ({
+      createNodeDispatchStepExecutor: vi.fn(({ fallback }: { fallback: unknown }) => fallback),
+    }));
+
+    vi.doMock("../../src/modules/agent/node-dispatch-service.js", () => ({
+      NodeDispatchService: function NodeDispatchService() {},
+    }));
+
+    vi.doMock("../../src/modules/execution/gateway-step-executor.js", () => ({
+      createGatewayStepExecutor: vi.fn((opts: { decideExecutor?: DecideExecutor }) => {
+        decideExecutor = opts.decideExecutor;
+        return { kind: "gateway-step-executor" };
+      }),
+    }));
+
+    vi.doMock("../../src/modules/execution/worker-loop.js", () => ({
+      startExecutionWorkerLoop: vi.fn(() => ({
+        stop: vi.fn(),
+        done: Promise.resolve(),
+      })),
+    }));
+
+    vi.doMock("../../src/bootstrap/entrypoint-path.js", () => ({
+      resolveGatewayEntrypointPath: vi.fn(() => "/tmp/tyrum-entrypoint"),
+    }));
+
+    const { createWorkerLoop } = await import("../../src/bootstrap/runtime-builders.js");
+
+    const logger = {
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+    const context = {
+      shouldRunWorker: true,
+      deploymentConfig: DeploymentConfig.parse({}),
+      dbPath: ":memory:",
+      tyrumHome: "/tmp/tyrum-home",
+      migrationsDir: "/tmp/tyrum-migrations",
+      container: {
+        db: {},
+        artifactStore: {},
+      },
+      logger,
+      instanceId: "worker-1",
+    } as const;
+    const protocol = {
+      protocolDeps: {
+        agents: { getRuntime },
+      },
+    } as const;
+
+    expect(createWorkerLoop(context as never, protocol as never)).toBeDefined();
+    expect(decideExecutor).toBeDefined();
+    if (!decideExecutor) {
+      throw new Error("expected createWorkerLoop to wire a decide executor");
+    }
+
+    await decideExecutor({
+      request: {
+        channel: "automation:default",
+        thread_id: "schedule-1",
+        message: "Run the heartbeat.",
+      },
+      planId: "plan-1",
+      stepIndex: 0,
+      timeoutMs: 5_000,
+      context: {
+        tenantId: "tenant-1",
+        runId: "run-1",
+        stepId: "step-1",
+        attemptId: "attempt-1",
+        approvalId: null,
+        agentId: "00000000-0000-4000-8000-000000000002",
+        key: "agent:default:main",
+        lane: "heartbeat",
+        workspaceId: "workspace-1",
+        policySnapshotId: null,
+      },
+    });
+
+    expect(getRuntime).toHaveBeenCalledOnce();
+    expect(getRuntime).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      agentKey: "default",
+    });
+    expect(executeDecideAction).toHaveBeenCalledOnce();
+  });
+});

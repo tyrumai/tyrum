@@ -6,7 +6,7 @@ import { NodeDispatchService } from "../modules/agent/node-dispatch-service.js";
 import { AgentRegistry } from "../modules/agent/registry.js";
 import { AuthAudit } from "../modules/auth/audit.js";
 import { SlidingWindowRateLimiter } from "../modules/auth/rate-limiter.js";
-import { deriveAgentIdFromKey } from "../modules/execution/gateway-step-executor-types.js";
+import { deriveAgentKeyFromKey } from "../modules/execution/gateway-step-executor-types.js";
 import { ApprovalEngineActionProcessor } from "../modules/approval/engine-action-processor.js";
 import { ConnectionDirectoryDal } from "../modules/backplane/connection-directory.js";
 import { OutboxDal } from "../modules/backplane/outbox-dal.js";
@@ -484,8 +484,7 @@ export function createWorkerLoop(
       ? async ({ request, planId, stepIndex, timeoutMs, context: executionContext }) => {
           const runtime = await agents.getRuntime({
             tenantId: executionContext.tenantId,
-            agentKey:
-              executionContext.agentId?.trim() || deriveAgentIdFromKey(executionContext.key),
+            agentKey: deriveAgentKeyFromKey(executionContext.key),
           });
           const response = await runtime.executeDecideAction(request, {
             timeoutMs,
