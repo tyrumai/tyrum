@@ -1,7 +1,7 @@
 import type { OperatorCore } from "@tyrum/operator-core";
 import { useCallback, type ReactNode } from "react";
 import type { DesktopApi } from "../../../desktop-api.js";
-import { useHostApi, type OperatorUiHostApi } from "../../../host/host-api.js";
+import { useHostApi } from "../../../host/host-api.js";
 import { useReconnectScrollArea } from "../../../reconnect-ui-state.js";
 import { AppPage } from "../../layout/app-page.js";
 import { Alert } from "../../ui/alert.js";
@@ -34,7 +34,7 @@ export function NodeConfigPage({ core, onReloadPage }: NodeConfigPageProps) {
     case "web":
       return <BrowserNodeConfigPage core={core} />;
     case "mobile":
-      return <MobileNodeConfigPage host={host} core={core} />;
+      return <MobileNodeConfigPage core={core} />;
   }
 }
 
@@ -84,12 +84,7 @@ function BrowserNodeConfigPage({ core }: { core?: OperatorCore }) {
 
 // ─── Mobile inner component ─────────────────────────────────────────────────
 
-function MobileNodeConfigPage({
-  core,
-}: {
-  host: Extract<OperatorUiHostApi, { kind: "mobile" }>;
-  core?: OperatorCore;
-}) {
+function MobileNodeConfigPage({ core }: { core?: OperatorCore }) {
   const dispatchTest = useCallback(
     async (_actionName: string, _input: Record<string, unknown>): Promise<unknown> => {
       // Mobile test dispatch placeholder — will delegate through core.http when wired.

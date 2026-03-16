@@ -204,7 +204,7 @@ export function useDesktopConnectionState(
   const connectionFields: DesktopConnectionFields = useMemo(
     () => ({
       connectionMode: connection.mode,
-      savedConnectionMode: initialConnectionRef.current?.mode ?? connection.mode,
+      savedConnectionMode: currentOperatorConnection?.mode ?? connection.mode,
       port: connection.port,
       remoteUrl: connection.remoteUrl,
       remoteToken: connection.remoteToken,
