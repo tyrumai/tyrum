@@ -346,7 +346,7 @@ describe("Failure matrix (scaling-ha)", () => {
     const flakyDb = createAllOnceFailingAllDb(db);
     const scheduler = new WatcherScheduler({
       db: flakyDb.db,
-      memoryV1Dal: { create: async () => ({}) } as never,
+      memoryDal: { create: async () => ({}) } as never,
       eventBus: { emit: () => undefined } as never,
       tickMs: 10,
     });

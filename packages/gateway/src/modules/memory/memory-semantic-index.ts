@@ -1,19 +1,19 @@
 import { createHash } from "node:crypto";
 import type { MemoryItemKind, MemorySensitivity } from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
-import { normalizeSnippet } from "./v1-dal-helpers.js";
+import { normalizeSnippet } from "./memory-dal-helpers.js";
 import { VectorDal, cosineSimilarity } from "./vector-dal.js";
 
-export interface MemoryV1Embedder {
+export interface MemoryEmbedder {
   modelId: string;
   embed(text: string): Promise<number[]>;
 }
 
-export interface MemoryV1SemanticIndexOptions {
+export interface MemorySemanticIndexOptions {
   db: SqlDb;
   tenantId: string;
   agentId: string;
-  embedder: MemoryV1Embedder;
+  embedder: MemoryEmbedder;
   maxEmbedChars?: number;
 }
 
@@ -106,22 +106,22 @@ function embeddingTextForRow(
   };
 }
 
-export type MemoryV1SemanticSearchHit = {
+export type MemorySemanticSearchHit = {
   memory_item_id: string;
   kind: MemoryItemKind;
   score: number;
   snippet?: string;
 };
 
-export class MemoryV1SemanticIndex {
+export class MemorySemanticIndex {
   private readonly db: SqlDb;
   private readonly tenantId: string;
   private readonly agentId: string;
-  private readonly embedder: MemoryV1Embedder;
+  private readonly embedder: MemoryEmbedder;
   private readonly vectorDal: VectorDal;
   private readonly maxEmbedChars: number;
 
-  constructor(opts: MemoryV1SemanticIndexOptions) {
+  constructor(opts: MemorySemanticIndexOptions) {
     this.db = opts.db;
     this.tenantId = opts.tenantId.trim();
     this.agentId = opts.agentId.trim();
@@ -291,7 +291,7 @@ export class MemoryV1SemanticIndex {
     return { rebuilt: true, indexed: rebuilt.indexed, skipped: rebuilt.skipped };
   }
 
-  async search(query: string, limit: number): Promise<MemoryV1SemanticSearchHit[]> {
+  async search(query: string, limit: number): Promise<MemorySemanticSearchHit[]> {
     const normalizedQuery = query.trim();
     if (normalizedQuery.length === 0) return [];
     const topK = Math.max(0, Math.floor(limit));

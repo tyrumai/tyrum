@@ -3,7 +3,7 @@ import type { GatewayEvents } from "../../src/event-bus.js";
 import { ScheduleService } from "../../src/modules/automation/schedule-service.js";
 import { DEFAULT_TENANT_ID, IdentityScopeDal } from "../../src/modules/identity/scope.js";
 import { WatcherScheduler } from "../../src/modules/watcher/scheduler.js";
-import { listWatcherEpisodes } from "../helpers/memory-v1-helpers.js";
+import { listWatcherEpisodes } from "../helpers/memory-helpers.js";
 import {
   requireWatcherSchedulerContext,
   type WatcherSchedulerState,
@@ -13,8 +13,8 @@ async function countEpisodesByEventType(
   state: WatcherSchedulerState,
   eventType: string,
 ): Promise<number> {
-  const { memoryV1Dal } = requireWatcherSchedulerContext(state);
-  const episodes = await listWatcherEpisodes(memoryV1Dal);
+  const { memoryDal } = requireWatcherSchedulerContext(state);
+  const episodes = await listWatcherEpisodes(memoryDal);
   return episodes.filter(
     (episode) =>
       (episode?.provenance?.metadata as { event_type?: string } | undefined)?.event_type ===
@@ -37,14 +37,13 @@ export function registerWatcherSchedulerCoreTests(state: WatcherSchedulerState):
   });
 
   it("treats periodic episode recording as best-effort and continues firing batch processing", async () => {
-    const { db, eventBus, memoryV1Dal, processor, scheduler } =
-      requireWatcherSchedulerContext(state);
+    const { db, eventBus, memoryDal, processor, scheduler } = requireWatcherSchedulerContext(state);
     const watcher1 = await processor.createWatcher("plan-1", "periodic", { intervalMs: 1000 });
     const watcher2 = await processor.createWatcher("plan-2", "periodic", { intervalMs: 1000 });
 
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const createSpy = vi
-      .spyOn(memoryV1Dal, "create")
+      .spyOn(memoryDal, "create")
       .mockRejectedValue(new Error("episode recording failure"));
 
     try {
@@ -195,10 +194,10 @@ export function registerWatcherSchedulerCoreTests(state: WatcherSchedulerState):
   });
 
   it("keeps the interval timer refed when keepProcessAlive is true", () => {
-    const { db, eventBus, memoryV1Dal } = requireWatcherSchedulerContext(state);
+    const { db, eventBus, memoryDal } = requireWatcherSchedulerContext(state);
     const scheduler = new WatcherScheduler({
       db,
-      memoryV1Dal,
+      memoryDal,
       eventBus,
       tickMs: 100,
       keepProcessAlive: true,

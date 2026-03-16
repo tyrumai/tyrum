@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Hono } from "hono";
 import mitt from "mitt";
 import { createHmac, randomUUID } from "node:crypto";
-import { MemoryV1Dal } from "../../src/modules/memory/v1-dal.js";
+import { MemoryDal } from "../../src/modules/memory/memory-dal.js";
 import { WatcherProcessor } from "../../src/modules/watcher/processor.js";
 import { WatcherScheduler } from "../../src/modules/watcher/scheduler.js";
 import { createWatcherRoutes } from "../../src/routes/watcher.js";
@@ -68,7 +68,7 @@ class InMemorySecretProvider implements SecretProvider {
 describe("Watcher routes + scheduler integration", () => {
   let db: SqliteDb;
   let didOpenDb = false;
-  let memoryV1Dal: MemoryV1Dal;
+  let memoryDal: MemoryDal;
   let eventBus: ReturnType<typeof mitt<GatewayEvents>>;
   let processor: WatcherProcessor;
   let secretProvider: InMemorySecretProvider;
@@ -102,9 +102,9 @@ describe("Watcher routes + scheduler integration", () => {
     didOpenDb = false;
     db = openTestSqliteDb();
     didOpenDb = true;
-    memoryV1Dal = new MemoryV1Dal(db);
+    memoryDal = new MemoryDal(db);
     eventBus = mitt<GatewayEvents>();
-    processor = new WatcherProcessor({ db, memoryV1Dal, eventBus });
+    processor = new WatcherProcessor({ db, memoryDal, eventBus });
     secretProvider = new InMemorySecretProvider();
     app = new Hono();
     app.route(
@@ -122,7 +122,7 @@ describe("Watcher routes + scheduler integration", () => {
   });
 
   async function listWatcherEpisodes(): Promise<any[]> {
-    const { items } = await memoryV1Dal.list({
+    const { items } = await memoryDal.list({
       filter: { kinds: ["episode"], provenance: { channels: ["watcher"] } },
       limit: 2000,
     });
@@ -212,7 +212,7 @@ describe("Watcher routes + scheduler integration", () => {
     // Fire a scheduler tick
     const scheduler = new WatcherScheduler({
       db,
-      memoryV1Dal,
+      memoryDal,
       eventBus,
       tickMs: 100,
     });

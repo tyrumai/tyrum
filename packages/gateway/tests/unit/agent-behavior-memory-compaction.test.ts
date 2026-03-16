@@ -115,7 +115,7 @@ describe("Agent behavior - memory compaction", () => {
       capturedMemoryDigest.indexOf("my name is Ron"),
     );
 
-    const items = await container.memoryV1Dal.list({
+    const items = await container.memoryDal.list({
       tenantId: DEFAULT_TENANT_ID,
       agentId: DEFAULT_AGENT_ID,
     });
@@ -163,7 +163,7 @@ describe("Agent behavior - memory compaction", () => {
     expect(remembered.memory_written).toBe(false);
     expect(recalled.reply).toBe("UNKNOWN");
 
-    const items = await container.memoryV1Dal.list({});
+    const items = await container.memoryDal.list({});
     expect(items.items).toHaveLength(0);
   });
 
@@ -186,7 +186,7 @@ describe("Agent behavior - memory compaction", () => {
       }),
     });
 
-    const fact = await container.memoryV1Dal.create({
+    const fact = await container.memoryDal.create({
       kind: "fact",
       key: "user.preferred_drink",
       value: "oolong tea",
@@ -198,7 +198,7 @@ describe("Agent behavior - memory compaction", () => {
     });
 
     for (let index = 0; index < 6; index += 1) {
-      await container.memoryV1Dal.create({
+      await container.memoryDal.create({
         kind: "episode",
         occurred_at: `2026-03-${String(10 - index).padStart(2, "0")}T00:00:00.000Z`,
         summary_md:
@@ -210,7 +210,7 @@ describe("Agent behavior - memory compaction", () => {
       });
     }
 
-    const consolidation = await container.memoryV1Dal.consolidateToBudgets({
+    const consolidation = await container.memoryDal.consolidateToBudgets({
       tenantId: DEFAULT_TENANT_ID,
       agentId: DEFAULT_AGENT_ID,
       budgets: constrainedBudgets,
@@ -239,7 +239,7 @@ describe("Agent behavior - memory compaction", () => {
 
     expect(consolidation.ran).toBe(true);
     expect(consolidation.deleted_tombstones.length).toBeGreaterThan(0);
-    expect(await container.memoryV1Dal.getById(fact.memory_item_id)).toMatchObject({
+    expect(await container.memoryDal.getById(fact.memory_item_id)).toMatchObject({
       kind: "fact",
       key: "user.preferred_drink",
     });

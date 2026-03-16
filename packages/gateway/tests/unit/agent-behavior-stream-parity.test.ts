@@ -69,7 +69,7 @@ function sessionTextTranscript(
 }
 
 function noteBodies(container: GatewayContainer): Promise<string[]> {
-  return container.memoryV1Dal
+  return container.memoryDal
     .list({
       tenantId: DEFAULT_TENANT_ID,
       agentId: DEFAULT_AGENT_ID,

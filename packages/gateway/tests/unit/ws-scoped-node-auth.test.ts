@@ -143,7 +143,7 @@ describe("scoped node WS authorization", () => {
           },
         } as const),
       } as never,
-      memoryV1Dal: {
+      memoryDal: {
         createEpisode: vi.fn(),
       } as never,
     });

@@ -3,7 +3,6 @@ import type {
   MemoryItem,
   MemoryItemKind,
   MemoryProvenance,
-  MemorySearchRequest,
   MemorySensitivity,
   MemoryTombstone,
 } from "@tyrum/schemas";
@@ -68,29 +67,26 @@ export interface RawSearchRow {
   metadata_json: string | null;
 }
 
-export type MemorySearchInput = Pick<MemorySearchRequest, "query" | "filter" | "limit" | "cursor"> &
-  Partial<Pick<MemorySearchRequest, "v" | "agent_id">>;
-
 export type Cursor = { sort: string; id: string };
 
-export type MemoryV1BudgetLimits = {
+export type MemoryBudgetLimits = {
   max_total_items: number;
   max_total_chars: number;
   per_kind: Record<MemoryItemKind, { max_items: number; max_chars: number }>;
 };
 
-export type MemoryV1BudgetUsage = {
+export type MemoryBudgetUsage = {
   total: { items: number; chars: number };
   per_kind: Record<MemoryItemKind, { items: number; chars: number }>;
 };
 
-export type MemoryV1ConsolidationResult = {
+export type MemoryConsolidationResult = {
   ran: boolean;
   created_items: MemoryItem[];
   deleted_tombstones: MemoryTombstone[];
   dropped_derived_indexes: { deleted_vectors: number; deleted_links: number };
-  before: MemoryV1BudgetUsage;
-  after: MemoryV1BudgetUsage;
+  before: MemoryBudgetUsage;
+  after: MemoryBudgetUsage;
 };
 
 export type RawBudgetRow = {

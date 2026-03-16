@@ -7,8 +7,8 @@ import {
 import type { SqlDb } from "../../statestore/types.js";
 import type { ExecutionEngine } from "../execution/engine.js";
 import type { IdentityScopeDal } from "../identity/scope.js";
-import type { MemoryV1Dal } from "../memory/v1-dal.js";
-import { recordMemoryV1SystemEpisode } from "../memory/v1-episode-recorder.js";
+import type { MemoryDal } from "../memory/memory-dal.js";
+import { recordMemorySystemEpisode } from "../memory/memory-episode-recorder.js";
 import { Logger } from "../observability/logger.js";
 import { PlaybookRunner } from "../playbook/runner.js";
 import type { PolicyService } from "../policy/service.js";
@@ -183,13 +183,13 @@ async function enqueueTrigger(
 }
 
 export async function recordLocationEpisode(
-  memoryV1Dal: MemoryV1Dal,
+  memoryDal: MemoryDal,
   tenantId: string,
   agentId: string,
   event: LocationEvent,
 ): Promise<void> {
-  await recordMemoryV1SystemEpisode(
-    memoryV1Dal,
+  await recordMemorySystemEpisode(
+    memoryDal,
     {
       occurred_at: event.occurred_at,
       channel: "location",

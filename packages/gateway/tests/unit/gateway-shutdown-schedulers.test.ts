@@ -121,7 +121,7 @@ describe("gateway shutdown", () => {
               }),
             },
             channelThreadDal: {},
-            memoryV1Dal: {},
+            memoryDal: {},
             contextReportDal: {},
             secretResolutionAuditDal: {},
             eventLog: {},

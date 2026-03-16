@@ -19,8 +19,8 @@ import { broadcastApprovalUpdated } from "../approval/update-broadcast.js";
 import type { PolicyService } from "../policy/service.js";
 import { isSafeSuggestedOverridePattern } from "../policy/override-guardrails.js";
 import { createReviewedApproval } from "../review/review-init.js";
-import type { MemoryV1Dal } from "../memory/v1-dal.js";
-import { recordMemoryV1SystemEpisode } from "../memory/v1-episode-recorder.js";
+import type { MemoryDal } from "../memory/memory-dal.js";
+import { recordMemorySystemEpisode } from "../memory/memory-episode-recorder.js";
 import {
   type ChannelEgressConnector,
   DEFAULT_CHANNEL_ACCOUNT_ID,
@@ -45,7 +45,7 @@ type TelegramBatchProcessorDeps = {
   egressConnectors: ReadonlyMap<string, ChannelEgressConnector>;
   owner: string;
   logger?: Logger;
-  memoryV1Dal?: MemoryV1Dal;
+  memoryDal?: MemoryDal;
   approvalDal?: ApprovalDal;
   protocolDeps?: ProtocolDeps;
   typingMode: ChannelTypingMode;
@@ -256,13 +256,13 @@ export async function processTelegramBatch(
     },
   });
 
-  const memoryV1Dal = deps.memoryV1Dal;
-  if (memoryV1Dal && formattingFallbacks.length > 0) {
+  const memoryDal = deps.memoryDal;
+  if (memoryDal && formattingFallbacks.length > 0) {
     const occurredAt = new Date().toISOString();
     await Promise.allSettled(
       formattingFallbacks.map(async (fallback) => {
-        await recordMemoryV1SystemEpisode(
-          memoryV1Dal,
+        await recordMemorySystemEpisode(
+          memoryDal,
           {
             occurred_at: occurredAt,
             channel: connectorId,

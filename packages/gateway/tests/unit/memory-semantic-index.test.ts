@@ -1,17 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { openTestPostgresDb } from "../helpers/postgres-db.js";
-import { MemoryV1Dal } from "../../src/modules/memory/v1-dal.js";
-import { MemoryV1SemanticIndex } from "../../src/modules/memory/v1-semantic-index.js";
+import { MemoryDal } from "../../src/modules/memory/memory-dal.js";
+import { MemorySemanticIndex } from "../../src/modules/memory/memory-semantic-index.js";
 import type { SqlDb } from "../../src/statestore/types.js";
 import { DEFAULT_AGENT_ID, DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
-type OpenDbResult = { dal: MemoryV1Dal; db: SqlDb; close: () => Promise<void> };
+type OpenDbResult = { dal: MemoryDal; db: SqlDb; close: () => Promise<void> };
 
 async function openSqliteDb(): Promise<OpenDbResult> {
   const db = openTestSqliteDb();
   return {
-    dal: new MemoryV1Dal(db),
+    dal: new MemoryDal(db),
     db,
     close: async () => {
       await db.close();
@@ -21,7 +21,7 @@ async function openSqliteDb(): Promise<OpenDbResult> {
 
 async function openPostgresDb(): Promise<OpenDbResult> {
   const { db, close } = await openTestPostgresDb();
-  return { dal: new MemoryV1Dal(db), db, close };
+  return { dal: new MemoryDal(db), db, close };
 }
 
 const EMBED_FEATURES = [
@@ -45,12 +45,12 @@ const fixtures = [
 ];
 
 for (const fixture of fixtures) {
-  describe(`MemoryV1 semantic index (${fixture.name})`, () => {
+  describe(`Memory semantic index (${fixture.name})`, () => {
     it("rebuilds, searches, drops, and rebuilds again without losing canonical content", async () => {
       const { dal, db, close } = await fixture.open();
       try {
         const scope = { tenantId: DEFAULT_TENANT_ID, agentId: DEFAULT_AGENT_ID };
-        const index = new MemoryV1SemanticIndex({
+        const index = new MemorySemanticIndex({
           db,
           tenantId: DEFAULT_TENANT_ID,
           agentId: DEFAULT_AGENT_ID,
@@ -152,7 +152,7 @@ for (const fixture of fixtures) {
         expect(afterRebuild[0]?.memory_item_id).toBe(note.memory_item_id);
 
         // Unrelated agent is isolated.
-        const otherAgentIndex = new MemoryV1SemanticIndex({
+        const otherAgentIndex = new MemorySemanticIndex({
           db,
           tenantId: DEFAULT_TENANT_ID,
           agentId: "00000000-0000-4000-8000-0000000000b0",
@@ -172,7 +172,7 @@ for (const fixture of fixtures) {
       const { dal, db, close } = await fixture.open();
       try {
         const scope = { tenantId: DEFAULT_TENANT_ID, agentId: DEFAULT_AGENT_ID };
-        const index = new MemoryV1SemanticIndex({
+        const index = new MemorySemanticIndex({
           db,
           tenantId: DEFAULT_TENANT_ID,
           agentId: DEFAULT_AGENT_ID,

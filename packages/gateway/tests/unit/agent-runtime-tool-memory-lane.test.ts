@@ -92,7 +92,7 @@ describe("AgentRuntime - tool tracking, memory, and lane signals", () => {
     container = await createObservedContainer();
     await seedAgentConfig(container, { config: makeMemoryToolConfig() });
 
-    const createSpy = vi.spyOn(container.memoryV1Dal, "create");
+    const createSpy = vi.spyOn(container.memoryDal, "create");
 
     const runtime = new AgentRuntime({
       container,
@@ -172,7 +172,7 @@ describe("AgentRuntime - tool tracking, memory, and lane signals", () => {
     container = await createObservedContainer();
     await seedAgentConfig(container, { config: makeMemoryToolConfig() });
 
-    const createSpy = vi.spyOn(container.memoryV1Dal, "create");
+    const createSpy = vi.spyOn(container.memoryDal, "create");
 
     const runtime = new AgentRuntime({
       container,

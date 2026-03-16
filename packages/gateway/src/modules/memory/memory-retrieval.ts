@@ -1,26 +1,26 @@
 import type {
   BuiltinMemoryServerSettings,
   MemoryItem,
-  MemoryItemFilter,
   MemorySensitivity,
 } from "@tyrum/schemas";
-import { normalizeSnippet, truncate } from "./v1-dal-helpers.js";
-import type { MemoryV1SemanticSearchHit } from "./v1-semantic-index.js";
-import type { MemoryV1Dal } from "./v1-dal.js";
+import type { MemoryItemFilter } from "./types.js";
+import { normalizeSnippet, truncate } from "./memory-dal-helpers.js";
+import type { MemorySemanticSearchHit } from "./memory-semantic-index.js";
+import type { MemoryDal } from "./memory-dal.js";
 
-export type MemoryV1MatchSource = "structured" | "keyword" | "semantic";
+export type MemoryMatchSource = "structured" | "keyword" | "semantic";
 
-export type MemoryV1RetrievedHit = {
+export type MemoryRetrievedHit = {
   item: MemoryItem;
   score: number;
-  match_sources: MemoryV1MatchSource[];
+  match_sources: MemoryMatchSource[];
   keyword_score: number;
   semantic_score: number;
   structured_rank?: number;
 };
 
-export type MemoryV1RetrievalResult = {
-  hits: MemoryV1RetrievedHit[];
+export type MemoryRetrievalResult = {
+  hits: MemoryRetrievedHit[];
   keyword_hit_count: number;
   semantic_hit_count: number;
   structured_item_count: number;
@@ -28,7 +28,7 @@ export type MemoryV1RetrievalResult = {
 
 type CandidateState = {
   memory_item_id: string;
-  match_sources: Set<MemoryV1MatchSource>;
+  match_sources: Set<MemoryMatchSource>;
   keyword_score: number;
   semantic_score: number;
   structured_rank?: number;
@@ -56,7 +56,7 @@ function mergeSensitivityFilter(
 }
 
 async function loadStructuredItems(params: {
-  dal: MemoryV1Dal;
+  dal: MemoryDal;
   tenantId: string;
   agentId: string;
   allow_sensitivities: readonly MemorySensitivity[];
@@ -134,7 +134,7 @@ function buildPreview(item: MemoryItem, maxChars = 240): string {
   return truncate(normalizeSnippet(item.body_md), maxChars);
 }
 
-function compareHits(left: MemoryV1RetrievedHit, right: MemoryV1RetrievedHit): number {
+function compareHits(left: MemoryRetrievedHit, right: MemoryRetrievedHit): number {
   const leftStructured = left.match_sources.includes("structured") ? 1 : 0;
   const rightStructured = right.match_sources.includes("structured") ? 1 : 0;
   if (leftStructured !== rightStructured) return rightStructured - leftStructured;
@@ -159,12 +159,12 @@ function compareHits(left: MemoryV1RetrievedHit, right: MemoryV1RetrievedHit): n
   return left.item.memory_item_id.localeCompare(right.item.memory_item_id);
 }
 
-export function buildMemoryV1Preview(item: MemoryItem, maxChars = 240): string {
+export function buildMemoryPreview(item: MemoryItem, maxChars = 240): string {
   return buildPreview(item, maxChars);
 }
 
-export async function retrieveMemoryV1(params: {
-  dal: MemoryV1Dal;
+export async function retrieveMemory(params: {
+  dal: MemoryDal;
   tenantId: string;
   agentId: string;
   query: string;
@@ -174,8 +174,8 @@ export async function retrieveMemoryV1(params: {
   structuredMaxItems?: number;
   keywordLimit?: number;
   semanticLimit?: number;
-  semanticSearch?: (query: string, limit: number) => Promise<MemoryV1SemanticSearchHit[]>;
-}): Promise<MemoryV1RetrievalResult> {
+  semanticSearch?: (query: string, limit: number) => Promise<MemorySemanticSearchHit[]>;
+}): Promise<MemoryRetrievalResult> {
   const query = params.query.trim();
   const candidates = new Map<string, CandidateState>();
   const scope = { tenantId: params.tenantId, agentId: params.agentId };
@@ -187,7 +187,7 @@ export async function retrieveMemoryV1(params: {
     if (existing) return existing;
     const created: CandidateState = {
       memory_item_id: memoryItemId,
-      match_sources: new Set<MemoryV1MatchSource>(),
+      match_sources: new Set<MemoryMatchSource>(),
       keyword_score: 0,
       semantic_score: 0,
     };
@@ -237,7 +237,7 @@ export async function retrieveMemoryV1(params: {
   }
 
   const semanticLimit = Math.max(0, Math.floor(params.semanticLimit ?? 0));
-  let semanticHits: MemoryV1SemanticSearchHit[] = [];
+  let semanticHits: MemorySemanticSearchHit[] = [];
   if (query.length > 0 && semanticLimit > 0 && params.semanticSearch) {
     try {
       semanticHits = await params.semanticSearch(query, semanticLimit);
@@ -252,7 +252,7 @@ export async function retrieveMemoryV1(params: {
     }
   }
 
-  const hits: MemoryV1RetrievedHit[] = [];
+  const hits: MemoryRetrievedHit[] = [];
   const mergedFilter = mergeSensitivityFilter(params.allow_sensitivities, params.filter);
   const allowedKinds = mergedFilter.kinds ? new Set(mergedFilter.kinds) : undefined;
 

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
-import { MemoryV1Dal } from "../../src/modules/memory/v1-dal.js";
+import { MemoryDal } from "../../src/modules/memory/memory-dal.js";
 import {
   checkpointJson,
   countFlushCalls,
@@ -87,7 +87,7 @@ describe("Pre-compaction memory flush", () => {
     expect(handoff).toContain("summary: first / a1");
     expect(handoff).not.toContain("FLUSH_OK");
 
-    const memory = new MemoryV1Dal(container.db);
+    const memory = new MemoryDal(container.db);
     const search = await memory.search({ v: 1, query: "FLUSH_OK", limit: 5 }, agentId);
     expect(search.hits.length).toBeGreaterThan(0);
     const hit = search.hits[0];
@@ -188,7 +188,7 @@ describe("Pre-compaction memory flush", () => {
     });
     expect(second.reply).toBe("a2");
 
-    const memory = new MemoryV1Dal(container.db);
+    const memory = new MemoryDal(container.db);
     const list = await memory.list({ tenantId, agentId, limit: 50 });
     const notes = list.items.filter((item) => item.kind === "note");
     expect(notes.length).toBeGreaterThan(0);
@@ -307,7 +307,7 @@ describe("Pre-compaction memory flush", () => {
     expect(listNonTitleGenerateCalls(languageModel)).toHaveLength(6);
     expect(countFlushCalls(languageModel)).toBe(1);
 
-    const memory = new MemoryV1Dal(container.db);
+    const memory = new MemoryDal(container.db);
     const search = await memory.search({ v: 1, query: "FLUSH_OK", limit: 5 }, agentId);
     expect(search.hits.length).toBeGreaterThan(0);
   });

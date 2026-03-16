@@ -74,7 +74,7 @@ export async function createTuiCore(options: TuiCoreOptions): Promise<TuiRuntime
       deviceIdentity: identity,
       elevatedModeStore: coreOptions.elevatedModeStore,
       deps: {
-        // Operator core still types the legacy memory methods on its WS client.
+        // Operator core expects the full WS client surface, so the concrete client is widened here.
         ws: ws as unknown as OperatorWsClient,
         http,
         createPrivilegedWs() {

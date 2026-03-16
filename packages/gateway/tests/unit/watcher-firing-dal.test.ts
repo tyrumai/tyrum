@@ -4,7 +4,7 @@ import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { WatcherFiringDal } from "../../src/modules/watcher/firing-dal.js";
 import { WatcherProcessor } from "../../src/modules/watcher/processor.js";
-import { MemoryV1Dal } from "../../src/modules/memory/v1-dal.js";
+import { MemoryDal } from "../../src/modules/memory/memory-dal.js";
 import mitt from "mitt";
 import type { GatewayEvents } from "../../src/event-bus.js";
 import {
@@ -26,7 +26,7 @@ describe("WatcherFiringDal", () => {
     dal = new WatcherFiringDal(db);
     processor = new WatcherProcessor({
       db,
-      memoryV1Dal: new MemoryV1Dal(db),
+      memoryDal: new MemoryDal(db),
       eventBus: mitt<GatewayEvents>(),
     });
   });

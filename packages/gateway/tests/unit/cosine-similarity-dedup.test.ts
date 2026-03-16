@@ -16,8 +16,8 @@ describe("memory cosineSimilarity dedup", () => {
     expect(cosineSimilarity([-1, 0], [1, 0])).toBe(-1);
   });
 
-  it("does not define a local cosineSimilarity in v1-semantic-index", async () => {
-    const semanticIndexPath = join(__dirname, "../../src/modules/memory/v1-semantic-index.ts");
+  it("does not define a local cosineSimilarity in memory-semantic-index", async () => {
+    const semanticIndexPath = join(__dirname, "../../src/modules/memory/memory-semantic-index.ts");
     const raw = await readFile(semanticIndexPath, "utf-8");
     expect(raw).not.toMatch(/\bfunction\s+cosineSimilarity\b/);
   });

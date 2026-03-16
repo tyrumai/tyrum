@@ -84,7 +84,7 @@ describe("gateway automation scheduler startup", () => {
     const db = { kind: "sqlite" };
     const identityScopeDal = {};
     const eventBus = {};
-    const memoryV1Dal = {};
+    const memoryDal = {};
     const policyService = { loadEffectiveBundle: vi.fn(), getOrCreateSnapshot: vi.fn() };
     const redactionEngine = { redact: vi.fn() };
     const secretProviderForTenant = vi.fn();
@@ -96,7 +96,7 @@ describe("gateway automation scheduler startup", () => {
       container: {
         db,
         identityScopeDal,
-        memoryV1Dal,
+        memoryDal,
         eventBus,
         policyService,
         redactionEngine,
@@ -124,7 +124,7 @@ describe("gateway automation scheduler startup", () => {
     expect(watcherSchedulerOptions).toHaveLength(1);
     expect(watcherSchedulerOptions[0]).toMatchObject({
       db,
-      memoryV1Dal,
+      memoryDal,
       eventBus,
       logger,
       engine: expect.any(Object),
@@ -208,7 +208,7 @@ describe("gateway automation scheduler startup", () => {
       container: {
         db: { kind: "sqlite" },
         identityScopeDal: {},
-        memoryV1Dal: {},
+        memoryDal: {},
         eventBus: {},
         policyService: {},
         redactionEngine: {},
@@ -283,7 +283,7 @@ describe("gateway automation scheduler startup", () => {
       container: {
         db: { kind: "sqlite" },
         identityScopeDal: {},
-        memoryV1Dal: {},
+        memoryDal: {},
         eventBus: {},
         policyService: {},
         redactionEngine: {},

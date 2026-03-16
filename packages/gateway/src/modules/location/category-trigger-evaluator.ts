@@ -4,12 +4,12 @@ import { recordLocationEpisode } from "./trigger-execution.js";
 import type { LocationAutomationTriggerRecord } from "./types.js";
 import type { LocationDal } from "./dal.js";
 import type { PoiProvider } from "./poi-provider.js";
-import type { MemoryV1Dal } from "../memory/v1-dal.js";
+import type { MemoryDal } from "../memory/memory-dal.js";
 import type { LocationSubjectState } from "./event-evaluator.js";
 
 export async function evaluateCategoryTriggerEvents(input: {
   dal: LocationDal;
-  memoryV1Dal: MemoryV1Dal;
+  memoryDal: MemoryDal;
   tenantId: string;
   agentId: string;
   agentKey: string;
@@ -75,7 +75,7 @@ export async function evaluateCategoryTriggerEvents(input: {
       dwellEmittedAt: event.state.dwellEmittedAt,
     });
     events.push(event.event);
-    await recordLocationEpisode(input.memoryV1Dal, input.tenantId, input.agentId, event.event);
+    await recordLocationEpisode(input.memoryDal, input.tenantId, input.agentId, event.event);
     await input.dispatchLocationTriggers({
       tenantId: input.tenantId,
       agentId: input.agentId,

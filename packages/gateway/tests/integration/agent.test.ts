@@ -339,7 +339,7 @@ describe("agent routes", () => {
     expect(telegramUserTurns.join("\n").toLowerCase()).toContain("prefer tea");
 
     const agentId = await container.identityScopeDal.ensureAgentId(DEFAULT_TENANT_ID, "default");
-    const memoryItems = await container.memoryV1Dal.list({
+    const memoryItems = await container.memoryDal.list({
       tenantId: DEFAULT_TENANT_ID,
       agentId,
       limit: 20,

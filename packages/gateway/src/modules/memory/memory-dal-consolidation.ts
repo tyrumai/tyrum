@@ -2,13 +2,13 @@ import type {
   BuiltinMemoryServerSettings,
   MemoryDeletedBy,
   MemoryItem,
-  MemoryItemCreateInput,
   MemoryItemKind,
   MemorySensitivity,
   MemoryTombstone,
 } from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
-import type { MemoryV1ConsolidationResult, RawBudgetRow } from "./v1-dal-types.js";
+import type { MemoryConsolidationResult, RawBudgetRow } from "./memory-dal-types.js";
+import type { MemoryCreateInput } from "./types.js";
 import {
   computeBudgetUsage,
   memoryItemCharCount,
@@ -18,7 +18,7 @@ import {
   overBudget,
   sensitivityRank,
   truncate,
-} from "./v1-dal-helpers.js";
+} from "./memory-dal-helpers.js";
 
 type Scope = { tenantId: string; agentId: string };
 
@@ -29,7 +29,7 @@ type DalLike = {
     params: { deleted_by: MemoryDeletedBy; reason?: string },
     scope: Scope,
   ): Promise<MemoryTombstone>;
-  create(input: MemoryItemCreateInput, scope: Scope): Promise<MemoryItem>;
+  create(input: MemoryCreateInput, scope: Scope): Promise<MemoryItem>;
 };
 
 type NormalizedLimits = ReturnType<typeof normalizeBudgets>;
@@ -282,7 +282,7 @@ export async function consolidateMemoryToBudgets(
   scope: Scope,
   budgets: BuiltinMemoryServerSettings["budgets"],
   dal: DalLike,
-): Promise<MemoryV1ConsolidationResult> {
+): Promise<MemoryConsolidationResult> {
   const limits = normalizeBudgets(budgets);
 
   const loadRows = async (): Promise<RawBudgetRow[]> =>
@@ -373,7 +373,7 @@ export async function consolidateMemoryToBudgets(
   );
 
   if (overBudget(afterUsage, limits)) {
-    throw new Error("memory v1 consolidation failed to return under budget");
+    throw new Error("memory consolidation failed to return under budget");
   }
 
   return {

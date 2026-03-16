@@ -1,7 +1,7 @@
 import type { MemoryProvenanceSourceKind, MemorySensitivity } from "@tyrum/schemas";
-import type { MemoryV1Dal } from "./v1-dal.js";
+import type { MemoryDal } from "./memory-dal.js";
 
-export type MemoryV1SystemEpisodeInput = {
+export type MemorySystemEpisodeInput = {
   occurred_at: string;
   channel?: string;
   event_type: string;
@@ -12,9 +12,9 @@ export type MemoryV1SystemEpisodeInput = {
   source_kind?: MemoryProvenanceSourceKind;
 };
 
-export async function recordMemoryV1SystemEpisode(
-  dal: MemoryV1Dal,
-  input: MemoryV1SystemEpisodeInput,
+export async function recordMemorySystemEpisode(
+  dal: MemoryDal,
+  input: MemorySystemEpisodeInput,
   scope?: { tenantId?: string; agentId?: string } | string,
 ): Promise<void> {
   const summary = (input.summary_md ?? input.event_type).trim();

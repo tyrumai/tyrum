@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import type { MemoryV1DalFixture } from "./memory-v1-dal.test-support.js";
+import type { MemoryDalFixture } from "./memory-dal.test-support.js";
 import {
   ensureAgentScopes,
   episodeInput,
@@ -8,9 +8,9 @@ import {
   operatorProvenance,
   userProvenance,
   withOpenDal,
-} from "./memory-v1-dal.test-support.js";
+} from "./memory-dal.test-support.js";
 
-export function registerMemoryV1DalSearchTests(fixture: MemoryV1DalFixture): void {
+export function registerMemoryDalSearchTests(fixture: MemoryDalFixture): void {
   it("searches with structured filters, keyword ranking, and safe snippets", async () => {
     await withOpenDal(fixture, async ({ dal, db }) => {
       const { scopeA, scopeB } = await ensureAgentScopes(db);

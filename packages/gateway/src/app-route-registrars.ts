@@ -408,7 +408,7 @@ export function registerAgentsAndWorkspaceRoutes(context: AppRouteContext): void
             })
           : undefined,
       agents: context.opts.agents,
-      memoryV1Dal: context.container.memoryV1Dal,
+      memoryDal: context.container.memoryDal,
       routingConfigDal: context.routeDeps.routingConfigDal,
       logger: context.container.logger,
     }),

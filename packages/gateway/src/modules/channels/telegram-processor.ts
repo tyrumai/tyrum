@@ -7,7 +7,7 @@ import { releaseLaneLease } from "../lanes/lane-lease.js";
 import type { SessionDal } from "../agent/session-dal.js";
 import type { AgentRegistry } from "../agent/registry.js";
 import type { ApprovalDal } from "../approval/dal.js";
-import type { MemoryV1Dal } from "../memory/v1-dal.js";
+import type { MemoryDal } from "../memory/memory-dal.js";
 import type { TelegramBot } from "../ingress/telegram-bot.js";
 import {
   type ChannelEgressConnector,
@@ -37,7 +37,7 @@ export class TelegramChannelProcessor {
   private readonly listEgressConnectors?: (tenantId: string) => Promise<ChannelEgressConnector[]>;
   private readonly owner: string;
   private readonly logger?: Logger;
-  private readonly memoryV1Dal?: MemoryV1Dal;
+  private readonly memoryDal?: MemoryDal;
   private readonly approvalDal?: ApprovalDal;
   private readonly protocolDeps?: ProtocolDeps;
   private readonly typingMode: ChannelTypingMode;
@@ -60,7 +60,7 @@ export class TelegramChannelProcessor {
     telegramBot?: TelegramBot;
     owner: string;
     logger?: Logger;
-    memoryV1Dal?: MemoryV1Dal;
+    memoryDal?: MemoryDal;
     approvalDal?: ApprovalDal;
     protocolDeps?: ProtocolDeps;
     typingMode?: ChannelTypingMode;
@@ -88,7 +88,7 @@ export class TelegramChannelProcessor {
     this.listEgressConnectors = opts.listEgressConnectors;
     this.owner = opts.owner;
     this.logger = opts.logger;
-    this.memoryV1Dal = opts.memoryV1Dal;
+    this.memoryDal = opts.memoryDal;
     this.approvalDal = opts.approvalDal;
     this.protocolDeps = opts.protocolDeps;
     this.typingMode = opts.typingMode ?? "never";
@@ -167,7 +167,7 @@ export class TelegramChannelProcessor {
                 egressConnectors,
                 owner: this.owner,
                 logger: this.logger,
-                memoryV1Dal: this.memoryV1Dal,
+                memoryDal: this.memoryDal,
                 approvalDal: this.approvalDal,
                 protocolDeps: this.protocolDeps,
                 typingMode: this.typingMode,

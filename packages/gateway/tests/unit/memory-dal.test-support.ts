@@ -1,5 +1,6 @@
-import type { MemoryItemCreateInput, MemoryProvenance } from "@tyrum/schemas";
-import { MemoryV1Dal } from "../../src/modules/memory/v1-dal.js";
+import type { MemoryProvenance } from "@tyrum/schemas";
+import type { MemoryCreateInput } from "../../src/modules/memory/types.js";
+import { MemoryDal } from "../../src/modules/memory/memory-dal.js";
 import { IdentityScopeDal } from "../../src/modules/identity/scope.js";
 import type { SqlDb } from "../../src/statestore/types.js";
 import { openTestPostgresDb } from "../helpers/postgres-db.js";
@@ -7,15 +8,12 @@ import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 
 export const OBSERVED_AT = "2026-02-19T12:00:00Z";
 
-type MemoryItemByKind<K extends MemoryItemCreateInput["kind"]> = Extract<
-  MemoryItemCreateInput,
-  { kind: K }
->;
+type MemoryItemByKind<K extends MemoryCreateInput["kind"]> = Extract<MemoryCreateInput, { kind: K }>;
 
 type ProvenanceOverrides = Partial<Omit<MemoryProvenance, "source_kind">>;
 
-export type OpenDalResult = { dal: MemoryV1Dal; db: SqlDb; close: () => Promise<void> };
-export type MemoryV1DalFixture = {
+export type OpenDalResult = { dal: MemoryDal; db: SqlDb; close: () => Promise<void> };
+export type MemoryDalFixture = {
   name: "sqlite" | "postgres";
   open: () => Promise<OpenDalResult>;
 };
@@ -24,7 +22,7 @@ export type AgentScopes = Awaited<ReturnType<typeof ensureAgentScopes>>;
 async function openSqliteDal(): Promise<OpenDalResult> {
   const db = openTestSqliteDb();
   return {
-    dal: new MemoryV1Dal(db),
+    dal: new MemoryDal(db),
     db,
     close: async () => {
       await db.close();
@@ -34,10 +32,10 @@ async function openSqliteDal(): Promise<OpenDalResult> {
 
 async function openPostgresDal(): Promise<OpenDalResult> {
   const { db, close } = await openTestPostgresDb();
-  return { dal: new MemoryV1Dal(db), db, close };
+  return { dal: new MemoryDal(db), db, close };
 }
 
-export const memoryV1DalFixtures: readonly MemoryV1DalFixture[] = [
+export const memoryDalFixtures: readonly MemoryDalFixture[] = [
   { name: "sqlite", open: openSqliteDal },
   { name: "postgres", open: openPostgresDal },
 ];
@@ -59,7 +57,7 @@ export async function ensureAgentScopes(db: SqlDb): Promise<{
 }
 
 export async function withOpenDal<T>(
-  fixture: MemoryV1DalFixture,
+  fixture: MemoryDalFixture,
   run: (ctx: Omit<OpenDalResult, "close">) => Promise<T>,
 ): Promise<T> {
   const { close, ...ctx } = await fixture.open();

@@ -508,11 +508,11 @@ describe("Agent behavior - session boundaries", () => {
 
     expect(tenantBRecall.reply).toBe("UNKNOWN");
 
-    const tenantAMemory = await container.memoryV1Dal.list({
+    const tenantAMemory = await container.memoryDal.list({
       tenantId: scopeA.tenantId,
       agentId: scopeA.agentId,
     });
-    const tenantBMemory = await container.memoryV1Dal.list({
+    const tenantBMemory = await container.memoryDal.list({
       tenantId: scopeB.tenantId,
       agentId: scopeB.agentId,
     });

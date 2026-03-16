@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { BuiltinMemoryServerSettings } from "@tyrum/schemas";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
-import { MemoryV1Dal } from "../../src/modules/memory/v1-dal.js";
-import { buildMemoryV1Digest } from "../../src/modules/memory/v1-digest.js";
+import { MemoryDal } from "../../src/modules/memory/memory-dal.js";
+import { buildMemoryDigest } from "../../src/modules/memory/memory-digest.js";
 import { DEFAULT_AGENT_ID, DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
-import { retrieveMemoryV1 } from "../../src/modules/memory/v1-retrieval.js";
+import { retrieveMemory } from "../../src/modules/memory/memory-retrieval.js";
 
-describe("buildMemoryV1Digest", () => {
+describe("buildMemoryDigest", () => {
   afterEach(() => {
     vi.useRealTimers();
   });
@@ -14,7 +14,7 @@ describe("buildMemoryV1Digest", () => {
   it("excludes sensitive items by default", async () => {
     const db = openTestSqliteDb();
     try {
-      const dal = new MemoryV1Dal(db);
+      const dal = new MemoryDal(db);
       const config = BuiltinMemoryServerSettings.parse({});
 
       vi.useFakeTimers();
@@ -38,7 +38,7 @@ describe("buildMemoryV1Digest", () => {
         provenance: { source_kind: "user", refs: [] },
       });
 
-      const res = await buildMemoryV1Digest({
+      const res = await buildMemoryDigest({
         dal,
         tenantId: DEFAULT_TENANT_ID,
         agentId: DEFAULT_AGENT_ID,
@@ -56,7 +56,7 @@ describe("buildMemoryV1Digest", () => {
   it("treats allow_sensitivities=[] as allow none", async () => {
     const db = openTestSqliteDb();
     try {
-      const dal = new MemoryV1Dal(db);
+      const dal = new MemoryDal(db);
       const base = BuiltinMemoryServerSettings.parse({});
       const config = { ...base, allow_sensitivities: [] } satisfies typeof base;
 
@@ -71,7 +71,7 @@ describe("buildMemoryV1Digest", () => {
         provenance: { source_kind: "user", refs: [] },
       });
 
-      const res = await buildMemoryV1Digest({
+      const res = await buildMemoryDigest({
         dal,
         tenantId: DEFAULT_TENANT_ID,
         agentId: DEFAULT_AGENT_ID,
@@ -89,7 +89,7 @@ describe("buildMemoryV1Digest", () => {
   it("enforces max_total_items deterministically", async () => {
     const db = openTestSqliteDb();
     try {
-      const dal = new MemoryV1Dal(db);
+      const dal = new MemoryDal(db);
       const base = BuiltinMemoryServerSettings.parse({});
       const config = {
         ...base,
@@ -132,14 +132,14 @@ describe("buildMemoryV1Digest", () => {
         provenance: { source_kind: "user", refs: [] },
       });
 
-      const first = await buildMemoryV1Digest({
+      const first = await buildMemoryDigest({
         dal,
         tenantId: DEFAULT_TENANT_ID,
         agentId: DEFAULT_AGENT_ID,
         query: "pizza",
         config,
       });
-      const second = await buildMemoryV1Digest({
+      const second = await buildMemoryDigest({
         dal,
         tenantId: DEFAULT_TENANT_ID,
         agentId: DEFAULT_AGENT_ID,
@@ -158,7 +158,7 @@ describe("buildMemoryV1Digest", () => {
   it("orders keyword hits by score then created_at deterministically", async () => {
     const db = openTestSqliteDb();
     try {
-      const dal = new MemoryV1Dal(db);
+      const dal = new MemoryDal(db);
       const config = BuiltinMemoryServerSettings.parse({});
 
       vi.useFakeTimers();
@@ -182,7 +182,7 @@ describe("buildMemoryV1Digest", () => {
         provenance: { source_kind: "user", refs: [] },
       });
 
-      const res = await buildMemoryV1Digest({
+      const res = await buildMemoryDigest({
         dal,
         tenantId: DEFAULT_TENANT_ID,
         agentId: DEFAULT_AGENT_ID,
@@ -215,7 +215,7 @@ describe("buildMemoryV1Digest", () => {
   it("is best-effort when keyword search rejects the query", async () => {
     const db = openTestSqliteDb();
     try {
-      const dal = new MemoryV1Dal(db);
+      const dal = new MemoryDal(db);
       const base = BuiltinMemoryServerSettings.parse({});
       const config = {
         ...base,
@@ -241,7 +241,7 @@ describe("buildMemoryV1Digest", () => {
       const longQuery = "pizza ".repeat(300);
       expect(longQuery.length).toBeGreaterThan(1024);
 
-      const res = await buildMemoryV1Digest({
+      const res = await buildMemoryDigest({
         dal,
         tenantId: DEFAULT_TENANT_ID,
         agentId: DEFAULT_AGENT_ID,
@@ -260,7 +260,7 @@ describe("buildMemoryV1Digest", () => {
   it("deduplicates structured tag results against fact_keys results", async () => {
     const db = openTestSqliteDb();
     try {
-      const dal = new MemoryV1Dal(db);
+      const dal = new MemoryDal(db);
       const base = BuiltinMemoryServerSettings.parse({});
       const config = {
         ...base,
@@ -284,7 +284,7 @@ describe("buildMemoryV1Digest", () => {
         provenance: { source_kind: "user", refs: [] },
       });
 
-      const res = await buildMemoryV1Digest({
+      const res = await buildMemoryDigest({
         dal,
         tenantId: DEFAULT_TENANT_ID,
         agentId: DEFAULT_AGENT_ID,
@@ -301,8 +301,8 @@ describe("buildMemoryV1Digest", () => {
   it("tolerates undefined structured arrays in retrieval input", async () => {
     const db = openTestSqliteDb();
     try {
-      const dal = new MemoryV1Dal(db);
-      const res = await retrieveMemoryV1({
+      const dal = new MemoryDal(db);
+      const res = await retrieveMemory({
         dal,
         tenantId: DEFAULT_TENANT_ID,
         agentId: DEFAULT_AGENT_ID,
@@ -324,7 +324,7 @@ describe("buildMemoryV1Digest", () => {
   it("preserves configured fact_keys order for structured hits under tight budgets", async () => {
     const db = openTestSqliteDb();
     try {
-      const dal = new MemoryV1Dal(db);
+      const dal = new MemoryDal(db);
       const base = BuiltinMemoryServerSettings.parse({});
       const config = {
         ...base,
@@ -367,7 +367,7 @@ describe("buildMemoryV1Digest", () => {
         provenance: { source_kind: "user", refs: [] },
       });
 
-      const res = await buildMemoryV1Digest({
+      const res = await buildMemoryDigest({
         dal,
         tenantId: DEFAULT_TENANT_ID,
         agentId: DEFAULT_AGENT_ID,
@@ -386,7 +386,7 @@ describe("buildMemoryV1Digest", () => {
   it("skips keyword candidates when dal.getById throws", async () => {
     const db = openTestSqliteDb();
     try {
-      const dal = new MemoryV1Dal(db);
+      const dal = new MemoryDal(db);
       const config = BuiltinMemoryServerSettings.parse({});
 
       vi.useFakeTimers();
@@ -416,7 +416,7 @@ describe("buildMemoryV1Digest", () => {
         return await original(id, scope);
       });
 
-      const res = await buildMemoryV1Digest({
+      const res = await buildMemoryDigest({
         dal,
         tenantId: DEFAULT_TENANT_ID,
         agentId: DEFAULT_AGENT_ID,
