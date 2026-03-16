@@ -19,6 +19,7 @@ import { cn } from "../../lib/cn.js";
 import { ArtifactInlinePreview } from "../artifacts/artifact-inline-preview.js";
 import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
+import { JsonViewer } from "../ui/json-viewer.js";
 import { ApprovalActions } from "./approval-actions.js";
 import { DisclosureCard, useAutoDisclosure } from "./chat-page-ai-sdk-disclosure-card.js";
 import { renderMetaMessagePart } from "./chat-page-ai-sdk-meta-part-card.js";
@@ -26,6 +27,7 @@ import {
   collectArtifactRefs,
   copyToClipboard,
   formatToolState,
+  normalizeToolOutputForDisplay,
   readCreatedAt,
   readRunId,
   readRunIdFromValue,
@@ -201,12 +203,19 @@ function ToolPartCard({
   }
 
   const approvalId = readToolApprovalId(part);
+  const outputState =
+    "output" in part
+      ? normalizeToolOutputForDisplay(part.output)
+      : { displayValue: undefined, isStructured: false };
   const artifactRefs =
-    "output" in part && part.output !== undefined ? collectArtifactRefs(part.output) : [];
+    "output" in part && part.output !== undefined
+      ? collectArtifactRefs(outputState.displayValue)
+      : [];
   const isPendingApproval = part.state === "approval-requested" && approvalId;
   const resolvedRunId =
-    ("output" in part && part.output !== undefined ? readRunIdFromValue(part.output) : null) ??
-    runId;
+    ("output" in part && part.output !== undefined
+      ? readRunIdFromValue(outputState.displayValue)
+      : null) ?? runId;
 
   return (
     <DisclosureCard header={getToolName(part)} open={open} onToggle={toggleOpen}>
@@ -223,9 +232,13 @@ function ToolPartCard({
         {"output" in part && part.output !== undefined ? (
           <div>
             <div className="mb-1 text-[11px] uppercase tracking-wide text-fg-muted">Output</div>
-            <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded-md bg-bg px-2 py-1.5 text-xs text-fg [overflow-wrap:anywhere]">
-              {stringifyPart(part.output)}
-            </pre>
+            {outputState.isStructured ? (
+              <JsonViewer value={outputState.displayValue} contentClassName="max-h-[420px]" />
+            ) : (
+              <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded-md bg-bg px-2 py-1.5 text-xs text-fg [overflow-wrap:anywhere]">
+                {stringifyPart(part.output)}
+              </pre>
+            )}
             {core && resolvedRunId && artifactRefs.length > 0 ? (
               <div className="mt-2 grid gap-3">
                 {artifactRefs.map((artifact) => (
