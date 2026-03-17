@@ -4,32 +4,61 @@ slug: /architecture/capabilities
 
 # Capabilities
 
-A capability is a named interface a node can provide. Capabilities are the bridge between "what the agent wants to do" and "what a device can safely execute".
+Read this if: you need the contract between gateway routing and what a node can actually execute.
 
-## Parent concept
+Skip this if: you only need the high-level node trust boundary; start with [Node](/architecture/node).
+
+Go deeper: [Node](/architecture/node), [Handshake](/architecture/protocol/handshake), [Events](/architecture/protocol/events).
+
+A capability is the typed interface a node advertises to the gateway. It is the boundary between requested intent and device-local execution.
+
+```mermaid
+flowchart LR
+  Node["Node runtime"] --> Advertise["Advertise descriptor ids + versions"]
+  Advertise --> Gateway["Gateway routing"]
+  Gateway --> Check["Pairing + allowlist + readiness"]
+  Check --> Execute["Capability request"]
+  Execute --> Evidence["Outcome + evidence + postconditions"]
+```
+
+## Capability contract
+
+Each capability combines:
+
+- a descriptor id and version
+- typed operations and payloads
+- evidence outputs for audit
+- postconditions where state changes need verification
+- explicit permissions and allowlist boundaries
+
+The gateway should reason about concrete descriptors, not vague device access.
+
+## Advertisement and routing model
+
+- Nodes advertise versioned descriptors during handshake and readiness updates.
+- The gateway can normalize older umbrella descriptors into concrete routing targets.
+- Dispatch happens only when the node is paired, allowlisted for that descriptor, and ready.
+- Managed node forms can start from narrower descriptor sets than standalone nodes.
+
+That routing rule is the safety boundary: a connected node is not automatically allowed to execute every operation it knows how to perform.
+
+## Common families
+
+- **Browser**: geolocation, camera, microphone
+- **iOS / Android**: current location, photo capture, audio capture
+- **Desktop**: screenshot, snapshot, query, act, input, wait-for
+
+These families map onto typed request/response schemas shared from `@tyrum/schemas`, so gateway routing and node implementations stay aligned.
+
+## Why this boundary matters
+
+- descriptor-level allowlists make pairing and revocation meaningful
+- evidence and postconditions keep high-risk capabilities observable
+- typed operations prevent gateway/node behavior from drifting into ad hoc RPC
+
+## Related docs
 
 - [Node](/architecture/node)
-
-## Capability shape
-
-- **Descriptor id + version:** namespaced capability descriptors (for example `tyrum.browser.geolocation.get@1.0.0`) are the current routing contract.
-- **Operations:** request/response contracts per operation.
-- **Evidence:** artifacts returned for audit (screenshots, logs, structured receipts). State-changing operations should emit evidence when feasible.
-- **Postconditions:** machine-checkable assertions used to verify that a state-changing operation actually succeeded (required when feasible).
-- **Permissions:** explicit scoping so nodes cannot silently escalate.
-
-## Advertisement and routing
-
-- Nodes advertise versioned descriptors during handshake.
-- The gateway normalizes legacy umbrella descriptors into concrete descriptor ids before routing.
-- The gateway routes a capability request only to a node that is paired, allowlisted for that descriptor, and ready to execute it.
-- Managed node forms can start from narrower allowlists. Gateway-managed desktop environments, for example, are expected to start with the desktop descriptor set only.
-
-## Common implemented families
-
-- **Browser node:** `tyrum.browser.geolocation.get`, `tyrum.browser.camera.capture-photo`, `tyrum.browser.microphone.record`
-- **iOS node:** `tyrum.ios.location.get-current`, `tyrum.ios.camera.capture-photo`, `tyrum.ios.audio.record-clip`
-- **Android node:** `tyrum.android.location.get-current`, `tyrum.android.camera.capture-photo`, `tyrum.android.audio.record-clip`
-- **Desktop node / managed desktop environment:** `tyrum.desktop.screenshot`, `tyrum.desktop.snapshot`, `tyrum.desktop.query`, `tyrum.desktop.act`, `tyrum.desktop.mouse`, `tyrum.desktop.keyboard`, `tyrum.desktop.wait-for`
-
-These descriptor families map onto typed request/response schemas shared from `@tyrum/schemas`, so node implementations and gateway routing stay aligned on exact operations and evidence shapes.
+- [Handshake](/architecture/protocol/handshake)
+- [Requests and Responses](/architecture/protocol/requests-responses)
+- [Events](/architecture/protocol/events)

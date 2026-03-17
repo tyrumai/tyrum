@@ -4,108 +4,71 @@ slug: /architecture/secrets
 
 # Secrets
 
-Secrets are a first-class architecture concept in Tyrum. The system is designed so that **the model never receives raw secret values** (passwords, API keys, tokens, card numbers).
+Tyrum is built around one hard rule: models and ordinary runtime state should not see raw secret values. Secrets are stored behind a trusted provider and referenced everywhere else by opaque handles.
 
-Instead, secrets are managed by a **secret provider** and referenced via **secret handles**.
+## Quick orientation
 
-## Requirements
+- Read this if: you need the handle model, resolution boundary, and audit expectations.
+- Skip this if: you only need provider-specific storage mechanics.
+- Go deeper: [Provider auth and onboarding](/architecture/auth), [Sandbox and policy](/architecture/sandbox-policy), [Execution engine](/architecture/execution-engine).
 
-- Keep raw secrets out of model context and out of logs by default.
-- Make secret access explicit, scoped, auditable, and revocable.
-- Support multiple secret backends without changing the core gateway.
+## Secret resolution boundary
 
-## Core concepts
+```mermaid
+flowchart LR
+  Request["Tool call or workflow step<br/>with secret handle"] --> Policy{"Policy decision"}
+  Policy -->|deny| Block["Do not resolve"]
+  Policy -->|require approval| Approval["Pause for approval"]
+  Approval --> Resume["Resume after approval"]
+  Policy -->|allow| Trusted["Trusted resolver<br/>gateway or trusted executor"]
+  Resume --> Trusted
+  Trusted --> Provider["Secret provider"]
+  Provider --> Inject["Inject value at last responsible moment"]
+  Inject --> Audit["Audit + redaction boundary"]
+```
 
-### Secret provider
+The handle can travel through plans, approvals, run state, and logs. The raw secret value cannot.
 
-An out-of-process component responsible for storing and retrieving secrets (for example OS keychain, encrypted local store, or a password manager integration). The gateway communicates with the secret provider through a typed interface.
+## What lives where
 
-### Secret handle
+- Secret provider: stores the raw credential material.
+- Gateway state: stores handles, metadata, policy linkage, and audit history.
+- Trusted executor boundary: resolves the handle only when the step actually needs it.
 
-An opaque reference to a stored secret. Handles are the only representation of secrets that should appear in:
+This is why a tool can be approval-gated based on a secret scope without exposing the secret itself during planning or review.
 
-- plans and workflows
-- approvals
-- persisted state
-- audit logs
+## Why handles matter
 
-## Provider selection
+Handles make four things possible at once:
 
-Deployments use different default providers:
-
-- **Desktop:** OS keychain provider.
-- **Kubernetes:** environment-backed provider (for example a secret injected into environment variables).
-- **Single host (non-keychain):** encrypted file-backed provider (volume-mounted).
-
-## Access model
-
-- Tools and capability providers that need credentials receive a **secret handle**, not a secret value.
-- The gateway (or a trusted executor) resolves the handle at the **last responsible moment** and injects the secret into the execution context.
-- Resolution must be **policy-gated** and **audited** (who requested, why, which scope).
+- approvals can describe the capability being requested without leaking the credential
+- logs and artifacts stay safe by default
+- credential rotation can update provider state without rewriting old plans
+- policy can reason about secret scope instead of raw value
 
 ## Rotation and revocation
 
-Secret handles support rotation:
+Rotation updates what a handle points to. Revocation disables use of the handle until an operator replaces or reauthorizes it. For auth-profile-backed credentials, that state must propagate into provider routing so a revoked credential does not keep getting selected.
 
-- rotate creates a new secret version and updates the handle mapping
-- revoke invalidates access and forces failures in dependent steps until updated
+## Cluster-safe patterns
 
-For provider credentials stored as **auth profiles**, rotation/revocation must propagate to dependent execution:
+Single-host and clustered deployments can use different secret backends, but the rule stays the same: raw secrets are never persisted into the StateStore and never treated as model-visible data.
 
-- rotating a handle updates any auth profiles that reference it to use the new handle
-- revoking a handle disables any auth profiles that reference it
+Common trusted patterns are:
 
-## Cluster notes
+- a shared secret provider reachable from trusted executors
+- gateway-mediated resolution into a trusted node or sandbox without persisting the raw value
 
-In a single-host deployment, secret resolution can be local (for example OS keychain, encrypted local store, or environment variables). In multi-process and clustered deployments, secret handling must still preserve the same invariant: **raw secret values are never exposed to the model and are never persisted to the StateStore**.
+## Hard invariants
 
-That implies one of the following patterns:
+- Secret handles may appear in durable state; raw secrets may not.
+- Resolution is policy-gated and auditable.
+- Redaction applies before logs, events, artifacts, and UI surfaces are persisted or rendered.
+- Debugging modes do not weaken the redaction boundary.
 
-- **Shared secret provider:** any process that executes steps (workers, trusted executors) can resolve secret handles via a provider reachable over a trusted channel.
-- **Gateway-mediated resolution:** only the gateway resolves handles and injects secrets into a trusted execution context (for example a paired node) without persisting the raw value.
+## Related docs
 
-## Redaction and logging
-
-- Raw secrets must never be written to the database, artifacts, or logs.
-- Tool outputs and error messages must be redacted before being persisted or shown to clients.
-- Debug/verbose modes must still redact secrets.
-
-Redaction is enforced at persistence and egress boundaries:
-
-- before DB writes and outbox/event payloads
-- before artifact persistence
-- before rendering outputs in operator clients
-
-## Typical secret types
-
-- Channel connector tokens (Telegram bot token, webhook secrets)
-- OAuth refresh tokens / API keys
-- Web session cookies (stored with explicit expiry metadata)
-- Payment instruments (only if explicitly enabled by the operator and supported by policy)
-
-## Provider credentials and auth profiles
-
-Model-provider credentials (API keys and OAuth tokens) are represented as:
-
-- secret handles stored in the secret provider, and
-- auth profile metadata scoped to an agent (profile id, provider, expiry, labels)
-
-Auth profiles are used for deterministic credential selection, rotation, and multi-account routing without exposing raw secrets to the model.
-
-Details: [Provider Auth and Onboarding](/architecture/auth).
-
-## Workflow and approval integration
-
-- Workflows may reference secret handles as parameters.
-- Any step that requires resolving a secret handle should be eligible for approval gating depending on risk and configured policy.
-
-### Policy matching
-
-Secret resolution is policy-gated via `PolicyBundle.secrets`. Policy matching uses **secret scopes** formatted as:
-
-- `<provider>:<scope>` (examples: `env:MY_API_KEY`, `file:oauth:openai:agent-1:access`)
-
-When a tool call or workflow step includes one or more secret handles, the gateway evaluates the resolved scopes against policy and enforces:
-
-- `deny` → do not resolve secrets; execution is blocked.
-- `require_approval` → pause and request operator approval before resolving secrets.
+- [Provider auth and onboarding](/architecture/auth)
+- [Sandbox and policy](/architecture/sandbox-policy)
+- [Execution engine](/architecture/execution-engine)
+- [Approvals](/architecture/approvals)

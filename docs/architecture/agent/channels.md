@@ -4,71 +4,64 @@ slug: /architecture/channels
 
 # Channels
 
-Channels are message transports that connect Tyrum to external chat surfaces. A channel connector normalizes inbound messages into session events and sends outbound messages when the agent replies.
+Read this if: you want the connector boundary between Tyrum and external chat surfaces.
 
-Channel connectors are a high-risk integration boundary. They are responsible for preserving identity, provenance, and auditability while presenting a consistent messaging model to the gateway.
+Skip this if: you need the core message/session model first; start with [Messages and Sessions](/architecture/messages-sessions).
 
-## Integration quality bar
+Go deeper: [Markdown Formatting](/architecture/markdown-formatting), [Sessions and Lanes](/architecture/sessions-lanes), [Approvals](/architecture/approvals).
 
-Channels meet an integration quality bar:
+## Connector boundary
 
-- **Idempotent:** retries do not duplicate outbound side effects.
-- **Approval-gated:** risky sends and new-party messaging require explicit consent.
-- **Evidence-rich:** receipts/errors are captured as audit events and (when useful) as artifacts.
+```mermaid
+flowchart LR
+  Inbound["Provider inbound event"] --> Normalize["Normalize identity + provenance + content"]
+  Normalize --> Dedupe["Dedupe / debounce"]
+  Dedupe --> Session["Session + lane routing"]
+  Session --> Runtime["Agent runtime"]
 
-## Channel types (examples)
+  Runtime --> Policy["Policy + approval gate"]
+  Policy --> Outbound["Provider outbound send"]
+  Outbound --> Receipt["Receipt / error / audit event"]
+```
 
-- WhatsApp (DM, group)
-- Telegram (DM, group)
-- Discord (DM, server channel)
-- Mattermost (DM, channel)
-- IRC (DM, channel)
-- Slack (DM, channel)
+## Purpose
 
-## Normalized containers
+Channels let Tyrum receive messages from external chat systems and send replies back without leaking provider-specific quirks into the rest of the runtime. Connectors preserve identity, provenance, receipts, and policy semantics while projecting all traffic into one normalized messaging model.
 
-Even when APIs differ, Tyrum should normalize "where a conversation lives" into a small set of containers:
+## What this page owns
 
-- **DM:** direct message thread
-- **Group:** group chat
-- **Channel:** named channel (server/workspace)
-- **Thread:** optional sub-container (topics/threads) when supported by the provider
+- Connector-level normalization of inbound provider events.
+- Inbound dedupe and debounce before a message becomes durable session work.
+- Outbound rendering, chunking, and receipt capture.
+- The guarantee that sending to a channel remains a policy-gated side effect.
 
-Normalized inbound messages follow the envelope rules described in [Messages and Sessions](/architecture/messages-sessions).
+This page does not define protocol wire contracts or session serialization internals.
 
-## Inbound reliability (dedupe + debounce)
+## Main flows
 
-Connectors make inbound delivery safe and cost-efficient:
+### Inbound
 
-- **Dedupe:** prevent redelivery from spawning duplicate runs using a stable `(channel, account_id, container_id, message_id)` key.
-- **Debounce:** batch rapid bursts of text into a single turn per container, while attachments flush immediately.
+1. A provider event arrives from a DM, group, channel, or thread surface.
+2. The connector normalizes sender/container identity, content, attachments, and provenance.
+3. Dedupe and debounce prevent duplicate runs and reduce burst noise.
+4. The normalized event enters the correct session and lane.
 
-Both behaviors are observable via events and do not weaken execution guarantees.
+### Outbound
 
-## Queueing while running
+1. The runtime produces a reply or delivery action.
+2. Policy and approvals decide whether the send is allowed.
+3. The connector renders the message within provider caps, sends it with idempotency, and records receipts/errors as audit evidence.
 
-If a run is already active for the target session/lane, connectors apply an explicit queue mode (`collect`, `followup`, `steer`, `steer_backlog`, `interrupt`). Queueing is lane-aware and bounded (cap + overflow policy). Details: [Messages and Sessions](/architecture/messages-sessions).
+## Key constraints
 
-## Outbound delivery (side effects)
+- Connectors are high-risk boundaries because outbound messages are real side effects.
+- Inbound retries must not create duplicate work.
+- Provenance must survive normalization so downstream policy can distinguish trusted from untrusted content.
+- Connectors must not bypass approvals or sandbox rules by performing side effects outside the normal execution path.
 
-Outbound sends are treated as side effects:
+## Related docs
 
-- Each send carries an idempotency key so retries do not duplicate messages.
-- Provider receipts (message ids, timestamps, errors) are captured as audit events and can be stored as artifacts.
-- Sending is policy-gated (allowlists, scope rules, and approvals for risky sends).
-
-## Formatting, chunking, and streaming
-
-Connectors render assistant output in a channel-safe way:
-
-- **Markdown → IR → chunk → render** to avoid breaking formatting across chunks.
-- Channel-specific caps are enforced (max chars, max lines, media limits).
-- Block streaming and typing indicators are supported where providers allow it.
-
-Details: [Markdown Formatting](/architecture/markdown-formatting).
-
-## Safety expectations
-
-- Connector configuration should be explicit and scoped.
-- Message sending should be auditable (evented) and redact secrets by default.
-- Connectors must not bypass approvals/policy/sandboxing by “helpfully” performing side effects outside the execution engine.
+- [Messages and Sessions](/architecture/messages-sessions)
+- [Sessions and Lanes](/architecture/sessions-lanes)
+- [Markdown Formatting](/architecture/markdown-formatting)
+- [Approvals](/architecture/approvals)

@@ -4,289 +4,106 @@ slug: /architecture/glossary
 
 # Glossary
 
-## Agent
-
-A configured runtime identity that owns sessions, a workspace, enabled tools/skills, and memory.
-
-## Agent loop
-
-The end-to-end path from an inbound message to model inference, tool execution, streaming output, and persistence.
-
-## Memory
-
-The durable, agent-scoped knowledge system that stores facts, preferences, procedures, and episodic records for later recall. Memory is bounded by **budgets** (not time-based TTL) and supports explicit “forget” with tombstones for auditability.
-
-## Memory item
-
-An addressable long-term memory record (stable id) stored in the StateStore and scoped to an agent. Memory items may be structured (facts) or text (notes) and can have derived indexes (for example embeddings) used for retrieval.
-
-## Memory budget
-
-A per-agent limit on memory volume (for example bytes/items/vectors). When exceeded, the system consolidates and evicts until back under budget. Inactivity must not cause forgetting.
-
-## Consolidation
-
-The process that converts high-volume episodic experience into lower-volume, reusable semantic/procedural memory and prunes redundancy under budget pressure (for example deduplication, summarization, merging facts, dropping derived indexes).
-
-## Tombstone
-
-A minimal durable record indicating a memory item was deleted/forgotten (who/when/why), without retaining the deleted content. Tombstones provide auditability and deletion proof.
-
-## Capability
-
-A named interface a node can provide (for example `camera.capture`) with typed operations and evidence.
-
-## Capability provider
-
-An out-of-process extension runtime that exposes typed operations to the gateway. In Tyrum, the primary capability provider forms are:
-
-- **Node:** a paired device runtime that exposes capabilities over the Tyrum WebSocket protocol.
-- **MCP server:** a local/out-of-process server that exposes a catalog of tools over the MCP protocol.
-
-## Browser node
-
-A browser-hosted node runtime that connects as `role: node` and exposes browser APIs such as geolocation, camera capture, and microphone recording.
-
-## Channel
-
-An external messaging surface (WhatsApp, Telegram, Discord, etc.) integrated via a connector.
-
-## Client
-
-An operator interface connected to the gateway (`role: client`) that sends requests, receives events, and performs approvals.
-
-## Embedded local node
-
-A node runtime bootstrapped by an operator host (for example browser or mobile) that still connects and is paired separately from the client host.
-
-## Contract
-
-A versioned schema that defines the shape/semantics of messages and extension interfaces.
-
-## Event
-
-A gateway-emitted server-push message that notifies clients of lifecycle, progress, and state changes.
-
-## Gateway
-
-A long-lived service component that owns edge connectivity, routing, validation, policy enforcement, and durable state coordination. It can be deployed as a single instance or replicated in a cluster.
-
-## Gateway plugin
-
-An in-process code module loaded by the gateway to extend the system (for example tools, slash commands, and gateway RPC endpoints). Gateway plugins are **trusted** extensions and are not the primary mechanism for per-app/per-vendor integrations (prefer capability providers for that).
-
-## StateStore
-
-The system of record for durable state and logs (sessions, approvals, run/job state, audit). SQLite is the default local backend; HA Postgres (or Postgres-compatible managed databases) are used for scale and availability.
-
-## Backplane
-
-A cross-instance event delivery mechanism used in clustered deployments so workers/schedulers can publish events that the gateway edge instances deliver to their connected clients/nodes.
-
-## Tenant
-
-An isolation boundary for identity, policy, and durable state. A deployment hosts one or more tenants; every request, event, and durable record is scoped to exactly one `tenant_id`.
-
-## Worker
-
-A step execution process that claims work (leases) and performs tool/capability calls. Workers scale horizontally.
-
-## WorkBoard
-
-A workspace-scoped work-tracking surface (Kanban) used to keep interactive sessions responsive while background work runs. The WorkBoard also provides an operator-visible drilldown "global workspace" (artifacts, decisions, and signals) and is the source of the per-run Work focus digest.
-
-## WorkItem
-
-An operator-facing unit of work with a clear outcome and acceptance criteria. WorkItems are sized to avoid "one mega task"; large requests are represented as Initiatives that decompose into smaller Action WorkItems.
-
-## WorkArtifact
-
-A typed, durable record attached to a WorkItem (or workspace) that captures intermediate planning/execution state (candidate plans, hypotheses, tool intent, verification reports) and links to evidence.
-
-## DecisionRecord
-
-A durable record of a discrete choice made during planning/execution (question, chosen option, alternatives, rationale, and inputs). DecisionRecords power auditability and WorkBoard drilldown.
-
-## WorkSignal
-
-A durable time- or event-based trigger attached to a WorkItem or workspace that enqueues follow-up work (and optionally policy-gated notifications).
-
-## Work focus digest
-
-A budgeted per-run summary derived from the WorkBoard (active items, blockers/approvals, next tasks, current KV state, and latest decisions) injected during context assembly.
-
-## WorkItem state KV
-
-An authoritative key/value store of current plan variables for a WorkItem, rendered in a stable form to prevent drift under prompt interference.
-
-## Agent state KV
-
-An authoritative key/value store of pinned agent preferences/constraints, rendered in a stable form to prevent oscillation and drift.
-
-## ToolIntent
-
-A record describing why a tool call should happen (goal, expected value/cost, risk class, and expected evidence/postconditions), typically stored as a WorkArtifact.
-
-## IntentGraph
-
-A derived representation of a WorkItem’s accepted intent and constraints (acceptance criteria, approvals, state KV, and decisions) used to detect and pause on execution drift outside intent.
-
-## User
-
-A human principal authenticated via a tenant-configured auth provider (built-in or OIDC). Users act through client devices.
-
-## Membership
-
-A durable binding of a user into a tenant, including a role and effective scopes. Membership is the unit of authorization and auditing for human actions.
-
-## Device
-
-A cryptographic endpoint identity derived from a long-lived signing keypair. Devices connect to the gateway as WebSocket peers (`role: client` or `role: node`) and are registered, pairable, and revocable.
-
-## Admin mode
-
-A time-bounded elevated access posture within a client UI that grants tenant administration capabilities after step-up authentication and/or explicit approval.
-
-## Scheduler
-
-A component that enqueues work from time-based triggers (cron/watchers/heartbeats). In multi-instance deployments, schedulers coordinate using DB-leases to avoid double-fires.
-
-## Lease
-
-A time-bounded claim stored in the StateStore that coordinates ownership of work or schedules across instances.
-
-## Location trigger
-
-A durable automation rule that fires from a location event such as entering, exiting, or dwelling at a saved place or POI category.
-
-## Outbox
-
-A durable event log/table used to publish events reliably to the backplane (supporting replay and recovery).
-
-## Lane
-
-An execution stream within a session (for example `main`, `cron`, `heartbeat`, `subagent`) used to separate concerns.
-
-## Execution profile
-
-A named execution configuration that selects model settings, tool allowlists, and budgets for a class of runs (for example interactive vs explorer vs executor). Execution profiles are distinct from provider auth profiles, which describe credentials for a provider.
-
-## Subagent
-
-A delegated execution context that shares an agent's identity boundary but runs under a separate session key and an execution profile. Subagents are used to keep channel-facing sessions low-latency and contexts narrow.
-
-## Node
-
-A capability provider connected to the gateway (`role: node`) that executes device-specific operations.
-
-## Desktop environment
-
-A gateway-managed sandbox desktop that boots a paired desktop node and is controlled through the gateway admin plane.
-
-## Request/Response
-
-A typed operation and typed reply correlated by `request_id`. Either peer may initiate a request; the other peer sends the response.
-
-## Session
-
-A durable conversation container with transcript history and queue state. Session keys and DM scope rules determine which messages share context.
-
-## Workspace (filesystem)
-
-The agent’s working directory boundary for workspace-backed tools. Workspaces make file operations explicit, containable, and durable across runs. Workspaces are not tenants.
-
-## Skill
-
-An instruction bundle loaded on demand to guide the agent in specialized workflows.
-
-## Tool
-
-An invocable operation available to the agent runtime (built-in, gateway-plugin-provided, or MCP-provided).
-
-## Execution engine
-
-The job runner that turns plans/workflows into resilient execution: queueing, retries, idempotency, concurrency limits, budgets/timeouts, pause/resume, and consistent audit/evidence capture.
-
-## Playbook
-
-A durable, reviewable workflow artifact (schema-validated) that describes a multi-step procedure, including explicit approval boundaries, postconditions, and expected evidence artifacts.
-
-## Workflow run
-
-A concrete execution attempt of a playbook (or ad-hoc workflow spec) by the execution engine. A workflow run can complete successfully, fail, or pause awaiting approvals and resume without re-running prior completed steps.
-
-## Approval
-
-A durable operator confirmation request that gates risky or side-effecting steps. Approvals can pause a workflow run and produce a **resume token** that allows safe continuation after approval/denial.
-
-## Guardian review
-
-An automated reviewer pass that evaluates an approval or node pairing before final human resolution and can either approve it or escalate it to `awaiting_human`.
-
-## Review entry
-
-A durable audit record for one guardian, human, or system review pass attached to an approval or node pairing.
-
-## Resume token
-
-An opaque, durable token that references the persisted pause state of a workflow run. It allows resuming execution after an approval decision without re-executing already-completed steps.
-
-## Artifact
-
-Audit evidence produced by a run (for example screenshots, diffs, receipts, logs, DOM snapshots). Artifacts are referenced from events and audit logs rather than embedded inline.
-
-## Postcondition
-
-A machine-checkable assertion that proves a step’s expected effect occurred (or that it did not). Postconditions are required for state-changing steps whenever a check is feasible.
-
-## Secret provider
-
-An out-of-process component responsible for storing and retrieving secrets. It returns **secret handles** to the gateway/nodes; raw secret values are not exposed to the model.
-
-## Secret handle
-
-An opaque reference to a secret stored in the secret provider. Executors and capability providers use handles to obtain the secret value at the last responsible moment; the model never receives the raw value.
-
-## Auth profile
-
-A durable internal record describing how Tyrum authenticates to a provider account (API key, OAuth, or token), represented as metadata plus secret handles. Operator-facing UX presents these as configured provider accounts rather than raw auth profiles.
-
-## Context report
-
-A gateway-generated breakdown of what was included in a model call (system prompt sections, injected files, tool schema overhead, and history/tool-result contributions). Context reports are persisted with runs for audit and debugging.
-
-## Debounce
-
-A per-container batching mechanism that coalesces rapid bursts of inbound text messages into a single agent turn within a time window.
-
-## Dedupe
-
-A reliability mechanism that detects and drops duplicate inbound deliveries (for example channel redelivery after reconnect) so they do not start duplicate runs.
-
-## DM scope
-
-A policy that determines how direct messages map to session keys (`shared`, `per_peer`, `per_channel_peer`, `per_account_channel_peer`) to prevent cross-sender context leakage in multi-user inboxes.
-
-## Queue mode
-
-The policy used when a run is already active for a session/lane, controlling whether inbound messages are collected, enqueued for follow-up, steered into the in-flight run, or interrupt the run.
-
-## Markdown IR
-
-An intermediate representation of Markdown used for channel-safe chunking and rendering: plain text plus structured spans for styles, links, and blocks.
-
-## Presence
-
-A best-effort, TTL-bounded view of the gateway, connected clients, and connected nodes, used for operator visibility (“Instances”).
-
-## Saved place
-
-A named geofenced location in an agent’s location profile that can produce enter/exit/dwell events and drive location automation.
-
-## Typing indicator
-
-A channel-side UX signal sent while a run is active to indicate the system is working. Typing behavior is connector-specific and policy-controlled.
-
-## Usage tracking
-
-Operator-visible accounting of tokens/time/cost per run and provider-reported usage/quota windows when available, exposed via `/usage` and UI panels.
+This is a scan-first reference lexicon for Tyrum architecture terms. It is intentionally compact. Use the linked architecture pages when you need behavior or mechanics.
+
+## Quick orientation
+
+- **Read this if:** a term in the architecture docs is unfamiliar or overloaded.
+- **Skip this if:** you already know the vocabulary and need detailed behavior.
+- **Go deeper:** start from [Architecture](/architecture) or the linked subsystem pages instead of treating this page as a tutorial.
+
+## Runtime and identity
+
+| Term       | Short meaning                                                                                          |
+| ---------- | ------------------------------------------------------------------------------------------------------ |
+| Agent      | Durable runtime persona that keeps sessions, memory, workspace context, and policy coherent over time. |
+| Admin mode | Time-bounded elevated client posture for tenant administration.                                        |
+| Client     | Operator peer connected as `role: client`.                                                             |
+| Device     | Cryptographic endpoint identity backed by a long-lived signing keypair.                                |
+| Membership | A user's role/scopes binding inside one tenant.                                                        |
+| Node       | Capability provider connected as `role: node`.                                                         |
+| Tenant     | Isolation boundary for identity, policy, and durable state.                                            |
+| User       | Human principal authenticated through a tenant-configured auth provider.                               |
+
+## Conversation and context
+
+| Term                   | Short meaning                                                               |
+| ---------------------- | --------------------------------------------------------------------------- |
+| Agent loop             | Inbound message to model/tool execution, streaming output, and persistence. |
+| Agent state KV         | Durable key/value store for pinned agent preferences and constraints.       |
+| Channel                | External messaging surface such as WhatsApp, Telegram, or Discord.          |
+| Embedded local node    | Node runtime started by a client host but paired as its own node identity.  |
+| Lane                   | Execution stream inside a session, such as `main`, `cron`, or `subagent`.   |
+| Memory                 | Durable agent-scoped knowledge store used for later recall.                 |
+| Memory budget          | Per-agent cap that drives consolidation and eviction.                       |
+| Memory item            | Addressable long-term memory record.                                        |
+| Session                | Durable conversation container with transcript and queue state.             |
+| Workspace (filesystem) | Explicit working-directory boundary for workspace-backed tools.             |
+
+## Execution and policy
+
+| Term              | Short meaning                                                                          |
+| ----------------- | -------------------------------------------------------------------------------------- |
+| Approval          | Durable operator confirmation gate for risky or side-effecting work.                   |
+| DecisionRecord    | Durable record of a discrete planning or execution choice.                             |
+| Execution engine  | Queueing, retries, idempotency, pause/resume, and evidence capture for resilient runs. |
+| Execution profile | Named execution configuration for model/tool/budget policy.                            |
+| IntentGraph       | Derived view of accepted intent and constraints used to detect drift.                  |
+| Playbook          | Durable, reviewable workflow spec with approvals and postconditions.                   |
+| ToolIntent        | Record of why a tool call should happen and what evidence it should produce.           |
+| Workflow run      | One concrete execution attempt of a playbook or ad-hoc workflow.                       |
+| Worker            | Process that claims work and performs tool or capability calls.                        |
+
+## Work tracking
+
+| Term              | Short meaning                                                                        |
+| ----------------- | ------------------------------------------------------------------------------------ |
+| WorkArtifact      | Typed durable execution/planning artifact attached to a work item or workspace.      |
+| WorkBoard         | Workspace-scoped work-tracking surface and drilldown state for background execution. |
+| Work focus digest | Budgeted per-run summary derived from current work state.                            |
+| WorkItem          | Operator-facing unit of work with a clear outcome.                                   |
+| WorkItem state KV | Authoritative current plan variables for one work item.                              |
+| WorkSignal        | Durable time- or event-based trigger that can enqueue follow-up work.                |
+
+## Transport, protocol, and extension
+
+| Term                | Short meaning                                                                                |
+| ------------------- | -------------------------------------------------------------------------------------------- |
+| Backplane           | Cross-instance delivery path that moves durable outbox items to the owning edge.             |
+| Browser node        | Browser-hosted node exposing browser APIs such as camera or geolocation.                     |
+| Capability          | Named typed interface a node can provide.                                                    |
+| Capability provider | External runtime exposing typed operations, typically a node or MCP server.                  |
+| Contract            | Versioned schema for protocol messages or extension interfaces.                              |
+| Desktop environment | Gateway-managed sandbox desktop with a paired desktop node.                                  |
+| Event               | Gateway-emitted server-push message.                                                         |
+| Gateway             | Long-lived service boundary for routing, auth, policy, validation, and durable coordination. |
+| Gateway plugin      | Trusted in-process gateway extension module.                                                 |
+| Outbox              | Durable event log used for reliable backplane delivery and replay.                           |
+| Request/Response    | Correlated typed operation and reply keyed by `request_id`.                                  |
+
+## Scheduling, storage, and coordination
+
+| Term             | Short meaning                                                                          |
+| ---------------- | -------------------------------------------------------------------------------------- |
+| Consolidation    | Budget-driven compression of episodic memory into lower-volume durable knowledge.      |
+| Lease            | Time-bounded StateStore claim used to coordinate ownership.                            |
+| Location trigger | Durable automation rule that fires from enter/exit/dwell location events.              |
+| Scheduler        | Component that emits time-based or watcher-driven work under DB lease coordination.    |
+| StateStore       | Durable system of record for sessions, approvals, execution, audit, and routing state. |
+| Tombstone        | Minimal record proving a memory item was forgotten without keeping its content.        |
+
+## Tooling and delegation
+
+| Term     | Short meaning                                                                          |
+| -------- | -------------------------------------------------------------------------------------- |
+| Skill    | Instruction bundle loaded on demand for specialized workflows.                         |
+| Subagent | Delegated execution context sharing an agent boundary with a separate session/profile. |
+| Tool     | Invocable operation available to the runtime.                                          |
+
+## Related docs
+
+- [Architecture](/architecture)
+- [Gateway](/architecture/gateway)
+- [Agent](/architecture/agent)
+- [Protocol](/architecture/protocol)
+- [Scaling and High Availability](/architecture/scaling-ha)

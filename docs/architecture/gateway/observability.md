@@ -2,70 +2,68 @@
 slug: /architecture/observability
 ---
 
-# Observability (Context, Usage, and Audit)
+# Observability (context, usage, and audit)
 
-Tyrum is designed so operators can answer: “what happened, why, and what did it cost?” without guessing.
+Observability in Tyrum is about operator answers, not just telemetry volume. The gateway should make it easy to answer four questions: what is happening, what did the model see, why was an action allowed, and what did it cost.
 
-## Core surfaces
+## Quick orientation
+
+- Read this if: you need the operator-facing inspection surfaces and the architecture behind them.
+- Skip this if: you only need metric names or tracing exporter details.
+- Go deeper: [Artifacts](/architecture/artifacts), [Provider auth and onboarding](/architecture/auth), [Protocol events](/architecture/protocol/events).
+
+## What operators inspect
+
+```mermaid
+flowchart TB
+  Status["Status<br/>health, queues, auth profile, policy mode"] --> Operator["Operator"]
+  Context["Context reports<br/>what the model saw"] --> Operator
+  Usage["Usage and cost<br/>run / session / agent rollups"] --> Operator
+  Events["Events + audit<br/>why decisions happened"] --> Operator
+  Artifacts["Artifacts<br/>evidence and outputs"] --> Operator
+```
+
+These surfaces are complementary. None of them alone is enough.
+
+## The main inspection surfaces
 
 ### Status
 
-`/status` (and equivalent UI panels) show:
-
-- active model/provider and selected auth profile
-- model catalog freshness (source version, cache age, last refresh status)
-- session key + lane, run state, and queue depth
-- context window utilization (estimated + last-run measured)
-- sandbox/policy mode, sandbox hardening profile, and whether elevated execution is available
-- OAuth profile health (expiry, refresh state, cooldown/disable reasons when present)
+Status surfaces answer "what is happening now?" They should expose current routing, queue depth, run posture, policy mode, sandbox posture, and auth-profile health.
 
 ### Context inspection
 
-`/context list` and `/context detail` expose a “context report” for the last run:
-
-- system prompt sections and sizes
-- injected workspace files (raw vs injected, truncation markers)
-- skills list overhead
-- **tool schema overhead** (largest tool contracts and their sizes)
-- recent conversation history size and tool-result contributions
-
-Context reports are generated deterministically by the gateway and persisted alongside the run so “what the model saw” is inspectable after the fact.
+Context reports answer "what did the model actually see?" They should show prompt sections, workspace injections, tool-schema overhead, and other durable inputs that shaped the turn.
 
 ### Usage and cost
 
-`/usage` surfaces two complementary views:
+Usage surfaces answer "what did this cost?" Tyrum keeps local accounting for budgets and approvals, then optionally layers provider-reported usage on top for operator guidance.
 
-- **Local accounting:** tokens/time attributed to runs/steps/attempts (source of truth for budgets and approvals).
-- **Provider usage:** provider-reported quota/usage windows when a provider exposes a usage endpoint and credentials allow access.
+### Events, logs, and artifacts
 
-Usage is scoped to the current session by default, with agent-wide and tenant-wide rollups available in operator clients. Platform-wide rollups are restricted to platform administration.
+These answer "why did this happen?" They link decisions, approvals, retries, overrides, artifacts, and provider-routing changes through stable ids so operators can correlate state across UI, storage, and exported bundles.
 
-Architecture notes:
+## Why this matters architecturally
 
-- `GET /usage` returns a deployment rollup across all locally-accounted execution attempts.
-- `GET /usage?key=<sessionKey>` returns a session rollup (all lanes/runs for a single session key).
-- `GET /usage?agent_key=<agentKey>` returns an agent rollup (all session keys for a single agent).
-- `GET /usage?run_id=<runId>` returns a per-run rollup (debugging / drilldown).
+Tyrum does not rely on ephemeral model memory for postmortems. The gateway persists the important context needed to inspect:
 
-## Events, logs, and evidence
+- decision history
+- policy and approval lineage
+- evidence produced by execution
+- usage attribution at run, session, and agent scope
 
-Tyrum emits typed events for:
+That is what makes after-the-fact reasoning possible when a run pauses, retries, escalates, or fails.
 
-- approvals requested/resolved
-- policy overrides created/revoked/expired
-- runs/steps lifecycle and retries
-- policy decisions (allow/deny/require-approval + reasons + snapshot references)
-- artifacts created/attached/fetched
-- model/provider selection, auth rotation, and fallback decisions
+## Hard invariants
 
-Durable logs include stable ids (`run_id`, `step_id`, `attempt_id`, `approval_id`, `policy_override_id`, `artifact_id`, `policy_snapshot_id`) so operators can correlate UI, DB records, and exported bundles.
+- Operator inspection should be based on durable records, not best-effort console logs.
+- Usage and provider quota polling are advisory surfaces, not silent billing truth replacements.
+- Context inspection must help explain behavior without leaking raw secrets.
+- Audit identifiers should be stable enough to correlate a single action across runs, approvals, overrides, and artifacts.
 
-## Provider quota polling
+## Related docs
 
-When enabled, Tyrum queries provider usage endpoints using the active auth profile:
-
-- polling is rate-limited and cached
-- failures are non-fatal and reported as structured status fields
-- results are never treated as authoritative billing records; they are operator guidance
-
-Provider polling respects policy: usage endpoints are only queried for allowed providers/profiles and never with raw secret values in model context.
+- [Artifacts](/architecture/artifacts)
+- [Provider auth and onboarding](/architecture/auth)
+- [Protocol events](/architecture/protocol/events)
+- [Data lifecycle and retention](/architecture/data-lifecycle)

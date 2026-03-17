@@ -4,31 +4,43 @@ slug: /architecture/db-naming-conventions
 
 # DB naming conventions
 
-This document defines naming conventions for StateStore tables and migration SQL, with the goal of keeping SQLite and Postgres schemas aligned and reducing drift.
+This is a compact reference card for StateStore schema naming. The goal is alignment across SQLite and Postgres and less drift in DAL code.
 
-## Primary keys (PK)
+## Quick orientation
 
-- **Tenant-scoped entities:** prefer composite PKs: `(tenant_id, <entity>_id)` (UUID in Postgres; `TEXT` in SQLite).
-- **Surrogate/auto-increment PKs:** use `<table>_id` (not generic `id`) when the value is returned to callers or used in DAL queries.
-- **Consistency rule:** the PK column name for a table must be the same in both dialects (SQLite + Postgres).
+- **Read this if:** you are adding tables, keys, timestamps, or migrations.
+- **Skip this if:** you only need the conceptual data model.
+- **Go deeper:** use [StateStore dialects](/architecture/gateway/statestore-dialects) for allowed type divergence.
 
-## Foreign keys (FK)
+## Naming matrix
 
-- Name FK columns after the referenced PK column: `<ref_table>_id`.
-- For tenant-scoped references, include `tenant_id` in the FK columns (and in the referenced key) to prevent cross-tenant linkage.
+| Concern                           | Convention                                  | Why                                                                 |
+| --------------------------------- | ------------------------------------------- | ------------------------------------------------------------------- |
+| Tenant-scoped primary keys        | `(tenant_id, <entity>_id)`                  | Prevent cross-tenant linkage and keep composite ownership explicit. |
+| Surrogate ids returned to callers | `<table>_id`, not generic `id`              | Makes DALs and joins clearer.                                       |
+| Foreign keys                      | Match the referenced PK column name         | Lowers join ambiguity and migration drift.                          |
+| Tenant-scoped foreign keys        | Include `tenant_id` in both sides of the FK | Enforces tenant isolation in the schema.                            |
+| Wall-clock timestamps             | `created_at`, `updated_at`                  | Stable semantic clock across both dialects.                         |
+| Millisecond epoch timestamps      | `*_at_ms`                                   | Clear distinction for lease/expiry counters.                        |
 
-## Timestamps
+## Timestamp rule
 
-- Use `created_at` / `updated_at` for wall-clock timestamps (`TIMESTAMPTZ` on Postgres; `TEXT` in SQLite).
-- Use `*_at_ms` for millisecond epoch timestamps (`BIGINT` on Postgres; `INTEGER` in SQLite).
-- Treat `updated_at` as a semantic mutation clock for rows that mutate in place.
-- DAL update paths MUST write `updated_at` on every semantic change and MUST leave it unchanged for no-op writes.
-- Prefer compare-and-update DAL helpers over relying on column defaults alone so SQLite and Postgres stay aligned.
+`updated_at` is a semantic mutation clock:
+
+- write it on every real row change,
+- leave it alone on no-op writes,
+- prefer compare-and-update DAL helpers instead of depending on DB defaults alone.
 
 ## Migration checklist
 
-When adding or modifying migrations under `packages/gateway/migrations/*`:
+When touching `packages/gateway/migrations/*`:
 
-- Apply the same schema changes in both `sqlite/` and `postgres/`.
-- Keep PK/FK/timestamp column names consistent with the conventions above.
-- Run the schema contract test: `pnpm test packages/gateway/tests/contract/schema-contract.test.ts`.
+1. Apply the same schema change in `sqlite/` and `postgres/`.
+2. Keep PK, FK, and timestamp names aligned with this page.
+3. Run the schema contract test: `pnpm test packages/gateway/tests/contract/schema-contract.test.ts`.
+
+## Related docs
+
+- [StateStore dialects](/architecture/gateway/statestore-dialects)
+- [DB enum constraints](/architecture/db-enum-constraints)
+- [Gateway data model map (v2)](/architecture/data-model-map)

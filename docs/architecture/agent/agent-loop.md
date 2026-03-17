@@ -4,33 +4,49 @@ slug: /architecture/agent-loop
 
 # Agent Loop
 
-An agent loop is the end-to-end path from an inbound message to a final reply and/or actions. The gateway is responsible for keeping loop execution consistent and auditable.
+Read this if: you want the compact turn-by-turn control loop from inbound message to reply and durable state update.
 
-## Loop stages
+Skip this if: you already know the turn loop and need detailed execution mechanics; use [Execution engine](/architecture/execution-engine).
+
+Go deeper: [Messages and Sessions](/architecture/messages-sessions), [Work board and delegated execution](/architecture/workboard), [Memory](/architecture/memory).
+
+## Turn loop
 
 ```mermaid
 flowchart TB
-  IN["Inbound message"] --> ASM["Assemble context<br/>(system + history + tools + injected files + digests)"]
-  ASM --> INF["Model inference<br/>(interpret + propose next actions)"]
-  INF --> WF["Workflow selection<br/>(playbook or ad-hoc workflow)"]
-  WF --> ENG["Execution engine<br/>(steps + retries + pause/resume)"]
-  ENG --> OUT["Stream progress + evidence"]
-  OUT --> PERSIST["Persist state<br/>(transcripts, events, work state, memory)"]
+  Inbound["Inbound message / trigger"] --> Context["Assemble bounded context<br/>(prompt, session, memory, work state)"]
+  Context --> Decide["Model decides next action"]
+  Decide --> Work{"Needs delegated work?"}
+  Work -- no --> Reply["Reply / progress output"]
+  Work -- yes --> Delegate["Create or update WorkBoard / run intent"]
+  Delegate --> Execute["Execution engine path"]
+  Execute --> Reply
+  Reply --> Persist["Persist transcript, events, work state, memory updates"]
 ```
 
-Planning is not a single “planner module.” Tyrum treats it as an iterative control loop: the model proposes next actions, the WorkBoard records durable commitments and status, and the execution engine gates side effects behind approvals, idempotency, and evidence.
+## Purpose
 
-Context assembly includes budgeted digests from durable state (for example memory recall and WorkBoard focus) so work remains coherent under interruptions and session compaction.
+The agent loop is the runtime path that keeps a turn coherent and auditable. It combines context assembly, model decision-making, delegated execution, and durable state updates into one repeatable control loop instead of treating the model as the sole source of truth.
 
-Workflow selection may create or update WorkItems in the WorkBoard when the agent delegates long-running work while keeping the interactive session responsive (see [Work board and delegated execution](/architecture/workboard)).
+## What this page owns
 
-## Serialization guarantee
+- The high-level stages of one agent turn.
+- The handoff from interactive decision-making into delegated work.
+- The rule that turn outcomes become durable state, not just ephemeral output.
 
-- Runs are serialized per session key (and lane) to prevent tool and transcript races.
-- This keeps session history consistent and makes replay/audit more reliable.
+This page does not define protocol entry shapes or low-level run/lease mechanics.
 
-## Entry points
+## Key constraints
 
-- Gateway RPC: `agent` and `agent.wait` (or equivalent HTTP endpoints)
-- Channel ingress: a message mapped into a session enqueue
-- Runtime behavior: each agent turn is enqueued as an execution-engine `Decide` step so turn side effects flow through the same durable control plane.
+- Turn execution is serialized per session key and lane.
+- Context is budgeted and assembled from durable state, not raw transcript replay alone.
+- Side effects flow through delegated execution with approvals, idempotency, and evidence.
+- Persisted state closes the loop so future turns can recover after interruption.
+
+## Related docs
+
+- [Agent](/architecture/agent)
+- [Messages and Sessions](/architecture/messages-sessions)
+- [Memory](/architecture/memory)
+- [Work board and delegated execution](/architecture/workboard)
+- [Execution engine](/architecture/execution-engine)

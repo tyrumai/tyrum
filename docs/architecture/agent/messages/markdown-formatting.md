@@ -4,16 +4,33 @@ slug: /architecture/markdown-formatting
 
 # Markdown Formatting
 
-Tyrum formats assistant output for outbound channels by converting Markdown into a neutral intermediate representation (IR) before chunking and rendering.
+Read this if: you need the exact formatting pipeline from model Markdown to channel-safe outbound content.
 
-## Goals
+Skip this if: you only need the message/session architecture; start with [Messages and Sessions](/architecture/messages-sessions).
+
+Go deeper: [Message flow control and delivery](/architecture/messages/flow-control-delivery), [Channels](/architecture/channels).
+
+Tyrum formats assistant output by converting Markdown into a neutral intermediate representation (IR) before chunking and rendering. This keeps formatting deterministic across channels with different markup rules.
+
+## Formatting pipeline
+
+```mermaid
+flowchart LR
+  MD["Assistant Markdown"] --> Parse["Parse Markdown -> IR"]
+  Parse --> Chunk["Chunk IR on safe boundaries"]
+  Chunk --> Render["Render per channel adapter"]
+  Render --> Send["Outbound send"]
+  Render --> Fallback["Plain-text fallback on per-chunk failure"]
+```
+
+## What this page guarantees
 
 - **Consistency:** one parse step, many channel renderers.
 - **Safe chunking:** split before rendering so inline formatting and code fences stay valid.
 - **Channel fit:** map the same IR to Slack/Telegram/Discord/etc. without re-parsing.
 - **Security:** escape/encode channel markup correctly and avoid link/HTML injection.
 
-## Pipeline
+## IR pipeline
 
 1. **Parse Markdown → IR**
    - IR is plain text plus structured spans:
@@ -37,7 +54,7 @@ Tyrum formats assistant output for outbound channels by converting Markdown into
      - Discord: Markdown with length/line caps
      - WhatsApp/Signal/iMessage: conservative formatting subset
 
-## Tables
+## Table policy
 
 Markdown tables are normalized using a channel policy:
 
@@ -53,7 +70,7 @@ Links are rendered with channel-safe rules:
 - when the channel cannot represent labeled links, render as `label (url)`
 - normalize and validate URL schemes; disallowed schemes are rendered as plain text
 
-## Fallbacks (never fail closed)
+## Fallbacks
 
 If parsing or rendering fails for a chunk:
 
@@ -67,3 +84,9 @@ This keeps delivery robust under channel-specific formatting quirks without losi
 ## Interaction with streaming
 
 Block streaming uses the same IR chunker. This guarantees that streamed partial replies and final replies share identical chunk boundaries and formatting rules.
+
+## Related docs
+
+- [Messages and Sessions](/architecture/messages-sessions)
+- [Message flow control and delivery](/architecture/messages/flow-control-delivery)
+- [Channels](/architecture/channels)

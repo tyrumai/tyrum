@@ -2,52 +2,72 @@
 slug: /architecture/gateway/postgres-json-fields
 ---
 
-# Postgres JSON fields: JSONB vs TEXT (issue #983)
+# Postgres JSON fields: JSONB vs TEXT
 
-## Context
+This is a reference note for one specific schema decision: why several JSON-heavy columns stay `TEXT` even on Postgres.
 
-Tyrum supports SQLite (default) and Postgres for the gateway StateStore. Many columns store JSON payloads as `TEXT` to keep the schema and application code portable across both engines.
+## Quick orientation
 
-This note evaluates whether we should use Postgres-native `JSONB` / generated columns for a small set of “high-value” JSON columns.
+- **Read this if:** you are considering `JSONB`, generated columns, or Postgres-specific JSON indexes.
+- **Skip this if:** you only need the general dialect contract.
+- **Go deeper:** use [StateStore dialects](/architecture/gateway/statestore-dialects) for the broader policy and [DB JSON hygiene](/architecture/db-json-hygiene) for shape/default rules.
 
-## Columns evaluated
+## Current decision
 
-Representative JSON-heavy columns called out in the issue:
+Keep the evaluated columns as `TEXT` for now.
 
-- `policy_snapshots.bundle_json`
-- `routing_configs.config_json`
-- `watchers.trigger_config_json`
+## Why `TEXT` still wins today
 
-## Findings (today)
+| Question                                                      | Current answer                                                                          |
+| ------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Are these columns queried by JSON path in hot operator flows? | No. They are usually read by id/revision and validated in the gateway.                  |
+| Would `JSONB` improve correctness today?                      | Not materially.                                                                         |
+| Would `JSONB` add cost?                                       | Yes. It introduces dialect handling in DALs and changes textual preservation semantics. |
+| What immediate integrity gain do we still want?               | JSON-validity checks on high-value `TEXT` columns.                                      |
 
-- These columns are primarily **read by ID/revision** and then parsed/validated in the gateway; they are **not currently queried by JSON path** in hot operator queries.
-- Postgres `JSONB` would improve queryability, but it also introduces practical costs:
-  - `pg` returns `json/jsonb` columns as native JS values, which would require dialect handling across the DALs.
-  - `JSONB` does not preserve input formatting/key order, which can change any logic that hashes or otherwise relies on the stored textual representation.
+## Evaluated columns
 
-## Decision
+| Column                         | Why it was considered                                                          |
+| ------------------------------ | ------------------------------------------------------------------------------ |
+| `policy_snapshots.bundle_json` | Policy bundles are large and structured.                                       |
+| `routing_configs.config_json`  | Routing config may eventually attract targeted filtering.                      |
+| `watchers.trigger_config_json` | Watcher configs are structured but not currently queried by path in hot flows. |
 
-Keep these columns as `TEXT` for now, and treat Postgres JSON querying as an **opt-in query-layer optimization** (cast-to-`jsonb`, expression/partial indexes) when we have a demonstrated query use-case.
+## Practical trade-off
 
-As an immediate integrity win, enforce that these “high-value” `TEXT` JSON columns contain valid JSON:
+```mermaid
+flowchart LR
+  Need["Need JSON storage"] --> Query{"Hot JSON-path queries?"}
+  Query -- "No" --> Text["Keep TEXT<br/>portable schema + simpler DAL"]
+  Query -- "Yes, proven" --> Opt["Add Postgres-only optimization"]
+  Opt --> Expr["Expression or partial indexes<br/>on cast-to-jsonb expressions"]
+  Expr --> Jsonb{"Still not enough?"}
+  Jsonb -- "No" --> Stay["Keep column as TEXT"]
+  Jsonb -- "Yes" --> Migrate["Consider generated columns or JSONB<br/>with explicit dialect handling"]
+```
 
-- SQLite: `CHECK (json_valid(...))`
-- Postgres: `CHECK (pg_input_is_valid(..., 'jsonb'))`
+## Integrity rules
 
-## Notes
+- SQLite uses `CHECK (json_valid(...))`.
+- Postgres uses `CHECK (pg_input_is_valid(..., 'jsonb'))`.
+- These checks were added in the v2 rebuild migrations; older already-migrated databases do not retroactively gain them without rebuild/migration work.
 
-- The JSON-validity `CHECK` constraints are implemented in the v2 rebuild migrations (`100_rebuild_v2.sql`), so existing databases that already applied v2 migrations will not pick them up unless rebuilt.
-- The Postgres checks rely on `pg_input_is_valid` and are validated against the repo’s development baseline (`docker-compose.yml` uses `postgres:16`).
+## When to revisit
 
-## Revisit criteria
+Revisit a `JSONB`-native design only when all of these are true:
 
-Re-evaluate a `JSONB`-native column (or generated columns) when:
+1. There is a concrete operator or audit query filtering on JSON keys.
+2. The query is frequent or expensive enough to justify Postgres-only optimization.
+3. The DAL and migration divergence is acceptable and documented.
 
-- The operator UI/audits need filtering on specific JSON keys, and
-- We can point to a concrete query pattern worth indexing.
+## Preferred optimization order
 
-At that point, prefer:
+1. Expression or partial indexes on `(text_column::jsonb ->> 'key')`.
+2. Generated columns if expression indexes are insufficient.
+3. `JSONB` column types only with explicit statestore-layer handling and updated docs.
 
-1. **Expression/partial indexes** on `(text_column::jsonb ->> 'key')` for Postgres-only performance.
-2. **Generated columns** only if expression indexes are insufficient and we are willing to keep schema parity (or explicitly document divergence).
-3. **`JSONB` column types** only with explicit dialect handling in `packages/gateway/src/statestore/` and documentation in `docs/architecture/scaling-ha/statestore-dialects.md`.
+## Related docs
+
+- [StateStore dialects](/architecture/gateway/statestore-dialects)
+- [DB JSON hygiene](/architecture/db-json-hygiene)
+- [Gateway data model map (v2)](/architecture/data-model-map)

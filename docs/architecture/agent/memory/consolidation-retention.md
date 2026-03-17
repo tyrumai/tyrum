@@ -4,32 +4,43 @@ slug: /architecture/memory/consolidation-retention
 
 # Memory consolidation and retention
 
-## Parent concept
+Read this if: you need the exact budget, consolidation, and forgetting rules behind agent memory.
 
-- [Memory](/architecture/memory)
+Skip this if: you only need the high-level memory boundary; start with [Memory](/architecture/memory).
 
-## Scope
+Go deeper: [Context, Compaction, and Pruning](/architecture/context-compaction), [Work board and delegated execution](/architecture/workboard).
 
-This page describes how Tyrum keeps durable memory bounded and auditable over time. It covers consolidation, budgets, forgetting, and tombstones rather than the higher-level purpose of memory.
+This is a mechanics page for how Tyrum keeps durable memory bounded and auditable over time. It covers consolidation, budgets, forgetting, and tombstones rather than the purpose of memory itself.
 
-## Automatic pre-compaction flush
+## Consolidation loop
 
-When a session is close to auto-compaction, Tyrum can trigger a silent turn that reminds the agent to write durable memory before older context is summarized away. In many cases the correct behavior is to record memory and produce no user-visible reply.
+```mermaid
+flowchart TB
+  Input["New episodic memory or work outcome"] --> Budget{"Over budget?"}
+  Budget -- no --> Store["Keep canonical item"]
+  Budget -- yes --> Merge["Deduplicate + merge"]
+  Merge --> Compress["Summarize or compress episodic detail"]
+  Compress --> Index["Drop or downsample derived indexes"]
+  Index --> Evict["Evict lowest-value canonical items if still needed"]
+  Evict --> Tombstone["Write tombstones for explicit forget/delete"]
+  Store --> Recall["Future bounded retrieval"]
+  Tombstone --> Recall
+```
 
-## Consolidation model
+## What this page covers
 
-Consolidation converts episodic records into reusable semantic or procedural memory and keeps the whole system bounded.
+- budget-driven consolidation
+- preferred eviction order
+- explicit forgetting and tombstones
+- the interaction between session compaction and durable memory writes
 
-Key properties:
+## Pre-compaction flush
 
-- consolidation runs when budgets are exceeded
-- compression is preferred over deletion
-- duplicate facts and notes are merged before lower-value content is evicted
-- WorkBoard outcomes can be promoted into memory when they become durable lessons or facts
+When a session is close to auto-compaction, Tyrum may trigger a silent turn that reminds the agent to write durable memory before older prompt context is summarized away. The intended outcome is often "record memory, send no user-visible reply."
 
 ## Budgets and enforcement
 
-Forgetting is driven by budgets, not by wall-clock time.
+Forgetting is budget-driven, not TTL-driven.
 
 Budgets may be expressed as:
 
@@ -40,7 +51,7 @@ Budgets may be expressed as:
 
 Timestamps may be used as tie-breakers, but not as TTL-based deletion triggers.
 
-## Recommended eviction order
+## Recommended consolidation order
 
 When over budget, apply the least-destructive steps first:
 
@@ -48,6 +59,8 @@ When over budget, apply the least-destructive steps first:
 2. summarize or compress high-volume episodic material
 3. drop or downsample derived indexes
 4. evict low-utility canonical items while preserving tombstones
+
+Compression is preferred over deletion, and WorkBoard outcomes may be promoted into durable memory when they become reusable facts or procedures.
 
 ## Forgetting and tombstones
 

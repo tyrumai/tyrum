@@ -4,15 +4,30 @@ slug: /architecture/messages/flow-control-delivery
 
 # Message flow control and delivery
 
-## Parent concept
+Read this if: you need the operational rules for dedupe, debounce, queueing, streaming, and outbound delivery after a message enters a session.
 
-- [Messages and Sessions](/architecture/messages-sessions)
+Skip this if: you only need the high-level message/session model; start with [Messages and Sessions](/architecture/messages-sessions).
 
-## Scope
+Go deeper: [Sessions and Lanes](/architecture/sessions-lanes), [Markdown Formatting](/architecture/markdown-formatting), [Channels](/architecture/channels).
 
-This page describes the operational mechanics around conversational flow once a message has entered a session: dedupe, debounce, queueing, loop control, outbound delivery, typing, and formatting.
+This is a mechanics page for conversational flow after a message has entered a session: dedupe, debounce, queueing, loop control, outbound delivery, typing, and formatting.
 
-## Inbound dedupe
+## Delivery pipeline
+
+```mermaid
+flowchart TB
+  Inbound["Inbound delivery"] --> Dedupe["Dedupe by stable provider identity"]
+  Dedupe --> Debounce["Debounce / burst handling"]
+  Debounce --> Queue["Lane-aware queue"]
+  Queue --> Active{"Run already active?"}
+  Active -- no --> Execute["Start run"]
+  Active -- yes --> Mode["Apply queue mode"]
+  Mode --> Execute
+  Execute --> Outbound["Outbound send / stream / typing"]
+  Outbound --> Receipt["Receipts, failures, audit events"]
+```
+
+## Inbound controls
 
 Channels can redeliver the same inbound message after reconnects and retries. Tyrum prevents duplicate runs by deduping inbound deliveries before they enqueue work.
 

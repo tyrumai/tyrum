@@ -4,7 +4,14 @@ slug: /architecture/sessions-lanes
 
 # Sessions and Lanes
 
-A session is a durable conversation container. A lane is an execution stream within a session (for example `main` vs `cron` vs `heartbeat` vs `subagent`).
+A session is a durable conversation container. A lane is an execution stream within a session (for example `main`, `cron`, `heartbeat`, `subagent`).
+This is a mechanics/reference page for exact keying and serialization behavior.
+
+## Quick orientation
+
+- **Read this if:** you need exact keying, lane serialization guarantees, or queue-mode behavior.
+- **Skip this if:** you want only the high-level messaging model; start with [Messages and Sessions](/architecture/messages-sessions).
+- **Go deeper:** see [Flow control and delivery](/architecture/messages/flow-control-delivery) for transport/backpressure behavior.
 
 ## Parent concept
 
@@ -13,6 +20,19 @@ A session is a durable conversation container. A lane is an execution stream wit
 ## Scope
 
 This page defines the exact keying and lane mechanics behind Tyrum's conversational execution model. It expands the higher-level message/session overview with the durable identifiers and serialization guarantees the runtime depends on.
+
+## Lane serialization model
+
+```mermaid
+flowchart LR
+  IN["Inbound message / trigger"] --> KEY["Resolve session key"]
+  KEY --> LANE["Resolve lane<br/>main | cron | heartbeat | subagent"]
+  LANE --> Q["Lane-aware queue mode<br/>collect | followup | steer | steer_backlog | interrupt"]
+  Q --> LOCK["Acquire distributed lock<br/>per (key, lane)"]
+  LOCK --> RUN["Run execution attempt"]
+  RUN --> REL["Release / renew lease"]
+  REL --> NEXT["Next queued item in same (key, lane)"]
+```
 
 ## Sessions
 

@@ -4,100 +4,79 @@ slug: /architecture/doc-templates
 
 # Architecture Doc Templates
 
-This page defines the standard template set for architecture documentation in Tyrum.
+This page defines the default architecture writing contract for Tyrum.
 
-The goal is to help readers move from a high-level understanding of the system to concrete mechanics without losing the thread of why each part exists.
+Use it to keep docs newcomer-friendly at the top and detailed where detail belongs.
 
-## What a building block should describe
+## Page archetypes
 
-In Tyrum, a building block should describe a stable architectural responsibility and its boundary, not just a named implementation box.
+Architecture pages should be written as one of three archetypes.
 
-Every meaningful building block should make these questions easy to answer:
+| Archetype | Typical levels | Purpose                                               | Word target | Diagram rule                                                                |
+| --------- | -------------- | ----------------------------------------------------- | ----------- | --------------------------------------------------------------------------- |
+| Overview  | Level 0/1      | Build a clear system or subsystem mental model fast   | 350-900     | **Required:** at least one Mermaid diagram near the top                     |
+| Component | Level 2        | Explain one behavior boundary and how it works        | 350-800     | **Expected for most pages:** add Mermaid when it reduces ambiguity          |
+| Reference | Level 3        | Specify exact mechanics, schemas, and ops constraints | flexible    | Optional; add Mermaid/table only when it improves comprehension of the spec |
 
-- Why does this part exist?
-- What capability does it provide?
-- What is inside its boundary, and what is outside?
-- What can other parts rely on it for?
-- What interfaces, inputs, and outputs define the boundary?
-- What dependencies and constraints shape its design?
+## Opening summary pattern
 
-## How to use these templates
+Every architecture page should start with a short orientation block before deep detail:
 
-- Choose the smallest level that matches the page's purpose.
-- Keep one level per page whenever possible.
-- Prefer explicit boundaries, interfaces, and constraints over generic labels.
-- Link upward to the broader concept and downward to the next drill-down pages.
-- Use diagrams only when they remove ambiguity.
+- `Read this if ...`
+- `Skip this if ...`
+- `Go deeper ...`
 
-## Levels in the current docs
+Recommended length: 3-6 lines total.
 
-Use these levels as the default classification for architecture docs in [`docs/architecture/`](/architecture).
+## Diagram policy
 
-| Level   | Purpose                                                            | Typical Tyrum pages                                                                                                                                                                                                                     |
-| ------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Level 0 | Explain the whole system in a few major building blocks            | [`Architecture`](/architecture)                                                                                                                                                                                                         |
-| Level 1 | Explain a major subsystem and its internal building blocks         | [`Gateway`](/architecture/gateway), [`Agent`](/architecture/agent), [`Protocol`](/architecture/protocol), [`Client`](/architecture/client), [`Node`](/architecture/node), [`Scaling and High Availability`](/architecture/scaling-ha)   |
-| Level 2 | Explain one concrete subsystem component in behavioral terms       | [`Execution engine`](/architecture/execution-engine), [`Work board and delegated execution`](/architecture/workboard), [`Memory`](/architecture/memory), [`Approvals`](/architecture/approvals), [`Artifacts`](/architecture/artifacts) |
-| Level 3 | Explain exact mechanics, schemas, storage, or operational behavior | [`Handshake`](/architecture/protocol/handshake), [`Events`](/architecture/protocol/events), [`StateStore dialects`](/architecture/gateway/statestore-dialects), [`Gateway data model map`](/architecture/data-model-map)                |
+- Mermaid is the standard format for new diagrams.
+- Level 0 and Level 1 pages must include at least one Mermaid diagram.
+- Level 2 pages should include a Mermaid diagram when the topic has flow, boundaries, or handoff state.
+- Level 3 pages may stay mostly textual, but should include diagrams or compact tables when they clearly lower reading cost.
+- Prefer one primary diagram near the top over multiple small diagrams scattered through the page.
 
-## Standard fields across all levels
+## Drill-down and traceability rules
 
-Every architecture page should answer most of these questions, with the level controlling how much detail is needed:
+- Level 0 links to Level 1 only.
+- Level 1 links upward to Level 0 and downward to owned Level 2 pages.
+- Level 2 links upward to its Level 1 parent and downward to relevant Level 3 references.
+- Level 3 links back to the closest useful Level 2 or Level 1 context page.
 
-- What is this page about?
-- What does it own?
-- What does it explicitly not own?
-- What is the boundary and who controls it?
-- What interfaces, inputs, outputs, and dependencies define that boundary?
-- What invariants and constraints must remain true?
-- How does it fail or recover?
-- What security or policy boundaries matter?
-- Where should the reader go next?
+Keep one canonical overview page and one canonical mechanics page per concept.
 
-## Traceability rules
+## Overview template (Level 0/1)
 
-The architecture set should read like a guided zoom-in:
+Use this for architecture landing pages and major subsystem overviews.
 
-- Level 0 pages link only to Level 1 pages.
-- Level 1 pages link downward to the Level 2 pages they own.
-- Level 2 pages link upward to their Level 1 parent and downward to any Level 3 mechanics pages.
-- Level 3 pages link upward to the Level 2 or Level 1 page that gives them context.
+````md
+# <System or Subsystem Name>
 
-Each concept should have one canonical overview home and one canonical mechanics home.
+Read this if: <who should read now>
+Skip this if: <who should jump to detail pages>
+Go deeper: <Child page 1>, <Child page 2>
 
-## Level 0 template: system overview
-
-Use this for the architecture landing page or a top-level product area that should be understandable in a few minutes.
-
-```md
-# <System or Product Area>
-
-<One-sentence description of what the system is and why it exists.>
+<One-sentence role of this system/subsystem.>
 
 ## Purpose
 
-<2-4 short paragraphs on the problem the system solves, who uses it, and the qualities that matter most.>
+<Why this exists and what problem it solves.>
 
 ## Core building blocks
 
-- **<Block 1>:** <Stable responsibility and boundary.>
-- **<Block 2>:** <Stable responsibility and boundary.>
-- **<Block 3>:** <Stable responsibility and boundary.>
-- **<Block 4>:** <Stable responsibility and boundary.>
+- **<Block>:** <Responsibility and boundary>
+- **<Block>:** <Responsibility and boundary>
 
-## High-level topology
+## Topology
 
-<Optional mermaid diagram showing the main blocks and their interfaces.>
+```mermaid
+flowchart LR
+  A --> B
+```
 
-## Primary runtime flows
+## Primary flows
 
-### <Flow 1>
-
-1. <Step>
-2. <Step>
-3. <Step>
-
-### <Flow 2>
+### <Flow name>
 
 1. <Step>
 2. <Step>
@@ -105,231 +84,119 @@ Use this for the architecture landing page or a top-level product area that shou
 
 ## Key decisions and tradeoffs
 
-- **<Decision>:** <Why this boundary or approach exists.>
-- **<Decision>:** <Why this boundary or approach exists.>
+- **<Decision>:** <Why this boundary exists>
+- **<Decision>:** <What it optimizes for>
 
 ## Drill-down
 
-- [<Level 1 page 1>](./<path>.md)
-- [<Level 1 page 2>](./<path>.md)
-- [<Level 1 page 3>](./<path>.md)
-```
+- <Child page 1>
+- <Child page 2>
+````
 
-## Level 1 template: subsystem overview
+## Component template (Level 2)
 
-Use this for a major area such as the gateway, agent runtime, protocol, client, node, or deployment model.
+Use this for a single subsystem concept (for example approvals, memory, workboard, tools).
 
-```md
-# <Subsystem Name>
-
-<One-sentence description of the subsystem's role in the broader architecture.>
-
-## Mission
-
-<Short explanation of why this subsystem exists.>
-
-## Responsibilities
-
-- <Responsibility>
-- <Responsibility>
-- <Responsibility>
-
-## Non-responsibilities
-
-- <What this subsystem must not do>
-- <What another subsystem owns instead>
-
-## Boundary and ownership
-
-- **Inside the boundary:** <What this subsystem directly controls>
-- **Outside the boundary:** <What adjacent subsystems own>
-
-## Internal building blocks
-
-- **<Component 1>:** <What it does inside this subsystem.>
-- **<Component 2>:** <What it does inside this subsystem.>
-- **<Component 3>:** <What it does inside this subsystem.>
-
-## Interfaces, inputs, outputs, and dependencies
-
-- **Inputs:** <Requests, events, jobs, files, or operator actions received>
-- **Outputs:** <Responses, events, artifacts, state changes, side effects>
-- **Dependencies:** <StateStore, backplane, providers, nodes, clients, plugins, etc.>
-
-## Invariants and constraints
-
-- <Rule that must always remain true>
-- <Constraint that materially shapes the design>
-
-## Failure and recovery
-
-- **Failure modes:** <What commonly fails here>
-- **Recovery model:** <Retry, pause/resume, reconnect, replay, manual intervention>
-
-## Security and policy boundaries
-
-- <Auth/authz expectations>
-- <Approval or policy boundaries>
-- <Secret or sensitive data boundaries>
-
-## Key decisions and tradeoffs
-
-- **<Decision>:** <Why this subsystem boundary or behavior exists.>
-- **<Decision>:** <Why this subsystem boundary or behavior exists.>
-
-## Drill-down
-
-- [<Parent overview>](./<parent>.md)
-- [<Level 2 page 1>](./<child>.md)
-- [<Level 2 page 2>](./<child>.md)
-- [<Level 2 page 3>](./<child>.md)
-```
-
-## Level 2 template: component detail
-
-Use this for one concrete component where readers need behavioral understanding rather than a full operational spec.
-
-```md
+````md
 # <Component Name>
 
-<One-sentence description of the component and the boundary it sits on.>
+Read this if: <who needs this concept>
+Skip this if: <who can stay at overview level>
+Go deeper: <Mechanics page>
+
+<One-sentence component boundary.>
 
 ## Purpose
 
-<Why this component exists and what problem it solves inside the subsystem.>
+<Why this component exists inside the parent subsystem.>
 
 ## Responsibilities
 
-- <Responsibility>
 - <Responsibility>
 - <Responsibility>
 
 ## Non-goals
 
-- <What this component intentionally does not handle>
-- <What adjacent components own>
+- <What this page/component does not own>
 
-## Boundary and ownership
+## Inputs, outputs, dependencies
 
-- **Inside the boundary:** <What this component directly controls>
-- **Outside the boundary:** <What adjacent components or operators own>
-
-## Inputs, outputs, and dependencies
-
-- **Inputs:** <Commands, events, API calls, jobs, records, files>
-- **Outputs:** <Events, state changes, responses, artifacts, side effects>
-- **Dependencies:** <Parent subsystem, stores, providers, services>
-
-## State and data
-
-- <What durable state, transient state, or records this component owns or depends on>
+- **Inputs:** <...>
+- **Outputs:** <...>
+- **Dependencies:** <...>
 
 ## Control flow
 
-1. <Step>
-2. <Step>
-3. <Step>
+```mermaid
+sequenceDiagram
+  participant A
+  participant B
+  A->>B: <interaction>
+```
 
 ## Invariants and constraints
 
 - <Invariant>
-- <Constraint that shapes the implementation>
+- <Constraint>
 
-## Failure behavior
+## Failure and recovery
 
-- **Expected failures:** <Validation errors, timeouts, conflicts, disconnects, etc.>
-- **Recovery path:** <Retry, replay, reconnect, pause/resume, compensation>
-
-## Security and policy considerations
-
-- <Auth/authz, policy checks, approval gates, tenant scoping, or secret handling>
-
-## Key decisions and tradeoffs
-
-- **<Optional when useful>:** <Why this design exists.>
-
-## Observability
-
-- <Important logs, metrics, traces, events, or evidence objects>
+- **Failures:** <Expected failures>
+- **Recovery:** <How it recovers>
 
 ## Related docs
 
-- [<Parent subsystem>](./<parent>.md)
-- [<Related component>](./<related>.md)
-- [<Lower-level detail>](./<detail>.md)
-```
+- <Parent overview>
+- <Mechanics reference>
+````
 
-## Level 3 template: deep mechanics or operational detail
+## Reference template (Level 3)
 
-Use this for detailed protocol pages, storage design pages, operational maintenance pages, or any page that needs exact mechanics and edge-case guidance.
+Use this for exact protocol, data-model, storage, and operational mechanics pages.
 
 ```md
-# <Mechanic or Operational Topic>
+# <Mechanics Topic>
 
-<One-sentence summary of the exact detail this page specifies.>
+Read this if: <who needs exact behavior>
+Skip this if: <who should start at concept/overview>
+Go deeper: <Sibling detail page>
+
+<One-sentence statement of what is specified here.>
 
 ## Parent concept
 
-- [<Parent component or subsystem>](./<parent>.md)
+- <Parent page>
 
 ## Scope
 
-<What this page covers and what it deliberately leaves to other pages.>
-
-## Preconditions and assumptions
-
-- <Assumption>
-- <Assumption>
+<What this page specifies and what it does not.>
 
 ## Detailed mechanics
 
-### <Section or phase 1>
+### <Section>
 
 1. <Step>
 2. <Step>
-3. <Step>
-
-### <Section or phase 2>
-
-1. <Step>
-2. <Step>
-3. <Step>
-
-## Data model or message shapes
-
-<Optional TypeScript, JSON, SQL, or table example for the exact shape being described.>
 
 ## Constraints and edge cases
 
 - <Constraint>
 - <Edge case>
-- <Recovery expectation>
 
-## Security considerations
+## Operational notes
 
-- <Sensitive inputs, validation, approval, authz, tenancy, or exposure constraints>
-
-## Operational guidance
-
-- <How operators diagnose or maintain this area>
-- <When manual intervention is required>
+- <How to monitor or maintain>
 
 ## Related docs
 
-- [<Sibling detail page>](./<sibling>.md)
-- [<Wider overview>](./<overview>.md)
+- <Overview>
+- <Adjacent reference>
 ```
 
-## Writing rules for this repo
+## Author checklist
 
-When authoring or revising architecture docs in this repository:
-
-- Prefer stable responsibilities and boundaries over implementation labels.
-- Make constraints explicit when they drive the design.
-- Put exact mechanics behind headings rather than front-loading them.
-- Keep the first paragraph readable by someone new to the codebase.
-- Do not mix aspirational design with shipped behavior without calling that out clearly.
-
-## Recommended next step
-
-Use this page as the standard when revising [`Architecture`](/architecture) and when deciding whether a new topic belongs as a Level 1 subsystem page, a Level 2 component page, or a Level 3 mechanics page.
+- Archetype is explicit (`Overview`, `Component`, or `Reference`).
+- Opening summary uses `Read this if / Skip this if / Go deeper`.
+- Diagram requirements are met for the selected archetype.
+- Page links cleanly upward and downward in the architecture tree.
+- The first screen of content is understandable to the intended reader.

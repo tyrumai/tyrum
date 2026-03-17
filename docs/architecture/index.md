@@ -1,74 +1,75 @@
 # Architecture
 
-Tyrum is an autonomous worker platform built around a gateway, an agent runtime, and safety boundaries for execution, approvals, and audit evidence.
+Tyrum is an autonomous worker platform built around one control plane, durable runtime state, and explicit safety boundaries for side effects.
 
-## Purpose
+## Read this page
 
-Tyrum is designed to scale from a local personal assistant to a shareable remote coworker without changing its core architectural promises. The same system should stay understandable and safe whether it is running on one laptop or across multiple processes and hosts.
+- **Read this if:** you are new to Tyrum and want the 5-minute system map.
+- **Skip this if:** you already know the major boundaries and need mechanics details.
+- **Go deeper:** start with [Gateway](/architecture/gateway) and [Agent](/architecture/agent), then use the other architecture sections for protocol, client/node, and deployment behavior.
 
-The architecture is intentionally conservative. Tyrum favors durable state, explicit policy boundaries, resumable execution, and typed interfaces over optimistic prompt-only behavior. That bias is visible across the entire system: transport is typed, work is durable, risky actions are approval-gated, and observable evidence is preferred over narrative claims.
-
-## Core building blocks
-
-- **Gateway control plane:** Owns connectivity, routing, policy enforcement, approvals, execution coordination, and extension boundaries. See [Gateway](/architecture/gateway).
-- **Agent runtime:** Owns the configured persona, workspace, memory, model selection, messages, and work state that make one Tyrum agent coherent over time. See [Agent](/architecture/agent).
-- **Protocol and contracts:** Define the typed message surfaces and validation boundaries between the gateway, clients, and nodes. See [Protocol](/architecture/protocol).
-- **Operator surfaces:** Let humans observe state, steer execution, review evidence, and resolve approvals across desktop, web, mobile, CLI, and TUI clients. Some hosts can also bootstrap embedded local nodes without collapsing the client/node boundary. See [Client](/architecture/client).
-- **Capability providers:** Keep device-specific or environment-specific execution behind paired, authorized nodes instead of baking those interfaces into the gateway. That includes remote nodes, embedded local nodes, and gateway-managed sandbox nodes. See [Node](/architecture/node).
-- **State, evidence, and deployment:** Provide the durable data, event delivery, and deployment coordination primitives that keep the system reliable in both local and clustered forms. See [Scaling and High Availability](/architecture/scaling-ha).
-
-## High-level topology
+## System map
 
 ```mermaid
 flowchart LR
   subgraph Surfaces["Operator surfaces"]
-    Client["Operator clients<br/>(Desktop • Web • Mobile • CLI/TUI)"]
+    Client["Clients<br/>(Desktop • Web • Mobile • CLI/TUI)"]
   end
 
-  subgraph Runtime["Tyrum runtime"]
+  subgraph Control["Control and runtime"]
     Gateway["Gateway control plane"]
     Agent["Agent runtime"]
     Protocol["Protocol + contracts"]
-    State["State + evidence<br/>(StateStore, artifacts, backplane)"]
   end
 
-  subgraph Providers["Capability and integration plane"]
+  subgraph Execution["Capability and execution plane"]
     Node["Nodes<br/>(Remote • Embedded • Managed)"]
-    Ext["Tools • MCP • Channels • Models"]
+    Tools["Tools / Plugins / MCP / Channels / Models"]
+  end
+
+  subgraph Durability["Durable coordination"]
+    State["StateStore + artifacts + backplane"]
   end
 
   Client <--> Gateway
   Gateway <--> Protocol
   Gateway <--> Agent
+  Gateway <--> Node
+  Gateway <--> Tools
   Gateway <--> State
   Agent <--> State
-  Gateway <--> Node
-  Gateway <--> Ext
 ```
+
+## Core boundaries
+
+- **Gateway control plane:** owns transport, validation, routing, approvals, policy checks, and execution coordination.
+- **Agent runtime:** owns persona continuity across turns through sessions, workspace state, memory, and work state.
+- **Protocol and contracts:** define typed request/response/event boundaries between the gateway and peers.
+- **Operator clients:** provide human oversight, steering, and approval decisions without owning capability execution.
+- **Nodes:** provide device- or environment-specific capability execution behind pairing and policy boundaries.
+- **Durability layer:** keeps state, evidence, and event delivery recoverable across restarts and scale changes.
 
 ## Primary runtime flows
 
 ### Interactive operator flow
 
-1. A client connects to the gateway over the typed protocol and sends a request or message. Some hosts may also bootstrap an adjacent local node with its own node identity.
-2. The gateway routes the request into the relevant agent runtime and, when needed, into the execution engine, approval/review pipeline, and node-dispatch path.
-3. Progress, approvals, review state, and outcomes stream back to operator surfaces as events with durable state behind them.
+1. A client connects to the gateway over the typed protocol and sends a request or message.
+2. The gateway validates and routes the request into the agent runtime and, when needed, execution, approval, and node paths.
+3. Progress and outcomes stream back as events, with durable state as source of truth.
 
-### Durable background execution flow
+### Durable background flow
 
-1. The agent runtime or automation layer captures work and hands it to the execution engine.
-2. The execution engine coordinates workers, tools, approvals, and evidence using durable state and policy checks.
-3. Results are persisted, emitted as events, and reflected back into the agent's work state, memory, and operator surfaces.
+1. The agent or automation layer captures work and hands it to the execution engine path.
+2. The runtime coordinates tools, nodes, approvals, retries, and evidence through policy-aware execution.
+3. Results are persisted and reflected back into agent state and operator surfaces.
 
-## Key decisions and tradeoffs
+## Architecture posture
 
-- **Interactive control plane over WebSocket:** Tyrum optimizes for long-lived interactive control and event delivery rather than a request-only HTTP model.
-- **Durable runtime over prompt memory:** Work state, approvals, and evidence are externalized so correctness does not depend on transcript recall.
-- **Device capabilities outside the gateway:** Desktop, mobile, and other device-specific actions live behind nodes so the gateway stays policy-centric and deployable.
-- **Capability boundaries survive co-location:** browser and mobile operator hosts may embed a node runtime, but capability execution still stays on the node side of the trust boundary.
-- **One logical architecture across deployment sizes:** Single-host installs and clustered deployments keep the same core semantics, with coordination primitives present in both.
+- **Durable over transcript-only:** long-lived work and evidence are externalized instead of relying on prompt memory.
+- **Explicit policy boundaries:** risky actions are approval- and policy-gated by runtime controls.
+- **One logical model across deployment sizes:** local and clustered installs preserve the same runtime semantics.
 
-## Drill-down
+## Go deeper
 
 - [Gateway](/architecture/gateway)
 - [Agent](/architecture/agent)

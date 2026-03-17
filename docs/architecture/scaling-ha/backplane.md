@@ -4,129 +4,83 @@ slug: /architecture/backplane
 
 # Backplane (Outbox Contract)
 
-Most operator UX is powered by server-push events delivered over WebSocket connections.
-When the gateway is replicated, only the edge instance that owns a connection can write to that socket. The **backplane** is the cross-instance mechanism that makes “cluster with N replicas” behave like “cluster with 1 replica” for event delivery.
+This is a mechanics/reference page for clustered event delivery. Read it after [Scaling and High Availability](/architecture/scaling-ha), not before.
 
-This page defines the required _behavior_ of the backplane and its durable outbox, independent of any specific implementation (polling, Postgres `LISTEN/NOTIFY`, external pub/sub, etc.).
+## Quick orientation
 
-References:
+- **Read this if:** you need the durable outbox mental model, replay expectations, or cluster fanout invariants.
+- **Skip this if:** you are still building the top-level deployment picture.
+- **Go deeper:** use [Protocol events](/architecture/protocol/events) for payload semantics and [Operational table maintenance](/architecture/operational-maintenance) for pruning details.
 
-- [Scaling and high availability](/architecture/scaling-ha)
-- [Protocol events](/architecture/protocol/events)
-
-## Parent concept
-
-- [Scaling and High Availability](/architecture/scaling-ha)
-
-## Terms
-
-- **Outbox:** a durable log/table in the StateStore used to publish events and directed commands reliably.
-- **Backplane:** a delivery mechanism that moves outbox items to the correct gateway edge instance for fanout to connected peers.
-- **Producer:** a component that appends items to the outbox (execution engine, workers, schedulers, etc.).
-- **Consumer:** a component that reads items from the outbox to deliver them (gateway edges in particular).
-- **Event:** a gateway-emitted notification delivered to clients/nodes (see [Events](/architecture/protocol/events)).
-- **Directed command:** a backplane item targeted at a specific owning edge instance (for example “deliver these events to `device_id=…`”).
-
-## Hard invariants
-
-### At-least-once delivery
-
-Outbox items are delivered **at-least-once**:
-
-- A consumer may observe the same item multiple times.
-- A peer may observe the same logical event multiple times (especially across reconnect).
-
-Consumers and peers MUST tolerate duplicates by deduplicating on stable ids (for protocol events, `event_id`).
-
-### No global ordering guarantee
-
-The backplane does **not** provide a global total order:
-
-- Delivery order may differ across peers.
-- Events can be observed out of order, especially during reconnect/replay.
-
-If an operator view depends on ordering, it MUST be reconstructible from durable StateStore state (events are an incremental _signal_, not the only source of truth).
-
-### Tenant isolation
-
-In multi-tenant deployments, backplane routing is tenant-scoped:
-
-- outbox items are associated with exactly one `tenant_id`
-- consumers deliver items only to connections authenticated within that same tenant
-
-### Durable append
-
-Publishing is durable:
-
-- Producers append outbox items transactionally with the state changes they represent when feasible.
-- Once appended, an item survives producer restarts and is eligible for later delivery/replay until retention policy removes it.
-
-## Backplane responsibilities
-
-### Fanout to owning edge
-
-In a cluster, the backplane bridges from “durable outbox item” to “the edge instance that owns a connection”.
-
-The connection directory described in [Scaling and high availability](/architecture/scaling-ha) provides routing metadata (for example `(device_id → owning_edge_instance)` with TTL heartbeats).
-
-### Delivery loop (conceptual)
+## Durable outbox mental model
 
 ```mermaid
-sequenceDiagram
-  participant Producer as Producer (engine/worker)
-  participant DB as StateStore (outbox)
-  participant Edge as GatewayEdge (owns WS)
-  participant Peer as Client/Node
-
-  Producer->>DB: append outbox item (event/command)
-  Edge->>DB: poll (or await signal) + read items
-  Edge->>Peer: deliver over WS (at-least-once)
-  Peer->>Peer: dedupe by id
+flowchart LR
+  Producer["Producer<br/>engine • worker • scheduler"] --> Outbox[("Durable outbox")]
+  Outbox --> Backplane["Backplane readers<br/>poll or signal + read"]
+  Backplane --> Edge["Owning gateway edge"]
+  Edge --> Peer["Client or node peer"]
+  Peer --> Dedupe["Dedupe by stable id<br/>for example event_id"]
+  Outbox -. "retention window" .-> Replay["Replay/recovery"]
 ```
 
-Implementations MAY add low-latency signals (for example Postgres `LISTEN/NOTIFY`) to reduce polling latency, but the durable outbox remains the source of truth.
+The outbox is the durable source of truth. The backplane is only the mechanism that gets durable rows to the edge instance that owns a live socket.
 
-## Retention, replay, and compaction (operational contract)
+## What the backplane must guarantee
 
-The outbox is intentionally durable, but it MUST be **bounded**.
-Unbounded outbox growth is an operational failure mode (cost, performance, recovery time).
+| Contract               | What it means operationally                                                                             |
+| ---------------------- | ------------------------------------------------------------------------------------------------------- |
+| At-least-once delivery | Consumers and peers must tolerate duplicates.                                                           |
+| No global ordering     | Reconnects and replica races can reorder events. Critical views must be rebuildable from durable state. |
+| Tenant isolation       | Each outbox item belongs to exactly one `tenant_id`; delivery never crosses tenants.                    |
+| Durable append         | Producers append outbox items transactionally with the state they describe when feasible.               |
+| Bounded retention      | Replay history is finite; operators recover old state from durable APIs, not infinite event history.    |
 
-### Retention goals
+## Delivery loop
 
-Retention MUST be sufficient to support:
+1. A producer writes state and appends an outbox row.
+2. A backplane reader polls the outbox or wakes up from a low-latency signal.
+3. The reader routes the row to the edge that currently owns the target connection.
+4. The edge delivers the event or command over WebSocket.
+5. The peer deduplicates by stable identity and refreshes durable state if ordering matters.
 
-- edge restarts (items published while an edge is down remain deliverable),
-- short-term partitions between edges and the StateStore, and
-- peer reconnects where the peer may observe duplicate delivery.
+## What is in the outbox
 
-Retention SHOULD be configured so that “typical operational recovery” does not require manual intervention.
+| Item type        | Typical use                                                                          |
+| ---------------- | ------------------------------------------------------------------------------------ |
+| Event            | Notify clients/nodes about execution, approvals, pairing, presence, or work changes. |
+| Directed command | Route a delivery action to the edge that owns a specific peer or connection.         |
 
-### Bounded growth
+## Retention and replay
 
-Implementations MUST have explicit compaction rules, for example:
+The retention window exists to survive normal restart and failover, not to act as the only audit log.
 
-- time-based TTL (delete items older than a configured window),
-- size-based caps (delete/compact when exceeding a row/byte budget), and/or
-- per-consumer progress tracking (delete items once all intended consumers have advanced past them).
+| Recovery case            | Expected behavior                                                                            |
+| ------------------------ | -------------------------------------------------------------------------------------------- |
+| Edge restart             | Unconsumed rows remain deliverable after the edge comes back or another edge takes over.     |
+| Short partition          | Readers resume from durable outbox state and may redeliver rows.                             |
+| Peer reconnect           | The peer may see duplicates or gaps and should refresh durable state for critical views.     |
+| Offline beyond retention | Incremental events may be gone; recovery must still work from durable state tables and APIs. |
 
-The exact mechanism is a deployment choice, but the **behavior** must remain at-least-once with dedupe-safe replay within the retention window.
+## Implementation freedom
 
-### Replay expectations
+Implementations may differ on latency and transport:
 
-Replays happen in practice (restarts, takeovers, reconnect).
+- Polling only.
+- Polling plus Postgres `LISTEN/NOTIFY`.
+- Another signal path paired with the same durable outbox.
 
-- Consumers MUST be able to restart and resume delivery without corrupting durable state.
-- Peers MUST treat events as at-least-once and SHOULD refresh critical views from durable APIs after reconnect instead of assuming no gaps or perfect ordering.
+What does not change is the contract above: durable append, at-least-once delivery, dedupe safety, and bounded retention.
 
-If a peer is offline beyond the outbox retention window, it may miss incremental events; recovery MUST be possible by re-reading durable StateStore-backed state.
+## Safety notes
 
-Architecture notes:
+- Avoid raw secret values in outbox payloads; store handles or redacted material instead.
+- Treat outbox rows and any fanout transport as sensitive operator data.
+- Do not assume socket delivery alone is enough for correctness; durable StateStore state remains authoritative.
 
-- Outbox retention is enforced by periodic compaction/pruning according to configured retention policies (time/size/consumer progress).
-- In clustered deployments, compaction runs under a single-writer lock/lease so pruning is correct and predictable.
+## Related docs
 
-## Safety and privacy
-
-- Outbox payloads SHOULD avoid embedding raw secret values (prefer secret handles and redaction).
-- Treat the outbox and any backplane transport as sensitive data: apply access controls and avoid logging payloads by default.
-- Ensure tooling and infra do not leak auth tokens in WebSocket upgrade headers (see [Handshake](/architecture/protocol/handshake)).
+- [Scaling and High Availability](/architecture/scaling-ha)
+- [Protocol events](/architecture/protocol/events)
+- [Operational table maintenance](/architecture/operational-maintenance)
+- [Data lifecycle and retention](/architecture/data-lifecycle)

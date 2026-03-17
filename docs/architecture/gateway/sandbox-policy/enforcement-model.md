@@ -4,83 +4,53 @@ slug: /architecture/sandbox-policy/enforcement-model
 
 # Policy enforcement model
 
-## Parent concept
+Read this if: you need the exact path from policy input to enforced execution decision.
 
-- [Sandbox and Policy](/architecture/sandbox-policy)
+Skip this if: you only need the high-level safety model; start with [Sandbox and Policy](/architecture/sandbox-policy).
+
+Go deeper: [Policy overrides](/architecture/policy-overrides), [Approvals](/architecture/approvals), [Tools](/architecture/tools).
+
+## Enforcement pipeline
+
+```mermaid
+flowchart TB
+  Request["Request / tool intent"] --> Validate["Contract validation"]
+  Validate --> Merge["Merge effective policy bundle"]
+  Merge --> Override["Apply narrow overrides"]
+  Override --> Provenance["Evaluate provenance + tool constraints"]
+  Provenance --> Decision["Decision: allow | deny | require_approval"]
+  Decision --> Execute["Executor checks same snapshot"]
+  Execute --> Audit["Decision reasons + snapshot + audit links"]
+```
 
 ## Scope
 
-This page describes the exact enforcement path for Tyrum policy decisions: how policy bundles are merged, how decisions become execution-time checks, how overrides apply, and how the system fails closed when enforcement paths disagree.
+This page specifies how policy becomes enforcement: merge order, override handling, provenance-aware decisions, snapshot-based execution, and fail-closed behavior at the executor boundary.
 
-## Evaluation pipeline
+## Core rules
 
-Policy evaluation follows a deterministic sequence:
+- Decisions are data, not prompt text.
+- `deny` wins over `require_approval`, which wins over `allow`.
+- Operator overrides can narrow approval friction but must not silently bypass an explicit `deny`.
+- Executors must enforce the same snapshot-derived policy that queue-time checks used.
 
-1. validate the incoming request or tool invocation against contracts
-2. load and merge the effective `PolicyBundle` from deployment, agent, and playbook scope
-3. apply any narrow operator-created policy overrides
-4. evaluate provenance-aware rules and tool-specific constraints
-5. return `allow`, `deny`, or `require_approval` with structured reasons
+## Snapshot and executor model
 
-The decision output is data, not prompt text.
+Execution uses the stored policy snapshot that was active when the run was created. The run carries `policy_snapshot_id` and a deterministic content hash, and executors receive that reference before performing policy-governed actions. This keeps replay, audit, and post-incident analysis coherent after live policy changes.
 
-## Merge and precedence rules
+## Provenance-aware enforcement
 
-- `deny` wins over `require_approval`
-- `require_approval` wins over `allow`
-- narrower scopes may tighten behavior
-- operator overrides may turn a narrow `require_approval` into `allow`, but must not silently bypass an explicit `deny`
+Untrusted content remains tagged as data through the runtime. Policy can escalate or block actions when arguments or destinations derive from untrusted sources. This is an enforcement rule, not advisory prompt guidance.
 
-This keeps broad defaults conservative while still allowing auditable exceptions.
+## Fail-closed behavior
 
-## Snapshot enforcement
-
-Execution uses the merged policy snapshot that was active when the run was created:
-
-- the run stores `policy_snapshot_id` plus a deterministic content hash
-- executors receive that snapshot reference before performing policy-governed actions
-- approval records and override usage remain linked back to the same snapshot
-
-This preserves replayability and answers “why was this allowed?” after the live configuration changes.
-
-## Provenance-aware decisions
-
-Untrusted content remains tagged as data throughout the runtime. Policy can escalate based on provenance, for example:
-
-- require approval before `bash` when arguments derive from untrusted web content
-- require approval before outbound messaging when message content derives from an untrusted source
-- deny unsafe tool chaining even if each individual tool would otherwise be allowed
-
-Provenance rules are part of enforcement, not advisory prompt guidance.
-
-## Executor fail-closed behavior
-
-Executors must enforce policy independently of queue-time checks:
-
-- secret resolution happens only after snapshot-based policy allows it
-- tool and network denials fail closed if an alternate path bypasses an earlier guard
-- approvals created at execution time flow back into the standard durable approval path
-
-This keeps local execution, ToolRunner execution, and queued workflow execution aligned.
-
-## Override and approval boundary
-
-`approve always` creates a durable override only when the approval includes safe, bounded suggestions:
-
-- overrides match stable tool-specific targets
-- override creation is auditable and revocable
-- free-form broadening is intentionally avoided
-
-The approval UI is the operator surface; the durable override record is the enforcement artifact.
+- Secret resolution happens only after snapshot-based policy allows it.
+- Tool and network denials must fail closed even if an alternate path tries to bypass earlier checks.
+- Execution-time approvals re-enter the ordinary durable approval flow instead of inventing a second mechanism.
 
 ## Auditability
 
-Policy enforcement remains explainable through:
-
-- decision reasons attached to runs, steps, and attempts
-- `policy_snapshot_id` and canonical snapshot hash
-- durable links from approvals to created overrides
-- events for override creation, revocation, and expiry
+Enforcement stays explainable through decision reasons, snapshot ids and hashes, override links, and approval/event linkage on the affected run or step records.
 
 ## Related docs
 

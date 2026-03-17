@@ -4,25 +4,51 @@ slug: /architecture/gateway/statestore-dialects
 
 # StateStore dialects (SQLite vs Postgres)
 
-Tyrum supports SQLite (default) and Postgres for the gateway StateStore. To keep the SQLite path lightweight while still using native Postgres types where they matter, the schemas intentionally diverge in a few places.
+This is a reference page for the small set of intentional schema differences between SQLite and Postgres.
 
-## Intentional type divergences
+## Quick orientation
 
-This list is intentionally short. If you add a new divergence, add it here and centralize any dialect handling in `packages/gateway/src/statestore/`.
+- **Read this if:** you are adding schema or DAL code and need to know where dialect differences are allowed.
+- **Skip this if:** you only need the deployment model; start with [Scaling and High Availability](/architecture/scaling-ha).
+- **Go deeper:** see [DB naming conventions](/architecture/db-naming-conventions) and [Postgres JSON fields](/architecture/gateway/postgres-json-fields).
 
-- **IDs:** `TEXT` (SQLite) vs `UUID` (Postgres)
-- **Booleans:** `INTEGER` (`0/1`) (SQLite) vs `BOOLEAN` (Postgres)
-- **Timestamps:** `TEXT` + `datetime('now')` (SQLite) vs `TIMESTAMPTZ` + `now()` (Postgres)
-- **Millisecond epochs / counters:** `INTEGER` (SQLite) vs `BIGINT` (Postgres)
+## Dialect matrix
 
-## Guidelines
+| Concern                       | SQLite                     | Postgres                | Rule of thumb                                                        |
+| ----------------------------- | -------------------------- | ----------------------- | -------------------------------------------------------------------- |
+| IDs                           | `TEXT`                     | `UUID`                  | Keep logical shapes aligned; hide differences in statestore helpers. |
+| Booleans                      | `INTEGER` (`0/1`)          | `BOOLEAN`               | Bind through helpers, not inline `db.kind` branches.                 |
+| Wall-clock timestamps         | `TEXT` + `datetime('now')` | `TIMESTAMPTZ` + `now()` | Normalize on read.                                                   |
+| Millisecond epochs / counters | `INTEGER`                  | `BIGINT`                | Use for leases, expiry, monotonic counters, and retry timing.        |
+| JSON-heavy payloads           | usually `TEXT`             | usually `TEXT`          | Prefer portability unless a proven Postgres-only query need exists.  |
 
-- Prefer **parameterized SQL** and avoid branching on `db.kind` in feature modules.
-- Centralize dialect differences in small helpers under `packages/gateway/src/statestore/`.
-- When reading timestamps, normalize them (see `packages/gateway/src/utils/db-time.ts`).
+## Allowed divergence
 
-## Helpers
+The divergence list should stay short. Add a new dialect difference only when one of these is true:
 
-- `packages/gateway/src/statestore/sql.ts` exports:
-  - `sqlBoolParam(db, value)` for binding boolean-ish parameters (`true/false` vs `1/0`)
-  - `sqlActiveWhereClause(db)` for building the `watchers.active` predicate without inline dialect conditionals
+| Allowed reason                                               | Example                                               |
+| ------------------------------------------------------------ | ----------------------------------------------------- |
+| Native type materially improves correctness                  | `UUID`, `BOOLEAN`, `TIMESTAMPTZ` on Postgres          |
+| SQLite portability would become meaningfully worse otherwise | JSON payloads kept as `TEXT`                          |
+| The divergence can be centralized in the statestore layer    | helper-based parameter binding and read normalization |
+
+## Rules for implementation
+
+- Prefer parameterized SQL and DAL helpers over feature-level dialect branching.
+- Centralize differences under `packages/gateway/src/statestore/`.
+- Normalize timestamps on read through `packages/gateway/src/utils/db-time.ts`.
+- If a new divergence is introduced, document it here and keep the migration names aligned across both dialects.
+
+## Existing helper touchpoints
+
+| Helper                     | Purpose                                                 |
+| -------------------------- | ------------------------------------------------------- |
+| `sqlBoolParam(db, value)`  | Bind booleans without inline SQLite/Postgres branching. |
+| `sqlActiveWhereClause(db)` | Build dialect-safe `watchers.active` predicates.        |
+
+## Related docs
+
+- [Scaling and High Availability](/architecture/scaling-ha)
+- [Postgres JSON fields: JSONB vs TEXT](/architecture/gateway/postgres-json-fields)
+- [DB naming conventions](/architecture/db-naming-conventions)
+- [DB JSON hygiene](/architecture/db-json-hygiene)

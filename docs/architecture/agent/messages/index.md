@@ -4,70 +4,58 @@ slug: /architecture/messages-sessions
 
 # Messages and Sessions
 
-This page defines how Tyrum turns inbound messages into durable sessions and lane-aware execution entrypoints while keeping chat behavior responsive, observable, and safe.
+Read this if: you need to understand how inbound chat becomes durable agent work.
+
+Skip this if: you are debugging wire-level contracts; use [Protocol](/architecture/protocol) instead.
+
+Go deeper: [Sessions and Lanes](/architecture/sessions-lanes), [Message flow control and delivery](/architecture/messages/flow-control-delivery), [Markdown Formatting](/architecture/markdown-formatting).
+
+## Core flow
+
+```mermaid
+flowchart TB
+  Inbound["Inbound message<br/>(client or channel)"] --> Normalize["Normalize into typed envelope<br/>(identity + provenance + content)"]
+  Normalize --> Session["Resolve session container<br/>(agent + session_key)"]
+  Session --> Lane["Route to lane<br/>(session_key, lane)"]
+  Lane --> Queue["Queue execution entry"]
+  Queue --> Exec["Agent + execution engine"]
+
+  Normalize --> Transcript["Durable transcript update"]
+  Lane --> Delivery["Operator-visible delivery state"]
+  Transcript --> Recall["Future-turn recall and compaction"]
+```
 
 ## Purpose
 
-Messages and sessions form the boundary between conversational input and durable agent execution. They normalize inbound content, choose the correct session container, and keep session state stable enough for replay, compaction, and safe follow-up behavior.
+Messages and sessions are the entry boundary between conversational input and durable execution. This layer gives Tyrum one stable message model across clients and channels, then maps that input into the correct session and lane so follow-up behavior remains coherent under retries, reconnects, and compaction.
 
-## Responsibilities
+## What this page owns
 
-- Normalize inbound messages from channels and clients into a typed, durable envelope.
-- Route input into the correct session container and execution lane.
-- Maintain session transcripts and retention semantics as durable conversational state.
-- Provide the parent concept for queueing, delivery, and session/lane mechanics.
+- Message normalization into a typed envelope with provenance.
+- Session targeting and lane entry (`(session_key, lane)`).
+- Durable transcript authority and retention hooks.
+- Queue entry into downstream execution.
 
-## Non-goals
+This page does not define protocol wire shapes and does not define execution internals. It defines how conversation enters those systems.
 
-- This page does not define the protocol wire contract; see [Protocol](/architecture/protocol).
-- This page does not replace execution-engine semantics; it defines how conversational work enters that runtime.
+## Main flow
 
-## Boundary and ownership
+1. A client or channel message is normalized into Tyrum's envelope, including sender, container identity, content, attachments, and provenance tags.
+2. The runtime resolves the agent and session container, then computes the execution lane.
+3. The message enters the lane queue, which is serialized per `(session_key, lane)` to keep turn behavior deterministic.
+4. Transcript and delivery state are persisted, so operator views and later turns use durable state rather than ephemeral socket state.
 
-- **Inside the boundary:** message normalization, session selection, transcript authority, retention semantics, and queue-entry behavior.
-- **Outside the boundary:** protocol transport validation, background execution internals, and channel-specific formatting mechanics beyond the normalized messaging model.
+## Key constraints
 
-## Inputs, outputs, and dependencies
+- Session transcript state is durable and remains the source of truth for future turns.
+- Lane serialization is mandatory for predictable ordering inside one session lane.
+- Inbound dedupe and retry-safety are required because connectors and clients can replay messages.
+- Provenance must be preserved so downstream policy can treat trusted and untrusted content differently.
+- Outbound sends remain side effects and stay under policy and approval controls.
 
-- **Inputs:** inbound messages from clients and channels, connector metadata, attachments, and sender/container identity.
-- **Outputs:** normalized session input, durable transcript state, queued follow-up work, and operator-visible message context.
-- **Dependencies:** agent runtime, channels, protocol, execution engine, sessions/lanes, WorkBoard, and StateStore-backed retention.
+## Failure and recovery
 
-## State and data
-
-- **Normalized envelope:** sender, container, delivery identity, message identity, content, attachments, and provenance tags.
-- **Session transcript:** the authoritative conversational context used for future turns.
-- **Retention metadata:** compaction windows, transport retention, and repair/debug context.
-
-## Control flow
-
-1. A channel or client message is normalized into Tyrum's message envelope.
-2. The gateway resolves the target agent and session container.
-3. The message enters the correct `(session_key, lane)` execution stream.
-4. Durable transcript state, queued follow-up behavior, and operator-visible delivery state are updated from that single source of truth.
-
-## Invariants and constraints
-
-- Session state is durable and remains the source of truth for future turns.
-- Execution is serialized per `(session_key, lane)`.
-- Side-effecting delivery remains policy-gated and auditable.
-
-## Failure behavior
-
-- **Expected failures:** duplicate inbound delivery, queue overflow, reconnect churn, and partially retained transport logs.
-- **Recovery path:** durable dedupe, repairable transcripts, bounded queueing, and lane-aware serialization keep message handling predictable under retries and restarts.
-
-## Security and policy considerations
-
-- Provenance is preserved so downstream policy can distinguish trusted from untrusted content.
-- Direct-message scoping protects against cross-user context leakage in multi-user surfaces.
-- Outbound sends remain side effects and stay under approval/policy control.
-
-## Key decisions and tradeoffs
-
-- **Durable sessions over connector state:** Tyrum owns the session key and transcript contract rather than inheriting one provider's chat model.
-- **Lane-aware execution:** conversational traffic enters explicit execution lanes instead of assuming one undifferentiated chat stream.
-- **Normalized messaging model:** connectors can vary, but the runtime behaves against one typed envelope.
+Common failures include duplicate inbound delivery, temporary queue pressure, and reconnect churn. Recovery relies on durable dedupe keys, lane-aware queueing, and transcript-backed rehydration instead of in-memory chat state.
 
 ## Related docs
 

@@ -4,35 +4,43 @@ slug: /architecture/skills
 
 # Skills
 
-A skill is an instruction bundle that teaches the agent how to perform a specialized workflow. Skills are loaded on demand and are meant to be readable by humans.
+Read this if: you need the architecture boundary for reusable instruction bundles.
 
-## Load order
+Skip this if: you are looking for runtime-enforced workflows or in-process extension code.
 
-Skills can be loaded from multiple locations. When the same skill id exists in more than one place, the more specific location wins:
+Go deeper: [Playbooks](/architecture/playbooks), [Gateway plugins](/architecture/plugins), [Sandbox and policy](/architecture/sandbox-policy).
 
-1. Bundled skills (provided by Tyrum)
-2. User skills directory (for example under a home directory)
-3. Workspace skills directory (wins on conflicts **when trusted**)
+## Skill boundary at a glance
 
-Workspace skills are only considered when workspace trust is explicitly enabled (see below).
+| Surface  | What it provides                            | Enforced by runtime?     | Best use                                  |
+| -------- | ------------------------------------------- | ------------------------ | ----------------------------------------- |
+| Skill    | Reusable instructions and workflow guidance | No                       | Teaching the agent how to approach a task |
+| Playbook | Deterministic workflow spec                 | Yes                      | Multi-step controlled execution           |
+| Plugin   | In-process gateway extension                | Yes, at gateway boundary | New routes/tools/commands                 |
 
-## Marketplace
+## Purpose
 
-Skills are discoverable and installable from a curated catalog.
+Skills are instruction bundles the agent can load on demand to perform specialized workflows consistently. They are guidance, not enforcement. The safety boundary remains in tool policy, approvals, and sandboxing.
 
-## Safety expectations
+## Load sources and trust posture
 
-- Skills are guidance, not enforcement.
-- Hard enforcement comes from tool policy, approvals, and sandboxing.
-- Skills can still be a social-engineering and supply-chain risk (especially marketplace and workspace-provided skills). Operator clients should surface skill origin (bundled vs user vs workspace) and encourage review before enabling.
-- Workspace skills are supplied by the current workspace contents; treat them as untrusted by default and load them only in trusted workspaces under explicit policy.
-- Skills must not contain raw secret values; use secret handles via the secret provider.
+Skills can come from several locations, with more specific locations winning on conflicts:
 
-## Workspace trust controls
+1. bundled skills
+2. user skills directory
+3. workspace skills directory, but only when workspace trust is explicitly enabled
 
-Workspace skill loading is gated by agent configuration:
+Workspace skills are the main risk boundary. They come from the current checkout and must be treated as untrusted until the workspace is deliberately marked trusted.
 
-- Enable workspace skills only in trusted workspaces (for example `skills.workspace_trusted: true`).
-- Operator clients can display provenance via `GET /agent/status` (`skills_detailed[].source`) and show whether workspace skills are trusted (`workspace_skills_trusted`).
+## Key rules
 
-Security note: treat enabling workspace skills as a workspace trust decision. Do not enable workspace skills for unreviewed checkouts.
+- Skills must never be treated as a bypass around tool policy or approvals.
+- Operator surfaces should show skill provenance so users can distinguish bundled, user, and workspace sources.
+- Marketplace discovery is acceptable only with reviewable provenance and explicit enablement.
+- Skills must reference secret handles rather than embedding raw secret values.
+
+## Related docs
+
+- [Playbooks](/architecture/playbooks)
+- [Gateway plugins](/architecture/plugins)
+- [Sandbox and policy](/architecture/sandbox-policy)

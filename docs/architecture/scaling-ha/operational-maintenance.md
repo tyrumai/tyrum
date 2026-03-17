@@ -4,36 +4,69 @@ slug: /architecture/operational-maintenance
 
 # Operational Table Maintenance Contract
 
-This page defines the current maintenance contract for operational StateStore tables: what bounds them, which job prunes them, and what operators can rely on during recovery.
+This is a mechanics/reference page for bounded operational tables: what prunes them, what safety rule applies, and what operators can rely on during recovery.
 
-Use this page alongside [Data lifecycle and retention](/architecture/data-lifecycle), [Backplane (outbox contract)](/architecture/backplane), and [Presence](/architecture/presence).
+## Quick orientation
 
-## Contract
+- **Read this if:** you are debugging prune behavior, sizing retention, or validating recovery assumptions.
+- **Skip this if:** you only need the high-level cluster model.
+- **Go deeper:** pair this with [Data lifecycle and retention](/architecture/data-lifecycle), [Backplane](/architecture/backplane), and [Presence](/architecture/presence).
 
-| Table                       | Bounding mechanism                                                                                                    | Prune trigger                                                                                                              | Safety invariant                                                                                                                                           | Observability                                                                                                                                                                                                   |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `presence_entries`          | TTL via `expires_at_ms`; websocket heartbeats also enforce `presence.maxEntries` opportunistically.                   | `StateStoreLifecycleScheduler` background sweep every 5 minutes; websocket heartbeat loop also prunes expired rows inline. | Delete only rows whose TTL has expired; presence is derived inventory, not durable truth.                                                                  | `lifecycle_prune_rows_total{scheduler="statestore",table="presence_entries"}` and `statestore.lifecycle_pruned`.                                                                                                |
-| `connections`               | TTL via `expires_at_ms`.                                                                                              | `StateStoreLifecycleScheduler` background sweep every 5 minutes; edge heartbeat loop also clears expired ownership.        | Delete only expired directory rows; active connections must keep refreshing TTL.                                                                           | `lifecycle_prune_rows_total{scheduler="statestore",table="connections"}` and `statestore.lifecycle_pruned`.                                                                                                     |
-| `channel_inbound_dedupe`    | TTL via `expires_at_ms`.                                                                                              | Best-effort inline cleanup during enqueue, plus `StateStoreLifecycleScheduler` background sweep.                           | Delete only expired dedupe keys; replay safety remains bounded to the configured dedupe window.                                                            | `lifecycle_prune_rows_total{scheduler="statestore",table="channel_inbound_dedupe"}` and `statestore.lifecycle_pruned`.                                                                                          |
-| `channel_inbox`             | Terminal retention window via deployment config `lifecycle.channels.terminalRetentionDays` (default `7`).             | `StateStoreLifecycleScheduler` background sweep.                                                                           | Failed rows age out after the terminal window. Completed rows are deleted only after dependent `channel_outbox` rows are gone.                             | `lifecycle_prune_rows_total{scheduler="statestore",table="channel_inbox.failed"}` and `lifecycle_prune_rows_total{scheduler="statestore",table="channel_inbox.completed"}`, plus `statestore.lifecycle_pruned`. |
-| `channel_outbox`            | Successful rows are deleted inline after send; failed rows use the same terminal retention window as `channel_inbox`. | Successful sends prune immediately in the delivery path; failed rows are pruned by `StateStoreLifecycleScheduler`.         | Retention must never be required for canonical transcript recovery; failed rows remain available through the terminal window for debugging/retry analysis. | `lifecycle_prune_rows_total{scheduler="statestore",table="channel_outbox.failed"}` and `statestore.lifecycle_pruned`.                                                                                           |
-| `lane_leases`               | Lease TTL via `lease_expires_at_ms`.                                                                                  | `StateStoreLifecycleScheduler` background sweep.                                                                           | Delete only expired leases; workers must reacquire before doing serialized lane work.                                                                      | `lifecycle_prune_rows_total{scheduler="statestore",table="lane_leases"}` and `statestore.lifecycle_pruned`.                                                                                                     |
-| `workspace_leases`          | Lease TTL via `lease_expires_at_ms`.                                                                                  | `StateStoreLifecycleScheduler` background sweep.                                                                           | Delete only expired leases; active owners must keep renewing.                                                                                              | `lifecycle_prune_rows_total{scheduler="statestore",table="workspace_leases"}` and `statestore.lifecycle_pruned`.                                                                                                |
-| `oauth_pending`             | Request expiry via `expires_at`.                                                                                      | `StateStoreLifecycleScheduler` background sweep; callback consumption also deletes the row inline.                         | Delete only expired or consumed authorization requests; live handshakes must still complete inside the advertised expiry window.                           | `lifecycle_prune_rows_total{scheduler="statestore",table="oauth_pending"}` and `statestore.lifecycle_pruned`.                                                                                                   |
-| `oauth_refresh_leases`      | Lease TTL via `lease_expires_at_ms`.                                                                                  | `StateStoreLifecycleScheduler` background sweep.                                                                           | Delete only expired refresh leases; active refresh owners must renew/reacquire.                                                                            | `lifecycle_prune_rows_total{scheduler="statestore",table="oauth_refresh_leases"}` and `statestore.lifecycle_pruned`.                                                                                            |
-| `models_dev_refresh_leases` | Lease TTL via `lease_expires_at_ms`.                                                                                  | `StateStoreLifecycleScheduler` background sweep.                                                                           | Delete only expired catalog-refresh leases; the cache row is separate and remains bounded independently.                                                   | `lifecycle_prune_rows_total{scheduler="statestore",table="models_dev_refresh_leases"}` and `statestore.lifecycle_pruned`.                                                                                       |
-| `outbox`                    | Time retention via `OutboxLifecycleScheduler` (default `24h`).                                                        | `OutboxLifecycleScheduler` background sweep every 5 minutes.                                                               | Retention bounds replay history, but recovery must remain possible from durable StateStore truth after rows age out.                                       | `lifecycle_prune_rows_total{scheduler="outbox",table="outbox"}` and `outbox.lifecycle_pruned`.                                                                                                                  |
-| `outbox_consumers`          | Time retention via `updated_at` and the same outbox retention window.                                                 | `OutboxLifecycleScheduler` background sweep every 5 minutes.                                                               | Delete only stale consumer cursors that have not advanced inside the retention window.                                                                     | `lifecycle_prune_rows_total{scheduler="outbox",table="outbox_consumers"}` and `outbox.lifecycle_pruned`.                                                                                                        |
+## Maintenance loops
+
+```mermaid
+flowchart LR
+  State["StateStore operational tables"] --> SS["StateStoreLifecycleScheduler<br/>5 minute sweep"]
+  Outbox[("outbox + outbox_consumers")] --> OB["OutboxLifecycleScheduler<br/>5 minute sweep"]
+  Inline["Inline cleanup in live paths"] --> State
+  SS --> Metrics["prune metrics + structured logs"]
+  OB --> Metrics
+```
+
+## Maintenance matrix
+
+| Table                       | Bounded by                                               | Prune path                                      | Safety rule                                                                                       |
+| --------------------------- | -------------------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `presence_entries`          | `expires_at_ms` TTL; heartbeat caps                      | scheduler sweep plus heartbeat cleanup          | Presence is derived inventory; delete only expired rows.                                          |
+| `connections`               | `expires_at_ms` TTL                                      | scheduler sweep plus edge heartbeat cleanup     | Active owners must keep refreshing TTL.                                                           |
+| `channel_inbound_dedupe`    | `expires_at_ms` TTL                                      | inline best-effort cleanup plus scheduler sweep | Replay protection remains valid inside the configured dedupe window.                              |
+| `channel_inbox`             | terminal retention window                                | scheduler sweep                                 | Completed rows wait for dependent `channel_outbox` cleanup; failed rows age out after the window. |
+| `channel_outbox`            | inline success deletion; terminal retention for failures | delivery path plus scheduler sweep              | Canonical transcript recovery must not depend on retained outbox rows.                            |
+| `lane_leases`               | `lease_expires_at_ms` TTL                                | scheduler sweep                                 | Only expired leases are removed.                                                                  |
+| `workspace_leases`          | `lease_expires_at_ms` TTL                                | scheduler sweep                                 | Active owners must renew before expiry.                                                           |
+| `oauth_pending`             | `expires_at`                                             | scheduler sweep plus callback consumption       | Live auth handshakes must survive until their advertised expiry.                                  |
+| `oauth_refresh_leases`      | `lease_expires_at_ms` TTL                                | scheduler sweep                                 | Delete only expired refresh ownership.                                                            |
+| `models_dev_refresh_leases` | `lease_expires_at_ms` TTL                                | scheduler sweep                                 | Refresh lease cleanup must not delete the separate cache row.                                     |
+| `outbox`                    | time retention window, default `24h`                     | outbox scheduler sweep                          | Replay history is bounded; durable state remains authoritative after prune.                       |
+| `outbox_consumers`          | stale `updated_at` against same retention window         | outbox scheduler sweep                          | Remove only stale cursors that have stopped advancing.                                            |
+
+## What operators should expect
+
+| Situation            | Expected behavior                                                                                                   |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Normal operation     | Background jobs keep bounded tables from growing without limit.                                                     |
+| Clustered deployment | Prune loops run under a single-writer lock or lease so replicas do not race cleanup.                                |
+| Tick failure         | The system logs `statestore.lifecycle_tick_failed` or `outbox.lifecycle_tick_failed` and increments error counters. |
+| Recovery after prune | Critical state must still be reconstructible from durable tables and APIs, not only from operational buffers.       |
 
 ## Explicit non-goals
 
-These rows are operational but do not need separate prune jobs today:
+- `models_dev_cache` does not need a prune loop because it is bounded by a singleton primary key.
+- Successful `channel_outbox` rows are already removed inline; a second background success-prune job would duplicate that lifecycle.
 
-- `models_dev_cache` is bounded by a singleton primary key (`id = 1`), so it cannot grow without limit.
-- Successful `channel_outbox` rows are deleted inline after delivery; a second background job would duplicate that lifecycle.
+## Observability hooks
 
-## Failure handling
+Use these as the first stop when checking maintenance health:
 
-- Background lifecycle jobs run under a single-writer DB lock/lease in clustered deployments so pruning stays correct under replica races.
-- Tick failures are logged as `statestore.lifecycle_tick_failed` or `outbox.lifecycle_tick_failed`.
-- Prometheus exposes `lifecycle_tick_errors_total{scheduler=...}` for alerting on repeated maintenance failures.
+- `lifecycle_prune_rows_total{scheduler="statestore",table="..."}`
+- `lifecycle_prune_rows_total{scheduler="outbox",table="..."}`
+- `statestore.lifecycle_pruned`
+- `outbox.lifecycle_pruned`
+- `lifecycle_tick_errors_total{scheduler=...}`
+
+## Related docs
+
+- [Data lifecycle and retention](/architecture/data-lifecycle)
+- [Backplane (outbox contract)](/architecture/backplane)
+- [Presence](/architecture/presence)
+- [Index tuning loop](/architecture/index-tuning)

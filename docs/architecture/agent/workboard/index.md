@@ -4,74 +4,66 @@ slug: /architecture/workboard
 
 # Work board and delegated execution
 
-The WorkBoard is Tyrum's durable work-management surface. It keeps long-running work visible, queryable, and resumable without forcing interactive sessions to carry the full planning and execution state in transcript history.
+Read this if: you need to understand how Tyrum tracks long-running work outside the chat transcript.
+
+Skip this if: you are debugging step retries, leases, or run-state internals; use [Execution engine](/architecture/execution-engine).
+
+Go deeper: [WorkBoard delegated execution](/architecture/workboard/delegated-execution), [WorkBoard durable work state](/architecture/workboard/durable-work-state).
+
+## Core flow
+
+```mermaid
+flowchart TB
+  Capture["Capture work<br/>(session or automation)"] --> Plan["Plan/refine into tasks<br/>and acceptance criteria"]
+  Plan --> Delegate["Delegate runnable tasks<br/>to execution engine"]
+  Delegate --> Run["Runs, approvals, artifacts,<br/>verification"]
+  Run --> Reflect["Reflect outcomes into<br/>WorkBoard state"]
+  Reflect --> Status["Operator status and next actions"]
+
+  Reflect --> Digest["Focus digest + state KV"]
+  Digest --> Plan
+```
 
 ## Purpose
 
-The WorkBoard exists so Tyrum can separate interactive responsiveness from background execution. It gives the agent a durable backlog, typed working set, and operator-visible status model while the execution engine handles the actual run and step lifecycle.
+WorkBoard is Tyrum's durable work-management surface. It keeps commitments, blockers, and progress explicit so interactive turns can stay responsive while background work continues safely.
 
-## Responsibilities
+## What this page owns
 
-- Represent operator-visible work as durable WorkItems with explicit status, acceptance criteria, and blockers.
-- Keep background work queryable from any operator surface without replaying transcripts.
-- Hold durable work-state records such as decisions, reminders, verification summaries, and work artifacts.
-- Coordinate delegated execution by capturing work, tracking readiness, and reflecting progress back into the agent runtime.
+- WorkItems with lifecycle state, acceptance criteria, and blockers.
+- Task-level work state and readiness for delegated execution.
+- Durable planning and evidence context such as WorkArtifacts, DecisionRecords, and WorkSignals.
+- Operator-facing status derived from durable state rather than transcript reconstruction.
 
-## Non-goals
+This page does not own transport, step execution, approval enforcement, or raw artifact byte storage.
 
-- The WorkBoard is not a replacement for the execution engine; it sits above jobs, runs, steps, and approvals.
-- The WorkBoard is not a generic team project-management suite; the starting assumption is one operator per agent.
-- The WorkBoard is not a transcript store or memory store; transcripts and long-term memory remain separate architectural surfaces.
+## Main flow
 
-## Boundary and ownership
+1. Work is captured from a session or automation trigger into a WorkItem.
+2. Planning/refinement creates task structure and marks runnable work.
+3. The execution engine performs delegated work and returns outcomes, approvals, and evidence.
+4. WorkBoard reflects those outcomes into durable state that operators and future turns can query directly.
 
-- **Inside the boundary:** WorkItems, task-level work state, DecisionRecords, WorkSignals, durable work artifacts, and operator-visible progress state.
-- **Outside the boundary:** transport/session handling, step execution, raw artifact bytes, and long-term memory consolidation.
+## Key constraints
 
-## Inputs, outputs, and dependencies
+- WorkBoard state is durable and survives reconnects, compaction, and restarts.
+- Interactive UX must remain responsive even while background work is active.
+- Work state cannot bypass policy, approvals, idempotency, or evidence requirements.
+- Status answers should come from WorkBoard records, not transcript memory.
 
-- **Inputs:** interactive work capture, planner updates, execution outcomes, approvals, artifacts, and operator actions.
-- **Outputs:** durable work-state records, operator-visible status, background dispatch intent, notifications, and drill-down context for the agent runtime.
-- **Dependencies:** agent runtime, execution engine, approvals, artifacts, workspace, sessions, and durable StateStore records.
+## Failure and recovery
 
-## Key building blocks
+Common failures are blocked tasks, stale plans, conflicting branches, or abandoned work. Recovery depends on explicit blockers, durable state, and reconciliation paths that let work pause and resume without losing intent history.
 
-- **WorkItem:** the operator-visible unit of work with acceptance criteria and lifecycle state.
-- **Task graph:** the internal dependency graph that breaks a WorkItem into runnable tasks.
-- **WorkArtifact:** typed durable context for planning, verification, risks, and summaries.
-- **DecisionRecord:** the durable explanation of what was chosen and why.
-- **WorkSignal:** a durable reminder or trigger that externalizes "remember to do this later".
-- **Focus digest and state KV:** the compact working set and authoritative current-truth state that keep the agent coherent under interruptions.
+## Why this boundary exists
 
-## Control flow
+- Durable work state prevents fragile “remembered in-chat” commitments.
+- Delegation isolates long-running operations from interactive latency.
+- Typed drill-down records preserve explainability without turning the chat thread into a project log.
 
-1. An interactive session or automation path captures work into the WorkBoard.
-2. Planning/refinement writes durable work-state records and marks tasks ready for background execution.
-3. The execution engine runs the delegated work and writes outcomes, approvals, artifacts, and verification back into the WorkBoard.
-4. Clients and channels answer status and completion questions from WorkBoard state rather than from transcript recall.
+## Operator-facing outcome
 
-## Invariants and constraints
-
-- WorkBoard state is durable and survives disconnects, compaction, and restarts.
-- Interactive turns must remain responsive even while the WorkBoard tracks larger background initiatives.
-- Work state is supportive context, not a bypass around policy, approvals, or execution guarantees.
-
-## Failure behavior
-
-- **Expected failures:** blocked work due to approvals or dependencies, stale plans, conflicting delegated branches, and abandoned background work.
-- **Recovery path:** durable state, explicit blockers, leases/reconciliation, and operator-visible status allow work to pause and resume safely.
-
-## Security and policy considerations
-
-- Side effects still run through the execution engine with approvals, idempotency, and evidence rules.
-- WorkArtifacts and DecisionRecords improve explainability, but they are not a policy override.
-- Notifications and completion messages remain outbound side effects and stay policy-gated.
-
-## Key decisions and tradeoffs
-
-- **Durable work state over transcript memory:** status and commitments live in the WorkBoard so they survive compaction and channel switching.
-- **Kanban summary plus typed drill-down:** the top-level operator view stays lightweight while deeper planning and verification state remains available.
-- **Delegation with explicit state:** background work is externalized into durable records instead of relying on an in-flight agent turn to stay alive forever.
+Operators get a compact status surface for "what is blocked, what is running, and what is done" while still being able to drill into evidence, decisions, and approvals when needed.
 
 ## Related docs
 

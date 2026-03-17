@@ -4,29 +4,47 @@ slug: /architecture/db-json-hygiene
 
 # DB JSON hygiene
 
-Tyrum stores many `*_json` columns as **JSON text** (cross-database, simple migrations).
+This is a compact reference card for how Tyrum stores and validates `*_json` columns.
 
-## Canonical shapes + NULLability
+## Quick orientation
 
-The canonical expectations for every `*_json` column (shape, whether `NULL` is allowed, and the DB default when present) live in:
+- **Read this if:** you are adding or changing a JSON column in the StateStore.
+- **Skip this if:** you only need the high-level dialect decision.
+- **Go deeper:** use [Postgres JSON fields](/architecture/gateway/postgres-json-fields) for the `TEXT` vs `JSONB` decision.
 
-- `packages/gateway/src/statestore/json-columns.json`
+## Source of truth
 
-This spec is enforced by contract tests:
+| Artifact                                                               | Purpose                                                                     |
+| ---------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `packages/gateway/src/statestore/json-columns.json`                    | Canonical shape, nullability, and default policy for every `*_json` column. |
+| `packages/gateway/tests/contract/json-column-specs.test.ts`            | Checks SQLite schema against the spec.                                      |
+| `packages/gateway/tests/contract/json-column-defaults-aligned.test.ts` | Checks Postgres rebuild defaults against the spec.                          |
 
-- `packages/gateway/tests/contract/json-column-specs.test.ts` (SQLite schema vs spec)
-- `packages/gateway/tests/contract/json-column-defaults-aligned.test.ts` (Postgres rebuild migration vs spec defaults)
+## Shape rules
 
-## Conventions
+| Shape    | Meaning              | Default when present   |
+| -------- | -------------------- | ---------------------- |
+| `object` | JSON object          | `{}`                   |
+| `array`  | JSON array           | `[]`                   |
+| `any`    | Any valid JSON value | no shared default rule |
 
-- **shape = `object`**: JSON object (`{...}`), default (when present) is `{}`.
-- **shape = `array`**: JSON array (`[...]`), default (when present) is `[]`.
-- **shape = `any`**: any JSON value; callers must validate as needed.
+## Change checklist
 
-## When changing the schema
+1. Update the SQLite migration.
+2. Update the Postgres migration.
+3. Update `json-columns.json`.
+4. Run the relevant contract tests.
 
-When adding/changing a `*_json` column:
+## Rule of thumb
 
-1. Update the SQLite + Postgres migrations.
-2. Update `packages/gateway/src/statestore/json-columns.json`.
-3. Run `pnpm test` (or at least the relevant contract tests).
+Keep JSON columns boring:
+
+- cross-dialect,
+- schema-documented,
+- validity-checked,
+- and validated again at the application boundary.
+
+## Related docs
+
+- [Postgres JSON fields: JSONB vs TEXT](/architecture/gateway/postgres-json-fields)
+- [StateStore dialects](/architecture/gateway/statestore-dialects)
