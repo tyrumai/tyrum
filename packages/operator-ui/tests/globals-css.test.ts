@@ -9,6 +9,12 @@ describe("globals.css", () => {
     expect(css).toContain('@import "tailwindcss/preflight.css" layer(base);');
   });
 
+  it("registers the Tailwind typography plugin", () => {
+    const css = readFileSync(join(process.cwd(), "packages/operator-ui/src/globals.css"), "utf8");
+
+    expect(css).toContain('@plugin "@tailwindcss/typography";');
+  });
+
   it("resets native chrome for plain text-entry controls", () => {
     const css = readFileSync(join(process.cwd(), "packages/operator-ui/src/globals.css"), "utf8");
 

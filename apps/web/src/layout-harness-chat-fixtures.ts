@@ -71,6 +71,19 @@ function parseDynamicResult<T>(
 }
 
 function createActiveSession(): HarnessChatSession {
+  const assistantMarkdown = [
+    "# Markdown Rendering",
+    "",
+    "Preflight should keep real markdown semantics inside the chat bubble:",
+    "",
+    "- first bullet",
+    "- second bullet with `inline code` and a [docs link](https://example.com/docs)",
+    "",
+    "```ts",
+    "const viewportWidth = 1280;",
+    "```",
+  ].join("\n");
+
   return {
     session_id: "session-1",
     agent_id: "default",
@@ -80,7 +93,7 @@ function createActiveSession(): HarnessChatSession {
     message_count: 2,
     last_message: {
       role: "assistant",
-      text: "Yes. We can add browser geometry checks.",
+      text: "Rendered markdown with heading, list, link, and code block.",
     },
     messages: [
       {
@@ -91,7 +104,7 @@ function createActiveSession(): HarnessChatSession {
       {
         id: "turn-2",
         role: "assistant",
-        parts: [{ type: "text", text: "Yes. We can add browser geometry checks." }],
+        parts: [{ type: "text", text: assistantMarkdown }],
       },
     ],
     updated_at: "2026-03-08T00:00:00.000Z",

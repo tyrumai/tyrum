@@ -12,6 +12,7 @@
 
 /* Ensure Tailwind scans operator-ui component sources for class names. */
 @source ".";
+@plugin "@tailwindcss/typography";
 
 @layer base {
   /*

@@ -3,6 +3,10 @@ import { chromium, type Browser, type Page } from "playwright";
 import { createServer, type ViteDevServer } from "vite";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  assertChatMarkdownTypography,
+  assertSingleRowTabs,
+} from "./layout-regression-test-support.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const APP_ROOT = resolve(__dirname, "..");
@@ -289,27 +293,6 @@ async function assertDashboardLayout(
   }, expected);
 }
 
-async function assertSingleRowTabs(page: Page, selector: string): Promise<void> {
-  const result = await page.evaluate((targetSelector) => {
-    const list = document.querySelector<HTMLElement>(targetSelector);
-    if (!list) {
-      return { found: false, uniqueTopCount: 0, scrollable: false };
-    }
-    const triggerTops = Array.from(list.querySelectorAll<HTMLElement>('[role="tab"]')).map((tab) =>
-      Math.round(tab.getBoundingClientRect().top),
-    );
-    return {
-      found: true,
-      uniqueTopCount: new Set(triggerTops).size,
-      scrollable: list.scrollWidth > list.clientWidth,
-    };
-  }, selector);
-
-  expect(result.found, `${selector} should exist`).toBe(true);
-  expect(result.uniqueTopCount).toBe(1);
-  expect(typeof result.scrollable).toBe("boolean");
-}
-
 describe("layout regression harness", () => {
   beforeAll(async () => {
     process.chdir(APP_ROOT);
@@ -416,6 +399,23 @@ describe("layout regression harness", () => {
         '[data-testid="chat-threads-panel"]',
         '[data-testid="chat-conversation-panel"]',
       ]);
+    } finally {
+      await page.close();
+    }
+  });
+
+  it("renders chat markdown with typography styles", { timeout: 30_000 }, async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    try {
+      await page.goto(`${baseUrl}?route=chat`, { waitUntil: "load" });
+      await page.waitForSelector('[data-testid="chat-conversation-panel"]');
+
+      await assertNoHorizontalOverflow(page, [
+        '[data-testid="chat-page"]',
+        '[data-testid="chat-panels"]',
+        '[data-testid="chat-conversation-panel"]',
+      ]);
+      await assertChatMarkdownTypography(page);
     } finally {
       await page.close();
     }

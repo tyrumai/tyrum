@@ -25,6 +25,18 @@ function getReferencedResourcePaths(indexHtml: string): string[] {
   return [...indexHtml.matchAll(HTML_RESOURCE_PATH)].map((match) => match[1]);
 }
 
+function readBuiltCssAsset(indexHtml: string): string {
+  const cssResourcePath = getReferencedResourcePaths(indexHtml).find((resourcePath) =>
+    resourcePath.endsWith(".css"),
+  );
+
+  if (!cssResourcePath?.startsWith("/ui/")) {
+    throw new Error(`Expected a built CSS asset reference in ${DIST_INDEX}.`);
+  }
+
+  return readFileSync(resolve(DIST_ROOT, cssResourcePath.slice("/ui/".length)), "utf8");
+}
+
 function shouldRefreshBuildOutput(): boolean {
   return !process.argv.includes("run") && !process.argv.includes("--run");
 }
@@ -62,5 +74,13 @@ describe("apps/web", () => {
       expect(resourcePath.startsWith("/ui/")).toBe(true);
       expect(existsSync(resolve(DIST_ROOT, resourcePath.slice("/ui/".length)))).toBe(true);
     }
+  });
+
+  it("includes Tailwind typography styles for markdown content", { timeout: 180_000 }, async () => {
+    const indexHtml = await ensureBuiltIndexHtml();
+    const css = readBuiltCssAsset(indexHtml);
+
+    expect(css).toContain(".prose");
+    expect(css).toContain("--tw-prose-body");
   });
 });
