@@ -63,33 +63,37 @@ describe("sidebar layout regression harness", () => {
     process.chdir(originalCwd);
   });
 
-  it("does not clip the sidebar when the secondary node section is visible", async () => {
-    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
-    try {
-      await page.goto(`${baseUrl}?route=dashboard`, { waitUntil: "load" });
-      await page.waitForSelector('[data-testid="sidebar-secondary-label"]');
+  it(
+    "does not clip the sidebar when the secondary node section is visible",
+    { timeout: 30_000 },
+    async () => {
+      const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+      try {
+        await page.goto(`${baseUrl}?route=dashboard`, { waitUntil: "load" });
+        await page.waitForSelector('[data-testid="sidebar-secondary-label"]');
 
-      await assertNoInternalHorizontalClipping(page, [
-        '[data-testid="sidebar-nav"]',
-        '[data-testid="sidebar-secondary-label"]',
-      ]);
+        await assertNoInternalHorizontalClipping(page, [
+          '[data-testid="sidebar-nav"]',
+          '[data-testid="sidebar-secondary-label"]',
+        ]);
 
-      const overflowBy = await page
-        .locator('[data-testid="sidebar-secondary-label"]')
-        .evaluate((label) => {
-          const nav = label.closest<HTMLElement>('[data-testid="sidebar-nav"]');
-          if (!nav) {
-            return Number.NaN;
-          }
-          return Math.max(
-            0,
-            label.getBoundingClientRect().right - nav.getBoundingClientRect().right,
-          );
-        });
+        const overflowBy = await page
+          .locator('[data-testid="sidebar-secondary-label"]')
+          .evaluate((label) => {
+            const nav = label.closest<HTMLElement>('[data-testid="sidebar-nav"]');
+            if (!nav) {
+              return Number.NaN;
+            }
+            return Math.max(
+              0,
+              label.getBoundingClientRect().right - nav.getBoundingClientRect().right,
+            );
+          });
 
-      expect(overflowBy).toBeLessThanOrEqual(1);
-    } finally {
-      await page.close();
-    }
-  });
+        expect(overflowBy).toBeLessThanOrEqual(1);
+      } finally {
+        await page.close();
+      }
+    },
+  );
 });

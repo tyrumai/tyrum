@@ -14,15 +14,17 @@ publish:
 files:
   - dist/**/*
   - "!dist/gateway/**"
-  - "!node_modules"
 asarUnpack:
+  - node_modules/@nut-tree-fork/**
   - node_modules/tesseract.js/**
   - node_modules/tesseract.js-core/**
 extraResources:
-  - from: dist/gateway/index.mjs
-    to: gateway/index.mjs
-  - from: dist/gateway/migrations
-    to: gateway/migrations
+  - from: dist/gateway
+    to: gateway
+    filter:
+      - "**/*"
+      - "!node_modules"
+      - "!node_modules/**"
   - from: dist/gateway/node_modules
     to: gateway/node_modules
   - from: build/icons/32x32.png

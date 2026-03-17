@@ -16,12 +16,11 @@ import { createPerplexity } from "@ai-sdk/perplexity";
 import { createTogetherAI } from "@ai-sdk/togetherai";
 import { createVercel } from "@ai-sdk/vercel";
 import { createXai } from "@ai-sdk/xai";
-import { createGitLab } from "@gitlab/gitlab-ai-provider";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { createSAPAIProvider } from "@jerome-benoit/sap-ai-provider-v2";
 import { createAiGateway } from "ai-gateway-provider";
 import { createUnified } from "ai-gateway-provider/providers/unified";
-import { createVenice } from "venice-ai-sdk-provider";
+import { createGitLab } from "gitlab-ai-provider";
 
 export type ProviderInstance = {
   languageModel: (modelId: string) => unknown;
@@ -353,12 +352,6 @@ function createSapFactory(input: ProviderFactoryInput): ProviderInstance {
   return wrapSapProvider(provider, { AICORE_SERVICE_KEY: serviceKey });
 }
 
-function createVeniceFactory(input: ProviderFactoryInput): ProviderInstance {
-  const options = buildSimpleOptions(input);
-  options["name"] = input.providerId;
-  return createVenice(options) as unknown as ProviderInstance;
-}
-
 const FACTORIES: Record<string, ProviderFactory> = {
   "@ai-sdk/amazon-bedrock": createAmazonBedrockFactory,
   "@ai-sdk/anthropic": createSimpleFactory(
@@ -406,13 +399,12 @@ const FACTORIES: Record<string, ProviderFactory> = {
   "@ai-sdk/xai": createSimpleFactory(
     createXai as unknown as (options: Record<string, unknown>) => unknown,
   ),
-  "@gitlab/gitlab-ai-provider": createGitLabFactory,
+  "gitlab-ai-provider": createGitLabFactory,
   "@jerome-benoit/sap-ai-provider-v2": createSapFactory,
   "@openrouter/ai-sdk-provider": createSimpleFactory(
     createOpenRouter as unknown as (options: Record<string, unknown>) => unknown,
   ),
   "ai-gateway-provider": createCloudflareAiGatewayFactory,
-  "venice-ai-sdk-provider": createVeniceFactory,
 };
 
 export function createProviderFromNpm(input: ProviderFactoryInput): ProviderInstance {

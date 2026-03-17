@@ -65,6 +65,61 @@ export function getByTestId<T extends Element>(root: ParentNode, testId: string)
   return expectPresent(root.querySelector<T>(`[data-testid='${testId}']`));
 }
 
+async function waitForElement<T extends Element>(
+  lookup: () => T | null,
+  description: string,
+  attempts = 50,
+): Promise<T> {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const element = lookup();
+    if (element) return element;
+    await act(async () => {
+      await Promise.resolve();
+      await vi.dynamicImportSettled();
+    });
+  }
+  throw new Error(`Timed out waiting for ${description}`);
+}
+
+export async function waitForTestId<T extends Element>(
+  root: ParentNode,
+  testId: string,
+  attempts = 50,
+): Promise<T> {
+  return waitForElement(
+    () => root.querySelector<T>(`[data-testid='${testId}']`),
+    `test id ${testId}`,
+    attempts,
+  );
+}
+
+type DisableableElement = HTMLElement & {
+  disabled: boolean;
+};
+
+export async function waitForEnabledTestId<T extends DisableableElement>(
+  root: ParentNode,
+  testId: string,
+  attempts = 50,
+): Promise<T> {
+  return waitForElement(
+    () => {
+      const element = root.querySelector<T>(`[data-testid='${testId}']`);
+      return element && !element.disabled ? element : null;
+    },
+    `enabled test id ${testId}`,
+    attempts,
+  );
+}
+
+export async function waitForQuerySelector<T extends Element>(
+  root: ParentNode,
+  selector: string,
+  attempts = 50,
+): Promise<T> {
+  return waitForElement(() => root.querySelector<T>(selector), `selector ${selector}`, attempts);
+}
+
 export function getButton(root: ParentNode, text: string): HTMLButtonElement {
   return expectPresent(
     Array.from(root.querySelectorAll<HTMLButtonElement>("button")).find(

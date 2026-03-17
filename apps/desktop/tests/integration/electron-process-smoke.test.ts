@@ -3,6 +3,7 @@ import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { once } from "node:events";
 import {
   closeSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   openSync,
@@ -16,17 +17,24 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import {
+  packagedExecutableCandidates,
+  resolvePackagedExecutablePath,
+} from "./packaged-executable-path.js";
+import { runWithLock } from "./run-with-lock.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 const REPO_ROOT = resolve(__dirname, "../../../../");
 const DESKTOP_MAIN_ENTRYPOINT = resolve(REPO_ROOT, "apps/desktop/dist/main/index.mjs");
+const DESKTOP_RELEASE_DIR = resolve(REPO_ROOT, "apps/desktop/release");
 const electronPackageExport = require("electron");
 if (typeof electronPackageExport !== "string") {
   throw new TypeError("Expected the electron package to export the executable path.");
 }
 const ELECTRON_BIN = electronPackageExport;
 const GATEWAY_BUILD_LOCK = resolve(REPO_ROOT, ".tyrum-gateway-build.lock");
+const PACKAGED_SMOKE_ENABLED = process.env["TYRUM_RUN_PACKAGED_SMOKE"] === "1";
 
 interface ElectronProbeResult {
   available: boolean;
@@ -175,6 +183,30 @@ function ensureBuildArtifacts(): void {
   );
 }
 
+function hasPackagedExecutable(): boolean {
+  return packagedExecutableCandidates(DESKTOP_RELEASE_DIR, process.platform, process.arch).some(
+    (candidate) => existsSync(candidate),
+  );
+}
+
+function packagedExecutablePath(): string {
+  return resolvePackagedExecutablePath(
+    DESKTOP_RELEASE_DIR,
+    process.platform,
+    process.arch,
+    existsSync,
+  );
+}
+
+function ensureReleaseArtifacts(): void {
+  if (hasPackagedExecutable()) return;
+
+  runBuildStep(
+    ["--filter", "tyrum-desktop", "dist"],
+    "Failed to build packaged tyrum-desktop release artifacts for Electron smoke test.",
+  );
+}
+
 function probeElectronRuntime(): ElectronProbeResult {
   const result = spawnSync(electronCommand(), ["--version"], {
     cwd: REPO_ROOT,
@@ -257,18 +289,34 @@ function writeDesktopConfig(tyrumHome: string, port: number, dbPath: string): vo
   writeFileSync(configPath, JSON.stringify(config, null, 2), { mode: 0o600 });
 }
 
-function buildElectronLaunch(entrypoint: string, useVirtualDisplay: boolean): LaunchCommand {
-  const electronArgs = ["--disable-gpu", "--no-sandbox", entrypoint];
+function buildLaunchCommand(
+  command: string,
+  args: string[],
+  useVirtualDisplay: boolean,
+): LaunchCommand {
   if (useVirtualDisplay) {
     return {
       command: XVFB_RUN_PATH!,
-      args: ["-a", electronCommand(), ...electronArgs],
+      args: ["-a", command, ...args],
     };
   }
-  return {
-    command: electronCommand(),
-    args: electronArgs,
-  };
+  return { command, args };
+}
+
+function buildElectronLaunch(entrypoint: string, useVirtualDisplay: boolean): LaunchCommand {
+  return buildLaunchCommand(
+    electronCommand(),
+    ["--disable-gpu", "--no-sandbox", entrypoint],
+    useVirtualDisplay,
+  );
+}
+
+function buildPackagedAppLaunch(useVirtualDisplay: boolean): LaunchCommand {
+  return buildLaunchCommand(
+    packagedExecutablePath(),
+    ["--disable-gpu", "--no-sandbox"],
+    useVirtualDisplay,
+  );
 }
 
 async function waitForGatewayHealth(
@@ -346,6 +394,66 @@ async function stopElectronProcess(child: ChildProcessWithoutNullStreams): Promi
   }
 }
 
+async function runDesktopGatewaySmoke(
+  launch: LaunchCommand,
+  envOverrides: NodeJS.ProcessEnv,
+): Promise<void> {
+  const port = await findAvailablePort();
+  const tempRoot = mkdtempSync(join(tmpdir(), "tyrum-electron-smoke-"));
+  const tyrumHome = join(tempRoot, ".tyrum");
+  const dbPath = join(tempRoot, "gateway", "gateway.db");
+  const healthUrl = `http://127.0.0.1:${port}/healthz`;
+  writeDesktopConfig(tyrumHome, port, dbPath);
+
+  let stdout = "";
+  let stderr = "";
+  let gatewayWasHealthy = false;
+
+  const child = spawn(launch.command, launch.args, {
+    cwd: REPO_ROOT,
+    detached: process.platform !== "win32",
+    env: {
+      ...process.env,
+      TYRUM_HOME: tyrumHome,
+      NODE_ENV: "test",
+      ELECTRON_DISABLE_SANDBOX: "1",
+      ...envOverrides,
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  child.stdout.setEncoding("utf8");
+  child.stderr.setEncoding("utf8");
+  child.stdout.on("data", (chunk: string) => {
+    stdout += chunk;
+  });
+  child.stderr.on("data", (chunk: string) => {
+    stderr += chunk;
+  });
+
+  const output = () => {
+    const probeReason = electronProbe.reason ? `\nProbe reason: ${electronProbe.reason}` : "";
+    const displayInfo = `\nLaunch: ${launch.command} ${launch.args.join(" ")}`;
+    return `--- stdout ---\n${stdout}\n--- stderr ---\n${stderr}${probeReason}${displayInfo}`;
+  };
+
+  try {
+    await waitForGatewayHealth(healthUrl, child, output);
+    gatewayWasHealthy = true;
+
+    const healthRes = await fetch(healthUrl);
+    expect(healthRes.status).toBe(200);
+    const healthBody = (await healthRes.json()) as { status: string };
+    expect(healthBody.status).toBe("ok");
+  } finally {
+    await stopElectronProcess(child);
+    if (gatewayWasHealthy) {
+      await waitForGatewayDown(healthUrl);
+    }
+    rmSync(tempRoot, { recursive: true, force: true });
+  }
+}
+
 const electronProbe = probeElectronRuntime();
 const XVFB_RUN_PATH = findCommandPath("xvfb-run");
 const NEEDS_VIRTUAL_DISPLAY = process.platform === "linux" && !process.env["DISPLAY"];
@@ -357,70 +465,25 @@ describe("desktop full Electron process smoke", () => {
     "launches desktop main process and starts embedded gateway",
     { timeout: 300_000 },
     async () => {
-      const releaseBuildLock = acquireGatewayBuildLock();
-      try {
-        // Keep build outputs stable for the full Electron launch so concurrent
-        // test workers do not clean workspace dist artifacts mid-startup.
+      await runWithLock(acquireGatewayBuildLock, async () => {
         ensureBuildArtifacts();
 
-        const port = await findAvailablePort();
-        const tempRoot = mkdtempSync(join(tmpdir(), "tyrum-electron-smoke-"));
-        const tyrumHome = join(tempRoot, ".tyrum");
-        const dbPath = join(tempRoot, "gateway", "gateway.db");
-        const healthUrl = `http://127.0.0.1:${port}/healthz`;
-        writeDesktopConfig(tyrumHome, port, dbPath);
-
-        let stdout = "";
-        let stderr = "";
-        let gatewayWasHealthy = false;
         const launch = buildElectronLaunch(DESKTOP_MAIN_ENTRYPOINT, NEEDS_VIRTUAL_DISPLAY);
+        await runDesktopGatewaySmoke(launch, { VITE_DEV_SERVER_URL: "about:blank" });
+      });
+    },
+  );
 
-        const child = spawn(launch.command, launch.args, {
-          cwd: REPO_ROOT,
-          detached: process.platform !== "win32",
-          env: {
-            ...process.env,
-            TYRUM_HOME: tyrumHome,
-            NODE_ENV: "test",
-            VITE_DEV_SERVER_URL: "about:blank",
-            ELECTRON_DISABLE_SANDBOX: "1",
-          },
-          stdio: ["ignore", "pipe", "pipe"],
-        });
+  it.skipIf(!CAN_LAUNCH_ELECTRON || !PACKAGED_SMOKE_ENABLED)(
+    "launches the packaged desktop app and starts the embedded gateway",
+    { timeout: 600_000 },
+    async () => {
+      await runWithLock(acquireGatewayBuildLock, async () => {
+        ensureReleaseArtifacts();
 
-        child.stdout.setEncoding("utf8");
-        child.stderr.setEncoding("utf8");
-        child.stdout.on("data", (chunk: string) => {
-          stdout += chunk;
-        });
-        child.stderr.on("data", (chunk: string) => {
-          stderr += chunk;
-        });
-
-        const output = () => {
-          const probeReason = electronProbe.reason ? `\nProbe reason: ${electronProbe.reason}` : "";
-          const displayInfo = `\nLaunch: ${launch.command} ${launch.args.join(" ")}`;
-          return `--- stdout ---\n${stdout}\n--- stderr ---\n${stderr}${probeReason}${displayInfo}`;
-        };
-
-        try {
-          await waitForGatewayHealth(healthUrl, child, output);
-          gatewayWasHealthy = true;
-
-          const healthRes = await fetch(healthUrl);
-          expect(healthRes.status).toBe(200);
-          const healthBody = (await healthRes.json()) as { status: string };
-          expect(healthBody.status).toBe("ok");
-        } finally {
-          await stopElectronProcess(child);
-          if (gatewayWasHealthy) {
-            await waitForGatewayDown(healthUrl);
-          }
-          rmSync(tempRoot, { recursive: true, force: true });
-        }
-      } finally {
-        releaseBuildLock();
-      }
+        const launch = buildPackagedAppLaunch(NEEDS_VIRTUAL_DISPLAY);
+        await runDesktopGatewaySmoke(launch, {});
+      });
     },
   );
 });

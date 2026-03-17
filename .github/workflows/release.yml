@@ -12,7 +12,6 @@ permissions:
 
 env:
   NODE_VERSION: 24
-  PNPM_VERSION: 10
 
 jobs:
   architecture-parity-gate:
@@ -82,8 +81,6 @@ jobs:
       - uses: actions/checkout@v6
 
       - uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
 
       - uses: actions/setup-node@v6
         with:
@@ -138,7 +135,6 @@ jobs:
             "packages/schemas/package.json",
             "packages/client/package.json",
             "packages/gateway/package.json",
-            "apps/desktop/package.json",
           ];
 
           const workspacePackageNames = new Set();
@@ -205,8 +201,6 @@ jobs:
       - uses: actions/checkout@v6
 
       - uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
 
       - uses: actions/setup-node@v6
         with:
@@ -232,24 +226,6 @@ jobs:
           const pkg = JSON.parse(readFileSync(path, "utf8"));
 
           pkg.version = version;
-
-          const dependencyFields = [
-            "dependencies",
-            "devDependencies",
-            "peerDependencies",
-            "optionalDependencies",
-          ];
-
-          for (const field of dependencyFields) {
-            const deps = pkg[field];
-            if (!deps || typeof deps !== "object") continue;
-            for (const depName of Object.keys(deps)) {
-              const depVersion = deps[depName];
-              if (typeof depVersion === "string" && depVersion.startsWith("workspace:")) {
-                deps[depName] = version;
-              }
-            }
-          }
 
           writeFileSync(path, `${JSON.stringify(pkg, null, 2)}\n`);
           console.log(`Updated ${path} -> ${pkg.version}`);
@@ -408,6 +384,21 @@ jobs:
           WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
           WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
         run: pnpm --filter tyrum-desktop dist
+
+      - name: Smoke test packaged desktop app
+        shell: bash
+        env:
+          TYRUM_RUN_PACKAGED_SMOKE: "1"
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
+            xvfb-run -a --server-args="-screen 0 1920x1080x24" \
+              pnpm exec vitest run apps/desktop/tests/integration/electron-process-smoke.test.ts \
+              -t "launches the packaged desktop app and starts the embedded gateway"
+          else
+            pnpm exec vitest run apps/desktop/tests/integration/electron-process-smoke.test.ts \
+              -t "launches the packaged desktop app and starts the embedded gateway"
+          fi
 
       - name: Stage desktop artifacts
         shell: bash

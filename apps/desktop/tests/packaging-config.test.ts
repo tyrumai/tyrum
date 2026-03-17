@@ -32,6 +32,13 @@ describe("desktop packaging configuration", () => {
     expect(config).toMatch(/^\s*schemes:\s*$/m);
     expect(config).toMatch(/^\s*-\s*tyrum\s*$/m);
     expect(config).toMatch(/^\s*npmRebuild:\s*false\s*$/m);
+    expect(config).not.toMatch(/^files:\n(?:\s+- .*\n)*\s+- "!node_modules"\s*$/m);
+    expect(config).toMatch(/^\s*-\s*node_modules\/@nut-tree-fork\/\*\*\s*$/m);
+    expect(config).toMatch(/^\s*-\s*from:\s*dist\/gateway\s*$/m);
+    expect(config).toMatch(/^\s*to:\s*gateway\s*$/m);
+    expect(config).toMatch(/^\s*-\s*"!node_modules\/\*\*"\s*$/m);
+    expect(config).toMatch(/^\s*-\s*from:\s*dist\/gateway\/node_modules\s*$/m);
+    expect(config).toMatch(/^\s*to:\s*gateway\/node_modules\s*$/m);
 
     expect(config).toMatch(/^\s*mac:\s*$/m);
     expect(config).toMatch(/^\s*icon:\s*build\/icon\.icns\s*$/m);

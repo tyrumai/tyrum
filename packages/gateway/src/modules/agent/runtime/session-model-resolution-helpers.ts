@@ -15,11 +15,7 @@ export interface ResolveSessionModelDeps {
   fetchImpl: typeof fetch;
 }
 
-const V2_PROVIDER_NPMS = new Set([
-  "@gitlab/gitlab-ai-provider",
-  "@jerome-benoit/sap-ai-provider-v2",
-  "venice-ai-sdk-provider",
-]);
+const V2_PROVIDER_NPMS = new Set(["gitlab-ai-provider", "@jerome-benoit/sap-ai-provider-v2"]);
 
 export function expectedSpecificationVersionForNpm(npm: string): "v2" | "v3" {
   return V2_PROVIDER_NPMS.has(npm) ? "v2" : "v3";
