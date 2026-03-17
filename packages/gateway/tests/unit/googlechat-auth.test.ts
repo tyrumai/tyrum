@@ -12,7 +12,8 @@ vi.mock("google-auth-library", () => ({
   },
 }));
 
-type VerifyGoogleChatRequest = typeof import("../../src/modules/ingress/googlechat-auth.js").verifyGoogleChatRequest;
+type VerifyGoogleChatRequest =
+  typeof import("../../src/modules/ingress/googlechat-auth.js").verifyGoogleChatRequest;
 
 async function loadVerifyGoogleChatRequest(): Promise<VerifyGoogleChatRequest> {
   const module = await import("../../src/modules/ingress/googlechat-auth.js");
@@ -131,8 +132,8 @@ describe("verifyGoogleChatRequest", () => {
   });
 
   it("validates project-number tokens and reuses the cached Chat certificates", async () => {
-    const fetchMock = vi.fn(async () =>
-      new Response(JSON.stringify({ key1: "cert1" }), { status: 200 }),
+    const fetchMock = vi.fn(
+      async () => new Response(JSON.stringify({ key1: "cert1" }), { status: 200 }),
     );
     vi.stubGlobal("fetch", fetchMock);
 
@@ -189,7 +190,9 @@ describe("verifyGoogleChatRequest", () => {
     verifyIdTokenMock.mockReset();
     verifySignedJwtWithCertsAsyncMock.mockReset();
 
-    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ key1: "cert1" }), { status: 200 }));
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ key1: "cert1" }), { status: 200 }),
+    );
     verifySignedJwtWithCertsAsyncMock.mockRejectedValueOnce(new Error("invalid signature"));
 
     verifyGoogleChatRequest = await loadVerifyGoogleChatRequest();
