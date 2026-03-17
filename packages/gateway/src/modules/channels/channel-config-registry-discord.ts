@@ -169,9 +169,12 @@ function scoreDiscordMember(member: DiscordMember, query: string): number {
   const candidates = [member.user.username, member.user.global_name, member.nick ?? undefined]
     .map((value) => value?.toLowerCase())
     .filter(Boolean) as string[];
-  let score = 0;
-  if (candidates.some((value) => value === q)) score += 3;
-  if (candidates.some((value) => value.includes(q))) score += 1;
+  const hasExactMatch = candidates.some((value) => value === q);
+  const hasPartialMatch = candidates.some((value) => value.includes(q));
+  if (!hasExactMatch && !hasPartialMatch) {
+    return 0;
+  }
+  let score = hasExactMatch ? 3 : 1;
   if (!member.user.bot) score += 1;
   return score;
 }

@@ -209,6 +209,55 @@ describe("channel config routes", () => {
     expect(discordFetch).toHaveBeenCalledTimes(4);
   });
 
+  it("rejects Discord member search results that do not match the requested user locally", async () => {
+    const discordFetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url =
+        typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      if (url === "https://discord.com/api/v10/users/@me/guilds") {
+        return new Response(JSON.stringify([{ id: "1234567890", name: "My Server" }]), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.startsWith("https://discord.com/api/v10/guilds/1234567890/members/search?")) {
+        return new Response(
+          JSON.stringify([{ user: { id: "9999", username: "bob", bot: false } }]),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      throw new Error(`Unexpected Discord API request: ${url}`);
+    });
+    vi.stubGlobal("fetch", discordFetch as typeof fetch);
+
+    const app = createAuthedApp();
+    const res = await app.request("/config/channels/accounts", {
+      method: "POST",
+      headers: jsonHeaders,
+      body: JSON.stringify({
+        channel: "discord",
+        account_key: "community",
+        config: {
+          agent_key: "agent-b",
+          allowed_user_ids: "@alice",
+        },
+        secrets: {
+          bot_token: "discord-bot-token",
+        },
+      }),
+    });
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({
+      error: "invalid_request",
+      field_errors: {
+        allowed_user_ids: ["Unable to resolve Discord user '@alice'"],
+      },
+    });
+  });
+
   it("supports Google Chat auth methods and normalizes stored access lists", async () => {
     const app = createAuthedApp();
 

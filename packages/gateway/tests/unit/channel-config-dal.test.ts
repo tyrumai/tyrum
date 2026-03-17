@@ -284,4 +284,47 @@ describe("ChannelConfigDal", () => {
     ).resolves.toBe(true);
     await expect(dal.listTelegram(DEFAULT_TENANT_ID)).resolves.toEqual([]);
   });
+
+  it("preserves timezone-offset timestamps returned from storage", async () => {
+    await dal.create({
+      tenantId: DEFAULT_TENANT_ID,
+      config: {
+        channel: "discord",
+        account_key: "community",
+        agent_key: "default",
+        allowed_user_ids: [],
+        allowed_channels: [],
+      },
+    });
+    await db.run(
+      `UPDATE channel_configs
+       SET created_at = ?, updated_at = ?
+       WHERE tenant_id = ?
+         AND connector_key = 'discord'
+         AND account_key = ?`,
+      ["2026-03-10 00:00:00+00", "2026-03-10 05:45:30+05:30", DEFAULT_TENANT_ID, "community"],
+    );
+
+    const entry = await dal.getEntryByChannelAndAccountKey({
+      tenantId: DEFAULT_TENANT_ID,
+      connectorKey: "discord",
+      accountKey: "community",
+    });
+    expect(entry).toMatchObject({
+      createdAt: "2026-03-10T00:00:00.000Z",
+      updatedAt: "2026-03-10T00:15:30.000Z",
+    });
+
+    const listed = await dal.listEntries(DEFAULT_TENANT_ID);
+    expect(listed).toContainEqual(
+      expect.objectContaining({
+        config: expect.objectContaining({
+          channel: "discord",
+          account_key: "community",
+        }),
+        createdAt: "2026-03-10T00:00:00.000Z",
+        updatedAt: "2026-03-10T00:15:30.000Z",
+      }),
+    );
+  });
 });

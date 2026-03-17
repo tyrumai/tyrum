@@ -43,8 +43,18 @@ function normalizeIsoTimestamp(value: string | undefined): string {
   if (!value?.trim()) {
     return new Date().toISOString();
   }
-  const normalized = value.includes("T") ? value : value.replace(" ", "T");
-  const withZone = normalized.endsWith("Z") ? normalized : `${normalized}Z`;
+  const normalized = value
+    .trim()
+    .replace(/^(\d{4}-\d{2}-\d{2})\s+/, "$1T")
+    .replace(/\s+([+-]\d{2}(?::?\d{2})?|[zZ])$/, "$1");
+  const normalizedOffset = /[+-]\d{4}$/.test(normalized)
+    ? `${normalized.slice(0, -2)}:${normalized.slice(-2)}`
+    : /[+-]\d{2}$/.test(normalized)
+      ? `${normalized}:00`
+      : normalized;
+  const withZone = /(?:[zZ]|[+-]\d{2}(?::?\d{2})?)$/.test(normalizedOffset)
+    ? normalizedOffset
+    : `${normalizedOffset}Z`;
   const parsed = new Date(withZone);
   return Number.isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
 }
