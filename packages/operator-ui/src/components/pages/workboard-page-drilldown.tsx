@@ -295,7 +295,7 @@ export function WorkBoardDrilldown({
           title="Cancel this WorkItem?"
           description="This will cancel the WorkItem and stop any running tasks."
           confirmLabel="Cancel WorkItem"
-          onConfirm={() => void onTransition("cancelled", "operator cancelled")}
+          onConfirm={() => onTransition("cancelled", "operator cancelled")}
         />
       </CardContent>
     </Card>

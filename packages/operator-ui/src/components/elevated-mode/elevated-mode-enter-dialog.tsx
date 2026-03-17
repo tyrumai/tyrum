@@ -82,9 +82,6 @@ export function ElevatedModeEnterDialog() {
             event.preventDefault();
           }
         }}
-        onOpenAutoFocus={(event) => {
-          event.preventDefault();
-        }}
       >
         <DialogHeader>
           <DialogTitle>Authorize admin access</DialogTitle>
