@@ -99,9 +99,7 @@ describe("Pre-compaction memory flush - advanced", () => {
     const flush = async () =>
       maybeRunPreCompactionMemoryFlush(
         {
-          db: container.db,
           logger: container.logger,
-          agentId,
           prepareTurnDeps: (runtime as any).prepareTurnDeps,
           channel: "test",
           threadId: "thread-idempotent",
@@ -119,6 +117,8 @@ describe("Pre-compaction memory flush - advanced", () => {
     const memory = new MemoryDal(container.db);
     const firstList = await memory.list({ tenantId, agentId, limit: 50 });
     expect(firstList.items).toHaveLength(1);
+    expect(firstList.items[0]?.provenance.channel).toBe("test");
+    expect(firstList.items[0]?.provenance.thread_id).toBe("thread-idempotent");
 
     await flush();
     expect(listNonTitleGenerateCalls(languageModel)).toHaveLength(2);
@@ -129,7 +129,7 @@ describe("Pre-compaction memory flush - advanced", () => {
   it("bounds pre-compaction flush timeout to a slice of the turn timeout", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-preflush-timeout-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
-    const { agentId } = await seedAgentConfig(container, { maxTurns: 1 });
+    await seedAgentConfig(container, { maxTurns: 1 });
 
     const languageModel = new MockLanguageModelV3({
       doGenerate: async (options) => {
@@ -197,9 +197,7 @@ describe("Pre-compaction memory flush - advanced", () => {
     const startedAtMs = performance.now();
     await maybeRunPreCompactionMemoryFlush(
       {
-        db: container.db,
         logger: container.logger,
-        agentId,
         prepareTurnDeps: (runtime as any).prepareTurnDeps,
         channel: "test",
         threadId: "thread-timeout",
@@ -220,7 +218,7 @@ describe("Pre-compaction memory flush - advanced", () => {
   it("uses a no-inference system prompt for pre-compaction memory flushes", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-preflush-system-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
-    const { agentId } = await seedAgentConfig(container, { maxTurns: 1 });
+    await seedAgentConfig(container, { maxTurns: 1 });
 
     const languageModel = createSequencedGenerateLanguageModel([
       createMemoryWriteToolStep({
@@ -259,9 +257,7 @@ describe("Pre-compaction memory flush - advanced", () => {
 
     await maybeRunPreCompactionMemoryFlush(
       {
-        db: container.db,
         logger: container.logger,
-        agentId,
         prepareTurnDeps: (runtime as any).prepareTurnDeps,
         channel: "test",
         threadId: "thread-system-prompt",

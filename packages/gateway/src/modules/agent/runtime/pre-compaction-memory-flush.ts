@@ -5,7 +5,6 @@ import type { AgentConfig as AgentConfigT, TyrumUIMessage } from "@tyrum/schemas
 import { sha256HexFromString } from "../../policy/canonical-json.js";
 import { redactSecretLikeText } from "./secrets.js";
 import type { SessionRow } from "../session-dal.js";
-import type { SqlDb } from "../../../statestore/types.js";
 import { extractMessageText } from "./session-context-state.js";
 import type { PrepareTurnDeps } from "./turn-preparation.js";
 import { getExecutionProfile } from "../execution-profiles.js";
@@ -265,6 +264,12 @@ async function resolvePreCompactionFlushTooling(params: {
     params.session,
     resolved,
     executionProfile,
+    {
+      memoryProvenance: {
+        channel: resolved.channel,
+        threadId: resolved.thread_id,
+      },
+    },
   );
   const resolvedMemory = resolveMemoryWriteTool(runtime.availableTools, params.ctx.config);
   if (!resolvedMemory) {
@@ -312,9 +317,7 @@ function compactionFlushTimeoutMs(totalTimeoutMs: number | undefined): number {
 
 export async function maybeRunPreCompactionMemoryFlush(
   deps: {
-    db: SqlDb;
     logger: LoggerLike;
-    agentId: string;
     prepareTurnDeps?: PrepareTurnDeps;
     channel?: string;
     threadId?: string;

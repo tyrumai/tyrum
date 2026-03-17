@@ -342,9 +342,7 @@ export async function compactSessionWithResolvedModel(input: {
 
   await maybeRunPreCompactionMemoryFlush(
     {
-      db: input.container.db,
       logger: input.container.logger,
-      agentId: input.session.agent_id,
       prepareTurnDeps: input.prepareTurnDeps,
       channel: input.channel,
       threadId: input.threadId,
