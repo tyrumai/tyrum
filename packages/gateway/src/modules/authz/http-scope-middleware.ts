@@ -61,12 +61,25 @@ function isReadOnlyMethod(method: string): boolean {
   return method === "GET" || method === "HEAD" || method === "OPTIONS";
 }
 
+function isExtensionsInventoryRoute(routePath: string): boolean {
+  const segments = routePath.split("/").filter((segment) => segment.length > 0);
+  if (segments[0] !== "config" || segments[1] !== "extensions") {
+    return false;
+  }
+
+  return segments.length === 3 || segments.length === 4;
+}
+
 export function resolveHttpRouteRequiredScopes(input: {
   method: string;
   routePath: string;
 }): string[] | null {
   const method = input.method.toUpperCase();
   const routePath = input.routePath;
+
+  if (isReadOnlyMethod(method) && isExtensionsInventoryRoute(routePath)) {
+    return ["operator.read"];
+  }
 
   // Tenant administration surfaces.
   if (

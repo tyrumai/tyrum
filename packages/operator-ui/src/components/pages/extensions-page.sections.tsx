@@ -1,5 +1,5 @@
 import type { ManagedExtensionDetail, ManagedExtensionSummary } from "@tyrum/schemas";
-import { History, RefreshCw } from "lucide-react";
+import { ChevronDown, ChevronRight, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
   applyMemorySettingsToForm,
@@ -52,6 +52,7 @@ function describeSource(source: ManagedExtensionSummary["source"]): string | nul
 export function ExtensionCard({
   item,
   detail,
+  isExpanded,
   inspectLoading,
   mutateLoading,
   canMutate,
@@ -64,6 +65,7 @@ export function ExtensionCard({
 }: {
   item: ManagedExtensionSummary;
   detail: ManagedExtensionDetail | undefined;
+  isExpanded: boolean;
   inspectLoading: boolean;
   mutateLoading: boolean;
   canMutate: boolean;
@@ -191,9 +193,19 @@ export function ExtensionCard({
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" isLoading={inspectLoading} onClick={onInspect}>
-              <History className="h-4 w-4" />
-              Inspect
+            <Button
+              variant="outline"
+              size="sm"
+              aria-expanded={isExpanded}
+              isLoading={inspectLoading}
+              onClick={onInspect}
+            >
+              {isExpanded ? (
+                <ChevronDown className="h-4 w-4" />
+              ) : (
+                <ChevronRight className="h-4 w-4" />
+              )}
+              {isExpanded ? "Collapse" : "Inspect"}
             </Button>
             {item.can_toggle_source_enabled ? (
               <Button variant="outline" size="sm" isLoading={mutateLoading} onClick={onToggle}>

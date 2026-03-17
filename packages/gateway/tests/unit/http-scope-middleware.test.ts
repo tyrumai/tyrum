@@ -47,6 +47,30 @@ describe("HTTP scope middleware route mapping", () => {
     ).toEqual(["operator.pairing"]);
   });
 
+  it("maps extension inventory reads to operator.read while keeping mutations on operator.admin", () => {
+    expect(
+      resolveHttpRouteRequiredScopes({ method: "GET", routePath: "/config/extensions/skill" }),
+    ).toEqual(["operator.read"]);
+    expect(
+      resolveHttpRouteRequiredScopes({
+        method: "HEAD",
+        routePath: "/config/extensions/mcp/filesystem",
+      }),
+    ).toEqual(["operator.read"]);
+    expect(
+      resolveHttpRouteRequiredScopes({
+        method: "POST",
+        routePath: "/config/extensions/skill/import",
+      }),
+    ).toEqual(["operator.admin"]);
+    expect(
+      resolveHttpRouteRequiredScopes({
+        method: "PUT",
+        routePath: "/config/extensions/mcp/filesystem/defaults",
+      }),
+    ).toEqual(["operator.admin"]);
+  });
+
   it("maps tenant admin surfaces to operator.admin", () => {
     expect(resolveHttpRouteRequiredScopes({ method: "GET", routePath: "/agents" })).toEqual([
       "operator.admin",
