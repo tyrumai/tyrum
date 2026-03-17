@@ -203,7 +203,11 @@ function buildNodeRows(input: {
   });
 
   const offlineRows = Array.from(approvedPairingsByNodeId.values())
-    .filter((pairing) => !inventoryByNodeId[pairing.node.node_id]?.connected)
+    .filter(
+      (pairing) =>
+        !pendingNodeIds.has(pairing.node.node_id) &&
+        !inventoryByNodeId[pairing.node.node_id]?.connected,
+    )
     .map((pairing) =>
       buildPairingRow({
         state: "offline",

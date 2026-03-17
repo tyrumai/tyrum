@@ -175,6 +175,65 @@ describe("PairingPage", () => {
     }
   });
 
+  it("does not duplicate a disconnected node when pending and approved pairings share the same node", async () => {
+    const ws = new FakeWsClient();
+    const { http, nodesList, pairingsList } = createFakeHttpClient();
+    const sampleInventory = sampleNodeInventoryResponse();
+    const pendingPairing = {
+      ...samplePairingRequestPending(),
+      pairing_id: 1,
+      status: "awaiting_human" as const,
+      requested_at: "2026-01-03T00:00:00.000Z",
+      node: {
+        ...samplePairingRequestPending().node,
+        node_id: "node-1",
+        label: "shared node",
+        last_seen_at: "2026-01-03T00:00:00.000Z",
+      },
+    };
+    const approvedPairing = {
+      ...samplePairingRequestApproved(),
+      pairing_id: 2,
+      node: {
+        ...samplePairingRequestApproved().node,
+        node_id: "node-1",
+        label: "shared node",
+        last_seen_at: "2026-01-02T00:00:00.000Z",
+      },
+    };
+
+    pairingsList.mockResolvedValue({
+      status: "ok",
+      pairings: [pendingPairing, approvedPairing],
+    });
+    nodesList.mockResolvedValue({
+      ...sampleInventory,
+      nodes: [],
+    });
+
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test"),
+      deps: { ws, http },
+    });
+
+    const { container, root } = renderPairingPage(core);
+
+    try {
+      await flushPairingPage();
+
+      const toggles = Array.from(
+        container.querySelectorAll<HTMLButtonElement>('[data-testid^="pairing-row-toggle-"]'),
+      ).map((button) => button.getAttribute("data-testid"));
+      expect(toggles).toEqual(["pairing-row-toggle-node-1"]);
+      expect(container.textContent).toContain("1 pending, 0 connected, 0 offline");
+      expect(container.querySelectorAll('[data-testid="pairing-row-node-1"]')).toHaveLength(1);
+    } finally {
+      cleanupTestRoot({ container, root });
+    }
+  });
+
   it("approves a pending row from the expanded details", async () => {
     const ws = new FakeWsClient();
     const { http, pairingsApprove, pairingsList } = createFakeHttpClient();
