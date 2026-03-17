@@ -8,5 +8,12 @@ describe("@tyrum/operator-ui entry exports", () => {
 
     expect(dts).toContain("type DialogHeaderProps");
     expect(dts).toContain("type DialogFooterProps");
+    expect(dts).not.toContain("AiSdkChatPage");
+  });
+
+  it("keeps AiSdkChatPage available from the pages entrypoint", () => {
+    const dts = readFileSync(join(process.cwd(), "packages/operator-ui/dist/pages.d.mts"), "utf8");
+
+    expect(dts).toContain("AiSdkChatPage");
   });
 });

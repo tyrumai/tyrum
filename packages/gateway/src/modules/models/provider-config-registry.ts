@@ -45,7 +45,6 @@ const SIMPLE_API_KEY_BASE_URL_NPMS = new Set([
   "@ai-sdk/togetherai",
   "@ai-sdk/vercel",
   "@ai-sdk/xai",
-  "venice-ai-sdk-provider",
 ]);
 
 const SIMPLE_API_KEY_NPMS = new Set([
@@ -419,7 +418,7 @@ function buildMethodsForProvider(
     return [buildCloudflareAiGatewayMethod()];
   }
 
-  if (npm === "@gitlab/gitlab-ai-provider") {
+  if (npm === "gitlab-ai-provider") {
     return [buildGitLabMethod()];
   }
 

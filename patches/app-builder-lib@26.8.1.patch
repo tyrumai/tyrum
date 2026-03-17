@@ -1,0 +1,45 @@
+diff --git a/out/node-module-collector/moduleManager.js b/out/node-module-collector/moduleManager.js
+index d23a542a..a3108994 100644
+--- a/out/node-module-collector/moduleManager.js
++++ b/out/node-module-collector/moduleManager.js
+@@ -17,7 +17,7 @@ var LogMessageByKey;
+ exports.logMessageLevelByKey = {
+     [LogMessageByKey.PKG_DUPLICATE_REF]: "info",
+     [LogMessageByKey.PKG_NOT_FOUND]: "warn",
+-    [LogMessageByKey.PKG_NOT_ON_DISK]: "warn",
++    [LogMessageByKey.PKG_NOT_ON_DISK]: "info",
+     [LogMessageByKey.PKG_SELF_REF]: "debug",
+     [LogMessageByKey.PKG_OPTIONAL_NOT_INSTALLED]: "info",
+     [LogMessageByKey.PKG_COLLECTOR_OUTPUT]: "warn",
+diff --git a/out/node-module-collector/nodeModulesCollector.js b/out/node-module-collector/nodeModulesCollector.js
+index 0956d265..a02a94f9 100644
+--- a/out/node-module-collector/nodeModulesCollector.js
++++ b/out/node-module-collector/nodeModulesCollector.js
+@@ -10,6 +10,7 @@ const path = require("path");
+ const hoist_1 = require("./hoist");
+ const moduleManager_1 = require("./moduleManager");
+ const packageManager_1 = require("./packageManager");
++const IGNORED_MISSING_ON_DISK_DEPENDENCIES = new Set(["@nut-tree-fork/node-mac-permissions@2.2.1", "node-addon-api@5.0.0"]);
+ class NodeModulesCollector {
+     constructor(rootDir, tempDirManager) {
+         this.rootDir = rootDir;
+@@ -249,7 +250,9 @@ class NodeModulesCollector {
+             // fix npm list issue
+             // https://github.com/npm/cli/issues/8535
+             if (!(await this.cache.exists[p])) {
+-                this.cache.logSummary[moduleManager_1.LogMessageByKey.PKG_NOT_ON_DISK].push(key);
++                if (!IGNORED_MISSING_ON_DISK_DEPENDENCIES.has(key)) {
++                    this.cache.logSummary[moduleManager_1.LogMessageByKey.PKG_NOT_ON_DISK].push(key);
++                }
+                 continue;
+             }
+             const node = {
+@@ -315,7 +318,7 @@ class NodeModulesCollector {
+             const child = childProcess.spawn(command, args, {
+                 cwd,
+                 env: { COREPACK_ENABLE_STRICT: "0", ...process.env }, // allow `process.env` overrides
+-                shell: true, // `true`` is now required: https://github.com/electron-userland/electron-builder/issues/9488
++                shell: process.platform === "win32", // Only Windows still needs shell wrapping for .cmd execution.
+             });
+             let stderr = "";
+             child.stdout.pipe(outStream);

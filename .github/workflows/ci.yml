@@ -499,8 +499,8 @@ jobs:
       - name: Build desktop type dependencies
         run: pnpm --filter @tyrum/schemas build && pnpm --filter @tyrum/client build && pnpm --filter @tyrum/operator-core build && pnpm --filter @tyrum/operator-ui build && pnpm --filter @tyrum/desktop-node build
 
-      - name: Build desktop app
-        run: pnpm --filter tyrum-desktop build
+      - name: Build desktop release files
+        run: pnpm --filter tyrum-desktop dist
 
       - name: Install Playwright (Chromium)
         shell: bash
@@ -513,6 +513,8 @@ jobs:
           fi
 
       - name: Test desktop suite
+        env:
+          TYRUM_RUN_PACKAGED_SMOKE: "1"
         shell: bash
         run: |
           set -euo pipefail

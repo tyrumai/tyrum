@@ -6,13 +6,14 @@
   "author": "Ron Hernaus <ron@virtunet.nl>",
   "license": "MIT",
   "type": "module",
+  "packageManager": "pnpm@10.28.0",
   "main": "dist/main/index.mjs",
   "scripts": {
     "dev": "electron dist/main/index.mjs",
     "pretest": "pnpm --filter @tyrum/schemas build && pnpm --filter @tyrum/client build && pnpm --filter @tyrum/cli-utils build && pnpm --filter @tyrum/operator-core build && pnpm --filter @tyrum/operator-ui build && pnpm --filter @tyrum/desktop-node build",
     "test": "pnpm -w vitest run apps/desktop/tests",
-    "build:main": "tsdown src/main/index.ts src/main/desktop-screenshot-helper.ts --format esm --outDir dist/main --external electron",
-    "build:preload": "tsdown src/preload/index.ts --format cjs --outDir dist/preload --external electron",
+    "build:main": "tsdown --config tsdown.config.ts --filter desktop-main",
+    "build:preload": "tsdown --config tsdown.config.ts --filter desktop-preload",
     "build:renderer": "vite build",
     "build": "pnpm build:main && pnpm build:preload && pnpm build:renderer",
     "build:gateway": "pnpm --filter @tyrum/schemas build && pnpm --filter @tyrum/cli-utils build && pnpm --filter @tyrum/gateway build && node ./scripts/stage-gateway-bin.mjs",
@@ -40,13 +41,14 @@
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@tyrum/gateway": "workspace:*",
-    "@vitejs/plugin-react": "^6.0.1",
+    "@vitejs/plugin-react": "^5.2.0",
     "electron": "^41.0.2",
     "electron-builder": "^26.8.1",
+    "electron-builder-squirrel-windows": "^26.8.1",
     "lucide-react": "^0.577.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "tailwindcss": "^4.2.1",
-    "vite": "^8.0.0"
+    "vite": "^7.3.1"
   }
 }

@@ -31,7 +31,7 @@ const providerFixtures = {
     id: "gitlab",
     name: "GitLab",
     env: ["GITLAB_TOKEN"],
-    npm: "@gitlab/gitlab-ai-provider",
+    npm: "gitlab-ai-provider",
     models: { "duo-chat": { id: "duo-chat", name: "Duo Chat" } },
   },
 } as const;

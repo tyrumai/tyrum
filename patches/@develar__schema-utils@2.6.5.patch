@@ -92,3 +92,17 @@ index 21f43d0dee5fd024990e28e855edaa6d91bd042f..147486beabc107729445ff1f4e766a77
  }
  /**
   * @param {Array<ErrorObject>} errors
+diff --git a/dist/keywords/absolutePath.js b/dist/keywords/absolutePath.js
+index 764d8035..801ee882 100644
+--- a/dist/keywords/absolutePath.js
++++ b/dist/keywords/absolutePath.js
+@@ -46,7 +46,8 @@ function getErrorFor(shouldBeAbsolute, schema, data) {
+ 
+ 
+ function addAbsolutePathKeyword(ajv) {
+-  ajv.addKeyword('absolutePath', {
++  ajv.addKeyword({
++    keyword: 'absolutePath',
+     errors: true,
+     type: 'string',
+ 

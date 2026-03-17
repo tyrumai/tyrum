@@ -102,4 +102,13 @@ describe("provider-factory SAP wrapper", () => {
     expect(sapMockState.maxConcurrent).toBe(1);
     expect(process.env.AICORE_SERVICE_KEY).toBe("original-service-key");
   });
+
+  it("rejects unsupported provider package identifiers", () => {
+    expect(() =>
+      createProviderFromNpm({
+        npm: "@acme/unsupported-provider",
+        providerId: "acme",
+      }),
+    ).toThrow("unsupported provider npm package '@acme/unsupported-provider'");
+  });
 });

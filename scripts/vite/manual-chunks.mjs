@@ -16,9 +16,14 @@ export function createTyrumManualChunk(id) {
 }
 
 const PACKAGES_WITH_EMPTY_CHUNKS = new Set([
+  "@ai-sdk/gateway",
+  "@opentelemetry/api",
+  "@vercel/oidc",
   "detect-node-es",
+  "dequal",
   "micromark-extension-gfm-tagfilter",
   "micromark-util-encode",
+  "use-sync-external-store",
   "zwitch",
 ]);
 
