@@ -70,7 +70,7 @@ function renderSocialCard(sourcePath, outputPath) {
   run("magick", [
     "-size",
     "1200x630",
-    "xc:#0a0a0a",
+    "xc:#141614",
     "(",
     sourcePath,
     "-resize",

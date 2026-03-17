@@ -83,6 +83,10 @@ const config: Config = {
     image: "img/brand/social-card.png",
     navbar: {
       title: "Tyrum",
+      logo: {
+        alt: "Tyrum",
+        src: "/img/brand/app-icon.svg",
+      },
       items: navbarItems,
     },
     ...(algolia ? { algolia } : {}),
