@@ -257,14 +257,7 @@ export function AgentIdentityPanel({
 
   return (
     <div className="grid min-w-0 gap-4" data-testid="agents-identity-panel">
-      <div
-        className="flex min-w-0 flex-wrap items-center justify-between gap-3"
-        data-testid="agents-identity-header"
-      >
-        <div className="min-w-0 flex-1 text-sm text-fg-muted [overflow-wrap:anywhere]">
-          Identity, runtime model, tool access, memory support, and session policy for the selected
-          agent.
-        </div>
+      <div className="flex min-w-0 items-center justify-end" data-testid="agents-identity-header">
         <Button
           type="button"
           size="sm"
