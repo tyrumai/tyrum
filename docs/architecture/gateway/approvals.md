@@ -4,139 +4,111 @@ slug: /architecture/approvals
 
 # Approvals
 
-Approvals are Tyrum’s durable mechanism for gating risky or side-effecting actions behind explicit operator consent. They are created by policy checks and by the execution engine when a workflow step requires confirmation.
+Approvals are Tyrum's durable enforcement surface for risky actions. They are created by policy checks and execution steps, and they gate side effects until an explicit decision is recorded.
 
-Approvals are **enforcement**, not prompt guidance.
+## Quick orientation
 
-## What approvals are used for
+- Read this if: you need the lifecycle of approval-gated work.
+- Skip this if: you need queue internals or review processor implementation details.
+- Go deeper: [Reviews](./reviews.md), [Policy overrides](./policy-overrides.md), [Execution engine](/architecture/execution-engine).
 
-- Spending / commitments
-- External messaging to new parties
-- Accessing sensitive scopes (filesystem, shell, secrets, remote nodes)
-- Executing side-effecting workflow steps (playbooks)
-- Human takeover handoffs (pause-and-drive)
-- Device/node pairing (when required)
+## Lifecycle at a glance
 
-## Approval lifecycle
+```mermaid
+stateDiagram-v2
+  [*] --> Requested
+  Requested --> Queued: auto_review
+  Requested --> AwaitingHuman: manual_only
+  Queued --> Reviewing: reviewer claimed
+  Reviewing --> AwaitingHuman: escalation
+  Reviewing --> Approved: reviewer approves
+  Reviewing --> Denied: reviewer denies
+  AwaitingHuman --> Approved: operator approves
+  AwaitingHuman --> Denied: operator denies
+  AwaitingHuman --> Expired: timeout
+  Approved --> Applied: engine resumes
+  Denied --> Applied: engine cancels/keeps paused
+  Expired --> Applied: policy-defined fallback
+  Applied --> [*]
+```
 
-1. **Requested:** the gateway persists an approval request and initializes its review posture.
-2. **Reviewed:** the approval may move through `queued`, `reviewing`, and `awaiting_human` while guardian, system, or human review progresses.
-3. **Resolved:** the approval becomes `approved`, `denied`, `expired`, or `cancelled`.
-4. **Applied:** the waiting workflow/run resumes, cancels, or escalates.
+Approvals are durable records, not transient prompts. Every transition is auditable and safe under retries.
 
-Approvals must be safe to process more than once (idempotent resolution handling).
+## What approvals gate
 
-## Review integration
+- State-changing workflow steps and playbook execution.
+- Sensitive tool scopes (filesystem, shell, secrets, node capability dispatch).
+- External messaging to new destinations.
+- Human takeover and high-risk automation actions.
+- Node/device pairing when policy requires explicit trust decisions.
 
-Approvals are reviewable durable records, not a single pending bit:
+## Review and resume model
 
-- `auto_review` policy starts a new approval in `queued` so the guardian review processor can claim it.
-- `manual_only` starts the approval in `awaiting_human` and skips guardian work.
-- `latest_review` and `reviews` attach the durable reviewer audit trail directly to the approval record.
+1. The gateway persists an approval request with scope (`tenant_id`, `approval_id`, `run_id`/`step_id`/`attempt_id` when present).
+2. Review mode sets the initial posture: `queued` for `auto_review`, `awaiting_human` for `manual_only`.
+3. Resolution writes a terminal outcome atomically: `approved`, `denied`, `expired`, or `cancelled`.
+4. Execution side effects are driven from durable state: resume, cancel, or remain paused based on policy.
 
-See [Reviews](./reviews.md) for the guardian/human/system review pipeline behind these intermediate states.
+When a run is paused for approval, the request includes a `resume_token` that maps to paused run state. Resume never re-runs already completed steps.
 
-## Cluster notes
+## Outcomes and operator choices
 
-Approvals are durable records in the StateStore and should behave correctly when multiple gateway instances (and multiple operator clients) are active:
+| Choice         | Effect on current run     | Durable authorization impact   |
+| -------------- | ------------------------- | ------------------------------ |
+| Approve once   | Resume gated work         | None                           |
+| Approve always | Resume gated work         | Creates narrow policy override |
+| Deny / Expire  | Cancel or hold per policy | None                           |
 
-- **Any gateway edge instance can serve the approval queue** (read from the StateStore) and accept resolution requests.
-- **Atomic resolution:** apply terminal transitions from `queued|reviewing|awaiting_human` to `approved|denied|expired|cancelled` in a single durable write so double-submission is safe.
-- **Durable side effects:** engine resume/cancel is driven by a leased, durable action queue so retries and multi-instance deployments do not duplicate side effects.
-- **At-least-once events:** `approval.updated` events may be delivered more than once; clients
-  should dedupe using event ids. Re-emission of the same approval transition reuses the persisted
-  `event_id`.
+`approve always` is still enforcement. It creates an auditable, revocable override and must never bypass explicit `deny`.
 
-## Interfaces
+## Cluster and delivery guarantees
 
-Approvals are exposed over:
+- Any gateway edge can accept resolution requests because approvals live in the StateStore.
+- Resolution transitions are atomic, so duplicate submissions are safe.
+- Resume/cancel actions are executed through durable leased work queues to avoid duplicate side effects.
+- `approval.updated` is at-least-once delivery; clients dedupe with `event_id`.
 
-- WebSocket requests/responses plus `approval.updated` server-push events (for real-time operator
-  clients)
-- HTTP APIs (for automation and operational tooling)
+## Request and resolution essentials
 
-## Scoping
+Common request fields:
 
-Approvals are scoped to durable identifiers, including `tenant_id`, `approval_id`, and execution scope (`run_id`, `step_id`, `attempt_id`) plus agent/session identifiers where applicable.
+- `approval_id`, `approval_key`, `kind`, `prompt`, `motivation`
+- execution scope identifiers and optional bounded `context`
+- optional `suggested_overrides`
+- `expires_at`, optional `resume_token`
+- `latest_review` and `reviews` when review state already exists
 
-## Approval request shape
+Common resolution fields:
 
-An approval request should be explicit about impact and traceability:
+- `outcome`, `resolved_at`, `resolved_by`
+- optional `reason`
+- optional `mode` (`once` or `always`)
+- optional `policy_override_id` when `mode=always`
 
-- `approval_id`
-- `approval_key`
-- `prompt` (operator-facing)
-- `motivation` (why the system is asking)
-- `kind` (`workflow_step`, `intent`, `retry`, `policy`, `budget`, `takeover`, `connector.send`, …)
-- `scope` (agent/session/run/step identifiers)
-- `context` (bounded, optional)
-- `suggested_overrides` (optional; bounded list of safe “approve always” patterns for tool-policy approvals)
-- `expires_at`
-- `resume_token` (when the approval gates a paused workflow)
-- `latest_review` / `reviews` (when guardian or system review has already initialized the approval)
+## Suggested overrides (tool-policy approvals)
 
-## Resolution
+When an approval is tool-policy-driven, clients can offer bounded `suggested_overrides`:
 
-Resolutions are durable records:
+- match against a stable, tool-defined target
+- prefer narrow prefix patterns
+- avoid broad wildcards
+- never propose a suggestion that bypasses an explicit deny
 
-- `outcome` (`approved`, `denied`, or `expired`)
-- `resolved_at`
-- `resolved_by` (tenant membership / user identity / client device identity)
-- optional `reason` (operator-provided)
-- optional `mode` (`once` or `always`, only meaningful when `outcome=approved`)
-- optional `policy_override_id` (when `mode=always` creates a durable policy override)
+Detailed normalization and pattern guidance lives in [Tools](./tools.md).
 
-Expired approvals behave like denial unless explicitly configured otherwise.
+## Observable events and UI expectations
 
-## Approve once vs approve always
+Key events:
 
-Approvals should support three operator outcomes:
+- `approval.updated`
+- `policy_override.created`, `policy_override.revoked`, `policy_override.expired`
+- `run.paused`, `run.resumed`, `run.cancelled`
 
-- **Approve once:** resolve the pending approval and resume/cancel the waiting run as normal. No standing authorization is created.
-- **Approve always:** resolve the pending approval and also create a **durable policy override** that allows _future_ matching actions without prompting. “Always” should be offered only when the approval includes `suggested_overrides` (or when a domain-specific durable authorization exists, such as node pairing).
-- **Reject:** deny the pending approval (or let it expire), and cancel/keep paused according to policy.
+Operator surfaces should provide queue filters, review state, impact preview, clear once/always/deny actions, and deep links into linked runs and overrides.
 
-“Approve always” is **enforcement**, not convenience: the override is a durable, auditable record with explicit scope and revocation. See [Policy overrides](./policy-overrides.md).
+## Related docs
 
-## Suggested overrides (pattern suggestions)
-
-For tool-policy approvals, the gateway should include `suggested_overrides` so operator clients can offer an “always” option without free-form rule authoring.
-
-Each suggested override is a _tool-specific wildcard pattern_ over a well-defined match target (see [Tools](./tools.md)). Suggestions are conservative:
-
-- narrow scope by default (agent and workspace scoped where applicable)
-- prefer prefix patterns over broad wildcards
-- never suggest a rule that would bypass an explicit `deny`
-- for automation schedules, prefer exact normalized heartbeat-create targets over free-form cadence or instruction text
-
-## Integration with workflows (pause/resume)
-
-When a workflow step requires approval:
-
-- The execution engine pauses the run.
-- An approval request is created with a **resume token** referencing the paused state.
-- On approval resolution, the execution engine resumes/cancels the run **without re-running** completed steps.
-
-## Events
-
-Approvals should be observable via gateway-emitted events:
-
-- `approval.updated` (including guardian-review progress such as `queued`, `reviewing`, or `awaiting_human`)
-- `policy_override.created` (when `mode=always` creates an override)
-- `policy_override.revoked` / `policy_override.expired`
-- `run.paused` (with reason: approval)
-- `run.resumed`
-- `run.cancelled` (when denied/expired)
-
-## Client/UI expectations
-
-The control panel should expose:
-
-- An **approval queue** (filterable by agent/run/kind)
-- Visible guardian/human review state while an approval is still unresolved
-- Approval details (prompt, preview, linked evidence/artifacts)
-- Approve **once** / approve **always** / deny with clear consequences
-- “Always” UI that presents the bounded `suggested_overrides` list (scope + match target + pattern) and requires selecting one or more suggestions
-- A policy override inventory (list/describe/revoke) with links back to the approvals and runs that created each override
-- Review evidence and reviewer attribution when the approval has already passed through guardian or system review
-- Deep links from notifications into the approval detail view
+- [Reviews](./reviews.md)
+- [Policy overrides](./policy-overrides.md)
+- [Tools](./tools.md)
+- [Execution engine](/architecture/execution-engine)

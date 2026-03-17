@@ -4,6 +4,14 @@ slug: /architecture/data-model-map
 
 # Gateway data model map (v2)
 
+This is a schema reference page for the Gateway StateStore. It is intentionally table- and audit-heavy and should be used as a mechanics map, not a system overview.
+
+## Quick orientation
+
+- **Read this if:** you are mapping runtime behavior to tables, reviewing retention/sensitivity posture, or validating migration impacts.
+- **Skip this if:** you are learning architecture boundaries for the first time; start at [Scaling and high availability](/architecture/scaling-ha).
+- **Go deeper:** use the migration SQL files as source-of-truth and [Gateway FK audit](./data-model-fk-audit.md) for relationship policy decisions.
+
 This page is a lightweight, human-readable map of the Gateway StateStore schema: table groups (“bounded contexts”), retention expectations, and sensitivity/PII notes for operators.
 
 The v2 rebuild migrations are the current source of truth:
@@ -14,6 +22,22 @@ The v2 rebuild migrations are the current source of truth:
 For the audited foreign-key vs soft-reference decisions on approval/policy linkage columns, see [Gateway FK audit](./data-model-fk-audit.md).
 
 This document complements (and does not replace) the broader retention guidance in [Data lifecycle and retention](./data-lifecycle.md).
+
+## Bounded-context cluster map
+
+```mermaid
+flowchart TB
+  DB[("Gateway StateStore")]
+  DB --> ID["Identity + scope"]
+  DB --> MSG["Channels + sessions"]
+  DB --> EXEC["Execution engine"]
+  DB --> POLICY["Policy + approvals"]
+  DB --> WORK["WorkBoard + Memory"]
+  DB --> EDGE["Presence + backplane + pairing"]
+  DB --> OPS["Routing + model cache + context reports"]
+  DB --> LOC["Location + automation"]
+  DB --> DESK["Managed desktop environments"]
+```
 
 ## Bounded contexts (table groups)
 

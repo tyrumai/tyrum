@@ -4,83 +4,68 @@ slug: /architecture/memory
 
 # Memory
 
-Memory is Tyrum's durable, agent-scoped knowledge system. It turns transient context and verified outcomes into reusable recall that can survive future turns, channels, and restarts.
+Read this if: you want to understand how Tyrum keeps durable agent knowledge coherent across turns.
+
+Skip this if: you are looking for transcript behavior; use [Messages and Sessions](/architecture/messages-sessions).
+
+Go deeper: [Memory consolidation and retention](/architecture/memory/consolidation-retention), [Context, Compaction, and Pruning](/architecture/context-compaction).
+
+## Core flow
+
+```mermaid
+flowchart TB
+  Cue["Turn cues + task context"] --> Retrieve["Retrieve bounded recall<br/>mcp.memory.seed + mcp.memory.search"]
+  Retrieve --> Use["Use recall in active turn"]
+  Use --> Write["Write durable outcomes<br/>mcp.memory.write"]
+  Write --> Store["Canonical memory store<br/>(agent-scoped)"]
+  Store --> Consolidate["Budget-driven consolidation<br/>and eviction"]
+  Consolidate --> Retrieve
+
+  Store --> Index["Derived indexes"]
+  Store --> Tombstone["Tombstone records for forget/delete"]
+```
 
 ## Purpose
 
-The memory subsystem exists so an agent can remain coherent over time without depending on raw transcript replay. It provides durable recall, bounded retrieval, and a safe path from transient experience to reusable knowledge.
+Memory is Tyrum's durable, agent-scoped knowledge layer. It converts useful outcomes from turns and background work into recallable context so the runtime does not depend on replaying full transcripts.
 
-## Responsibilities
+## MCP-native capability boundary
 
-- Store durable agent-scoped knowledge such as facts, notes, procedures, and episodic provenance.
-- Retrieve a bounded, attributed working set of memory for future turns.
-- Accept explicit memory writes from users, operators, workflows, and durable work outcomes.
-- Keep memory safe and auditable through classification, provenance, and policy-aware retrieval.
+Memory is an **MCP-native capability**, not a gateway-owned CRUD surface. The runtime interacts through stable tools:
 
-## Non-goals
+- `mcp.memory.seed` for pre-turn hydration.
+- `mcp.memory.search` for bounded recall during a turn.
+- `mcp.memory.write` for durable facts, notes, procedures, and episodic updates.
 
-- Memory is not the raw transcript store; sessions and messages are separate durable surfaces.
-- Memory is not a secret manager; secrets stay behind a secret-provider boundary.
-- Memory is not the active work tracker; current commitments live in the WorkBoard.
+Memory configuration is carried in `server_settings.memory`. Retrieval hooks are wired through `pre_turn_tools` so recall can be assembled before inference starts.
 
-## Boundary and ownership
+## Main flow
 
-- **Inside the boundary:** durable memory items, episodic provenance, retrieval indexes, and forgetting/consolidation behavior.
-- **Outside the boundary:** session transcripts, workspace files, approval records, and active work-state tracking.
+1. A turn begins with retrieval cues from session context, work state, and operator intent.
+2. The configured memory provider returns bounded, attributed recall suitable for prompt assembly.
+3. During or after execution, the runtime writes durable memory when information should survive the current turn.
+4. Consolidation enforces memory budgets by summarizing, merging, or pruning lower-value content while preserving canonical records.
 
-## Inputs, outputs, and dependencies
+## What this page owns
 
-- **Inputs:** explicit "remember this" intent, workflow outcomes, operator annotations, durable work-state outcomes, and pre-turn retrieval cues.
-- **Outputs:** prompt-ready recall context, durable memory records, provider-specific memory operations, and audit-visible memory activity.
-- **Dependencies:** agent runtime, WorkBoard, provider-specific MCP memory tools, StateStore, and policy/audit boundaries.
+- Agent-scoped durable memory items and provenance.
+- Bounded retrieval behavior and pre-turn seeding.
+- Budget-driven consolidation and eviction rules.
+- Auditable delete/forget behavior through tombstone records.
 
-## MCP-native interface
+This page does not own transcript storage, secret handling, or active work tracking.
 
-Memory is modeled as an **MCP-native capability** rather than a gateway-owned CRUD API. The runtime interacts with the configured provider through stable tool surfaces such as:
+## Key constraints
 
-- `mcp.memory.seed` for pre-turn hydration and prompt seeding
-- `mcp.memory.search` for bounded recall during a turn
-- `mcp.memory.write` for durable facts, notes, procedures, and episodic updates
+- Memory is partitioned by `agent_id`.
+- Retrieval is supportive context, not policy authority.
+- Budgets, not inactivity TTL, drive forgetting behavior.
+- Canonical content is the source of truth; indexes are derived and rebuildable.
+- Secrets must not be written to memory.
 
-Memory configuration is surfaced through `server_settings.memory`, and retrieval hooks participate in `pre_turn_tools` so the runtime can assemble bounded recall before inference begins.
+## Failure and recovery
 
-## State and data
-
-- **Facts and notes:** durable semantic knowledge and operator-visible preferences.
-- **Procedures:** reusable strategy records tied to successful or failed outcomes.
-- **Episodes and provenance:** the raw material for auditability and later consolidation.
-- **Derived indexes:** expendable search/embedding structures that support recall but are never the source of truth.
-- **Tombstones:** durable deletion markers that preserve stable ids and deletion proof without retaining the removed content.
-
-## Control flow
-
-1. The runtime gathers retrieval cues from the current turn.
-2. The configured memory provider returns bounded, attributed recall context.
-3. The agent or workflow writes durable memory when something should survive beyond the current turn.
-4. Consolidation and retention policies keep the overall memory set bounded without relying on time-based forgetting.
-
-## Invariants and constraints
-
-- Durable memory is partitioned by `agent_id`.
-- Retrieval is bounded and supportive; it must not become an implicit policy override.
-- Forgetting is budget-driven, not driven by inactivity alone.
-
-## Failure behavior
-
-- **Expected failures:** failed retrieval, stale derived indexes, over-budget memory sets, and provider-specific tool failures.
-- **Recovery path:** best-effort pre-turn hydration, durable canonical records, and budget-triggered consolidation keep the system usable under partial failure.
-
-## Security and policy considerations
-
-- Secrets must not be stored in memory.
-- Memory operations remain observable and policy-gated.
-- Retrieved memory is supporting context, not authority to perform risky actions.
-
-## Key decisions and tradeoffs
-
-- **Agent-scoped continuity:** one agent's memory survives across channels by default.
-- **Provider-backed memory boundary:** memory is now treated as an MCP-native capability rather than a gateway-owned CRUD plane.
-- **Budgets over TTL:** retention favors compression and consolidation instead of expiring knowledge simply because it was not used recently.
+Expected failures include provider outages, stale indexes, and temporary over-budget states. Recovery favors best-effort recall, durable canonical storage, and deferred consolidation rather than blocking the entire agent turn.
 
 ## Related docs
 

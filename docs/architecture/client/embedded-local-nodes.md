@@ -4,79 +4,78 @@ slug: /architecture/client/embedded-local-nodes
 
 # Embedded local nodes
 
-Embedded local nodes are node runtimes started by an operator host, but still connected to the gateway as independent `role: node` peers with their own identity, pairing, and capability state.
+Read this if: you need to understand how client hosts can expose local device capabilities without collapsing trust boundaries.
+
+Skip this if: you are working on remote node behavior that does not involve host-local bootstrap.
+
+Go deeper: [Node](/architecture/node), [Handshake](/architecture/protocol/handshake), [Presence and Instances](/architecture/presence).
+
+## Core flow
+
+```mermaid
+sequenceDiagram
+  participant Host as Operator Host (Web/Mobile/Desktop)
+  participant LocalNode as Embedded Node Runtime
+  participant Gateway
+  participant Operator as Operator Client
+
+  Host->>LocalNode: bootstrap material + local consent checks
+  LocalNode->>Gateway: connect.init/connect.proof (role=node)
+  Gateway-->>Operator: pairing.updated (queued/review state)
+  Operator->>Gateway: pairing.approve or pairing.deny
+  Gateway-->>LocalNode: pairing.updated (scoped token or denial)
+  LocalNode->>Gateway: capability.ready(...)
+  Gateway-->>Host: node status and readiness updates
+```
 
 ## Purpose
 
-This component exists so web, mobile, and desktop operator hosts can expose device-local capabilities without collapsing the client and node trust boundaries into one process or one UI session.
+Embedded local nodes let a browser, mobile, or desktop host start a local node runtime while preserving the client/node boundary. The host owns onboarding and consent UX; capability execution still happens through a separately identified `role: node` peer.
 
-The host owns onboarding, consent UX, and local bootstrap. The embedded runtime still behaves like an ordinary node once it reaches the gateway.
+## What this page owns
 
-## Responsibilities
+- Host-local bootstrap and consent UX.
+- Node runtime startup/shutdown from the host context.
+- Separate node identity, pairing lifecycle, and readiness wiring.
+- Operator-visible local diagnostics for bootstrap and permissions.
 
-- Bootstrap a local node runtime from an operator host.
-- Preserve a separate node device identity, presence entry, and pairing lifecycle.
-- Surface local consent, readiness, and permission state to the operator.
-- Hand off all capability execution to the node path after bootstrap.
+This page does not allow direct client-to-capability RPC and does not replace gateway policy or pairing controls.
 
-## Non-goals
+## Main flow
 
-- This component does not let a client execute node RPC directly.
-- This component does not replace pairing, review, or policy enforcement with host-local shortcuts.
+1. Operator enables local-node mode in a host surface.
+2. Host provisions bootstrap data and starts the embedded runtime.
+3. Runtime connects as `role: node`, advertises capabilities, and enters normal pairing/review flow.
+4. After approval and readiness, gateway routes capability requests to the embedded runtime like any other node.
+5. Host continues presenting status, but trust and authorization remain node-scoped.
 
-## Boundary and ownership
+## Key constraints
 
-- **Inside the boundary:** bootstrap tokens/URLs, host-local consent UX, node startup/shutdown, and local readiness wiring.
-- **Outside the boundary:** gateway routing, pairing authorization, capability allowlists, approval policy, and durable orchestration.
+- Client identity and node identity are always separate, even in one app process.
+- Embedded local nodes must emit normal node presence, pairing, and `capability.ready` signals.
+- Local permission prompts can block readiness independently from client connectivity.
+- Bootstrap materials are credential-bearing and must be treated like scoped secrets.
 
-## Inputs, outputs, and dependencies
+## State and data notes
 
-- **Inputs:** operator enablement, host-local runtime APIs, pairing updates, and gateway bootstrap material.
-- **Outputs:** a node handshake, capability advertisement/readiness, presence updates, and operator-visible diagnostics.
-- **Dependencies:** [Client](/architecture/client), [Node](/architecture/node), [Identity](/architecture/identity), and the typed protocol handshake/event surfaces.
+- Host keeps client identity and operator session state.
+- Embedded runtime keeps node identity and pairing authorization state.
+- Browser-hosted nodes advertise `mode=browser-node` in presence.
+- Mobile bootstrap uses `tyrum://bootstrap?...` payloads carrying gateway base URLs and node bootstrap tokens.
 
-## State and data
+## Failure and recovery
 
-- The host keeps its own client device identity and connection state.
-- The embedded runtime keeps its own node device identity and pairing record.
-- Browser-hosted nodes advertise `mode=browser-node` in presence and connect with browser capability descriptors.
-- Mobile onboarding uses a `tyrum://bootstrap?...` payload that carries the gateway HTTP base URL, WebSocket URL, and node bootstrap token.
+Typical failures are missing permissions, deep-link/bootstrap issues, expired bootstrap tokens, and reconnect churn. Recovery is restart + re-bootstrap + reconnect as `role: node`, without mutating client identity.
 
-## Control flow
+## Security and policy posture
 
-1. An operator enables local-node support from a host surface such as the browser operator UI or the mobile app.
-2. The host loads or creates node identity material, applies local consent/permission checks, and starts the embedded node runtime.
-3. The embedded runtime connects as `role: node`, advertises capability descriptors, and enters the normal pairing/review flow.
-4. After pairing approval and readiness, the gateway routes capability requests to the embedded node just as it would for any remote node.
-5. The client host continues to show status and controls, but capability execution remains on the node side of the boundary.
-
-## Invariants and constraints
-
-- Client and embedded node remain separate peers even when they run inside the same app or browser tab.
-- Embedded local nodes must emit ordinary node presence, pairing, and capability-ready signals.
-- Local OS or browser permission prompts can block readiness even while the client UI remains connected and healthy.
-
-## Failure behavior
-
-- **Expected failures:** missing browser permissions, mobile deep-link/bootstrap failures, expired bootstrap tokens, and reconnect churn between host and node runtime.
-- **Recovery path:** restart the local runtime, reissue bootstrap material when needed, reconnect as `role: node`, and re-advertise readiness without mutating the client identity.
-
-## Security and policy considerations
-
-- Bootstrap material is credential-bearing and should be treated like a scoped node secret.
-- Local embedding does not bypass gateway policy, approval, or capability allowlists.
-- High-risk capabilities still rely on the ordinary node approval/evidence path even when the node is local to the operator.
-
-## Key decisions and tradeoffs
-
-- **Reuse the node architecture locally:** browser and mobile hosts use the same pairing and capability model as remote nodes, which keeps policy semantics consistent.
-- **Separate host UX from capability trust:** the operator host can guide setup and consent without becoming the capability authority.
+Local embedding does not bypass policy, approvals, or capability allowlists. High-risk actions still follow the ordinary node approval and evidence path, even on the same physical device.
 
 ## Observability
 
-- Embedded nodes appear as separate entries in presence and node inventory.
-- Pairing state changes continue to flow through `pairing.updated`.
-- Capability readiness and evidence continue to flow through the normal node event stream.
+- Embedded nodes appear as separate node/presence inventory entries.
+- Pairing lifecycle is visible through `pairing.updated`.
+- Capability readiness and evidence flow through the standard node event stream.
 
 ## Related docs
 

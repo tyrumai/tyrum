@@ -4,6 +4,14 @@ slug: /architecture/data-lifecycle
 
 # Data lifecycle and retention
 
+This is a scaling/reference page for retention mechanics across Tyrum data surfaces. It is not the best first page for understanding deployment architecture.
+
+## Quick orientation
+
+- **Read this if:** you are setting retention policy, planning pruning jobs, or validating audit/privacy guarantees.
+- **Skip this if:** you need the deployment mental model first; start at [Scaling and high availability](/architecture/scaling-ha).
+- **Go deeper:** use [Operational table maintenance contract](/architecture/operational-maintenance) for table-level maintenance behavior.
+
 The StateStore is the source of truth for sessions, execution, approvals, and audit evidence.
 That durability must be paired with explicit **retention** and **deletion** rules so deployments remain operable (bounded cost), safe (privacy), and explainable (audit).
 
@@ -17,6 +25,23 @@ References:
 - [Operational table maintenance contract](/architecture/operational-maintenance)
 - [Artifacts](/architecture/artifacts)
 - [Sandbox and policy](/architecture/sandbox-policy)
+
+## Lifecycle map
+
+```mermaid
+flowchart TB
+  DS["Durable StateStore data<br/>sessions • execution • approvals • memory • work state"]
+  TTL["Derived TTL data<br/>presence • connection directory • dedupe keys"]
+  BYTES["External artifact bytes<br/>FS/S3 payloads"]
+
+  DS --> RET["Retention policy + budgets"]
+  TTL --> PRUNE["TTL pruning jobs"]
+  BYTES --> BYTE_RET["Artifact byte retention policy"]
+
+  RET --> AUDIT["Auditable delete/forget outcomes"]
+  PRUNE --> AUDIT
+  BYTE_RET --> AUDIT
+```
 
 ## Principles
 

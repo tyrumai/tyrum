@@ -4,184 +4,95 @@ slug: /architecture/playbooks
 
 # Playbooks (deterministic workflows)
 
-A playbook is a **durable, reviewable workflow artifact** that the execution engine can run deterministically. Playbooks exist to make multi-step work:
+A playbook is a durable workflow spec executed by the runtime, not by prompt memory. It gives Tyrum a reviewable run graph with deterministic pause/resume behavior.
 
-- **Composable:** a single run request executes many steps
-- **Auditable:** steps and outcomes are logged with artifacts
-- **Safe:** side effects are gated by approvals; runs can pause and resume
-- **Resumable:** paused workflows can continue without repeating completed steps
+## Quick orientation
 
-## Playbooks are not skills
+- Read this if: you need the control flow for multi-step deterministic work.
+- Skip this if: you need tool-level runtime mechanics or queue internals.
+- Go deeper: [Execution engine](/architecture/execution-engine), [Approvals](/architecture/approvals), [Automation](/architecture/automation).
 
-- **Skills** are instruction bundles for the model (guidance).
-- **Playbooks** are schema-validated workflow specs executed by the runtime (control).
+## Run -> pause -> resume flow
 
-## Workflow runtime contract (run / resume)
-
-The playbook runtime exposes a small contract that supports two operations:
-
-- **Run:** start a workflow.
-- **Resume:** continue a paused workflow using a resume token.
-
-### Input shape
-
-```json
-{
-  "action": "run",
-  "pipeline": "<inline pipeline YAML OR loaded playbook id OR absolute file path of a loaded playbook>",
-  "argsJson": "{\"key\":\"value\"}",
-  "cwd": "<workspace-relative cwd>",
-  "timeoutMs": 30000,
-  "maxOutputBytes": 512000
-}
+```mermaid
+flowchart TB
+  RunReq["workflow.run"] --> Parse["Load + validate playbook"]
+  Parse --> Start["Start run in execution engine"]
+  Start --> Step["Execute next step"]
+  Step --> NeedsApproval{"approval required?"}
+  NeedsApproval -- no --> More{"more steps?"}
+  NeedsApproval -- yes --> Pause["Pause run + create approval + issue resume token"]
+  Pause --> Decision{"approved?"}
+  Decision -- yes --> Resume["workflow.resume(token)"]
+  Decision -- no --> Cancel["Cancel / hold per policy"]
+  Resume --> Step
+  More -- yes --> Step
+  More -- no --> Done["Run completed"]
 ```
 
-Notes:
+Playbooks are about control-plane determinism: each step is typed, bounded, and auditable.
 
-- When `pipeline` is an absolute file path, it must refer to a playbook file already loaded by the gateway (from a configured playbook directory).
-- `maxOutputBytes` is a positive integer cap applied by the runtime/executor to step output capture.
-- When omitted, a safe default cap is applied.
+## What playbooks are for
 
-Resume:
+- composing many side-effecting or read-only steps into one run
+- pausing safely for approvals and resuming without replaying completed steps
+- preserving evidence and outcomes per step/attempt
+- expressing workflow behavior as data (YAML/JSON), not ad hoc model decisions
 
-```json
-{
-  "action": "resume",
-  "token": "<resumeToken>",
-  "approve": true
-}
-```
+Playbooks are not skills. Skills are instruction/context bundles; playbooks are runtime-enforced workflow specs.
 
-### Output envelope
+## Runtime contract (minimal)
 
-The runtime returns an envelope with a **status**:
+The surface is intentionally small:
 
-- `ok` → finished successfully
-- `needs_approval` → paused; a `resumeToken` is required to resume
-- `cancelled` → explicitly denied/cancelled (no further side effects)
-- `error` → failed; `ok: false` with a structured error payload
+- `workflow.run`: start a run from inline pipeline, loaded id, or loaded file path
+- `workflow.resume`: continue a paused run by `resumeToken`
+- `workflow.cancel`: stop queued/running/paused work under policy rules
 
-Example (paused):
+Common run inputs include `cwd`, `timeoutMs`, and `maxOutputBytes`. Output is a status envelope: `ok`, `needs_approval`, `cancelled`, or `error`.
 
-```json
-{
-  "ok": true,
-  "status": "needs_approval",
-  "output": [],
-  "requiresApproval": {
-    "prompt": "Apply changes?",
-    "items": [],
-    "resumeToken": "..."
-  }
-}
-```
+## Workflow shape
 
-Failures should be represented as `ok: false` with a structured error payload (and may include partial output and/or a resume token when safe).
+A playbook defines `name`, optional `args`, and ordered `steps`.
 
-## Workflow files (YAML/JSON)
+Step commands use explicit namespaces so execution is unambiguous:
 
-Playbooks can be stored as workflow files that define `name`, `args`, and `steps`. A minimal YAML shape:
+- `cli`, `http`, `web`, `mcp`, `node`
+- `llm` for JSON-only model steps with explicit tool budget and allowlist
 
-```yaml
-name: inbox-triage
-args:
-  tag:
-    default: "family"
-steps:
-  - id: collect
-    command: cli inbox list --json
-    output: json
-  - id: categorize
-    command: cli inbox categorize --json
-    output: json
-    stdin: $collect.stdout
-  - id: approve
-    command: cli inbox apply --approve
-    stdin: $categorize.stdout
-    approval: required
-  - id: execute
-    command: cli inbox apply --execute
-    stdin: $categorize.stdout
-    condition: $approve.approved
-```
+Steps can consume prior outputs (`$stepId.stdout` / `$stepId.json`), and JSON-declared outputs are validated as JSON contracts.
 
-### Command namespaces (required)
+## Approval behavior
 
-`steps[].command` is interpreted via an explicit namespace prefix and compiled into typed runtime actions. This avoids unsafe implicit behavior (for example “shell by accident”).
+Any step can declare `approval: required`.
 
-Examples:
+- execution pauses before side effects
+- an approval record is created with bounded preview context when available
+- resume requires a durable token and explicit decision
+- denied/expired paths cancel or hold according to policy
 
-- `cli …` → command runs via the CLI capability/tooling (never an implicit OS shell).
-- `http …` → HTTP request action.
-- `web …` → browser automation action.
-- `mcp …` → MCP tool invocation.
-- `node …` → node RPC / capability call.
-- `llm` → JSON-only model step (optionally with allowlisted tools + tool-call budgets).
+This keeps long workflows safe under restarts, retries, and multi-instance execution.
 
-### Step data passing
+## Safety constraints (non-negotiable)
 
-Steps can reference prior step outputs, for example:
+- enforce step timeouts and output caps
+- enforce workspace boundary for `cwd`
+- enforce tool policy and sandbox rules for every step
+- use secret handles instead of embedding raw secret values
+- require postconditions for state-changing steps when feasible
 
-- `stdin: $stepId.stdout` (raw output)
-- `stdin: $stepId.json` (parsed JSON output)
+## LLM steps in deterministic workflows
 
-The runtime is responsible for enforcing output caps and for refusing ambiguous/non-JSON output when a step declares JSON (via `output: json` and/or an explicit output schema).
+LLM steps are allowed as bounded judgment/extraction stages, but they remain runtime-governed:
 
-If a step declares an explicit output schema, the output contract type must be JSON (for example `output: { type: json, schema: ... }`).
+- explicit model and JSON output schema
+- explicit tool allowlist (if tools are allowed)
+- max tool call count and runtime budgets
+- normal policy and approval gates still apply
 
-### Approval gates
+## Related docs
 
-Any step may declare `approval: required`. When reached:
-
-- The run **pauses** and creates an approval request.
-- The runtime returns/emits an envelope with `status: needs_approval` and a `resumeToken`.
-- The operator approves/denies; the runtime resumes/cancels accordingly.
-
-Approval steps can include a preview derived from prior step output (capped) so the operator sees what would happen before approving.
-
-## Determinism + safety constraints
-
-The playbook runtime must enforce:
-
-- **Timeouts** (`timeoutMs`) and **output caps** (`maxOutputBytes`) at runtime.
-- **Workspace boundary** for `cwd` (no filesystem traversal outside workspace).
-- **Tool allowlists/denylists** and sandbox policy (no bypass via playbooks).
-- **No secret values** embedded in workflow specs; use secret handles via the secret provider.
-- **Postconditions** for state-changing steps when feasible.
-
-## Optional: JSON-only LLM steps
-
-Some workflows need a “judgment” step (classify, extract, draft) that uses a model and may call tools. Tyrum allows LLM steps, but they must remain **budgeted** and **enforced** like any other execution:
-
-- tool access must be explicitly allowed (allowlist / policy)
-- risky tool calls may require approvals
-- budgets/timeouts apply (including a maximum tool-call count)
-- outputs should be validated when a schema is provided
-
-This supports advanced workflows while keeping safety enforceable outside prompts.
-
-### LLM step shape
-
-LLM steps use the `llm` command namespace plus an `llm` config block. They must declare a JSON output contract.
-
-```yaml
-- id: extract
-  command: llm
-  llm:
-    model: <provider>/<model>
-    prompt: |
-      Extract fields from the input and return JSON.
-    max_tool_calls: 2
-    tools:
-      allow:
-        - webfetch
-        - bash
-  output:
-    type: json
-    schema:
-      type: object
-      properties:
-        ok: { type: boolean }
-      required: [ok]
-      additionalProperties: false
-```
+- [Execution engine](/architecture/execution-engine)
+- [Approvals](/architecture/approvals)
+- [Automation](/architecture/automation)
+- [Tools](/architecture/tools)

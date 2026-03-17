@@ -1,8 +1,27 @@
 # Events
 
-Events are gateway-emitted, server-push messages delivered to connected clients (and sometimes nodes). Events make the system observable and keep operator interfaces in sync without polling.
+This is a protocol reference page for Tyrum's server-push event surface. It is intentionally contract-heavy and should be read after the [Protocol overview](/architecture/protocol).
 
 The wire shapes are defined by shared, versioned contracts (see [Contracts](/architecture/contracts)).
+
+## Quick orientation
+
+- **Read this if:** you are implementing event producers/consumers, reviewing replay behavior, or validating event payload contracts.
+- **Skip this if:** you are still building a mental model of gateway/protocol architecture; start at [Protocol](/architecture/protocol) first.
+- **Go deeper:** use [Backplane](/architecture/backplane) for cluster delivery mechanics and `packages/schemas` for authoritative payload definitions.
+
+## Event family map
+
+```mermaid
+flowchart LR
+  ENV["Event envelope<br/>event_id • type • occurred_at • scope • payload"]
+  ENV --> AP["Approvals + policy<br/>approval.updated<br/>policy_override.*"]
+  ENV --> EX["Execution + evidence<br/>run.* • step.* • attempt.*<br/>artifact.*"]
+  ENV --> WK["Work + delegation<br/>work.* • subagent.*"]
+  ENV --> PP["Pairing + presence<br/>pairing.updated<br/>presence.*"]
+  ENV --> MSG["Messaging UX<br/>typing.* • message.*<br/>delivery.receipt"]
+  ENV --> OBS["Observability<br/>auth.* • context_report.*<br/>usage.*"]
+```
 
 ## Parent concepts
 

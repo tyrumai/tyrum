@@ -4,19 +4,32 @@ slug: /architecture/node
 
 # Node
 
-A node is a companion runtime that connects to the gateway with `role: node` and exposes authorized capabilities such as desktop automation, browser APIs, mobile sensors, camera access, or other device-local execution.
+Read this if you want the trust boundary for device and environment capabilities. Skip this if you need exact capability descriptors and payload contracts; use the drill-down docs.
 
-## Mission
+A node is a companion runtime that connects to the gateway with `role: node` and executes authorized device-local capabilities (desktop, browser, mobile, or headless environments).
 
-Nodes exist so Tyrum can use device-specific or environment-specific capabilities without collapsing those concerns into the gateway. They provide the execution boundary for high-risk local interfaces while keeping policy and routing centralized.
+```mermaid
+flowchart LR
+  Operator["Operator client"]
+  Gateway["Gateway control plane"]
+  Policy["Policy + approvals"]
+  Node["Node runtime (role=node)"]
+  Device["Device/OS APIs"]
+  Evidence["Evidence + artifacts"]
 
-## Integration quality bar
+  Operator <--> Gateway
+  Gateway <--> Policy
+  Gateway <--> Node
+  Node <--> Device
+  Node --> Evidence
+  Evidence --> Gateway
+```
 
-Nodes are "remote hands", so Tyrum treats node capabilities as high-risk by default. Node capabilities should be:
+## What This Page Covers
 
-- **Explicitly authorized:** pairing and policy decide what a node may do.
-- **Approval-gated:** state-changing or privacy-impacting actions can pause behind approvals.
-- **Evidence-backed:** capability results should include durable evidence or artifacts when feasible.
+- Why nodes exist as a separate trust boundary.
+- Pairing + authorization posture for capability dispatch.
+- Primary lifecycle from connect to capability-ready execution.
 
 ## Node forms
 
@@ -30,117 +43,42 @@ Nodes can run on a variety of devices:
 
 Browser and mobile nodes are often embedded in operator hosts, but they still connect and are governed as nodes. See [Embedded Local Nodes](/architecture/client/embedded-local-nodes). Gateway-managed sandbox nodes are described in [Desktop Environments](/architecture/gateway/desktop-environments).
 
-## Responsibilities
+## Boundary
 
-- Establish a node identity and connect to the gateway as a capability provider.
-- Advertise supported capabilities and capability versions.
-- Execute authorized capability requests and return typed results and evidence.
-- Manage local permissions and runtime readiness on the node device.
+- **Inside node ownership:** local permissions/readiness checks, capability execution, and evidence generation.
+- **Outside node ownership:** global routing, policy decisions, and operator UI orchestration.
 
-## Non-responsibilities
+## Primary Flow
 
-- Nodes do not own global orchestration, approvals, or operator UX; the gateway and clients own those concerns.
-- Nodes do not bypass gateway authorization by self-dispatching work.
+1. Node connects with device identity and proves possession of private key material.
+2. Gateway applies pairing posture (auto-approved local policy or explicit operator approval).
+3. Node receives scoped authorization and advertises capability readiness.
+4. Gateway dispatches only allowlisted, policy-compatible capability requests.
+5. Node returns typed outcomes and operator-visible evidence.
 
-## Boundary and ownership
+## Pairing and Capability Posture
 
-- **Inside the boundary:** device-local execution, OS permissions, capability readiness, and evidence generation.
-- **Outside the boundary:** pairing policy, global routing, durable orchestration, and operator-facing oversight.
+- Nodes are deny-by-default and execute only paired/allowlisted capabilities.
+- High-risk or state-changing actions can pause behind approvals.
+- Revocation is durable: reconnect alone cannot restore revoked access.
+- Managed node forms can start with narrower capability allowlists than standalone nodes.
 
-## Internal building blocks
+## Invariants
 
-- **Pairing and authorization:** device identity, scoped authorization, and revocation handling.
-- **Capability advertisement:** stable descriptions of what the node can execute.
-- **Capability execution:** local device/system calls plus evidence capture and readiness checks.
-- **Bootstrap/orchestration hooks:** optional host-provided bootstrap material for embedded or gateway-managed nodes without relaxing the node trust boundary.
+- Client hosts and node runtimes remain separate peers even when co-located.
+- Capability dispatch always flows through gateway policy and pairing checks.
+- Evidence should be emitted for high-impact operations when feasible.
 
-## Inputs, outputs, and dependencies
+## Failure and Recovery
 
-- **Inputs:** pairing flows, capability RPC, policy-gated execution requests, local OS permission prompts, and optional host-provided bootstrap material for embedded or managed runtimes.
-- **Outputs:** capability results, evidence artifacts, readiness signals, and error/failure reports.
-- **Dependencies:** gateway control plane, protocol/contracts, pairing records, and local device/runtime APIs.
+- **Common failures:** permission denial, local dependency/runtime failure, disconnect/reconnect churn.
+- **Recovery posture:** reconnect, re-advertise readiness, and re-enter pairing flow when authorization is missing or revoked.
 
-## Specialized capability notes
+## Not In Scope Here
 
-### Desktop OCR (pixel query)
-
-For pixel-mode `Desktop.query` text search, the desktop node runs OCR locally and returns bounded `{ text, bounds, confidence? }` matches in screenshot coordinate space so agents can locate UI targets without embedding full screenshots in tool outputs.
-
-When `selector.bounds` is provided, OCR matches are filtered to those whose bounds intersect the requested region.
-
-Architecture notes:
-
-- Prefer self-contained, cross-platform OCR runtimes over system binaries so the desktop node works out of the box across macOS, Windows, and Linux.
-
-Tradeoffs:
-
-- Pros: no OS-level packages, cross-platform behavior, and process-local worker caching.
-- Cons: first call can be slow because of worker initialization and language data loading, and OCR accuracy varies by font and locale.
-
-## Invariants and constraints
-
-- Nodes are deny-by-default and only execute capabilities they are paired and authorized for.
-- Device-local execution must remain observable and evidence-backed when feasible.
-- Capability execution is a trusted boundary and must not be conflated with operator clients.
-
-## Pairing posture
-
-- Nodes connect using a public-key device identity and prove possession of the private key during handshake.
-- When a node connects without an active pairing record, the gateway creates a pairing request for the node device.
-- Local nodes can be auto-approved by explicit policy; remote nodes require explicit operator approval.
-- Pairing results in a scoped authorization such as a node-scoped token and a capability allowlist that can later be revoked.
-- Embedded local nodes may be bootstrapped by an operator host, and gateway-managed desktop environments may be approved by explicit management policy, but both still resolve to durable pairing records and capability allowlists.
-
-```mermaid
-sequenceDiagram
-  participant Node
-  participant Gateway
-  participant Client
-
-  Node->>Gateway: connect.init/connect.proof (role=node, device, capabilities)
-  Gateway-->>Client: pairing.updated(pairing.status=queued)
-  Client->>Gateway: pairing.approve(node_id)
-  Gateway-->>Node: pairing.updated(scoped_token)
-  Node-->>Gateway: capability.ready(...)
-  Node-->>Gateway: attempt.evidence(...)
-```
-
-After pairing approval, nodes should report which capabilities are ready to execute via `capability.ready` after verifying OS permissions, local dependencies, or warmup.
-
-During capability execution, nodes may stream operator-visible evidence for a given attempt via `attempt.evidence` so UIs and audits can observe progress without polling.
-
-## Failure and recovery
-
-- **Failure modes:** permission denial, local dependency issues, disconnects, and capability-specific runtime failures.
-- **Recovery model:** reconnect, re-advertise readiness, and re-enter the paired authorization flow when needed.
-
-## Security and policy boundaries
-
-- Node execution is policy-gated and often approval-gated because it touches high-risk local interfaces.
-- Scoped authorization and capability allowlists define what a node may do.
-- Revocation must take effect durably so a reconnect alone does not restore unauthorized access.
-
-## Trust and capability scope
-
-Pairing binds a node device identity to an explicit authorization record:
-
-- trust level (for example local vs remote)
-- capability allowlist (specific capability names and versions)
-- optional operator-defined labels
-
-Managed node forms may start from a narrower initial allowlist than standalone nodes. For example, gateway-managed desktop environments are expected to receive a bounded desktop capability allowlist rather than inheriting broad device access.
-
-Capability execution requests are authorized against the node's pairing record and the effective policy snapshot for the run. Authorization is deny-by-default: the gateway only dispatches a capability request to a node when that node is allowed to execute it.
-
-## Revocation
-
-Revocation removes the pairing authorization and invalidates scoped tokens. A revoked node can reconnect, but it cannot execute capabilities until it is re-paired.
-
-## Key decisions and tradeoffs
-
-- **Capabilities behind nodes, not clients:** Tyrum keeps execution boundaries separate from operator surfaces.
-- **Pairing as an explicit trust boundary:** node trust is a durable authorization decision, not an implicit connection property.
-- **Evidence-backed execution:** node capabilities should return enough durable evidence for operators and audits to understand what happened.
+- Full capability descriptor catalogs and operation payloads.
+- Detailed pairing event contracts and review pipelines.
+- Desktop automation operation semantics such as OCR/query/act specifics.
 
 ## Drill-down
 
@@ -148,3 +86,5 @@ Revocation removes the pairing authorization and invalidates scoped tokens. A re
 - [Embedded Local Nodes](/architecture/client/embedded-local-nodes)
 - [Desktop Environments](/architecture/gateway/desktop-environments)
 - [Capabilities](/architecture/capabilities)
+- [Handshake](/architecture/protocol/handshake)
+- [Events](/architecture/protocol/events)
