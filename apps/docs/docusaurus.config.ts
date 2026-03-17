@@ -9,24 +9,10 @@ const repoDocsDir = resolve(currentDir, "../../docs");
 const sidebarsPath = resolve(currentDir, "./sidebars.ts");
 const customCssPath = resolve(currentDir, "./src/css/custom.css");
 
-const algoliaAppId = process.env.ALGOLIA_APP_ID;
-const algoliaSearchApiKey = process.env.ALGOLIA_SEARCH_API_KEY;
-const algoliaIndexName = process.env.ALGOLIA_INDEX_NAME;
-const algolia =
-  algoliaAppId && algoliaSearchApiKey && algoliaIndexName
-    ? {
-        appId: algoliaAppId,
-        apiKey: algoliaSearchApiKey,
-        indexName: algoliaIndexName,
-        contextualSearch: true,
-      }
-    : undefined;
-
 const navbarItems = [
   { to: "/install", label: "Install", position: "left" },
   { to: "/getting-started", label: "Quick Start", position: "left" },
   { to: "/architecture", label: "Architecture", position: "left" },
-  ...(algolia ? [{ type: "search", position: "right" }] : []),
   {
     href: "https://github.com/rhernaus/tyrum",
     label: "GitHub",
@@ -57,7 +43,25 @@ const config: Config = {
       onBrokenMarkdownLinks: "throw",
     },
   },
-  themes: ["@docusaurus/theme-mermaid"],
+  themes: [
+    "@docusaurus/theme-mermaid",
+    [
+      "@easyops-cn/docusaurus-search-local",
+      {
+        indexDocs: true,
+        indexBlog: false,
+        indexPages: false,
+        docsRouteBasePath: "/",
+        docsDir: "../../docs",
+        language: "en",
+        hashed: true,
+        searchBarPosition: "right",
+        searchBarShortcut: true,
+        searchBarShortcutHint: true,
+        ignoreFiles: [/^\/_README$/],
+      },
+    ],
+  ],
 
   presets: [
     [
@@ -89,7 +93,6 @@ const config: Config = {
       },
       items: navbarItems,
     },
-    ...(algolia ? { algolia } : {}),
     colorMode: {
       defaultMode: "dark",
       respectPrefersColorScheme: true,
