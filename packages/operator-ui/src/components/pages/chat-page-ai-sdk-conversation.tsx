@@ -4,7 +4,13 @@ import type { OperatorCore } from "@tyrum/operator-core";
 import { useChat } from "@ai-sdk/react";
 import type { UIMessage } from "ai";
 import { ChevronLeft, Send, Trash2 } from "lucide-react";
-import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from "react";
 import { toast } from "sonner";
 import type {
   createTyrumAiSdkChatSessionClient,
@@ -14,6 +20,34 @@ import type {
 import { AiSdkChatMessageList } from "./chat-page-ai-sdk-messages.js";
 import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
+
+const DRAFT_MIN_ROWS = 2;
+const DRAFT_MAX_ROWS = 12;
+const DEFAULT_DRAFT_LINE_HEIGHT_PX = 20;
+
+function parsePixelValue(value: string): number {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function syncDraftHeight(textarea: HTMLTextAreaElement): void {
+  const styles = window.getComputedStyle(textarea);
+  const lineHeight = parsePixelValue(styles.lineHeight);
+  const fontSize = parsePixelValue(styles.fontSize);
+  const resolvedLineHeight =
+    lineHeight > 0 ? lineHeight : fontSize > 0 ? fontSize * 1.5 : DEFAULT_DRAFT_LINE_HEIGHT_PX;
+  const paddingHeight = parsePixelValue(styles.paddingTop) + parsePixelValue(styles.paddingBottom);
+  const borderHeight =
+    parsePixelValue(styles.borderTopWidth) + parsePixelValue(styles.borderBottomWidth);
+  const minHeight = resolvedLineHeight * DRAFT_MIN_ROWS + paddingHeight + borderHeight;
+  const maxHeight = resolvedLineHeight * DRAFT_MAX_ROWS + paddingHeight + borderHeight;
+
+  textarea.style.height = "auto";
+  const scrollHeight = textarea.scrollHeight + borderHeight;
+  const nextHeight = Math.min(Math.max(scrollHeight, minHeight), maxHeight);
+  textarea.style.height = `${nextHeight}px`;
+  textarea.style.overflowY = scrollHeight > maxHeight ? "auto" : "hidden";
+}
 
 function MarkdownToggle({
   onChange,
@@ -75,6 +109,7 @@ export function AiSdkConversation({
 }) {
   const [draft, setDraft] = useState("");
   const [followRequestId, setFollowRequestId] = useState(0);
+  const draftRef = useRef<HTMLTextAreaElement | null>(null);
   const previousStatusRef = useRef<ReturnType<typeof useChat<UIMessage>>["status"]>("ready");
   const chat = useChat<UIMessage>({
     id: session.session_id,
@@ -119,6 +154,14 @@ export function AiSdkConversation({
       cancelled = true;
     };
   }, [chat.setMessages, chat.status, onSessionMessages, session.session_id, sessionClient]);
+
+  useLayoutEffect(() => {
+    const textarea = draftRef.current;
+    if (!textarea) {
+      return;
+    }
+    syncDraftHeight(textarea);
+  }, [draft]);
 
   const send = async (): Promise<void> => {
     const text = draft.trim();
@@ -213,7 +256,9 @@ export function AiSdkConversation({
       <div className="border-t border-border p-3">
         <div className="flex items-end gap-2">
           <textarea
-            className="min-h-[88px] flex-1 rounded-md border border-border bg-bg px-3 py-2 text-sm text-fg outline-none"
+            ref={draftRef}
+            rows={DRAFT_MIN_ROWS}
+            className="box-border flex-1 resize-none overflow-y-hidden rounded-md border border-border bg-bg px-3 py-2 text-sm leading-5 text-fg outline-none"
             data-testid="ai-sdk-chat-draft"
             onChange={(event) => {
               setDraft(event.currentTarget.value);
