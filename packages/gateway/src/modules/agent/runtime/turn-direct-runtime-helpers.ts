@@ -129,6 +129,8 @@ export async function maybeAutoCompactSession(input: {
   systemPrompt?: string;
   abortSignal?: AbortSignal;
   timeoutMs?: number;
+  channel?: string;
+  threadId?: string;
 }): Promise<void> {
   const persisted = await input.deps.sessionDal.getById({
     tenantId: input.tenantId,
@@ -160,6 +162,9 @@ export async function maybeAutoCompactSession(input: {
     abortSignal: input.abortSignal,
     timeoutMs: input.timeoutMs,
     logger: input.deps.opts.container.logger,
+    prepareTurnDeps: input.deps.prepareTurnDeps,
+    channel: input.channel,
+    threadId: input.threadId,
   });
 }
 
@@ -170,6 +175,8 @@ export async function compactForOverflow(input: {
   model: LanguageModel;
   abortSignal?: AbortSignal;
   timeoutMs?: number;
+  channel?: string;
+  threadId?: string;
 }): Promise<void> {
   await compactSessionWithResolvedModel({
     container: input.deps.opts.container,
@@ -180,5 +187,8 @@ export async function compactForOverflow(input: {
     abortSignal: input.abortSignal,
     timeoutMs: input.timeoutMs,
     logger: input.deps.opts.container.logger,
+    prepareTurnDeps: input.deps.prepareTurnDeps,
+    channel: input.channel,
+    threadId: input.threadId,
   });
 }

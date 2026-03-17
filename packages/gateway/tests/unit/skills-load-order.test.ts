@@ -7,9 +7,9 @@ import { loadEnabledSkills } from "../../src/modules/agent/workspace.js";
 
 function skillDoc(body: string): string {
   return `---
-id: example
-name: Example
-version: 0.0.1
+ id: tyrum-docs
+ name: Tyrum Docs
+ version: 0.0.1
 ---
 ${body}
 `;
@@ -34,11 +34,15 @@ describe("skills load order", () => {
     userHome = await mkdtemp(join(tmpdir(), "tyrum-user-home-"));
     workspaceHome = await mkdtemp(join(tmpdir(), "tyrum-workspace-home-"));
 
-    await mkdir(join(userHome, "skills/example"), { recursive: true });
-    await writeFile(join(userHome, "skills/example/SKILL.md"), skillDoc("user"), "utf-8");
+    await mkdir(join(userHome, "skills/tyrum-docs"), { recursive: true });
+    await writeFile(join(userHome, "skills/tyrum-docs/SKILL.md"), skillDoc("user"), "utf-8");
 
-    await mkdir(join(workspaceHome, "skills/example"), { recursive: true });
-    await writeFile(join(workspaceHome, "skills/example/SKILL.md"), skillDoc("workspace"), "utf-8");
+    await mkdir(join(workspaceHome, "skills/tyrum-docs"), { recursive: true });
+    await writeFile(
+      join(workspaceHome, "skills/tyrum-docs/SKILL.md"),
+      skillDoc("workspace"),
+      "utf-8",
+    );
 
     // Inject the temp user skills directory without relying on runtime env configuration.
     // (Gateway runtime no longer reads TYRUM_USER_HOME.)
@@ -48,7 +52,7 @@ describe("skills load order", () => {
         model: { model: null },
         skills: {
           default_mode: "deny",
-          allow: ["example"],
+          allow: ["tyrum-docs"],
           deny: [],
           workspace_trusted: true,
         },
@@ -64,8 +68,8 @@ describe("skills load order", () => {
     userHome = await mkdtemp(join(tmpdir(), "tyrum-user-home-"));
     workspaceHome = await mkdtemp(join(tmpdir(), "tyrum-workspace-home-"));
 
-    await mkdir(join(userHome, "skills/example"), { recursive: true });
-    await writeFile(join(userHome, "skills/example/SKILL.md"), skillDoc("user"), "utf-8");
+    await mkdir(join(userHome, "skills/tyrum-docs"), { recursive: true });
+    await writeFile(join(userHome, "skills/tyrum-docs/SKILL.md"), skillDoc("user"), "utf-8");
 
     const skills = await loadEnabledSkills(
       workspaceHome,
@@ -73,7 +77,7 @@ describe("skills load order", () => {
         model: { model: null },
         skills: {
           default_mode: "deny",
-          allow: ["example"],
+          allow: ["tyrum-docs"],
           deny: [],
           workspace_trusted: false,
         },
@@ -90,11 +94,15 @@ describe("skills load order", () => {
     userHome = await mkdtemp(join(tmpdir(), "tyrum-user-home-"));
     workspaceHome = await mkdtemp(join(tmpdir(), "tyrum-workspace-home-"));
 
-    await mkdir(join(userHome, "skills/example"), { recursive: true });
-    await writeFile(join(userHome, "skills/example/SKILL.md"), skillDoc("user"), "utf-8");
+    await mkdir(join(userHome, "skills/tyrum-docs"), { recursive: true });
+    await writeFile(join(userHome, "skills/tyrum-docs/SKILL.md"), skillDoc("user"), "utf-8");
 
-    await mkdir(join(workspaceHome, "skills/example"), { recursive: true });
-    await writeFile(join(workspaceHome, "skills/example/SKILL.md"), skillDoc("workspace"), "utf-8");
+    await mkdir(join(workspaceHome, "skills/tyrum-docs"), { recursive: true });
+    await writeFile(
+      join(workspaceHome, "skills/tyrum-docs/SKILL.md"),
+      skillDoc("workspace"),
+      "utf-8",
+    );
 
     const skills = await loadEnabledSkills(
       workspaceHome,
@@ -102,7 +110,7 @@ describe("skills load order", () => {
         model: { model: null },
         skills: {
           default_mode: "deny",
-          allow: ["example"],
+          allow: ["tyrum-docs"],
           deny: [],
           workspace_trusted: false,
         },
@@ -119,8 +127,12 @@ describe("skills load order", () => {
     userHome = await mkdtemp(join(tmpdir(), "tyrum-user-home-"));
     workspaceHome = await mkdtemp(join(tmpdir(), "tyrum-workspace-home-"));
 
-    await mkdir(join(workspaceHome, "skills/example"), { recursive: true });
-    await writeFile(join(workspaceHome, "skills/example/SKILL.md"), skillDoc("workspace"), "utf-8");
+    await mkdir(join(workspaceHome, "skills/tyrum-docs"), { recursive: true });
+    await writeFile(
+      join(workspaceHome, "skills/tyrum-docs/SKILL.md"),
+      skillDoc("workspace"),
+      "utf-8",
+    );
 
     const skills = await loadEnabledSkills(
       workspaceHome,
@@ -128,7 +140,7 @@ describe("skills load order", () => {
         model: { model: null },
         skills: {
           default_mode: "deny",
-          allow: ["example"],
+          allow: ["tyrum-docs"],
           deny: [],
           workspace_trusted: false,
         },
@@ -137,7 +149,7 @@ describe("skills load order", () => {
     );
 
     expect(skills).toHaveLength(1);
-    expect(skills[0]!.meta.id).toBe("example");
+    expect(skills[0]!.meta.id).toBe("tyrum-docs");
     expect(skills[0]!.meta.version).toBe("0.1.0");
     expect(skills[0]!.provenance.source).toBe("bundled");
   });

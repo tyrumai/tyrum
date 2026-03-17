@@ -285,6 +285,11 @@ describe("McpServerSpec", () => {
         sync: {
           description_append: "Use for durable calendar hydration.",
           effect: "read_only",
+          pre_turn_hydration: {
+            prompt_arg_name: "query",
+            include_turn_context: true,
+          },
+          memory_role: "seed",
         },
       },
     });
@@ -292,6 +297,11 @@ describe("McpServerSpec", () => {
     expect(parsed.tool_overrides?.["sync"]).toEqual({
       description_append: "Use for durable calendar hydration.",
       effect: "read_only",
+      pre_turn_hydration: {
+        prompt_arg_name: "query",
+        include_turn_context: true,
+      },
+      memory_role: "seed",
     });
   });
 

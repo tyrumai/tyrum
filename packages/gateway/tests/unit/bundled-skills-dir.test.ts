@@ -9,8 +9,8 @@ import {
 describe("resolveBundledSkillsDir", () => {
   it("resolves the bundled skills directory", async () => {
     const skillsDir = resolveBundledSkillsDir();
-    const exampleSkill = await readFile(join(skillsDir, "example", "SKILL.md"), "utf-8");
-    expect(exampleSkill).toContain("name:");
+    const docsSkill = await readFile(join(skillsDir, "tyrum-docs", "SKILL.md"), "utf-8");
+    expect(docsSkill).toContain("name:");
   });
 
   it("resolves correctly from a dist/ bundle location", () => {

@@ -44,6 +44,8 @@ import type { ToolSetBuilderDeps } from "./tool-set-builder.js";
 import type { McpManager } from "../mcp-manager.js";
 import type { PluginRegistry } from "../../plugins/registry.js";
 import type { PolicyService } from "../../policy/service.js";
+import { ToolExecutor } from "../tool-executor.js";
+import { createToolExecutorForTurnPreparation } from "./turn-preparation-runtime-tooling.js";
 
 export interface TurnPreparationRuntimeDeps extends PrepareTurnHelperDeps {
   home: string;
@@ -359,17 +361,24 @@ export async function resolveIdentityAndContext(
   };
 }
 
-export async function resolveToolsAndMemory(
+export async function resolveToolExecutionRuntime(
   deps: TurnPreparationRuntimeDeps,
   ctx: AgentLoadedContext,
   session: SessionRow,
   resolved: ResolvedAgentTurnInput,
   executionProfile: ResolvedExecutionProfile,
+  opts?: {
+    memoryProvenance?: {
+      channel?: string;
+      threadId?: string;
+    };
+  },
 ): Promise<{
   availableTools: ToolDescriptor[];
   toolSetBuilderDeps: ConstructorParameters<typeof ToolSetBuilder>[0];
   toolSetBuilder: ToolSetBuilder;
   filteredTools: ToolDescriptor[];
+  toolExecutor: ToolExecutor;
 }> {
   const mcpTools = canDiscoverMcpTools(ctx.config.tools)
     ? await deps.mcpManager.listToolDescriptors(ctx.mcpServers)
@@ -470,7 +479,15 @@ export async function resolveToolsAndMemory(
       return validated ? [validated] : [];
     });
 
-  return { availableTools, toolSetBuilderDeps, toolSetBuilder, filteredTools };
+  const toolExecutor = await createToolExecutorForTurnPreparation({
+    deps,
+    ctx,
+    session,
+    executionProfile,
+    memoryProvenance: opts?.memoryProvenance,
+  });
+
+  return { availableTools, toolSetBuilderDeps, toolSetBuilder, filteredTools, toolExecutor };
 }
 
 export function buildToolSetBuilderDeps(

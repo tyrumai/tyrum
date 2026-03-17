@@ -60,6 +60,11 @@ describe("McpManager (stdio)", () => {
         echo: {
           description_append: "Use this for prompt-seeded recall.",
           effect: "read_only",
+          pre_turn_hydration: {
+            prompt_arg_name: "text",
+            include_turn_context: true,
+          },
+          memory_role: "seed",
         },
       },
     };
@@ -74,6 +79,11 @@ describe("McpManager (stdio)", () => {
     const echo = tools.find((tool) => tool.id === "mcp.mock.echo");
     expect(echo?.description).toContain("Echo back the provided text.");
     expect(echo?.description).toContain("Use this for prompt-seeded recall.");
+    expect(echo?.preTurnHydration).toEqual({
+      promptArgName: "text",
+      includeTurnContext: true,
+    });
+    expect(echo?.memoryRole).toBe("seed");
   });
 
   it("reconciles disabled servers by stopping and evicting stale entries", async () => {

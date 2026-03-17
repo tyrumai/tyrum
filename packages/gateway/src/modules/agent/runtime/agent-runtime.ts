@@ -340,6 +340,7 @@ export class AgentRuntime {
       abortSignal: input.abortSignal,
       timeoutMs: input.timeoutMs,
       logger: this.opts.container.logger,
+      prepareTurnDeps: this.prepareTurnDeps,
     });
   }
 

@@ -10,6 +10,8 @@ export interface ToolPreTurnHydrationConfig {
   includeTurnContext?: boolean;
 }
 
+export type ToolMemoryRole = "seed" | "search" | "write";
+
 export interface ToolDescriptor {
   id: string;
   description: string;
@@ -19,6 +21,7 @@ export interface ToolDescriptor {
   promptGuidance?: readonly string[];
   promptExamples?: readonly string[];
   preTurnHydration?: ToolPreTurnHydrationConfig;
+  memoryRole?: ToolMemoryRole;
   source?: ToolSource;
   family?: string;
   backingServerId?: string;

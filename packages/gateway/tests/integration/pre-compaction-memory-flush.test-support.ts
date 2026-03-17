@@ -4,6 +4,11 @@ import { vi } from "vitest";
 import type { GatewayContainer } from "../../src/container.js";
 import { AgentConfigDal } from "../../src/modules/config/agent-config-dal.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
+import {
+  BUILTIN_MEMORY_MCP_TOOLS,
+  buildBuiltinMemoryServerSpec,
+} from "../../src/modules/memory/builtin-mcp.js";
+import type { ToolDescriptor } from "../../src/modules/agent/tools.js";
 
 const TITLE_PROMPT_TEXT = "Write a concise session title.";
 
@@ -87,23 +92,27 @@ export function listNonTitleGenerateCalls(
   }[];
 }
 
-export function findFlushPromptText(languageModel: MockLanguageModelV3): string {
-  const call = listNonTitleGenerateCalls(languageModel).find((entry) =>
-    extractUserPromptText(entry.prompt).includes("silent internal pre-compaction memory flush"),
+function isInitialFlushCall(call: { prompt: unknown[] }): boolean {
+  if (!extractUserPromptText(call.prompt).includes("silent internal pre-compaction memory flush")) {
+    return false;
+  }
+  return !call.prompt.some(
+    (entry) =>
+      Boolean(entry) && typeof entry === "object" && (entry as { role?: unknown }).role === "tool",
   );
+}
+
+export function findFlushPromptText(languageModel: MockLanguageModelV3): string {
+  const call = listNonTitleGenerateCalls(languageModel).find(isInitialFlushCall);
   return extractUserPromptText(call?.prompt);
 }
 
 export function countFlushCalls(languageModel: MockLanguageModelV3): number {
-  return listNonTitleGenerateCalls(languageModel).filter((entry) =>
-    extractUserPromptText(entry.prompt).includes("silent internal pre-compaction memory flush"),
-  ).length;
+  return listNonTitleGenerateCalls(languageModel).filter(isInitialFlushCall).length;
 }
 
 export function findFlushSystemText(languageModel: MockLanguageModelV3): string {
-  const call = listNonTitleGenerateCalls(languageModel).find((entry) =>
-    extractUserPromptText(entry.prompt).includes("silent internal pre-compaction memory flush"),
-  );
+  const call = listNonTitleGenerateCalls(languageModel).find(isInitialFlushCall);
   return extractSystemPromptText(call?.prompt);
 }
 
@@ -117,6 +126,28 @@ function titleGenerateResult() {
 }
 
 export function createSequencedTextLanguageModel(texts: readonly string[]): MockLanguageModelV3 {
+  return createSequencedGenerateLanguageModel(texts);
+}
+
+type GenerateStep =
+  | string
+  | {
+      kind: "tool-call";
+      toolName: string;
+      input: string | Record<string, unknown>;
+    };
+
+export function createMemoryWriteToolStep(input: Record<string, unknown>): GenerateStep {
+  return {
+    kind: "tool-call",
+    toolName: "mcp.memory.write",
+    input,
+  };
+}
+
+export function createSequencedGenerateLanguageModel(
+  steps: readonly GenerateStep[],
+): MockLanguageModelV3 {
   let callCount = 0;
 
   return new MockLanguageModelV3({
@@ -124,10 +155,26 @@ export function createSequencedTextLanguageModel(texts: readonly string[]): Mock
       if (isTitleGenerateCall(options as { prompt?: unknown[] })) {
         return titleGenerateResult();
       }
-      const text = texts[callCount] ?? texts.at(-1) ?? "";
+      const step = steps[callCount] ?? steps.at(-1) ?? "";
       callCount += 1;
+
+      if (typeof step !== "string") {
+        return {
+          content: [
+            {
+              type: "tool-call" as const,
+              toolCallId: `tc-${String(callCount)}`,
+              toolName: step.toolName,
+              input: typeof step.input === "string" ? step.input : JSON.stringify(step.input),
+            },
+          ],
+          finishReason: { unified: "tool-calls" as const, raw: undefined },
+          usage: usage(),
+          warnings: [],
+        };
+      }
       return {
-        content: [{ type: "text" as const, text }],
+        content: [{ type: "text" as const, text: step }],
         finishReason: { unified: "stop" as const, raw: undefined },
         usage: usage(),
         warnings: [],
@@ -149,7 +196,8 @@ export async function seedAgentConfig(
       model: { model: "openai/gpt-4.1" },
       skills: { enabled: [] },
       mcp: {
-        enabled: [],
+        default_mode: "deny",
+        allow: ["memory"],
         pre_turn_tools: ["mcp.memory.seed"],
         server_settings: { memory: { enabled: true } },
       },
@@ -170,9 +218,48 @@ export async function seedAgentConfig(
   return { tenantId, agentId };
 }
 
+function createBuiltinMemoryToolDescriptors(): ToolDescriptor[] {
+  const spec = buildBuiltinMemoryServerSpec();
+  const overrides = spec.tool_overrides ?? {};
+  return BUILTIN_MEMORY_MCP_TOOLS.map((tool) => {
+    const override = overrides[tool.name];
+    return {
+      id: `mcp.${spec.id}.${tool.name}`,
+      description: tool.description?.trim().length
+        ? `${tool.description.trim()} (server=${spec.name})`
+        : `MCP tool '${tool.name}' from server '${spec.name}'.`,
+      effect: override?.effect ?? tool.effect ?? "state_changing",
+      keywords: [
+        "mcp",
+        spec.id.toLowerCase(),
+        spec.name.toLowerCase(),
+        tool.name.toLowerCase(),
+        ...(tool.keywords ?? []),
+      ],
+      source: "mcp",
+      family: "mcp",
+      backingServerId: spec.id,
+      inputSchema:
+        tool.inputSchema && typeof tool.inputSchema === "object"
+          ? (tool.inputSchema as Record<string, unknown>)
+          : undefined,
+      promptGuidance: tool.promptGuidance,
+      promptExamples: tool.promptExamples,
+      preTurnHydration: override?.pre_turn_hydration
+        ? {
+            promptArgName: override.pre_turn_hydration.prompt_arg_name,
+            includeTurnContext: override.pre_turn_hydration.include_turn_context,
+          }
+        : tool.preTurnHydration,
+      memoryRole: override?.memory_role ?? tool.memoryRole,
+    };
+  });
+}
+
 export function createMockMcpManager() {
+  const descriptors = createBuiltinMemoryToolDescriptors();
   return {
-    listToolDescriptors: vi.fn(async () => []),
+    listToolDescriptors: vi.fn(async () => descriptors),
     shutdown: vi.fn(async () => {}),
     callTool: vi.fn(async () => ({ content: [] })),
   };

@@ -21,7 +21,6 @@ const PROMPT_SECTION_LABELS = [
   PRETURN_MEMORY_SECTION_LABEL,
   "Automation directive:",
   "Automation context:",
-  "User request:",
 ] as const;
 
 function flattenPromptPart(part: unknown): string {
@@ -204,10 +203,7 @@ function buildPromptAwareInput(options: LanguageModelV3CallOptions): PromptAware
     const latestUserPart = latestUserEntry.content.findLast(
       (part) => flattenPromptPart(part).length > 0,
     );
-    const latestText = latestUserPart ? flattenPromptPart(latestUserPart) : "";
-    return latestText.startsWith("User request:\n")
-      ? latestText.slice("User request:\n".length)
-      : latestText;
+    return latestUserPart ? flattenPromptPart(latestUserPart) : "";
   })();
   const systemText = flattenPromptContent(systemEntry?.content);
   return {

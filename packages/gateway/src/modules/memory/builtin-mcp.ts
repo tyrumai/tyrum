@@ -27,6 +27,21 @@ export function buildBuiltinMemoryServerSpec(): McpServerSpecT {
     transport: "stdio",
     command: process.execPath,
     args: ["-e", ""],
+    tool_overrides: {
+      seed: {
+        pre_turn_hydration: {
+          prompt_arg_name: "query",
+          include_turn_context: true,
+        },
+        memory_role: "seed",
+      },
+      search: {
+        memory_role: "search",
+      },
+      write: {
+        memory_role: "write",
+      },
+    },
   };
 }
 
@@ -37,10 +52,6 @@ export const BUILTIN_MEMORY_MCP_TOOLS: readonly BuiltinMcpToolInfo[] = [
       "Return prompt-ready durable memory relevant to the current user request. Use this as pre-turn recall context; the gateway may invoke it automatically before a turn.",
     effect: "read_only",
     keywords: ["memory", "seed", "recall", "preferences", "context"],
-    preTurnHydration: {
-      promptArgName: "query",
-      includeTurnContext: true,
-    },
     inputSchema: {
       type: "object",
       properties: {
