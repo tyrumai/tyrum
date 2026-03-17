@@ -139,33 +139,9 @@ const cases: LayoutCase[] = [
     selectors: ["[data-layout-content]"],
   },
   {
-    name: "desktop general",
+    name: "desktop node config",
     route: "desktop",
-    selectors: ["[data-layout-content]", '[role="tabpanel"][data-state="active"]'],
-  },
-  {
-    name: "desktop page desktop tab",
-    route: "desktop",
-    clicks: ['[role="tab"]:has-text("Desktop")'],
-    selectors: ["[data-layout-content]", '[role="tabpanel"][data-state="active"]'],
-  },
-  {
-    name: "desktop page browser tab",
-    route: "desktop",
-    clicks: ['[role="tab"]:has-text("Browser")'],
-    selectors: ["[data-layout-content]", '[role="tabpanel"][data-state="active"]'],
-  },
-  {
-    name: "desktop page shell tab",
-    route: "desktop",
-    clicks: ['[role="tab"]:has-text("Shell")'],
-    selectors: ["[data-layout-content]", '[role="tabpanel"][data-state="active"]'],
-  },
-  {
-    name: "desktop page web tab",
-    route: "desktop",
-    clicks: ['[role="tab"]:has-text("Web")'],
-    selectors: ["[data-layout-content]", '[role="tabpanel"][data-state="active"]'],
+    selectors: ["[data-layout-content]"],
   },
   {
     name: "onboarding",

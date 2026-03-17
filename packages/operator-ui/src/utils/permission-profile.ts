@@ -7,8 +7,6 @@ export interface CapFlags {
   http: boolean;
 }
 
-export type AllowlistState = "active" | "inactive";
-
 const PROFILE_CAPABILITIES: Record<Profile, CapFlags> = {
   safe: {
     desktop: true,
@@ -32,20 +30,4 @@ const PROFILE_CAPABILITIES: Record<Profile, CapFlags> = {
 
 export function capabilitiesForProfile(profile: Profile): CapFlags {
   return { ...PROFILE_CAPABILITIES[profile] };
-}
-
-export function getAllowlistMode(
-  profile: Profile,
-  capabilities: CapFlags,
-): { cli: AllowlistState; web: AllowlistState } {
-  switch (profile) {
-    case "safe":
-    case "poweruser":
-      return { cli: "inactive", web: "inactive" };
-    case "balanced":
-      return {
-        cli: capabilities.cli ? "active" : "inactive",
-        web: capabilities.playwright ? "active" : "inactive",
-      };
-  }
 }

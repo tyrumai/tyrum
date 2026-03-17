@@ -8,9 +8,8 @@ import { ConfigurePage } from "../../../packages/operator-ui/src/components/page
 import { DashboardPage } from "../../../packages/operator-ui/src/components/pages/dashboard-page.js";
 import { ExtensionsPage } from "../../../packages/operator-ui/src/components/pages/extensions-page.js";
 import { FirstRunOnboardingPage } from "../../../packages/operator-ui/src/components/pages/first-run-onboarding.js";
-import { NodeConfigurePage } from "../../../packages/operator-ui/src/components/pages/node-configure-page.js";
+import { NodeConfigPage } from "../../../packages/operator-ui/src/components/pages/node-config/node-config-page.js";
 import { PairingPage } from "../../../packages/operator-ui/src/components/pages/pairing-page.js";
-import { BrowserCapabilitiesPage } from "../../../packages/operator-ui/src/components/pages/platform/browser-capabilities-page.js";
 import { WorkBoardPage } from "../../../packages/operator-ui/src/components/pages/workboard-page.js";
 import { BrowserNodeProvider } from "../../../packages/operator-ui/src/browser-node/browser-node-provider.js";
 import { AdminAccessProvider } from "../../../packages/operator-ui/src/elevated-mode.js";
@@ -63,7 +62,9 @@ function HarnessIcon({ className }: { className?: string }) {
 function createBrowserRoute(): React.ReactNode {
   return (
     <BrowserNodeProvider wsUrl="ws://127.0.0.1:8788/ws">
-      <BrowserCapabilitiesPage />
+      <OperatorUiHostProvider value={{ kind: "web" }}>
+        <NodeConfigPage />
+      </OperatorUiHostProvider>
     </BrowserNodeProvider>
   );
 }
@@ -71,7 +72,7 @@ function createBrowserRoute(): React.ReactNode {
 function createDesktopRoute(): React.ReactNode {
   return (
     <OperatorUiHostProvider value={{ kind: "desktop", api: createDesktopApi() }}>
-      <NodeConfigurePage />
+      <NodeConfigPage />
     </OperatorUiHostProvider>
   );
 }

@@ -151,8 +151,19 @@ describe("operator-ui mobile host", () => {
           await Promise.resolve();
         });
 
-        expect(container.querySelector('[data-testid="mobile-platform-page"]')).not.toBeNull();
-        expect(container.textContent).toContain("Mobile node executor");
+        // The unified NodeConfigPage loads mobile state asynchronously.
+        // Flush additional microtasks to allow the API call to resolve.
+        await act(async () => {
+          await Promise.resolve();
+        });
+        await act(async () => {
+          await Promise.resolve();
+        });
+
+        // The unified NodeConfigPage renders the mobile configuration UI.
+        // The platform label is derived from the mobile state platform ("iOS"),
+        // so the executor title is "iOS node executor".
+        expect(container.textContent).toContain("iOS node executor");
         expect(container.textContent).toContain("iOS");
         expect(browserNodeProviderSpy).not.toHaveBeenCalled();
       } finally {
