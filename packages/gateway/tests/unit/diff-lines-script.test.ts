@@ -5,12 +5,24 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
 
+function createSanitizedGitEnv(): NodeJS.ProcessEnv {
+  return Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("GIT_")));
+}
+
 function runGit(cwd: string, args: string[]) {
-  return execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
+  return execFileSync("git", args, {
+    cwd,
+    encoding: "utf8",
+    env: createSanitizedGitEnv(),
+  }).trim();
 }
 
 function runNode(cwd: string, args: string[]) {
-  return execFileSync(process.execPath, args, { cwd, encoding: "utf8" });
+  return execFileSync(process.execPath, args, {
+    cwd,
+    encoding: "utf8",
+    env: createSanitizedGitEnv(),
+  });
 }
 
 test("diff-lines skips non-coverable changed lines when file has no coverage entry", () => {

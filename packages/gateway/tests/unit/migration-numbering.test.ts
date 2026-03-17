@@ -8,6 +8,10 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MIGRATIONS_ROOT = join(__dirname, "../../migrations");
 
+function createSanitizedGitEnv(): NodeJS.ProcessEnv {
+  return Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("GIT_")));
+}
+
 function tryGetTrackedMigrationFiles(
   migrationsRoot: string,
   kind: "sqlite" | "postgres",
@@ -84,13 +88,19 @@ describe("gateway migrations", () => {
   it("ignores untracked migration files when checking duplicate prefixes", () => {
     const repoRoot = mkdtempSync(join(tmpdir(), "tyrum-migrations-"));
     try {
-      execFileSync("git", ["init"], { cwd: repoRoot, stdio: "ignore" });
+      execFileSync("git", ["init"], {
+        cwd: repoRoot,
+        env: createSanitizedGitEnv(),
+        stdio: "ignore",
+      });
       execFileSync("git", ["config", "user.email", "test@example.com"], {
         cwd: repoRoot,
+        env: createSanitizedGitEnv(),
         stdio: "ignore",
       });
       execFileSync("git", ["config", "user.name", "Tyrum Test"], {
         cwd: repoRoot,
+        env: createSanitizedGitEnv(),
         stdio: "ignore",
       });
 
@@ -100,9 +110,14 @@ describe("gateway migrations", () => {
 
       writeFileSync(join(sqliteDir, "100_a.sql"), "SELECT 1;", "utf-8");
       writeFileSync(join(sqliteDir, "102_tracked.sql"), "SELECT 1;", "utf-8");
-      execFileSync("git", ["add", "."], { cwd: repoRoot, stdio: "ignore" });
+      execFileSync("git", ["add", "."], {
+        cwd: repoRoot,
+        env: createSanitizedGitEnv(),
+        stdio: "ignore",
+      });
       execFileSync("git", ["commit", "--no-gpg-sign", "-m", "seed tracked migrations"], {
         cwd: repoRoot,
+        env: createSanitizedGitEnv(),
         stdio: "ignore",
       });
 
@@ -112,6 +127,7 @@ describe("gateway migrations", () => {
         "git",
         ["-C", repoRoot, "ls-files", "--", "packages/gateway/migrations/sqlite"],
         {
+          env: createSanitizedGitEnv(),
           encoding: "utf-8",
           stdio: ["ignore", "pipe", "ignore"],
         },
