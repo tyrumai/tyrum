@@ -1,9 +1,12 @@
 import type { DecisionRecord, WorkArtifact, WorkItem, WorkSignal } from "@tyrum/operator-core";
+import { useState } from "react";
 import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent } from "../ui/card.js";
+import { ConfirmDangerDialog } from "../ui/confirm-danger-dialog.js";
+import { LoadingState } from "../ui/loading-state.js";
 import type { WorkStateKvEntry, WorkTaskSummary } from "../workboard/workboard-store.js";
-import { DetailListSection, EmptyState, KvSection, Section } from "./workboard-page.shared.js";
+import { DetailListSection, InlineEmptyHint, KvSection, Section } from "./workboard-page.shared.js";
 
 type TaskCounts = {
   leased: number;
@@ -51,6 +54,8 @@ export function WorkBoardDrilldown({
   agentKvEntries,
   workItemKvEntries,
 }: WorkBoardDrilldownProps) {
+  const [cancelOpen, setCancelOpen] = useState(false);
+
   return (
     <Card>
       <CardContent className="grid gap-4 pt-6">
@@ -58,11 +63,11 @@ export function WorkBoardDrilldown({
         {!selectedWorkItemId ? (
           <div className="text-sm text-fg-muted">Select a WorkItem to inspect details.</div>
         ) : drilldownBusy ? (
-          <div className="text-sm text-fg-muted">Loading…</div>
+          <LoadingState />
         ) : drilldownError ? (
           <Alert variant="error" title="Drilldown error" description={drilldownError} />
         ) : !selectedItem ? (
-          <EmptyState>WorkItem not loaded.</EmptyState>
+          <InlineEmptyHint>WorkItem not loaded.</InlineEmptyHint>
         ) : (
           <div className="grid gap-5">
             <Section title="WorkItem">
@@ -103,10 +108,7 @@ export function WorkBoardDrilldown({
                     <Button
                       variant="danger"
                       size="sm"
-                      onClick={() => {
-                        if (!globalThis.confirm("Cancel this WorkItem?")) return;
-                        void onTransition("cancelled", "operator cancelled");
-                      }}
+                      onClick={() => setCancelOpen(true)}
                       disabled={transitionTarget !== null}
                       isLoading={transitionTarget === "cancelled"}
                     >
@@ -287,6 +289,14 @@ export function WorkBoardDrilldown({
             <KvSection title="State KV (work item)" entries={workItemKvEntries} />
           </div>
         )}
+        <ConfirmDangerDialog
+          open={cancelOpen}
+          onOpenChange={setCancelOpen}
+          title="Cancel this WorkItem?"
+          description="This will cancel the WorkItem and stop any running tasks."
+          confirmLabel="Cancel WorkItem"
+          onConfirm={() => void onTransition("cancelled", "operator cancelled")}
+        />
       </CardContent>
     </Card>
   );

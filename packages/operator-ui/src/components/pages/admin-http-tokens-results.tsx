@@ -4,6 +4,7 @@ import * as React from "react";
 import { ElevatedModeTooltip } from "../elevated-mode/elevated-mode-tooltip.js";
 import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
+import { DataTable, type DataTableColumn } from "../ui/data-table.js";
 import { EmptyState } from "../ui/empty-state.js";
 import {
   formatAccessSummary,
@@ -58,72 +59,87 @@ export function TokenResults({
     return null;
   }
 
+  const tokenColumns: DataTableColumn<AuthTokenListEntry>[] = [
+    {
+      id: "token",
+      header: "Token",
+      cell: (token) => (
+        <>
+          <div className="font-medium text-fg">{token.display_name}</div>
+          <div className="font-mono text-xs text-fg-muted">{token.token_id}</div>
+        </>
+      ),
+    },
+    {
+      id: "role",
+      header: "Role",
+      cell: (token) => <Badge>{token.role}</Badge>,
+    },
+    {
+      id: "device",
+      header: "Device",
+      cell: (token) => <span className="text-fg-muted">{token.device_id ?? "Optional"}</span>,
+    },
+    {
+      id: "access",
+      header: "Access",
+      cell: (token) => <span className="text-fg-muted">{formatAccessSummary(token)}</span>,
+    },
+    {
+      id: "expires",
+      header: "Expires",
+      cell: (token) => <span className="text-fg-muted">{formatTimestamp(token.expires_at)}</span>,
+    },
+    {
+      id: "lastChanged",
+      header: "Last changed",
+      cell: (token) => <span className="text-fg-muted">{formatTimestamp(token.updated_at)}</span>,
+    },
+    {
+      id: "status",
+      header: "Status",
+      cell: (token) => <Badge variant={statusBadgeVariant(token)}>{statusLabel(token)}</Badge>,
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      cell: (token) => (
+        <div className="flex flex-wrap gap-2">
+          <TokenActionButton
+            canMutate={canMutate}
+            requestEnter={requestEnter}
+            testId={`admin-http-token-edit-${token.token_id}`}
+            variant="secondary"
+            disabled={Boolean(token.revoked_at)}
+            onClick={() => onEditToken(token)}
+          >
+            Edit
+          </TokenActionButton>
+          <TokenActionButton
+            canMutate={canMutate}
+            requestEnter={requestEnter}
+            testId={`admin-http-token-revoke-${token.token_id}`}
+            variant="danger"
+            disabled={Boolean(token.revoked_at)}
+            onClick={() => onRevokeToken(token)}
+          >
+            Revoke
+          </TokenActionButton>
+        </div>
+      ),
+    },
+  ];
+
   return (
     <>
-      <div className="hidden overflow-x-auto rounded-lg border border-border md:block">
-        <table className="min-w-full border-collapse text-left text-sm">
-          <thead className="bg-bg-subtle/50 text-xs uppercase tracking-wide text-fg-muted">
-            <tr>
-              <th className="px-3 py-2 font-medium">Token</th>
-              <th className="px-3 py-2 font-medium">Role</th>
-              <th className="px-3 py-2 font-medium">Device</th>
-              <th className="px-3 py-2 font-medium">Access</th>
-              <th className="px-3 py-2 font-medium">Expires</th>
-              <th className="px-3 py-2 font-medium">Last changed</th>
-              <th className="px-3 py-2 font-medium">Status</th>
-              <th className="px-3 py-2 font-medium">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {visibleTokens.map((token) => (
-              <tr
-                key={token.token_id}
-                data-testid={`admin-http-token-row-${token.token_id}`}
-                className="border-t border-border align-top"
-              >
-                <td className="px-3 py-3">
-                  <div className="font-medium text-fg">{token.display_name}</div>
-                  <div className="font-mono text-xs text-fg-muted">{token.token_id}</div>
-                </td>
-                <td className="px-3 py-3">
-                  <Badge>{token.role}</Badge>
-                </td>
-                <td className="px-3 py-3 text-fg-muted">{token.device_id ?? "Optional"}</td>
-                <td className="px-3 py-3 text-fg-muted">{formatAccessSummary(token)}</td>
-                <td className="px-3 py-3 text-fg-muted">{formatTimestamp(token.expires_at)}</td>
-                <td className="px-3 py-3 text-fg-muted">{formatTimestamp(token.updated_at)}</td>
-                <td className="px-3 py-3">
-                  <Badge variant={statusBadgeVariant(token)}>{statusLabel(token)}</Badge>
-                </td>
-                <td className="px-3 py-3">
-                  <div className="flex flex-wrap gap-2">
-                    <TokenActionButton
-                      canMutate={canMutate}
-                      requestEnter={requestEnter}
-                      testId={`admin-http-token-edit-${token.token_id}`}
-                      variant="secondary"
-                      disabled={Boolean(token.revoked_at)}
-                      onClick={() => onEditToken(token)}
-                    >
-                      Edit
-                    </TokenActionButton>
-                    <TokenActionButton
-                      canMutate={canMutate}
-                      requestEnter={requestEnter}
-                      testId={`admin-http-token-revoke-${token.token_id}`}
-                      variant="danger"
-                      disabled={Boolean(token.revoked_at)}
-                      onClick={() => onRevokeToken(token)}
-                    >
-                      Revoke
-                    </TokenActionButton>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataTable<AuthTokenListEntry>
+        className="hidden md:block"
+        columns={tokenColumns}
+        data={visibleTokens}
+        rowKey={(token) => token.token_id}
+        rowClassName="align-top"
+        testIdPrefix="admin-http-token-row"
+      />
 
       <div className="grid gap-3 md:hidden">
         {visibleTokens.map((token) => (

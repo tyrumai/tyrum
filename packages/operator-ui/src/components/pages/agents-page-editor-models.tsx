@@ -8,6 +8,7 @@ import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
 import { Input } from "../ui/input.js";
 import { Label } from "../ui/label.js";
+import { LoadingState } from "../ui/loading-state.js";
 import { ScrollArea } from "../ui/scroll-area.js";
 import { cn } from "../../lib/cn.js";
 
@@ -283,7 +284,7 @@ export function AgentEditorModelFields({
               ) : null}
             </div>
             {presetsLoading ? (
-              <div className="text-sm text-fg-muted">Loading configured models…</div>
+              <LoadingState label="Loading configured models…" />
             ) : primaryOpen ? (
               <div className="grid gap-2">
                 <Input

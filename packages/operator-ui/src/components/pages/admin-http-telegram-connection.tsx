@@ -16,6 +16,7 @@ import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { EmptyState } from "../ui/empty-state.js";
+import { LoadingState } from "../ui/loading-state.js";
 import {
   useAdminHttpClient,
   useAdminMutationAccess,
@@ -135,7 +136,7 @@ export function AdminHttpChannelConfigsPanel({
           ) : null}
 
           {loading ? (
-            <div className="text-sm text-fg-muted">Loading configured channels…</div>
+            <LoadingState label="Loading configured channels…" />
           ) : configs.length === 0 ? (
             <EmptyState
               icon={Plus}

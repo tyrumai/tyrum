@@ -1,0 +1,5 @@
+[
+  "packages/operator-ui/src/components/pages/agents-page.tsx",
+  "packages/operator-ui/src/components/pages/chat-page-threads.tsx",
+  "packages/operator-ui/src/components/pages/agents-page-editor-access-transfer.tsx"
+]

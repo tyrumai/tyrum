@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { ConfirmDangerDialog } from "../ui/confirm-danger-dialog.js";
 import { EmptyState } from "../ui/empty-state.js";
 import { Input } from "../ui/input.js";
+import { LoadingState } from "../ui/loading-state.js";
 import {
   useAdminHttpClient,
   useAdminMutationAccess,
@@ -333,7 +334,7 @@ export function AdminHttpSecretsPanel({ core }: { core: OperatorCore }): React.R
             <Alert variant="error" title="Failed to load secrets" description={errorMessage} />
           ) : null}
 
-          {loading ? <div className="text-sm text-fg-muted">Loading secrets...</div> : null}
+          {loading ? <LoadingState label="Loading secrets…" /> : null}
 
           {!loading && !errorMessage && rows.length === 0 ? (
             <EmptyState

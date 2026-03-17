@@ -5,6 +5,7 @@ import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { Alert } from "../ui/alert.js";
+import { LoadingState } from "../ui/loading-state.js";
 import { cn } from "../../lib/cn.js";
 
 function IdentityField({
@@ -220,7 +221,9 @@ export function AgentIdentityPanel({
   if (loading && !status) {
     return (
       <Card>
-        <CardContent className="py-10 text-sm text-fg-muted">Loading agent identity…</CardContent>
+        <CardContent>
+          <LoadingState variant="centered" label="Loading agent identity…" />
+        </CardContent>
       </Card>
     );
   }

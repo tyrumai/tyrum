@@ -11,6 +11,8 @@ import { AppPage } from "../layout/app-page.js";
 import { Alert } from "../ui/alert.js";
 import { Card } from "../ui/card.js";
 import { EmptyState } from "../ui/empty-state.js";
+import { LoadingState } from "../ui/loading-state.js";
+import { SectionHeading } from "../ui/section-heading.js";
 import { useOperatorStore } from "../../use-operator-store.js";
 import { NodeListRowItem, type NodeListRow, type NodeListState } from "./pairing-page.rows.js";
 import {
@@ -267,16 +269,14 @@ export function PairingPage({ core }: { core: OperatorCore }) {
 
       <div className="grid gap-3">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-lg font-medium text-fg">Nodes</h2>
+          <SectionHeading level="page" as="h2">Nodes</SectionHeading>
           <div className="text-sm text-fg-muted">
             {counts.pending} pending, {counts.connected} connected, {counts.offline} offline
           </div>
         </div>
 
         {inventory.loading && rows.length === 0 ? (
-          <Card>
-            <div className="px-6 py-5 text-sm text-fg-muted">Loading nodes...</div>
-          </Card>
+          <LoadingState label="Loading nodes..." />
         ) : rows.length === 0 ? (
           <Card>
             <EmptyState

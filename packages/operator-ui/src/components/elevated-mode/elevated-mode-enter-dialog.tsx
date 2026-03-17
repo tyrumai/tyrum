@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
+import { Checkbox } from "../ui/checkbox.js";
 import {
   Dialog,
   DialogContent,
@@ -18,13 +19,11 @@ export function ElevatedModeEnterDialog() {
   const busyRef = useRef(busy);
   busyRef.current = busy;
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const confirmRef = useRef<HTMLInputElement | null>(null);
+  const [confirmed, setConfirmed] = useState(false);
 
   const resetForm = (): void => {
     setErrorMessage(null);
-    if (confirmRef.current) {
-      confirmRef.current.checked = false;
-    }
+    setConfirmed(false);
   };
 
   useEffect(() => {
@@ -35,7 +34,6 @@ export function ElevatedModeEnterDialog() {
   const submit = async (): Promise<void> => {
     if (busyRef.current) return;
 
-    const confirmed = confirmRef.current?.checked ?? false;
     if (!confirmed) {
       setErrorMessage("Confirmation is required");
       return;
@@ -86,7 +84,6 @@ export function ElevatedModeEnterDialog() {
         }}
         onOpenAutoFocus={(event) => {
           event.preventDefault();
-          confirmRef.current?.focus();
         }}
       >
         <DialogHeader>
@@ -99,7 +96,11 @@ export function ElevatedModeEnterDialog() {
 
         <div className="mt-4 grid gap-5">
           <label className="flex items-center gap-3 text-sm text-fg">
-            <input type="checkbox" data-testid="elevated-mode-confirm" ref={confirmRef} />
+            <Checkbox
+              data-testid="elevated-mode-confirm"
+              checked={confirmed}
+              onCheckedChange={(v) => setConfirmed(v === true)}
+            />
             <span>I understand and want to proceed.</span>
           </label>
 

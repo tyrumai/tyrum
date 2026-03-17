@@ -7,6 +7,7 @@ import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { EmptyState } from "../ui/empty-state.js";
 import { Input } from "../ui/input.js";
+import { LoadingState } from "../ui/loading-state.js";
 import { Select } from "../ui/select.js";
 import { Separator } from "../ui/separator.js";
 
@@ -247,7 +248,7 @@ export function LocationPlacesCard(props: {
       </CardHeader>
       <CardContent className="grid gap-4">
         {props.loading && props.places.length === 0 ? (
-          <div className="text-sm text-fg-muted">Loading saved places...</div>
+          <LoadingState label="Loading saved places..." />
         ) : props.places.length === 0 ? (
           <EmptyState
             icon={MapPin}

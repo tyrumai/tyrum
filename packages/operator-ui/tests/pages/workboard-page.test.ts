@@ -15,7 +15,7 @@ import {
   getStatusColumn,
   makeWorkItem,
 } from "./workboard-page.test-support.js";
-import { cleanupTestRoot, renderIntoDocument, stubMatchMedia } from "../test-utils.js";
+import { click, cleanupTestRoot, renderIntoDocument, stubMatchMedia } from "../test-utils.js";
 
 function setSelectValue(container: HTMLElement, testId: string, value: string): void {
   const select = container.querySelector<HTMLSelectElement>(`[data-testid="${testId}"]`);
@@ -220,22 +220,41 @@ describe("WorkBoardPage", () => {
       expect(backlogColumn.textContent).toContain("No items");
       expect(readyColumn.textContent).toContain("Ship regression tests");
 
-      vi.stubGlobal(
-        "confirm",
-        vi.fn(() => false),
-      );
+      // Click Cancel to open ConfirmDangerDialog, then dismiss
       await act(async () => {
         clickButton(testRoot.container, "Cancel");
         await Promise.resolve();
       });
+      // Dialog renders in a Radix Portal on document.body
+      const dismissButton = document.querySelector<HTMLElement>(
+        "[data-testid='confirm-danger-cancel']",
+      );
+      expect(dismissButton).not.toBeNull();
+      await act(async () => {
+        click(dismissButton!);
+        await Promise.resolve();
+      });
       expect(ws.workTransition).toHaveBeenCalledTimes(1);
 
-      vi.stubGlobal(
-        "confirm",
-        vi.fn(() => true),
-      );
+      // Click Cancel again, check the confirmation checkbox, then confirm
       await act(async () => {
         clickButton(testRoot.container, "Cancel");
+        await Promise.resolve();
+      });
+      const checkbox = document.querySelector<HTMLElement>(
+        "[data-testid='confirm-danger-checkbox']",
+      );
+      expect(checkbox).not.toBeNull();
+      await act(async () => {
+        click(checkbox!);
+        await Promise.resolve();
+      });
+      const confirmBtn = document.querySelector<HTMLElement>(
+        "[data-testid='confirm-danger-confirm']",
+      );
+      expect(confirmBtn).not.toBeNull();
+      await act(async () => {
+        click(confirmBtn!);
         await Promise.resolve();
       });
       expect(ws.workTransition).toHaveBeenCalledTimes(2);

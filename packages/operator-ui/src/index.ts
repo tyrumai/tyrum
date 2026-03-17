@@ -57,6 +57,9 @@ export { Badge } from "./components/ui/badge.js";
 export type { InputProps } from "./components/ui/input.js";
 export { Input } from "./components/ui/input.js";
 
+export type { SelectProps } from "./components/ui/select.js";
+export { Select } from "./components/ui/select.js";
+
 export type { TextareaProps } from "./components/ui/textarea.js";
 export { Textarea } from "./components/ui/textarea.js";
 
@@ -88,6 +91,15 @@ export { EmptyState } from "./components/ui/empty-state.js";
 
 export type { SkeletonProps } from "./components/ui/skeleton.js";
 export { Skeleton } from "./components/ui/skeleton.js";
+
+export type { LoadingStateProps, LoadingStateVariant } from "./components/ui/loading-state.js";
+export { LoadingState } from "./components/ui/loading-state.js";
+
+export type { DataTableColumn, DataTableProps } from "./components/ui/data-table.js";
+export { DataTable } from "./components/ui/data-table.js";
+
+export type { SectionHeadingLevel, SectionHeadingProps } from "./components/ui/section-heading.js";
+export { SectionHeading } from "./components/ui/section-heading.js";
 
 export type { DialogFooterProps, DialogHeaderProps } from "./components/ui/dialog.js";
 export {

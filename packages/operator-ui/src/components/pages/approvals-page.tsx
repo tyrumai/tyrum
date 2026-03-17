@@ -29,8 +29,9 @@ import { Button } from "../ui/button.js";
 import { Card, CardContent, CardFooter, CardHeader } from "../ui/card.js";
 import { EmptyState } from "../ui/empty-state.js";
 import { LiveRegion } from "../ui/live-region.js";
+import { LoadingState } from "../ui/loading-state.js";
 import { Select } from "../ui/select.js";
-import { Spinner } from "../ui/spinner.js";
+
 import { useOperatorStore } from "../../use-operator-store.js";
 import { extractTakeoverUrlFromNodeIdentity } from "../../utils/takeover-url.js";
 import { isAdminAccessRequiredError } from "../elevated-mode/admin-access-error.js";
@@ -404,13 +405,7 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
       </Card>
 
       {approvalsLoadingInitially ? (
-        <div
-          className="flex items-center justify-center gap-2 px-4 py-10 text-sm text-fg-muted"
-          aria-busy={true}
-        >
-          <Spinner aria-hidden={true} />
-          Loading approvals...
-        </div>
+        <LoadingState variant="centered" label="Loading approvals…" />
       ) : (
         <>
           <section data-testid="approvals-needs-attention" className="grid gap-3">

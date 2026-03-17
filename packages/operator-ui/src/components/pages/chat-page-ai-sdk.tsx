@@ -11,8 +11,9 @@ import { useBrowserNodeOptional } from "../../browser-node/browser-node-provider
 import { useHostApiOptional } from "../../host/host-api.js";
 import { useOperatorStore } from "../../use-operator-store.js";
 import { Alert } from "../ui/alert.js";
+import { Button } from "../ui/button.js";
 import { ConfirmDangerDialog } from "../ui/confirm-danger-dialog.js";
-import { Spinner } from "../ui/spinner.js";
+import { LoadingState } from "../ui/loading-state.js";
 import { useAppShellMinWidth } from "../layout/app-shell.js";
 import { ChatThreadsPanel } from "./chat-page-threads.js";
 import { AiSdkConversation } from "./chat-page-ai-sdk-conversation.js";
@@ -289,9 +290,7 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
 
         {showConversation ? (
           chat.active.loading ? (
-            <div className="flex flex-1 items-center justify-center">
-              <Spinner />
-            </div>
+            <LoadingState variant="centered" className="flex-1" />
           ) : activeSession ? (
             <AiSdkConversation
               key={activeSession.session_id}
@@ -332,16 +331,16 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
                   <div className="text-sm text-fg-muted">
                     Select a conversation or start a new chat.
                   </div>
-                  <button
-                    type="button"
+                  <Button
+                    variant="secondary"
+                    size="sm"
                     data-testid="chat-empty-conversation-new"
-                    className="rounded-md border border-border bg-bg-subtle px-3 py-2 text-sm font-medium text-fg transition-colors hover:bg-bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
                     onClick={() => {
                       void startNewChat();
                     }}
                   >
                     Start new chat
-                  </button>
+                  </Button>
                 </div>
               )}
             </div>
