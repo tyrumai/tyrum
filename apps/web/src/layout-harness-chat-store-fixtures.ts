@@ -1,6 +1,19 @@
 import { createStore } from "../../../packages/operator-core/src/store.js";
 
 export function createChatStore() {
+  const assistantMarkdown = [
+    "# Markdown Rendering",
+    "",
+    "Preflight should keep real markdown semantics inside the chat bubble:",
+    "",
+    "- first bullet",
+    "- second bullet with `inline code` and a [docs link](https://example.com/docs)",
+    "",
+    "```ts",
+    "const viewportWidth = 1280;",
+    "```",
+  ].join("\n");
+
   const activeSession = {
     session_id: "session-1",
     agent_id: "default",
@@ -10,7 +23,7 @@ export function createChatStore() {
     message_count: 2,
     last_message: {
       role: "assistant" as const,
-      text: "Yes. We can add browser geometry checks.",
+      text: "Rendered markdown with heading, list, link, and code block.",
     },
     messages: [
       {
@@ -21,7 +34,7 @@ export function createChatStore() {
       {
         id: "turn-2",
         role: "assistant" as const,
-        parts: [{ type: "text" as const, text: "Yes. We can add browser geometry checks." }],
+        parts: [{ type: "text" as const, text: assistantMarkdown }],
       },
     ],
     updated_at: "2026-03-08T00:00:00.000Z",

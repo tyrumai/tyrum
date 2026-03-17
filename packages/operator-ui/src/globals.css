@@ -2,22 +2,23 @@
 
 @layer theme, base, components, utilities;
 
-/* Tailwind 4 (CSS-first). Keep preflight disabled for now to avoid global visual changes. */
+/* Tailwind 4 (CSS-first). Import Preflight explicitly so base defaults stay consistent. */
 @import "tailwindcss/theme.css" layer(theme);
 @import "./tokens.css" layer(theme);
+@import "tailwindcss/preflight.css" layer(base);
 @import "./themes.css" layer(base);
 
 @import "tailwindcss/utilities.css" layer(utilities);
 
 /* Ensure Tailwind scans operator-ui component sources for class names. */
 @source ".";
+@plugin "@tailwindcss/typography";
 
 @layer base {
   /*
-   * Reset browser-default button chrome. Tailwind preflight is disabled to
-   * avoid global visual regressions, so native <button> elements inherit
-   * browser-default borders, backgrounds, and padding. This reset removes
-   * those defaults so all buttons start from a neutral base.
+   * Keep these control-specific adjustments even with Tailwind Preflight
+   * enabled. They preserve the operator UI's expected control appearance
+   * while broader layout fallout from the global reset is evaluated.
    *
    * Scope: <button> elements only — does not affect <input type="button">,
    * <input type="submit">, or <select>.
