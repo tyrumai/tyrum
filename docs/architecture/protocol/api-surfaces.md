@@ -4,62 +4,66 @@ slug: /architecture/api-surfaces
 
 # API surfaces (WebSocket vs HTTP)
 
-The gateway uses WebSocket for interactive control, but it is not WebSocket-only. It exposes two operator-facing API surfaces:
+Read this if: you need the transport boundary between interactive control and resource-oriented HTTP access.
 
-- **WebSocket protocol (control plane):** typed requests/responses plus server-push events.
-- **HTTP API (resource plane):** bootstrap/auth flows, resource/blob transfer, and callback/webhook endpoints.
+Skip this if: you are looking for exact request/event payloads; use the protocol reference pages first.
 
-The transport you pick is a **delivery detail**. **Scopes + per-method authorization** are the security boundary.
+Go deeper: [Protocol](/architecture/protocol), [Contracts](/architecture/contracts), [Requests and Responses](/architecture/protocol/requests-responses).
 
-## Parent concept
+The gateway is not WebSocket-only. Tyrum uses WebSocket for the interactive control plane and HTTP for resource/bootstrap surfaces, but scopes and per-method authorization remain the real boundary.
 
-- [Protocol](/architecture/protocol)
+```mermaid
+flowchart LR
+  Client["Operator client"] --> WS["WebSocket<br/>requests + responses + events"]
+  Client --> HTTP["HTTP<br/>auth/bootstrap + artifacts + webhooks"]
+  WS --> Gateway["Gateway boundary"]
+  HTTP --> Gateway
+  Gateway --> Authz["Scopes + approvals + audit"]
+```
 
-## Principle: scopes are the boundary (not transport)
+## What each surface is for
 
-- The same operator can perform both “day-to-day” actions and “admin” actions.
-- Whether an action is _allowed_ is decided by **scopes** (and approvals/policy), not by “it was HTTP” or “it was WS”.
-- **Both** HTTP routes and WS request types MUST declare and enforce required scopes (deny-by-default).
+- **WebSocket** is the control plane: long-lived interaction, server-push events, heartbeats, and low-latency operator actions.
+- **HTTP** is the resource plane: auth/session bootstrap, artifact upload/download, callback/webhook ingress, and one-shot snapshots.
 
-Do not define roles in terms of transport (for example “operator = WS” and “admin = HTTP”); define them in terms of scopes.
+Transport is a delivery choice, not a trust model.
 
-## When to use WebSocket
+## Core rule: scopes, not transport
 
-Use WebSocket for **interactive, eventful, low-latency control plane** work:
+- The same operator can use both HTTP and WebSocket.
+- Whether an action is allowed depends on scopes, approvals, and policy.
+- Both HTTP routes and WS request types must validate inputs and enforce authz deny-by-default.
 
-- streaming timelines (runs/steps/attempts), approvals, pairing, presence
-- any UX that benefits from immediate server-push updates
-- any operation where you want a single connection to carry: requests + events + heartbeats
+Do not define "admin" or "operator" by transport.
 
-In practice: most operator interactions should use WebSocket, even if some backing data is fetched over HTTP.
+## When WebSocket is the right choice
 
-## When to use HTTP
+Use WebSocket when the UX benefits from a single live connection carrying:
 
-Use HTTP for **resource and integration surfaces**:
+- typed mutations
+- immediate server-push state changes
+- interactive timelines such as runs, approvals, pairing, or presence
 
-- **Browser auth/session bootstrap** (cookies, OIDC callbacks): redirects/callbacks are HTTP-native
-- **Artifacts and large payloads** (upload/download): HTTP is better suited than WS for blobs
-- **Webhooks/callback ingress** from third-party systems
-- **Health/status snapshots** and other “one-shot” reads
+In practice, most operator-facing control should stay on WebSocket even if some backing reads use HTTP.
 
-HTTP endpoints should still publish events (or otherwise update durable state) so WS-connected clients observe consistent state transitions.
+## When HTTP is the right choice
+
+Use HTTP for:
+
+- browser-native auth/session bootstrap
+- large blobs such as artifacts
+- inbound webhooks and third-party callbacks
+- simple snapshot/status reads
+
+HTTP paths should still update durable state so WebSocket-connected clients see consistent state transitions.
 
 ## Avoid dual-surface drift
 
-Do not implement the _same mutation_ twice (once in HTTP, once in WS) unless you have a strong reason.
+Do not implement the same mutation twice unless there is a strong reason. If a capability spans both transports, keep one business-logic implementation and make transport adapters match on authz, validation, audit, and semantics.
 
-If you must duplicate a capability across transports:
+## Related docs
 
-- share the same core business logic (one implementation, two adapters)
-- keep authZ, validation, and audit/event emission consistent
-- ensure semantics match (idempotency, error shapes, side effects)
-
-## Elevated Mode crosses both surfaces
-
-Elevated Mode (step-up) is intentionally **transport-agnostic**:
-
-- the client enters Elevated Mode by obtaining a **short-lived elevated device token**
-- the SDK uses that token for both **WS requests** and **HTTP calls** during the TTL window
-- exiting Elevated Mode returns to the baseline scoped token
-
-Changes to API surfaces are contract changes: update the relevant contracts, enforcement (authZ/audit), and documentation together.
+- [Protocol](/architecture/protocol)
+- [Contracts](/architecture/contracts)
+- [Handshake](/architecture/protocol/handshake)
+- [Requests and Responses](/architecture/protocol/requests-responses)

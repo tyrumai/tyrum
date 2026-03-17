@@ -4,56 +4,59 @@ slug: /architecture/system-prompt
 
 # System Prompt
 
-For each agent run, Tyrum assembles a custom system prompt. The purpose is to provide the model with the minimum context and rules needed to act safely and effectively.
+Read this if: you want the architecture boundary for how Tyrum assembles model-facing runtime context.
 
-## Typical sections
+Skip this if: you are looking for prompt-writing tips; this page is about system design, not prompt craft.
 
-- Tooling: tool list with short descriptions
-- Tool schemas: machine-readable contracts for tool invocation (counts toward context)
-- Safety: short guardrail reminder to avoid bypassing oversight
-- Skills (when available): how to load skill instructions on demand
-- Self-update: how to apply config updates and run updates
-- Workspace: the working directory boundary for tools and file operations
-- Documentation: where local docs live and when to read them
-- Injected workspace files: bootstrap context included without explicit reads
-- Memory digest: budgeted long-term memory recall (from the StateStore), scoped to the agent
-- Work focus digest: budgeted "what matters now" slice of the WorkBoard (active WorkItems, blockers/approvals, next tasks, current state KV, and latest decisions)
-- Sandbox: runtime constraints (including hardening profile) and whether elevated execution is available
-- Date and time: user-local time and formatting
-- Reply tags: optional provider-specific reply tags
-- Heartbeats: periodic prompt and acknowledgement behavior
-- Runtime: host/OS/node/model/runtime summary
-- Reasoning visibility: visibility level and how it can be toggled (when supported)
+Go deeper: [Models](/architecture/models), [Memory](/architecture/memory), [Work board and delegated execution](/architecture/workboard).
 
-## Context report (what the model saw)
+## Assembly boundary
 
-For observability, the gateway produces a per-run **context report** that captures:
+```mermaid
+flowchart TB
+  Rules["Runtime rules<br/>(safety, tooling, sandbox posture)"] --> Prompt["Compiled system prompt"]
+  Tools["Tool schemas + skill hints"] --> Prompt
+  Workspace["Workspace docs + injected files"] --> Prompt
+  Digests["Memory digest + work focus digest"] --> Prompt
+  Runtime["Date/time + host/runtime summary"] --> Prompt
+  Prompt --> Report["Context report / observability"]
+```
 
-- injected workspace files (raw vs injected sizes and truncation)
-- system prompt section sizes
-- skill list overhead
-- the largest tool schema contributors
+## Purpose
 
-Operator clients expose this via `/context list` and `/context detail` (see [Observability](/architecture/observability) and [Slash Commands](/architecture/slash-commands)).
+The system prompt boundary exists so Tyrum can turn runtime state into a bounded, inspectable model input. It keeps prompt assembly explicit and observable instead of letting critical safety or workspace assumptions live in hidden application code.
 
-## Advisory vs enforcement
+## What this page owns
 
-System-prompt guardrails are advisory. Hard enforcement should come from:
+- The sections that contribute to the model-facing system prompt.
+- The distinction between advisory prompt context and hard runtime enforcement.
+- Context-report observability for what was injected and how large it was.
 
-- Tool allowlists and parameter validation
-- Execution approvals
-- Sandboxing and environment constraints
-- Channel allowlists and connector policy
+This page does not define prompt wording policy for every provider or replace policy/approval enforcement.
 
-## Injected bootstrap files
+## Assembly model
 
-These files (or equivalents) can be injected as "project context" so the model has identity and safety context without extra tool calls:
+Common sections include:
 
-- `AGENTS.md`
-- `SOUL.md`
-- `TOOLS.md`
-- `USER.md`
-- `HEARTBEAT.md`
-- `BOOTSTRAP.md` (only for brand-new workspaces)
+- tool and skill availability
+- workspace and injected bootstrap files
+- memory and work-state digests
+- sandbox/runtime posture
+- date/time and other runtime summary data
 
-Agent identity, long-term memory, and work state are not represented as workspace files. They live in the StateStore and are injected as stored config or **budgeted digests** (agent-scoped memory recall and workspace-scoped WorkBoard focus) during context assembly.
+The gateway also emits a per-run context report describing section sizes, injected files, and the largest schema contributors so operators can inspect what the model actually saw.
+
+## Key constraints
+
+- The prompt should carry the minimum context needed for safe, effective execution.
+- Guardrails in the prompt are advisory; policy, approvals, validation, and sandboxing enforce.
+- Memory and work-state enter as budgeted digests, not as unconstrained raw history.
+- Injected workspace files should reduce tool calls, not become an unbounded secondary transcript.
+
+## Related docs
+
+- [Agent](/architecture/agent)
+- [Models](/architecture/models)
+- [Memory](/architecture/memory)
+- [Work board and delegated execution](/architecture/workboard)
+- [Observability](/architecture/observability)

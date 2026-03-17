@@ -4,55 +4,51 @@ slug: /architecture/slash-commands
 
 # Slash Commands
 
-Slash commands are a client-facing command surface for common actions. Clients translate commands into typed requests to the gateway.
+Read this if: you need the client-to-gateway command boundary for common operator actions.
 
-Commands are handled by the gateway (not by the model). This keeps control-plane actions deterministic, policy-enforced, and auditable.
+Skip this if: you are looking for model prompts or free-form conversational behavior.
+
+Go deeper: [Client](/architecture/client), [Protocol](/architecture/protocol), [Approvals](/architecture/approvals).
+
+## Command path
+
+```mermaid
+sequenceDiagram
+  participant Operator
+  participant Client
+  participant Gateway
+  participant Runtime
+
+  Operator->>Client: /command
+  Client->>Gateway: typed request
+  Gateway->>Runtime: policy-checked action
+  Runtime-->>Gateway: result / status
+  Gateway-->>Client: typed response or event
+```
+
+## Purpose
+
+Slash commands are a deterministic operator surface for common actions such as session control, status inspection, model changes, and policy-override management. Clients parse commands and translate them into typed gateway requests so command behavior stays auditable and policy-enforced.
 
 ## Command classes
 
-- **Standalone commands:** a message that is only `/...` runs as a command.
-- **Directives:** certain commands persist per-session settings and are stripped before model inference.
-- **Side-effecting commands:** commands that change state or send messages are subject to policy and may require approvals.
+| Class                 | Examples                                           | Architecture note                                    |
+| --------------------- | -------------------------------------------------- | ---------------------------------------------------- |
+| Session and execution | `/new`, `/reset`, `/stop`, `/compact`, `/repair`   | Control-plane actions, not model interpretation      |
+| Context and usage     | `/status`, `/context ...`, `/usage`, `/presence`   | Read-oriented inspection surfaces                    |
+| Models and auth       | `/model ...`                                       | Typed configuration or session pinning path          |
+| Messaging and policy  | `/queue ...`, `/send ...`, `/policy overrides ...` | Can change runtime behavior and may require approval |
 
-## Common commands (examples)
+## Design rules
 
-### Session and execution
+- Commands are handled by the gateway, not by the model.
+- Command names should stay explicit and unambiguous.
+- Side-effecting commands must still pass through ordinary policy and approval checks.
+- Clients own command parsing UX; the gateway owns the authoritative action semantics.
 
-- `/new` — start a new session (fresh context and new session id).
-- `/reset` — reset the current session state (policy-defined).
-- `/stop` — cancel the active run and clear queued followups for the current session.
-- `/compact` — request compaction of older history into a summary.
-- `/repair [max_turns]` — rebuild session context from retained channel transport logs.
+## Related docs
 
-### Context and usage
-
-- `/status` — show runtime + session status (model, lane, queue, policy mode).
-- `/context list` — show a context breakdown summary for the last run.
-- `/context detail` — show a detailed breakdown including tool schema overhead.
-- `/usage` — show current session usage summary (tokens/time/cost).
-- `/usage provider` — show provider-reported usage/quota when available.
-- `/presence` — show connected gateway/client/node presence entries.
-
-### Models and auth
-
-- `/model` — show the current session model preset and available options.
-- `/model <preset_key>` — set the configured model preset for the current session.
-- `/model <provider/model>` — set the model when exactly one configured preset targets that underlying model.
-- `/model <provider/model>@<profile>` — advanced compatibility form that pins a specific provider account for the session.
-
-### Messaging behavior
-
-- `/queue <collect|followup|steer|steer_backlog|interrupt>` — set the inbound queue mode for the session.
-- `/send <on|off|inherit>` — set or clear a per-session send policy override (operator-scoped).
-
-### Policy overrides
-
-- `/policy overrides list` — list active and historical policy overrides (filterable by agent/tool/status).
-- `/policy overrides describe <policy_override_id>` — show override scope, pattern, and audit linkage.
-- `/policy overrides revoke <policy_override_id>` — revoke an override (audited, optionally with a reason).
-
-## Design guidelines
-
-- Prefer unambiguous names (`/context list` over `/ctx`).
-- Commands should have typed request/response contracts.
-- Commands that can cause side effects should require explicit confirmation when risk is non-trivial.
+- [Client](/architecture/client)
+- [Protocol](/architecture/protocol)
+- [Policy overrides](/architecture/policy-overrides)
+- [Approvals](/architecture/approvals)

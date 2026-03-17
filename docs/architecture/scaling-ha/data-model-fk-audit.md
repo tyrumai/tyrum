@@ -4,27 +4,55 @@ slug: /architecture/data-model-fk-audit
 
 # Gateway FK audit
 
-This note records the current decision for the reference columns called out by the FK audit in issue `#974`.
+This is a reference decision record for the foreign-key audit called out in issue `#974`.
 
-The migration pair `packages/gateway/migrations/sqlite/111_fk_audit_policy_approval_refs.sql` and `packages/gateway/migrations/postgres/111_fk_audit_policy_approval_refs.sql` is the implementation source of truth for the enforced subset.
+## Quick orientation
 
-## Matrix
+- **Read this if:** you are changing the schema, retention jobs, or delete semantics around approvals, runs, and policy overrides.
+- **Skip this if:** you only need the high-level data model.
+- **Go deeper:** use [Gateway data model map (v2)](/architecture/data-model-map) for the broader schema picture.
 
-| Reference column                            | Decision           | Delete / repair behavior                                                                                                        | Why                                                                                                                                                                                   |
-| ------------------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `channel_outbox.approval_id`                | **Enforce FK**     | Migration nulls legacy orphans before the constraint is added. Parent approval deletes must clear the child ref first.          | This is a live queue-gating pointer. The runtime already clears it when an approval is resolved, so explicit cleanup is consistent with the existing flow.                            |
-| `policy_overrides.created_from_approval_id` | **Enforce FK**     | Migration nulls legacy orphans before the constraint is added. Parent approval deletes must clear the child ref first.          | This is provenance for an override, not ownership. The override can outlive the originating approval, but the cleanup step must be explicit.                                          |
-| `approvals.run_id`                          | **Enforce FK**     | Migration nulls legacy orphans before the constraint is added. Parent run deletes must clear the child ref first.               | Runs are durable execution records, but approvals are the longer-lived audit surface.                                                                                                 |
-| `approvals.step_id`                         | **Enforce FK**     | Migration nulls legacy orphans before the constraint is added. Parent step deletes must clear the child ref first.              | Step links are used for pause/resume traceability and should resolve while the step exists.                                                                                           |
-| `approvals.attempt_id`                      | **Enforce FK**     | Migration nulls legacy orphans before the constraint is added. Parent attempt deletes must clear the child ref first.           | Attempt links are audit pointers into retry/executor state, not ownership edges.                                                                                                      |
-| `policy_overrides.agent_id`                 | **Soft reference** | Revoke or delete matching overrides as part of agent/workspace decommissioning until we choose a single hard contract.          | The unresolved question is whether overrides should bind to `agents`, `workspaces`, or `agent_workspaces`. Locking that down in SQL now would encode semantics we have not agreed on. |
-| `policy_overrides.workspace_id`             | **Soft reference** | Revoke or delete matching overrides as part of agent/workspace decommissioning until we choose a single hard contract.          | Workspace scoping is optional today, so we need an explicit membership contract before adding a DB constraint.                                                                        |
-| `approvals.work_item_id`                    | **Soft reference** | Keep the raw ID as an audit breadcrumb; detect unresolved rows with `LEFT JOIN` integrity checks before any future enforcement. | Current runtime paths do not rely on this column for live control flow, and WorkBoard retention may intentionally outlive or compact the target rows.                                 |
-| `approvals.work_item_task_id`               | **Soft reference** | Keep the raw ID as an audit breadcrumb; detect unresolved rows with `LEFT JOIN` integrity checks before any future enforcement. | Same rationale as `work_item_id`: this is audit linkage, not a current ownership edge.                                                                                                |
+## Enforcement model
 
-## Cleanup / retention
+| Class              | Meaning                                                                                                      |
+| ------------------ | ------------------------------------------------------------------------------------------------------------ |
+| **Enforced FK**    | The reference participates in live integrity and should stay valid while the parent exists.                  |
+| **Soft reference** | Keep the raw id for audit or future linking; detect drift with joins or audits instead of a hard constraint. |
 
-- The enforced subset is normalized during migration so upgrades do not fail on legacy orphaned rows.
-- The audited enforced subset is still tenant-scoped composite FK enforcement for insert/update integrity. SQLite and PostgreSQL cannot null only the trailing ID column for these keys without also nulling `tenant_id`, so parent-row deletion must clear the child reference explicitly before deleting the parent row.
-- The soft-reference subset is intentionally documented instead of constrained. Any future compaction or decommissioning job that deletes the target rows must either preserve the raw IDs as audit breadcrumbs or clear them explicitly as part of that same job.
-- If we later decide that `policy_overrides.agent_id/workspace_id` should be membership-bound, the follow-up should choose one contract (`agents`, `workspaces`, or `agent_workspaces`) and add matching cleanup tests before adding constraints.
+## Current matrix
+
+| Reference column                            | Decision       | Delete / repair rule                                                                                       | Why                                                                            |
+| ------------------------------------------- | -------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `channel_outbox.approval_id`                | Enforced FK    | Null legacy orphans in migration; clear the child reference before parent delete.                          | Live queue-gating pointer.                                                     |
+| `policy_overrides.created_from_approval_id` | Enforced FK    | Null legacy orphans in migration; clear the child reference before parent delete.                          | Provenance link that still needs explicit cleanup.                             |
+| `approvals.run_id`                          | Enforced FK    | Null legacy orphans in migration; clear the child reference before parent delete.                          | Pause/resume and audit traces depend on this being valid while the run exists. |
+| `approvals.step_id`                         | Enforced FK    | Null legacy orphans in migration; clear the child reference before parent delete.                          | Step-level traceability is part of live execution history.                     |
+| `approvals.attempt_id`                      | Enforced FK    | Null legacy orphans in migration; clear the child reference before parent delete.                          | Retry and executor traces use the link as a live pointer.                      |
+| `policy_overrides.agent_id`                 | Soft reference | Revoke or delete overrides during agent/workspace decommissioning until the ownership contract is settled. | The correct parent contract is still unresolved.                               |
+| `policy_overrides.workspace_id`             | Soft reference | Revoke or delete overrides during agent/workspace decommissioning until the ownership contract is settled. | Optional workspace scoping is not stable enough for SQL enforcement yet.       |
+| `approvals.work_item_id`                    | Soft reference | Preserve the raw id as an audit breadcrumb; use join audits before future enforcement.                     | Audit linkage, not a current live ownership edge.                              |
+| `approvals.work_item_task_id`               | Soft reference | Preserve the raw id as an audit breadcrumb; use join audits before future enforcement.                     | Same as `work_item_id`.                                                        |
+
+## Important delete rule
+
+SQLite and Postgres both use tenant-scoped composite keys for the enforced subset. In practice that means parent deletion must clear the child reference explicitly first; these databases cannot null only the trailing id column while preserving the same FK shape automatically.
+
+## Migration source of truth
+
+The enforced subset is implemented in:
+
+- `packages/gateway/migrations/sqlite/111_fk_audit_policy_approval_refs.sql`
+- `packages/gateway/migrations/postgres/111_fk_audit_policy_approval_refs.sql`
+
+## Follow-up trigger
+
+Revisit the soft-reference subset only when one of these becomes stable enough to encode in SQL:
+
+- a single ownership contract for `policy_overrides.agent_id` / `workspace_id`
+- retention rules that prove the work-item links should remain hard and live
+
+## Related docs
+
+- [Gateway data model map (v2)](/architecture/data-model-map)
+- [Operational table maintenance](/architecture/operational-maintenance)
+- [DB naming conventions](/architecture/db-naming-conventions)

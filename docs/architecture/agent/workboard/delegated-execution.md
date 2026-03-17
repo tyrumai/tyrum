@@ -4,51 +4,30 @@ slug: /architecture/workboard/delegated-execution
 
 # WorkBoard delegated execution
 
-## Parent concept
+Read this if: you need the handoff model between interactive work capture and background execution.
 
-- [Work board and delegated execution](/architecture/workboard)
+Skip this if: you are looking for run/step retry semantics; use [Execution engine](/architecture/execution-engine).
 
-## Scope
+Go deeper: [WorkBoard durable work state](/architecture/workboard/durable-work-state), [Approvals](/architecture/approvals), [Sessions and Lanes](/architecture/sessions-lanes).
 
-This page describes how the WorkBoard captures long-running work, delegates it into background execution, and routes status and completion back to the operator. It does not redefine the execution engine's step semantics.
+This page describes how the WorkBoard captures long-running work, delegates it into background execution, and routes status and completion back to the operator. It does not redefine execution-engine step semantics.
 
-## Intake and delegation flow
-
-The interactive agent should be able to notice when work is too large, ambiguous, or long-running for an inline turn and capture it on the WorkBoard directly through built-in tools.
-
-Execution dispatch remains scheduler-owned. The model decides when to externalize work; background services decide when `ready` work is actually assigned and executed.
+## Delegation flow
 
 ```mermaid
 flowchart TB
-  classDef session fill:#f6f8ff,stroke:#4a67d6,stroke-width:1px,color:#111;
-  classDef board fill:#f2fff6,stroke:#2f8f4e,stroke-width:1px,color:#111;
-  classDef exec fill:#fff7ed,stroke:#b45309,stroke-width:1px,color:#111;
-  classDef gate fill:#fff1f2,stroke:#be123c,stroke-width:1px,color:#111;
-
-  subgraph S["Interactive sessions (lane=main)"]
-    Desktop["Desktop client session_key"]:::session
-    Telegram["Telegram DM session_key"]:::session
-  end
-
-  Desktop --> Intake["Interactive agent turn<br/>classify + inspect work state + decide inline vs capture"]:::session
-  Telegram --> Intake
-
-  Intake -->|inline| Inline["Reply in-session"]:::session
-  Intake -->|workboard.capture| WB["WorkBoard (workspace scope)<br/>WorkItem + drilldown updated"]:::board
-
-  WB -->|auto-start refinement| SA["Planner subagent<br/>(one per WorkItem)"]:::exec
-  SA --> ENG["Execution engine<br/>(jobs/runs/steps)"]:::exec
-  ENG --> ART["Artifacts + postconditions"]:::exec
-  ENG --> APPR["Approvals (pause/resume)"]:::gate
-
-  ART --> WB
-  APPR --> WB
-  WB --> Notify["Clarification/completion notification<br/>to last active session"]:::session
-  Notify --> Desktop
-  Notify --> Telegram
+  Intake["Interactive session or automation"] --> Capture["Capture / update WorkItem"]
+  Capture --> Refine["Planner subagent refines tasks + criteria"]
+  Refine --> Ready["Runnable tasks marked ready"]
+  Ready --> Engine["Execution engine"]
+  Engine --> Evidence["Artifacts + verification + approvals"]
+  Evidence --> Board["WorkBoard durable state updated"]
+  Board --> Status["Operator status / notifications / next actions"]
 ```
 
-Standard intake flow:
+The model decides when to externalize work. Background services decide when `ready` work is actually claimed and executed.
+
+## Standard intake flow
 
 1. Classify the request as inline, Action WorkItem, or Initiative WorkItem.
 2. Write minimal acceptance criteria, budgets, and authoritative current-truth state.
@@ -107,6 +86,7 @@ Delegation does not bypass Tyrum's enforcement model:
 
 ## Related docs
 
+- [Work board and delegated execution](/architecture/workboard)
 - [Execution engine](/architecture/execution-engine)
 - [Approvals](/architecture/approvals)
 - [Sessions and Lanes](/architecture/sessions-lanes)

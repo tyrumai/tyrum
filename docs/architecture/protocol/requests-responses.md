@@ -1,64 +1,85 @@
 # Requests and Responses
 
-Requests are typed operations initiated by either peer (gateway, client, or node). Responses are typed replies correlated by `request_id`.
+Read this if: you need the interaction model for typed protocol operations and retries.
 
-The wire shapes are defined by shared, versioned contracts (see [Contracts](/architecture/contracts)).
+Skip this if: you need only the protocol overview; start with [Protocol](/architecture/protocol).
 
-## Request envelope
+Go deeper: [Handshake](/architecture/protocol/handshake), [Contracts](/architecture/contracts), [Events](/architecture/protocol/events).
 
-- `request_id`: unique id for correlation and safe retries.
-- `type`: the operation name (for example `connect.init`, `task.execute`, `workflow.run`).
-- `payload`: typed input fields defined by a contract.
-- `trace`: optional metadata for observability (span ids, origin, timing).
+Requests are typed operations initiated by a gateway, client, or node peer. Responses are typed replies correlated by `request_id`.
 
-## Request types
+```mermaid
+sequenceDiagram
+  participant Peer
+  participant Gateway
+  participant State as Durable state
 
-The gateway, clients, and nodes support these request types:
+  Peer->>Gateway: request { request_id, type, payload }
+  Gateway->>Gateway: validate contract + authz
+  Gateway->>State: apply durable mutation when needed
+  Gateway-->>Peer: response { request_id, ok, result|error }
+  Note over Peer,Gateway: retry may resend the same request_id
+```
 
-- `connect.init` / `connect.proof` — handshake and device proof (see [Handshake](./handshake.md)).
-- `ping` — client-initiated protocol health-check request (gateway replies with `ok: true`); connection heartbeat and eviction use WebSocket ping/pong control frames.
-- `session.send` — send a message into a session (chat input).
-- `workflow.run` — start a deterministic workflow run (playbook file or inline pipeline).
-- `workflow.resume` — resume a paused workflow run using a resume token (after an approval decision).
-- `workflow.cancel` — cancel a queued/running/paused run (subject to policy).
-- `approval.list` — list pending approvals.
-- `approval.resolve` — approve/deny an approval request (idempotent; enqueues a durable engine action to resume/cancel runs asynchronously).
-- `pairing.approve` / `pairing.deny` — resolve a node pairing request.
-- `capability.ready` — node reports capability readiness after pairing (payload includes `CapabilityDescriptor[]`).
-- `task.execute` — request a capability/tool execution for a specific attempt. Payload includes `run_id`, `step_id`, `attempt_id`, and the `ActionPrimitive`.
-- `attempt.evidence` — node reports execution evidence for a specific attempt. Payload includes `run_id`, `step_id`, `attempt_id`, and evidence data for operator UIs and postconditions.
+The wire shapes are defined by shared versioned contracts, not by prose examples.
 
-## Response envelope
+## Request/response model
 
-- `request_id`: echoes the request id.
-- `type`: echoes the operation name (useful for debugging and routing).
-- `ok`: boolean success flag.
-- `result`: typed output when `ok: true`.
-- `error`: structured error when `ok: false` (code/message/details).
+Request envelope:
 
-## Failure handling
+- `request_id`
+- `type`
+- `payload`
+- optional `trace`
 
-Prefer explicit, typed errors over ambiguous strings:
+Response envelope:
 
-- `contract_error` (schema validation failed)
+- `request_id`
+- `type`
+- `ok`
+- `result` when successful
+- `error` when unsuccessful
+
+The architectural point is correlation and retry safety: one logical action should remain interpretable even when transport visibility is imperfect.
+
+## Common request families
+
+- handshake: `connect.init`, `connect.proof`
+- operator interaction: `session.send`, `approval.list`, `approval.resolve`
+- workflow control: `workflow.run`, `workflow.resume`, `workflow.cancel`
+- pairing and node readiness: `pairing.approve`, `pairing.deny`, `capability.ready`
+- execution and evidence: `task.execute`, `attempt.evidence`
+- health: `ping`
+
+## Error model
+
+Prefer explicit typed errors over vague strings:
+
+- `contract_error`
 - `unauthorized` / `forbidden`
 - `not_found`
 - `rate_limited`
 - `internal`
 
-For operations with side effects, idempotency should be defined up-front so clients can safely retry.
+That error vocabulary is part of the contract boundary and should stay consistent across handlers.
 
-## Retry and idempotency expectations
+## Retry and idempotency
 
-Distributed systems lose packets and drop connections; retries are expected. Tyrum relies on two related ideas:
+Tyrum treats retries as normal:
 
-- **Transport-level retry (`request_id`):** if a peer does not observe a response, it may retry the same logical request by re-sending it with the same `request_id`. Servers should handle duplicate `request_id` safely according to the request type’s contract.
-- **Side-effect idempotency:** for state-changing operations, the request payload (or the workflow step) may also carry an explicit `idempotency_key` so that retries do not duplicate side effects even under at-least-once execution.
+- **transport retry:** a peer can resend the same logical request with the same `request_id` when it did not observe a response
+- **side-effect idempotency:** state-changing operations may also carry or derive an `idempotency_key` so retries do not duplicate outcomes
 
-### `approval.resolve` idempotency
+### `approval.resolve` as the reference example
 
-- Resolution is an atomic state transition on the durable approval record (`pending → approved|denied|expired`).
-- Only the first successful transition enqueues a durable engine action (resume/cancel). Duplicate resolve attempts for an already-resolved approval do not enqueue additional actions.
-- `approval.updated` is emitted for each approval transition/status change, and re-emission of that
-  same transition reuses the persisted `event_id`; delivery is still at-least-once, so consumers
-  should dedupe using `event_id`.
+- the approval row transitions atomically from pending to a terminal state
+- only the first successful resolution enqueues resume/cancel work
+- duplicate resolve attempts for an already-resolved approval do not enqueue more side effects
+- downstream `approval.updated` remains at-least-once, so consumers still dedupe by `event_id`
+
+## Related docs
+
+- [Protocol](/architecture/protocol)
+- [Handshake](/architecture/protocol/handshake)
+- [Contracts](/architecture/contracts)
+- [Events](/architecture/protocol/events)

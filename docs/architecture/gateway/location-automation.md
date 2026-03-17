@@ -4,86 +4,60 @@ slug: /architecture/gateway/location-automation
 
 # Location automation
 
-Location automation turns node-reported location beacons into durable saved-place or POI-category events and dispatches those events into the execution engine.
+Read this if: you need the architectural path from location beacons to durable automation runs.
+
+Skip this if: you only need generic automation triggers such as cron, heartbeat, or webhook.
+
+Go deeper: [Automation](/architecture/automation), [Node](/architecture/node), [Events](/architecture/protocol/events).
+
+## Beacon to run flow
+
+```mermaid
+flowchart TB
+  Beacon["Paired node beacon"] --> Validate["Profile + accuracy checks"]
+  Validate --> Persist["Persist sample"]
+  Persist --> Eval["Place / POI transition evaluation"]
+  Eval --> Event["Durable location event"]
+  Event --> Match["Match enabled triggers"]
+  Match --> Dispatch["Execution engine dispatch"]
+  Dispatch --> Audit["Events + audit + operator visibility"]
+```
 
 ## Purpose
 
-This component exists so Tyrum can react to where a paired device is, not just to time-based schedules or external webhooks.
+Location automation turns node-reported location beacons into durable place or category events, then dispatches matching triggers through the same execution path used by other automation. Nodes sense; the gateway decides what the data means and whether it should cause work.
 
-It keeps raw sensor collection on nodes while the gateway owns configuration, event evaluation, retention, and automation dispatch.
+## What this boundary owns
 
-## Responsibilities
+- Location profiles, saved places, subject state, event history, and trigger definitions.
+- Validation and acceptance of paired-node location samples.
+- Enter/exit/dwell evaluation for saved places and optional POI categories.
+- Dispatch into `agent_turn`, `steps`, or `playbook` execution modes.
 
-- Manage location profiles, saved places, event history, and automation triggers.
-- Accept paired-node location beacons and decide whether each sample is usable.
-- Evaluate saved-place and POI-category enter/exit/dwell transitions durably.
-- Dispatch matching triggers as agent turns, explicit steps, or playbook runs.
+It does not own device permissions, background sensing UX, or the generic scheduling model.
 
-## Non-goals
+## Main flow
 
-- This component does not collect background location by itself; nodes provide the sensor boundary.
-- This component does not replace generic cron, heartbeat, or webhook automation.
+1. Operators define a profile, saved places, and automation triggers.
+2. A paired node submits a beacon with coordinates and source metadata.
+3. The gateway validates and persists the sample, then evaluates place or category transitions.
+4. New transitions become durable location events, update subject state, and can emit downstream automation work.
 
-## Boundary and ownership
+## Invariants
 
-- **Inside the boundary:** profile/place configuration, sample acceptance, event/state persistence, and trigger dispatch into the execution engine.
-- **Outside the boundary:** device sensor permissions, mobile/browser collection UX, and external POI provider implementation details.
+- Triggering is driven from durable events, not transient in-memory geofence state.
+- Rejected samples may be retained for audit/debug but must not trigger automation.
+- Trigger execution still passes through the standard policy, approval, and audit boundaries.
+- Location data remains a high-sensitivity surface and should be treated accordingly.
 
-## Inputs, outputs, and dependencies
+## Failure and recovery
 
-- **Inputs:** `/location/*` configuration requests, `/automation/triggers` requests, location beacons from paired nodes, and optional POI lookups.
-- **Outputs:** accepted or rejected samples, durable location events, memory episodes, and execution jobs for `agent_turn`, `steps`, or `playbook` triggers.
-- **Dependencies:** [Gateway](/architecture/gateway), [Automation](/architecture/automation), [Node](/architecture/node), the execution engine, policy checks, and location storage tables.
-
-## State and data
-
-- `location_profiles` store per-agent stream settings such as primary node, accuracy filters, and POI provider choice.
-- `location_places` store named saved places with coordinates, radius, and metadata.
-- `location_samples` keep accepted or rejected beacon history.
-- `location_subject_states` store the current enter/exit/dwell state per subject and node.
-- `location_events` are the durable trigger source for saved places and POI categories.
-- `automation_triggers` store enabled location-trigger rules and their execution mode.
-
-## Control flow
-
-1. An operator configures a location profile, saved places, and one or more location automation triggers.
-2. A paired node sends a location beacon to the gateway with coordinates, timing, and source metadata.
-3. The gateway validates the sample against the profile, persists it, and evaluates saved-place and optional POI-category transitions.
-4. When a new event is detected, the gateway stores the event, updates subject state, records a memory episode, and matches enabled triggers.
-5. Matching triggers dispatch into the execution engine as an `agent_turn`, explicit `steps`, or a `playbook`, using the normal policy and approval path.
-
-## Invariants and constraints
-
-- Location automation is driven by durable events, not by ephemeral in-memory geofence state.
-- Samples can be retained as `accepted=false` without triggering any automation.
-- Trigger definitions are scoped to an agent/workspace and can be enabled or paused independently of the underlying location profile.
-
-## Failure behavior
-
-- **Expected failures:** invalid beacon payloads, samples that fail accuracy/background filters, POI provider errors, and trigger-dispatch failures.
-- **Recovery path:** rejected samples remain non-triggering history, saved-place evaluation continues even if POI evaluation fails, and durable events remain recorded even when downstream trigger dispatch needs retry or operator inspection.
-
-## Security and policy considerations
-
-- Location data is sensitive and should be treated more like sensor history than ordinary scheduling metadata.
-- Only paired nodes for the tenant can submit location beacons.
-- Trigger execution still goes through the ordinary gateway policy, approval, and audit boundaries.
-
-## Key decisions and tradeoffs
-
-- **Split sensing from orchestration:** nodes collect coordinates; the gateway decides what those coordinates mean for automation.
-- **Trigger from durable events:** saved-place and POI transitions can be replayed, audited, and deduped without trusting socket liveness.
-
-## Observability
-
-- Operators can inspect location profiles, saved places, recent events, and trigger definitions through the gateway APIs.
-- Location-trigger dispatch failures are logged without discarding the underlying durable event.
-- Event history is available for debugging why a location-aware automation did or did not fire.
+- **Common failures:** bad beacon payloads, rejected samples, POI provider failures, trigger dispatch failure.
+- **Recovery posture:** sample history and event history remain durable; saved-place evaluation can continue even when POI enrichment or downstream dispatch is degraded.
 
 ## Related docs
 
-- [Gateway](/architecture/gateway)
 - [Automation](/architecture/automation)
-- [Events](/architecture/protocol/events)
+- [Node](/architecture/node)
 - [Gateway data model map](/architecture/data-model-map)
 - [Data lifecycle and retention](/architecture/data-lifecycle)

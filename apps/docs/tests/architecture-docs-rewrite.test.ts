@@ -1,13 +1,65 @@
 import { describe, expect, it } from "vitest";
-import { readFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { readdir, readFile } from "node:fs/promises";
+import { dirname, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "../../..");
+const architectureTemplate = "docs/architecture/reference/doc-templates.md";
+const compactReferencePages = new Set([
+  "docs/architecture/gateway/sandbox-policy/sandbox-profiles.md",
+  "docs/architecture/gateway/skills.md",
+  "docs/architecture/reference/glossary.md",
+  "docs/architecture/scaling-ha/data-model-fk-audit.md",
+  "docs/architecture/scaling-ha/db-enum-constraints.md",
+  "docs/architecture/scaling-ha/db-json-hygiene.md",
+  "docs/architecture/scaling-ha/db-naming-conventions.md",
+  "docs/architecture/scaling-ha/statestore-dialects.md",
+]);
+const referenceHeavyPages = [
+  "docs/architecture/agent/messages/sessions-lanes.md",
+  "docs/architecture/protocol/events.md",
+  "docs/architecture/scaling-ha/backplane.md",
+  "docs/architecture/scaling-ha/data-lifecycle.md",
+  "docs/architecture/scaling-ha/data-model-map.md",
+  "docs/architecture/scaling-ha/operational-maintenance.md",
+  "docs/architecture/reference/glossary.md",
+  "docs/architecture/scaling-ha/data-model-fk-audit.md",
+  "docs/architecture/scaling-ha/db-enum-constraints.md",
+  "docs/architecture/scaling-ha/db-json-hygiene.md",
+  "docs/architecture/scaling-ha/db-naming-conventions.md",
+  "docs/architecture/scaling-ha/statestore-dialects.md",
+];
 
 async function readRepoFile(path: string): Promise<string> {
   return await readFile(resolve(repoRoot, path), "utf8");
+}
+
+async function listRepoMarkdownFiles(path: string): Promise<string[]> {
+  const absolutePath = resolve(repoRoot, path);
+  const entries = await readdir(absolutePath, { withFileTypes: true });
+  const files: string[] = [];
+
+  for (const entry of entries) {
+    const entryPath = resolve(absolutePath, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...(await listRepoMarkdownFiles(relative(repoRoot, entryPath))));
+      continue;
+    }
+
+    if (entry.isFile() && entry.name.endsWith(".md")) {
+      files.push(relative(repoRoot, entryPath).split(sep).join("/"));
+    }
+  }
+
+  return files.toSorted();
+}
+
+function getArchitectureSidebarDocPaths(sidebars: string): string[] {
+  const architectureDocIds = Array.from(sidebars.matchAll(/"architecture\/[^"]+"/g), (match) =>
+    match[0].slice(1, -1),
+  );
+  return architectureDocIds.map((id) => `docs/${id}.md`).toSorted();
 }
 
 describe("Architecture docs rewrite", () => {
@@ -42,40 +94,51 @@ describe("Architecture docs rewrite", () => {
     );
   });
 
-  it("gives every overview page an orientation cue and Mermaid diagram", async () => {
-    const overviewPages = [
-      "docs/architecture/index.md",
-      "docs/architecture/gateway/index.md",
-      "docs/architecture/agent/index.md",
-      "docs/architecture/protocol/index.md",
-      "docs/architecture/client/index.md",
-      "docs/architecture/node/index.md",
-      "docs/architecture/scaling-ha/index.md",
-    ];
+  it("keeps every architecture doc reachable from the newcomer-first sidebar", async () => {
+    const sidebars = await readRepoFile("apps/docs/sidebars.ts");
+    const sidebarDocPaths = getArchitectureSidebarDocPaths(sidebars);
+    const architectureDocPaths = await listRepoMarkdownFiles("docs/architecture");
 
-    for (const page of overviewPages) {
+    expect(sidebarDocPaths).toEqual(architectureDocPaths);
+  });
+
+  it("gives every architecture page an orientation cue", async () => {
+    const architectureDocPaths = await listRepoMarkdownFiles("docs/architecture");
+    const pagePaths = architectureDocPaths.filter((page) => page !== architectureTemplate);
+
+    for (const page of pagePaths) {
       const content = await readRepoFile(page);
-      expect(content, `${page} should include an orientation cue`).toMatch(/Read this if/i);
-      expect(content, `${page} should include a drill-down cue`).toMatch(/Go deeper|Drill-down/i);
+      expect(content, `${page} should include orientation guidance`).toMatch(/Read this if/i);
+      expect(content, `${page} should include a skip cue`).toMatch(/Skip this if/i);
+      expect(content, `${page} should include a drill-down cue`).toMatch(
+        /Go deeper|Drill-down|Related docs/i,
+      );
+    }
+  });
+
+  it("uses Mermaid on all diagram-backed architecture pages", async () => {
+    const architectureDocPaths = await listRepoMarkdownFiles("docs/architecture");
+    const pagePaths = architectureDocPaths.filter((page) => page !== architectureTemplate);
+
+    for (const page of pagePaths) {
+      const content = await readRepoFile(page);
+
+      if (compactReferencePages.has(page)) {
+        expect(content, `${page} should stay scan-friendly without a diagram`).toMatch(/\|.+\|/);
+        continue;
+      }
+
       expect(content, `${page} should include a Mermaid diagram`).toMatch(/```mermaid/);
     }
   });
 
-  it("marks reference-heavy pages as mechanics docs with quick orientation", async () => {
-    const referencePages = [
-      "docs/architecture/protocol/events.md",
-      "docs/architecture/agent/messages/sessions-lanes.md",
-      "docs/architecture/scaling-ha/data-lifecycle.md",
-      "docs/architecture/scaling-ha/data-model-map.md",
-    ];
-
-    for (const page of referencePages) {
+  it("marks reference-heavy architecture pages as mechanics or reference docs", async () => {
+    for (const page of referenceHeavyPages) {
       const content = await readRepoFile(page);
-      expect(content, `${page} should frame itself as a reference page`).toMatch(
-        /reference page|schema reference page|mechanics\/reference page|scaling\/reference page/i,
+      expect(content, `${page} should frame itself as mechanics/reference content`).toMatch(
+        /reference page|reference card|reference lexicon|reference decision record|mechanics page|mechanics\/reference page|schema reference page|scaling\/reference page/i,
       );
       expect(content, `${page} should include orientation guidance`).toMatch(/Read this if/i);
-      expect(content, `${page} should include a Mermaid diagram`).toMatch(/```mermaid/);
     }
   });
 });

@@ -2,90 +2,85 @@
 slug: /architecture/auth
 ---
 
-# Provider Auth and Onboarding
+# Provider auth and onboarding
 
-Tyrum supports multiple model providers and authentication mechanisms while preserving the invariant that raw credentials never enter model context.
+Provider auth is how Tyrum connects operators, stored credentials, and model/provider routing without ever treating raw credentials as ordinary runtime data.
 
-## Principles
+## Quick orientation
 
-- **Secrets by handle:** credentials are stored in a secret provider and referenced via secret handles (see [Secrets](/architecture/secrets)).
-- **Least privilege:** auth profiles are scoped per agent and gated by policy.
-- **Observable and auditable:** auth changes, refreshes, and failovers emit events and are attributable to an operator identity.
-- **Deterministic failover:** when calls fail, Tyrum rotates credentials and models in a predictable order (see [Models](/architecture/models)).
+- Read this if: you need the onboarding and credential-selection boundary for providers.
+- Skip this if: you already know the profile model and only need model fallback rules.
+- Go deeper: [Secrets](/architecture/secrets), [Models](/architecture/models), [Observability](/architecture/observability).
 
-## Auth profiles
+## Auth boundary
 
-An **auth profile** is a durable record that tells Tyrum how to authenticate to a provider.
+```mermaid
+flowchart LR
+  Operator["Authenticated operator"] --> Gateway["Gateway auth surface"]
+  Gateway --> OAuth["OAuth flow / API key intake"]
+  OAuth --> Provider["External provider"]
+  Gateway --> Secrets["Secret provider"]
+  Secrets --> Profile["Auth profile metadata"]
+  Profile --> Routing["Provider selection + session pinning"]
+  Routing --> Calls["Provider API calls"]
+  Calls --> Audit["Status, audit, cooldowns"]
+```
 
-Profiles are **metadata + secret handles**:
+The gateway stores metadata and secret handles. Raw keys or tokens live in the secret provider and are resolved only by trusted execution paths.
 
-- `profile_id` (stable; used for routing/pinning)
-- `provider` (for example `openai`, `anthropic`, `openrouter`)
-- `type`:
-  - `api_key`
-  - `oauth` (access + refresh)
-  - `token` (non-refreshing bearer token)
-- `secret_handles` (for example `api_key_handle`, `oauth_refresh_handle`)
-- `expires_at` (when applicable)
-- optional labels (`email`, `account_id`, `workspace`, `notes`)
+## What an auth profile is
 
-Profiles are scoped per `agent_id`. Cross-agent sharing is deny-by-default and requires explicit policy.
+An auth profile is the durable record Tyrum uses for routing and health decisions. It typically contains:
 
-## OAuth onboarding (multi-account)
+- stable `profile_id`
+- provider identity
+- auth type such as API key, OAuth, or non-refreshing bearer token
+- secret handles for the credential material
+- expiry, labels, and operator-facing notes
 
-When a provider supports OAuth, Tyrum onboards accounts using an Authorization Code + PKCE flow:
+Profiles are agent-scoped by default. Cross-agent sharing is not the normal path because it weakens audit and blast-radius boundaries.
 
-- an authenticated operator initiates authorization for a specific provider
-- Tyrum generates a PKCE verifier/challenge and a `state` nonce
-- the provider redirects to a callback endpoint where Tyrum exchanges the code for tokens
-- token material is stored in the secret provider; only token **handles** are persisted in Tyrum state
+## Onboarding flows
 
-Refresh is automatic:
+### API keys
 
-- access tokens are refreshed under a lock
-- refresh outputs overwrite the prior handles
-- refresh failures are surfaced as structured events and status surfaces
+An operator submits the credential through an authenticated control path. The gateway writes the raw value into the secret provider, stores only the returned handle, and creates the profile metadata record.
 
-Multiple accounts are represented as multiple auth profiles for the same provider (distinct `profile_id`s).
+### OAuth
 
-## Credential selection, pinning, and rotation
+The gateway owns the authorization-code flow, PKCE/state protection, and callback handling. After token exchange:
 
-For a given provider, Tyrum selects an auth profile using:
+- access and refresh material goes into the secret provider
+- profile metadata records the provider, labels, and expiry state
+- later refreshes update handles and health state without exposing raw tokens to the model
 
-1. An explicit configured order (if present).
-2. Stored profiles for the provider (stable, deterministic ordering).
+Multiple accounts are simply multiple profiles for the same provider.
 
-Selections are **pinned per session** to keep provider caches warm and to make behavior repeatable. The pinned profile is reused until:
+## Selection, pinning, and failure handling
 
-- the session is reset
-- the profile expires or is revoked
-- the profile enters cooldown due to repeated transient failures
+Credential choice should be deterministic, not accidental. Tyrum therefore:
 
-### Cooldowns and disabling
+- selects from an explicit order when configured
+- otherwise falls back to a stable provider-local ordering
+- pins the selected profile per session so behavior is repeatable
+- cools down or disables bad profiles based on classified failures
 
-When a request fails, Tyrum classifies the failure and reacts predictably:
+Typical reactions:
 
-- **Rate limit / transient:** rotate to the next profile for the provider and apply a cooldown to the failing profile.
-- **Auth invalid / revoked:** disable the profile until an operator re-authenticates.
-- **Billing / quota exhausted:** disable the profile with a long backoff and rotate to another profile or model fallback.
+- transient or rate-limit errors: rotate to another eligible profile and apply cooldown
+- invalid or revoked auth: disable the profile until re-authenticated
+- quota or billing exhaustion: mark the profile unavailable and continue with allowed alternatives
 
-Cooldown/disable state is durable and visible in the control panel and `/status`.
+## Hard invariants
 
-## Operator UX (CLI + control panel)
+- Raw credentials do not enter model context.
+- Auth changes are operator-authenticated and auditable.
+- Profile routing stays deterministic enough to explain why a provider call used a specific credential.
+- Refresh, disable, and rotation state are visible to operators instead of failing silently.
 
-Tyrum exposes a small operator surface for auth lifecycle:
+## Related docs
 
-- Add/remove profiles (API key and OAuth).
-- List profiles and their status (expiry, cooldown, disabled reason).
-- Select a profile globally or per-session (pin override).
-- Export a redacted auth inventory (no secret material).
-
-All auth mutations require an authenticated operator identity and are audited.
-
-## Integration points
-
-Auth profiles integrate with:
-
-- **Policy:** which providers/profiles can be used for which sessions and lanes.
-- **Approvals:** high-risk auth changes (adding a privileged key, granting a broad OAuth scope) can be approval-gated.
-- **Usage tracking:** provider usage endpoints are queried using the active profile and displayed in `/usage` and UI surfaces (see [Observability](/architecture/observability)).
+- [Secrets](/architecture/secrets)
+- [Models](/architecture/models)
+- [Observability](/architecture/observability)
+- [Policy overrides](/architecture/policy-overrides)

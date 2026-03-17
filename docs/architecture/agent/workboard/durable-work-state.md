@@ -4,13 +4,29 @@ slug: /architecture/workboard/durable-work-state
 
 # WorkBoard durable work state
 
-## Parent concept
+Read this if: you need the exact durable records that make WorkBoard state inspectable, resumable, and compact.
 
-- [Work board and delegated execution](/architecture/workboard)
+Skip this if: you only need the high-level WorkBoard boundary; start with [Work board and delegated execution](/architecture/workboard).
 
-## Scope
+Go deeper: [WorkBoard delegated execution](/architecture/workboard/delegated-execution), [Execution engine](/architecture/execution-engine), [Artifacts](/architecture/artifacts).
 
-This page describes the durable records that make the WorkBoard inspectable, resumable, and compact enough to survive long-running work. It covers the drill-down state behind a WorkItem rather than the execution engine's run/step records.
+This is a mechanics page for the durable records behind a WorkItem. It covers the drill-down state that makes WorkBoard inspectable, resumable, and compact enough to survive long-running work.
+
+## Durable state map
+
+```mermaid
+flowchart TB
+  Item["WorkItem"] --> Tasks["Task graph"]
+  Item --> Artifact["WorkArtifacts"]
+  Item --> Decision["DecisionRecords"]
+  Item --> Signal["WorkSignals"]
+  Item --> KV["State KV"]
+  Tasks --> Subagent["Subagent / execution linkage"]
+  Artifact --> Digest["Focus digest for context assembly"]
+  Decision --> Digest
+  KV --> Digest
+  Signal --> Digest
+```
 
 ## Core durable records
 
@@ -115,6 +131,7 @@ Each event should point back to durable identifiers so clients can rehydrate aft
 
 ## Related docs
 
+- [Work board and delegated execution](/architecture/workboard)
 - [WorkBoard delegated execution](/architecture/workboard/delegated-execution)
 - [Execution engine](/architecture/execution-engine)
 - [Artifacts](/architecture/artifacts)

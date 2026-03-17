@@ -4,138 +4,83 @@ slug: /architecture/policy-overrides
 
 # Policy overrides (approve-always)
 
-Policy overrides are durable, operator-created enforcement rules that reduce repeated prompts without weakening Tyrum’s auditability or safety model.
+Policy overrides are durable allow rules created by operators so repeated low-variance approvals do not require the same prompt every time.
 
-They are most commonly created when an operator resolves an approval with **approve always** (see [Approvals](./approvals.md)).
+## Quick orientation
 
-## What a policy override is (and is not)
+- Read this if: you need the difference between approve once, approve always, revoke, and expire.
+- Skip this if: you already know the lifecycle and only need wildcard grammar details.
+- Go deeper: [Approvals](/architecture/approvals), [Tools](/architecture/tools), [Sandbox and policy](/architecture/sandbox-policy).
 
-- **Is:** a durable, auditable rule that can turn a future `require_approval` decision into an `allow` decision for _matching_ tool actions.
-- **Is not:** prompt text, a “hint”, or an implicit trust signal. Overrides are evaluated by the policy engine and recorded in the audit log.
+## Resolution and override lifecycle
 
-## Scope and safety invariants
+```mermaid
+flowchart LR
+  Request["Approval requested"] --> Choice{"Operator decision"}
+  Choice -->|Approve once| Once["Resume current work only"]
+  Choice -->|Approve always| Create["Create active policy override"]
+  Choice -->|Deny| Deny["Do not allow the action"]
 
-Policy overrides are scoped and conservative by default:
+  Create --> Future["Future matching requests become allow"]
+  Future --> Revoke["Revoke"]
+  Future --> Expire["Expire"]
+  Revoke --> Prompt["Future requests require approval again"]
+  Expire --> Prompt
+```
 
-- scoped at least to `tenant_id` and `agent_id` (and typically also `workspace_id` for workspace-backed tools)
-- **cannot** override an explicit `deny` by default
-- intended to relax only `require_approval → allow`
+The short version:
 
-If a deployment needs “deny overrides”, it must be an explicit, audited, policy-gated exception and should be avoided.
+- `approve once` resolves the current approval and changes nothing durable about future requests.
+- `approve always` resolves the current approval and creates a scoped override for future matching requests.
+- `revoke` or `expire` stops the override from applying, so future matching requests fall back to normal policy and approval flow.
 
-## Relationship to PolicyBundle
+## What an override can do
 
-The baseline enforcement configuration is the merged `PolicyBundle` (deployment + agent + playbook). Policy overrides form an additional, operator-controlled layer applied during policy evaluation. See [Sandbox and policy](/architecture/sandbox-policy).
+An override is meant to relax `require_approval` into `allow` for a narrow, auditable slice of work. It is not a free-form trust flag and it should not silently broaden access.
 
-## Matching and pattern language
+By default, overrides should:
 
-Overrides use **tool-specific wildcard patterns** matched against a well-defined per-tool “match target”.
+- stay tenant- and agent-scoped
+- usually stay workspace-scoped for workspace-backed tools
+- target one tool family and one normalized match pattern
+- never defeat an explicit `deny`
 
-### Match target normalization (hard rule)
+## Matching model
 
-Tools MUST define and document their match targets, and MUST compute them from validated, canonicalized inputs.
+Overrides match against the tool's normalized target, not raw user text. That target must be derived from validated inputs, because sloppy normalization turns narrow operator intent into a broad allow rule.
 
-Operators should assume policy overrides match the tool’s _normalized_ representation of an action (not raw user text).
-If normalization rules change, it should be treated as a contract change because it can broaden or narrow the effective scope of existing overrides.
-
-Concrete normalization guidance for high-risk tools lives in [Tools](./tools.md).
-
-Wildcard grammar:
-
-- `*` matches zero or more characters
-- `?` matches exactly one character
-
-No regex by default.
-
-Each override stores:
-
-- `tool_id` (the tool the pattern applies to)
-- `pattern` (wildcard pattern over that tool’s match target)
-
-Tools must define their match targets unambiguously (examples live in [Tools](./tools.md)).
-
-### Unsafe pattern examples (operator guidance)
-
-Wildcards are powerful; prefer narrow prefixes and avoid leading wildcards.
-Examples of overly broad patterns that are usually unsafe:
-
-- **`fs`**: `write:*` (approves writing anywhere in the workspace), `delete:*` (approves deleting any file).
-- **`bash`**: `*` (approves any command), `curl*` (often includes network egress + exfil risk), `git*` (can include destructive actions like `git reset --hard`).
-- **`messaging`**: `send:*` (approves sending to any destination).
-
-Prefer patterns that encode intent and scope, for example:
+Examples of healthy patterns:
 
 - `fs`: `write:docs/architecture/*`
-- `bash`: `git status*`
 - `messaging`: `send:slack:acct_123:chan_C024BE91L`
-- `tool.node.dispatch` (Desktop): `capability:tyrum.desktop;action:Desktop;op:query` (read-only) and `capability:tyrum.desktop;action:Desktop;op:act*` (state-changing)
-- `tool.automation.schedule.create`: `kind:heartbeat;execution:agent_turn;delivery:quiet`
-- `connectors` (channel pipeline): `telegram:work:123` (paired with `tool_id: connector.send`)
+- `connector.send`: an exact destination key rather than a broad wildcard
 
-### Connector sends
+Examples that are usually too broad:
 
-Outbound connector sends (the channel pipeline) support **approve always** by creating policy overrides with:
+- `bash:*`
+- `fs:delete:*`
+- `send:*`
 
-- `tool_id`: `connector.send`
-- `pattern`: a connector match target (wildcard-glob)
+## Operator choices in practice
 
-Current match target examples (v1):
+| Choice         | Effect on current approval | Effect on future matching work         |
+| -------------- | -------------------------- | -------------------------------------- |
+| Approve once   | resumes this run           | none                                   |
+| Approve always | resumes this run           | creates active override                |
+| Deny           | blocks this run per policy | none                                   |
+| Revoke         | n/a                        | disables an existing override          |
+| Expire         | n/a                        | lets an override age out automatically |
 
-- Default account: `telegram:123`
-- Account-scoped: `telegram:work:123`
+## Hard invariants
 
-Suggested overrides default to an exact destination match target (no wildcards).
+- Overrides are policy data, not prompt conventions.
+- Every override creation, application, revocation, and expiry must be auditable.
+- Decision records should show which override made an action allowable.
+- Explicit deny remains stronger than override-created allow.
 
-## Evaluation semantics
+## Related docs
 
-Policy evaluation remains deterministic and conservative:
-
-1. Evaluate merged `PolicyBundle` layers (deployment → agent → playbook) to produce `allow | deny | require_approval`.
-2. If the result is `deny`, return `deny` (overrides do not apply).
-3. If the result is `allow`, return `allow`.
-4. If the result is `require_approval`, check for a matching **active** policy override:
-   - if a match exists, return `allow` and include the applied `policy_override_id`(s) in the decision record
-   - otherwise return `require_approval` as normal
-
-## Data model (durable records)
-
-Policy overrides are durable records separate from approvals. A minimal record shape:
-
-- `policy_override_id`
-- `status` (`active`, `revoked`, `expired`)
-- `created_at`, `created_by` (user identity + client identity)
-- `tenant_id`
-- `agent_id`
-- optional `workspace_id` (recommended for workspace-backed tools)
-- `tool_id`
-- `pattern`
-- `created_from_approval_id` (link back to the originating approval)
-- `created_from_policy_snapshot_id` (link back to the policy snapshot in effect when the approval was requested)
-- optional `expires_at`
-- optional `revoked_at`, `revoked_by`, `revoked_reason`
-
-## Audit, events, and export
-
-Overrides are first-class audit objects:
-
-- Creation emits `policy_override.created` with the durable `policy_override_id` and linkage fields, and re-emission of the same creation reuses the persisted `event_id`.
-- Revocation emits `policy_override.revoked`.
-- Expiry emits `policy_override.expired`.
-
-Policy decision records (and run logs) should include which override ids were applied so operators can answer “why was this allowed?” after the fact.
-
-Snapshot exports should include:
-
-- approval records (requested/resolved)
-- policy override records (active + historical with status)
-- audit/event logs linking `approval_id`, `policy_snapshot_id`, and `policy_override_id`
-
-## Operator UX expectations
-
-Operator clients should provide:
-
-- Override inventory (filter by agent/tool/status)
-- Override detail view (match target description, pattern, scope, created-from approval/run)
-- One-tap revoke with an operator-provided reason (revocation is audited)
-
-Suggested control-plane commands: see [Slash commands](./slash-commands.md).
+- [Approvals](/architecture/approvals)
+- [Reviews](/architecture/gateway/reviews)
+- [Tools](/architecture/tools)
+- [Sandbox and policy](/architecture/sandbox-policy)

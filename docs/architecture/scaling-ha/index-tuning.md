@@ -4,49 +4,53 @@ slug: /architecture/index-tuning
 
 # Index tuning loop
 
-Tyrum’s v2 schema ships with a solid baseline index set, but real-world query patterns evolve. This runbook defines a lightweight loop for proposing and validating index changes.
+This is a mechanics/runbook page for proposing and validating StateStore index changes.
 
-## Checklist
+## Quick orientation
 
-1. **Capture the hot query**
-   - Record the exact SQL and the call site (file + function).
-   - Note cadence and cardinality (e.g., “runs every second”, “per session”, “per tenant”).
+- **Read this if:** a query is hot, a planner regressed, or you are proposing a new index migration.
+- **Skip this if:** you only need the schema overview.
+- **Go deeper:** use [Gateway data model map (v2)](/architecture/data-model-map) for table shape and the contract tests for proof.
 
-2. **Measure the baseline**
-   - **SQLite:** run `EXPLAIN QUERY PLAN <SQL>` (and optionally time a representative query loop). For reproducible “explicit index” validation, temporarily set `PRAGMA automatic_index = OFF`.
-   - **Postgres:** run `EXPLAIN (ANALYZE, BUFFERS) <SQL>` on representative data.
+## Tuning loop
 
-3. **Propose an index**
-   - Add a new numbered migration in both:
-     - `packages/gateway/migrations/sqlite/`
-     - `packages/gateway/migrations/postgres/`
-   - Keep index names consistent across dialects.
-   - Include a short justification comment tying the index to the measured query.
-
-4. **Verify improvement**
-   - Confirm the planner uses the new index and eliminates avoidable sorts/scans.
-   - Add a regression test when practical (for example: assert `EXPLAIN QUERY PLAN` uses the index on SQLite).
-
-5. **Rollout / rollback**
-   - Roll forward with an index-add migration.
-   - Roll back by adding a follow-up migration that drops the index (avoid editing applied migrations).
-
-## Example: `channel_outbox` inbox ordering
-
-`ChannelOutboxDal` frequently needs rows ordered by `(chunk_index, outbox_id)` for a single `inbox_id` (list + claim loops). Call sites include `packages/gateway/src/modules/channels/outbox-dal.ts` (`listForInbox`, `claimNextForInbox`). We added an index to avoid a full scan and temp sort.
-
-- Migration:
-  - `packages/gateway/migrations/sqlite/105_channel_outbox_inbox_chunk_order_idx.sql`
-  - `packages/gateway/migrations/postgres/105_channel_outbox_inbox_chunk_order_idx.sql`
-- Regression test: `packages/gateway/tests/contract/index-tuning-loop.test.ts`
-
-SQLite evidence (`EXPLAIN QUERY PLAN` for `WHERE inbox_id = ? ORDER BY chunk_index, outbox_id LIMIT 1`, collected with `PRAGMA automatic_index = OFF`):
-
-```text
-# Before (without 105_* migration)
-SCAN channel_outbox
-USE TEMP B-TREE FOR ORDER BY
-
-# After (with 105_* migration)
-SEARCH channel_outbox USING COVERING INDEX channel_outbox_inbox_chunk_outbox_idx (inbox_id=?)
+```mermaid
+flowchart LR
+  Capture["Capture the exact query<br/>SQL + call site + cadence"] --> Measure["Measure baseline<br/>EXPLAIN / EXPLAIN ANALYZE"]
+  Measure --> Propose["Add paired SQLite/Postgres index migrations"]
+  Propose --> Verify["Verify planner improvement<br/>and add regression evidence"]
+  Verify --> Roll["Roll forward only<br/>rollback via follow-up drop migration"]
 ```
+
+## Reference checklist
+
+| Step                   | What to record                                                                 |
+| ---------------------- | ------------------------------------------------------------------------------ |
+| Capture the hot query  | Exact SQL, call site, cadence, tenant/cardinality shape.                       |
+| Measure baseline       | SQLite: `EXPLAIN QUERY PLAN`; Postgres: `EXPLAIN (ANALYZE, BUFFERS)`.          |
+| Propose an index       | Add a numbered migration in both dialect directories with the same index name. |
+| Verify improvement     | Confirm the planner uses the index and removes avoidable scans or sorts.       |
+| Preserve reversibility | Never edit applied migrations; drop with a new follow-up migration if needed.  |
+
+## SQLite vs Postgres evidence
+
+| Dialect  | Baseline tool                | Useful note                                                                            |
+| -------- | ---------------------------- | -------------------------------------------------------------------------------------- |
+| SQLite   | `EXPLAIN QUERY PLAN`         | Use `PRAGMA automatic_index = OFF` when you need reproducible explicit-index evidence. |
+| Postgres | `EXPLAIN (ANALYZE, BUFFERS)` | Run on representative data, not an empty development database.                         |
+
+## Example: `channel_outbox` ordering
+
+`ChannelOutboxDal` frequently needs `WHERE inbox_id = ? ORDER BY chunk_index, outbox_id LIMIT 1`. The repo added a paired index so those loops avoid full scans and temp sorting.
+
+| Evidence           | Location                                                                            |
+| ------------------ | ----------------------------------------------------------------------------------- |
+| SQLite migration   | `packages/gateway/migrations/sqlite/105_channel_outbox_inbox_chunk_order_idx.sql`   |
+| Postgres migration | `packages/gateway/migrations/postgres/105_channel_outbox_inbox_chunk_order_idx.sql` |
+| Regression test    | `packages/gateway/tests/contract/index-tuning-loop.test.ts`                         |
+
+## Related docs
+
+- [Gateway data model map (v2)](/architecture/data-model-map)
+- [Operational table maintenance](/architecture/operational-maintenance)
+- [DB naming conventions](/architecture/db-naming-conventions)

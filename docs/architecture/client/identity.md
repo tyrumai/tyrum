@@ -4,42 +4,72 @@ slug: /architecture/identity
 
 # Identity
 
-Identity is how Tyrum attributes authority and scopes access to durable state. Tyrum uses identity at three layers:
+Read this if: you need the identity model that ties tenants, users, agents, and devices together.
 
-- **Tenant** (isolation boundary)
-- **User** (human principal)
-- **Device** (cryptographic endpoint identity for clients and nodes)
+Skip this if: you are debugging handshake wire details first; use [Handshake](/architecture/protocol/handshake).
 
-## Parent concepts
+Go deeper: [Client](/architecture/client), [Node](/architecture/node), [Handshake](/architecture/protocol/handshake).
 
-- [Client](/architecture/client)
-- [Node](/architecture/node)
+Identity is how Tyrum scopes authority to the right tenant, user, agent, and device without mixing those responsibilities together.
 
-## Identity types
+```mermaid
+flowchart TB
+  Tenant["Tenant<br/>(isolation boundary)"]
+  User["User"]
+  Membership["Membership<br/>(role + scopes)"]
+  Agent["Agent<br/>(runtime persona)"]
+  Client["Client device<br/>(role=client)"]
+  Node["Node device<br/>(role=node)"]
+  Conn["Connection<br/>(ephemeral WS session)"]
 
-- **Tenant identity (`tenant_id`):** the primary security boundary. All durable records and events are scoped to exactly one tenant.
-- **User identity (`user_id`):** a human principal authenticated via a tenant-configured auth provider.
-- **Membership:** a durable binding of a user into a tenant, including a role and effective scopes.
-- **Agent identity (`agent_id`):** the configured runtime persona that owns sessions, tools/skills, and memory within a tenant.
-- **Client device identity (`device_id`, `role: client`):** a specific operator device connected to the gateway.
-- **Node device identity (`device_id`, `role: node`):** a capability provider device connected to the gateway.
-- **Channel identity (`channel_key`):** which connector/account instance an inbound message or event belongs to.
-- **Connection identity (`connection_id`):** an ephemeral identifier for a single live WebSocket connection, bound to a device identity after handshake.
+  Tenant --> Membership
+  User --> Membership
+  Tenant --> Agent
+  Membership --> Client
+  Membership --> Node
+  Client --> Conn
+  Node --> Conn
+```
 
-## Device identities
+## What this page covers
 
-Client and node identities are device identities derived from a long-lived signing keypair (Ed25519). The public key is the canonical identity material.
+- the durable identities Tyrum treats as security and routing boundaries
+- why device identity is separate from user identity
+- how ephemeral connections attach to stable principals
 
-`device_id` is deterministic and validated by the gateway:
+## Identity layers
+
+- **Tenant (`tenant_id`)** is the primary isolation boundary. Durable records, events, and policy decisions belong to exactly one tenant.
+- **User (`user_id`)** is the human principal authenticated through a tenant-configured auth provider.
+- **Membership** binds one user into one tenant with a role and effective scopes.
+- **Agent (`agent_id`)** is the durable runtime persona within a tenant.
+- **Device (`device_id`)** identifies one client or node endpoint cryptographically.
+- **Connection (`connection_id`)** is an ephemeral WebSocket session that becomes trusted only after handshake and auth.
+
+The important split is durable principal vs live connection. A reconnect should create a new `connection_id`, not a new device identity.
+
+## Device identity model
+
+Client and node devices derive identity from a long-lived Ed25519 keypair. The public key is the canonical identity material, and the gateway validates a deterministic `device_id` from it:
 
 `device_id = "dev_" + base32_lower_nopad(sha256(pubkey_der_bytes))`
 
-Where `base32_lower_nopad` uses the RFC 4648 alphabet (`a-z2-7`), rendered lowercase, with no padding, and `pubkey_der_bytes` is the DER SPKI public key decoded from base64url. Treat `device_id` as an opaque stable identifier for pairing, revocation, and audit trails.
+`base32_lower_nopad` uses the RFC 4648 alphabet (`a-z2-7`), rendered lowercase, with no padding, and `pubkey_der_bytes` is the DER SPKI public key decoded from base64url.
 
-## Why identity matters
+Treat `device_id` as an opaque stable identifier for pairing, revocation, presence, and audit. It is not just a display field.
 
-- Pairing and revocation (nodes and clients)
-- Audit trails (who/what performed an action)
-- Scoping (which tenant, agents, and workspaces an action can touch)
+## Why this boundary exists
 
-Agent identity is durable runtime configuration stored in the StateStore, not a workspace file. Operator/config surfaces are the source of truth for reading and updating it.
+- user identity answers **who** is acting
+- tenant identity answers **where** the action is allowed
+- agent identity answers **which runtime persona** owns state
+- device identity answers **which endpoint** is connected and can be paired or revoked
+
+Keeping those layers separate is what makes reconnects, scoped tokens, pairing, and audit trails coherent.
+
+## Related docs
+
+- [Client](/architecture/client)
+- [Node](/architecture/node)
+- [Presence and Instances](/architecture/presence)
+- [Handshake](/architecture/protocol/handshake)

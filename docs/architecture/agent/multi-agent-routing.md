@@ -4,61 +4,55 @@ slug: /architecture/multi-agent-routing
 
 # Multi-Agent Routing
 
-Multi-agent routing is the ability to run multiple isolated agents behind one gateway, each with its own workspace and sessions, while routing inbound messages from channels to the correct agent.
+Read this if: you want the boundary that decides which agent owns an inbound message or trigger.
 
-## Isolation model
+Skip this if: you only need single-agent behavior; the main [Agent](/architecture/agent) overview is enough.
 
-Baseline isolation is enforced via hard namespaces and runtime checks:
+Go deeper: [Sessions and Lanes](/architecture/sessions-lanes), [Gateway](/architecture/gateway), [Node](/architecture/node).
 
-- workspaces, sessions, memory, tools, and secrets are scoped per `agent_id`
-- cross-agent access is deny-by-default and requires explicit policy
+## Routing boundary
 
-## Routing rules
+```mermaid
+flowchart LR
+  Inbound["Inbound message / trigger"] --> Rules["Routing rules<br/>(versioned config)"]
+  Rules --> AgentA["Agent A boundary"]
+  Rules --> AgentB["Agent B boundary"]
+  Rules --> AgentN["Agent N boundary"]
 
-Inbound events are mapped to an agent via explicit, auditable bindings.
+  AgentA --> ScopeA["Workspace / sessions / memory / tools"]
+  AgentB --> ScopeB["Workspace / sessions / memory / tools"]
+  AgentN --> ScopeN["Workspace / sessions / memory / tools"]
+```
 
-- Rules start as static configuration mappings.
-- The same rule shape can be stored in the StateStore and edited from the control panel.
-- Rule changes emit events and are reversible.
+## Purpose
 
-### Durable routing state
+Multi-agent routing lets one gateway host multiple isolated agents while keeping inbound routing explicit and auditable. The important property is not “many agents,” but that each agent keeps its own workspace, sessions, memory, tools, and secrets unless a policy explicitly allows otherwise.
 
-Routing rules are persisted as versioned config snapshots in the StateStore:
+## What this page owns
 
-- Append-only revisions; the newest valid revision is effective.
-- Changes emit events and are recorded in an append-only audit stream suitable for export.
-- A `routing.config.updated` event notifies clients that a new revision is available; clients can `GET /routing/config` to fetch the effective config.
+- The routing-rule boundary between inbound events and agent selection.
+- The isolation model for per-agent state.
+- The idea that routing is durable, auditable configuration rather than hidden connector logic.
 
-Operator API:
+This page does not define the exact admin API schema or low-level session key details.
 
-- `GET /routing/config` — fetch the effective config + revision
-- `PUT /routing/config` — write a new revision
-- `POST /routing/config/revert` — create a new revision from an earlier revision
+## Main flow
 
-Authentication/authorization:
+1. An inbound message or trigger arrives with channel/account/container identity.
+2. The gateway evaluates the effective routing rules.
+3. The selected agent becomes the owner of the session/workspace/memory scope for that interaction.
+4. Rule changes are written as versioned config revisions and exposed through operator APIs and audit events.
 
-- Scoped device tokens must include `operator.admin` for `/routing/*` routes.
+## Key constraints
 
-Bootstrap behavior:
+- Cross-agent access is deny-by-default.
+- Routing decisions must be reversible and auditable.
+- Session-key conventions must remain stable when routing rules evolve.
+- Stronger isolation modes can move agents into separate processes or containers without changing the logical routing model.
 
-- Initial routing rules may be seeded from static configuration.
-- Once a durable revision exists and validates against the routing config schema, it becomes the source of truth for routing decisions.
+## Related docs
 
-## Key taxonomy
-
-Routing uses the session key conventions described in [Sessions and lanes](/architecture/sessions-lanes).
-
-- `channel` and `account` identify the connector/account instance (`channel=telegram`, `account=work`).
-- Provider-native thread/container identifiers are preserved and stored in the key’s `<id>` portion for groups/channels.
-- Direct-message session keys are chosen using `dm_scope` so multi-user inboxes default to per-sender isolation.
-
-This supports multiple accounts on one gateway while keeping session ids stable.
-
-## Stronger isolation mode
-
-Deployments that require OS-level isolation run agents in separate processes/containers with distinct workspaces, policies, and secrets.
-
-## Safety expectations
-
-- Isolation boundaries must be enforced by the gateway, not by convention.
-- Routing decisions should be auditable and reversible.
+- [Agent](/architecture/agent)
+- [Sessions and Lanes](/architecture/sessions-lanes)
+- [Gateway](/architecture/gateway)
+- [Channels](/architecture/channels)

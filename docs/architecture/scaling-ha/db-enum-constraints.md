@@ -4,30 +4,34 @@ slug: /architecture/db-enum-constraints
 
 # DB enum constraints
 
-This document records which DB columns are treated as enums (and constrained at the database layer) vs intentionally open-ended.
+This is a compact reference card for columns that are intentionally constrained as enums at the database layer.
 
-## Constrained (CHECK)
+## Quick orientation
 
-### Plans (`plans`)
+- **Read this if:** you are adding or changing `kind` / `status` columns in the StateStore.
+- **Skip this if:** you only need the deployment or data-model overview.
+- **Go deeper:** use [DB naming conventions](/architecture/db-naming-conventions) and the cited migrations.
 
-- `plans.kind`: `audit | planner`
-- `plans.status`: `active | success | escalate | failure`
+## Constraint matrix
 
-Enforced in:
+| Table / column     | Allowed values                             | Enforced in                                     |
+| ------------------ | ------------------------------------------ | ----------------------------------------------- |
+| `plans.kind`       | `audit`, `planner`                         | SQLite + Postgres `102_enum_constraints_v2.sql` |
+| `plans.status`     | `active`, `success`, `escalate`, `failure` | SQLite + Postgres `102_enum_constraints_v2.sql` |
+| `approvals.kind`   | `ApprovalKind` from `@tyrum/schemas`       | SQLite + Postgres `102_enum_constraints_v2.sql` |
+| `approvals.status` | `ApprovalStatus` from `@tyrum/schemas`     | SQLite + Postgres `102_enum_constraints_v2.sql` |
 
-- SQLite: `packages/gateway/migrations/sqlite/102_enum_constraints_v2.sql`
-- Postgres: `packages/gateway/migrations/postgres/102_enum_constraints_v2.sql`
+## Rules
 
-### Approvals (`approvals`)
+- Constrain enum-like columns in both dialects at the same migration boundary.
+- Prefer shared schema enums where they already exist instead of inventing DB-only lists.
+- If a `status` or `kind` column is intentionally open-ended, document that choice here.
 
-- `approvals.kind`: `@tyrum/schemas` `ApprovalKind`
-- `approvals.status`: `@tyrum/schemas` `ApprovalStatus`
+## Intentionally unconstrained today
 
-Enforced in:
+None recorded yet.
 
-- SQLite: `packages/gateway/migrations/sqlite/102_enum_constraints_v2.sql`
-- Postgres: `packages/gateway/migrations/postgres/102_enum_constraints_v2.sql`
+## Related docs
 
-## Intentionally unconstrained
-
-None documented yet (add rows here when we intentionally keep a `status`/`kind` column open-ended).
+- [DB naming conventions](/architecture/db-naming-conventions)
+- [Gateway data model map (v2)](/architecture/data-model-map)
