@@ -11,14 +11,8 @@ import {
   parseStoredChannelConfigOrThrow,
 } from "./channel-config-model.js";
 
-export {
-  GoogleChatAudienceType,
-  GoogleChatAuthMethod,
-  toChannelConfigView,
-} from "./channel-config-model.js";
+export { toChannelConfigView } from "./channel-config-model.js";
 export type {
-  GoogleChatAudienceType,
-  GoogleChatAuthMethod,
   StoredDiscordChannelConfig,
   StoredGoogleChatChannelConfig,
   StoredChannelConfig,

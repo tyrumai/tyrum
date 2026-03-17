@@ -1,5 +1,5 @@
 import { OAuth2Client } from "google-auth-library";
-import type { GoogleChatAudienceType } from "../channels/channel-config-dal.js";
+import type { GoogleChatAudienceType } from "../channels/channel-config-model.js";
 
 const CHAT_ISSUER = "chat@system.gserviceaccount.com";
 const ADDON_ISSUER_PATTERN = /^service-\d+@gcp-sa-gsuiteaddons\.iam\.gserviceaccount\.com$/;

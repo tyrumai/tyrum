@@ -1,9 +1,6 @@
 import { ChannelRegistryEntry } from "@tyrum/schemas";
-import type {
-  GoogleChatAudienceType,
-  GoogleChatAuthMethod,
-  StoredGoogleChatChannelConfig,
-} from "./channel-config-dal.js";
+import type { GoogleChatAudienceType, GoogleChatAuthMethod } from "./channel-config-model.js";
+import type { StoredGoogleChatChannelConfig } from "./channel-config-dal.js";
 import {
   type ChannelRegistrySpec,
   configuredSecretKeysForConfig,
