@@ -3,7 +3,7 @@ import React, { act } from "react";
 import { expect } from "vitest";
 import { setNativeValue } from "../test-utils.js";
 
-type ExtensionKind = "skill" | "mcp";
+export type ExtensionKind = "skill" | "mcp";
 
 export type ExtensionApiMock = {
   list: ReturnType<typeof import("vitest").vi.fn>;
@@ -310,13 +310,7 @@ export async function setInput(
 }
 
 export async function clickButton(container: HTMLElement, label: string): Promise<void> {
-  const activePanel = container.querySelector<HTMLElement>(
-    '[role="tabpanel"][data-state="active"]',
-  );
-  const searchRoots = activePanel ? [activePanel, container] : [container];
-  const button = searchRoots
-    .flatMap((root) => Array.from(root.querySelectorAll<HTMLButtonElement>("button")))
-    .find((candidate) => candidate.textContent?.trim() === label);
+  const button = findButtonByText(container, label);
   expect(button).toBeDefined();
   await act(async () => {
     button!.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
@@ -326,6 +320,19 @@ export async function clickButton(container: HTMLElement, label: string): Promis
     button!.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
     await Promise.resolve();
   });
+}
+
+export function findButtonByText(
+  container: HTMLElement,
+  label: string,
+): HTMLButtonElement | undefined {
+  const activePanel = container.querySelector<HTMLElement>(
+    '[role="tabpanel"][data-state="active"]',
+  );
+  const searchRoots = activePanel ? [activePanel, container] : [container];
+  return searchRoots
+    .flatMap((root) => Array.from(root.querySelectorAll<HTMLButtonElement>("button")))
+    .find((candidate) => candidate.textContent?.trim() === label);
 }
 
 export async function setSelect(

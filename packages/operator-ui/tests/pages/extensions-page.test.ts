@@ -2,7 +2,7 @@
 
 import { createElevatedModeStore, type OperatorCore } from "@tyrum/operator-core";
 import type { ManagedExtensionDetail } from "@tyrum/schemas";
-import React from "react";
+import React, { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ExtensionsPage } from "../../src/components/pages/extensions-page.js";
 import {
@@ -12,6 +12,7 @@ import {
   createBuiltinMemoryDetail,
   createMcpDetail,
   createSkillDetail,
+  findButtonByText,
   flush,
   setInput,
   setLabeledInput,
@@ -30,6 +31,8 @@ const mutationAccess = {
 
 vi.mock("../../src/components/pages/admin-http-shared.js", () => ({
   useAdminHttpClient: () => ({ extensions: extensionsApi }),
+  useAdminMutationHttpClient: () =>
+    mutationAccess.canMutate ? { extensions: extensionsApi } : null,
   useAdminMutationAccess: () => mutationAccess,
 }));
 
@@ -214,7 +217,7 @@ beforeEach(() => {
 });
 
 describe("ExtensionsPage", () => {
-  it("loads, inspects, mutates, and imports managed extensions", async () => {
+  it("loads inventories, toggles inspect, preserves per-tab expansion, mutates, and switches tabs after imports", async () => {
     const testRoot = renderIntoDocument(
       React.createElement(ExtensionsPage, { core: createCore() }),
     );
@@ -225,12 +228,40 @@ describe("ExtensionsPage", () => {
       expect(testRoot.container.textContent).toContain("Agent Review");
       expect(testRoot.container.textContent).toContain("1 skills");
       expect(testRoot.container.textContent).toContain("1 MCP servers");
+      expect(testRoot.container.textContent).not.toContain("Archive or SKILL.md URL");
+      expect(testRoot.container.textContent).not.toContain("Remote endpoint URL");
+
+      const inspectButton = findButtonByText(testRoot.container, "Inspect");
+      expect(inspectButton?.getAttribute("aria-expanded")).toBe("false");
 
       await clickButton(testRoot.container, "Inspect");
       await flush();
       expect(extensionsApi.get).toHaveBeenCalledWith("skill", "agent-review");
       expect(testRoot.container.textContent).toContain("Revision history");
-      expect(testRoot.container.textContent).toContain("Revision 2");
+      expect(findButtonByText(testRoot.container, "Collapse")?.getAttribute("aria-expanded")).toBe(
+        "true",
+      );
+
+      await clickButton(testRoot.container, "Collapse");
+      await flush();
+      expect(testRoot.container.textContent).not.toContain("Revision history");
+
+      await clickButton(testRoot.container, "Inspect");
+      await flush();
+      expect(testRoot.container.textContent).toContain("Revision history");
+
+      await clickTab(testRoot.container, "MCP Servers");
+      await flush();
+      await clickButton(testRoot.container, "Inspect");
+      await flush();
+      expect(extensionsApi.get).toHaveBeenCalledWith("mcp", "filesystem");
+      expect(testRoot.container.textContent).toContain("Filesystem MCP");
+      expect(testRoot.container.textContent).toContain("Revision history");
+
+      await clickTab(testRoot.container, "Skills");
+      await flush();
+      expect(testRoot.container.textContent).toContain("Agent Review");
+      expect(testRoot.container.textContent).toContain("Revision history");
 
       await clickButton(testRoot.container, "Disable");
       await flush();
@@ -239,6 +270,10 @@ describe("ExtensionsPage", () => {
       });
       expect(testRoot.container.textContent).toContain("disabled");
 
+      await clickTab(testRoot.container, "MCP Servers");
+      await flush();
+      await clickButton(testRoot.container, "Import Skill");
+      await flush();
       await setInput(
         testRoot.container,
         "https://example.com/skill.zip",
@@ -250,12 +285,10 @@ describe("ExtensionsPage", () => {
         url: "https://example.com/imported-skill.zip",
       });
       expect(testRoot.container.textContent).toContain("Imported Skill");
+      expect(testRoot.container.textContent).not.toContain("Archive or SKILL.md URL");
 
-      await clickTab(testRoot.container, "MCP Servers");
+      await clickButton(testRoot.container, "Import MCP Server");
       await flush();
-      expect(testRoot.container.textContent).toContain("Filesystem MCP");
-      expect(testRoot.container.textContent).toContain("managed");
-
       await setInput(
         testRoot.container,
         "@modelcontextprotocol/server-filesystem",
@@ -268,12 +301,93 @@ describe("ExtensionsPage", () => {
         npm_spec: "@modelcontextprotocol/server-memory",
       });
       expect(testRoot.container.textContent).toContain("Imported MCP");
+      expect(testRoot.container.textContent).not.toContain("npm spec");
     } finally {
       cleanupTestRoot(testRoot);
     }
   });
 
-  it("shows the elevated-mode guard when mutations are locked", async () => {
+  it("keeps only one extension expanded per list", async () => {
+    const primarySkill = createSkillDetail({
+      revisions: [
+        {
+          revision: 2,
+          enabled: true,
+          created_at: "2026-03-09T10:00:00.000Z",
+          reason: "review-detail",
+          reverted_from_revision: null,
+        },
+      ],
+    });
+    const secondarySkill = createSkillDetail({
+      key: "triage-skill",
+      name: "Triage Skill",
+      description: "Sorts incoming work",
+      manifest: {
+        meta: {
+          id: "triage-skill",
+          name: "Triage Skill",
+          version: "1.0.0",
+          description: "Sorts incoming work",
+        },
+        body: "Triage requests before escalation.",
+      },
+      revisions: [
+        {
+          revision: 1,
+          enabled: true,
+          created_at: "2026-03-09T09:00:00.000Z",
+          reason: "triage-detail",
+          reverted_from_revision: null,
+        },
+      ],
+    });
+
+    extensionsApi.list.mockImplementation(async (kind: ExtensionKind) => ({
+      items:
+        kind === "skill"
+          ? [cloneDetail(primarySkill), cloneDetail(secondarySkill)]
+          : [cloneDetail(mcpDetail)],
+    }));
+    extensionsApi.get.mockImplementation(async (kind: ExtensionKind, key: string) => ({
+      item: cloneDetail(
+        kind === "skill" && key === secondarySkill.key
+          ? secondarySkill
+          : kind === "skill"
+            ? primarySkill
+            : mcpDetail,
+      ),
+    }));
+
+    const testRoot = renderIntoDocument(
+      React.createElement(ExtensionsPage, { core: createCore() }),
+    );
+    try {
+      await flush();
+
+      await clickButton(testRoot.container, "Inspect");
+      await flush();
+      expect(testRoot.container.textContent).toContain("review-detail");
+
+      const inspectButtons = Array.from(
+        testRoot.container.querySelectorAll<HTMLButtonElement>("button"),
+      ).filter((button) => button.textContent?.trim() === "Inspect");
+      expect(inspectButtons).toHaveLength(1);
+      await act(async () => {
+        inspectButtons[0]?.click();
+        await Promise.resolve();
+      });
+      await flush();
+
+      expect(testRoot.container.textContent).not.toContain("review-detail");
+      expect(testRoot.container.textContent).toContain("triage-detail");
+      expect(testRoot.container.querySelectorAll('button[aria-expanded="true"]')).toHaveLength(1);
+    } finally {
+      cleanupTestRoot(testRoot);
+    }
+  });
+
+  it("loads inventories without admin access and keeps import disclosures collapsed by default", async () => {
     mutationAccess.canMutate = false;
     const testRoot = renderIntoDocument(
       React.createElement(ExtensionsPage, { core: createCore() }),
@@ -281,7 +395,23 @@ describe("ExtensionsPage", () => {
     try {
       await flush();
 
+      expect(testRoot.container.textContent).toContain("Agent Review");
+      expect(testRoot.container.textContent).toContain("Import Skill");
+      expect(testRoot.container.textContent).toContain("Import MCP Server");
+      expect(testRoot.container.textContent).not.toContain("Archive or SKILL.md URL");
+      expect(testRoot.container.textContent).not.toContain("Remote endpoint URL");
+
+      await clickTab(testRoot.container, "MCP Servers");
+      await flush();
+      expect(testRoot.container.textContent).toContain("Filesystem MCP");
+      await clickTab(testRoot.container, "Skills");
+      await flush();
+
+      await clickButton(testRoot.container, "Import Skill");
+      await flush();
       expect(testRoot.container.textContent).toContain("Admin access required");
+      expect(testRoot.container.textContent).toContain("Archive or SKILL.md URL");
+
       await clickButton(testRoot.container, "Authorize admin access");
       expect(mutationAccess.requestEnter).toHaveBeenCalledTimes(1);
     } finally {
