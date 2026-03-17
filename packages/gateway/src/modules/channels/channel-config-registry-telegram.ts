@@ -165,6 +165,10 @@ export const telegramSpec: ChannelRegistrySpec<StoredTelegramChannelConfig> = {
       clearSecretKeys: input.clearSecretKeys,
       required: true,
     });
+    const hasAllowedUserIds = Object.prototype.hasOwnProperty.call(
+      input.config,
+      "allowed_user_ids",
+    );
     return {
       channel: "telegram",
       account_key: input.current.account_key,
@@ -181,11 +185,13 @@ export const telegramSpec: ChannelRegistrySpec<StoredTelegramChannelConfig> = {
         });
         return webhookSecret ? { webhook_secret: webhookSecret } : {};
       })(),
-      allowed_user_ids: await resolveTelegramAllowedUsers({
-        entries: parseStringList(input.config["allowed_user_ids"]),
-        token: botToken,
-        fieldKey: "allowed_user_ids",
-      }),
+      allowed_user_ids: hasAllowedUserIds
+        ? await resolveTelegramAllowedUsers({
+            entries: parseStringList(input.config["allowed_user_ids"]),
+            token: botToken,
+            fieldKey: "allowed_user_ids",
+          })
+        : input.current.allowed_user_ids,
       pipeline_enabled: readBoolean(
         input.config,
         "pipeline_enabled",

@@ -413,21 +413,33 @@ export const discordSpec: ChannelRegistrySpec<StoredDiscordChannelConfig> = {
       clearSecretKeys: input.clearSecretKeys,
       required: true,
     });
+    const hasAllowedUserIds = Object.prototype.hasOwnProperty.call(
+      input.config,
+      "allowed_user_ids",
+    );
+    const hasAllowedChannels = Object.prototype.hasOwnProperty.call(
+      input.config,
+      "allowed_channels",
+    );
     return {
       channel: "discord",
       account_key: input.current.account_key,
       agent_key: readRequiredString(input.config, "agent_key", "Target agent"),
       ...(botToken ? { bot_token: botToken } : {}),
-      allowed_user_ids: await resolveDiscordAllowedUsers({
-        entries: parseStringList(input.config["allowed_user_ids"]),
-        token: botToken,
-        fieldKey: "allowed_user_ids",
-      }),
-      allowed_channels: await resolveDiscordAllowedChannels({
-        entries: parseStringList(input.config["allowed_channels"]),
-        token: botToken,
-        fieldKey: "allowed_channels",
-      }),
+      allowed_user_ids: hasAllowedUserIds
+        ? await resolveDiscordAllowedUsers({
+            entries: parseStringList(input.config["allowed_user_ids"]),
+            token: botToken,
+            fieldKey: "allowed_user_ids",
+          })
+        : input.current.allowed_user_ids,
+      allowed_channels: hasAllowedChannels
+        ? await resolveDiscordAllowedChannels({
+            entries: parseStringList(input.config["allowed_channels"]),
+            token: botToken,
+            fieldKey: "allowed_channels",
+          })
+        : input.current.allowed_channels,
     };
   },
   toConfiguredAccount(input) {

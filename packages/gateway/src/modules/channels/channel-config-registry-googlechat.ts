@@ -171,6 +171,7 @@ export const googleChatSpec: ChannelRegistrySpec<StoredGoogleChatChannelConfig> 
       "inline_json",
       "file_path",
     ] as const) as GoogleChatAuthMethod;
+    const hasAllowedUsers = Object.prototype.hasOwnProperty.call(input.config, "allowed_users");
     const next: StoredGoogleChatChannelConfig = {
       channel: "googlechat",
       account_key: input.current.account_key,
@@ -181,9 +182,9 @@ export const googleChatSpec: ChannelRegistrySpec<StoredGoogleChatChannelConfig> 
         "project-number",
       ] as const) as GoogleChatAudienceType,
       audience: readRequiredString(input.config, "audience", "Webhook audience"),
-      allowed_users: normalizeGoogleChatAllowedUsers(
-        parseStringList(input.config["allowed_users"]),
-      ),
+      allowed_users: hasAllowedUsers
+        ? normalizeGoogleChatAllowedUsers(parseStringList(input.config["allowed_users"]))
+        : input.current.allowed_users,
       ...(authMethod === "inline_json"
         ? {
             service_account_json: resolveSecretUpdate({
