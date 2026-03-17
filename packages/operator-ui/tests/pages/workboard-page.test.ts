@@ -17,21 +17,34 @@ import {
 } from "./workboard-page.test-support.js";
 import { cleanupTestRoot, renderIntoDocument, stubMatchMedia } from "../test-utils.js";
 
+function setSelectValue(container: HTMLElement, testId: string, value: string): void {
+  const select = container.querySelector<HTMLSelectElement>(`[data-testid="${testId}"]`);
+  expect(select).not.toBeNull();
+  select!.value = value;
+  select!.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
 describe("WorkBoardPage", () => {
-  it("shows disconnected state and reconnects", () => {
-    const { core } = createCore("disconnected");
+  it("uses global connection handling and keeps stale work visible while disconnected", async () => {
+    const workItem = makeWorkItem({ work_item_id: "wi-stale" });
+    const { core } = createCore("disconnected", undefined, {
+      items: [workItem],
+      supported: true,
+      lastSyncedAt: "2026-01-01T00:00:00.000Z",
+    });
+    const matchMedia = stubMatchMedia("(min-width: 1160px)", true);
     const testRoot = renderIntoDocument(React.createElement(WorkBoardPage, { core }));
 
     try {
-      expect(testRoot.container.textContent).toContain("Not connected");
-
-      act(() => {
-        clickButton(testRoot.container, "Reconnect");
-      });
-
-      expect(core.disconnect).toHaveBeenCalledTimes(1);
-      expect(core.connect).toHaveBeenCalledTimes(1);
+      await flushEffects();
+      expect(testRoot.container.textContent).not.toContain("Not connected");
+      expect(testRoot.container.textContent).toContain("Ship regression tests");
+      expect(testRoot.container.textContent).not.toContain("Reconnect");
+      expect(
+        testRoot.container.querySelector('[data-testid="workboard-scope-workspace"]'),
+      ).toBeNull();
     } finally {
+      matchMedia.cleanup();
       cleanupTestRoot(testRoot);
     }
   });
@@ -333,25 +346,56 @@ describe("WorkBoardPage", () => {
       );
       expect(testRoot.container.textContent).toContain("agent.from-event");
       expect(testRoot.container.textContent).toContain("work.from-event");
-
-      act(() => {
-        clickButton(testRoot.container, "Reconnect");
-      });
-      expect(core.disconnect).toHaveBeenCalledTimes(1);
-      expect(core.connect).toHaveBeenCalledTimes(1);
+      expect(testRoot.container.textContent).not.toContain("Reconnect");
     } finally {
       matchMedia.cleanup();
       cleanupTestRoot(testRoot);
     }
   });
 
-  it("uses the current workboard scope for drilldown requests", async () => {
-    const workItem = makeWorkItem({
-      work_item_id: "wi-scope",
-      agent_id: "agent-scope",
-      workspace_id: "workspace-scope",
+  it("shows agent names without keys and applies scope with the default workspace", async () => {
+    const { core, http, workboard } = createCore("connected");
+    http.agents.list.mockResolvedValueOnce({
+      agents: [
+        { agent_key: "builder", persona: { name: "" } },
+        { agent_key: "default", persona: { name: "Default Agent" } },
+      ],
     });
-    const { core, ws } = createCore(
+
+    const testRoot = renderIntoDocument(React.createElement(WorkBoardPage, { core }));
+    try {
+      await flushEffects();
+
+      const agentSelect = testRoot.container.querySelector<HTMLSelectElement>(
+        '[data-testid="workboard-scope-agent"]',
+      );
+      expect(agentSelect).not.toBeNull();
+      expect(Array.from(agentSelect!.options).map((option) => option.text)).toEqual([
+        "builder",
+        "Default Agent",
+      ]);
+      expect(testRoot.container.textContent).not.toContain("default · Default Agent");
+
+      act(() => {
+        setSelectValue(testRoot.container, "workboard-scope-agent", "builder");
+      });
+      await act(async () => {
+        clickButton(testRoot.container, "Load scope");
+        await Promise.resolve();
+      });
+
+      expect(workboard.store.setScopeKeys).toHaveBeenLastCalledWith({
+        agent_key: "builder",
+        workspace_key: "default",
+      });
+    } finally {
+      cleanupTestRoot(testRoot);
+    }
+  });
+
+  it("normalizes hidden workspace scope back to default for workboard requests", async () => {
+    const workItem = makeWorkItem({ work_item_id: "wi-scope" });
+    const { core, ws, workboard } = createCore(
       "connected",
       {
         workGet: vi.fn(async () => ({ item: workItem })),
@@ -360,16 +404,25 @@ describe("WorkBoardPage", () => {
         workSignalList: vi.fn(async () => ({ signals: [] })),
         workStateKvList: vi.fn(async () => ({ entries: [] })),
       },
-      {
-        items: [workItem],
-        scopeKeys: { agent_key: "planner", workspace_key: "ops" },
-        supported: true,
-      },
+      { scopeKeys: { agent_key: "planner", workspace_key: "ops" }, supported: true },
     );
+    workboard.store.refreshList = vi.fn(async () => {
+      workboard.setState((prev) => ({
+        ...prev,
+        items: [workItem],
+        supported: true,
+        lastSyncedAt: "2026-01-01T00:00:00.000Z",
+      }));
+    });
 
     const testRoot = renderIntoDocument(React.createElement(WorkBoardPage, { core }));
     try {
       await flushEffects();
+      expect(workboard.store.setScopeKeys).toHaveBeenCalledWith({
+        agent_key: "planner",
+        workspace_key: "default",
+      });
+      expect(workboard.store.refreshList).toHaveBeenCalledTimes(1);
 
       const scopedCard = testRoot.container.querySelector<HTMLButtonElement>(
         '[data-testid="work-item-wi-scope"]',
@@ -383,12 +436,12 @@ describe("WorkBoardPage", () => {
 
       expect(ws.workGet).toHaveBeenCalledWith({
         agent_key: "planner",
-        workspace_key: "ops",
+        workspace_key: "default",
         work_item_id: "wi-scope",
       });
       expect(ws.workArtifactList).toHaveBeenCalledWith({
         agent_key: "planner",
-        workspace_key: "ops",
+        workspace_key: "default",
         work_item_id: "wi-scope",
         limit: 200,
       });

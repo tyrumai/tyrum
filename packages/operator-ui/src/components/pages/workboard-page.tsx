@@ -54,6 +54,13 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
   const isConnected = connection.status === "connected";
   const workboard = useOperatorStore(core.workboardStore);
   const currentScopeKeys = workboard.scopeKeys;
+  const effectiveScopeKeys = useMemo(
+    () => ({
+      agent_key: currentScopeKeys.agent_key,
+      workspace_key: "default",
+    }),
+    [currentScopeKeys.agent_key],
+  );
   const desktopBoard = useAppShellMinWidth(WORKBOARD_DESKTOP_CONTENT_WIDTH_PX);
 
   const selectedIdRef = useRef<string | null>(null);
@@ -74,7 +81,16 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
 
   useEffect(() => {
     setSelectedWorkItemId(null);
-  }, [currentScopeKeys.agent_key, currentScopeKeys.workspace_key]);
+  }, [effectiveScopeKeys.agent_key, effectiveScopeKeys.workspace_key]);
+
+  useEffect(() => {
+    if (currentScopeKeys.workspace_key === effectiveScopeKeys.workspace_key) {
+      return;
+    }
+    core.workboardStore.setScopeKeys(effectiveScopeKeys);
+    if (!isConnected) return;
+    void core.workboardStore.refreshList();
+  }, [core.workboardStore, currentScopeKeys.workspace_key, effectiveScopeKeys, isConnected]);
 
   useEffect(() => {
     selectedIdRef.current = selectedWorkItemId;
@@ -113,7 +129,7 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
       setDrilldownError(null);
       try {
         const res = await core.ws.workTransition({
-          ...currentScopeKeys,
+          ...effectiveScopeKeys,
           work_item_id: selectedWorkItemId,
           status,
           reason,
@@ -130,7 +146,7 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
         setTransitionTarget(null);
       }
     },
-    [core.ws, core.workboardStore, currentScopeKeys, isConnected, selectedWorkItemId],
+    [core.ws, core.workboardStore, effectiveScopeKeys, isConnected, selectedWorkItemId],
   );
 
   useEffect(() => {
@@ -167,7 +183,7 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
       const selectedId = selectedIdRef.current;
       if (!selectedId) return;
       void core.ws
-        .workSignalGet({ ...currentScopeKeys, signal_id: event.payload.signal_id })
+        .workSignalGet({ ...effectiveScopeKeys, signal_id: event.payload.signal_id })
         .then((res) => {
           if (disposed) return;
           if (res.signal.work_item_id !== selectedIdRef.current) return;
@@ -213,7 +229,7 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
       core.ws.off("work.signal.fired", onWorkSignalFired);
       core.ws.off("work.state_kv.updated", onWorkStateKvUpdated);
     };
-  }, [core.ws, currentScopeKeys, isConnected]);
+  }, [core.ws, effectiveScopeKeys, isConnected]);
 
   useEffect(() => {
     if (!isConnected || !selectedWorkItemId) {
@@ -236,25 +252,25 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
       try {
         const [workItemRes, artifactsRes, decisionsRes, signalsRes, agentKvRes, workItemKvRes] =
           await Promise.all([
-            core.ws.workGet({ ...currentScopeKeys, work_item_id: selectedWorkItemId }),
+            core.ws.workGet({ ...effectiveScopeKeys, work_item_id: selectedWorkItemId }),
             core.ws.workArtifactList({
-              ...currentScopeKeys,
+              ...effectiveScopeKeys,
               work_item_id: selectedWorkItemId,
               limit: 200,
             }),
             core.ws.workDecisionList({
-              ...currentScopeKeys,
+              ...effectiveScopeKeys,
               work_item_id: selectedWorkItemId,
               limit: 200,
             }),
             core.ws.workSignalList({
-              ...currentScopeKeys,
+              ...effectiveScopeKeys,
               work_item_id: selectedWorkItemId,
               limit: 200,
             }),
-            core.ws.workStateKvList({ scope: makeAgentScope(currentScopeKeys) }),
+            core.ws.workStateKvList({ scope: makeAgentScope(effectiveScopeKeys) }),
             core.ws.workStateKvList({
-              scope: makeWorkItemScope(currentScopeKeys, selectedWorkItemId),
+              scope: makeWorkItemScope(effectiveScopeKeys, selectedWorkItemId),
             }),
           ]);
 
@@ -280,7 +296,7 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
     return () => {
       cancelled = true;
     };
-  }, [core.ws, currentScopeKeys, isConnected, selectedWorkItemId]);
+  }, [core.ws, effectiveScopeKeys, isConnected, selectedWorkItemId]);
 
   const tasksForSelected = selectTasksForSelectedWorkItem(
     workboard.tasksByWorkItemId,
@@ -314,10 +330,9 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
       <AppPageToolbar
         actions={
           <WorkboardToolbarActions
-            connectionStatus={connection.status}
             core={core}
             isConnected={isConnected}
-            scopeKeys={currentScopeKeys}
+            scopeKeys={effectiveScopeKeys}
           />
         }
       />
@@ -326,14 +341,6 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
         <div className="min-h-0 flex-1 overflow-hidden">
           <ScrollArea className="h-full">
             <div data-layout-content="" className="grid gap-4 px-4 py-4 md:px-5 md:py-5">
-              {!isConnected ? (
-                <Alert
-                  variant="warning"
-                  title="Not connected"
-                  description="Connect to the gateway to use WorkBoard."
-                />
-              ) : null}
-
               {workboard.error ? (
                 <Alert variant="error" title="WorkBoard error" description={workboard.error} />
               ) : null}
@@ -417,14 +424,6 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
         <div className="min-h-0 flex-1 overflow-hidden">
           <ScrollArea className="h-full">
             <div data-layout-content="" className="grid gap-4 px-4 py-4 md:px-5 md:py-5">
-              {!isConnected ? (
-                <Alert
-                  variant="warning"
-                  title="Not connected"
-                  description="Connect to the gateway to use WorkBoard."
-                />
-              ) : null}
-
               {workboard.error ? (
                 <Alert variant="error" title="WorkBoard error" description={workboard.error} />
               ) : null}

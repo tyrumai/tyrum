@@ -1,18 +1,12 @@
 import type { OperatorCore, WorkboardScopeKeys } from "@tyrum/operator-core";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "../ui/button.js";
-import { Input } from "../ui/input.js";
 import { Select } from "../ui/select.js";
-import { StatusDot, type StatusDotVariant } from "../ui/status-dot.js";
 
 type WorkboardScopeControlsProps = {
   core: OperatorCore;
   isConnected: boolean;
   scopeKeys: WorkboardScopeKeys;
-};
-
-type WorkboardToolbarActionsProps = WorkboardScopeControlsProps & {
-  connectionStatus: string;
 };
 
 type AgentOption = {
@@ -25,11 +19,8 @@ const DEFAULT_SCOPE_KEYS: WorkboardScopeKeys = {
   workspace_key: "default",
 } as const;
 
-function normalizeScopeKeys(scopeKeys: Partial<WorkboardScopeKeys>): WorkboardScopeKeys {
-  return {
-    agent_key: scopeKeys.agent_key?.trim() || DEFAULT_SCOPE_KEYS.agent_key,
-    workspace_key: scopeKeys.workspace_key?.trim() || DEFAULT_SCOPE_KEYS.workspace_key,
-  };
+function normalizeAgentKey(agentKey?: string): string {
+  return agentKey?.trim() || DEFAULT_SCOPE_KEYS.agent_key;
 }
 
 function normalizeAgentOptions(agents: unknown): AgentOption[] {
@@ -58,10 +49,7 @@ function normalizeAgentOptions(agents: unknown): AgentOption[] {
         : "";
     options.push({
       agentKey,
-      label:
-        personaName && personaName.toLowerCase() !== agentKey.toLowerCase()
-          ? `${agentKey} · ${personaName}`
-          : agentKey,
+      label: personaName || agentKey,
     });
   }
   options.sort((left, right) => left.agentKey.localeCompare(right.agentKey));
@@ -73,12 +61,12 @@ export function WorkboardScopeControls({
   isConnected,
   scopeKeys,
 }: WorkboardScopeControlsProps) {
-  const [scopeDraft, setScopeDraft] = useState<WorkboardScopeKeys>(scopeKeys);
+  const [agentKeyDraft, setAgentKeyDraft] = useState(() => normalizeAgentKey(scopeKeys.agent_key));
   const [agentOptions, setAgentOptions] = useState<AgentOption[]>([]);
 
   useEffect(() => {
-    setScopeDraft(scopeKeys);
-  }, [scopeKeys]);
+    setAgentKeyDraft(normalizeAgentKey(scopeKeys.agent_key));
+  }, [scopeKeys.agent_key]);
 
   useEffect(() => {
     let cancelled = false;
@@ -103,18 +91,21 @@ export function WorkboardScopeControls({
   }, [core.http]);
 
   const visibleAgentOptions = useMemo(() => {
-    if (agentOptions.some((option) => option.agentKey === scopeDraft.agent_key)) {
+    if (agentOptions.some((option) => option.agentKey === agentKeyDraft)) {
       return agentOptions;
     }
-    return [{ agentKey: scopeDraft.agent_key, label: scopeDraft.agent_key }, ...agentOptions];
-  }, [agentOptions, scopeDraft.agent_key]);
+    return [{ agentKey: agentKeyDraft, label: agentKeyDraft }, ...agentOptions];
+  }, [agentKeyDraft, agentOptions]);
 
   const applyScope = useCallback(async (): Promise<void> => {
-    const nextScopeKeys = normalizeScopeKeys(scopeDraft);
+    const nextScopeKeys = {
+      agent_key: normalizeAgentKey(agentKeyDraft),
+      workspace_key: DEFAULT_SCOPE_KEYS.workspace_key,
+    } satisfies WorkboardScopeKeys;
     core.workboardStore.setScopeKeys(nextScopeKeys);
     if (!isConnected) return;
     await core.workboardStore.refreshList();
-  }, [core.workboardStore, isConnected, scopeDraft]);
+  }, [agentKeyDraft, core.workboardStore, isConnected]);
 
   return (
     <div className="flex flex-wrap items-center gap-3">
@@ -122,10 +113,10 @@ export function WorkboardScopeControls({
         data-testid="workboard-scope-agent"
         aria-label="Workboard agent scope"
         className="min-w-44"
-        value={scopeDraft.agent_key}
-        onChange={(event) =>
-          setScopeDraft((prev) => ({ ...prev, agent_key: event.currentTarget.value }))
-        }
+        value={agentKeyDraft}
+        onChange={(event) => {
+          setAgentKeyDraft(event.currentTarget.value);
+        }}
       >
         {visibleAgentOptions.map((option) => (
           <option key={option.agentKey} value={option.agentKey}>
@@ -133,15 +124,6 @@ export function WorkboardScopeControls({
           </option>
         ))}
       </Select>
-      <Input
-        data-testid="workboard-scope-workspace"
-        aria-label="Workboard workspace scope"
-        className="w-36"
-        value={scopeDraft.workspace_key}
-        onChange={(event) =>
-          setScopeDraft((prev) => ({ ...prev, workspace_key: event.currentTarget.value }))
-        }
-      />
       <Button
         data-testid="workboard-scope-apply"
         variant="secondary"
@@ -156,36 +138,6 @@ export function WorkboardScopeControls({
   );
 }
 
-export function WorkboardToolbarActions({
-  connectionStatus,
-  core,
-  isConnected,
-  scopeKeys,
-}: WorkboardToolbarActionsProps) {
-  const connectionDotVariant: StatusDotVariant =
-    connectionStatus === "connected"
-      ? "success"
-      : connectionStatus === "connecting"
-        ? "warning"
-        : "neutral";
-
-  return (
-    <>
-      <WorkboardScopeControls core={core} isConnected={isConnected} scopeKeys={scopeKeys} />
-      <div className="flex items-center gap-2 text-sm text-fg-muted">
-        <StatusDot variant={connectionDotVariant} pulse={connectionStatus === "connecting"} />
-        {connectionStatus}
-      </div>
-      <Button
-        variant="secondary"
-        size="sm"
-        onClick={() => {
-          core.disconnect();
-          core.connect();
-        }}
-      >
-        Reconnect
-      </Button>
-    </>
-  );
+export function WorkboardToolbarActions(props: WorkboardScopeControlsProps) {
+  return <WorkboardScopeControls {...props} />;
 }
