@@ -215,7 +215,7 @@ function createCore(options?: {
 }
 
 describe("AgentsPage", () => {
-  it("loads managed agents, auto-selects a valid agent, and refreshes on selection changes", async () => {
+  it("loads managed agents, shows names in display surfaces, and refreshes when mobile selection changes", async () => {
     const list = vi.fn(async () => ({
       agents: [
         {
@@ -257,16 +257,32 @@ describe("AgentsPage", () => {
     );
     expect(agentButton).not.toBeNull();
     expect(agentButton?.textContent).toContain("Ada");
-    expect(agentButton?.textContent).toContain("agent-1");
-    const mobileSelect = testRoot.container.querySelector<HTMLSelectElement>(
+    expect(agentButton?.textContent).not.toContain("agent-1");
+
+    const selectedName = testRoot.container.querySelector<HTMLElement>(
+      '[data-testid="agents-selected-name"]',
+    );
+    expect(selectedName?.textContent).toContain("Feynman");
+
+    const mobileSelect = testRoot.container.querySelector<HTMLButtonElement>(
       '[data-testid="agents-select"]',
     );
-    expect(mobileSelect?.querySelector('option[value="agent-1"]')?.textContent).toBe(
-      "Ada (agent-1)",
-    );
+    expect(mobileSelect?.textContent).toContain("Feynman");
+    expect(mobileSelect?.textContent).not.toContain("default");
 
     await act(async () => {
-      agentButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      if (mobileSelect) click(mobileSelect);
+      await Promise.resolve();
+    });
+
+    const mobileOption = document.querySelector<HTMLElement>(
+      '[data-testid="agents-mobile-select-agent-1"]',
+    );
+    expect(mobileOption?.textContent).toContain("Ada");
+    expect(mobileOption?.textContent).not.toContain("agent-1");
+
+    await act(async () => {
+      if (mobileOption) click(mobileOption);
       await Promise.resolve();
     });
 
@@ -276,14 +292,20 @@ describe("AgentsPage", () => {
     cleanupTestRoot(testRoot);
   });
 
-  it("uses a wider desktop rail and avoids duplicating raw keys when no friendly name exists", async () => {
+  it("uses avatars to distinguish duplicate names without rendering raw keys", async () => {
     const list = vi.fn(async () => ({
       agents: [
         {
-          agent_key: "00000000-0000-4000-8000-000000000002",
+          agent_key: "default",
           agent_id: "11111111-1111-4111-8111-111111111111",
+          can_delete: false,
+          persona: { name: "Ada" },
+        },
+        {
+          agent_key: "agent-1",
+          agent_id: "22222222-2222-4222-8222-222222222222",
           can_delete: true,
-          persona: { name: "00000000-0000-4000-8000-000000000002" },
+          persona: { name: "Ada" },
         },
       ],
     }));
@@ -295,14 +317,41 @@ describe("AgentsPage", () => {
     const listPanel = testRoot.container.querySelector<HTMLElement>(
       '[data-testid="agents-list-panel"]',
     );
-    const agentButton = testRoot.container.querySelector<HTMLButtonElement>(
-      '[data-testid="agents-select-00000000-0000-4000-8000-000000000002"]',
+    const firstAgentButton = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="agents-select-default"]',
+    );
+    const secondAgentButton = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="agents-select-agent-1"]',
+    );
+    const firstAvatar = testRoot.container.querySelector<HTMLElement>(
+      '[data-testid="agents-avatar-default"]',
+    );
+    const secondAvatar = testRoot.container.querySelector<HTMLElement>(
+      '[data-testid="agents-avatar-agent-1"]',
     );
 
     expect(listPanel?.className).toContain("w-[clamp(220px,24vw,300px)]");
-    expect(agentButton?.textContent?.match(/00000000-0000-4000-8000-000000000002/g)?.length).toBe(
-      1,
+    expect(firstAgentButton?.textContent).toContain("Ada");
+    expect(firstAgentButton?.textContent).not.toContain("default");
+    expect(secondAgentButton?.textContent).toContain("Ada");
+    expect(secondAgentButton?.textContent).not.toContain("agent-1");
+    expect(firstAvatar?.getAttribute("data-avatar-variant")).toBe(
+      secondAvatar?.getAttribute("data-avatar-variant"),
     );
+    expect(firstAvatar?.getAttribute("data-avatar-pattern")).not.toBe(
+      secondAvatar?.getAttribute("data-avatar-pattern"),
+    );
+
+    await act(async () => {
+      secondAgentButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    const selectedName = testRoot.container.querySelector<HTMLElement>(
+      '[data-testid="agents-selected-name"]',
+    );
+    expect(selectedName?.textContent).toBe("Ada");
+    expect(testRoot.container.querySelector('[data-testid="agents-selected-key"]')).toBeNull();
 
     cleanupTestRoot(testRoot);
   });
@@ -439,6 +488,12 @@ describe("AgentsPage", () => {
       deleteButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       await Promise.resolve();
     });
+
+    const confirmDialog = document.querySelector<HTMLElement>(
+      '[data-testid="confirm-danger-dialog"]',
+    );
+    expect(confirmDialog?.textContent).toContain("Delete Ada");
+    expect(confirmDialog?.textContent).not.toContain("agent-1");
 
     const confirmCheckbox = document.querySelector<HTMLElement>(
       '[data-testid="confirm-danger-checkbox"]',

@@ -199,6 +199,11 @@ describe("AgentsPage layout", () => {
     const testRoot = renderIntoDocument(React.createElement(AgentsPage, { core }));
     await flush();
 
+    const mobileToolbar = testRoot.container.querySelector<HTMLElement>(
+      '[data-testid="agents-mobile-toolbar"]',
+    );
+    expect(mobileToolbar?.className).toContain("lg:hidden");
+
     const detailPane = testRoot.container.querySelector<HTMLDivElement>(
       '[data-testid="agents-detail-pane"]',
     );
@@ -222,6 +227,7 @@ describe("AgentsPage layout", () => {
       '[data-testid="agents-identity-header"]',
     );
     expect(identityHeader?.className).toContain("min-w-0");
+    expect(identityHeader?.className).toContain("justify-end");
 
     const identitySections = testRoot.container.querySelector<HTMLDivElement>(
       '[data-testid="agents-identity-sections"]',

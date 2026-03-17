@@ -3,7 +3,6 @@ import type { AgentStatusResponse } from "@tyrum/schemas";
 import { Bot, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useApiAction } from "../../hooks/use-api-action.js";
-import { cn } from "../../lib/cn.js";
 import {
   getActiveAgentIdsFromSessionLanes,
   resolveAgentIdForRun,
@@ -18,28 +17,21 @@ import { EmptyState } from "../ui/empty-state.js";
 import { ScrollArea } from "../ui/scroll-area.js";
 import { StatusDot } from "../ui/status-dot.js";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs.js";
+import {
+  AgentAvatar,
+  AgentListRow,
+  AgentMobilePicker,
+  type AgentOption,
+} from "./agents-page-agent-display.js";
 import { AgentIdentityPanel } from "./agents-page-identity.js";
 import { AgentsPageEditor } from "./agents-page-editor.js";
 import { RunsPage } from "./runs-page.js";
 import { useReconnectScrollArea, useReconnectTabState } from "../../reconnect-ui-state.js";
-
-type AgentOption = {
-  agentKey: string;
-  agentId: string;
-  canDelete: boolean;
-  displayName: string;
-};
 type AgentsPageTab = "identity" | "editor" | "runs";
 
 function trimAgentKey(value: string): string {
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : "default";
-}
-
-function formatAgentOptionLabel(agent: AgentOption): string {
-  return agent.displayName === agent.agentKey
-    ? agent.agentKey
-    : `${agent.displayName} (${agent.agentKey})`;
 }
 
 function normalizeAgentOptions(
@@ -175,28 +167,17 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
   const renderEditor = createMode || selectedAgentOption !== null;
   const mobileToolbarActions = (
     <div className="flex flex-wrap items-center gap-2 lg:hidden">
-      <select
-        data-testid="agents-select"
-        aria-label="Selected agent"
-        value={selectedAgentKey}
+      <AgentMobilePicker
+        agentOptions={agentOptions}
+        selectedAgentOption={selectedAgentOption}
+        selectedAgentKey={selectedAgentKey}
         disabled={agentOptions.length === 0}
-        onChange={(event) => {
+        onSelect={(agentKey) => {
           setCreateMode(false);
           setSelectionReady(true);
-          setSelectedAgentKey(event.currentTarget.value);
+          setSelectedAgentKey(agentKey);
         }}
-        className="flex h-8 w-[11rem] rounded-md border border-border bg-bg px-2 py-1 text-sm text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-0 lg:hidden"
-      >
-        {agentOptions.length === 0 ? (
-          <option value={selectedAgentKey}>{selectedAgentKey}</option>
-        ) : (
-          agentOptions.map((agent) => (
-            <option key={agent.agentKey} value={agent.agentKey}>
-              {formatAgentOptionLabel(agent)}
-            </option>
-          ))
-        )}
-      </select>
+      />
       <Button
         type="button"
         size="sm"
@@ -234,12 +215,16 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
       className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-bg"
       data-testid="agents-page"
     >
-      <AppPageToolbar actions={mobileToolbarActions} />
+      <AppPageToolbar
+        actions={mobileToolbarActions}
+        className="lg:hidden"
+        data-testid="agents-mobile-toolbar"
+      />
 
       <ConfirmDangerDialog
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
-        title={`Delete agent ${selectedAgentKey}`}
+        title={selectedAgentOption ? `Delete ${selectedAgentOption.displayName}` : "Delete agent"}
         description="This permanently removes the managed agent configuration and identity history."
         confirmLabel="Delete agent"
         isLoading={deleteAction.isLoading}
@@ -314,43 +299,17 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
                       activeAgentIds.has(agent.agentId) || activeAgentIds.has(agent.agentKey);
                     const selected = agent.agentKey === selectedAgentKey;
                     return (
-                      <button
+                      <AgentListRow
                         key={agent.agentKey}
-                        type="button"
-                        data-testid={`agents-select-${agent.agentKey}`}
-                        data-active={selected ? "true" : undefined}
-                        className={cn(
-                          "grid gap-1.5 rounded-md px-2.5 py-2 text-left transition-colors duration-150",
-                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-0",
-                          selected
-                            ? "bg-bg-subtle text-fg"
-                            : "bg-transparent text-fg-muted hover:bg-bg-subtle hover:text-fg",
-                        )}
-                        onClick={() => {
+                        agent={agent}
+                        active={active}
+                        selected={selected}
+                        onSelect={() => {
                           setCreateMode(false);
                           setSelectionReady(true);
                           setSelectedAgentKey(agent.agentKey);
                         }}
-                      >
-                        <div
-                          className="truncate text-sm font-medium text-fg"
-                          title={agent.displayName}
-                        >
-                          {agent.displayName}
-                        </div>
-                        {agent.displayName !== agent.agentKey ? (
-                          <div
-                            className="truncate font-mono text-xs text-fg-muted"
-                            title={agent.agentKey}
-                          >
-                            Key {agent.agentKey}
-                          </div>
-                        ) : null}
-                        <div className="flex items-center gap-2 text-xs opacity-80">
-                          <StatusDot variant={active ? "success" : "neutral"} pulse={active} />
-                          {active ? "Active" : "Idle"}
-                        </div>
-                      </button>
+                      />
                     );
                   })}
                 </div>
@@ -360,21 +319,38 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
         </div>
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col" data-testid="agents-detail-pane">
-          <div className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-border px-4">
+          <div
+            className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-border px-4"
+            data-testid="agents-detail-header"
+          >
             <div className="min-w-0 flex flex-wrap items-center gap-3">
-              <div
-                data-testid="agents-selected-key"
-                className="max-w-full rounded-md border border-border bg-bg-subtle px-2 py-1 font-mono text-xs text-fg break-all"
-              >
-                {selectedAgentOption?.agentKey ?? "No agent selected"}
-              </div>
-              <div className="flex items-center gap-2 text-sm text-fg-muted">
-                <StatusDot
-                  variant={selectedAgentActive ? "success" : "neutral"}
-                  pulse={selectedAgentActive}
-                />
-                {selectedAgentActive ? "Currently active" : "Currently idle"}
-              </div>
+              {selectedAgentOption ? (
+                <>
+                  <AgentAvatar
+                    agentKey={selectedAgentOption.agentKey}
+                    displayName={selectedAgentOption.displayName}
+                    className="h-8 w-8 text-sm"
+                    testId="agents-selected-avatar"
+                  />
+                  <div
+                    data-testid="agents-selected-name"
+                    className="min-w-0 truncate text-sm font-medium text-fg"
+                  >
+                    {selectedAgentOption.displayName}
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-fg-muted">
+                    <StatusDot
+                      variant={selectedAgentActive ? "success" : "neutral"}
+                      pulse={selectedAgentActive}
+                    />
+                    {selectedAgentActive ? "Currently active" : "Currently idle"}
+                  </div>
+                </>
+              ) : (
+                <div data-testid="agents-selected-name" className="text-sm text-fg-muted">
+                  No agent selected
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <Button
