@@ -22,8 +22,21 @@ vi.mock("sonner", () => ({
 }));
 
 vi.mock("../../src/components/pages/chat-page-ai-sdk-messages.js", () => ({
-  AiSdkChatMessageList: ({ messages }: { messages: UIMessage[] }) =>
-    e("div", { "data-testid": "mock-message-list" }, String(messages.length)),
+  AiSdkChatMessageList: ({
+    followRequestId,
+    messages,
+  }: {
+    followRequestId: number;
+    messages: UIMessage[];
+  }) =>
+    e(
+      "div",
+      {
+        "data-follow-request-id": String(followRequestId),
+        "data-testid": "mock-message-list",
+      },
+      String(messages.length),
+    ),
 }));
 
 function makeUseChatState(overrides?: Partial<ReturnType<typeof useChatMock>>) {
@@ -99,6 +112,11 @@ describe("AiSdkConversation", () => {
 
     await flushEffects();
     expect(onSessionMessages).toHaveBeenCalledWith([]);
+    expect(
+      testRoot.container
+        .querySelector("[data-testid='mock-message-list']")
+        ?.getAttribute("data-follow-request-id"),
+    ).toBe("0");
 
     const conversationPanel = testRoot.container.querySelector(
       "[data-testid='chat-conversation-panel']",
@@ -117,6 +135,11 @@ describe("AiSdkConversation", () => {
       { text: "hello world" },
       { body: { attached_node_id: "node-1" } },
     );
+    expect(
+      testRoot.container
+        .querySelector("[data-testid='mock-message-list']")
+        ?.getAttribute("data-follow-request-id"),
+    ).toBe("1");
     expect(draft.value).toBe("");
 
     const textToggle = Array.from(testRoot.container.querySelectorAll("button")).find(

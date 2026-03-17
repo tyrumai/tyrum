@@ -74,6 +74,7 @@ export function AiSdkConversation({
   transport: ReturnType<typeof createTyrumAiSdkChatTransport>;
 }) {
   const [draft, setDraft] = useState("");
+  const [followRequestId, setFollowRequestId] = useState(0);
   const previousStatusRef = useRef<ReturnType<typeof useChat<UIMessage>>["status"]>("ready");
   const chat = useChat<UIMessage>({
     id: session.session_id,
@@ -126,6 +127,7 @@ export function AiSdkConversation({
     }
     const attachedNodeId = await resolveAttachedNodeId();
     setDraft("");
+    setFollowRequestId((value) => value + 1);
     await chat.sendMessage(
       {
         text,
@@ -194,6 +196,7 @@ export function AiSdkConversation({
       <AiSdkChatMessageList
         approvalsById={approvalsById}
         core={core}
+        followRequestId={followRequestId}
         messages={chat.messages}
         onResolveApproval={onResolveApproval}
         renderMode={renderMode}
