@@ -7,6 +7,7 @@ import {
 } from "@tyrum/schemas";
 import { z } from "zod";
 import type { StoredChannelConfig } from "./channel-config-dal.js";
+import { normalizeUniqueStringList } from "./channel-config-model.js";
 
 export type CreateAccountInput = {
   accountKey: string;
@@ -70,15 +71,7 @@ export function parseStringList(raw: unknown): string[] {
 }
 
 export function unique(values: readonly string[]): string[] {
-  const seen = new Set<string>();
-  const normalized: string[] = [];
-  for (const value of values) {
-    const trimmed = value.trim();
-    if (!trimmed || seen.has(trimmed)) continue;
-    seen.add(trimmed);
-    normalized.push(trimmed);
-  }
-  return normalized;
+  return normalizeUniqueStringList(values);
 }
 
 export function readRequiredString(
@@ -143,12 +136,15 @@ export function resolveSecretUpdate(params: {
   clearSecretKeys: Set<string>;
   required?: boolean;
 }): string | undefined {
-  if (params.clearSecretKeys.has(params.key)) {
-    return undefined;
-  }
   const next = params.secrets[params.key]?.trim();
   if (next) {
     return next;
+  }
+  if (params.clearSecretKeys.has(params.key)) {
+    if (params.required) {
+      throw fieldError(params.key, `${params.label} is required`);
+    }
+    return undefined;
   }
   if (params.current?.trim()) {
     return params.current;

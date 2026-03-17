@@ -7,7 +7,7 @@ import {
 import { z } from "zod";
 import { safeJsonParse } from "../../utils/json.js";
 
-export function canonicalizeNumericIds(values: readonly string[]): string[] {
+export function normalizeUniqueStringList(values: readonly string[]): string[] {
   const seen = new Set<string>();
   const normalized: string[] = [];
   for (const value of values) {
@@ -19,16 +19,8 @@ export function canonicalizeNumericIds(values: readonly string[]): string[] {
   return normalized;
 }
 
-function canonicalizeStringList(values: readonly string[]): string[] {
-  const seen = new Set<string>();
-  const normalized: string[] = [];
-  for (const value of values) {
-    const trimmed = value.trim();
-    if (!trimmed || seen.has(trimmed)) continue;
-    seen.add(trimmed);
-    normalized.push(trimmed);
-  }
-  return normalized;
+export function canonicalizeNumericIds(values: readonly string[]): string[] {
+  return normalizeUniqueStringList(values);
 }
 
 const DiscordAllowedChannel = z
@@ -78,7 +70,10 @@ export const StoredDiscordChannelConfigSchema = z
       )
       .default([])
       .transform(canonicalizeNumericIds),
-    allowed_channels: z.array(DiscordAllowedChannel).default([]).transform(canonicalizeStringList),
+    allowed_channels: z
+      .array(DiscordAllowedChannel)
+      .default([])
+      .transform(normalizeUniqueStringList),
   })
   .strict();
 export type StoredDiscordChannelConfig = z.infer<typeof StoredDiscordChannelConfigSchema>;
@@ -93,7 +88,10 @@ export const StoredGoogleChatChannelConfigSchema = z
     service_account_file: z.string().trim().min(1).optional(),
     audience_type: GoogleChatAudienceType,
     audience: z.string().trim().min(1),
-    allowed_users: z.array(z.string().trim().min(1)).default([]).transform(canonicalizeStringList),
+    allowed_users: z
+      .array(z.string().trim().min(1))
+      .default([])
+      .transform(normalizeUniqueStringList),
   })
   .strict()
   .superRefine((value, ctx) => {

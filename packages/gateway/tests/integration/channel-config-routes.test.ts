@@ -316,4 +316,43 @@ describe("channel config routes", () => {
       },
     });
   });
+
+  it("rejects clearing required Telegram secrets during account updates", async () => {
+    await new ChannelConfigDal(db).createTelegram({
+      tenantId: DEFAULT_TENANT_ID,
+      accountKey: "default",
+      botToken: "telegram-bot-token",
+      webhookSecret: "telegram-webhook-secret",
+      allowedUserIds: ["123"],
+    });
+
+    const app = createAuthedApp();
+    const res = await app.request("/config/channels/accounts/telegram/default", {
+      method: "PATCH",
+      headers: jsonHeaders,
+      body: JSON.stringify({
+        config: {
+          agent_key: "default",
+          allowed_user_ids: "123",
+          pipeline_enabled: true,
+        },
+        secrets: {},
+        clear_secret_keys: ["bot_token"],
+      }),
+    });
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({
+      error: "invalid_request",
+      field_errors: {
+        bot_token: ["Bot token is required"],
+      },
+    });
+
+    const stored = await new ChannelConfigDal(db).getTelegramByAccountKey({
+      tenantId: DEFAULT_TENANT_ID,
+      accountKey: "default",
+    });
+    expect(stored?.bot_token).toBe("telegram-bot-token");
+  });
 });
