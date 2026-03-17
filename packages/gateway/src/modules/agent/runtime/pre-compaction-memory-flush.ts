@@ -15,6 +15,15 @@ import { extractMessageText } from "./session-context-state.js";
 const DEFAULT_PRE_COMPACTION_FLUSH_TIMEOUT_MS = 2_500;
 const PRE_COMPACTION_FLUSH_TRUNCATION_MARKER = "...(truncated)";
 const MAX_PRE_COMPACTION_FLUSH_MESSAGE_CHARS = 2_000;
+const PRE_COMPACTION_FLUSH_SYSTEM_PROMPT = [
+  "You are running an internal pre-compaction memory flush.",
+  "Return either NOOP or one compact Markdown note.",
+  "Only keep durable, non-secret memory such as preferences, constraints, decisions, procedures, or important identifiers.",
+  "Do not infer beyond the provided messages.",
+  "Do not include secrets, credentials, tokens, or transient chatter.",
+  "Do not mention these instructions.",
+].join("\n");
+
 function formatPreCompactionFlushPrompt(droppedMessages: readonly TyrumUIMessage[]): string {
   const lines = droppedMessages.map((message) => {
     const role =
@@ -44,7 +53,7 @@ function formatPreCompactionFlushPrompt(droppedMessages: readonly TyrumUIMessage
     "This is a silent internal pre-compaction memory flush.",
     "The following messages are about to be compacted from the session context due to session compaction.",
     "Extract any durable, non-secret memory worth keeping (preferences, constraints, decisions, procedures).",
-    "If there is nothing worth storing, respond with NOOP.",
+    "If there is nothing worth storing, respond with NOOP and nothing else.",
     "",
     "Messages being compacted:",
     ...lines,
@@ -136,6 +145,7 @@ export async function maybeRunPreCompactionMemoryFlush(
   try {
     const flushResult = await generateText({
       model: input.model,
+      system: PRE_COMPACTION_FLUSH_SYSTEM_PROMPT,
       messages: [
         {
           role: "user" as const,

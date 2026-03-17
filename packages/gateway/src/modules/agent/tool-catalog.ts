@@ -168,6 +168,13 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     description: "Fetch and normalize web content via Exa's hosted MCP server.",
     effect: "read_only",
     keywords: ["fetch", "crawl", "web", "url", "extract", "research"],
+    promptGuidance: [
+      "Use mode='raw' to fetch normalized page content when you need the full source.",
+      "Use mode='extract' with a prompt when you want a focused, grounded extraction from the fetched source.",
+    ],
+    promptExamples: [
+      '{"url":"https://example.com/spec","mode":"extract","prompt":"List the supported authentication methods."}',
+    ],
     source: "builtin_mcp",
     family: "web",
     backingServerId: "exa",
@@ -267,6 +274,14 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     description: "Dispatch a specific capability action to a connected node.",
     effect: "state_changing",
     keywords: ["node", "device", "screen", "automation", "dispatch"],
+    promptGuidance: [
+      "Inspect the capability first so you know the exact action_name and input shape.",
+      "Put action-specific arguments inside the input object.",
+      "Do not add the transport op field yourself; the dispatcher derives it from action_name.",
+    ],
+    promptExamples: [
+      '{"node_id":"node_123","capability":"tyrum.desktop.screenshot","action_name":"screenshot","input":{"display":"all"},"timeout_ms":30000}',
+    ],
     source: "builtin",
     family: "node",
     inputSchema: {

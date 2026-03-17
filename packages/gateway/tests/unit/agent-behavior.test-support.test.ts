@@ -12,7 +12,8 @@ describe("agent behavior test support", () => {
       prompt: [
         {
           role: "system",
-          content: "Session context:\nknown facts\n\nMemory digest:\nmy name is Ron",
+          content:
+            "Session state:\nknown facts\n\nPre-turn recall (mcp.memory.seed):\nmy name is Ron",
         },
         { role: "user", content: "what is my name" },
       ],
@@ -29,7 +30,7 @@ describe("agent behavior test support", () => {
         {
           role: "user",
           content: [
-            { type: "text", text: "Memory digest:\nmy name is Ron" },
+            { type: "text", text: "Pre-turn recall (mcp.memory.seed):\nmy name is Ron" },
             { type: "text", text: "what is my name" },
           ],
         },

@@ -5,6 +5,7 @@ import type {
 } from "@tyrum/schemas";
 import {
   DATA_TAG_SAFETY_PROMPT,
+  PROMPT_CONTRACT_PROMPT,
   formatIdentityPrompt,
   formatRuntimePrompt,
   formatSessionContext,
@@ -160,34 +161,39 @@ export function assemblePrompts(
 ) {
   const sessionCtx = formatSessionContext(session.context_state);
   const identityPrompt = formatIdentityPrompt(ctx.identity);
-  const skillsText = `Enabled skills:\n${formatSkillsPrompt(ctx.skills)}`;
+  const promptContractPrompt = PROMPT_CONTRACT_PROMPT;
+  const skillsText = `Skill guidance:\n${formatSkillsPrompt(ctx.skills)}`;
   const workOrchestrationText = formatWorkOrchestrationPrompt(filteredTools);
-  const toolsText = [`Available tools:\n${formatToolPrompt(filteredTools)}`, workOrchestrationText]
-    .filter((value): value is string => typeof value === "string" && value.length > 0)
-    .join("\n\n");
-  const sessionText = `Session context:\n${sessionCtx}`;
-  const automationTriggerText = automation
-    ? `Automation trigger:\n${[
+  const toolsText = `Tool contracts:\n${formatToolPrompt(filteredTools)}`;
+  const sessionText = `Session state:\n${sessionCtx.trim() || "No stored session state."}`;
+  const automationDirectiveText =
+    automation?.instruction && automation.instruction.trim().length > 0
+      ? `Automation directive:\n${automation.instruction.trim()}`
+      : undefined;
+  const automationContextText = automation
+    ? `Automation context:\n${[
         `Schedule kind: ${automation.schedule_kind ?? "unknown"}`,
         `Schedule id: ${automation.schedule_id ?? "unknown"}`,
         `Fired at: ${automation.fired_at ?? "unknown"}`,
         `Previous fired at: ${automation.previous_fired_at ?? "never"}`,
         `Delivery mode: ${automation.delivery_mode ?? "notify"}`,
-        automation.instruction ? `Instruction: ${automation.instruction}` : undefined,
-      ]
-        .filter((line): line is string => Boolean(line))
-        .join("\n")}`
+      ].join("\n")}`
     : undefined;
 
   return {
     identityPrompt,
+    promptContractPrompt,
     runtimePrompt,
     safetyPrompt: DATA_TAG_SAFETY_PROMPT,
     skillsText,
     toolsText,
+    workOrchestrationText: workOrchestrationText
+      ? `Work orchestration guidance:\n${workOrchestrationText}`
+      : undefined,
     sessionText,
     preTurnTexts: [...preTurnTexts],
-    automationTriggerText,
+    automationDirectiveText,
+    automationContextText,
   };
 }
 

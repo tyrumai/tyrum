@@ -173,7 +173,7 @@ export async function runPreTurnHydration(params: {
         continue;
       }
 
-      const text = `Pre-turn context (${tool.id}):\n${result.output}`;
+      const text = `Pre-turn recall (${tool.id}):\n${result.output}`;
       sections.push({ toolId: tool.id, text });
       reports.push({
         tool_id: tool.id,

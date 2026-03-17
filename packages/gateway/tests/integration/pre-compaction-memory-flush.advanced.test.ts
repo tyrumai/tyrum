@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
@@ -15,10 +15,30 @@ import {
   checkpointJson,
   createMockMcpManager,
   createSequencedTextLanguageModel,
+  findFlushSystemText,
   listNonTitleGenerateCalls,
   seedAgentConfig,
   usage,
 } from "./pre-compaction-memory-flush.test-support.js";
+
+vi.mock("../../src/modules/models/provider-factory.js", () => ({
+  createProviderFromNpm: (input: { providerId: string }) => ({
+    languageModel(modelId: string) {
+      return {
+        specificationVersion: "v3",
+        provider: input.providerId,
+        modelId,
+        supportedUrls: {},
+        async doGenerate() {
+          return { text: "ok" } as never;
+        },
+        async doStream() {
+          throw new Error("not implemented");
+        },
+      };
+    },
+  }),
+}));
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -184,5 +204,54 @@ describe("Pre-compaction memory flush - advanced", () => {
 
     expect(second.response.reply).toBe("a2");
     expect(elapsedTimeMs).toBeLessThan(350);
+  });
+
+  it("uses a no-inference system prompt for pre-compaction memory flushes", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-preflush-system-"));
+    container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
+    const { agentId } = await seedAgentConfig(container, { maxTurns: 1 });
+
+    const languageModel = createSequencedTextLanguageModel(["FLUSH_OK"]);
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel,
+      mcpManager: createMockMcpManager() as unknown as ConstructorParameters<
+        typeof AgentRuntime
+      >[0]["mcpManager"],
+    });
+
+    const session = await container.sessionDal.getOrCreate({
+      connectorKey: "test",
+      providerThreadId: "thread-system-prompt",
+      containerKind: "channel",
+    });
+    await container.sessionDal.appendTurn({
+      tenantId: session.tenant_id,
+      sessionId: session.session_id,
+      userMessage: "first",
+      assistantMessage: "a1",
+      timestamp: new Date().toISOString(),
+    });
+
+    const prepared = await prepareTurn((runtime as any).prepareTurnDeps, {
+      channel: "test",
+      thread_id: "thread-system-prompt",
+      message: "second",
+    });
+
+    await maybeRunPreCompactionMemoryFlush(
+      { db: container.db, logger: container.logger, agentId },
+      {
+        ctx: prepared.ctx,
+        session: prepared.session,
+        model: prepared.model,
+        droppedMessages: prepared.session.messages,
+      },
+    );
+
+    const systemText = findFlushSystemText(languageModel);
+    expect(systemText).toContain("Return either NOOP or one compact Markdown note.");
+    expect(systemText).toContain("Do not infer beyond the provided messages.");
   });
 });

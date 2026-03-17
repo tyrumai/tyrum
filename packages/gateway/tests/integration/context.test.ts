@@ -6,6 +6,25 @@ import { createTestApp } from "./helpers.js";
 import { simulateReadableStream } from "ai";
 import { MockLanguageModelV3 } from "ai/test";
 
+vi.mock("../../src/modules/models/provider-factory.js", () => ({
+  createProviderFromNpm: (input: { providerId: string }) => ({
+    languageModel(modelId: string) {
+      return {
+        specificationVersion: "v3",
+        provider: input.providerId,
+        modelId,
+        supportedUrls: {},
+        async doGenerate() {
+          return { text: "ok" } as never;
+        },
+        async doStream() {
+          throw new Error("not implemented");
+        },
+      };
+    },
+  }),
+}));
+
 async function writeWorkspace(home: string): Promise<void> {
   await mkdir(join(home, "agents/default"), { recursive: true });
 }
@@ -158,8 +177,8 @@ describe("/context", () => {
     expect(ctxPayload.report!.thread_id).toBe("dm-1");
     expect(ctxPayload.report!.system_prompt.chars).toBeGreaterThan(10);
 
-    const messagePart = ctxPayload.report!.user_parts.find((p) => p.id === "message");
-    expect(messagePart).toEqual({ id: "message", chars: "hello".length });
+    const messagePart = ctxPayload.report!.user_parts.find((p) => p.id === "user_request");
+    expect(messagePart).toEqual({ id: "user_request", chars: "hello".length });
 
     expect(ctxPayload.report!.system_prompt.sections?.length).toBeGreaterThan(0);
     expect(ctxPayload.report!.selected_tools).toContain("read");

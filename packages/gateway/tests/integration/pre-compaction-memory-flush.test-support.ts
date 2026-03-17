@@ -21,6 +21,29 @@ export function extractUserPromptText(prompt: unknown[] | undefined): string {
     .join("\n");
 }
 
+export function extractSystemPromptText(prompt: unknown[] | undefined): string {
+  return (prompt ?? [])
+    .filter((msg): msg is { role: string; content: unknown } =>
+      Boolean(msg && typeof msg === "object"),
+    )
+    .filter((msg) => msg.role === "system")
+    .flatMap((msg) => {
+      if (typeof msg.content === "string") {
+        return [msg.content];
+      }
+      return Array.isArray(msg.content)
+        ? msg.content
+            .filter((part): part is { type: "text"; text: string } =>
+              Boolean(
+                part && typeof part === "object" && (part as { type?: unknown }).type === "text",
+              ),
+            )
+            .map((part) => part.text)
+        : [];
+    })
+    .join("\n");
+}
+
 export function checkpointJson(handoffMd: string): string {
   return JSON.stringify({
     goal: "",
@@ -75,6 +98,13 @@ export function countFlushCalls(languageModel: MockLanguageModelV3): number {
   return listNonTitleGenerateCalls(languageModel).filter((entry) =>
     extractUserPromptText(entry.prompt).includes("silent internal pre-compaction memory flush"),
   ).length;
+}
+
+export function findFlushSystemText(languageModel: MockLanguageModelV3): string {
+  const call = listNonTitleGenerateCalls(languageModel).find((entry) =>
+    extractUserPromptText(entry.prompt).includes("silent internal pre-compaction memory flush"),
+  );
+  return extractSystemPromptText(call?.prompt);
 }
 
 function titleGenerateResult() {

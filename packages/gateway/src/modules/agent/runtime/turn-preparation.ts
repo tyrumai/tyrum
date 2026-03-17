@@ -102,6 +102,33 @@ export type PrepareTurnDeps = {
   setCleanupAtMs: (ms: number) => void;
 };
 
+function mergeAutomationContextSections(
+  metadataSection: string | undefined,
+  digestBody: string | undefined,
+): string | undefined {
+  const sections: string[] = [];
+
+  if (metadataSection) {
+    const normalized = metadataSection.replace(/^Automation context:\n?/, "").trim();
+    if (normalized.length > 0) {
+      sections.push(normalized);
+    }
+  }
+
+  if (digestBody) {
+    const normalized = digestBody.trim();
+    if (normalized.length > 0) {
+      sections.push(normalized);
+    }
+  }
+
+  if (sections.length === 0) {
+    return undefined;
+  }
+
+  return `Automation context:\n${sections.join("\n\n")}`;
+}
+
 export async function prepareTurn(
   deps: PrepareTurnDeps,
   input: AgentTurnRequestT,
@@ -192,7 +219,7 @@ export async function prepareTurn(
             workspace_id: session.workspace_id,
           },
         });
-  const workFocusText = `Work focus digest:\n${workFocusDigest}`;
+  const workFocusText = `Active work state:\n${workFocusDigest}`;
   const runtimePrompt = guardianReviewRequest
     ? undefined
     : await buildRuntimePrompt({
@@ -355,14 +382,17 @@ export async function prepareTurn(
   const promptParts = guardianReviewRequest
     ? {
         identityPrompt: "",
+        promptContractPrompt: "",
         runtimePromptText: "",
         safetyPrompt: "",
-        skillsText: "Enabled skills:\nGuardian review mode disabled skills.",
-        toolsText: "Available tools:\nguardian_review_decision",
+        skillsText: "Skill guidance:\nGuardian review mode disables normal skill guidance.",
+        toolsText: "Tool contracts:\nguardian_review_decision",
+        workOrchestrationText: undefined as string | undefined,
         sessionText:
-          "Session context:\nGuardian review mode relies on the supplied review request evidence.",
+          "Session state:\nGuardian review mode relies on the supplied review request evidence.",
         preTurnTexts: [] as string[],
-        automationTriggerText: undefined as string | undefined,
+        automationDirectiveText: undefined as string | undefined,
+        automationContextText: undefined as string | undefined,
       }
     : (() => {
         const assembled = assemblePrompts(
@@ -375,13 +405,16 @@ export async function prepareTurn(
         );
         return {
           identityPrompt: assembled.identityPrompt,
+          promptContractPrompt: assembled.promptContractPrompt,
           runtimePromptText: assembled.runtimePrompt,
           safetyPrompt: assembled.safetyPrompt,
           skillsText: assembled.skillsText,
           toolsText: assembled.toolsText,
+          workOrchestrationText: assembled.workOrchestrationText,
           sessionText: assembled.sessionText,
           preTurnTexts: assembled.preTurnTexts,
-          automationTriggerText: assembled.automationTriggerText,
+          automationDirectiveText: assembled.automationDirectiveText,
+          automationContextText: assembled.automationContextText,
         };
       })();
 
@@ -389,14 +422,18 @@ export async function prepareTurn(
     ? buildGuardianReviewSystemPrompt(guardianReviewRequest.subjectType)
     : [
         promptParts.identityPrompt,
+        promptParts.promptContractPrompt,
         promptParts.runtimePromptText,
         promptParts.safetyPrompt,
         sandboxPrompt,
+        promptParts.skillsText,
+        promptParts.toolsText,
+        promptParts.workOrchestrationText,
       ]
         .filter((value): value is string => typeof value === "string" && value.length > 0)
         .join("\n\n");
 
-  const automationDigestText =
+  const automationDigestBody =
     guardianReviewRequest || !automation
       ? undefined
       : await buildAutomationDigest({
@@ -408,6 +445,9 @@ export async function prepareTurn(
           },
           automation,
         });
+  const automationContextText = guardianReviewRequest
+    ? undefined
+    : mergeAutomationContextSections(promptParts.automationContextText, automationDigestBody);
 
   const validatedReport = buildContextReport({
     session,
@@ -417,16 +457,19 @@ export async function prepareTurn(
     filteredTools,
     systemPrompt,
     identityPrompt: promptParts.identityPrompt,
+    promptContractPrompt: promptParts.promptContractPrompt,
+    runtimePrompt: promptParts.runtimePromptText,
     safetyPrompt: promptParts.safetyPrompt,
     sandboxPrompt,
     skillsText: promptParts.skillsText,
     toolsText: promptParts.toolsText,
+    workOrchestrationText: promptParts.workOrchestrationText,
     sessionText: promptParts.sessionText,
     workFocusText,
     preTurnTexts: [...promptParts.preTurnTexts],
     preTurnReports: preTurnHydration.reports,
-    automationTriggerText: promptParts.automationTriggerText,
-    automationDigestText,
+    automationDirectiveText: promptParts.automationDirectiveText,
+    automationContextText,
     memorySummary: preTurnHydration.memory,
     automation,
     logger: deps.opts.container.logger,
@@ -451,16 +494,14 @@ export async function prepareTurn(
   const userContent: Array<{ type: "text"; text: string }> = guardianReviewRequest
     ? [{ type: "text", text: resolved.message }]
     : [
-        { type: "text", text: promptParts.skillsText },
-        { type: "text", text: promptParts.toolsText },
         { type: "text", text: promptParts.sessionText },
         { type: "text", text: workFocusText },
         ...promptParts.preTurnTexts.map((text) => ({ type: "text" as const, text })),
-        ...(promptParts.automationTriggerText
-          ? [{ type: "text" as const, text: promptParts.automationTriggerText }]
+        ...(promptParts.automationDirectiveText
+          ? [{ type: "text" as const, text: promptParts.automationDirectiveText }]
           : []),
-        ...(automationDigestText ? [{ type: "text" as const, text: automationDigestText }] : []),
-        { type: "text", text: resolved.message },
+        ...(automationContextText ? [{ type: "text" as const, text: automationContextText }] : []),
+        { type: "text", text: `User request:\n${resolved.message}` },
       ];
 
   return {

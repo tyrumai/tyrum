@@ -8,19 +8,20 @@ import { simulateReadableStream } from "ai";
 import type { NormalizedThreadMessage } from "@tyrum/schemas";
 
 export const TITLE_PROMPT_TEXT = "Write a concise session title.";
-export const PRETURN_MEMORY_SECTION_LABEL = "Pre-turn context (mcp.memory.seed):";
+export const PRETURN_MEMORY_SECTION_LABEL = "Pre-turn recall (mcp.memory.seed):";
 const PROMPT_ROLE_MARKER_PREFIX = "[[role:";
 const PROMPT_PART_MARKER_PREFIX = "[[part:";
 
 const PROMPT_SECTION_LABELS = [
-  "Enabled skills:",
-  "Available tools:",
-  "Session context:",
-  "Work focus digest:",
+  "Skill guidance:",
+  "Tool contracts:",
+  "Session state:",
+  "Active work state:",
   "Memory digest:",
   PRETURN_MEMORY_SECTION_LABEL,
-  "Automation trigger:",
-  "Automation digest:",
+  "Automation directive:",
+  "Automation context:",
+  "User request:",
 ] as const;
 
 function flattenPromptPart(part: unknown): string {
@@ -203,7 +204,10 @@ function buildPromptAwareInput(options: LanguageModelV3CallOptions): PromptAware
     const latestUserPart = latestUserEntry.content.findLast(
       (part) => flattenPromptPart(part).length > 0,
     );
-    return latestUserPart ? flattenPromptPart(latestUserPart) : "";
+    const latestText = latestUserPart ? flattenPromptPart(latestUserPart) : "";
+    return latestText.startsWith("User request:\n")
+      ? latestText.slice("User request:\n".length)
+      : latestText;
   })();
   const systemText = flattenPromptContent(systemEntry?.content);
   return {

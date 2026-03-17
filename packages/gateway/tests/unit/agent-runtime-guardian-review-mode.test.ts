@@ -14,6 +14,25 @@ import {
   teardownTestEnv,
 } from "./agent-runtime.test-helpers.js";
 
+vi.mock("../../src/modules/models/provider-factory.js", () => ({
+  createProviderFromNpm: (input: { providerId: string }) => ({
+    languageModel(modelId: string) {
+      return {
+        specificationVersion: "v3",
+        provider: input.providerId,
+        modelId,
+        supportedUrls: {},
+        async doGenerate() {
+          return { text: "ok" } as never;
+        },
+        async doStream() {
+          throw new Error("not implemented");
+        },
+      };
+    },
+  }),
+}));
+
 function usage() {
   return {
     inputTokens: { total: 10, noCache: 10, cacheRead: undefined, cacheWrite: undefined },
@@ -115,8 +134,13 @@ describe("AgentRuntime guardian review mode", () => {
       system_prompt: {
         sections: [
           { id: "identity", chars: 0 },
+          { id: "prompt_contract", chars: 0 },
+          { id: "runtime", chars: 0 },
           { id: "safety", chars: 0 },
           { id: "sandbox", chars: 0 },
+          { id: "skill_guidance", chars: expect.any(Number) },
+          { id: "tool_contracts", chars: expect.any(Number) },
+          { id: "work_orchestration", chars: 0 },
         ],
       },
     });

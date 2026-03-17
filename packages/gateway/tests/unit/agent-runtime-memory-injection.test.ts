@@ -31,6 +31,25 @@ vi.mock("ai", async (importOriginal) => {
   };
 });
 
+vi.mock("../../src/modules/models/provider-factory.js", () => ({
+  createProviderFromNpm: (input: { providerId: string }) => ({
+    languageModel(modelId: string) {
+      return {
+        specificationVersion: "v3",
+        provider: input.providerId,
+        modelId,
+        supportedUrls: {},
+        async doGenerate() {
+          return { text: "ok" } as never;
+        },
+        async doStream() {
+          throw new Error("not implemented");
+        },
+      };
+    },
+  }),
+}));
+
 describe("AgentRuntime (memory MCP pre-turn injection)", () => {
   let homeDir: string | undefined;
   let container: GatewayContainer | undefined;
@@ -115,7 +134,7 @@ describe("AgentRuntime (memory MCP pre-turn injection)", () => {
       tool_id: "mcp.memory.seed",
       status: "succeeded",
     });
-    expect(stitched).toContain("Pre-turn context (mcp.memory.seed):");
+    expect(stitched).toContain("Pre-turn recall (mcp.memory.seed):");
     expect(stitched).toContain('<data source="tool">');
     expect(stitched).toContain(item.memory_item_id);
   });
@@ -165,7 +184,7 @@ describe("AgentRuntime (memory MCP pre-turn injection)", () => {
     expect(call?.system).not.toContain("Turn memory protocol:");
     expect(call?.system).not.toContain("memory_turn_decision");
     expect(call?.tools).not.toHaveProperty("memory_turn_decision");
-    expect(stitched).not.toContain("Pre-turn context (mcp.memory.seed):");
+    expect(stitched).not.toContain("Pre-turn recall (mcp.memory.seed):");
   });
 
   it("still injects pre-turn memory context when memory MCP settings are partial", async () => {
@@ -230,7 +249,7 @@ describe("AgentRuntime (memory MCP pre-turn injection)", () => {
       tool_id: "mcp.memory.seed",
       status: "succeeded",
     });
-    expect(stitched).toContain("Pre-turn context (mcp.memory.seed):");
+    expect(stitched).toContain("Pre-turn recall (mcp.memory.seed):");
   });
 
   it("injects fact recall for punctuated identity questions", async () => {
@@ -294,7 +313,7 @@ describe("AgentRuntime (memory MCP pre-turn injection)", () => {
       | undefined;
     const stitched = (call?.messages?.[0]?.content ?? []).map((part) => part.text).join("\n\n");
 
-    expect(stitched).toContain("Pre-turn context (mcp.memory.seed):");
+    expect(stitched).toContain("Pre-turn recall (mcp.memory.seed):");
     expect(stitched).toContain(item.memory_item_id);
     expect(stitched).toContain("key=user_name");
     expect(stitched).toContain('value="Ron"');

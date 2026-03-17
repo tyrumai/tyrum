@@ -48,6 +48,25 @@ vi.mock("ai", async (importOriginal) => {
   };
 });
 
+vi.mock("../../src/modules/models/provider-factory.js", () => ({
+  createProviderFromNpm: (input: { providerId: string }) => ({
+    languageModel(modelId: string) {
+      return {
+        specificationVersion: "v3",
+        provider: input.providerId,
+        modelId,
+        supportedUrls: {},
+        async doGenerate() {
+          return { text: "ok" } as never;
+        },
+        async doStream() {
+          throw new Error("not implemented");
+        },
+      };
+    },
+  }),
+}));
+
 describe("AgentRuntime (WorkBoard integration)", () => {
   let homeDir: string | undefined;
   let container: GatewayContainer | undefined;
@@ -192,7 +211,7 @@ describe("AgentRuntime (WorkBoard integration)", () => {
     const content = call?.messages?.[0]?.content ?? [];
     const stitched = content.map((part) => part.text).join("\n\n");
 
-    expect(stitched).toContain("Work focus digest:");
+    expect(stitched).toContain("Active work state:");
     expect(stitched).toContain(workItemId);
     expect(stitched).toContain("Focus digest work item");
   });

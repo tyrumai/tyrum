@@ -11,6 +11,8 @@ export interface ToolDescriptor {
   effect: ToolEffect;
   keywords: readonly string[];
   inputSchema?: Record<string, unknown>;
+  promptGuidance?: readonly string[];
+  promptExamples?: readonly string[];
   source?: ToolSource;
   family?: string;
   backingServerId?: string;

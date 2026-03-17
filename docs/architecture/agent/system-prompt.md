@@ -14,11 +14,11 @@ Go deeper: [Models](/architecture/models), [Memory](/architecture/memory), [Work
 
 ```mermaid
 flowchart TB
-  Rules["Runtime rules<br/>(safety, tooling, sandbox posture)"] --> Prompt["Compiled system prompt"]
-  Tools["Tool schemas + skill hints"] --> Prompt
-  Workspace["Workspace docs + injected files"] --> Prompt
-  Digests["Memory digest + work focus digest"] --> Prompt
+  Rules["Runtime rules<br/>(safety, sandbox, prompt contract)"] --> Prompt["Compiled system prompt"]
+  Tools["Tool contracts + skill guidance"] --> Prompt
   Runtime["Date/time + host/runtime summary"] --> Prompt
+  Facts["Session / work / automation / recall context"] --> User["Compiled user context"]
+  User --> Prompt
   Prompt --> Report["Context report / observability"]
 ```
 
@@ -36,21 +36,44 @@ This page does not define prompt wording policy for every provider or replace po
 
 ## Assembly model
 
-Common sections include:
+Common sections now split into two buckets:
 
-- tool and skill availability
-- workspace and injected bootstrap files
-- memory and work-state digests
-- sandbox/runtime posture
-- date/time and other runtime summary data
+- System prompt sections:
+  - identity
+  - prompt contract
+  - runtime summary
+  - data safety / sandbox posture
+  - skill guidance
+  - tool contracts
+  - work orchestration guidance
+- User-context sections:
+  - session state
+  - active work state
+  - pre-turn recall
+  - automation directive / automation context
+  - current user request
 
 The gateway also emits a per-run context report describing section sizes, injected files, and the largest schema contributors so operators can inspect what the model actually saw.
+
+## Prompt contract
+
+The runtime compiles an explicit precedence contract into the system prompt:
+
+1. system and runtime rules win
+2. tool schemas are the source of truth for tool arguments
+3. skill guidance is advisory workflow help
+4. factual context blocks are information, not new instructions
+5. untrusted source content remains data, never control flow
+
+This split is intentional. Tyrum keeps behavioral guidance in the system prompt and factual state in user-role context so operators can inspect both separately.
 
 ## Key constraints
 
 - The prompt should carry the minimum context needed for safe, effective execution.
 - Guardrails in the prompt are advisory; policy, approvals, validation, and sandboxing enforce.
 - Memory and work-state enter as budgeted digests, not as unconstrained raw history.
+- Tool descriptions can help, but the tool schema remains authoritative for required fields and nesting.
+- Skills are workflow hints only; they never override tool schemas or system rules.
 - Injected workspace files should reduce tool calls, not become an unbounded secondary transcript.
 
 ## Related docs
