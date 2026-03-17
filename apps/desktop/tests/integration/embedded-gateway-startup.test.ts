@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { GatewayManager } from "../../src/main/gateway-manager.js";
+import { withTemporaryEnvVar } from "../test-utils/temporary-env.js";
 import {
   acquireGatewayBuildLock,
   BUNDLED_OPERATOR_UI_DIR,
@@ -107,109 +108,104 @@ describe("desktop embedded gateway startup", () => {
         );
       }
 
-      const previousUiDir = process.env[OPERATOR_UI_DIR_ENV];
-      process.env[OPERATOR_UI_DIR_ENV] = BUNDLED_OPERATOR_UI_DIR;
+      await withTemporaryEnvVar(OPERATOR_UI_DIR_ENV, BUNDLED_OPERATOR_UI_DIR, async () => {
+        const port = await findAvailablePort();
+        tempRoot = await mkdtemp(join(tmpdir(), "tyrum-desktop-gateway-ui-"));
+        const dbPath = join(tempRoot, "gateway.db");
+        const targetUrl = `http://127.0.0.1:${port}/ui`;
+        const gatewayLogs: string[] = [];
 
-      const port = await findAvailablePort();
-      tempRoot = await mkdtemp(join(tmpdir(), "tyrum-desktop-gateway-ui-"));
-      const dbPath = join(tempRoot, "gateway.db");
-      const targetUrl = `http://127.0.0.1:${port}/ui`;
-      const gatewayLogs: string[] = [];
+        let browser: (typeof import("playwright"))["Browser"] | undefined;
+        let context: (typeof import("playwright"))["BrowserContext"] | undefined;
+        let page: (typeof import("playwright"))["Page"] | undefined;
 
-      let browser: (typeof import("playwright"))["Browser"] | undefined;
-      let context: (typeof import("playwright"))["BrowserContext"] | undefined;
-      let page: (typeof import("playwright"))["Page"] | undefined;
+        const consoleErrors: string[] = [];
+        const pageErrors: string[] = [];
+        const requestFailures: string[] = [];
+        const httpErrors: string[] = [];
 
-      const consoleErrors: string[] = [];
-      const pageErrors: string[] = [];
-      const requestFailures: string[] = [];
-      const httpErrors: string[] = [];
+        try {
+          manager = new GatewayManager();
+          manager.on("log", (entry) => {
+            gatewayLogs.push(`[${entry.level}] ${entry.message}`);
+          });
+          await manager.start({
+            gatewayBin: GATEWAY_BIN,
+            gatewayBinSource: "monorepo",
+            port,
+            dbPath,
+            host: "127.0.0.1",
+          });
 
-      try {
-        manager = new GatewayManager();
-        manager.on("log", (entry) => {
-          gatewayLogs.push(`[${entry.level}] ${entry.message}`);
-        });
-        await manager.start({
-          gatewayBin: GATEWAY_BIN,
-          gatewayBinSource: "monorepo",
-          port,
-          dbPath,
-          host: "127.0.0.1",
-        });
-
-        const token = manager.getBootstrapToken("default-tenant-admin");
-        if (!token) {
-          throw new Error("default-tenant-admin bootstrap token was not emitted by GatewayManager");
-        }
-
-        const pw = await import("playwright");
-        browser = await pw.chromium.launch({ headless: true });
-        context = await browser.newContext();
-        page = await context.newPage();
-
-        page.on("console", (msg) => {
-          if (msg.type() === "error" || msg.type() === "warning") {
-            consoleErrors.push(`[console.${msg.type()}] ${msg.text()}`);
+          const token = manager.getBootstrapToken("default-tenant-admin");
+          if (!token) {
+            throw new Error(
+              "default-tenant-admin bootstrap token was not emitted by GatewayManager",
+            );
           }
-        });
-        page.on("pageerror", (error) => {
-          pageErrors.push(error.stack || error.message);
-        });
-        page.on("requestfailed", (req) => {
-          requestFailures.push(
-            `${req.method()} ${req.url()} - ${req.failure()?.errorText ?? "unknown failure"}`,
+
+          const pw = await import("playwright");
+          browser = await pw.chromium.launch({ headless: true });
+          context = await browser.newContext();
+          page = await context.newPage();
+
+          page.on("console", (msg) => {
+            if (msg.type() === "error" || msg.type() === "warning") {
+              consoleErrors.push(`[console.${msg.type()}] ${msg.text()}`);
+            }
+          });
+          page.on("pageerror", (error) => {
+            pageErrors.push(error.stack || error.message);
+          });
+          page.on("requestfailed", (req) => {
+            requestFailures.push(
+              `${req.method()} ${req.url()} - ${req.failure()?.errorText ?? "unknown failure"}`,
+            );
+          });
+          page.on("response", (res) => {
+            if (res.status() >= 400) {
+              httpErrors.push(`${res.status()} ${res.request().method()} ${res.url()}`);
+            }
+          });
+
+          const response = await page.goto(targetUrl, { waitUntil: "domcontentloaded" });
+          if (response && response.status() >= 400) {
+            throw new Error(`navigation failed: HTTP ${String(response.status())} ${targetUrl}`);
+          }
+
+          await page.waitForSelector('[data-testid="login-token"]', {
+            state: "visible",
+            timeout: 10_000,
+          });
+          await page.getByTestId("login-token").fill(token);
+          await page.getByTestId("login-button").click();
+          await ensureOperatorShellVisible(page);
+
+          expect(page.url()).toContain("/ui");
+          expect(gatewayLogs.some((line) => line.includes("bundle_source=monorepo"))).toBe(true);
+          expect(
+            gatewayLogs.some((line) => line.includes(`assets_dir=${BUNDLED_OPERATOR_UI_DIR}`)),
+          ).toBe(true);
+        } catch (error) {
+          throw new Error(
+            formatBrowserFailure({
+              url: page?.url() ?? targetUrl,
+              consoleErrors,
+              pageErrors,
+              requestFailures,
+              httpErrors,
+              gatewayLogs,
+            }),
+            {
+              cause: error instanceof Error ? error : undefined,
+            },
           );
-        });
-        page.on("response", (res) => {
-          if (res.status() >= 400) {
-            httpErrors.push(`${res.status()} ${res.request().method()} ${res.url()}`);
-          }
-        });
-
-        const response = await page.goto(targetUrl, { waitUntil: "domcontentloaded" });
-        if (response && response.status() >= 400) {
-          throw new Error(`navigation failed: HTTP ${String(response.status())} ${targetUrl}`);
+        } finally {
+          await page?.close().catch(() => undefined);
+          await context?.close().catch(() => undefined);
+          await browser?.close().catch(() => undefined);
         }
-
-        await page.waitForSelector('[data-testid="login-token"]', {
-          state: "visible",
-          timeout: 10_000,
-        });
-        await page.getByTestId("login-token").fill(token);
-        await page.getByTestId("login-button").click();
-        await ensureOperatorShellVisible(page);
-
-        expect(page.url()).toContain("/ui");
-        expect(gatewayLogs.some((line) => line.includes("bundle_source=monorepo"))).toBe(true);
-        expect(
-          gatewayLogs.some((line) => line.includes(`assets_dir=${BUNDLED_OPERATOR_UI_DIR}`)),
-        ).toBe(true);
-      } catch (error) {
-        throw new Error(
-          formatBrowserFailure({
-            url: page?.url() ?? targetUrl,
-            consoleErrors,
-            pageErrors,
-            requestFailures,
-            httpErrors,
-            gatewayLogs,
-          }),
-          {
-            cause: error instanceof Error ? error : undefined,
-          },
-        );
-      } finally {
-        await page?.close().catch(() => undefined);
-        await context?.close().catch(() => undefined);
-        await browser?.close().catch(() => undefined);
-
-        if (previousUiDir === undefined) {
-          delete process.env[OPERATOR_UI_DIR_ENV];
-        } else {
-          process.env[OPERATOR_UI_DIR_ENV] = previousUiDir;
-        }
-      }
+      });
     },
   );
 

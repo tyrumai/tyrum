@@ -17,6 +17,9 @@ describe("stage-gateway-bin script", () => {
       "const electronNativeBuildEnv = createElectronNativeBuildEnv(process.env);",
     );
     expect(script).toContain("env: electronNativeBuildEnv");
+    expect(script).toContain("const prebuildInstallScript = resolvePrebuildInstallScript");
+    expect(script).toContain("const nodeGypScript = resolveWorkspaceNodeGypScript();");
+    expect(script).toContain("process.execPath,");
   });
 
   it("uses Windows shell handling for pnpm deploy and preserves spawn diagnostics", () => {
@@ -25,6 +28,9 @@ describe("stage-gateway-bin script", () => {
     expect(script).toContain('const isWindows = process.platform === "win32";');
     expect(script).toContain("shell: isWindows");
     expect(script).toContain("function formatDeployFailure(result)");
+    expect(script).toContain("result.error ? `spawn error:");
+    expect(script).toContain("function formatNativeBuildFailure(prefix, result)");
+    expect(script).toContain("result.signal ? `signal:");
     expect(script).toContain("result.error ? `spawn error:");
   });
 });

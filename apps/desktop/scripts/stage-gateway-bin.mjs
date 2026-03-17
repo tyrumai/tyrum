@@ -5,6 +5,7 @@ import {
   lstatSync,
   mkdirSync,
   readdirSync,
+  realpathSync,
   unlinkSync,
   rmSync,
 } from "node:fs";
@@ -51,6 +52,46 @@ function formatDeployFailure(result) {
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+function formatNativeBuildFailure(prefix, result) {
+  return [
+    prefix,
+    result.status === null ? "exit code: null" : `exit code: ${String(result.status)}`,
+    result.signal ? `signal: ${String(result.signal)}` : undefined,
+    result.error ? `spawn error: ${result.error.message}` : undefined,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function resolvePrebuildInstallScript(packageDir) {
+  const resolvedPackageDir = realpathSync(packageDir);
+  const candidates = [
+    join(resolvedPackageDir, "../prebuild-install/bin.js"),
+    join(resolvedPackageDir, "node_modules/prebuild-install/bin.js"),
+    join(packageDir, "node_modules/prebuild-install/bin.js"),
+  ];
+
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return candidate;
+  }
+
+  throw new Error(`Failed to locate prebuild-install for better-sqlite3 at ${packageDir}.`);
+}
+
+function resolveWorkspaceNodeGypScript() {
+  const directNodeGyp = join(repoRoot, "node_modules/node-gyp/bin/node-gyp.js");
+  if (existsSync(directNodeGyp)) return directNodeGyp;
+
+  const pnpmStoreDir = join(repoRoot, "node_modules/.pnpm");
+  for (const entry of readdirSync(pnpmStoreDir)) {
+    if (!entry.startsWith("node-gyp@")) continue;
+    const candidate = join(pnpmStoreDir, entry, "node_modules/node-gyp/bin/node-gyp.js");
+    if (existsSync(candidate)) return candidate;
+  }
+
+  throw new Error(`Failed to locate node-gyp in workspace install under ${pnpmStoreDir}.`);
 }
 
 let deploy = spawnSync(pnpmCmd, [...deployArgsBase, targetDir], {
@@ -120,13 +161,14 @@ const electronTarget = (() => {
 })();
 
 const betterSqlite3Dir = join(targetDir, "node_modules/better-sqlite3");
-const prebuildInstallBin = join(betterSqlite3Dir, "node_modules/.bin/prebuild-install");
+const prebuildInstallScript = resolvePrebuildInstallScript(betterSqlite3Dir);
 const electronNativeBuildEnv = createElectronNativeBuildEnv(process.env);
 
 // Prefer prebuilt binaries for Electron; fall back to node-gyp rebuild.
 const prebuildInstall = spawnSync(
-  process.platform === "win32" ? `${prebuildInstallBin}.cmd` : prebuildInstallBin,
+  process.execPath,
   [
+    prebuildInstallScript,
     "--runtime",
     "electron",
     "--target",
@@ -144,9 +186,11 @@ const prebuildInstall = spawnSync(
   },
 );
 if (prebuildInstall.status !== 0) {
+  const nodeGypScript = resolveWorkspaceNodeGypScript();
   const rebuild = spawnSync(
-    process.platform === "win32" ? "node-gyp.cmd" : "node-gyp",
+    process.execPath,
     [
+      nodeGypScript,
       "rebuild",
       "--release",
       `--target=${electronTarget}`,
@@ -161,9 +205,10 @@ if (prebuildInstall.status !== 0) {
   );
   if (rebuild.status !== 0) {
     throw new Error(
-      `Failed to rebuild better-sqlite3 for Electron ${electronTarget} (exit code ${String(
-        rebuild.status,
-      )}).`,
+      formatNativeBuildFailure(
+        `Failed to rebuild better-sqlite3 for Electron ${electronTarget}.`,
+        rebuild,
+      ),
     );
   }
 }
