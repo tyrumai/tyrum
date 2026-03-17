@@ -26,8 +26,6 @@ jobs:
         run: bash scripts/check-public-docs.sh
 
       - uses: pnpm/action-setup@v4
-        with:
-          version: 10
 
       - uses: actions/setup-node@v6
         with:

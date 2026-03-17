@@ -21,6 +21,7 @@ import {
   packagedExecutableCandidates,
   resolvePackagedExecutablePath,
 } from "./packaged-executable-path.js";
+import { runWithLock } from "./run-with-lock.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -464,15 +465,12 @@ describe("desktop full Electron process smoke", () => {
     "launches desktop main process and starts embedded gateway",
     { timeout: 300_000 },
     async () => {
-      const releaseBuildLock = acquireGatewayBuildLock();
-      try {
+      await runWithLock(acquireGatewayBuildLock, async () => {
         ensureBuildArtifacts();
-      } finally {
-        releaseBuildLock();
-      }
 
-      const launch = buildElectronLaunch(DESKTOP_MAIN_ENTRYPOINT, NEEDS_VIRTUAL_DISPLAY);
-      await runDesktopGatewaySmoke(launch, { VITE_DEV_SERVER_URL: "about:blank" });
+        const launch = buildElectronLaunch(DESKTOP_MAIN_ENTRYPOINT, NEEDS_VIRTUAL_DISPLAY);
+        await runDesktopGatewaySmoke(launch, { VITE_DEV_SERVER_URL: "about:blank" });
+      });
     },
   );
 
@@ -480,15 +478,12 @@ describe("desktop full Electron process smoke", () => {
     "launches the packaged desktop app and starts the embedded gateway",
     { timeout: 600_000 },
     async () => {
-      const releaseBuildLock = acquireGatewayBuildLock();
-      try {
+      await runWithLock(acquireGatewayBuildLock, async () => {
         ensureReleaseArtifacts();
-      } finally {
-        releaseBuildLock();
-      }
 
-      const launch = buildPackagedAppLaunch(NEEDS_VIRTUAL_DISPLAY);
-      await runDesktopGatewaySmoke(launch, {});
+        const launch = buildPackagedAppLaunch(NEEDS_VIRTUAL_DISPLAY);
+        await runDesktopGatewaySmoke(launch, {});
+      });
     },
   );
 });
