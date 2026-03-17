@@ -24,6 +24,7 @@ const migrationsSourceDir = join(desktopRoot, "../../packages/gateway/migrations
 
 const targetDir = join(desktopRoot, "dist/gateway");
 const migrationsTargetDir = join(targetDir, "migrations");
+const isWindows = process.platform === "win32";
 
 if (!existsSync(sourcePath)) {
   throw new Error(
@@ -38,13 +39,25 @@ if (!existsSync(migrationsSourceDir)) {
 rmSync(targetDir, { recursive: true, force: true });
 mkdirSync(dirname(targetDir), { recursive: true });
 
-const pnpmCmd = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+const pnpmCmd = isWindows ? "pnpm.cmd" : "pnpm";
 const deployArgsBase = ["--ignore-scripts", "--filter", "@tyrum/gateway", "deploy", "--prod"];
+
+function formatDeployFailure(result) {
+  return [
+    `Failed to stage gateway dependencies (pnpm deploy exit code ${String(result.status)}).`,
+    result.error ? `spawn error: ${result.error.message}` : undefined,
+    result.stdout?.trim() ? `stdout:\n${result.stdout.trim()}` : undefined,
+    result.stderr?.trim() ? `stderr:\n${result.stderr.trim()}` : undefined,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
 
 let deploy = spawnSync(pnpmCmd, [...deployArgsBase, targetDir], {
   stdio: "pipe",
   cwd: repoRoot,
   encoding: "utf8",
+  shell: isWindows,
 });
 
 if (deploy.status !== 0) {
@@ -59,6 +72,7 @@ if (deploy.status !== 0) {
     deploy = spawnSync(pnpmCmd, [...deployArgsBase, "--legacy", targetDir], {
       stdio: "inherit",
       cwd: repoRoot,
+      shell: isWindows,
     });
   } else {
     process.stdout.write(stdout);
@@ -67,9 +81,7 @@ if (deploy.status !== 0) {
 }
 
 if (deploy.status !== 0) {
-  throw new Error(
-    `Failed to stage gateway dependencies (pnpm deploy exit code ${String(deploy.status)}).`,
-  );
+  throw new Error(formatDeployFailure(deploy));
 }
 
 // pnpm deploy may create workspace symlinks that are valid in-repo but broken

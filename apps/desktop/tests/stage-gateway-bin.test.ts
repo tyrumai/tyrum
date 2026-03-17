@@ -18,4 +18,13 @@ describe("stage-gateway-bin script", () => {
     );
     expect(script).toContain("env: electronNativeBuildEnv");
   });
+
+  it("uses Windows shell handling for pnpm deploy and preserves spawn diagnostics", () => {
+    const script = readFileSync(stageGatewayBinPath, "utf8");
+
+    expect(script).toContain('const isWindows = process.platform === "win32";');
+    expect(script).toContain("shell: isWindows");
+    expect(script).toContain("function formatDeployFailure(result)");
+    expect(script).toContain("result.error ? `spawn error:");
+  });
 });
