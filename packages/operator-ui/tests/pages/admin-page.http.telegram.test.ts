@@ -15,6 +15,8 @@ import {
   jsonResponse,
   renderAdminHttpConfigurePage,
   switchHttpTab,
+  waitForEnabledTestId,
+  waitForTestId,
 } from "./admin-page.http.test-support.js";
 
 afterEach(() => {
@@ -29,7 +31,10 @@ describe("ConfigurePage (HTTP) channel configs", () => {
     const page = renderAdminHttpConfigurePage(core);
 
     await switchHttpTab(page.container, "admin-http-tab-routing-config");
-    await flush();
+    const toggleButton = await waitForEnabledTestId<HTMLButtonElement>(
+      page.container,
+      "channels-instance-toggle-default",
+    );
 
     expect(page.container.textContent).toContain("Configured channels");
     expect(page.container.textContent).toContain("default");
@@ -37,7 +42,7 @@ describe("ConfigurePage (HTTP) channel configs", () => {
       page.container.querySelector("[data-testid='channels-instance-default-bot-token']"),
     ).toBeNull();
 
-    click(getByTestId<HTMLButtonElement>(page.container, "channels-instance-toggle-default"));
+    click(toggleButton);
     await flush();
 
     expect(
@@ -78,38 +83,41 @@ describe("ConfigurePage (HTTP) channel configs", () => {
 
     const page = renderAdminHttpConfigurePage(core);
     await switchHttpTab(page.container, "admin-http-tab-routing-config");
-    await flush();
+    const addChannelButton = await waitForEnabledTestId<HTMLButtonElement>(
+      page.container,
+      "channels-instance-add-open",
+    );
 
-    click(getByTestId<HTMLButtonElement>(page.container, "channels-instance-add-open"));
-    await flush();
+    click(addChannelButton);
+    const dialog = await waitForTestId<HTMLElement>(
+      document.body,
+      "channels-instance-create-dialog",
+    );
 
     act(() => {
       setNativeValue(
-        getByTestId<HTMLInputElement>(document.body, "channels-instance-create-account-key"),
+        getByTestId<HTMLInputElement>(dialog, "channels-instance-create-account-key"),
         "alerts",
       );
       setNativeValue(
-        getByTestId<HTMLInputElement>(document.body, "channels-instance-create-bot-token"),
+        getByTestId<HTMLInputElement>(dialog, "channels-instance-create-bot-token"),
         "alerts-bot-token",
       );
       setNativeValue(
-        getByTestId<HTMLInputElement>(document.body, "channels-instance-create-webhook-secret"),
+        getByTestId<HTMLInputElement>(dialog, "channels-instance-create-webhook-secret"),
         "alerts-webhook-secret",
       );
       setNativeValue(
-        getByTestId<HTMLTextAreaElement>(
-          document.body,
-          "channels-instance-create-allowed-user-ids",
-        ),
+        getByTestId<HTMLTextAreaElement>(dialog, "channels-instance-create-allowed-user-ids"),
         "9001\n9002",
       );
     });
     await flush();
 
-    click(getByTestId<HTMLElement>(document.body, "channels-instance-create-pipeline-enabled"));
+    click(getByTestId<HTMLElement>(dialog, "channels-instance-create-pipeline-enabled"));
     await flush();
     await clickAndFlush(
-      getByTestId<HTMLButtonElement>(document.body, "channels-instance-create-save"),
+      await waitForEnabledTestId<HTMLButtonElement>(dialog, "channels-instance-create-save"),
     );
 
     expect(writeSpy).toHaveBeenCalledTimes(1);
@@ -144,9 +152,12 @@ describe("ConfigurePage (HTTP) channel configs", () => {
 
     const page = renderAdminHttpConfigurePage(core);
     await switchHttpTab(page.container, "admin-http-tab-routing-config");
-    await flush();
+    const toggleButton = await waitForEnabledTestId<HTMLButtonElement>(
+      page.container,
+      "channels-instance-toggle-default",
+    );
 
-    click(getByTestId<HTMLButtonElement>(page.container, "channels-instance-toggle-default"));
+    click(toggleButton);
     await flush();
 
     act(() => {
@@ -198,14 +209,21 @@ describe("ConfigurePage (HTTP) channel configs", () => {
 
     const page = renderAdminHttpConfigurePage(core);
     await switchHttpTab(page.container, "admin-http-tab-routing-config");
+    click(
+      await waitForEnabledTestId<HTMLButtonElement>(page.container, "channels-instance-toggle-ops"),
+    );
     await flush();
-
-    click(getByTestId<HTMLButtonElement>(page.container, "channels-instance-toggle-ops"));
-    await flush();
-    click(getByTestId<HTMLButtonElement>(page.container, "channels-instance-delete-open-ops"));
-    await flush();
-    click(getByTestId<HTMLElement>(document.body, "confirm-danger-checkbox"));
-    await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "confirm-danger-confirm"));
+    click(
+      await waitForEnabledTestId<HTMLButtonElement>(
+        page.container,
+        "channels-instance-delete-open-ops",
+      ),
+    );
+    const confirmDialog = await waitForTestId<HTMLElement>(document.body, "confirm-danger-dialog");
+    click(getByTestId<HTMLElement>(confirmDialog, "confirm-danger-checkbox"));
+    await clickAndFlush(
+      await waitForEnabledTestId<HTMLButtonElement>(confirmDialog, "confirm-danger-confirm"),
+    );
 
     expect(writeSpy).toHaveBeenCalledTimes(1);
     expect(page.container.querySelector("[data-testid='channels-instance-card-ops']")).toBeNull();

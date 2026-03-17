@@ -12,7 +12,6 @@ import {
   clickAndFlush,
   createAdminHttpTestCore,
   expectAuthorizedJsonRequest,
-  expectPresent,
   flush,
   getByTestId,
   jsonResponse,
@@ -20,6 +19,9 @@ import {
   renderAdminHttpConfigurePage,
   setSelectValue,
   switchHttpTab,
+  waitForEnabledTestId,
+  waitForQuerySelector,
+  waitForTestId,
 } from "./admin-page.http.test-support.js";
 
 afterEach(() => {
@@ -88,7 +90,10 @@ describe("ConfigurePage (HTTP) routing config", () => {
     const page = renderAdminHttpConfigurePage(core);
 
     await switchHttpTab(page.container, "admin-http-tab-routing-config");
-    await flush();
+    await waitForQuerySelector<HTMLButtonElement>(
+      page.container,
+      '[aria-label="Remove Support room"]',
+    );
 
     expect(page.container.textContent).toContain("Support room");
 
@@ -129,16 +134,21 @@ describe("ConfigurePage (HTTP) routing config", () => {
 
     const page = renderAdminHttpConfigurePage(core);
     await switchHttpTab(page.container, "admin-http-tab-routing-config");
-    await flush();
+    const addRuleButton = await waitForEnabledTestId<HTMLButtonElement>(
+      page.container,
+      "channels-add-open",
+    );
 
-    click(getByTestId<HTMLButtonElement>(page.container, "channels-add-open"));
-    await flush();
-    setSelectValue(getByTestId<HTMLSelectElement>(document.body, "channels-rule-kind"), "thread");
+    click(addRuleButton);
+    const dialog = await waitForTestId<HTMLElement>(document.body, "channels-rule-dialog");
+    setSelectValue(getByTestId<HTMLSelectElement>(dialog, "channels-rule-kind"), "thread");
     setSelectValue(
-      getByTestId<HTMLSelectElement>(document.body, "channels-rule-thread"),
+      getByTestId<HTMLSelectElement>(dialog, "channels-rule-thread"),
       JSON.stringify(["ops", "tg-123"]),
     );
-    await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "channels-rule-save"));
+    await clickAndFlush(
+      await waitForEnabledTestId<HTMLButtonElement>(dialog, "channels-rule-save"),
+    );
     await flush();
 
     expect(routingConfigUpdate).toHaveBeenCalledTimes(0);
@@ -148,6 +158,12 @@ describe("ConfigurePage (HTTP) routing config", () => {
 
   it("adds an account-scoped default route from the structured dialog", async () => {
     const { core } = createAdminHttpTestCore();
+    const originalListChannelConfigs = core.http.routingConfig.listChannelConfigs;
+    core.http.routingConfig.listChannelConfigs = vi.fn(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      return await originalListChannelConfigs();
+    });
     const { writeSpy } = stubAdminHttpFetch(core, async (input: RequestInfo | URL, init) => {
       expectAuthorizedJsonRequest(input, init, {
         url: "http://example.test/routing/config",
@@ -174,11 +190,16 @@ describe("ConfigurePage (HTTP) routing config", () => {
 
     const page = renderAdminHttpConfigurePage(core);
     await switchHttpTab(page.container, "admin-http-tab-routing-config");
-    await flush();
+    const addRuleButton = await waitForEnabledTestId<HTMLButtonElement>(
+      page.container,
+      "channels-add-open",
+    );
 
-    click(getByTestId<HTMLButtonElement>(page.container, "channels-add-open"));
-    await flush();
-    await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "channels-rule-save"));
+    click(addRuleButton);
+    const dialog = await waitForTestId<HTMLElement>(document.body, "channels-rule-dialog");
+    await clickAndFlush(
+      await waitForEnabledTestId<HTMLButtonElement>(dialog, "channels-rule-save"),
+    );
 
     expect(writeSpy).toHaveBeenCalledTimes(1);
     cleanupAdminHttpPage(page);
@@ -208,15 +229,17 @@ describe("ConfigurePage (HTTP) routing config", () => {
 
     const page = renderAdminHttpConfigurePage(core);
     await switchHttpTab(page.container, "admin-http-tab-routing-config");
-    await flush();
-
     click(
-      expectPresent(
-        page.container.querySelector<HTMLButtonElement>('[aria-label="Remove Support room"]'),
+      await waitForQuerySelector<HTMLButtonElement>(
+        page.container,
+        '[aria-label="Remove Support room"]',
       ),
     );
-    click(getByTestId<HTMLElement>(document.body, "confirm-danger-checkbox"));
-    await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "confirm-danger-confirm"));
+    const confirmDialog = await waitForTestId<HTMLElement>(document.body, "confirm-danger-dialog");
+    click(getByTestId<HTMLElement>(confirmDialog, "confirm-danger-checkbox"));
+    await clickAndFlush(
+      await waitForEnabledTestId<HTMLButtonElement>(confirmDialog, "confirm-danger-confirm"),
+    );
     await flush();
 
     expect(routingConfigUpdate).toHaveBeenCalledTimes(0);
@@ -237,15 +260,17 @@ describe("ConfigurePage (HTTP) routing config", () => {
 
     const page = renderAdminHttpConfigurePage(core);
     await switchHttpTab(page.container, "admin-http-tab-routing-config");
-    await flush();
-
     click(
-      expectPresent(
-        page.container.querySelector<HTMLButtonElement>('[aria-label="Revert to revision 1"]'),
+      await waitForQuerySelector<HTMLButtonElement>(
+        page.container,
+        '[aria-label="Revert to revision 1"]',
       ),
     );
-    click(getByTestId<HTMLElement>(document.body, "confirm-danger-checkbox"));
-    await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "confirm-danger-confirm"));
+    const confirmDialog = await waitForTestId<HTMLElement>(document.body, "confirm-danger-dialog");
+    click(getByTestId<HTMLElement>(confirmDialog, "confirm-danger-checkbox"));
+    await clickAndFlush(
+      await waitForEnabledTestId<HTMLButtonElement>(confirmDialog, "confirm-danger-confirm"),
+    );
     await flush();
 
     expect(routingConfigRevert).toHaveBeenCalledTimes(0);
