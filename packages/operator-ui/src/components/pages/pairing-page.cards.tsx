@@ -8,7 +8,7 @@ import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
-import { Card, CardContent, CardFooter, CardHeader } from "../ui/card.js";
+import { Card } from "../ui/card.js";
 import { Checkbox } from "../ui/checkbox.js";
 import { Label } from "../ui/label.js";
 import { RadioGroup, RadioGroupItem } from "../ui/radio-group.js";
@@ -29,17 +29,19 @@ import {
 
 type PairingTrustLevel = "local" | "remote";
 
-export function PendingPairingCard({
-  core,
-  pairing,
-  inventory,
-  attachmentKind,
-}: {
+type PendingPairingDetailsProps = {
   core: OperatorCore;
   pairing: Pairing;
   inventory?: NodeInventoryEntry;
   attachmentKind: AttachmentKind;
-}) {
+};
+
+export function PendingPairingDetails({
+  core,
+  pairing,
+  inventory,
+  attachmentKind,
+}: PendingPairingDetailsProps) {
   const mountedRef = useMountedRef();
   const { canMutate, requestEnter } = useAdminMutationAccess(core);
 
@@ -119,43 +121,39 @@ export function PendingPairingCard({
   };
 
   return (
-    <Card
-      data-testid={`pairing-card-${pairing.pairing_id}`}
-      className={cn(attachmentKind === "local" && "border-primary/40 bg-primary/5")}
-    >
-      <CardHeader className="pb-2.5">
-        <div className="grid gap-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="text-sm font-medium text-fg">Node request</div>
-            <Badge variant={statusDisplay.variant}>{statusDisplay.label}</Badge>
-          </div>
-          <div className="text-sm text-fg-muted">
-            Node <span className="break-all font-medium text-fg">{pairing.node.node_id}</span>
-          </div>
-          {pairing.node.label ? (
-            <div className="text-xs text-fg-muted">{pairing.node.label}</div>
-          ) : null}
-          <NodeInventoryBadges
-            pairingId={pairing.pairing_id}
-            inventory={inventory}
-            attachmentKind={attachmentKind}
-          />
-          <NodeDetails node={pairing.node} requestedAt={pairing.requested_at} />
-          {takeoverUrl ? (
-            <Button asChild size="sm" variant="outline" className="w-fit">
-              <a
-                data-testid={`pairing-takeover-${pairing.pairing_id}`}
-                href={takeoverUrl}
-                target="_blank"
-                rel="noreferrer noopener"
-              >
-                Open takeover
-              </a>
-            </Button>
-          ) : null}
+    <div className="grid gap-6">
+      <div className="grid gap-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="text-sm font-medium text-fg">Node request</div>
+          <Badge variant={statusDisplay.variant}>{statusDisplay.label}</Badge>
         </div>
-      </CardHeader>
-      <CardContent className="grid gap-6">
+        <div className="text-sm text-fg-muted">
+          Node <span className="break-all font-medium text-fg">{pairing.node.node_id}</span>
+        </div>
+        {pairing.node.label ? (
+          <div className="text-xs text-fg-muted">{pairing.node.label}</div>
+        ) : null}
+        <NodeInventoryBadges
+          pairingId={pairing.pairing_id}
+          inventory={inventory}
+          attachmentKind={attachmentKind}
+        />
+        <NodeDetails node={pairing.node} requestedAt={pairing.requested_at} />
+        {takeoverUrl ? (
+          <Button asChild size="sm" variant="outline" className="w-fit">
+            <a
+              data-testid={`pairing-takeover-${pairing.pairing_id}`}
+              href={takeoverUrl}
+              target="_blank"
+              rel="noreferrer noopener"
+            >
+              Open takeover
+            </a>
+          </Button>
+        ) : null}
+      </div>
+
+      <div className="grid gap-6">
         <ReviewContext
           motivation={pairing.motivation}
           review={pairing.latest_review}
@@ -257,9 +255,10 @@ export function PendingPairingCard({
               : "Guardian review is in progress."}
           </div>
         )}
-      </CardContent>
+      </div>
+
       {actionable ? (
-        <CardFooter className="gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button
             data-testid={`pairing-approve-${pairing.pairing_id}`}
             isLoading={busy === "approve"}
@@ -281,23 +280,48 @@ export function PendingPairingCard({
           >
             Deny
           </Button>
-        </CardFooter>
+        </div>
       ) : null}
-    </Card>
+    </div>
   );
 }
 
-export function ApprovedPairingCard({
+export function PendingPairingCard({
   core,
   pairing,
   inventory,
   attachmentKind,
-}: {
+}: PendingPairingDetailsProps) {
+  return (
+    <Card
+      data-testid={`pairing-card-${pairing.pairing_id}`}
+      className={cn(attachmentKind === "local" && "border-primary/40 bg-primary/5")}
+    >
+      <div className="grid gap-6 p-4 sm:p-5">
+        <PendingPairingDetails
+          core={core}
+          pairing={pairing}
+          inventory={inventory}
+          attachmentKind={attachmentKind}
+        />
+      </div>
+    </Card>
+  );
+}
+
+type ApprovedPairingDetailsProps = {
   core: OperatorCore;
   pairing: Pairing;
   inventory?: NodeInventoryEntry;
   attachmentKind: AttachmentKind;
-}) {
+};
+
+export function ApprovedPairingDetails({
+  core,
+  pairing,
+  inventory,
+  attachmentKind,
+}: ApprovedPairingDetailsProps) {
   const mountedRef = useMountedRef();
   const { canMutate, requestEnter } = useAdminMutationAccess(core);
 
@@ -324,40 +348,37 @@ export function ApprovedPairingCard({
   };
 
   return (
-    <Card
-      data-testid={`pairing-card-${pairing.pairing_id}`}
-      className={cn(attachmentKind === "local" && "border-primary/40 bg-primary/5")}
-    >
-      <CardHeader className="pb-2.5">
-        <div className="grid gap-1">
-          <div className="text-sm font-medium text-fg">Trusted node</div>
-          <div className="text-sm text-fg-muted">
-            Node <span className="break-all font-medium text-fg">{pairing.node.node_id}</span>
-          </div>
-          {pairing.node.label ? (
-            <div className="text-xs text-fg-muted">{pairing.node.label}</div>
-          ) : null}
-          <NodeInventoryBadges
-            pairingId={pairing.pairing_id}
-            inventory={inventory}
-            attachmentKind={attachmentKind}
-          />
-          <NodeDetails node={pairing.node} />
-          {pairing.trust_level ? (
-            <div className="text-sm text-fg-muted">
-              Trust level <span className="font-medium text-fg">{pairing.trust_level}</span>
-            </div>
-          ) : null}
+    <div className="grid gap-6">
+      <div className="grid gap-1">
+        <div className="text-sm font-medium text-fg">Trusted node</div>
+        <div className="text-sm text-fg-muted">
+          Node <span className="break-all font-medium text-fg">{pairing.node.node_id}</span>
         </div>
-      </CardHeader>
-      <CardContent className="grid gap-6">
+        {pairing.node.label ? (
+          <div className="text-xs text-fg-muted">{pairing.node.label}</div>
+        ) : null}
+        <NodeInventoryBadges
+          pairingId={pairing.pairing_id}
+          inventory={inventory}
+          attachmentKind={attachmentKind}
+        />
+        <NodeDetails node={pairing.node} />
+        {pairing.trust_level ? (
+          <div className="text-sm text-fg-muted">
+            Trust level <span className="font-medium text-fg">{pairing.trust_level}</span>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="grid gap-6">
         <ReviewContext
           motivation={pairing.motivation}
           review={pairing.latest_review}
           testIdPrefix={`pairing-${pairing.pairing_id}`}
         />
-      </CardContent>
-      <CardFooter>
+      </div>
+
+      <div>
         <Button
           variant="danger"
           data-testid={`pairing-revoke-${pairing.pairing_id}`}
@@ -368,7 +389,30 @@ export function ApprovedPairingCard({
         >
           Revoke
         </Button>
-      </CardFooter>
+      </div>
+    </div>
+  );
+}
+
+export function ApprovedPairingCard({
+  core,
+  pairing,
+  inventory,
+  attachmentKind,
+}: ApprovedPairingDetailsProps) {
+  return (
+    <Card
+      data-testid={`pairing-card-${pairing.pairing_id}`}
+      className={cn(attachmentKind === "local" && "border-primary/40 bg-primary/5")}
+    >
+      <div className="grid gap-6 p-4 sm:p-5">
+        <ApprovedPairingDetails
+          core={core}
+          pairing={pairing}
+          inventory={inventory}
+          attachmentKind={attachmentKind}
+        />
+      </div>
     </Card>
   );
 }

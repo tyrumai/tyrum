@@ -12,14 +12,14 @@ const PLATFORM_LABELS: Record<string, string> = {
   win32: "Windows",
 };
 
-interface NodeMeta {
+export interface NodeMeta {
   platform: string | null;
   version: string | null;
   mode: string | null;
   ip: string | null;
 }
 
-function extractNodeMeta(metadata: unknown): NodeMeta {
+export function extractNodeMeta(metadata: unknown): NodeMeta {
   const empty: NodeMeta = { platform: null, version: null, mode: null, ip: null };
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return empty;
   const record = metadata as Record<string, unknown>;
@@ -153,12 +153,12 @@ export function resolveAttachmentKind(
   return "lane";
 }
 
-export function NodeInventoryBadges({
-  pairingId,
+export function ConnectionBadges({
+  id,
   inventory,
   attachmentKind,
 }: {
-  pairingId: number;
+  id?: string | number;
   inventory?: NodeInventoryEntry;
   attachmentKind: AttachmentKind;
 }) {
@@ -168,7 +168,7 @@ export function NodeInventoryBadges({
     <div className="mt-1 flex flex-wrap items-center gap-2">
       {inventory ? (
         <Badge
-          data-testid={`pairing-connection-${pairingId}`}
+          data-testid={id === undefined ? undefined : `pairing-connection-${String(id)}`}
           variant={inventory.connected ? "success" : "outline"}
         >
           {inventory.connected ? "Connected" : "Offline"}
@@ -176,17 +176,32 @@ export function NodeInventoryBadges({
       ) : null}
       {attachmentKind === "local" ? (
         <Badge
-          data-testid={`pairing-attached-local-${pairingId}`}
+          data-testid={id === undefined ? undefined : `pairing-attached-local-${String(id)}`}
           className="border-primary/25 bg-primary/10 text-primary"
         >
           Attached to this UI
         </Badge>
       ) : null}
       {attachmentKind === "lane" ? (
-        <Badge data-testid={`pairing-attached-lane-${pairingId}`} variant="outline">
+        <Badge
+          data-testid={id === undefined ? undefined : `pairing-attached-lane-${String(id)}`}
+          variant="outline"
+        >
           Attached to lane
         </Badge>
       ) : null}
     </div>
   );
+}
+
+export function NodeInventoryBadges({
+  pairingId,
+  inventory,
+  attachmentKind,
+}: {
+  pairingId: number;
+  inventory?: NodeInventoryEntry;
+  attachmentKind: AttachmentKind;
+}) {
+  return <ConnectionBadges id={pairingId} inventory={inventory} attachmentKind={attachmentKind} />;
 }
