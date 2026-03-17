@@ -18,7 +18,7 @@ export const STATUS_LABELS: Record<WorkItem["status"], string> = {
 export function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="grid gap-2">
-      <SectionHeading>{title}</SectionHeading>
+      <SectionHeading className="font-semibold">{title}</SectionHeading>
       {children}
     </div>
   );
@@ -155,7 +155,9 @@ export function WorkStatusPanel({
     <Card>
       <CardContent className="grid gap-2.5 pt-4">
         <div className="flex items-center justify-between gap-2">
-          <SectionHeading as="div">{STATUS_LABELS[status]}</SectionHeading>
+          <SectionHeading as="div" className="font-semibold">
+            {STATUS_LABELS[status]}
+          </SectionHeading>
           <Badge variant="outline">{items.length}</Badge>
         </div>
         <WorkStatusList items={items} selectedWorkItemId={selectedWorkItemId} onSelect={onSelect} />

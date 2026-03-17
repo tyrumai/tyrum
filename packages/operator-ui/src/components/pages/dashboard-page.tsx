@@ -282,7 +282,9 @@ export function DashboardPage({
       >
         <Card>
           <CardHeader className="pb-0">
-            <SectionHeading as="h3">System Status</SectionHeading>
+            <SectionHeading as="h3" className="font-semibold">
+              System Status
+            </SectionHeading>
           </CardHeader>
           <CardContent className="divide-y divide-border">
             <StatusRow
@@ -338,7 +340,9 @@ export function DashboardPage({
 
         <Card>
           <CardHeader className="pb-0">
-            <SectionHeading as="h3">Security</SectionHeading>
+            <SectionHeading as="h3" className="font-semibold">
+              Security
+            </SectionHeading>
           </CardHeader>
           <CardContent className="divide-y divide-border">
             <StatusRow
@@ -382,7 +386,9 @@ export function DashboardPage({
       {/* Recent Activity */}
       <Card>
         <CardHeader className="pb-0">
-          <SectionHeading as="h3">Recent Activity</SectionHeading>
+          <SectionHeading as="h3" className="font-semibold">
+            Recent Activity
+          </SectionHeading>
         </CardHeader>
         <CardContent>
           {recentEvents.length === 0 ? (

@@ -180,7 +180,9 @@ export function WorkDistributionBar({
   return (
     <Card className="min-w-0">
       <CardHeader className="flex-row items-center justify-between pb-2">
-        <SectionHeading as="h3">Work Distribution</SectionHeading>
+        <SectionHeading as="h3" className="font-semibold">
+          Work Distribution
+        </SectionHeading>
         <span className="text-sm text-fg-muted">{total} total</span>
       </CardHeader>
       <CardContent>
@@ -271,7 +273,9 @@ export function ConfigHealthCard({
       <CardHeader className="pb-2.5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="grid gap-1">
-            <SectionHeading as="h3">Configuration Health</SectionHeading>
+            <SectionHeading as="h3" className="font-semibold">
+              Configuration Health
+            </SectionHeading>
             <div className="text-sm text-fg-muted">
               Resolve configuration issues before agents can run reliably.
             </div>
