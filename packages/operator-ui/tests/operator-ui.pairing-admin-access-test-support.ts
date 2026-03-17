@@ -39,6 +39,21 @@ function renderDirectPairingPage(
   );
 }
 
+async function flushPairingPage(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
+function expandNodeRow(container: HTMLElement, nodeId = "node-1"): void {
+  const toggle = container.querySelector<HTMLButtonElement>(
+    `[data-testid="pairing-row-toggle-${nodeId}"]`,
+  );
+  expect(toggle).not.toBeNull();
+  act(() => {
+    toggle?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+}
+
 export function registerPairingAdminAccessTests(): void {
   it("prompts for admin access before approving when elevated access is inactive", async () => {
     const toastError = vi
@@ -71,10 +86,10 @@ export function registerPairingAdminAccessTests(): void {
     });
 
     await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
+      await flushPairingPage();
     });
 
+    expandNodeRow(container);
     const approveButton = container.querySelector<HTMLButtonElement>(
       '[data-testid="pairing-approve-1"]',
     );
@@ -131,10 +146,10 @@ export function registerPairingAdminAccessTests(): void {
     });
 
     await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
+      await flushPairingPage();
     });
 
+    expandNodeRow(container);
     const approveButton = container.querySelector<HTMLButtonElement>(
       '[data-testid="pairing-approve-1"]',
     );
@@ -182,10 +197,10 @@ export function registerPairingAdminAccessTests(): void {
     });
 
     await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
+      await flushPairingPage();
     });
 
+    expandNodeRow(container);
     const approveButton = container.querySelector<HTMLButtonElement>(
       '[data-testid="pairing-approve-1"]',
     );
@@ -241,10 +256,10 @@ export function registerPairingAdminAccessTests(): void {
     });
 
     await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
+      await flushPairingPage();
     });
 
+    expandNodeRow(container);
     const denyButton = container.querySelector<HTMLButtonElement>('[data-testid="pairing-deny-1"]');
     expect(denyButton).not.toBeNull();
 
@@ -297,10 +312,10 @@ export function registerPairingAdminAccessTests(): void {
     });
 
     await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
+      await flushPairingPage();
     });
 
+    expandNodeRow(container);
     const revokeButton = container.querySelector<HTMLButtonElement>(
       '[data-testid="pairing-revoke-1"]',
     );

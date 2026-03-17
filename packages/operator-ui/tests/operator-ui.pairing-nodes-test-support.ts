@@ -4,8 +4,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { createBearerTokenAuth, createOperatorCore } from "../../operator-core/src/index.js";
 import { AdminAccessProvider } from "../src/index.js";
 import { PairingPage } from "../src/components/pages/pairing-page.js";
-import { FakeWsClient, createFakeHttpClient } from "./operator-ui.test-fixtures.js";
 import { sampleNodeInventoryResponse } from "./operator-ui.data-fixtures.js";
+import { FakeWsClient, createFakeHttpClient } from "./operator-ui.test-fixtures.js";
 import { TEST_DEVICE_IDENTITY } from "./operator-ui.test-support.js";
 
 const NOOP_ADMIN_ACCESS_CONTROLLER = {
@@ -25,6 +25,38 @@ function renderPairingPage(root: Root, core: Parameters<typeof PairingPage>[0]["
       React.createElement(PairingPage, { core }),
     ),
   );
+}
+
+async function flushPairingPage(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+  await new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
+}
+
+function expandNodeRow(container: HTMLElement, nodeId: string): void {
+  const toggle = container.querySelector<HTMLButtonElement>(
+    `[data-testid="pairing-row-toggle-${nodeId}"]`,
+  );
+  expect(toggle).not.toBeNull();
+  act(() => {
+    toggle?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+}
+
+function sampleCapabilitySummary(capability: string) {
+  return {
+    capability,
+    capability_version: "1.0.0",
+    connected: true,
+    paired: false,
+    dispatchable: false,
+    supported_action_count: 1,
+    enabled_action_count: 1,
+    available_action_count: 1,
+    unknown_action_count: 0,
+  } as const;
 }
 
 export function registerPairingNodeInventoryTests(): void {
@@ -98,11 +130,7 @@ export function registerPairingNodeInventoryTests(): void {
     });
 
     await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-      await new Promise((resolve) => {
-        setTimeout(resolve, 0);
-      });
+      await flushPairingPage();
     });
 
     expect(nodesList).toHaveBeenCalledWith({
@@ -110,14 +138,16 @@ export function registerPairingNodeInventoryTests(): void {
       key: "agent:default:ui:default:channel:ui-session-1",
       lane: "main",
     });
+
+    expandNodeRow(container, "node-1");
     expect(container.querySelector('[data-testid="pairing-attached-local-1"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="pairing-attached-lane-1"]')).toBeNull();
     expect(container.querySelector('[data-testid="pairing-connection-1"]')?.textContent).toContain(
       "Connected",
     );
-    expect(container.querySelector('[data-testid="pairing-card-1"]')?.className ?? "").toContain(
-      "border-primary/40",
-    );
+    expect(
+      container.querySelector('[data-testid="pairing-row-toggle-node-1"]')?.className ?? "",
+    ).toContain("bg-primary/5");
 
     act(() => {
       root?.unmount();
@@ -129,7 +159,7 @@ export function registerPairingNodeInventoryTests(): void {
     const ws = new FakeWsClient();
     const { http, pairingsList, nodesList } = createFakeHttpClient();
     const sampleInventory = sampleNodeInventoryResponse();
-    pairingsList.mockResolvedValueOnce({
+    pairingsList.mockResolvedValue({
       status: "ok",
       pairings: [
         {
@@ -156,13 +186,14 @@ export function registerPairingNodeInventoryTests(): void {
         },
       ],
     });
-    nodesList.mockResolvedValueOnce({
+    nodesList.mockResolvedValue({
       ...sampleInventory,
       key: "agent:default:ui:default:channel:ui-session-1",
       lane: "main",
       nodes: [
         {
           ...sampleInventory.nodes[0],
+          connected: true,
           attached_to_requested_lane: true,
           source_client_device_id: "dev_other_client",
         },
@@ -194,18 +225,15 @@ export function registerPairingNodeInventoryTests(): void {
     });
 
     await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-      await new Promise((resolve) => {
-        setTimeout(resolve, 0);
-      });
+      await flushPairingPage();
     });
 
+    expandNodeRow(container, "node-1");
     expect(container.querySelector('[data-testid="pairing-attached-local-1"]')).toBeNull();
     expect(container.querySelector('[data-testid="pairing-attached-lane-1"]')).not.toBeNull();
     expect(
-      container.querySelector('[data-testid="pairing-card-1"]')?.className ?? "",
-    ).not.toContain("border-primary/40");
+      container.querySelector('[data-testid="pairing-row-toggle-node-1"]')?.className ?? "",
+    ).not.toContain("bg-primary/5");
 
     act(() => {
       root?.unmount();
@@ -213,20 +241,35 @@ export function registerPairingNodeInventoryTests(): void {
     container.remove();
   });
 
-  it("shows all connected nodes in the live section, including unpaired ones", async () => {
+  it("renders one sorted list for pending, connected, and offline nodes", async () => {
     const ws = new FakeWsClient();
     const { http, pairingsList, nodesList } = createFakeHttpClient();
     const sampleInventory = sampleNodeInventoryResponse();
-    pairingsList.mockResolvedValueOnce({
+    pairingsList.mockResolvedValue({
       status: "ok",
       pairings: [
         {
           pairing_id: 1,
+          status: "awaiting_human",
+          requested_at: "2026-01-03T00:00:00.000Z",
+          node: {
+            node_id: "node-1",
+            label: "pending node",
+            last_seen_at: "2026-01-03T00:00:00.000Z",
+            capabilities: [{ id: "tyrum.cli", version: "1.0.0" }],
+          },
+          capability_allowlist: [{ id: "tyrum.cli", version: "1.0.0" }],
+          trust_level: "local",
+          resolution: null,
+          resolved_at: null,
+        },
+        {
+          pairing_id: 2,
           status: "approved",
           requested_at: "2026-01-01T00:00:00.000Z",
           node: {
-            node_id: "node-1",
-            label: "trusted node",
+            node_id: "node-3",
+            label: "offline trusted node",
             last_seen_at: "2026-01-01T00:00:00.000Z",
             capabilities: [],
           },
@@ -247,9 +290,11 @@ export function registerPairingNodeInventoryTests(): void {
         {
           ...sampleInventory.nodes[0],
           node_id: "node-1",
-          label: "trusted node",
+          label: "pending node",
           connected: true,
-          paired_status: "approved",
+          paired_status: "awaiting_human",
+          mode: "desktop",
+          capabilities: [sampleCapabilitySummary("tyrum.cli")],
         },
         {
           ...sampleInventory.nodes[0],
@@ -257,6 +302,19 @@ export function registerPairingNodeInventoryTests(): void {
           label: "new node",
           connected: true,
           paired_status: null,
+          mode: "browser",
+          capabilities: [
+            sampleCapabilitySummary("tyrum.http"),
+            sampleCapabilitySummary("tyrum.cli"),
+          ],
+        },
+        {
+          ...sampleInventory.nodes[0],
+          node_id: "node-3",
+          label: "offline trusted node",
+          connected: false,
+          paired_status: "approved",
+          capabilities: [sampleCapabilitySummary("tyrum.cli")],
         },
       ],
     });
@@ -269,10 +327,6 @@ export function registerPairingNodeInventoryTests(): void {
       deps: { ws, http },
     });
 
-    act(() => {
-      core.connect();
-    });
-
     const container = document.createElement("div");
     document.body.appendChild(container);
 
@@ -283,20 +337,51 @@ export function registerPairingNodeInventoryTests(): void {
     });
 
     await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
+      await flushPairingPage();
     });
 
-    expect(container.querySelector('[data-testid="pairing-connected-section"]')).not.toBeNull();
-    expect(container.textContent).toContain("2 live now");
-    const trustedNode = container.querySelector('[data-testid="pairing-connected-node-node-1"]');
-    const unpairedNode = container.querySelector('[data-testid="pairing-connected-node-node-2"]');
-    expect(trustedNode).not.toBeNull();
-    expect(unpairedNode).not.toBeNull();
-    expect(trustedNode?.textContent).toContain("Trusted");
-    expect(unpairedNode?.textContent).toContain("Unpaired");
-    expect(trustedNode?.textContent).toContain("trusted node");
-    expect(unpairedNode?.textContent).toContain("new node");
+    expect(container.querySelector('[data-testid="pairing-list"]')).not.toBeNull();
+    expect(container.textContent).toContain("1 pending, 1 connected, 1 offline");
+
+    const toggles = Array.from(
+      container.querySelectorAll<HTMLButtonElement>('[data-testid^="pairing-row-toggle-"]'),
+    ).map((button) => button.getAttribute("data-testid"));
+    expect(toggles).toEqual([
+      "pairing-row-toggle-node-1",
+      "pairing-row-toggle-node-2",
+      "pairing-row-toggle-node-3",
+    ]);
+
+    expect(container.querySelector('[data-testid="pairing-row-details-node-1"]')).toBeNull();
+    expect(
+      container.querySelector('[data-testid="pairing-row-identifier-node-1"]')?.textContent,
+    ).toBe("node-1");
+    expect(container.querySelector('[data-testid="pairing-row-tools-node-2"]')?.textContent).toBe(
+      "2",
+    );
+    expect(container.querySelector('[data-testid="pairing-row-node-1"]')?.textContent).toContain(
+      "Pending",
+    );
+    expect(container.querySelector('[data-testid="pairing-row-node-2"]')?.textContent).toContain(
+      "Connected",
+    );
+    expect(container.querySelector('[data-testid="pairing-row-node-3"]')?.textContent).toContain(
+      "Offline",
+    );
+
+    expandNodeRow(container, "node-2");
+    expect(
+      container.querySelector('[data-testid="pairing-row-details-node-2"]')?.textContent,
+    ).toContain("Connected node");
+    expect(
+      container.querySelector('[data-testid="pairing-row-details-node-2"]')?.textContent,
+    ).toContain("Unpaired");
+
+    expandNodeRow(container, "node-3");
+    expect(container.querySelector('[data-testid="pairing-row-details-node-2"]')).toBeNull();
+    expect(
+      container.querySelector('[data-testid="pairing-row-details-node-3"]')?.textContent,
+    ).toContain("Trusted node");
 
     act(() => {
       root?.unmount();

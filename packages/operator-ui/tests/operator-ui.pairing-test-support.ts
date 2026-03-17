@@ -35,6 +35,21 @@ function renderDirectPairingPage(
   );
 }
 
+async function flushPairingPage(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
+function expandNodeRow(container: HTMLElement, nodeId = "node-1"): void {
+  const toggle = container.querySelector<HTMLButtonElement>(
+    `[data-testid="pairing-row-toggle-${nodeId}"]`,
+  );
+  expect(toggle).not.toBeNull();
+  act(() => {
+    toggle?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+}
+
 function registerPairingApproveTests(): void {
   it("lists and approves pairing requests", async () => {
     const ws = new FakeWsClient();
@@ -67,12 +82,12 @@ function registerPairingApproveTests(): void {
     });
 
     await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
+      await flushPairingPage();
     });
 
     expect(pairingsList).toHaveBeenCalledTimes(1);
     expect(container.textContent).toContain("node-1");
+    expandNodeRow(container);
 
     const takeoverLink = container.querySelector<HTMLAnchorElement>(
       '[data-testid="pairing-takeover-1"]',
@@ -165,10 +180,10 @@ function registerPairingApproveTests(): void {
     });
 
     await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
+      await flushPairingPage();
     });
 
+    expandNodeRow(container);
     const capability0 = container.querySelector<HTMLButtonElement>(
       '[data-testid="pairing-capability-1-0"]',
     );
@@ -221,10 +236,10 @@ function registerPairingApproveTests(): void {
     });
 
     await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
+      await flushPairingPage();
     });
 
+    expandNodeRow(container);
     const approveButton = container.querySelector<HTMLButtonElement>(
       '[data-testid="pairing-approve-1"]',
     );
@@ -268,10 +283,10 @@ function registerPairingApproveTests(): void {
     });
 
     await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
+      await flushPairingPage();
     });
 
+    expandNodeRow(container);
     const legends = Array.from(container.querySelectorAll("legend")).map((node) =>
       (node.textContent ?? "").trim(),
     );
@@ -310,15 +325,12 @@ function registerPairingDenyRevokeTests(): void {
     });
 
     await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
+      await flushPairingPage();
     });
 
     expect(pairingsList).toHaveBeenCalledTimes(1);
-    expect(container.textContent).toContain("No node requests");
-    expect(container.textContent).toContain(
-      "Node requests appear here when devices want to connect.",
-    );
+    expect(container.textContent).toContain("No nodes");
+    expect(container.textContent).toContain("Nodes will appear here when devices connect");
 
     act(() => {
       root?.unmount();
@@ -366,11 +378,11 @@ function registerPairingDenyRevokeTests(): void {
     });
 
     await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
+      await flushPairingPage();
     });
 
     expect(pairingsList).toHaveBeenCalledTimes(1);
+    expandNodeRow(container);
 
     const denyButton = container.querySelector<HTMLButtonElement>('[data-testid="pairing-deny-1"]');
     expect(denyButton).not.toBeNull();
@@ -434,11 +446,11 @@ function registerPairingDenyRevokeTests(): void {
     });
 
     await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
+      await flushPairingPage();
     });
 
     expect(pairingsList).toHaveBeenCalledTimes(1);
+    expandNodeRow(container);
 
     const revokeButton = container.querySelector<HTMLButtonElement>(
       '[data-testid="pairing-revoke-1"]',
