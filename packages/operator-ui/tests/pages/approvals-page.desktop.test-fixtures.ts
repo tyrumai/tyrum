@@ -20,6 +20,7 @@ const DEFAULT_DESKTOP_APPROVAL_CONTEXT = {
 type DesktopApprovalOptions = {
   approvalId?: number;
   approvalKey?: string;
+  agentId?: string;
   status?: string;
   context?: Record<string, unknown>;
   latestReview?: unknown;
@@ -65,6 +66,7 @@ type DesktopAttemptOptions = {
 export function createDesktopApprovalFixture({
   approvalId = 1,
   approvalKey = `approval:${approvalId}`,
+  agentId = "00000000-0000-4000-8000-000000000002",
   status = "awaiting_human",
   context = DEFAULT_DESKTOP_APPROVAL_CONTEXT,
   latestReview = null,
@@ -73,6 +75,7 @@ export function createDesktopApprovalFixture({
   return {
     approval_id: approvalId,
     approval_key: approvalKey,
+    agent_id: agentId,
     kind: "workflow_step",
     status,
     prompt: "Approve execution of 'tool.node.dispatch'",

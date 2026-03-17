@@ -265,6 +265,41 @@ describe("ApprovalDal", () => {
     expect(queued.map((approval) => approval.prompt)).toEqual(["Oldest", "Middle", "Newest"]);
   });
 
+  it("lists terminal approvals newest first when requested", async () => {
+    const dal = createDal();
+    const oldest = await createApproval(dal, {
+      approvalKey: `approval:${randomUUID()}`,
+      prompt: "Oldest approved",
+      status: "approved",
+    });
+    const newest = await createApproval(dal, {
+      approvalKey: `approval:${randomUUID()}`,
+      prompt: "Newest approved",
+      status: "approved",
+    });
+
+    await db!.run("UPDATE approvals SET created_at = ? WHERE tenant_id = ? AND approval_id = ?", [
+      "2026-01-01T00:00:00.000Z",
+      tenantId,
+      oldest.approval_id,
+    ]);
+    await db!.run("UPDATE approvals SET created_at = ? WHERE tenant_id = ? AND approval_id = ?", [
+      "2026-01-01T00:00:02.000Z",
+      tenantId,
+      newest.approval_id,
+    ]);
+
+    const approved = await dal.getByStatus({
+      tenantId,
+      status: "approved",
+      newestFirst: true,
+    });
+    expect(approved.map((approval) => approval.prompt)).toEqual([
+      "Newest approved",
+      "Oldest approved",
+    ]);
+  });
+
   it("lists pending human approvals oldest first without returning reviewing rows", async () => {
     const dal = createDal();
     const queued = await createApproval(dal, {

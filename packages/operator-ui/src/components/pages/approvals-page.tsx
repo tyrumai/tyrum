@@ -1,45 +1,40 @@
-import type { Approval, ExecutionAttempt } from "@tyrum/client";
+import type { Approval } from "@tyrum/client";
 import {
   isApprovalHumanActionableStatus,
   type OperatorCore,
   type ResolveApprovalInput,
-  type RunsState,
 } from "@tyrum/operator-core";
 import { clientCapabilityFromDescriptorId, type CapabilityDescriptor } from "@tyrum/schemas";
 import { CircleCheck } from "lucide-react";
-import { type ComponentProps, useState } from "react";
+import { type ComponentProps, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { AttemptArtifactsDialog } from "../artifacts/attempt-artifacts-dialog.js";
 import { AppPage } from "../layout/app-page.js";
 import { ApprovalActions } from "./approval-actions.js";
+import {
+  createManagedAgentLookup,
+  describeApprovalOutcome,
+  describeDesktopApprovalContext,
+  formatAgentLabel,
+  formatReviewRisk,
+  formatTimestamp,
+  normalizeManagedAgentOptions,
+  resolveApprovalAgentInfo,
+  resolveArtifactsForApprovalStep,
+  type ManagedAgentOption,
+} from "./approvals-page.helpers.js";
 import { Alert } from "../ui/alert.js";
 import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardFooter, CardHeader } from "../ui/card.js";
 import { EmptyState } from "../ui/empty-state.js";
 import { LiveRegion } from "../ui/live-region.js";
+import { Select } from "../ui/select.js";
 import { Spinner } from "../ui/spinner.js";
-import { parseAgentIdFromKey } from "../../lib/status-session-lanes.js";
 import { useOperatorStore } from "../../use-operator-store.js";
 import { extractTakeoverUrlFromNodeIdentity } from "../../utils/takeover-url.js";
-import { isRecord } from "../../utils/is-record.js";
 import { isAdminAccessRequiredError } from "../elevated-mode/admin-access-error.js";
 import { useAdminMutationAccess } from "./admin-http-shared.js";
-
-function formatTimestamp(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString();
-}
-
-function formatReviewRisk(review: Approval["latest_review"]): string | null {
-  if (!review) return null;
-  const parts = [
-    review.risk_level ? review.risk_level.toUpperCase() : null,
-    typeof review.risk_score === "number" ? `score ${String(review.risk_score)}` : null,
-  ].filter((part): part is string => part !== null);
-  return parts.length > 0 ? parts.join(" · ") : null;
-}
 
 function getApprovalStatusDisplay(status: Approval["status"] | "pending"): {
   label: string;
@@ -63,114 +58,98 @@ function getApprovalStatusDisplay(status: Approval["status"] | "pending"): {
   }
 }
 
-type DesktopApprovalSummary = {
-  op: string;
-  actionKind?: string;
-  targetText?: string;
-};
-
-function describeDesktopApprovalContext(context: unknown): DesktopApprovalSummary | null {
-  const ctx = isRecord(context) ? context : null;
-  if (!ctx || ctx["source"] !== "agent-tool-execution" || ctx["tool_id"] !== "tool.node.dispatch") {
-    return null;
-  }
-
-  const args = isRecord(ctx["args"]) ? (ctx["args"] as Record<string, unknown>) : null;
-  if (!args) return null;
-  const capability = typeof args["capability"] === "string" ? args["capability"].trim() : undefined;
-  if (!capability || clientCapabilityFromDescriptorId(capability) !== "desktop") {
-    return null;
-  }
-  const op = typeof args["action_name"] === "string" ? args["action_name"].trim() : "";
-  if (!op) return null;
-
-  const summary: DesktopApprovalSummary = { op };
-  const actionArgs = isRecord(args["input"]) ? (args["input"] as Record<string, unknown>) : null;
-
-  if (op === "act" && actionArgs) {
-    const action = isRecord(actionArgs["action"])
-      ? (actionArgs["action"] as Record<string, unknown>)
-      : null;
-    const kind = typeof action?.["kind"] === "string" ? action["kind"].trim() : "";
-    if (kind) summary.actionKind = kind;
-
-    const target = isRecord(actionArgs["target"])
-      ? (actionArgs["target"] as Record<string, unknown>)
-      : null;
-    if (target) {
-      const targetKind = typeof target["kind"] === "string" ? target["kind"].trim() : "";
-      if (targetKind === "a11y") {
-        const role = typeof target["role"] === "string" ? target["role"].trim() : "";
-        const name = typeof target["name"] === "string" ? target["name"].trim() : "";
-        const parts = [role ? `role=${role}` : undefined, name ? `name=${name}` : undefined].filter(
-          (part): part is string => part !== undefined,
-        );
-        if (parts.length > 0) {
-          summary.targetText = `target: a11y (${parts.join(" ")})`;
-        } else {
-          summary.targetText = "target: a11y";
-        }
-      } else if (targetKind) {
-        summary.targetText = `target: ${targetKind}`;
-      }
-    }
-  }
-
-  return summary;
-}
-
-type ApprovalArtifactsSummary = {
-  runId: string;
-  attemptId: string;
-  artifacts: ExecutionAttempt["artifacts"];
-};
-
-function resolveArtifactsForApprovalStep(
-  runsState: RunsState,
-  scope: { run_id?: string; step_id?: string; step_index?: number } | undefined,
-): ApprovalArtifactsSummary | null {
-  const runId = typeof scope?.run_id === "string" ? scope.run_id : "";
-  const scopeStepId = typeof scope?.step_id === "string" ? scope.step_id : "";
-  const stepIndex = typeof scope?.step_index === "number" ? scope.step_index : null;
-  if (!runId) return null;
-
-  const stepId =
-    scopeStepId ||
-    (stepIndex === null
-      ? null
-      : ((runsState.stepIdsByRunId[runId] ?? []).find((candidateId) => {
-          const step = runsState.stepsById[candidateId];
-          return step?.step_index === stepIndex;
-        }) ?? null));
-  if (!stepId) return null;
-
-  let latestAttemptWithArtifacts: ExecutionAttempt | undefined;
-  for (const attemptId of runsState.attemptIdsByStepId[stepId] ?? []) {
-    const attempt = runsState.attemptsById[attemptId];
-    if (!attempt || attempt.artifacts.length === 0) continue;
-    if (!latestAttemptWithArtifacts || attempt.attempt > latestAttemptWithArtifacts.attempt) {
-      latestAttemptWithArtifacts = attempt;
-    }
-  }
-
-  if (!latestAttemptWithArtifacts) return null;
-
-  return {
-    runId,
-    attemptId: latestAttemptWithArtifacts.attempt_id,
-    artifacts: latestAttemptWithArtifacts.artifacts,
-  };
-}
-
 export function ApprovalsPage({ core }: { core: OperatorCore }) {
   const approvals = useOperatorStore(core.approvalsStore);
   const pairingState = useOperatorStore(core.pairingStore);
   const runsState = useOperatorStore(core.runsStore);
   const { canMutate, requestEnter } = useAdminMutationAccess(core);
   const blockedApprovalIds = approvals.blockedIds ?? approvals.pendingIds;
+  const historyApprovalIds = approvals.historyIds ?? [];
   const [resolvingById, setResolvingById] = useState<
     Record<string, "approved" | "denied" | "always" | undefined>
   >({});
+  const [managedAgents, setManagedAgents] = useState<ManagedAgentOption[]>([]);
+  const [agentFilter, setAgentFilter] = useState("all");
+
+  useEffect(() => {
+    let cancelled = false;
+    const listAgents = core.http?.agents?.list;
+
+    if (typeof listAgents !== "function") {
+      setManagedAgents([]);
+      return;
+    }
+
+    const loadAgents = async (): Promise<void> => {
+      try {
+        const response = await listAgents();
+        if (cancelled) return;
+        setManagedAgents(normalizeManagedAgentOptions((response as { agents?: unknown }).agents));
+      } catch {
+        if (!cancelled) {
+          setManagedAgents([]);
+        }
+      }
+    };
+
+    void loadAgents();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [core.http]);
+
+  const managedAgentsByIdentity = useMemo(
+    () => createManagedAgentLookup(managedAgents),
+    [managedAgents],
+  );
+
+  const agentFilterOptions = useMemo(() => {
+    const optionsByValue = new Map<string, string>();
+    for (const agent of managedAgents) {
+      optionsByValue.set(agent.agentId, formatAgentLabel(agent));
+    }
+
+    for (const approval of Object.values(approvals.byId)) {
+      const agentInfo = resolveApprovalAgentInfo(approval, managedAgentsByIdentity);
+      if (!agentInfo || optionsByValue.has(agentInfo.filterValue)) {
+        continue;
+      }
+      optionsByValue.set(agentInfo.filterValue, agentInfo.label);
+    }
+
+    return [...optionsByValue.entries()]
+      .map(([value, label]) => ({ value, label }))
+      .toSorted((left, right) => left.label.localeCompare(right.label));
+  }, [approvals.byId, managedAgents, managedAgentsByIdentity]);
+
+  useEffect(() => {
+    if (agentFilter === "all") return;
+    if (agentFilterOptions.some((option) => option.value === agentFilter)) return;
+    setAgentFilter("all");
+  }, [agentFilter, agentFilterOptions]);
+
+  const matchesAgentFilter = (approval: Approval | undefined): boolean => {
+    if (!approval) return false;
+    if (agentFilter === "all") return true;
+    const agentInfo = resolveApprovalAgentInfo(approval, managedAgentsByIdentity);
+    return agentInfo?.filterValue === agentFilter;
+  };
+
+  const filteredBlockedApprovalIds = useMemo(
+    () => blockedApprovalIds.filter((approvalId) => matchesAgentFilter(approvals.byId[approvalId])),
+    [agentFilter, approvals.byId, blockedApprovalIds, managedAgentsByIdentity],
+  );
+  const filteredHistoryApprovalIds = useMemo(
+    () => historyApprovalIds.filter((approvalId) => matchesAgentFilter(approvals.byId[approvalId])),
+    [agentFilter, approvals.byId, historyApprovalIds, managedAgentsByIdentity],
+  );
+  const approvalsLoadingInitially =
+    approvals.loading &&
+    approvals.lastSyncedAt === null &&
+    blockedApprovalIds.length === 0 &&
+    historyApprovalIds.length === 0;
+  const agentFilterActive = agentFilter !== "all";
 
   const desktopTakeoverLinks = Object.values(pairingState.byId)
     .filter((pairing) => pairing.status === "approved")
@@ -232,6 +211,163 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
     }
   };
 
+  const renderApprovalCards = (approvalIds: string[]) => (
+    <div className="grid gap-3">
+      {approvalIds.map((approvalId) => {
+        const approval = approvals.byId[approvalId];
+        if (!approval) return null;
+
+        const resolvingDecision = resolvingById[approvalId];
+        const actionable = isApprovalHumanActionableStatus(approval.status);
+        const statusDisplay = getApprovalStatusDisplay(approval.status);
+        const reviewReason = approval.latest_review?.reason?.trim() ?? "";
+        const reviewRisk = formatReviewRisk(approval.latest_review);
+        const scope = approval.scope;
+        const approvalAgent = resolveApprovalAgentInfo(approval, managedAgentsByIdentity);
+        const detailEntries = [
+          ["Approval key", approval.approval_key],
+          ["Agent", approvalAgent?.label],
+          ["Scope key", scope?.key],
+          ["Lane", scope?.lane],
+          ["Run", scope?.run_id],
+          ["Step", scope?.step_id],
+          ["Attempt", scope?.attempt_id],
+        ].filter((entry): entry is [string, string] => typeof entry[1] === "string");
+
+        return (
+          <Card key={approvalId}>
+            <CardHeader className="pb-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="outline">{approval.kind}</Badge>
+                  <Badge variant={statusDisplay.variant}>{statusDisplay.label}</Badge>
+                </div>
+                <time
+                  dateTime={approval.created_at}
+                  className="text-xs text-fg-muted"
+                  title={approval.created_at}
+                >
+                  {formatTimestamp(approval.created_at)}
+                </time>
+              </div>
+            </CardHeader>
+            <CardContent className="grid gap-3">
+              <blockquote className="rounded-md border border-border bg-bg-subtle px-3 py-2.5 text-sm text-fg break-words [overflow-wrap:anywhere]">
+                {approval.prompt}
+              </blockquote>
+
+              <div
+                data-testid={`approval-motivation-${approvalId}`}
+                className="grid gap-0.5 rounded-md border border-border bg-bg-subtle px-3 py-2.5"
+              >
+                <div className="text-xs font-medium text-fg-muted">Motivation</div>
+                <div className="text-sm text-fg break-words [overflow-wrap:anywhere]">
+                  {approval.motivation}
+                </div>
+              </div>
+
+              {reviewReason || reviewRisk ? (
+                <div
+                  data-testid={`approval-review-${approvalId}`}
+                  className="grid gap-1 rounded-md border border-border bg-bg-subtle px-3 py-2.5"
+                >
+                  <div className="text-xs font-medium text-fg-muted">Latest review</div>
+                  {reviewReason ? (
+                    <div className="text-sm text-fg break-words [overflow-wrap:anywhere]">
+                      {reviewReason}
+                    </div>
+                  ) : null}
+                  {reviewRisk ? (
+                    <div className="text-xs text-fg-muted">Risk {reviewRisk}</div>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {detailEntries.length > 0 ? (
+                <div
+                  data-testid={`approval-details-${approvalId}`}
+                  className="grid gap-2 rounded-md border border-border bg-bg-subtle px-3 py-2.5"
+                >
+                  {detailEntries.map(([label, value]) => (
+                    <div key={label} className="grid gap-0.5">
+                      <div className="text-xs font-medium text-fg-muted">{label}</div>
+                      <div className="font-mono text-xs text-fg break-all">{value}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+
+              {(() => {
+                const desktop = describeDesktopApprovalContext(approval.context);
+                if (!desktop) return null;
+
+                const artifacts = resolveArtifactsForApprovalStep(runsState, approval.scope);
+
+                return (
+                  <div
+                    data-testid={`desktop-approval-summary-${approvalId}`}
+                    className="grid gap-1.5 rounded-md border border-border bg-bg-subtle px-3 py-2.5"
+                  >
+                    <div className="flex flex-wrap items-center gap-2 text-sm text-fg">
+                      <Badge variant="outline">Desktop</Badge>
+                      <span className="font-medium text-fg">{desktop.op}</span>
+                      {desktop.actionKind ? (
+                        <span className="text-fg-muted">• {desktop.actionKind}</span>
+                      ) : null}
+                    </div>
+                    {desktop.targetText ? (
+                      <div className="text-xs text-fg-muted">{desktop.targetText}</div>
+                    ) : null}
+                    {artifacts ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <AttemptArtifactsDialog
+                          core={core}
+                          runId={artifacts.runId}
+                          attemptId={artifacts.attemptId}
+                          artifacts={artifacts.artifacts}
+                        />
+                      </div>
+                    ) : null}
+                    {takeoverUrl ? (
+                      <Button asChild size="sm" variant="outline" className="w-fit">
+                        <a
+                          data-testid={`approval-takeover-${approvalId}`}
+                          href={takeoverUrl}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                        >
+                          Open takeover
+                        </a>
+                      </Button>
+                    ) : null}
+                  </div>
+                );
+              })()}
+            </CardContent>
+            <CardFooter className="gap-2">
+              {actionable ? (
+                <ApprovalActions
+                  approvalId={approvalId}
+                  approval={approval}
+                  resolvingState={resolvingDecision}
+                  onResolve={(input) => {
+                    void resolveApproval(input);
+                  }}
+                />
+              ) : (
+                <div className="text-sm text-fg-muted">
+                  {approval.status === "reviewing"
+                    ? "Guardian review is in progress."
+                    : describeApprovalOutcome(approval.status)}
+                </div>
+              )}
+            </CardFooter>
+          </Card>
+        );
+      })}
+    </div>
+  );
+
   return (
     <AppPage contentClassName="max-w-4xl gap-5">
       <LiveRegion data-testid="approvals-pending-live">
@@ -242,178 +378,87 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
         <Alert variant="error" title="Approvals failed to load" description={approvals.error} />
       ) : null}
 
-      {blockedApprovalIds.length === 0 ? (
-        approvals.loading && approvals.lastSyncedAt === null ? (
-          <div
-            className="flex items-center justify-center gap-2 px-4 py-10 text-sm text-fg-muted"
-            aria-busy={true}
+      <Card data-testid="approvals-filters">
+        <CardHeader className="pb-3">
+          <div className="text-sm font-medium text-fg">Filters</div>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-[minmax(0,16rem)_auto] md:items-end">
+          <Select
+            label="Agent"
+            data-testid="approvals-agent-filter"
+            value={agentFilter}
+            onChange={(event) => setAgentFilter(event.currentTarget.value)}
           >
-            <Spinner aria-hidden={true} />
-            Loading approvals...
+            <option value="all">All agents</option>
+            {agentFilterOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </Select>
+          <div className="flex flex-wrap gap-2">
+            <Badge>{`${filteredBlockedApprovalIds.length} awaiting attention`}</Badge>
+            <Badge variant="outline">{`${filteredHistoryApprovalIds.length} in history`}</Badge>
           </div>
-        ) : (
-          <EmptyState
-            icon={CircleCheck}
-            title="No pending approvals"
-            description="Approvals appear here when agents request permission to perform actions."
-          />
-        )
-      ) : (
-        <div className="grid gap-3">
-          {blockedApprovalIds.map((approvalId) => {
-            const approval = approvals.byId[approvalId];
-            if (!approval) return null;
+        </CardContent>
+      </Card>
 
-            const resolvingDecision = resolvingById[approvalId];
-            const actionable = isApprovalHumanActionableStatus(approval.status);
-            const statusDisplay = getApprovalStatusDisplay(approval.status);
-            const reviewReason = approval.latest_review?.reason?.trim() ?? "";
-            const reviewRisk = formatReviewRisk(approval.latest_review);
-            const scope = approval.scope;
-            const approvalAgentKey =
-              typeof scope?.key === "string" ? parseAgentIdFromKey(scope.key) : null;
-            const detailEntries = [
-              ["Approval key", approval.approval_key],
-              ["Agent", approvalAgentKey ?? undefined],
-              ["Scope key", scope?.key],
-              ["Lane", scope?.lane],
-              ["Run", scope?.run_id],
-              ["Step", scope?.step_id],
-              ["Attempt", scope?.attempt_id],
-            ].filter((entry): entry is [string, string] => typeof entry[1] === "string");
-
-            return (
-              <Card key={approvalId}>
-                <CardHeader className="pb-2.5">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant="outline">{approval.kind}</Badge>
-                      <Badge variant={statusDisplay.variant}>{statusDisplay.label}</Badge>
-                    </div>
-                    <time
-                      dateTime={approval.created_at}
-                      className="text-xs text-fg-muted"
-                      title={approval.created_at}
-                    >
-                      {formatTimestamp(approval.created_at)}
-                    </time>
-                  </div>
-                </CardHeader>
-                <CardContent className="grid gap-3">
-                  <blockquote className="rounded-md border border-border bg-bg-subtle px-3 py-2.5 text-sm text-fg break-words [overflow-wrap:anywhere]">
-                    {approval.prompt}
-                  </blockquote>
-
-                  <div
-                    data-testid={`approval-motivation-${approvalId}`}
-                    className="grid gap-0.5 rounded-md border border-border bg-bg-subtle px-3 py-2.5"
-                  >
-                    <div className="text-xs font-medium text-fg-muted">Motivation</div>
-                    <div className="text-sm text-fg break-words [overflow-wrap:anywhere]">
-                      {approval.motivation}
-                    </div>
-                  </div>
-
-                  {reviewReason || reviewRisk ? (
-                    <div
-                      data-testid={`approval-review-${approvalId}`}
-                      className="grid gap-1 rounded-md border border-border bg-bg-subtle px-3 py-2.5"
-                    >
-                      <div className="text-xs font-medium text-fg-muted">Latest review</div>
-                      {reviewReason ? (
-                        <div className="text-sm text-fg break-words [overflow-wrap:anywhere]">
-                          {reviewReason}
-                        </div>
-                      ) : null}
-                      {reviewRisk ? (
-                        <div className="text-xs text-fg-muted">Risk {reviewRisk}</div>
-                      ) : null}
-                    </div>
-                  ) : null}
-
-                  {detailEntries.length > 0 ? (
-                    <div
-                      data-testid={`approval-details-${approvalId}`}
-                      className="grid gap-2 rounded-md border border-border bg-bg-subtle px-3 py-2.5"
-                    >
-                      {detailEntries.map(([label, value]) => (
-                        <div key={label} className="grid gap-0.5">
-                          <div className="text-xs font-medium text-fg-muted">{label}</div>
-                          <div className="font-mono text-xs text-fg break-all">{value}</div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-
-                  {(() => {
-                    const desktop = describeDesktopApprovalContext(approval.context);
-                    if (!desktop) return null;
-
-                    const artifacts = resolveArtifactsForApprovalStep(runsState, approval.scope);
-
-                    return (
-                      <div
-                        data-testid={`desktop-approval-summary-${approvalId}`}
-                        className="grid gap-1.5 rounded-md border border-border bg-bg-subtle px-3 py-2.5"
-                      >
-                        <div className="flex flex-wrap items-center gap-2 text-sm text-fg">
-                          <Badge variant="outline">Desktop</Badge>
-                          <span className="font-medium text-fg">{desktop.op}</span>
-                          {desktop.actionKind ? (
-                            <span className="text-fg-muted">• {desktop.actionKind}</span>
-                          ) : null}
-                        </div>
-                        {desktop.targetText ? (
-                          <div className="text-xs text-fg-muted">{desktop.targetText}</div>
-                        ) : null}
-                        {artifacts ? (
-                          <div className="flex flex-wrap items-center gap-2">
-                            <AttemptArtifactsDialog
-                              core={core}
-                              runId={artifacts.runId}
-                              attemptId={artifacts.attemptId}
-                              artifacts={artifacts.artifacts}
-                            />
-                          </div>
-                        ) : null}
-                        {takeoverUrl ? (
-                          <Button asChild size="sm" variant="outline" className="w-fit">
-                            <a
-                              data-testid={`approval-takeover-${approvalId}`}
-                              href={takeoverUrl}
-                              target="_blank"
-                              rel="noreferrer noopener"
-                            >
-                              Open takeover
-                            </a>
-                          </Button>
-                        ) : null}
-                      </div>
-                    );
-                  })()}
-                </CardContent>
-                <CardFooter className="gap-2">
-                  {actionable ? (
-                    <ApprovalActions
-                      approvalId={approvalId}
-                      approval={approval}
-                      resolvingState={resolvingDecision}
-                      onResolve={(input) => {
-                        void resolveApproval(input);
-                      }}
-                    />
-                  ) : (
-                    <div className="text-sm text-fg-muted">
-                      {approval.status === "queued"
-                        ? "Queued for guardian review."
-                        : "Guardian review is in progress."}
-                    </div>
-                  )}
-                </CardFooter>
-              </Card>
-            );
-          })}
+      {approvalsLoadingInitially ? (
+        <div
+          className="flex items-center justify-center gap-2 px-4 py-10 text-sm text-fg-muted"
+          aria-busy={true}
+        >
+          <Spinner aria-hidden={true} />
+          Loading approvals...
         </div>
+      ) : (
+        <>
+          <section data-testid="approvals-needs-attention" className="grid gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-sm font-medium text-fg">Needs attention</h2>
+              <Badge variant="outline">{filteredBlockedApprovalIds.length}</Badge>
+            </div>
+            {filteredBlockedApprovalIds.length > 0 ? (
+              renderApprovalCards(filteredBlockedApprovalIds)
+            ) : (
+              <EmptyState
+                icon={CircleCheck}
+                title={
+                  agentFilterActive ? "No pending approvals for this agent" : "No pending approvals"
+                }
+                description={
+                  agentFilterActive
+                    ? "Try a different agent filter to review approvals for another agent."
+                    : "Approvals appear here when agents request permission to perform actions."
+                }
+              />
+            )}
+          </section>
+
+          <section data-testid="approvals-history" className="grid gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-sm font-medium text-fg">History</h2>
+              <Badge variant="outline">{filteredHistoryApprovalIds.length}</Badge>
+            </div>
+            {filteredHistoryApprovalIds.length > 0 ? (
+              renderApprovalCards(filteredHistoryApprovalIds)
+            ) : (
+              <EmptyState
+                icon={CircleCheck}
+                title={
+                  agentFilterActive
+                    ? "No approval history for this agent"
+                    : "No approval history yet"
+                }
+                description={
+                  agentFilterActive
+                    ? "Resolved approvals for the selected agent will appear here."
+                    : "Resolved approvals will appear here once agents start requesting access."
+                }
+              />
+            )}
+          </section>
+        </>
       )}
     </AppPage>
   );

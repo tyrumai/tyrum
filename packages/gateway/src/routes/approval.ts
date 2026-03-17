@@ -6,7 +6,11 @@
  */
 
 import { Hono } from "hono";
-import type { ApprovalDal, ApprovalStatus } from "../modules/approval/dal.js";
+import {
+  isApprovalTerminalStatus,
+  type ApprovalDal,
+  type ApprovalStatus,
+} from "../modules/approval/dal.js";
 import type { PolicyOverrideDal } from "../modules/policy/override-dal.js";
 import type { Logger } from "../modules/observability/logger.js";
 import type { WsEventDal } from "../modules/ws-event/dal.js";
@@ -79,6 +83,7 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
       ? await deps.approvalDal.getByStatus({
           tenantId,
           status,
+          newestFirst: isApprovalTerminalStatus(status),
         })
       : await deps.approvalDal.listBlocked({ tenantId });
     return c.json({

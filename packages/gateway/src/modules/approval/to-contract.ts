@@ -37,6 +37,7 @@ export function toApprovalContract(row: ApprovalRow): ApprovalT | undefined {
   const candidate: ApprovalT = {
     approval_id: row.approval_id,
     approval_key: row.approval_key,
+    agent_id: row.agent_id,
     kind: row.kind,
     status: row.status,
     prompt: row.prompt,

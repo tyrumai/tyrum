@@ -12,6 +12,7 @@ export {
   approvalUpdatedAt,
   isApprovalBlockedStatus,
   isApprovalHumanActionableStatus,
+  isApprovalTerminalStatus,
   isPairingBlockedStatus,
   isPairingHumanActionableStatus,
   pairingUpdatedAt,

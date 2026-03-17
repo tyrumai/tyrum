@@ -79,14 +79,49 @@ function registerApprovalListAndResolveTests(): void {
     expect((result as unknown as { ok: boolean }).ok).toBe(true);
     const res = result as unknown as {
       result: {
-        approvals: Array<{ approval_id: string; created_at: string; latest_review: unknown }>;
+        approvals: Array<{
+          approval_id: string;
+          agent_id?: string;
+          created_at: string;
+          latest_review: unknown;
+        }>;
       };
     };
     expect(res.result.approvals).toHaveLength(1);
     expect(res.result.approvals[0]!.approval_id).toBe(approvalId);
+    expect(res.result.approvals[0]!.agent_id).toBe(DEFAULT_AGENT_ID);
     expect(res.result.approvals[0]!.created_at).toContain("T");
     expect(res.result.approvals[0]!.created_at).toContain("Z");
     expect(res.result.approvals[0]!.latest_review).toBeNull();
+  });
+
+  it("requests newest-first ordering for terminal approval history", async () => {
+    const cm = new ConnectionManager();
+    const { id } = makeClient(cm, ["playwright"]);
+    const client = cm.getClient(id)!;
+    const approvalDal = {
+      listBlocked: vi.fn(async () => []),
+      getByStatus: vi.fn(async () => []),
+    };
+    const deps = makeDeps(cm, { approvalDal: approvalDal as never });
+
+    const result = await handleClientMessage(
+      client,
+      JSON.stringify({
+        request_id: "r-history",
+        type: "approval.list",
+        payload: { status: "approved", limit: 20 },
+      }),
+      deps,
+    );
+
+    expect(result).toBeDefined();
+    expect((result as unknown as { ok: boolean }).ok).toBe(true);
+    expect(approvalDal.getByStatus).toHaveBeenCalledWith({
+      tenantId: DEFAULT_TENANT_ID,
+      status: "approved",
+      newestFirst: true,
+    });
   });
 
   it("rejects approval.list when peer role is node", async () => {

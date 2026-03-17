@@ -215,12 +215,19 @@ export class ApprovalDal {
     return row ? await this.hydrate(row) : undefined;
   }
 
-  async getByStatus(input: { tenantId: string; status: ApprovalStatus }): Promise<ApprovalRow[]> {
+  async getByStatus(input: {
+    tenantId: string;
+    status: ApprovalStatus;
+    newestFirst?: boolean;
+  }): Promise<ApprovalRow[]> {
+    const orderBy = input.newestFirst
+      ? "ORDER BY created_at DESC, approval_id DESC"
+      : "ORDER BY created_at ASC, approval_id ASC";
     const rows = await this.db.all<RawApprovalRow>(
       `SELECT *
        FROM approvals
        WHERE tenant_id = ? AND status = ?
-       ORDER BY created_at ASC, approval_id ASC`,
+       ${orderBy}`,
       [input.tenantId.trim(), input.status],
     );
     return await this.hydrateMany(rows);

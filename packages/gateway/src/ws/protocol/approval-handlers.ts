@@ -6,6 +6,7 @@ import {
   WsApprovalResolveRequest,
 } from "@tyrum/schemas";
 import type { Approval as ApprovalT, WsResponseEnvelope } from "@tyrum/schemas";
+import { isApprovalTerminalStatus } from "../../modules/approval/dal.js";
 import { resolveApproval } from "../../modules/approval/resolve-service.js";
 import { toApprovalContract } from "../../modules/approval/to-contract.js";
 import type { ConnectedClient } from "../connection-manager.js";
@@ -67,7 +68,11 @@ async function handleApprovalListMessage(
   const rows =
     status === undefined
       ? await deps.approvalDal.listBlocked({ tenantId })
-      : await deps.approvalDal.getByStatus({ tenantId, status });
+      : await deps.approvalDal.getByStatus({
+          tenantId,
+          status,
+          newestFirst: isApprovalTerminalStatus(status),
+        });
 
   const approvals = rows
     .map(toApprovalContract)

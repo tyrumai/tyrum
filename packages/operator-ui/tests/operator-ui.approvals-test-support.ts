@@ -19,7 +19,7 @@ export function registerApprovalsTests(): void {
       .mockImplementation(() => "" as unknown as string);
 
     const ws = new FakeWsClient();
-    ws.approvalList.mockResolvedValueOnce({
+    ws.approvalList.mockResolvedValue({
       approvals: [sampleApprovalPending()],
       next_cursor: undefined,
     });
@@ -58,7 +58,7 @@ export function registerApprovalsTests(): void {
       await Promise.resolve();
     });
 
-    expect(ws.approvalList).toHaveBeenCalledTimes(1);
+    expect(ws.approvalList).toHaveBeenCalledTimes(5);
     expect(container.textContent).toContain("Allow the tool call?");
     expect(container.textContent).toContain("other");
     expect(container.querySelector('time[datetime="2026-01-01T00:00:00.000Z"]')).not.toBeNull();
@@ -75,7 +75,9 @@ export function registerApprovalsTests(): void {
 
     expect(ws.approvalResolve).toHaveBeenCalledTimes(1);
     expect(toastSuccess).toHaveBeenCalledWith("Approval resolved");
-    expect(container.textContent).not.toContain("Allow the tool call?");
+    expect(container.textContent).toContain("History");
+    expect(container.querySelector('[data-testid="approval-approve-1"]')).toBeNull();
+    expect(container.textContent).toContain("Allow the tool call?");
 
     act(() => {
       root?.unmount();
@@ -88,7 +90,7 @@ export function registerApprovalsTests(): void {
       .spyOn(operatorUi.toast, "error")
       .mockImplementation(() => "" as unknown as string);
     const ws = new FakeWsClient();
-    ws.approvalList.mockResolvedValueOnce({
+    ws.approvalList.mockResolvedValue({
       approvals: [sampleApprovalPending()],
       next_cursor: undefined,
     });
@@ -150,7 +152,7 @@ export function registerApprovalsTests(): void {
       .mockImplementation(() => "" as unknown as string);
 
     const ws = new FakeWsClient();
-    ws.approvalList.mockResolvedValueOnce({
+    ws.approvalList.mockResolvedValue({
       approvals: [sampleApprovalPending()],
       next_cursor: undefined,
     });
@@ -208,7 +210,7 @@ export function registerApprovalsTests(): void {
       .spyOn(operatorUi.toast, "error")
       .mockImplementation(() => "" as unknown as string);
     const ws = new FakeWsClient();
-    ws.approvalList.mockResolvedValueOnce({
+    ws.approvalList.mockResolvedValue({
       approvals: [sampleApprovalPending()],
       next_cursor: undefined,
     });
@@ -266,7 +268,7 @@ export function registerApprovalsTests(): void {
 
   it("shows an empty state when there are no pending approvals", async () => {
     const ws = new FakeWsClient();
-    ws.approvalList.mockResolvedValueOnce({
+    ws.approvalList.mockResolvedValue({
       approvals: [],
       next_cursor: undefined,
     });
@@ -297,7 +299,7 @@ export function registerApprovalsTests(): void {
       await Promise.resolve();
     });
 
-    expect(ws.approvalList).toHaveBeenCalledTimes(1);
+    expect(ws.approvalList).toHaveBeenCalledTimes(5);
     expect(container.textContent).toContain("0 approvals awaiting action");
     expect(container.textContent).toContain(
       "Approvals appear here when agents request permission to perform actions.",
