@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import React, { act } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { UIMessage } from "ai";
 import type { OperatorCore } from "../../../operator-core/src/index.js";
 import { createChatStore } from "../../../operator-core/src/stores/chat-store.js";
@@ -178,7 +178,20 @@ async function clickAndFlush(element: HTMLElement): Promise<void> {
   });
 }
 
+function listThreadOrder(container: HTMLElement): string[] {
+  return Array.from(container.querySelectorAll<HTMLElement>("[data-testid^='mock-open-']")).map(
+    (button) => button.getAttribute("data-testid")?.replace("mock-open-", "") ?? "",
+  );
+}
+
 describe("AiSdkChatPage integration", () => {
+  beforeEach(() => {
+    createSessionClientMock.mockReset();
+    createTransportMock.mockClear();
+    toastErrorMock.mockReset();
+    supportsSocketMock.mockReturnValue(true);
+  });
+
   it("loads sessions, starts chats, applies message updates, and deletes sessions", async () => {
     const sessionClient = {
       list: vi.fn(async () => ({
@@ -268,6 +281,93 @@ describe("AiSdkChatPage integration", () => {
 
     expect(sessionClient.delete).toHaveBeenCalledWith({ session_id: "session-2" });
     expect(testRoot.container.textContent).toContain("session-1");
+
+    cleanupTestRoot(testRoot);
+  });
+
+  it("keeps thread order stable when opening an older thread and promotes on real updates", async () => {
+    const sessionClient = {
+      list: vi.fn(async () => ({
+        sessions: [
+          createSessionSummary("session-1", "Newest preview"),
+          {
+            ...createSessionSummary("session-2", "Older preview"),
+            created_at: "2026-03-12T00:00:00.000Z",
+            updated_at: "2026-03-12T00:00:00.000Z",
+          },
+        ],
+        next_cursor: null,
+      })),
+      get: vi.fn(async ({ session_id }: { session_id: string }) =>
+        session_id === "session-2"
+          ? {
+              ...createSession("session-2", "Older preview"),
+              created_at: "2026-03-12T00:00:00.000Z",
+              updated_at: "2026-03-12T00:00:00.000Z",
+            }
+          : createSession("session-1", "Newest preview"),
+      ),
+      create: vi.fn(async () => createSession("session-3", "New preview")),
+      delete: vi.fn(async () => undefined),
+    };
+    createSessionClientMock.mockReturnValue(sessionClient);
+
+    const agentList = vi.fn(async () => ({
+      agents: [{ agent_key: "default", persona: { name: "Default" } }],
+    }));
+    const { store: connectionStore } = createStore({
+      status: "connected",
+      clientId: null,
+      lastDisconnect: null,
+      transportError: null,
+    });
+    const approvalsStore = createApprovalsStoreStub();
+    const ws = {
+      connected: true,
+      off: vi.fn(),
+      on: vi.fn(),
+      requestDynamic: vi.fn(),
+      onDynamicEvent: vi.fn(),
+      offDynamicEvent: vi.fn(),
+    };
+    const http = {
+      agentList: {
+        get: agentList,
+      },
+    };
+    const chatStore = createChatStore(ws as never, http as never);
+    const core = {
+      approvalsStore,
+      chatStore,
+      connectionStore,
+      http,
+      ws,
+    } as unknown as OperatorCore;
+
+    const { AiSdkChatPage } = await import("../../src/components/pages/chat-page-ai-sdk.js");
+    const testRoot = renderIntoDocument(e(AiSdkChatPage, { core }));
+
+    await flushEffects();
+    await flushEffects();
+
+    expect(agentList).toHaveBeenCalledOnce();
+    expect(sessionClient.get).toHaveBeenCalledWith({ session_id: "session-1" });
+    expect(listThreadOrder(testRoot.container)).toEqual(["session-1", "session-2"]);
+
+    await clickAndFlush(
+      testRoot.container.querySelector("[data-testid='mock-open-session-2']") as HTMLElement,
+    );
+
+    expect(sessionClient.get).toHaveBeenLastCalledWith({ session_id: "session-2" });
+    expect(listThreadOrder(testRoot.container)).toEqual(["session-1", "session-2"]);
+    expect(testRoot.container.textContent).toContain("session-2");
+
+    await clickAndFlush(
+      testRoot.container.querySelector("[data-testid='mock-conversation-messages']") as HTMLElement,
+    );
+
+    expect(listThreadOrder(testRoot.container)).toEqual(["session-2", "session-1"]);
+    expect(testRoot.container.textContent).toContain("Title session-2:Fresh assistant reply");
 
     cleanupTestRoot(testRoot);
   });
