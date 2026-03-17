@@ -13,9 +13,14 @@ function isBottomLocked(element: HTMLElement): boolean {
   );
 }
 
+function scrollToBottom(element: HTMLElement): void {
+  element.scrollTop = element.scrollHeight;
+}
+
 export function AiSdkChatMessageList({
   approvalsById,
   core,
+  followRequestId,
   messages,
   onResolveApproval,
   renderMode,
@@ -24,6 +29,7 @@ export function AiSdkChatMessageList({
 }: {
   approvalsById: Record<string, Approval>;
   core: OperatorCore;
+  followRequestId: number;
   messages: UIMessage[];
   onResolveApproval: (input: ResolveApprovalInput) => void;
   renderMode: "markdown" | "text";
@@ -32,6 +38,7 @@ export function AiSdkChatMessageList({
 }) {
   const transcriptRef = useRef<HTMLDivElement | null>(null);
   const wasBottomLockedRef = useRef(true);
+  const lastFollowRequestIdRef = useRef(followRequestId);
 
   useEffect(() => {
     const element = transcriptRef.current;
@@ -50,10 +57,20 @@ export function AiSdkChatMessageList({
 
   useLayoutEffect(() => {
     const element = transcriptRef.current;
+    if (!element || followRequestId === lastFollowRequestIdRef.current) {
+      return;
+    }
+    lastFollowRequestIdRef.current = followRequestId;
+    wasBottomLockedRef.current = true;
+    scrollToBottom(element);
+  }, [followRequestId]);
+
+  useLayoutEffect(() => {
+    const element = transcriptRef.current;
     if (!element || !wasBottomLockedRef.current) {
       return;
     }
-    element.scrollTop = element.scrollHeight;
+    scrollToBottom(element);
   }, [messages, working]);
 
   return (
