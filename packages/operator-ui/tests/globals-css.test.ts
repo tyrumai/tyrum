@@ -3,6 +3,12 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 describe("globals.css", () => {
+  it("imports Tailwind Preflight", () => {
+    const css = readFileSync(join(process.cwd(), "packages/operator-ui/src/globals.css"), "utf8");
+
+    expect(css).toContain('@import "tailwindcss/preflight.css" layer(base);');
+  });
+
   it("resets native chrome for plain text-entry controls", () => {
     const css = readFileSync(join(process.cwd(), "packages/operator-ui/src/globals.css"), "utf8");
 
