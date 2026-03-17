@@ -4,8 +4,6 @@ import { secureStringEqual } from "../../utils/secure-string-equal.js";
 import { isUniqueViolation } from "../../utils/sql-errors.js";
 import {
   StoredTelegramChannelConfigSchema,
-  type StoredDiscordChannelConfig,
-  type StoredGoogleChatChannelConfig,
   type StoredChannelConfig,
   type StoredTelegramChannelConfig,
   asStoredTelegramConfig,
@@ -16,13 +14,15 @@ import {
 export {
   GoogleChatAudienceType,
   GoogleChatAuthMethod,
-  type GoogleChatAudienceType,
-  type GoogleChatAuthMethod,
-  type StoredDiscordChannelConfig,
-  type StoredGoogleChatChannelConfig,
-  type StoredChannelConfig,
-  type StoredTelegramChannelConfig,
   toChannelConfigView,
+} from "./channel-config-model.js";
+export type {
+  GoogleChatAudienceType,
+  GoogleChatAuthMethod,
+  StoredDiscordChannelConfig,
+  StoredGoogleChatChannelConfig,
+  StoredChannelConfig,
+  StoredTelegramChannelConfig,
 } from "./channel-config-model.js";
 
 // Hidden sentinel row so a tenant that deleted every live channel config does not
