@@ -54,6 +54,13 @@ Escalation is the safety valve. Guardian review may succeed, deny, or decide tha
 
 That means human review is not an exceptional fallback. It is the normal safe endpoint whenever automated review cannot defend a durable allow or deny.
 
+Guardian prompts should make two things explicit:
+
+- missing or omitted evidence means unknown, not safe
+- `requested_human` is the default whenever risk is not clearly low and well-justified
+
+Guardian review also uses explicit risk-score bands so different runs do not improvise their own threshold vocabulary.
+
 ## Hard invariants
 
 - Every reviewable item should expose durable review state on the parent approval or pairing.

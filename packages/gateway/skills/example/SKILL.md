@@ -9,9 +9,11 @@ requires:
   tools: []
 ---
 
-This is a bundled example skill.
+This bundled skill is documentation-only.
 
-It exists to demonstrate the skill load order:
+It exists to demonstrate skill provenance and load order. If it is enabled, it should not change runtime behavior beyond showing that the skill was loaded.
+
+The load order is:
 
 1. Bundled skills (shipped with Tyrum)
 2. User skills directory (global)

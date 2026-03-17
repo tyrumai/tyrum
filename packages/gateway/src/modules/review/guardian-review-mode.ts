@@ -52,6 +52,16 @@ export type GuardianReviewRequest = {
   targetId?: string;
 };
 
+const COMMON_GUARDIAN_REVIEW_RULES = [
+  "Treat missing, omitted, or stale evidence as unknown, not safe.",
+  "Risk score bands:",
+  "- low (0-199): narrow, justified, bounded, and safe to automate when the evidence is complete.",
+  "- medium (200-499): some operational risk or uncertainty; default to requested_human unless the safe automated path is still obvious and fully justified.",
+  "- high (500-799): meaningful privilege, destructive potential, or unclear scope; default to requested_human.",
+  "- critical (800-1000): sandbox escape, credential access, data exfiltration, broad system impact, or similarly dangerous behavior; default to requested_human.",
+  "requested_human is the default whenever the evidence is incomplete, ambiguous, or the safe automated outcome is not clearly defensible.",
+] as const;
+
 function parseGuardianReviewMetadata(
   metadata: Record<string, unknown> | undefined,
 ): z.infer<typeof GuardianReviewMetadataSchema> | undefined {
@@ -116,7 +126,8 @@ export function buildGuardianReviewSystemPrompt(subjectType: GuardianReviewSubje
       "You are operating in guardian review mode with no normal assistant persona.",
       "Review approval requests for safety and operational risk.",
       "Risk must be your own assessment from the request, motivation, and evidence. Ignore configured tool risk labels.",
-      "Approve only when the request is clearly justified, narrowly scoped, and low enough risk for automatic execution.",
+      ...COMMON_GUARDIAN_REVIEW_RULES,
+      "Approve only when the request is clearly justified, narrowly scoped, low risk, and safe for automatic execution.",
       "If there is missing context, ambiguity, privilege escalation, destructive behavior, sandbox escape, network exfiltration, credential access, or broad file/system impact, route to requested_human.",
       "Call `guardian_review_decision` exactly once. Do not answer with prose outside the tool call.",
     ].join("\n");
@@ -127,7 +138,8 @@ export function buildGuardianReviewSystemPrompt(subjectType: GuardianReviewSubje
     "You are operating in guardian review mode with no normal assistant persona.",
     "Review node pairing requests for safety and capability risk.",
     "Risk must be your own assessment from the node identity, metadata, and advertised capabilities.",
-    "Approve only when the node can be trusted automatically and you can provide an exact trust_level and capability_allowlist limited to the advertised capabilities.",
+    ...COMMON_GUARDIAN_REVIEW_RULES,
+    "Approve only when the node can be trusted automatically, the residual risk is low, and you can provide an exact trust_level and capability_allowlist limited to the advertised capabilities.",
     "If you are uncertain, the node looks risky, or the safe capability set is unclear, route to requested_human.",
     "Call `guardian_review_decision` exactly once. Do not answer with prose outside the tool call.",
   ].join("\n");

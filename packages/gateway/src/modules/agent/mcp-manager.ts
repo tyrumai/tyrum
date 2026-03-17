@@ -67,6 +67,9 @@ export interface McpToolInfo {
   inputSchema?: unknown;
   effect?: ToolDescriptor["effect"];
   keywords?: string[];
+  promptGuidance?: readonly string[];
+  promptExamples?: readonly string[];
+  preTurnHydration?: ToolDescriptor["preTurnHydration"];
 }
 
 interface McpClientEntry {
@@ -186,6 +189,9 @@ function toDescriptor(spec: McpServerSpecT, tool: McpToolInfo, logger?: Logger):
       tool.inputSchema && typeof tool.inputSchema === "object"
         ? (tool.inputSchema as Record<string, unknown>)
         : undefined,
+    promptGuidance: tool.promptGuidance,
+    promptExamples: tool.promptExamples,
+    preTurnHydration: tool.preTurnHydration,
   };
 }
 

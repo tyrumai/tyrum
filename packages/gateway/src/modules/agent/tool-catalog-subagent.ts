@@ -11,6 +11,13 @@ const SUBAGENT_TOOL_METADATA = {
     description:
       "Spawn a read-only helper subagent, run an initial prompt through it, and keep it available for follow-up.",
     keywords: ["subagent", "delegate", "helper", "spawn", "review", "explore"] as const,
+    promptGuidance: [
+      "Use spawn only for bounded helper work with a clear execution_profile.",
+      "Make the initial message specific about the files, question, or output you want back.",
+    ] as const,
+    promptExamples: [
+      '{"execution_profile":"explorer_ro","message":"Inspect the automation scheduler and summarize the functions that normalize cadence inputs."}',
+    ] as const,
   },
   "subagent.list": {
     description: "List helper subagents created by the current session.",
@@ -20,15 +27,29 @@ const SUBAGENT_TOOL_METADATA = {
   },
   "subagent.send": {
     description: "Send a follow-up prompt to one of the current session's helper subagents.",
+    promptGuidance: [
+      "Use send for follow-up questions on an existing helper instead of spawning a new one.",
+    ] as const,
+    promptExamples: [
+      '{"subagent_id":"subagent_123","message":"Focus on the retry path and cite the relevant functions."}',
+    ] as const,
   },
   "subagent.close": {
     description: "Close one of the current session's helper subagents when it is no longer needed.",
+    promptGuidance: [
+      "Close helpers once their result is integrated so session state stays clean.",
+    ] as const,
+    promptExamples: [
+      '{"subagent_id":"subagent_123","reason":"Analysis integrated into the main turn."}',
+    ] as const,
   },
 } as const satisfies Record<
   SubagentToolId,
   {
     description: string;
     keywords?: readonly string[];
+    promptGuidance?: readonly string[];
+    promptExamples?: readonly string[];
   }
 >;
 
@@ -51,5 +72,7 @@ export const SUBAGENT_TOOL_REGISTRY: readonly ToolDescriptor[] = (
     source: "builtin",
     family: "subagent",
     inputSchema: SUBAGENT_TOOL_INPUT_SCHEMAS[id],
+    promptGuidance: "promptGuidance" in metadata ? metadata.promptGuidance : undefined,
+    promptExamples: "promptExamples" in metadata ? metadata.promptExamples : undefined,
   };
 });

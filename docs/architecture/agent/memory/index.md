@@ -39,6 +39,8 @@ Memory is an **MCP-native capability**, not a gateway-owned CRUD surface. The ru
 
 Memory configuration is carried in `server_settings.memory`. Retrieval hooks are wired through `pre_turn_tools` so recall can be assembled before inference starts.
 
+For gateway-owned memory tools, pre-turn hydration should rely on explicit descriptor metadata for the prompt field and whether turn context is included. Schema-based inference remains only as a compatibility fallback for third-party MCP tools.
+
 ## Main flow
 
 1. A turn begins with retrieval cues from session context, work state, and operator intent.

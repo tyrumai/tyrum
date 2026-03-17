@@ -37,6 +37,10 @@ export const BUILTIN_MEMORY_MCP_TOOLS: readonly BuiltinMcpToolInfo[] = [
       "Return prompt-ready durable memory relevant to the current user request. Use this as pre-turn recall context; the gateway may invoke it automatically before a turn.",
     effect: "read_only",
     keywords: ["memory", "seed", "recall", "preferences", "context"],
+    preTurnHydration: {
+      promptArgName: "query",
+      includeTurnContext: true,
+    },
     inputSchema: {
       type: "object",
       properties: {

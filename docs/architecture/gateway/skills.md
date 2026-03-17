@@ -40,6 +40,8 @@ Skills can come from several locations, with more specific locations winning on 
 
 Workspace skills are the main risk boundary. They come from the current checkout and must be treated as untrusted until the workspace is deliberately marked trusted.
 
+The bundled `example` skill is intentionally documentation-only. If it is enabled, it should demonstrate provenance and load order rather than alter runtime behavior.
+
 ## Key rules
 
 - Skills must never be treated as a bypass around tool policy or approvals.

@@ -5,6 +5,11 @@ import { BUILTIN_TOOL_REGISTRY } from "./tool-catalog.js";
 export type ToolEffect = "read_only" | "state_changing";
 export type ToolSource = "builtin" | "builtin_mcp" | "mcp" | "plugin";
 
+export interface ToolPreTurnHydrationConfig {
+  promptArgName: string;
+  includeTurnContext?: boolean;
+}
+
 export interface ToolDescriptor {
   id: string;
   description: string;
@@ -13,6 +18,7 @@ export interface ToolDescriptor {
   inputSchema?: Record<string, unknown>;
   promptGuidance?: readonly string[];
   promptExamples?: readonly string[];
+  preTurnHydration?: ToolPreTurnHydrationConfig;
   source?: ToolSource;
   family?: string;
   backingServerId?: string;

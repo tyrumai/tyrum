@@ -15,6 +15,17 @@ import {
 } from "../observability/persisted-json.js";
 
 const SESSION_TITLE_MAX_CHARS = 120;
+const LOW_SIGNAL_SESSION_TITLES = new Set([
+  "chat",
+  "conversation",
+  "help",
+  "need help",
+  "new conversation",
+  "question",
+  "session",
+  "task",
+  "untitled",
+]);
 
 export interface SessionRow extends RawSessionTimeFields {
   tenant_id: string;
@@ -320,5 +331,13 @@ export function toSessionListRow(
 export function normalizeSessionTitle(value: string): string {
   const [firstLine = ""] = value.replaceAll("\r", "").split("\n");
   const trimmed = firstLine.trim();
-  return trimmed.slice(0, SESSION_TITLE_MAX_CHARS);
+  const truncated = trimmed.slice(0, SESSION_TITLE_MAX_CHARS);
+  const normalized = truncated
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+  if (LOW_SIGNAL_SESSION_TITLES.has(normalized)) {
+    return "";
+  }
+  return truncated;
 }

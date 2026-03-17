@@ -69,20 +69,27 @@ describe("formatSkillsPrompt", () => {
   it("renders prompt guidance and examples for risky tools", () => {
     const prompt = formatToolPrompt([
       {
+        id: "bash",
+        description: "Execute shell commands on the local machine.",
+        effect: "state_changing",
+        keywords: [],
+        promptGuidance: ["Prefer one bounded command at a time."],
+        promptExamples: ['{"command":"pnpm lint","cwd":"packages/gateway","timeout_ms":120000}'],
+      },
+      {
         id: "tool.node.dispatch",
         description: "Dispatch a specific capability action to a connected node.",
         effect: "state_changing",
         keywords: [],
-        promptGuidance: [
-          "Put action-specific arguments inside the input object.",
-          "Do not add the transport op field yourself.",
-        ],
+        promptGuidance: ["Put action-specific arguments inside the input object."],
         promptExamples: [
           '{"node_id":"node_123","capability":"tyrum.desktop.screenshot","action_name":"screenshot","input":{"display":"all"}}',
         ],
       },
     ]);
 
+    expect(prompt).toContain("Guidance: Prefer one bounded command at a time.");
+    expect(prompt).toContain('Example: {"command":"pnpm lint"');
     expect(prompt).toContain("Guidance: Put action-specific arguments inside the input object.");
     expect(prompt).toContain('Example: {"node_id":"node_123"');
     expect(prompt).toContain('"input":{"display":"all"}');

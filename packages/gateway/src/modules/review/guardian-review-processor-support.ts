@@ -114,11 +114,23 @@ export function buildApprovalReviewMessage(
         }
       : undefined,
   };
-  return `Review this approval request.\n\n${JSON.stringify(evidence, null, 2)}`;
+  return [
+    "Review this approval request.",
+    "Treat missing or omitted fields as unknown, not safe.",
+    "If the evidence is incomplete or ambiguous, route to requested_human.",
+    "",
+    JSON.stringify(evidence, null, 2),
+  ].join("\n");
 }
 
 export function buildPairingReviewMessage(pairing: NodePairingRequest): string {
-  return `Review this pairing request.\n\n${JSON.stringify(pairing, null, 2)}`;
+  return [
+    "Review this pairing request.",
+    "Treat missing or omitted fields as unknown, not safe.",
+    "If the safe trust level or capability allowlist is unclear, route to requested_human.",
+    "",
+    JSON.stringify(pairing, null, 2),
+  ].join("\n");
 }
 
 export function isValidGuardianPairingDecision(
