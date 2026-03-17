@@ -1,4 +1,4 @@
-import { Approval, Lane, TyrumKey } from "@tyrum/schemas";
+import { AgentId, Approval, Lane, TyrumKey } from "@tyrum/schemas";
 import type { Approval as ApprovalT } from "@tyrum/schemas";
 import type { ApprovalRow } from "./dal.js";
 
@@ -34,10 +34,11 @@ function buildScope(row: ApprovalRow): ApprovalT["scope"] | undefined {
 
 export function toApprovalContract(row: ApprovalRow): ApprovalT | undefined {
   const scope = buildScope(row);
+  const agentId = AgentId.safeParse(row.agent_id);
   const candidate: ApprovalT = {
     approval_id: row.approval_id,
     approval_key: row.approval_key,
-    agent_id: row.agent_id,
+    ...(agentId.success ? { agent_id: agentId.data } : {}),
     kind: row.kind,
     status: row.status,
     prompt: row.prompt,
