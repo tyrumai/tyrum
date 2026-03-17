@@ -276,11 +276,12 @@ These routes require a **system admin token** (`tenant_id === null`). Deployment
 
 - Auth: Required (unless gateway auth is disabled)
 - Device scope: `operator.approvals`
-- Request: Optional query param `status` (`pending|approved|denied|expired|cancelled`)
+- Request: Optional query param `status` (`queued|reviewing|awaiting_human|approved|denied|expired|cancelled`)
 - Response:
   - `200` JSON `{ approvals: [...] }`
   - `400` invalid status
   - `401`, `403`
+- Notes: Approval records follow `Approval` and may include `agent_id` for managed-agent correlation.
 
 #### GET /approvals/:id
 
@@ -1294,6 +1295,7 @@ Client-sent events are rejected.
 - Scope (device tokens): `operator.approvals`
 - Schema: `WsApprovalListRequest` (payload parsed as `ApprovalListRequest`)
 - Result: `ApprovalListResponse`
+- Notes: Approval entries may include `agent_id`; terminal statuses are returned newest-first when a specific terminal `status` filter is requested.
 
 #### `approval.resolve`
 

@@ -29,6 +29,7 @@ describe("Approval contracts", () => {
   const baseApproval = {
     approval_id: "550e8400-e29b-41d4-a716-446655440000",
     approval_key: "approval-1",
+    agent_id: "550e8400-e29b-41d4-a716-446655440222",
     kind: "workflow_step",
     status: "queued",
     prompt: "Approve deployment?",
@@ -50,6 +51,7 @@ describe("Approval contracts", () => {
 
     expect(approval.kind).toBe("workflow_step");
     expect(approval.status).toBe("queued");
+    expect(approval.agent_id).toBe("550e8400-e29b-41d4-a716-446655440222");
     expect(approval.motivation).toContain("permission");
   });
 

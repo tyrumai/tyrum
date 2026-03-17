@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { DateTimeSchema, UuidSchema } from "./common.js";
-import { Lane, TyrumKey } from "./keys.js";
+import { AgentId, Lane, TyrumKey } from "./keys.js";
 import { PolicyOverride } from "./policy-bundle.js";
 import { ReviewEntry } from "./review.js";
 import { canonicalizeToolId } from "./tool-id.js";
@@ -53,6 +53,7 @@ export const Approval = z
   .object({
     approval_id: ApprovalId,
     approval_key: ApprovalKey,
+    agent_id: AgentId.optional(),
     kind: ApprovalKind,
     status: ApprovalStatus,
     prompt: z.string().trim().min(1),

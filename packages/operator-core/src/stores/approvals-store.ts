@@ -3,12 +3,22 @@ import type { PolicyOverride } from "@tyrum/schemas";
 import type { OperatorWsClient } from "../deps.js";
 import { ElevatedModeRequiredError } from "../elevated-mode.js";
 import { createStore, type ExternalStore } from "../store.js";
-import { isApprovalBlockedStatus, isApprovalHumanActionableStatus } from "../review-status.js";
+import {
+  approvalUpdatedAt,
+  isApprovalBlockedStatus,
+  isApprovalHumanActionableStatus,
+  isApprovalTerminalStatus,
+} from "../review-status.js";
+
+const ACTIVE_APPROVAL_LIMIT = 500;
+const HISTORY_APPROVAL_LIMIT = 100;
+const HISTORY_APPROVAL_STATUSES = ["approved", "denied", "expired", "cancelled"] as const;
 
 export interface ApprovalsState {
   byId: Record<string, Approval>;
   blockedIds: string[];
   pendingIds: string[];
+  historyIds: string[];
   loading: boolean;
   error: string | null;
   lastSyncedAt: string | null;
@@ -40,44 +50,117 @@ export interface ResolveApprovalResult {
 
 type GetPrivilegedWsClient = () => OperatorWsClient | null;
 
+function compareTimestampsDesc(left: string, right: string): number {
+  const leftMs = Date.parse(left);
+  const rightMs = Date.parse(right);
+  if (Number.isFinite(leftMs) && Number.isFinite(rightMs) && leftMs !== rightMs) {
+    return rightMs - leftMs;
+  }
+  if (left !== right) {
+    return right.localeCompare(left);
+  }
+  return 0;
+}
+
+function compareApprovalsByCreatedDesc(left: Approval, right: Approval): number {
+  return compareTimestampsDesc(left.created_at, right.created_at);
+}
+
+function compareApprovalsByHistoryDesc(left: Approval, right: Approval): number {
+  const updatedCompare = compareTimestampsDesc(approvalUpdatedAt(left), approvalUpdatedAt(right));
+  if (updatedCompare !== 0) {
+    return updatedCompare;
+  }
+  return compareApprovalsByCreatedDesc(left, right);
+}
+
+function sortApprovalIds(
+  approvalIds: string[],
+  byId: Record<string, Approval>,
+  compare: (left: Approval, right: Approval) => number,
+): string[] {
+  return [...new Set(approvalIds)]
+    .filter((approvalId) => approvalId in byId)
+    .toSorted((leftId, rightId) => {
+      const left = byId[leftId]!;
+      const right = byId[rightId]!;
+      const result = compare(left, right);
+      return result !== 0 ? result : leftId.localeCompare(rightId);
+    });
+}
+
+function updateApprovalIds(
+  currentIds: string[],
+  approvalId: string,
+  shouldInclude: boolean,
+): string[] {
+  const nextIds = currentIds.filter((entry) => entry !== approvalId);
+  if (shouldInclude) {
+    nextIds.push(approvalId);
+  }
+  return nextIds;
+}
+
+function dedupeApprovals(approvals: Approval[]): Approval[] {
+  const approvalsById = new Map<string, Approval>();
+  for (const approval of approvals) {
+    approvalsById.set(approval.approval_id, approval);
+  }
+  return [...approvalsById.values()];
+}
+
 function collectApprovalIds(
   approvals: Approval[],
-): Pick<ApprovalsState, "blockedIds" | "pendingIds"> {
+): Pick<ApprovalsState, "blockedIds" | "pendingIds" | "historyIds"> {
+  const byId = Object.fromEntries(
+    approvals.map((approval) => [approval.approval_id, approval] as const),
+  ) as Record<string, Approval>;
+
   return {
-    blockedIds: approvals
-      .filter((approval) => isApprovalBlockedStatus(approval.status))
-      .map((approval) => approval.approval_id),
-    pendingIds: approvals
-      .filter((approval) => isApprovalHumanActionableStatus(approval.status))
-      .map((approval) => approval.approval_id),
+    blockedIds: sortApprovalIds(
+      approvals
+        .filter((approval) => isApprovalBlockedStatus(approval.status))
+        .map((approval) => approval.approval_id),
+      byId,
+      compareApprovalsByCreatedDesc,
+    ),
+    pendingIds: sortApprovalIds(
+      approvals
+        .filter((approval) => isApprovalHumanActionableStatus(approval.status))
+        .map((approval) => approval.approval_id),
+      byId,
+      compareApprovalsByCreatedDesc,
+    ),
+    historyIds: sortApprovalIds(
+      approvals
+        .filter((approval) => isApprovalTerminalStatus(approval.status))
+        .map((approval) => approval.approval_id),
+      byId,
+      compareApprovalsByHistoryDesc,
+    ).slice(0, HISTORY_APPROVAL_LIMIT),
   };
 }
 
 function upsertApproval(state: ApprovalsState, approval: Approval): ApprovalsState {
   const id = approval.approval_id;
   const byId = { ...state.byId, [id]: approval };
+  const blockedIds = sortApprovalIds(
+    updateApprovalIds(state.blockedIds, id, isApprovalBlockedStatus(approval.status)),
+    byId,
+    compareApprovalsByCreatedDesc,
+  );
+  const pendingIds = sortApprovalIds(
+    updateApprovalIds(state.pendingIds, id, isApprovalHumanActionableStatus(approval.status)),
+    byId,
+    compareApprovalsByCreatedDesc,
+  );
+  const historyIds = sortApprovalIds(
+    updateApprovalIds(state.historyIds, id, isApprovalTerminalStatus(approval.status)),
+    byId,
+    compareApprovalsByHistoryDesc,
+  ).slice(0, HISTORY_APPROVAL_LIMIT);
 
-  const shouldBeBlocked = isApprovalBlockedStatus(approval.status);
-  const isBlocked = state.blockedIds.includes(id);
-  let blockedIds = state.blockedIds;
-
-  if (shouldBeBlocked && !isBlocked) {
-    blockedIds = [...blockedIds, id];
-  } else if (!shouldBeBlocked && isBlocked) {
-    blockedIds = blockedIds.filter((entry) => entry !== id);
-  }
-
-  const shouldBePending = isApprovalHumanActionableStatus(approval.status);
-  const isPending = state.pendingIds.includes(id);
-  let pendingIds = state.pendingIds;
-
-  if (shouldBePending && !isPending) {
-    pendingIds = [...pendingIds, id];
-  } else if (!shouldBePending && isPending) {
-    pendingIds = pendingIds.filter((entry) => entry !== id);
-  }
-
-  return { ...state, byId, blockedIds, pendingIds };
+  return { ...state, byId, blockedIds, pendingIds, historyIds };
 }
 
 async function withPrivilegedWsClient<T>(
@@ -139,6 +222,7 @@ export function createApprovalsStore(options: {
     byId: {},
     blockedIds: [],
     pendingIds: [],
+    historyIds: [],
     loading: false,
     error: null,
     lastSyncedAt: null,
@@ -162,19 +246,29 @@ export function createApprovalsStore(options: {
 
     setState((prev) => ({ ...prev, loading: true, error: null }));
     try {
-      const result = await ws.approvalList({ limit: 500 });
+      const [activeApprovalsResult, ...historyResults] = await Promise.all([
+        ws.approvalList({ limit: ACTIVE_APPROVAL_LIMIT }),
+        ...HISTORY_APPROVAL_STATUSES.map((status) =>
+          ws.approvalList({ status, limit: HISTORY_APPROVAL_LIMIT }),
+        ),
+      ]);
       if (activeRefreshPendingRunId !== runId) return;
       const buffered = bufferedApprovalUpserts;
-      const activeApprovals = result.approvals;
+      const fetchedApprovals = dedupeApprovals([
+        ...activeApprovalsResult.approvals,
+        ...historyResults.flatMap((result) => result.approvals),
+      ]);
 
       setState((prev) => {
-        let next = prev;
-        for (const approval of activeApprovals) {
-          next = upsertApproval(next, approval);
+        const byId = { ...prev.byId };
+        for (const approval of fetchedApprovals) {
+          byId[approval.approval_id] = approval;
         }
-        next = {
-          ...next,
-          ...collectApprovalIds(activeApprovals),
+
+        let next: ApprovalsState = {
+          ...prev,
+          byId,
+          ...collectApprovalIds(fetchedApprovals),
         };
         for (const approval of buffered.values()) {
           next = upsertApproval(next, approval);

@@ -20,6 +20,7 @@ function createApprovalsState(): ApprovalsState {
     byId: {},
     blockedIds: [],
     pendingIds: [],
+    historyIds: [],
     loading: false,
     error: null,
     lastSyncedAt: null,

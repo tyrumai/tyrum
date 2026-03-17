@@ -4,18 +4,46 @@ import { createApprovalsStore } from "../src/stores/approvals-store.js";
 
 function makeApproval(
   approvalId: string,
-  status: "queued" | "reviewing" | "awaiting_human" | "approved",
+  status: "queued" | "reviewing" | "awaiting_human" | "approved" | "denied" | "expired",
+  overrides?: {
+    createdAt?: string;
+    latestReview?: {
+      created_at?: string;
+      started_at?: string | null;
+      completed_at?: string | null;
+      state?: string;
+      reason?: string | null;
+    } | null;
+  },
 ) {
   return {
     approval_id: approvalId,
     approval_key: `approval:${approvalId}`,
+    agent_id: "00000000-0000-4000-8000-000000000002",
     kind: "workflow_step",
     status,
     prompt: `Approve ${approvalId}?`,
     motivation: "Approval is required before execution can continue.",
-    created_at: "2026-03-10T00:00:00.000Z",
+    created_at: overrides?.createdAt ?? "2026-03-10T00:00:00.000Z",
     expires_at: null,
-    latest_review: null,
+    latest_review: overrides?.latestReview
+      ? {
+          review_id: `review:${approvalId}`,
+          target_type: "approval",
+          target_id: approvalId,
+          reviewer_kind: "human",
+          reviewer_id: null,
+          state: overrides.latestReview.state ?? status,
+          reason: overrides.latestReview.reason ?? null,
+          risk_level: null,
+          risk_score: null,
+          evidence: null,
+          decision_payload: null,
+          created_at: overrides.latestReview.created_at ?? "2026-03-10T00:00:00.000Z",
+          started_at: overrides.latestReview.started_at ?? null,
+          completed_at: overrides.latestReview.completed_at ?? null,
+        }
+      : null,
   } as const;
 }
 
@@ -39,6 +67,59 @@ describe("approvals-store", () => {
       awaitingHuman.approval_id,
     ]);
     expect(store.getSnapshot().pendingIds).toEqual([queued.approval_id, awaitingHuman.approval_id]);
+    expect(store.getSnapshot().historyIds).toEqual([]);
+  });
+
+  it("hydrates recent approval history newest first across terminal statuses", async () => {
+    const queued = makeApproval("11111111-1111-1111-1111-111111111111", "queued");
+    const approvedNewest = makeApproval("22222222-2222-2222-2222-222222222222", "approved", {
+      createdAt: "2026-03-10T00:00:00.000Z",
+      latestReview: {
+        completed_at: "2026-03-10T00:00:05.000Z",
+        state: "approved",
+      },
+    });
+    const deniedMiddle = makeApproval("33333333-3333-3333-3333-333333333333", "denied", {
+      createdAt: "2026-03-10T00:00:01.000Z",
+      latestReview: {
+        completed_at: "2026-03-10T00:00:03.000Z",
+        state: "denied",
+      },
+    });
+    const expiredOldest = makeApproval("44444444-4444-4444-4444-444444444444", "expired", {
+      createdAt: "2026-03-10T00:00:02.000Z",
+      latestReview: {
+        completed_at: "2026-03-10T00:00:02.000Z",
+        state: "expired",
+      },
+    });
+    const ws = {
+      approvalList: vi.fn(async (payload?: { status?: string }) => {
+        switch (payload?.status) {
+          case "approved":
+            return { approvals: [approvedNewest] };
+          case "denied":
+            return { approvals: [deniedMiddle] };
+          case "expired":
+            return { approvals: [expiredOldest] };
+          case "cancelled":
+            return { approvals: [] };
+          default:
+            return { approvals: [queued] };
+        }
+      }),
+    };
+
+    const { store } = createApprovalsStore({ ws: ws as never });
+    await store.refreshPending();
+
+    expect(store.getSnapshot().blockedIds).toEqual([queued.approval_id]);
+    expect(store.getSnapshot().pendingIds).toEqual([queued.approval_id]);
+    expect(store.getSnapshot().historyIds).toEqual([
+      approvedNewest.approval_id,
+      deniedMiddle.approval_id,
+      expiredOldest.approval_id,
+    ]);
   });
 
   it("passes approve-always payloads through and returns created overrides", async () => {
@@ -117,6 +198,8 @@ describe("approvals-store", () => {
       createdOverrides: [createdOverride],
     });
     expect(store.getSnapshot().byId[approval.approval_id]).toEqual(approval);
+    expect(store.getSnapshot().historyIds).toEqual([approval.approval_id]);
+    expect(store.getSnapshot().pendingIds).toEqual([]);
   });
 
   it("uses a privileged WS client for approval resolution when provided", async () => {

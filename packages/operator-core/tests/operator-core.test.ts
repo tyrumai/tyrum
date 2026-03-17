@@ -102,7 +102,7 @@ describe("operator-core wiring", () => {
     expect(http.__calls.pairingsList).toBe(pairingsListBefore + 1);
     expect(http.__calls.desktopEnvironmentHostsList).toBe(desktopEnvironmentHostsListBefore + 1);
     expect(http.__calls.desktopEnvironmentsList).toBe(desktopEnvironmentsListBefore + 1);
-    expect(ws.approvalList).toHaveBeenCalledTimes(approvalsListBefore + 1);
+    expect(ws.approvalList).toHaveBeenCalledTimes(approvalsListBefore + 5);
     expect(ws.runList).toHaveBeenCalledTimes(runsListBefore + 1);
   });
 
@@ -135,7 +135,7 @@ describe("operator-core wiring", () => {
     expect(http.__calls.pairingsList).toBe(1);
     expect(http.__calls.desktopEnvironmentHostsList).toBe(1);
     expect(http.__calls.desktopEnvironmentsList).toBe(1);
-    expect(ws.approvalList).toHaveBeenCalledTimes(1);
+    expect(ws.approvalList).toHaveBeenCalledTimes(5);
     expect(ws.runList).toHaveBeenCalledTimes(1);
 
     ws.emit("approval.updated", {
@@ -346,7 +346,7 @@ describe("operator-core wiring", () => {
     expect(http.__calls.usageGet).toBe(1);
     expect(http.__calls.presenceList).toBe(1);
     expect(http.__calls.pairingsList).toBe(1);
-    expect(ws.approvalList).toHaveBeenCalledTimes(1);
+    expect(ws.approvalList).toHaveBeenCalledTimes(5);
     expect(ws.runList).toHaveBeenCalledTimes(1);
   });
 
@@ -573,7 +573,7 @@ describe("operator-core wiring", () => {
     ws.emit("connected", { clientId: "client-123" });
     await tick();
     expect(http.__calls.statusGet).toBe(1);
-    expect(ws.approvalList).toHaveBeenCalledTimes(1);
+    expect(ws.approvalList).toHaveBeenCalledTimes(5);
     expect(ws.runList).toHaveBeenCalledTimes(1);
 
     ws.emit("disconnected", { code: 1006, reason: "net down" });
@@ -581,7 +581,7 @@ describe("operator-core wiring", () => {
     await tick();
 
     expect(http.__calls.statusGet).toBe(2);
-    expect(ws.approvalList).toHaveBeenCalledTimes(2);
+    expect(ws.approvalList).toHaveBeenCalledTimes(10);
     expect(ws.runList).toHaveBeenCalledTimes(2);
   });
 });

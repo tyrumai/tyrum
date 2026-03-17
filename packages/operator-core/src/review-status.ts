@@ -30,6 +30,12 @@ export function isApprovalHumanActionableStatus(status: ApprovalLikeStatus): boo
   return status === "pending" || status === "queued" || status === "awaiting_human";
 }
 
+export function isApprovalTerminalStatus(status: ApprovalLikeStatus): boolean {
+  return (
+    status === "approved" || status === "denied" || status === "expired" || status === "cancelled"
+  );
+}
+
 export function approvalUpdatedAt(approval: Approval): string {
   return readReviewLikeUpdatedAt(approval.latest_review) ?? approval.created_at;
 }
