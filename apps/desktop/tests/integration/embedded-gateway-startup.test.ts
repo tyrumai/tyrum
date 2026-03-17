@@ -33,6 +33,8 @@ import {
 const itPlaywright = skipPlaywrightTests ? it.skip : it;
 // Windows can take longer to remove the copied staged gateway artifact tree.
 const cleanupTimeoutMs = process.platform === "win32" ? 120_000 : 10_000;
+const bundledUiTestTimeoutMs = process.platform === "win32" ? 180_000 : 90_000;
+const loginFormTimeoutMs = process.platform === "win32" ? 30_000 : 10_000;
 
 describe("desktop embedded gateway startup", () => {
   let manager: GatewayManager | undefined;
@@ -89,7 +91,7 @@ describe("desktop embedded gateway startup", () => {
 
   itPlaywright(
     "serves bundled /ui assets and connects with the bootstrap token via the login form",
-    { timeout: 90_000 },
+    { timeout: bundledUiTestTimeoutMs },
     async () => {
       if (!canRunPlaywright) {
         throw new Error(
@@ -178,7 +180,7 @@ describe("desktop embedded gateway startup", () => {
 
           await page.waitForSelector('[data-testid="login-token"]', {
             state: "visible",
-            timeout: 10_000,
+            timeout: loginFormTimeoutMs,
           });
           await page.getByTestId("login-token").fill(token);
           await page.getByTestId("login-button").click();

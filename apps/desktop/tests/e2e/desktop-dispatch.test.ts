@@ -60,6 +60,25 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function waitForTaskResults(
+  taskResults: TaskResultEntry[],
+  expectedLength: number,
+  timeoutMs = process.platform === "win32" ? 5_000 : 2_000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() <= deadline) {
+    if (taskResults.length >= expectedLength) {
+      return;
+    }
+    await delay(25);
+  }
+
+  throw new Error(
+    `timed out waiting for ${String(expectedLength)} task result(s); received ${String(taskResults.length)}`,
+  );
+}
+
 async function waitForCapabilities(
   connectionManager: ConnectionManager,
   capabilities: ReadonlyArray<"desktop" | "cli" | "playwright" | "http" | "ios" | "android">,
@@ -287,8 +306,7 @@ describe("e2e: gateway dispatches task to desktop node", () => {
       { connectionManager: srv.connectionManager, nodePairingDal: approvedNodePairingDal },
     );
 
-    // Wait for the round-trip
-    await delay(300);
+    await waitForTaskResults(srv.taskResults, 1);
 
     expect(srv.taskResults).toHaveLength(1);
     expect(srv.taskResults[0]!.taskId).toBe(taskId);
@@ -326,7 +344,7 @@ describe("e2e: gateway dispatches task to desktop node", () => {
       { connectionManager: srv.connectionManager, nodePairingDal: approvedNodePairingDal },
     );
 
-    await delay(300);
+    await waitForTaskResults(srv.taskResults, 1);
 
     expect(srv.taskResults).toHaveLength(1);
     expect(srv.taskResults[0]!.taskId).toBe(taskId);
@@ -359,7 +377,7 @@ describe("e2e: gateway dispatches task to desktop node", () => {
       { connectionManager: srv.connectionManager, nodePairingDal: approvedNodePairingDal },
     );
 
-    await delay(300);
+    await waitForTaskResults(srv.taskResults, 1);
 
     expect(srv.taskResults).toHaveLength(1);
     expect(srv.taskResults[0]!.taskId).toBe(taskId);
@@ -392,7 +410,7 @@ describe("e2e: gateway dispatches task to desktop node", () => {
       { connectionManager: srv.connectionManager, nodePairingDal: approvedNodePairingDal },
     );
 
-    await delay(500);
+    await waitForTaskResults(srv.taskResults, 1);
 
     expect(srv.taskResults).toHaveLength(1);
     expect(srv.taskResults[0]!.taskId).toBe(taskId);

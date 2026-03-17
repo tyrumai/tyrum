@@ -339,8 +339,9 @@ export async function stopChildProcess(child: ChildProcessWithoutNullStreams): P
 
 export async function ensureOperatorShellVisible(
   page: (typeof import("playwright"))["Page"],
+  timeoutMs = process.platform === "win32" ? 60_000 : 30_000,
 ): Promise<void> {
-  const deadline = Date.now() + 30_000;
+  const deadline = Date.now() + timeoutMs;
   while (Date.now() <= deadline) {
     const visibleUiState = await Promise.race([
       page
@@ -359,7 +360,7 @@ export async function ensureOperatorShellVisible(
       await page.getByRole("button", { name: "Skip setup" }).click();
     }
   }
-  throw new Error("operator shell did not become visible");
+  throw new Error(`operator shell did not become visible within ${timeoutMs}ms`);
 }
 
 export function formatBrowserFailure(input: {
