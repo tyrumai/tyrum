@@ -269,14 +269,20 @@ export function PairingPage({ core }: { core: OperatorCore }) {
 
       <div className="grid gap-3">
         <div className="flex items-center justify-between gap-3">
-          <SectionHeading level="page" as="h2">Nodes</SectionHeading>
+          <SectionHeading level="page" as="h2">
+            Nodes
+          </SectionHeading>
           <div className="text-sm text-fg-muted">
             {counts.pending} pending, {counts.connected} connected, {counts.offline} offline
           </div>
         </div>
 
         {inventory.loading && rows.length === 0 ? (
-          <LoadingState label="Loading nodes..." />
+          <Card>
+            <div className="px-6 py-5">
+              <LoadingState label="Loading nodes..." />
+            </div>
+          </Card>
         ) : rows.length === 0 ? (
           <Card>
             <EmptyState
