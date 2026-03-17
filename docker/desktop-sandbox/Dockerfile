@@ -26,6 +26,7 @@ COPY packages/client ./packages/client
 COPY packages/desktop-node ./packages/desktop-node
 
 RUN pnpm install --frozen-lockfile
+RUN node ./scripts/check-desktop-sandbox-native.mjs
 
 RUN pnpm --filter @tyrum/schemas build \
   && pnpm --filter @tyrum/cli-utils build \

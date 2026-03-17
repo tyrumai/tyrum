@@ -8,6 +8,10 @@ describe("desktop-sandbox Dockerfile", () => {
     import.meta.url,
   );
   const dockerfileUrl = new URL("../../../../docker/desktop-sandbox/Dockerfile", import.meta.url);
+  const nativeCheckUrl = new URL(
+    "../../../../scripts/check-desktop-sandbox-native.mjs",
+    import.meta.url,
+  );
 
   test("copies the shared bootstrap helper when the desktop-node bin imports it", () => {
     const bin = readFileSync(fileURLToPath(binUrl), "utf8");
@@ -15,5 +19,13 @@ describe("desktop-sandbox Dockerfile", () => {
 
     expect(bin).toContain("package-bin-bootstrap.mjs");
     expect(dockerfile).toContain("COPY --from=builder /app/scripts ./scripts");
+  });
+
+  test("runs the desktop native preflight during the builder stage", () => {
+    const nativeCheck = readFileSync(fileURLToPath(nativeCheckUrl), "utf8");
+    const dockerfile = readFileSync(fileURLToPath(dockerfileUrl), "utf8");
+
+    expect(nativeCheck).toContain("@nut-tree-fork/nut-js");
+    expect(dockerfile).toContain("RUN node ./scripts/check-desktop-sandbox-native.mjs");
   });
 });

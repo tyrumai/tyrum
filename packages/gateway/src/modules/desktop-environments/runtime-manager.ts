@@ -24,10 +24,21 @@ const DEFAULT_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 30;
 const CONTAINER_NODE_HOME = "/var/lib/tyrum-node";
 const CONTAINER_IDENTITY_PATH = `${CONTAINER_NODE_HOME}/desktop-node/device-identity.json`;
 const CONTAINER_GATEWAY_TOKEN_PATH = "/run/tyrum/gateway-token";
+const OFFICIAL_DESKTOP_SANDBOX_IMAGE_REF_PREFIX = "ghcr.io/rhernaus/tyrum-desktop-sandbox:";
 const DESKTOP_ALLOWLIST = descriptorIdsForClientCapability("desktop").map((id) => ({
   id,
   version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
 }));
+
+type DesktopEnvironmentRuntimeManagerOptions = {
+  hostId: string;
+  tyrumHome: string;
+  gatewayPort: number;
+  gatewayWsUrl?: string;
+  tokenTtlSeconds?: number;
+  hostPlatform?: NodeJS.Platform;
+  hostArch?: string;
+};
 
 type DesktopEnvironmentPaths = {
   runtimeHomeDir: string;
@@ -67,13 +78,7 @@ export class DesktopEnvironmentRuntimeManager {
     private readonly nodePairingDal: NodePairingDal,
     private readonly authTokens: AuthTokenService,
     private readonly logger: Logger,
-    private readonly options: {
-      hostId: string;
-      tyrumHome: string;
-      gatewayPort: number;
-      gatewayWsUrl?: string;
-      tokenTtlSeconds?: number;
-    },
+    private readonly options: DesktopEnvironmentRuntimeManagerOptions,
   ) {}
 
   async reconcileAll(): Promise<void> {
@@ -92,6 +97,7 @@ export class DesktopEnvironmentRuntimeManager {
   ): Promise<void> {
     const containerName = containerNameForEnvironment(environment.environment_id);
     const paths = resolveEnvironmentPaths(this.options.tyrumHome, environment.environment_id);
+    const imagePlatform = this.resolveManagedImagePlatform(environment.image_ref);
     await mkdir(paths.runtimeHomeDir, { recursive: true, mode: 0o700 });
     await mkdir(paths.runtimeIdentityDir, { recursive: true, mode: 0o700 });
     await mkdir(paths.secretsDir, { recursive: true, mode: 0o700 });
@@ -115,20 +121,36 @@ export class DesktopEnvironmentRuntimeManager {
     }
 
     let inspect = await inspectContainer(containerName);
-    let removedForImageChange = false;
+    let removedForRecreate = false;
     const currentImage = inspect?.Config?.Image?.trim();
     if (inspect && currentImage && currentImage !== environment.image_ref) {
       await removeContainer(containerName);
       inspect = null;
-      removedForImageChange = true;
+      removedForRecreate = true;
     }
 
-    if (!inspect && environment.status === "error" && !removedForImageChange) {
+    // Once an environment is already marked errored, leave non-running containers in place
+    // until a reset or image change clears the failure state.
+    if (
+      environment.status === "error" &&
+      inspect?.State?.Status !== "running" &&
+      !removedForRecreate
+    ) {
       return;
     }
 
+    if (inspect && inspect.State?.Status !== "running" && imagePlatform) {
+      await removeContainer(containerName);
+      inspect = null;
+      removedForRecreate = true;
+    }
+
     if (!inspect) {
-      await ensureImageAvailable(environment.image_ref);
+      if (imagePlatform) {
+        await ensureImageAvailable(environment.image_ref, { platform: imagePlatform });
+      } else {
+        await ensureImageAvailable(environment.image_ref);
+      }
       const issuedToken = await this.authTokens.issueToken({
         tenantId: environment.tenant_id,
         role: "node",
@@ -138,8 +160,11 @@ export class DesktopEnvironmentRuntimeManager {
         displayName: `desktop-environment:${environment.environment_id}`,
       });
       await writeGatewayToken(paths.gatewayTokenPath, issuedToken.token);
-      const runResult = await runDocker([
-        "run",
+      const runArgs = ["run"];
+      if (imagePlatform) {
+        runArgs.push("--platform", imagePlatform);
+      }
+      runArgs.push(
         "--detach",
         "--name",
         containerName,
@@ -170,7 +195,8 @@ export class DesktopEnvironmentRuntimeManager {
         "--env",
         "TYRUM_NODE_MODE=desktop-sandbox",
         environment.image_ref,
-      ]);
+      );
+      const runResult = await runDocker(runArgs);
       if (runResult.status !== 0) {
         throw new Error(
           combineDockerError("failed to start desktop environment container", runResult),
@@ -212,6 +238,19 @@ export class DesktopEnvironmentRuntimeManager {
     return `ws://host.containers.internal:${String(this.options.gatewayPort)}/ws`;
   }
 
+  private resolveManagedImagePlatform(imageRef: string): string | undefined {
+    const hostPlatform = this.options.hostPlatform ?? process.platform;
+    const hostArch = this.options.hostArch ?? process.arch;
+    if (
+      hostPlatform === "darwin" &&
+      hostArch === "arm64" &&
+      imageRef.trim().startsWith(OFFICIAL_DESKTOP_SANDBOX_IMAGE_REF_PREFIX)
+    ) {
+      return "linux/amd64";
+    }
+    return undefined;
+  }
+
   private async recordReconcileFailure(
     environment: DesktopEnvironment & { tenant_id: string },
     error: unknown,
@@ -220,6 +259,7 @@ export class DesktopEnvironmentRuntimeManager {
     this.logger.error("desktop_environment.reconcile_failed", {
       environment_id: environment.environment_id,
       host_id: this.options.hostId,
+      image_platform: this.resolveManagedImagePlatform(environment.image_ref) ?? null,
       error: message,
     });
 
