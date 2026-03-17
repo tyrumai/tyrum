@@ -1,4 +1,7 @@
-import { describe, expect, it, vi } from "vitest";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   BackgroundModeController,
   isBackgroundLaunch,
@@ -30,6 +33,9 @@ vi.mock("electron", () => ({
 function createController(options?: {
   platform?: NodeJS.Platform;
   config?: DesktopNodeConfig;
+  appIsPackaged?: boolean;
+  resourcesPath?: string;
+  moduleDir?: string;
   nativeImageImpl?: {
     createFromDataURL: (dataUrl: string) => { setTemplateImage?: (template: boolean) => void };
     createFromPath: (path: string) => unknown;
@@ -41,7 +47,7 @@ function createController(options?: {
   };
   let openAtLogin = false;
   const app = {
-    isPackaged: true,
+    isPackaged: options?.appIsPackaged ?? true,
     getAppPath: vi.fn(() => "/tmp/Tyrum.app"),
     getLoginItemSettings: vi.fn(() => ({ openAtLogin })),
     setLoginItemSettings: vi.fn((settings: { openAtLogin: boolean }) => {
@@ -60,7 +66,8 @@ function createController(options?: {
     platform: options?.platform ?? "win32",
     processArgv: ["Tyrum", "--background"],
     processExecPath: "/Applications/Tyrum.app/Contents/MacOS/Tyrum",
-    resourcesPath: "/Applications/Tyrum.app/Contents/Resources",
+    resourcesPath: options?.resourcesPath ?? "/Applications/Tyrum.app/Contents/Resources",
+    moduleDir: options?.moduleDir,
     loadConfig: () => config,
     saveConfig: (nextConfig) => {
       config = nextConfig;
@@ -71,6 +78,17 @@ function createController(options?: {
 
   return { app, controller, menu };
 }
+
+const tempDirs: string[] = [];
+
+afterEach(() => {
+  while (tempDirs.length > 0) {
+    const path = tempDirs.pop();
+    if (path) {
+      rmSync(path, { recursive: true, force: true });
+    }
+  }
+});
 
 describe("background mode helpers", () => {
   it("detects background launch args", () => {
@@ -160,5 +178,34 @@ describe("BackgroundModeController", () => {
     });
 
     expect(() => controller.setEnabled(true)).toThrow("system tray");
+  });
+
+  it("loads the shared monochrome mascot template for macOS tray icons", () => {
+    const resourcesPath = mkdtempSync(join(tmpdir(), "tyrum-tray-template-"));
+    tempDirs.push(resourcesPath);
+    const trayDir = join(resourcesPath, "tray");
+    mkdirSync(trayDir, { recursive: true });
+    writeFileSync(
+      join(trayDir, "macos-template.svg"),
+      '<svg xmlns="http://www.w3.org/2000/svg"><path fill="black" d="M0 0h16v16H0z"/></svg>',
+    );
+
+    const setTemplateImage = vi.fn();
+    const createFromDataURL = vi.fn(() => ({ setTemplateImage }));
+    const { controller } = createController({
+      platform: "darwin",
+      resourcesPath,
+      nativeImageImpl: {
+        createFromDataURL,
+        createFromPath: vi.fn(() => ({})),
+      },
+    });
+
+    controller.setEnabled(true);
+
+    expect(createFromDataURL).toHaveBeenCalledWith(
+      expect.stringContaining("data:image/svg+xml;base64,"),
+    );
+    expect(setTemplateImage).toHaveBeenCalledWith(true);
   });
 });

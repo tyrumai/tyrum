@@ -39,6 +39,7 @@ const config: Config = {
   tagline: "Documentation",
   url: "https://docs.tyrum.ai",
   baseUrl: "/",
+  favicon: "/img/brand/favicon.ico",
   trailingSlash: false,
   onBrokenLinks: "throw",
 
@@ -79,6 +80,7 @@ const config: Config = {
   ],
 
   themeConfig: {
+    image: "img/brand/social-card.png",
     navbar: {
       title: "Tyrum",
       items: navbarItems,

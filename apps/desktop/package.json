@@ -2,6 +2,7 @@
   "name": "tyrum-desktop",
   "version": "0.1.0",
   "private": true,
+  "description": "Tyrum desktop app",
   "author": "Ron Hernaus <ron@virtunet.nl>",
   "license": "MIT",
   "type": "module",

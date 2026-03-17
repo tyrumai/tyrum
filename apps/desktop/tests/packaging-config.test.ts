@@ -31,6 +31,7 @@ describe("desktop packaging configuration", () => {
     expect(config).toMatch(/^\s*protocols:\s*$/m);
     expect(config).toMatch(/^\s*schemes:\s*$/m);
     expect(config).toMatch(/^\s*-\s*tyrum\s*$/m);
+    expect(config).toMatch(/^\s*npmRebuild:\s*false\s*$/m);
 
     expect(config).toMatch(/^\s*mac:\s*$/m);
     expect(config).toMatch(/^\s*icon:\s*build\/icon\.icns\s*$/m);
@@ -45,10 +46,13 @@ describe("desktop packaging configuration", () => {
     expect(config).toMatch(/^\s*createDesktopShortcut:\s*true\s*$/m);
     expect(config).toMatch(/^\s*createStartMenuShortcut:\s*true\s*$/m);
     expect(config).toMatch(/^\s*installerIcon:\s*build\/icon\.ico\s*$/m);
+    expect(config).toMatch(/^\s*-\s*from:\s*build\/tray-macos-template\.svg\s*$/m);
+    expect(config).toMatch(/^\s*to:\s*tray\/macos-template\.svg\s*$/m);
 
     expect(config).toMatch(/^\s*linux:\s*$/m);
     expect(config).toMatch(/^\s*icon:\s*build\/icons\s*$/m);
     expect(config).toMatch(/^\s*desktop:\s*$/m);
+    expect(config).toMatch(/^\s*entry:\s*$/m);
     expect(config).toMatch(/^\s*StartupWMClass:\s*Tyrum\s*$/m);
   });
 
@@ -56,7 +60,9 @@ describe("desktop packaging configuration", () => {
     const icnsPath = join(__dirname, "..", "build", "icon.icns");
     const icoPath = join(__dirname, "..", "build", "icon.ico");
     const pngPath = join(__dirname, "..", "build", "icons", "512x512.png");
-    const requiredPaths = [icnsPath, icoPath, pngPath];
+    const sourceSvgPath = join(__dirname, "..", "build", "icon.svg");
+    const trayTemplatePath = join(__dirname, "..", "build", "tray-macos-template.svg");
+    const requiredPaths = [icnsPath, icoPath, pngPath, sourceSvgPath, trayTemplatePath];
 
     for (const path of requiredPaths) {
       expect(existsSync(path)).toBe(true);
@@ -90,5 +96,13 @@ describe("desktop packaging configuration", () => {
 
     const pngHeader = readFileSync(pngPath).subarray(0, 8);
     expect(Array.from(pngHeader)).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+    const sourceSvg = readFileSync(sourceSvgPath, "utf8");
+    expect(sourceSvg).not.toContain('<path d=""');
+
+    const trayTemplate = readFileSync(trayTemplatePath, "utf8");
+    expect(trayTemplate).toContain("<svg");
+    expect(trayTemplate).toContain('fill="black"');
+    expect(trayTemplate).not.toContain('<path d=""');
   });
 });

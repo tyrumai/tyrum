@@ -27,6 +27,7 @@ describe("operator UI static hosting (/ui)", () => {
         "<html>",
         "<head>",
         '<meta charset="utf-8">',
+        '<link rel="icon" href="/ui/favicon.ico">',
         "<title>Tyrum</title>",
         "</head>",
         "<body>",
@@ -40,6 +41,7 @@ describe("operator UI static hosting (/ui)", () => {
       join(operatorUiDistAssetsDir, "index-test.js"),
       "console.log('operator-ui');\n",
     );
+    await writeFile(join(operatorUiDistDir, "favicon.ico"), Buffer.from([0x00, 0x00, 0x01, 0x00]));
 
     const created = await createTestApp({ operatorUiAssetsDir: operatorUiDistDir });
     app = created.app;
@@ -79,6 +81,17 @@ describe("operator UI static hosting (/ui)", () => {
     expect(res.headers.get("cache-control")).toBe("no-cache");
     const html = await res.text();
     expect(html).toContain('<div id="root"></div>');
+  });
+
+  it("serves /ui/favicon.ico with icon content-type and browser cache headers", async () => {
+    const res = await app.request("/ui/favicon.ico");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-security-policy")).toBe(OPERATOR_UI_CSP_POLICY);
+    expect(res.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(res.headers.get("x-frame-options")).toBe("DENY");
+    expect(res.headers.get("content-type")).toBe("image/x-icon");
+    expect(res.headers.get("cache-control")).toBe("public, max-age=3600");
+    expect(Buffer.from(await res.arrayBuffer())).toEqual(Buffer.from([0x00, 0x00, 0x01, 0x00]));
   });
 
   it("serves static assets with correct content-type and long cache headers", async () => {
