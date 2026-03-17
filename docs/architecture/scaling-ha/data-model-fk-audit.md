@@ -37,6 +37,10 @@ This is a reference decision record for the foreign-key audit called out in issu
 
 SQLite and Postgres both use tenant-scoped composite keys for the enforced subset. In practice that means parent deletion must clear the child reference explicitly first; these databases cannot null only the trailing id column while preserving the same FK shape automatically.
 
+## Cleanup / retention
+
+For the enforced tenant-scoped composite keys, cleanup and retention jobs must clear the child ref first before a parent row can be deleted. The soft-reference rows are different: they stay available for audit or future linkage until a retention rule explicitly removes them.
+
 ## Migration source of truth
 
 The enforced subset is implemented in:
