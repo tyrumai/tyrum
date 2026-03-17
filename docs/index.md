@@ -22,8 +22,6 @@ Public user-facing docs for install, onboarding, and architecture.
 - [Remote Gateway](./advanced/remote-gateway.md)
 - [Multi-Node Deployments](./advanced/multi-node.md)
 
-## Product Reference
+## Reference
 
 - [Policy Service](./policy_service.md)
-- [HTTP Executor](./executors/http_executor.md)
-- [Web Executor](./executors/web_executor.md)
