@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { AppOptions } from "./app.js";
 export { createAppRouteDependencies } from "./app-route-support.js";
+export { registerArtifactsAuditAndUiRoutes } from "./app-route-registrars-artifacts.js";
 import {
   createClusterWsRouteOptions,
   createExecutionRouteServices,
@@ -13,25 +14,22 @@ import { createAgentRoutes } from "./routes/agent.js";
 import { createApprovalRoutes } from "./routes/approval.js";
 import { createAutomationScheduleRoutes } from "./routes/automation-schedules.js";
 import { createAutomationTriggerRoutes } from "./routes/automation-triggers.js";
-import { createArtifactRoutes } from "./routes/artifact.js";
-import { createAuditRoutes } from "./routes/audit.js";
 import { createAuthProfileRoutes } from "./routes/auth-profiles.js";
 import { createAuthSessionRoutes } from "./routes/auth-session.js";
 import { createAuthTokenRoutes } from "./routes/auth-token.js";
 import { createCanvasRoutes } from "./routes/canvas.js";
+import { createChannelConfigRoutes } from "./routes/channel-config.js";
 import { createConnectionsRoute } from "./routes/connections.js";
 import { createContextRoutes } from "./routes/context.js";
 import { createContractRoutes } from "./routes/contracts.js";
 import { createDeviceTokenRoutes } from "./routes/device-token.js";
 import { createDesktopEnvironmentRoutes } from "./routes/desktop-environments.js";
-import { createExtensionsRoutes } from "./routes/extensions.js";
 import { createHealthRoute } from "./routes/health.js";
 import { createIngressRoutes } from "./routes/ingress.js";
 import { createMetricsRoutes } from "./routes/metrics.js";
 import { createModelConfigRoutes } from "./routes/model-config.js";
 import { createModelsDevRoutes } from "./routes/models-dev.js";
 import { createNodesRoute } from "./routes/nodes.js";
-import { createOperatorUiRoutes } from "./routes/operator-ui.js";
 import { createPairingRoutes } from "./routes/pairing.js";
 import { createPlanRoutes } from "./routes/plan.js";
 import { createPlaybookRoutes } from "./routes/playbook.js";
@@ -46,7 +44,6 @@ import { createProviderOAuthRoutes } from "./routes/provider-oauth.js";
 import { createRoutingConfigRoutes } from "./routes/routing-config.js";
 import { createSecretRoutes } from "./routes/secret.js";
 import { createSharedStateConfigRoutes } from "./routes/shared-state-config.js";
-import { createSnapshotRoutes } from "./routes/snapshot.js";
 import { createStatusRoutes } from "./routes/status.js";
 import { createSystemRoutes } from "./routes/system.js";
 import { createToolRegistryRoutes } from "./routes/tool-registry.js";
@@ -57,6 +54,7 @@ import { ChannelConfigDal } from "./modules/channels/channel-config-dal.js";
 import type { ChannelThreadDal } from "./modules/channels/thread-dal.js";
 import { TelegramChannelQueue } from "./modules/channels/telegram.js";
 import { TelegramChannelRuntime } from "./modules/channels/telegram-runtime.js";
+import { GoogleChatChannelRuntime } from "./modules/channels/googlechat-runtime.js";
 import { LifecycleHookConfigDal } from "./modules/hooks/config-dal.js";
 import type { AuthProfileDal } from "./modules/models/auth-profile-dal.js";
 import type { ConfiguredModelPresetDal } from "./modules/models/configured-model-preset-dal.js";
@@ -326,6 +324,14 @@ export function registerModelsAndConfigRoutes(context: AppRouteContext): void {
 
   context.app.route(
     "/",
+    createChannelConfigRoutes({
+      db: context.container.db,
+      routingConfigDal: context.routeDeps.routingConfigDal,
+    }),
+  );
+
+  context.app.route(
+    "/",
     createRoutingConfigRoutes({
       db: context.container.db,
       logger: context.container.logger,
@@ -387,6 +393,9 @@ export function registerAgentsAndWorkspaceRoutes(context: AppRouteContext): void
   const telegramRuntime =
     context.opts.telegramRuntime ??
     new TelegramChannelRuntime(new ChannelConfigDal(context.container.db));
+  const googleChatRuntime =
+    context.opts.googleChatRuntime ??
+    new GoogleChatChannelRuntime(new ChannelConfigDal(context.container.db));
   context.app.route(
     "/",
     createPairingRoutes({
@@ -401,6 +410,7 @@ export function registerAgentsAndWorkspaceRoutes(context: AppRouteContext): void
     "/",
     createIngressRoutes({
       telegramRuntime,
+      googleChatRuntime,
       telegramQueue:
         context.channelPipelineEnabled && context.opts.agents
           ? new TelegramChannelQueue(context.container.db, {
@@ -475,45 +485,4 @@ export function registerAgentsAndWorkspaceRoutes(context: AppRouteContext): void
       }),
     );
   }
-}
-
-export function registerArtifactsAuditAndUiRoutes(context: AppRouteContext): void {
-  context.app.route(
-    "/",
-    createExtensionsRoutes({
-      db: context.container.db,
-      container: context.container,
-    }),
-  );
-
-  context.app.route(
-    "/",
-    createAuditRoutes({
-      db: context.container.db,
-      eventLog: context.container.eventLog,
-      identityScopeDal: context.container.identityScopeDal,
-    }),
-  );
-
-  context.app.route(
-    "/",
-    createSnapshotRoutes({
-      db: context.container.db,
-      version: context.runtime.version,
-      importEnabled: context.container.deploymentConfig.snapshots.importEnabled,
-    }),
-  );
-
-  context.app.route(
-    "/",
-    createArtifactRoutes({
-      db: context.container.db,
-      artifactStore: context.container.artifactStore,
-      logger: context.container.logger,
-      policySnapshotDal: context.container.policySnapshotDal,
-      policyService: context.container.policyService,
-    }),
-  );
-
-  context.app.route("/", createOperatorUiRoutes({ assetsDir: context.opts.operatorUiAssetsDir }));
 }

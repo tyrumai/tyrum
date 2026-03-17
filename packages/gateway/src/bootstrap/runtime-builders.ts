@@ -1,6 +1,3 @@
-import { createServer as createHttpServer } from "node:http";
-import { createServer as createHttpsServer } from "node:https";
-import { getRequestListener } from "@hono/node-server";
 import { createApp } from "../app.js";
 import { NodeDispatchService } from "../modules/agent/node-dispatch-service.js";
 import { AgentRegistry } from "../modules/agent/registry.js";
@@ -11,9 +8,6 @@ import { ApprovalEngineActionProcessor } from "../modules/approval/engine-action
 import { ConnectionDirectoryDal } from "../modules/backplane/connection-directory.js";
 import { OutboxDal } from "../modules/backplane/outbox-dal.js";
 import { OutboxPoller } from "../modules/backplane/outbox-poller.js";
-import { ChannelConfigDal } from "../modules/channels/channel-config-dal.js";
-import { TelegramChannelProcessor } from "../modules/channels/telegram.js";
-import { TelegramChannelRuntime } from "../modules/channels/telegram-runtime.js";
 import { type StepExecutor as ExecutionStepExecutor } from "../modules/execution/engine.js";
 import { createGatewayStepExecutor } from "../modules/execution/gateway-step-executor.js";
 import { createKubernetesToolRunnerStepExecutor } from "../modules/execution/kubernetes-toolrunner-step-executor.js";
@@ -30,7 +24,6 @@ import { createPluginCatalogProvider } from "../modules/plugins/catalog-provider
 import { GuardianReviewProcessor } from "../modules/review/guardian-review-processor.js";
 import { loadAllPlaybooks } from "../modules/playbook/loader.js";
 import { PlaybookRunner } from "../modules/playbook/runner.js";
-import { ensureSelfSignedTlsMaterial } from "../modules/tls/self-signed.js";
 import { WsEventDal } from "../modules/ws-event/dal.js";
 import { WorkboardDispatcher } from "../modules/workboard/dispatcher.js";
 import { WorkboardOrchestrator } from "../modules/workboard/orchestrator.js";
@@ -44,14 +37,11 @@ import { ConnectionManager } from "../ws/connection-manager.js";
 import type { ProtocolDeps } from "../ws/protocol.js";
 import { TaskResultRegistry, type TaskResult } from "../ws/protocol/task-result-registry.js";
 import { resolveGatewayEntrypointPath } from "./entrypoint-path.js";
+import { startChannelRuntimeBundle } from "./runtime-builders-channels.js";
 import { createExecutionEngine } from "./runtime-builders-engine.js";
+import { createGatewayServer } from "./runtime-builders-server.js";
 import { fireGatewayLifecycleHooks } from "./runtime-builders-shutdown.js";
-import type {
-  EdgeRuntime,
-  GatewayBootContext,
-  GatewayServer,
-  ProtocolRuntime,
-} from "./runtime-shared.js";
+import type { EdgeRuntime, GatewayBootContext, ProtocolRuntime } from "./runtime-shared.js";
 export { startBackgroundSchedulers } from "./runtime-builders-background.js";
 export { createShutdownHandler, runShutdownCleanup } from "./runtime-builders-shutdown.js";
 
@@ -213,63 +203,6 @@ export async function createProtocolRuntime(
   };
 }
 
-async function createGatewayServer(
-  context: GatewayBootContext,
-  app: ReturnType<typeof createApp> | undefined,
-  wsHandler: ReturnType<typeof createWsHandler> | undefined,
-): Promise<GatewayServer | undefined> {
-  if (!context.shouldRunEdge || !app || !wsHandler) {
-    return undefined;
-  }
-
-  const listener = getRequestListener(app.fetch);
-  const tlsSelfSigned = context.deploymentConfig.server.tlsSelfSigned ?? false;
-  const { server, tlsMaterial } = await (async () => {
-    if (!tlsSelfSigned) {
-      return { server: createHttpServer(listener), tlsMaterial: null };
-    }
-    const material = await ensureSelfSignedTlsMaterial({ home: context.tyrumHome });
-    return {
-      server: createHttpsServer({ key: material.keyPem, cert: material.certPem }, listener),
-      tlsMaterial: material,
-    };
-  })();
-
-  server.on("upgrade", (req, socket, head) => {
-    const pathname = new URL(req.url ?? "/", "http://localhost").pathname;
-    if (pathname === "/ws") {
-      wsHandler.handleUpgrade(req, socket, head);
-    } else {
-      socket.destroy();
-    }
-  });
-
-  server.listen(context.port, context.host, () => {
-    const scheme = tlsSelfSigned ? "https" : "http";
-    context.logger.info("gateway.listen", {
-      host: context.host,
-      port: context.port,
-      url: `${scheme}://${context.host}:${context.port}`,
-      tls_self_signed: tlsSelfSigned,
-      tls_fingerprint256: tlsMaterial?.fingerprint256 ?? null,
-    });
-
-    if (tlsSelfSigned && tlsMaterial) {
-      console.log("---");
-      console.log("TLS enabled (self-signed). Browsers will show a warning unless trusted.");
-      console.log(`TLS fingerprint (SHA-256): ${tlsMaterial.fingerprint256}`);
-      console.log(`TLS certificate: ${tlsMaterial.certPath}`);
-      console.log(`TLS key: ${tlsMaterial.keyPath}`);
-      console.log(`UI: https://${context.host}:${context.port}/ui`);
-      console.log(`WS: wss://${context.host}:${context.port}/ws`);
-      console.log("Verify the fingerprint out-of-band (e.g. SSH) before trusting.");
-      console.log("---");
-    }
-  });
-
-  return server;
-}
-
 export async function startEdgeRuntime(
   context: GatewayBootContext,
   protocol: ProtocolRuntime,
@@ -315,11 +248,16 @@ export async function startEdgeRuntime(
     windowMs: authRateLimitWindowS * 1_000,
     max: wsUpgradeRateLimitMax,
   });
-  const telegramRuntime = new TelegramChannelRuntime(new ChannelConfigDal(context.container.db));
+  const channelRuntimeBundle = startChannelRuntimeBundle({
+    context,
+    protocol,
+    agents,
+  });
 
   const app = createApp(context.container, {
     agents,
-    telegramRuntime,
+    telegramRuntime: channelRuntimeBundle.telegramRuntime,
+    googleChatRuntime: channelRuntimeBundle.googleChatRuntime,
     plugins,
     pluginCatalogProvider,
     authTokens: context.authTokens,
@@ -358,25 +296,6 @@ export async function startEdgeRuntime(
     maxBufferedBytes: context.deploymentConfig.websocket.maxBufferedBytes,
   });
   outboxPoller.start();
-
-  const telegramProcessor = agents
-    ? new TelegramChannelProcessor({
-        db: context.container.db,
-        sessionDal: context.container.sessionDal,
-        agents,
-        owner: context.instanceId,
-        logger: context.logger,
-        typingMode: context.deploymentConfig.channels.typingMode,
-        typingRefreshMs: context.deploymentConfig.channels.typingRefreshMs,
-        typingAutomationEnabled: context.deploymentConfig.channels.typingAutomationEnabled,
-        memoryDal: context.container.memoryDal,
-        approvalDal: context.container.approvalDal,
-        protocolDeps: protocol.protocolDeps,
-        listEgressConnectors: async (tenantId) =>
-          await telegramRuntime.listEgressConnectors(tenantId),
-      })
-    : undefined;
-  telegramProcessor?.start();
 
   const workboardOrchestrator = agents
     ? new WorkboardOrchestrator({
@@ -430,7 +349,8 @@ export async function startEdgeRuntime(
     wsUpgradeRateLimiter,
     wsHandler,
     outboxPoller,
-    telegramProcessor,
+    telegramProcessor: channelRuntimeBundle.telegramProcessor,
+    discordMonitor: channelRuntimeBundle.discordMonitor,
     server,
   };
 }

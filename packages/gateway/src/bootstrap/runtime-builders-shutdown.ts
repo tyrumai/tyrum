@@ -157,6 +157,7 @@ export function createShutdownHandler(
     runtime.protocol.guardianReviewProcessor?.stop();
     runtime.edge.outboxPoller?.stop();
     runtime.edge.telegramProcessor?.stop();
+    runtime.edge.discordMonitor?.stop();
     runtime.edge.workboardOrchestrator?.stop();
     runtime.edge.workboardDispatcher?.stop();
     runtime.edge.workboardReconciler?.stop();

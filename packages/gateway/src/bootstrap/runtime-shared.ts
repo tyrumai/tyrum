@@ -9,6 +9,7 @@ import type { OutboxDal } from "../modules/backplane/outbox-dal.js";
 import type { ConnectionDirectoryDal } from "../modules/backplane/connection-directory.js";
 import type { OutboxPoller } from "../modules/backplane/outbox-poller.js";
 import type { GuardianReviewProcessor } from "../modules/review/guardian-review-processor.js";
+import type { DiscordChannelMonitor } from "../modules/channels/discord-monitor.js";
 import type { TelegramChannelProcessor } from "../modules/channels/telegram.js";
 import type { ExecutionEngine } from "../modules/execution/engine.js";
 import type { ExecutionWorkerLoop } from "../modules/execution/worker-loop.js";
@@ -94,6 +95,7 @@ export interface EdgeRuntime {
   wsHandler?: ReturnType<typeof createWsHandler>;
   outboxPoller?: OutboxPoller;
   telegramProcessor?: TelegramChannelProcessor;
+  discordMonitor?: DiscordChannelMonitor;
   server?: GatewayServer;
 }
 

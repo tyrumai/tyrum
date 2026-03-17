@@ -33,6 +33,7 @@ import {
 import { createMetricsMiddleware, gatewayMetrics } from "./modules/observability/metrics.js";
 import { requestIdForAudit } from "./modules/observability/request-id.js";
 import type { TelegramChannelRuntime } from "./modules/channels/telegram-runtime.js";
+import type { GoogleChatChannelRuntime } from "./modules/channels/googlechat-runtime.js";
 import type { DesktopEnvironmentLifecycle } from "./modules/desktop-environments/lifecycle-service.js";
 import {
   createAppRouteDependencies,
@@ -47,6 +48,7 @@ import {
 export interface AppOptions {
   agents?: AgentRegistry;
   telegramRuntime?: TelegramChannelRuntime;
+  googleChatRuntime?: GoogleChatChannelRuntime;
   plugins?: PluginRegistry;
   pluginCatalogProvider?: PluginCatalogProvider;
   authTokens?: AuthTokenService;

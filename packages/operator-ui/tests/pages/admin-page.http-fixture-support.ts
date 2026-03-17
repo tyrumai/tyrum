@@ -2,6 +2,7 @@ import { vi } from "vitest";
 import { TyrumHttpClientError } from "@tyrum/client/browser";
 import { createElevatedModeStore, type OperatorCore } from "../../../operator-core/src/index.js";
 import { stubAdminHttpFetch } from "../admin-http-fetch-test-support.js";
+import { createChannelAndRoutingFixtures } from "./admin-page.http-channel-fixture-support.js";
 import { createLocationFixture } from "./admin-page.http-location-fixture-support.js";
 import {
   TEST_TIMESTAMP,
@@ -49,6 +50,11 @@ export function createAdminHttpTestCore(): {
   const routingConfigRevert = vi.fn(async () => ({ revision: 2, config: { v: 1 } }) as unknown);
   const secretsRotate = vi.fn(async () => ({ revoked: true, handle: {} }) as unknown);
   const policyCreateOverride = vi.fn(async () => ({ status: "ok" }) as unknown);
+  const { channelConfig, routingConfig } = createChannelAndRoutingFixtures({
+    testTimestamp: TEST_TIMESTAMP,
+    routingConfigUpdate,
+    routingConfigRevert,
+  });
   const {
     locationUpdateProfile,
     locationCreatePlace,
@@ -276,118 +282,8 @@ export function createAdminHttpTestCore(): {
         deleteAccount: vi.fn(async () => ({ status: "ok" }) as unknown),
         deleteProvider: vi.fn(async () => ({ status: "ok" }) as unknown),
       },
-      routingConfig: {
-        get: vi.fn(async () => ({
-          revision: 1,
-          config: {
-            v: 1,
-            telegram: {
-              accounts: {
-                default: {
-                  default_agent_key: "default",
-                  threads: { "tg-123": "agent-b" },
-                },
-                ops: {},
-              },
-            },
-          },
-        })),
-        listRevisions: vi.fn(async () => ({
-          revisions: [
-            {
-              revision: 1,
-              config: {
-                v: 1,
-                telegram: {
-                  accounts: {
-                    default: {
-                      default_agent_key: "default",
-                      threads: { "tg-123": "agent-b" },
-                    },
-                    ops: {},
-                  },
-                },
-              },
-              created_at: TEST_TIMESTAMP,
-            },
-          ],
-        })),
-        listObservedTelegramThreads: vi.fn(async () => ({
-          threads: [
-            {
-              channel: "telegram",
-              account_key: "default",
-              thread_id: "tg-123",
-              container_kind: "group",
-              session_title: "Support room",
-              last_active_at: TEST_TIMESTAMP,
-            },
-            {
-              channel: "telegram",
-              account_key: "default",
-              thread_id: "tg-456",
-              container_kind: "dm",
-              session_title: "Direct chat",
-              last_active_at: TEST_TIMESTAMP,
-            },
-            {
-              channel: "telegram",
-              account_key: "ops",
-              thread_id: "tg-123",
-              container_kind: "group",
-              session_title: "Ops mirror",
-              last_active_at: TEST_TIMESTAMP,
-            },
-          ],
-        })),
-        listChannelConfigs: vi.fn(async () => ({
-          channels: [
-            {
-              channel: "telegram",
-              account_key: "default",
-              bot_token_configured: true,
-              webhook_secret_configured: true,
-              allowed_user_ids: ["123"],
-              pipeline_enabled: true,
-            },
-            {
-              channel: "telegram",
-              account_key: "ops",
-              bot_token_configured: false,
-              webhook_secret_configured: true,
-              allowed_user_ids: ["555", "777"],
-              pipeline_enabled: false,
-            },
-          ],
-        })),
-        createChannelConfig: vi.fn(async () => ({
-          config: {
-            channel: "telegram",
-            account_key: "ops",
-            bot_token_configured: true,
-            webhook_secret_configured: true,
-            allowed_user_ids: ["123"],
-            pipeline_enabled: true,
-          },
-        })),
-        update: routingConfigUpdate,
-        updateChannelConfig: vi.fn(async () => ({
-          config: {
-            channel: "telegram",
-            account_key: "default",
-            bot_token_configured: true,
-            webhook_secret_configured: true,
-            allowed_user_ids: ["123"],
-            pipeline_enabled: true,
-          },
-        })),
-        deleteChannelConfig: vi.fn(async () => ({
-          deleted: true,
-          channel: "telegram",
-          account_key: "default",
-        })),
-        revert: routingConfigRevert,
-      },
+      channelConfig,
+      routingConfig,
       toolRegistry: {
         list: vi.fn(async () => ({
           status: "ok",
