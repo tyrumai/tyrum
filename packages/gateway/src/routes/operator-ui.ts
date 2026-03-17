@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 const OPERATOR_UI_PATH_PREFIX = "/ui";
 const OPERATOR_UI_ASSETS_DIR_ENV = "TYRUM_OPERATOR_UI_ASSETS_DIR";
+const EMBEDDED_GATEWAY_BUNDLE_SOURCE_ENV = "TYRUM_EMBEDDED_GATEWAY_BUNDLE_SOURCE";
 
 const INDEX_CACHE_CONTROL = "no-cache";
 const ASSET_CACHE_CONTROL = "public, max-age=31536000, immutable";
@@ -31,7 +32,24 @@ function isFile(path: string): boolean {
   }
 }
 
-function resolveOperatorUiAssetsDirFrom(startDir: string): string | undefined {
+export type OperatorUiAssetsSource =
+  | "explicit"
+  | "env"
+  | "workspace-dev"
+  | "bundled-ui"
+  | "bundled-dist-ui"
+  | "unavailable";
+
+export interface ResolvedOperatorUiAssets {
+  assetsDir: string | undefined;
+  assetsDirReal: string | undefined;
+  source: OperatorUiAssetsSource;
+}
+
+function resolveOperatorUiAssetsDirFrom(startDir: string): {
+  assetsDir: string | undefined;
+  source: Exclude<OperatorUiAssetsSource, "explicit" | "env">;
+} {
   // Workspace dev: prefer the Vite build output when present so the operator UI
   // can be iterated on without rebuilding the gateway bundle.
   {
@@ -40,7 +58,9 @@ function resolveOperatorUiAssetsDirFrom(startDir: string): string | undefined {
       const marker = join(current, "pnpm-workspace.yaml");
       if (isFile(marker)) {
         const workspaceIndex = join(current, "apps", "web", "dist", "index.html");
-        if (isFile(workspaceIndex)) return join(current, "apps", "web", "dist");
+        if (isFile(workspaceIndex)) {
+          return { assetsDir: join(current, "apps", "web", "dist"), source: "workspace-dev" };
+        }
         break;
       }
 
@@ -53,17 +73,21 @@ function resolveOperatorUiAssetsDirFrom(startDir: string): string | undefined {
   let current = startDir;
   for (let i = 0; i < 12; i += 1) {
     const bundledCandidate = join(current, "ui", "index.html");
-    if (isFile(bundledCandidate)) return join(current, "ui");
+    if (isFile(bundledCandidate)) {
+      return { assetsDir: join(current, "ui"), source: "bundled-ui" };
+    }
 
     const distCandidate = join(current, "dist", "ui", "index.html");
-    if (isFile(distCandidate)) return join(current, "dist", "ui");
+    if (isFile(distCandidate)) {
+      return { assetsDir: join(current, "dist", "ui"), source: "bundled-dist-ui" };
+    }
 
     const parent = dirname(current);
     if (parent === current) break;
     current = parent;
   }
 
-  return undefined;
+  return { assetsDir: undefined, source: "unavailable" };
 }
 
 function resolveAssetPath(assetsDir: string, pathTail: string): string | undefined {
@@ -143,14 +167,58 @@ async function serveIndexHtml(assetsDir: string | undefined): Promise<string> {
   return await readFile(indexPath, "utf-8");
 }
 
+export function resolveOperatorUiAssets(
+  opts: {
+    assetsDir?: string;
+    env?: NodeJS.ProcessEnv;
+    moduleDir?: string;
+  } = {},
+): ResolvedOperatorUiAssets {
+  const env = opts.env ?? process.env;
+  const explicitAssetsDir = opts.assetsDir?.trim();
+  const configuredAssetsDir = env[OPERATOR_UI_ASSETS_DIR_ENV]?.trim();
+
+  if (explicitAssetsDir) {
+    return {
+      assetsDir: explicitAssetsDir,
+      assetsDirReal: safeRealpathSync(explicitAssetsDir),
+      source: "explicit",
+    };
+  }
+
+  if (configuredAssetsDir) {
+    return {
+      assetsDir: configuredAssetsDir,
+      assetsDirReal: safeRealpathSync(configuredAssetsDir),
+      source: "env",
+    };
+  }
+
+  const resolved = resolveOperatorUiAssetsDirFrom(
+    opts.moduleDir ?? dirname(fileURLToPath(import.meta.url)),
+  );
+  return {
+    assetsDir: resolved.assetsDir,
+    assetsDirReal: resolved.assetsDir ? safeRealpathSync(resolved.assetsDir) : undefined,
+    source: resolved.source,
+  };
+}
+
+function logEmbeddedOperatorUiResolution(resolved: ResolvedOperatorUiAssets): void {
+  const bundleSource = process.env[EMBEDDED_GATEWAY_BUNDLE_SOURCE_ENV]?.trim();
+  if (!bundleSource) return;
+
+  const pathValue = resolved.assetsDirReal ?? resolved.assetsDir ?? "unavailable";
+  console.log(
+    `embedded-gateway operator-ui: bundle_source=${bundleSource} assets_source=${resolved.source} assets_dir=${pathValue}`,
+  );
+}
+
 export function createOperatorUiRoutes(opts: { assetsDir?: string } = {}): Hono {
   const app = new Hono();
-  const configuredAssetsDir = process.env[OPERATOR_UI_ASSETS_DIR_ENV]?.trim();
-  const assetsDir =
-    opts.assetsDir ??
-    (configuredAssetsDir && configuredAssetsDir.length > 0 ? configuredAssetsDir : undefined) ??
-    resolveOperatorUiAssetsDirFrom(dirname(fileURLToPath(import.meta.url)));
-  const assetsDirReal = assetsDir ? safeRealpathSync(assetsDir) : undefined;
+  const resolvedAssets = resolveOperatorUiAssets({ assetsDir: opts.assetsDir });
+  const { assetsDir, assetsDirReal } = resolvedAssets;
+  logEmbeddedOperatorUiResolution(resolvedAssets);
 
   app.use(OPERATOR_UI_PATH_PREFIX, applyOperatorUiSecurityHeaders);
   app.use(`${OPERATOR_UI_PATH_PREFIX}/*`, applyOperatorUiSecurityHeaders);

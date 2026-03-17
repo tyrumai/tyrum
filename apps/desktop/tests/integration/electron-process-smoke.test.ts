@@ -10,6 +10,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
+import { createRequire } from "node:module";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -17,10 +18,14 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const require = createRequire(import.meta.url);
 const REPO_ROOT = resolve(__dirname, "../../../../");
 const DESKTOP_MAIN_ENTRYPOINT = resolve(REPO_ROOT, "apps/desktop/dist/main/index.mjs");
-const ELECTRON_BIN = resolve(REPO_ROOT, "apps/desktop/node_modules/.bin/electron");
-const ELECTRON_BIN_WINDOWS = resolve(REPO_ROOT, "apps/desktop/node_modules/.bin/electron.cmd");
+const electronPackageExport = require("electron");
+if (typeof electronPackageExport !== "string") {
+  throw new TypeError("Expected the electron package to export the executable path.");
+}
+const ELECTRON_BIN = electronPackageExport;
 const GATEWAY_BUILD_LOCK = resolve(REPO_ROOT, ".tyrum-gateway-build.lock");
 
 interface ElectronProbeResult {
@@ -121,7 +126,7 @@ function killProcessGroup(pid: number, signal: NodeJS.Signals): void {
 const isWindows = process.platform === "win32";
 
 function electronCommand(): string {
-  return process.platform === "win32" ? ELECTRON_BIN_WINDOWS : ELECTRON_BIN;
+  return ELECTRON_BIN;
 }
 
 function runBuildStep(args: string[], failurePrefix: string): void {
@@ -354,65 +359,67 @@ describe("desktop full Electron process smoke", () => {
     async () => {
       const releaseBuildLock = acquireGatewayBuildLock();
       try {
+        // Keep build outputs stable for the full Electron launch so concurrent
+        // test workers do not clean workspace dist artifacts mid-startup.
         ensureBuildArtifacts();
+
+        const port = await findAvailablePort();
+        const tempRoot = mkdtempSync(join(tmpdir(), "tyrum-electron-smoke-"));
+        const tyrumHome = join(tempRoot, ".tyrum");
+        const dbPath = join(tempRoot, "gateway", "gateway.db");
+        const healthUrl = `http://127.0.0.1:${port}/healthz`;
+        writeDesktopConfig(tyrumHome, port, dbPath);
+
+        let stdout = "";
+        let stderr = "";
+        let gatewayWasHealthy = false;
+        const launch = buildElectronLaunch(DESKTOP_MAIN_ENTRYPOINT, NEEDS_VIRTUAL_DISPLAY);
+
+        const child = spawn(launch.command, launch.args, {
+          cwd: REPO_ROOT,
+          detached: process.platform !== "win32",
+          env: {
+            ...process.env,
+            TYRUM_HOME: tyrumHome,
+            NODE_ENV: "test",
+            VITE_DEV_SERVER_URL: "about:blank",
+            ELECTRON_DISABLE_SANDBOX: "1",
+          },
+          stdio: ["ignore", "pipe", "pipe"],
+        });
+
+        child.stdout.setEncoding("utf8");
+        child.stderr.setEncoding("utf8");
+        child.stdout.on("data", (chunk: string) => {
+          stdout += chunk;
+        });
+        child.stderr.on("data", (chunk: string) => {
+          stderr += chunk;
+        });
+
+        const output = () => {
+          const probeReason = electronProbe.reason ? `\nProbe reason: ${electronProbe.reason}` : "";
+          const displayInfo = `\nLaunch: ${launch.command} ${launch.args.join(" ")}`;
+          return `--- stdout ---\n${stdout}\n--- stderr ---\n${stderr}${probeReason}${displayInfo}`;
+        };
+
+        try {
+          await waitForGatewayHealth(healthUrl, child, output);
+          gatewayWasHealthy = true;
+
+          const healthRes = await fetch(healthUrl);
+          expect(healthRes.status).toBe(200);
+          const healthBody = (await healthRes.json()) as { status: string };
+          expect(healthBody.status).toBe("ok");
+        } finally {
+          await stopElectronProcess(child);
+          if (gatewayWasHealthy) {
+            await waitForGatewayDown(healthUrl);
+          }
+          rmSync(tempRoot, { recursive: true, force: true });
+        }
       } finally {
         releaseBuildLock();
-      }
-
-      const port = await findAvailablePort();
-      const tempRoot = mkdtempSync(join(tmpdir(), "tyrum-electron-smoke-"));
-      const tyrumHome = join(tempRoot, ".tyrum");
-      const dbPath = join(tempRoot, "gateway", "gateway.db");
-      const healthUrl = `http://127.0.0.1:${port}/healthz`;
-      writeDesktopConfig(tyrumHome, port, dbPath);
-
-      let stdout = "";
-      let stderr = "";
-      let gatewayWasHealthy = false;
-      const launch = buildElectronLaunch(DESKTOP_MAIN_ENTRYPOINT, NEEDS_VIRTUAL_DISPLAY);
-
-      const child = spawn(launch.command, launch.args, {
-        cwd: REPO_ROOT,
-        detached: process.platform !== "win32",
-        env: {
-          ...process.env,
-          TYRUM_HOME: tyrumHome,
-          NODE_ENV: "test",
-          VITE_DEV_SERVER_URL: "about:blank",
-          ELECTRON_DISABLE_SANDBOX: "1",
-        },
-        stdio: ["ignore", "pipe", "pipe"],
-      });
-
-      child.stdout.setEncoding("utf8");
-      child.stderr.setEncoding("utf8");
-      child.stdout.on("data", (chunk: string) => {
-        stdout += chunk;
-      });
-      child.stderr.on("data", (chunk: string) => {
-        stderr += chunk;
-      });
-
-      const output = () => {
-        const probeReason = electronProbe.reason ? `\nProbe reason: ${electronProbe.reason}` : "";
-        const displayInfo = `\nLaunch: ${launch.command} ${launch.args.join(" ")}`;
-        return `--- stdout ---\n${stdout}\n--- stderr ---\n${stderr}${probeReason}${displayInfo}`;
-      };
-
-      try {
-        await waitForGatewayHealth(healthUrl, child, output);
-        gatewayWasHealthy = true;
-
-        const healthRes = await fetch(healthUrl);
-        expect(healthRes.status).toBe(200);
-        const healthBody = (await healthRes.json()) as { status: string };
-        expect(healthBody.status).toBe("ok");
-      } finally {
-        await stopElectronProcess(child);
-        if (gatewayWasHealthy) {
-          await waitForGatewayDown(healthUrl);
-        }
-        rmSync(tempRoot, { recursive: true, force: true });
       }
     },
   );

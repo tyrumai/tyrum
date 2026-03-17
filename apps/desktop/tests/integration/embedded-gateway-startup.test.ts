@@ -1,244 +1,38 @@
-import { spawnSync } from "node:child_process";
-import { closeSync, existsSync, openSync, readdirSync, statSync, unlinkSync } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
-import { createServer } from "node:net";
+import { spawn } from "node:child_process";
+import { existsSync, realpathSync } from "node:fs";
+import { cp, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { GatewayManager } from "../../src/main/gateway-manager.js";
+import { withTemporaryEnvVar } from "../test-utils/temporary-env.js";
+import {
+  acquireGatewayBuildLock,
+  BUNDLED_OPERATOR_UI_DIR,
+  BUNDLED_OPERATOR_UI_INDEX,
+  canRunPlaywright,
+  electronCommand,
+  EMBEDDED_GATEWAY_BUNDLE_SOURCE_ENV,
+  ensureGatewayBuild,
+  ensureOperatorShellVisible,
+  ensureStagedGatewayBuild,
+  findAvailablePort,
+  formatBrowserFailure,
+  GATEWAY_BIN,
+  OPERATOR_UI_DIR_ENV,
+  playwrightProbeError,
+  skipPlaywrightTests,
+  STAGED_BUNDLED_OPERATOR_UI_INDEX,
+  STAGED_GATEWAY_DIR,
+  stopChildProcess,
+  waitForDefaultTenantAdminToken,
+  waitForHealthDown,
+  waitForHealthUp,
+} from "./embedded-gateway-test-utils.js";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = resolve(__dirname, "../../../../");
-const GATEWAY_BIN = resolve(REPO_ROOT, "packages/gateway/dist/index.mjs");
-const CLI_UTILS_DIST = resolve(REPO_ROOT, "packages/cli-utils/dist/index.mjs");
-const CLI_UTILS_PACKAGE_JSON = resolve(REPO_ROOT, "packages/cli-utils/package.json");
-const CLI_UTILS_TSCONFIG = resolve(REPO_ROOT, "packages/cli-utils/tsconfig.json");
-const CLI_UTILS_SRC_DIR = resolve(REPO_ROOT, "packages/cli-utils/src");
-const SCHEMAS_DIST = resolve(REPO_ROOT, "packages/schemas/dist/index.mjs");
-const SCHEMAS_PACKAGE_JSON = resolve(REPO_ROOT, "packages/schemas/package.json");
-const SCHEMAS_TSCONFIG = resolve(REPO_ROOT, "packages/schemas/tsconfig.json");
-const SCHEMAS_SRC_DIR = resolve(REPO_ROOT, "packages/schemas/src");
-const SCHEMAS_SCRIPTS_DIR = resolve(REPO_ROOT, "packages/schemas/scripts");
-const GATEWAY_SRC_DIR = resolve(REPO_ROOT, "packages/gateway/src");
-const GATEWAY_BUILD_LOCK = resolve(REPO_ROOT, ".tyrum-gateway-build.lock");
-
-const isWindows = process.platform === "win32";
-
-function sleepSync(ms: number): void {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
-}
-
-function acquireGatewayBuildLock(timeoutMs = 180_000): () => void {
-  const startedAt = Date.now();
-  for (;;) {
-    try {
-      const fd = openSync(GATEWAY_BUILD_LOCK, "wx");
-      return () => {
-        try {
-          closeSync(fd);
-        } catch {
-          // ignore
-        }
-        try {
-          unlinkSync(GATEWAY_BUILD_LOCK);
-        } catch {
-          // ignore
-        }
-      };
-    } catch (err) {
-      const code = err && typeof err === "object" ? (err as { code?: string }).code : undefined;
-      if (code !== "EEXIST") {
-        throw err;
-      }
-
-      if (Date.now() - startedAt > timeoutMs) {
-        throw new Error(
-          `Timed out waiting for gateway build lock (${timeoutMs}ms): ${GATEWAY_BUILD_LOCK}`,
-        );
-      }
-      sleepSync(200);
-    }
-  }
-}
-
-function formatBuildFailure(prefix: string, result: ReturnType<typeof spawnSync>): string {
-  const details = [
-    prefix,
-    result.error ? `spawn error: ${result.error.message}` : undefined,
-    result.status === null ? "exit status: null" : `exit status: ${String(result.status)}`,
-    result.stdout,
-    result.stderr,
-  ].filter(Boolean);
-  return details.join("\n");
-}
-
-function tryGatewayBuild(cmd: string, args: string[]): ReturnType<typeof spawnSync> {
-  return spawnSync(cmd, args, {
-    cwd: REPO_ROOT,
-    encoding: "utf8",
-    shell: isWindows,
-  });
-}
-
-function waitForBuildOutputByAnotherWorker(outputPath: string, timeoutMs: number): boolean {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (existsSync(outputPath)) return true;
-    sleepSync(200);
-  }
-  return existsSync(outputPath);
-}
-
-function latestMtimeInDir(rootDir: string): number {
-  let latest = 0;
-  const stack: string[] = [rootDir];
-
-  while (stack.length > 0) {
-    const dir = stack.pop();
-    if (!dir) break;
-
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      const fullPath = join(dir, entry.name);
-      if (entry.isDirectory()) {
-        if (entry.name === "node_modules" || entry.name === "dist") continue;
-        stack.push(fullPath);
-        continue;
-      }
-      if (!entry.isFile()) continue;
-
-      const mtimeMs = statSync(fullPath).mtimeMs;
-      if (mtimeMs > latest) latest = mtimeMs;
-    }
-  }
-
-  return latest;
-}
-
-function gatewayBuildIsStale(): boolean {
-  if (!existsSync(GATEWAY_BIN)) return true;
-  if (!existsSync(CLI_UTILS_DIST)) return true;
-  if (!existsSync(SCHEMAS_DIST)) return true;
-
-  const gatewayMtime = statSync(GATEWAY_BIN).mtimeMs;
-
-  if (existsSync(GATEWAY_SRC_DIR) && gatewayMtime < latestMtimeInDir(GATEWAY_SRC_DIR)) {
-    return true;
-  }
-
-  if (
-    existsSync(CLI_UTILS_PACKAGE_JSON) &&
-    gatewayMtime < statSync(CLI_UTILS_PACKAGE_JSON).mtimeMs
-  ) {
-    return true;
-  }
-
-  if (existsSync(CLI_UTILS_TSCONFIG) && gatewayMtime < statSync(CLI_UTILS_TSCONFIG).mtimeMs) {
-    return true;
-  }
-
-  if (existsSync(CLI_UTILS_SRC_DIR) && gatewayMtime < latestMtimeInDir(CLI_UTILS_SRC_DIR)) {
-    return true;
-  }
-
-  if (existsSync(SCHEMAS_PACKAGE_JSON) && gatewayMtime < statSync(SCHEMAS_PACKAGE_JSON).mtimeMs) {
-    return true;
-  }
-
-  if (existsSync(SCHEMAS_TSCONFIG) && gatewayMtime < statSync(SCHEMAS_TSCONFIG).mtimeMs) {
-    return true;
-  }
-
-  if (existsSync(SCHEMAS_SRC_DIR) && gatewayMtime < latestMtimeInDir(SCHEMAS_SRC_DIR)) {
-    return true;
-  }
-
-  if (existsSync(SCHEMAS_SCRIPTS_DIR) && gatewayMtime < latestMtimeInDir(SCHEMAS_SCRIPTS_DIR)) {
-    return true;
-  }
-
-  if (gatewayMtime < statSync(SCHEMAS_DIST).mtimeMs) {
-    return true;
-  }
-
-  if (gatewayMtime < statSync(CLI_UTILS_DIST).mtimeMs) {
-    return true;
-  }
-
-  return false;
-}
-
-function ensureWorkspaceBuild(filter: string, outputPath: string, failurePrefix: string): void {
-  const args = ["--filter", filter, "build"];
-  const result = tryGatewayBuild("pnpm", args);
-  if (result.status === 0 || existsSync(outputPath)) return;
-  if (waitForBuildOutputByAnotherWorker(outputPath, 5_000)) return;
-
-  if (result.error?.message.includes("ENOENT")) {
-    const corepackResult = tryGatewayBuild("corepack", ["pnpm", ...args]);
-    if (corepackResult.status === 0 || existsSync(outputPath)) return;
-    if (waitForBuildOutputByAnotherWorker(outputPath, 5_000)) return;
-
-    throw new Error(formatBuildFailure(failurePrefix, corepackResult));
-  }
-
-  throw new Error(formatBuildFailure(failurePrefix, result));
-}
-
-function ensureGatewayBuild(): void {
-  if (!gatewayBuildIsStale()) return;
-
-  ensureWorkspaceBuild(
-    "@tyrum/schemas",
-    SCHEMAS_DIST,
-    "Failed to build @tyrum/schemas before desktop integration test.",
-  );
-  ensureWorkspaceBuild(
-    "@tyrum/cli-utils",
-    CLI_UTILS_DIST,
-    "Failed to build @tyrum/cli-utils before desktop integration test.",
-  );
-  ensureWorkspaceBuild(
-    "@tyrum/gateway",
-    GATEWAY_BIN,
-    "Failed to build @tyrum/gateway before desktop integration test.",
-  );
-}
-
-async function findAvailablePort(): Promise<number> {
-  return await new Promise<number>((resolvePort, rejectPort) => {
-    const server = createServer();
-    server.once("error", rejectPort);
-    server.listen(0, "127.0.0.1", () => {
-      const address = server.address();
-      if (!address || typeof address !== "object") {
-        server.close(() => rejectPort(new Error("Unable to allocate free port")));
-        return;
-      }
-      const { port } = address;
-      server.close((error) => {
-        if (error) {
-          rejectPort(error);
-          return;
-        }
-        resolvePort(port);
-      });
-    });
-  });
-}
-
-async function waitForHealthDown(url: string, timeoutMs = 5_000): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    try {
-      await fetch(url);
-    } catch {
-      return;
-    }
-    await new Promise((resolveWait) => setTimeout(resolveWait, 150));
-  }
-  throw new Error(`Gateway still reachable after stop timeout (${timeoutMs}ms): ${url}`);
-}
+const itPlaywright = skipPlaywrightTests ? it.skip : it;
+// Windows can take longer to remove the copied staged gateway artifact tree.
+const cleanupTimeoutMs = process.platform === "win32" ? 120_000 : 10_000;
 
 describe("desktop embedded gateway startup", () => {
   let manager: GatewayManager | undefined;
@@ -253,7 +47,7 @@ describe("desktop embedded gateway startup", () => {
       await rm(tempRoot, { recursive: true, force: true });
       tempRoot = undefined;
     }
-  });
+  }, cleanupTimeoutMs);
 
   it(
     "starts embedded gateway via GatewayManager and passes health check",
@@ -290,6 +84,302 @@ describe("desktop embedded gateway startup", () => {
       await manager.stop();
       expect(manager.status).toBe("stopped");
       await waitForHealthDown(healthUrl);
+    },
+  );
+
+  itPlaywright(
+    "serves bundled /ui assets and connects with the bootstrap token via the login form",
+    { timeout: 90_000 },
+    async () => {
+      if (!canRunPlaywright) {
+        throw new Error(
+          `Playwright is required for this test but could not be launched: ${playwrightProbeError ?? "unknown error"}`,
+        );
+      }
+
+      const releaseBuildLock = acquireGatewayBuildLock();
+      try {
+        ensureGatewayBuild();
+      } finally {
+        releaseBuildLock();
+      }
+
+      if (!existsSync(BUNDLED_OPERATOR_UI_INDEX)) {
+        throw new Error(
+          `Missing bundled operator UI at ${BUNDLED_OPERATOR_UI_INDEX}. Run pnpm --filter @tyrum/gateway build first.`,
+        );
+      }
+      const bundledOperatorUiDirReal = realpathSync(BUNDLED_OPERATOR_UI_DIR);
+
+      await withTemporaryEnvVar(OPERATOR_UI_DIR_ENV, BUNDLED_OPERATOR_UI_DIR, async () => {
+        const port = await findAvailablePort();
+        tempRoot = await mkdtemp(join(tmpdir(), "tyrum-desktop-gateway-ui-"));
+        const dbPath = join(tempRoot, "gateway.db");
+        const targetUrl = `http://127.0.0.1:${port}/ui`;
+        const gatewayLogs: string[] = [];
+
+        let browser: (typeof import("playwright"))["Browser"] | undefined;
+        let context: (typeof import("playwright"))["BrowserContext"] | undefined;
+        let page: (typeof import("playwright"))["Page"] | undefined;
+
+        const consoleErrors: string[] = [];
+        const pageErrors: string[] = [];
+        const requestFailures: string[] = [];
+        const httpErrors: string[] = [];
+
+        try {
+          manager = new GatewayManager();
+          manager.on("log", (entry) => {
+            gatewayLogs.push(`[${entry.level}] ${entry.message}`);
+          });
+          await manager.start({
+            gatewayBin: GATEWAY_BIN,
+            gatewayBinSource: "monorepo",
+            port,
+            dbPath,
+            host: "127.0.0.1",
+          });
+
+          const token = manager.getBootstrapToken("default-tenant-admin");
+          if (!token) {
+            throw new Error(
+              "default-tenant-admin bootstrap token was not emitted by GatewayManager",
+            );
+          }
+
+          const pw = await import("playwright");
+          browser = await pw.chromium.launch({ headless: true });
+          context = await browser.newContext();
+          page = await context.newPage();
+
+          page.on("console", (msg) => {
+            if (msg.type() === "error" || msg.type() === "warning") {
+              consoleErrors.push(`[console.${msg.type()}] ${msg.text()}`);
+            }
+          });
+          page.on("pageerror", (error) => {
+            pageErrors.push(error.stack || error.message);
+          });
+          page.on("requestfailed", (req) => {
+            requestFailures.push(
+              `${req.method()} ${req.url()} - ${req.failure()?.errorText ?? "unknown failure"}`,
+            );
+          });
+          page.on("response", (res) => {
+            if (res.status() >= 400) {
+              httpErrors.push(`${res.status()} ${res.request().method()} ${res.url()}`);
+            }
+          });
+
+          const response = await page.goto(targetUrl, { waitUntil: "domcontentloaded" });
+          if (response && response.status() >= 400) {
+            throw new Error(`navigation failed: HTTP ${String(response.status())} ${targetUrl}`);
+          }
+
+          await page.waitForSelector('[data-testid="login-token"]', {
+            state: "visible",
+            timeout: 10_000,
+          });
+          await page.getByTestId("login-token").fill(token);
+          await page.getByTestId("login-button").click();
+          await ensureOperatorShellVisible(page);
+
+          expect(page.url()).toContain("/ui");
+          expect(gatewayLogs.some((line) => line.includes("bundle_source=monorepo"))).toBe(true);
+          expect(
+            gatewayLogs.some((line) => line.includes(`assets_dir=${bundledOperatorUiDirReal}`)),
+          ).toBe(true);
+        } catch (error) {
+          throw new Error(
+            formatBrowserFailure({
+              url: page?.url() ?? targetUrl,
+              consoleErrors,
+              pageErrors,
+              requestFailures,
+              httpErrors,
+              gatewayLogs,
+            }),
+            {
+              cause: error instanceof Error ? error : undefined,
+            },
+          );
+        } finally {
+          await page?.close().catch(() => undefined);
+          await context?.close().catch(() => undefined);
+          await browser?.close().catch(() => undefined);
+        }
+      });
+    },
+  );
+
+  itPlaywright(
+    "boots a copied staged gateway artifact outside the workspace and connects via bundled /ui",
+    { timeout: 240_000 },
+    async () => {
+      if (!canRunPlaywright) {
+        throw new Error(
+          `Playwright is required for this test but could not be launched: ${playwrightProbeError ?? "unknown error"}`,
+        );
+      }
+
+      const releaseBuildLock = acquireGatewayBuildLock();
+      try {
+        ensureGatewayBuild();
+        ensureStagedGatewayBuild();
+      } finally {
+        releaseBuildLock();
+      }
+
+      if (!existsSync(STAGED_BUNDLED_OPERATOR_UI_INDEX)) {
+        throw new Error(
+          `Missing staged bundled operator UI at ${STAGED_BUNDLED_OPERATOR_UI_INDEX}. Run pnpm --filter tyrum-desktop build:gateway first.`,
+        );
+      }
+
+      tempRoot = await mkdtemp(join(tmpdir(), "tyrum-staged-gateway-artifact-"));
+      const copiedGatewayDir = join(tempRoot, "gateway");
+      const copiedGatewayBin = join(copiedGatewayDir, "index.mjs");
+      const copiedMigrationsDir = join(copiedGatewayDir, "migrations/sqlite");
+      const copiedBundledOperatorUiDir = join(copiedGatewayDir, "dist/ui");
+
+      // Move the staged artifact outside the repo so the gateway cannot discover
+      // workspace apps/web/dist and must resolve its packaged operator UI bundle.
+      await cp(STAGED_GATEWAY_DIR, copiedGatewayDir, { recursive: true });
+      const copiedBundledOperatorUiDirReal = realpathSync(copiedBundledOperatorUiDir);
+
+      const port = await findAvailablePort();
+      const dbHome = join(tempRoot, "home");
+      const dbPath = join(dbHome, "gateway.db");
+      const healthUrl = `http://127.0.0.1:${port}/healthz`;
+      const targetUrl = `http://127.0.0.1:${port}/ui`;
+      const gatewayLogs: string[] = [];
+      let stdout = "";
+      let stderr = "";
+
+      const childEnv: NodeJS.ProcessEnv = {
+        ...process.env,
+        ELECTRON_RUN_AS_NODE: "1",
+        [EMBEDDED_GATEWAY_BUNDLE_SOURCE_ENV]: "staged",
+      };
+      delete childEnv[OPERATOR_UI_DIR_ENV];
+
+      const child = spawn(
+        electronCommand(),
+        [
+          copiedGatewayBin,
+          "start",
+          "--host",
+          "127.0.0.1",
+          "--port",
+          String(port),
+          "--home",
+          dbHome,
+          "--db",
+          dbPath,
+          "--migrations-dir",
+          copiedMigrationsDir,
+        ],
+        {
+          cwd: copiedGatewayDir,
+          env: childEnv,
+          stdio: ["ignore", "pipe", "pipe"],
+        },
+      );
+      child.stdout.setEncoding("utf8");
+      child.stderr.setEncoding("utf8");
+      child.stdout.on("data", (chunk: string) => {
+        stdout += chunk;
+        gatewayLogs.push(`[stdout] ${chunk.trimEnd()}`);
+      });
+      child.stderr.on("data", (chunk: string) => {
+        stderr += chunk;
+        gatewayLogs.push(`[stderr] ${chunk.trimEnd()}`);
+      });
+
+      let browser: (typeof import("playwright"))["Browser"] | undefined;
+      let context: (typeof import("playwright"))["BrowserContext"] | undefined;
+      let page: (typeof import("playwright"))["Page"] | undefined;
+      let healthReached = false;
+      const consoleErrors: string[] = [];
+      const pageErrors: string[] = [];
+      const requestFailures: string[] = [];
+      const httpErrors: string[] = [];
+      const output = () => `--- stdout ---\n${stdout}\n--- stderr ---\n${stderr}`;
+
+      try {
+        await waitForHealthUp(healthUrl, child, output);
+        healthReached = true;
+        const token = await waitForDefaultTenantAdminToken(output, child);
+
+        const pw = await import("playwright");
+        browser = await pw.chromium.launch({ headless: true });
+        context = await browser.newContext();
+        page = await context.newPage();
+
+        page.on("console", (msg) => {
+          if (msg.type() === "error" || msg.type() === "warning") {
+            consoleErrors.push(`[console.${msg.type()}] ${msg.text()}`);
+          }
+        });
+        page.on("pageerror", (error) => {
+          pageErrors.push(error.stack || error.message);
+        });
+        page.on("requestfailed", (req) => {
+          requestFailures.push(
+            `${req.method()} ${req.url()} - ${req.failure()?.errorText ?? "unknown failure"}`,
+          );
+        });
+        page.on("response", (res) => {
+          if (res.status() >= 400) {
+            httpErrors.push(`${res.status()} ${res.request().method()} ${res.url()}`);
+          }
+        });
+
+        const response = await page.goto(targetUrl, { waitUntil: "domcontentloaded" });
+        if (response && response.status() >= 400) {
+          throw new Error(`navigation failed: HTTP ${String(response.status())} ${targetUrl}`);
+        }
+
+        await page.waitForSelector('[data-testid="login-token"]', {
+          state: "visible",
+          timeout: 10_000,
+        });
+        await page.getByTestId("login-token").fill(token);
+        await page.getByTestId("login-button").click();
+        await ensureOperatorShellVisible(page);
+
+        expect(page.url()).toContain("/ui");
+        expect(
+          gatewayLogs.some((line) =>
+            line.includes("bundle_source=staged assets_source=bundled-dist-ui"),
+          ),
+        ).toBe(true);
+        expect(
+          gatewayLogs.some((line) => line.includes(`assets_dir=${copiedBundledOperatorUiDirReal}`)),
+        ).toBe(true);
+      } catch (error) {
+        throw new Error(
+          formatBrowserFailure({
+            url: page?.url() ?? targetUrl,
+            consoleErrors,
+            pageErrors,
+            requestFailures,
+            httpErrors,
+            gatewayLogs: [...gatewayLogs, output()],
+          }),
+          {
+            cause: error instanceof Error ? error : undefined,
+          },
+        );
+      } finally {
+        await page?.close().catch(() => undefined);
+        await context?.close().catch(() => undefined);
+        await browser?.close().catch(() => undefined);
+        await stopChildProcess(child);
+        if (healthReached) {
+          await waitForHealthDown(healthUrl).catch(() => undefined);
+        }
+      }
     },
   );
 });
