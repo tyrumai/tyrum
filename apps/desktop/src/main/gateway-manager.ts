@@ -268,6 +268,14 @@ export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
   private _status: GatewayStatus = "stopped";
   private bootstrapTokens = new Map<string, string>();
 
+  private emitLog(level: GatewayLogEntry["level"], message: string): void {
+    this.emit("log", {
+      level,
+      message,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
   get status(): GatewayStatus {
     return this._status;
   }
@@ -358,6 +366,10 @@ export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
     if (this.process) throw new Error("Gateway already running");
     this.setStatus("starting");
     this.bootstrapTokens.clear();
+    this.emitLog(
+      "info",
+      `embedded-gateway bundle: source=${opts.gatewayBinSource ?? "unknown"} path=${opts.gatewayBin}`,
+    );
 
     const host = opts.host ?? "127.0.0.1";
     const startupLogLines: string[] = [];
@@ -379,6 +391,7 @@ export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
       env: {
         ...process.env,
         ...launch.env,
+        TYRUM_EMBEDDED_GATEWAY_BUNDLE_SOURCE: opts.gatewayBinSource ?? "",
       },
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -480,18 +493,14 @@ export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
         } catch {
           /* already dead */
         }
-        if (this.status !== "stopped") {
-          this.setStatus("stopped");
-        }
+        if (this.status !== "stopped") this.setStatus("stopped");
         resolve();
       }, 5_000);
       killTimer.unref();
 
       proc.once("exit", () => {
         clearTimeout(killTimer);
-        if (this.stoppingProcess === proc) {
-          this.stoppingProcess = null;
-        }
+        if (this.stoppingProcess === proc) this.stoppingProcess = null;
         this.setStatus("stopped");
         resolve();
       });
@@ -503,9 +512,7 @@ export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
         // If it already fired before we attached our listener, resolve now.
         if (proc.exitCode !== null || proc.signalCode !== null) {
           clearTimeout(killTimer);
-          if (this.stoppingProcess === proc) {
-            this.stoppingProcess = null;
-          }
+          if (this.stoppingProcess === proc) this.stoppingProcess = null;
           this.setStatus("stopped");
           resolve();
         }
@@ -546,9 +553,7 @@ export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
     this.process = null;
     this.setStatus("error");
     const startupReason = summarizeGatewayStartupFailure(startupLogLines);
-    if (startupReason) {
-      throw new Error(`Gateway failed to start within timeout: ${startupReason}`);
-    }
+    if (startupReason) throw new Error(`Gateway failed to start within timeout: ${startupReason}`);
     throw new Error("Gateway failed to start within timeout");
   }
 
@@ -562,9 +567,7 @@ export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
         if (this.process !== observedProcess) return;
 
         if (res.ok) {
-          if (this.status === "error") {
-            this.setStatus("running");
-          }
+          if (this.status === "error") this.setStatus("running");
           return;
         }
 
@@ -581,9 +584,8 @@ export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
   }
 
   private stopHealthCheck(): void {
-    if (this.healthTimer) {
-      clearInterval(this.healthTimer);
-      this.healthTimer = null;
-    }
+    if (!this.healthTimer) return;
+    clearInterval(this.healthTimer);
+    this.healthTimer = null;
   }
 }
