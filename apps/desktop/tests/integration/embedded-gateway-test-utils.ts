@@ -1,10 +1,12 @@
 import { spawnSync, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { closeSync, existsSync, openSync, readdirSync, statSync, unlinkSync } from "node:fs";
+import { createRequire } from "node:module";
 import { createServer } from "node:net";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const require = createRequire(import.meta.url);
 export const REPO_ROOT = resolve(__dirname, "../../../../");
 export const GATEWAY_BIN = resolve(REPO_ROOT, "packages/gateway/dist/index.mjs");
 export const BUNDLED_OPERATOR_UI_DIR = resolve(REPO_ROOT, "packages/gateway/dist/ui");
@@ -13,8 +15,11 @@ export const STAGED_GATEWAY_DIR = resolve(REPO_ROOT, "apps/desktop/dist/gateway"
 export const STAGED_GATEWAY_BIN = resolve(STAGED_GATEWAY_DIR, "index.mjs");
 export const STAGED_BUNDLED_OPERATOR_UI_INDEX = resolve(STAGED_GATEWAY_DIR, "dist/ui/index.html");
 const STAGE_GATEWAY_BIN_SCRIPT = resolve(REPO_ROOT, "apps/desktop/scripts/stage-gateway-bin.mjs");
-const ELECTRON_BIN = resolve(REPO_ROOT, "apps/desktop/node_modules/.bin/electron");
-const ELECTRON_BIN_WINDOWS = resolve(REPO_ROOT, "apps/desktop/node_modules/.bin/electron.cmd");
+const electronPackageExport = require("electron");
+if (typeof electronPackageExport !== "string") {
+  throw new TypeError("Expected the electron package to export the executable path.");
+}
+const ELECTRON_BIN = electronPackageExport;
 const CLI_UTILS_DIST = resolve(REPO_ROOT, "packages/cli-utils/dist/index.mjs");
 const CLI_UTILS_PACKAGE_JSON = resolve(REPO_ROOT, "packages/cli-utils/package.json");
 const CLI_UTILS_TSCONFIG = resolve(REPO_ROOT, "packages/cli-utils/tsconfig.json");
@@ -246,7 +251,7 @@ export async function waitForHealthDown(url: string, timeoutMs = 5_000): Promise
 }
 
 export function electronCommand(): string {
-  return process.platform === "win32" ? ELECTRON_BIN_WINDOWS : ELECTRON_BIN;
+  return ELECTRON_BIN;
 }
 
 export async function waitForHealthUp(

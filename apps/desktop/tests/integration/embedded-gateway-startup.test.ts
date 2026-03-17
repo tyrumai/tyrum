@@ -107,6 +107,7 @@ describe("desktop embedded gateway startup", () => {
           `Missing bundled operator UI at ${BUNDLED_OPERATOR_UI_INDEX}. Run pnpm --filter @tyrum/gateway build first.`,
         );
       }
+      const bundledOperatorUiDirReal = realpathSync(BUNDLED_OPERATOR_UI_DIR);
 
       await withTemporaryEnvVar(OPERATOR_UI_DIR_ENV, BUNDLED_OPERATOR_UI_DIR, async () => {
         const port = await findAvailablePort();
@@ -184,7 +185,7 @@ describe("desktop embedded gateway startup", () => {
           expect(page.url()).toContain("/ui");
           expect(gatewayLogs.some((line) => line.includes("bundle_source=monorepo"))).toBe(true);
           expect(
-            gatewayLogs.some((line) => line.includes(`assets_dir=${BUNDLED_OPERATOR_UI_DIR}`)),
+            gatewayLogs.some((line) => line.includes(`assets_dir=${bundledOperatorUiDirReal}`)),
           ).toBe(true);
         } catch (error) {
           throw new Error(

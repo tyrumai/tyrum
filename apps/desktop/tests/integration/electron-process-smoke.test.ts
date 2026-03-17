@@ -10,6 +10,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
+import { createRequire } from "node:module";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -17,10 +18,14 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const require = createRequire(import.meta.url);
 const REPO_ROOT = resolve(__dirname, "../../../../");
 const DESKTOP_MAIN_ENTRYPOINT = resolve(REPO_ROOT, "apps/desktop/dist/main/index.mjs");
-const ELECTRON_BIN = resolve(REPO_ROOT, "apps/desktop/node_modules/.bin/electron");
-const ELECTRON_BIN_WINDOWS = resolve(REPO_ROOT, "apps/desktop/node_modules/.bin/electron.cmd");
+const electronPackageExport = require("electron");
+if (typeof electronPackageExport !== "string") {
+  throw new TypeError("Expected the electron package to export the executable path.");
+}
+const ELECTRON_BIN = electronPackageExport;
 const GATEWAY_BUILD_LOCK = resolve(REPO_ROOT, ".tyrum-gateway-build.lock");
 
 interface ElectronProbeResult {
@@ -121,7 +126,7 @@ function killProcessGroup(pid: number, signal: NodeJS.Signals): void {
 const isWindows = process.platform === "win32";
 
 function electronCommand(): string {
-  return process.platform === "win32" ? ELECTRON_BIN_WINDOWS : ELECTRON_BIN;
+  return ELECTRON_BIN;
 }
 
 function runBuildStep(args: string[], failurePrefix: string): void {
