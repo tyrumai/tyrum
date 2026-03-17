@@ -59,12 +59,69 @@ function buildPreview(messages: UIMessage[]): TyrumAiSdkChatSessionSummary["last
   return null;
 }
 
+function compareSessionActivity(
+  left: TyrumAiSdkChatSessionSummary,
+  right: TyrumAiSdkChatSessionSummary,
+): number {
+  if (left.updated_at !== right.updated_at) {
+    return right.updated_at.localeCompare(left.updated_at);
+  }
+  return right.session_id.localeCompare(left.session_id);
+}
+
+function isComparableRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function toComparableEntries(record: Record<string, unknown>): Array<[string, unknown]> {
+  return Object.entries(record)
+    .filter(([, value]) => value !== undefined)
+    .toSorted(([leftKey], [rightKey]) => leftKey.localeCompare(rightKey));
+}
+
+function areComparableValuesEqual(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) {
+    return true;
+  }
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) {
+      return false;
+    }
+    return left.every((value, index) => areComparableValuesEqual(value, right[index]));
+  }
+  if (!isComparableRecord(left) || !isComparableRecord(right)) {
+    return false;
+  }
+
+  const leftEntries = toComparableEntries(left);
+  const rightEntries = toComparableEntries(right);
+  if (leftEntries.length !== rightEntries.length) {
+    return false;
+  }
+
+  return leftEntries.every(([leftKey, leftValue], index) => {
+    const rightEntry = rightEntries[index];
+    return (
+      rightEntry !== undefined &&
+      leftKey === rightEntry[0] &&
+      areComparableValuesEqual(leftValue, rightEntry[1])
+    );
+  });
+}
+
+function areMessagesEqual(left: UIMessage[], right: UIMessage[]): boolean {
+  return areComparableValuesEqual(left, right);
+}
+
 function patchSessionList(
   sessions: TyrumAiSdkChatSessionSummary[],
   session: TyrumAiSdkChatSession | TyrumAiSdkChatSessionSummary,
 ): TyrumAiSdkChatSessionSummary[] {
   const nextSummary = toSessionSummary(session);
-  return [nextSummary, ...sessions.filter((entry) => entry.session_id !== nextSummary.session_id)];
+  return [
+    ...sessions.filter((entry) => entry.session_id !== nextSummary.session_id),
+    nextSummary,
+  ].toSorted(compareSessionActivity);
 }
 
 function applySessionMessages(
@@ -311,7 +368,7 @@ export function hydrateActiveSession(
 export function updateActiveMessages(ctx: ChatStoreContext, messages: UIMessage[]): void {
   ctx.setState((prev) => {
     const session = prev.active.session;
-    if (!session) {
+    if (!session || areMessagesEqual(session.messages, messages)) {
       return prev;
     }
     const nextSession = applySessionMessages(session, messages);

@@ -15,9 +15,9 @@ function sampleListItem(sessionId: string, updatedAt = "2026-01-01T00:00:00.000Z
   };
 }
 
-function sampleGetSession(sessionId: string) {
+function sampleGetSession(sessionId: string, updatedAt = "2026-01-01T00:00:00.000Z") {
   return {
-    ...sampleListItem(sessionId),
+    ...sampleListItem(sessionId, updatedAt),
     messages: [
       {
         id: `${sessionId}-user-1`,
@@ -111,41 +111,121 @@ describe("chatStore", () => {
     expect(chat.getSnapshot().active.session).toEqual(sampleGetSession("session-9"));
   });
 
-  it("updates the active session and thread preview when live messages change", async () => {
+  it("keeps existing thread order when opening an older session", async () => {
     const ws = createFakeWs();
-    ws.sessionGet.mockResolvedValueOnce({ session: sampleGetSession("session-3") });
+    ws.sessionList.mockResolvedValueOnce({
+      sessions: [
+        sampleListItem("session-1", "2026-01-02T00:00:00.000Z"),
+        sampleListItem("session-2", "2026-01-01T00:00:00.000Z"),
+      ],
+      next_cursor: null,
+    });
+    ws.sessionGet.mockResolvedValueOnce({
+      session: sampleGetSession("session-2", "2026-01-01T00:00:00.000Z"),
+    });
     const chat = createChatStore(ws as never, createFakeHttp() as never);
 
-    await chat.openSession("session-3");
-    chat.updateActiveMessages([
-      {
-        id: "session-3-user-1",
-        role: "user",
-        parts: [{ type: "text", text: "hello" }],
-      },
-      {
-        id: "session-3-assistant-1",
-        role: "assistant",
-        parts: [{ type: "text", text: "Fresh assistant reply" }],
-      },
-    ]);
+    await chat.refreshSessions();
+    await chat.openSession("session-2");
 
-    const snapshot = chat.getSnapshot();
-    expect(snapshot.active.session?.messages).toHaveLength(2);
-    expect(snapshot.active.session?.last_message).toEqual({
-      role: "assistant",
-      text: "Fresh assistant reply",
-    });
-    expect(snapshot.sessions.sessions[0]).toEqual(
-      expect.objectContaining({
-        session_id: "session-3",
-        message_count: 2,
-        last_message: {
-          role: "assistant",
-          text: "Fresh assistant reply",
+    expect(chat.getSnapshot().sessions.sessions.map((session) => session.session_id)).toEqual([
+      "session-1",
+      "session-2",
+    ]);
+    expect(chat.getSnapshot().active.sessionId).toBe("session-2");
+  });
+
+  it("ignores unchanged message arrays so activity order does not reset on open", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-10T00:00:00.000Z"));
+
+    try {
+      const ws = createFakeWs();
+      ws.sessionList.mockResolvedValueOnce({
+        sessions: [
+          sampleListItem("session-1", "2026-01-02T00:00:00.000Z"),
+          sampleListItem("session-2", "2026-01-01T00:00:00.000Z"),
+        ],
+        next_cursor: null,
+      });
+      ws.sessionGet.mockResolvedValueOnce({
+        session: sampleGetSession("session-2", "2026-01-01T00:00:00.000Z"),
+      });
+      const chat = createChatStore(ws as never, createFakeHttp() as never);
+
+      await chat.refreshSessions();
+      await chat.openSession("session-2");
+      chat.updateActiveMessages(sampleGetSession("session-2", "2026-01-01T00:00:00.000Z").messages);
+
+      const snapshot = chat.getSnapshot();
+      expect(snapshot.active.session?.updated_at).toBe("2026-01-01T00:00:00.000Z");
+      expect(snapshot.sessions.sessions.map((session) => session.session_id)).toEqual([
+        "session-1",
+        "session-2",
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("promotes the active session when live messages actually change", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-10T00:00:00.000Z"));
+
+    try {
+      const ws = createFakeWs();
+      ws.sessionList.mockResolvedValueOnce({
+        sessions: [
+          sampleListItem("session-1", "2026-01-02T00:00:00.000Z"),
+          sampleListItem("session-3", "2026-01-01T00:00:00.000Z"),
+        ],
+        next_cursor: null,
+      });
+      ws.sessionGet.mockResolvedValueOnce({
+        session: sampleGetSession("session-3", "2026-01-01T00:00:00.000Z"),
+      });
+      const chat = createChatStore(ws as never, createFakeHttp() as never);
+
+      await chat.refreshSessions();
+      await chat.openSession("session-3");
+      chat.updateActiveMessages([
+        {
+          id: "session-3-user-1",
+          role: "user",
+          parts: [{ type: "text", text: "hello" }],
         },
-      }),
-    );
+        {
+          id: "session-3-assistant-1",
+          role: "assistant",
+          parts: [{ type: "text", text: "Fresh assistant reply" }],
+        },
+      ]);
+
+      const snapshot = chat.getSnapshot();
+      expect(snapshot.active.session?.messages).toHaveLength(2);
+      expect(snapshot.active.session?.last_message).toEqual({
+        role: "assistant",
+        text: "Fresh assistant reply",
+      });
+      expect(snapshot.active.session?.updated_at).toBe("2026-01-10T00:00:00.000Z");
+      expect(snapshot.sessions.sessions.map((session) => session.session_id)).toEqual([
+        "session-3",
+        "session-1",
+      ]);
+      expect(snapshot.sessions.sessions[0]).toEqual(
+        expect.objectContaining({
+          session_id: "session-3",
+          message_count: 2,
+          last_message: {
+            role: "assistant",
+            text: "Fresh assistant reply",
+          },
+          updated_at: "2026-01-10T00:00:00.000Z",
+        }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("creates and deletes sessions while retaining live message state", async () => {
