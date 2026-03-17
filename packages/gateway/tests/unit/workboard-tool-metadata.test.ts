@@ -91,4 +91,18 @@ describe("WorkBoard tool metadata", () => {
       required: ["key"],
     });
   });
+
+  it("adds prompt guidance for capture and clarification flows", () => {
+    expect(
+      WORKBOARD_TOOL_REGISTRY.find((tool) => tool.id === "workboard.capture")?.promptGuidance,
+    ).toContain(
+      "Use capture when the work is multi-step or should stay durable beyond the current reply.",
+    );
+    expect(
+      WORKBOARD_TOOL_REGISTRY.find((tool) => tool.id === "workboard.clarification.request")
+        ?.promptExamples,
+    ).toContain(
+      '{"work_item_id":"work_123","question":"Should heartbeat schedules notify operators by default or stay quiet?"}',
+    );
+  });
 });

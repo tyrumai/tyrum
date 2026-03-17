@@ -27,6 +27,21 @@ export function buildBuiltinMemoryServerSpec(): McpServerSpecT {
     transport: "stdio",
     command: process.execPath,
     args: ["-e", ""],
+    tool_overrides: {
+      seed: {
+        pre_turn_hydration: {
+          prompt_arg_name: "query",
+          include_turn_context: true,
+        },
+        memory_role: "seed",
+      },
+      search: {
+        memory_role: "search",
+      },
+      write: {
+        memory_role: "write",
+      },
+    },
   };
 }
 

@@ -245,6 +245,14 @@ export const McpToolMetadataOverride = z
     description_override: z.string().trim().min(1).optional(),
     description_append: z.string().trim().min(1).optional(),
     effect: z.enum(["read_only", "state_changing"]).optional(),
+    pre_turn_hydration: z
+      .object({
+        prompt_arg_name: z.string().trim().min(1),
+        include_turn_context: z.boolean().optional(),
+      })
+      .strict()
+      .optional(),
+    memory_role: z.enum(["seed", "search", "write"]).optional(),
   })
   .strict()
   .superRefine((value, ctx) => {

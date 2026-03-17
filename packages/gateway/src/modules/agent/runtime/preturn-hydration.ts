@@ -59,26 +59,40 @@ function resolvePreferredPromptArgName(
   return stringProps.length === 1 ? stringProps[0]?.[0] : undefined;
 }
 
+type ResolvedPreTurnHydration = {
+  args: Record<string, unknown>;
+  usedFallbackInference: boolean;
+};
+
 function buildPreTurnArgs(
   tool: ToolDescriptor,
   session: SessionRow,
   resolved: ResolvedAgentTurnInput,
-): Record<string, unknown> | undefined {
-  const schema = asRecord(tool.inputSchema);
-  const primaryArgName = resolvePreferredPromptArgName(schema);
+): ResolvedPreTurnHydration | undefined {
+  const explicitConfig = tool.preTurnHydration;
+  const primaryArgName =
+    explicitConfig?.promptArgName ?? resolvePreferredPromptArgName(asRecord(tool.inputSchema));
   if (!primaryArgName) {
     return undefined;
   }
 
-  return {
+  const args: Record<string, unknown> = {
     [primaryArgName]: resolved.message,
-    turn: {
+  };
+
+  if (explicitConfig?.includeTurnContext ?? true) {
+    args["turn"] = {
       agent_id: session.agent_id,
       workspace_id: session.workspace_id,
       session_id: session.session_id,
       channel: resolved.channel,
       thread_id: resolved.thread_id,
-    },
+    };
+  }
+
+  return {
+    args,
+    usedFallbackInference: !explicitConfig,
   };
 }
 
@@ -126,15 +140,21 @@ export async function runPreTurnHydration(params: {
       continue;
     }
 
-    const args = buildPreTurnArgs(tool, params.session, params.resolved);
-    if (!args) {
+    const hydration = buildPreTurnArgs(tool, params.session, params.resolved);
+    if (!hydration) {
       reports.push({
         tool_id: tool.id,
         status: "skipped",
         injected_chars: 0,
-        error: "unable to infer pre-turn input shape from tool schema",
+        error:
+          "pre-turn hydration metadata is missing and the tool schema did not expose a usable string prompt field",
       });
       continue;
+    }
+    if (hydration.usedFallbackInference) {
+      params.toolSetBuilderDeps.logger.warn("agent.pre_turn_hydration_schema_fallback", {
+        tool_id: tool.id,
+      });
     }
 
     try {
@@ -142,7 +162,7 @@ export async function runPreTurnHydration(params: {
       const policyState = await policyRuntime.resolveToolCallPolicyState({
         toolDesc: tool,
         toolCallId,
-        args,
+        args: hydration.args,
         inputProvenance: { source: "system", trusted: true },
       });
       if (policyState.shouldRequireApproval) {
@@ -155,7 +175,7 @@ export async function runPreTurnHydration(params: {
         continue;
       }
 
-      const result = await params.toolExecutor.execute(tool.id, toolCallId, args, {
+      const result = await params.toolExecutor.execute(tool.id, toolCallId, hydration.args, {
         agent_id: params.session.agent_id,
         workspace_id: params.session.workspace_id,
         session_id: params.session.session_id,
@@ -173,7 +193,7 @@ export async function runPreTurnHydration(params: {
         continue;
       }
 
-      const text = `Pre-turn context (${tool.id}):\n${result.output}`;
+      const text = `Pre-turn recall (${tool.id}):\n${result.output}`;
       sections.push({ toolId: tool.id, text });
       reports.push({
         tool_id: tool.id,

@@ -16,14 +16,24 @@ type MemoryToolEmbeddingPipeline = {
   embed(text: string): Promise<number[]>;
 };
 
+type MemoryWriteProvenance = {
+  source_kind: "tool";
+  session_id: string;
+  tool_call_id: string;
+  refs: [];
+  metadata: { tool_id: string };
+  channel?: string;
+  thread_id?: string;
+};
+
 export interface AgentMemoryToolRuntimeOptions {
   db: SqlDb;
   dal: MemoryDal;
   tenantId: string;
   agentId: string;
   sessionId: string;
-  channel: string;
-  threadId: string;
+  channel?: string;
+  threadId?: string;
   config: BuiltinMemoryServerSettings;
   budgetsProvider: () => Promise<BuiltinMemoryServerSettings["budgets"]>;
   resolveEmbeddingPipeline?: () => Promise<MemoryToolEmbeddingPipeline | undefined>;
@@ -189,15 +199,19 @@ export class AgentMemoryToolRuntime {
     const nowIso = new Date().toISOString();
     const tags = normalizeTags(input.tags);
     const sensitivity = input.sensitivity ?? "private";
-    const provenance = {
+    const provenance: MemoryWriteProvenance = {
       source_kind: "tool" as const,
-      channel: this.opts.channel,
-      thread_id: this.opts.threadId,
       session_id: this.opts.sessionId,
       tool_call_id: toolCallId,
       refs: [],
       metadata: { tool_id: sourceToolId },
     };
+    if (typeof this.opts.channel === "string" && this.opts.channel.trim().length > 0) {
+      provenance.channel = this.opts.channel;
+    }
+    if (typeof this.opts.threadId === "string" && this.opts.threadId.trim().length > 0) {
+      provenance.thread_id = this.opts.threadId;
+    }
     const created = await this.opts.dal.create(
       input.kind === "fact"
         ? {

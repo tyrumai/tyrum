@@ -19,7 +19,7 @@ import {
   buildToolSetBuilderDeps,
   buildRuntimePrompt,
   resolveIdentityAndContext,
-  resolveToolsAndMemory,
+  resolveToolExecutionRuntime,
 } from "./turn-preparation-runtime.js";
 import { runPreTurnHydration } from "./preturn-hydration.js";
 import { buildWorkFocusDigest } from "./work-focus-digest.js";
@@ -31,10 +31,7 @@ import type { AgentContextStore } from "../context-store.js";
 import type { SessionRow } from "../session-dal.js";
 import { SessionDal } from "../session-dal.js";
 import { McpManager } from "../mcp-manager.js";
-import { NodeDispatchService } from "../node-dispatch-service.js";
-import { ToolExecutor } from "../tool-executor.js";
-import { NodeCapabilityInspectionService } from "../../node/capability-inspection-service.js";
-import { NodeInventoryService } from "../../node/inventory-service.js";
+import type { ToolExecutor } from "../tool-executor.js";
 import { LaneQueueSignalDal } from "../../lanes/queue-signal-dal.js";
 import { resolveGatewayStateMode } from "../../runtime-state/mode.js";
 import type { SecretProvider } from "../../secret/provider.js";
@@ -42,9 +39,6 @@ import type { PluginRegistry } from "../../plugins/registry.js";
 import type { PolicyService } from "../../policy/service.js";
 import type { ApprovalDal } from "../../approval/dal.js";
 import { buildContextReport } from "./turn-context-report.js";
-import { AgentMemoryToolRuntime } from "../../memory/agent-tool-runtime.js";
-import { resolveBuiltinMemoryConfig } from "../../memory/builtin-mcp.js";
-import { resolveEmbeddingPipeline } from "./embedding-pipeline-resolution.js";
 import {
   buildGuardianReviewSystemPrompt,
   createGuardianReviewDecisionCollector,
@@ -101,6 +95,33 @@ export type PrepareTurnDeps = {
   cleanupAtMs: number;
   setCleanupAtMs: (ms: number) => void;
 };
+
+function mergeAutomationContextSections(
+  metadataSection: string | undefined,
+  digestBody: string | undefined,
+): string | undefined {
+  const sections: string[] = [];
+
+  if (metadataSection) {
+    const normalized = metadataSection.replace(/^Automation context:\n?/, "").trim();
+    if (normalized.length > 0) {
+      sections.push(normalized);
+    }
+  }
+
+  if (digestBody) {
+    const normalized = digestBody.trim();
+    if (normalized.length > 0) {
+      sections.push(normalized);
+    }
+  }
+
+  if (sections.length === 0) {
+    return undefined;
+  }
+
+  return `Automation context:\n${sections.join("\n\n")}`;
+}
 
 export async function prepareTurn(
   deps: PrepareTurnDeps,
@@ -171,13 +192,30 @@ export async function prepareTurn(
     : undefined;
   const normalTurnContext = guardianReviewRequest
     ? undefined
-    : await resolveToolsAndMemory(deps, ctx, session, resolved, executionProfile);
+    : await resolveToolExecutionRuntime(deps, ctx, session, resolved, executionProfile, {
+        memoryProvenance: {
+          channel: resolved.channel,
+          threadId: resolved.thread_id,
+        },
+      });
   const availableTools = normalTurnContext?.availableTools ?? [];
   const toolSetBuilderDeps = normalTurnContext?.toolSetBuilderDeps;
   const filteredTools = normalTurnContext?.filteredTools ?? [];
   const resolvedToolSetBuilder = normalTurnContext?.toolSetBuilder ?? guardianReviewToolSetBuilder;
+  const toolExecutor = normalTurnContext?.toolExecutor;
+  const activeToolExecutor = (toolExecutor ??
+    ({
+      execute: async () => ({
+        tool_call_id: "guardian-review",
+        output: "",
+        error: "guardian review mode does not expose normal tools",
+      }),
+    } satisfies Pick<ToolExecutor, "execute">)) as ToolExecutor;
   if (!resolvedToolSetBuilder) {
     throw new Error("tool set builder unavailable for turn preparation");
+  }
+  if (!guardianReviewRequest && !toolExecutor) {
+    throw new Error("tool executor unavailable for turn preparation");
   }
 
   const workFocusDigest = guardianReviewRequest
@@ -192,7 +230,7 @@ export async function prepareTurn(
             workspace_id: session.workspace_id,
           },
         });
-  const workFocusText = `Work focus digest:\n${workFocusDigest}`;
+  const workFocusText = `Active work state:\n${workFocusDigest}`;
   const runtimePrompt = guardianReviewRequest
     ? undefined
     : await buildRuntimePrompt({
@@ -207,29 +245,6 @@ export async function prepareTurn(
         model: executionProfile.profile.model_id ?? executionProfile.id,
       });
 
-  const mcpSpecMap = new Map<string, (typeof ctx.mcpServers)[number]>(
-    ctx.mcpServers.map((server: (typeof ctx.mcpServers)[number]) => [server.id, server]),
-  );
-  const nodeDispatchService = deps.opts.protocolDeps
-    ? new NodeDispatchService(deps.opts.protocolDeps)
-    : undefined;
-  const nodeInventoryService = deps.opts.protocolDeps
-    ? new NodeInventoryService({
-        connectionManager: deps.opts.protocolDeps.connectionManager,
-        connectionDirectory: deps.opts.protocolDeps.cluster?.connectionDirectory,
-        nodePairingDal: deps.opts.container.nodePairingDal,
-        presenceDal: deps.opts.container.presenceDal,
-        attachmentDal: deps.opts.container.sessionLaneNodeAttachmentDal,
-      })
-    : undefined;
-  const nodeCapabilityInspectionService =
-    deps.opts.protocolDeps && nodeInventoryService
-      ? new NodeCapabilityInspectionService({
-          connectionManager: deps.opts.protocolDeps.connectionManager,
-          connectionDirectory: deps.opts.protocolDeps.cluster?.connectionDirectory,
-          nodeInventoryService,
-        })
-      : undefined;
   const modelResolution = await resolveSessionModelImpl(
     {
       container: deps.opts.container,
@@ -248,56 +263,6 @@ export async function prepareTurn(
     },
   );
   const model = modelResolution.model;
-  const memoryConfig = resolveBuiltinMemoryConfig(ctx.config);
-  const memoryToolRuntime = memoryConfig.enabled
-    ? new AgentMemoryToolRuntime({
-        db: deps.opts.container.db,
-        dal: deps.opts.container.memoryDal,
-        tenantId: session.tenant_id,
-        agentId: session.agent_id,
-        sessionId: session.session_id,
-        channel: resolved.channel,
-        threadId: resolved.thread_id,
-        config: memoryConfig,
-        budgetsProvider: async () => memoryConfig.budgets,
-        resolveEmbeddingPipeline: async () =>
-          await resolveEmbeddingPipeline({
-            container: deps.opts.container,
-            secretProvider: deps.secretProvider,
-            instanceOwner: deps.instanceOwner,
-            fetchImpl: deps.fetchImpl,
-            primaryModelId: executionProfile.profile.model_id ?? ctx.config.model.model,
-            sessionId: session.session_id,
-            tenantId: session.tenant_id,
-            agentId: session.agent_id,
-          }),
-      })
-    : undefined;
-  const toolExecutor = new ToolExecutor(
-    deps.home,
-    deps.mcpManager,
-    mcpSpecMap,
-    deps.fetchImpl,
-    deps.secretProvider,
-    undefined,
-    deps.opts.container.redactionEngine,
-    deps.opts.container.secretResolutionAuditDal,
-    {
-      db: deps.opts.container.db,
-      tenantId: session.tenant_id,
-      agentId: session.agent_id,
-      workspaceId: session.workspace_id,
-      ownerPrefix: deps.instanceOwner,
-    },
-    nodeDispatchService,
-    deps.opts.container.artifactStore,
-    deps.opts.container.identityScopeDal,
-    nodeInventoryService,
-    nodeCapabilityInspectionService,
-    memoryToolRuntime,
-    deps.opts.protocolDeps?.agents,
-    deps.opts.protocolDeps,
-  );
   const toolExecutionContext = {
     tenantId: session.tenant_id,
     planId: exec?.planId ?? `agent-turn-${session.session_id}-${randomUUID()}`,
@@ -340,7 +305,7 @@ export async function prepareTurn(
       : await runPreTurnHydration({
           toolIds: ctx.config.mcp.pre_turn_tools,
           availableTools,
-          toolExecutor,
+          toolExecutor: activeToolExecutor,
           toolSetBuilderDeps,
           toolExecutionContext,
           session,
@@ -355,14 +320,17 @@ export async function prepareTurn(
   const promptParts = guardianReviewRequest
     ? {
         identityPrompt: "",
+        promptContractPrompt: "",
         runtimePromptText: "",
         safetyPrompt: "",
-        skillsText: "Enabled skills:\nGuardian review mode disabled skills.",
-        toolsText: "Available tools:\nguardian_review_decision",
+        skillsText: "Skill guidance:\nGuardian review mode disables normal skill guidance.",
+        toolsText: "Tool contracts:\nguardian_review_decision",
+        workOrchestrationText: undefined as string | undefined,
         sessionText:
-          "Session context:\nGuardian review mode relies on the supplied review request evidence.",
+          "Session state:\nGuardian review mode relies on the supplied review request evidence.",
         preTurnTexts: [] as string[],
-        automationTriggerText: undefined as string | undefined,
+        automationDirectiveText: undefined as string | undefined,
+        automationContextText: undefined as string | undefined,
       }
     : (() => {
         const assembled = assemblePrompts(
@@ -375,13 +343,16 @@ export async function prepareTurn(
         );
         return {
           identityPrompt: assembled.identityPrompt,
+          promptContractPrompt: assembled.promptContractPrompt,
           runtimePromptText: assembled.runtimePrompt,
           safetyPrompt: assembled.safetyPrompt,
           skillsText: assembled.skillsText,
           toolsText: assembled.toolsText,
+          workOrchestrationText: assembled.workOrchestrationText,
           sessionText: assembled.sessionText,
           preTurnTexts: assembled.preTurnTexts,
-          automationTriggerText: assembled.automationTriggerText,
+          automationDirectiveText: assembled.automationDirectiveText,
+          automationContextText: assembled.automationContextText,
         };
       })();
 
@@ -389,14 +360,18 @@ export async function prepareTurn(
     ? buildGuardianReviewSystemPrompt(guardianReviewRequest.subjectType)
     : [
         promptParts.identityPrompt,
+        promptParts.promptContractPrompt,
         promptParts.runtimePromptText,
         promptParts.safetyPrompt,
         sandboxPrompt,
+        promptParts.skillsText,
+        promptParts.toolsText,
+        promptParts.workOrchestrationText,
       ]
         .filter((value): value is string => typeof value === "string" && value.length > 0)
         .join("\n\n");
 
-  const automationDigestText =
+  const automationDigestBody =
     guardianReviewRequest || !automation
       ? undefined
       : await buildAutomationDigest({
@@ -408,6 +383,9 @@ export async function prepareTurn(
           },
           automation,
         });
+  const automationContextText = guardianReviewRequest
+    ? undefined
+    : mergeAutomationContextSections(promptParts.automationContextText, automationDigestBody);
 
   const validatedReport = buildContextReport({
     session,
@@ -417,16 +395,19 @@ export async function prepareTurn(
     filteredTools,
     systemPrompt,
     identityPrompt: promptParts.identityPrompt,
+    promptContractPrompt: promptParts.promptContractPrompt,
+    runtimePrompt: promptParts.runtimePromptText,
     safetyPrompt: promptParts.safetyPrompt,
     sandboxPrompt,
     skillsText: promptParts.skillsText,
     toolsText: promptParts.toolsText,
+    workOrchestrationText: promptParts.workOrchestrationText,
     sessionText: promptParts.sessionText,
     workFocusText,
     preTurnTexts: [...promptParts.preTurnTexts],
     preTurnReports: preTurnHydration.reports,
-    automationTriggerText: promptParts.automationTriggerText,
-    automationDigestText,
+    automationDirectiveText: promptParts.automationDirectiveText,
+    automationContextText,
     memorySummary: preTurnHydration.memory,
     automation,
     logger: deps.opts.container.logger,
@@ -437,7 +418,7 @@ export async function prepareTurn(
   const toolCallPolicyStates = new Map<string, ToolCallPolicyState>();
   const toolSet = resolvedToolSetBuilder.buildToolSet(
     filteredTools,
-    toolExecutor,
+    activeToolExecutor,
     usedTools,
     toolExecutionContext,
     validatedReport,
@@ -451,15 +432,13 @@ export async function prepareTurn(
   const userContent: Array<{ type: "text"; text: string }> = guardianReviewRequest
     ? [{ type: "text", text: resolved.message }]
     : [
-        { type: "text", text: promptParts.skillsText },
-        { type: "text", text: promptParts.toolsText },
         { type: "text", text: promptParts.sessionText },
         { type: "text", text: workFocusText },
         ...promptParts.preTurnTexts.map((text) => ({ type: "text" as const, text })),
-        ...(promptParts.automationTriggerText
-          ? [{ type: "text" as const, text: promptParts.automationTriggerText }]
+        ...(promptParts.automationDirectiveText
+          ? [{ type: "text" as const, text: promptParts.automationDirectiveText }]
           : []),
-        ...(automationDigestText ? [{ type: "text" as const, text: automationDigestText }] : []),
+        ...(automationContextText ? [{ type: "text" as const, text: automationContextText }] : []),
         { type: "text", text: resolved.message },
       ];
 

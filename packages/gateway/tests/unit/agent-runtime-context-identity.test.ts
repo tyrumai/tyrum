@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GatewayContainer } from "../../src/container.js";
 import { teardownTestEnv, fetch404, migrationsDir } from "./agent-runtime.test-helpers.js";
 import { mkdtemp } from "node:fs/promises";
@@ -7,6 +7,25 @@ import { tmpdir } from "node:os";
 import { createContainer } from "../../src/container.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
 import { createStubLanguageModel } from "./stub-language-model.js";
+
+vi.mock("../../src/modules/models/provider-factory.js", () => ({
+  createProviderFromNpm: (input: { providerId: string }) => ({
+    languageModel(modelId: string) {
+      return {
+        specificationVersion: "v3",
+        provider: input.providerId,
+        modelId,
+        supportedUrls: {},
+        async doGenerate() {
+          return { text: "ok" } as never;
+        },
+        async doStream() {
+          throw new Error("not implemented");
+        },
+      };
+    },
+  }),
+}));
 
 describe("AgentRuntime - context reports and identity keys", () => {
   let homeDir: string | undefined;

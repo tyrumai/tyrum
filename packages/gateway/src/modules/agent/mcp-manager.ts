@@ -27,6 +27,11 @@ interface McpRemoteSpec {
       description_override?: string;
       description_append?: string;
       effect?: ToolDescriptor["effect"];
+      pre_turn_hydration?: {
+        prompt_arg_name: string;
+        include_turn_context?: boolean;
+      };
+      memory_role?: ToolDescriptor["memoryRole"];
     }
   >;
 }
@@ -53,6 +58,11 @@ interface McpStdioSpec {
       description_override?: string;
       description_append?: string;
       effect?: ToolDescriptor["effect"];
+      pre_turn_hydration?: {
+        prompt_arg_name: string;
+        include_turn_context?: boolean;
+      };
+      memory_role?: ToolDescriptor["memoryRole"];
     }
   >;
 }
@@ -67,6 +77,10 @@ export interface McpToolInfo {
   inputSchema?: unknown;
   effect?: ToolDescriptor["effect"];
   keywords?: string[];
+  promptGuidance?: readonly string[];
+  promptExamples?: readonly string[];
+  preTurnHydration?: ToolDescriptor["preTurnHydration"];
+  memoryRole?: ToolDescriptor["memoryRole"];
 }
 
 interface McpClientEntry {
@@ -186,6 +200,15 @@ function toDescriptor(spec: McpServerSpecT, tool: McpToolInfo, logger?: Logger):
       tool.inputSchema && typeof tool.inputSchema === "object"
         ? (tool.inputSchema as Record<string, unknown>)
         : undefined,
+    promptGuidance: tool.promptGuidance,
+    promptExamples: tool.promptExamples,
+    preTurnHydration: override?.pre_turn_hydration
+      ? {
+          promptArgName: override.pre_turn_hydration.prompt_arg_name,
+          includeTurnContext: override.pre_turn_hydration.include_turn_context,
+        }
+      : tool.preTurnHydration,
+    memoryRole: override?.memory_role ?? tool.memoryRole,
   };
 }
 

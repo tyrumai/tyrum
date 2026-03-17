@@ -35,6 +35,7 @@ import {
 import type { ResolveSessionModelDeps } from "./session-model-resolution.js";
 import type { AgentLoadedContext } from "./types.js";
 import { resolveGatewayStateMode } from "../../runtime-state/mode.js";
+import type { PrepareTurnDeps } from "./turn-preparation.js";
 
 const DEFAULT_RESERVED_INPUT_TOKENS = 20_000;
 const DEFAULT_KEEP_LAST_MESSAGES_AFTER_COMPACTION = 12;
@@ -317,6 +318,9 @@ export async function compactSessionWithResolvedModel(input: {
   abortSignal?: AbortSignal;
   timeoutMs?: number;
   logger?: LoggerLike;
+  prepareTurnDeps?: PrepareTurnDeps;
+  channel?: string;
+  threadId?: string;
 }): Promise<SessionCompactionResult> {
   const keepLastMessages = Math.max(
     0,
@@ -337,7 +341,12 @@ export async function compactSessionWithResolvedModel(input: {
   }
 
   await maybeRunPreCompactionMemoryFlush(
-    { db: input.container.db, logger: input.container.logger, agentId: input.session.agent_id },
+    {
+      logger: input.container.logger,
+      prepareTurnDeps: input.prepareTurnDeps,
+      channel: input.channel,
+      threadId: input.threadId,
+    },
     {
       ctx: input.ctx,
       session: input.session,

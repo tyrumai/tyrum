@@ -14,6 +14,10 @@ const memorySeedTool: ToolDescriptor = {
   description: "Seed pre-turn memory context.",
   effect: "read_only",
   keywords: [],
+  preTurnHydration: {
+    promptArgName: "query",
+    includeTurnContext: true,
+  },
   inputSchema: {
     type: "object",
     properties: {
@@ -99,6 +103,108 @@ describe("runPreTurnHydration", () => {
         status: "failed",
         injected_chars: 0,
         error: "policy store unavailable",
+      },
+    ]);
+  });
+
+  it("uses explicit pre-turn hydration metadata for owned tools", async () => {
+    const execute = vi.fn(async () => ({
+      output: "Stored recall",
+      error: undefined,
+      meta: undefined,
+    }));
+
+    const result = await runPreTurnHydration({
+      toolIds: [memorySeedTool.id],
+      availableTools: [memorySeedTool],
+      toolExecutor: { execute } as unknown as ToolExecutor,
+      toolSetBuilderDeps: createToolSetBuilderDeps({}),
+      toolExecutionContext,
+      session,
+      resolved,
+    });
+
+    expect(execute).toHaveBeenCalledOnce();
+    expect(execute).toHaveBeenCalledWith(
+      memorySeedTool.id,
+      expect.stringMatching(/^preturn-/),
+      {
+        query: resolved.message,
+        turn: {
+          agent_id: session.agent_id,
+          workspace_id: session.workspace_id,
+          session_id: session.session_id,
+          channel: resolved.channel,
+          thread_id: resolved.thread_id,
+        },
+      },
+      {
+        agent_id: session.agent_id,
+        workspace_id: session.workspace_id,
+        session_id: session.session_id,
+        channel: resolved.channel,
+        thread_id: resolved.thread_id,
+      },
+    );
+    expect(result.sections).toEqual([
+      {
+        toolId: memorySeedTool.id,
+        text: "Pre-turn recall (mcp.memory.seed):\nStored recall",
+      },
+    ]);
+    expect(result.reports).toEqual([
+      {
+        tool_id: memorySeedTool.id,
+        status: "succeeded",
+        injected_chars: "Pre-turn recall (mcp.memory.seed):\nStored recall".length,
+      },
+    ]);
+  });
+
+  it("falls back to schema inference for compatible MCP tools and logs the degraded path", async () => {
+    const fallbackTool: ToolDescriptor = {
+      ...memorySeedTool,
+      id: "mcp.compatibility.seed",
+      preTurnHydration: undefined,
+    };
+    const execute = vi.fn(async () => ({
+      output: "Compatibility recall",
+      error: undefined,
+      meta: undefined,
+    }));
+    const deps = createToolSetBuilderDeps({});
+
+    const result = await runPreTurnHydration({
+      toolIds: [fallbackTool.id],
+      availableTools: [fallbackTool],
+      toolExecutor: { execute } as unknown as ToolExecutor,
+      toolSetBuilderDeps: deps,
+      toolExecutionContext,
+      session,
+      resolved,
+    });
+
+    expect(execute).toHaveBeenCalledOnce();
+    expect(execute).toHaveBeenCalledWith(
+      fallbackTool.id,
+      expect.stringMatching(/^preturn-/),
+      {
+        query: resolved.message,
+        turn: expect.objectContaining({
+          session_id: session.session_id,
+          thread_id: resolved.thread_id,
+        }),
+      },
+      expect.any(Object),
+    );
+    expect(deps.logger.warn).toHaveBeenCalledWith("agent.pre_turn_hydration_schema_fallback", {
+      tool_id: fallbackTool.id,
+    });
+    expect(result.reports).toEqual([
+      {
+        tool_id: fallbackTool.id,
+        status: "succeeded",
+        injected_chars: "Pre-turn recall (mcp.compatibility.seed):\nCompatibility recall".length,
       },
     ]);
   });

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
@@ -9,12 +9,32 @@ import { MemoryDal } from "../../src/modules/memory/memory-dal.js";
 import {
   checkpointJson,
   countFlushCalls,
+  createMemoryWriteToolStep,
   createMockMcpManager,
-  createSequencedTextLanguageModel,
+  createSequencedGenerateLanguageModel,
   findFlushPromptText,
   listNonTitleGenerateCalls,
   seedAgentConfig,
 } from "./pre-compaction-memory-flush.test-support.js";
+
+vi.mock("../../src/modules/models/provider-factory.js", () => ({
+  createProviderFromNpm: (input: { providerId: string }) => ({
+    languageModel(modelId: string) {
+      return {
+        specificationVersion: "v3",
+        provider: input.providerId,
+        modelId,
+        supportedUrls: {},
+        async doGenerate() {
+          return { text: "ok" } as never;
+        },
+        async doStream() {
+          throw new Error("not implemented");
+        },
+      };
+    },
+  }),
+}));
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -38,9 +58,13 @@ describe("Pre-compaction memory flush", () => {
     container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
     const { agentId } = await seedAgentConfig(container, { maxTurns: 1 });
 
-    const languageModel = createSequencedTextLanguageModel([
+    const languageModel = createSequencedGenerateLanguageModel([
       "a1",
-      "FLUSH_OK",
+      createMemoryWriteToolStep({
+        kind: "note",
+        body_md: "FLUSH_OK",
+      }),
+      "",
       checkpointJson("summary: first / a1"),
       "a2",
     ]);
@@ -70,7 +94,7 @@ describe("Pre-compaction memory flush", () => {
     });
     expect(second.reply).toBe("a2");
 
-    expect(listNonTitleGenerateCalls(languageModel)).toHaveLength(4);
+    expect(listNonTitleGenerateCalls(languageModel)).toHaveLength(5);
 
     const flushPromptText = findFlushPromptText(languageModel);
 
@@ -97,8 +121,8 @@ describe("Pre-compaction memory flush", () => {
     const item = await memory.getById(hit.memory_item_id, agentId);
     expect(item?.kind).toBe("note");
     expect(item?.provenance.session_id).toBe(session.session_id);
-    expect(item?.provenance.channel).toBeUndefined();
-    expect(item?.provenance.thread_id).toBeUndefined();
+    expect(item?.provenance.channel).toBe("test");
+    expect(item?.provenance.thread_id).toBe("thread-flush");
     expect(item && "body_md" in item ? item.body_md : "").toContain("FLUSH_OK");
   });
 
@@ -109,9 +133,13 @@ describe("Pre-compaction memory flush", () => {
     container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
     await seedAgentConfig(container, { maxTurns: 1 });
 
-    const languageModel = createSequencedTextLanguageModel([
+    const languageModel = createSequencedGenerateLanguageModel([
       "a1",
-      "FLUSH_OK",
+      createMemoryWriteToolStep({
+        kind: "note",
+        body_md: "FLUSH_OK",
+      }),
+      "",
       checkpointJson("summary: secret redaction"),
       "a2",
     ]);
@@ -141,7 +169,7 @@ describe("Pre-compaction memory flush", () => {
     });
     expect(second.reply).toBe("a2");
 
-    expect(listNonTitleGenerateCalls(languageModel)).toHaveLength(4);
+    expect(listNonTitleGenerateCalls(languageModel)).toHaveLength(5);
 
     const flushPromptText = findFlushPromptText(languageModel);
 
@@ -156,9 +184,13 @@ describe("Pre-compaction memory flush", () => {
     container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
     const { tenantId, agentId } = await seedAgentConfig(container, { maxTurns: 1 });
 
-    const languageModel = createSequencedTextLanguageModel([
+    const languageModel = createSequencedGenerateLanguageModel([
       "a1",
-      `Remember this: ${secret}`,
+      createMemoryWriteToolStep({
+        kind: "note",
+        body_md: `Remember this: ${secret}`,
+      }),
+      "",
       checkpointJson("summary: secret output redaction"),
       "a2",
     ]);
@@ -206,9 +238,9 @@ describe("Pre-compaction memory flush", () => {
     container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
     await seedAgentConfig(container, { maxTurns: 1 });
 
-    const languageModel = createSequencedTextLanguageModel([
+    const languageModel = createSequencedGenerateLanguageModel([
       "a1",
-      "NOOP",
+      "",
       checkpointJson("summary: truncate"),
       "a2",
     ]);
@@ -252,11 +284,15 @@ describe("Pre-compaction memory flush", () => {
     container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
     const { agentId } = await seedAgentConfig(container, { maxTurns: 3 });
 
-    const languageModel = createSequencedTextLanguageModel([
+    const languageModel = createSequencedGenerateLanguageModel([
       "a1",
       "a2",
       "a3",
-      "FLUSH_OK",
+      createMemoryWriteToolStep({
+        kind: "note",
+        body_md: "FLUSH_OK",
+      }),
+      "",
       checkpointJson("summary: threshold"),
       "a4",
     ]);
@@ -304,7 +340,7 @@ describe("Pre-compaction memory flush", () => {
       message: "fourth",
     });
     expect(fourth.reply).toBe("a4");
-    expect(listNonTitleGenerateCalls(languageModel)).toHaveLength(6);
+    expect(listNonTitleGenerateCalls(languageModel)).toHaveLength(7);
     expect(countFlushCalls(languageModel)).toBe(1);
 
     const memory = new MemoryDal(container.db);
@@ -317,11 +353,15 @@ describe("Pre-compaction memory flush", () => {
     container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
     await seedAgentConfig(container, { maxTurns: 3 });
 
-    const languageModel = createSequencedTextLanguageModel([
+    const languageModel = createSequencedGenerateLanguageModel([
       "a1",
       "a2",
       "a3",
-      "FLUSH_OK",
+      createMemoryWriteToolStep({
+        kind: "note",
+        body_md: "FLUSH_OK",
+      }),
+      "",
       checkpointJson("summary: prompt-only"),
       "a4",
       "a5",
@@ -379,7 +419,7 @@ describe("Pre-compaction memory flush", () => {
       ).reply,
     ).toBe("a4");
 
-    expect(listNonTitleGenerateCalls(languageModel)).toHaveLength(6);
+    expect(listNonTitleGenerateCalls(languageModel)).toHaveLength(7);
     expect(countFlushCalls(languageModel)).toBe(1);
 
     expect(
@@ -392,7 +432,7 @@ describe("Pre-compaction memory flush", () => {
       ).reply,
     ).toBe("a5");
 
-    expect(listNonTitleGenerateCalls(languageModel)).toHaveLength(7);
+    expect(listNonTitleGenerateCalls(languageModel)).toHaveLength(8);
     expect(countFlushCalls(languageModel)).toBe(1);
   });
 });

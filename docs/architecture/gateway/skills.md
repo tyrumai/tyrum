@@ -22,6 +22,14 @@ Go deeper: [Playbooks](/architecture/playbooks), [Gateway plugins](/architecture
 
 Skills are instruction bundles the agent can load on demand to perform specialized workflows consistently. They are guidance, not enforcement. The safety boundary remains in tool policy, approvals, and sandboxing.
 
+In the compiled runtime prompt, skills live in the system prompt as `Skill guidance:` sections. They are intentionally lower-precedence than:
+
+1. system/runtime safety rules
+2. tool schemas and tool contracts
+3. the current user request
+
+That keeps skills useful for workflow consistency without letting them override policy or tool contracts.
+
 ## Load sources and trust posture
 
 Skills can come from several locations, with more specific locations winning on conflicts:
@@ -32,9 +40,12 @@ Skills can come from several locations, with more specific locations winning on 
 
 Workspace skills are the main risk boundary. They come from the current checkout and must be treated as untrusted until the workspace is deliberately marked trusted.
 
+The bundled `tyrum-docs` skill points the agent at `https://docs.tyrum.ai` when the user asks how Tyrum is meant to be used. It is product guidance, not a policy override.
+
 ## Key rules
 
 - Skills must never be treated as a bypass around tool policy or approvals.
+- Skills must be framed as advisory workflow help, not as hidden policy or hard requirements.
 - Operator surfaces should show skill provenance so users can distinguish bundled, user, and workspace sources.
 - Marketplace discovery is acceptable only with reviewable provenance and explicit enablement.
 - Skills must reference secret handles rather than embedding raw secret values.

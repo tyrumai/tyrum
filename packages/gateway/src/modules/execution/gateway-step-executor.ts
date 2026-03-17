@@ -34,6 +34,33 @@ import {
 } from "./gateway-step-executor-helpers.js";
 import { buildToolSet } from "./gateway-step-executor-tool-set.js";
 
+function stringifyOutputSchema(schema: unknown): string | undefined {
+  if (schema === undefined) {
+    return undefined;
+  }
+
+  try {
+    return JSON.stringify(schema, null, 2);
+  } catch {
+    return undefined;
+  }
+}
+
+function formatOutputContractPrompt(outputContract: { schema?: unknown }): string {
+  const lines = [
+    "Output contract:",
+    "- Return exactly one valid JSON value that satisfies the declared contract.",
+    "- Do not return prose, Markdown fences, commentary, or wrapper text.",
+    "- Do not invent unsupported facts. If evidence is limited, keep the JSON conservative.",
+  ];
+  const schemaText = stringifyOutputSchema(outputContract.schema);
+  if (schemaText) {
+    lines.push("Schema:");
+    lines.push(schemaText);
+  }
+  return lines.join("\n");
+}
+
 async function executeLlmAction(input: {
   action: ActionPrimitiveT;
   planId: string;
@@ -98,7 +125,12 @@ async function executeLlmAction(input: {
   let messages: ModelMessage[] = [
     {
       role: "user" as const,
-      content: [{ type: "text" as const, text: prompt }],
+      content: [
+        {
+          type: "text" as const,
+          text: `${formatOutputContractPrompt(outputContract)}\n\nStep prompt:\n${prompt}`,
+        },
+      ],
     },
   ];
 
@@ -205,7 +237,8 @@ async function executeLlmAction(input: {
       model: modelResolved.model as unknown as LanguageModel,
       system: [
         "You are executing an LLM step inside a deterministic playbook.",
-        "Return ONLY valid JSON.",
+        "Return only the final JSON value that satisfies the output contract.",
+        "Do not emit prose, Markdown fences, commentary, or any wrapper text.",
       ].join("\n"),
       messages,
       tools: toolSet,

@@ -245,8 +245,8 @@ describe("turnDirect overflow retry", () => {
     prepareTurnMock.mockResolvedValue({
       ...samplePreparedTurn(new Set()),
       userContent: [
-        { type: "text", text: "Enabled skills:\nnone" },
-        { type: "text", text: "Session context:\nstale checkpoint text" },
+        { type: "text", text: "Skill guidance:\nnone" },
+        { type: "text", text: "Session state:\nstale checkpoint text" },
         { type: "text", text: "hello" },
       ],
     });
@@ -282,7 +282,7 @@ describe("turnDirect overflow retry", () => {
     expect(userMessage).toMatchObject({
       role: "user",
       content: [
-        { type: "text", text: "Enabled skills:\nnone" },
+        { type: "text", text: "Skill guidance:\nnone" },
         { type: "text", text: "hello" },
       ],
     });

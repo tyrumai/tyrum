@@ -14,16 +14,19 @@ export interface ContextReportInput {
   filteredTools: ToolDescriptor[];
   systemPrompt: string;
   identityPrompt: string;
+  promptContractPrompt: string;
+  runtimePrompt: string;
   safetyPrompt: string;
   sandboxPrompt: string;
   skillsText: string;
   toolsText: string;
+  workOrchestrationText: string | undefined;
   sessionText: string;
   workFocusText: string;
   preTurnTexts: string[];
   preTurnReports: AgentContextReport["pre_turn_tools"];
-  automationTriggerText: string | undefined;
-  automationDigestText: string | undefined;
+  automationDirectiveText: string | undefined;
+  automationContextText: string | undefined;
   memorySummary: {
     keyword_hits: number;
     semantic_hits: number;
@@ -49,16 +52,19 @@ export function buildContextReport(input: ContextReportInput): AgentContextRepor
     filteredTools,
     systemPrompt,
     identityPrompt,
+    promptContractPrompt,
+    runtimePrompt,
     safetyPrompt,
     sandboxPrompt,
     skillsText,
     toolsText,
+    workOrchestrationText,
     sessionText,
     workFocusText,
     preTurnTexts,
     preTurnReports,
-    automationTriggerText,
-    automationDigestText,
+    automationDirectiveText,
+    automationContextText,
     memorySummary,
     automation,
     logger,
@@ -91,26 +97,29 @@ export function buildContextReport(input: ContextReportInput): AgentContextRepor
       chars: systemPrompt.length,
       sections: [
         { id: "identity", chars: identityPrompt.length },
+        { id: "prompt_contract", chars: promptContractPrompt.length },
+        { id: "runtime", chars: runtimePrompt.length },
         { id: "safety", chars: safetyPrompt.length },
         { id: "sandbox", chars: sandboxPrompt.length },
+        { id: "skill_guidance", chars: skillsText.length },
+        { id: "tool_contracts", chars: toolsText.length },
+        { id: "work_orchestration", chars: workOrchestrationText?.length ?? 0 },
       ],
     },
     user_parts: [
-      { id: "skills", chars: skillsText.length },
-      { id: "tools", chars: toolsText.length },
-      { id: "session_context", chars: sessionText.length },
-      { id: "work_focus_digest", chars: workFocusText.length },
+      { id: "session_state", chars: sessionText.length },
+      { id: "work_state", chars: workFocusText.length },
       ...preTurnTexts.map((text, index) => ({
-        id: `pre_turn_context_${String(index + 1)}`,
+        id: `pre_turn_recall_${String(index + 1)}`,
         chars: text.length,
       })),
-      ...(automationTriggerText
-        ? [{ id: "automation_trigger", chars: automationTriggerText.length }]
+      ...(automationDirectiveText
+        ? [{ id: "automation_directive", chars: automationDirectiveText.length }]
         : []),
-      ...(automationDigestText
-        ? [{ id: "automation_digest", chars: automationDigestText.length }]
+      ...(automationContextText
+        ? [{ id: "automation_context", chars: automationContextText.length }]
         : []),
-      { id: "message", chars: resolved.message.length },
+      { id: "user_request", chars: resolved.message.length },
     ],
     selected_tools: filteredTools.map((t) => t.id),
     execution_profile: executionProfile.id,

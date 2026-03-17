@@ -123,25 +123,24 @@ export async function buildAutomationDigest(input: {
   ]);
 
   const lines: string[] = [];
-  lines.push("Automation digest:");
-  lines.push(
-    `- Schedule kind: ${input.automation.schedule_kind ?? "unknown"}${input.automation.seeded_default ? " (seeded default)" : ""}`,
-  );
-  lines.push(`- Last active session: ${activity?.last_active_session_key ?? "none"}`);
-  lines.push(`- Active work items: ${String(itemsResult.items.length)}`);
+  if (input.automation.seeded_default) {
+    lines.push("Schedule source: seeded default");
+  }
+  lines.push(`Last active session: ${activity?.last_active_session_key ?? "none"}`);
+  lines.push(`Active work items: ${String(itemsResult.items.length)}`);
   for (const item of itemsResult.items.slice(0, 5)) {
     lines.push(`  - [${item.status}] ${item.title}`);
   }
-  lines.push(`- Active signals: ${String(signalsResult.signals.length)}`);
+  lines.push(`Active signals: ${String(signalsResult.signals.length)}`);
   for (const signal of signalsResult.signals.slice(0, 5)) {
     lines.push(`  - ${signal.trigger_kind} (${signal.signal_id})`);
   }
-  lines.push(`- Pending approvals: ${String(pendingApprovals.length)}`);
+  lines.push(`Pending approvals: ${String(pendingApprovals.length)}`);
   for (const approval of pendingApprovals.slice(0, 5)) {
     lines.push(`  - ${approval.kind}: ${approval.prompt}`);
   }
   if (recentEvents.length > 0) {
-    lines.push("- Recent work item events since previous automation run:");
+    lines.push("Recent work item events since previous automation run:");
     for (const event of recentEvents.slice(0, 5)) {
       lines.push(`  - ${event.created_at}: ${event.kind} on ${event.title}`);
     }

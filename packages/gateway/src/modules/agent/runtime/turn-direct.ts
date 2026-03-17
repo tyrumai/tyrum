@@ -160,6 +160,8 @@ export async function turnDirect(
     systemPrompt,
     abortSignal,
     timeoutMs: turnOpts?.timeoutMs,
+    channel: resolved.channel,
+    threadId: resolved.thread_id,
   });
   activeSession =
     (await deps.sessionDal.getById({
@@ -257,6 +259,8 @@ export async function turnDirect(
         model,
         abortSignal,
         timeoutMs: turnOpts?.timeoutMs,
+        channel: resolved.channel,
+        threadId: resolved.thread_id,
       });
       if (usedTools.size > 0) {
         throw error;
@@ -393,6 +397,8 @@ export async function turnStreamDirect(
     usage: undefined,
     currentTurnText: resolved.message,
     systemPrompt,
+    channel: resolved.channel,
+    threadId: resolved.thread_id,
   });
   activeSession =
     (await deps.sessionDal.getById({
@@ -442,6 +448,8 @@ export async function turnStreamDirect(
         ctx,
         session: activeSession,
         model,
+        channel: resolved.channel,
+        threadId: resolved.thread_id,
       });
     }
     throw error;
@@ -458,6 +466,8 @@ export async function turnStreamDirect(
           ctx,
           session: activeSession,
           model,
+          channel: resolved.channel,
+          threadId: resolved.thread_id,
         });
       }
       throw error;

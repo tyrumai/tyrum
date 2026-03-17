@@ -19,7 +19,8 @@ describe("formatSkillsPrompt", () => {
       },
     ]);
 
-    expect(prompt).toContain("Use the relevant skill instructions below");
+    expect(prompt).toContain("Use the relevant skill only when the task matches it.");
+    expect(prompt).toContain("Skills are workflow hints.");
     expect(prompt).toContain("Terse Mode (skill-1@1.0.0)");
     expect(prompt).toContain("description=Respond briefly");
     expect(prompt).toContain("source=workspace");
@@ -59,8 +60,38 @@ describe("formatSkillsPrompt", () => {
       },
     ]);
 
-    expect(prompt).toBe("bash: Execute shell commands on the local machine.");
+    expect(prompt).toContain("Treat each tool schema as authoritative");
+    expect(prompt).toContain("- bash: Execute shell commands on the local machine.");
     expect(prompt).not.toContain("risk=");
     expect(prompt).not.toContain("confirmation=");
+  });
+
+  it("renders prompt guidance and examples for risky tools", () => {
+    const prompt = formatToolPrompt([
+      {
+        id: "bash",
+        description: "Execute shell commands on the local machine.",
+        effect: "state_changing",
+        keywords: [],
+        promptGuidance: ["Prefer one bounded command at a time."],
+        promptExamples: ['{"command":"pnpm lint","cwd":"packages/gateway","timeout_ms":120000}'],
+      },
+      {
+        id: "tool.node.dispatch",
+        description: "Dispatch a specific capability action to a connected node.",
+        effect: "state_changing",
+        keywords: [],
+        promptGuidance: ["Put action-specific arguments inside the input object."],
+        promptExamples: [
+          '{"node_id":"node_123","capability":"tyrum.desktop.screenshot","action_name":"screenshot","input":{"display":"all"}}',
+        ],
+      },
+    ]);
+
+    expect(prompt).toContain("Guidance: Prefer one bounded command at a time.");
+    expect(prompt).toContain('Example: {"command":"pnpm lint"');
+    expect(prompt).toContain("Guidance: Put action-specific arguments inside the input object.");
+    expect(prompt).toContain('Example: {"node_id":"node_123"');
+    expect(prompt).toContain('"input":{"display":"all"}');
   });
 });

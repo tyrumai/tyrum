@@ -28,4 +28,18 @@ describe("subagent tool metadata", () => {
       additionalProperties: false,
     });
   });
+
+  it("adds canonical guidance for the higher-risk subagent mutators", () => {
+    expect(
+      SUBAGENT_TOOL_REGISTRY.find((tool) => tool.id === "subagent.spawn")?.promptGuidance,
+    ).toContain("Use spawn only for bounded helper work with a clear execution_profile.");
+    expect(
+      SUBAGENT_TOOL_REGISTRY.find((tool) => tool.id === "subagent.send")?.promptExamples,
+    ).toContain(
+      '{"subagent_id":"subagent_123","message":"Focus on the retry path and cite the relevant functions."}',
+    );
+    expect(
+      SUBAGENT_TOOL_REGISTRY.find((tool) => tool.id === "subagent.close")?.promptGuidance,
+    ).toContain("Close helpers once their result is integrated so session state stays clean.");
+  });
 });

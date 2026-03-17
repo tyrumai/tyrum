@@ -7,6 +7,7 @@ import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { createGatewayStepExecutor } from "../../src/modules/execution/gateway-step-executor.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { ModelsDevCacheDal } from "../../src/modules/models/models-dev-cache-dal.js";
+import { MockLanguageModelV3 } from "ai/test";
 
 vi.mock("../../src/modules/models/provider-factory.js", () => ({
   createProviderFromNpm: vi.fn(),
@@ -27,6 +28,11 @@ describe("gateway-step-executor", () => {
       await rm(homeDir, { recursive: true, force: true });
       homeDir = undefined;
     }
+  });
+
+  const usage = () => ({
+    inputTokens: { total: 10, noCache: 10, cacheRead: undefined, cacheWrite: undefined },
+    outputTokens: { total: 5, text: 5, reasoning: undefined },
   });
 
   it("treats template API providers as requiring configured accounts", async () => {
@@ -99,5 +105,70 @@ describe("gateway-step-executor", () => {
     ).rejects.toThrow(
       "no active auth profiles with credentials configured for provider 'template-provider'",
     );
+  });
+
+  it("injects the output contract into llm step prompts", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-gateway-step-prompt-"));
+    container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
+
+    const languageModel = new MockLanguageModelV3({
+      doGenerate: async () => ({
+        content: [{ type: "text" as const, text: '{"status":"ok"}' }],
+        finishReason: { unified: "stop" as const, raw: undefined },
+        usage: usage(),
+        warnings: [],
+      }),
+    });
+
+    const executor = createGatewayStepExecutor({
+      container,
+      toolExecutor: {
+        execute: vi.fn(async () => ({ success: true, result: { ok: true } })),
+      },
+      languageModel,
+    });
+
+    const result = await executor.execute(
+      {
+        type: "Llm",
+        args: {
+          model: "openai/gpt-4.1",
+          prompt: "Summarize the run status.",
+          __playbook: {
+            output: {
+              type: "json",
+              schema: {
+                type: "object",
+                properties: {
+                  status: { type: "string" },
+                },
+                required: ["status"],
+                additionalProperties: false,
+              },
+            },
+          },
+        },
+      },
+      "plan-llm-prompt",
+      0,
+      5_000,
+      {
+        tenantId: DEFAULT_TENANT_ID,
+        runId: "run-1",
+        stepId: "step-1",
+        attemptId: "attempt-1",
+        approvalId: null,
+        key: "agent:test",
+        lane: "main",
+        workspaceId: "default",
+        policySnapshotId: null,
+      },
+    );
+
+    expect(result).toMatchObject({ success: true });
+    const promptJson = JSON.stringify(languageModel.doGenerateCalls[0]?.prompt ?? []);
+    expect(promptJson).toContain("Output contract:");
+    expect(promptJson).toContain("Do not return prose, Markdown fences");
+    expect(promptJson).toContain("status");
   });
 });

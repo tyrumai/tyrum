@@ -59,5 +59,5 @@ export function stripEmbeddedSessionContext(
   if (!hasPromptInjectedContext) {
     return [...userContent];
   }
-  return userContent.filter((part) => !part.text.startsWith("Session context:\n"));
+  return userContent.filter((part) => !part.text.startsWith("Session state:\n"));
 }

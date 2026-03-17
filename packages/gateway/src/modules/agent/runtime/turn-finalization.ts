@@ -141,7 +141,8 @@ async function maybeGenerateSessionTitle(input: {
       model: input.model,
       system:
         "Write a concise session title. Return plain text only. " +
-        "Use 3 to 8 words, no quotes, no markdown, no trailing punctuation.",
+        "Use 3 to 8 words, no quotes, no markdown, no trailing punctuation. " +
+        "Avoid generic titles such as Need help, Question, Chat, Task, or New conversation.",
       messages: [
         {
           role: "user",

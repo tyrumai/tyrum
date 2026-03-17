@@ -32,6 +32,13 @@ flowchart TB
 
 The router is the hard boundary: prompt text suggests actions, but policy decides whether a tool call is allowed, denied, or requires approval.
 
+For model-facing prompts, each tool exposes two layers:
+
+- schema: the authoritative contract for required fields, nesting, and allowed values
+- description/guidance: human-readable hints and examples that explain when to use the tool
+
+The schema wins. Prompt prose must never be treated as permission to invent arguments that the schema does not allow.
+
 ## Tool families
 
 | Family        | Typical examples                                                           | Trust / risk notes                                                     |
@@ -84,6 +91,23 @@ Examples:
 - `messaging`: stable destination key, not message body text.
 - `tool.node.dispatch`: capability id + action kind (+ normalized desktop operation where relevant).
 - `tool.automation.schedule.*`: stable schedule semantics or exact `schedule_id`, not free-form cadence text.
+
+## Model-facing guidance examples
+
+High-risk tools should include canonical examples in their prompt-facing descriptions when argument nesting is easy to miss.
+
+- filesystem mutators should explain safe usage order:
+  - use `glob` or `grep` to discover candidates
+  - use `read` to inspect the exact target
+  - use `edit` or `apply_patch` for surgical changes
+  - use `write` only for full-file replacement
+- `bash` should show bounded commands with explicit `cwd` and `timeout_ms` when relevant.
+- `tool.node.dispatch` should show that action-specific arguments go inside `input`, for example:
+  `{"node_id":"...","capability":"tyrum.desktop.screenshot","action_name":"screenshot","input":{"display":"all"}}`
+- `tool.node.list` and `tool.node.inspect` should make the discovery order explicit before dispatch.
+- `tool.automation.schedule.create` and `.update` should show canonical nested `cadence`, `execution`, and `delivery` objects instead of free-form schedule prose.
+- `webfetch` should distinguish `mode: "raw"` from `mode: "extract"` and show that extract mode uses a focused `prompt`.
+- delegation and work-tracking tools such as `subagent.spawn`, `workboard.capture`, and `workboard.clarification.request` should include examples that show the intended bounded workflow.
 
 ## Related docs
 

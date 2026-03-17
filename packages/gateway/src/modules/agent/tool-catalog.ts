@@ -1,5 +1,18 @@
 import type { ToolDescriptor } from "./tools.js";
 import { SUBAGENT_TOOL_REGISTRY } from "./tool-catalog-subagent.js";
+import {
+  APPLY_PATCH_TOOL_PROMPT_METADATA,
+  AUTOMATION_SCHEDULE_CREATE_PROMPT_METADATA,
+  AUTOMATION_SCHEDULE_UPDATE_PROMPT_METADATA,
+  BASH_TOOL_PROMPT_METADATA,
+  EDIT_TOOL_PROMPT_METADATA,
+  GLOB_TOOL_PROMPT_METADATA,
+  GREP_TOOL_PROMPT_METADATA,
+  READ_TOOL_PROMPT_METADATA,
+  TOOL_NODE_INSPECT_PROMPT_METADATA,
+  TOOL_NODE_LIST_PROMPT_METADATA,
+  WRITE_TOOL_PROMPT_METADATA,
+} from "./tool-catalog-prompt-metadata.js";
 import { WORKBOARD_TOOL_REGISTRY } from "./tool-catalog-workboard.js";
 
 export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
@@ -8,6 +21,7 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     description: "Read files from the local filesystem.",
     effect: "read_only",
     keywords: ["read", "file", "open", "inspect", "view", "log"],
+    ...READ_TOOL_PROMPT_METADATA,
     source: "builtin",
     family: "filesystem",
     inputSchema: {
@@ -32,6 +46,7 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     description: "Write a file in the local filesystem.",
     effect: "state_changing",
     keywords: ["write", "edit", "update", "patch", "create", "file"],
+    ...WRITE_TOOL_PROMPT_METADATA,
     source: "builtin",
     family: "filesystem",
     inputSchema: {
@@ -49,6 +64,7 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     description: "Edit an existing file by replacing exact text.",
     effect: "state_changing",
     keywords: ["edit", "replace", "patch", "update", "string", "file"],
+    ...EDIT_TOOL_PROMPT_METADATA,
     source: "builtin",
     family: "filesystem",
     inputSchema: {
@@ -71,6 +87,7 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     description: "Apply a structured patch using the Codex *** Begin Patch format.",
     effect: "state_changing",
     keywords: ["patch", "diff", "apply", "edit", "update", "file"],
+    ...APPLY_PATCH_TOOL_PROMPT_METADATA,
     source: "builtin",
     family: "filesystem",
     inputSchema: {
@@ -87,6 +104,7 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     description: "Execute shell commands on the local machine.",
     effect: "state_changing",
     keywords: ["run", "command", "shell", "terminal", "execute", "build"],
+    ...BASH_TOOL_PROMPT_METADATA,
     source: "builtin",
     family: "shell",
     inputSchema: {
@@ -108,6 +126,7 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     description: "Find files in the workspace using a glob pattern.",
     effect: "read_only",
     keywords: ["glob", "files", "find", "match", "pattern", "search"],
+    ...GLOB_TOOL_PROMPT_METADATA,
     source: "builtin",
     family: "filesystem",
     inputSchema: {
@@ -125,6 +144,7 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     description: "Search files in the workspace for text or a regular expression.",
     effect: "read_only",
     keywords: ["grep", "search", "regex", "text", "find", "pattern"],
+    ...GREP_TOOL_PROMPT_METADATA,
     source: "builtin",
     family: "filesystem",
     inputSchema: {
@@ -168,6 +188,13 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     description: "Fetch and normalize web content via Exa's hosted MCP server.",
     effect: "read_only",
     keywords: ["fetch", "crawl", "web", "url", "extract", "research"],
+    promptGuidance: [
+      "Use mode='raw' to fetch normalized page content when you need the full source.",
+      "Use mode='extract' with a prompt when you want a focused, grounded extraction from the fetched source.",
+    ],
+    promptExamples: [
+      '{"url":"https://example.com/spec","mode":"extract","prompt":"List the supported authentication methods."}',
+    ],
     source: "builtin_mcp",
     family: "web",
     backingServerId: "exa",
@@ -213,6 +240,7 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     description: "List connected and dispatchable nodes for the current lane or a specified lane.",
     effect: "read_only",
     keywords: ["node", "device", "inventory", "list", "discover"],
+    ...TOOL_NODE_LIST_PROMPT_METADATA,
     source: "builtin",
     family: "node",
     inputSchema: {
@@ -244,6 +272,7 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     description: "Inspect the enabled actions for a specific connected node capability.",
     effect: "read_only",
     keywords: ["node", "device", "inspect", "capability", "actions"],
+    ...TOOL_NODE_INSPECT_PROMPT_METADATA,
     source: "builtin",
     family: "node",
     inputSchema: {
@@ -267,6 +296,14 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     description: "Dispatch a specific capability action to a connected node.",
     effect: "state_changing",
     keywords: ["node", "device", "screen", "automation", "dispatch"],
+    promptGuidance: [
+      "Inspect the capability first so you know the exact action_name and input shape.",
+      "Put action-specific arguments inside the input object.",
+      "Do not add the transport op field yourself; the dispatcher derives it from action_name.",
+    ],
+    promptExamples: [
+      '{"node_id":"node_123","capability":"tyrum.desktop.screenshot","action_name":"screenshot","input":{"display":"all"},"timeout_ms":30000}',
+    ],
     source: "builtin",
     family: "node",
     inputSchema: {
@@ -337,6 +374,7 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     description: "Create a recurring automation schedule such as a heartbeat or cron job.",
     effect: "state_changing",
     keywords: ["automation", "schedule", "heartbeat", "cron", "create"],
+    ...AUTOMATION_SCHEDULE_CREATE_PROMPT_METADATA,
     source: "builtin",
     family: "automation",
     inputSchema: {
@@ -372,6 +410,7 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     description: "Update an existing automation schedule.",
     effect: "state_changing",
     keywords: ["automation", "schedule", "heartbeat", "cron", "update"],
+    ...AUTOMATION_SCHEDULE_UPDATE_PROMPT_METADATA,
     source: "builtin",
     family: "automation",
     inputSchema: {

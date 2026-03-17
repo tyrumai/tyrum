@@ -8,19 +8,19 @@ import { simulateReadableStream } from "ai";
 import type { NormalizedThreadMessage } from "@tyrum/schemas";
 
 export const TITLE_PROMPT_TEXT = "Write a concise session title.";
-export const PRETURN_MEMORY_SECTION_LABEL = "Pre-turn context (mcp.memory.seed):";
+export const PRETURN_MEMORY_SECTION_LABEL = "Pre-turn recall (mcp.memory.seed):";
 const PROMPT_ROLE_MARKER_PREFIX = "[[role:";
 const PROMPT_PART_MARKER_PREFIX = "[[part:";
 
 const PROMPT_SECTION_LABELS = [
-  "Enabled skills:",
-  "Available tools:",
-  "Session context:",
-  "Work focus digest:",
+  "Skill guidance:",
+  "Tool contracts:",
+  "Session state:",
+  "Active work state:",
   "Memory digest:",
   PRETURN_MEMORY_SECTION_LABEL,
-  "Automation trigger:",
-  "Automation digest:",
+  "Automation directive:",
+  "Automation context:",
 ] as const;
 
 function flattenPromptPart(part: unknown): string {

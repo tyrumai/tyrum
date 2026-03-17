@@ -17,6 +17,13 @@ const WORKBOARD_TOOL_METADATA = {
     description:
       "Create a backlog WorkItem and queue planner refinement. Use when work is multi-step, ambiguous, or should continue beyond the current turn.",
     keywords: ["workboard", "capture", "backlog", "refine", "plan", "task"] as const,
+    promptGuidance: [
+      "Use capture when the work is multi-step or should stay durable beyond the current reply.",
+      "Put the user request or distilled objective in request so the planner has concrete context.",
+    ] as const,
+    promptExamples: [
+      '{"kind":"initiative","title":"Finish phase 2 prompt hardening","request":"Implement the remaining prompt-contract fixes and verification.","priority":2}',
+    ] as const,
   },
   "workboard.item.list": {
     description: "List WorkItems in the current work scope.",
@@ -108,6 +115,13 @@ const WORKBOARD_TOOL_METADATA = {
   "workboard.clarification.request": {
     description:
       "Request clarification through the main user-facing agent and send a steer notification.",
+    promptGuidance: [
+      "Use clarification.request only when progress is blocked on missing human input.",
+      "Ask one concrete question that unblocks the next decision or implementation step.",
+    ] as const,
+    promptExamples: [
+      '{"work_item_id":"work_123","question":"Should heartbeat schedules notify operators by default or stay quiet?"}',
+    ] as const,
   },
   "workboard.clarification.answer": {
     description: "Answer a clarification request on behalf of the main user-facing agent.",
@@ -120,6 +134,8 @@ const WORKBOARD_TOOL_METADATA = {
   {
     description: string;
     keywords?: readonly string[];
+    promptGuidance?: readonly string[];
+    promptExamples?: readonly string[];
   }
 >;
 
@@ -142,5 +158,7 @@ export const WORKBOARD_TOOL_REGISTRY: readonly ToolDescriptor[] = (
     source: "builtin",
     family: "workboard",
     inputSchema: WORKBOARD_TOOL_INPUT_SCHEMAS[id],
+    promptGuidance: "promptGuidance" in metadata ? metadata.promptGuidance : undefined,
+    promptExamples: "promptExamples" in metadata ? metadata.promptExamples : undefined,
   };
 });

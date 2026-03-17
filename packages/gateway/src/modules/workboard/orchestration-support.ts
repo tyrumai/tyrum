@@ -22,7 +22,7 @@ export function buildPlannerInstruction(item: WorkItem): string {
   return [
     `You own refinement for WorkItem ${item.work_item_id}: ${item.title}`,
     "Use WorkBoard tools to inspect state, artifacts, decisions, and clarifications before acting.",
-    "If the scope is unclear, request clarification through workboard.clarification.request.",
+    "Request clarification through workboard.clarification.request only when scope is blocked on missing human input, not to ask for permission to proceed.",
     "If the work is large, decompose it into child work items or execution tasks.",
     "When scope, sizing, and decomposition are complete, transition the work item to ready.",
   ].join("\n");
@@ -36,7 +36,7 @@ export function buildExecutorInstruction(params: {
   return [
     `You own execution for WorkItem ${params.item.work_item_id}: ${params.item.title}`,
     `Task ${params.task.task_id} profile=${params.task.execution_profile}`,
-    "Use WorkBoard tools to record results, update task state, and request clarification if blocked.",
+    "Use WorkBoard tools to record results and update task state. Request clarification only when blocked on missing human input, not to ask for permission to proceed.",
     ...(params.attachedNodeId
       ? [`A managed desktop node is attached for this run: ${params.attachedNodeId}`]
       : []),

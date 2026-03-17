@@ -21,7 +21,7 @@ import {
   canPatternMatchMcpToolId,
   resetGitRootCacheForTests,
   resolveGitRoot,
-  resolveToolsAndMemory,
+  resolveToolExecutionRuntime,
 } from "../../src/modules/agent/runtime/turn-preparation-runtime.js";
 
 describe("turn preparation runtime helpers", () => {
@@ -190,7 +190,7 @@ describe("turn preparation runtime helpers", () => {
       },
     };
 
-    const result = await resolveToolsAndMemory(
+    const result = await resolveToolExecutionRuntime(
       {
         tenantId: "tenant-1",
         home: "/workspace",
@@ -272,7 +272,7 @@ describe("turn preparation runtime helpers", () => {
       inputSchema: { type: "string" },
     };
 
-    const result = await resolveToolsAndMemory(
+    const result = await resolveToolExecutionRuntime(
       {
         tenantId: "tenant-1",
         home: "/workspace",
@@ -341,7 +341,7 @@ describe("turn preparation runtime helpers", () => {
       }));
 
     const logger = { warn: vi.fn() };
-    await resolveToolsAndMemory(
+    await resolveToolExecutionRuntime(
       {
         tenantId: "tenant-1",
         home: "/workspace",
