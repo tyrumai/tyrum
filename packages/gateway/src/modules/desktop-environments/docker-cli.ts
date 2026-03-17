@@ -133,7 +133,10 @@ export async function inspectContainer(
   return first as DockerInspectContainer;
 }
 
-export async function ensureImageAvailable(imageRef: string): Promise<void> {
+export async function ensureImageAvailable(
+  imageRef: string,
+  options?: { platform?: string },
+): Promise<void> {
   const inspectResult = await runDocker(["image", "inspect", imageRef], { timeoutMs: 15_000 });
   if (inspectResult.status === 0) return;
   if (!isMissingImageResult(inspectResult)) {
@@ -142,7 +145,13 @@ export async function ensureImageAvailable(imageRef: string): Promise<void> {
     );
   }
 
-  const pullResult = await runDocker(["pull", imageRef], {
+  const pullArgs = ["pull"];
+  if (options?.platform) {
+    pullArgs.push("--platform", options.platform);
+  }
+  pullArgs.push(imageRef);
+
+  const pullResult = await runDocker(pullArgs, {
     timeoutMs: 10 * 60 * 1_000,
     maxBufferBytes: 32 * 1024 * 1024,
   });

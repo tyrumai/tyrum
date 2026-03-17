@@ -41,7 +41,6 @@ vi.mock("../../src/modules/desktop-environments/docker-cli.js", () => ({
 }));
 
 import { DesktopEnvironmentRuntimeManager } from "../../src/modules/desktop-environments/runtime-manager.js";
-
 const TEST_IMAGE = "ghcr.io/tyrum/desktop:latest";
 const TEST_TIMESTAMP = "2026-03-12T00:00:00.000Z";
 
