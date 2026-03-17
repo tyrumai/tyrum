@@ -31,6 +31,8 @@ import {
 } from "./embedded-gateway-test-utils.js";
 
 const itPlaywright = skipPlaywrightTests ? it.skip : it;
+// Windows can take longer to remove the copied staged gateway artifact tree.
+const cleanupTimeoutMs = process.platform === "win32" ? 120_000 : 10_000;
 
 describe("desktop embedded gateway startup", () => {
   let manager: GatewayManager | undefined;
@@ -45,7 +47,7 @@ describe("desktop embedded gateway startup", () => {
       await rm(tempRoot, { recursive: true, force: true });
       tempRoot = undefined;
     }
-  });
+  }, cleanupTimeoutMs);
 
   it(
     "starts embedded gateway via GatewayManager and passes health check",
