@@ -1,45 +1,45 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
 
 :root {
-  --ifm-color-primary: #6366f1;
-  --ifm-color-primary-dark: #4f46e5;
-  --ifm-color-primary-darker: #4338ca;
-  --ifm-color-primary-darkest: #3730a3;
-  --ifm-color-primary-light: #818cf8;
-  --ifm-color-primary-lighter: #a5b4fc;
-  --ifm-color-primary-lightest: #c7d2fe;
+  --ifm-color-primary: #943b19;
+  --ifm-color-primary-dark: #73311b;
+  --ifm-color-primary-darker: #57291c;
+  --ifm-color-primary-darkest: #301812;
+  --ifm-color-primary-light: #af4715;
+  --ifm-color-primary-lighter: #c85c1d;
+  --ifm-color-primary-lightest: #d87e42;
   --ifm-code-font-size: 0.9em;
-  --ifm-font-family-base: 'Inter', system-ui, -apple-system, sans-serif;
+  --ifm-font-family-base: 'DM Sans', system-ui, -apple-system, sans-serif;
   --ifm-font-family-monospace: 'JetBrains Mono', 'SF Mono', monospace;
-  --ifm-heading-font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  --ifm-heading-font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
 }
 
 [data-theme='dark'] {
-  --ifm-background-color: #000;
-  --ifm-background-surface-color: #0a0a0a;
-  --ifm-color-primary: #6366f1;
-  --ifm-color-primary-dark: #4f46e5;
-  --ifm-color-primary-darker: #4338ca;
-  --ifm-color-primary-darkest: #3730a3;
-  --ifm-color-primary-light: #818cf8;
-  --ifm-color-primary-lighter: #a5b4fc;
-  --ifm-color-primary-lightest: #c7d2fe;
-  --ifm-font-color-base: #ededed;
-  --ifm-font-color-secondary: #888;
-  --ifm-heading-color: #ededed;
-  --ifm-navbar-background-color: rgba(0, 0, 0, 0.8);
-  --ifm-navbar-link-color: #888;
-  --ifm-navbar-link-hover-color: #ededed;
-  --ifm-footer-background-color: #000;
-  --ifm-footer-color: #666;
-  --ifm-footer-link-color: #888;
-  --ifm-footer-title-color: #ededed;
-  --ifm-toc-border-color: #1a1a1a;
-  --ifm-color-emphasis-300: #1a1a1a;
-  --ifm-hr-background-color: #1a1a1a;
-  --ifm-table-border-color: #1a1a1a;
-  --ifm-code-background: #0a0a0a;
-  --docusaurus-highlighted-code-line-bg: rgba(99, 102, 241, 0.1);
+  --ifm-background-color: #141614;
+  --ifm-background-surface-color: #1b1d1b;
+  --ifm-color-primary: #c85c1d;
+  --ifm-color-primary-dark: #af4715;
+  --ifm-color-primary-darker: #943b19;
+  --ifm-color-primary-darkest: #73311b;
+  --ifm-color-primary-light: #d87e42;
+  --ifm-color-primary-lighter: #e4a575;
+  --ifm-color-primary-lightest: #eccaaa;
+  --ifm-font-color-base: #ede9df;
+  --ifm-font-color-secondary: #9e9889;
+  --ifm-heading-color: #ede9df;
+  --ifm-navbar-background-color: rgba(20, 22, 20, 0.8);
+  --ifm-navbar-link-color: #9e9889;
+  --ifm-navbar-link-hover-color: #ede9df;
+  --ifm-footer-background-color: #141614;
+  --ifm-footer-color: #7d7b72;
+  --ifm-footer-link-color: #9e9889;
+  --ifm-footer-title-color: #ede9df;
+  --ifm-toc-border-color: #2e322d;
+  --ifm-color-emphasis-300: #2e322d;
+  --ifm-hr-background-color: #2e322d;
+  --ifm-table-border-color: #2e322d;
+  --ifm-code-background: #1b1d1b;
+  --docusaurus-highlighted-code-line-bg: rgba(200, 92, 29, 0.1);
 }
 
 .navbar,
@@ -49,31 +49,31 @@
 }
 
 [data-theme='dark'] .navbar {
-  border-bottom: 1px solid #1a1a1a;
+  border-bottom: 1px solid #2e322d;
 }
 
 [data-theme='dark'] .navbar__title {
-  color: #fff;
+  color: #ede9df;
   font-weight: 800;
 }
 
 [data-theme='dark'] .footer {
-  border-top: 1px solid #1a1a1a;
+  border-top: 1px solid #2e322d;
 }
 
 [data-theme='dark'] .menu__link {
-  color: #888;
+  color: #9e9889;
 }
 
 [data-theme='dark'] .menu__link--active,
 [data-theme='dark'] .menu__link:hover {
-  color: #ededed;
+  color: #ede9df;
 }
 
 [data-theme='dark'] .table-of-contents__link {
-  color: #666;
+  color: #7d7b72;
 }
 
 [data-theme='dark'] .table-of-contents__link--active {
-  color: #ededed;
+  color: #ede9df;
 }
