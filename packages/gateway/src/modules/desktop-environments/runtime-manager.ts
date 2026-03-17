@@ -129,14 +129,20 @@ export class DesktopEnvironmentRuntimeManager {
       removedForRecreate = true;
     }
 
+    // Once an environment is already marked errored, leave non-running containers in place
+    // until a reset or image change clears the failure state.
+    if (
+      environment.status === "error" &&
+      inspect?.State?.Status !== "running" &&
+      !removedForRecreate
+    ) {
+      return;
+    }
+
     if (inspect && inspect.State?.Status !== "running" && imagePlatform) {
       await removeContainer(containerName);
       inspect = null;
       removedForRecreate = true;
-    }
-
-    if (!inspect && environment.status === "error" && !removedForRecreate) {
-      return;
     }
 
     if (!inspect) {

@@ -245,4 +245,33 @@ describe("DesktopEnvironmentRuntimeManager platform selection", () => {
       expect.arrayContaining(["run", "--platform", "linux/amd64", OFFICIAL_SANDBOX_IMAGE]),
     );
   });
+
+  it("does not recreate errored stopped official sandbox containers on arm64 macOS", async () => {
+    inspectContainerMock.mockResolvedValue({
+      Config: { Image: OFFICIAL_SANDBOX_IMAGE },
+      State: { Status: "exited" },
+    });
+
+    const { environmentDal, runtimeManager } = createRuntimeManager({
+      hostPlatform: "darwin",
+      hostArch: "arm64",
+    });
+    environmentDal.listByHost.mockResolvedValue([
+      createEnvironment({
+        environment_id: "env-1",
+        label: "Sandbox",
+        status: "error",
+        image_ref: OFFICIAL_SANDBOX_IMAGE,
+        last_error: "container crashed",
+      }),
+    ]);
+
+    await runtimeManager.reconcileAll();
+
+    expect(removeContainerMock).not.toHaveBeenCalled();
+    expect(ensureImageAvailableMock).not.toHaveBeenCalled();
+    expect(findDockerArgs("run")).toBeUndefined();
+    expect(findDockerArgs("start")).toBeUndefined();
+    expect(environmentDal.updateRuntime).not.toHaveBeenCalled();
+  });
 });

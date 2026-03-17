@@ -28,6 +28,12 @@ export type DockerInspectContainer = {
   };
 };
 
+type DockerInspectImage = {
+  Os?: string;
+  Architecture?: string;
+  Variant?: string;
+};
+
 function normalizeExecOutput(value: string | Buffer | undefined): string {
   if (typeof value === "string") return value;
   return Buffer.isBuffer(value) ? value.toString("utf8") : "";
@@ -121,16 +127,36 @@ export function readTakeoverUrl(inspect: DockerInspectContainer): string | null 
   return `http://127.0.0.1:${String(port)}/vnc.html?autoconnect=true`;
 }
 
+function parseInspectResult<T extends object>(raw: string): T | null {
+  const parsed = JSON.parse(raw) as unknown;
+  if (!Array.isArray(parsed) || parsed.length === 0) return null;
+  const first = parsed[0];
+  if (!first || typeof first !== "object") return null;
+  return first as T;
+}
+
+function imageMatchesPlatform(inspect: DockerInspectImage, platform: string): boolean {
+  const [requestedOs, requestedArchitecture, requestedVariant, ...extraSegments] = platform
+    .trim()
+    .split("/");
+  if (
+    !requestedOs ||
+    !requestedArchitecture ||
+    extraSegments.length > 0 ||
+    inspect.Os?.trim() !== requestedOs ||
+    inspect.Architecture?.trim() !== requestedArchitecture
+  ) {
+    return false;
+  }
+  return requestedVariant === undefined || inspect.Variant?.trim() === requestedVariant;
+}
+
 export async function inspectContainer(
   containerName: string,
 ): Promise<DockerInspectContainer | null> {
   const result = await runDocker(["inspect", containerName]);
   if (result.status !== 0) return null;
-  const parsed = JSON.parse(result.stdout) as unknown;
-  if (!Array.isArray(parsed) || parsed.length === 0) return null;
-  const first = parsed[0];
-  if (!first || typeof first !== "object") return null;
-  return first as DockerInspectContainer;
+  return parseInspectResult<DockerInspectContainer>(result.stdout);
 }
 
 export async function ensureImageAvailable(
@@ -138,8 +164,13 @@ export async function ensureImageAvailable(
   options?: { platform?: string },
 ): Promise<void> {
   const inspectResult = await runDocker(["image", "inspect", imageRef], { timeoutMs: 15_000 });
-  if (inspectResult.status === 0) return;
-  if (!isMissingImageResult(inspectResult)) {
+  if (inspectResult.status === 0) {
+    if (!options?.platform) return;
+    const inspect = parseInspectResult<DockerInspectImage>(inspectResult.stdout);
+    if (inspect && imageMatchesPlatform(inspect, options.platform)) {
+      return;
+    }
+  } else if (!isMissingImageResult(inspectResult)) {
     throw new Error(
       combineDockerError("failed to inspect desktop environment image", inspectResult),
     );
