@@ -80,6 +80,16 @@ jobs:
         shell: bash
         run: pnpm install --frozen-lockfile
 
+      - name: Sync native iOS project for CodeQL
+        if: matrix.language == 'swift'
+        shell: bash
+        run: pnpm --filter @tyrum/mobile ios:sync
+
+      - name: Reset SwiftPM binary artifact cache
+        if: matrix.language == 'swift'
+        shell: bash
+        run: rm -rf ~/Library/Caches/org.swift.swiftpm/artifacts
+
       # Initializes the CodeQL tools for scanning.
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
@@ -96,15 +106,7 @@ jobs:
       - name: Build iOS app for CodeQL
         if: matrix.language == 'swift' && matrix.build-mode == 'manual'
         shell: bash
-        run: |
-          xcodebuild build \
-            -project apps/mobile/ios/App/App.xcodeproj \
-            -target App \
-            -configuration Debug \
-            -sdk iphonesimulator \
-            -destination 'generic/platform=iOS Simulator' \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO
+        run: pnpm --filter @tyrum/mobile exec node ./scripts/build-ios.mjs
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v4
