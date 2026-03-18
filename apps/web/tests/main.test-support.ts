@@ -51,6 +51,7 @@ export type RootMock = { render: ReturnType<typeof vi.fn> };
 
 export type WebAuthPersistence = {
   hasStoredToken: boolean;
+  readToken?: () => Promise<string | null> | string | null;
   saveToken: (token: string) => Promise<void>;
   clearToken: () => Promise<void>;
 };

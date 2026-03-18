@@ -8,6 +8,7 @@ import { FakeWsClient, createFakeHttpClient } from "./operator-ui.test-fixtures.
 
 type WebAuthPersistence = {
   hasStoredToken: boolean;
+  readToken?: () => Promise<string | null> | string | null;
   saveToken?: (token: string) => Promise<void> | void;
   clearToken?: () => Promise<void> | void;
 };
@@ -33,6 +34,7 @@ function renderWebOperatorApp(params?: {
   const webAuthPersistence = params?.webAuthPersistence
     ? {
         hasStoredToken: params.webAuthPersistence.hasStoredToken,
+        readToken: params.webAuthPersistence.readToken ?? vi.fn(async () => null),
         saveToken: params.webAuthPersistence.saveToken ?? vi.fn(),
         clearToken: params.webAuthPersistence.clearToken ?? vi.fn(),
       }
@@ -88,6 +90,13 @@ function setInputValue(input: HTMLInputElement, value: string): void {
   input.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
+async function flushEffects(): Promise<void> {
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+}
+
 function registerLoginFormTests(): void {
   it("disables browser assistance on the login token field", () => {
     const { container, root } = renderWebOperatorApp();
@@ -108,9 +117,9 @@ function registerLoginFormTests(): void {
     expect(scrollArea?.className).toContain("h-full");
     expect(scrollArea?.className).toContain("w-full");
     expect(container.querySelector('[data-testid="login-button"]')).not.toBeNull();
-    expect(container.textContent).toContain("Need a gateway token?");
-    expect(container.textContent).toContain("default-tenant-admin");
-    expect(container.textContent).toContain("tyrum tokens issue-default-tenant-admin");
+    expect(container.querySelector('[data-testid="login-token-help"]')).not.toBeNull();
+    expect(container.textContent).not.toContain("Need a gateway token?");
+    expect(container.textContent).not.toContain("Saved token available");
 
     cleanup(root, container);
   });
@@ -195,14 +204,22 @@ function registerLoginFormTests(): void {
     cleanup(root, container);
   });
 
-  it("reconnects with the saved token when the field is left blank", async () => {
+  it("loads the saved token into the field and connects with it", async () => {
+    const readToken = vi.fn(async () => "stored-token");
+    const saveToken = vi.fn(async () => {});
     const { container, root, ws } = renderWebOperatorApp({
       webAuthPersistence: {
         hasStoredToken: true,
+        readToken,
+        saveToken,
       },
     });
 
-    expect(container.textContent).toContain("Saved token available");
+    await flushEffects();
+
+    const tokenField = getTokenField(container);
+    expect(readToken).toHaveBeenCalledTimes(1);
+    expect(tokenField.value).toBe("stored-token");
     expect(container.textContent).toContain("Forget saved token");
 
     const loginButton = getLoginButton(container);
@@ -211,6 +228,7 @@ function registerLoginFormTests(): void {
       await Promise.resolve();
     });
 
+    expect(saveToken).not.toHaveBeenCalled();
     expect(ws.connect).toHaveBeenCalledTimes(1);
     expect(container.textContent).not.toContain("Token is required");
 
@@ -222,9 +240,12 @@ function registerLoginFormTests(): void {
     const { container, root, ws } = renderWebOperatorApp({
       webAuthPersistence: {
         hasStoredToken: true,
+        readToken: async () => "stored-token",
         saveToken,
       },
     });
+
+    await flushEffects();
 
     const tokenField = getTokenField(container);
     act(() => {
@@ -248,9 +269,12 @@ function registerLoginFormTests(): void {
     const { container, root } = renderWebOperatorApp({
       webAuthPersistence: {
         hasStoredToken: true,
+        readToken: async () => "stored-token",
         clearToken,
       },
     });
+
+    await flushEffects();
 
     const forgetButton = container.querySelector<HTMLButtonElement>(
       '[data-testid="forget-saved-token-button"]',
@@ -304,9 +328,12 @@ function registerLoginErrorTests(): void {
     const { container, root } = renderWebOperatorApp({
       webAuthPersistence: {
         hasStoredToken: true,
+        readToken: async () => "stored-token",
         clearToken,
       },
     });
+
+    await flushEffects();
 
     const forgetButton = container.querySelector<HTMLButtonElement>(
       '[data-testid="forget-saved-token-button"]',
