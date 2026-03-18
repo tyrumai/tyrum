@@ -18,9 +18,9 @@ import type {
 type MobileCapabilityKey = "location" | "camera" | "audio";
 
 const CAPABILITY_KEY_TO_MOBILE_ACTION: Record<MobileCapabilityKey, MobileHostActionName> = {
-  location: "location.get_current",
-  camera: "camera.capture_photo",
-  audio: "audio.record_clip",
+  location: "get",
+  camera: "capture_photo",
+  audio: "record",
 };
 
 const CAPABILITY_KEYS: readonly MobileCapabilityKey[] = ["location", "camera", "audio"];

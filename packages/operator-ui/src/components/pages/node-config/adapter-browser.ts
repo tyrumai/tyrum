@@ -14,9 +14,9 @@ import type {
 type BrowserCapabilityKey = "location" | "camera" | "audio";
 
 const CAPABILITY_KEY_TO_BROWSER_NAME: Record<BrowserCapabilityKey, BrowserCapabilityName> = {
-  location: "geolocation.get",
-  camera: "camera.capture_photo",
-  audio: "microphone.record",
+  location: "get",
+  camera: "capture_photo",
+  audio: "record",
 };
 
 const CAPABILITY_KEYS: readonly BrowserCapabilityKey[] = ["location", "camera", "audio"];

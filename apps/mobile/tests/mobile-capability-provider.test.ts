@@ -56,7 +56,7 @@ describe("createMobileCapabilityProvider", () => {
 
     const result = await provider.execute({
       type: "IOS",
-      args: { op: "location.get_current" },
+      args: { op: "get" },
     });
 
     expect(result.success).toBe(true);
@@ -67,7 +67,7 @@ describe("createMobileCapabilityProvider", () => {
       maximumAge: 0,
     });
     expect(IosActionResult.parse(result.evidence)).toEqual({
-      op: "location.get_current",
+      op: "get",
       coords: {
         latitude: 52.3676,
         longitude: 4.9041,
@@ -100,13 +100,13 @@ describe("createMobileCapabilityProvider", () => {
 
       const result = await provider.execute({
         type: "IOS",
-        args: { op: "camera.capture_photo", format: "jpeg" },
+        args: { op: "capture_photo", format: "jpeg" },
       });
 
       expect(result.success).toBe(true);
       expect(cameraRequestPermissions).toHaveBeenCalledWith({ permissions: ["camera"] });
       expect(IosActionResult.parse(result.evidence)).toMatchObject({
-        op: "camera.capture_photo",
+        op: "capture_photo",
         bytesBase64: "ZmFrZS1pbWFnZQ==",
         mime: "image/jpeg",
       });

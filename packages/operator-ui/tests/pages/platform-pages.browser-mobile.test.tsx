@@ -63,10 +63,7 @@ describe("Platform pages browser and mobile flows", () => {
 
       await clickSwitchAndFlush(container, 1);
 
-      expect(mobileHostApi.node.setActionEnabled).toHaveBeenCalledWith(
-        "location.get_current",
-        false,
-      );
+      expect(mobileHostApi.node.setActionEnabled).toHaveBeenCalledWith("get", false);
     });
   });
 

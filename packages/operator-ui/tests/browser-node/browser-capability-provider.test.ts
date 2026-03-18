@@ -63,12 +63,12 @@ describe("createBrowserCapabilityProvider", () => {
 
     const result = await provider.execute({
       type: "Browser",
-      args: { op: "geolocation.get" },
+      args: { op: "get" },
     });
 
     expect(result.success).toBe(true);
     const evidence = result.evidence as Record<string, unknown>;
-    expect(evidence["op"]).toBe("geolocation.get");
+    expect(evidence["op"]).toBe("get");
     expect(evidence["coords"]).toMatchObject({
       latitude: 10,
       longitude: 20,
@@ -86,7 +86,7 @@ describe("createBrowserCapabilityProvider", () => {
 
     const result = await provider.execute({
       type: "Browser",
-      args: { op: "camera.capture_photo", format: "jpeg", quality: 0.92 },
+      args: { op: "capture_photo", format: "jpeg", quality: 0.92 },
     });
 
     expect(result.success).toBe(false);
@@ -169,7 +169,7 @@ describe("createBrowserCapabilityProvider", () => {
 
     const promise = provider.execute({
       type: "Browser",
-      args: { op: "microphone.record", duration_ms: 250, mime: "audio/webm" },
+      args: { op: "record", duration_ms: 250, mime: "audio/webm" },
     });
 
     await vi.advanceTimersByTimeAsync(250);
@@ -177,7 +177,7 @@ describe("createBrowserCapabilityProvider", () => {
 
     expect(result.success).toBe(true);
     const evidence = result.evidence as Record<string, unknown>;
-    expect(evidence["op"]).toBe("microphone.record");
+    expect(evidence["op"]).toBe("record");
     expect(evidence["mime"]).toBe("audio/webm");
     expect(evidence["bytesBase64"]).toBe(Buffer.from("hello", "utf8").toString("base64"));
     expect(stopTrack).toHaveBeenCalledTimes(1);

@@ -54,9 +54,7 @@ function blobToBase64(blob: Blob): Promise<string> {
   });
 }
 
-function getCurrentPosition(
-  args: BrowserActionArgs & { op: "geolocation.get" },
-): Promise<GeolocationPosition> {
+function getCurrentPosition(args: BrowserActionArgs & { op: "get" }): Promise<GeolocationPosition> {
   return new Promise((resolve, reject) => {
     const api = globalThis.navigator?.geolocation;
     if (!api) {
@@ -72,7 +70,7 @@ function getCurrentPosition(
   });
 }
 
-async function capturePhoto(args: BrowserActionArgs & { op: "camera.capture_photo" }): Promise<{
+async function capturePhoto(args: BrowserActionArgs & { op: "capture_photo" }): Promise<{
   bytesBase64: string;
   mime: string;
   width: number;
@@ -145,7 +143,7 @@ async function capturePhoto(args: BrowserActionArgs & { op: "camera.capture_phot
   }
 }
 
-async function recordAudio(args: BrowserActionArgs & { op: "microphone.record" }): Promise<{
+async function recordAudio(args: BrowserActionArgs & { op: "record" }): Promise<{
   bytesBase64: string;
   mime: string;
   duration_ms: number;
@@ -256,7 +254,7 @@ export function createBrowserCapabilityProvider(options: {
       const timestamp = new Date().toISOString();
 
       try {
-        if (args.op === "geolocation.get") {
+        if (args.op === "get") {
           const allowed = await options.requestConsent({
             scope: "geolocation",
             title: "Share location?",
@@ -271,7 +269,7 @@ export function createBrowserCapabilityProvider(options: {
           return {
             success: true,
             evidence: {
-              op: "geolocation.get",
+              op: "get",
               coords: {
                 latitude: coords.latitude,
                 longitude: coords.longitude,
@@ -286,7 +284,7 @@ export function createBrowserCapabilityProvider(options: {
           };
         }
 
-        if (args.op === "camera.capture_photo") {
+        if (args.op === "capture_photo") {
           const allowed = await options.requestConsent({
             scope: "camera",
             title: "Allow camera capture?",
@@ -300,7 +298,7 @@ export function createBrowserCapabilityProvider(options: {
           return {
             success: true,
             evidence: {
-              op: "camera.capture_photo",
+              op: "capture_photo",
               ...captured,
               timestamp,
             },
@@ -319,7 +317,7 @@ export function createBrowserCapabilityProvider(options: {
         return {
           success: true,
           evidence: {
-            op: "microphone.record",
+            op: "record",
             ...recorded,
             timestamp,
           },

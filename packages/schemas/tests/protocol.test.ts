@@ -353,39 +353,27 @@ describe("requiredCapabilityDescriptor", () => {
 
   it("maps browser, iOS, and Android sensor ops to canonical cross-platform descriptors", () => {
     // Browser sensor ops → canonical IDs
-    expect(requiredCapabilityDescriptor("Browser", { op: "geolocation.get" })).toBe(
-      "tyrum.location.get",
-    );
-    expect(requiredCapabilityDescriptor("Browser", { op: "camera.capture_photo" })).toBe(
+    expect(requiredCapabilityDescriptor("Browser", { op: "get" })).toBe("tyrum.location.get");
+    expect(requiredCapabilityDescriptor("Browser", { op: "capture_photo" })).toBe(
       "tyrum.camera.capture-photo",
     );
-    expect(requiredCapabilityDescriptor("Browser", { op: "microphone.record" })).toBe(
-      "tyrum.audio.record",
-    );
+    expect(requiredCapabilityDescriptor("Browser", { op: "record" })).toBe("tyrum.audio.record");
     expect(requiredCapabilityDescriptor("Browser", { op: "unknown" })).toBeUndefined();
 
     // iOS ops → same canonical IDs
-    expect(requiredCapabilityDescriptor("IOS", { op: "location.get_current" })).toBe(
-      "tyrum.location.get",
-    );
-    expect(requiredCapabilityDescriptor("IOS", { op: "camera.capture_photo" })).toBe(
+    expect(requiredCapabilityDescriptor("IOS", { op: "get" })).toBe("tyrum.location.get");
+    expect(requiredCapabilityDescriptor("IOS", { op: "capture_photo" })).toBe(
       "tyrum.camera.capture-photo",
     );
-    expect(requiredCapabilityDescriptor("IOS", { op: "audio.record_clip" })).toBe(
-      "tyrum.audio.record",
-    );
+    expect(requiredCapabilityDescriptor("IOS", { op: "record" })).toBe("tyrum.audio.record");
     expect(requiredCapabilityDescriptor("IOS", { op: "unknown" })).toBeUndefined();
 
     // Android ops → same canonical IDs
-    expect(requiredCapabilityDescriptor("Android", { op: "location.get_current" })).toBe(
-      "tyrum.location.get",
-    );
-    expect(requiredCapabilityDescriptor("Android", { op: "camera.capture_photo" })).toBe(
+    expect(requiredCapabilityDescriptor("Android", { op: "get" })).toBe("tyrum.location.get");
+    expect(requiredCapabilityDescriptor("Android", { op: "capture_photo" })).toBe(
       "tyrum.camera.capture-photo",
     );
-    expect(requiredCapabilityDescriptor("Android", { op: "audio.record_clip" })).toBe(
-      "tyrum.audio.record",
-    );
+    expect(requiredCapabilityDescriptor("Android", { op: "record" })).toBe("tyrum.audio.record");
     expect(requiredCapabilityDescriptor("Android", { op: "unknown" })).toBeUndefined();
   });
 

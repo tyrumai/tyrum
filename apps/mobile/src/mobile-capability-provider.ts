@@ -53,9 +53,7 @@ async function measureBase64Image(
   });
 }
 
-async function getCurrentLocation(
-  args: Extract<IosActionArgs | AndroidActionArgs, { op: "location.get_current" }>,
-) {
+async function getCurrentLocation(args: Extract<IosActionArgs | AndroidActionArgs, { op: "get" }>) {
   if (Capacitor.isNativePlatform()) {
     await Geolocation.requestPermissions();
   }
@@ -72,7 +70,7 @@ async function getCurrentLocation(
 }
 
 async function capturePhoto(
-  args: Extract<IosActionArgs | AndroidActionArgs, { op: "camera.capture_photo" }>,
+  args: Extract<IosActionArgs | AndroidActionArgs, { op: "capture_photo" }>,
 ) {
   if (Capacitor.isNativePlatform()) {
     await Camera.requestPermissions({ permissions: ["camera"] });
@@ -102,9 +100,7 @@ async function capturePhoto(
   };
 }
 
-async function recordAudioClip(
-  args: Extract<IosActionArgs | AndroidActionArgs, { op: "audio.record_clip" }>,
-) {
+async function recordAudioClip(args: Extract<IosActionArgs | AndroidActionArgs, { op: "record" }>) {
   const mediaDevices = globalThis.navigator?.mediaDevices;
   if (!mediaDevices?.getUserMedia) {
     throw new Error("mediaDevices.getUserMedia is unavailable.");
@@ -186,13 +182,13 @@ export function createMobileCapabilityProvider(platform: MobileHostPlatform): Ca
 
       const args = argsResult.data;
       try {
-        if (args.op === "location.get_current") {
+        if (args.op === "get") {
           return { success: true, evidence: { op: args.op, ...(await getCurrentLocation(args)) } };
         }
-        if (args.op === "camera.capture_photo") {
+        if (args.op === "capture_photo") {
           return { success: true, evidence: { op: args.op, ...(await capturePhoto(args)) } };
         }
-        if (args.op === "audio.record_clip") {
+        if (args.op === "record") {
           return { success: true, evidence: { op: args.op, ...(await recordAudioClip(args)) } };
         }
         return { success: false, error: "unsupported mobile op" };

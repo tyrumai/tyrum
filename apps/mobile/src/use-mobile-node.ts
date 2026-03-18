@@ -75,21 +75,17 @@ export function useMobileNode(options: UseMobileNodeOptions): {
   const wsUrl = config?.wsUrl ?? null;
   const actionSettings = config?.actionSettings;
   const locationStreaming = config?.locationStreaming;
-  const locationActionEnabled = actionSettings?.["location.get_current"] ?? false;
+  const locationActionEnabled = actionSettings?.["get"] ?? false;
   const actionStates = useMemo(
     () =>
       resolveMobileActionStates(
         actionSettings ?? {
-          "location.get_current": true,
-          "camera.capture_photo": true,
-          "audio.record_clip": true,
+          get: true,
+          capture_photo: true,
+          record: true,
         },
       ),
-    [
-      actionSettings?.["audio.record_clip"],
-      actionSettings?.["camera.capture_photo"],
-      actionSettings?.["location.get_current"],
-    ],
+    [actionSettings?.["record"], actionSettings?.["capture_photo"], actionSettings?.["get"]],
   );
 
   const actionStatesRef = useRef(actionStates);
@@ -302,18 +298,18 @@ export function useMobileNode(options: UseMobileNodeOptions): {
             error: stateRef.current.error,
             actions: resolveMobileActionStates(
               updated?.actionSettings ?? {
-                "location.get_current": true,
-                "camera.capture_photo": true,
-                "audio.record_clip": true,
+                get: true,
+                capture_photo: true,
+                record: true,
               },
             ),
           });
         },
         setActionEnabled: async (action, nextEnabled) => {
           const current = config?.actionSettings ?? {
-            "location.get_current": true,
-            "camera.capture_photo": true,
-            "audio.record_clip": true,
+            get: true,
+            capture_photo: true,
+            record: true,
           };
           const updated = await updateConfig({
             actionSettings: { ...current, [action]: nextEnabled },
@@ -326,9 +322,9 @@ export function useMobileNode(options: UseMobileNodeOptions): {
             error: stateRef.current.error,
             actions: resolveMobileActionStates(
               updated?.actionSettings ?? {
-                "location.get_current": true,
-                "camera.capture_photo": true,
-                "audio.record_clip": true,
+                get: true,
+                capture_photo: true,
+                record: true,
               },
             ),
           });
@@ -347,9 +343,9 @@ export function useMobileNode(options: UseMobileNodeOptions): {
       },
     }),
     [
-      config?.actionSettings["audio.record_clip"],
-      config?.actionSettings["camera.capture_photo"],
-      config?.actionSettings["location.get_current"],
+      config?.actionSettings["record"],
+      config?.actionSettings["capture_photo"],
+      config?.actionSettings["get"],
       platform,
       updateConfig,
     ],

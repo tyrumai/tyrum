@@ -151,12 +151,12 @@ describe("BrowserNodeProvider", () => {
       await flushEffects();
 
       await act(async () => {
-        capturedApi.setCapabilityEnabled("geolocation.get", false);
+        capturedApi.setCapabilityEnabled("get", false);
         await Promise.resolve();
       });
 
       const result = await capturedApi.executeLocal({
-        op: "geolocation.get",
+        op: "get",
         enable_high_accuracy: false,
         timeout_ms: 30_000,
         maximum_age_ms: 0,
@@ -164,7 +164,7 @@ describe("BrowserNodeProvider", () => {
 
       expect(result).toEqual({
         success: false,
-        error: "action 'geolocation.get' is disabled by the operator",
+        error: "action 'get' is disabled by the operator",
       });
     } finally {
       cleanupTestRoot(testRoot);
@@ -247,7 +247,7 @@ describe("BrowserNodeProvider", () => {
       // Trigger the consent dialog by calling executeLocal directly.
       await act(async () => {
         void capturedApi.executeLocal({
-          op: "geolocation.get",
+          op: "get",
           enable_high_accuracy: false,
           timeout_ms: 30_000,
           maximum_age_ms: 0,
@@ -309,7 +309,7 @@ describe("BrowserNodeProvider", () => {
       expect(capturedApi.status).toBe("connected");
 
       const states = capturedApi.capabilityStates;
-      expect(states["geolocation.get"].availability_status).toBe("available");
+      expect(states["get"].availability_status).toBe("available");
     } finally {
       cleanupTestRoot(testRoot);
     }
@@ -351,7 +351,7 @@ describe("BrowserNodeProvider", () => {
       // Trigger the consent dialog by calling executeLocal directly.
       await act(async () => {
         void capturedApi.executeLocal({
-          op: "geolocation.get",
+          op: "get",
           enable_high_accuracy: false,
           timeout_ms: 30_000,
           maximum_age_ms: 0,

@@ -152,17 +152,17 @@ export function createMobileHostApi(): MobileHostApi {
     deviceId: "ios-node-1",
     error: null,
     actions: {
-      "location.get_current": {
+      get: {
         enabled: true,
         availabilityStatus: "ready" as const,
         unavailableReason: null,
       },
-      "camera.capture_photo": {
+      capture_photo: {
         enabled: true,
         availabilityStatus: "ready" as const,
         unavailableReason: null,
       },
-      "audio.record_clip": {
+      record: {
         enabled: true,
         availabilityStatus: "ready" as const,
         unavailableReason: null,

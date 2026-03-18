@@ -110,7 +110,7 @@ describe("shapeBrowserEvidenceForArtifacts", () => {
 
   it("stores browser media bytes as an execution artifact and strips bytesBase64 from evidence", async () => {
     const evidence = {
-      op: "camera.capture_photo",
+      op: "capture_photo",
       bytesBase64: Buffer.from("hello", "utf8").toString("base64"),
       mime: "image/jpeg",
       timestamp: new Date("2026-02-19T12:00:00Z").toISOString(),

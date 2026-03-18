@@ -484,7 +484,7 @@ describe("PlaywrightProvider", () => {
     expect(result.success).toBe(true);
     expect(result.evidence).toMatchObject({
       type: "tabs",
-      activeIndex: 0,
+      active_index: 0,
     });
     expect((result.evidence as Record<string, unknown>).tabs).toBeDefined();
   });
