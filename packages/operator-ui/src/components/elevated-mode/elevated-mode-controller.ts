@@ -5,7 +5,7 @@ export const ELEVATED_MODE_SCOPES = [
   "operator.pairing",
   "operator.admin",
 ] as const;
-const ADMIN_ACCESS_TTL_SECONDS = 60 * 10;
+export const ADMIN_ACCESS_TTL_SECONDS = 60 * 10;
 
 export interface ElevatedModeController {
   enter(): Promise<void>;

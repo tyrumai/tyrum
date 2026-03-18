@@ -24,6 +24,7 @@ const RENDERER_MUTABLE_PATHS = new Set([
   "web.allowedDomains",
   "web.headless",
   "permissions.overrides",
+  "adminAccess.mode",
 ]);
 
 export function filterMutableKeys(

@@ -8,6 +8,7 @@ import { Sidebar } from "./components/layout/sidebar.js";
 import { ScrollArea } from "./components/ui/scroll-area.js";
 import { Spinner } from "./components/ui/spinner.js";
 import { ToastProvider } from "./components/toast/toast-provider.js";
+import { AdminAccessModeProvider } from "./hooks/use-admin-access-mode.js";
 import { ThemeProvider, useThemeOptional } from "./hooks/use-theme.js";
 import { BrowserNodeProvider } from "./browser-node/browser-node-provider.js";
 import { getDesktopApi } from "./desktop-api.js";
@@ -212,48 +213,54 @@ function OperatorUiAppRoot({
       }
     >
       <RetainedUiStateProvider scopeKey={reconnectUiScopeKey}>
-        <AdminAccessProvider core={core} mode={mode} adminAccessController={adminAccessController}>
-          <LocalNodeAutoApprovalBridge />
-          {viewModel.showConnectPage ? (
-            <div className="flex min-h-0 flex-1 overflow-hidden">
-              <ScrollArea className="h-full w-full">
-                <div className="mx-auto flex min-h-full w-full max-w-lg items-start px-4 py-6 md:items-center md:py-10">
-                  <Suspense fallback={<OperatorRouteFallback />}>
-                    {CONNECT_PAGE_RENDER(routeRenderContext)}
-                  </Suspense>
-                </div>
-              </ScrollArea>
-            </div>
-          ) : onboarding.isOpen ? (
-            <FirstRunOnboardingPage
-              core={core}
-              onClose={onboarding.close}
-              onSkip={onboarding.skip}
-              onMarkCompleted={onboarding.markCompleted}
-              onNavigate={(routeId) => {
-                viewModel.navigate(routeId);
-              }}
-            />
-          ) : (
-            <Suspense fallback={<OperatorRouteFallback />}>
-              <>
-                {showRetainedChat ? (
-                  <div
-                    key={chatHostKey}
-                    className={viewModel.route === "chat" ? "contents" : "hidden"}
-                    data-testid="retained-chat-route"
-                    aria-hidden={viewModel.route === "chat" ? undefined : true}
-                  >
-                    {chatRouteDefinition.render(routeRenderContext)}
+        <AdminAccessModeProvider>
+          <AdminAccessProvider
+            core={core}
+            mode={mode}
+            adminAccessController={adminAccessController}
+          >
+            <LocalNodeAutoApprovalBridge />
+            {viewModel.showConnectPage ? (
+              <div className="flex min-h-0 flex-1 overflow-hidden">
+                <ScrollArea className="h-full w-full">
+                  <div className="mx-auto flex min-h-full w-full max-w-lg items-start px-4 py-6 md:items-center md:py-10">
+                    <Suspense fallback={<OperatorRouteFallback />}>
+                      {CONNECT_PAGE_RENDER(routeRenderContext)}
+                    </Suspense>
                   </div>
-                ) : null}
-                {viewModel.route === "chat"
-                  ? null
-                  : (routeDefinition?.render(routeRenderContext) ?? null)}
-              </>
-            </Suspense>
-          )}
-        </AdminAccessProvider>
+                </ScrollArea>
+              </div>
+            ) : onboarding.isOpen ? (
+              <FirstRunOnboardingPage
+                core={core}
+                onClose={onboarding.close}
+                onSkip={onboarding.skip}
+                onMarkCompleted={onboarding.markCompleted}
+                onNavigate={(routeId) => {
+                  viewModel.navigate(routeId);
+                }}
+              />
+            ) : (
+              <Suspense fallback={<OperatorRouteFallback />}>
+                <>
+                  {showRetainedChat ? (
+                    <div
+                      key={chatHostKey}
+                      className={viewModel.route === "chat" ? "contents" : "hidden"}
+                      data-testid="retained-chat-route"
+                      aria-hidden={viewModel.route === "chat" ? undefined : true}
+                    >
+                      {chatRouteDefinition.render(routeRenderContext)}
+                    </div>
+                  ) : null}
+                  {viewModel.route === "chat"
+                    ? null
+                    : (routeDefinition?.render(routeRenderContext) ?? null)}
+                </>
+              </Suspense>
+            )}
+          </AdminAccessProvider>
+        </AdminAccessModeProvider>
       </RetainedUiStateProvider>
     </AppShell>
   );

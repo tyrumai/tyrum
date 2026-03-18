@@ -89,6 +89,11 @@ export const DesktopNodeConfig = z.object({
       headless: z.boolean().default(true),
     })
     .default({ allowedDomains: [], headless: true }),
+  adminAccess: z
+    .object({
+      mode: z.enum(["on-demand", "always-on"]).default("on-demand"),
+    })
+    .default({ mode: "on-demand" }),
 });
 export type DesktopNodeConfig = z.infer<typeof DesktopNodeConfig>;
 
