@@ -3,6 +3,7 @@ import { cn } from "../../lib/cn.js";
 import { formatRelativeTime } from "../../utils/format-relative-time.js";
 import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
+import { LoadingState } from "../ui/loading-state.js";
 import { ScrollArea } from "../ui/scroll-area.js";
 
 export interface ChatThreadSummary {
@@ -107,7 +108,7 @@ export function ChatThreadsPanel({
         ) : null}
         <div className="min-h-0 flex-1 overflow-hidden">
           {loading && threads.length === 0 ? (
-            <div className="p-4 text-sm text-fg-muted">Loading…</div>
+            <LoadingState className="p-4" />
           ) : threads.length === 0 ? (
             <div className="grid gap-3 p-4">
               <div className="text-sm text-fg-muted">No chats yet.</div>

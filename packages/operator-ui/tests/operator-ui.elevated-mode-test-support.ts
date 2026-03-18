@@ -92,13 +92,12 @@ export function registerElevatedModeTests(): void {
       enterButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    const confirmCheckbox = document.querySelector<HTMLInputElement>(
+    const confirmCheckbox = document.querySelector<HTMLElement>(
       '[data-testid="elevated-mode-confirm"]',
     );
     expect(confirmCheckbox).not.toBeNull();
     act(() => {
-      confirmCheckbox!.checked = true;
-      confirmCheckbox!.dispatchEvent(new Event("change", { bubbles: true }));
+      confirmCheckbox!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
     const submitButton = document.querySelector<HTMLButtonElement>(

@@ -4,6 +4,7 @@ import { Alert } from "../ui/alert.js";
 import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
+import { LoadingState } from "../ui/loading-state.js";
 import { Select } from "../ui/select.js";
 import {
   EXECUTION_PROFILE_LABELS,
@@ -320,7 +321,7 @@ export function ProvidersCard({
         ) : null}
 
         {loading ? (
-          <div className="text-sm text-fg-muted">Loading providers…</div>
+          <LoadingState label="Loading providers…" />
         ) : providers.length === 0 ? (
           <Alert
             variant="info"

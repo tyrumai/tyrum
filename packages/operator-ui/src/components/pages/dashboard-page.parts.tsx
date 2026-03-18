@@ -5,6 +5,7 @@ import * as React from "react";
 import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
+import { SectionHeading } from "../ui/section-heading.js";
 import { Skeleton } from "../ui/skeleton.js";
 import { StatusDot } from "../ui/status-dot.js";
 import { cn } from "../../lib/cn.js";
@@ -179,7 +180,9 @@ export function WorkDistributionBar({
   return (
     <Card className="min-w-0">
       <CardHeader className="flex-row items-center justify-between pb-2">
-        <h3 className="text-sm font-semibold">Work Distribution</h3>
+        <SectionHeading as="h3" className="font-semibold">
+          Work Distribution
+        </SectionHeading>
         <span className="text-sm text-fg-muted">{total} total</span>
       </CardHeader>
       <CardContent>
@@ -270,7 +273,9 @@ export function ConfigHealthCard({
       <CardHeader className="pb-2.5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="grid gap-1">
-            <h3 className="text-sm font-semibold">Configuration Health</h3>
+            <SectionHeading as="h3" className="font-semibold">
+              Configuration Health
+            </SectionHeading>
             <div className="text-sm text-fg-muted">
               Resolve configuration issues before agents can run reliably.
             </div>

@@ -1,6 +1,7 @@
 import { expect, it, vi } from "vitest";
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
+
 import {
   createBearerTokenAuth,
   createBrowserCookieAuth,
@@ -81,13 +82,12 @@ function registerElevatedModeAuthBearerTests(): void {
     const dialog = document.querySelector('[data-testid="elevated-mode-dialog"]');
     expect(dialog).not.toBeNull();
 
-    const confirmCheckbox = document.querySelector<HTMLInputElement>(
+    const confirmCheckbox = document.querySelector<HTMLElement>(
       '[data-testid="elevated-mode-confirm"]',
     );
     expect(confirmCheckbox).not.toBeNull();
     act(() => {
-      confirmCheckbox!.checked = true;
-      confirmCheckbox!.dispatchEvent(new Event("change", { bubbles: true }));
+      confirmCheckbox!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
     const submitButton = document.querySelector<HTMLButtonElement>(
@@ -187,13 +187,12 @@ function registerElevatedModeAuthBearerTests(): void {
       enterButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    const confirmCheckbox = document.querySelector<HTMLInputElement>(
+    const confirmCheckbox = document.querySelector<HTMLElement>(
       '[data-testid="elevated-mode-confirm"]',
     );
     expect(confirmCheckbox).not.toBeNull();
     act(() => {
-      confirmCheckbox!.checked = true;
-      confirmCheckbox!.dispatchEvent(new Event("change", { bubbles: true }));
+      confirmCheckbox!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
     const submitButton = document.querySelector<HTMLButtonElement>(
@@ -282,13 +281,12 @@ function registerElevatedModeAuthCookieDialogTests(): void {
       enterButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    const confirmCheckbox = document.querySelector<HTMLInputElement>(
+    const confirmCheckbox = document.querySelector<HTMLElement>(
       '[data-testid="elevated-mode-confirm"]',
     );
     expect(confirmCheckbox).not.toBeNull();
     act(() => {
-      confirmCheckbox!.checked = true;
-      confirmCheckbox!.dispatchEvent(new Event("change", { bubbles: true }));
+      confirmCheckbox!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
     const submitButton = document.querySelector<HTMLButtonElement>(

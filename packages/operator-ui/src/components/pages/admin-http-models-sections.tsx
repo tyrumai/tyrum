@@ -4,6 +4,7 @@ import { Alert } from "../ui/alert.js";
 import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
+import { LoadingState } from "../ui/loading-state.js";
 import { Select } from "../ui/select.js";
 import {
   EXECUTION_PROFILE_IDS,
@@ -118,7 +119,7 @@ export function ExecutionProfilesCard({
       </CardHeader>
       <CardContent className="grid gap-4">
         {loading ? (
-          <div className="text-sm text-fg-muted">Loading model config…</div>
+          <LoadingState label="Loading model config…" />
         ) : executionProfilesErrorMessage ? (
           <Alert
             variant="error"

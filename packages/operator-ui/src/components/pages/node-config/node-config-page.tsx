@@ -7,7 +7,7 @@ import { AppPage } from "../../layout/app-page.js";
 import { Alert } from "../../ui/alert.js";
 import { Badge } from "../../ui/badge.js";
 import { Card, CardContent } from "../../ui/card.js";
-import { Spinner } from "../../ui/spinner.js";
+import { LoadingState } from "../../ui/loading-state.js";
 import { useNodeConfigBrowser } from "./adapter-browser.js";
 import { useNodeConfigDesktop } from "./adapter-desktop.js";
 import { useNodeConfigMobile } from "./adapter-mobile.js";
@@ -119,9 +119,8 @@ function NodeConfigPageLayout({ model }: { model: UnifiedNodeConfigModel }) {
     return (
       <AppPage contentClassName="max-w-5xl gap-4">
         <Card>
-          <CardContent className="flex items-center gap-3 pt-6 text-sm text-fg-muted">
-            <Spinner className="h-4 w-4" />
-            <span>Loading node settings…</span>
+          <CardContent className="pt-6">
+            <LoadingState label="Loading node settings…" />
           </CardContent>
         </Card>
       </AppPage>

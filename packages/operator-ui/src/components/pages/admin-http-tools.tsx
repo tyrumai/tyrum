@@ -14,6 +14,7 @@ import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { Input } from "../ui/input.js";
+import { LoadingState } from "../ui/loading-state.js";
 
 type SourceFilter = ToolRegistryEntry["source"] | "all";
 type EffectFilter = ToolRegistryEntry["effect"] | "all";
@@ -249,7 +250,7 @@ export function ToolRegistryCard({ core }: { core: OperatorCore }): React.ReactE
           <Alert variant="error" title="Failed to load tools" description={errorMessage} />
         ) : null}
 
-        {loading ? <div className="text-sm text-fg-muted">Loading tool registry...</div> : null}
+        {loading ? <LoadingState label="Loading tool registry..." /> : null}
 
         {!loading && !errorMessage && groupedTools.length === 0 ? (
           <Alert

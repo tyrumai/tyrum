@@ -14,6 +14,7 @@ import { Button } from "../ui/button.js";
 import { Card, CardContent } from "../ui/card.js";
 import { ConfirmDangerDialog } from "../ui/confirm-danger-dialog.js";
 import { EmptyState } from "../ui/empty-state.js";
+import { LoadingState } from "../ui/loading-state.js";
 import { ScrollArea } from "../ui/scroll-area.js";
 import { StatusDot } from "../ui/status-dot.js";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs.js";
@@ -280,9 +281,11 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
           </div>
           <div className="min-h-0 flex-1 overflow-hidden">
             {agentsLoading && agentKeys.length === 0 ? (
-              <div className="p-4 text-sm text-fg-muted" data-testid="agents-list-loading">
-                Loading agents…
-              </div>
+              <LoadingState
+                label="Loading agents…"
+                className="p-4"
+                data-testid="agents-list-loading"
+              />
             ) : agentOptions.length === 0 ? (
               <div className="p-3">
                 <EmptyState

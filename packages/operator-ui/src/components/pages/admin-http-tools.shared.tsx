@@ -2,9 +2,14 @@ import type { ToolRegistryListResult } from "@tyrum/client";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import * as React from "react";
 import { cn } from "../../lib/cn.js";
-import { buildStructuredToolSchema, type StructuredToolSchema } from "./admin-http-tools.schema.js";
+import {
+  buildStructuredToolSchema,
+  type StructuredToolSchema,
+  type StructuredToolSchemaRow,
+} from "./admin-http-tools.schema.js";
 import { Badge, type BadgeVariant } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
+import { DataTable, type DataTableColumn } from "../ui/data-table.js";
 
 export type ToolRegistryEntry = ToolRegistryListResult["tools"][number];
 export type ToolGroupId = "built_in" | "extensions";
@@ -58,6 +63,33 @@ function DetailSection({
   );
 }
 
+const SCHEMA_FIELD_COLUMNS: DataTableColumn<StructuredToolSchemaRow>[] = [
+  {
+    id: "field",
+    header: "Field",
+    cell: (row) => <span className="font-mono text-xs text-fg">{row.field}</span>,
+    cellClassName: "py-2",
+  },
+  {
+    id: "type",
+    header: "Type",
+    cell: (row) => <span className="text-fg">{row.type}</span>,
+    cellClassName: "py-2",
+  },
+  {
+    id: "required",
+    header: "Required",
+    cell: (row) => <span className="text-fg">{row.required ? "Yes" : "No"}</span>,
+    cellClassName: "py-2",
+  },
+  {
+    id: "description",
+    header: "Description",
+    cell: (row) => <span className="text-fg-muted">{row.description ?? "—"}</span>,
+    cellClassName: "py-2",
+  },
+];
+
 function StructuredSchemaDetails({
   schema,
 }: {
@@ -78,28 +110,11 @@ function StructuredSchemaDetails({
             ) : null}
           </div>
           {section.rows.length > 0 ? (
-            <div className="overflow-x-auto rounded-lg border border-border/80">
-              <table className="min-w-full text-sm">
-                <thead className="bg-bg-subtle/60 text-left text-xs uppercase tracking-wide text-fg-muted">
-                  <tr>
-                    <th className="px-3 py-2 font-medium">Field</th>
-                    <th className="px-3 py-2 font-medium">Type</th>
-                    <th className="px-3 py-2 font-medium">Required</th>
-                    <th className="px-3 py-2 font-medium">Description</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {section.rows.map((row) => (
-                    <tr key={`${section.id}:${row.field}`} className="border-t border-border/70">
-                      <td className="px-3 py-2 font-mono text-xs text-fg">{row.field}</td>
-                      <td className="px-3 py-2 text-fg">{row.type}</td>
-                      <td className="px-3 py-2 text-fg">{row.required ? "Yes" : "No"}</td>
-                      <td className="px-3 py-2 text-fg-muted">{row.description ?? "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DataTable<StructuredToolSchemaRow>
+              columns={SCHEMA_FIELD_COLUMNS}
+              data={section.rows}
+              rowKey={(row) => `${section.id}:${row.field}`}
+            />
           ) : null}
         </div>
       ))}
@@ -197,6 +212,52 @@ export function ToolTableSection({
   expandedIds: ReadonlySet<string>;
   onToggleExpanded: (toolId: string) => void;
 }): React.ReactElement {
+  const toolGroupColumns: DataTableColumn<ToolRegistryEntry>[] = [
+    {
+      id: "tool",
+      header: "Tool",
+      cell: (tool) => (
+        <div className="grid gap-1">
+          <div className="font-mono text-sm text-fg">{tool.canonical_id}</div>
+          <div className="max-w-3xl text-xs text-fg-muted">{tool.description}</div>
+        </div>
+      ),
+    },
+    {
+      id: "source",
+      header: "Source",
+      cell: (tool) => <Badge variant="outline">{SOURCE_LABELS[tool.source]}</Badge>,
+    },
+    {
+      id: "effect",
+      header: "Effect",
+      cell: (tool) => <Badge variant={effectBadgeVariant(tool.effect)}>{tool.effect}</Badge>,
+    },
+    {
+      id: "exposure",
+      header: "Exposure",
+      cell: (tool) => {
+        const exposure = exposureBadge(tool);
+        return <Badge variant={exposure.variant}>{exposure.label}</Badge>;
+      },
+    },
+    {
+      id: "details",
+      header: "Details",
+      headerClassName: "text-right",
+      cellClassName: "text-right",
+      cell: (tool) => (
+        <DetailsToggle
+          expanded={expandedIds.has(tool.canonical_id)}
+          toolId={tool.canonical_id}
+          onToggle={() => {
+            onToggleExpanded(tool.canonical_id);
+          }}
+        />
+      ),
+    },
+  ];
+
   return (
     <section className="grid gap-3" data-testid={`admin-http-tools-group-${groupId}`}>
       <div className="flex items-center justify-between gap-3">
@@ -204,65 +265,25 @@ export function ToolTableSection({
         <Badge variant="outline">{tools.length}</Badge>
       </div>
 
-      <div className="hidden overflow-x-auto rounded-lg border border-border/80 md:block">
-        <table className="min-w-full text-sm">
-          <thead className="bg-bg-subtle/60 text-left text-xs uppercase tracking-wide text-fg-muted">
-            <tr>
-              <th className="px-3 py-2 font-medium">Tool</th>
-              <th className="px-3 py-2 font-medium">Source</th>
-              <th className="px-3 py-2 font-medium">Effect</th>
-              <th className="px-3 py-2 font-medium">Exposure</th>
-              <th className="px-3 py-2 font-medium text-right">Details</th>
+      <DataTable<ToolRegistryEntry>
+        className="hidden md:block"
+        columns={toolGroupColumns}
+        data={tools}
+        rowKey={(tool) => `${groupId}:${tool.canonical_id}`}
+        rowClassName="align-top"
+        renderAfterRow={(tool) =>
+          expandedIds.has(tool.canonical_id) ? (
+            <tr
+              className="border-t border-border"
+              data-testid={`admin-http-tools-details-${tool.canonical_id}`}
+            >
+              <td className="px-3 py-3" colSpan={5}>
+                <ToolDetailPanel tool={tool} />
+              </td>
             </tr>
-          </thead>
-          <tbody>
-            {tools.map((tool) => {
-              const expanded = expandedIds.has(tool.canonical_id);
-              const exposure = exposureBadge(tool);
-              return (
-                <React.Fragment key={`${groupId}:${tool.canonical_id}`}>
-                  <tr className="border-t border-border/70 align-top">
-                    <td className="px-3 py-3">
-                      <div className="grid gap-1">
-                        <div className="font-mono text-sm text-fg">{tool.canonical_id}</div>
-                        <div className="max-w-3xl text-xs text-fg-muted">{tool.description}</div>
-                      </div>
-                    </td>
-                    <td className="px-3 py-3">
-                      <Badge variant="outline">{SOURCE_LABELS[tool.source]}</Badge>
-                    </td>
-                    <td className="px-3 py-3">
-                      <Badge variant={effectBadgeVariant(tool.effect)}>{tool.effect}</Badge>
-                    </td>
-                    <td className="px-3 py-3">
-                      <Badge variant={exposure.variant}>{exposure.label}</Badge>
-                    </td>
-                    <td className="px-3 py-3 text-right">
-                      <DetailsToggle
-                        expanded={expanded}
-                        toolId={tool.canonical_id}
-                        onToggle={() => {
-                          onToggleExpanded(tool.canonical_id);
-                        }}
-                      />
-                    </td>
-                  </tr>
-                  {expanded ? (
-                    <tr
-                      className="border-t border-border/70"
-                      data-testid={`admin-http-tools-details-${tool.canonical_id}`}
-                    >
-                      <td className="px-3 py-3" colSpan={5}>
-                        <ToolDetailPanel tool={tool} />
-                      </td>
-                    </tr>
-                  ) : null}
-                </React.Fragment>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+          ) : null
+        }
+      />
 
       <div className="grid gap-2 md:hidden">
         {tools.map((tool) => {

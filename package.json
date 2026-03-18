@@ -24,7 +24,7 @@
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "docs:public-check": "bash scripts/check-public-docs.sh",
-    "lint": "node scripts/lint/oxlint-ratchet.mjs",
+    "lint": "node scripts/lint/oxlint-ratchet.mjs && node scripts/lint/check-raw-elements.mjs",
     "lint:oxlint:report": "oxlint -f unix .",
     "format": "node scripts/format-repo.mjs --write",
     "format:check": "node scripts/format-repo.mjs --check",

@@ -7,6 +7,7 @@ import { AppPage } from "../layout/app-page.js";
 import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent } from "../ui/card.js";
+import { LoadingState } from "../ui/loading-state.js";
 import { useElevatedModeUiContext } from "../elevated-mode/elevated-mode-provider.js";
 import { useAdminMutationAccess, useAdminMutationHttpClient } from "./admin-http-shared.js";
 import { selectProviderFormState, validateProviderForm } from "./admin-http-providers.shared.js";
@@ -136,7 +137,7 @@ export function FirstRunOnboardingPage({
 
   const renderStep = (): React.ReactElement => {
     if (data.loading) {
-      return <div className="text-sm text-fg-muted">Loading onboarding state…</div>;
+      return <LoadingState label="Loading onboarding state…" />;
     }
     if (step === "done") {
       return (

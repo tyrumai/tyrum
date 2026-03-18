@@ -8,9 +8,11 @@ import { Alert } from "../ui/alert.js";
 import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
+import { DataTable, type DataTableColumn } from "../ui/data-table.js";
 import { ConfirmDangerDialog } from "../ui/confirm-danger-dialog.js";
 import { EmptyState } from "../ui/empty-state.js";
 import { Input } from "../ui/input.js";
+import { LoadingState } from "../ui/loading-state.js";
 import {
   useAdminHttpClient,
   useAdminMutationAccess,
@@ -224,6 +226,177 @@ export function AdminHttpRoutingConfigPanel({ core }: { core: OperatorCore }): R
     await loadPanelData("refreshing");
   };
 
+  const routingRuleColumns: DataTableColumn<RoutingRuleRow>[] = [
+    {
+      id: "channel",
+      header: "Channel",
+      cell: () => <Badge variant="outline">telegram</Badge>,
+      cellClassName: "align-top",
+    },
+    {
+      id: "account",
+      header: "Account",
+      cell: (row) => <span className="text-fg">{row.accountKey}</span>,
+      cellClassName: "align-top",
+    },
+    {
+      id: "rule",
+      header: "Rule",
+      cell: (row) => (
+        <div className="font-medium text-fg">
+          {row.kind === "default" ? "Default route" : "Thread override"}
+        </div>
+      ),
+      cellClassName: "align-top",
+    },
+    {
+      id: "thread",
+      header: "Thread",
+      cell: (row) => (
+        <>
+          <div className="font-medium text-fg">{describeRule(row)}</div>
+          {row.threadId ? (
+            <div className="text-xs text-fg-muted">Thread ID: {row.threadId}</div>
+          ) : null}
+        </>
+      ),
+      cellClassName: "align-top",
+    },
+    {
+      id: "container",
+      header: "Container",
+      cell: (row) => (
+        <span className="text-fg-muted">
+          {row.kind === "default" ? "Any" : (row.containerKind ?? "Unknown")}
+        </span>
+      ),
+      cellClassName: "align-top",
+    },
+    {
+      id: "agent",
+      header: "Agent",
+      cell: (row) => <span className="text-fg">{row.agentKey}</span>,
+      cellClassName: "align-top",
+    },
+    {
+      id: "lastActive",
+      header: "Last active",
+      cell: (row) => (
+        <span className="text-fg-muted" title={row.lastActiveAt}>
+          {formatTimestamp(row.lastActiveAt)}
+        </span>
+      ),
+      cellClassName: "align-top",
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      headerClassName: "text-right",
+      cellClassName: "align-top text-right",
+      cell: (row) => (
+        <div className="flex justify-end gap-1">
+          <ElevatedModeTooltip canMutate={canMutate} requestEnter={requestEnter}>
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label={`Edit ${describeRule(row)}`}
+              onClick={() => {
+                openEditDialog(row);
+              }}
+            >
+              <Pencil className="h-4 w-4" />
+            </Button>
+          </ElevatedModeTooltip>
+          <ElevatedModeTooltip canMutate={canMutate} requestEnter={requestEnter}>
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label={`Remove ${describeRule(row)}`}
+              onClick={() => {
+                if (!canMutate) {
+                  requestEnter();
+                  return;
+                }
+                setDeletingRow(row);
+              }}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </ElevatedModeTooltip>
+        </div>
+      ),
+    },
+  ];
+
+  const revisionColumns: DataTableColumn<ChannelRoutingRevisionSummary>[] = [
+    {
+      id: "revision",
+      header: "Revision",
+      cell: (revision) => <span className="font-medium text-fg">#{revision.revision}</span>,
+      cellClassName: "align-top",
+    },
+    {
+      id: "when",
+      header: "When",
+      cell: (revision) => (
+        <span className="text-fg-muted" title={revision.created_at}>
+          {formatTimestamp(revision.created_at)}
+        </span>
+      ),
+      cellClassName: "align-top",
+    },
+    {
+      id: "reason",
+      header: "Reason",
+      cell: (revision) => (
+        <span className="text-fg-muted">{revision.reason ?? "No reason recorded"}</span>
+      ),
+      cellClassName: "align-top",
+    },
+    {
+      id: "rules",
+      header: "Rules",
+      cell: (revision) => (
+        <span className="text-fg-muted">{countRoutingRules(revision.config)}</span>
+      ),
+      cellClassName: "align-top",
+    },
+    {
+      id: "revertedFrom",
+      header: "Reverted from",
+      cell: (revision) => (
+        <span className="text-fg-muted">{revision.reverted_from_revision ?? "—"}</span>
+      ),
+      cellClassName: "align-top",
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      headerClassName: "text-right",
+      cellClassName: "align-top text-right",
+      cell: (revision) => (
+        <div className="flex justify-end">
+          <ElevatedModeTooltip canMutate={canMutate} requestEnter={requestEnter}>
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label={`Revert to revision ${revision.revision}`}
+              onClick={() => {
+                if (!canMutate) {
+                  requestEnter();
+                  return;
+                }
+                setRevertingRevision(revision);
+              }}
+            >
+              <Undo2 className="h-4 w-4" />
+            </Button>
+          </ElevatedModeTooltip>
+        </div>
+      ),
+    },
+  ];
+
   return (
     <section className="grid gap-4" data-testid="admin-http-routing-config">
       <div className="text-sm font-medium text-fg">Channels</div>
@@ -288,7 +461,7 @@ export function AdminHttpRoutingConfigPanel({ core }: { core: OperatorCore }): R
           </div>
 
           {loading ? (
-            <div className="text-sm text-fg-muted">Loading channels routing…</div>
+            <LoadingState label="Loading channels routing…" />
           ) : allRows.length === 0 ? (
             <EmptyState
               icon={Waypoints}
@@ -307,82 +480,11 @@ export function AdminHttpRoutingConfigPanel({ core }: { core: OperatorCore }): R
               description="Clear or change the filter to see the configured Telegram rules."
             />
           ) : (
-            <div className="overflow-x-auto rounded-lg border border-border">
-              <table className="min-w-full text-left text-sm">
-                <thead className="bg-bg-subtle text-fg-muted">
-                  <tr>
-                    <th className="px-3 py-2 font-medium">Channel</th>
-                    <th className="px-3 py-2 font-medium">Account</th>
-                    <th className="px-3 py-2 font-medium">Rule</th>
-                    <th className="px-3 py-2 font-medium">Thread</th>
-                    <th className="px-3 py-2 font-medium">Container</th>
-                    <th className="px-3 py-2 font-medium">Agent</th>
-                    <th className="px-3 py-2 font-medium">Last active</th>
-                    <th className="px-3 py-2 font-medium text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row) => (
-                    <tr key={row.id} className="border-t border-border">
-                      <td className="px-3 py-3 align-top">
-                        <Badge variant="outline">telegram</Badge>
-                      </td>
-                      <td className="px-3 py-3 align-top text-fg">{row.accountKey}</td>
-                      <td className="px-3 py-3 align-top">
-                        <div className="font-medium text-fg">
-                          {row.kind === "default" ? "Default route" : "Thread override"}
-                        </div>
-                      </td>
-                      <td className="px-3 py-3 align-top">
-                        <div className="font-medium text-fg">{describeRule(row)}</div>
-                        {row.threadId ? (
-                          <div className="text-xs text-fg-muted">Thread ID: {row.threadId}</div>
-                        ) : null}
-                      </td>
-                      <td className="px-3 py-3 align-top text-fg-muted">
-                        {row.kind === "default" ? "Any" : (row.containerKind ?? "Unknown")}
-                      </td>
-                      <td className="px-3 py-3 align-top text-fg">{row.agentKey}</td>
-                      <td className="px-3 py-3 align-top text-fg-muted" title={row.lastActiveAt}>
-                        {formatTimestamp(row.lastActiveAt)}
-                      </td>
-                      <td className="px-3 py-3 align-top">
-                        <div className="flex justify-end gap-1">
-                          <ElevatedModeTooltip canMutate={canMutate} requestEnter={requestEnter}>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              aria-label={`Edit ${describeRule(row)}`}
-                              onClick={() => {
-                                openEditDialog(row);
-                              }}
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                          </ElevatedModeTooltip>
-                          <ElevatedModeTooltip canMutate={canMutate} requestEnter={requestEnter}>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              aria-label={`Remove ${describeRule(row)}`}
-                              onClick={() => {
-                                if (!canMutate) {
-                                  requestEnter();
-                                  return;
-                                }
-                                setDeletingRow(row);
-                              }}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </ElevatedModeTooltip>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DataTable<RoutingRuleRow>
+              columns={routingRuleColumns}
+              data={rows}
+              rowKey={(row) => row.id}
+            />
           )}
         </CardContent>
       </Card>
@@ -396,7 +498,7 @@ export function AdminHttpRoutingConfigPanel({ core }: { core: OperatorCore }): R
         </CardHeader>
         <CardContent className="grid gap-4">
           {loading ? (
-            <div className="text-sm text-fg-muted">Loading routing history…</div>
+            <LoadingState label="Loading routing history…" />
           ) : revisions.length === 0 ? (
             <Alert
               variant="info"
@@ -404,61 +506,11 @@ export function AdminHttpRoutingConfigPanel({ core }: { core: OperatorCore }): R
               description="The revision browser will appear here after the first routing change."
             />
           ) : (
-            <div className="overflow-x-auto rounded-lg border border-border">
-              <table className="min-w-full text-left text-sm">
-                <thead className="bg-bg-subtle text-fg-muted">
-                  <tr>
-                    <th className="px-3 py-2 font-medium">Revision</th>
-                    <th className="px-3 py-2 font-medium">When</th>
-                    <th className="px-3 py-2 font-medium">Reason</th>
-                    <th className="px-3 py-2 font-medium">Rules</th>
-                    <th className="px-3 py-2 font-medium">Reverted from</th>
-                    <th className="px-3 py-2 font-medium text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {revisions.map((revision) => (
-                    <tr key={revision.revision} className="border-t border-border">
-                      <td className="px-3 py-3 align-top font-medium text-fg">
-                        #{revision.revision}
-                      </td>
-                      <td className="px-3 py-3 align-top text-fg-muted" title={revision.created_at}>
-                        {formatTimestamp(revision.created_at)}
-                      </td>
-                      <td className="px-3 py-3 align-top text-fg-muted">
-                        {revision.reason ?? "No reason recorded"}
-                      </td>
-                      <td className="px-3 py-3 align-top text-fg-muted">
-                        {countRoutingRules(revision.config)}
-                      </td>
-                      <td className="px-3 py-3 align-top text-fg-muted">
-                        {revision.reverted_from_revision ?? "—"}
-                      </td>
-                      <td className="px-3 py-3 align-top">
-                        <div className="flex justify-end">
-                          <ElevatedModeTooltip canMutate={canMutate} requestEnter={requestEnter}>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              aria-label={`Revert to revision ${revision.revision}`}
-                              onClick={() => {
-                                if (!canMutate) {
-                                  requestEnter();
-                                  return;
-                                }
-                                setRevertingRevision(revision);
-                              }}
-                            >
-                              <Undo2 className="h-4 w-4" />
-                            </Button>
-                          </ElevatedModeTooltip>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DataTable<ChannelRoutingRevisionSummary>
+              columns={revisionColumns}
+              data={revisions}
+              rowKey={(revision) => String(revision.revision)}
+            />
           )}
         </CardContent>
       </Card>

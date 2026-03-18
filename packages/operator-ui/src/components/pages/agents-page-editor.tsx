@@ -11,6 +11,7 @@ import { modelRefFor, type ModelPreset } from "./admin-http-models.shared.js";
 import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent } from "../ui/card.js";
+import { LoadingState } from "../ui/loading-state.js";
 import {
   type AgentEditorFormState,
   type PreservedMcpConfig,
@@ -428,7 +429,9 @@ export function AgentsPageEditor({
   if (loading) {
     return (
       <Card>
-        <CardContent className="py-10 text-sm text-fg-muted">Loading agent editor…</CardContent>
+        <CardContent>
+          <LoadingState variant="centered" label="Loading agent editor…" />
+        </CardContent>
       </Card>
     );
   }

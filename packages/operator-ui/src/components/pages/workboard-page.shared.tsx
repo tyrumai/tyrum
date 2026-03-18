@@ -2,6 +2,7 @@ import type { WorkItem } from "@tyrum/operator-core";
 import type { ReactNode } from "react";
 import { Badge } from "../ui/badge.js";
 import { Card, CardContent } from "../ui/card.js";
+import { SectionHeading } from "../ui/section-heading.js";
 import type { WorkStateKvEntry } from "../workboard/workboard-store.js";
 
 export const STATUS_LABELS: Record<WorkItem["status"], string> = {
@@ -17,13 +18,13 @@ export const STATUS_LABELS: Record<WorkItem["status"], string> = {
 export function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="grid gap-2">
-      <div className="text-sm font-semibold text-fg">{title}</div>
+      <SectionHeading className="font-semibold">{title}</SectionHeading>
       {children}
     </div>
   );
 }
 
-export function EmptyState({ children }: { children: ReactNode }) {
+export function InlineEmptyHint({ children }: { children: ReactNode }) {
   return <div className="text-sm text-fg-muted">{children}</div>;
 }
 
@@ -41,7 +42,7 @@ export function DetailListSection<T>({
   return (
     <Section title={title}>
       {items.length === 0 ? (
-        <EmptyState>{empty}</EmptyState>
+        <InlineEmptyHint>{empty}</InlineEmptyHint>
       ) : (
         <div className="grid gap-2">{items.map(renderItem)}</div>
       )}
@@ -59,7 +60,7 @@ export function KvSection({
   return (
     <Section title={title}>
       {entries.length === 0 ? (
-        <EmptyState>No entries.</EmptyState>
+        <InlineEmptyHint>No entries.</InlineEmptyHint>
       ) : (
         <pre className="whitespace-pre-wrap break-words rounded-md border border-border bg-bg-subtle p-2.5 font-mono text-xs text-fg [overflow-wrap:anywhere]">
           {entries.map((entry) => `${entry.key} = ${JSON.stringify(entry.value_json)}`).join("\n")}
@@ -122,7 +123,7 @@ export function WorkStatusList({
   onSelect: (workItemId: string) => void;
 }) {
   if (items.length === 0) {
-    return <EmptyState>No items</EmptyState>;
+    return <InlineEmptyHint>No items</InlineEmptyHint>;
   }
 
   return (
@@ -154,7 +155,9 @@ export function WorkStatusPanel({
     <Card>
       <CardContent className="grid gap-2.5 pt-4">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-sm font-semibold text-fg">{STATUS_LABELS[status]}</span>
+          <SectionHeading as="div" className="font-semibold">
+            {STATUS_LABELS[status]}
+          </SectionHeading>
           <Badge variant="outline">{items.length}</Badge>
         </div>
         <WorkStatusList items={items} selectedWorkItemId={selectedWorkItemId} onSelect={onSelect} />

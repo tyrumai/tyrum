@@ -8,6 +8,7 @@ import { Alert } from "../ui/alert.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { EmptyState } from "../ui/empty-state.js";
 import { LiveRegion } from "../ui/live-region.js";
+import { SectionHeading } from "../ui/section-heading.js";
 import { StatusDot } from "../ui/status-dot.js";
 import { cn } from "../../lib/cn.js";
 import { getConnectionDisplay } from "../../lib/connection-display.js";
@@ -281,7 +282,9 @@ export function DashboardPage({
       >
         <Card>
           <CardHeader className="pb-0">
-            <h3 className="text-sm font-semibold">System Status</h3>
+            <SectionHeading as="h3" className="font-semibold">
+              System Status
+            </SectionHeading>
           </CardHeader>
           <CardContent className="divide-y divide-border">
             <StatusRow
@@ -337,7 +340,9 @@ export function DashboardPage({
 
         <Card>
           <CardHeader className="pb-0">
-            <h3 className="text-sm font-semibold">Security</h3>
+            <SectionHeading as="h3" className="font-semibold">
+              Security
+            </SectionHeading>
           </CardHeader>
           <CardContent className="divide-y divide-border">
             <StatusRow
@@ -381,7 +386,9 @@ export function DashboardPage({
       {/* Recent Activity */}
       <Card>
         <CardHeader className="pb-0">
-          <h3 className="text-sm font-semibold">Recent Activity</h3>
+          <SectionHeading as="h3" className="font-semibold">
+            Recent Activity
+          </SectionHeading>
         </CardHeader>
         <CardContent>
           {recentEvents.length === 0 ? (
