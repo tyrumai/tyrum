@@ -258,7 +258,16 @@ export function formatMemoryGuidancePrompt(tools: readonly ToolDescriptor[]): st
 
   if (hasSearch) {
     lines.push(
-      "Search memory when pre-turn recall may have missed relevant items — for example when the user references prior context, the task scope differs from the seed query, or recall returned few results.",
+      "Search memory when pre-turn recall may have missed relevant items — for example when the user references prior context, asks a broad question, the task scope differs from the seed query, or recall returned few results.",
+    );
+    lines.push(
+      "Do not assume pre-turn recall is complete or that missing details are unavailable in memory. Pre-turn recall is seed-based and may omit relevant memory that uses different terms.",
+    );
+    lines.push(
+      "If the requested information is not in pre-turn recall, run mcp.memory.search before answering. Do this for broad questions and for follow-up probes about specific topics.",
+    );
+    lines.push(
+      "When pre-turn recall is insufficient, search with alternative terms, paraphrases, broader or narrower queries, and related entities or topics.",
     );
   }
 
