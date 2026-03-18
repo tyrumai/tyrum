@@ -4,10 +4,15 @@ import {
   type ExternalStore,
   type OperatorCore,
 } from "@tyrum/operator-core";
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { OperatorUiMode } from "../../app.js";
+import { useAdminAccessModeOptional } from "../../hooks/use-admin-access-mode.js";
 import { useOperatorStore } from "../../use-operator-store.js";
-import { ELEVATED_MODE_SCOPES, type ElevatedModeController } from "./elevated-mode-controller.js";
+import {
+  ADMIN_ACCESS_TTL_SECONDS,
+  ELEVATED_MODE_SCOPES,
+  type ElevatedModeController,
+} from "./elevated-mode-controller.js";
 import { ElevatedModeEnterDialog } from "./elevated-mode-enter-dialog.js";
 
 type ElevatedModeUiContextValue = {
@@ -53,6 +58,8 @@ export interface AdminAccessProviderProps {
 
 export type ElevatedModeProviderProps = AdminAccessProviderProps;
 
+const RENEWAL_THRESHOLD_MS = ADMIN_ACCESS_TTL_SECONDS * 1000 * 0.2;
+
 export function ElevatedModeProvider({
   core,
   mode,
@@ -67,6 +74,12 @@ export function ElevatedModeProvider({
     (core as { connectionStore?: ExternalStore<ConnectionState> }).connectionStore ??
       DISCONNECTED_CONNECTION_STORE,
   );
+  const adminAccessModeSetting = useAdminAccessModeOptional();
+  const adminAccessMode = adminAccessModeSetting?.mode ?? "on-demand";
+  const autoEnterAttemptedRef = useRef(false);
+  const renewingRef = useRef(false);
+  const adminAccessModeRef = useRef(adminAccessMode);
+  adminAccessModeRef.current = adminAccessMode;
 
   useEffect(() => {
     if (!controller) return;
@@ -102,7 +115,7 @@ export function ElevatedModeProvider({
       device_id: deviceId,
       role: "client",
       scopes: [...ELEVATED_MODE_SCOPES],
-      ttl_seconds: 60 * 10,
+      ttl_seconds: ADMIN_ACCESS_TTL_SECONDS,
     });
     if (!issued.expires_at) {
       throw new Error("Gateway returned a timed elevated-mode token without expires_at.");
@@ -121,6 +134,89 @@ export function ElevatedModeProvider({
     }
     core.elevatedModeStore.exit();
   };
+
+  // Auto-enter elevated mode when "always-on" and connected.
+  // autoEnterAttemptedRef guards against concurrent duplicate requests
+  // and is kept set after failure to prevent retry loops. On success it
+  // is cleared so that a later token expiry can trigger re-entry.
+  useEffect(() => {
+    if (adminAccessMode !== "always-on") {
+      autoEnterAttemptedRef.current = false;
+      return;
+    }
+    if (connection.status !== "connected") {
+      autoEnterAttemptedRef.current = false;
+      return;
+    }
+    if (isElevatedModeActive(elevatedMode)) return;
+    if (autoEnterAttemptedRef.current) return;
+    if (renewingRef.current) return;
+
+    autoEnterAttemptedRef.current = true;
+    void (async () => {
+      try {
+        await enterElevatedMode();
+        if (adminAccessModeRef.current !== "always-on") {
+          // Mode changed while the request was in-flight. Undo.
+          core.elevatedModeStore.exit();
+          return;
+        }
+        // Success: clear the guard so a future token expiry can re-trigger.
+        // The isElevatedModeActive check above prevents immediate re-entry.
+        autoEnterAttemptedRef.current = false;
+      } catch {
+        // Failure: keep autoEnterAttemptedRef set to prevent retry loops.
+        // A disconnect/reconnect or mode toggle will reset it.
+      }
+    })();
+  });
+
+  // Auto-renew elevated mode token when "always-on" and nearing expiry.
+  // renewingRef prevents concurrent renewal requests. It is always reset
+  // when the async operation completes — refs are safe to mutate after
+  // effect cleanup, unlike React state.
+  useEffect(() => {
+    if (adminAccessMode !== "always-on") return;
+    if (elevatedMode.status !== "active") return;
+    if (elevatedMode.remainingMs === null) return;
+    if (elevatedMode.remainingMs > RENEWAL_THRESHOLD_MS) return;
+    if (renewingRef.current) return;
+
+    renewingRef.current = true;
+    void (async () => {
+      try {
+        await enterElevatedMode();
+        if (adminAccessModeRef.current !== "always-on") {
+          // Mode changed while the renewal was in-flight. Undo.
+          core.elevatedModeStore.exit();
+        }
+        // Success: allow future renewals.
+        renewingRef.current = false;
+      } catch {
+        // Failure: keep renewingRef set to prevent a retry storm (~1 req/s).
+        // The existing token still has time left. When it expires, the
+        // auto-enter effect will attempt re-entry.
+      }
+    })();
+  });
+
+  // Exit elevated mode when switching from "always-on" to "on-demand"
+  const prevModeRef = useRef(adminAccessMode);
+  useEffect(() => {
+    const prevMode = prevModeRef.current;
+    prevModeRef.current = adminAccessMode;
+
+    if (prevMode === "always-on" && adminAccessMode === "on-demand") {
+      if (isElevatedModeActive(elevatedMode)) {
+        void exitElevatedMode().catch(() => {
+          // Revocation failed (e.g. network error). Force-exit the store
+          // so elevated mode does not stay stuck after the user switched
+          // to on-demand.
+          core.elevatedModeStore.exit();
+        });
+      }
+    }
+  });
 
   return (
     <ElevatedModeUiContext.Provider

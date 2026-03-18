@@ -25,6 +25,9 @@ export { AdminAccessGate, AdminAccessProvider } from "./elevated-mode.js";
 
 export { cn } from "./lib/cn.js";
 
+export type { AdminAccessMode } from "./hooks/use-admin-access-mode.js";
+export { AdminAccessModeProvider, useAdminAccessMode } from "./hooks/use-admin-access-mode.js";
+
 export type { ThemeMode } from "./hooks/use-theme.js";
 export { ThemeProvider, useTheme } from "./hooks/use-theme.js";
 

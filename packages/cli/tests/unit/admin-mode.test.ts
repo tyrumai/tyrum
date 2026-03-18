@@ -107,7 +107,13 @@ describe("@tyrum/cli elevated-mode", () => {
       token_id: "tkn-id",
       device_id: "operator-cli",
       role: "client",
-      scopes: ["operator.admin"],
+      scopes: [
+        "operator.read",
+        "operator.write",
+        "operator.approvals",
+        "operator.pairing",
+        "operator.admin",
+      ],
       issued_at: "2026-02-27T00:00:00.000Z",
       expires_at: "2099-01-01T00:00:00.000Z",
     });
@@ -133,7 +139,13 @@ describe("@tyrum/cli elevated-mode", () => {
         expect.objectContaining({
           device_id: "operator-cli",
           role: "client",
-          scopes: ["operator.admin"],
+          scopes: [
+            "operator.read",
+            "operator.write",
+            "operator.approvals",
+            "operator.pairing",
+            "operator.admin",
+          ],
           ttl_seconds: 42,
         }),
       );

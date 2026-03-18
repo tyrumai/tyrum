@@ -143,7 +143,13 @@ export async function createTuiCore(options: TuiCoreOptions): Promise<TuiRuntime
     const issued = await http.deviceTokens.issue({
       device_id: identity.deviceId,
       role: "client",
-      scopes: ["operator.approvals", "operator.pairing", "operator.admin"],
+      scopes: [
+        "operator.read",
+        "operator.write",
+        "operator.approvals",
+        "operator.pairing",
+        "operator.admin",
+      ],
       ttl_seconds: opts?.ttlSeconds ?? 60 * 10,
     });
 

@@ -1,8 +1,12 @@
 import type { OperatorCore } from "@tyrum/operator-core";
-import { Monitor, Moon, Sun } from "lucide-react";
+import { Monitor, Moon, Shield, ShieldCheck, Sun } from "lucide-react";
 import { useState } from "react";
 import type { OperatorUiMode } from "../../app.js";
 import { useHostApiOptional } from "../../host/host-api.js";
+import {
+  useAdminAccessModeOptional,
+  type AdminAccessMode,
+} from "../../hooks/use-admin-access-mode.js";
 import { useTheme, type ThemeMode } from "../../hooks/use-theme.js";
 import { cn } from "../../lib/cn.js";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
@@ -44,6 +48,31 @@ const THEME_OPTIONS: ThemeOption[] = [
   },
 ];
 
+type AdminAccessOption = {
+  mode: AdminAccessMode;
+  label: string;
+  description: string;
+  icon: typeof Shield;
+  testId: string;
+};
+
+const ADMIN_ACCESS_OPTIONS: AdminAccessOption[] = [
+  {
+    mode: "on-demand",
+    label: "On demand",
+    description: "Read-only by default. Authorize admin access when needed.",
+    icon: Shield,
+    testId: "configure-admin-access-on-demand",
+  },
+  {
+    mode: "always-on",
+    label: "Always on",
+    description: "Automatically authorize admin access on connect.",
+    icon: ShieldCheck,
+    testId: "configure-admin-access-always-on",
+  },
+];
+
 export function ConfigureGeneralPanel({
   core,
   mode,
@@ -54,6 +83,7 @@ export function ConfigureGeneralPanel({
   webAuthPersistence?: WebAuthPersistence;
 }) {
   const theme = useTheme();
+  const adminAccessModeSetting = useAdminAccessModeOptional();
   const host = useHostApiOptional();
   const desktopApi = host?.kind === "desktop" ? host.api : null;
   const [webAuthBusy, setWebAuthBusy] = useState(false);
@@ -115,6 +145,49 @@ export function ConfigureGeneralPanel({
           </div>
         </CardContent>
       </Card>
+
+      {adminAccessModeSetting ? (
+        <Card data-testid="configure-admin-access">
+          <CardHeader className="pb-2.5">
+            <div className="text-sm font-medium text-fg">Admin access</div>
+            <div className="text-sm text-fg-muted">
+              Choose when admin access is authorized. Always-on mode automatically enters and renews
+              admin access.
+            </div>
+          </CardHeader>
+          <CardContent className="grid gap-3">
+            <div className="grid gap-3 sm:grid-cols-2" role="radiogroup" aria-label="Admin access">
+              {ADMIN_ACCESS_OPTIONS.map((option) => {
+                const active = adminAccessModeSetting.mode === option.mode;
+                const Icon = option.icon;
+                return (
+                  <button
+                    key={option.mode}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    data-testid={option.testId}
+                    className={cn(
+                      "flex w-full items-start gap-3 rounded-lg border px-4 py-3 text-left transition-colors",
+                      "hover:bg-bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
+                      active ? "border-primary bg-bg text-fg" : "border-border bg-bg text-fg",
+                    )}
+                    onClick={() => {
+                      adminAccessModeSetting.setMode(option.mode);
+                    }}
+                  >
+                    <Icon className="mt-0.5 h-5 w-5 shrink-0" aria-hidden={true} />
+                    <div className="grid gap-0.5">
+                      <div className="text-sm font-medium">{option.label}</div>
+                      <div className="text-xs text-fg-muted">{option.description}</div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {activeWebAuth ? (
         <Card data-testid="configure-web-auth">
