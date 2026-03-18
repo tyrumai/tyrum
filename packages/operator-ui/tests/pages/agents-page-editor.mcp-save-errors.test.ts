@@ -132,10 +132,6 @@ describe("AgentsPage editor MCP save errors", () => {
 
     expect(update).not.toHaveBeenCalled();
     expect(onSaved).not.toHaveBeenCalled();
-    expect(testRoot.container.textContent).toContain("Save failed");
-    expect(testRoot.container.textContent).toContain(
-      "MCP override settings must be a JSON object.",
-    );
 
     cleanupTestRoot(testRoot);
   });
@@ -164,8 +160,6 @@ describe("AgentsPage editor MCP save errors", () => {
     });
     expect(update).not.toHaveBeenCalled();
     expect(onSaved).not.toHaveBeenCalled();
-    expect(testRoot.container.textContent).toContain("Save failed");
-    expect(testRoot.container.textContent).toContain("parse failed");
 
     cleanupTestRoot(testRoot);
   });

@@ -73,7 +73,12 @@ function MobileBootstrapQrDialog({
         </DialogHeader>
 
         {errorMessage ? (
-          <Alert variant="error" title="QR generation failed" description={errorMessage} />
+          <Alert
+            variant="error"
+            title="QR generation failed"
+            description={errorMessage}
+            onDismiss={() => setErrorMessage(null)}
+          />
         ) : svg ? (
           <div
             className="mx-auto w-full max-w-[18rem] rounded-lg border border-border bg-white p-3"

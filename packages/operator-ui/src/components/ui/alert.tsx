@@ -1,5 +1,5 @@
 import * as React from "react";
-import { CircleCheck, CircleX, Info, TriangleAlert } from "lucide-react";
+import { CircleCheck, CircleX, Info, TriangleAlert, X } from "lucide-react";
 import { cn } from "../../lib/cn.js";
 
 export type AlertVariant = "info" | "success" | "warning" | "error";
@@ -8,6 +8,7 @@ export interface AlertProps extends Omit<React.HTMLAttributes<HTMLDivElement>, "
   variant?: AlertVariant;
   title: React.ReactNode;
   description?: React.ReactNode;
+  onDismiss?: () => void;
 }
 
 const VARIANT_STYLES: Record<
@@ -37,7 +38,7 @@ const VARIANT_STYLES: Record<
 };
 
 export const Alert = React.forwardRef<HTMLDivElement, AlertProps>(
-  ({ className, variant = "info", title, description, ...props }, ref) => {
+  ({ className, variant = "info", title, description, onDismiss, ...props }, ref) => {
     const styles = VARIANT_STYLES[variant];
     const Icon = styles.Icon;
 
@@ -61,6 +62,16 @@ export const Alert = React.forwardRef<HTMLDivElement, AlertProps>(
               <div className="mt-1 text-sm text-fg-muted break-words">{description}</div>
             ) : null}
           </div>
+          {onDismiss ? (
+            <button
+              type="button"
+              aria-label="Dismiss"
+              onClick={onDismiss}
+              className="ml-auto shrink-0 rounded-md p-1 opacity-70 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+            >
+              <X aria-hidden="true" className="h-4 w-4" />
+            </button>
+          ) : null}
         </div>
       </div>
     );

@@ -1,6 +1,6 @@
 import * as React from "react";
+import { toast } from "sonner";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
-import { Alert } from "./alert.js";
 import { Button } from "./button.js";
 import { Checkbox } from "./checkbox.js";
 import {
@@ -20,7 +20,7 @@ export interface ConfirmDangerDialogProps {
   confirmLabel?: React.ReactNode;
   cancelLabel?: React.ReactNode;
   confirmationLabel?: React.ReactNode;
-  onConfirm: () => void | Promise<void>;
+  onConfirm: () => void | false | Promise<void | false>;
   isLoading?: boolean;
   confirmDisabled?: boolean;
   children?: React.ReactNode;
@@ -41,13 +41,11 @@ export function ConfirmDangerDialog({
 }: ConfirmDangerDialogProps): React.ReactElement {
   const [confirmed, setConfirmed] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
-  const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (open) return;
     setConfirmed(false);
     setSubmitting(false);
-    setErrorMessage(null);
   }, [open]);
 
   const busy = isLoading || submitting;
@@ -60,12 +58,11 @@ export function ConfirmDangerDialog({
   const submit = async (): Promise<void> => {
     if (!confirmed || busy || confirmDisabled) return;
     setSubmitting(true);
-    setErrorMessage(null);
     try {
-      await onConfirm();
-      onOpenChange(false);
+      const result = await onConfirm();
+      if (result !== false) onOpenChange(false);
     } catch (error) {
-      setErrorMessage(formatErrorMessage(error));
+      toast.error("Action failed", { description: formatErrorMessage(error) });
     } finally {
       setSubmitting(false);
     }
@@ -110,9 +107,6 @@ export function ConfirmDangerDialog({
             />
             <span>{confirmationLabel}</span>
           </label>
-          {errorMessage ? (
-            <Alert variant="error" title="Action failed" description={errorMessage} />
-          ) : null}
         </div>
 
         <DialogFooter>

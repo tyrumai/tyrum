@@ -114,7 +114,6 @@ function SectionLabel({ children }: { children: ReactNode }) {
 
 function NodeConfigPageLayout({ model }: { model: UnifiedNodeConfigModel }) {
   const scrollAreaRef = useReconnectScrollArea(`node-config:${model.platform}`);
-
   if (model.loading) {
     return (
       <AppPage contentClassName="max-w-5xl gap-4">

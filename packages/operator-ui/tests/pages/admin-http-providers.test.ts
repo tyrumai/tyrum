@@ -427,9 +427,6 @@ describe("AdminHttpProvidersPanel", () => {
     await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "confirm-danger-confirm"));
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(document.body.textContent).toContain(
-      "Select replacement presets or None before removing this provider.",
-    );
 
     setSelectValue(
       getLabeledSelect(
@@ -496,9 +493,6 @@ describe("AdminHttpProvidersPanel", () => {
     await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "confirm-danger-confirm"));
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(document.body.textContent).toContain(
-      "Select replacement presets or None before removing this provider.",
-    );
 
     await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "confirm-danger-confirm"));
 

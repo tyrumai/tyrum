@@ -1,6 +1,7 @@
 import type { OperatorCore } from "@tyrum/operator-core";
 import type { AuthTokenListEntry } from "@tyrum/client/browser";
 import * as React from "react";
+import { toast } from "sonner";
 import { ElevatedModeTooltip } from "../elevated-mode/elevated-mode-tooltip.js";
 import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
@@ -45,11 +46,9 @@ export function AuthTokensCard({ core }: { core: OperatorCore }): React.ReactEle
     "expirationPreset" | "customExpiresAt"
   > | null>(null);
   const [formState, setFormState] = React.useState(defaultFormState());
-  const [dialogErrorMessage, setDialogErrorMessage] = React.useState<string | null>(null);
   const [dialogBusy, setDialogBusy] = React.useState(false);
   const [issuedToken, setIssuedToken] = React.useState<AuthTokenIssueResult | null>(null);
   const [revokeTarget, setRevokeTarget] = React.useState<AuthTokenListEntry | null>(null);
-  const [revokeErrorMessage, setRevokeErrorMessage] = React.useState<string | null>(null);
 
   const loadTokens = React.useCallback(async () => {
     if (!adminHttp) {
@@ -100,7 +99,6 @@ export function AuthTokensCard({ core }: { core: OperatorCore }): React.ReactEle
     setEditingToken(null);
     setInitialEditExpirationState(null);
     setFormState(defaultFormState());
-    setDialogErrorMessage(null);
     setIssuedToken(null);
   };
 
@@ -113,7 +111,6 @@ export function AuthTokensCard({ core }: { core: OperatorCore }): React.ReactEle
       customExpiresAt: initialFormState.customExpiresAt,
     });
     setFormState(initialFormState);
-    setDialogErrorMessage(null);
     setIssuedToken(null);
   };
 
@@ -122,7 +119,6 @@ export function AuthTokensCard({ core }: { core: OperatorCore }): React.ReactEle
     setDialogMode(null);
     setEditingToken(null);
     setInitialEditExpirationState(null);
-    setDialogErrorMessage(null);
     setDialogBusy(false);
   };
 
@@ -135,12 +131,11 @@ export function AuthTokensCard({ core }: { core: OperatorCore }): React.ReactEle
       initialExpiresAt: dialogMode === "edit" ? (editingToken?.expires_at ?? null) : null,
     });
     if (validationError) {
-      setDialogErrorMessage(validationError);
+      toast.error("Unable to save token", { description: validationError });
       return;
     }
 
     setDialogBusy(true);
-    setDialogErrorMessage(null);
     try {
       if (dialogMode === "create") {
         if (!adminHttp) {
@@ -163,13 +158,15 @@ export function AuthTokensCard({ core }: { core: OperatorCore }): React.ReactEle
       closeDialog(false);
       await loadTokens();
     } catch (error) {
-      setDialogErrorMessage(error instanceof Error ? error.message : "Failed to save token.");
+      toast.error("Unable to save token", {
+        description: error instanceof Error ? error.message : "Failed to save token.",
+      });
     } finally {
       setDialogBusy(false);
     }
   };
 
-  const revokeToken = async (): Promise<void> => {
+  const revokeToken = async () => {
     if (!canMutate) {
       requestEnter();
       throw new Error("Authorize admin access to revoke tokens.");
@@ -178,7 +175,6 @@ export function AuthTokensCard({ core }: { core: OperatorCore }): React.ReactEle
       throw new Error("Select a token to revoke.");
     }
 
-    setRevokeErrorMessage(null);
     try {
       if (!adminHttp) {
         throw new Error("Admin access is required to revoke tenant tokens.");
@@ -191,8 +187,8 @@ export function AuthTokensCard({ core }: { core: OperatorCore }): React.ReactEle
       await loadTokens();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to revoke token.";
-      setRevokeErrorMessage(message);
-      throw error;
+      toast.error("Token revoke failed", { description: message });
+      return false;
     }
   };
 
@@ -254,12 +250,13 @@ export function AuthTokensCard({ core }: { core: OperatorCore }): React.ReactEle
           />
         ) : null}
 
-        {revokeErrorMessage ? (
-          <Alert variant="error" title="Token revoke failed" description={revokeErrorMessage} />
-        ) : null}
-
         {listErrorMessage ? (
-          <Alert variant="error" title="Token list failed" description={listErrorMessage} />
+          <Alert
+            variant="error"
+            title="Token list failed"
+            description={listErrorMessage}
+            onDismiss={() => setListErrorMessage(null)}
+          />
         ) : null}
 
         <div className="grid gap-3 rounded-lg border border-border p-3 lg:grid-cols-[minmax(0,1fr)_12rem_12rem]">
@@ -316,7 +313,6 @@ export function AuthTokensCard({ core }: { core: OperatorCore }): React.ReactEle
         open={dialogMode !== null}
         mode={dialogMode ?? "create"}
         state={formState}
-        errorMessage={dialogErrorMessage}
         saving={dialogBusy}
         onOpenChange={closeDialog}
         onStateChange={setFormState}

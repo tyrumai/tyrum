@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Alert } from "../../ui/alert.js";
 import { Badge, type BadgeVariant } from "../../ui/badge.js";
 import { Card, CardContent } from "../../ui/card.js";
@@ -29,6 +30,12 @@ export interface ExecutorSectionProps {
 }
 
 export function ExecutorSection({ executor, platformLabel }: ExecutorSectionProps) {
+  const [errorDismissed, setErrorDismissed] = useState(false);
+
+  useEffect(() => {
+    setErrorDismissed(false);
+  }, [executor.error]);
+
   const title = `${platformLabel} node executor`;
   const description = `Manage the local ${platformLabel.toLowerCase()} node.`;
 
@@ -58,8 +65,13 @@ export function ExecutorSection({ executor, platformLabel }: ExecutorSectionProp
         </div>
 
         {/* Error alert */}
-        {executor.error ? (
-          <Alert variant="error" title="Executor error" description={executor.error} />
+        {executor.error && !errorDismissed ? (
+          <Alert
+            variant="error"
+            title="Executor error"
+            description={executor.error}
+            onDismiss={() => setErrorDismissed(true)}
+          />
         ) : null}
       </CardContent>
     </Card>

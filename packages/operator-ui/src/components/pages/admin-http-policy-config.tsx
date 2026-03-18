@@ -132,14 +132,6 @@ export function PolicyConfigSection(props: PolicyConfigSectionProps): React.Reac
         />
       ) : null}
 
-      {props.saveError ? (
-        <Alert
-          variant="error"
-          title="Policy save failed"
-          description={formatErrorMessage(props.saveError)}
-        />
-      ) : null}
-
       <div className="grid gap-4">
         <Card data-testid="policy-config-approvals">
           <CardHeader>
@@ -296,14 +288,6 @@ export function PolicyConfigSection(props: PolicyConfigSectionProps): React.Reac
         </CardFooter>
       </Card>
 
-      {props.revertError ? (
-        <Alert
-          variant="error"
-          title="Policy revert failed"
-          description={formatErrorMessage(props.revertError)}
-        />
-      ) : null}
-
       <RevisionHistoryCard
         revisions={props.revisions}
         configUnavailable={props.configUnavailable}
@@ -326,6 +310,7 @@ export function PolicyConfigSection(props: PolicyConfigSectionProps): React.Reac
         isLoading={props.saveBusy}
         onConfirm={async () => {
           const saved = await props.onSave(nextBundle, saveReason);
+          if (saved === false) return false;
           if (!saved) return;
           skipNextPropBundleSignatureRef.current = applyBundleToEditor(nextBundle);
           setSaveReason("");
@@ -359,7 +344,7 @@ export function PolicyConfigSection(props: PolicyConfigSectionProps): React.Reac
         isLoading={props.revertBusy}
         onConfirm={async () => {
           if (!revertTarget) return;
-          await props.onRevert(revertTarget.revision, revertReason);
+          return props.onRevert(revertTarget.revision, revertReason);
         }}
       >
         <div className="grid gap-4">

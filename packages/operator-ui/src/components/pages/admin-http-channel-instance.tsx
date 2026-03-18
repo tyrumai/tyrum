@@ -1,5 +1,6 @@
 import { ChevronDown, ChevronRight, Save, Trash2 } from "lucide-react";
 import * as React from "react";
+import { toast } from "sonner";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 import {
   asChannelRoutingApi,
@@ -12,7 +13,6 @@ import {
   type TelegramChannelConfig,
 } from "./admin-http-channels.shared.js";
 import { ElevatedModeTooltip } from "../elevated-mode/elevated-mode-tooltip.js";
-import { Alert } from "../ui/alert.js";
 import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
@@ -58,8 +58,6 @@ export function TelegramChannelCard({
   const [pipelineEnabled, setPipelineEnabled] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
-  const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
-  const [statusMessage, setStatusMessage] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     setBotTokenRaw("");
@@ -105,8 +103,6 @@ export function TelegramChannelCard({
     }
 
     setSaving(true);
-    setErrorMessage(null);
-    setStatusMessage(null);
     try {
       const result = await mutationApi.updateChannelConfig(
         "telegram",
@@ -125,9 +121,9 @@ export function TelegramChannelCard({
       }
       onUpdated(result.config);
       onChannelConfigsChanged?.();
-      setStatusMessage(`Saved Telegram account ${result.config.account_key}.`);
+      toast.success("Channel updated");
     } catch (error) {
-      setErrorMessage(formatErrorMessage(error));
+      toast.error("Unable to update channel", { description: formatErrorMessage(error) });
     } finally {
       setSaving(false);
     }
@@ -186,13 +182,6 @@ export function TelegramChannelCard({
 
       {expanded ? (
         <CardContent className="grid gap-4">
-          {statusMessage ? (
-            <Alert variant="success" title="Channel updated" description={statusMessage} />
-          ) : null}
-          {errorMessage ? (
-            <Alert variant="error" title="Unable to update channel" description={errorMessage} />
-          ) : null}
-
           <TelegramChannelFields
             testIdPrefix={`channels-instance-${config.account_key}`}
             allowSecretClears={true}
@@ -279,7 +268,6 @@ export function CreateChannelDialog({
   const [allowedUserIdsRaw, setAllowedUserIdsRaw] = React.useState("");
   const [pipelineEnabled, setPipelineEnabled] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
-  const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (open) return;
@@ -290,7 +278,6 @@ export function CreateChannelDialog({
     setAllowedUserIdsRaw("");
     setPipelineEnabled(true);
     setSaving(false);
-    setErrorMessage(null);
   }, [open]);
 
   const parsedAllowedUserIds = React.useMemo(
@@ -317,7 +304,6 @@ export function CreateChannelDialog({
     }
 
     setSaving(true);
-    setErrorMessage(null);
     try {
       const result = await mutationApi.createChannelConfig(
         buildTelegramChannelCreateInput({
@@ -334,7 +320,7 @@ export function CreateChannelDialog({
       onCreated(result.config);
       onOpenChange(false);
     } catch (error) {
-      setErrorMessage(formatErrorMessage(error));
+      toast.error("Unable to add channel", { description: formatErrorMessage(error) });
     } finally {
       setSaving(false);
     }
@@ -390,10 +376,6 @@ export function CreateChannelDialog({
             onAllowedUserIdsChange={setAllowedUserIdsRaw}
             onPipelineEnabledChange={setPipelineEnabled}
           />
-
-          {errorMessage ? (
-            <Alert variant="error" title="Unable to add channel" description={errorMessage} />
-          ) : null}
         </div>
 
         <DialogFooter>

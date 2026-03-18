@@ -67,7 +67,6 @@ export interface DesktopConnectionFields {
   dirty: boolean;
   saving: boolean;
   saved: boolean;
-  saveError: string | null;
   /** Persist connection settings (may trigger restart confirmation). */
   onSave: () => void;
 }

@@ -1,6 +1,8 @@
 import { TyrumHttpClientError } from "@tyrum/client/browser";
 import type { OperatorCore } from "@tyrum/operator-core";
 import * as React from "react";
+import { toast } from "sonner";
+import { formatErrorMessage } from "../../utils/format-error-message.js";
 import type { AdminHttpClient } from "./admin-http-shared.js";
 import {
   AdminAccessGateCard,
@@ -133,13 +135,9 @@ export function AdminHttpPolicyCard({
   const [loadError, setLoadError] = React.useState<unknown>(null);
   const [requiresAdminAccess, setRequiresAdminAccess] = React.useState(false);
   const [saveBusy, setSaveBusy] = React.useState(false);
-  const [saveError, setSaveError] = React.useState<unknown>(null);
   const [revertBusy, setRevertBusy] = React.useState(false);
-  const [revertError, setRevertError] = React.useState<unknown>(null);
   const [createBusy, setCreateBusy] = React.useState(false);
-  const [createError, setCreateError] = React.useState<unknown>(null);
   const [revokeBusy, setRevokeBusy] = React.useState(false);
-  const [revokeError, setRevokeError] = React.useState<unknown>(null);
 
   const requireMutationAccess = React.useCallback((): boolean => {
     if (canMutate) return true;
@@ -214,16 +212,13 @@ export function AdminHttpPolicyCard({
         loadBusy={loadBusy}
         loadError={loadError}
         saveBusy={saveBusy}
-        saveError={saveError}
         revertBusy={revertBusy}
-        revertError={revertError}
         canMutate={canMutate}
         requestEnter={requestEnter}
         onRefresh={() => {
           void loadAll();
         }}
         onSave={async (bundle, reason) => {
-          setSaveError(null);
           if (!requireMutationAccess()) return false;
           setSaveBusy(true);
           try {
@@ -237,14 +232,13 @@ export function AdminHttpPolicyCard({
             await loadAll();
             return true;
           } catch (error) {
-            setSaveError(error);
-            throw error;
+            toast.error("Policy save failed", { description: formatErrorMessage(error) });
+            return false;
           } finally {
             setSaveBusy(false);
           }
         }}
         onRevert={async (revision, reason) => {
-          setRevertError(null);
           if (!requireMutationAccess()) return;
           setRevertBusy(true);
           try {
@@ -257,8 +251,8 @@ export function AdminHttpPolicyCard({
             });
             await loadAll();
           } catch (error) {
-            setRevertError(error);
-            throw error;
+            toast.error("Policy revert failed", { description: formatErrorMessage(error) });
+            return false;
           } finally {
             setRevertBusy(false);
           }
@@ -269,9 +263,7 @@ export function AdminHttpPolicyCard({
         loadBusy={loadBusy}
         loadError={loadError}
         createBusy={createBusy}
-        createError={createError}
         revokeBusy={revokeBusy}
-        revokeError={revokeError}
         canMutate={canMutate}
         requestEnter={requestEnter}
         agents={agents}
@@ -280,7 +272,6 @@ export function AdminHttpPolicyCard({
           void loadAll();
         }}
         onCreate={async (input) => {
-          setCreateError(null);
           if (!requireMutationAccess()) return false;
           setCreateBusy(true);
           try {
@@ -291,14 +282,13 @@ export function AdminHttpPolicyCard({
             await loadAll();
             return true;
           } catch (error) {
-            setCreateError(error);
-            throw error;
+            toast.error("Override creation failed", { description: formatErrorMessage(error) });
+            return false;
           } finally {
             setCreateBusy(false);
           }
         }}
         onRevoke={async (input) => {
-          setRevokeError(null);
           if (!requireMutationAccess()) return;
           setRevokeBusy(true);
           try {
@@ -308,8 +298,8 @@ export function AdminHttpPolicyCard({
             await mutationHttp.policy.revokeOverride(input);
             await loadAll();
           } catch (error) {
-            setRevokeError(error);
-            throw error;
+            toast.error("Override revocation failed", { description: formatErrorMessage(error) });
+            return false;
           } finally {
             setRevokeBusy(false);
           }

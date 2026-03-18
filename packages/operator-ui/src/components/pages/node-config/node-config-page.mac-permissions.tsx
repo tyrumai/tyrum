@@ -1,4 +1,3 @@
-import { Alert } from "../../ui/alert.js";
 import { Button } from "../../ui/button.js";
 
 export interface MacPermissionsContentProps {
@@ -6,7 +5,6 @@ export interface MacPermissionsContentProps {
   summary: string | null;
   checking: boolean;
   requestingPermission: "accessibility" | "screenRecording" | null;
-  errorMessage: string | null;
   onCheck: () => void;
   onRequest: (permission: "accessibility" | "screenRecording") => void;
 }
@@ -49,9 +47,6 @@ export function MacPermissionsContent(props: MacPermissionsContentProps) {
         </Button>
       </div>
       {props.summary ? <div className="text-sm text-fg">{props.summary}</div> : null}
-      {props.errorMessage ? (
-        <Alert variant="error" title="Permission request failed" description={props.errorMessage} />
-      ) : null}
     </div>
   );
 }

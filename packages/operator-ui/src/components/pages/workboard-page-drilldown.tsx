@@ -1,5 +1,5 @@
 import type { DecisionRecord, WorkArtifact, WorkItem, WorkSignal } from "@tyrum/operator-core";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent } from "../ui/card.js";
@@ -55,6 +55,11 @@ export function WorkBoardDrilldown({
   workItemKvEntries,
 }: WorkBoardDrilldownProps) {
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [drilldownErrorDismissed, setDrilldownErrorDismissed] = useState(false);
+
+  useEffect(() => {
+    setDrilldownErrorDismissed(false);
+  }, [drilldownError]);
 
   return (
     <Card>
@@ -64,8 +69,13 @@ export function WorkBoardDrilldown({
           <div className="text-sm text-fg-muted">Select a WorkItem to inspect details.</div>
         ) : drilldownBusy ? (
           <LoadingState />
-        ) : drilldownError ? (
-          <Alert variant="error" title="Drilldown error" description={drilldownError} />
+        ) : drilldownError && !drilldownErrorDismissed ? (
+          <Alert
+            variant="error"
+            title="Drilldown error"
+            description={drilldownError}
+            onDismiss={() => setDrilldownErrorDismissed(true)}
+          />
         ) : !selectedItem ? (
           <InlineEmptyHint>WorkItem not loaded.</InlineEmptyHint>
         ) : (

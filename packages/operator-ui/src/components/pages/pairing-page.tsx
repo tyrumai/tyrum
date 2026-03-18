@@ -326,6 +326,7 @@ export function PairingPage({ core }: { core: OperatorCore }) {
   const [expandedRowKey, setExpandedRowKey] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [stateFilter, setStateFilter] = useState<StateFilter>("all");
+  const [inventoryErrorDismissed, setInventoryErrorDismissed] = useState(false);
 
   const inventory = useNodeInventory({
     core,
@@ -335,6 +336,10 @@ export function PairingPage({ core }: { core: OperatorCore }) {
     activeSession: chat.active.session,
     refreshAt: pairing.lastSyncedAt,
   });
+
+  useEffect(() => {
+    setInventoryErrorDismissed(false);
+  }, [inventory.error]);
 
   const rows = useMemo(
     () =>
@@ -369,8 +374,13 @@ export function PairingPage({ core }: { core: OperatorCore }) {
 
   return (
     <AppPage contentClassName="max-w-5xl gap-5">
-      {inventory.error ? (
-        <Alert variant="error" title="Live node status unavailable" description={inventory.error} />
+      {inventory.error && !inventoryErrorDismissed ? (
+        <Alert
+          variant="error"
+          title="Live node status unavailable"
+          description={inventory.error}
+          onDismiss={() => setInventoryErrorDismissed(true)}
+        />
       ) : null}
 
       <div className="grid gap-3">

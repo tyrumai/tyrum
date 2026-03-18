@@ -24,12 +24,10 @@ export interface PolicyConfigSectionProps {
   loadBusy: boolean;
   loadError: unknown;
   saveBusy: boolean;
-  saveError: unknown;
   revertBusy: boolean;
-  revertError: unknown;
   canMutate: boolean;
   requestEnter: () => void;
   onRefresh: () => void;
   onSave: (bundle: PolicyBundleT, reason: string) => Promise<boolean>;
-  onRevert: (revision: number, reason: string) => Promise<void>;
+  onRevert: (revision: number, reason: string) => Promise<void | false>;
 }

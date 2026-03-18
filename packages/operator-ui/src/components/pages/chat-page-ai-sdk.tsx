@@ -101,6 +101,17 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
   const agentsError = chat.agents.error?.message ?? null;
   const activeError = chat.active.error?.message ?? null;
 
+  const [agentsErrorDismissed, setAgentsErrorDismissed] = useState(false);
+  const [activeErrorDismissed, setActiveErrorDismissed] = useState(false);
+
+  useEffect(() => {
+    setAgentsErrorDismissed(false);
+  }, [agentsError]);
+
+  useEffect(() => {
+    setActiveErrorDismissed(false);
+  }, [activeError]);
+
   useEffect(() => {
     if (!lgUp && !chat.active.sessionId) {
       setMobileView("threads");
@@ -251,9 +262,14 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
       className="relative flex h-full w-full flex-1 flex-col overflow-hidden bg-bg"
       data-testid="chat-page"
     >
-      {agentsError ? (
+      {agentsError && !agentsErrorDismissed ? (
         <div className="absolute inset-x-0 top-0 z-10 p-4">
-          <Alert variant="error" title="Failed to load agents" description={agentsError} />
+          <Alert
+            variant="error"
+            title="Failed to load agents"
+            description={agentsError}
+            onDismiss={() => setAgentsErrorDismissed(true)}
+          />
         </div>
       ) : null}
 
@@ -349,11 +365,12 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
             />
           ) : (
             <div className="flex flex-1 items-center justify-center px-6">
-              {activeError ? (
+              {activeError && !activeErrorDismissed ? (
                 <Alert
                   variant="error"
                   title="Failed to load conversation"
                   description={activeError}
+                  onDismiss={() => setActiveErrorDismissed(true)}
                 />
               ) : (
                 <div className="grid max-w-sm justify-items-center gap-3 text-center">

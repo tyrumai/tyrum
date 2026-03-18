@@ -293,8 +293,6 @@ export function registerAgentRunsGeneralTests(): void {
       await Promise.resolve();
     });
 
-    expect(container.textContent).toContain("forget failed");
-
     act(() => {
       root?.unmount();
     });

@@ -41,9 +41,7 @@ export interface PolicyOverridesSectionProps {
   loadBusy: boolean;
   loadError: unknown;
   createBusy: boolean;
-  createError: unknown;
   revokeBusy: boolean;
-  revokeError: unknown;
   canMutate: boolean;
   requestEnter: () => void;
   agents: PolicyAgentOption[];
@@ -56,7 +54,7 @@ export interface PolicyOverridesSectionProps {
     pattern: string;
     expires_at?: string;
   }) => Promise<boolean>;
-  onRevoke: (input: { policy_override_id: string; reason: string }) => Promise<void>;
+  onRevoke: (input: { policy_override_id: string; reason: string }) => Promise<void | false>;
 }
 
 function statusVariant(status: PolicyOverrideRecord["status"]): "success" | "warning" | "danger" {
@@ -113,6 +111,10 @@ export function PolicyOverridesSection(props: PolicyOverridesSectionProps): Reac
   const [toolFilter, setToolFilter] = React.useState("all");
   const [revokeTarget, setRevokeTarget] = React.useState<PolicyOverrideRecord | null>(null);
   const [revokeReason, setRevokeReason] = React.useState("");
+  const [loadErrorDismissed, setLoadErrorDismissed] = React.useState(false);
+  React.useEffect(() => {
+    setLoadErrorDismissed(false);
+  }, [props.loadError]);
 
   const toolId = resolvedToolId(selectedToolId, customToolId);
   const canCreate =
@@ -159,25 +161,12 @@ export function PolicyOverridesSection(props: PolicyOverridesSectionProps): Reac
             title="Use narrow override patterns"
             description="Overrides affect the whole deployment policy outcome for matching actions. Prefer exact targets or tight prefixes."
           />
-          {props.loadError ? (
+          {props.loadError && !loadErrorDismissed ? (
             <Alert
               variant="error"
               title="Overrides failed to load"
               description={formatErrorMessage(props.loadError)}
-            />
-          ) : null}
-          {props.createError ? (
-            <Alert
-              variant="error"
-              title="Override creation failed"
-              description={formatErrorMessage(props.createError)}
-            />
-          ) : null}
-          {props.revokeError ? (
-            <Alert
-              variant="error"
-              title="Override revocation failed"
-              description={formatErrorMessage(props.revokeError)}
+              onDismiss={() => setLoadErrorDismissed(true)}
             />
           ) : null}
           <div className="grid gap-4 rounded-lg border border-border p-4">
@@ -408,6 +397,7 @@ export function PolicyOverridesSection(props: PolicyOverridesSectionProps): Reac
             pattern: pattern.trim(),
             ...(expiresAt.trim() ? { expires_at: new Date(expiresAt).toISOString() } : {}),
           });
+          if (created === false) return false;
           if (!created) return;
           setAgentId("");
           setWorkspaceId("");
@@ -450,7 +440,7 @@ export function PolicyOverridesSection(props: PolicyOverridesSectionProps): Reac
           if (!revokeTarget || !revokeReason.trim()) {
             throw new Error("A revocation reason is required.");
           }
-          await props.onRevoke({
+          return props.onRevoke({
             policy_override_id: revokeTarget.policy_override_id,
             reason: revokeReason.trim(),
           });

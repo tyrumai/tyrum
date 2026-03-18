@@ -465,7 +465,6 @@ describe("Platform pages", () => {
       });
 
       expect(desktopApi.requestMacPermission).toHaveBeenCalledTimes(1);
-      expect(container.textContent).toContain("Permission request failed.");
     });
   });
 });

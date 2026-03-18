@@ -1,6 +1,7 @@
 import type { OperatorCore } from "@tyrum/operator-core";
 import { Plus, RefreshCw } from "lucide-react";
 import * as React from "react";
+import { toast } from "sonner";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 import {
   asChannelRoutingApi,
@@ -39,7 +40,6 @@ export function AdminHttpChannelConfigsPanel({
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
-  const [statusMessage, setStatusMessage] = React.useState<string | null>(null);
   const [configs, setConfigs] = React.useState<TelegramChannelConfig[]>([]);
   const [expandedKeys, setExpandedKeys] = React.useState<string[]>([]);
   const [createDialogOpen, setCreateDialogOpen] = React.useState(false);
@@ -85,10 +85,6 @@ export function AdminHttpChannelConfigsPanel({
         description="Channel config updates are live as soon as they are saved. Secret values remain write-only."
       />
 
-      {statusMessage ? (
-        <Alert variant="success" title="Channel updated" description={statusMessage} />
-      ) : null}
-
       <Card>
         <CardHeader className="pb-2.5">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -132,7 +128,12 @@ export function AdminHttpChannelConfigsPanel({
 
         <CardContent className="grid gap-4">
           {errorMessage ? (
-            <Alert variant="error" title="Unable to load channels" description={errorMessage} />
+            <Alert
+              variant="error"
+              title="Unable to load channels"
+              description={errorMessage}
+              onDismiss={() => setErrorMessage(null)}
+            />
           ) : null}
 
           {loading ? (
@@ -169,7 +170,7 @@ export function AdminHttpChannelConfigsPanel({
                   onDeleted={(accountKey) => {
                     setConfigs((current) => removeConfig(current, accountKey));
                     setExpandedKeys((current) => current.filter((value) => value !== accountKey));
-                    setStatusMessage(`Removed Telegram account ${accountKey}.`);
+                    toast.success(`Removed Telegram account ${accountKey}.`);
                   }}
                   onChannelConfigsChanged={onChannelConfigsChanged}
                   mutationApi={mutationApi}
@@ -193,7 +194,7 @@ export function AdminHttpChannelConfigsPanel({
           setExpandedKeys((current) =>
             current.includes(config.account_key) ? current : [...current, config.account_key],
           );
-          setStatusMessage(`Added Telegram account ${config.account_key}.`);
+          toast.success(`Added Telegram account ${config.account_key}.`);
           onChannelConfigsChanged?.();
         }}
       />

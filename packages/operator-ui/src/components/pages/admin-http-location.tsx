@@ -211,10 +211,20 @@ export function AdminHttpLocationPanel({ core }: { core: OperatorCore }) {
   return (
     <div className="grid gap-4" data-testid="admin-http-location">
       {loadError ? (
-        <Alert variant="error" title="Failed to load location settings" description={loadError} />
+        <Alert
+          variant="error"
+          title="Failed to load location settings"
+          description={loadError}
+          onDismiss={() => setLoadError(null)}
+        />
       ) : null}
       {mutationError ? (
-        <Alert variant="error" title="Location update failed" description={mutationError} />
+        <Alert
+          variant="error"
+          title="Location update failed"
+          description={mutationError}
+          onDismiss={() => setMutationError(null)}
+        />
       ) : null}
 
       <LocationProfileCard

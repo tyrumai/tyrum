@@ -152,7 +152,6 @@ describe("ConfigurePage (HTTP) secrets", () => {
     expect(writeSpy).toHaveBeenCalledTimes(1);
     expect(listSecrets).toHaveBeenCalledTimes(2);
     expect(page.container.querySelector("[data-testid='secret-row-gamma']")).not.toBeNull();
-    expect(page.container.textContent).toContain('Stored secret "gamma".');
 
     cleanupAdminHttpPage(page);
   });

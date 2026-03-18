@@ -441,7 +441,12 @@ export function AdminHttpRoutingConfigPanel({ core }: { core: OperatorCore }): R
         </CardHeader>
         <CardContent className="grid gap-4">
           {errorMessage ? (
-            <Alert variant="error" title="Channels routing failed" description={errorMessage} />
+            <Alert
+              variant="error"
+              title="Channels routing failed"
+              description={errorMessage}
+              onDismiss={() => setErrorMessage(null)}
+            />
           ) : null}
 
           <div className="flex flex-wrap items-center justify-between gap-3">

@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import type { DesktopApi, DesktopBackgroundState } from "../../../desktop-api.js";
 import { formatErrorMessage } from "../../../utils/format-error-message.js";
 import {
@@ -55,7 +56,6 @@ export function useDesktopConnectionState(
 
   const [generalSaving, setGeneralSaving] = useState(false);
   const [generalSaved, setGeneralSaved] = useState(false);
-  const [generalError, setGeneralError] = useState<string | null>(null);
 
   const initialConnectionRef = useRef<ConnectionState | null>(null);
   const operatorConnectionRequestRef = useRef(0);
@@ -109,14 +109,13 @@ export function useDesktopConnectionState(
 
     const validationError = validateConnectionState(connection);
     if (validationError) {
-      setGeneralError(validationError);
+      toast.error("Save failed", { description: validationError });
       setGeneralSaved(false);
       return;
     }
 
     saveInFlightRef.current = true;
     setGeneralSaving(true);
-    setGeneralError(null);
     setGeneralSaved(false);
 
     const previousConnection = initialConnectionRef.current
@@ -165,11 +164,12 @@ export function useDesktopConnectionState(
         }
 
         await refreshCurrentOperatorConnection();
-        setGeneralError(null);
         setGeneralSaved(true);
         setTimeout(() => setGeneralSaved(false), 2_000);
       })
-      .catch((error: unknown) => setGeneralError(formatErrorMessage(error)))
+      .catch((error: unknown) => {
+        toast.error("Save failed", { description: formatErrorMessage(error) });
+      })
       .finally(() => {
         saveInFlightRef.current = false;
         setGeneralSaving(false);
@@ -253,7 +253,6 @@ export function useDesktopConnectionState(
       dirty: generalDirty,
       saving: generalSaving,
       saved: generalSaved,
-      saveError: generalError,
       onSave: saveGeneral,
     }),
     [
@@ -265,7 +264,6 @@ export function useDesktopConnectionState(
       currentTokenError,
       currentTokenLoading,
       generalDirty,
-      generalError,
       generalSaved,
       generalSaving,
       saveGeneral,

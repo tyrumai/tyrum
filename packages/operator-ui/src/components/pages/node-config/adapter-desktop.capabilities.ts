@@ -1,4 +1,5 @@
 import { createElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import type { DesktopApi } from "../../../desktop-api.js";
 import { formatErrorMessage } from "../../../utils/format-error-message.js";
 import type { CapFlags } from "../../../utils/permission-profile.js";
@@ -83,7 +84,6 @@ export function useDesktopCapabilities(input: UseDesktopCapabilitiesInput): Norm
   const [requestingMacPermission, setRequestingMacPermission] = useState<
     "accessibility" | "screenRecording" | null
   >(null);
-  const [macPermissionError, setMacPermissionError] = useState<string | null>(null);
 
   const mountedRef = useRef(true);
 
@@ -99,7 +99,6 @@ export function useDesktopCapabilities(input: UseDesktopCapabilitiesInput): Norm
   const checkMacPermissions = useCallback(() => {
     if (!api.checkMacPermissions || macPermissionChecking) return;
     setMacPermissionChecking(true);
-    setMacPermissionError(null);
     void api
       .checkMacPermissions()
       .then((snapshot) =>
@@ -107,7 +106,9 @@ export function useDesktopCapabilities(input: UseDesktopCapabilitiesInput): Norm
           describeMacPermissionSummary(snapshot as MacPermissionSnapshot | null),
         ),
       )
-      .catch((error: unknown) => setMacPermissionError(formatErrorMessage(error)))
+      .catch((error: unknown) => {
+        toast.error("Permission request failed", { description: formatErrorMessage(error) });
+      })
       .finally(() => setMacPermissionChecking(false));
   }, [api, macPermissionChecking]);
 
@@ -115,7 +116,6 @@ export function useDesktopCapabilities(input: UseDesktopCapabilitiesInput): Norm
     (permission: "accessibility" | "screenRecording") => {
       if (!api.requestMacPermission || requestingMacPermission !== null) return;
       setRequestingMacPermission(permission);
-      setMacPermissionError(null);
       void api
         .requestMacPermission(permission)
         .then(() => {
@@ -134,7 +134,9 @@ export function useDesktopCapabilities(input: UseDesktopCapabilitiesInput): Norm
               });
           }
         })
-        .catch((error: unknown) => setMacPermissionError(formatErrorMessage(error)))
+        .catch((error: unknown) => {
+          toast.error("Permission request failed", { description: formatErrorMessage(error) });
+        })
         .finally(() => setRequestingMacPermission(null));
     },
     [api, requestingMacPermission],
@@ -186,7 +188,6 @@ export function useDesktopCapabilities(input: UseDesktopCapabilitiesInput): Norm
       summary: macPermissionSummary,
       checking: macPermissionChecking,
       requestingPermission: requestingMacPermission,
-      errorMessage: macPermissionError,
       onCheck: checkMacPermissions,
       onRequest: requestMacPermission,
     });
@@ -342,7 +343,6 @@ export function useDesktopCapabilities(input: UseDesktopCapabilitiesInput): Norm
     buildTestActions,
     checkMacPermissions,
     macPermissionChecking,
-    macPermissionError,
     macPermissionSummary,
     requestMacPermission,
     requestingMacPermission,
