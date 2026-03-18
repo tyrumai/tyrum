@@ -11,6 +11,7 @@ const archivedDefaults = {
   archivedThreads: [],
   archivedLoading: false,
   archivedLoaded: false,
+  archivedHasError: false,
   canLoadMoreArchived: false,
   onArchiveThread: vi.fn(),
   onUnarchiveThread: vi.fn(),

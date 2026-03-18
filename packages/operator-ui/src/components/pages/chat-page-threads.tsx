@@ -38,6 +38,7 @@ export function ChatThreadsPanel({
   archivedThreads,
   archivedLoading,
   archivedLoaded,
+  archivedHasError,
   canLoadMoreArchived,
   onArchiveThread,
   onUnarchiveThread,
@@ -62,6 +63,7 @@ export function ChatThreadsPanel({
   archivedThreads: ChatThreadSummary[];
   archivedLoading: boolean;
   archivedLoaded: boolean;
+  archivedHasError: boolean;
   canLoadMoreArchived: boolean;
   onArchiveThread: (sessionId: string) => void;
   onUnarchiveThread: (sessionId: string) => void;
@@ -174,6 +176,7 @@ export function ChatThreadsPanel({
                 threads={archivedThreads}
                 loading={archivedLoading}
                 loaded={archivedLoaded}
+                hasError={archivedHasError}
                 canLoadMore={canLoadMoreArchived}
                 activeSessionId={activeSessionId}
                 onExpand={onLoadArchived}
@@ -250,6 +253,7 @@ function ArchivedSection({
   threads,
   loading,
   loaded,
+  hasError,
   canLoadMore,
   activeSessionId,
   onExpand,
@@ -260,6 +264,7 @@ function ArchivedSection({
   threads: ChatThreadSummary[];
   loading: boolean;
   loaded: boolean;
+  hasError: boolean;
   canLoadMore: boolean;
   activeSessionId: string | null;
   onExpand: () => void;
@@ -270,10 +275,10 @@ function ArchivedSection({
   const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
-    if (expanded && !loaded && !loading) {
+    if (expanded && !loaded && !loading && !hasError) {
       onExpand();
     }
-  }, [expanded, loaded, loading, onExpand]);
+  }, [expanded, loaded, loading, hasError, onExpand]);
 
   const handleToggle = () => {
     const next = !expanded;

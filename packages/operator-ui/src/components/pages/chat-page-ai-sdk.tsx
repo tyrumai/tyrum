@@ -300,6 +300,7 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
             archivedThreads={archivedThreads}
             archivedLoading={chat.archivedSessions.loading}
             archivedLoaded={chat.archivedSessions.loaded}
+            archivedHasError={Boolean(chat.archivedSessions.error)}
             canLoadMoreArchived={Boolean(chat.archivedSessions.nextCursor)}
             onArchiveThread={(sessionId) => {
               void core.chatStore.archiveSession(sessionId);
