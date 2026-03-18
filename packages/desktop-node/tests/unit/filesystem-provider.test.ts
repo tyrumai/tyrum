@@ -39,6 +39,15 @@ afterEach(async () => {
 // ---------------------------------------------------------------------------
 
 describe("read", () => {
+  it("normalizes the sandbox root path to dot", () => {
+    const rel = (
+      provider as unknown as {
+        rel: (absolutePath: string) => string;
+      }
+    ).rel(sandboxRoot);
+    expect(rel).toBe(".");
+  });
+
   it("reads a file successfully", async () => {
     await writeFile(join(sandboxRoot, "hello.txt"), "hello world", "utf-8");
     const result = await provider.execute(makeAction({ op: "read", path: "hello.txt" }));

@@ -82,7 +82,7 @@ export class FilesystemProvider implements CapabilityProvider {
 
   private rel(absolutePath: string): string {
     const r = relative(this.sandboxRoot, absolutePath);
-    return r.length > 0 ? r : absolutePath;
+    return r.length > 0 ? r : ".";
   }
 
   private async read(args: FsReadArgs): Promise<TaskResult> {
