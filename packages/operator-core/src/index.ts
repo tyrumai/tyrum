@@ -140,10 +140,14 @@ export type {
   WorkStateKVScope,
 } from "@tyrum/schemas";
 export {
+  CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   capabilityDescriptorsForClientCapability,
   checkPostcondition,
+  descriptorIdsForClientCapability,
   deviceIdFromSha256Digest,
+  migrateCapabilityDescriptorId,
 } from "@tyrum/schemas";
+export type { WsCapabilityReadyPayload } from "@tyrum/schemas";
 export type {
   DeviceIdentity,
   CapabilityProvider,

@@ -1,6 +1,8 @@
 import type { WebSocket } from "ws";
 import type {
   CapabilityDescriptor,
+  DevicePlatform,
+  DeviceType,
   NodeCapabilityState,
   WsEventEnvelope,
   WsRequestEnvelope,
@@ -13,6 +15,9 @@ export interface ConnectedClient {
   readonly ws: WebSocket;
   readonly role: "client" | "node";
   readonly device_id?: string;
+  readonly device_type?: DeviceType;
+  readonly device_platform?: DevicePlatform;
+  readonly device_model?: string;
   readonly auth_claims?: AuthTokenClaims;
   readonly protocol_rev: number;
   readonly capabilities: readonly CapabilityDescriptor[];
@@ -50,6 +55,9 @@ export class ConnectionManager {
       id?: string;
       role?: "client" | "node";
       deviceId?: string;
+      deviceType?: DeviceType;
+      devicePlatform?: DevicePlatform;
+      deviceModel?: string;
       authClaims?: AuthTokenClaims;
       protocolRev?: number;
     },
@@ -62,6 +70,9 @@ export class ConnectionManager {
       ws,
       role,
       device_id: opts?.deviceId,
+      device_type: opts?.deviceType,
+      device_platform: opts?.devicePlatform,
+      device_model: opts?.deviceModel,
       auth_claims: opts?.authClaims,
       protocol_rev: opts?.protocolRev ?? 1,
       capabilities,

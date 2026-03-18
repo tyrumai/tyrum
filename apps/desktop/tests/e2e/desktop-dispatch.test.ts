@@ -31,6 +31,7 @@ import { resolvePermissions } from "../../src/main/config/permissions.js";
 import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   descriptorIdsForClientCapability,
+  migrateCapabilityDescriptorId,
 } from "@tyrum/schemas";
 import { AuthTokenService } from "../../../../packages/gateway/src/modules/auth/auth-token-service.js";
 import { DEFAULT_TENANT_ID } from "../../../../packages/gateway/src/modules/identity/scope.js";
@@ -45,10 +46,12 @@ const approvedNodePairingDal = {
       capability_allowlist: [
         ...descriptorIdsForClientCapability("desktop"),
         ...descriptorIdsForClientCapability("cli"),
-      ].map((id) => ({
-        id,
-        version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-      })),
+      ]
+        .flatMap(migrateCapabilityDescriptorId)
+        .map((id) => ({
+          id,
+          version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+        })),
     }) as never,
 } as never;
 
@@ -85,7 +88,11 @@ async function waitForCapabilities(
   timeoutMs = 2_000,
 ): Promise<void> {
   const required = [
-    ...new Set(capabilities.flatMap((capability) => descriptorIdsForClientCapability(capability))),
+    ...new Set(
+      capabilities
+        .flatMap((capability) => descriptorIdsForClientCapability(capability))
+        .flatMap(migrateCapabilityDescriptorId),
+    ),
   ];
   const deadline = Date.now() + timeoutMs;
 

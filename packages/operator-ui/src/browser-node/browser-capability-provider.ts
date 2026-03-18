@@ -235,6 +235,7 @@ export function createBrowserCapabilityProvider(options: {
 }): CapabilityProvider {
   return {
     capability: "browser",
+    capabilityIds: ["tyrum.location.get", "tyrum.camera.capture-photo", "tyrum.audio.record"],
     async execute(action: ActionPrimitive, ctx?: TaskExecuteContext): Promise<TaskResult> {
       if (action.type !== "Browser") {
         return {

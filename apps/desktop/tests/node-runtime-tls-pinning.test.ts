@@ -18,6 +18,14 @@ vi.mock("@tyrum/operator-core/node", () => {
   return {
     TyrumClient,
     autoExecute: vi.fn(),
+    createManagedNodeClientLifecycle: vi.fn(
+      (input: { client: unknown; providers?: unknown[] }) => ({
+        client: input.client,
+        connect: vi.fn(),
+        publishCapabilityState: vi.fn(),
+        dispose: vi.fn(),
+      }),
+    ),
   };
 });
 

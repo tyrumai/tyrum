@@ -170,6 +170,7 @@ async function recordAudioClip(
 export function createMobileCapabilityProvider(platform: MobileHostPlatform): CapabilityProvider {
   return {
     capability: platform,
+    capabilityIds: ["tyrum.location.get", "tyrum.camera.capture-photo", "tyrum.audio.record"],
     async execute(action: ActionPrimitive, _ctx?: TaskExecuteContext): Promise<TaskResult> {
       const argsResult =
         platform === "ios"

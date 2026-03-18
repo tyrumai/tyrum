@@ -1,4 +1,5 @@
 export { autoExecute } from "./capability.js";
+export { InteractionTracker } from "./interaction-tracker.js";
 export {
   createTyrumAiSdkChatSessionClient,
   createTyrumAiSdkChatTransport,

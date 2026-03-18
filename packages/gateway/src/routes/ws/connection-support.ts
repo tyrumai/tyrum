@@ -1,6 +1,8 @@
 import { createPublicKey, verify } from "node:crypto";
 import {
   type CapabilityDescriptor,
+  type DevicePlatform,
+  type DeviceType,
   normalizeCapabilityDescriptors,
   type WsEventEnvelope,
   type WsPeerRole,
@@ -20,6 +22,9 @@ export interface PendingInit {
   platform?: string;
   version?: string;
   mode?: string;
+  deviceType?: DeviceType;
+  devicePlatform?: DevicePlatform;
+  deviceModel?: string;
   capabilities: CapabilityDescriptor[];
   connectionId: string;
   challenge: string;

@@ -22,10 +22,7 @@ import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { dispatchTask, type ProtocolDeps } from "../../src/ws/protocol.js";
 import { TyrumClient } from "../../../client/src/ws-client.js";
 import { generateKeyPairSync } from "node:crypto";
-import {
-  CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-  descriptorIdForClientCapability,
-} from "@tyrum/schemas";
+import { CAPABILITY_DESCRIPTOR_DEFAULT_VERSION } from "@tyrum/schemas";
 import { waitForCondition } from "../helpers/wait-for.js";
 import type { AuthTokenService } from "../../src/modules/auth/auth-token-service.js";
 
@@ -196,7 +193,7 @@ describe("E2E smoke test", () => {
               status: "approved",
               capability_allowlist: [
                 {
-                  id: descriptorIdForClientCapability("http"),
+                  id: "tyrum.http.request",
                   version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
                 },
               ],

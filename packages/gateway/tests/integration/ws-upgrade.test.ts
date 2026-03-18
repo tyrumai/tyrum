@@ -13,7 +13,7 @@ import { createServer } from "node:http";
 import type { Server } from "node:http";
 import { getRequestListener } from "@hono/node-server";
 import { Hono } from "hono";
-import { descriptorIdForClientCapability } from "@tyrum/schemas";
+import { BROWSER_AUTOMATION_CAPABILITY_IDS } from "@tyrum/schemas";
 import { createWsHandler } from "../../src/routes/ws.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { TyrumClient } from "../../../client/src/ws-client.js";
@@ -124,8 +124,11 @@ describe("WebSocket upgrade", () => {
 
     const stats = srv.connectionManager.getStats();
     expect(stats.totalClients).toBe(1);
-    expect(stats.capabilityCounts[descriptorIdForClientCapability("playwright")]).toBe(1);
-    expect(stats.capabilityCounts[descriptorIdForClientCapability("http")]).toBe(1);
+    // "playwright" expands to all browser automation IDs; "http" migrates to tyrum.http.request
+    for (const browserId of BROWSER_AUTOMATION_CAPABILITY_IDS) {
+      expect(stats.capabilityCounts[browserId]).toBe(1);
+    }
+    expect(stats.capabilityCounts["tyrum.http.request"]).toBe(1);
   });
 
   it("registers client capabilities correctly in ConnectionManager", async () => {
@@ -150,20 +153,16 @@ describe("WebSocket upgrade", () => {
     await connectedP;
     await delay(50);
 
-    // Verify capability-based lookup works
-    const cliClient = srv.connectionManager.getClientForCapability(
-      descriptorIdForClientCapability("cli"),
-    );
+    // Verify capability-based lookup works (cli migrates to tyrum.cli.execute)
+    const cliClient = srv.connectionManager.getClientForCapability("tyrum.cli.execute");
     expect(cliClient).toBeDefined();
     expect(cliClient!.capabilities).toContainEqual({
-      id: descriptorIdForClientCapability("cli"),
+      id: "tyrum.cli.execute",
       version: "1.0.0",
     });
 
-    // Should NOT find a "playwright" client
-    const pwClient = srv.connectionManager.getClientForCapability(
-      descriptorIdForClientCapability("playwright"),
-    );
+    // Should NOT find a browser automation client (only cli was advertised)
+    const pwClient = srv.connectionManager.getClientForCapability("tyrum.browser.navigate");
     expect(pwClient).toBeUndefined();
   });
 

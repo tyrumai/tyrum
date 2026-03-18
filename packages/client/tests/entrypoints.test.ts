@@ -13,8 +13,8 @@ describe("@tyrum/client entrypoints", () => {
 
     expect(typeof browserEntry["createBrowserLocalStorageDeviceIdentityStorage"]).toBe("function");
     expect(typeof browserEntry["createManagedNodeClientLifecycle"]).toBe("function");
+    expect(typeof nodeEntry["createManagedNodeClientLifecycle"]).toBe("function");
     expect("createBrowserLocalStorageDeviceIdentityStorage" in nodeEntry).toBe(false);
-    expect("createManagedNodeClientLifecycle" in nodeEntry).toBe(false);
     expect("createManagedNodeClientLifecycle" in rootEntry).toBe(false);
   });
 

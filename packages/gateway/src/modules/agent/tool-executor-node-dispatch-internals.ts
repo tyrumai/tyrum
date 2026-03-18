@@ -29,6 +29,10 @@ export function stripNodeListControlState(
       ...(node.version ? { version: node.version } : {}),
       connected: node.connected,
       ...(node.last_seen_at ? { last_seen_at: node.last_seen_at } : {}),
+      ...(node.device ? { device: node.device } : {}),
+      ...(node.last_tyrum_interaction_at
+        ? { last_tyrum_interaction_at: node.last_tyrum_interaction_at }
+        : {}),
       ...(filters.capability
         ? {
             matched_capabilities: node.capabilities

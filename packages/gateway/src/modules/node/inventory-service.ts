@@ -1,6 +1,8 @@
 import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   type CapabilityDescriptor,
+  type DevicePlatform,
+  type DeviceType,
   type NodeCapabilityState,
   type NodeCapabilitySummary,
   type NodeInventoryEntry,
@@ -21,6 +23,9 @@ type InventoryNode = {
   label?: string;
   mode?: string;
   version?: string;
+  deviceType?: DeviceType;
+  devicePlatform?: DevicePlatform;
+  deviceModel?: string;
   connected: boolean;
   capabilities: Map<string, CapabilityDescriptor>;
   readyCapabilities: Map<string, CapabilityDescriptor>;
@@ -58,6 +63,9 @@ function upsertNode(map: Map<string, InventoryNode>, next: InventoryNode): void 
   existing.label = existing.label ?? next.label;
   existing.mode = existing.mode ?? next.mode;
   existing.version = existing.version ?? next.version;
+  existing.deviceType = existing.deviceType ?? next.deviceType;
+  existing.devicePlatform = existing.devicePlatform ?? next.devicePlatform;
+  existing.deviceModel = existing.deviceModel ?? next.deviceModel;
   existing.lastSeenAtMs = Math.max(existing.lastSeenAtMs ?? 0, next.lastSeenAtMs ?? 0) || undefined;
   existing.connected ||= next.connected;
   for (const [capabilityId, capability] of next.capabilities) {
@@ -78,6 +86,9 @@ function fromDirectoryRow(row: ConnectionDirectoryRow): InventoryNode | undefine
     label: row.label ?? undefined,
     mode: row.mode ?? undefined,
     version: row.version ?? undefined,
+    deviceType: row.device_type ?? undefined,
+    devicePlatform: row.device_platform ?? undefined,
+    deviceModel: row.device_model ?? undefined,
     connected: true,
     capabilities: capabilityMap(row.capabilities),
     readyCapabilities: capabilityMap(row.ready_capabilities),
@@ -90,6 +101,9 @@ function fromConnectedClient(client: ConnectedClient): InventoryNode | undefined
   if (client.role !== "node" || !client.device_id) return undefined;
   return {
     nodeId: client.device_id,
+    deviceType: client.device_type,
+    devicePlatform: client.device_platform,
+    deviceModel: client.device_model,
     connected: true,
     capabilities: capabilityMap(client.capabilities),
     readyCapabilities: capabilityMap(client.readyCapabilities),
@@ -154,6 +168,31 @@ export class NodeInventoryService {
             lane: attachmentLane,
           })
         : undefined;
+
+    // Build a lookup of last Tyrum interaction timestamps from presence data.
+    // Presence entries store `last_input_seconds` (relative) and `last_seen_at_ms` (absolute).
+    const presenceByNodeId = new Map<string, { lastTyrumInteractionAt: string }>();
+    if (this.deps.presenceDal) {
+      const presenceEntries = await this.deps.presenceDal.listNonExpired(nowMs, 500);
+      for (const entry of presenceEntries) {
+        if (entry.role !== "node" || entry.last_input_seconds == null) continue;
+        const interactionMs = entry.last_seen_at_ms - entry.last_input_seconds * 1000;
+        if (interactionMs > 0) {
+          // Use connection_id to correlate — find which node this presence entry belongs to.
+          // The connection_id on the presence entry matches a ConnectedClient.id, and we need
+          // the device_id (node_id) from that client. Build the mapping from connected clients.
+          const connectionId = entry.connection_id;
+          if (connectionId) {
+            const client = this.deps.connectionManager.getClient(connectionId);
+            if (client?.device_id) {
+              presenceByNodeId.set(client.device_id, {
+                lastTyrumInteractionAt: new Date(interactionMs).toISOString(),
+              });
+            }
+          }
+        }
+      }
+    }
 
     const filteredCapability = input.capability?.trim() || undefined;
     const dispatchableOnly = input.dispatchableOnly === true;
@@ -252,6 +291,15 @@ export class NodeInventoryService {
           : {}),
         ...(node.lastSeenAtMs ? { last_seen_at: new Date(node.lastSeenAtMs).toISOString() } : {}),
         capabilities: summaries,
+        device:
+          node.deviceType || node.devicePlatform || node.deviceModel
+            ? {
+                ...(node.deviceType ? { type: node.deviceType } : {}),
+                ...(node.devicePlatform ? { platform: node.devicePlatform } : {}),
+                ...(node.deviceModel ? { model: node.deviceModel } : {}),
+              }
+            : undefined,
+        last_tyrum_interaction_at: presenceByNodeId.get(nodeId)?.lastTyrumInteractionAt,
       });
     }
 

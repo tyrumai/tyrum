@@ -78,6 +78,11 @@ export const TEST_ACTION_DEFINITIONS: Readonly<Record<string, readonly TestActio
       actionName: "navigate",
       defaultInput: { url: "about:blank" },
     },
+    {
+      label: "Capture page snapshot",
+      actionName: "snapshot",
+      defaultInput: {},
+    },
   ],
   cli: [
     {
@@ -149,4 +154,41 @@ export const DESKTOP_ACTIONS: ReadonlyArray<{
     label: "Wait-for",
     description: "Wait for a UI condition before continuing.",
   },
+];
+
+/** Browser automation (Playwright) sub-action metadata. */
+export const BROWSER_AUTOMATION_ACTIONS: ReadonlyArray<{
+  key: string;
+  label: string;
+  description: string;
+}> = [
+  { key: "navigate", label: "Navigate", description: "Navigate to a URL." },
+  {
+    key: "navigate_back",
+    label: "Navigate Back",
+    description: "Navigate back in browser history.",
+  },
+  { key: "snapshot", label: "Snapshot", description: "Collect a page accessibility snapshot." },
+  { key: "click", label: "Click", description: "Click a page element." },
+  { key: "type", label: "Type", description: "Type text into an element." },
+  { key: "fill_form", label: "Fill Form", description: "Fill a form field." },
+  { key: "select_option", label: "Select Option", description: "Select from a dropdown." },
+  { key: "hover", label: "Hover", description: "Hover over an element." },
+  { key: "drag", label: "Drag", description: "Drag an element." },
+  { key: "press_key", label: "Press Key", description: "Press a keyboard key." },
+  { key: "screenshot", label: "Screenshot", description: "Capture a page screenshot." },
+  { key: "evaluate", label: "Evaluate", description: "Run JavaScript in page context." },
+  { key: "wait_for", label: "Wait For", description: "Wait for a page condition." },
+  { key: "tabs", label: "Tabs", description: "List or switch browser tabs." },
+  { key: "upload_file", label: "Upload File", description: "Upload a file to a file input." },
+  {
+    key: "console_messages",
+    label: "Console Messages",
+    description: "Read browser console output.",
+  },
+  { key: "network_requests", label: "Network Requests", description: "Inspect network requests." },
+  { key: "resize", label: "Resize", description: "Resize the browser viewport." },
+  { key: "close", label: "Close", description: "Close the browser." },
+  { key: "handle_dialog", label: "Handle Dialog", description: "Accept or dismiss a dialog." },
+  { key: "run_code", label: "Run Code", description: "Run arbitrary code in the browser." },
 ];

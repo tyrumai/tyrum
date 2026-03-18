@@ -1,9 +1,5 @@
 import { expect, it, vi } from "vitest";
-import {
-  CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-  descriptorIdForClientCapability,
-  type ActionPrimitive,
-} from "@tyrum/schemas";
+import { CAPABILITY_DESCRIPTOR_DEFAULT_VERSION, type ActionPrimitive } from "@tyrum/schemas";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { dispatchTask, handleClientMessage, NoCapableClientError } from "../../src/ws/protocol.js";
 import { NoCapableNodeError, NodeNotPairedError } from "../../src/ws/protocol/errors.js";
@@ -11,7 +7,7 @@ import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { createMockWs, makeDeps, makeClient } from "./ws-protocol.test-support.js";
 
 const cliDescriptor = {
-  id: descriptorIdForClientCapability("cli"),
+  id: "tyrum.cli.execute",
   version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
 } as const;
 
@@ -119,7 +115,7 @@ function registerAllowlistTests(): void {
             status: "approved",
             capability_allowlist: [
               {
-                id: descriptorIdForClientCapability("http"),
+                id: "tyrum.http.request",
                 version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
               },
             ],
@@ -427,7 +423,7 @@ function registerDispatchErrorTests(): void {
 
     const action: ActionPrimitive = {
       type: "Web",
-      args: {},
+      args: { op: "navigate" },
     };
 
     expect(() =>

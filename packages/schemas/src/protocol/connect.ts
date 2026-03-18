@@ -9,6 +9,12 @@ import { WsRequestEnvelope, WsResponseErrEnvelope, WsResponseOkEnvelope } from "
 export const WsPeerRole = z.enum(["client", "node"]);
 export type WsPeerRole = z.infer<typeof WsPeerRole>;
 
+export const DeviceType = z.enum(["phone", "tablet", "desktop", "browser"]);
+export type DeviceType = z.infer<typeof DeviceType>;
+
+export const DevicePlatform = z.enum(["ios", "android", "macos", "windows", "linux", "web"]);
+export type DevicePlatform = z.infer<typeof DevicePlatform>;
+
 export const WsDeviceDescriptor = z
   .object({
     device_id: z.string().trim().min(1),
@@ -17,6 +23,9 @@ export const WsDeviceDescriptor = z
     platform: z.string().trim().min(1).optional(),
     version: z.string().trim().min(1).optional(),
     mode: z.string().trim().min(1).optional(),
+    device_type: DeviceType.optional(),
+    device_platform: DevicePlatform.optional(),
+    device_model: z.string().trim().min(1).optional(),
   })
   .strict();
 export type WsDeviceDescriptor = z.infer<typeof WsDeviceDescriptor>;

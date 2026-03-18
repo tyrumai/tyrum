@@ -12,9 +12,9 @@
 
 import { describe, it, expect, afterEach } from "vitest";
 import {
+  BROWSER_AUTOMATION_CAPABILITY_IDS,
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   WsTaskExecuteRequest,
-  descriptorIdForClientCapability,
 } from "@tyrum/schemas";
 import { TyrumClient } from "../../src/ws-client.js";
 import {
@@ -112,9 +112,7 @@ describe("WS SDK conformance (client <-> gateway)", () => {
     expect(clients.length).toBe(1);
     const registered = clients[0];
     expect(registered.protocol_rev).toBe(2);
-    expect(capabilityIds(registered!.capabilities)).toContain(
-      descriptorIdForClientCapability("http"),
-    );
+    expect(capabilityIds(registered!.capabilities)).toContain("tyrum.http.request");
     expect(registered.role).toBe("client");
     expect(registered.device_id).toBeTruthy();
   });
@@ -166,7 +164,7 @@ describe("WS SDK conformance (client <-> gateway)", () => {
             status: "approved",
             capability_allowlist: [
               {
-                id: descriptorIdForClientCapability("http"),
+                id: "tyrum.http.request",
                 version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
               },
             ],
@@ -227,12 +225,13 @@ describe("WS SDK conformance (client <-> gateway)", () => {
     const clients = [...gw.connectionManager.allClients()];
     expect(clients.length).toBe(1);
     const registered = clients[0];
-    expect(capabilityIds(registered!.capabilities)).toEqual(
-      expect.arrayContaining([
-        descriptorIdForClientCapability("http"),
-        descriptorIdForClientCapability("playwright"),
-      ]),
-    );
+    // After normalization, "http" → "tyrum.http.request",
+    // "playwright" → all tyrum.browser.* IDs.
+    const capIds = capabilityIds(registered!.capabilities);
+    expect(capIds).toContain("tyrum.http.request");
+    for (const browserId of BROWSER_AUTOMATION_CAPABILITY_IDS) {
+      expect(capIds).toContain(browserId);
+    }
   });
 
   // -------------------------------------------------------------------------
@@ -275,7 +274,7 @@ describe("WS SDK conformance (client <-> gateway)", () => {
     expect(clients.length).toBe(2);
 
     const caps = clients.flatMap((c) => capabilityIds(c.capabilities));
-    expect(caps).toContain(descriptorIdForClientCapability("http"));
-    expect(caps).toContain(descriptorIdForClientCapability("playwright"));
+    expect(caps).toContain("tyrum.http.request");
+    expect(caps).toContain(BROWSER_AUTOMATION_CAPABILITY_IDS[0]);
   });
 });

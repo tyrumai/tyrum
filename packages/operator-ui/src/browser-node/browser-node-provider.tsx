@@ -7,7 +7,7 @@ import {
   type ManagedNodeClientLifecycle,
   type TaskResult,
 } from "@tyrum/client/browser";
-import { BrowserActionArgs, capabilityDescriptorsForClientCapability } from "@tyrum/schemas";
+import { BrowserActionArgs } from "@tyrum/schemas";
 import {
   createContext,
   useCallback,
@@ -206,7 +206,11 @@ export function BrowserNodeProvider({
         token: "",
         role: "node",
         capabilities: ["browser"],
-        advertisedCapabilities: capabilityDescriptorsForClientCapability("browser"),
+        advertisedCapabilities: [
+          { id: "tyrum.location.get", version: "1.0.0" },
+          { id: "tyrum.camera.capture-photo", version: "1.0.0" },
+          { id: "tyrum.audio.record", version: "1.0.0" },
+        ],
         device: {
           deviceId: identity.deviceId,
           publicKey: identity.publicKey,
@@ -214,6 +218,8 @@ export function BrowserNodeProvider({
           label: "operator-ui browser node",
           platform: "web",
           mode: "browser-node",
+          device_type: "browser",
+          device_platform: "web",
         },
       });
       const baseProvider = createBrowserCapabilityProvider({ requestConsent });

@@ -1,16 +1,21 @@
 import {
+  isLegacyCapabilityDescriptorId,
   isLegacyUmbrellaCapabilityDescriptorId,
+  LEGACY_ID_MIGRATION_MAP,
   NodeActionDispatchRequest,
   NodeActionDispatchResponse,
   NodeCapabilityInspectionResponse,
   NodeInventoryResponse,
   type ActionPrimitive,
+  type ActionPrimitiveKind,
+  type DevicePlatform,
   type NodeActionDispatchRequest as NodeActionDispatchRequestT,
   type NodeActionDispatchResponse as NodeActionDispatchResponseT,
   type NodeCapabilityInspectionResponse as NodeCapabilityInspectionResponseT,
 } from "@tyrum/schemas";
 import type { ArtifactStore } from "../artifact/store.js";
 import type { NodeCapabilityInspectionService } from "../node/capability-inspection-service.js";
+import type { ConnectionManager } from "../../ws/connection-manager.js";
 import { getCapabilityCatalogAction } from "../node/capability-catalog.js";
 import type { NodeInventoryService } from "../node/inventory-service.js";
 import type { NodeDispatchService } from "./node-dispatch-service.js";
@@ -40,6 +45,7 @@ type NodeToolContext = {
   nodeDispatchService?: NodeDispatchService;
   nodeInventoryService?: NodeInventoryService;
   inspectionService?: NodeCapabilityInspectionService;
+  connectionManager?: ConnectionManager;
   artifactStore?: ArtifactStore;
 };
 
@@ -55,12 +61,52 @@ type DispatchExecutionContext = {
   tenantId: string;
   nodeDispatchService: NodeDispatchService;
   inspectionService: NodeCapabilityInspectionService;
+  connectionManager?: ConnectionManager;
   artifactStore?: ArtifactStore;
   workspaceLease?: WorkspaceLeaseConfig;
 };
 
+const DEVICE_PLATFORM_TO_PRIMITIVE_KIND: Record<DevicePlatform, ActionPrimitiveKind> = {
+  ios: "IOS",
+  android: "Android",
+  web: "Browser",
+  macos: "Browser",
+  windows: "Browser",
+  linux: "Browser",
+};
+
+/**
+ * Resolves the `ActionPrimitiveKind` for a cross-platform capability by
+ * looking up the target node's device platform from the connection manager.
+ */
+function resolvePrimitiveKindFromNode(
+  context: DispatchExecutionContext,
+  nodeId: string,
+): ActionPrimitiveKind | undefined {
+  if (!context.connectionManager) return undefined;
+  for (const client of context.connectionManager.allClients()) {
+    if (client.device_id === nodeId && client.device_platform) {
+      return DEVICE_PLATFORM_TO_PRIMITIVE_KIND[client.device_platform];
+    }
+  }
+  return undefined;
+}
+
 function legacyCapabilityError(capability: string): string {
   return `legacy umbrella capability '${capability}' is not supported; use an exact split capability descriptor`;
+}
+
+function legacyNamespacedCapabilityError(capability: string): string {
+  const replacement = LEGACY_ID_MIGRATION_MAP[capability];
+  const canonical =
+    replacement === undefined
+      ? "a canonical capability ID"
+      : typeof replacement === "string"
+        ? `'${replacement}'`
+        : replacement.length === 1
+          ? `'${replacement[0]}'`
+          : `one of: ${replacement.map((id) => `'${id}'`).join(", ")}`;
+  return `deprecated platform-namespaced capability '${capability}' is not supported; use ${canonical} instead`;
 }
 
 async function performNodeDispatch(
@@ -72,6 +118,12 @@ async function performNodeDispatch(
     return preflightFailure(
       request,
       dispatchError("invalid_input", legacyCapabilityError(request.capability)),
+    );
+  }
+  if (isLegacyCapabilityDescriptorId(request.capability)) {
+    return preflightFailure(
+      request,
+      dispatchError("invalid_input", legacyNamespacedCapabilityError(request.capability)),
     );
   }
 
@@ -181,8 +233,23 @@ async function performNodeDispatch(
         key: audit?.work_session_key,
         lane: audit?.work_lane,
       });
+  let primitiveKind = catalogAction.transport.primitive_kind;
+  if (primitiveKind === null) {
+    // Cross-platform capability — resolve primitive kind from the target node's device platform.
+    const resolved = resolvePrimitiveKindFromNode(context, request.node_id);
+    if (!resolved) {
+      return preflightFailure(
+        request,
+        dispatchError(
+          "runtime_unavailable",
+          `cannot determine device platform for node '${request.node_id}'; cross-platform capability '${request.capability}' requires device metadata to dispatch`,
+        ),
+      );
+    }
+    primitiveKind = resolved;
+  }
   const primitive: ActionPrimitive = {
-    type: catalogAction.transport.primitive_kind,
+    type: primitiveKind,
     args: actionArgs,
   };
 
@@ -278,6 +345,13 @@ export async function executeNodeInspectTool(
       error: legacyCapabilityError(capability),
     };
   }
+  if (isLegacyCapabilityDescriptorId(capability)) {
+    return {
+      tool_call_id: toolCallId,
+      output: "",
+      error: legacyNamespacedCapabilityError(capability),
+    };
+  }
 
   try {
     const payload = stripNodeInspectionControlState(
@@ -336,6 +410,13 @@ export async function executeNodeListTool(
       tool_call_id: toolCallId,
       output: "",
       error: legacyCapabilityError(capability),
+    };
+  }
+  if (capability && isLegacyCapabilityDescriptorId(capability)) {
+    return {
+      tool_call_id: toolCallId,
+      output: "",
+      error: legacyNamespacedCapabilityError(capability),
     };
   }
 
@@ -406,12 +487,25 @@ export async function executeNodeDispatchTool(
       provenance: tagged,
     };
   }
+  if (isLegacyCapabilityDescriptorId(request.capability)) {
+    const response = preflightFailure(
+      request,
+      dispatchError("invalid_input", legacyNamespacedCapabilityError(request.capability)),
+    );
+    const tagged = tagContent(serializeToolDispatchResponse(response), "tool");
+    return {
+      tool_call_id: toolCallId,
+      output: sanitizeForModel(tagged),
+      provenance: tagged,
+    };
+  }
 
   const response = await performNodeDispatch(
     {
       tenantId,
       nodeDispatchService: context.nodeDispatchService,
       inspectionService: context.inspectionService,
+      connectionManager: context.connectionManager,
       artifactStore: context.artifactStore,
       workspaceLease: context.workspaceLease,
     },

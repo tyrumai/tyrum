@@ -1,9 +1,5 @@
 import { expect, it, vi } from "vitest";
-import {
-  CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-  descriptorIdForClientCapability,
-  type ActionPrimitive,
-} from "@tyrum/schemas";
+import { CAPABILITY_DESCRIPTOR_DEFAULT_VERSION, type ActionPrimitive } from "@tyrum/schemas";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { dispatchTask, handleClientMessage } from "../../src/ws/protocol.js";
 import { NoCapableNodeError, NodeNotPairedError } from "../../src/ws/protocol/errors.js";
@@ -16,11 +12,11 @@ import {
 import { createMockWs, makeDeps, makeClient } from "./ws-protocol.test-support.js";
 
 const cliDescriptor = {
-  id: descriptorIdForClientCapability("cli"),
+  id: "tyrum.cli.execute",
   version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
 } as const;
-const playwrightDescriptor = {
-  id: descriptorIdForClientCapability("playwright"),
+const browserNavigateDescriptor = {
+  id: "tyrum.browser.navigate",
   version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
 } as const;
 const desktopSnapshotDescriptor = {
@@ -56,7 +52,7 @@ function registerSelectionTests(): void {
 
   it("sends task.execute request to a paired capable node", async () => {
     const cm = new ConnectionManager();
-    const { ws } = makeClient(cm, [playwrightDescriptor], {
+    const { ws } = makeClient(cm, [browserNavigateDescriptor], {
       role: "node",
       deviceId: "dev_web_test",
       protocolRev: 2,
@@ -68,8 +64,8 @@ function registerSelectionTests(): void {
             status: "approved",
             capability_allowlist: [
               {
-                id: playwrightDescriptor.id,
-                version: playwrightDescriptor.version,
+                id: browserNavigateDescriptor.id,
+                version: browserNavigateDescriptor.version,
               },
             ],
           }) as never,
@@ -78,7 +74,7 @@ function registerSelectionTests(): void {
 
     const action: ActionPrimitive = {
       type: "Web",
-      args: { url: "https://example.com" },
+      args: { op: "navigate", url: "https://example.com" },
     };
 
     const taskId = await dispatchTask(action, defaultDispatchScope, deps);
@@ -93,7 +89,7 @@ function registerSelectionTests(): void {
         run_id: "550e8400-e29b-41d4-a716-446655440000",
         step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
         attempt_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
-        action: { type: "Web", args: { url: "https://example.com" } },
+        action: { type: "Web", args: { op: "navigate", url: "https://example.com" } },
       },
     });
   });

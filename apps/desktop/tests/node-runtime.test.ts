@@ -1,10 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+  descriptorIdsForClientCapability,
   deviceIdFromSha256Digest,
+  migrateCapabilityDescriptorId,
   type ActionPrimitive,
+  type CapabilityDescriptor,
   type ClientCapability,
 } from "@tyrum/schemas";
 import type { CapabilityProvider, TaskResult } from "@tyrum/client";
+import type { WsCapabilityReadyPayload } from "@tyrum/schemas";
 import { NodeRuntime } from "../src/main/node-runtime.js";
 import { resolvePermissions } from "../src/main/config/permissions.js";
 import { DEFAULT_CONFIG } from "../src/main/config/schema.js";
@@ -23,10 +28,32 @@ function makeProvider(capability: ClientCapability): CapabilityProvider {
   };
 }
 
-function readEnabledCapabilities(runtime: NodeRuntime): ClientCapability[] {
+function readAdvertisedDescriptors(runtime: NodeRuntime): CapabilityDescriptor[] {
   return (
-    runtime as unknown as { getEnabledCapabilities: () => ClientCapability[] }
-  ).getEnabledCapabilities();
+    runtime as unknown as { getAdvertisedCapabilityDescriptors: () => CapabilityDescriptor[] }
+  ).getAdvertisedCapabilityDescriptors();
+}
+
+function readCapabilityReadyPayload(runtime: NodeRuntime): WsCapabilityReadyPayload {
+  return (
+    runtime as unknown as { getCapabilityReadyPayload: () => WsCapabilityReadyPayload }
+  ).getCapabilityReadyPayload();
+}
+
+/** Builds expected descriptors for a ClientCapability, applying legacy migration. */
+function expectedDescriptorsFor(...capabilities: ClientCapability[]): CapabilityDescriptor[] {
+  const seen = new Set<string>();
+  const descriptors: CapabilityDescriptor[] = [];
+  for (const cap of capabilities) {
+    const ids = descriptorIdsForClientCapability(cap).flatMap(migrateCapabilityDescriptorId);
+    for (const id of ids) {
+      if (!seen.has(id)) {
+        seen.add(id);
+        descriptors.push({ id, version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION });
+      }
+    }
+  }
+  return descriptors;
 }
 
 function computeDeviceIdFromPublicKey(publicKey: string): string {
@@ -61,7 +88,7 @@ describe("NodeRuntime capability advertisement", () => {
     runtime.registerProvider(makeProvider("desktop"));
     runtime.registerProvider(makeProvider("cli"));
 
-    expect(readEnabledCapabilities(runtime)).toEqual(["desktop", "cli"]);
+    expect(readAdvertisedDescriptors(runtime)).toEqual(expectedDescriptorsFor("desktop", "cli"));
   });
 
   it("deduplicates capability advertisement by provider capability", () => {
@@ -70,7 +97,43 @@ describe("NodeRuntime capability advertisement", () => {
     runtime.registerProvider(makeProvider("desktop"));
     runtime.registerProvider(makeProvider("desktop"));
 
-    expect(readEnabledCapabilities(runtime)).toEqual(["desktop"]);
+    expect(readAdvertisedDescriptors(runtime)).toEqual(expectedDescriptorsFor("desktop"));
+  });
+
+  it("uses capabilityIds when provider declares them directly", () => {
+    const runtime = new NodeRuntime(DEFAULT_CONFIG, resolvePermissions("balanced", {}), callbacks);
+
+    runtime.registerProvider({
+      capabilityIds: ["tyrum.browser.navigate", "tyrum.browser.close"],
+      execute: async () => ({ success: true }),
+    });
+
+    const descriptors = readAdvertisedDescriptors(runtime);
+    expect(descriptors).toEqual([
+      { id: "tyrum.browser.navigate", version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION },
+      { id: "tyrum.browser.close", version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION },
+    ]);
+  });
+
+  it("getCapabilityReadyPayload wraps descriptors with empty capability_states", () => {
+    const runtime = new NodeRuntime(DEFAULT_CONFIG, resolvePermissions("balanced", {}), callbacks);
+
+    runtime.registerProvider(makeProvider("desktop"));
+
+    const payload = readCapabilityReadyPayload(runtime);
+    expect(payload.capabilities).toEqual(expectedDescriptorsFor("desktop"));
+    expect(payload.capability_states).toEqual([]);
+  });
+
+  it("provider with no capability or capabilityIds produces no descriptors", () => {
+    const runtime = new NodeRuntime(DEFAULT_CONFIG, resolvePermissions("balanced", {}), callbacks);
+
+    runtime.registerProvider({
+      execute: async () => ({ success: true }),
+    });
+
+    const descriptors = readAdvertisedDescriptors(runtime);
+    expect(descriptors).toEqual([]);
   });
 });
 
