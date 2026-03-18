@@ -41,6 +41,8 @@ const REQUIRES_POSTCONDITION = new Set<ActionPrimitiveKind>([
   "Android",
   "Desktop",
   "Filesystem",
+  "CLI",
+  "Http",
   "Mcp",
   "Node",
   "Message",

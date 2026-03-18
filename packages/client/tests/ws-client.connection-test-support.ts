@@ -1,5 +1,8 @@
 import { expect, it, vi } from "vitest";
-import { BROWSER_AUTOMATION_CAPABILITY_IDS } from "@tyrum/schemas";
+import {
+  BROWSER_AUTOMATION_CAPABILITY_IDS,
+  CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+} from "@tyrum/schemas";
 import * as deviceIdentity from "../src/device-identity.js";
 import type { TyrumClientProtocolErrorInfo } from "../src/ws-client.js";
 import { TyrumClient } from "../src/ws-client.js";
@@ -298,6 +301,34 @@ function registerConnectionProtocolErrorTests(fixture: ConnectionFixture): void 
     const capIds = capabilities.map((c) => c.id);
     expect(capIds).toContain("tyrum.desktop.screenshot");
     expect(capIds).toContain("tyrum.desktop.mouse");
+  });
+
+  it("uses advertisedCapabilities for connect.init when provided", async () => {
+    const server = createTestServer();
+    fixture.setServer(server);
+    const client = new TyrumClient({
+      url: server.url,
+      token: "t",
+      capabilities: ["desktop"],
+      advertisedCapabilities: [
+        { id: "tyrum.desktop.screenshot", version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION },
+        { id: "tyrum.fs.read", version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION },
+      ],
+      reconnect: false,
+      role: "node",
+      device: { publicKey: "AQID", privateKey: "BAUG" },
+    });
+    fixture.setClient(client);
+
+    client.connect();
+    const ws = await server.waitForClient();
+    const init = (await waitForMessage(ws)) as Record<string, unknown>;
+    expect(init["type"]).toBe("connect.init");
+
+    const payload = init["payload"] as Record<string, unknown>;
+    const capabilities = payload["capabilities"] as Array<{ id: string; version: string }>;
+    const capIds = capabilities.map((c) => c.id);
+    expect(capIds).toEqual(["tyrum.desktop.screenshot", "tyrum.fs.read"]);
   });
 }
 

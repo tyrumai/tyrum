@@ -44,6 +44,8 @@ describe("requiresPostcondition", () => {
       "Android",
       "Desktop",
       "Filesystem",
+      "CLI",
+      "Http",
       "Mcp",
       "Node",
       "Message",
@@ -57,7 +59,7 @@ describe("requiresPostcondition", () => {
   });
 
   it("returns false for non-mutating primitive kinds", () => {
-    const nonMutating: ActionPrimitiveKind[] = ["Research", "Decide", "Confirm", "CLI", "Http"];
+    const nonMutating: ActionPrimitiveKind[] = ["Research", "Decide", "Confirm"];
     for (const kind of nonMutating) {
       expect(requiresPostcondition(kind)).toBe(false);
     }

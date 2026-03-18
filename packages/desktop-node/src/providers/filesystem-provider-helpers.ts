@@ -265,6 +265,7 @@ export async function execBash(
       cwd,
       env: sanitizeEnv(),
       stdio: ["ignore", "pipe", "pipe"],
+      detached: true,
     });
     const chunks: Buffer[] = [];
     let size = 0;
@@ -277,21 +278,44 @@ export async function execBash(
     child.stdout.on("data", pushChunk);
     child.stderr.on("data", pushChunk);
 
-    const timer = setTimeout(() => {
+    let finished = false;
+    const killChild = (signal: NodeJS.Signals) => {
+      if (finished) return;
+      if (child.pid) {
+        try {
+          process.kill(-child.pid, signal);
+          return;
+        } catch {
+          // Process groups are not guaranteed everywhere; fall back to the shell itself.
+        }
+      }
       try {
-        child.kill("SIGTERM");
+        child.kill(signal);
       } catch {
         // child may already be gone
       }
-    }, timeoutMs);
+    };
 
-    child.on("close", (code) => {
+    const timer = setTimeout(() => {
+      killChild("SIGTERM");
+    }, timeoutMs);
+    timer.unref();
+    const forceKillTimer = setTimeout(() => {
+      killChild("SIGKILL");
+    }, timeoutMs + 5_000);
+    forceKillTimer.unref();
+
+    child.once("close", (code) => {
+      finished = true;
       clearTimeout(timer);
+      clearTimeout(forceKillTimer);
       resolvePromise({ output: Buffer.concat(chunks).toString("utf-8"), exitCode: code });
     });
 
-    child.on("error", (err) => {
+    child.once("error", (err) => {
+      finished = true;
       clearTimeout(timer);
+      clearTimeout(forceKillTimer);
       resolvePromise({ output: `Error spawning command: ${err.message}`, exitCode: null });
     });
   });

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
+import { CAPABILITY_DESCRIPTOR_DEFAULT_VERSION, FILESYSTEM_CAPABILITY_IDS } from "@tyrum/schemas";
 
 const {
   clientCtorSpy,
@@ -12,6 +13,7 @@ const {
   loadOrCreateSpy,
   formatDeviceIdentityErrorSpy,
   providerCtorSpy,
+  filesystemProviderCtorSpy,
   backendCtorSpy,
 } = vi.hoisted(() => ({
   clientCtorSpy: vi.fn(),
@@ -26,6 +28,7 @@ const {
   })),
   formatDeviceIdentityErrorSpy: vi.fn(() => "mock identity error"),
   providerCtorSpy: vi.fn(),
+  filesystemProviderCtorSpy: vi.fn(),
   backendCtorSpy: vi.fn(),
 }));
 
@@ -85,6 +88,12 @@ vi.mock("../src/providers/desktop-provider.js", () => ({
   },
 }));
 
+vi.mock("../src/providers/filesystem-provider.js", () => ({
+  FilesystemProvider: function FilesystemProvider(...args: unknown[]) {
+    filesystemProviderCtorSpy(...args);
+  },
+}));
+
 vi.mock("../src/providers/backends/nutjs-desktop-backend.js", () => ({
   NutJsDesktopBackend: function NutJsDesktopBackend() {
     backendCtorSpy();
@@ -112,6 +121,7 @@ describe("runCli", () => {
     TYRUM_NODE_MODE: process.env["TYRUM_NODE_MODE"],
     TYRUM_TAKEOVER_URL: process.env["TYRUM_TAKEOVER_URL"],
     TYRUM_DESKTOP_SANDBOX_TAKEOVER_URL: process.env["TYRUM_DESKTOP_SANDBOX_TAKEOVER_URL"],
+    TYRUM_FS_SANDBOX_ROOT: process.env["TYRUM_FS_SANDBOX_ROOT"],
   };
 
   afterEach(() => {
@@ -252,6 +262,36 @@ describe("runCli", () => {
     } finally {
       await rm(tempHome, { recursive: true, force: true });
     }
+  });
+
+  it("registers filesystem capabilities when TYRUM_FS_SANDBOX_ROOT is set", async () => {
+    vi.resetModules();
+    process.env["TYRUM_GATEWAY_TOKEN"] = "test-token";
+    process.env["TYRUM_FS_SANDBOX_ROOT"] = "/sandbox/root";
+
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const { runCli } = await import("../src/cli/run-cli.js");
+    const code = await runWithSigterm(runCli([]));
+
+    expect(code).toBe(0);
+    expect(filesystemProviderCtorSpy).toHaveBeenCalledWith({ sandboxRoot: "/sandbox/root" });
+
+    const opts = clientCtorSpy.mock.calls[0]?.[0] as {
+      advertisedCapabilities: Array<{ id: string; version: string }>;
+    };
+    expect(opts.advertisedCapabilities).toEqual(
+      expect.arrayContaining(
+        FILESYSTEM_CAPABILITY_IDS.map((id) => ({
+          id,
+          version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+        })),
+      ),
+    );
+
+    const providers = autoExecuteSpy.mock.calls[0]?.[1] as unknown[];
+    expect(providers).toHaveLength(2);
   });
 
   it("loads gateway token from env token path file", async () => {

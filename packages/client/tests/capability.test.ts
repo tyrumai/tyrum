@@ -209,6 +209,57 @@ describe("autoExecute", () => {
     });
   });
 
+  it("routes task.execute using canonical capabilityIds", async () => {
+    server = createTestServer();
+    client = new TyrumClient({
+      url: server.url,
+      token: "t",
+      capabilities: [],
+      reconnect: false,
+    });
+
+    const filesystemProvider: CapabilityProvider = {
+      capabilityIds: ["tyrum.fs.read"],
+      execute: async (action) => {
+        expect(action).toEqual({
+          type: "Filesystem",
+          args: { op: "read", path: "notes.txt" },
+        });
+        return {
+          success: true,
+          result: { content: "hello", path: "notes.txt" },
+        };
+      },
+    };
+
+    autoExecute(client, [filesystemProvider]);
+
+    client.connect();
+    const ws = await server.waitForClient();
+    await acceptConnect(ws);
+
+    ws.send(
+      JSON.stringify({
+        request_id: "t-fs-1",
+        type: "task.execute",
+        payload: {
+          run_id: "550e8400-e29b-41d4-a716-446655440000",
+          step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+          attempt_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+          action: { type: "Filesystem", args: { op: "read", path: "notes.txt" } },
+        },
+      }),
+    );
+
+    const result = await waitForMessage(ws);
+    expect(result).toEqual({
+      request_id: "t-fs-1",
+      type: "task.execute",
+      ok: true,
+      result: { result: { content: "hello", path: "notes.txt" } },
+    });
+  });
+
   it("sends error result when no matching provider", async () => {
     server = createTestServer();
     client = new TyrumClient({
