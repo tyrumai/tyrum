@@ -36,6 +36,10 @@ function createFakeWs() {
     sessionGet: vi.fn(async () => ({ session: sampleGetSession("session-1") })),
     sessionCreate: vi.fn(async () => sampleGetSession("session-1")),
     sessionDelete: vi.fn(async () => ({ session_id: "session-1" })),
+    sessionArchive: vi.fn(async (payload: { session_id: string; archived: boolean }) => ({
+      session_id: payload.session_id,
+      archived: payload.archived,
+    })),
     requestDynamic: vi.fn(
       async (type: string, payload: unknown, schema?: { parse?: (input: unknown) => unknown }) => {
         let result: unknown;
@@ -51,6 +55,9 @@ function createFakeWs() {
             break;
           case "chat.session.delete":
             result = await api.sessionDelete(payload);
+            break;
+          case "chat.session.archive":
+            result = await api.sessionArchive(payload as { session_id: string; archived: boolean });
             break;
           default:
             throw new Error(`unsupported dynamic request: ${type}`);
@@ -241,5 +248,145 @@ describe("chatStore", () => {
     await chat.deleteActive();
     expect(chat.getSnapshot().active.sessionId).toBeNull();
     expect(chat.getSnapshot().active.session).toBeNull();
+  });
+
+  it("archives a session and removes it from the active list", async () => {
+    const ws = createFakeWs();
+    ws.sessionList.mockResolvedValueOnce({
+      sessions: [sampleListItem("session-1"), sampleListItem("session-2")],
+      next_cursor: null,
+    });
+    const chat = createChatStore(ws as never, createFakeHttp() as never);
+    await chat.refreshSessions();
+
+    await chat.archiveSession("session-1");
+
+    const snapshot = chat.getSnapshot();
+    expect(snapshot.sessions.sessions.map((s) => s.session_id)).toEqual(["session-2"]);
+  });
+
+  it("archives the active session and deselects it", async () => {
+    const ws = createFakeWs();
+    ws.sessionList.mockResolvedValueOnce({
+      sessions: [sampleListItem("session-1")],
+      next_cursor: null,
+    });
+    ws.sessionGet.mockResolvedValueOnce({ session: sampleGetSession("session-1") });
+    const chat = createChatStore(ws as never, createFakeHttp() as never);
+    await chat.refreshSessions();
+    await chat.openSession("session-1");
+
+    await chat.archiveSession("session-1");
+
+    expect(chat.getSnapshot().active.sessionId).toBeNull();
+    expect(chat.getSnapshot().active.session).toBeNull();
+  });
+
+  it("prepends to archived list when archive section is loaded", async () => {
+    const ws = createFakeWs();
+    ws.sessionList
+      .mockResolvedValueOnce({
+        sessions: [sampleListItem("session-1")],
+        next_cursor: null,
+      })
+      .mockResolvedValueOnce({
+        sessions: [],
+        next_cursor: null,
+      });
+    const chat = createChatStore(ws as never, createFakeHttp() as never);
+    await chat.refreshSessions();
+    await chat.loadArchivedSessions();
+
+    await chat.archiveSession("session-1");
+
+    const snapshot = chat.getSnapshot();
+    expect(snapshot.archivedSessions.sessions).toHaveLength(1);
+    expect(snapshot.archivedSessions.sessions[0]?.session_id).toBe("session-1");
+    expect(snapshot.archivedSessions.sessions[0]?.archived).toBe(true);
+  });
+
+  it("unarchives a session and moves it to the active list", async () => {
+    const ws = createFakeWs();
+    const archivedItem = { ...sampleListItem("session-1"), archived: true };
+    ws.sessionList
+      .mockResolvedValueOnce({ sessions: [], next_cursor: null })
+      .mockResolvedValueOnce({ sessions: [archivedItem], next_cursor: null });
+    const chat = createChatStore(ws as never, createFakeHttp() as never);
+    await chat.refreshSessions();
+    await chat.loadArchivedSessions();
+
+    await chat.unarchiveSession("session-1");
+
+    const snapshot = chat.getSnapshot();
+    expect(snapshot.archivedSessions.sessions).toHaveLength(0);
+    expect(snapshot.sessions.sessions).toHaveLength(1);
+    expect(snapshot.sessions.sessions[0]?.session_id).toBe("session-1");
+    expect(snapshot.sessions.sessions[0]?.archived).toBe(false);
+  });
+
+  it("loads archived sessions lazily", async () => {
+    const ws = createFakeWs();
+    const archivedItem = { ...sampleListItem("session-a"), archived: true };
+    ws.sessionList.mockResolvedValueOnce({ sessions: [archivedItem], next_cursor: "ac1" });
+    const chat = createChatStore(ws as never, createFakeHttp() as never);
+
+    expect(chat.getSnapshot().archivedSessions.loaded).toBe(false);
+
+    await chat.loadArchivedSessions();
+
+    const snapshot = chat.getSnapshot();
+    expect(snapshot.archivedSessions.loaded).toBe(true);
+    expect(snapshot.archivedSessions.sessions).toEqual([archivedItem]);
+    expect(snapshot.archivedSessions.nextCursor).toBe("ac1");
+  });
+
+  it("loads more archived sessions with cursor pagination", async () => {
+    const ws = createFakeWs();
+    const first = { ...sampleListItem("session-a"), archived: true };
+    const second = { ...sampleListItem("session-b"), archived: true };
+    ws.sessionList
+      .mockResolvedValueOnce({ sessions: [first], next_cursor: "ac1" })
+      .mockResolvedValueOnce({ sessions: [second], next_cursor: null });
+    const chat = createChatStore(ws as never, createFakeHttp() as never);
+
+    await chat.loadArchivedSessions();
+    await chat.loadMoreArchivedSessions();
+
+    const snapshot = chat.getSnapshot();
+    expect(snapshot.archivedSessions.sessions).toEqual([first, second]);
+    expect(snapshot.archivedSessions.nextCursor).toBeNull();
+  });
+
+  it("resets archived sessions when agent changes", async () => {
+    const ws = createFakeWs();
+    const archivedItem = { ...sampleListItem("session-a"), archived: true };
+    ws.sessionList.mockResolvedValueOnce({ sessions: [archivedItem], next_cursor: null });
+    const chat = createChatStore(ws as never, createFakeHttp() as never);
+
+    await chat.loadArchivedSessions();
+    expect(chat.getSnapshot().archivedSessions.loaded).toBe(true);
+
+    chat.setAgentId("other-agent");
+
+    const snapshot = chat.getSnapshot();
+    expect(snapshot.archivedSessions.loaded).toBe(false);
+    expect(snapshot.archivedSessions.sessions).toEqual([]);
+  });
+
+  it("removes deleted session from archived list", async () => {
+    const ws = createFakeWs();
+    const archivedItem = { ...sampleListItem("session-1"), archived: true };
+    ws.sessionList
+      .mockResolvedValueOnce({ sessions: [], next_cursor: null })
+      .mockResolvedValueOnce({ sessions: [archivedItem], next_cursor: null });
+    ws.sessionGet.mockResolvedValueOnce({ session: sampleGetSession("session-1") });
+    const chat = createChatStore(ws as never, createFakeHttp() as never);
+    await chat.refreshSessions();
+    await chat.loadArchivedSessions();
+    await chat.openSession("session-1");
+
+    await chat.deleteActive();
+
+    expect(chat.getSnapshot().archivedSessions.sessions).toHaveLength(0);
   });
 });
