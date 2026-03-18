@@ -187,7 +187,6 @@ export function ElevatedModeProvider({
 
     return () => {
       cancelled = true;
-      renewingRef.current = false;
     };
   });
 
