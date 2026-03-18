@@ -149,6 +149,11 @@ export function ConnectPage({
     }
     const trimmed = tokenValue.trim();
     if (!trimmed) {
+      if (hasSavedWebToken && !tokenEditedRef.current) {
+        setLoginError(null);
+        core.connect();
+        return;
+      }
       setLoginError("Token is required");
       return;
     }
