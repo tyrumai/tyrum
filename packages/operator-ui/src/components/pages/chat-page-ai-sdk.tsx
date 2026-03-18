@@ -278,14 +278,16 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
               const isArchived = chat.archivedSessions.sessions.some(
                 (s) => s.session_id === sessionId,
               );
-              if (isArchived) {
-                void core.chatStore.unarchiveSession(sessionId);
-              }
-              void core.chatStore.openSession(sessionId).then(() => {
+              const open = async () => {
+                if (isArchived) {
+                  await core.chatStore.unarchiveSession(sessionId);
+                }
+                await core.chatStore.openSession(sessionId);
                 if (!lgUp && core.chatStore.getSnapshot().active.sessionId === sessionId) {
                   setMobileView("conversation");
                 }
-              });
+              };
+              void open();
             }}
             agentId={chat.agentId}
             agents={agents}
