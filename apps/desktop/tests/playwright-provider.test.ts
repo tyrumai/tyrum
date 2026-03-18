@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ActionPrimitive } from "@tyrum/schemas";
-import {
-  PlaywrightProvider,
-  type PlaywrightProviderConfig,
-} from "../src/main/providers/playwright-provider.js";
+import { PlaywrightProvider, type PlaywrightProviderConfig } from "@tyrum/desktop-node";
 import { MockPlaywrightBackend } from "./test-utils/mock-playwright-backend.js";
 
 // ---------------------------------------------------------------------------
@@ -637,11 +634,11 @@ describe("PlaywrightProvider", () => {
 
   // -- Capability field -----------------------------------------------------
 
-  it("capabilityIds lists all 21 browser operations", () => {
+  it("capabilityIds lists all 22 browser operations", () => {
     const provider = makeProvider();
+    expect(provider.capabilityIds).toContain("tyrum.browser.launch");
     expect(provider.capabilityIds).toContain("tyrum.browser.navigate");
     expect(provider.capabilityIds).toContain("tyrum.browser.close");
-    expect(provider.capabilityIds).toContain("tyrum.browser.run-code");
-    expect(provider.capabilityIds).toHaveLength(21);
+    expect(provider.capabilityIds).toHaveLength(22);
   });
 });

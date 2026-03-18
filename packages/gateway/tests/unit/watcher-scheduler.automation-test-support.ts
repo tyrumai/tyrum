@@ -43,7 +43,7 @@ export function registerWatcherSchedulerAutomationTests(state: WatcherSchedulerS
 
       await processor.createWatcher("plan-1", "periodic", {
         intervalMs: 1000,
-        steps: [{ type: "CLI", args: { cmd: "echo", args: ["hi"] } }],
+        steps: [{ type: "Desktop", args: { op: "screenshot" } }],
       });
 
       await scheduler.tick();
@@ -77,7 +77,7 @@ export function registerWatcherSchedulerAutomationTests(state: WatcherSchedulerS
         intervalMs: 1000,
         key: "agent:default:main",
         lane: "heartbeat",
-        steps: [{ type: "CLI", args: { cmd: "echo", args: ["hi"] } }],
+        steps: [{ type: "Desktop", args: { op: "screenshot" } }],
       });
 
       await scheduler.tick();
@@ -242,7 +242,7 @@ export function registerWatcherSchedulerAutomationTests(state: WatcherSchedulerS
       await processor.createWatcher("plan-1", "periodic", {
         intervalMs: 1000,
         lane: "custom-lane",
-        steps: [{ type: "CLI", args: { cmd: "echo", args: ["hi"] } }],
+        steps: [{ type: "Desktop", args: { op: "screenshot" } }],
       });
 
       await scheduler.tick();

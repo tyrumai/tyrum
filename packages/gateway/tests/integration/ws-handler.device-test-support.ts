@@ -22,7 +22,7 @@ import {
 } from "./ws-handler.test-support.js";
 
 const httpDescriptor = {
-  id: "tyrum.http.request",
+  id: "tyrum.desktop.mouse",
   version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
 } as const;
 

@@ -77,8 +77,6 @@ describe("NodeRuntime capability advertisement", () => {
         capabilities: {
           desktop: true,
           playwright: true,
-          cli: true,
-          http: true,
         },
       },
       resolvePermissions("balanced", {}),
@@ -86,9 +84,8 @@ describe("NodeRuntime capability advertisement", () => {
     );
 
     runtime.registerProvider(makeProvider("desktop"));
-    runtime.registerProvider(makeProvider("cli"));
 
-    expect(readAdvertisedDescriptors(runtime)).toEqual(expectedDescriptorsFor("desktop", "cli"));
+    expect(readAdvertisedDescriptors(runtime)).toEqual(expectedDescriptorsFor("desktop"));
   });
 
   it("deduplicates capability advertisement by provider capability", () => {

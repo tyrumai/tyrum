@@ -23,7 +23,7 @@ function registerDedupRequestTests(fixture: DedupFixture): void {
     const client = new TyrumClient({
       url: server.url,
       token: "t",
-      capabilities: ["http"],
+      capabilities: ["desktop"],
       reconnect: true,
       maxReconnectDelay: 25,
     });
@@ -94,7 +94,7 @@ function registerDedupRequestTests(fixture: DedupFixture): void {
     const client = new TyrumClient({
       url: server.url,
       token: "t",
-      capabilities: ["http"],
+      capabilities: ["desktop"],
       reconnect: false,
       maxSeenRequestIds: 2,
     });

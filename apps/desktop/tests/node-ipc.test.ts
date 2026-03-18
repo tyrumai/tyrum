@@ -49,16 +49,13 @@ vi.mock("../src/main/config/store.js", () => ({
     embedded: { port: 8788, dbPath: "/tmp/test.db", tokenRef: "enc:tok" },
     remote: { wsUrl: "ws://127.0.0.1:8788/ws", tokenRef: "" },
     permissions: { profile: "default", overrides: {} },
-    capabilities: { desktop: false, playwright: false, cli: false, http: false },
-    cli: { allowedCommands: [], allowedWorkingDirs: [] },
+    capabilities: { desktop: false, playwright: false },
     web: { allowedDomains: [], headless: true },
   })),
 }));
 
 vi.mock("../src/main/config/permissions.js", () => ({
   resolvePermissions: vi.fn(() => ({
-    cli: false,
-    cliAllowlistEnforced: true,
     playwright: false,
     playwrightDomainRestricted: true,
   })),
@@ -73,24 +70,14 @@ vi.mock("@tyrum/desktop-node", () => ({
   DesktopProvider: vi.fn(),
   NutJsDesktopBackend: vi.fn(),
   getTesseractOcrEngine: vi.fn(() => ({ recognize: vi.fn() })),
+  PlaywrightProvider: vi.fn(),
+  RealPlaywrightBackend: vi.fn(function () {
+    return { close: vi.fn() };
+  }),
 }));
 
 vi.mock("../src/main/providers/backends/isolated-desktop-backend.js", () => ({
   IsolatedDesktopBackend: vi.fn(),
-}));
-
-vi.mock("../src/main/providers/playwright-provider.js", () => ({
-  PlaywrightProvider: vi.fn(),
-}));
-
-vi.mock("../src/main/providers/cli-provider.js", () => ({
-  CliProvider: vi.fn(),
-}));
-
-vi.mock("../src/main/providers/backends/real-playwright-backend.js", () => ({
-  RealPlaywrightBackend: vi.fn(function () {
-    return { close: vi.fn() };
-  }),
 }));
 
 vi.mock("../src/main/ipc/window-sender.js", () => ({
@@ -168,8 +155,7 @@ describe("node-ipc", () => {
       embedded: { port: 8788, dbPath: "/tmp/test.db", tokenRef: "enc:tok" },
       remote: { wsUrl: "ws://127.0.0.1:8788/ws", tokenRef: "" },
       permissions: { profile: "default", overrides: {} },
-      capabilities: { desktop: false, playwright: false, cli: false, http: false },
-      cli: { allowedCommands: [], allowedWorkingDirs: [] },
+      capabilities: { desktop: false, playwright: false },
       web: { allowedDomains: [], headless: true },
     });
 
@@ -235,15 +221,12 @@ describe("node-ipc", () => {
       embedded: { port: 8788, dbPath: "/tmp/test.db", tokenRef: "enc:tok" },
       remote: { wsUrl: "ws://gateway.example/ws", tokenRef: "enc:remote" },
       permissions: { profile: "default", overrides: {} },
-      capabilities: { desktop: true, playwright: true, cli: true, http: false },
-      cli: { allowedCommands: ["echo"], allowedWorkingDirs: ["/tmp"] },
+      capabilities: { desktop: true, playwright: true },
       web: { allowedDomains: ["example.com"], headless: true },
     });
 
     const { resolvePermissions } = await import("../src/main/config/permissions.js");
     (resolvePermissions as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
-      cli: true,
-      cliAllowlistEnforced: true,
       playwright: true,
       playwrightDomainRestricted: true,
     });
@@ -275,17 +258,13 @@ describe("node-ipc", () => {
     const { DesktopProvider } = await import("@tyrum/desktop-node");
     const { IsolatedDesktopBackend } =
       await import("../src/main/providers/backends/isolated-desktop-backend.js");
-    const { PlaywrightProvider } = await import("../src/main/providers/playwright-provider.js");
-    const { CliProvider } = await import("../src/main/providers/cli-provider.js");
+    const { PlaywrightProvider, RealPlaywrightBackend } = await import("@tyrum/desktop-node");
     expect(DesktopProvider).toHaveBeenCalledTimes(1);
     expect(IsolatedDesktopBackend).toHaveBeenCalledTimes(1);
     expect(PlaywrightProvider).toHaveBeenCalledTimes(1);
-    expect(CliProvider).toHaveBeenCalledTimes(1);
 
-    expect(runtimeInstance?.registerProvider).toHaveBeenCalledTimes(3);
+    expect(runtimeInstance?.registerProvider).toHaveBeenCalledTimes(2);
 
-    const { RealPlaywrightBackend } =
-      await import("../src/main/providers/backends/real-playwright-backend.js");
     expect(RealPlaywrightBackend).toHaveBeenCalledWith({ headless: true });
   });
 
@@ -296,15 +275,12 @@ describe("node-ipc", () => {
       embedded: { port: 8788, dbPath: "/tmp/test.db", tokenRef: "enc:tok" },
       remote: { wsUrl: "ws://gateway.example/ws", tokenRef: "enc:remote" },
       permissions: { profile: "default", overrides: {} },
-      capabilities: { desktop: false, playwright: true, cli: false, http: false },
-      cli: { allowedCommands: [], allowedWorkingDirs: [] },
+      capabilities: { desktop: false, playwright: true },
       web: { allowedDomains: [], headless: true },
     });
 
     const { resolvePermissions } = await import("../src/main/config/permissions.js");
     (resolvePermissions as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
-      cli: false,
-      cliAllowlistEnforced: true,
       playwright: true,
       playwrightDomainRestricted: true,
     });
@@ -323,8 +299,7 @@ describe("node-ipc", () => {
       | { disconnect: () => void }
       | undefined;
 
-    const { RealPlaywrightBackend } =
-      await import("../src/main/providers/backends/real-playwright-backend.js");
+    const { RealPlaywrightBackend } = await import("@tyrum/desktop-node");
     const RealPlaywrightBackendMock = RealPlaywrightBackend as unknown as ReturnType<typeof vi.fn>;
     const firstBackend = RealPlaywrightBackendMock.mock.results[0]?.value as
       | { close: () => Promise<void> }
@@ -343,8 +318,7 @@ describe("node-ipc", () => {
       embedded: { port: 8788, dbPath: "/tmp/test.db", tokenRef: "enc:tok" },
       remote: { wsUrl: "ws://127.0.0.1:8788/ws", tokenRef: "" },
       permissions: { profile: "default", overrides: {} },
-      capabilities: { desktop: false, playwright: false, cli: false, http: false },
-      cli: { allowedCommands: [], allowedWorkingDirs: [] },
+      capabilities: { desktop: false, playwright: false },
       web: { allowedDomains: [], headless: true },
     });
 

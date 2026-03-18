@@ -416,3 +416,23 @@ export const BrowserRunCodeResult = z
   })
   .strict();
 export type BrowserRunCodeResult = z.infer<typeof BrowserRunCodeResult>;
+
+// ---------------------------------------------------------------------------
+// 22. Launch
+// ---------------------------------------------------------------------------
+
+export const BrowserLaunchArgs = z
+  .object({
+    headless: z.boolean().optional(),
+    browser: z.enum(["chromium"]).default("chromium").optional(),
+  })
+  .strict();
+export type BrowserLaunchArgs = z.infer<typeof BrowserLaunchArgs>;
+
+export const BrowserLaunchResult = z
+  .object({
+    headless: z.boolean(),
+    browser: z.string(),
+  })
+  .strict();
+export type BrowserLaunchResult = z.infer<typeof BrowserLaunchResult>;

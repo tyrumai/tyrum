@@ -2,7 +2,7 @@ id: second-playbook
 name: Second Playbook
 version: "2.0.0"
 steps:
-  - id: http
-    name: Make HTTP request
-    command: http GET https://api.example.com/data
+  - id: web
+    name: Navigate to API
+    command: web navigate https://api.example.com/data
     output: json

@@ -1,7 +1,7 @@
-import type { ActionPrimitive } from "@tyrum/operator-core";
-import { checkPostcondition } from "@tyrum/operator-core";
-import type { EvaluationContext } from "@tyrum/operator-core";
-import type { CapabilityProvider, TaskResult } from "@tyrum/operator-core";
+import type { ActionPrimitive } from "@tyrum/schemas";
+import { checkPostcondition } from "@tyrum/schemas";
+import type { EvaluationContext } from "@tyrum/schemas";
+import type { CapabilityProvider, TaskResult } from "@tyrum/client";
 import type { PlaywrightBackend } from "./backends/playwright-backend.js";
 
 export interface PlaywrightProviderConfig {
@@ -12,6 +12,7 @@ export interface PlaywrightProviderConfig {
 
 export class PlaywrightProvider implements CapabilityProvider {
   readonly capabilityIds = [
+    "tyrum.browser.launch",
     "tyrum.browser.navigate",
     "tyrum.browser.navigate-back",
     "tyrum.browser.snapshot",
@@ -54,6 +55,8 @@ export class PlaywrightProvider implements CapabilityProvider {
 
     try {
       switch (op) {
+        case "launch":
+          return await this.launchOp(args);
         case "navigate":
           return await this.navigate(action, args);
         case "navigate_back":
@@ -472,6 +475,18 @@ export class PlaywrightProvider implements CapabilityProvider {
     return {
       success: true,
       evidence: { type: "resize", width, height, timestamp: new Date().toISOString() },
+    };
+  }
+
+  private async launchOp(args: Record<string, unknown>): Promise<TaskResult> {
+    const headless = typeof args["headless"] === "boolean" ? args["headless"] : undefined;
+    const result = await this.backend.launch({ headless });
+    return {
+      success: true,
+      result: {
+        headless: result.headless,
+        browser: result.browser,
+      },
     };
   }
 

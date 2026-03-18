@@ -20,12 +20,12 @@ import { createSpyLogger, makeDeps, makeClient } from "./ws-protocol.test-suppor
 function registerCapabilityReadyTests(): void {
   it("accepts capability.ready from nodes and broadcasts a capability.ready event", async () => {
     const cm = new ConnectionManager();
-    const { id: nodeConnId } = makeClient(cm, ["cli"], {
+    const { id: nodeConnId } = makeClient(cm, ["desktop"], {
       role: "node",
       deviceId: "dev_test",
       protocolRev: 2,
     });
-    const { ws: operatorWs } = makeClient(cm, ["cli"], { protocolRev: 2 });
+    const { ws: operatorWs } = makeClient(cm, ["desktop"], { protocolRev: 2 });
     const node = cm.getClient(nodeConnId)!;
 
     const deps = makeDeps(cm, {
@@ -42,7 +42,7 @@ function registerCapabilityReadyTests(): void {
         payload: {
           capabilities: [
             {
-              id: descriptorIdForClientCapability("cli"),
+              id: descriptorIdForClientCapability("playwright"),
               version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
             },
           ],
@@ -69,12 +69,12 @@ function registerCapabilityReadyTests(): void {
 
   it("logs capability.ready persistence failures (best-effort)", async () => {
     const cm = new ConnectionManager();
-    const { id: nodeConnId } = makeClient(cm, ["cli"], {
+    const { id: nodeConnId } = makeClient(cm, ["desktop"], {
       role: "node",
       deviceId: "dev_test",
       protocolRev: 2,
     });
-    makeClient(cm, ["cli"], { protocolRev: 2 });
+    makeClient(cm, ["desktop"], { protocolRev: 2 });
     const node = cm.getClient(nodeConnId)!;
 
     const logger = createSpyLogger();
@@ -101,7 +101,7 @@ function registerCapabilityReadyTests(): void {
         payload: {
           capabilities: [
             {
-              id: descriptorIdForClientCapability("cli"),
+              id: descriptorIdForClientCapability("playwright"),
               version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
             },
           ],
@@ -128,7 +128,7 @@ function registerCapabilityReadyTests(): void {
 function registerAttemptEvidenceTests(): void {
   it("logs attempt.evidence node pairing lookup failures", async () => {
     const cm = new ConnectionManager();
-    const { id: nodeConnId } = makeClient(cm, ["cli"], {
+    const { id: nodeConnId } = makeClient(cm, ["desktop"], {
       role: "node",
       deviceId: "dev_test",
       protocolRev: 2,
@@ -178,12 +178,12 @@ function registerAttemptEvidenceTests(): void {
     const db = openTestSqliteDb();
     try {
       const cm = new ConnectionManager();
-      const { id: nodeConnId } = makeClient(cm, ["cli"], {
+      const { id: nodeConnId } = makeClient(cm, ["desktop"], {
         role: "node",
         deviceId: "dev_test",
         protocolRev: 2,
       });
-      const { ws: operatorWs } = makeClient(cm, ["cli"], { protocolRev: 2 });
+      const { ws: operatorWs } = makeClient(cm, ["desktop"], { protocolRev: 2 });
       const node = cm.getClient(nodeConnId)!;
 
       await db.run(
@@ -231,7 +231,7 @@ function registerAttemptEvidenceTests(): void {
           "550e8400-e29b-41d4-a716-446655440000",
           0,
           "running",
-          JSON.stringify({ type: "CLI", args: { command: "echo hi" } }),
+          JSON.stringify({ type: "Desktop", args: { op: "screenshot" } }),
         ],
       );
       await db.run(
@@ -292,12 +292,12 @@ function registerAttemptEvidenceTests(): void {
 
   it("rejects oversized attempt.evidence payloads", async () => {
     const cm = new ConnectionManager();
-    const { id: nodeConnId } = makeClient(cm, ["cli"], {
+    const { id: nodeConnId } = makeClient(cm, ["desktop"], {
       role: "node",
       deviceId: "dev_test",
       protocolRev: 2,
     });
-    const { ws: operatorWs } = makeClient(cm, ["cli"], { protocolRev: 2 });
+    const { ws: operatorWs } = makeClient(cm, ["desktop"], { protocolRev: 2 });
     const node = cm.getClient(nodeConnId)!;
 
     const deps = makeDeps(cm);
@@ -328,17 +328,17 @@ function registerAttemptEvidenceTests(): void {
     const db = openTestSqliteDb();
     try {
       const cm = new ConnectionManager();
-      const { id: executorConnId } = makeClient(cm, ["cli"], {
+      const { id: executorConnId } = makeClient(cm, ["desktop"], {
         role: "node",
         deviceId: "dev_executor",
         protocolRev: 2,
       });
-      const { id: attackerConnId } = makeClient(cm, ["cli"], {
+      const { id: attackerConnId } = makeClient(cm, ["desktop"], {
         role: "node",
         deviceId: "dev_attacker",
         protocolRev: 2,
       });
-      const { ws: operatorWs } = makeClient(cm, ["cli"], { protocolRev: 2 });
+      const { ws: operatorWs } = makeClient(cm, ["desktop"], { protocolRev: 2 });
 
       await db.run(
         `INSERT INTO execution_jobs (
@@ -385,7 +385,7 @@ function registerAttemptEvidenceTests(): void {
           "550e8400-e29b-41d4-a716-446655440000",
           0,
           "running",
-          JSON.stringify({ type: "CLI", args: { command: "echo hi" } }),
+          JSON.stringify({ type: "Desktop", args: { op: "screenshot" } }),
         ],
       );
       await db.run(

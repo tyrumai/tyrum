@@ -83,6 +83,8 @@ COPY --from=builder /app/packages/desktop-node/node_modules ./packages/desktop-n
 COPY docker/desktop-sandbox/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
+RUN npx playwright install --with-deps chromium
+
 EXPOSE 5900
 EXPOSE 6080
 

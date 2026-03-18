@@ -129,7 +129,7 @@ function registerPairingRequestTests(ctx: TestContext): void {
           device: { device_id: deviceId, pubkey: pubkeyB64Url, label: "node-1" },
           capabilities: [
             {
-              id: "tyrum.cli.execute",
+              id: "tyrum.desktop.screenshot",
               version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
             },
           ],
@@ -203,7 +203,7 @@ function registerPairingRequestTests(ctx: TestContext): void {
           trust_level: "remote",
           capability_allowlist: [
             {
-              id: "tyrum.cli.execute",
+              id: "tyrum.desktop.screenshot",
               version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
             },
           ],
@@ -221,7 +221,7 @@ function registerPairingRequestTests(ctx: TestContext): void {
     expect((pairing2 as any)["trust_level"]).toBe("remote");
     expect((pairing2 as any)["capability_allowlist"]).toEqual([
       {
-        id: "tyrum.cli.execute",
+        id: "tyrum.desktop.screenshot",
         version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
       },
     ]);
@@ -299,7 +299,7 @@ function registerTokenRevocationTests(ctx: TestContext): void {
           device: { device_id: deviceId, pubkey: pubkeyB64Url, label: "node-1" },
           capabilities: [
             {
-              id: "tyrum.cli.execute",
+              id: "tyrum.desktop.screenshot",
               version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
             },
           ],
@@ -362,7 +362,7 @@ function registerTokenRevocationTests(ctx: TestContext): void {
           trust_level: "remote",
           capability_allowlist: [
             {
-              id: "tyrum.cli.execute",
+              id: "tyrum.desktop.screenshot",
               version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
             },
           ],
@@ -409,7 +409,7 @@ function registerTokenRevocationTests(ctx: TestContext): void {
           device: { device_id: deviceId, pubkey: pubkeyB64Url, label: "node-1" },
           capabilities: [
             {
-              id: "tyrum.cli.execute",
+              id: "tyrum.desktop.screenshot",
               version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
             },
           ],

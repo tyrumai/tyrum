@@ -44,7 +44,7 @@ function registerEventsBasicTests(fixture: EventsFixture): void {
     const client = new TyrumClient({
       url: server.url,
       token: "t",
-      capabilities: ["http"],
+      capabilities: ["desktop"],
     });
     fixture.setClient(client);
 
@@ -78,7 +78,7 @@ function registerEventsBasicTests(fixture: EventsFixture): void {
     const client = new TyrumClient({
       url: server.url,
       token: "t",
-      capabilities: ["http"],
+      capabilities: ["desktop"],
       reconnect: false,
     });
     fixture.setClient(client);

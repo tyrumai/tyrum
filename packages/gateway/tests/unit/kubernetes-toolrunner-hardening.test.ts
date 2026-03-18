@@ -69,7 +69,7 @@ describe("KubernetesToolRunnerStepExecutor hardening", () => {
     });
 
     const result = await executor.execute(
-      { type: "CLI", args: { cmd: "echo", args: ["hi"] } },
+      { type: "Desktop", args: { op: "screenshot" } },
       "plan-1",
       0,
       1_000,
@@ -128,7 +128,7 @@ describe("KubernetesToolRunnerStepExecutor hardening", () => {
     });
 
     const result = await executor.execute(
-      { type: "CLI", args: { cmd: "echo", args: ["hi"] } },
+      { type: "Desktop", args: { op: "screenshot" } },
       "plan-1",
       0,
       1_000,

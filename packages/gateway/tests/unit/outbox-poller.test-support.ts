@@ -150,7 +150,7 @@ function attachClients(
     const ws = createMockWs(client.wsOptions);
     connectionManager.addClient(
       ws as never,
-      (client.capabilities ?? ["cli"]) as never,
+      (client.capabilities ?? ["desktop"]) as never,
       client.options,
     );
     sockets[client.key] = ws;
@@ -215,7 +215,7 @@ function createTaskExecuteMessage(attemptId = "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0
       run_id: "550e8400-e29b-41d4-a716-446655440000",
       step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
       attempt_id: attemptId,
-      action: { type: "CLI", args: { command: "echo hi" } },
+      action: { type: "Desktop", args: { op: "screenshot" } },
     },
   };
 }

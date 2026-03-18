@@ -26,10 +26,10 @@ describe("WS envelopes", () => {
     const msg = WsConnectRequest.parse({
       request_id: "r-1",
       type: "connect",
-      payload: { capabilities: ["playwright", "http"] },
+      payload: { capabilities: ["playwright", "desktop"] },
     });
     expect(msg.type).toBe("connect");
-    expect(msg.payload.capabilities).toEqual(["playwright", "http"]);
+    expect(msg.payload.capabilities).toEqual(["playwright", "desktop"]);
   });
 
   it("rejects connect request missing payload", () => {
@@ -311,8 +311,8 @@ describe("requiredCapability", () => {
     expect(requiredCapability("Browser")).toBe("browser");
   });
 
-  it("maps Http to http", () => {
-    expect(requiredCapability("Http")).toBe("http");
+  it("maps Http to undefined (no longer a node capability)", () => {
+    expect(requiredCapability("Http")).toBeUndefined();
   });
 
   it("maps Desktop to desktop", () => {
@@ -392,9 +392,9 @@ describe("requiredCapabilityDescriptor", () => {
     expect(requiredCapabilityDescriptor("Web", { op: "unknown" })).toBeUndefined();
   });
 
-  it("maps CLI and Http to canonical descriptors", () => {
-    expect(requiredCapabilityDescriptor("Http", { op: "anything" })).toBe("tyrum.http.request");
-    expect(requiredCapabilityDescriptor("CLI", { op: "anything" })).toBe("tyrum.cli.execute");
+  it("maps CLI and Http to undefined (no longer node capabilities)", () => {
+    expect(requiredCapabilityDescriptor("Http", { op: "anything" })).toBeUndefined();
+    expect(requiredCapabilityDescriptor("CLI", { op: "anything" })).toBeUndefined();
     expect(requiredCapabilityDescriptor("Research", { op: "anything" })).toBeUndefined();
     expect(
       requiredCapabilityDescriptorForAction({

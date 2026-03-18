@@ -24,7 +24,7 @@ describe("resolveNodePairing", () => {
       nodeId,
       pubkey: `${nodeId}-pubkey`,
       label: nodeId,
-      capabilities: ["cli"],
+      capabilities: ["desktop"],
       motivation: "Human review is required before this node can be paired.",
       initialStatus: "awaiting_human",
       nowIso: "2026-02-23T00:00:00.000Z",

@@ -44,9 +44,15 @@ export const CANONICAL_CAPABILITY_IDS = [
   "tyrum.browser.close",
   "tyrum.browser.handle-dialog",
   "tyrum.browser.run-code",
-  // CLI / HTTP
-  "tyrum.cli.execute",
-  "tyrum.http.request",
+  "tyrum.browser.launch",
+  // Filesystem
+  "tyrum.fs.read",
+  "tyrum.fs.write",
+  "tyrum.fs.edit",
+  "tyrum.fs.apply-patch",
+  "tyrum.fs.bash",
+  "tyrum.fs.glob",
+  "tyrum.fs.grep",
 ] as const;
 
 export type CanonicalCapabilityId = (typeof CANONICAL_CAPABILITY_IDS)[number];
@@ -54,6 +60,11 @@ export type CanonicalCapabilityId = (typeof CANONICAL_CAPABILITY_IDS)[number];
 /** All canonical browser automation capability IDs. */
 export const BROWSER_AUTOMATION_CAPABILITY_IDS = CANONICAL_CAPABILITY_IDS.filter((id) =>
   id.startsWith("tyrum.browser."),
+);
+
+/** All canonical filesystem capability IDs. */
+export const FILESYSTEM_CAPABILITY_IDS = CANONICAL_CAPABILITY_IDS.filter((id) =>
+  id.startsWith("tyrum.fs."),
 );
 
 // ---------------------------------------------------------------------------
@@ -80,9 +91,6 @@ export const LEGACY_ID_MIGRATION_MAP: Record<string, string | readonly string[]>
   "tyrum.browser.microphone.record": "tyrum.audio.record",
   // Monolithic playwright → fine-grained browser automation IDs
   "tyrum.playwright": BROWSER_AUTOMATION_CAPABILITY_IDS,
-  // Monolithic CLI / HTTP → explicit action IDs
-  "tyrum.cli": "tyrum.cli.execute",
-  "tyrum.http": "tyrum.http.request",
 } as const;
 
 /**
@@ -114,15 +122,7 @@ export function migrateCapabilityDescriptorId(id: string): readonly string[] {
  * Nodes advertise and execute these capabilities; clients do not execute
  * capability calls.
  */
-export const ClientCapability = z.enum([
-  "playwright",
-  "ios",
-  "android",
-  "desktop",
-  "cli",
-  "http",
-  "browser",
-]);
+export const ClientCapability = z.enum(["playwright", "ios", "android", "desktop", "browser"]);
 export type ClientCapability = z.infer<typeof ClientCapability>;
 
 /** @deprecated Use canonical capability descriptor IDs instead. */
@@ -166,8 +166,6 @@ export const CAPABILITY_DESCRIPTOR_IDS = {
     "tyrum.desktop.keyboard",
     "tyrum.desktop.wait-for",
   ],
-  cli: ["tyrum.cli"],
-  http: ["tyrum.http"],
   browser: [
     "tyrum.browser.geolocation.get",
     "tyrum.browser.camera.capture-photo",

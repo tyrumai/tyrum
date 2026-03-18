@@ -108,6 +108,7 @@ if [[ -z "${TYRUM_GATEWAY_TOKEN_PATH:-}" && -z "${TYRUM_GATEWAY_TOKEN:-}" ]]; th
   exit 1
 fi
 
+export TYRUM_BROWSER_ENABLED="${TYRUM_BROWSER_ENABLED:-1}"
 export TYRUM_NODE_LABEL="${TYRUM_NODE_LABEL:-tyrum-desktop-sandbox}"
 export TYRUM_NODE_MODE="${TYRUM_NODE_MODE:-desktop-sandbox}"
 

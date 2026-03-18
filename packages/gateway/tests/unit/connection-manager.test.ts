@@ -43,7 +43,7 @@ function createMockWs(): MockWebSocket & { emitPong: () => void } {
   };
 }
 
-function descriptorsFor(...capabilities: Array<"playwright" | "cli" | "http">) {
+function descriptorsFor(...capabilities: Array<"playwright" | "desktop" | "browser">) {
   return capabilities.flatMap((capability) => capabilityDescriptorsForClientCapability(capability));
 }
 
@@ -67,7 +67,7 @@ describe("ConnectionManager", () => {
 
   it("removeClient evicts the client", () => {
     const cm = new ConnectionManager();
-    const id = cm.addClient(createMockWs() as never, descriptorsFor("cli"));
+    const id = cm.addClient(createMockWs() as never, descriptorsFor("desktop"));
     cm.removeClient(id);
 
     expect(cm.getClient(id)).toBeUndefined();
@@ -79,7 +79,7 @@ describe("ConnectionManager", () => {
     metrics.wsConnectionsActive.set(0);
     const cm = new ConnectionManager(metrics);
 
-    const id = cm.addClient(createMockWs() as never, descriptorsFor("cli"), { id: "client-1" });
+    const id = cm.addClient(createMockWs() as never, descriptorsFor("desktop"), { id: "client-1" });
     await expect(
       metrics.registry.getSingleMetricAsString("ws_connections_active"),
     ).resolves.toMatch(/ws_connections_active\s+1(\s|$)/);
@@ -93,7 +93,7 @@ describe("ConnectionManager", () => {
   it("getClientForCapability returns matching client", () => {
     const cm = new ConnectionManager();
     cm.addClient(createMockWs() as never, descriptorsFor("playwright"));
-    cm.addClient(createMockWs() as never, descriptorsFor("cli", "http"));
+    cm.addClient(createMockWs() as never, descriptorsFor("desktop", "playwright"));
 
     const playwrightClient = cm.getClientForCapability(
       descriptorIdForClientCapability("playwright"),
@@ -104,17 +104,17 @@ describe("ConnectionManager", () => {
       version: "1.0.0",
     });
 
-    const cliClient = cm.getClientForCapability(descriptorIdForClientCapability("cli"));
+    const cliClient = cm.getClientForCapability(descriptorIdForClientCapability("playwright"));
     expect(cliClient).toBeDefined();
     expect(cliClient!.capabilities).toContainEqual({
-      id: descriptorIdForClientCapability("cli"),
+      id: descriptorIdForClientCapability("playwright"),
       version: "1.0.0",
     });
 
-    const httpClient = cm.getClientForCapability(descriptorIdForClientCapability("http"));
+    const httpClient = cm.getClientForCapability(descriptorIdForClientCapability("playwright"));
     expect(httpClient).toBeDefined();
     expect(httpClient!.capabilities).toContainEqual({
-      id: descriptorIdForClientCapability("http"),
+      id: descriptorIdForClientCapability("playwright"),
       version: "1.0.0",
     });
   });
@@ -133,8 +133,8 @@ describe("ConnectionManager", () => {
     const ws3 = createMockWs();
 
     cm.addClient(ws1 as never, descriptorsFor("playwright"));
-    cm.addClient(ws2 as never, descriptorsFor("playwright", "cli"));
-    cm.addClient(ws3 as never, descriptorsFor("cli"));
+    cm.addClient(ws2 as never, descriptorsFor("playwright", "desktop"));
+    cm.addClient(ws3 as never, descriptorsFor("desktop"));
 
     cm.broadcastToCapable(descriptorIdForClientCapability("playwright"), {
       event_id: "evt-1",
@@ -172,7 +172,7 @@ describe("ConnectionManager", () => {
       const ws2 = createMockWs();
 
       cm.addClient(ws1 as never, descriptorsFor("playwright"));
-      cm.addClient(ws2 as never, descriptorsFor("cli"));
+      cm.addClient(ws2 as never, descriptorsFor("desktop"));
 
       cm.heartbeat();
 
@@ -234,17 +234,14 @@ describe("ConnectionManager", () => {
   describe("getStats", () => {
     it("returns correct totals and capability counts", () => {
       const cm = new ConnectionManager();
-      cm.addClient(createMockWs() as never, descriptorsFor("playwright", "cli"));
+      cm.addClient(createMockWs() as never, descriptorsFor("playwright", "desktop"));
       cm.addClient(createMockWs() as never, descriptorsFor("playwright"));
-      cm.addClient(createMockWs() as never, descriptorsFor("http"));
+      cm.addClient(createMockWs() as never, descriptorsFor("desktop"));
 
       const stats = cm.getStats();
       expect(stats.totalClients).toBe(3);
-      expect(stats.capabilityCounts).toEqual({
-        [descriptorIdForClientCapability("playwright")]: 2,
-        [descriptorIdForClientCapability("cli")]: 1,
-        [descriptorIdForClientCapability("http")]: 1,
-      });
+      expect(stats.capabilityCounts[descriptorIdForClientCapability("playwright")]).toBe(2);
+      expect(stats.capabilityCounts["tyrum.desktop.screenshot"]).toBe(2);
     });
 
     it("returns zero counts when empty", () => {
@@ -258,7 +255,7 @@ describe("ConnectionManager", () => {
   it("allClients iterates all clients", () => {
     const cm = new ConnectionManager();
     const id1 = cm.addClient(createMockWs() as never, descriptorsFor("playwright"));
-    const id2 = cm.addClient(createMockWs() as never, descriptorsFor("cli"));
+    const id2 = cm.addClient(createMockWs() as never, descriptorsFor("desktop"));
 
     const ids = [...cm.allClients()].map((c) => c.id);
     expect(ids).toContain(id1);

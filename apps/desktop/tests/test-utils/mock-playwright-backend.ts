@@ -1,7 +1,4 @@
-import type {
-  PageSnapshot,
-  PlaywrightBackend,
-} from "../../src/main/providers/backends/playwright-backend.js";
+import type { PageSnapshot, PlaywrightBackend } from "@tyrum/desktop-node";
 
 export class MockPlaywrightBackend implements PlaywrightBackend {
   readonly calls: Array<{ method: string; args: unknown[] }> = [];

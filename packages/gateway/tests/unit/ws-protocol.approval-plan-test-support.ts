@@ -9,7 +9,7 @@ export function registerApprovalPlanTests(): void {
     it("broadcasts plan.update events to all connected clients", () => {
       const cm = new ConnectionManager();
       const { ws: ws1 } = makeClient(cm, ["playwright"]);
-      const { ws: ws2 } = makeClient(cm, ["cli"]);
+      const { ws: ws2 } = makeClient(cm, ["desktop"]);
       const deps = makeDeps(cm);
 
       sendPlanUpdate(DEFAULT_TENANT_ID, "plan-1", "executing", deps, "step 2 of 5");

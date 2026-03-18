@@ -65,7 +65,7 @@ describe("Pairing routes", () => {
       nodeId: "node-1",
       pubkey: "pubkey-1",
       label: "node-1",
-      capabilities: ["cli"],
+      capabilities: ["desktop"],
       motivation: "Human review is required before this node can be paired.",
       initialStatus: "awaiting_human",
       nowIso: "2026-02-23T00:00:00.000Z",

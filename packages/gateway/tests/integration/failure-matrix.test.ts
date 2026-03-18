@@ -55,7 +55,7 @@ describe("Failure matrix (scaling-ha)", () => {
       port: edgeA.port,
       token,
       role: "node",
-      capabilities: ["cli"],
+      capabilities: ["desktop"],
     });
 
     await expectSingleCapabilityEdge(edgeA.connectionDirectory, "edge-a");
@@ -78,7 +78,7 @@ describe("Failure matrix (scaling-ha)", () => {
       port: edgeB.port,
       token,
       role: "node",
-      capabilities: ["cli"],
+      capabilities: ["desktop"],
     });
 
     await expectSingleCapabilityEdge(edgeB.connectionDirectory, "edge-b");
@@ -113,7 +113,7 @@ describe("Failure matrix (scaling-ha)", () => {
       port: edgeA1.port,
       token,
       role: "node",
-      capabilities: ["cli"],
+      capabilities: ["desktop"],
     });
 
     await expectSingleCapabilityEdge(edgeA1.connectionDirectory, "edge-a");
@@ -145,7 +145,7 @@ describe("Failure matrix (scaling-ha)", () => {
       port: edgeA2.port,
       token,
       role: "node",
-      capabilities: ["cli"],
+      capabilities: ["desktop"],
     });
 
     await expectSingleCapabilityEdge(edgeA2.connectionDirectory, "edge-a");
@@ -174,7 +174,7 @@ describe("Failure matrix (scaling-ha)", () => {
       lane: "main",
       planId: "plan-worker-1",
       requestId: "req-worker-1",
-      steps: [{ type: "CLI", args: {} }],
+      steps: [{ type: "Desktop", args: { op: "screenshot" } }],
     });
 
     const stepId = await getRequiredStepId(db2, runId);
@@ -234,7 +234,7 @@ describe("Failure matrix (scaling-ha)", () => {
       lane,
       planId: "plan-lane-1",
       requestId: "req-lane-1",
-      steps: [{ type: "CLI", args: {} }],
+      steps: [{ type: "Desktop", args: { op: "screenshot" } }],
     });
     const run2 = await engine1.enqueuePlan({
       tenantId: DEFAULT_TENANT_ID,
@@ -242,7 +242,7 @@ describe("Failure matrix (scaling-ha)", () => {
       lane,
       planId: "plan-lane-2",
       requestId: "req-lane-2",
-      steps: [{ type: "CLI", args: {} }],
+      steps: [{ type: "Desktop", args: { op: "screenshot" } }],
     });
 
     let releaseFirst: (() => void) | undefined;
@@ -386,7 +386,7 @@ describe("Failure matrix (scaling-ha)", () => {
       port,
       token,
       role: "client",
-      capabilities: ["cli"],
+      capabilities: ["desktop"],
     });
 
     const consumerId = "edge-db-restart";
@@ -406,7 +406,7 @@ describe("Failure matrix (scaling-ha)", () => {
             run_id: runId,
             step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
             attempt_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
-            action: { type: "CLI", args: {} },
+            action: { type: "Desktop", args: { op: "screenshot" } },
           },
         },
       },

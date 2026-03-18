@@ -12,15 +12,11 @@ try {
 }
 
 describe.skipIf(!canRunPlaywright)("RealPlaywrightBackend", () => {
-  let backend:
-    | InstanceType<
-        typeof import("../src/main/providers/backends/real-playwright-backend.js").RealPlaywrightBackend
-      >
-    | undefined;
+  let backend: InstanceType<typeof import("@tyrum/desktop-node").RealPlaywrightBackend> | undefined;
 
   // Dynamic import to avoid issues if playwright isn't installed
   const getBackend = async () => {
-    const mod = await import("../src/main/providers/backends/real-playwright-backend.js");
+    const mod = await import("@tyrum/desktop-node");
     return new mod.RealPlaywrightBackend({ headless: true });
   };
 
@@ -75,13 +71,13 @@ describe.skipIf(!canRunPlaywright)("RealPlaywrightBackend", () => {
 
 describe("RealPlaywrightBackend construction", () => {
   it("can be constructed without throwing", async () => {
-    const mod = await import("../src/main/providers/backends/real-playwright-backend.js");
+    const mod = await import("@tyrum/desktop-node");
     const backend = new mod.RealPlaywrightBackend({ headless: true });
     expect(backend).toBeDefined();
   });
 
   it("closes the browser without waiting on a stuck page close", async () => {
-    const mod = await import("../src/main/providers/backends/real-playwright-backend.js");
+    const mod = await import("@tyrum/desktop-node");
     const backend = new mod.RealPlaywrightBackend({ headless: true });
     const browserClose = vi.fn(async () => undefined);
     const pageClose = vi.fn(() => new Promise<void>(() => {}));

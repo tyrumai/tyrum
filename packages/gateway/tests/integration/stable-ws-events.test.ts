@@ -136,7 +136,7 @@ describe("stable ws event builders", () => {
       nodeId: "node-stable-event",
       pubkey: "pubkey-stable-event",
       label: "node-stable-event",
-      capabilities: ["cli"],
+      capabilities: ["desktop"],
       motivation: "Human review is required before pairing this node.",
       initialStatus: "awaiting_human",
       nowIso: "2026-03-06T12:00:00.000Z",

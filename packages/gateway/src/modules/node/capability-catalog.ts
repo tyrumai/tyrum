@@ -65,6 +65,23 @@ import {
   BrowserHandleDialogResult,
   BrowserRunCodeArgs,
   BrowserRunCodeResult,
+  BrowserLaunchArgs,
+  BrowserLaunchResult,
+  // Filesystem schemas
+  FsReadArgs,
+  FsReadResult,
+  FsWriteArgs,
+  FsWriteResult,
+  FsEditArgs,
+  FsEditResult,
+  FsApplyPatchArgs,
+  FsApplyPatchResult,
+  FsBashArgs,
+  FsBashResult,
+  FsGlobArgs,
+  FsGlobResult,
+  FsGrepArgs,
+  FsGrepResult,
   type CapabilityDescriptor,
   type NodeActionConsentMetadata,
   type NodeActionPermissionMetadata,
@@ -180,6 +197,32 @@ function crossPlatformSensorAction(
   };
 }
 
+/** Shorthand: create a browser automation catalog entry. */
+function ba(
+  id: string,
+  name: string,
+  description: string,
+  inputSchema: unknown,
+  outputSchema: unknown,
+): CapabilityCatalogEntry {
+  return createEntry(id, browserAutomationAction(name, description, inputSchema, outputSchema));
+}
+
+/** Shorthand: create a filesystem catalog entry. */
+function fa(
+  id: string,
+  name: string,
+  description: string,
+  inputSchema: unknown,
+  outputSchema: unknown,
+  isStateChanging: boolean,
+): CapabilityCatalogEntry {
+  return createEntry(
+    id,
+    filesystemAction(name, description, inputSchema, outputSchema, isStateChanging),
+  );
+}
+
 function browserAutomationAction(
   name: CatalogAction["name"],
   description: string,
@@ -211,6 +254,41 @@ function browserAutomationAction(
       op_value: name,
       result_channel: resultChannel,
       artifactize_binary_fields: resultChannel === "result" ? [] : ["bytesBase64"],
+    },
+  };
+}
+
+function filesystemAction(
+  name: CatalogAction["name"],
+  description: string,
+  inputSchema: unknown,
+  outputSchema: unknown,
+  isStateChanging: boolean,
+): CatalogAction {
+  return {
+    name,
+    description,
+    inputParser: passthroughParser(inputSchema),
+    outputParser: outputSchema as ZodType,
+    inputSchema: jsonSchemaOf(inputSchema, "input"),
+    outputSchema: jsonSchemaOf(outputSchema, "output"),
+    consent: {
+      requires_operator_enable: false,
+      requires_runtime_consent: false,
+      may_prompt_user: false,
+      sensitive_data_category: isStateChanging ? "filesystem" : "none",
+    },
+    permissions: {
+      secure_context_required: false,
+      browser_apis: [],
+      hardware_may_be_required: false,
+    },
+    transport: {
+      primitive_kind: "Filesystem",
+      op_field: "op",
+      op_value: name,
+      result_channel: "result",
+      artifactize_binary_fields: [],
     },
   };
 }
@@ -363,239 +441,162 @@ const CATALOG_ENTRIES: CapabilityCatalogEntry[] = [
   ),
 
   // ---------------------------------------------------------------------------
-  // Browser automation (21 entries)
+  // Browser automation (22 entries including launch)
   // ---------------------------------------------------------------------------
-  createEntry(
+  ba(
+    "tyrum.browser.launch",
+    "launch",
+    "Launch a browser session.",
+    BrowserLaunchArgs,
+    BrowserLaunchResult,
+  ),
+  ba(
     "tyrum.browser.navigate",
-    browserAutomationAction(
-      "navigate",
-      "Navigate to a URL.",
-      BrowserNavigateArgs,
-      BrowserNavigateResult,
-    ),
+    "navigate",
+    "Navigate to a URL.",
+    BrowserNavigateArgs,
+    BrowserNavigateResult,
   ),
-  createEntry(
+  ba(
     "tyrum.browser.navigate-back",
-    browserAutomationAction(
-      "navigate_back",
-      "Navigate back in history.",
-      BrowserNavigateBackArgs,
-      BrowserNavigateBackResult,
-    ),
+    "navigate_back",
+    "Navigate back in history.",
+    BrowserNavigateBackArgs,
+    BrowserNavigateBackResult,
   ),
-  createEntry(
+  ba(
     "tyrum.browser.snapshot",
-    browserAutomationAction(
-      "snapshot",
-      "Collect a page accessibility snapshot.",
-      BrowserSnapshotArgs,
-      BrowserSnapshotResult,
-    ),
+    "snapshot",
+    "Collect a page accessibility snapshot.",
+    BrowserSnapshotArgs,
+    BrowserSnapshotResult,
   ),
-  createEntry(
-    "tyrum.browser.click",
-    browserAutomationAction("click", "Click a page element.", BrowserClickArgs, BrowserClickResult),
-  ),
-  createEntry(
+  ba("tyrum.browser.click", "click", "Click a page element.", BrowserClickArgs, BrowserClickResult),
+  ba(
     "tyrum.browser.type",
-    browserAutomationAction(
-      "type",
-      "Type text into an element.",
-      BrowserTypeArgs,
-      BrowserTypeResult,
-    ),
+    "type",
+    "Type text into an element.",
+    BrowserTypeArgs,
+    BrowserTypeResult,
   ),
-  createEntry(
+  ba(
     "tyrum.browser.fill-form",
-    browserAutomationAction(
-      "fill_form",
-      "Fill a form field.",
-      BrowserFillFormArgs,
-      BrowserFillFormResult,
-    ),
+    "fill_form",
+    "Fill a form field.",
+    BrowserFillFormArgs,
+    BrowserFillFormResult,
   ),
-  createEntry(
+  ba(
     "tyrum.browser.select-option",
-    browserAutomationAction(
-      "select_option",
-      "Select from a dropdown.",
-      BrowserSelectOptionArgs,
-      BrowserSelectOptionResult,
-    ),
+    "select_option",
+    "Select from a dropdown.",
+    BrowserSelectOptionArgs,
+    BrowserSelectOptionResult,
   ),
-  createEntry(
+  ba(
     "tyrum.browser.hover",
-    browserAutomationAction(
-      "hover",
-      "Hover over an element.",
-      BrowserHoverArgs,
-      BrowserHoverResult,
-    ),
+    "hover",
+    "Hover over an element.",
+    BrowserHoverArgs,
+    BrowserHoverResult,
   ),
-  createEntry(
-    "tyrum.browser.drag",
-    browserAutomationAction("drag", "Drag an element.", BrowserDragArgs, BrowserDragResult),
-  ),
-  createEntry(
+  ba("tyrum.browser.drag", "drag", "Drag an element.", BrowserDragArgs, BrowserDragResult),
+  ba(
     "tyrum.browser.press-key",
-    browserAutomationAction(
-      "press_key",
-      "Press a keyboard key.",
-      BrowserPressKeyArgs,
-      BrowserPressKeyResult,
-    ),
+    "press_key",
+    "Press a keyboard key.",
+    BrowserPressKeyArgs,
+    BrowserPressKeyResult,
   ),
-  createEntry(
+  ba(
     "tyrum.browser.screenshot",
-    browserAutomationAction(
-      "screenshot",
-      "Capture a page screenshot.",
-      BrowserScreenshotArgs,
-      BrowserScreenshotResult,
-      "result_or_evidence",
-    ),
+    "screenshot",
+    "Capture a page screenshot.",
+    BrowserScreenshotArgs,
+    BrowserScreenshotResult,
   ),
-  createEntry(
+  ba(
     "tyrum.browser.evaluate",
-    browserAutomationAction(
-      "evaluate",
-      "Run JavaScript in page context.",
-      BrowserEvaluateArgs,
-      BrowserEvaluateResult,
-    ),
+    "evaluate",
+    "Run JavaScript in page context.",
+    BrowserEvaluateArgs,
+    BrowserEvaluateResult,
   ),
-  createEntry(
+  ba(
     "tyrum.browser.wait-for",
-    browserAutomationAction(
-      "wait_for",
-      "Wait for a page condition.",
-      BrowserWaitForArgs,
-      BrowserWaitForResult,
-    ),
+    "wait_for",
+    "Wait for a page condition.",
+    BrowserWaitForArgs,
+    BrowserWaitForResult,
   ),
-  createEntry(
+  ba(
     "tyrum.browser.tabs",
-    browserAutomationAction(
-      "tabs",
-      "List or switch browser tabs.",
-      BrowserTabsArgs,
-      BrowserTabsResult,
-    ),
+    "tabs",
+    "List or switch browser tabs.",
+    BrowserTabsArgs,
+    BrowserTabsResult,
   ),
-  createEntry(
+  ba(
     "tyrum.browser.upload-file",
-    browserAutomationAction(
-      "upload_file",
-      "Upload a file to a file input.",
-      BrowserUploadFileArgs,
-      BrowserUploadFileResult,
-    ),
+    "upload_file",
+    "Upload a file to a file input.",
+    BrowserUploadFileArgs,
+    BrowserUploadFileResult,
   ),
-  createEntry(
+  ba(
     "tyrum.browser.console-messages",
-    browserAutomationAction(
-      "console_messages",
-      "Read browser console output.",
-      BrowserConsoleMessagesArgs,
-      BrowserConsoleMessagesResult,
-    ),
+    "console_messages",
+    "Read browser console output.",
+    BrowserConsoleMessagesArgs,
+    BrowserConsoleMessagesResult,
   ),
-  createEntry(
+  ba(
     "tyrum.browser.network-requests",
-    browserAutomationAction(
-      "network_requests",
-      "Inspect network requests.",
-      BrowserNetworkRequestsArgs,
-      BrowserNetworkRequestsResult,
-    ),
+    "network_requests",
+    "Inspect network requests.",
+    BrowserNetworkRequestsArgs,
+    BrowserNetworkRequestsResult,
   ),
-  createEntry(
+  ba(
     "tyrum.browser.resize",
-    browserAutomationAction(
-      "resize",
-      "Resize the browser viewport.",
-      BrowserResizeArgs,
-      BrowserResizeResult,
-    ),
+    "resize",
+    "Resize the browser viewport.",
+    BrowserResizeArgs,
+    BrowserResizeResult,
   ),
-  createEntry(
-    "tyrum.browser.close",
-    browserAutomationAction("close", "Close the browser.", BrowserCloseArgs, BrowserCloseResult),
-  ),
-  createEntry(
+  ba("tyrum.browser.close", "close", "Close the browser.", BrowserCloseArgs, BrowserCloseResult),
+  ba(
     "tyrum.browser.handle-dialog",
-    browserAutomationAction(
-      "handle_dialog",
-      "Accept or dismiss a dialog.",
-      BrowserHandleDialogArgs,
-      BrowserHandleDialogResult,
-    ),
+    "handle_dialog",
+    "Accept or dismiss a dialog.",
+    BrowserHandleDialogArgs,
+    BrowserHandleDialogResult,
   ),
-  createEntry(
+  ba(
     "tyrum.browser.run-code",
-    browserAutomationAction(
-      "run_code",
-      "Run arbitrary code in the browser.",
-      BrowserRunCodeArgs,
-      BrowserRunCodeResult,
-    ),
+    "run_code",
+    "Run arbitrary code in the browser.",
+    BrowserRunCodeArgs,
+    BrowserRunCodeResult,
   ),
 
   // ---------------------------------------------------------------------------
-  // CLI / HTTP (2 entries)
+  // Filesystem (7 entries)
   // ---------------------------------------------------------------------------
-  createEntry("tyrum.cli.execute", {
-    name: "execute",
-    description: "Execute a CLI command on the node.",
-    inputParser: z.object({}).passthrough() as ZodType,
-    outputParser: z.object({}).passthrough() as ZodType,
-    inputSchema: { type: "object", additionalProperties: true },
-    outputSchema: { type: "object", additionalProperties: true },
-    consent: {
-      requires_operator_enable: true,
-      requires_runtime_consent: false,
-      may_prompt_user: false,
-      sensitive_data_category: "none",
-    },
-    permissions: {
-      secure_context_required: false,
-      browser_apis: [],
-      hardware_may_be_required: false,
-    },
-    transport: {
-      primitive_kind: "CLI",
-      op_field: "op",
-      op_value: "execute",
-      result_channel: "result",
-      artifactize_binary_fields: [],
-    },
-  }),
-  createEntry("tyrum.http.request", {
-    name: "request",
-    description: "Send an HTTP request from the node.",
-    inputParser: z.object({}).passthrough() as ZodType,
-    outputParser: z.object({}).passthrough() as ZodType,
-    inputSchema: { type: "object", additionalProperties: true },
-    outputSchema: { type: "object", additionalProperties: true },
-    consent: {
-      requires_operator_enable: true,
-      requires_runtime_consent: false,
-      may_prompt_user: false,
-      sensitive_data_category: "none",
-    },
-    permissions: {
-      secure_context_required: false,
-      browser_apis: [],
-      hardware_may_be_required: false,
-    },
-    transport: {
-      primitive_kind: "Http",
-      op_field: "op",
-      op_value: "request",
-      result_channel: "result",
-      artifactize_binary_fields: [],
-    },
-  }),
+  fa("tyrum.fs.read", "read", "Read a file from the filesystem.", FsReadArgs, FsReadResult, false),
+  fa("tyrum.fs.write", "write", "Write content to a file.", FsWriteArgs, FsWriteResult, true),
+  fa("tyrum.fs.edit", "edit", "Edit a file by replacing text.", FsEditArgs, FsEditResult, true),
+  fa(
+    "tyrum.fs.apply-patch",
+    "apply_patch",
+    "Apply a structured patch.",
+    FsApplyPatchArgs,
+    FsApplyPatchResult,
+    true,
+  ),
+  fa("tyrum.fs.bash", "bash", "Execute a shell command.", FsBashArgs, FsBashResult, true),
+  fa("tyrum.fs.glob", "glob", "Find files by glob pattern.", FsGlobArgs, FsGlobResult, false),
+  fa("tyrum.fs.grep", "grep", "Search files for text or regex.", FsGrepArgs, FsGrepResult, false),
 ];
 
 const CATALOG = new Map<string, CapabilityCatalogEntry>(

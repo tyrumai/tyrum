@@ -305,4 +305,27 @@ export class RealPlaywrightBackend implements PlaywrightBackend {
     const page = this.getPage();
     return page.evaluate(code);
   }
+
+  async launch(options?: { headless?: boolean }): Promise<{ headless: boolean; browser: string }> {
+    if (this.browser) {
+      try {
+        await this.browser.close();
+      } catch {}
+    }
+
+    this.browser = null;
+    this.page = null;
+    this.consoleMessages = [];
+    this.networkRequests = [];
+    this.lastDialog = null;
+    this.pendingDialogAction = null;
+
+    if (options?.headless !== undefined) {
+      this.headless = options.headless;
+    }
+
+    await this.ensureBrowser();
+
+    return { headless: this.headless, browser: "chromium" };
+  }
 }

@@ -242,7 +242,7 @@ describe("PlaybookRunner", () => {
 
   it("converts steps to action primitives", () => {
     const pb = makePlaybook("conv-test", [
-      { id: "cli", command: "cli echo hello" },
+      { id: "web", command: "web navigate https://example.com" },
       { id: "mcp", command: 'mcp github.search query="hello"' },
       { id: "node", command: 'node screen capture format="png"' },
     ]);
@@ -250,13 +250,13 @@ describe("PlaybookRunner", () => {
     const result = runner.run(pb);
     expect(result.playbook_id).toBe("conv-test");
     expect(result.steps).toHaveLength(3);
-    expect(result.steps[0]!.type).toBe("CLI");
+    expect(result.steps[0]!.type).toBe("Web");
     expect(result.steps[0]!.args).toEqual({
-      cmd: "echo",
-      args: ["hello"],
+      op: "navigate",
+      url: "https://example.com",
       __playbook: {
         playbook_id: "conv-test",
-        step_id: "cli",
+        step_id: "web",
         step_name: null,
         stdin: null,
         condition: null,
@@ -293,7 +293,7 @@ describe("PlaybookRunner", () => {
         output: null,
       },
     });
-    expect(result.steps[0]!.idempotency_key).toBe("playbook:conv-test:cli");
+    expect(result.steps[0]!.idempotency_key).toBe("playbook:conv-test:web");
     expect(result.steps[1]!.idempotency_key).toBe("playbook:conv-test:mcp");
     expect(result.steps[2]!.idempotency_key).toBe("playbook:conv-test:node");
     expect(result.created_at).toBeDefined();
@@ -301,7 +301,9 @@ describe("PlaybookRunner", () => {
 
   it("tracks execution stats", () => {
     const runner2 = new PlaybookRunner();
-    const pb = makePlaybook("stats-test", [{ id: "step", command: "cli echo x" }]);
+    const pb = makePlaybook("stats-test", [
+      { id: "step", command: "web navigate https://example.com" },
+    ]);
 
     runner2.run(pb);
     runner2.run(pb);
@@ -313,16 +315,14 @@ describe("PlaybookRunner", () => {
     expect(stats[0]!.run_count).toBe(3);
   });
 
-  it("compiles cli/web/llm namespaces into executable primitives", () => {
+  it("compiles web/llm namespaces into executable primitives", () => {
     const pb = {
       manifest: PlaybookManifest.parse({
         id: "ns-test",
         name: "Namespaces",
         version: "1.0.0",
         steps: [
-          { id: "cli", command: 'cli echo "hello world"' },
           { id: "web", command: "web navigate https://example.com" },
-          { id: "http", command: "http GET https://example.com" },
           {
             id: "llm",
             command: "llm",
@@ -341,26 +341,10 @@ describe("PlaybookRunner", () => {
     };
 
     const result = runner.run(pb);
-    expect(result.steps).toHaveLength(4);
+    expect(result.steps).toHaveLength(2);
 
-    expect(result.steps[0]!.type).toBe("CLI");
+    expect(result.steps[0]!.type).toBe("Web");
     expect(result.steps[0]!.args).toEqual({
-      cmd: "echo",
-      args: ["hello world"],
-      __playbook: {
-        playbook_id: "ns-test",
-        step_id: "cli",
-        step_name: null,
-        stdin: null,
-        condition: null,
-        approval: null,
-        output: null,
-      },
-    });
-    expect(result.steps[0]!.idempotency_key).toBe("playbook:ns-test:cli");
-
-    expect(result.steps[1]!.type).toBe("Web");
-    expect(result.steps[1]!.args).toEqual({
       op: "navigate",
       url: "https://example.com",
       __playbook: {
@@ -373,26 +357,10 @@ describe("PlaybookRunner", () => {
         output: null,
       },
     });
-    expect(result.steps[1]!.idempotency_key).toBe("playbook:ns-test:web");
+    expect(result.steps[0]!.idempotency_key).toBe("playbook:ns-test:web");
 
-    expect(result.steps[2]!.type).toBe("Http");
-    expect(result.steps[2]!.args).toEqual({
-      method: "GET",
-      url: "https://example.com",
-      __playbook: {
-        playbook_id: "ns-test",
-        step_id: "http",
-        step_name: null,
-        stdin: null,
-        condition: null,
-        approval: null,
-        output: null,
-      },
-    });
-    expect(result.steps[2]!.idempotency_key).toBe("playbook:ns-test:http");
-
-    expect(result.steps[3]!.type).toBe("Llm");
-    expect(result.steps[3]!.args).toEqual({
+    expect(result.steps[1]!.type).toBe("Llm");
+    expect(result.steps[1]!.args).toEqual({
       model: "openai/gpt-4.1",
       prompt: 'Return JSON: {"ok": true}',
       max_tool_calls: 2,
@@ -407,11 +375,16 @@ describe("PlaybookRunner", () => {
         output: "json",
       },
     });
-    expect(result.steps[3]!.idempotency_key).toBe("playbook:ns-test:llm");
+    expect(result.steps[1]!.idempotency_key).toBe("playbook:ns-test:llm");
   });
 
-  it("rejects http namespace without a URL", () => {
-    const pb = makePlaybook("bad-http", [{ id: "s1", command: "http GET" }]);
-    expect(() => runner.run(pb)).toThrow(/http command requires a URL/i);
+  it("rejects cli namespace at compile time", () => {
+    const pb = makePlaybook("bad-cli", [{ id: "s1", command: "cli echo test" }]);
+    expect(() => runner.run(pb)).toThrow(/removed/i);
+  });
+
+  it("rejects http namespace at compile time", () => {
+    const pb = makePlaybook("bad-http", [{ id: "s1", command: "http GET https://example.com" }]);
+    expect(() => runner.run(pb)).toThrow(/removed/i);
   });
 });

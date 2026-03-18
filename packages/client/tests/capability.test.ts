@@ -103,7 +103,7 @@ describe("autoExecute", () => {
     client = new TyrumClient({
       url: server.url,
       token: "t",
-      capabilities: ["http"],
+      capabilities: ["desktop"],
       reconnect: false,
     });
 
@@ -113,19 +113,19 @@ describe("autoExecute", () => {
       stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
       attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
     } satisfies TaskExecuteContext;
-    const httpProvider: CapabilityProvider = {
-      capability: "http",
+    const desktopProvider: CapabilityProvider = {
+      capability: "desktop",
       execute: async (action, ctx?: TaskExecuteContext) => {
-        expect(action.type).toBe("Http");
+        expect(action.type).toBe("Desktop");
         expect(ctx).toEqual(expectedContext);
         return {
           success: true,
-          evidence: { statusCode: 200 },
+          evidence: { screenshot: "base64..." },
         };
       },
     };
 
-    autoExecute(client, [httpProvider]);
+    autoExecute(client, [desktopProvider]);
 
     client.connect();
     const ws = await server.waitForClient();
@@ -139,7 +139,7 @@ describe("autoExecute", () => {
           run_id: expectedContext.runId,
           step_id: expectedContext.stepId,
           attempt_id: expectedContext.attemptId,
-          action: { type: "Http", args: { url: "https://example.com" } },
+          action: { type: "Desktop", args: { op: "screenshot" } },
         },
       }),
     );
@@ -149,7 +149,7 @@ describe("autoExecute", () => {
       request_id: "t-1",
       type: "task.execute",
       ok: true,
-      result: { evidence: { statusCode: 200 } },
+      result: { evidence: { screenshot: "base64..." } },
     });
   });
 
@@ -158,7 +158,7 @@ describe("autoExecute", () => {
     client = new TyrumClient({
       url: server.url,
       token: "t",
-      capabilities: ["http"],
+      capabilities: ["desktop"],
       reconnect: false,
     });
 
@@ -169,19 +169,19 @@ describe("autoExecute", () => {
       attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
     } satisfies TaskExecuteContext;
 
-    const httpProvider: CapabilityProvider = {
-      capability: "http",
+    const desktopProvider: CapabilityProvider = {
+      capability: "desktop",
       execute: async (_action, ctx) => {
         expect(ctx).toEqual(expectedContext);
         return {
           success: true,
           result: { ok: true },
-          evidence: { statusCode: 200 },
+          evidence: { screenshot: "base64..." },
         };
       },
     };
 
-    autoExecute(client, [httpProvider]);
+    autoExecute(client, [desktopProvider]);
 
     client.connect();
     const ws = await server.waitForClient();
@@ -195,7 +195,7 @@ describe("autoExecute", () => {
           run_id: expectedContext.runId,
           step_id: expectedContext.stepId,
           attempt_id: expectedContext.attemptId,
-          action: { type: "Http", args: { url: "https://example.com" } },
+          action: { type: "Desktop", args: { op: "screenshot" } },
         },
       }),
     );
@@ -205,7 +205,7 @@ describe("autoExecute", () => {
       request_id: "t-1",
       type: "task.execute",
       ok: true,
-      result: { result: { ok: true }, evidence: { statusCode: 200 } },
+      result: { result: { ok: true }, evidence: { screenshot: "base64..." } },
     });
   });
 
@@ -214,7 +214,7 @@ describe("autoExecute", () => {
     client = new TyrumClient({
       url: server.url,
       token: "t",
-      capabilities: ["http"],
+      capabilities: ["desktop"],
       reconnect: false,
     });
 
@@ -233,7 +233,7 @@ describe("autoExecute", () => {
           run_id: "550e8400-e29b-41d4-a716-446655440000",
           step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
           attempt_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
-          action: { type: "Http", args: {} },
+          action: { type: "Desktop", args: { op: "screenshot" } },
         },
       }),
     );
@@ -337,12 +337,12 @@ describe("autoExecute", () => {
     client = new TyrumClient({
       url: server.url,
       token: "t",
-      capabilities: ["http"],
+      capabilities: ["desktop"],
       reconnect: false,
     });
 
     const badProvider: CapabilityProvider = {
-      capability: "http",
+      capability: "desktop",
       execute: async () => ({
         success: true,
         evidence: { value: BigInt(1) },
@@ -363,7 +363,7 @@ describe("autoExecute", () => {
           run_id: "550e8400-e29b-41d4-a716-446655440000",
           step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
           attempt_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
-          action: { type: "Http", args: { url: "https://example.com" } },
+          action: { type: "Desktop", args: { op: "screenshot" } },
         },
       }),
     );

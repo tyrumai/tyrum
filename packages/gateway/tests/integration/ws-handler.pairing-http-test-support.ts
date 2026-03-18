@@ -89,7 +89,7 @@ function registerHttpApprovalTests(ctx: TestContext): void {
           device: { device_id: deviceId, pubkey: pubkeyB64Url, label: "node-1" },
           capabilities: [
             {
-              id: "tyrum.cli.execute",
+              id: "tyrum.desktop.screenshot",
               version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
             },
           ],
@@ -162,7 +162,7 @@ function registerHttpApprovalTests(ctx: TestContext): void {
         trust_level: "remote",
         capability_allowlist: [
           {
-            id: "tyrum.cli.execute",
+            id: "tyrum.desktop.screenshot",
             version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
           },
         ],
@@ -220,7 +220,7 @@ function registerIpResolutionTests(ctx: TestContext): void {
     const { deviceId } = await completeHandshake(node, {
       requestIdPrefix: "node",
       role: "node",
-      capabilities: ["cli"],
+      capabilities: ["desktop"],
       label: "node-1",
     });
 
@@ -290,7 +290,7 @@ function registerIpResolutionTests(ctx: TestContext): void {
     const { deviceId } = await completeHandshake(node, {
       requestIdPrefix: "node",
       role: "node",
-      capabilities: ["cli"],
+      capabilities: ["desktop"],
       label: "node-1",
     });
 

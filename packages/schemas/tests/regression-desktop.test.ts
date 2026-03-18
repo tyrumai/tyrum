@@ -79,30 +79,34 @@ describe("Desktop schema regression", () => {
     expectRejects(DesktopActionArgs, { display: "primary", format: "png" });
   });
 
-  it("all 14 ActionPrimitiveKind values parse", () => {
+  it("all 18 ActionPrimitiveKind values parse", () => {
     const kinds = [
       "Research",
       "Decide",
+      "Llm",
       "Web",
       "Browser",
       "IOS",
       "Android",
+      "Desktop",
+      "Filesystem",
       "CLI",
       "Http",
+      "Mcp",
+      "Node",
       "Message",
       "Pay",
       "Store",
       "Watch",
       "Confirm",
-      "Desktop",
     ];
     for (const kind of kinds) {
       expect(ActionPrimitiveKind.parse(kind)).toBe(kind);
     }
   });
 
-  it("all 7 ClientCapability values parse", () => {
-    const caps = ["playwright", "ios", "android", "cli", "http", "desktop", "browser"];
+  it("all 5 ClientCapability values parse", () => {
+    const caps = ["playwright", "ios", "android", "desktop", "browser"];
     for (const cap of caps) {
       expect(ClientCapability.parse(cap)).toBe(cap);
     }
@@ -123,8 +127,8 @@ describe("Desktop schema regression", () => {
   it("Desktop capability mapping is consistent with requiredCapability", () => {
     // Verify that Desktop -> desktop mapping matches the pattern of other
     // capability-mapped kinds
-    const mappedKinds = ["Web", "Browser", "IOS", "Android", "CLI", "Http", "Desktop"] as const;
-    const expectedCaps = ["playwright", "browser", "ios", "android", "cli", "http", "desktop"];
+    const mappedKinds = ["Web", "Browser", "IOS", "Android", "Desktop"] as const;
+    const expectedCaps = ["playwright", "browser", "ios", "android", "desktop"];
     for (let i = 0; i < mappedKinds.length; i++) {
       expect(requiredCapability(mappedKinds[i]!)).toBe(expectedCaps[i]);
     }

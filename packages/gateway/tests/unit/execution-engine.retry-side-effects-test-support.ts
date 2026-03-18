@@ -30,7 +30,7 @@ export function registerRetrySideEffectTests(fixture: { db: () => SqliteDb }): v
       lane: "main",
       planId: "plan-retry-approval-1",
       requestId: "test-req-1",
-      steps: [action("CLI")],
+      steps: [action("Web", { op: "navigate", url: "https://example.com" })],
     });
     await db.run("UPDATE execution_steps SET max_attempts = 2 WHERE run_id = ?", [runId]);
     let callCount = 0;

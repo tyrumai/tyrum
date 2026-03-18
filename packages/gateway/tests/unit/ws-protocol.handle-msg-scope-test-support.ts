@@ -16,7 +16,7 @@ import { createSpyLogger, makeDeps, makeClient } from "./ws-protocol.test-suppor
 function registerPairingAndCommandScopeTests(): void {
   it("rejects pairing.approve when trust_level is missing", async () => {
     const cm = new ConnectionManager();
-    const { id } = makeClient(cm, ["cli"]);
+    const { id } = makeClient(cm, ["desktop"]);
     const client = cm.getClient(id)!;
     const nodePairingDal = { resolve: vi.fn(async () => undefined) };
     const deps = makeDeps(cm, { nodePairingDal: nodePairingDal as never });
@@ -39,7 +39,7 @@ function registerPairingAndCommandScopeTests(): void {
 
   it("rejects pairing.approve when capability_allowlist is missing", async () => {
     const cm = new ConnectionManager();
-    const { id } = makeClient(cm, ["cli"]);
+    const { id } = makeClient(cm, ["desktop"]);
     const client = cm.getClient(id)!;
     const nodePairingDal = { resolve: vi.fn(async () => undefined) };
     const deps = makeDeps(cm, { nodePairingDal: nodePairingDal as never });
@@ -62,7 +62,7 @@ function registerPairingAndCommandScopeTests(): void {
 
   it("forbids command.execute when scoped device token lacks operator.admin", async () => {
     const cm = new ConnectionManager();
-    const { id } = makeClient(cm, ["cli"], {
+    const { id } = makeClient(cm, ["desktop"], {
       role: "client",
       deviceId: "dev_client_1",
       protocolRev: 2,
@@ -91,7 +91,7 @@ function registerPairingAndCommandScopeTests(): void {
 
   it("allows command.execute when scoped device token includes operator.admin", async () => {
     const cm = new ConnectionManager();
-    const { id } = makeClient(cm, ["cli"], {
+    const { id } = makeClient(cm, ["desktop"], {
       role: "client",
       protocolRev: 2,
       authClaims: {
@@ -121,7 +121,7 @@ function registerPairingAndCommandScopeTests(): void {
 
   it("denies unmapped request types by default for scoped device tokens", async () => {
     const cm = new ConnectionManager();
-    const { id } = makeClient(cm, ["cli"], {
+    const { id } = makeClient(cm, ["desktop"], {
       role: "client",
       protocolRev: 2,
       authClaims: {
@@ -151,7 +151,7 @@ function registerPairingAndCommandScopeTests(): void {
 function registerPresenceAndPingScopeTests(): void {
   it("does not forbid presence.beacon when no scopes are required", async () => {
     const cm = new ConnectionManager();
-    const { id } = makeClient(cm, ["cli"], {
+    const { id } = makeClient(cm, ["desktop"], {
       role: "client",
       deviceId: "dev_client_1",
       protocolRev: 2,
@@ -182,14 +182,14 @@ function registerPresenceAndPingScopeTests(): void {
 
   it("logs presence.beacon broadcast send failures (best-effort)", async () => {
     const cm = new ConnectionManager();
-    const { id } = makeClient(cm, ["cli"], {
+    const { id } = makeClient(cm, ["desktop"], {
       role: "client",
       deviceId: "dev_client_1",
       protocolRev: 2,
     });
     const client = cm.getClient(id)!;
 
-    const { ws: throwingPeerWs } = makeClient(cm, ["cli"], { protocolRev: 2 });
+    const { ws: throwingPeerWs } = makeClient(cm, ["desktop"], { protocolRev: 2 });
     throwingPeerWs.send.mockImplementation(() => {
       throw new Error("send failed");
     });
@@ -238,12 +238,12 @@ function registerPresenceAndPingScopeTests(): void {
     const db = openTestSqliteDb();
     try {
       const cm = new ConnectionManager();
-      const { id: nodeConnId } = makeClient(cm, ["cli"], {
+      const { id: nodeConnId } = makeClient(cm, ["desktop"], {
         role: "node",
         deviceId: "dev_test",
         protocolRev: 2,
       });
-      const { ws: operatorWs } = makeClient(cm, ["cli"], { protocolRev: 2 });
+      const { ws: operatorWs } = makeClient(cm, ["desktop"], { protocolRev: 2 });
       const node = cm.getClient(nodeConnId)!;
 
       await db.run(
@@ -291,7 +291,7 @@ function registerPresenceAndPingScopeTests(): void {
           "550e8400-e29b-41d4-a716-446655440000",
           0,
           "running",
-          JSON.stringify({ type: "CLI", args: { command: "echo hi" } }),
+          JSON.stringify({ type: "Desktop", args: { op: "screenshot" } }),
         ],
       );
       await db.run(
@@ -352,7 +352,7 @@ function registerPresenceAndPingScopeTests(): void {
 
   it("does not forbid ping when no scopes are required", async () => {
     const cm = new ConnectionManager();
-    const { id } = makeClient(cm, ["cli"], {
+    const { id } = makeClient(cm, ["desktop"], {
       role: "client",
       deviceId: "dev_client_1",
       protocolRev: 2,

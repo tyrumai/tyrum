@@ -219,7 +219,7 @@ export function expectDefaultWsCtor(token = "tkn"): void {
       url: "ws://127.0.0.1:8788/ws",
       token,
       reconnect: false,
-      capabilities: ["cli"],
+      capabilities: [],
       device: expect.objectContaining(DEFAULT_DEVICE),
     }),
   );

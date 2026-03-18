@@ -39,7 +39,7 @@ export const approvedCliPairingDal = {
       status: "approved",
       capability_allowlist: [
         {
-          id: "tyrum.cli.execute",
+          id: "tyrum.desktop.screenshot",
           version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
         },
       ],
@@ -194,7 +194,7 @@ export async function expectSingleCapabilityEdge(
 ): Promise<void> {
   const list = await connectionDirectory.listConnectionsForCapability(
     DEFAULT_TENANT_ID,
-    "tyrum.cli.execute",
+    "tyrum.desktop.screenshot",
     Date.now(),
   );
   expect(list.length).toBe(1);
@@ -214,7 +214,7 @@ export async function dispatchCliTaskForRun(
     stepId: DEFAULT_STEP_ID,
     attemptId: DEFAULT_ATTEMPT_ID,
   };
-  await dispatchTask({ type: "CLI", args: {} }, taskScope, {
+  await dispatchTask({ type: "Desktop", args: { op: "screenshot" } }, taskScope, {
     connectionManager: edge.connectionManager,
     nodePairingDal: approvedCliPairingDal,
     cluster: {

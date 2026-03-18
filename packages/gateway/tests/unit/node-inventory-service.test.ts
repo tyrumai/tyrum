@@ -6,7 +6,10 @@ import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { createTestContainer } from "../integration/helpers.js";
 
 describe("NodeInventoryService", () => {
-  const cliDescriptor = { id: descriptorIdForClientCapability("cli"), version: "1.0.0" } as const;
+  const cliDescriptor = {
+    id: descriptorIdForClientCapability("playwright"),
+    version: "1.0.0",
+  } as const;
   const containers: Array<Awaited<ReturnType<typeof createTestContainer>>> = [];
 
   afterEach(async () => {
@@ -136,7 +139,7 @@ describe("NodeInventoryService", () => {
     });
     expect(result.nodes[0]?.capabilities).toContainEqual(
       expect.objectContaining({
-        capability: descriptorIdForClientCapability("cli"),
+        capability: descriptorIdForClientCapability("playwright"),
         dispatchable: false,
         supported_action_count: 0,
         enabled_action_count: 0,

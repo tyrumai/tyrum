@@ -23,3 +23,15 @@ export {
   type DesktopA11yActResult,
 } from "./providers/backends/desktop-a11y-backend.js";
 export { AtSpiDesktopA11yBackend } from "./providers/backends/atspi-a11y-backend.js";
+
+export {
+  PlaywrightProvider,
+  type PlaywrightProviderConfig,
+} from "./providers/playwright-provider.js";
+export type { PlaywrightBackend, PageSnapshot } from "./providers/backends/playwright-backend.js";
+export { RealPlaywrightBackend } from "./providers/backends/real-playwright-backend.js";
+
+export {
+  FilesystemProvider,
+  type FilesystemProviderConfig,
+} from "./providers/filesystem-provider.js";

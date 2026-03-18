@@ -7,7 +7,7 @@ import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { createMockWs, makeDeps, makeClient } from "./ws-protocol.test-support.js";
 
 const cliDescriptor = {
-  id: "tyrum.cli.execute",
+  id: "tyrum.desktop.screenshot",
   version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
 } as const;
 
@@ -70,8 +70,8 @@ function registerAllowlistTests(): void {
     legacyWs.send.mockClear();
 
     const action: ActionPrimitive = {
-      type: "CLI",
-      args: { command: "echo hi" },
+      type: "Desktop",
+      args: { op: "screenshot" },
     };
 
     const taskId = await dispatchTask(
@@ -115,7 +115,7 @@ function registerAllowlistTests(): void {
             status: "approved",
             capability_allowlist: [
               {
-                id: "tyrum.http.request",
+                id: "tyrum.desktop.mouse",
                 version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
               },
             ],
@@ -124,8 +124,8 @@ function registerAllowlistTests(): void {
     });
 
     const action: ActionPrimitive = {
-      type: "CLI",
-      args: { command: "echo hi" },
+      type: "Desktop",
+      args: { op: "screenshot" },
     };
 
     await expect(
@@ -179,8 +179,8 @@ function registerAllowlistTests(): void {
     });
 
     const action: ActionPrimitive = {
-      type: "CLI",
-      args: { command: "echo hi" },
+      type: "Desktop",
+      args: { op: "screenshot" },
     };
 
     await expect(
@@ -263,8 +263,8 @@ function registerPolicyEvaluationTests(): void {
     nodeWs.send.mockClear();
 
     const action: ActionPrimitive = {
-      type: "CLI",
-      args: { command: "echo hi" },
+      type: "Desktop",
+      args: { op: "screenshot" },
     };
 
     await expect(
@@ -344,8 +344,8 @@ function registerPolicyEvaluationTests(): void {
     nodeWs.send.mockClear();
 
     const action: ActionPrimitive = {
-      type: "CLI",
-      args: { command: "echo hi" },
+      type: "Desktop",
+      args: { op: "screenshot" },
     };
 
     const taskId = await dispatchTask(
@@ -396,8 +396,8 @@ function registerDispatchErrorTests(): void {
     });
 
     const action: ActionPrimitive = {
-      type: "CLI",
-      args: { command: "echo hi" },
+      type: "Desktop",
+      args: { op: "screenshot" },
     };
 
     await expect(
@@ -445,8 +445,8 @@ function registerDispatchErrorTests(): void {
     const deps = makeDeps(cm);
 
     const action: ActionPrimitive = {
-      type: "Http",
-      args: {},
+      type: "Desktop",
+      args: { op: "screenshot" },
     };
 
     expect(() =>

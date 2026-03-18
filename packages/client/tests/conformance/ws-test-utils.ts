@@ -30,7 +30,7 @@ export function createConnectedClient(
   const client = new TyrumClient({
     url: gw.wsUrl,
     token: gw.adminToken,
-    capabilities: (opts?.capabilities ?? ["http"]) as never[],
+    capabilities: (opts?.capabilities ?? ["desktop"]) as never[],
     reconnect: false,
     role: (opts?.role ?? "client") as never,
     protocolRev: opts?.protocolRev ?? 2,

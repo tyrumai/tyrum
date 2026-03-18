@@ -1,5 +1,5 @@
 import type { AuthTokenClaims, NodePairingRequest } from "@tyrum/schemas";
-import { DESKTOP_CAPABILITY_ALLOWLIST } from "../../modules/desktop-environments/allowlist.js";
+import { SANDBOX_CAPABILITY_ALLOWLIST } from "../../modules/desktop-environments/allowlist.js";
 import type { DesktopEnvironmentDal } from "../../modules/desktop-environments/dal.js";
 import { isPairingBlockedStatus, type NodePairingDal } from "../../modules/node/pairing-dal.js";
 import type { PresenceDal } from "../../modules/presence/dal.js";
@@ -208,7 +208,7 @@ async function initializePairingOnConnect(input: {
           pairingId: initializedPairing.pairing_id,
           decision: "approved",
           trustLevel: "local",
-          capabilityAllowlist: DESKTOP_CAPABILITY_ALLOWLIST,
+          capabilityAllowlist: SANDBOX_CAPABILITY_ALLOWLIST,
           reason: "gateway-managed desktop environment",
           resolvedBy: {
             kind: "desktop_environment_runtime",

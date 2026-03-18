@@ -131,7 +131,7 @@ name: Inline runtime test
 version: "1.0.0"
 steps:
   - id: step-1
-    command: cli echo hi
+    command: web navigate https://example.com
 `.trim();
 
 const IMPLICIT_SHELL_PLAYBOOK = `
@@ -143,13 +143,13 @@ steps:
     command: echo hi
 `.trim();
 
-const HTTP_MISSING_URL_PLAYBOOK = `
-id: http-missing-url-runtime-test
-name: HTTP missing URL runtime test
+const REMOVED_NAMESPACE_PLAYBOOK = `
+id: removed-namespace-runtime-test
+name: Removed namespace runtime test
 version: "1.0.0"
 steps:
   - id: step-1
-    command: http GET
+    command: http GET https://example.com
 `.trim();
 
 describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
@@ -261,14 +261,14 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
     expect(runCount?.count ?? 0).toBe(0);
   });
 
-  it("returns status=error envelope for invalid http commands (no run created)", async () => {
+  it("returns status=error envelope for removed namespace commands (no run created)", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-playbook-runtime-"));
     ({ container, app } = await createRuntimeContext(homeDir));
 
     const res = await app.request("/playbooks/runtime", {
       method: "POST",
       headers: runtimeJsonHeaders,
-      body: JSON.stringify({ action: "run", pipeline: HTTP_MISSING_URL_PLAYBOOK, timeoutMs: 50 }),
+      body: JSON.stringify({ action: "run", pipeline: REMOVED_NAMESPACE_PLAYBOOK, timeoutMs: 50 }),
     });
 
     expect(res.status).toBe(200);

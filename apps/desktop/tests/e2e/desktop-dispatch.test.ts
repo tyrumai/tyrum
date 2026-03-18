@@ -26,7 +26,6 @@ import { dispatchTask } from "../../../../packages/gateway/src/ws/protocol.js";
 import type { ProtocolDeps } from "../../../../packages/gateway/src/ws/protocol.js";
 import { TyrumClient, autoExecute } from "../../../../packages/client/src/index.js";
 import { DesktopProvider, MockDesktopBackend } from "@tyrum/desktop-node";
-import { CliProvider } from "../../src/main/providers/cli-provider.js";
 import { resolvePermissions } from "../../src/main/config/permissions.js";
 import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
@@ -43,10 +42,7 @@ const approvedNodePairingDal = {
   getByNodeId: async () =>
     ({
       status: "approved",
-      capability_allowlist: [
-        ...descriptorIdsForClientCapability("desktop"),
-        ...descriptorIdsForClientCapability("cli"),
-      ]
+      capability_allowlist: [...descriptorIdsForClientCapability("desktop")]
         .flatMap(migrateCapabilityDescriptorId)
         .map((id) => ({
           id,
@@ -84,7 +80,7 @@ async function waitForTaskResults(
 
 async function waitForCapabilities(
   connectionManager: ConnectionManager,
-  capabilities: ReadonlyArray<"desktop" | "cli" | "playwright" | "http" | "ios" | "android">,
+  capabilities: ReadonlyArray<"desktop" | "playwright" | "ios" | "android">,
   timeoutMs = 2_000,
 ): Promise<void> {
   const required = [
@@ -208,7 +204,7 @@ async function startServer(): Promise<{
 async function connectClient(
   port: number,
   token: string,
-  capabilities: Array<"desktop" | "cli" | "playwright" | "http" | "ios" | "android">,
+  capabilities: Array<"desktop" | "playwright" | "ios" | "android">,
   connectionManager: ConnectionManager,
 ): Promise<TyrumClient> {
   const { publicKey, privateKey } = generateKeyPairSync("ed25519");
@@ -271,14 +267,9 @@ describe("e2e: gateway dispatches task to desktop node", () => {
     tokenHome = srv.tokenHome;
     stopHeartbeat = srv.stopHeartbeat;
 
-    // Connect client with desktop + cli capabilities
+    // Connect client with desktop capabilities
     const permissions = resolvePermissions("poweruser", {});
-    client = await connectClient(
-      srv.port,
-      srv.adminToken,
-      ["desktop", "cli"],
-      srv.connectionManager,
-    );
+    client = await connectClient(srv.port, srv.adminToken, ["desktop"], srv.connectionManager);
     expect(client.connected).toBe(true);
 
     const desktopProvider = new DesktopProvider(
@@ -286,8 +277,7 @@ describe("e2e: gateway dispatches task to desktop node", () => {
       permissions,
       async () => true,
     );
-    const cliProvider = new CliProvider(["echo"], ["/tmp"]);
-    autoExecute(client, [desktopProvider, cliProvider]);
+    autoExecute(client, [desktopProvider]);
 
     // Verify connection was registered
     const stats = srv.connectionManager.getStats();
@@ -356,78 +346,5 @@ describe("e2e: gateway dispatches task to desktop node", () => {
     expect(srv.taskResults).toHaveLength(1);
     expect(srv.taskResults[0]!.taskId).toBe(taskId);
     expect(srv.taskResults[0]!.success).toBe(true);
-  });
-
-  it("rejects forbidden CLI command with error", async () => {
-    const srv = await startServer();
-    httpServer = srv.server;
-    tokenHome = srv.tokenHome;
-    stopHeartbeat = srv.stopHeartbeat;
-
-    client = await connectClient(srv.port, srv.adminToken, ["cli"], srv.connectionManager);
-
-    // Only "echo" is allowed
-    const cliProvider = new CliProvider(["echo"], ["/tmp"]);
-    autoExecute(client, [cliProvider]);
-
-    const taskId = await dispatchTask(
-      {
-        type: "CLI",
-        args: { cmd: "rm", args: ["-rf", "/"] },
-      },
-      {
-        tenantId: DEFAULT_TENANT_ID,
-        runId: randomUUID(),
-        stepId: randomUUID(),
-        attemptId: randomUUID(),
-      },
-      { connectionManager: srv.connectionManager, nodePairingDal: approvedNodePairingDal },
-    );
-
-    await waitForTaskResults(srv.taskResults, 1);
-
-    expect(srv.taskResults).toHaveLength(1);
-    expect(srv.taskResults[0]!.taskId).toBe(taskId);
-    expect(srv.taskResults[0]!.success).toBe(false);
-    expect(srv.taskResults[0]!.error).toContain("not in the allowlist");
-  });
-
-  it("executes allowed CLI command successfully", async () => {
-    const srv = await startServer();
-    httpServer = srv.server;
-    tokenHome = srv.tokenHome;
-    stopHeartbeat = srv.stopHeartbeat;
-
-    client = await connectClient(srv.port, srv.adminToken, ["cli"], srv.connectionManager);
-
-    const cliProvider = new CliProvider(["echo"], ["/tmp"]);
-    autoExecute(client, [cliProvider]);
-
-    const taskId = await dispatchTask(
-      {
-        type: "CLI",
-        args: { cmd: "echo", args: ["hello", "world"] },
-      },
-      {
-        tenantId: DEFAULT_TENANT_ID,
-        runId: randomUUID(),
-        stepId: randomUUID(),
-        attemptId: randomUUID(),
-      },
-      { connectionManager: srv.connectionManager, nodePairingDal: approvedNodePairingDal },
-    );
-
-    await waitForTaskResults(srv.taskResults, 1);
-
-    expect(srv.taskResults).toHaveLength(1);
-    expect(srv.taskResults[0]!.taskId).toBe(taskId);
-    expect(srv.taskResults[0]!.success).toBe(true);
-
-    const evidence = srv.taskResults[0]!.evidence as {
-      exit_code: number;
-      stdout: string;
-    };
-    expect(evidence.exit_code).toBe(0);
-    expect(evidence.stdout).toContain("hello world");
   });
 });

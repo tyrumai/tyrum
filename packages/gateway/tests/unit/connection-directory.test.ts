@@ -10,7 +10,7 @@ import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 
 /** Canonical ID after migration. */
-const CLI_CANONICAL_ID = "tyrum.cli.execute";
+const CLI_CANONICAL_ID = "tyrum.desktop.screenshot";
 const BROWSER_NAVIGATE_ID = "tyrum.browser.navigate";
 
 describe("ConnectionDirectoryDal", () => {
@@ -97,7 +97,7 @@ describe("ConnectionDirectoryDal", () => {
         "00000000-0000-4000-8000-000000000022",
         "edge-a",
         "00000000-0000-4000-8000-000000000021",
-        JSON.stringify(["cli"]),
+        JSON.stringify([{ id: CLI_CANONICAL_ID, version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION }]),
         now,
         now,
         now + 5_000,
@@ -163,7 +163,7 @@ describe("ConnectionDirectoryDal", () => {
         "edge-a",
         "00000000-0000-4000-8000-000000000031",
         2,
-        JSON.stringify(["cli"]),
+        JSON.stringify([{ id: CLI_CANONICAL_ID, version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION }]),
         "{ not valid json",
         now,
         now,
@@ -229,7 +229,7 @@ describe("ConnectionDirectoryDal", () => {
         "edge-a",
         "00000000-0000-4000-8000-000000000033",
         2,
-        JSON.stringify(["cli"]),
+        JSON.stringify([{ id: CLI_CANONICAL_ID, version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION }]),
         JSON.stringify([]),
         now,
         now,
@@ -292,7 +292,7 @@ describe("ConnectionDirectoryDal", () => {
         JSON.stringify([
           "desktop",
           {
-            id: "tyrum.cli",
+            id: "tyrum.playwright",
             version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
           },
           "not-a-capability",
@@ -309,7 +309,7 @@ describe("ConnectionDirectoryDal", () => {
     expect(rows[0]!.capabilities.map((capability) => capability.id).toSorted()).toEqual(
       [
         ...descriptorIdsForClientCapability("desktop"),
-        ...migrateCapabilityDescriptorId("tyrum.cli"),
+        ...migrateCapabilityDescriptorId("tyrum.playwright"),
       ].toSorted(),
     );
   });

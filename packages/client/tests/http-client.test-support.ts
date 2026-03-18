@@ -183,7 +183,7 @@ export function samplePairing(): Record<string, unknown> {
       label: "Node 1",
       capabilities: [
         {
-          id: descriptorIdForClientCapability("http"),
+          id: descriptorIdForClientCapability("playwright"),
           version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
         },
       ],
@@ -191,7 +191,7 @@ export function samplePairing(): Record<string, unknown> {
     },
     capability_allowlist: [
       {
-        id: descriptorIdForClientCapability("http"),
+        id: descriptorIdForClientCapability("playwright"),
         version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
       },
     ],

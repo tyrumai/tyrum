@@ -3,17 +3,15 @@ name: Test Playbook
 description: A playbook used in automated tests
 version: "1.0.0"
 steps:
-  - id: cli
-    name: Echo something
-    command: cli echo "hello world"
-    output: text
-  - id: http
-    name: Make HTTP request
-    command: http GET https://example.com/data
-    output: json
-  - id: web
-    name: Navigate
+  - id: web-nav
+    name: Navigate to page
     command: web navigate https://example.com
+  - id: web-click
+    name: Click element
+    command: web click "#submit"
+  - id: web-snap
+    name: Capture snapshot
+    command: web snapshot
 allowed_domains:
   - example.com
 consent_boundary: "requires_approval"

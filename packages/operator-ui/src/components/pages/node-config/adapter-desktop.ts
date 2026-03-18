@@ -10,7 +10,6 @@ import {
   readSecurityState,
   splitAllowlistLines,
   DEFAULT_CAPABILITIES,
-  DEFAULT_CLI_CONFIG,
   DEFAULT_PROFILE,
   DEFAULT_WEB_CONFIG,
 } from "../node-configure-page.shared.js";
@@ -39,7 +38,6 @@ function securityToPersistedPayload(security: SecurityState): Record<string, unk
       overrides: security.overrides,
     },
     capabilities: security.capabilities,
-    cli: security.cli,
     web: security.web,
   };
 }
@@ -62,13 +60,10 @@ export function useNodeConfigDesktop(
     profile: DEFAULT_PROFILE,
     overrides: {},
     capabilities: DEFAULT_CAPABILITIES,
-    cli: DEFAULT_CLI_CONFIG,
     web: DEFAULT_WEB_CONFIG,
   });
   const [allowlistDrafts, setAllowlistDrafts] = useState<AllowlistDrafts>({
     browserDomains: "",
-    cliCommands: "",
-    cliWorkingDirs: "",
   });
 
   // ── Security auto-save state ──────────────────────────────────────────
@@ -293,36 +288,6 @@ export function useNodeConfigDesktop(
     [scheduleSecuritySave, updateSecurity],
   );
 
-  const updateCliCommands = useCallback(
-    (value: string) => {
-      updateSecurity((current) => ({
-        ...current,
-        cli: {
-          ...current.cli,
-          allowedCommands: splitAllowlistLines(value),
-        },
-      }));
-      setAllowlistDrafts((current) => ({ ...current, cliCommands: value }));
-      scheduleSecuritySave(false);
-    },
-    [scheduleSecuritySave, updateSecurity],
-  );
-
-  const updateCliWorkingDirs = useCallback(
-    (value: string) => {
-      updateSecurity((current) => ({
-        ...current,
-        cli: {
-          ...current.cli,
-          allowedWorkingDirs: splitAllowlistLines(value),
-        },
-      }));
-      setAllowlistDrafts((current) => ({ ...current, cliWorkingDirs: value }));
-      scheduleSecuritySave(false);
-    },
-    [scheduleSecuritySave, updateSecurity],
-  );
-
   // ── Browser headless toggle ───────────────────────────────────────────
 
   const setBrowserHeadless = useCallback(
@@ -373,8 +338,6 @@ export function useNodeConfigDesktop(
     setCapability,
     setBrowserHeadless,
     updateBrowserDomains,
-    updateCliCommands,
-    updateCliWorkingDirs,
   });
 
   // ── Executor status ───────────────────────────────────────────────────

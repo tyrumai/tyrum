@@ -77,8 +77,8 @@ describe("Playbook routes", () => {
       };
       expect(body.playbook_id).toBe("test-playbook");
       expect(body.steps).toHaveLength(3);
-      expect(body.steps[0]!.type).toBe("CLI");
-      expect(body.steps[1]!.type).toBe("Http");
+      expect(body.steps[0]!.type).toBe("Web");
+      expect(body.steps[1]!.type).toBe("Web");
       expect(body.steps[2]!.type).toBe("Web");
       expect(body.created_at).toBeDefined();
     });

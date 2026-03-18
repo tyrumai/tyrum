@@ -26,7 +26,7 @@ function registerControlPlaneWorkflowTests(fixture: ControlPlaneFixture): void {
     const client = new TyrumClient({
       url: server.url,
       token: "t",
-      capabilities: ["http"],
+      capabilities: ["playwright"],
       reconnect: false,
     });
     fixture.setClient(client);
@@ -42,7 +42,7 @@ function registerControlPlaneWorkflowTests(fixture: ControlPlaneFixture): void {
           node_id: "node-1",
           capabilities: [
             {
-              id: descriptorIdForClientCapability("http"),
+              id: descriptorIdForClientCapability("playwright"),
               version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
             },
           ],
@@ -50,7 +50,7 @@ function registerControlPlaneWorkflowTests(fixture: ControlPlaneFixture): void {
         },
         capability_allowlist: [
           {
-            id: descriptorIdForClientCapability("http"),
+            id: descriptorIdForClientCapability("playwright"),
             version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
           },
         ],
@@ -83,7 +83,7 @@ function registerControlPlaneWorkflowTests(fixture: ControlPlaneFixture): void {
           node_id: "node-1",
           capabilities: [
             {
-              id: descriptorIdForClientCapability("http"),
+              id: descriptorIdForClientCapability("playwright"),
               version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
             },
           ],
@@ -119,7 +119,7 @@ function registerControlPlaneWorkflowTests(fixture: ControlPlaneFixture): void {
           node_id: "node-1",
           capabilities: [
             {
-              id: descriptorIdForClientCapability("http"),
+              id: descriptorIdForClientCapability("playwright"),
               version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
             },
           ],
@@ -213,7 +213,7 @@ function registerControlPlaneWorkflowTests(fixture: ControlPlaneFixture): void {
       trust_level: "remote",
       capability_allowlist: [
         {
-          id: descriptorIdForClientCapability("http"),
+          id: descriptorIdForClientCapability("playwright"),
           version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
         },
       ],
@@ -347,7 +347,7 @@ function registerControlPlaneWorkflowTests(fixture: ControlPlaneFixture): void {
     const readyP = client.capabilityReady({
       capabilities: [
         {
-          id: descriptorIdForClientCapability("http"),
+          id: descriptorIdForClientCapability("playwright"),
           version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
         },
       ],

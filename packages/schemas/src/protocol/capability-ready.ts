@@ -86,8 +86,6 @@ const CAPABILITY_MAP: Partial<Record<ActionPrimitiveKind, CapabilityKind>> = {
   IOS: "ios",
   Android: "android",
   Desktop: "desktop",
-  CLI: "cli",
-  Http: "http",
 };
 
 /**
@@ -129,6 +127,18 @@ const WEB_OP_TO_CANONICAL: Record<string, string> = {
   close: "tyrum.browser.close",
   handle_dialog: "tyrum.browser.handle-dialog",
   run_code: "tyrum.browser.run-code",
+  launch: "tyrum.browser.launch",
+};
+
+/** Maps Filesystem transport op names to canonical filesystem IDs. */
+const FS_OP_TO_CANONICAL: Record<string, string> = {
+  read: "tyrum.fs.read",
+  write: "tyrum.fs.write",
+  edit: "tyrum.fs.edit",
+  apply_patch: "tyrum.fs.apply-patch",
+  bash: "tyrum.fs.bash",
+  glob: "tyrum.fs.glob",
+  grep: "tyrum.fs.grep",
 };
 
 export function requiredCapabilityDescriptor(
@@ -177,14 +187,11 @@ export function requiredCapabilityDescriptor(
     case "Web":
       return op ? WEB_OP_TO_CANONICAL[op] : undefined;
 
-    case "CLI":
-      return "tyrum.cli.execute";
-
-    case "Http":
-      return "tyrum.http.request";
+    case "Filesystem":
+      return op ? FS_OP_TO_CANONICAL[op] : undefined;
 
     default: {
-      // Fallback for any other kinds (e.g. Research, Decide, Llm, etc.)
+      // Fallback for any other kinds (e.g. Research, Decide, Llm, CLI, Http, etc.)
       const capability = requiredCapability(kind);
       return capability ? descriptorIdForClientCapability(capability) : undefined;
     }

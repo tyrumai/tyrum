@@ -8,7 +8,15 @@ const JsonSchemaObject = z.record(z.string(), z.unknown());
 export const CapabilityAvailabilityStatus = z.enum(["unknown", "available", "unavailable"]);
 export type CapabilityAvailabilityStatus = z.infer<typeof CapabilityAvailabilityStatus>;
 
-export const SensitiveDataCategory = z.enum(["none", "location", "image", "audio", "screen", "ui"]);
+export const SensitiveDataCategory = z.enum([
+  "none",
+  "location",
+  "image",
+  "audio",
+  "screen",
+  "ui",
+  "filesystem",
+]);
 export type SensitiveDataCategory = z.infer<typeof SensitiveDataCategory>;
 
 export const NodeActionConsentMetadata = z

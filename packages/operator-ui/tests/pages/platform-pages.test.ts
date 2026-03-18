@@ -156,16 +156,7 @@ describe("Platform pages", () => {
       ).find((el) => el.textContent?.includes("Saved!"));
       expect(connectionSaveButton).not.toBeUndefined();
 
-      // Now expand the Shell capability and edit an allowlist.
-      await expandCapabilityCard(container, "Shell");
-
-      const commandsTextarea = getTextareaByLabel(container, "Allowed commands");
-      act(() => {
-        setNativeValue(commandsTextarea, "echo hello");
-      });
-
       // The connection saved indicator should still show "Saved!"
-      // (auto-save for capabilities is separate from connection save).
       const stillSaved = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(
         (el) => el.textContent?.includes("Saved!"),
       );
@@ -205,15 +196,15 @@ describe("Platform pages", () => {
       await withDesktopNodeConfigurePage(desktopApi, async ({ container }) => {
         await flushEffects();
 
-        // Expand the Shell capability card to see its allowlists.
-        await expandCapabilityCard(container, "Shell");
+        // Expand the Browser Automation capability card to see its allowlists.
+        await expandCapabilityCard(container, "Browser Automation");
 
-        const commandsTextarea = getTextareaByLabel(container, "Allowed commands");
+        const domainsTextarea = getTextareaByLabel(container, "Allowed domains");
         act(() => {
-          setNativeValue(commandsTextarea, "git status\n");
+          setNativeValue(domainsTextarea, "example.com\n");
         });
 
-        expect(commandsTextarea.value).toBe("git status\n");
+        expect(domainsTextarea.value).toBe("example.com\n");
 
         // The allowlist uses a debounced auto-save (500ms).
         // Advance time to trigger the debounce.
@@ -229,8 +220,8 @@ describe("Platform pages", () => {
           string,
           unknown
         >;
-        const cli = lastCall["cli"] as { allowedCommands: string[] };
-        expect(cli.allowedCommands).toEqual(["git status"]);
+        const web = lastCall["web"] as { allowedDomains: string[] };
+        expect(web.allowedDomains).toEqual(["example.com"]);
       });
     } finally {
       vi.useRealTimers();
@@ -249,29 +240,19 @@ describe("Platform pages", () => {
 
       // All capabilities should be visible on the page (no tabs).
       // When capabilities are missing from config, the defaults apply:
-      // desktop: true, playwright: false, cli: false, http: false (restrictive fallback).
+      // desktop: true, playwright: false (restrictive fallback).
       const desktopSwitch = container.querySelector<HTMLButtonElement>(
         '[role="switch"][aria-label="Toggle Desktop Automation"]',
       );
       const browserSwitch = container.querySelector<HTMLButtonElement>(
         '[role="switch"][aria-label="Toggle Browser Automation"]',
       );
-      const shellSwitch = container.querySelector<HTMLButtonElement>(
-        '[role="switch"][aria-label="Toggle Shell"]',
-      );
-      const httpSwitch = container.querySelector<HTMLButtonElement>(
-        '[role="switch"][aria-label="Toggle Web (HTTP)"]',
-      );
 
       expect(desktopSwitch).not.toBeNull();
       expect(browserSwitch).not.toBeNull();
-      expect(shellSwitch).not.toBeNull();
-      expect(httpSwitch).not.toBeNull();
 
       expect(desktopSwitch?.getAttribute("aria-checked")).toBe("true");
       expect(browserSwitch?.getAttribute("aria-checked")).toBe("false");
-      expect(shellSwitch?.getAttribute("aria-checked")).toBe("false");
-      expect(httpSwitch?.getAttribute("aria-checked")).toBe("false");
     });
   });
 
@@ -362,8 +343,8 @@ describe("Platform pages", () => {
     await withDesktopNodeConfigurePage(desktopApi, async ({ container }) => {
       await flushEffects();
 
-      // Toggle Shell off to trigger auto-save.
-      await clickSwitchByAriaLabelAndFlush(container, "Toggle Shell");
+      // Toggle Browser Automation off to trigger auto-save.
+      await clickSwitchByAriaLabelAndFlush(container, "Toggle Browser Automation");
       await flushEffects();
 
       // Auto-save should have called setConfig (not a connection save).
@@ -392,12 +373,12 @@ describe("Platform pages", () => {
       await withDesktopNodeConfigurePage(desktopApi, async ({ container }) => {
         await flushEffects();
 
-        // Expand the Shell capability card.
-        await expandCapabilityCard(container, "Shell");
+        // Expand the Browser Automation capability card.
+        await expandCapabilityCard(container, "Browser Automation");
 
-        const commandsTextarea = getTextareaByLabel(container, "Allowed commands");
+        const domainsTextarea = getTextareaByLabel(container, "Allowed domains");
         act(() => {
-          setNativeValue(commandsTextarea, "git status\nnode --version");
+          setNativeValue(domainsTextarea, "example.com\ntrusted.org");
         });
 
         // Wait for debounced auto-save (500ms).
@@ -413,8 +394,8 @@ describe("Platform pages", () => {
           string,
           unknown
         >;
-        const cli = lastCall["cli"] as { allowedCommands: string[] };
-        expect(cli.allowedCommands).toEqual(["git status", "node --version"]);
+        const web = lastCall["web"] as { allowedDomains: string[] };
+        expect(web.allowedDomains).toEqual(["example.com", "trusted.org"]);
       });
     } finally {
       vi.useRealTimers();
@@ -429,8 +410,8 @@ describe("Platform pages", () => {
     await withDesktopNodeConfigurePage(desktopApi, async ({ container }) => {
       await flushEffects();
 
-      // Toggle Shell off to trigger auto-save.
-      await clickSwitchByAriaLabelAndFlush(container, "Toggle Shell");
+      // Toggle Browser Automation off to trigger auto-save.
+      await clickSwitchByAriaLabelAndFlush(container, "Toggle Browser Automation");
       await flushEffects();
 
       // Should show "Saved" indicator text.
