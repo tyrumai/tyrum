@@ -302,7 +302,11 @@ const NODE_COLUMNS: DataTableColumn<NodeListRow>[] = [
         {row.lastSeenAt ? formatRelativeTime(row.lastSeenAt) : "-"}
       </span>
     ),
-    sortValue: (row) => (row.lastSeenAt ? Date.parse(row.lastSeenAt) || null : null),
+    sortValue: (row) => {
+      if (!row.lastSeenAt) return null;
+      const parsed = Date.parse(row.lastSeenAt);
+      return Number.isFinite(parsed) ? parsed : null;
+    },
   },
   {
     id: "state",

@@ -64,10 +64,13 @@ function SortableHeader({
   const isActive = column.id === activeSortId;
   const Icon = isActive ? (direction === "asc" ? ArrowUp : ArrowDown) : ChevronsUpDown;
   return (
-    <th key={column.id} className={cn("px-3 py-2 font-medium", column.headerClassName)}>
+    <th
+      key={column.id}
+      aria-sort={isActive ? (direction === "asc" ? "ascending" : "descending") : "none"}
+      className={cn("px-3 py-2 font-medium", column.headerClassName)}
+    >
       <button
         type="button"
-        aria-sort={isActive ? (direction === "asc" ? "ascending" : "descending") : "none"}
         className="flex items-center gap-1 text-left text-xs font-medium uppercase tracking-wide text-fg-muted transition-colors hover:text-fg"
         onClick={() => onSort(column.id)}
       >
