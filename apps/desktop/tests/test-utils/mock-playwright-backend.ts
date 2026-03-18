@@ -89,10 +89,10 @@ export class MockPlaywrightBackend implements PlaywrightBackend {
 
   async listTabs(): Promise<{
     tabs: Array<{ index: number; url: string; title?: string }>;
-    activeIndex: number;
+    active_index: number;
   }> {
     this.calls.push({ method: "listTabs", args: [] });
-    return { tabs: [{ index: 0, url: this.currentUrl, title: "Mock Page" }], activeIndex: 0 };
+    return { tabs: [{ index: 0, url: this.currentUrl, title: "Mock Page" }], active_index: 0 };
   }
 
   async switchTab(index: number): Promise<void> {

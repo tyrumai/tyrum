@@ -160,24 +160,15 @@ export function requiredCapabilityDescriptor(
 
     case "IOS":
     case "Android":
-      switch (op) {
-        case "location.get_current":
-          return "tyrum.location.get";
-        case "camera.capture_photo":
-          return "tyrum.camera.capture-photo";
-        case "audio.record_clip":
-          return "tyrum.audio.record";
-        default:
-          return undefined;
-      }
-
     case "Browser":
       switch (op) {
-        case "geolocation.get":
+        case "get":
           return "tyrum.location.get";
-        case "camera.capture_photo":
+        case "capture_photo":
           return "tyrum.camera.capture-photo";
-        case "microphone.record":
+        case "capture_video":
+          return "tyrum.camera.capture-video";
+        case "record":
           return "tyrum.audio.record";
         default:
           return undefined;

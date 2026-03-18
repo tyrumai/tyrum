@@ -16,6 +16,7 @@ import {
 import type { ArtifactStore } from "../artifact/store.js";
 import type { NodeCapabilityInspectionService } from "../node/capability-inspection-service.js";
 import type { ConnectionManager } from "../../ws/connection-manager.js";
+import type { ConnectionDirectoryDal } from "../backplane/connection-directory.js";
 import { getCapabilityCatalogAction } from "../node/capability-catalog.js";
 import type { NodeInventoryService } from "../node/inventory-service.js";
 import type { NodeDispatchService } from "./node-dispatch-service.js";
@@ -46,6 +47,7 @@ type NodeToolContext = {
   nodeInventoryService?: NodeInventoryService;
   inspectionService?: NodeCapabilityInspectionService;
   connectionManager?: ConnectionManager;
+  connectionDirectory?: ConnectionDirectoryDal;
   artifactStore?: ArtifactStore;
 };
 
@@ -62,6 +64,7 @@ type DispatchExecutionContext = {
   nodeDispatchService: NodeDispatchService;
   inspectionService: NodeCapabilityInspectionService;
   connectionManager?: ConnectionManager;
+  connectionDirectory?: ConnectionDirectoryDal;
   artifactStore?: ArtifactStore;
   workspaceLease?: WorkspaceLeaseConfig;
 };
@@ -77,16 +80,29 @@ const DEVICE_PLATFORM_TO_PRIMITIVE_KIND: Record<DevicePlatform, ActionPrimitiveK
 
 /**
  * Resolves the `ActionPrimitiveKind` for a cross-platform capability by
- * looking up the target node's device platform from the connection manager.
+ * looking up the target node's device platform. Checks local connection
+ * manager first, then falls back to the connection directory (cluster mode).
  */
-function resolvePrimitiveKindFromNode(
+async function resolvePrimitiveKindFromNode(
   context: DispatchExecutionContext,
   nodeId: string,
-): ActionPrimitiveKind | undefined {
-  if (!context.connectionManager) return undefined;
-  for (const client of context.connectionManager.allClients()) {
-    if (client.device_id === nodeId && client.device_platform) {
-      return DEVICE_PLATFORM_TO_PRIMITIVE_KIND[client.device_platform];
+): Promise<ActionPrimitiveKind | undefined> {
+  // Check locally connected clients first (fast path)
+  if (context.connectionManager) {
+    for (const client of context.connectionManager.allClients()) {
+      if (client.device_id === nodeId && client.device_platform) {
+        return DEVICE_PLATFORM_TO_PRIMITIVE_KIND[client.device_platform];
+      }
+    }
+  }
+  // Fall back to connection directory for cluster-mode (node on another edge)
+  if (context.connectionDirectory) {
+    const nowMs = Date.now();
+    const rows = await context.connectionDirectory.listNonExpired(context.tenantId, nowMs);
+    for (const row of rows) {
+      if (row.device_id === nodeId && row.device_platform) {
+        return DEVICE_PLATFORM_TO_PRIMITIVE_KIND[row.device_platform];
+      }
     }
   }
   return undefined;
@@ -236,7 +252,7 @@ async function performNodeDispatch(
   let primitiveKind = catalogAction.transport.primitive_kind;
   if (primitiveKind === null) {
     // Cross-platform capability — resolve primitive kind from the target node's device platform.
-    const resolved = resolvePrimitiveKindFromNode(context, request.node_id);
+    const resolved = await resolvePrimitiveKindFromNode(context, request.node_id);
     if (!resolved) {
       return preflightFailure(
         request,
@@ -506,6 +522,7 @@ export async function executeNodeDispatchTool(
       nodeDispatchService: context.nodeDispatchService,
       inspectionService: context.inspectionService,
       connectionManager: context.connectionManager,
+      connectionDirectory: context.connectionDirectory,
       artifactStore: context.artifactStore,
       workspaceLease: context.workspaceLease,
     },

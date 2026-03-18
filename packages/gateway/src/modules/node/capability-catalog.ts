@@ -136,6 +136,18 @@ function desktopAction(
   };
 }
 
+/**
+ * Wraps a .strict() Zod object schema with .passthrough() so the transport
+ * `op` field injected by the gateway dispatch is not rejected during parsing.
+ * The JSON Schema output still uses the original strict shape (no `op` field).
+ */
+function passthroughParser(schema: unknown): ZodType {
+  const candidate = schema as { passthrough?: () => ZodType };
+  return typeof candidate.passthrough === "function"
+    ? candidate.passthrough()
+    : (schema as ZodType);
+}
+
 function crossPlatformSensorAction(
   name: CatalogAction["name"],
   description: string,
@@ -147,7 +159,7 @@ function crossPlatformSensorAction(
   return {
     name,
     description,
-    inputParser: inputSchema as ZodType,
+    inputParser: passthroughParser(inputSchema),
     outputParser: outputSchema as ZodType,
     inputSchema: jsonSchemaOf(inputSchema, "input"),
     outputSchema: jsonSchemaOf(outputSchema, "output"),
@@ -178,7 +190,7 @@ function browserAutomationAction(
   return {
     name,
     description,
-    inputParser: inputSchema as ZodType,
+    inputParser: passthroughParser(inputSchema),
     outputParser: outputSchema as ZodType,
     inputSchema: jsonSchemaOf(inputSchema, "input"),
     outputSchema: jsonSchemaOf(outputSchema, "output"),

@@ -94,6 +94,8 @@ export async function createToolExecutorForTurnPreparation(input: {
     input.deps.opts.container.identityScopeDal,
     nodeInventoryService,
     nodeCapabilityInspectionService,
+    input.deps.opts.protocolDeps?.connectionManager,
+    input.deps.opts.protocolDeps?.cluster?.connectionDirectory,
     memoryToolRuntime,
     input.deps.opts.protocolDeps?.agents,
     input.deps.opts.protocolDeps,
