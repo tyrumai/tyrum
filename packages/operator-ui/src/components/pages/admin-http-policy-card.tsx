@@ -233,7 +233,6 @@ export function AdminHttpPolicyCard({
             return true;
           } catch (error) {
             toast.error("Policy save failed", { description: formatErrorMessage(error) });
-            throw error;
           } finally {
             setSaveBusy(false);
           }
@@ -252,7 +251,6 @@ export function AdminHttpPolicyCard({
             await loadAll();
           } catch (error) {
             toast.error("Policy revert failed", { description: formatErrorMessage(error) });
-            throw error;
           } finally {
             setRevertBusy(false);
           }
