@@ -44,6 +44,8 @@ import {
   WsPresenceBeaconResponseOkEnvelope,
 } from "./presence.js";
 import {
+  WsChatSessionArchiveResponseErrEnvelope,
+  WsChatSessionArchiveResponseOkEnvelope,
   WsChatSessionCreateResponseErrEnvelope,
   WsChatSessionCreateResponseOkEnvelope,
   WsChatSessionDeleteResponseErrEnvelope,
@@ -137,6 +139,8 @@ export const WsResponse = z.union([
   WsChatSessionCreateResponseErrEnvelope,
   WsChatSessionDeleteResponseOkEnvelope,
   WsChatSessionDeleteResponseErrEnvelope,
+  WsChatSessionArchiveResponseOkEnvelope,
+  WsChatSessionArchiveResponseErrEnvelope,
   WsChatSessionReconnectResponseOkEnvelope,
   WsChatSessionReconnectResponseErrEnvelope,
   WsWorkflowRunResponseOkEnvelope,

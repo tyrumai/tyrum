@@ -19,7 +19,7 @@ function requireChatSocket(ctx: ChatStoreContext) {
   return supportsTyrumAiSdkChatSocket(ctx.ws) ? ctx.ws : null;
 }
 
-function buildSessionClient(ctx: ChatStoreContext) {
+export function buildSessionClient(ctx: ChatStoreContext) {
   const socket = requireChatSocket(ctx);
   return socket ? createTyrumAiSdkChatSessionClient({ client: socket }) : null;
 }
@@ -37,6 +37,7 @@ function toSessionSummary(
     updated_at: session.updated_at,
     created_at: session.created_at,
     last_message: session.last_message ?? null,
+    archived: session.archived ?? false,
   };
 }
 
@@ -113,7 +114,7 @@ function areMessagesEqual(left: UIMessage[], right: UIMessage[]): boolean {
   return areComparableValuesEqual(left, right);
 }
 
-function patchSessionList(
+export function patchSessionList(
   sessions: TyrumAiSdkChatSessionSummary[],
   session: TyrumAiSdkChatSession | TyrumAiSdkChatSessionSummary,
 ): TyrumAiSdkChatSessionSummary[] {
@@ -142,11 +143,19 @@ export function setAgentId(ctx: ChatStoreContext, agentId: string): void {
   if (ctx.store.getSnapshot().agentId === nextAgentId) return;
 
   ctx.runIds.sessions += 1;
+  ctx.runIds.archivedSessions += 1;
   ctx.runIds.open += 1;
   ctx.setState((prev) => ({
     ...prev,
     agentId: nextAgentId,
     sessions: { sessions: [], nextCursor: null, loading: false, error: null },
+    archivedSessions: {
+      sessions: [],
+      nextCursor: null,
+      loading: false,
+      loaded: false,
+      error: null,
+    },
     active: {
       sessionId: null,
       session: null,
@@ -401,6 +410,12 @@ export async function deleteActive(ctx: ChatStoreContext): Promise<void> {
         ...prev.sessions,
         sessions: prev.sessions.sessions.filter((session) => session.session_id !== sessionId),
       },
+      archivedSessions: {
+        ...prev.archivedSessions,
+        sessions: prev.archivedSessions.sessions.filter(
+          (session) => session.session_id !== sessionId,
+        ),
+      },
       active:
         prev.active.sessionId === sessionId
           ? {
@@ -418,3 +433,10 @@ export async function deleteActive(ctx: ChatStoreContext): Promise<void> {
     }));
   }
 }
+
+export {
+  archiveSession,
+  unarchiveSession,
+  loadArchivedSessions,
+  loadMoreArchivedSessions,
+} from "./chat-store-archive.actions.js";

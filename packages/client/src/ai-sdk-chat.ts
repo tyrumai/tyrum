@@ -2,6 +2,7 @@ import type { ChatRequestOptions, ChatTransport, UIMessage, UIMessageChunk } fro
 import {
   WsAiSdkChatStreamEvent,
   WsAiSdkChatStreamEventPayload,
+  WsChatSessionArchiveResult,
   WsChatSessionCreateResult,
   WsChatSessionDeleteResult,
   WsChatSessionGetResult,
@@ -9,6 +10,7 @@ import {
   WsChatSessionReconnectResult,
   WsChatSessionStreamStart,
   type WsChatSession as WsChatSessionT,
+  type WsChatSessionArchivePayload,
   type WsChatSessionCreatePayload,
   type WsChatSessionDeletePayload,
   type WsChatSessionGetPayload,
@@ -36,6 +38,7 @@ export interface TyrumAiSdkChatSocket {
 export type TyrumAiSdkChatTrigger = WsChatSessionSendTrigger;
 
 export type TyrumAiSdkChatOperations = {
+  sessionArchive: string;
   sessionCreate: string;
   sessionDelete: string;
   sessionGet: string;
@@ -46,6 +49,7 @@ export type TyrumAiSdkChatOperations = {
 };
 
 export const DEFAULT_TYRUM_AI_SDK_CHAT_OPERATIONS: TyrumAiSdkChatOperations = {
+  sessionArchive: "chat.session.archive",
   sessionCreate: "chat.session.create",
   sessionDelete: "chat.session.delete",
   sessionGet: "chat.session.get",
@@ -83,11 +87,16 @@ export type TyrumAiSdkChatSendPayload<UI_MESSAGE extends UIMessage = UIMessage> 
   messages?: UI_MESSAGE[];
 };
 
+export type TyrumAiSdkChatSessionArchivePayload = WsChatSessionArchivePayload;
+
 export type TyrumAiSdkChatReconnectPayload = WsChatSessionReconnectPayload;
 
 export type TyrumAiSdkChatStreamStart = WsChatSessionStreamStart;
 
 export interface TyrumAiSdkChatSessionClient<UI_MESSAGE extends UIMessage = UIMessage> {
+  archive(
+    payload: TyrumAiSdkChatSessionArchivePayload,
+  ): Promise<{ session_id: string; archived: boolean }>;
   create(payload?: TyrumAiSdkChatSessionCreatePayload): Promise<TyrumAiSdkChatSession<UI_MESSAGE>>;
   delete(payload: TyrumAiSdkChatSessionDeletePayload): Promise<{ session_id: string }>;
   get(payload: TyrumAiSdkChatSessionGetPayload): Promise<TyrumAiSdkChatSession<UI_MESSAGE>>;
@@ -134,6 +143,16 @@ function createCreateResultSchema<UI_MESSAGE extends UIMessage>(): TyrumClientDy
 }> {
   return WsChatSessionCreateResult as TyrumClientDynamicSchema<{
     session: TyrumAiSdkChatSession<UI_MESSAGE>;
+  }>;
+}
+
+function createArchiveResultSchema(): TyrumClientDynamicSchema<{
+  session_id: string;
+  archived: boolean;
+}> {
+  return WsChatSessionArchiveResult as TyrumClientDynamicSchema<{
+    session_id: string;
+    archived: boolean;
   }>;
 }
 
@@ -232,6 +251,14 @@ export function createTyrumAiSdkChatSessionClient<UI_MESSAGE extends UIMessage =
 }: TyrumAiSdkChatTransportOptions): TyrumAiSdkChatSessionClient<UI_MESSAGE> {
   const resolvedOperations = mergeOperations(operations);
   return {
+    async archive(payload) {
+      return await client.requestDynamic(
+        resolvedOperations.sessionArchive,
+        payload,
+        createArchiveResultSchema(),
+        requestTimeoutMs,
+      );
+    },
     async list(payload = {}) {
       return await client.requestDynamic(
         resolvedOperations.sessionList,

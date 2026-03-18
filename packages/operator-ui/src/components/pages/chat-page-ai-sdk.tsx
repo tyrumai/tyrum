@@ -92,6 +92,10 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
     () => chat.sessions.sessions.map(toThreadSummary),
     [chat.sessions.sessions],
   );
+  const archivedThreads = useMemo(
+    () => chat.archivedSessions.sessions.map(toThreadSummary),
+    [chat.archivedSessions.sessions],
+  );
   const activeSession = chat.active.session;
   const sessionsError = chat.sessions.error?.message ?? null;
   const agentsError = chat.agents.error?.message ?? null;
@@ -271,11 +275,19 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
             }}
             canLoadMore={Boolean(chat.sessions.nextCursor)}
             onOpenThread={(sessionId) => {
-              void core.chatStore.openSession(sessionId).then(() => {
+              const isArchived = chat.archivedSessions.sessions.some(
+                (s) => s.session_id === sessionId,
+              );
+              const open = async () => {
+                if (isArchived) {
+                  await core.chatStore.unarchiveSession(sessionId);
+                }
+                await core.chatStore.openSession(sessionId);
                 if (!lgUp && core.chatStore.getSnapshot().active.sessionId === sessionId) {
                   setMobileView("conversation");
                 }
-              });
+              };
+              void open();
             }}
             agentId={chat.agentId}
             agents={agents}
@@ -284,6 +296,23 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
             }}
             onNewChat={() => {
               void startNewChat();
+            }}
+            archivedThreads={archivedThreads}
+            archivedLoading={chat.archivedSessions.loading}
+            archivedLoaded={chat.archivedSessions.loaded}
+            archivedHasError={Boolean(chat.archivedSessions.error)}
+            canLoadMoreArchived={Boolean(chat.archivedSessions.nextCursor)}
+            onArchiveThread={(sessionId) => {
+              void core.chatStore.archiveSession(sessionId);
+            }}
+            onUnarchiveThread={(sessionId) => {
+              void core.chatStore.unarchiveSession(sessionId);
+            }}
+            onLoadArchived={() => {
+              void core.chatStore.loadArchivedSessions();
+            }}
+            onLoadMoreArchived={() => {
+              void core.chatStore.loadMoreArchivedSessions();
             }}
           />
         ) : null}

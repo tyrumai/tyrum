@@ -70,6 +70,7 @@ import {
 } from "./chat-events.js";
 import {
   WsAiSdkChatStreamEvent,
+  WsChatSessionArchiveRequest,
   WsChatSessionCreateRequest,
   WsChatSessionDeleteRequest,
   WsChatSessionGetRequest,
@@ -147,6 +148,7 @@ export const WsRequest = z.discriminatedUnion("type", [
   WsChatSessionGetRequest,
   WsChatSessionCreateRequest,
   WsChatSessionDeleteRequest,
+  WsChatSessionArchiveRequest,
   WsChatSessionReconnectRequest,
   WsChatSessionSendRequest,
   WsCommandExecuteRequest,

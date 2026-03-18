@@ -1,4 +1,5 @@
-import { Plus, RefreshCw } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Archive, ArchiveRestore, ChevronDown, Plus, RefreshCw } from "lucide-react";
 import { cn } from "../../lib/cn.js";
 import { formatRelativeTime } from "../../utils/format-relative-time.js";
 import { Alert } from "../ui/alert.js";
@@ -15,6 +16,7 @@ export interface ChatThreadSummary {
   created_at: string;
   updated_at: string;
   preview: string;
+  archived: boolean;
 }
 
 export function ChatThreadsPanel({
@@ -33,6 +35,15 @@ export function ChatThreadsPanel({
   agents,
   onAgentChange,
   onNewChat,
+  archivedThreads,
+  archivedLoading,
+  archivedLoaded,
+  archivedHasError,
+  canLoadMoreArchived,
+  onArchiveThread,
+  onUnarchiveThread,
+  onLoadArchived,
+  onLoadMoreArchived,
 }: {
   splitView: boolean;
   connected: boolean;
@@ -49,6 +60,15 @@ export function ChatThreadsPanel({
   agents: Array<{ agent_id: string; label: string }>;
   onAgentChange: (value: string) => void;
   onNewChat: () => void;
+  archivedThreads: ChatThreadSummary[];
+  archivedLoading: boolean;
+  archivedLoaded: boolean;
+  archivedHasError: boolean;
+  canLoadMoreArchived: boolean;
+  onArchiveThread: (sessionId: string) => void;
+  onUnarchiveThread: (sessionId: string) => void;
+  onLoadArchived: () => void;
+  onLoadMoreArchived: () => void;
 }) {
   return (
     <div
@@ -109,70 +129,205 @@ export function ChatThreadsPanel({
         <div className="min-h-0 flex-1 overflow-hidden">
           {loading && threads.length === 0 ? (
             <LoadingState className="p-4" />
-          ) : threads.length === 0 ? (
-            <div className="grid gap-3 p-4">
-              <div className="text-sm text-fg-muted">No chats yet.</div>
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                data-testid="chat-empty-threads-new"
-                disabled={!connected || agentsLoading}
-                onClick={onNewChat}
-              >
-                Start new chat
-              </Button>
-            </div>
           ) : (
             <ScrollArea className="h-full">
-              <div className="grid gap-0.5 p-2">
-                {threads.map((session) => {
-                  const isActive = activeSessionId === session.session_id;
-                  return (
-                    <button
-                      key={session.session_id}
-                      type="button"
-                      data-testid={`chat-thread-${session.session_id}`}
-                      data-active={isActive ? "true" : undefined}
-                      className={cn(
-                        "w-full rounded-md px-2.5 py-2 text-left transition-colors duration-150",
-                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
-                        isActive
-                          ? "bg-bg-subtle text-fg"
-                          : "bg-transparent text-fg-muted hover:bg-bg-subtle hover:text-fg",
-                      )}
-                      onClick={() => onOpenThread(session.session_id)}
-                    >
-                      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-medium">{session.title}</div>
-                          <div className="mt-0.5 truncate text-xs opacity-80">
-                            {session.preview || "—"}
-                          </div>
-                        </div>
-                        <div className="shrink-0 text-[10px] opacity-60">
-                          {formatRelativeTime(session.updated_at)}
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-              {canLoadMore ? (
-                <div className="p-2 pt-0">
+              {threads.length === 0 ? (
+                <div className="grid gap-3 p-4">
+                  <div className="text-sm text-fg-muted">No chats yet.</div>
                   <Button
-                    variant="ghost"
-                    className="w-full text-xs text-fg-muted hover:text-fg"
-                    onClick={onLoadMore}
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    data-testid="chat-empty-threads-new"
+                    disabled={!connected || agentsLoading}
+                    onClick={onNewChat}
                   >
-                    Load more
+                    Start new chat
                   </Button>
                 </div>
-              ) : null}
+              ) : (
+                <>
+                  <div className="grid gap-0.5 p-2">
+                    {threads.map((session) => (
+                      <ThreadItem
+                        key={session.session_id}
+                        session={session}
+                        isActive={activeSessionId === session.session_id}
+                        onOpen={onOpenThread}
+                        actionIcon="archive"
+                        onAction={onArchiveThread}
+                      />
+                    ))}
+                  </div>
+                  {canLoadMore ? (
+                    <div className="p-2 pt-0">
+                      <Button
+                        variant="ghost"
+                        className="w-full text-xs text-fg-muted hover:text-fg"
+                        onClick={onLoadMore}
+                      >
+                        Load more
+                      </Button>
+                    </div>
+                  ) : null}
+                </>
+              )}
+              <ArchivedSection
+                threads={archivedThreads}
+                loading={archivedLoading}
+                loaded={archivedLoaded}
+                hasError={archivedHasError}
+                canLoadMore={canLoadMoreArchived}
+                activeSessionId={activeSessionId}
+                onExpand={onLoadArchived}
+                onLoadMore={onLoadMoreArchived}
+                onOpenThread={onOpenThread}
+                onUnarchiveThread={onUnarchiveThread}
+              />
             </ScrollArea>
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function ThreadItem({
+  session,
+  isActive,
+  onOpen,
+  actionIcon,
+  onAction,
+}: {
+  session: ChatThreadSummary;
+  isActive: boolean;
+  onOpen: (sessionId: string) => void;
+  actionIcon: "archive" | "restore";
+  onAction: (sessionId: string) => void;
+}) {
+  return (
+    <button
+      type="button"
+      data-testid={`chat-thread-${session.session_id}`}
+      data-active={isActive ? "true" : undefined}
+      className={cn(
+        "group w-full rounded-md px-2.5 py-2 text-left transition-colors duration-150",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
+        isActive
+          ? "bg-bg-subtle text-fg"
+          : "bg-transparent text-fg-muted hover:bg-bg-subtle hover:text-fg",
+      )}
+      onClick={() => onOpen(session.session_id)}
+    >
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
+        <div className="min-w-0">
+          <div className="truncate text-sm font-medium">{session.title}</div>
+          <div className="mt-0.5 truncate text-xs opacity-80">{session.preview || "\u2014"}</div>
+        </div>
+        <div className="flex shrink-0 items-center">
+          <span className="text-[10px] opacity-60 group-hover:hidden">
+            {formatRelativeTime(session.updated_at)}
+          </span>
+          <button
+            type="button"
+            className="hidden h-5 w-5 items-center justify-center rounded text-fg-muted hover:text-fg group-hover:flex"
+            title={actionIcon === "archive" ? "Archive" : "Restore"}
+            onClick={(e) => {
+              e.stopPropagation();
+              onAction(session.session_id);
+            }}
+          >
+            {actionIcon === "archive" ? (
+              <Archive className="h-3 w-3" />
+            ) : (
+              <ArchiveRestore className="h-3 w-3" />
+            )}
+          </button>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function ArchivedSection({
+  threads,
+  loading,
+  loaded,
+  hasError,
+  canLoadMore,
+  activeSessionId,
+  onExpand,
+  onLoadMore,
+  onOpenThread,
+  onUnarchiveThread,
+}: {
+  threads: ChatThreadSummary[];
+  loading: boolean;
+  loaded: boolean;
+  hasError: boolean;
+  canLoadMore: boolean;
+  activeSessionId: string | null;
+  onExpand: () => void;
+  onLoadMore: () => void;
+  onOpenThread: (sessionId: string) => void;
+  onUnarchiveThread: (sessionId: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    if (expanded && !loaded && !loading && !hasError) {
+      onExpand();
+    }
+  }, [expanded, loaded, loading, hasError, onExpand]);
+
+  const handleToggle = () => {
+    const next = !expanded;
+    setExpanded(next);
+    if (next && !loaded) {
+      onExpand();
+    }
+  };
+
+  return (
+    <div className="border-t border-border">
+      <button
+        type="button"
+        className="flex w-full items-center gap-1.5 px-3 py-2 text-xs font-medium text-fg-muted hover:text-fg"
+        onClick={handleToggle}
+        data-testid="chat-archived-toggle"
+      >
+        <ChevronDown className={cn("h-3 w-3 transition-transform", !expanded && "-rotate-90")} />
+        Archived
+      </button>
+      {expanded ? (
+        <div className="grid gap-0.5 px-2 pb-2">
+          {loading && threads.length === 0 ? (
+            <LoadingState className="py-2" />
+          ) : threads.length === 0 ? (
+            <div className="px-2.5 py-2 text-xs text-fg-muted">No archived chats.</div>
+          ) : (
+            threads.map((session) => (
+              <ThreadItem
+                key={session.session_id}
+                session={session}
+                isActive={activeSessionId === session.session_id}
+                onOpen={onOpenThread}
+                actionIcon="restore"
+                onAction={onUnarchiveThread}
+              />
+            ))
+          )}
+          {canLoadMore ? (
+            <Button
+              variant="ghost"
+              className="w-full text-xs text-fg-muted hover:text-fg"
+              onClick={onLoadMore}
+            >
+              Load more
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

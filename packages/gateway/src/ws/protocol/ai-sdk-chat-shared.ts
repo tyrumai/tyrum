@@ -1,6 +1,7 @@
 import { getToolName, isTextUIPart, isToolUIPart, type UIMessage, validateUIMessages } from "ai";
 import type { TyrumUIMessage, WsResponseEnvelope } from "@tyrum/schemas";
 export {
+  WsChatSessionArchiveRequest as ChatSessionArchiveRequest,
   WsChatSessionCreateRequest as ChatSessionCreateRequest,
   WsChatSessionDeleteRequest as ChatSessionDeleteRequest,
   WsChatSessionGetRequest as ChatSessionGetRequest,
@@ -170,6 +171,7 @@ export function toPreview(
 
 export function toSessionSummary(input: {
   agentId: string;
+  archived?: boolean;
   channel: string;
   createdAt: string;
   messages: TyrumUIMessage[];
@@ -179,6 +181,7 @@ export function toSessionSummary(input: {
   updatedAt: string;
 }): {
   agent_id: string;
+  archived: boolean;
   channel: string;
   created_at: string;
   last_message: { role: "assistant" | "system" | "user"; text: string } | null;
@@ -203,6 +206,7 @@ export function toSessionSummary(input: {
 
   return {
     agent_id: input.agentId,
+    archived: input.archived ?? false,
     channel: input.channel,
     created_at: input.createdAt,
     last_message: toPreview(lastMessage),

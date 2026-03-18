@@ -88,6 +88,13 @@ export function createChatStore() {
       loading: false,
       error: null,
     },
+    archivedSessions: {
+      sessions: [],
+      nextCursor: null,
+      loading: false,
+      loaded: false,
+      error: null,
+    },
     active: {
       sessionId: activeSession.session_id,
       session: activeSession,
@@ -116,6 +123,10 @@ export function createChatStore() {
     },
     newChat: async () => {},
     deleteActive: async () => {},
+    archiveSession: async () => {},
+    unarchiveSession: async () => {},
+    loadArchivedSessions: async () => {},
+    loadMoreArchivedSessions: async () => {},
     hydrateActiveSession: (session: typeof activeSession | null) => {
       setState((previous) => ({
         ...previous,

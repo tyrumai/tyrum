@@ -24,6 +24,7 @@ export function toThreadSummary(session: TyrumAiSdkChatSessionSummary): ChatThre
     created_at: session.created_at,
     updated_at: session.updated_at,
     preview: deriveSessionPreview(session),
+    archived: session.archived ?? false,
   };
 }
 
