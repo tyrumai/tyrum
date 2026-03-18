@@ -53,8 +53,8 @@ export interface PolicyOverridesSectionProps {
     tool_id: string;
     pattern: string;
     expires_at?: string;
-  }) => Promise<boolean>;
-  onRevoke: (input: { policy_override_id: string; reason: string }) => Promise<void>;
+  }) => Promise<boolean | false>;
+  onRevoke: (input: { policy_override_id: string; reason: string }) => Promise<void | false>;
 }
 
 function statusVariant(status: PolicyOverrideRecord["status"]): "success" | "warning" | "danger" {
@@ -397,6 +397,7 @@ export function PolicyOverridesSection(props: PolicyOverridesSectionProps): Reac
             pattern: pattern.trim(),
             ...(expiresAt.trim() ? { expires_at: new Date(expiresAt).toISOString() } : {}),
           });
+          if (created === false) return false;
           if (!created) return;
           setAgentId("");
           setWorkspaceId("");
@@ -439,7 +440,7 @@ export function PolicyOverridesSection(props: PolicyOverridesSectionProps): Reac
           if (!revokeTarget || !revokeReason.trim()) {
             throw new Error("A revocation reason is required.");
           }
-          await props.onRevoke({
+          return props.onRevoke({
             policy_override_id: revokeTarget.policy_override_id,
             reason: revokeReason.trim(),
           });

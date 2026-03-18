@@ -28,6 +28,6 @@ export interface PolicyConfigSectionProps {
   canMutate: boolean;
   requestEnter: () => void;
   onRefresh: () => void;
-  onSave: (bundle: PolicyBundleT, reason: string) => Promise<boolean>;
-  onRevert: (revision: number, reason: string) => Promise<void>;
+  onSave: (bundle: PolicyBundleT, reason: string) => Promise<boolean | false>;
+  onRevert: (revision: number, reason: string) => Promise<void | false>;
 }

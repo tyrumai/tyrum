@@ -166,7 +166,7 @@ export function AuthTokensCard({ core }: { core: OperatorCore }): React.ReactEle
     }
   };
 
-  const revokeToken = async (): Promise<void> => {
+  const revokeToken = async () => {
     if (!canMutate) {
       requestEnter();
       throw new Error("Authorize admin access to revoke tokens.");
