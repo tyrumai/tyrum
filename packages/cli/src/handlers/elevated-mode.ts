@@ -69,7 +69,13 @@ export async function handleElevatedModeEnter(
     const issued = await http.deviceTokens.issue({
       device_id: "operator-cli",
       role: "client",
-      scopes: ["operator.admin"],
+      scopes: [
+        "operator.read",
+        "operator.write",
+        "operator.approvals",
+        "operator.pairing",
+        "operator.admin",
+      ],
       ttl_seconds: command.ttl_seconds ?? 60 * 10,
     });
     if (!issued.expires_at) {
