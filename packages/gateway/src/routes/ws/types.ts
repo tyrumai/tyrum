@@ -1,6 +1,7 @@
 import type { AuthTokenService } from "../../modules/auth/auth-token-service.js";
 import type { SlidingWindowRateLimiter } from "../../modules/auth/rate-limiter.js";
 import type { ConnectionDirectoryDal } from "../../modules/backplane/connection-directory.js";
+import type { DesktopEnvironmentDal } from "../../modules/desktop-environments/dal.js";
 import type { NodePairingDal } from "../../modules/node/pairing-dal.js";
 import type { PresenceDal } from "../../modules/presence/dal.js";
 import type { ConnectionManager } from "../../ws/connection-manager.js";
@@ -25,6 +26,7 @@ export interface WsRouteOptions {
   upgradeRateLimiter?: SlidingWindowRateLimiter;
   presenceDal?: PresenceDal;
   nodePairingDal?: NodePairingDal;
+  desktopEnvironmentDal?: DesktopEnvironmentDal;
   cluster?: WsClusterOptions;
   presence?: WsPresenceOptions;
 }

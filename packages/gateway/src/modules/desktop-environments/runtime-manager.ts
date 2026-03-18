@@ -1,12 +1,9 @@
 import { chmod, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import {
-  CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-  descriptorIdsForClientCapability,
-} from "@tyrum/schemas";
 import type { AuthTokenService } from "../auth/auth-token-service.js";
 import { isPairingBlockedStatus, type NodePairingDal } from "../node/pairing-dal.js";
 import type { Logger } from "../observability/logger.js";
+import { DESKTOP_CAPABILITY_ALLOWLIST } from "./allowlist.js";
 import { DesktopEnvironmentDal, type DesktopEnvironment } from "./dal.js";
 import { loadOrCreateDesktopEnvironmentIdentity } from "./device-identity.js";
 import {
@@ -25,10 +22,6 @@ const CONTAINER_NODE_HOME = "/var/lib/tyrum-node";
 const CONTAINER_IDENTITY_PATH = `${CONTAINER_NODE_HOME}/desktop-node/device-identity.json`;
 const CONTAINER_GATEWAY_TOKEN_PATH = "/run/tyrum/gateway-token";
 const OFFICIAL_DESKTOP_SANDBOX_IMAGE_REF_PREFIX = "ghcr.io/rhernaus/tyrum-desktop-sandbox:";
-const DESKTOP_ALLOWLIST = descriptorIdsForClientCapability("desktop").map((id) => ({
-  id,
-  version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-}));
 
 type DesktopEnvironmentRuntimeManagerOptions = {
   hostId: string;
@@ -318,7 +311,7 @@ export class DesktopEnvironmentRuntimeManager {
 
   private async approveManagedPairing(tenantId: string, nodeId: string): Promise<void> {
     const pairing = await this.nodePairingDal.getByNodeId(nodeId, tenantId);
-    if (!pairing || pairing.status === "reviewing" || !isPairingBlockedStatus(pairing.status)) {
+    if (!pairing || !isPairingBlockedStatus(pairing.status)) {
       return;
     }
     await this.nodePairingDal.resolve({
@@ -326,10 +319,10 @@ export class DesktopEnvironmentRuntimeManager {
       pairingId: pairing.pairing_id,
       decision: "approved",
       trustLevel: "local",
-      capabilityAllowlist: DESKTOP_ALLOWLIST,
+      capabilityAllowlist: DESKTOP_CAPABILITY_ALLOWLIST,
       reason: "gateway-managed desktop environment",
       resolvedBy: { kind: "desktop_environment_runtime", host_id: this.options.hostId },
-      allowedCurrentStatuses: ["queued", "awaiting_human"],
+      allowedCurrentStatuses: ["queued", "reviewing", "awaiting_human"],
     });
   }
 }

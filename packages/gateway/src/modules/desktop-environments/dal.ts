@@ -381,6 +381,22 @@ export class DesktopEnvironmentDal {
     );
   }
 
+  async getByNodeId(
+    nodeId: string,
+    tenantId: string,
+  ): Promise<(DesktopEnvironmentT & { tenant_id: string }) | undefined> {
+    const row = await this.db.get<RawEnvironmentRow & { tenant_id: string }>(
+      `SELECT tenant_id, environment_id, host_id, label, image_ref, managed_kind, status,
+              desired_running, node_id, takeover_url, last_seen_at, last_error, logs_json,
+              created_at, updated_at
+       FROM desktop_environments
+       WHERE tenant_id = ? AND node_id = ? AND desired_running = ${sqlBoolParam(this.db, true)}
+       LIMIT 1`,
+      [this.requireTenantId(tenantId), nodeId],
+    );
+    return row ? toEnvironmentWithTenant(row) : undefined;
+  }
+
   async listByHost(hostId: string): Promise<Array<DesktopEnvironmentT & { tenant_id: string }>> {
     const rows = await this.db.all<RawEnvironmentRow & { tenant_id: string }>(
       `SELECT tenant_id, environment_id, host_id, label, image_ref, managed_kind, status,

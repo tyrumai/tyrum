@@ -56,6 +56,7 @@ export function createWsHandler(opts: WsRouteOptions): {
     trustedProxies,
     presenceDal: opts.presenceDal,
     nodePairingDal: opts.nodePairingDal,
+    desktopEnvironmentDal: opts.desktopEnvironmentDal,
     presenceTtlMs,
   });
 
