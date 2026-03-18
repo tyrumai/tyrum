@@ -82,7 +82,7 @@ export class PlaywrightProvider implements CapabilityProvider {
         case "wait_for":
           return await this.waitFor(args);
         case "tabs":
-          return await this.tabs();
+          return await this.tabs(args);
         case "upload_file":
           return await this.uploadFile(args);
         case "console_messages":
@@ -402,8 +402,14 @@ export class PlaywrightProvider implements CapabilityProvider {
     };
   }
 
-  private async tabs(): Promise<TaskResult> {
+  private async tabs(args: Record<string, unknown>): Promise<TaskResult> {
     await this.backend.ensureBrowser();
+
+    const switchTo = args["switch_to"] as number | undefined;
+    if (switchTo !== undefined) {
+      await this.backend.switchTab(switchTo);
+    }
+
     const result = await this.backend.listTabs();
 
     return {

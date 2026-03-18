@@ -173,7 +173,7 @@ function browserAutomationAction(
   description: string,
   inputSchema: unknown,
   outputSchema: unknown,
-  resultChannel: NodeActionTransportMetadata["result_channel"] = "result",
+  resultChannel: NodeActionTransportMetadata["result_channel"] = "result_or_evidence",
 ): CatalogAction {
   return {
     name,
