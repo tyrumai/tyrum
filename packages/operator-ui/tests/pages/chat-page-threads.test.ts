@@ -7,6 +7,17 @@ import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
 
 const e = React.createElement;
 
+const archivedDefaults = {
+  archivedThreads: [],
+  archivedLoading: false,
+  archivedLoaded: false,
+  canLoadMoreArchived: false,
+  onArchiveThread: vi.fn(),
+  onUnarchiveThread: vi.fn(),
+  onLoadArchived: vi.fn(),
+  onLoadMoreArchived: vi.fn(),
+};
+
 describe("ChatThreadsPanel", () => {
   it("renders agent names in the selector while keeping agent ids as option values", () => {
     const testRoot = renderIntoDocument(
@@ -29,6 +40,7 @@ describe("ChatThreadsPanel", () => {
         ],
         onAgentChange: vi.fn(),
         onNewChat: vi.fn(),
+        ...archivedDefaults,
       }),
     );
 
@@ -65,6 +77,7 @@ describe("ChatThreadsPanel", () => {
         agents: [{ agent_id: "default", label: "Default" }],
         onAgentChange: vi.fn(),
         onNewChat,
+        ...archivedDefaults,
       }),
     );
 

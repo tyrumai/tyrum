@@ -308,6 +308,7 @@ export class SessionDal {
   async list(input: {
     scopeKeys?: Partial<ScopeKeys>;
     connectorKey?: string;
+    archived?: boolean;
     limit?: number;
     cursor?: string;
   }): Promise<{ sessions: SessionListRow[]; nextCursor: string | null }> {
@@ -323,11 +324,12 @@ export class SessionDal {
       agentId: scopeIds.agentId,
       workspaceId: scopeIds.workspaceId,
       connectorKey,
+      archived: input.archived,
       cursor,
     });
 
     const rows = await this.db.all<RawSessionListRow>(
-      `SELECT s.session_id, s.session_key, ag.agent_key, ca.connector_key, ct.provider_thread_id, s.title, s.messages_json, s.context_state_json, s.created_at, s.updated_at FROM sessions s JOIN agents ag ON ag.tenant_id = s.tenant_id AND ag.agent_id = s.agent_id JOIN channel_threads ct ON ct.tenant_id = s.tenant_id AND ct.workspace_id = s.workspace_id AND ct.channel_thread_id = s.channel_thread_id JOIN channel_accounts ca ON ca.tenant_id = ct.tenant_id AND ca.workspace_id = ct.workspace_id AND ca.channel_account_id = ct.channel_account_id WHERE ${where.join(" AND ")} ORDER BY s.updated_at DESC, s.session_id DESC LIMIT ?`,
+      `SELECT s.session_id, s.session_key, ag.agent_key, ca.connector_key, ct.provider_thread_id, s.title, s.messages_json, s.context_state_json, s.archived_at, s.created_at, s.updated_at FROM sessions s JOIN agents ag ON ag.tenant_id = s.tenant_id AND ag.agent_id = s.agent_id JOIN channel_threads ct ON ct.tenant_id = s.tenant_id AND ct.workspace_id = s.workspace_id AND ct.channel_thread_id = s.channel_thread_id JOIN channel_accounts ca ON ca.tenant_id = ct.tenant_id AND ca.workspace_id = ct.workspace_id AND ca.channel_account_id = ct.channel_account_id WHERE ${where.join(" AND ")} ORDER BY s.updated_at DESC, s.session_id DESC LIMIT ?`,
       [...params, limit + 1],
     );
     const selectedRows = rows.slice(0, limit);
@@ -402,6 +404,15 @@ export class SessionDal {
       title,
       updatedAt: new Date().toISOString(),
     });
+  }
+
+  async setArchived(input: SessionIdentity & { archived: boolean }): Promise<boolean> {
+    const archivedAt = input.archived ? new Date().toISOString() : null;
+    const result = await this.db.run(
+      "UPDATE sessions SET archived_at = ? WHERE tenant_id = ? AND session_id = ?",
+      [archivedAt, input.tenantId, input.sessionId],
+    );
+    return (result.changes ?? 0) > 0;
   }
 
   async deleteExpired(ttlDays: number, agentKey?: string): Promise<number> {

@@ -45,6 +45,7 @@ export interface SessionRow extends RawSessionTimeFields {
     content: string;
     created_at: string;
   }>;
+  archived: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -59,6 +60,7 @@ export interface SessionListRow extends RawSessionTimeFields {
   last_message: TyrumUIMessagePreview | null;
   transcript_count: number;
   last_text: TyrumUIMessagePreview | null;
+  archived: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -85,6 +87,7 @@ export interface RawSessionRow extends RawSessionTimeFields {
   title: string;
   messages_json: string;
   context_state_json: string;
+  archived_at: string | null;
 }
 
 export interface RawSessionListRow extends RawSessionTimeFields {
@@ -96,6 +99,7 @@ export interface RawSessionListRow extends RawSessionTimeFields {
   title: string;
   messages_json: string;
   context_state_json: string;
+  archived_at: string | null;
 }
 
 export interface RawSessionWithDeliveryRow extends RawSessionRow {
@@ -299,6 +303,7 @@ export function toSessionRow(raw: RawSessionRow, observer: PersistedJsonObserver
     context_state: contextState,
     summary: contextState.checkpoint?.handoff_md ?? "",
     transcript: textTranscript(messages, updatedAt),
+    archived: raw.archived_at !== null,
     created_at: createdAt,
     updated_at: updatedAt,
   };
@@ -323,6 +328,7 @@ export function toSessionListRow(
     last_message: lastMessage ? { role: lastMessage.role, content: lastMessage.content } : null,
     transcript_count: messageCount,
     last_text: lastMessage ? { role: lastMessage.role, content: lastMessage.content } : null,
+    archived: raw.archived_at !== null,
     created_at: normalizeTime(raw.created_at),
     updated_at: normalizeTime(raw.updated_at),
   };

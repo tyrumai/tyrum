@@ -28,6 +28,7 @@ export const WsChatSessionSummary = z
     updated_at: DateTimeSchema,
     created_at: DateTimeSchema,
     last_message: WsChatSessionPreview.nullable().optional(),
+    archived: z.boolean().default(false),
   })
   .strict();
 export type WsChatSessionSummary = z.infer<typeof WsChatSessionSummary>;
@@ -46,6 +47,7 @@ export const WsChatSessionListPayload = z
     channel: z.string().trim().min(1).optional(),
     limit: z.number().int().positive().max(200).optional(),
     cursor: z.string().trim().min(1).optional(),
+    archived: z.boolean().optional(),
   })
   .strict();
 export type WsChatSessionListPayload = z.infer<typeof WsChatSessionListPayload>;
@@ -259,6 +261,43 @@ export const WsChatSessionReconnectResponseErrEnvelope = WsResponseErrEnvelope.e
 });
 export type WsChatSessionReconnectResponseErrEnvelope = z.infer<
   typeof WsChatSessionReconnectResponseErrEnvelope
+>;
+
+export const WsChatSessionArchivePayload = z
+  .object({
+    session_id: z.string().trim().min(1),
+    archived: z.boolean(),
+  })
+  .strict();
+export type WsChatSessionArchivePayload = z.infer<typeof WsChatSessionArchivePayload>;
+
+export const WsChatSessionArchiveRequest = WsRequestEnvelope.extend({
+  type: z.literal("chat.session.archive"),
+  payload: WsChatSessionArchivePayload,
+});
+export type WsChatSessionArchiveRequest = z.infer<typeof WsChatSessionArchiveRequest>;
+
+export const WsChatSessionArchiveResult = z
+  .object({
+    session_id: z.string().trim().min(1),
+    archived: z.boolean(),
+  })
+  .strict();
+export type WsChatSessionArchiveResult = z.infer<typeof WsChatSessionArchiveResult>;
+
+export const WsChatSessionArchiveResponseOkEnvelope = WsResponseOkEnvelope.extend({
+  type: z.literal("chat.session.archive"),
+  result: WsChatSessionArchiveResult,
+});
+export type WsChatSessionArchiveResponseOkEnvelope = z.infer<
+  typeof WsChatSessionArchiveResponseOkEnvelope
+>;
+
+export const WsChatSessionArchiveResponseErrEnvelope = WsResponseErrEnvelope.extend({
+  type: z.literal("chat.session.archive"),
+});
+export type WsChatSessionArchiveResponseErrEnvelope = z.infer<
+  typeof WsChatSessionArchiveResponseErrEnvelope
 >;
 
 export const WsAiSdkChatStreamEventPayload = z.discriminatedUnion("stage", [

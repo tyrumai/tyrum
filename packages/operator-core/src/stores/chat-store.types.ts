@@ -26,6 +26,14 @@ export interface ChatSessionsState {
   error: OperatorCoreError | null;
 }
 
+export interface ChatArchivedSessionsState {
+  sessions: TyrumAiSdkChatSessionSummary[];
+  nextCursor: string | null;
+  loading: boolean;
+  loaded: boolean;
+  error: OperatorCoreError | null;
+}
+
 export interface ChatActiveSessionState {
   sessionId: string | null;
   session: TyrumAiSdkChatSession | null;
@@ -37,6 +45,7 @@ export interface ChatState {
   agentId: string;
   agents: ChatAgentsState;
   sessions: ChatSessionsState;
+  archivedSessions: ChatArchivedSessionsState;
   active: ChatActiveSessionState;
 }
 
@@ -50,11 +59,16 @@ export interface ChatStore extends ExternalStore<ChatState> {
   updateActiveMessages(messages: UIMessage[]): void;
   newChat(): Promise<void>;
   deleteActive(): Promise<void>;
+  archiveSession(sessionId: string): Promise<void>;
+  unarchiveSession(sessionId: string): Promise<void>;
+  loadArchivedSessions(): Promise<void>;
+  loadMoreArchivedSessions(): Promise<void>;
 }
 
 export type ChatStoreRunIds = {
   agents: number;
   sessions: number;
+  archivedSessions: number;
   open: number;
 };
 
@@ -78,6 +92,13 @@ export function createInitialChatState(): ChatState {
       sessions: [],
       nextCursor: null,
       loading: false,
+      error: null,
+    },
+    archivedSessions: {
+      sessions: [],
+      nextCursor: null,
+      loading: false,
+      loaded: false,
       error: null,
     },
     active: {

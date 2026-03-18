@@ -1,14 +1,18 @@
 import type { OperatorHttpClient, OperatorWsClient } from "../deps.js";
 import { createStore } from "../store.js";
 import {
+  archiveSession,
   deleteActive,
   hydrateActiveSession,
+  loadArchivedSessions,
+  loadMoreArchivedSessions,
   loadMoreSessions,
   newChat,
   openSession,
   refreshAgents,
   refreshSessions,
   setAgentId,
+  unarchiveSession,
   updateActiveMessages,
 } from "./chat-store.actions.js";
 import {
@@ -21,6 +25,7 @@ import {
 export type {
   ChatAgent,
   ChatAgentsState,
+  ChatArchivedSessionsState,
   ChatSessionsState,
   ChatActiveSessionState,
   ChatState,
@@ -35,7 +40,7 @@ export function createChatStore(ws: OperatorWsClient, http: OperatorHttpClient):
     setState,
     ws,
     http,
-    runIds: { agents: 0, sessions: 0, open: 0 },
+    runIds: { agents: 0, sessions: 0, archivedSessions: 0, open: 0 },
   };
 
   return {
@@ -49,5 +54,9 @@ export function createChatStore(ws: OperatorWsClient, http: OperatorHttpClient):
     updateActiveMessages: (messages) => updateActiveMessages(ctx, messages),
     newChat: () => newChat(ctx),
     deleteActive: () => deleteActive(ctx),
+    archiveSession: (sessionId) => archiveSession(ctx, sessionId),
+    unarchiveSession: (sessionId) => unarchiveSession(ctx, sessionId),
+    loadArchivedSessions: () => loadArchivedSessions(ctx),
+    loadMoreArchivedSessions: () => loadMoreArchivedSessions(ctx),
   };
 }

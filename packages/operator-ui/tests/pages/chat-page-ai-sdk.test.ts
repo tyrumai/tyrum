@@ -43,6 +43,13 @@ describe("AiSdkChatPage", () => {
         loading: false,
         error: null,
       },
+      archivedSessions: {
+        sessions: [],
+        nextCursor: null,
+        loading: false,
+        loaded: false,
+        error: null,
+      },
       active: {
         sessionId: null,
         session: null,
@@ -61,6 +68,10 @@ describe("AiSdkChatPage", () => {
       updateActiveMessages: vi.fn(),
       newChat: vi.fn(async () => undefined),
       deleteActive: vi.fn(async () => undefined),
+      archiveSession: vi.fn(async () => undefined),
+      unarchiveSession: vi.fn(async () => undefined),
+      loadArchivedSessions: vi.fn(async () => undefined),
+      loadMoreArchivedSessions: vi.fn(async () => undefined),
     };
     const core = {
       approvalsStore,

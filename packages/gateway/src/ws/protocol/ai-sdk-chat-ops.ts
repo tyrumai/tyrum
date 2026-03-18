@@ -13,6 +13,7 @@ import {
   finishAiSdkChatStream,
   reconnectAiSdkChatStream,
 } from "./ai-sdk-chat-streams.js";
+import { handleChatSessionArchiveMessage } from "./session-archive-ops.js";
 import { handleSessionDeleteMessage } from "./session-delete-ops.js";
 import {
   attachedNodeIdFromBody,
@@ -49,6 +50,9 @@ export async function handleAiSdkChatMessage(
   }
   if (msg.type === "chat.session.delete") {
     return await handleChatSessionDeleteMessage(client, msg, deps);
+  }
+  if (msg.type === "chat.session.archive") {
+    return await handleChatSessionArchiveMessage(client, msg, deps);
   }
   if (msg.type === "chat.session.reconnect") {
     return await handleChatSessionReconnectMessage(client, msg, deps);
@@ -89,6 +93,7 @@ async function handleChatSessionListMessage(
     const listed = await createSessionDal(deps).list({
       scopeKeys: { agentKey, workspaceKey: resolveWorkspaceKey() },
       connectorKey,
+      archived: parsed.data.payload.archived,
       limit: parsed.data.payload.limit ?? 50,
       cursor: parsed.data.payload.cursor,
     });
@@ -99,6 +104,7 @@ async function handleChatSessionListMessage(
       result: {
         sessions: listed.sessions.map((session) => ({
           agent_id: session.agent_id,
+          archived: session.archived,
           channel: session.channel,
           created_at: session.created_at,
           last_message: toPreview(session.last_message),
@@ -164,6 +170,7 @@ async function handleChatSessionGetMessage(
         session: {
           ...toSessionSummary({
             agentId: looked.agent_key,
+            archived: looked.session.archived,
             channel: looked.connector_key,
             createdAt: looked.session.created_at,
             messages: looked.session.messages,
@@ -329,6 +336,14 @@ async function handleChatSessionSendMessage(
     });
     if (!looked) {
       return errorResponse(msg.request_id, msg.type, "not_found", "session not found");
+    }
+
+    if (looked.session.archived) {
+      await sessionDal.setArchived({
+        tenantId: auth.tenantId,
+        sessionId: looked.session.session_id,
+        archived: false,
+      });
     }
 
     const persistedMessages = looked.session.messages as unknown as UIMessage[];

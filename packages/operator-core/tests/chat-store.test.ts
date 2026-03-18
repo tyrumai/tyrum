@@ -12,6 +12,7 @@ function sampleListItem(sessionId: string, updatedAt = "2026-01-01T00:00:00.000Z
     last_message: { role: "user" as const, text: "hello" },
     updated_at: updatedAt,
     created_at: updatedAt,
+    archived: false,
   };
 }
 

@@ -58,6 +58,7 @@ export function buildSessionListWhereClause(input: {
   agentId: string;
   workspaceId: string;
   connectorKey?: string;
+  archived?: boolean;
   cursor?: { updated_at: string; session_id: string };
 }): { where: string[]; params: unknown[] } {
   const where = ["s.tenant_id = ?", "s.agent_id = ?", "s.workspace_id = ?"];
@@ -65,6 +66,11 @@ export function buildSessionListWhereClause(input: {
   if (input.connectorKey) {
     where.push("ca.connector_key = ?");
     params.push(input.connectorKey);
+  }
+  if (input.archived === true) {
+    where.push("s.archived_at IS NOT NULL");
+  } else {
+    where.push("s.archived_at IS NULL");
   }
   if (input.cursor) {
     where.push("(s.updated_at < ? OR (s.updated_at = ? AND s.session_id < ?))");
