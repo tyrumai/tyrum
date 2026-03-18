@@ -127,7 +127,7 @@ export function ChatThreadsPanel({
         <div className="min-h-0 flex-1 overflow-hidden">
           {loading && threads.length === 0 ? (
             <LoadingState className="p-4" />
-          ) : threads.length === 0 && archivedThreads.length === 0 && !archivedLoaded ? (
+          ) : threads.length === 0 && archivedLoaded && archivedThreads.length === 0 ? (
             <div className="grid gap-3 p-4">
               <div className="text-sm text-fg-muted">No chats yet.</div>
               <Button

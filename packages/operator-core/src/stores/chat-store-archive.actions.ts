@@ -1,34 +1,6 @@
-import type { TyrumAiSdkChatSessionSummary } from "@tyrum/client/browser";
-import {
-  createTyrumAiSdkChatSessionClient,
-  supportsTyrumAiSdkChatSocket,
-} from "@tyrum/client/browser";
 import { toOperatorCoreError } from "../operator-error.js";
+import { buildSessionClient, patchSessionList } from "./chat-store.actions.js";
 import type { ChatStoreContext } from "./chat-store.types.js";
-
-function buildSessionClient(ctx: ChatStoreContext) {
-  const socket = supportsTyrumAiSdkChatSocket(ctx.ws) ? ctx.ws : null;
-  return socket ? createTyrumAiSdkChatSessionClient({ client: socket }) : null;
-}
-
-function compareSessionActivity(
-  left: TyrumAiSdkChatSessionSummary,
-  right: TyrumAiSdkChatSessionSummary,
-): number {
-  if (left.updated_at !== right.updated_at) {
-    return right.updated_at.localeCompare(left.updated_at);
-  }
-  return right.session_id.localeCompare(left.session_id);
-}
-
-function patchSessionList(
-  sessions: TyrumAiSdkChatSessionSummary[],
-  session: TyrumAiSdkChatSessionSummary,
-): TyrumAiSdkChatSessionSummary[] {
-  return [...sessions.filter((entry) => entry.session_id !== session.session_id), session].toSorted(
-    compareSessionActivity,
-  );
-}
 
 export async function archiveSession(ctx: ChatStoreContext, sessionId: string): Promise<void> {
   const sessionClient = buildSessionClient(ctx);

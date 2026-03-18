@@ -19,7 +19,7 @@ function requireChatSocket(ctx: ChatStoreContext) {
   return supportsTyrumAiSdkChatSocket(ctx.ws) ? ctx.ws : null;
 }
 
-function buildSessionClient(ctx: ChatStoreContext) {
+export function buildSessionClient(ctx: ChatStoreContext) {
   const socket = requireChatSocket(ctx);
   return socket ? createTyrumAiSdkChatSessionClient({ client: socket }) : null;
 }
@@ -114,7 +114,7 @@ function areMessagesEqual(left: UIMessage[], right: UIMessage[]): boolean {
   return areComparableValuesEqual(left, right);
 }
 
-function patchSessionList(
+export function patchSessionList(
   sessions: TyrumAiSdkChatSessionSummary[],
   session: TyrumAiSdkChatSession | TyrumAiSdkChatSessionSummary,
 ): TyrumAiSdkChatSessionSummary[] {

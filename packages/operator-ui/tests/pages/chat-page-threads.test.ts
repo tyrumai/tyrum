@@ -78,6 +78,7 @@ describe("ChatThreadsPanel", () => {
         onAgentChange: vi.fn(),
         onNewChat,
         ...archivedDefaults,
+        archivedLoaded: true,
       }),
     );
 
