@@ -336,7 +336,7 @@ export async function startEdgeRuntime(
     : undefined;
   subagentJanitor?.start();
 
-  const server = await createGatewayServer(context, app, wsHandler);
+  const serverResult = await createGatewayServer(context, app, wsHandler);
   return {
     plugins,
     pluginCatalogProvider,
@@ -351,7 +351,8 @@ export async function startEdgeRuntime(
     outboxPoller,
     telegramProcessor: channelRuntimeBundle.telegramProcessor,
     discordMonitor: channelRuntimeBundle.discordMonitor,
-    server,
+    server: serverResult?.server,
+    tlsFingerprint256: serverResult?.tlsFingerprint256,
   };
 }
 

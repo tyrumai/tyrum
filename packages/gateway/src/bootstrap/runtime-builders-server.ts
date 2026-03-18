@@ -10,7 +10,7 @@ export async function createGatewayServer(
   context: GatewayBootContext,
   app: ReturnType<typeof createApp> | undefined,
   wsHandler: ReturnType<typeof createWsHandler> | undefined,
-): Promise<GatewayServer | undefined> {
+): Promise<{ server: GatewayServer; tlsFingerprint256?: string } | undefined> {
   if (!context.shouldRunEdge || !app || !wsHandler) {
     return undefined;
   }
@@ -60,5 +60,5 @@ export async function createGatewayServer(
     }
   });
 
-  return server;
+  return { server, tlsFingerprint256: tlsMaterial?.fingerprint256 };
 }
