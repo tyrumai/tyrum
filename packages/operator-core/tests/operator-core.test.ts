@@ -92,6 +92,7 @@ describe("operator-core wiring", () => {
     const runsListBefore = ws.runList.mock.calls.length;
     const desktopEnvironmentHostsListBefore = http.__calls.desktopEnvironmentHostsList;
     const desktopEnvironmentsListBefore = http.__calls.desktopEnvironmentsList;
+    const agentListGetBefore = http.__calls.agentListGet;
 
     await core.syncAllNow();
     await tick();
@@ -102,6 +103,7 @@ describe("operator-core wiring", () => {
     expect(http.__calls.pairingsList).toBe(pairingsListBefore + 1);
     expect(http.__calls.desktopEnvironmentHostsList).toBe(desktopEnvironmentHostsListBefore + 1);
     expect(http.__calls.desktopEnvironmentsList).toBe(desktopEnvironmentsListBefore + 1);
+    expect(http.__calls.agentListGet).toBe(agentListGetBefore + 1);
     expect(ws.approvalList).toHaveBeenCalledTimes(approvalsListBefore + 5);
     expect(ws.runList).toHaveBeenCalledTimes(runsListBefore + 1);
   });
