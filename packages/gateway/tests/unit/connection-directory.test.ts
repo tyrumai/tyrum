@@ -1,13 +1,17 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-  descriptorIdForClientCapability,
   descriptorIdsForClientCapability,
+  migrateCapabilityDescriptorId,
 } from "@tyrum/schemas";
 import { ConnectionDirectoryDal } from "../../src/modules/backplane/connection-directory.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
+
+/** Canonical ID after migration. */
+const CLI_CANONICAL_ID = "tyrum.cli.execute";
+const BROWSER_NAVIGATE_ID = "tyrum.browser.navigate";
 
 describe("ConnectionDirectoryDal", () => {
   let db: SqliteDb | undefined;
@@ -32,7 +36,7 @@ describe("ConnectionDirectoryDal", () => {
       role: "client",
       capabilities: [
         {
-          id: descriptorIdForClientCapability("playwright"),
+          id: BROWSER_NAVIGATE_ID,
           version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
         },
       ],
@@ -41,28 +45,16 @@ describe("ConnectionDirectoryDal", () => {
     });
 
     expect(
-      await dir.listConnectionsForCapability(
-        DEFAULT_TENANT_ID,
-        descriptorIdForClientCapability("playwright"),
-        now,
-      ),
+      await dir.listConnectionsForCapability(DEFAULT_TENANT_ID, BROWSER_NAVIGATE_ID, now),
     ).toHaveLength(1);
     expect(
-      await dir.listConnectionsForCapability(
-        DEFAULT_TENANT_ID,
-        descriptorIdForClientCapability("cli"),
-        now,
-      ),
+      await dir.listConnectionsForCapability(DEFAULT_TENANT_ID, CLI_CANONICAL_ID, now),
     ).toHaveLength(0);
 
     // Expire it
     expect(await dir.cleanupExpired(now + 10_000)).toBe(1);
     expect(
-      await dir.listConnectionsForCapability(
-        DEFAULT_TENANT_ID,
-        descriptorIdForClientCapability("playwright"),
-        now + 10_000,
-      ),
+      await dir.listConnectionsForCapability(DEFAULT_TENANT_ID, BROWSER_NAVIGATE_ID, now + 10_000),
     ).toHaveLength(0);
   });
 
@@ -116,13 +108,13 @@ describe("ConnectionDirectoryDal", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]!.capabilities).toEqual([
       {
-        id: descriptorIdForClientCapability("cli"),
+        id: CLI_CANONICAL_ID,
         version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
       },
     ]);
     expect(rows[0]!.ready_capabilities).toEqual([
       {
-        id: descriptorIdForClientCapability("cli"),
+        id: CLI_CANONICAL_ID,
         version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
       },
     ]);
@@ -183,13 +175,13 @@ describe("ConnectionDirectoryDal", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]!.capabilities).toEqual([
       {
-        id: descriptorIdForClientCapability("cli"),
+        id: CLI_CANONICAL_ID,
         version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
       },
     ]);
     expect(rows[0]!.ready_capabilities).toEqual([
       {
-        id: descriptorIdForClientCapability("cli"),
+        id: CLI_CANONICAL_ID,
         version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
       },
     ]);
@@ -249,7 +241,7 @@ describe("ConnectionDirectoryDal", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]!.capabilities).toEqual([
       {
-        id: descriptorIdForClientCapability("cli"),
+        id: CLI_CANONICAL_ID,
         version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
       },
     ]);
@@ -300,7 +292,7 @@ describe("ConnectionDirectoryDal", () => {
         JSON.stringify([
           "desktop",
           {
-            id: descriptorIdForClientCapability("cli"),
+            id: "tyrum.cli",
             version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
           },
           "not-a-capability",
@@ -317,7 +309,7 @@ describe("ConnectionDirectoryDal", () => {
     expect(rows[0]!.capabilities.map((capability) => capability.id).toSorted()).toEqual(
       [
         ...descriptorIdsForClientCapability("desktop"),
-        descriptorIdForClientCapability("cli"),
+        ...migrateCapabilityDescriptorId("tyrum.cli"),
       ].toSorted(),
     );
   });

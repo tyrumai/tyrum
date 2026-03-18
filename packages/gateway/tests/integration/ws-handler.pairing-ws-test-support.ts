@@ -19,7 +19,6 @@ import {
   computeDeviceId,
   createAuthTokens,
   createHandshakeIdentity,
-  descriptorIdForClientCapability,
   issueDeviceToken,
   recordJsonMessages,
   waitForClose,
@@ -130,7 +129,7 @@ function registerPairingRequestTests(ctx: TestContext): void {
           device: { device_id: deviceId, pubkey: pubkeyB64Url, label: "node-1" },
           capabilities: [
             {
-              id: descriptorIdForClientCapability("cli"),
+              id: "tyrum.cli.execute",
               version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
             },
           ],
@@ -204,7 +203,7 @@ function registerPairingRequestTests(ctx: TestContext): void {
           trust_level: "remote",
           capability_allowlist: [
             {
-              id: descriptorIdForClientCapability("cli"),
+              id: "tyrum.cli.execute",
               version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
             },
           ],
@@ -222,7 +221,7 @@ function registerPairingRequestTests(ctx: TestContext): void {
     expect((pairing2 as any)["trust_level"]).toBe("remote");
     expect((pairing2 as any)["capability_allowlist"]).toEqual([
       {
-        id: descriptorIdForClientCapability("cli"),
+        id: "tyrum.cli.execute",
         version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
       },
     ]);
@@ -300,7 +299,7 @@ function registerTokenRevocationTests(ctx: TestContext): void {
           device: { device_id: deviceId, pubkey: pubkeyB64Url, label: "node-1" },
           capabilities: [
             {
-              id: descriptorIdForClientCapability("cli"),
+              id: "tyrum.cli.execute",
               version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
             },
           ],
@@ -363,7 +362,7 @@ function registerTokenRevocationTests(ctx: TestContext): void {
           trust_level: "remote",
           capability_allowlist: [
             {
-              id: descriptorIdForClientCapability("cli"),
+              id: "tyrum.cli.execute",
               version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
             },
           ],
@@ -410,7 +409,7 @@ function registerTokenRevocationTests(ctx: TestContext): void {
           device: { device_id: deviceId, pubkey: pubkeyB64Url, label: "node-1" },
           capabilities: [
             {
-              id: descriptorIdForClientCapability("cli"),
+              id: "tyrum.cli.execute",
               version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
             },
           ],

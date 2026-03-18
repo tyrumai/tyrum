@@ -1,7 +1,7 @@
 import { expect, it, vi } from "vitest";
 import {
+  BROWSER_AUTOMATION_CAPABILITY_IDS,
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-  descriptorIdForClientCapability,
 } from "@tyrum/schemas";
 import * as deviceIdentity from "../src/device-identity.js";
 import type { TyrumClientProtocolErrorInfo } from "../src/ws-client.js";
@@ -35,24 +35,27 @@ function registerConnectionHandshakeTests(fixture: ConnectionFixture): void {
     const ws = await server.waitForClient();
     const connect = (await waitForMessage(ws)) as Record<string, unknown>;
     expect(connect["type"]).toBe("connect.init");
-    expect(connect["payload"]).toEqual({
-      protocol_rev: 2,
-      role: "client",
-      device: expect.objectContaining({
-        device_id: expect.any(String),
-        pubkey: expect.any(String),
+    const payload = connect["payload"] as Record<string, unknown>;
+    expect(payload).toEqual(
+      expect.objectContaining({
+        protocol_rev: 2,
+        role: "client",
+        device: expect.objectContaining({
+          device_id: expect.any(String),
+          pubkey: expect.any(String),
+        }),
       }),
-      capabilities: [
-        {
-          id: descriptorIdForClientCapability("playwright"),
-          version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-        },
-        {
-          id: descriptorIdForClientCapability("http"),
-          version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-        },
-      ],
-    });
+    );
+
+    // After normalization, "playwright" expands to all tyrum.browser.* IDs
+    // and "http" migrates to "tyrum.http.request".
+    const capabilities = payload["capabilities"] as Array<{ id: string; version: string }>;
+    const capIds = capabilities.map((c) => c.id);
+    for (const browserId of BROWSER_AUTOMATION_CAPABILITY_IDS) {
+      expect(capIds).toContain(browserId);
+    }
+    expect(capIds).toContain("tyrum.http.request");
+    expect(capabilities.length).toBe(BROWSER_AUTOMATION_CAPABILITY_IDS.length + 1);
   });
 
   it("reuses one auto-generated device identity across concurrent resolution", async () => {
@@ -293,13 +296,14 @@ function registerConnectionProtocolErrorTests(fixture: ConnectionFixture): void 
     expect(init["type"]).toBe("connect.init");
 
     const payload = init["payload"] as Record<string, unknown>;
+    // After normalization, "cli" → "tyrum.cli.execute", "http" → "tyrum.http.request"
     expect(payload["capabilities"]).toEqual([
       {
-        id: descriptorIdForClientCapability("cli"),
+        id: "tyrum.cli.execute",
         version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
       },
       {
-        id: descriptorIdForClientCapability("http"),
+        id: "tyrum.http.request",
         version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
       },
     ]);

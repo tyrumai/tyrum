@@ -14,6 +14,7 @@ import {
 } from "../node-configure-page.shared.js";
 import { MacPermissionsContent } from "./node-config-page.mac-permissions.js";
 import {
+  BROWSER_AUTOMATION_ACTIONS,
   DESKTOP_ACTIONS,
   getCatalogEntry,
   TEST_ACTION_DEFINITIONS,
@@ -211,6 +212,17 @@ export function useDesktopCapabilities(input: UseDesktopCapabilitiesInput): Norm
 
     // 2. Playwright (Browser Automation)
     const playwrightEnabled = security.capabilities.playwright;
+    const playwrightActions: CapabilityAction[] = BROWSER_AUTOMATION_ACTIONS.map((action) => ({
+      name: action.key,
+      label: action.label,
+      description: action.description,
+      enabled: true,
+      availabilityStatus: "available" as const,
+      onToggle: () => {
+        // Browser automation actions are all-or-nothing; the whole capability is toggled.
+      },
+    }));
+
     const browserAllowlistActive = playwrightEnabled;
     const browserDomainsEmpty = splitAllowlistLines(allowlistDrafts.browserDomains).length === 0;
 
@@ -250,11 +262,11 @@ export function useDesktopCapabilities(input: UseDesktopCapabilitiesInput): Norm
       enabled: playwrightEnabled,
       onToggle: (enabled) => setCapability("playwright", enabled),
       statusSummary: playwrightEnabled
-        ? `enabled${browserAllowlistActive ? " \u00b7 allowlist active" : ""}`
+        ? `${BROWSER_AUTOMATION_ACTIONS.length} actions enabled${browserAllowlistActive ? " \u00b7 allowlist active" : ""}`
         : "disabled",
       saveStatus,
       saveError,
-      actions: [],
+      actions: playwrightActions,
       allowlists: playwrightAllowlists,
       toggles: playwrightToggles,
       testActions: buildTestActions("playwright"),

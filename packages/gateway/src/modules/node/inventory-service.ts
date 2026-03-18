@@ -1,6 +1,8 @@
 import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   type CapabilityDescriptor,
+  type DevicePlatform,
+  type DeviceType,
   type NodeCapabilityState,
   type NodeCapabilitySummary,
   type NodeInventoryEntry,
@@ -21,6 +23,9 @@ type InventoryNode = {
   label?: string;
   mode?: string;
   version?: string;
+  deviceType?: DeviceType;
+  devicePlatform?: DevicePlatform;
+  deviceModel?: string;
   connected: boolean;
   capabilities: Map<string, CapabilityDescriptor>;
   readyCapabilities: Map<string, CapabilityDescriptor>;
@@ -58,6 +63,9 @@ function upsertNode(map: Map<string, InventoryNode>, next: InventoryNode): void 
   existing.label = existing.label ?? next.label;
   existing.mode = existing.mode ?? next.mode;
   existing.version = existing.version ?? next.version;
+  existing.deviceType = existing.deviceType ?? next.deviceType;
+  existing.devicePlatform = existing.devicePlatform ?? next.devicePlatform;
+  existing.deviceModel = existing.deviceModel ?? next.deviceModel;
   existing.lastSeenAtMs = Math.max(existing.lastSeenAtMs ?? 0, next.lastSeenAtMs ?? 0) || undefined;
   existing.connected ||= next.connected;
   for (const [capabilityId, capability] of next.capabilities) {
@@ -78,6 +86,9 @@ function fromDirectoryRow(row: ConnectionDirectoryRow): InventoryNode | undefine
     label: row.label ?? undefined,
     mode: row.mode ?? undefined,
     version: row.version ?? undefined,
+    deviceType: row.device_type ?? undefined,
+    devicePlatform: row.device_platform ?? undefined,
+    deviceModel: row.device_model ?? undefined,
     connected: true,
     capabilities: capabilityMap(row.capabilities),
     readyCapabilities: capabilityMap(row.ready_capabilities),
@@ -90,6 +101,9 @@ function fromConnectedClient(client: ConnectedClient): InventoryNode | undefined
   if (client.role !== "node" || !client.device_id) return undefined;
   return {
     nodeId: client.device_id,
+    deviceType: client.device_type,
+    devicePlatform: client.device_platform,
+    deviceModel: client.device_model,
     connected: true,
     capabilities: capabilityMap(client.capabilities),
     readyCapabilities: capabilityMap(client.readyCapabilities),
@@ -252,6 +266,15 @@ export class NodeInventoryService {
           : {}),
         ...(node.lastSeenAtMs ? { last_seen_at: new Date(node.lastSeenAtMs).toISOString() } : {}),
         capabilities: summaries,
+        device:
+          node.deviceType || node.devicePlatform || node.deviceModel
+            ? {
+                ...(node.deviceType ? { type: node.deviceType } : {}),
+                ...(node.devicePlatform ? { platform: node.devicePlatform } : {}),
+                ...(node.deviceModel ? { model: node.deviceModel } : {}),
+              }
+            : undefined,
+        last_tyrum_interaction_at: undefined,
       });
     }
 

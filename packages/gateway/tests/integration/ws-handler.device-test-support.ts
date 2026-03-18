@@ -14,7 +14,6 @@ import {
   buildTranscript,
   computeDeviceId,
   createAuthTokens,
-  descriptorIdForClientCapability,
   issueDeviceToken,
   waitForClose,
   waitForJsonMessage,
@@ -23,7 +22,7 @@ import {
 } from "./ws-handler.test-support.js";
 
 const httpDescriptor = {
-  id: descriptorIdForClientCapability("http"),
+  id: "tyrum.http.request",
   version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
 } as const;
 

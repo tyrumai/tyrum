@@ -65,15 +65,22 @@ export const GREP_TOOL_PROMPT_METADATA = {
 export const TOOL_NODE_LIST_PROMPT_METADATA = {
   promptGuidance: [
     "List nodes before inspect or dispatch so you target a connected node and capability.",
+    "Use node device metadata (type, platform, last_tyrum_interaction_at) to choose the best node for an action. Prefer nodes the user is actively using.",
   ],
-  promptExamples: ['{"capability":"tyrum.desktop.screenshot","dispatchable_only":true}'],
+  promptExamples: [
+    '{"capability":"tyrum.desktop.screenshot","dispatchable_only":true}',
+    '{"capability":"tyrum.browser.navigate","dispatchable_only":true}',
+  ],
 } as const;
 
 export const TOOL_NODE_INSPECT_PROMPT_METADATA = {
   promptGuidance: [
     "Inspect the capability before dispatch so you know the exact action names and input shape.",
   ],
-  promptExamples: ['{"node_id":"node_123","capability":"tyrum.desktop.screenshot"}'],
+  promptExamples: [
+    '{"node_id":"node_123","capability":"tyrum.desktop.screenshot"}',
+    '{"node_id":"node_456","capability":"tyrum.camera.capture-photo"}',
+  ],
 } as const;
 
 export const AUTOMATION_SCHEDULE_CREATE_PROMPT_METADATA = {

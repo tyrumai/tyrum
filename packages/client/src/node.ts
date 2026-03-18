@@ -27,6 +27,7 @@ import {
   type TyrumClientProtocolErrorInfo,
   type TyrumClientProtocolErrorKind,
 } from "./ws-client.js";
+import { createManagedNodeClientLifecycle } from "./managed-node-client.js";
 import { VERSION } from "./version.js";
 
 export * from "./public-shared.js";
@@ -39,6 +40,7 @@ export {
   createPinnedNodeWebSocket,
   destroyPinnedNodeDispatcher,
   createTyrumHttpClient,
+  createManagedNodeClientLifecycle,
   TyrumHttpClientError,
 };
 export * from "./public-device-identity.js";
@@ -60,3 +62,4 @@ export type {
   TyrumRequestOptions,
 };
 export { VERSION };
+export type { ManagedNodeClient, ManagedNodeClientLifecycle } from "./managed-node-client.js";

@@ -48,6 +48,8 @@ export interface TyrumClientOptions {
     platform?: string;
     version?: string;
     mode?: string;
+    device_type?: string;
+    device_platform?: string;
   };
   reconnect?: boolean;
   reconnectBaseDelayMs?: number;

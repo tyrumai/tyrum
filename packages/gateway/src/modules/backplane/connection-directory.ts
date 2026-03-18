@@ -1,5 +1,14 @@
-import { NodeCapabilityState as NodeCapabilityStateSchema } from "@tyrum/schemas";
-import type { CapabilityDescriptor, NodeCapabilityState } from "@tyrum/schemas";
+import {
+  DevicePlatform as DevicePlatformSchema,
+  DeviceType as DeviceTypeSchema,
+  NodeCapabilityState as NodeCapabilityStateSchema,
+} from "@tyrum/schemas";
+import type {
+  CapabilityDescriptor,
+  DevicePlatform,
+  DeviceType,
+  NodeCapabilityState,
+} from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
 import { DEFAULT_TENANT_ID } from "../identity/scope.js";
 import { parseStoredCapabilityDescriptors } from "../node/stored-capability-descriptors.js";
@@ -14,6 +23,9 @@ export interface ConnectionDirectoryRow {
   label: string | null;
   version: string | null;
   mode: string | null;
+  device_type: DeviceType | null;
+  device_platform: DevicePlatform | null;
+  device_model: string | null;
   capabilities: CapabilityDescriptor[];
   ready_capabilities: CapabilityDescriptor[];
   capability_states: NodeCapabilityState[];
@@ -113,6 +125,13 @@ function toRow(raw: RawConnectionDirectoryRow): ConnectionDirectoryRow {
   const metadata = safeParseJsonObject(raw.metadata_json);
   const version = typeof metadata.version === "string" ? metadata.version : null;
   const mode = typeof metadata.mode === "string" ? metadata.mode : null;
+  const parsedDeviceType = DeviceTypeSchema.safeParse(metadata.device_type);
+  const deviceType: DeviceType | null = parsedDeviceType.success ? parsedDeviceType.data : null;
+  const parsedDevicePlatform = DevicePlatformSchema.safeParse(metadata.device_platform);
+  const devicePlatform: DevicePlatform | null = parsedDevicePlatform.success
+    ? parsedDevicePlatform.data
+    : null;
+  const deviceModel = typeof metadata.device_model === "string" ? metadata.device_model : null;
   const deviceId = raw.principal_key === raw.connection_id ? null : raw.principal_key;
   return {
     connection_id: raw.connection_id,
@@ -127,6 +146,9 @@ function toRow(raw: RawConnectionDirectoryRow): ConnectionDirectoryRow {
     label: raw.label,
     version,
     mode,
+    device_type: deviceType,
+    device_platform: devicePlatform,
+    device_model: deviceModel,
     capabilities,
     ready_capabilities: readyCapabilities.fallbackToCapabilities
       ? capabilities
@@ -152,6 +174,9 @@ export class ConnectionDirectoryDal {
     label?: string | null;
     version?: string | null;
     mode?: string | null;
+    deviceType?: string | null;
+    devicePlatform?: string | null;
+    deviceModel?: string | null;
     capabilities: readonly CapabilityDescriptor[];
     readyCapabilities?: readonly CapabilityDescriptor[];
     capabilityStates?: readonly NodeCapabilityState[];
@@ -174,6 +199,9 @@ export class ConnectionDirectoryDal {
     const metadataJson = JSON.stringify({
       ...(params.version ? { version: params.version } : {}),
       ...(params.mode ? { mode: params.mode } : {}),
+      ...(params.deviceType ? { device_type: params.deviceType } : {}),
+      ...(params.devicePlatform ? { device_platform: params.devicePlatform } : {}),
+      ...(params.deviceModel ? { device_model: params.deviceModel } : {}),
     });
 
     if (existingPrincipal) {

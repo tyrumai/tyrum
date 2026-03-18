@@ -21,10 +21,7 @@ import { createWsHandler } from "../../src/routes/ws.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { dispatchTask } from "../../src/ws/protocol.js";
-import {
-  CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-  descriptorIdForClientCapability,
-} from "@tyrum/schemas";
+import { CAPABILITY_DESCRIPTOR_DEFAULT_VERSION } from "@tyrum/schemas";
 
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import {
@@ -42,7 +39,7 @@ export const approvedCliPairingDal = {
       status: "approved",
       capability_allowlist: [
         {
-          id: descriptorIdForClientCapability("cli"),
+          id: "tyrum.cli.execute",
           version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
         },
       ],
@@ -197,7 +194,7 @@ export async function expectSingleCapabilityEdge(
 ): Promise<void> {
   const list = await connectionDirectory.listConnectionsForCapability(
     DEFAULT_TENANT_ID,
-    descriptorIdForClientCapability("cli"),
+    "tyrum.cli.execute",
     Date.now(),
   );
   expect(list.length).toBe(1);

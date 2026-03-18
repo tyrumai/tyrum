@@ -19,7 +19,6 @@ import {
   completeHandshake,
   computeDeviceId,
   createAuthTokens,
-  descriptorIdForClientCapability,
   waitForJsonMessage,
   waitForJsonMessageMatching,
   waitForOpen,
@@ -90,7 +89,7 @@ function registerHttpApprovalTests(ctx: TestContext): void {
           device: { device_id: deviceId, pubkey: pubkeyB64Url, label: "node-1" },
           capabilities: [
             {
-              id: descriptorIdForClientCapability("cli"),
+              id: "tyrum.cli.execute",
               version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
             },
           ],
@@ -163,7 +162,7 @@ function registerHttpApprovalTests(ctx: TestContext): void {
         trust_level: "remote",
         capability_allowlist: [
           {
-            id: descriptorIdForClientCapability("cli"),
+            id: "tyrum.cli.execute",
             version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
           },
         ],

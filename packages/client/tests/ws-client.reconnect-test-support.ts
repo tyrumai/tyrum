@@ -1,9 +1,6 @@
 import { expect, it, vi } from "vitest";
 import { generateKeyPairSync } from "node:crypto";
-import {
-  CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-  descriptorIdForClientCapability,
-} from "@tyrum/schemas";
+import { CAPABILITY_DESCRIPTOR_DEFAULT_VERSION } from "@tyrum/schemas";
 import { TyrumClient } from "../src/ws-client.js";
 import {
   type TestServer,
@@ -97,7 +94,7 @@ function registerReconnectBasicTests(fixture: ReconnectFixture): void {
         role: "client",
         capabilities: [
           {
-            id: descriptorIdForClientCapability("cli"),
+            id: "tyrum.cli.execute",
             version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
           },
         ],
@@ -135,7 +132,7 @@ function registerReconnectBasicTests(fixture: ReconnectFixture): void {
         role: "client",
         capabilities: [
           {
-            id: descriptorIdForClientCapability("cli"),
+            id: "tyrum.cli.execute",
             version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
           },
         ],

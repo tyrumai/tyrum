@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { CapabilityKind } from "../src/index.js";
 import {
+  CANONICAL_CAPABILITY_IDS,
+  BROWSER_AUTOMATION_CAPABILITY_IDS,
+  LEGACY_ID_MIGRATION_MAP,
+  isLegacyCapabilityDescriptorId,
+  migrateCapabilityDescriptorId,
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   CapabilityDescriptor,
   ClientCapability,
@@ -105,28 +110,130 @@ describe("descriptor legacy mappings", () => {
   it("detects and expands legacy umbrella descriptor IDs", () => {
     expect(isLegacyUmbrellaCapabilityDescriptorId("tyrum.browser")).toBe(true);
     expect(isLegacyUmbrellaCapabilityDescriptorId("tyrum.browser.geolocation.get")).toBe(false);
+    // Umbrella IDs now expand through the migration map to canonical IDs
     expect(expandCapabilityDescriptorId("tyrum.browser")).toEqual([
-      "tyrum.browser.geolocation.get",
-      "tyrum.browser.camera.capture-photo",
-      "tyrum.browser.microphone.record",
+      "tyrum.location.get",
+      "tyrum.camera.capture-photo",
+      "tyrum.audio.record",
     ]);
-    expect(expandCapabilityDescriptorId("tyrum.http")).toEqual(["tyrum.http"]);
+    // Legacy monolithic IDs migrate to canonical form
+    expect(expandCapabilityDescriptorId("tyrum.http")).toEqual(["tyrum.http.request"]);
+    expect(expandCapabilityDescriptorId("tyrum.cli")).toEqual(["tyrum.cli.execute"]);
+    // Already-canonical IDs pass through unchanged
+    expect(expandCapabilityDescriptorId("tyrum.desktop.screenshot")).toEqual([
+      "tyrum.desktop.screenshot",
+    ]);
   });
 
-  it("normalizes umbrella descriptors into exact, deduplicated descriptors", () => {
+  it("normalizes umbrella descriptors into canonical, deduplicated descriptors", () => {
     expect(
       normalizeCapabilityDescriptors([
         { id: "tyrum.browser", version: "2.0.0" },
         { id: "tyrum.browser.camera.capture-photo", version: "3.0.0" },
       ]),
     ).toEqual([
-      { id: "tyrum.browser.geolocation.get", version: "2.0.0" },
-      { id: "tyrum.browser.camera.capture-photo", version: "3.0.0" },
-      { id: "tyrum.browser.microphone.record", version: "2.0.0" },
+      { id: "tyrum.location.get", version: "2.0.0" },
+      // The explicit entry wins with version 3.0.0 because it comes last
+      { id: "tyrum.camera.capture-photo", version: "3.0.0" },
+      { id: "tyrum.audio.record", version: "2.0.0" },
+    ]);
+  });
+
+  it("normalizes platform-specific IDs to canonical IDs", () => {
+    expect(
+      normalizeCapabilityDescriptors([
+        { id: "tyrum.ios.camera.capture-photo", version: "1.0.0" },
+        { id: "tyrum.android.location.get-current", version: "1.0.0" },
+      ]),
+    ).toEqual([
+      { id: "tyrum.camera.capture-photo", version: "1.0.0" },
+      { id: "tyrum.location.get", version: "1.0.0" },
     ]);
   });
 
   it("returns undefined for unknown namespaced descriptor IDs", () => {
     expect(clientCapabilityFromDescriptorId("camera.capture")).toBeUndefined();
+  });
+});
+
+describe("canonical capability IDs", () => {
+  it("contains all expected capability types", () => {
+    const types = new Set(CANONICAL_CAPABILITY_IDS.map((id) => id.split(".")[1]));
+    expect(types).toContain("camera");
+    expect(types).toContain("audio");
+    expect(types).toContain("location");
+    expect(types).toContain("desktop");
+    expect(types).toContain("browser");
+    expect(types).toContain("cli");
+    expect(types).toContain("http");
+  });
+
+  it("browser automation IDs are a subset of canonical IDs", () => {
+    for (const id of BROWSER_AUTOMATION_CAPABILITY_IDS) {
+      expect(CANONICAL_CAPABILITY_IDS).toContain(id);
+      expect(id).toMatch(/^tyrum\.browser\./);
+    }
+  });
+
+  it("has 21 browser automation capabilities", () => {
+    expect(BROWSER_AUTOMATION_CAPABILITY_IDS).toHaveLength(21);
+  });
+});
+
+describe("legacy ID migration", () => {
+  it("detects legacy platform-namespaced IDs", () => {
+    expect(isLegacyCapabilityDescriptorId("tyrum.ios.camera.capture-photo")).toBe(true);
+    expect(isLegacyCapabilityDescriptorId("tyrum.android.location.get-current")).toBe(true);
+    expect(isLegacyCapabilityDescriptorId("tyrum.browser.geolocation.get")).toBe(true);
+    expect(isLegacyCapabilityDescriptorId("tyrum.playwright")).toBe(true);
+    expect(isLegacyCapabilityDescriptorId("tyrum.cli")).toBe(true);
+    expect(isLegacyCapabilityDescriptorId("tyrum.http")).toBe(true);
+  });
+
+  it("does not flag canonical IDs as legacy", () => {
+    expect(isLegacyCapabilityDescriptorId("tyrum.camera.capture-photo")).toBe(false);
+    expect(isLegacyCapabilityDescriptorId("tyrum.desktop.screenshot")).toBe(false);
+    expect(isLegacyCapabilityDescriptorId("tyrum.browser.navigate")).toBe(false);
+    expect(isLegacyCapabilityDescriptorId("tyrum.cli.execute")).toBe(false);
+  });
+
+  it("migrates platform-specific sensor IDs to canonical cross-platform IDs", () => {
+    expect(migrateCapabilityDescriptorId("tyrum.ios.camera.capture-photo")).toEqual([
+      "tyrum.camera.capture-photo",
+    ]);
+    expect(migrateCapabilityDescriptorId("tyrum.android.location.get-current")).toEqual([
+      "tyrum.location.get",
+    ]);
+    expect(migrateCapabilityDescriptorId("tyrum.browser.microphone.record")).toEqual([
+      "tyrum.audio.record",
+    ]);
+  });
+
+  it("expands monolithic playwright ID to all browser automation IDs", () => {
+    const migrated = migrateCapabilityDescriptorId("tyrum.playwright");
+    expect(migrated).toEqual(BROWSER_AUTOMATION_CAPABILITY_IDS);
+  });
+
+  it("migrates monolithic CLI/HTTP to explicit action IDs", () => {
+    expect(migrateCapabilityDescriptorId("tyrum.cli")).toEqual(["tyrum.cli.execute"]);
+    expect(migrateCapabilityDescriptorId("tyrum.http")).toEqual(["tyrum.http.request"]);
+  });
+
+  it("passes through already-canonical IDs unchanged", () => {
+    expect(migrateCapabilityDescriptorId("tyrum.camera.capture-photo")).toEqual([
+      "tyrum.camera.capture-photo",
+    ]);
+    expect(migrateCapabilityDescriptorId("tyrum.desktop.screenshot")).toEqual([
+      "tyrum.desktop.screenshot",
+    ]);
+  });
+
+  it("all legacy migration targets are valid canonical IDs", () => {
+    for (const [, target] of Object.entries(LEGACY_ID_MIGRATION_MAP)) {
+      const targets = typeof target === "string" ? [target] : target;
+      for (const t of targets) {
+        expect(CANONICAL_CAPABILITY_IDS).toContain(t);
+      }
+    }
   });
 });

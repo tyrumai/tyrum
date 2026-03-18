@@ -18,20 +18,10 @@ export const MOBILE_ACTION_NAMES: MobileHostActionName[] = [
   "audio.record_clip",
 ];
 
-const MOBILE_CAPABILITY_DESCRIPTOR_IDS: Record<
-  MobileHostPlatform,
-  Record<MobileHostActionName, string>
-> = {
-  ios: {
-    "location.get_current": "tyrum.ios.location.get-current",
-    "camera.capture_photo": "tyrum.ios.camera.capture-photo",
-    "audio.record_clip": "tyrum.ios.audio.record-clip",
-  },
-  android: {
-    "location.get_current": "tyrum.android.location.get-current",
-    "camera.capture_photo": "tyrum.android.camera.capture-photo",
-    "audio.record_clip": "tyrum.android.audio.record-clip",
-  },
+const MOBILE_CAPABILITY_DESCRIPTOR_IDS: Record<MobileHostActionName, string> = {
+  "location.get_current": "tyrum.location.get",
+  "camera.capture_photo": "tyrum.camera.capture-photo",
+  "audio.record_clip": "tyrum.audio.record",
 };
 
 export function resolveMobilePlatform(): MobileHostPlatform {
@@ -84,12 +74,11 @@ function toNodeActionState(
 }
 
 export function toNodeCapabilityStates(
-  platform: MobileHostPlatform,
   actions: Record<MobileHostActionName, MobileHostActionState>,
 ): NodeCapabilityState[] {
   return MOBILE_ACTION_NAMES.map((name) => ({
     capability: {
-      id: MOBILE_CAPABILITY_DESCRIPTOR_IDS[platform][name],
+      id: MOBILE_CAPABILITY_DESCRIPTOR_IDS[name],
       version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
     },
     actions: [toNodeActionState(name, actions[name])],

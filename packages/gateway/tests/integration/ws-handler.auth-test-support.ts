@@ -12,13 +12,13 @@ import {
   authProtocols,
   completeHandshake,
   createAuthTokens,
-  descriptorIdForClientCapability,
   waitForClose,
   waitForOpen,
   waitForUnexpectedResponse,
 } from "./ws-handler.test-support.js";
 
-const playwrightDescriptorId = descriptorIdForClientCapability("playwright");
+/** After normalization, "tyrum.playwright" expands to canonical browser automation IDs. */
+const browserNavigateDescriptorId = "tyrum.browser.navigate";
 
 function registerConnectionTests(ctx: TestContext): void {
   it("accepts connection, completes connect.init/connect.proof handshake, and registers client", async () => {
@@ -65,10 +65,10 @@ function registerConnectionTests(ctx: TestContext): void {
     // After connect, client should be registered with the right capability
     const stats = connectionManager.getStats();
     expect(stats.totalClients).toBe(1);
-    expect(stats.capabilityCounts[playwrightDescriptorId]).toBe(1);
+    expect(stats.capabilityCounts[browserNavigateDescriptorId]).toBe(1);
 
     // Verify we can find a client for the playwright capability
-    const client = connectionManager.getClientForCapability(playwrightDescriptorId);
+    const client = connectionManager.getClientForCapability(browserNavigateDescriptorId);
     expect(client).toBeDefined();
 
     stopHeartbeat();
@@ -166,7 +166,7 @@ function registerConnectionTests(ctx: TestContext): void {
 
     const stats = connectionManager.getStats();
     expect(stats.totalClients).toBe(1);
-    expect(stats.capabilityCounts[playwrightDescriptorId]).toBe(1);
+    expect(stats.capabilityCounts[browserNavigateDescriptorId]).toBe(1);
 
     stopHeartbeat();
   });
@@ -260,7 +260,7 @@ function registerCookieAndRejectTests(ctx: TestContext): void {
 
     const stats = connectionManager.getStats();
     expect(stats.totalClients).toBe(1);
-    expect(stats.capabilityCounts[playwrightDescriptorId]).toBe(1);
+    expect(stats.capabilityCounts[browserNavigateDescriptorId]).toBe(1);
 
     stopHeartbeat();
   });
@@ -310,7 +310,7 @@ function registerCookieAndRejectTests(ctx: TestContext): void {
 
     const stats = connectionManager.getStats();
     expect(stats.totalClients).toBe(1);
-    expect(stats.capabilityCounts[playwrightDescriptorId]).toBe(1);
+    expect(stats.capabilityCounts[browserNavigateDescriptorId]).toBe(1);
 
     stopHeartbeat();
   });

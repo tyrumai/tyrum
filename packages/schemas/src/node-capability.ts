@@ -32,7 +32,7 @@ export type NodeActionPermissionMetadata = z.infer<typeof NodeActionPermissionMe
 
 export const NodeActionTransportMetadata = z
   .object({
-    primitive_kind: ActionPrimitiveKind,
+    primitive_kind: ActionPrimitiveKind.nullable(),
     op_field: z.string().trim().min(1),
     op_value: z.string().trim().min(1),
     result_channel: z.enum(["result", "evidence", "result_or_evidence"]),

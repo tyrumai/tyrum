@@ -1,5 +1,7 @@
 import {
+  isLegacyCapabilityDescriptorId,
   isLegacyUmbrellaCapabilityDescriptorId,
+  LEGACY_ID_MIGRATION_MAP,
   NodeActionDispatchRequest,
   NodeActionDispatchResponse,
   NodeCapabilityInspectionResponse,
@@ -63,6 +65,19 @@ function legacyCapabilityError(capability: string): string {
   return `legacy umbrella capability '${capability}' is not supported; use an exact split capability descriptor`;
 }
 
+function legacyNamespacedCapabilityError(capability: string): string {
+  const replacement = LEGACY_ID_MIGRATION_MAP[capability];
+  const canonical =
+    replacement === undefined
+      ? "a canonical capability ID"
+      : typeof replacement === "string"
+        ? `'${replacement}'`
+        : replacement.length === 1
+          ? `'${replacement[0]}'`
+          : `one of: ${replacement.map((id) => `'${id}'`).join(", ")}`;
+  return `deprecated platform-namespaced capability '${capability}' is not supported; use ${canonical} instead`;
+}
+
 async function performNodeDispatch(
   context: DispatchExecutionContext,
   request: NodeActionDispatchRequestT,
@@ -72,6 +87,12 @@ async function performNodeDispatch(
     return preflightFailure(
       request,
       dispatchError("invalid_input", legacyCapabilityError(request.capability)),
+    );
+  }
+  if (isLegacyCapabilityDescriptorId(request.capability)) {
+    return preflightFailure(
+      request,
+      dispatchError("invalid_input", legacyNamespacedCapabilityError(request.capability)),
     );
   }
 
@@ -181,8 +202,18 @@ async function performNodeDispatch(
         key: audit?.work_session_key,
         lane: audit?.work_lane,
       });
+  const primitiveKind = catalogAction.transport.primitive_kind;
+  if (primitiveKind === null) {
+    return preflightFailure(
+      request,
+      dispatchError(
+        "runtime_unavailable",
+        `capability '${request.capability}' requires platform-specific dispatch resolution (not yet implemented)`,
+      ),
+    );
+  }
   const primitive: ActionPrimitive = {
-    type: catalogAction.transport.primitive_kind,
+    type: primitiveKind,
     args: actionArgs,
   };
 
@@ -278,6 +309,13 @@ export async function executeNodeInspectTool(
       error: legacyCapabilityError(capability),
     };
   }
+  if (isLegacyCapabilityDescriptorId(capability)) {
+    return {
+      tool_call_id: toolCallId,
+      output: "",
+      error: legacyNamespacedCapabilityError(capability),
+    };
+  }
 
   try {
     const payload = stripNodeInspectionControlState(
@@ -336,6 +374,13 @@ export async function executeNodeListTool(
       tool_call_id: toolCallId,
       output: "",
       error: legacyCapabilityError(capability),
+    };
+  }
+  if (capability && isLegacyCapabilityDescriptorId(capability)) {
+    return {
+      tool_call_id: toolCallId,
+      output: "",
+      error: legacyNamespacedCapabilityError(capability),
     };
   }
 
@@ -398,6 +443,18 @@ export async function executeNodeDispatchTool(
     const response = preflightFailure(
       request,
       dispatchError("invalid_input", legacyCapabilityError(request.capability)),
+    );
+    const tagged = tagContent(serializeToolDispatchResponse(response), "tool");
+    return {
+      tool_call_id: toolCallId,
+      output: sanitizeForModel(tagged),
+      provenance: tagged,
+    };
+  }
+  if (isLegacyCapabilityDescriptorId(request.capability)) {
+    const response = preflightFailure(
+      request,
+      dispatchError("invalid_input", legacyNamespacedCapabilityError(request.capability)),
     );
     const tagged = tagContent(serializeToolDispatchResponse(response), "tool");
     return {

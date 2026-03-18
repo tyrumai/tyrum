@@ -6,7 +6,6 @@ import {
   type ManagedNodeClientLifecycle,
 } from "@tyrum/client/browser";
 import { Capacitor } from "@capacitor/core";
-import { capabilityDescriptorsForClientCapability } from "@tyrum/schemas";
 import { Clipboard } from "@capacitor/clipboard";
 import { Device, type DeviceInfo } from "@capacitor/device";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -179,7 +178,11 @@ export function useMobileNode(options: UseMobileNodeOptions): {
         token,
         role: "node",
         capabilities: [platform],
-        advertisedCapabilities: capabilityDescriptorsForClientCapability(platform),
+        advertisedCapabilities: [
+          { id: "tyrum.location.get", version: "1.0.0" },
+          { id: "tyrum.camera.capture-photo", version: "1.0.0" },
+          { id: "tyrum.audio.record", version: "1.0.0" },
+        ],
         device: {
           deviceId: identity.deviceId,
           publicKey: identity.publicKey,
@@ -188,6 +191,8 @@ export function useMobileNode(options: UseMobileNodeOptions): {
           platform: optionalTrimmedString(deviceInfo?.operatingSystem) ?? platform,
           version: optionalTrimmedString(deviceInfo?.osVersion),
           mode: "mobile-node",
+          device_type: "phone",
+          device_platform: platform === "ios" ? "ios" : "android",
         },
       });
       const provider = createMobileCapabilityProvider(platform);
@@ -203,7 +208,7 @@ export function useMobileNode(options: UseMobileNodeOptions): {
         client,
         providers: [provider],
         getCapabilityReadyPayload: () => {
-          const capabilityStates = toNodeCapabilityStates(platform, actionStatesRef.current);
+          const capabilityStates = toNodeCapabilityStates(actionStatesRef.current);
           return {
             capabilities: capabilityStates.map((capabilityState) => capabilityState.capability),
             capability_states: capabilityStates,

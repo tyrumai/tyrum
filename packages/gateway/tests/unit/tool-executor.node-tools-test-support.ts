@@ -182,7 +182,7 @@ export function registerToolExecutorNodeToolTests(home: HomeDirState): void {
         } as never,
       }).execute("tool.node.inspect", "call-9", {
         node_id: "node-404",
-        capability: "tyrum.browser.geolocation.get",
+        capability: "tyrum.location.get",
       });
 
       expect(result.output).toBe("");

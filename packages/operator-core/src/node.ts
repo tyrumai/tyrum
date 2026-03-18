@@ -9,6 +9,7 @@ export {
   createPinnedNodeWebSocket,
   destroyPinnedNodeDispatcher,
   createTyrumHttpClient,
+  createManagedNodeClientLifecycle,
   loadOrCreateDeviceIdentity,
 } from "@tyrum/client/node";
 export type {
@@ -17,6 +18,7 @@ export type {
   ExecutionAttempt,
   ExecutionRun,
   ExecutionStep,
+  ManagedNodeClientLifecycle,
   MemoryItem,
   NodePinnedTlsOptions,
   NodePinnedTransportState,

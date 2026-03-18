@@ -25,9 +25,9 @@ export const BROWSER_CAPABILITY_NAMES: BrowserCapabilityName[] = [
 ];
 
 const BROWSER_CAPABILITY_DESCRIPTOR_IDS: Record<BrowserCapabilityName, string> = {
-  "geolocation.get": "tyrum.browser.geolocation.get",
-  "camera.capture_photo": "tyrum.browser.camera.capture-photo",
-  "microphone.record": "tyrum.browser.microphone.record",
+  "geolocation.get": "tyrum.location.get",
+  "camera.capture_photo": "tyrum.camera.capture-photo",
+  "microphone.record": "tyrum.audio.record",
 };
 
 const ENABLED_STORAGE_KEY = "tyrum.operator-ui.browserNode.enabled";

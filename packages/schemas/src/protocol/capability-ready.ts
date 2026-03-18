@@ -75,7 +75,11 @@ export const WsCapabilityReadyEvent = WsEventEnvelope.extend({
 });
 export type WsCapabilityReadyEvent = z.infer<typeof WsCapabilityReadyEvent>;
 
-/** Maps ActionPrimitiveKind to the legacy capability kind used for node routing. */
+/**
+ * @deprecated Use `requiredCapabilityDescriptor()` with canonical capability IDs instead.
+ *
+ * Maps ActionPrimitiveKind to the legacy capability kind used for node routing.
+ */
 const CAPABILITY_MAP: Partial<Record<ActionPrimitiveKind, CapabilityKind>> = {
   Web: "playwright",
   Browser: "browser",
@@ -86,6 +90,9 @@ const CAPABILITY_MAP: Partial<Record<ActionPrimitiveKind, CapabilityKind>> = {
   Http: "http",
 };
 
+/**
+ * @deprecated Use `requiredCapabilityDescriptor()` with canonical capability IDs instead.
+ */
 export function requiredCapability(kind: ActionPrimitiveKind): CapabilityKind | undefined {
   return CAPABILITY_MAP[kind];
 }
@@ -98,74 +105,99 @@ function readActionOp(args: unknown): string | undefined {
   return typeof op === "string" ? op.trim() : undefined;
 }
 
+/** Maps Web (Playwright) transport op names to canonical browser automation IDs. */
+const WEB_OP_TO_CANONICAL: Record<string, string> = {
+  navigate: "tyrum.browser.navigate",
+  navigate_back: "tyrum.browser.navigate-back",
+  snapshot: "tyrum.browser.snapshot",
+  click: "tyrum.browser.click",
+  type: "tyrum.browser.type",
+  fill: "tyrum.browser.fill-form",
+  fill_form: "tyrum.browser.fill-form",
+  select_option: "tyrum.browser.select-option",
+  hover: "tyrum.browser.hover",
+  drag: "tyrum.browser.drag",
+  press_key: "tyrum.browser.press-key",
+  screenshot: "tyrum.browser.screenshot",
+  evaluate: "tyrum.browser.evaluate",
+  wait_for: "tyrum.browser.wait-for",
+  tabs: "tyrum.browser.tabs",
+  upload_file: "tyrum.browser.upload-file",
+  console_messages: "tyrum.browser.console-messages",
+  network_requests: "tyrum.browser.network-requests",
+  resize: "tyrum.browser.resize",
+  close: "tyrum.browser.close",
+  handle_dialog: "tyrum.browser.handle-dialog",
+  run_code: "tyrum.browser.run-code",
+};
+
 export function requiredCapabilityDescriptor(
   kind: ActionPrimitiveKind,
   args?: unknown,
 ): string | undefined {
   const op = readActionOp(args);
 
-  if (kind === "Desktop") {
-    switch (op) {
-      case "screenshot":
-        return "tyrum.desktop.screenshot";
-      case "snapshot":
-        return "tyrum.desktop.snapshot";
-      case "query":
-        return "tyrum.desktop.query";
-      case "act":
-        return "tyrum.desktop.act";
-      case "mouse":
-        return "tyrum.desktop.mouse";
-      case "keyboard":
-        return "tyrum.desktop.keyboard";
-      case "wait_for":
-        return "tyrum.desktop.wait-for";
-      default:
-        return undefined;
+  switch (kind) {
+    case "Desktop":
+      switch (op) {
+        case "screenshot":
+          return "tyrum.desktop.screenshot";
+        case "snapshot":
+          return "tyrum.desktop.snapshot";
+        case "query":
+          return "tyrum.desktop.query";
+        case "act":
+          return "tyrum.desktop.act";
+        case "mouse":
+          return "tyrum.desktop.mouse";
+        case "keyboard":
+          return "tyrum.desktop.keyboard";
+        case "wait_for":
+          return "tyrum.desktop.wait-for";
+        default:
+          return undefined;
+      }
+
+    case "IOS":
+    case "Android":
+      switch (op) {
+        case "location.get_current":
+          return "tyrum.location.get";
+        case "camera.capture_photo":
+          return "tyrum.camera.capture-photo";
+        case "audio.record_clip":
+          return "tyrum.audio.record";
+        default:
+          return undefined;
+      }
+
+    case "Browser":
+      switch (op) {
+        case "geolocation.get":
+          return "tyrum.location.get";
+        case "camera.capture_photo":
+          return "tyrum.camera.capture-photo";
+        case "microphone.record":
+          return "tyrum.audio.record";
+        default:
+          return undefined;
+      }
+
+    case "Web":
+      return op ? WEB_OP_TO_CANONICAL[op] : undefined;
+
+    case "CLI":
+      return "tyrum.cli.execute";
+
+    case "Http":
+      return "tyrum.http.request";
+
+    default: {
+      // Fallback for any other kinds (e.g. Research, Decide, Llm, etc.)
+      const capability = requiredCapability(kind);
+      return capability ? descriptorIdForClientCapability(capability) : undefined;
     }
   }
-
-  if (kind === "Browser") {
-    switch (op) {
-      case "geolocation.get":
-        return "tyrum.browser.geolocation.get";
-      case "camera.capture_photo":
-        return "tyrum.browser.camera.capture-photo";
-      case "microphone.record":
-        return "tyrum.browser.microphone.record";
-      default:
-        return undefined;
-    }
-  }
-
-  if (kind === "IOS") {
-    switch (op) {
-      case "location.get_current":
-        return "tyrum.ios.location.get-current";
-      case "camera.capture_photo":
-        return "tyrum.ios.camera.capture-photo";
-      case "audio.record_clip":
-        return "tyrum.ios.audio.record-clip";
-      default:
-        return undefined;
-    }
-  }
-
-  if (kind === "Android") {
-    switch (op) {
-      case "location.get_current":
-        return "tyrum.android.location.get-current";
-      case "camera.capture_photo":
-        return "tyrum.android.camera.capture-photo";
-      case "audio.record_clip":
-        return "tyrum.android.audio.record-clip";
-      default:
-        return undefined;
-    }
-  }
-
-  const capability = requiredCapability(kind);
-  return capability ? descriptorIdForClientCapability(capability) : undefined;
 }
 
 export function requiredCapabilityDescriptorForAction(

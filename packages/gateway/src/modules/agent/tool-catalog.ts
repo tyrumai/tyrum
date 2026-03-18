@@ -249,7 +249,7 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
         capability: {
           type: "string",
           description:
-            "Optional exact capability descriptor id filter (example: tyrum.desktop.query).",
+            "Optional exact capability descriptor id filter (example: tyrum.location.get).",
         },
         dispatchable_only: {
           type: "boolean",
@@ -284,7 +284,7 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
         },
         capability: {
           type: "string",
-          description: "Exact capability descriptor id (example: tyrum.ios.location.get-current).",
+          description: "Exact capability descriptor id (example: tyrum.camera.capture-photo).",
         },
       },
       required: ["node_id", "capability"],
@@ -300,9 +300,11 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
       "Inspect the capability first so you know the exact action_name and input shape.",
       "Put action-specific arguments inside the input object.",
       "Do not add the transport op field yourself; the dispatcher derives it from action_name.",
+      "Use node device metadata (type, platform, last_tyrum_interaction_at) to choose the best node for an action. Prefer nodes the user is actively using.",
     ],
     promptExamples: [
       '{"node_id":"node_123","capability":"tyrum.desktop.screenshot","action_name":"screenshot","input":{"display":"all"},"timeout_ms":30000}',
+      '{"node_id":"node_456","capability":"tyrum.browser.navigate","action_name":"navigate","input":{"url":"https://example.com"},"timeout_ms":30000}',
     ],
     source: "builtin",
     family: "node",
@@ -315,7 +317,7 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
         },
         capability: {
           type: "string",
-          description: "Exact capability descriptor id (example: tyrum.android.audio.record-clip).",
+          description: "Exact capability descriptor id (example: tyrum.audio.record).",
         },
         action_name: {
           type: "string",

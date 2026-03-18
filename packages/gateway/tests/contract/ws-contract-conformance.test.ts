@@ -10,7 +10,6 @@ import {
   WsTaskExecuteRequest,
   WsTaskExecuteResponseEnvelope,
   WsWorkSignalFiredEvent,
-  descriptorIdForClientCapability,
 } from "@tyrum/schemas";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { createWsHandler } from "../../src/routes/ws.js";
@@ -197,7 +196,7 @@ describe("WS contract conformance (gateway <-> client <-> schemas)", () => {
               status: "approved",
               capability_allowlist: [
                 {
-                  id: descriptorIdForClientCapability("http"),
+                  id: "tyrum.http.request",
                   version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
                 },
               ],

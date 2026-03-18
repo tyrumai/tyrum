@@ -29,6 +29,8 @@ type ResolvedConnectDevice = GeneratedDevice & {
   platform?: string;
   version?: string;
   mode?: string;
+  device_type?: string;
+  device_platform?: string;
 };
 
 const WS_BASE_PROTOCOL = "tyrum-v1";
@@ -291,6 +293,8 @@ export abstract class TyrumClientTransportCore extends TyrumClientProtocolCore {
             platform: toOptionalTrimmedString(device.platform),
             version: toOptionalTrimmedString(device.version),
             mode: toOptionalTrimmedString(device.mode),
+            ...(device.device_type ? { device_type: device.device_type } : {}),
+            ...(device.device_platform ? { device_platform: device.device_platform } : {}),
           },
           capabilities: advertisedCapabilities,
         },

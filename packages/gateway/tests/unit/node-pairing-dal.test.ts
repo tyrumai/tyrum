@@ -4,8 +4,8 @@ import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { NodePairingDal } from "../../src/modules/node/pairing-dal.js";
 import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-  descriptorIdForClientCapability,
   descriptorIdsForClientCapability,
+  migrateCapabilityDescriptorId,
 } from "@tyrum/schemas";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
@@ -23,7 +23,7 @@ describe("NodePairingDal.upsertOnConnect", () => {
 
     const nodeId = "node-1";
     const cliDescriptor = {
-      id: descriptorIdForClientCapability("cli"),
+      id: "tyrum.cli.execute",
       version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
     };
 
@@ -84,7 +84,7 @@ describe("NodePairingDal.upsertOnConnect", () => {
 
     const nodeId = "node-2";
     const cliDescriptor = {
-      id: descriptorIdForClientCapability("cli"),
+      id: "tyrum.cli.execute",
       version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
     };
 
@@ -249,7 +249,7 @@ describe("NodePairingDal.upsertOnConnect", () => {
       label: "legacy",
       capabilities: [
         {
-          id: descriptorIdForClientCapability("cli"),
+          id: "tyrum.cli.execute",
           version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
         },
       ],
@@ -265,7 +265,7 @@ describe("NodePairingDal.upsertOnConnect", () => {
         JSON.stringify([
           "desktop",
           {
-            id: descriptorIdForClientCapability("cli"),
+            id: "tyrum.cli",
             version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
           },
           "not-a-capability",
@@ -280,7 +280,7 @@ describe("NodePairingDal.upsertOnConnect", () => {
     expect(pairing!.node.capabilities.map((capability) => capability.id).toSorted()).toEqual(
       [
         ...descriptorIdsForClientCapability("desktop"),
-        descriptorIdForClientCapability("cli"),
+        ...migrateCapabilityDescriptorId("tyrum.cli"),
       ].toSorted(),
     );
   });

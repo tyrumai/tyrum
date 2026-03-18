@@ -4,6 +4,7 @@ import { NodeId } from "./keys.js";
 import { CapabilityDescriptor } from "./capability.js";
 import { NodeCapabilitySummary } from "./node-capability.js";
 import { ReviewEntry } from "./review.js";
+import { DevicePlatform, DeviceType } from "./protocol/connect.js";
 
 export const NodeIdentity = z
   .object({
@@ -59,6 +60,14 @@ export const NodeInventoryEntry = z
     source_client_device_id: z.string().trim().min(1).nullable().optional(),
     last_seen_at: DateTimeSchema.optional(),
     capabilities: z.array(NodeCapabilitySummary),
+    device: z
+      .object({
+        type: DeviceType.optional(),
+        platform: DevicePlatform.optional(),
+        model: z.string().trim().min(1).optional(),
+      })
+      .optional(),
+    last_tyrum_interaction_at: DateTimeSchema.optional(),
   })
   .strict();
 export type NodeInventoryEntry = z.infer<typeof NodeInventoryEntry>;

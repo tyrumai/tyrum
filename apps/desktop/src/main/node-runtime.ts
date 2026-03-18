@@ -1,19 +1,36 @@
-import { TyrumClient, autoExecute } from "@tyrum/operator-core/node";
-import type { CapabilityProvider } from "@tyrum/operator-core/node";
+import { TyrumClient, createManagedNodeClientLifecycle } from "@tyrum/operator-core/node";
+import type { CapabilityProvider, ManagedNodeClientLifecycle } from "@tyrum/operator-core/node";
 import {
-  capabilityDescriptorsForClientCapability,
+  CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+  descriptorIdsForClientCapability,
   deviceIdFromSha256Digest,
+  migrateCapabilityDescriptorId,
+  type CapabilityDescriptor,
   type ClientCapability,
+  type WsCapabilityReadyPayload,
 } from "@tyrum/operator-core";
 import type { DesktopNodeConfig } from "./config/schema.js";
 import type { ResolvedPermissions } from "./config/permissions.js";
 import { saveConfig } from "./config/store.js";
 import { decryptToken, encryptToken } from "./config/token-store.js";
 import { createHash, generateKeyPairSync } from "node:crypto";
+import { platform as osPlatform } from "node:os";
 
 function computeDeviceId(pubkeyDer: Buffer): string {
   const digest = createHash("sha256").update(pubkeyDer).digest();
   return deviceIdFromSha256Digest(digest);
+}
+
+/** Maps `process.platform` to the canonical `DevicePlatform` value. */
+function resolveDevicePlatform(): "macos" | "windows" | "linux" {
+  switch (osPlatform()) {
+    case "darwin":
+      return "macos";
+    case "win32":
+      return "windows";
+    default:
+      return "linux";
+  }
 }
 
 export interface NodeRuntimeCallbacks {
@@ -23,7 +40,7 @@ export interface NodeRuntimeCallbacks {
 }
 
 export class NodeRuntime {
-  private client: TyrumClient | null = null;
+  private lifecycle: ManagedNodeClientLifecycle<TyrumClient> | null = null;
   private providers: CapabilityProvider[] = [];
   private config: DesktopNodeConfig;
   private currentDeviceId: string | null = null;
@@ -37,7 +54,7 @@ export class NodeRuntime {
   }
 
   get connected(): boolean {
-    return this.client?.connected ?? false;
+    return this.lifecycle?.client.connected ?? false;
   }
 
   get permissions(): ResolvedPermissions {
@@ -127,12 +144,48 @@ export class NodeRuntime {
     };
   }
 
+  /**
+   * Collects the canonical capability descriptor IDs from all registered providers.
+   * Migrates legacy IDs to canonical form.
+   */
+  private getAdvertisedCapabilityDescriptors(): CapabilityDescriptor[] {
+    const seen = new Set<string>();
+    const descriptors: CapabilityDescriptor[] = [];
+    for (const provider of this.providers) {
+      const ids: readonly string[] =
+        provider.capabilityIds ??
+        (provider.capability
+          ? descriptorIdsForClientCapability(provider.capability as ClientCapability).flatMap(
+              migrateCapabilityDescriptorId,
+            )
+          : []);
+      for (const id of ids) {
+        if (!seen.has(id)) {
+          seen.add(id);
+          descriptors.push({ id, version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION });
+        }
+      }
+    }
+    return descriptors;
+  }
+
+  private getCapabilityReadyPayload(): WsCapabilityReadyPayload {
+    return {
+      capabilities: this.getAdvertisedCapabilityDescriptors(),
+      capability_states: [],
+    };
+  }
+
   connect(wsUrl: string, token: string): void {
-    if (this.client) {
-      this.client.disconnect();
+    if (this.lifecycle) {
+      this.lifecycle.dispose();
+      this.lifecycle = null;
     }
 
-    const capabilities = this.getEnabledCapabilities();
+    const advertisedDescriptors = this.getAdvertisedCapabilityDescriptors();
+
+    // Legacy capabilities array — still required by TyrumClient for backward compat
+    const legacyCapabilities = this.getEnabledLegacyCapabilities();
 
     const device = this.ensureDeviceIdentity();
     const tlsCertFingerprint256Raw =
@@ -141,15 +194,13 @@ export class NodeRuntime {
       tlsCertFingerprint256Raw.length > 0 ? tlsCertFingerprint256Raw : undefined;
     const tlsAllowSelfSigned =
       this.config.mode === "remote" ? Boolean(this.config.remote.tlsAllowSelfSigned) : false;
-    this.client = new TyrumClient({
+    const client = new TyrumClient({
       url: wsUrl,
       token,
       tlsCertFingerprint256,
       tlsAllowSelfSigned,
-      capabilities,
-      advertisedCapabilities: capabilities.flatMap((capability) =>
-        capabilityDescriptorsForClientCapability(capability),
-      ),
+      capabilities: legacyCapabilities,
+      advertisedCapabilities: advertisedDescriptors,
       role: "node",
       device: {
         publicKey: device.publicKey,
@@ -159,32 +210,50 @@ export class NodeRuntime {
         platform: device.platform.trim().length > 0 ? device.platform : undefined,
         version: device.version.trim().length > 0 ? device.version : undefined,
         mode: device.mode.trim().length > 0 ? device.mode : undefined,
+        device_type: "desktop",
+        device_platform: resolveDevicePlatform(),
       },
     });
 
-    this.client.on("connected", () => {
-      this.callbacks.onStatusChange({ connected: true });
-      this.callbacks.onLog({
-        level: "info",
-        message: `Connected to gateway at ${wsUrl} as ${device.deviceId}`,
-        timestamp: new Date().toISOString(),
-      });
+    this.lifecycle = createManagedNodeClientLifecycle({
+      client,
+      getCapabilityReadyPayload: () => this.getCapabilityReadyPayload(),
+      providers: this.providers,
+      onConnected: () => {
+        this.callbacks.onStatusChange({ connected: true });
+        this.callbacks.onLog({
+          level: "info",
+          message: `Connected to gateway at ${wsUrl} as ${device.deviceId}`,
+          timestamp: new Date().toISOString(),
+        });
+      },
+      onDisconnected: (info) => {
+        this.callbacks.onStatusChange({
+          connected: false,
+          code: info.code,
+          reason: info.reason,
+        });
+        this.callbacks.onLog({
+          level: "info",
+          message: `Disconnected from gateway (code: ${info.code})`,
+          timestamp: new Date().toISOString(),
+        });
+      },
+      onTransportError: (msg) => {
+        this.callbacks.onLog({
+          level: "error",
+          message: `Transport error: ${msg.message}`,
+          timestamp: new Date().toISOString(),
+        });
+      },
     });
 
-    this.client.on("disconnected", (info: { code: number; reason?: string }) => {
-      this.callbacks.onStatusChange({ connected: false, ...info });
-      this.callbacks.onLog({
-        level: "info",
-        message: `Disconnected from gateway (code: ${info.code})`,
-        timestamp: new Date().toISOString(),
-      });
-    });
-
-    this.client.on("plan_update", (msg) => {
+    // Forward events that were previously registered directly on the client
+    client.on("plan_update", (msg) => {
       this.callbacks.onPlanUpdate(msg);
     });
 
-    this.client.on("error", (msg: { payload: { message: string } }) => {
+    client.on("error", (msg: { payload: { message: string } }) => {
       this.callbacks.onLog({
         level: "error",
         message: `Gateway error: ${msg.payload.message}`,
@@ -192,27 +261,31 @@ export class NodeRuntime {
       });
     });
 
-    this.client.on("transport_error", (msg: { message: string }) => {
-      this.callbacks.onLog({
-        level: "error",
-        message: `Transport error: ${msg.message}`,
-        timestamp: new Date().toISOString(),
-      });
-    });
+    this.lifecycle.connect();
+  }
 
-    if (this.providers.length > 0) {
-      autoExecute(this.client, this.providers);
-    }
-
-    this.client.connect();
+  /** Re-publish capability state (e.g. after operator toggles capabilities). */
+  async publishCapabilityState(): Promise<void> {
+    await this.lifecycle?.publishCapabilityState();
   }
 
   disconnect(): void {
-    this.client?.disconnect();
-    this.client = null;
+    this.lifecycle?.dispose();
+    this.lifecycle = null;
   }
 
-  private getEnabledCapabilities(): ClientCapability[] {
-    return [...new Set(this.providers.map((provider) => provider.capability))];
+  /**
+   * @deprecated Legacy capability list for TyrumClient backward compat.
+   * Returns deduplicated `ClientCapability` values from providers that still
+   * declare the old `capability` field.
+   */
+  private getEnabledLegacyCapabilities(): ClientCapability[] {
+    const caps = new Set<ClientCapability>();
+    for (const provider of this.providers) {
+      if (provider.capability) {
+        caps.add(provider.capability as ClientCapability);
+      }
+    }
+    return [...caps];
   }
 }

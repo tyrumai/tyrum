@@ -7,7 +7,11 @@
  */
 
 import type { ActionPrimitive, ClientCapability } from "@tyrum/schemas";
-import { requiredCapability } from "@tyrum/schemas";
+import {
+  requiredCapabilityDescriptorForAction,
+  descriptorIdsForClientCapability,
+  migrateCapabilityDescriptorId,
+} from "@tyrum/schemas";
 import type { TyrumClient } from "./ws-client.js";
 
 // ---------------------------------------------------------------------------
@@ -29,7 +33,22 @@ export interface TaskExecuteContext {
 }
 
 export interface CapabilityProvider {
-  readonly capability: ClientCapability;
+  /**
+   * @deprecated Use `capabilityIds` instead.
+   *
+   * Legacy capability kind used for backward-compatible provider lookup.
+   * When `capabilityIds` is present, this field is ignored.
+   */
+  readonly capability?: ClientCapability;
+
+  /**
+   * Canonical capability descriptor IDs this provider handles
+   * (e.g. `["tyrum.camera.capture-photo", "tyrum.audio.record"]`).
+   *
+   * When absent, falls back to expanding `capability` via the legacy bridge.
+   */
+  readonly capabilityIds?: readonly string[];
+
   execute(action: ActionPrimitive, ctx?: TaskExecuteContext): Promise<TaskResult>;
 }
 
@@ -40,13 +59,33 @@ type AutoExecuteClient = Pick<TyrumClient, "on" | "respondTaskExecute">;
 // ---------------------------------------------------------------------------
 
 /**
+ * Resolves the set of capability descriptor IDs a provider handles.
+ * Prefers the new `capabilityIds` field; falls back to expanding the
+ * legacy `capability` kind and migrating to canonical IDs.
+ */
+function resolveProviderCapabilityIds(provider: CapabilityProvider): readonly string[] {
+  if (provider.capabilityIds && provider.capabilityIds.length > 0) {
+    return provider.capabilityIds;
+  }
+  if (provider.capability) {
+    // Expand legacy kind to descriptor IDs, then migrate each to canonical form
+    return descriptorIdsForClientCapability(provider.capability).flatMap(
+      migrateCapabilityDescriptorId,
+    );
+  }
+  return [];
+}
+
+/**
  * Wires {@link CapabilityProvider}s to a {@link TyrumClient} -- automatically
  * executes dispatched tasks using the matching provider and reports results.
  */
 export function autoExecute(client: AutoExecuteClient, providers: CapabilityProvider[]): void {
-  const capMap = new Map<ClientCapability, CapabilityProvider>();
+  const capMap = new Map<string, CapabilityProvider>();
   for (const provider of providers) {
-    capMap.set(provider.capability, provider);
+    for (const id of resolveProviderCapabilityIds(provider)) {
+      capMap.set(id, provider);
+    }
   }
 
   client.on("task_execute", (msg) => {
@@ -82,15 +121,15 @@ export function autoExecute(client: AutoExecuteClient, providers: CapabilityProv
       }
     };
 
-    const required = requiredCapability(action.type);
-    const provider = required ? capMap.get(required) : undefined;
+    const descriptorId = requiredCapabilityDescriptorForAction(action);
+    const provider = descriptorId ? capMap.get(descriptorId) : undefined;
 
     if (!provider) {
       respond(
         false,
         undefined,
         undefined,
-        `no provider for capability: ${required ?? action.type}`,
+        `no provider for capability: ${descriptorId ?? action.type}`,
       );
       return;
     }
