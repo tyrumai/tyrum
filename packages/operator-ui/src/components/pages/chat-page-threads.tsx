@@ -127,45 +127,49 @@ export function ChatThreadsPanel({
         <div className="min-h-0 flex-1 overflow-hidden">
           {loading && threads.length === 0 ? (
             <LoadingState className="p-4" />
-          ) : threads.length === 0 && archivedLoaded && archivedThreads.length === 0 ? (
-            <div className="grid gap-3 p-4">
-              <div className="text-sm text-fg-muted">No chats yet.</div>
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                data-testid="chat-empty-threads-new"
-                disabled={!connected || agentsLoading}
-                onClick={onNewChat}
-              >
-                Start new chat
-              </Button>
-            </div>
           ) : (
             <ScrollArea className="h-full">
-              <div className="grid gap-0.5 p-2">
-                {threads.map((session) => (
-                  <ThreadItem
-                    key={session.session_id}
-                    session={session}
-                    isActive={activeSessionId === session.session_id}
-                    onOpen={onOpenThread}
-                    actionIcon="archive"
-                    onAction={onArchiveThread}
-                  />
-                ))}
-              </div>
-              {canLoadMore ? (
-                <div className="p-2 pt-0">
+              {threads.length === 0 ? (
+                <div className="grid gap-3 p-4">
+                  <div className="text-sm text-fg-muted">No chats yet.</div>
                   <Button
-                    variant="ghost"
-                    className="w-full text-xs text-fg-muted hover:text-fg"
-                    onClick={onLoadMore}
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    data-testid="chat-empty-threads-new"
+                    disabled={!connected || agentsLoading}
+                    onClick={onNewChat}
                   >
-                    Load more
+                    Start new chat
                   </Button>
                 </div>
-              ) : null}
+              ) : (
+                <>
+                  <div className="grid gap-0.5 p-2">
+                    {threads.map((session) => (
+                      <ThreadItem
+                        key={session.session_id}
+                        session={session}
+                        isActive={activeSessionId === session.session_id}
+                        onOpen={onOpenThread}
+                        actionIcon="archive"
+                        onAction={onArchiveThread}
+                      />
+                    ))}
+                  </div>
+                  {canLoadMore ? (
+                    <div className="p-2 pt-0">
+                      <Button
+                        variant="ghost"
+                        className="w-full text-xs text-fg-muted hover:text-fg"
+                        onClick={onLoadMore}
+                      >
+                        Load more
+                      </Button>
+                    </div>
+                  ) : null}
+                </>
+              )}
               <ArchivedSection
                 threads={archivedThreads}
                 loading={archivedLoading}
