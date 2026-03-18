@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import React from "react";
 import * as operatorUi from "../../src/index.js";
 import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
@@ -42,6 +42,44 @@ describe("Alert", () => {
     const el = container.querySelector(".test-alert");
     expect(el).not.toBeNull();
     expect(el?.className).toContain("border-error");
+
+    cleanupTestRoot({ container, root });
+  });
+
+  it("renders dismiss button when onDismiss is provided", () => {
+    const Alert = (operatorUi as Record<string, unknown>)["Alert"];
+    expect(Alert).toBeDefined();
+
+    const onDismiss = vi.fn();
+
+    const { container, root } = renderIntoDocument(
+      React.createElement(Alert as React.ComponentType, {
+        title: "Dismissable",
+        description: "Click to dismiss",
+        onDismiss,
+      }),
+    );
+
+    const button = container.querySelector<HTMLButtonElement>('[aria-label="Dismiss"]');
+    expect(button).not.toBeNull();
+    button?.click();
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+
+    cleanupTestRoot({ container, root });
+  });
+
+  it("does not render dismiss button when onDismiss is omitted", () => {
+    const Alert = (operatorUi as Record<string, unknown>)["Alert"];
+    expect(Alert).toBeDefined();
+
+    const { container, root } = renderIntoDocument(
+      React.createElement(Alert as React.ComponentType, {
+        title: "Not dismissable",
+      }),
+    );
+
+    const button = container.querySelector('[aria-label="Dismiss"]');
+    expect(button).toBeNull();
 
     cleanupTestRoot({ container, root });
   });
