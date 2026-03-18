@@ -163,6 +163,10 @@ export function AiSdkConversation({
     syncDraftHeight(textarea);
   }, [draft]);
 
+  useEffect(() => {
+    draftRef.current?.focus();
+  }, []);
+
   const send = async (): Promise<void> => {
     const text = draft.trim();
     if (!text) {
