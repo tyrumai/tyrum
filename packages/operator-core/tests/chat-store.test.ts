@@ -119,6 +119,56 @@ describe("chatStore", () => {
     expect(chat.getSnapshot().active.session).toEqual(sampleGetSession("session-9"));
   });
 
+  it("keeps opened archived sessions in the archived list and updates them there", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-10T00:00:00.000Z"));
+
+    try {
+      const ws = createFakeWs();
+      const archivedItem = { ...sampleListItem("session-1"), archived: true };
+      const archivedSession = { ...sampleGetSession("session-1"), archived: true };
+      ws.sessionList
+        .mockResolvedValueOnce({ sessions: [], next_cursor: null })
+        .mockResolvedValueOnce({ sessions: [archivedItem], next_cursor: null });
+      ws.sessionGet.mockResolvedValueOnce({ session: archivedSession });
+      const chat = createChatStore(ws as never, createFakeHttp() as never);
+
+      await chat.refreshSessions();
+      await chat.loadArchivedSessions();
+      await chat.openSession("session-1");
+
+      expect(chat.getSnapshot().sessions.sessions).toEqual([]);
+      expect(chat.getSnapshot().archivedSessions.sessions[0]).toEqual(archivedItem);
+
+      chat.updateActiveMessages([
+        ...archivedSession.messages,
+        {
+          id: "session-1-assistant-1",
+          role: "assistant",
+          parts: [{ type: "text", text: "Archived update" }],
+        },
+      ]);
+
+      const snapshot = chat.getSnapshot();
+      expect(snapshot.active.session?.archived).toBe(true);
+      expect(snapshot.sessions.sessions).toEqual([]);
+      expect(snapshot.archivedSessions.sessions[0]).toEqual(
+        expect.objectContaining({
+          session_id: "session-1",
+          archived: true,
+          message_count: 2,
+          last_message: {
+            role: "assistant",
+            text: "Archived update",
+          },
+          updated_at: "2026-01-10T00:00:00.000Z",
+        }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("keeps existing thread order when opening an older session", async () => {
     const ws = createFakeWs();
     ws.sessionList.mockResolvedValueOnce({

@@ -291,13 +291,7 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
             }}
             canLoadMore={Boolean(chat.sessions.nextCursor)}
             onOpenThread={(sessionId) => {
-              const isArchived = chat.archivedSessions.sessions.some(
-                (s) => s.session_id === sessionId,
-              );
               const open = async () => {
-                if (isArchived) {
-                  await core.chatStore.unarchiveSession(sessionId);
-                }
                 await core.chatStore.openSession(sessionId);
                 if (!lgUp && core.chatStore.getSnapshot().active.sessionId === sessionId) {
                   setMobileView("conversation");

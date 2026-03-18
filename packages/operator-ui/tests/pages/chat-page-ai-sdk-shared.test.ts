@@ -123,4 +123,20 @@ describe("chat-page-ai-sdk-shared", () => {
       archived: false,
     });
   });
+
+  it("falls back to New chat when a session title is blank", () => {
+    const summary = toThreadSummary({
+      session_id: "session-1",
+      agent_id: "default",
+      channel: "ui",
+      thread_id: "thread-1",
+      title: "   ",
+      created_at: "2026-03-13T00:00:00.000Z",
+      updated_at: "2026-03-14T00:00:00.000Z",
+      message_count: 0,
+      last_message: null,
+    });
+
+    expect(summary.title).toBe("New chat");
+  });
 });

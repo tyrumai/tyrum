@@ -45,10 +45,12 @@ vi.mock("../../src/host/host-api.js", () => ({
 
 vi.mock("../../src/components/pages/chat-page-threads.js", () => ({
   ChatThreadsPanel: ({
+    archivedThreads,
     onNewChat,
     onOpenThread,
     threads,
   }: {
+    archivedThreads: Array<{ preview: string; session_id: string; title: string }>;
     onNewChat: () => void;
     onOpenThread: (sessionId: string) => void;
     threads: Array<{ preview: string; session_id: string; title: string }>;
@@ -69,6 +71,20 @@ vi.mock("../../src/components/pages/chat-page-threads.js", () => ({
             type: "button",
           },
           `${thread.title}:${thread.preview}`,
+        ),
+      ),
+      ...archivedThreads.map((thread) =>
+        e(
+          "button",
+          {
+            key: `archived-${thread.session_id}`,
+            "data-testid": `mock-open-archived-${thread.session_id}`,
+            onClick: () => {
+              onOpenThread(thread.session_id);
+            },
+            type: "button",
+          },
+          `archived:${thread.title}:${thread.preview}`,
         ),
       ),
     ),
@@ -281,6 +297,108 @@ describe("AiSdkChatPage integration", () => {
 
     expect(sessionClient.delete).toHaveBeenCalledWith({ session_id: "session-2" });
     expect(testRoot.container.textContent).toContain("session-1");
+
+    cleanupTestRoot(testRoot);
+  });
+
+  it("opens archived chats without unarchiving them first", async () => {
+    const sessionClient = {
+      list: vi.fn(async () => ({ sessions: [], next_cursor: null })),
+      get: vi.fn(async ({ session_id }: { session_id: string }) => createSession(session_id, "")),
+      create: vi.fn(async () => createSession("session-2", "New preview")),
+      delete: vi.fn(async () => undefined),
+    };
+    createSessionClientMock.mockReturnValue(sessionClient);
+
+    const { store: connectionStore } = createStore({
+      status: "disconnected",
+      clientId: null,
+      lastDisconnect: null,
+      transportError: null,
+    });
+    const approvalsStore = createApprovalsStoreStub();
+    const { store: chatStoreBase } = createStore({
+      agentId: "default",
+      agents: {
+        agents: [{ agent_id: "default", persona: { name: "Default" } }],
+        loading: false,
+        error: null,
+      },
+      sessions: {
+        sessions: [],
+        nextCursor: null,
+        loading: false,
+        error: null,
+      },
+      archivedSessions: {
+        sessions: [
+          {
+            ...createSessionSummary("session-archived", "Archived preview"),
+            title: "",
+            archived: true,
+          },
+        ],
+        nextCursor: null,
+        loading: false,
+        loaded: true,
+        error: null,
+      },
+      active: {
+        sessionId: null,
+        session: null,
+        loading: false,
+        error: null,
+      },
+    });
+    const chatStore = {
+      ...chatStoreBase,
+      setAgentId: vi.fn(),
+      refreshAgents: vi.fn(async () => undefined),
+      refreshSessions: vi.fn(async () => undefined),
+      loadMoreSessions: vi.fn(async () => undefined),
+      openSession: vi.fn(async () => undefined),
+      hydrateActiveSession: vi.fn(),
+      updateActiveMessages: vi.fn(),
+      newChat: vi.fn(async () => undefined),
+      deleteActive: vi.fn(async () => undefined),
+      archiveSession: vi.fn(async () => undefined),
+      unarchiveSession: vi.fn(async () => undefined),
+      loadArchivedSessions: vi.fn(async () => undefined),
+      loadMoreArchivedSessions: vi.fn(async () => undefined),
+    };
+    const ws = {
+      connected: true,
+      off: vi.fn(),
+      on: vi.fn(),
+      requestDynamic: vi.fn(),
+      onDynamicEvent: vi.fn(),
+      offDynamicEvent: vi.fn(),
+    };
+    const http = {
+      agentList: {
+        get: vi.fn(async () => ({ agents: [] })),
+      },
+    };
+    const core = {
+      approvalsStore,
+      chatStore,
+      connectionStore,
+      http,
+      ws,
+    } as unknown as OperatorCore;
+
+    const { AiSdkChatPage } = await import("../../src/components/pages/chat-page-ai-sdk.js");
+    const testRoot = renderIntoDocument(e(AiSdkChatPage, { core }));
+
+    await flushEffects();
+    await clickAndFlush(
+      testRoot.container.querySelector(
+        "[data-testid='mock-open-archived-session-archived']",
+      ) as HTMLElement,
+    );
+
+    expect(chatStore.openSession).toHaveBeenCalledWith("session-archived");
+    expect(chatStore.unarchiveSession).not.toHaveBeenCalled();
 
     cleanupTestRoot(testRoot);
   });

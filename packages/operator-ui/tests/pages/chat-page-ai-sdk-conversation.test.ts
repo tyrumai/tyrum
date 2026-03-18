@@ -9,7 +9,13 @@ import { click, cleanupTestRoot, renderIntoDocument, setNativeValue } from "../t
 const e = React.createElement;
 const useChatMock = vi.hoisted(() => vi.fn());
 const toastErrorMock = vi.hoisted(() => vi.fn());
-const testCore = { http: {} } as unknown as OperatorCore;
+const hydrateActiveSessionMock = vi.hoisted(() => vi.fn());
+const testCore = {
+  http: {},
+  chatStore: {
+    hydrateActiveSession: hydrateActiveSessionMock,
+  },
+} as unknown as OperatorCore;
 const DRAFT_LINE_HEIGHT_PX = 20;
 const DRAFT_PADDING_PX = 8;
 const DRAFT_BORDER_PX = 1;
@@ -112,6 +118,74 @@ describe("AiSdkConversation", () => {
   beforeEach(() => {
     useChatMock.mockReset();
     toastErrorMock.mockReset();
+    hydrateActiveSessionMock.mockReset();
+  });
+
+  it("renders the session title in the header and falls back to New chat", async () => {
+    const chatState = makeUseChatState();
+    useChatMock.mockReturnValue(chatState);
+    const sessionClient = {
+      get: vi.fn(async () => ({
+        session_id: "session-1",
+        messages: [],
+      })),
+    };
+
+    const { AiSdkConversation } =
+      await import("../../src/components/pages/chat-page-ai-sdk-conversation.js");
+    const titledRoot = renderIntoDocument(
+      e(AiSdkConversation, {
+        approvalsById: {},
+        core: testCore,
+        onDelete: vi.fn(),
+        onResolveApproval: vi.fn(),
+        onRenderModeChange: vi.fn(),
+        onSessionMessages: vi.fn(),
+        renderMode: "markdown",
+        resolvingApproval: null,
+        resolveAttachedNodeId: vi.fn(async () => null),
+        session: {
+          session_id: "session-1",
+          thread_id: "thread-1",
+          title: "Visible chat title",
+          messages: [],
+        },
+        sessionClient,
+        transport: { transport: true },
+      } as never),
+    );
+
+    expect(titledRoot.container.textContent).toContain("Visible chat title");
+    expect(titledRoot.container.textContent).not.toContain("thread-1");
+
+    cleanupTestRoot(titledRoot);
+
+    const untitledRoot = renderIntoDocument(
+      e(AiSdkConversation, {
+        approvalsById: {},
+        core: testCore,
+        onDelete: vi.fn(),
+        onResolveApproval: vi.fn(),
+        onRenderModeChange: vi.fn(),
+        onSessionMessages: vi.fn(),
+        renderMode: "markdown",
+        resolvingApproval: null,
+        resolveAttachedNodeId: vi.fn(async () => null),
+        session: {
+          session_id: "session-2",
+          thread_id: "thread-2",
+          title: "",
+          messages: [],
+        },
+        sessionClient,
+        transport: { transport: true },
+      } as never),
+    );
+
+    expect(untitledRoot.container.textContent).toContain("New chat");
+    expect(untitledRoot.container.textContent).not.toContain("thread-2");
+
+    cleanupTestRoot(untitledRoot);
   });
 
   it("sends messages and updates the markdown toggle", async () => {
@@ -285,12 +359,15 @@ describe("AiSdkConversation", () => {
         parts: [{ type: "text", text: "done" }],
       },
     ] as unknown as UIMessage[];
+    const reloadedSession = {
+      session_id: "session-1",
+      thread_id: "thread-1",
+      title: "Generated title",
+      messages: reloadedMessages,
+    };
     const onSessionMessages = vi.fn();
     const sessionClient = {
-      get: vi.fn(async () => ({
-        session_id: "session-1",
-        messages: reloadedMessages,
-      })),
+      get: vi.fn(async () => reloadedSession),
     };
 
     const { AiSdkConversation } =
@@ -324,7 +401,7 @@ describe("AiSdkConversation", () => {
 
     expect(sessionClient.get).toHaveBeenCalledWith({ session_id: "session-1" });
     expect(chatState.setMessages).toHaveBeenCalledWith(reloadedMessages);
-    expect(onSessionMessages).toHaveBeenCalledWith(reloadedMessages);
+    expect(hydrateActiveSessionMock).toHaveBeenCalledWith(reloadedSession);
 
     cleanupTestRoot(testRoot);
   });

@@ -2,8 +2,14 @@ import { isTextUIPart, type UIMessage } from "ai";
 import type { TyrumAiSdkChatSession, TyrumAiSdkChatSessionSummary } from "@tyrum/client";
 import type { ChatThreadSummary } from "./chat-page-threads.js";
 
-function firstLine(text: string): string {
-  return text.split(/\r?\n/)[0]?.trim() ?? "";
+export const DEFAULT_CHAT_TITLE = "New chat";
+
+function firstLine(text: string | null | undefined): string {
+  return typeof text === "string" ? (text.split(/\r?\n/)[0]?.trim() ?? "") : "";
+}
+
+export function getSessionDisplayTitle(title: string | null | undefined): string {
+  return firstLine(title) || DEFAULT_CHAT_TITLE;
 }
 
 function deriveSessionPreview(session: TyrumAiSdkChatSessionSummary): string {
@@ -11,7 +17,7 @@ function deriveSessionPreview(session: TyrumAiSdkChatSessionSummary): string {
 }
 
 function deriveSessionTitle(session: TyrumAiSdkChatSessionSummary): string {
-  return firstLine(session.title) || session.thread_id;
+  return getSessionDisplayTitle(session.title);
 }
 
 export function toThreadSummary(session: TyrumAiSdkChatSessionSummary): ChatThreadSummary {

@@ -8,7 +8,7 @@ import {
   supportsTyrumAiSdkChatSocket,
 } from "@tyrum/client/browser";
 import { toOperatorCoreError } from "../operator-error.js";
-import type { ChatStoreContext } from "./chat-store.types.js";
+import type { ChatState, ChatStoreContext } from "./chat-store.types.js";
 
 function normalizeAgentId(agentId: string): string {
   const trimmed = agentId.trim();
@@ -123,6 +123,48 @@ export function patchSessionList(
     ...sessions.filter((entry) => entry.session_id !== nextSummary.session_id),
     nextSummary,
   ].toSorted(compareSessionActivity);
+}
+
+function routeSessionSummary(
+  prev: ChatState,
+  session: TyrumAiSdkChatSession | TyrumAiSdkChatSessionSummary,
+): Pick<ChatState, "archivedSessions" | "sessions"> {
+  const nextSummary = toSessionSummary(session);
+  const filteredActiveSessions = prev.sessions.sessions.filter(
+    (entry) => entry.session_id !== nextSummary.session_id,
+  );
+  const filteredArchivedSessions = prev.archivedSessions.sessions.filter(
+    (entry) => entry.session_id !== nextSummary.session_id,
+  );
+
+  if (nextSummary.archived) {
+    const shouldPatchArchived =
+      prev.archivedSessions.loaded ||
+      prev.archivedSessions.sessions.some((entry) => entry.session_id === nextSummary.session_id);
+    return {
+      sessions: {
+        ...prev.sessions,
+        sessions: filteredActiveSessions,
+      },
+      archivedSessions: {
+        ...prev.archivedSessions,
+        sessions: shouldPatchArchived
+          ? patchSessionList(prev.archivedSessions.sessions, nextSummary)
+          : filteredArchivedSessions,
+      },
+    };
+  }
+
+  return {
+    sessions: {
+      ...prev.sessions,
+      sessions: patchSessionList(prev.sessions.sessions, nextSummary),
+    },
+    archivedSessions: {
+      ...prev.archivedSessions,
+      sessions: filteredArchivedSessions,
+    },
+  };
 }
 
 function applySessionMessages(
@@ -350,13 +392,7 @@ export function hydrateActiveSession(
 ): void {
   ctx.setState((prev) => ({
     ...prev,
-    sessions:
-      session === null
-        ? prev.sessions
-        : {
-            ...prev.sessions,
-            sessions: patchSessionList(prev.sessions.sessions, session),
-          },
+    ...(session === null ? {} : routeSessionSummary(prev, session)),
     active:
       session === null
         ? {
@@ -383,10 +419,7 @@ export function updateActiveMessages(ctx: ChatStoreContext, messages: UIMessage[
     const nextSession = applySessionMessages(session, messages);
     return {
       ...prev,
-      sessions: {
-        ...prev.sessions,
-        sessions: patchSessionList(prev.sessions.sessions, nextSession),
-      },
+      ...routeSessionSummary(prev, nextSession),
       active: {
         ...prev.active,
         session: nextSession,
