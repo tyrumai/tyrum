@@ -56,7 +56,6 @@ export function useDesktopConnectionState(
 
   const [generalSaving, setGeneralSaving] = useState(false);
   const [generalSaved, setGeneralSaved] = useState(false);
-  const [generalError, setGeneralError] = useState<string | null>(null);
 
   const initialConnectionRef = useRef<ConnectionState | null>(null);
   const operatorConnectionRequestRef = useRef(0);
@@ -117,7 +116,6 @@ export function useDesktopConnectionState(
 
     saveInFlightRef.current = true;
     setGeneralSaving(true);
-    setGeneralError(null);
     setGeneralSaved(false);
 
     const previousConnection = initialConnectionRef.current
@@ -166,7 +164,6 @@ export function useDesktopConnectionState(
         }
 
         await refreshCurrentOperatorConnection();
-        setGeneralError(null);
         setGeneralSaved(true);
         setTimeout(() => setGeneralSaved(false), 2_000);
       })
@@ -256,7 +253,6 @@ export function useDesktopConnectionState(
       dirty: generalDirty,
       saving: generalSaving,
       saved: generalSaved,
-      saveError: generalError,
       onSave: saveGeneral,
     }),
     [
@@ -268,7 +264,6 @@ export function useDesktopConnectionState(
       currentTokenError,
       currentTokenLoading,
       generalDirty,
-      generalError,
       generalSaved,
       generalSaving,
       saveGeneral,

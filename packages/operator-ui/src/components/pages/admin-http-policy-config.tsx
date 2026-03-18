@@ -57,13 +57,8 @@ export function PolicyConfigSection(props: PolicyConfigSectionProps): React.Reac
   const [saveOpen, setSaveOpen] = React.useState(false);
   const [revertReason, setRevertReason] = React.useState("");
   const [revertTarget, setRevertTarget] = React.useState<PolicyConfigRevision | null>(null);
-  const [loadErrorDismissed, setLoadErrorDismissed] = React.useState(false);
   const skipNextPropBundleSignatureRef = React.useRef<string | null>(null);
   const lastAppliedDeploymentBundleSignatureRef = React.useRef<string | null>(null);
-
-  React.useEffect(() => {
-    setLoadErrorDismissed(false);
-  }, [props.loadError]);
 
   const applyBundleToEditor = React.useCallback((bundle: PolicyBundleT): string => {
     const normalizedBundle = normalizePolicyBundle(bundle);
@@ -93,13 +88,12 @@ export function PolicyConfigSection(props: PolicyConfigSectionProps): React.Reac
     setSaveReason("");
   }, [applyBundleToEditor, props.currentRevision, props.effective]);
 
-  if (props.loadError && !props.effective && !loadErrorDismissed) {
+  if (props.loadError && !props.effective) {
     return (
       <Alert
         variant="error"
         title="Policy tab failed to load"
         description={formatErrorMessage(props.loadError)}
-        onDismiss={() => setLoadErrorDismissed(true)}
       />
     );
   }

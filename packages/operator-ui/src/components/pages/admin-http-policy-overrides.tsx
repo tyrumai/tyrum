@@ -53,7 +53,7 @@ export interface PolicyOverridesSectionProps {
     tool_id: string;
     pattern: string;
     expires_at?: string;
-  }) => Promise<boolean | false>;
+  }) => Promise<boolean>;
   onRevoke: (input: { policy_override_id: string; reason: string }) => Promise<void | false>;
 }
 
