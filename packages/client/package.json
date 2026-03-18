@@ -22,7 +22,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsdown src/index.ts src/browser.ts src/node.ts --format esm --dts"
+    "build": "tsdown src/index.ts src/browser.ts src/node.ts --format esm --dts && node scripts/post-build.mjs"
   },
   "dependencies": {
     "ai": "^6.0.116",
