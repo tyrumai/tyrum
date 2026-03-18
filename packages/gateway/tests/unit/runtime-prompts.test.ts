@@ -122,6 +122,12 @@ describe("formatMemoryGuidancePrompt", () => {
     expect(result).toContain("Proactively persist durable memory");
     expect(result).toContain("Never write: secrets");
     expect(result).toContain("Search memory when pre-turn recall");
+    expect(result).toContain("asks a broad question");
+    expect(result).toContain("Do not assume pre-turn recall is complete");
+    expect(result).toContain("Pre-turn recall is seed-based");
+    expect(result).toContain("If the requested information is not in pre-turn recall");
+    expect(result).toContain("run mcp.memory.search before answering");
+    expect(result).toContain("search with alternative terms, paraphrases");
   });
 
   it("returns only search guidance for read-only profiles without mcp.memory.write", () => {
@@ -131,6 +137,9 @@ describe("formatMemoryGuidancePrompt", () => {
     expect(result).not.toContain("Proactively persist");
     expect(result).not.toContain("Never write");
     expect(result).toContain("Search memory when pre-turn recall");
+    expect(result).toContain("Pre-turn recall is seed-based");
+    expect(result).toContain("run mcp.memory.search before answering");
+    expect(result).toContain("search with alternative terms, paraphrases");
   });
 
   it("returns undefined when only seed is present", () => {
