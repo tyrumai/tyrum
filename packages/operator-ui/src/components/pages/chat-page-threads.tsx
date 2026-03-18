@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Archive, ArchiveRestore, ChevronDown, Plus, RefreshCw } from "lucide-react";
 import { cn } from "../../lib/cn.js";
 import { formatRelativeTime } from "../../utils/format-relative-time.js";
@@ -268,6 +268,12 @@ function ArchivedSection({
   onUnarchiveThread: (sessionId: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    if (expanded && !loaded && !loading) {
+      onExpand();
+    }
+  }, [expanded, loaded, loading, onExpand]);
 
   const handleToggle = () => {
     const next = !expanded;
