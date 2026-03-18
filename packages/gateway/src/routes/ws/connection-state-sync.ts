@@ -1,5 +1,7 @@
 import type { AuthTokenClaims, NodePairingRequest } from "@tyrum/schemas";
-import type { NodePairingDal } from "../../modules/node/pairing-dal.js";
+import { DESKTOP_CAPABILITY_ALLOWLIST } from "../../modules/desktop-environments/allowlist.js";
+import type { DesktopEnvironmentDal } from "../../modules/desktop-environments/dal.js";
+import { isPairingBlockedStatus, type NodePairingDal } from "../../modules/node/pairing-dal.js";
 import type { PresenceDal } from "../../modules/presence/dal.js";
 import {
   initializePairingReview,
@@ -8,6 +10,7 @@ import {
 } from "../../modules/review/review-init.js";
 import { broadcastWsEvent } from "../../ws/broadcast.js";
 import type { ConnectionManager } from "../../ws/connection-manager.js";
+import { emitPairingApprovedEvent } from "../../ws/pairing-approved.js";
 import type { ProtocolDeps } from "../../ws/protocol.js";
 import { ensurePairingResolvedEvent } from "../../ws/stable-events.js";
 import {
@@ -30,6 +33,7 @@ export interface ConnectionStateSyncDeps {
   connectionTtlMs: number;
   presenceDal?: PresenceDal;
   nodePairingDal?: NodePairingDal;
+  desktopEnvironmentDal?: DesktopEnvironmentDal;
   presenceTtlMs: number;
 }
 
@@ -184,6 +188,55 @@ async function initializePairingOnConnect(input: {
       tenantId: input.tenantId,
       pairing,
     });
+
+    // If this node belongs to a gateway-managed desktop environment, auto-approve
+    // immediately to prevent the guardian review processor from claiming it.
+    if (input.deps.desktopEnvironmentDal && isPairingBlockedStatus(initializedPairing.status)) {
+      const managedEnv = await input.deps.desktopEnvironmentDal.getByNodeId(
+        input.nodeId,
+        input.tenantId,
+      );
+      if (managedEnv) {
+        const resolved = await input.nodePairingDal.resolve({
+          tenantId: input.tenantId,
+          pairingId: initializedPairing.pairing_id,
+          decision: "approved",
+          trustLevel: "local",
+          capabilityAllowlist: DESKTOP_CAPABILITY_ALLOWLIST,
+          reason: "gateway-managed desktop environment",
+          resolvedBy: {
+            kind: "desktop_environment_runtime",
+            environment_id: managedEnv.environment_id,
+          },
+          allowedCurrentStatuses: ["queued", "awaiting_human"],
+        });
+        if (resolved?.transitioned && resolved.scopedToken) {
+          emitPairingApprovedEvent(
+            {
+              connectionManager: input.deps.connectionManager,
+              logger: input.deps.protocolDeps.logger,
+              maxBufferedBytes: input.deps.protocolDeps.maxBufferedBytes,
+              cluster: input.deps.protocolDeps.cluster,
+            },
+            input.tenantId,
+            {
+              pairing: resolved.pairing,
+              nodeId: input.nodeId,
+              scopedToken: resolved.scopedToken,
+            },
+          );
+        }
+        if (resolved?.pairing) {
+          await broadcastPairingRequested({
+            deps: input.deps,
+            tenantId: input.tenantId,
+            pairing: resolved.pairing,
+          });
+        }
+        return;
+      }
+    }
+
     const shouldRequest =
       (initializedPairing.status === "queued" ||
         initializedPairing.status === "reviewing" ||

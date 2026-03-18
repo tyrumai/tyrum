@@ -16,6 +16,7 @@ import {
   toSingleHeaderValue,
   type TrustedProxyAllowlist,
 } from "../../modules/auth/client-ip.js";
+import type { DesktopEnvironmentDal } from "../../modules/desktop-environments/dal.js";
 import type { NodePairingDal } from "../../modules/node/pairing-dal.js";
 import type { PresenceDal } from "../../modules/presence/dal.js";
 import { handleClientMessage } from "../../ws/protocol.js";
@@ -51,6 +52,7 @@ interface BindWsConnectionHandlerOptions {
   trustedProxies?: TrustedProxyAllowlist;
   presenceDal?: PresenceDal;
   nodePairingDal?: NodePairingDal;
+  desktopEnvironmentDal?: DesktopEnvironmentDal;
   presenceTtlMs: number;
 }
 
@@ -65,6 +67,7 @@ type WsSessionInput = {
   trustedProxies?: TrustedProxyAllowlist;
   presenceDal?: PresenceDal;
   nodePairingDal?: NodePairingDal;
+  desktopEnvironmentDal?: DesktopEnvironmentDal;
   presenceTtlMs: number;
 };
 
@@ -81,6 +84,7 @@ export function bindWsConnectionHandler(opts: BindWsConnectionHandlerOptions): v
       trustedProxies: opts.trustedProxies,
       presenceDal: opts.presenceDal,
       nodePairingDal: opts.nodePairingDal,
+      desktopEnvironmentDal: opts.desktopEnvironmentDal,
       presenceTtlMs: opts.presenceTtlMs,
     });
     session.attach();

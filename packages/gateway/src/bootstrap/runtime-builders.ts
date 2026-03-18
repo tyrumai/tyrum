@@ -6,6 +6,7 @@ import { SlidingWindowRateLimiter } from "../modules/auth/rate-limiter.js";
 import { deriveAgentKeyFromKey } from "../modules/execution/gateway-step-executor-types.js";
 import { ApprovalEngineActionProcessor } from "../modules/approval/engine-action-processor.js";
 import { ConnectionDirectoryDal } from "../modules/backplane/connection-directory.js";
+import { DesktopEnvironmentDal } from "../modules/desktop-environments/dal.js";
 import { OutboxDal } from "../modules/backplane/outbox-dal.js";
 import { OutboxPoller } from "../modules/backplane/outbox-poller.js";
 import { type StepExecutor as ExecutionStepExecutor } from "../modules/execution/engine.js";
@@ -277,6 +278,10 @@ export async function startEdgeRuntime(
     },
   });
 
+  const desktopEnvironmentDal = context.shouldRunDesktopRuntime
+    ? new DesktopEnvironmentDal(context.container.db)
+    : undefined;
+
   const wsHandler = createWsHandler({
     connectionManager: protocol.connectionManager,
     protocolDeps: protocol.protocolDeps,
@@ -285,6 +290,7 @@ export async function startEdgeRuntime(
     upgradeRateLimiter: wsUpgradeRateLimiter,
     presenceDal: context.container.presenceDal,
     nodePairingDal: context.container.nodePairingDal,
+    desktopEnvironmentDal,
     cluster: { instanceId: context.instanceId, connectionDirectory: protocol.connectionDirectory },
   });
 
