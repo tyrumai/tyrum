@@ -209,6 +209,46 @@ describe("runPreTurnHydration", () => {
     ]);
   });
 
+  it("enriches memory.seed section text with retrieval metadata header", async () => {
+    const execute = vi.fn(async () => ({
+      output: "- [fact] abc (public) key=user value=Ron",
+      error: undefined,
+      meta: {
+        kind: "memory.seed" as const,
+        query: "recall prior context",
+        keyword_hit_count: 3,
+        semantic_hit_count: 1,
+        structured_item_count: 2,
+        included_item_ids: ["abc", "def", "ghi"],
+      },
+    }));
+
+    const result = await runPreTurnHydration({
+      toolIds: [memorySeedTool.id],
+      availableTools: [memorySeedTool],
+      toolExecutor: { execute } as unknown as ToolExecutor,
+      toolSetBuilderDeps: createToolSetBuilderDeps({}),
+      toolExecutionContext,
+      session,
+      resolved,
+    });
+
+    expect(result.sections).toHaveLength(1);
+    const text = result.sections[0]!.text;
+    expect(text).toContain('seed_query="recall prior context"');
+    expect(text).toContain("structured=2");
+    expect(text).toContain("keyword=3");
+    expect(text).toContain("semantic=1");
+    expect(text).toContain("included=3");
+    expect(text).toContain("- [fact] abc (public) key=user value=Ron");
+    expect(result.memory).toEqual({
+      keyword_hits: 3,
+      semantic_hits: 1,
+      structured_hits: 2,
+      included_items: 3,
+    });
+  });
+
   it("treats unexpected executor throws as best-effort skips", async () => {
     const execute = vi.fn(async () => {
       throw new Error("executor crashed");

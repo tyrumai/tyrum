@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { formatSkillsPrompt, formatToolPrompt } from "../../src/modules/agent/runtime/prompts.js";
+import {
+  formatMemoryGuidancePrompt,
+  formatSkillsPrompt,
+  formatToolPrompt,
+} from "../../src/modules/agent/runtime/prompts.js";
+import type { ToolDescriptor } from "../../src/modules/agent/tools.js";
 
 describe("formatSkillsPrompt", () => {
   it("includes inline skill instructions with provenance metadata", () => {
@@ -66,7 +71,7 @@ describe("formatSkillsPrompt", () => {
     expect(prompt).not.toContain("confirmation=");
   });
 
-  it("renders prompt guidance and examples for risky tools", () => {
+  it("renders prompt guidance and examples for tools", () => {
     const prompt = formatToolPrompt([
       {
         id: "bash",
@@ -93,5 +98,43 @@ describe("formatSkillsPrompt", () => {
     expect(prompt).toContain("Guidance: Put action-specific arguments inside the input object.");
     expect(prompt).toContain('Example: {"node_id":"node_123"');
     expect(prompt).toContain('"input":{"display":"all"}');
+  });
+});
+
+function makeTool(id: string): ToolDescriptor {
+  return { id, description: `Tool ${id}`, effect: "read_only", keywords: [] };
+}
+
+describe("formatMemoryGuidancePrompt", () => {
+  it("returns undefined when no memory tools are present", () => {
+    const result = formatMemoryGuidancePrompt([makeTool("bash"), makeTool("fs.read")]);
+    expect(result).toBeUndefined();
+  });
+
+  it("returns write and search guidance when all memory tools are present", () => {
+    const tools = [
+      makeTool("mcp.memory.seed"),
+      makeTool("mcp.memory.search"),
+      makeTool("mcp.memory.write"),
+    ];
+    const result = formatMemoryGuidancePrompt(tools);
+    expect(result).toBeDefined();
+    expect(result).toContain("Proactively persist durable memory");
+    expect(result).toContain("Never write: secrets");
+    expect(result).toContain("Search memory when pre-turn recall");
+  });
+
+  it("returns only search guidance for read-only profiles without mcp.memory.write", () => {
+    const tools = [makeTool("mcp.memory.seed"), makeTool("mcp.memory.search")];
+    const result = formatMemoryGuidancePrompt(tools);
+    expect(result).toBeDefined();
+    expect(result).not.toContain("Proactively persist");
+    expect(result).not.toContain("Never write");
+    expect(result).toContain("Search memory when pre-turn recall");
+  });
+
+  it("returns undefined when only seed is present", () => {
+    const result = formatMemoryGuidancePrompt([makeTool("mcp.memory.seed")]);
+    expect(result).toBeUndefined();
   });
 });

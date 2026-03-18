@@ -210,16 +210,6 @@ export function resolveMainLaneSessionKey(input: {
   });
 }
 
-export function shouldPromoteToCoreMemory(message: string): boolean {
-  const normalized = message.toLowerCase();
-  return (
-    normalized.includes("i prefer") ||
-    normalized.includes("remember that") ||
-    normalized.includes("always ") ||
-    normalized.includes("never ")
-  );
-}
-
 export function isStatusQuery(message: string): boolean {
   const normalized = message.trim().toLowerCase();
   return normalized === "status?" || normalized === "status";

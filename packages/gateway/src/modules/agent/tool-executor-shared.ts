@@ -37,6 +37,7 @@ export type ToolResultMeta =
     }
   | {
       kind: "memory.seed";
+      query?: string;
       keyword_hit_count: number;
       semantic_hit_count: number;
       structured_item_count: number;
