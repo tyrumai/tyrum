@@ -245,7 +245,7 @@ export class DesktopEnvironmentRuntimeManager {
   private resolveGatewayWsUrl(): string {
     const override = this.options.gatewayWsUrl?.trim();
     if (override) return override;
-    const scheme = this.options.tlsSelfSigned ? "wss" : "ws";
+    const scheme = this.options.tlsSelfSigned && this.options.tlsFingerprint256 ? "wss" : "ws";
     return `${scheme}://host.containers.internal:${String(this.options.gatewayPort)}/ws`;
   }
 

@@ -210,6 +210,33 @@ describe("DesktopEnvironmentRuntimeManager TLS", () => {
     expect(joined).not.toContain("TYRUM_GATEWAY_TLS_ALLOW_SELF_SIGNED");
   });
 
+  it("falls back to ws:// when tlsSelfSigned is true but fingerprint is missing", async () => {
+    const { environmentDal, runtimeManager } = createRuntimeManager({
+      tlsSelfSigned: true,
+    });
+    environmentDal.listByHost.mockResolvedValue([
+      createEnvironment({
+        environment_id: "env-no-fp",
+        label: "No Fingerprint",
+        status: "starting",
+      }),
+    ]);
+
+    await runtimeManager.reconcileAll();
+
+    const runArgs = findDockerArgs("run");
+    expect(runArgs).toBeDefined();
+    expect(runArgs).toEqual(
+      expect.arrayContaining([
+        "--env",
+        "TYRUM_GATEWAY_WS_URL=ws://host.containers.internal:8788/ws",
+      ]),
+    );
+    const joined = runArgs!.join(" ");
+    expect(joined).not.toContain("TYRUM_GATEWAY_TLS_FINGERPRINT256");
+    expect(joined).not.toContain("TYRUM_GATEWAY_TLS_ALLOW_SELF_SIGNED");
+  });
+
   it("explicit gatewayWsUrl override takes precedence over TLS scheme", async () => {
     const { environmentDal, runtimeManager } = createRuntimeManager({
       tlsSelfSigned: true,
