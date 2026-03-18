@@ -78,6 +78,8 @@ export function ElevatedModeProvider({
   const adminAccessMode = adminAccessModeSetting?.mode ?? "on-demand";
   const autoEnterAttemptedRef = useRef(false);
   const renewingRef = useRef(false);
+  const adminAccessModeRef = useRef(adminAccessMode);
+  adminAccessModeRef.current = adminAccessMode;
 
   useEffect(() => {
     if (!controller) return;
@@ -154,6 +156,11 @@ export function ElevatedModeProvider({
     void (async () => {
       try {
         await enterElevatedMode();
+        if (adminAccessModeRef.current !== "always-on") {
+          // Mode changed while the request was in-flight. Undo.
+          core.elevatedModeStore.exit();
+          return;
+        }
         // Success: clear the guard so a future token expiry can re-trigger.
         // The isElevatedModeActive check above prevents immediate re-entry.
         autoEnterAttemptedRef.current = false;
@@ -179,6 +186,10 @@ export function ElevatedModeProvider({
     void (async () => {
       try {
         await enterElevatedMode();
+        if (adminAccessModeRef.current !== "always-on") {
+          // Mode changed while the renewal was in-flight. Undo.
+          core.elevatedModeStore.exit();
+        }
       } catch {
         // Renewal failed; existing token still has time left.
       } finally {
