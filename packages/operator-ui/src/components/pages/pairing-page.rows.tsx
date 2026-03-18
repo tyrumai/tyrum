@@ -1,10 +1,7 @@
 import type { OperatorCore, Pairing } from "@tyrum/operator-core";
 import type { NodeInventoryEntry } from "@tyrum/schemas";
-import { ChevronDown } from "lucide-react";
-import type { ReactNode } from "react";
 import { Badge, type BadgeVariant } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
-import { cn } from "../../lib/cn.js";
 import { formatRelativeTime } from "../../utils/format-relative-time.js";
 import { extractTakeoverUrlFromNodeLabel } from "../../utils/takeover-url.js";
 import { ApprovedPairingDetails, PendingPairingDetails } from "./pairing-page.cards.js";
@@ -63,7 +60,7 @@ function getPairingStatusDisplay(status: NodeInventoryEntry["paired_status"]): {
   }
 }
 
-function getStateDisplay(state: NodeListState): { label: string; variant: BadgeVariant } {
+export function getStateDisplay(state: NodeListState): { label: string; variant: BadgeVariant } {
   switch (state) {
     case "pending":
       return { label: "Pending", variant: "warning" };
@@ -72,25 +69,6 @@ function getStateDisplay(state: NodeListState): { label: string; variant: BadgeV
     case "offline":
       return { label: "Offline", variant: "outline" };
   }
-}
-
-function RowValue({
-  label,
-  children,
-  className,
-}: {
-  label: string;
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <div className={cn("grid min-w-0 gap-1", className)}>
-      <div className="text-[11px] font-medium uppercase tracking-wide text-fg-muted md:hidden">
-        {label}
-      </div>
-      <div className="min-w-0">{children}</div>
-    </div>
-  );
 }
 
 function ConnectedNodeDetails({
@@ -168,7 +146,7 @@ function ConnectedNodeDetails({
   );
 }
 
-function ExpandedRowDetails({ core, row }: { core: OperatorCore; row: NodeListRow }) {
+export function ExpandedRowDetails({ core, row }: { core: OperatorCore; row: NodeListRow }) {
   switch (row.detailKind) {
     case "pending":
       return (
@@ -191,91 +169,4 @@ function ExpandedRowDetails({ core, row }: { core: OperatorCore; row: NodeListRo
     case "inventory":
       return <ConnectedNodeDetails inventory={row.inventory} attachmentKind={row.attachmentKind} />;
   }
-}
-
-export function NodeListRowItem({
-  core,
-  row,
-  expanded,
-  onToggle,
-}: {
-  core: OperatorCore;
-  row: NodeListRow;
-  expanded: boolean;
-  onToggle: () => void;
-}) {
-  const stateDisplay = getStateDisplay(row.state);
-  const rowDetailsId = `pairing-row-details-${row.nodeId}`;
-
-  return (
-    <div data-testid={`pairing-row-${row.nodeId}`} className="divide-y divide-border">
-      <button
-        type="button"
-        data-testid={`pairing-row-toggle-${row.nodeId}`}
-        className={cn(
-          "flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-bg-subtle/60",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
-          row.attachmentKind === "local" && "bg-primary/5",
-        )}
-        aria-expanded={expanded}
-        aria-controls={rowDetailsId}
-        onClick={onToggle}
-      >
-        <div className="min-w-0 flex-1 grid gap-3 md:grid-cols-[minmax(0,1.3fr)_minmax(0,0.7fr)_minmax(0,0.6fr)_minmax(0,0.9fr)_minmax(0,0.7fr)] md:items-center">
-          <RowValue label="Identifier">
-            <div
-              className="truncate font-mono text-sm text-fg"
-              title={row.nodeId}
-              data-testid={`pairing-row-identifier-${row.nodeId}`}
-            >
-              {row.shortIdentifier}
-            </div>
-          </RowValue>
-
-          <RowValue label="Mode">
-            <div className="truncate text-sm text-fg-muted">{row.mode ?? "-"}</div>
-          </RowValue>
-
-          <RowValue label="#tools">
-            <div
-              className="text-sm tabular-nums text-fg-muted"
-              data-testid={`pairing-row-tools-${row.nodeId}`}
-            >
-              {row.toolCount}
-            </div>
-          </RowValue>
-
-          <RowValue label="Last seen">
-            <div className="truncate text-sm text-fg-muted">
-              {row.lastSeenAt ? formatRelativeTime(row.lastSeenAt) : "-"}
-            </div>
-          </RowValue>
-
-          <RowValue label="State" className="md:justify-self-start">
-            <div className="flex items-center gap-2">
-              <Badge variant={stateDisplay.variant}>{stateDisplay.label}</Badge>
-            </div>
-          </RowValue>
-        </div>
-
-        <ChevronDown
-          aria-hidden={true}
-          className={cn(
-            "mt-0.5 h-4 w-4 shrink-0 text-fg-muted transition-transform",
-            expanded ? "rotate-180" : "rotate-0",
-          )}
-        />
-      </button>
-
-      {expanded ? (
-        <div
-          id={rowDetailsId}
-          data-testid={`pairing-row-details-${row.nodeId}`}
-          className="bg-bg-subtle/20 px-4 py-4 md:px-5"
-        >
-          <ExpandedRowDetails core={core} row={row} />
-        </div>
-      ) : null}
-    </div>
-  );
 }

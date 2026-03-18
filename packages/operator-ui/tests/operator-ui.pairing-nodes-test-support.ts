@@ -35,13 +35,11 @@ async function flushPairingPage(): Promise<void> {
   });
 }
 
-function expandNodeRow(container: HTMLElement, nodeId: string): void {
-  const toggle = container.querySelector<HTMLButtonElement>(
-    `[data-testid="pairing-row-toggle-${nodeId}"]`,
-  );
-  expect(toggle).not.toBeNull();
+function expandNodeRow(container: HTMLElement, rowKey: string): void {
+  const row = container.querySelector<HTMLElement>(`[data-testid="pairing-row-${rowKey}"]`);
+  expect(row).not.toBeNull();
   act(() => {
-    toggle?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    row?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   });
 }
 
@@ -139,14 +137,14 @@ export function registerPairingNodeInventoryTests(): void {
       lane: "main",
     });
 
-    expandNodeRow(container, "node-1");
+    expandNodeRow(container, "pairing:1");
     expect(container.querySelector('[data-testid="pairing-attached-local-1"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="pairing-attached-lane-1"]')).toBeNull();
     expect(container.querySelector('[data-testid="pairing-connection-1"]')?.textContent).toContain(
       "Connected",
     );
     expect(
-      container.querySelector('[data-testid="pairing-row-toggle-node-1"]')?.className ?? "",
+      container.querySelector('[data-testid="pairing-row-pairing:1"]')?.className ?? "",
     ).toContain("bg-primary/5");
 
     act(() => {
@@ -228,11 +226,11 @@ export function registerPairingNodeInventoryTests(): void {
       await flushPairingPage();
     });
 
-    expandNodeRow(container, "node-1");
+    expandNodeRow(container, "pairing:1");
     expect(container.querySelector('[data-testid="pairing-attached-local-1"]')).toBeNull();
     expect(container.querySelector('[data-testid="pairing-attached-lane-1"]')).not.toBeNull();
     expect(
-      container.querySelector('[data-testid="pairing-row-toggle-node-1"]')?.className ?? "",
+      container.querySelector('[data-testid="pairing-row-pairing:1"]')?.className ?? "",
     ).not.toContain("bg-primary/5");
 
     act(() => {
@@ -343,45 +341,41 @@ export function registerPairingNodeInventoryTests(): void {
     expect(container.querySelector('[data-testid="pairing-list"]')).not.toBeNull();
     expect(container.textContent).toContain("1 pending, 1 connected, 1 offline");
 
-    const toggles = Array.from(
-      container.querySelectorAll<HTMLButtonElement>('[data-testid^="pairing-row-toggle-"]'),
-    ).map((button) => button.getAttribute("data-testid"));
-    expect(toggles).toEqual([
-      "pairing-row-toggle-node-1",
-      "pairing-row-toggle-node-2",
-      "pairing-row-toggle-node-3",
+    const rows = Array.from(
+      container.querySelectorAll<HTMLElement>('[data-testid^="pairing-row-"]'),
+    )
+      .map((el) => el.getAttribute("data-testid"))
+      .filter(
+        (id): id is string => id !== null && !id.includes("identifier") && !id.includes("tools"),
+      );
+    expect(rows).toEqual([
+      "pairing-row-pairing:1",
+      "pairing-row-node:node-2",
+      "pairing-row-pairing:2",
     ]);
 
-    expect(container.querySelector('[data-testid="pairing-row-details-node-1"]')).toBeNull();
     expect(
       container.querySelector('[data-testid="pairing-row-identifier-node-1"]')?.textContent,
     ).toBe("node-1");
     expect(container.querySelector('[data-testid="pairing-row-tools-node-2"]')?.textContent).toBe(
       "2",
     );
-    expect(container.querySelector('[data-testid="pairing-row-node-1"]')?.textContent).toContain(
+    expect(container.querySelector('[data-testid="pairing-row-pairing:1"]')?.textContent).toContain(
       "Pending",
     );
-    expect(container.querySelector('[data-testid="pairing-row-node-2"]')?.textContent).toContain(
-      "Connected",
-    );
-    expect(container.querySelector('[data-testid="pairing-row-node-3"]')?.textContent).toContain(
+    expect(
+      container.querySelector('[data-testid="pairing-row-node:node-2"]')?.textContent,
+    ).toContain("Connected");
+    expect(container.querySelector('[data-testid="pairing-row-pairing:2"]')?.textContent).toContain(
       "Offline",
     );
 
-    expandNodeRow(container, "node-2");
-    expect(
-      container.querySelector('[data-testid="pairing-row-details-node-2"]')?.textContent,
-    ).toContain("Connected node");
-    expect(
-      container.querySelector('[data-testid="pairing-row-details-node-2"]')?.textContent,
-    ).toContain("Unpaired");
+    expandNodeRow(container, "node:node-2");
+    expect(container.textContent).toContain("Connected node");
+    expect(container.textContent).toContain("Unpaired");
 
-    expandNodeRow(container, "node-3");
-    expect(container.querySelector('[data-testid="pairing-row-details-node-2"]')).toBeNull();
-    expect(
-      container.querySelector('[data-testid="pairing-row-details-node-3"]')?.textContent,
-    ).toContain("Trusted node");
+    expandNodeRow(container, "pairing:2");
+    expect(container.textContent).toContain("Trusted node");
 
     act(() => {
       root?.unmount();

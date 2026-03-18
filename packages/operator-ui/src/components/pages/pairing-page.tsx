@@ -9,12 +9,22 @@ import { Link2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { AppPage } from "../layout/app-page.js";
 import { Alert } from "../ui/alert.js";
+import { Badge } from "../ui/badge.js";
 import { Card } from "../ui/card.js";
+import { DataTable, type DataTableColumn } from "../ui/data-table.js";
 import { EmptyState } from "../ui/empty-state.js";
+import { Input } from "../ui/input.js";
 import { LoadingState } from "../ui/loading-state.js";
 import { SectionHeading } from "../ui/section-heading.js";
+import { Select } from "../ui/select.js";
 import { useOperatorStore } from "../../use-operator-store.js";
-import { NodeListRowItem, type NodeListRow, type NodeListState } from "./pairing-page.rows.js";
+import { formatRelativeTime } from "../../utils/format-relative-time.js";
+import {
+  ExpandedRowDetails,
+  getStateDisplay,
+  type NodeListRow,
+  type NodeListState,
+} from "./pairing-page.rows.js";
 import {
   extractNodeMeta,
   resolveAttachmentKind,
@@ -227,11 +237,95 @@ function buildNodeRows(input: {
   return [...pendingRows, ...sortedConnectedRows, ...offlineRows];
 }
 
+type StateFilter = "all" | NodeListState;
+
+function matchesSearch(row: NodeListRow, query: string): boolean {
+  if (!query) return true;
+  const needle = query.toLowerCase();
+  return (
+    row.nodeId.toLowerCase().includes(needle) ||
+    row.shortIdentifier.toLowerCase().includes(needle) ||
+    (row.mode?.toLowerCase().includes(needle) ?? false)
+  );
+}
+
+function getStateSortRank(state: NodeListState): number {
+  switch (state) {
+    case "pending":
+      return 0;
+    case "connected":
+      return 1;
+    case "offline":
+      return 2;
+  }
+}
+
+const NODE_COLUMNS: DataTableColumn<NodeListRow>[] = [
+  {
+    id: "identifier",
+    header: "Identifier",
+    cell: (row) => (
+      <div
+        className="truncate font-mono text-sm text-fg"
+        title={row.nodeId}
+        data-testid={`pairing-row-identifier-${row.nodeId}`}
+      >
+        {row.shortIdentifier}
+      </div>
+    ),
+    sortValue: (row) => row.nodeId,
+  },
+  {
+    id: "mode",
+    header: "Mode",
+    cell: (row) => <span className="truncate text-sm text-fg-muted">{row.mode ?? "-"}</span>,
+    sortValue: (row) => row.mode,
+  },
+  {
+    id: "toolCount",
+    header: "#tools",
+    cell: (row) => (
+      <span
+        className="text-sm tabular-nums text-fg-muted"
+        data-testid={`pairing-row-tools-${row.nodeId}`}
+      >
+        {row.toolCount}
+      </span>
+    ),
+    sortValue: (row) => row.toolCount,
+  },
+  {
+    id: "lastSeenAt",
+    header: "Last seen",
+    cell: (row) => (
+      <span className="truncate text-sm text-fg-muted">
+        {row.lastSeenAt ? formatRelativeTime(row.lastSeenAt) : "-"}
+      </span>
+    ),
+    sortValue: (row) => {
+      if (!row.lastSeenAt) return null;
+      const parsed = Date.parse(row.lastSeenAt);
+      return Number.isFinite(parsed) ? parsed : null;
+    },
+  },
+  {
+    id: "state",
+    header: "State",
+    cell: (row) => {
+      const display = getStateDisplay(row.state);
+      return <Badge variant={display.variant}>{display.label}</Badge>;
+    },
+    sortValue: (row) => getStateSortRank(row.state),
+  },
+];
+
 export function PairingPage({ core }: { core: OperatorCore }) {
   const connection = useOperatorStore(core.connectionStore);
   const pairing = useOperatorStore(core.pairingStore);
   const chat = useOperatorStore(core.chatStore);
   const [expandedRowKey, setExpandedRowKey] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [stateFilter, setStateFilter] = useState<StateFilter>("all");
 
   const inventory = useNodeInventory({
     core,
@@ -254,12 +348,24 @@ export function PairingPage({ core }: { core: OperatorCore }) {
   );
   const counts = useMemo(() => countRowsByState(rows), [rows]);
 
+  const visibleRows = useMemo(() => {
+    const trimmedQuery = searchQuery.trim();
+    if (!trimmedQuery && stateFilter === "all") return rows;
+    return rows.filter((row) => {
+      if (stateFilter !== "all" && row.state !== stateFilter) return false;
+      if (!matchesSearch(row, trimmedQuery)) return false;
+      return true;
+    });
+  }, [rows, searchQuery, stateFilter]);
+
+  const isFiltering = searchQuery.trim() !== "" || stateFilter !== "all";
+
   useEffect(() => {
     if (!expandedRowKey) return;
-    if (!rows.some((row) => row.key === expandedRowKey)) {
+    if (!visibleRows.some((row) => row.key === expandedRowKey)) {
       setExpandedRowKey(null);
     }
-  }, [rows, expandedRowKey]);
+  }, [visibleRows, expandedRowKey]);
 
   return (
     <AppPage contentClassName="max-w-5xl gap-5">
@@ -273,8 +379,32 @@ export function PairingPage({ core }: { core: OperatorCore }) {
             Nodes
           </SectionHeading>
           <div className="text-sm text-fg-muted">
+            {isFiltering
+              ? `Showing ${String(visibleRows.length)} of ${String(rows.length)} — `
+              : null}
             {counts.pending} pending, {counts.connected} connected, {counts.offline} offline
           </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem]">
+          <Input
+            data-testid="pairing-search"
+            value={searchQuery}
+            placeholder="Filter by identifier or mode"
+            onChange={(event) => setSearchQuery(event.currentTarget.value)}
+          />
+          <Select
+            bare
+            aria-label="Filter by state"
+            data-testid="pairing-state-filter"
+            value={stateFilter}
+            onChange={(event) => setStateFilter(event.currentTarget.value as StateFilter)}
+          >
+            <option value="all">All states</option>
+            <option value="pending">Pending</option>
+            <option value="connected">Connected</option>
+            <option value="offline">Offline</option>
+          </Select>
         </div>
 
         {inventory.loading && rows.length === 0 ? (
@@ -292,36 +422,29 @@ export function PairingPage({ core }: { core: OperatorCore }) {
               description="Nodes will appear here when devices connect or request access."
             />
           </Card>
-        ) : (
-          <Card data-testid="pairing-list">
-            <div role="table" aria-label="Nodes list" className="grid">
-              <div
-                role="row"
-                className="hidden items-center gap-3 border-b border-border bg-bg-subtle/60 px-4 py-2 text-xs font-medium uppercase tracking-wide text-fg-muted md:grid md:grid-cols-[minmax(0,1.3fr)_minmax(0,0.7fr)_minmax(0,0.6fr)_minmax(0,0.9fr)_minmax(0,0.7fr)_auto]"
-              >
-                <div role="columnheader">Identifier</div>
-                <div role="columnheader">Mode</div>
-                <div role="columnheader">#tools</div>
-                <div role="columnheader">Last seen</div>
-                <div role="columnheader">State</div>
-                <div aria-hidden={true} />
-              </div>
-
-              <div className="divide-y divide-border">
-                {rows.map((row) => (
-                  <NodeListRowItem
-                    key={row.key}
-                    core={core}
-                    row={row}
-                    expanded={expandedRowKey === row.key}
-                    onToggle={() => {
-                      setExpandedRowKey((current) => (current === row.key ? null : row.key));
-                    }}
-                  />
-                ))}
-              </div>
-            </div>
+        ) : visibleRows.length === 0 ? (
+          <Card>
+            <EmptyState
+              data-testid="pairing-empty-filtered"
+              icon={Link2}
+              title="No matching nodes"
+              description="Try adjusting your search or filter criteria."
+            />
           </Card>
+        ) : (
+          <DataTable<NodeListRow>
+            data-testid="pairing-list"
+            columns={NODE_COLUMNS}
+            data={visibleRows}
+            rowKey={(row) => row.key}
+            rowClassName={(row) => (row.attachmentKind === "local" ? "bg-primary/5" : "")}
+            testIdPrefix="pairing-row"
+            sortable
+            striped
+            expandedRowKey={expandedRowKey}
+            onExpandedRowChange={setExpandedRowKey}
+            renderExpandedRow={(row) => <ExpandedRowDetails core={core} row={row} />}
+          />
         )}
       </div>
     </AppPage>

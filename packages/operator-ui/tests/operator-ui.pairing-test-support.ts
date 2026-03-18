@@ -40,13 +40,11 @@ async function flushPairingPage(): Promise<void> {
   await Promise.resolve();
 }
 
-function expandNodeRow(container: HTMLElement, nodeId = "node-1"): void {
-  const toggle = container.querySelector<HTMLButtonElement>(
-    `[data-testid="pairing-row-toggle-${nodeId}"]`,
-  );
-  expect(toggle).not.toBeNull();
+function expandNodeRow(container: HTMLElement, rowKey = "pairing:1"): void {
+  const row = container.querySelector<HTMLElement>(`[data-testid="pairing-row-${rowKey}"]`);
+  expect(row).not.toBeNull();
   act(() => {
-    toggle?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    row?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   });
 }
 

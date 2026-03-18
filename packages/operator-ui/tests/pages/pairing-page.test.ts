@@ -45,13 +45,11 @@ async function flushPairingPage(): Promise<void> {
   });
 }
 
-function expandNodeRow(container: HTMLElement, nodeId: string): void {
-  const toggle = container.querySelector<HTMLButtonElement>(
-    `[data-testid="pairing-row-toggle-${nodeId}"]`,
-  );
-  expect(toggle).not.toBeNull();
+function expandNodeRow(container: HTMLElement, rowKey: string): void {
+  const row = container.querySelector<HTMLElement>(`[data-testid="pairing-row-${rowKey}"]`);
+  expect(row).not.toBeNull();
   act(() => {
-    toggle?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    row?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   });
 }
 
@@ -144,32 +142,31 @@ describe("PairingPage", () => {
     try {
       await flushPairingPage();
 
-      const toggles = Array.from(
-        container.querySelectorAll<HTMLButtonElement>('[data-testid^="pairing-row-toggle-"]'),
-      ).map((button) => button.getAttribute("data-testid"));
-      expect(toggles).toEqual([
-        "pairing-row-toggle-node-1",
-        "pairing-row-toggle-node-2",
-        "pairing-row-toggle-node-3",
+      // Rows are rendered as <tr> elements with data-testid="pairing-row-<key>"
+      // Keys: pairing:1 (pending node-1), node:node-2 (connected), pairing:2 (offline node-3)
+      const rows = Array.from(
+        container.querySelectorAll<HTMLElement>('[data-testid^="pairing-row-"]'),
+      )
+        .map((el) => el.getAttribute("data-testid"))
+        .filter(
+          (id): id is string => id !== null && !id.includes("identifier") && !id.includes("tools"),
+        );
+      expect(rows).toEqual([
+        "pairing-row-pairing:1",
+        "pairing-row-node:node-2",
+        "pairing-row-pairing:2",
       ]);
       expect(container.textContent).toContain("1 pending, 1 connected, 1 offline");
       expect(container.querySelector('[data-testid="pairing-row-tools-node-2"]')?.textContent).toBe(
         "2",
       );
 
-      expandNodeRow(container, "node-2");
-      expect(
-        container.querySelector('[data-testid="pairing-row-details-node-2"]')?.textContent,
-      ).toContain("Connected node");
-      expect(
-        container.querySelector('[data-testid="pairing-row-details-node-2"]')?.textContent,
-      ).toContain("Unpaired");
+      expandNodeRow(container, "node:node-2");
+      expect(container.textContent).toContain("Connected node");
+      expect(container.textContent).toContain("Unpaired");
 
-      expandNodeRow(container, "node-3");
-      expect(container.querySelector('[data-testid="pairing-row-details-node-2"]')).toBeNull();
-      expect(
-        container.querySelector('[data-testid="pairing-row-details-node-3"]')?.textContent,
-      ).toContain("Trusted node");
+      expandNodeRow(container, "pairing:2");
+      expect(container.textContent).toContain("Trusted node");
     } finally {
       cleanupTestRoot({ container, root });
     }
@@ -223,12 +220,15 @@ describe("PairingPage", () => {
     try {
       await flushPairingPage();
 
-      const toggles = Array.from(
-        container.querySelectorAll<HTMLButtonElement>('[data-testid^="pairing-row-toggle-"]'),
-      ).map((button) => button.getAttribute("data-testid"));
-      expect(toggles).toEqual(["pairing-row-toggle-node-1"]);
+      const rows = Array.from(
+        container.querySelectorAll<HTMLElement>('[data-testid^="pairing-row-"]'),
+      )
+        .map((el) => el.getAttribute("data-testid"))
+        .filter(
+          (id): id is string => id !== null && !id.includes("identifier") && !id.includes("tools"),
+        );
+      expect(rows).toEqual(["pairing-row-pairing:1"]);
       expect(container.textContent).toContain("1 pending, 0 connected, 0 offline");
-      expect(container.querySelectorAll('[data-testid="pairing-row-node-1"]')).toHaveLength(1);
     } finally {
       cleanupTestRoot({ container, root });
     }
@@ -252,7 +252,7 @@ describe("PairingPage", () => {
     try {
       await flushPairingPage();
 
-      expandNodeRow(container, "node-1");
+      expandNodeRow(container, "pairing:1");
 
       const trustRemote = container.querySelector<HTMLButtonElement>(
         '[data-testid="pairing-trust-level-1-remote"]',
@@ -316,7 +316,7 @@ describe("PairingPage", () => {
 
     try {
       await flushPairingPage();
-      expandNodeRow(container, "node-1");
+      expandNodeRow(container, "pairing:1");
 
       const denyButton = container.querySelector<HTMLButtonElement>(
         '[data-testid="pairing-deny-1"]',
@@ -355,7 +355,7 @@ describe("PairingPage", () => {
 
     try {
       await flushPairingPage();
-      expandNodeRow(container, "node-1");
+      expandNodeRow(container, "pairing:1");
 
       const revokeButton = container.querySelector<HTMLButtonElement>(
         '[data-testid="pairing-revoke-1"]',
