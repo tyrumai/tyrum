@@ -20,7 +20,7 @@ export interface ConfirmDangerDialogProps {
   confirmLabel?: React.ReactNode;
   cancelLabel?: React.ReactNode;
   confirmationLabel?: React.ReactNode;
-  onConfirm: () => void | Promise<void>;
+  onConfirm: () => void | false | Promise<void | false>;
   isLoading?: boolean;
   confirmDisabled?: boolean;
   children?: React.ReactNode;
@@ -59,8 +59,8 @@ export function ConfirmDangerDialog({
     if (!confirmed || busy || confirmDisabled) return;
     setSubmitting(true);
     try {
-      await onConfirm();
-      onOpenChange(false);
+      const result = await onConfirm();
+      if (result !== false) onOpenChange(false);
     } catch (error) {
       toast.error("Action failed", { description: formatErrorMessage(error) });
     } finally {

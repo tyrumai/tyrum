@@ -316,6 +316,7 @@ export function AuditPanel({ core }: { core: OperatorCore }) {
             );
           } catch (error) {
             toast.error("Forget failed", { description: formatErrorMessage(error) });
+            return false;
           }
         }}
       >

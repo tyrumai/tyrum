@@ -233,6 +233,7 @@ export function AdminHttpPolicyCard({
             return true;
           } catch (error) {
             toast.error("Policy save failed", { description: formatErrorMessage(error) });
+            return false;
           } finally {
             setSaveBusy(false);
           }
@@ -251,6 +252,7 @@ export function AdminHttpPolicyCard({
             await loadAll();
           } catch (error) {
             toast.error("Policy revert failed", { description: formatErrorMessage(error) });
+            return false;
           } finally {
             setRevertBusy(false);
           }
@@ -281,7 +283,7 @@ export function AdminHttpPolicyCard({
             return true;
           } catch (error) {
             toast.error("Override creation failed", { description: formatErrorMessage(error) });
-            throw error;
+            return false;
           } finally {
             setCreateBusy(false);
           }
@@ -297,7 +299,7 @@ export function AdminHttpPolicyCard({
             await loadAll();
           } catch (error) {
             toast.error("Override revocation failed", { description: formatErrorMessage(error) });
-            throw error;
+            return false;
           } finally {
             setRevokeBusy(false);
           }

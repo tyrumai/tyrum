@@ -188,6 +188,7 @@ export function AuthTokensCard({ core }: { core: OperatorCore }): React.ReactEle
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to revoke token.";
       toast.error("Token revoke failed", { description: message });
+      return false;
     }
   };
 
