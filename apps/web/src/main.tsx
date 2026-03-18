@@ -273,6 +273,9 @@ async function bootstrap(): Promise<void> {
 
   const webAuthPersistence: WebAuthPersistence = {
     hasStoredToken: resolvedAuth.hasStoredToken,
+    readToken() {
+      return readStoredOperatorToken();
+    },
     async saveToken(token) {
       await ensureGatewayBrowserSession({ token, httpBaseUrl });
       try {

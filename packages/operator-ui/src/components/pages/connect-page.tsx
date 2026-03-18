@@ -6,6 +6,7 @@ import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { Input } from "../ui/input.js";
 import { Alert } from "../ui/alert.js";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip.js";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { useOperatorStore } from "../../use-operator-store.js";
 import type { WebAuthPersistence } from "../../web-auth.js";
@@ -34,9 +35,16 @@ export function ConnectPage({
   const [loginError, setLoginError] = useState<string | null>(null);
   const [showToken, setShowToken] = useState(false);
   const [gatewayUrl, setGatewayUrl] = useState(core.httpBaseUrl);
+  const [tokenValue, setTokenValue] = useState("");
+  const [savedTokenValue, setSavedTokenValue] = useState<string | null>(null);
+  const [loadingSavedToken, setLoadingSavedToken] = useState(
+    mode === "web" &&
+      webAuthPersistence?.hasStoredToken === true &&
+      !!webAuthPersistence?.readToken,
+  );
   const [nowMs, setNowMs] = useState(() => Date.now());
 
-  const tokenRef = useRef<HTMLInputElement | null>(null);
+  const tokenEditedRef = useRef(false);
   const isWeb = mode === "web";
   const hasSavedWebToken = isWeb && webAuthPersistence?.hasStoredToken === true;
 
@@ -62,6 +70,47 @@ export function ConnectPage({
     };
   }, [hasScheduledRetry, nextRetryAtMs]);
 
+  useEffect(() => {
+    tokenEditedRef.current = false;
+    setSavedTokenValue(null);
+    setTokenValue("");
+    if (!hasSavedWebToken || !webAuthPersistence?.readToken) {
+      setLoadingSavedToken(false);
+      return;
+    }
+    const { readToken } = webAuthPersistence;
+    let cancelled = false;
+    setLoadingSavedToken(true);
+    void Promise.resolve()
+      .then(() => readToken())
+      .then((storedToken) => {
+        if (cancelled) return;
+        const normalizedToken =
+          typeof storedToken === "string" && storedToken.trim().length > 0
+            ? storedToken.trim()
+            : null;
+        setSavedTokenValue(normalizedToken);
+        if (!tokenEditedRef.current) {
+          setTokenValue(normalizedToken ?? "");
+        }
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setSavedTokenValue(null);
+        if (!tokenEditedRef.current) {
+          setTokenValue("");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoadingSavedToken(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [hasSavedWebToken, webAuthPersistence]);
+
   const retryCountdownSeconds =
     hasScheduledRetry && nextRetryAtMs !== null
       ? Math.max(0, Math.ceil((nextRetryAtMs - nowMs) / 1_000))
@@ -71,6 +120,17 @@ export function ConnectPage({
       ? `Connecting (${String(retryCountdownSeconds)}s)`
       : "Connecting"
     : "Connect";
+  const tokenHelperText = !isWeb
+    ? undefined
+    : loadingSavedToken
+      ? "Loading saved token..."
+      : hasSavedWebToken
+        ? tokenValue.trim().length === 0
+          ? "Paste a replacement token, or forget the saved token below."
+          : savedTokenValue !== null && tokenValue.trim() === savedTokenValue
+            ? "Saved token loaded. Connect to reuse it, or replace it with a new one."
+            : "This token will replace the saved token when you connect."
+        : "Paste a tenant admin token.";
 
   const loginOrConnect = async (): Promise<void> => {
     const trimmedUrl = gatewayUrl.trim();
@@ -90,14 +150,22 @@ export function ConnectPage({
       return;
     }
 
-    const trimmed = tokenRef.current?.value.trim() ?? "";
+    if (loadingSavedToken) {
+      return;
+    }
+    const trimmed = tokenValue.trim();
     if (!trimmed) {
-      if (hasSavedWebToken) {
+      if (hasSavedWebToken && !tokenEditedRef.current) {
         setLoginError(null);
         core.connect();
         return;
       }
       setLoginError("Token is required");
+      return;
+    }
+    if (hasSavedWebToken && savedTokenValue !== null && trimmed === savedTokenValue) {
+      setLoginError(null);
+      core.connect();
       return;
     }
 
@@ -108,9 +176,8 @@ export function ConnectPage({
         throw new Error("Browser token storage is unavailable.");
       }
       await webAuthPersistence.saveToken(trimmed);
-      if (tokenRef.current) {
-        tokenRef.current.value = "";
-      }
+      tokenEditedRef.current = false;
+      setTokenValue("");
     } catch (error) {
       setLoginError(formatErrorMessage(error));
     } finally {
@@ -127,9 +194,6 @@ export function ConnectPage({
         throw new Error("Browser token storage is unavailable.");
       }
       await webAuthPersistence.clearToken();
-      if (tokenRef.current) {
-        tokenRef.current.value = "";
-      }
     } catch (error) {
       setLoginError(formatErrorMessage(error));
     } finally {
@@ -149,27 +213,6 @@ export function ConnectPage({
           </div>
         </CardHeader>
         <CardContent className="grid gap-4">
-          {isWeb ? (
-            <Alert
-              title="Need a gateway token?"
-              description={
-                <>
-                  Use the <code>default-tenant-admin</code> token printed when the gateway starts
-                  for the first time. If you need a new one, run{" "}
-                  <code>tyrum tokens issue-default-tenant-admin</code>.
-                </>
-              }
-            />
-          ) : null}
-
-          {hasSavedWebToken ? (
-            <Alert
-              variant="info"
-              title="Saved token available"
-              description="Leave the token field blank to reconnect with the saved token, paste a new token to replace it, or forget the saved token."
-            />
-          ) : null}
-
           {onReconfigureGateway ? (
             <Input
               id="gateway-url"
@@ -190,27 +233,51 @@ export function ConnectPage({
               id="login-token"
               data-testid="login-token"
               label="Token"
-              ref={tokenRef}
+              className="pr-20"
+              value={tokenValue}
+              onChange={(event) => {
+                tokenEditedRef.current = true;
+                setTokenValue(event.currentTarget.value);
+              }}
               type={showToken ? "text" : "password"}
               spellCheck={false}
               autoCapitalize="none"
               autoCorrect="off"
-              helperText={
-                hasSavedWebToken
-                  ? "Leave blank to reconnect with the saved token, or paste a new token to replace it."
-                  : "Paste the tenant admin token from gateway startup or a newly issued recovery token."
-              }
+              helperText={tokenHelperText}
               suffix={
-                <button
-                  type="button"
-                  data-testid="toggle-token-visibility"
-                  className="hover:text-fg"
-                  aria-label="Toggle token visibility"
-                  aria-pressed={showToken}
-                  onClick={() => setShowToken(!showToken)}
-                >
-                  {showToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
+                <div className="flex items-center gap-1">
+                  <TooltipProvider delayDuration={200}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          data-testid="login-token-help"
+                          className="rounded-md p-1 text-fg-muted transition-colors duration-150 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+                          aria-label="How to get a gateway token"
+                        >
+                          <span aria-hidden="true" className="text-xs font-semibold leading-none">
+                            ?
+                          </span>
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-72 text-left leading-relaxed">
+                        Use the <code>default-tenant-admin</code> token printed when the gateway
+                        starts for the first time. Need a new one? Run{" "}
+                        <code>tyrum tokens issue-default-tenant-admin</code>.
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                  <button
+                    type="button"
+                    data-testid="toggle-token-visibility"
+                    className="rounded-md p-1 text-fg-muted transition-colors duration-150 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+                    aria-label="Toggle token visibility"
+                    aria-pressed={showToken}
+                    onClick={() => setShowToken(!showToken)}
+                  >
+                    {showToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
               }
             />
           ) : null}
@@ -219,6 +286,7 @@ export function ConnectPage({
             <Button
               data-testid="login-button"
               isLoading={connectButtonBusy}
+              disabled={loadingSavedToken}
               onClick={() => {
                 void loginOrConnect();
               }}
@@ -229,7 +297,7 @@ export function ConnectPage({
               <Button
                 data-testid="forget-saved-token-button"
                 variant="secondary"
-                disabled={connectButtonBusy}
+                disabled={connectButtonBusy || loadingSavedToken}
                 onClick={() => {
                   void forgetSavedToken();
                 }}

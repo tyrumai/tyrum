@@ -142,7 +142,9 @@ describe("apps/web main bootstrap", () => {
     });
     expect(core.connect).toHaveBeenCalledTimes(1);
     expect(replaceStateSpy).not.toHaveBeenCalled();
-    expect(getRenderedOperatorUiProps(root).webAuthPersistence.hasStoredToken).toBe(true);
+    const props = getRenderedOperatorUiProps(root);
+    expect(props.webAuthPersistence.hasStoredToken).toBe(true);
+    expect(await props.webAuthPersistence.readToken?.()).toBe("stored-token");
   });
 
   it("drops invalid stored tokens when browser session bootstrap is unauthorized", async () => {
@@ -278,7 +280,9 @@ describe("apps/web main bootstrap", () => {
     expect(operatorCore.createBearerTokenAuth).toHaveBeenCalledWith("");
     expect(core.connect).not.toHaveBeenCalled();
     expect(replaceStateSpy).not.toHaveBeenCalled();
-    expect(getRenderedOperatorUiProps(root).webAuthPersistence.hasStoredToken).toBe(false);
+    const props = getRenderedOperatorUiProps(root);
+    expect(props.webAuthPersistence.hasStoredToken).toBe(false);
+    expect(await props.webAuthPersistence.readToken?.()).toBeNull();
   });
 
   it("falls back to the connect page when token storage cannot be read", async () => {

@@ -220,6 +220,146 @@ describe("ConnectPage", () => {
     cleanupTestRoot(testRoot);
   });
 
+  it("reconnects with saved token when readToken is not provided", async () => {
+    const { store: connectionStore } = createStore({
+      status: "disconnected",
+      clientId: null,
+      lastDisconnect: null,
+      transportError: null,
+    });
+
+    const core = {
+      connectionStore,
+      httpBaseUrl: "https://gateway.example",
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+    } as unknown as OperatorCore;
+
+    const webAuthPersistence = {
+      hasStoredToken: true,
+      saveToken: vi.fn(),
+      clearToken: vi.fn(),
+    };
+
+    const testRoot = renderIntoDocument(
+      React.createElement(ConnectPage, {
+        core,
+        mode: "web",
+        webAuthPersistence,
+      }),
+    );
+
+    const loginButton = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="login-button"]',
+    );
+    expect(loginButton).not.toBeNull();
+
+    await act(async () => {
+      loginButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(core.connect).toHaveBeenCalledTimes(1);
+
+    cleanupTestRoot(testRoot);
+  });
+
+  it("reconnects with saved token when readToken returns null", async () => {
+    const { store: connectionStore } = createStore({
+      status: "disconnected",
+      clientId: null,
+      lastDisconnect: null,
+      transportError: null,
+    });
+
+    const core = {
+      connectionStore,
+      httpBaseUrl: "https://gateway.example",
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+    } as unknown as OperatorCore;
+
+    const webAuthPersistence = {
+      hasStoredToken: true,
+      readToken: vi.fn().mockResolvedValue(null),
+      saveToken: vi.fn(),
+      clearToken: vi.fn(),
+    };
+
+    const testRoot = renderIntoDocument(
+      React.createElement(ConnectPage, {
+        core,
+        mode: "web",
+        webAuthPersistence,
+      }),
+    );
+
+    // Wait for readToken to resolve
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const loginButton = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="login-button"]',
+    );
+    expect(loginButton).not.toBeNull();
+
+    await act(async () => {
+      loginButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(core.connect).toHaveBeenCalledTimes(1);
+
+    cleanupTestRoot(testRoot);
+  });
+
+  it("handles synchronous throw from readToken gracefully", async () => {
+    const { store: connectionStore } = createStore({
+      status: "disconnected",
+      clientId: null,
+      lastDisconnect: null,
+      transportError: null,
+    });
+
+    const core = {
+      connectionStore,
+      httpBaseUrl: "https://gateway.example",
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+    } as unknown as OperatorCore;
+
+    const webAuthPersistence = {
+      hasStoredToken: true,
+      readToken: () => {
+        throw new Error("storage unavailable");
+      },
+      saveToken: vi.fn(),
+      clearToken: vi.fn(),
+    };
+
+    const testRoot = renderIntoDocument(
+      React.createElement(ConnectPage, {
+        core,
+        mode: "web",
+        webAuthPersistence,
+      }),
+    );
+
+    // Wait for the promise chain to settle after the synchronous throw
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    const loginButton = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="login-button"]',
+    );
+    expect(loginButton).not.toBeNull();
+    expect(loginButton?.disabled).toBe(false);
+
+    cleanupTestRoot(testRoot);
+  });
+
   it("shows a retry countdown while reconnect is scheduled from the background", () => {
     vi.useFakeTimers();
     try {
