@@ -169,6 +169,31 @@ export class NodeInventoryService {
           })
         : undefined;
 
+    // Build a lookup of last Tyrum interaction timestamps from presence data.
+    // Presence entries store `last_input_seconds` (relative) and `last_seen_at_ms` (absolute).
+    const presenceByNodeId = new Map<string, { lastTyrumInteractionAt: string }>();
+    if (this.deps.presenceDal) {
+      const presenceEntries = await this.deps.presenceDal.listNonExpired(nowMs, 500);
+      for (const entry of presenceEntries) {
+        if (entry.role !== "node" || entry.last_input_seconds == null) continue;
+        const interactionMs = entry.last_seen_at_ms - entry.last_input_seconds * 1000;
+        if (interactionMs > 0) {
+          // Use connection_id to correlate — find which node this presence entry belongs to.
+          // The connection_id on the presence entry matches a ConnectedClient.id, and we need
+          // the device_id (node_id) from that client. Build the mapping from connected clients.
+          const connectionId = entry.connection_id;
+          if (connectionId) {
+            const client = this.deps.connectionManager.getClient(connectionId);
+            if (client?.device_id) {
+              presenceByNodeId.set(client.device_id, {
+                lastTyrumInteractionAt: new Date(interactionMs).toISOString(),
+              });
+            }
+          }
+        }
+      }
+    }
+
     const filteredCapability = input.capability?.trim() || undefined;
     const dispatchableOnly = input.dispatchableOnly === true;
     const entries: NodeInventoryEntry[] = [];
@@ -274,7 +299,7 @@ export class NodeInventoryService {
                 ...(node.deviceModel ? { model: node.deviceModel } : {}),
               }
             : undefined,
-        last_tyrum_interaction_at: undefined,
+        last_tyrum_interaction_at: presenceByNodeId.get(nodeId)?.lastTyrumInteractionAt,
       });
     }
 

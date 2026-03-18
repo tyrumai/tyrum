@@ -76,11 +76,14 @@ export class RealPlaywrightBackend implements PlaywrightBackend {
     });
 
     page.on("dialog", (dialog) => {
-      this.lastDialog = dialog;
       if (this.pendingDialogAction) {
+        // Auto-handle the dialog and clear state — don't store as lastDialog
+        // since it will be dismissed immediately and would be stale.
         const action = this.pendingDialogAction;
         this.pendingDialogAction = null;
         void (action.accept ? dialog.accept(action.promptText) : dialog.dismiss());
+      } else {
+        this.lastDialog = dialog;
       }
     });
   }

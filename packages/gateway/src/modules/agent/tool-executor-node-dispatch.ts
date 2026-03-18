@@ -7,6 +7,8 @@ import {
   NodeCapabilityInspectionResponse,
   NodeInventoryResponse,
   type ActionPrimitive,
+  type ActionPrimitiveKind,
+  type DevicePlatform,
   type NodeActionDispatchRequest as NodeActionDispatchRequestT,
   type NodeActionDispatchResponse as NodeActionDispatchResponseT,
   type NodeCapabilityInspectionResponse as NodeCapabilityInspectionResponseT,
@@ -57,9 +59,37 @@ type DispatchExecutionContext = {
   tenantId: string;
   nodeDispatchService: NodeDispatchService;
   inspectionService: NodeCapabilityInspectionService;
+  nodeInventoryService?: NodeInventoryService;
   artifactStore?: ArtifactStore;
   workspaceLease?: WorkspaceLeaseConfig;
 };
+
+const DEVICE_PLATFORM_TO_PRIMITIVE_KIND: Record<DevicePlatform, ActionPrimitiveKind> = {
+  ios: "IOS",
+  android: "Android",
+  web: "Browser",
+  macos: "Browser",
+  windows: "Browser",
+  linux: "Browser",
+};
+
+/**
+ * Resolves the `ActionPrimitiveKind` for a cross-platform capability by
+ * looking up the target node's device platform in the inventory.
+ */
+async function resolvePrimitiveKindFromNode(
+  context: DispatchExecutionContext,
+  nodeId: string,
+): Promise<ActionPrimitiveKind | undefined> {
+  if (!context.nodeInventoryService) return undefined;
+  const inventory = await context.nodeInventoryService.list({
+    tenantId: context.tenantId,
+  });
+  const node = inventory.nodes.find((n) => n.node_id === nodeId);
+  const platform = node?.device?.platform as DevicePlatform | undefined;
+  if (!platform) return undefined;
+  return DEVICE_PLATFORM_TO_PRIMITIVE_KIND[platform];
+}
 
 function legacyCapabilityError(capability: string): string {
   return `legacy umbrella capability '${capability}' is not supported; use an exact split capability descriptor`;
@@ -202,15 +232,20 @@ async function performNodeDispatch(
         key: audit?.work_session_key,
         lane: audit?.work_lane,
       });
-  const primitiveKind = catalogAction.transport.primitive_kind;
+  let primitiveKind = catalogAction.transport.primitive_kind;
   if (primitiveKind === null) {
-    return preflightFailure(
-      request,
-      dispatchError(
-        "runtime_unavailable",
-        `capability '${request.capability}' requires platform-specific dispatch resolution (not yet implemented)`,
-      ),
-    );
+    // Cross-platform capability — resolve primitive kind from the target node's device platform.
+    const resolved = await resolvePrimitiveKindFromNode(context, request.node_id);
+    if (!resolved) {
+      return preflightFailure(
+        request,
+        dispatchError(
+          "runtime_unavailable",
+          `cannot determine device platform for node '${request.node_id}'; cross-platform capability '${request.capability}' requires device metadata to dispatch`,
+        ),
+      );
+    }
+    primitiveKind = resolved;
   }
   const primitive: ActionPrimitive = {
     type: primitiveKind,
@@ -469,6 +504,7 @@ export async function executeNodeDispatchTool(
       tenantId,
       nodeDispatchService: context.nodeDispatchService,
       inspectionService: context.inspectionService,
+      nodeInventoryService: context.nodeInventoryService,
       artifactStore: context.artifactStore,
       workspaceLease: context.workspaceLease,
     },
