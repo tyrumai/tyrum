@@ -14,6 +14,7 @@ export class RealPlaywrightBackend implements PlaywrightBackend {
   }> = [];
   private lastDialog: import("playwright").Dialog | null = null;
   private pendingDialogAction: { accept: boolean; promptText?: string } | null = null;
+  private listenedPages = new WeakSet<import("playwright").Page>();
 
   constructor(opts: { headless?: boolean } = {}) {
     this.headless = opts.headless ?? true;
@@ -59,6 +60,9 @@ export class RealPlaywrightBackend implements PlaywrightBackend {
   }
 
   private attachListeners(page: import("playwright").Page): void {
+    if (this.listenedPages.has(page)) return;
+    this.listenedPages.add(page);
+
     page.on("console", (msg) => {
       this.consoleMessages.push({ type: msg.type(), text: msg.text() });
     });
@@ -248,6 +252,7 @@ export class RealPlaywrightBackend implements PlaywrightBackend {
     const pages = context.pages();
     if (index < 0 || index >= pages.length) throw new Error(`Tab index ${index} out of range`);
     this.page = pages[index]!;
+    this.attachListeners(this.page);
     await this.page.bringToFront();
   }
 

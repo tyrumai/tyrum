@@ -15,6 +15,7 @@ import {
 } from "@tyrum/schemas";
 import type { ArtifactStore } from "../artifact/store.js";
 import type { NodeCapabilityInspectionService } from "../node/capability-inspection-service.js";
+import type { ConnectionManager } from "../../ws/connection-manager.js";
 import { getCapabilityCatalogAction } from "../node/capability-catalog.js";
 import type { NodeInventoryService } from "../node/inventory-service.js";
 import type { NodeDispatchService } from "./node-dispatch-service.js";
@@ -44,6 +45,7 @@ type NodeToolContext = {
   nodeDispatchService?: NodeDispatchService;
   nodeInventoryService?: NodeInventoryService;
   inspectionService?: NodeCapabilityInspectionService;
+  connectionManager?: ConnectionManager;
   artifactStore?: ArtifactStore;
 };
 
@@ -59,7 +61,7 @@ type DispatchExecutionContext = {
   tenantId: string;
   nodeDispatchService: NodeDispatchService;
   inspectionService: NodeCapabilityInspectionService;
-  nodeInventoryService?: NodeInventoryService;
+  connectionManager?: ConnectionManager;
   artifactStore?: ArtifactStore;
   workspaceLease?: WorkspaceLeaseConfig;
 };
@@ -75,20 +77,19 @@ const DEVICE_PLATFORM_TO_PRIMITIVE_KIND: Record<DevicePlatform, ActionPrimitiveK
 
 /**
  * Resolves the `ActionPrimitiveKind` for a cross-platform capability by
- * looking up the target node's device platform in the inventory.
+ * looking up the target node's device platform from the connection manager.
  */
-async function resolvePrimitiveKindFromNode(
+function resolvePrimitiveKindFromNode(
   context: DispatchExecutionContext,
   nodeId: string,
-): Promise<ActionPrimitiveKind | undefined> {
-  if (!context.nodeInventoryService) return undefined;
-  const inventory = await context.nodeInventoryService.list({
-    tenantId: context.tenantId,
-  });
-  const node = inventory.nodes.find((n) => n.node_id === nodeId);
-  const platform = node?.device?.platform as DevicePlatform | undefined;
-  if (!platform) return undefined;
-  return DEVICE_PLATFORM_TO_PRIMITIVE_KIND[platform];
+): ActionPrimitiveKind | undefined {
+  if (!context.connectionManager) return undefined;
+  for (const client of context.connectionManager.allClients()) {
+    if (client.device_id === nodeId && client.device_platform) {
+      return DEVICE_PLATFORM_TO_PRIMITIVE_KIND[client.device_platform];
+    }
+  }
+  return undefined;
 }
 
 function legacyCapabilityError(capability: string): string {
@@ -235,7 +236,7 @@ async function performNodeDispatch(
   let primitiveKind = catalogAction.transport.primitive_kind;
   if (primitiveKind === null) {
     // Cross-platform capability — resolve primitive kind from the target node's device platform.
-    const resolved = await resolvePrimitiveKindFromNode(context, request.node_id);
+    const resolved = resolvePrimitiveKindFromNode(context, request.node_id);
     if (!resolved) {
       return preflightFailure(
         request,
@@ -504,7 +505,7 @@ export async function executeNodeDispatchTool(
       tenantId,
       nodeDispatchService: context.nodeDispatchService,
       inspectionService: context.inspectionService,
-      nodeInventoryService: context.nodeInventoryService,
+      connectionManager: context.connectionManager,
       artifactStore: context.artifactStore,
       workspaceLease: context.workspaceLease,
     },
