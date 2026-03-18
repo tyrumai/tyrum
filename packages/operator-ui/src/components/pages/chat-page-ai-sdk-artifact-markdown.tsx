@@ -29,6 +29,8 @@ function ArtifactMarkdownImage({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    setError(null);
+
     const artifactsApi = core.http.artifacts;
     if (!artifactsApi) {
       setError("Artifacts API unavailable");
