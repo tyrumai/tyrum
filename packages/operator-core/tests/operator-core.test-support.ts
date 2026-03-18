@@ -49,6 +49,7 @@ type HttpCallCounts = {
   agentStatusGet: number;
   desktopEnvironmentHostsList: number;
   desktopEnvironmentsList: number;
+  agentListGet: number;
 };
 
 export type FakeHttpClient = Pick<
@@ -58,6 +59,7 @@ export type FakeHttpClient = Pick<
   | "presence"
   | "pairings"
   | "agentStatus"
+  | "agentList"
   | "desktopEnvironmentHosts"
   | "desktopEnvironments"
 > & {
@@ -181,6 +183,7 @@ export function createFakeHttpClient(): FakeHttpClient {
     agentStatusGet: 0,
     desktopEnvironmentHostsList: 0,
     desktopEnvironmentsList: 0,
+    agentListGet: 0,
   };
 
   return {
@@ -222,6 +225,12 @@ export function createFakeHttpClient(): FakeHttpClient {
       list: vi.fn(async () => {
         calls.desktopEnvironmentHostsList++;
         return { status: "ok", hosts: [sampleDesktopEnvironmentHost()] } as const;
+      }),
+    },
+    agentList: {
+      get: vi.fn(async () => {
+        calls.agentListGet++;
+        return { agents: [] };
       }),
     },
     desktopEnvironments: {
