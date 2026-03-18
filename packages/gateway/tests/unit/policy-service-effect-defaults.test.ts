@@ -61,6 +61,91 @@ describe("PolicyService effect defaults", () => {
     }
   });
 
+  it("allows mcp.memory.write by default even though it is state-changing", async () => {
+    const db = openTestSqliteDb();
+    try {
+      const policy = new PolicyService({
+        home: "/tmp/unused",
+        snapshotDal: new PolicySnapshotDal(db),
+        overrideDal: new PolicyOverrideDal(db),
+      });
+
+      const res = await policy.evaluateToolCall({
+        tenantId: DEFAULT_TENANT_ID,
+        agentId: DEFAULT_AGENT_ID,
+        workspaceId: DEFAULT_WORKSPACE_ID,
+        toolId: "mcp.memory.write",
+        toolMatchTarget: "mcp.memory.write",
+        toolEffect: "state_changing",
+        roleAllowed: true,
+      });
+
+      expect(res.decision).toBe("allow");
+      expect(res.decision_record?.rules).toContainEqual(
+        expect.objectContaining({
+          rule: "tool_policy",
+          outcome: "allow",
+          detail: expect.stringContaining("default=mcp_memory_write"),
+        }),
+      );
+    } finally {
+      await db.close();
+    }
+  });
+
+  it("still honors explicit policy rules for mcp.memory.write", async () => {
+    const db = openTestSqliteDb();
+    try {
+      await db.run(
+        `INSERT INTO policy_bundle_config_revisions (
+           tenant_id, scope_kind, agent_id, bundle_json, created_at, created_by_json, reason
+         ) VALUES (?, 'deployment', NULL, ?, ?, ?, ?)`,
+        [
+          DEFAULT_TENANT_ID,
+          JSON.stringify({
+            v: 1,
+            tools: { default: "deny", allow: [], require_approval: ["mcp.memory.write"], deny: [] },
+          }),
+          new Date().toISOString(),
+          JSON.stringify({ kind: "test" }),
+          "deployment-memory-write-requires-approval",
+        ],
+      );
+
+      const policy = new PolicyService({
+        home: "/tmp/unused",
+        snapshotDal: new PolicySnapshotDal(db),
+        overrideDal: new PolicyOverrideDal(db),
+        configStore: createGatewayConfigStore({
+          db,
+          home: "/tmp/unused",
+          deploymentConfig: { state: { mode: "shared" } },
+        }),
+      });
+
+      const res = await policy.evaluateToolCall({
+        tenantId: DEFAULT_TENANT_ID,
+        agentId: DEFAULT_AGENT_ID,
+        workspaceId: DEFAULT_WORKSPACE_ID,
+        toolId: "mcp.memory.write",
+        toolMatchTarget: "mcp.memory.write",
+        toolEffect: "state_changing",
+        roleAllowed: true,
+      });
+
+      expect(res.decision).toBe("require_approval");
+      expect(res.decision_record?.rules).toContainEqual(
+        expect.objectContaining({
+          rule: "tool_policy",
+          outcome: "require_approval",
+          detail: expect.stringContaining("source=explicit_rule"),
+        }),
+      );
+    } finally {
+      await db.close();
+    }
+  });
+
   it("denies tools outside the role ceiling before approval logic", async () => {
     const db = openTestSqliteDb();
     try {

@@ -53,19 +53,18 @@ export async function evaluateToolCallAgainstBundle(params: {
       detail: `tool_id=${params.toolId};source=role_ceiling`,
     });
   } else {
-    toolDecision =
-      explicitToolDecision ??
-      (params.toolEffect === "read_only"
-        ? "allow"
-        : params.toolEffect === "state_changing"
-          ? "require_approval"
-          : evaluateDomain(toolsDomain, params.toolId));
+    const implicitToolDecision = resolveImplicitToolDecision({
+      toolId: params.toolId,
+      toolEffect: params.toolEffect,
+      toolsDomain,
+    });
+    toolDecision = explicitToolDecision ?? implicitToolDecision.decision;
     rules.push({
       rule: "tool_policy",
       outcome: toolDecision,
       detail:
         explicitToolDecision === undefined
-          ? `tool_id=${params.toolId};default=${params.toolEffect ?? "bundle"}`
+          ? `tool_id=${params.toolId};default=${implicitToolDecision.source}`
           : `tool_id=${params.toolId};source=explicit_rule`,
     });
   }
@@ -177,4 +176,30 @@ function evaluateToolDecisionOverride(
   }
 
   return undefined;
+}
+
+function resolveImplicitToolDecision(input: {
+  toolId: string;
+  toolEffect?: ToolEffect;
+  toolsDomain: ReturnType<typeof normalizeDomain>;
+}): { decision: Decision; source: string } {
+  if (input.toolEffect === "read_only") {
+    return { decision: "allow", source: "read_only" };
+  }
+
+  if (input.toolEffect === "state_changing") {
+    if (isDefaultAllowedStateChangingTool(input.toolId)) {
+      return { decision: "allow", source: "mcp_memory_write" };
+    }
+    return { decision: "require_approval", source: "state_changing" };
+  }
+
+  return {
+    decision: evaluateDomain(input.toolsDomain, input.toolId),
+    source: "bundle",
+  };
+}
+
+function isDefaultAllowedStateChangingTool(toolId: string): boolean {
+  return toolId.trim() === "mcp.memory.write";
 }
