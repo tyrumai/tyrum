@@ -5,6 +5,7 @@ import type { OperatorUiMode } from "../../app.js";
 import { useHostApiOptional } from "../../host/host-api.js";
 import { useTheme, type ThemeMode } from "../../hooks/use-theme.js";
 import { cn } from "../../lib/cn.js";
+import { toast } from "sonner";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 import type { WebAuthPersistence } from "../../web-auth.js";
 import { Alert } from "../ui/alert.js";
@@ -57,18 +58,16 @@ export function ConfigureGeneralPanel({
   const host = useHostApiOptional();
   const desktopApi = host?.kind === "desktop" ? host.api : null;
   const [webAuthBusy, setWebAuthBusy] = useState(false);
-  const [webAuthError, setWebAuthError] = useState<string | null>(null);
   const activeWebAuth = mode === "web" ? webAuthPersistence : undefined;
 
   const forgetSavedToken = async (): Promise<void> => {
     if (!activeWebAuth?.hasStoredToken) return;
     setWebAuthBusy(true);
-    setWebAuthError(null);
     try {
       core.disconnect();
       await activeWebAuth.clearToken();
     } catch (error) {
-      setWebAuthError(formatErrorMessage(error));
+      toast.error("Forget failed", { description: formatErrorMessage(error) });
     } finally {
       setWebAuthBusy(false);
     }
@@ -145,9 +144,6 @@ export function ConfigureGeneralPanel({
               >
                 Forget saved token
               </Button>
-            ) : null}
-            {webAuthError ? (
-              <Alert variant="error" title="Forget failed" description={webAuthError} />
             ) : null}
           </CardContent>
         </Card>

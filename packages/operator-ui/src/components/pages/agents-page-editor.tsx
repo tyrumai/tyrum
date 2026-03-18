@@ -5,6 +5,7 @@ import type {
   ManagedExtensionDetail,
 } from "@tyrum/schemas";
 import * as React from "react";
+import { toast } from "sonner";
 import { useApiAction } from "../../hooks/use-api-action.js";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { modelRefFor, type ModelPreset } from "./admin-http-models.shared.js";
@@ -417,13 +418,21 @@ export function AgentsPageEditor({
         });
       });
       onSaved(updated.agent_key);
-    } catch {
+    } catch (error) {
+      toast.error("Save failed", { description: formatErrorMessage(error) });
       return;
     }
   };
 
   if (loadError) {
-    return <Alert variant="error" title="Agent editor unavailable" description={loadError} />;
+    return (
+      <Alert
+        variant="error"
+        title="Agent editor unavailable"
+        description={loadError}
+        onDismiss={() => setLoadError(null)}
+      />
+    );
   }
 
   if (loading) {
@@ -463,13 +472,6 @@ export function AgentsPageEditor({
         </div>
       </div>
 
-      {saveAction.error ? (
-        <Alert
-          variant="error"
-          title="Save failed"
-          description={formatErrorMessage(saveAction.error)}
-        />
-      ) : null}
       {unsupportedModelOptions ? (
         <Alert
           variant="info"

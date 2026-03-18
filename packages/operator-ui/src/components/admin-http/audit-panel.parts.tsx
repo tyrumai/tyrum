@@ -181,17 +181,13 @@ export function AuditPlansBrowser({
 export function AuditExportResultCard({
   plan,
   result,
-  error,
-  downloadError,
   onDownload,
 }: {
   plan: AuditPlanSummary | null;
   result: AuditExportResult | undefined;
-  error: unknown;
-  downloadError: string | null;
   onDownload: () => void;
 }) {
-  if (!result && !error && !downloadError) return null;
+  if (!result) return null;
 
   const verification = result?.chain_verification;
 
@@ -201,9 +197,6 @@ export function AuditExportResultCard({
         <div className="text-sm font-medium text-fg">Export result</div>
       </CardHeader>
       <CardContent className="grid gap-3">
-        {error ? (
-          <Alert variant="error" title="Export failed" description={formatErrorMessage(error)} />
-        ) : null}
         {result ? (
           <Alert
             variant={verification?.valid ? "success" : "warning"}
@@ -218,9 +211,6 @@ export function AuditExportResultCard({
                 : "The export completed, but the chain verification reported a broken point."
             }
           />
-        ) : null}
-        {downloadError ? (
-          <Alert variant="error" title="Download failed" description={downloadError} />
         ) : null}
         {result ? (
           <>
@@ -269,13 +259,11 @@ export function AuditExportResultCard({
 export function AuditForgetResultCard({
   planKey,
   result,
-  error,
 }: {
   planKey: string | null;
   result: AuditForgetResult | undefined;
-  error: unknown;
 }) {
-  if (!result && !error) return null;
+  if (!result) return null;
 
   return (
     <Card>
@@ -283,15 +271,11 @@ export function AuditForgetResultCard({
         <div className="text-sm font-medium text-fg">Forget result</div>
       </CardHeader>
       <CardContent className="grid gap-3">
-        {error ? (
-          <Alert variant="error" title="Forget failed" description={formatErrorMessage(error)} />
-        ) : (
-          <Alert
-            variant="success"
-            title="Audit receipts forgotten"
-            description="The selected plan now keeps only the new proof event."
-          />
-        )}
+        <Alert
+          variant="success"
+          title="Audit receipts forgotten"
+          description="The selected plan now keeps only the new proof event."
+        />
         {result ? (
           <div className="grid gap-3 sm:grid-cols-2">
             <AuditSummaryField label="Plan" value={planKey ?? "Unknown"} mono />

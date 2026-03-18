@@ -12,6 +12,7 @@ import {
   DialogTitle,
   Input,
   Label,
+  toast,
 } from "@tyrum/operator-ui";
 import type { MobileBootstrapConfig } from "./mobile-config.js";
 import {
@@ -53,7 +54,6 @@ export function MobileSetupPage({
   const [httpBaseUrl, setHttpBaseUrl] = useState(initialConfig?.httpBaseUrl ?? "");
   const [wsUrl, setWsUrl] = useState(initialConfig?.wsUrl ?? "");
   const [token, setToken] = useState(initialConfig?.token ?? "");
-  const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingSubmit, setPendingSubmit] = useState<MobileBootstrapConfig | null>(null);
@@ -66,10 +66,20 @@ export function MobileSetupPage({
     setHttpBaseUrl(initialHttpBaseUrl);
     setWsUrl(initialWsUrl);
     setToken(initialToken);
-    setSaveError(null);
     setConfirmOpen(false);
     setPendingSubmit(null);
   }, [initialHttpBaseUrl, initialToken, initialWsUrl]);
+
+  const [errorDismissed, setErrorDismissed] = useState(false);
+  const [intentErrorDismissed, setIntentErrorDismissed] = useState(false);
+
+  useEffect(() => {
+    setErrorDismissed(false);
+  }, [errorMessage]);
+
+  useEffect(() => {
+    setIntentErrorDismissed(false);
+  }, [intentErrorMessage]);
 
   const disabled = busy || saving || scanQrBusy;
 
@@ -80,11 +90,12 @@ export function MobileSetupPage({
 
     submitInFlightRef.current = true;
     setSaving(true);
-    setSaveError(null);
     try {
       await onSubmit(config);
     } catch (error) {
-      setSaveError(error instanceof Error ? error.message : String(error));
+      toast.error("Save failed", {
+        description: error instanceof Error ? error.message : String(error),
+      });
     } finally {
       submitInFlightRef.current = false;
       setSaving(false);
@@ -98,7 +109,9 @@ export function MobileSetupPage({
     const normalizedWs = normalizeWsUrl(wsUrl);
     const normalizedToken = token.trim();
     if (!normalizedHttp || !normalizedWs || !normalizedToken) {
-      setSaveError("HTTP URL, WebSocket URL, and token are required.");
+      toast.error("Save failed", {
+        description: "HTTP URL, WebSocket URL, and token are required.",
+      });
       return;
     }
 
@@ -140,23 +153,25 @@ export function MobileSetupPage({
               </p>
             </div>
 
-            {errorMessage ? (
-              <Alert variant="error" title="Connection failed" description={errorMessage} />
+            {errorMessage && !errorDismissed ? (
+              <Alert
+                variant="error"
+                title="Connection failed"
+                description={errorMessage}
+                onDismiss={() => setErrorDismissed(true)}
+              />
             ) : null}
             {intentMessage ? (
               <Alert variant="info" title="Mobile bootstrap loaded" description={intentMessage} />
             ) : null}
-            {intentErrorMessage ? (
+            {intentErrorMessage && !intentErrorDismissed ? (
               <Alert
                 variant="error"
                 title="Bootstrap import failed"
                 description={intentErrorMessage}
+                onDismiss={() => setIntentErrorDismissed(true)}
               />
             ) : null}
-            {saveError ? (
-              <Alert variant="error" title="Save failed" description={saveError} />
-            ) : null}
-
             <div className="grid gap-2">
               <Label htmlFor="mobile-http-base-url">Gateway HTTP base URL</Label>
               <Input

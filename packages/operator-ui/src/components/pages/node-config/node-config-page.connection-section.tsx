@@ -228,9 +228,6 @@ function EditableConnectionContent({ fields }: { fields: DesktopConnectionFields
           >
             {fields.saving ? "Saving…" : fields.saved ? "Saved!" : "Save connection settings"}
           </Button>
-          {fields.saveError ? (
-            <Alert variant="error" title="Save failed" description={fields.saveError} />
-          ) : null}
         </div>
       </CardContent>
     </Card>

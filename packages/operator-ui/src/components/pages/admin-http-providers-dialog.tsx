@@ -1,4 +1,5 @@
 import * as React from "react";
+import { toast } from "sonner";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
@@ -55,7 +56,6 @@ export function ProviderAccountDialog({
   const [state, setState] = React.useState<ProviderFormState>(emptyFormState());
   const [providerFilter, setProviderFilter] = React.useState("");
   const [saving, setSaving] = React.useState(false);
-  const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
   const [autoSelectReady, setAutoSelectReady] = React.useState(false);
 
   const supportedProviders = React.useMemo(
@@ -93,7 +93,6 @@ export function ProviderAccountDialog({
     }
     setAutoSelectReady(false);
     setProviderFilter("");
-    setErrorMessage(null);
     setSaving(false);
     setState(
       normalizeFormState({
@@ -140,16 +139,17 @@ export function ProviderAccountDialog({
       throw new Error("Authorize admin access to configure providers.");
     }
     if (!selectedProvider || !selectedMethod) {
-      setErrorMessage("Choose a supported provider and authentication method.");
+      toast.error("Unable to save", {
+        description: "Choose a supported provider and authentication method.",
+      });
       return;
     }
     if (formError) {
-      setErrorMessage(formError);
+      toast.error("Unable to save", { description: formError });
       return;
     }
 
     setSaving(true);
-    setErrorMessage(null);
     try {
       const payload = buildProviderPayload(state, selectedMethod);
       if (account) {
@@ -164,7 +164,7 @@ export function ProviderAccountDialog({
       onOpenChange(false);
       await onSaved();
     } catch (error) {
-      setErrorMessage(formatErrorMessage(error));
+      toast.error("Unable to save", { description: formatErrorMessage(error) });
     } finally {
       setSaving(false);
     }
@@ -326,10 +326,6 @@ export function ProviderAccountDialog({
               title="No supported providers available"
               description="The model catalog does not currently expose any supported provider setup flows."
             />
-          ) : null}
-
-          {errorMessage ? (
-            <Alert variant="error" title="Unable to save" description={errorMessage} />
           ) : null}
         </div>
 

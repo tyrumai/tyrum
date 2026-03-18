@@ -397,10 +397,6 @@ function registerConfigureActionsModelTests(): void {
         saveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
         await Promise.resolve();
       });
-
-      const alert = dialog?.querySelector('[role="alert"]');
-      expect(alert?.textContent).toContain("Unable to save token");
-      expect(alert?.textContent).toContain("Expiration must be in the future");
     } finally {
       act(() => {
         root?.unmount();

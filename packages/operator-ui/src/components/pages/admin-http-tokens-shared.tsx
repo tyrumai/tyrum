@@ -334,7 +334,6 @@ export function TokenDialog({
   open,
   mode,
   state,
-  errorMessage,
   saving,
   onOpenChange,
   onStateChange,
@@ -343,7 +342,6 @@ export function TokenDialog({
   open: boolean;
   mode: DialogMode;
   state: TokenFormState;
-  errorMessage: string | null;
   saving: boolean;
   onOpenChange: (open: boolean) => void;
   onStateChange: React.Dispatch<React.SetStateAction<TokenFormState>>;
@@ -362,10 +360,6 @@ export function TokenDialog({
         </DialogHeader>
 
         <div className="grid gap-4">
-          {errorMessage ? (
-            <Alert variant="error" title="Unable to save token" description={errorMessage} />
-          ) : null}
-
           <Input
             label="Name"
             required

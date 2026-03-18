@@ -1,4 +1,5 @@
 import * as React from "react";
+import { toast } from "sonner";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { ElevatedModeTooltip } from "../elevated-mode/elevated-mode-tooltip.js";
 import { Alert } from "../ui/alert.js";
@@ -57,13 +58,11 @@ export function ChannelAccountDialog({
     initialEntry ? buildInitialFormState({ entry: initialEntry, account, agentOptions }) : null,
   );
   const [saving, setSaving] = React.useState(false);
-  const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = React.useState<ChannelFieldErrors>({});
 
   React.useEffect(() => {
     if (!open) {
       setSaving(false);
-      setErrorMessage(null);
       setFieldErrors({});
       return;
     }
@@ -100,7 +99,6 @@ export function ChannelAccountDialog({
     }
 
     setSaving(true);
-    setErrorMessage(null);
     setFieldErrors({});
     try {
       const config = buildConfigPayload(entry, state);
@@ -125,7 +123,7 @@ export function ChannelAccountDialog({
       onOpenChange(false);
     } catch (error) {
       setFieldErrors(readChannelFieldErrors(error));
-      setErrorMessage(formatErrorMessage(error));
+      toast.error("Unable to save channel", { description: formatErrorMessage(error) });
     } finally {
       setSaving(false);
     }
@@ -231,10 +229,6 @@ export function ChannelAccountDialog({
               setState={setState}
               setFieldErrors={setFieldErrors}
             />
-
-            {errorMessage ? (
-              <Alert variant="error" title="Unable to save channel" description={errorMessage} />
-            ) : null}
           </div>
         )}
 

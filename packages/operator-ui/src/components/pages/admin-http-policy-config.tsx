@@ -57,8 +57,13 @@ export function PolicyConfigSection(props: PolicyConfigSectionProps): React.Reac
   const [saveOpen, setSaveOpen] = React.useState(false);
   const [revertReason, setRevertReason] = React.useState("");
   const [revertTarget, setRevertTarget] = React.useState<PolicyConfigRevision | null>(null);
+  const [loadErrorDismissed, setLoadErrorDismissed] = React.useState(false);
   const skipNextPropBundleSignatureRef = React.useRef<string | null>(null);
   const lastAppliedDeploymentBundleSignatureRef = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    setLoadErrorDismissed(false);
+  }, [props.loadError]);
 
   const applyBundleToEditor = React.useCallback((bundle: PolicyBundleT): string => {
     const normalizedBundle = normalizePolicyBundle(bundle);
@@ -88,12 +93,13 @@ export function PolicyConfigSection(props: PolicyConfigSectionProps): React.Reac
     setSaveReason("");
   }, [applyBundleToEditor, props.currentRevision, props.effective]);
 
-  if (props.loadError && !props.effective) {
+  if (props.loadError && !props.effective && !loadErrorDismissed) {
     return (
       <Alert
         variant="error"
         title="Policy tab failed to load"
         description={formatErrorMessage(props.loadError)}
+        onDismiss={() => setLoadErrorDismissed(true)}
       />
     );
   }
@@ -129,14 +135,6 @@ export function PolicyConfigSection(props: PolicyConfigSectionProps): React.Reac
           variant="info"
           title="Deployment policy editing unavailable"
           description="This gateway is not exposing deployment policy config routes, so the editor is read-only and overrides remain available."
-        />
-      ) : null}
-
-      {props.saveError ? (
-        <Alert
-          variant="error"
-          title="Policy save failed"
-          description={formatErrorMessage(props.saveError)}
         />
       ) : null}
 
@@ -295,14 +293,6 @@ export function PolicyConfigSection(props: PolicyConfigSectionProps): React.Reac
           </ElevatedModeTooltip>
         </CardFooter>
       </Card>
-
-      {props.revertError ? (
-        <Alert
-          variant="error"
-          title="Policy revert failed"
-          description={formatErrorMessage(props.revertError)}
-        />
-      ) : null}
 
       <RevisionHistoryCard
         revisions={props.revisions}

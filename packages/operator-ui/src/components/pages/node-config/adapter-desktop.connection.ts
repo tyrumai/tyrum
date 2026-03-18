@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import type { DesktopApi, DesktopBackgroundState } from "../../../desktop-api.js";
 import { formatErrorMessage } from "../../../utils/format-error-message.js";
 import {
@@ -109,7 +110,7 @@ export function useDesktopConnectionState(
 
     const validationError = validateConnectionState(connection);
     if (validationError) {
-      setGeneralError(validationError);
+      toast.error("Save failed", { description: validationError });
       setGeneralSaved(false);
       return;
     }
@@ -169,7 +170,9 @@ export function useDesktopConnectionState(
         setGeneralSaved(true);
         setTimeout(() => setGeneralSaved(false), 2_000);
       })
-      .catch((error: unknown) => setGeneralError(formatErrorMessage(error)))
+      .catch((error: unknown) => {
+        toast.error("Save failed", { description: formatErrorMessage(error) });
+      })
       .finally(() => {
         saveInFlightRef.current = false;
         setGeneralSaving(false);

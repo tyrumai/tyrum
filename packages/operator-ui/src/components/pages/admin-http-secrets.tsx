@@ -2,6 +2,7 @@ import type { SecretHandle } from "@tyrum/schemas";
 import type { OperatorCore } from "@tyrum/operator-core";
 import { KeyRound, Plus, RefreshCw, RotateCcw, Trash2 } from "lucide-react";
 import * as React from "react";
+import { toast } from "sonner";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { ElevatedModeTooltip } from "../elevated-mode/elevated-mode-tooltip.js";
 import { Alert } from "../ui/alert.js";
@@ -19,10 +20,6 @@ import {
 } from "./admin-http-shared.js";
 
 type SecretsApi = OperatorCore["http"]["secrets"];
-type SecretPanelMessage = {
-  title: string;
-  description: string;
-};
 type SecretRow = {
   handle: SecretHandle;
   secretKey: string;
@@ -151,7 +148,6 @@ export function AdminHttpSecretsPanel({ core }: { core: OperatorCore }): React.R
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
-  const [statusMessage, setStatusMessage] = React.useState<SecretPanelMessage | null>(null);
   const [storeOpen, setStoreOpen] = React.useState(false);
   const [storeSecretKeyRaw, setStoreSecretKeyRaw] = React.useState("");
   const [storeValueRaw, setStoreValueRaw] = React.useState("");
@@ -208,10 +204,7 @@ export function AdminHttpSecretsPanel({ core }: { core: OperatorCore }): React.R
     await refreshSecrets();
     setStoreSecretKeyRaw("");
     setStoreValueRaw("");
-    setStatusMessage({
-      title: "Secret stored",
-      description: `Stored secret "${secretKey}".`,
-    });
+    toast.success(`Stored secret "${secretKey}".`);
   };
 
   const runRotate = async (): Promise<void> => {
@@ -234,10 +227,7 @@ export function AdminHttpSecretsPanel({ core }: { core: OperatorCore }): React.R
     await mutationApi.rotate(rotateTarget.handle.handle_id, { value: rawValue });
     await refreshSecrets();
     setRotateValueRaw("");
-    setStatusMessage({
-      title: "Secret rotated",
-      description: `Rotated secret "${rotateTarget.secretKey}".`,
-    });
+    toast.success(`Rotated secret "${rotateTarget.secretKey}".`);
   };
 
   const runRevoke = async (): Promise<void> => {
@@ -254,10 +244,7 @@ export function AdminHttpSecretsPanel({ core }: { core: OperatorCore }): React.R
     }
     await mutationApi.revoke(revokeTarget.handle.handle_id);
     await refreshSecrets();
-    setStatusMessage({
-      title: "Secret revoked",
-      description: `Revoked secret "${revokeTarget.secretKey}".`,
-    });
+    toast.success(`Revoked secret "${revokeTarget.secretKey}".`);
   };
 
   return (
@@ -267,14 +254,6 @@ export function AdminHttpSecretsPanel({ core }: { core: OperatorCore }): React.R
         title="Write-only secrets"
         description="Secret values are never shown again after submission. Provider-managed credentials stay in Providers and do not appear in this list."
       />
-
-      {statusMessage ? (
-        <Alert
-          variant="success"
-          title={statusMessage.title}
-          description={statusMessage.description}
-        />
-      ) : null}
 
       <Card>
         <CardHeader>
@@ -331,7 +310,12 @@ export function AdminHttpSecretsPanel({ core }: { core: OperatorCore }): React.R
           </div>
 
           {errorMessage ? (
-            <Alert variant="error" title="Failed to load secrets" description={errorMessage} />
+            <Alert
+              variant="error"
+              title="Failed to load secrets"
+              description={errorMessage}
+              onDismiss={() => setErrorMessage(null)}
+            />
           ) : null}
 
           {loading ? <LoadingState label="Loading secrets…" /> : null}

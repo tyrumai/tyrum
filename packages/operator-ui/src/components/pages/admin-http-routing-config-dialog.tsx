@@ -1,5 +1,6 @@
 import type { ObservedTelegramThread } from "@tyrum/schemas";
 import * as React from "react";
+import { toast } from "sonner";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
@@ -95,7 +96,6 @@ export function RoutingRuleDialog({
     threadId: "",
   });
   const [saving, setSaving] = React.useState(false);
-  const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
   const mode = row ? "edit" : "create";
   const effectiveThreads = React.useMemo(() => {
     if (!row?.threadId) return observedThreads;
@@ -122,7 +122,6 @@ export function RoutingRuleDialog({
 
   React.useEffect(() => {
     if (!open) return;
-    setErrorMessage(null);
     setSaving(false);
     setDraft(
       resolveInitialDraft({
@@ -142,33 +141,35 @@ export function RoutingRuleDialog({
 
   const submit = async (): Promise<void> => {
     if (!canMutate) {
-      setErrorMessage("Authorize admin access to change channels routing.");
+      toast.error("Unable to save routing rule", {
+        description: "Authorize admin access to change channels routing.",
+      });
       return;
     }
     if (!draft.accountKey.trim()) {
-      setErrorMessage(
-        draft.kind === "default"
-          ? "Choose a configured Telegram account."
-          : "Choose an observed Telegram thread.",
-      );
+      toast.error("Unable to save routing rule", {
+        description:
+          draft.kind === "default"
+            ? "Choose a configured Telegram account."
+            : "Choose an observed Telegram thread.",
+      });
       return;
     }
     if (!draft.agentKey.trim()) {
-      setErrorMessage("Choose an agent.");
+      toast.error("Unable to save routing rule", { description: "Choose an agent." });
       return;
     }
     if (draft.kind === "thread" && !draft.threadId.trim()) {
-      setErrorMessage("Choose a Telegram thread.");
+      toast.error("Unable to save routing rule", { description: "Choose a Telegram thread." });
       return;
     }
 
     setSaving(true);
-    setErrorMessage(null);
     try {
       await onSubmit(draft);
       onOpenChange(false);
     } catch (error) {
-      setErrorMessage(formatErrorMessage(error));
+      toast.error("Unable to save routing rule", { description: formatErrorMessage(error) });
     } finally {
       setSaving(false);
     }
@@ -316,10 +317,6 @@ export function RoutingRuleDialog({
               </option>
             ))}
           </Select>
-
-          {errorMessage ? (
-            <Alert variant="error" title="Unable to save routing rule" description={errorMessage} />
-          ) : null}
         </div>
 
         <DialogFooter>

@@ -1,6 +1,6 @@
 import * as React from "react";
+import { toast } from "sonner";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
-import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
 import {
   Dialog,
@@ -49,7 +49,6 @@ export function ModelPresetDialog({
   const [state, setState] = React.useState<ModelDialogState>(emptyDialogState());
   const [modelFilter, setModelFilter] = React.useState("");
   const [saving, setSaving] = React.useState(false);
-  const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
   const selectedModel = availableModels.find((model) => modelRefFor(model) === state.modelRef);
   const filteredAvailableModels = React.useMemo(
     () => filterAvailableModels(availableModels, modelFilter),
@@ -61,7 +60,6 @@ export function ModelPresetDialog({
     setState(normalizeDialogState({ preset, availableModels }));
     setModelFilter("");
     setSaving(false);
-    setErrorMessage(null);
   }, [availableModels, open, preset]);
 
   React.useEffect(() => {
@@ -93,16 +91,15 @@ export function ModelPresetDialog({
       throw new Error("Authorize admin access to configure models.");
     }
     if (!state.displayName.trim()) {
-      setErrorMessage("Display name is required.");
+      toast.error("Unable to save", { description: "Display name is required." });
       return;
     }
     if (!preset && !selectedModel) {
-      setErrorMessage("Choose a model.");
+      toast.error("Unable to save", { description: "Choose a model." });
       return;
     }
 
     setSaving(true);
-    setErrorMessage(null);
     try {
       const options = {
         ...(state.reasoningEffort === "" ? {} : { reasoning_effort: state.reasoningEffort }),
@@ -130,7 +127,7 @@ export function ModelPresetDialog({
       onOpenChange(false);
       await onSaved();
     } catch (error) {
-      setErrorMessage(formatErrorMessage(error));
+      toast.error("Unable to save", { description: formatErrorMessage(error) });
     } finally {
       setSaving(false);
     }
@@ -212,9 +209,6 @@ export function ModelPresetDialog({
               </option>
             ))}
           </Select>
-          {errorMessage ? (
-            <Alert variant="error" title="Unable to save" description={errorMessage} />
-          ) : null}
         </div>
 
         <DialogFooter>

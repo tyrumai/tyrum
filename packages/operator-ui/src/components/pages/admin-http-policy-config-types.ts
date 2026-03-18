@@ -24,9 +24,7 @@ export interface PolicyConfigSectionProps {
   loadBusy: boolean;
   loadError: unknown;
   saveBusy: boolean;
-  saveError: unknown;
   revertBusy: boolean;
-  revertError: unknown;
   canMutate: boolean;
   requestEnter: () => void;
   onRefresh: () => void;

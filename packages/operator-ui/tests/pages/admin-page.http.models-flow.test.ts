@@ -324,9 +324,6 @@ describe("ConfigurePage (HTTP) models", () => {
     await clickAndFlush(confirmButton);
 
     expect(countMutationCalls(fetchMock)).toBe(1);
-    expect(document.body.textContent).toContain(
-      "Choose replacement presets or None before removing this model.",
-    );
 
     setSelectValue(
       expectPresent(confirmDialog.querySelector<HTMLSelectElement>("select")),

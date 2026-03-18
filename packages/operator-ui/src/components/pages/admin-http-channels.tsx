@@ -1,6 +1,7 @@
 import type { OperatorCore } from "@tyrum/operator-core";
 import { Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import * as React from "react";
+import { toast } from "sonner";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { ElevatedModeTooltip } from "../elevated-mode/elevated-mode-tooltip.js";
 import { Alert } from "../ui/alert.js";
@@ -32,7 +33,6 @@ export function AdminHttpChannelsPanel({ core }: { core: OperatorCore }): React.
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
-  const [statusMessage, setStatusMessage] = React.useState<string | null>(null);
   const [registry, setRegistry] = React.useState<ChannelRegistryEntry[]>([]);
   const [groups, setGroups] = React.useState<ConfiguredChannelGroup[]>([]);
   const [agentOptions, setAgentOptions] = React.useState<AgentOption[]>([]);
@@ -83,7 +83,7 @@ export function AdminHttpChannelsPanel({ core }: { core: OperatorCore }): React.
       throw new Error("Authorize admin access to change channel settings.");
     }
     await mutationApi.deleteAccount(deleteTarget.channel, deleteTarget.account_key);
-    setStatusMessage(`Removed ${deleteTarget.channel} account ${deleteTarget.account_key}.`);
+    toast.success(`Removed ${deleteTarget.channel} account ${deleteTarget.account_key}.`);
     setDeleteTarget(null);
     await refresh();
   };
@@ -95,10 +95,6 @@ export function AdminHttpChannelsPanel({ core }: { core: OperatorCore }): React.
         title="Account config is the source of truth"
         description="Each channel account stores its own target agent, access rules, and secrets. Friendly usernames or labels resolve to canonical IDs when credentials are available."
       />
-
-      {statusMessage ? (
-        <Alert variant="success" title="Channel updated" description={statusMessage} />
-      ) : null}
 
       <Card>
         <CardHeader className="pb-2.5">
@@ -143,7 +139,12 @@ export function AdminHttpChannelsPanel({ core }: { core: OperatorCore }): React.
 
         <CardContent className="grid gap-4">
           {errorMessage ? (
-            <Alert variant="error" title="Unable to load channels" description={errorMessage} />
+            <Alert
+              variant="error"
+              title="Unable to load channels"
+              description={errorMessage}
+              onDismiss={() => setErrorMessage(null)}
+            />
           ) : null}
 
           {loading ? (
@@ -266,7 +267,7 @@ export function AdminHttpChannelsPanel({ core }: { core: OperatorCore }): React.
         requestEnter={requestEnter}
         onSaved={async () => {
           await refresh();
-          setStatusMessage(
+          toast.success(
             editingAccount
               ? `Saved ${editingAccount.channel} account ${editingAccount.account_key}.`
               : "Added channel account.",
