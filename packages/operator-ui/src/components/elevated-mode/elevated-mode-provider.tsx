@@ -190,10 +190,12 @@ export function ElevatedModeProvider({
           // Mode changed while the renewal was in-flight. Undo.
           core.elevatedModeStore.exit();
         }
-      } catch {
-        // Renewal failed; existing token still has time left.
-      } finally {
+        // Success: allow future renewals.
         renewingRef.current = false;
+      } catch {
+        // Failure: keep renewingRef set to prevent a retry storm (~1 req/s).
+        // The existing token still has time left. When it expires, the
+        // auto-enter effect will attempt re-entry.
       }
     })();
   });
