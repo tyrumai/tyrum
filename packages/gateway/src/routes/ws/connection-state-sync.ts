@@ -208,7 +208,7 @@ async function initializePairingOnConnect(input: {
             kind: "desktop_environment_runtime",
             environment_id: managedEnv.environment_id,
           },
-          allowedCurrentStatuses: ["queued", "awaiting_human"],
+          allowedCurrentStatuses: ["queued", "reviewing", "awaiting_human"],
         });
         if (resolved?.transitioned && resolved.scopedToken) {
           emitPairingApprovedEvent(

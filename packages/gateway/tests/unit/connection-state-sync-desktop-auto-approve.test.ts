@@ -144,7 +144,7 @@ describe("initializePairingOnConnect desktop auto-approve", () => {
         decision: "approved",
         trustLevel: "local",
         reason: "gateway-managed desktop environment",
-        allowedCurrentStatuses: ["queued", "awaiting_human"],
+        allowedCurrentStatuses: ["queued", "reviewing", "awaiting_human"],
       }),
     );
     expect(emitPairingApprovedEventMock).toHaveBeenCalledWith(
