@@ -148,6 +148,7 @@ export function ElevatedModeProvider({
     }
     if (isElevatedModeActive(elevatedMode)) return;
     if (autoEnterAttemptedRef.current) return;
+    if (renewingRef.current) return;
 
     autoEnterAttemptedRef.current = true;
     void (async () => {
@@ -194,7 +195,12 @@ export function ElevatedModeProvider({
 
     if (prevMode === "always-on" && adminAccessMode === "on-demand") {
       if (isElevatedModeActive(elevatedMode)) {
-        void exitElevatedMode();
+        void exitElevatedMode().catch(() => {
+          // Revocation failed (e.g. network error). Force-exit the store
+          // so elevated mode does not stay stuck after the user switched
+          // to on-demand.
+          core.elevatedModeStore.exit();
+        });
       }
     }
   });
