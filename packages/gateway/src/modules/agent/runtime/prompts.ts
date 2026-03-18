@@ -231,3 +231,36 @@ export function formatWorkOrchestrationPrompt(
     ...lines.map((line) => `- ${line}`),
   ].join("\n");
 }
+
+export function formatMemoryGuidancePrompt(tools: readonly ToolDescriptor[]): string | undefined {
+  const toolIds = new Set(tools.map((tool) => tool.id));
+  const hasWrite = toolIds.has("mcp.memory.write");
+  const hasSearch = toolIds.has("mcp.memory.search");
+
+  if (!hasWrite && !hasSearch) return undefined;
+
+  const lines: string[] = [];
+
+  if (hasWrite) {
+    lines.push(
+      "Proactively persist durable memory when the turn yields reusable knowledge — do not wait for an explicit request to remember.",
+    );
+    lines.push(
+      "Write: user preferences and corrections, project context and constraints, successful procedures, important decisions and outcomes.",
+    );
+    lines.push(
+      "Kinds: fact (stable key-value, requires key+value), note (contextual info, requires body_md), procedure (learned workflow, requires body_md), episode (significant outcome, requires summary_md).",
+    );
+    lines.push(
+      "Never write: secrets or credentials, transient chatter, information derivable from tools or code, raw conversation transcripts.",
+    );
+  }
+
+  if (hasSearch) {
+    lines.push(
+      "Search memory when pre-turn recall may have missed relevant items — for example when the user references prior context, the task scope differs from the seed query, or recall returned few results.",
+    );
+  }
+
+  return lines.map((line) => `- ${line}`).join("\n");
+}

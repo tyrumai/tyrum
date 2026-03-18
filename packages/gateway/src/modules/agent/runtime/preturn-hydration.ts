@@ -193,19 +193,42 @@ export async function runPreTurnHydration(params: {
         continue;
       }
 
-      const text = `Pre-turn recall (${tool.id}):\n${result.output}`;
-      sections.push({ toolId: tool.id, text });
-      reports.push({
-        tool_id: tool.id,
-        status: "succeeded",
-        injected_chars: text.length,
-      });
-
       if (result.meta?.kind === "memory.seed") {
-        memory.keyword_hits += result.meta.keyword_hit_count;
-        memory.semantic_hits += result.meta.semantic_hit_count;
-        memory.structured_hits += result.meta.structured_item_count;
-        memory.included_items += result.meta.included_item_ids.length;
+        const meta = result.meta;
+        const metaParts: string[] = [];
+        if (meta.query) {
+          metaParts.push(`seed_query="${meta.query}"`);
+        }
+        const hitParts: string[] = [];
+        if (meta.structured_item_count > 0)
+          hitParts.push(`structured=${meta.structured_item_count}`);
+        if (meta.keyword_hit_count > 0) hitParts.push(`keyword=${meta.keyword_hit_count}`);
+        if (meta.semantic_hit_count > 0) hitParts.push(`semantic=${meta.semantic_hit_count}`);
+        const included = meta.included_item_ids.length;
+        if (hitParts.length > 0) {
+          hitParts.push(`included=${included}`);
+          metaParts.push(hitParts.join(" "));
+        }
+        const header = metaParts.length > 0 ? `[${metaParts.join(" | ")}]\n` : "";
+        const text = `Pre-turn recall (${tool.id}):\n${header}${result.output}`;
+        sections.push({ toolId: tool.id, text });
+        reports.push({
+          tool_id: tool.id,
+          status: "succeeded",
+          injected_chars: text.length,
+        });
+        memory.keyword_hits += meta.keyword_hit_count;
+        memory.semantic_hits += meta.semantic_hit_count;
+        memory.structured_hits += meta.structured_item_count;
+        memory.included_items += included;
+      } else {
+        const text = `Pre-turn recall (${tool.id}):\n${result.output}`;
+        sections.push({ toolId: tool.id, text });
+        reports.push({
+          tool_id: tool.id,
+          status: "succeeded",
+          injected_chars: text.length,
+        });
       }
     } catch (error) {
       reports.push({

@@ -326,6 +326,7 @@ export async function prepareTurn(
         skillsText: "Skill guidance:\nGuardian review mode disables normal skill guidance.",
         toolsText: "Tool contracts:\nguardian_review_decision",
         workOrchestrationText: undefined as string | undefined,
+        memoryGuidanceText: undefined as string | undefined,
         sessionText:
           "Session state:\nGuardian review mode relies on the supplied review request evidence.",
         preTurnTexts: [] as string[],
@@ -349,6 +350,7 @@ export async function prepareTurn(
           skillsText: assembled.skillsText,
           toolsText: assembled.toolsText,
           workOrchestrationText: assembled.workOrchestrationText,
+          memoryGuidanceText: assembled.memoryGuidanceText,
           sessionText: assembled.sessionText,
           preTurnTexts: assembled.preTurnTexts,
           automationDirectiveText: assembled.automationDirectiveText,
@@ -367,6 +369,7 @@ export async function prepareTurn(
         promptParts.skillsText,
         promptParts.toolsText,
         promptParts.workOrchestrationText,
+        promptParts.memoryGuidanceText,
       ]
         .filter((value): value is string => typeof value === "string" && value.length > 0)
         .join("\n\n");
@@ -402,6 +405,7 @@ export async function prepareTurn(
     skillsText: promptParts.skillsText,
     toolsText: promptParts.toolsText,
     workOrchestrationText: promptParts.workOrchestrationText,
+    memoryGuidanceText: promptParts.memoryGuidanceText,
     sessionText: promptParts.sessionText,
     workFocusText,
     preTurnTexts: [...promptParts.preTurnTexts],

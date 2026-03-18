@@ -21,6 +21,7 @@ export interface ContextReportInput {
   skillsText: string;
   toolsText: string;
   workOrchestrationText: string | undefined;
+  memoryGuidanceText: string | undefined;
   sessionText: string;
   workFocusText: string;
   preTurnTexts: string[];
@@ -59,6 +60,7 @@ export function buildContextReport(input: ContextReportInput): AgentContextRepor
     skillsText,
     toolsText,
     workOrchestrationText,
+    memoryGuidanceText,
     sessionText,
     workFocusText,
     preTurnTexts,
@@ -104,6 +106,7 @@ export function buildContextReport(input: ContextReportInput): AgentContextRepor
         { id: "skill_guidance", chars: skillsText.length },
         { id: "tool_contracts", chars: toolsText.length },
         { id: "work_orchestration", chars: workOrchestrationText?.length ?? 0 },
+        { id: "memory_guidance", chars: memoryGuidanceText?.length ?? 0 },
       ],
     },
     user_parts: [

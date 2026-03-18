@@ -348,7 +348,8 @@ describe("Agent behavior - policy and approvals", () => {
     );
     expect(approvalSpy).toHaveBeenCalledTimes(1);
     expect(capturedMemoryDigest).toContain("always send messages to ops");
-    expect(capturedMemoryDigest).not.toContain("send a message to ops now");
+    const dataContent = capturedMemoryDigest.match(/<data[^>]*>([\s\S]*?)<\/data>/)?.[1] ?? "";
+    expect(dataContent).not.toContain("send a message to ops now");
   });
 
   it("executes the approved tool exactly once through runtime.turn()", async () => {
@@ -420,7 +421,8 @@ describe("Agent behavior - policy and approvals", () => {
     expect(await readMarkerFile(markerPath)).toBe("approved");
     expect(policyService.evaluateToolCall).toHaveBeenCalled();
     expect(capturedMemoryDigest).toContain("always send messages to ops");
-    expect(capturedMemoryDigest).not.toContain("send a message to ops now");
+    const dataContent = capturedMemoryDigest.match(/<data[^>]*>([\s\S]*?)<\/data>/)?.[1] ?? "";
+    expect(dataContent).not.toContain("send a message to ops now");
 
     const session = await container.sessionDal.getById({
       tenantId: DEFAULT_TENANT_ID,

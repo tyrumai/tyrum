@@ -202,6 +202,7 @@ export async function executeBuiltinMemoryMcpTool(params: {
       ...makeToolResult(params.toolCallId, result.digest as string, "tool"),
       meta: {
         kind: "memory.seed",
+        query: typeof result.query === "string" ? result.query : undefined,
         keyword_hit_count: Number(result.keyword_hit_count ?? 0),
         semantic_hit_count: Number(result.semantic_hit_count ?? 0),
         structured_item_count: Number(result.structured_item_count ?? 0),

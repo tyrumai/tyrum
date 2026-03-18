@@ -11,6 +11,7 @@ import {
   formatSessionContext,
   formatSkillsPrompt,
   formatToolPrompt,
+  formatMemoryGuidancePrompt,
   formatWorkOrchestrationPrompt,
 } from "./prompts.js";
 import {
@@ -166,6 +167,7 @@ export function assemblePrompts(
   const promptContractPrompt = PROMPT_CONTRACT_PROMPT;
   const skillsText = `Skill guidance:\n${formatSkillsPrompt(ctx.skills)}`;
   const workOrchestrationText = formatWorkOrchestrationPrompt(filteredTools);
+  const memoryGuidanceText = formatMemoryGuidancePrompt(filteredTools);
   const toolsText = `Tool contracts:\n${formatToolPrompt(filteredTools)}`;
   const sessionText = `Session state:\n${sessionCtx.trim() || "No stored session state."}`;
   const automationDirectiveText =
@@ -191,6 +193,9 @@ export function assemblePrompts(
     toolsText,
     workOrchestrationText: workOrchestrationText
       ? `Work orchestration guidance:\n${workOrchestrationText}`
+      : undefined,
+    memoryGuidanceText: memoryGuidanceText
+      ? `Durable memory guidance:\n${memoryGuidanceText}`
       : undefined,
     sessionText,
     preTurnTexts: [...preTurnTexts],

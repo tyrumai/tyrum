@@ -141,6 +141,7 @@ describe("AgentRuntime guardian review mode", () => {
           { id: "skill_guidance", chars: expect.any(Number) },
           { id: "tool_contracts", chars: expect.any(Number) },
           { id: "work_orchestration", chars: 0 },
+          { id: "memory_guidance", chars: 0 },
         ],
       },
     });
