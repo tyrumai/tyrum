@@ -18,6 +18,7 @@ import type {
   TyrumAiSdkChatSession,
 } from "@tyrum/client";
 import { AiSdkChatMessageList } from "./chat-page-ai-sdk-messages.js";
+import { getSessionDisplayTitle } from "./chat-page-ai-sdk-shared.js";
 import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
 
@@ -143,7 +144,7 @@ export function AiSdkConversation({
           return;
         }
         chat.setMessages(reloaded.messages);
-        onSessionMessages(reloaded.messages);
+        core.chatStore.hydrateActiveSession(reloaded);
       })
       .catch((error) => {
         if (!cancelled) {
@@ -154,7 +155,7 @@ export function AiSdkConversation({
     return () => {
       cancelled = true;
     };
-  }, [chat.setMessages, chat.status, onSessionMessages, session.session_id, sessionClient]);
+  }, [chat.setMessages, chat.status, core.chatStore, session.session_id, sessionClient]);
 
   useLayoutEffect(() => {
     const textarea = draftRef.current;
@@ -228,7 +229,9 @@ export function AiSdkConversation({
             </Button>
           ) : null}
           <div className="min-w-0">
-            <div className="truncate text-sm font-medium text-fg">{session.thread_id}</div>
+            <div className="truncate text-sm font-medium text-fg">
+              {getSessionDisplayTitle(session.title)}
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-2">
