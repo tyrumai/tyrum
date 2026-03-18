@@ -1,6 +1,6 @@
 import type { AgentStatusResponse } from "@tyrum/schemas";
 import { RefreshCw } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
@@ -214,21 +214,8 @@ export function AgentIdentityPanel({
   status: AgentStatusResponse | null;
   onRefresh: () => void;
 }) {
-  const [errorDismissed, setErrorDismissed] = useState(false);
-
-  useEffect(() => {
-    setErrorDismissed(false);
-  }, [error]);
-
-  if (error && !errorDismissed) {
-    return (
-      <Alert
-        variant="error"
-        title="Failed to load agent"
-        description={error}
-        onDismiss={() => setErrorDismissed(true)}
-      />
-    );
+  if (error) {
+    return <Alert variant="error" title="Failed to load agent" description={error} />;
   }
 
   if (loading && !status) {
