@@ -102,6 +102,7 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
     agentStatusStore: agentStatus.store,
     desktopEnvironmentHostsStore: desktopEnvironmentHosts.store,
     desktopEnvironmentsStore: desktopEnvironments.store,
+    chatStore: chat,
   } as const;
 
   const syncRegistry: { [K in keyof typeof warmStores]: AutoSyncTask[] } = {
@@ -197,6 +198,16 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
           await desktopEnvironments.store.refresh();
           const error = desktopEnvironments.store.getSnapshot().error;
           if (error) throw new Error(error);
+        },
+      },
+    ],
+    chatStore: [
+      {
+        id: "chat.refreshAgents",
+        run: async () => {
+          await chat.refreshAgents({ includeDefault: true });
+          const error = chat.getSnapshot().agents.error;
+          if (error) throw new Error(error.message);
         },
       },
     ],
