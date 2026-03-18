@@ -35,6 +35,8 @@ type DesktopEnvironmentRuntimeManagerOptions = {
   tyrumHome: string;
   gatewayPort: number;
   gatewayWsUrl?: string;
+  tlsSelfSigned?: boolean;
+  tlsFingerprint256?: string;
   tokenTtlSeconds?: number;
   hostPlatform?: NodeJS.Platform;
   hostArch?: string;
@@ -194,8 +196,16 @@ export class DesktopEnvironmentRuntimeManager {
         `TYRUM_NODE_LABEL=${environment.label ?? `desktop-environment:${environment.environment_id}`}`,
         "--env",
         "TYRUM_NODE_MODE=desktop-sandbox",
-        environment.image_ref,
       );
+      if (this.options.tlsSelfSigned && this.options.tlsFingerprint256) {
+        runArgs.push(
+          "--env",
+          `TYRUM_GATEWAY_TLS_FINGERPRINT256=${this.options.tlsFingerprint256}`,
+          "--env",
+          "TYRUM_GATEWAY_TLS_ALLOW_SELF_SIGNED=1",
+        );
+      }
+      runArgs.push(environment.image_ref);
       const runResult = await runDocker(runArgs);
       if (runResult.status !== 0) {
         throw new Error(
@@ -235,7 +245,8 @@ export class DesktopEnvironmentRuntimeManager {
   private resolveGatewayWsUrl(): string {
     const override = this.options.gatewayWsUrl?.trim();
     if (override) return override;
-    return `ws://host.containers.internal:${String(this.options.gatewayPort)}/ws`;
+    const scheme = this.options.tlsSelfSigned ? "wss" : "ws";
+    return `${scheme}://host.containers.internal:${String(this.options.gatewayPort)}/ws`;
   }
 
   private resolveManagedImagePlatform(imageRef: string): string | undefined {

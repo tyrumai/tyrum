@@ -97,6 +97,7 @@ export interface EdgeRuntime {
   telegramProcessor?: TelegramChannelProcessor;
   discordMonitor?: DiscordChannelMonitor;
   server?: GatewayServer;
+  tlsFingerprint256?: string;
 }
 
 export interface GatewayRuntime {

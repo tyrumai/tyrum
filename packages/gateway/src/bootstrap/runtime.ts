@@ -305,6 +305,8 @@ export async function main(input?: GatewayRole | GatewayStartOptions): Promise<v
             tyrumHome: context.tyrumHome,
             gatewayPort: context.port,
             gatewayWsUrl: process.env["TYRUM_DESKTOP_ENVIRONMENTS_GATEWAY_WS_URL"]?.trim(),
+            tlsSelfSigned: context.deploymentConfig.server.tlsSelfSigned ?? false,
+            tlsFingerprint256: edge.tlsFingerprint256,
           },
         ),
         {
