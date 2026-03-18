@@ -11,6 +11,7 @@ import { createAgentListApi, type AgentListApi } from "./agent-list.js";
 import { createAgentStatusApi, type AgentStatusApi } from "./agent-status.js";
 import { createArtifactsApi, type ArtifactsApi } from "./artifacts.js";
 import { createAuditApi, type AuditApi } from "./audit.js";
+import { createChannelConfigApi, type ChannelConfigApi } from "./channel-config.js";
 import { createContractsApi, type ContractsApi } from "./contracts.js";
 import { createContextApi, type ContextApi } from "./context.js";
 import {
@@ -75,6 +76,7 @@ export interface TyrumHttpClient {
   agentConfig?: AgentConfigApi;
   agentList?: AgentListApi;
   agentStatus?: AgentStatusApi;
+  channelConfig?: ChannelConfigApi;
   routingConfig?: RoutingConfigApi;
   audit?: AuditApi;
   context?: ContextApi;
@@ -91,6 +93,7 @@ export type TyrumHttpClientOperator = TyrumHttpClient & {
   agentConfig: AgentConfigApi;
   agentList: AgentListApi;
   agentStatus: AgentStatusApi;
+  channelConfig: ChannelConfigApi;
   routingConfig: RoutingConfigApi;
   audit: AuditApi;
   context: ContextApi;
@@ -130,6 +133,7 @@ export function createTyrumHttpClient(options: TyrumHttpClientOptions): TyrumHtt
     agentConfig: createAgentConfigApi(transport),
     agentList: createAgentListApi(transport),
     agentStatus: createAgentStatusApi(transport),
+    channelConfig: createChannelConfigApi(transport),
     routingConfig: createRoutingConfigApi(transport),
     audit: createAuditApi(transport),
     context: createContextApi(transport),

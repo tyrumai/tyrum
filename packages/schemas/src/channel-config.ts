@@ -1,8 +1,12 @@
 import { z } from "zod";
+import { DateTimeSchema } from "./common.js";
 import { AccountId } from "./keys.js";
 import { canonicalizeTelegramAllowedUserIds } from "./telegram.js";
 
-export const ChannelType = z.enum(["telegram"]);
+const JsonRecord = z.record(z.string().trim().min(1), z.unknown());
+const StringRecord = z.record(z.string().trim().min(1), z.string().trim().min(1));
+
+export const ChannelType = z.enum(["telegram", "discord", "googlechat"]);
 export type ChannelType = z.infer<typeof ChannelType>;
 
 export const TelegramChannelConfigView = z
@@ -114,3 +118,171 @@ export const ChannelConfigDeleteResponse = z
   })
   .strict();
 export type ChannelConfigDeleteResponse = z.infer<typeof ChannelConfigDeleteResponse>;
+
+export const ChannelRegistryFieldKind = z.enum(["config", "secret"]);
+export type ChannelRegistryFieldKind = z.infer<typeof ChannelRegistryFieldKind>;
+
+export const ChannelRegistryFieldInput = z.enum([
+  "text",
+  "password",
+  "textarea",
+  "boolean",
+  "select",
+]);
+export type ChannelRegistryFieldInput = z.infer<typeof ChannelRegistryFieldInput>;
+
+export const ChannelRegistryFieldSection = z.enum([
+  "credentials",
+  "access",
+  "delivery",
+  "advanced",
+]);
+export type ChannelRegistryFieldSection = z.infer<typeof ChannelRegistryFieldSection>;
+
+export const ChannelRegistryFieldOptionSource = z.enum(["agents"]);
+export type ChannelRegistryFieldOptionSource = z.infer<typeof ChannelRegistryFieldOptionSource>;
+
+export const ChannelRegistryFieldOption = z
+  .object({
+    value: z.string().trim().min(1),
+    label: z.string().trim().min(1),
+  })
+  .strict();
+export type ChannelRegistryFieldOption = z.infer<typeof ChannelRegistryFieldOption>;
+
+export const ChannelRegistryFieldVisibility = z
+  .object({
+    field_key: z.string().trim().min(1),
+    equals: z.union([z.string().trim().min(1), z.boolean()]),
+  })
+  .strict();
+export type ChannelRegistryFieldVisibility = z.infer<typeof ChannelRegistryFieldVisibility>;
+
+export const ChannelRegistryField = z
+  .object({
+    key: z.string().trim().min(1),
+    label: z.string().trim().min(1),
+    description: z.string().trim().min(1).nullable().default(null),
+    kind: ChannelRegistryFieldKind,
+    input: ChannelRegistryFieldInput,
+    section: ChannelRegistryFieldSection,
+    required: z.boolean(),
+    default_value: z
+      .union([z.string().trim().min(1), z.boolean()])
+      .nullable()
+      .default(null),
+    placeholder: z.string().trim().min(1).nullable().default(null),
+    help_title: z.string().trim().min(1).nullable().default(null),
+    help_lines: z.array(z.string().trim().min(1)).default([]),
+    options: z.array(ChannelRegistryFieldOption).default([]),
+    option_source: ChannelRegistryFieldOptionSource.nullable().default(null),
+    visible_when: ChannelRegistryFieldVisibility.nullable().default(null),
+  })
+  .strict();
+export type ChannelRegistryField = z.infer<typeof ChannelRegistryField>;
+
+export const ChannelRegistryEntry = z
+  .object({
+    channel: ChannelType,
+    name: z.string().trim().min(1),
+    doc: z.string().trim().min(1).nullable().default(null),
+    supported: z.boolean(),
+    configurable: z.boolean(),
+    intro_title: z.string().trim().min(1).nullable().default(null),
+    intro_lines: z.array(z.string().trim().min(1)).default([]),
+    fields: z.array(ChannelRegistryField),
+  })
+  .strict();
+export type ChannelRegistryEntry = z.infer<typeof ChannelRegistryEntry>;
+
+export const ChannelRegistryResponse = z
+  .object({
+    status: z.literal("ok"),
+    channels: z.array(ChannelRegistryEntry),
+  })
+  .strict();
+export type ChannelRegistryResponse = z.infer<typeof ChannelRegistryResponse>;
+
+export const ConfiguredChannelAccount = z
+  .object({
+    channel: ChannelType,
+    account_key: AccountId,
+    config: JsonRecord.default({}),
+    configured_secret_keys: z.array(z.string().trim().min(1)).default([]),
+    created_at: DateTimeSchema,
+    updated_at: DateTimeSchema,
+  })
+  .strict();
+export type ConfiguredChannelAccount = z.infer<typeof ConfiguredChannelAccount>;
+
+export const ConfiguredChannelGroup = z
+  .object({
+    channel: ChannelType,
+    name: z.string().trim().min(1),
+    doc: z.string().trim().min(1).nullable().default(null),
+    supported: z.boolean(),
+    configurable: z.boolean(),
+    accounts: z.array(ConfiguredChannelAccount),
+  })
+  .strict();
+export type ConfiguredChannelGroup = z.infer<typeof ConfiguredChannelGroup>;
+
+export const ConfiguredChannelListResponse = z
+  .object({
+    status: z.literal("ok"),
+    channels: z.array(ConfiguredChannelGroup),
+  })
+  .strict();
+export type ConfiguredChannelListResponse = z.infer<typeof ConfiguredChannelListResponse>;
+
+export const ChannelAccountCreateRequest = z
+  .object({
+    channel: ChannelType,
+    account_key: AccountId,
+    config: JsonRecord.default({}),
+    secrets: StringRecord.default({}),
+  })
+  .strict();
+export type ChannelAccountCreateRequest = z.infer<typeof ChannelAccountCreateRequest>;
+
+export const ChannelAccountUpdateRequest = z
+  .object({
+    config: JsonRecord.optional(),
+    secrets: StringRecord.optional(),
+    clear_secret_keys: z.array(z.string().trim().min(1)).default([]).optional(),
+  })
+  .strict();
+export type ChannelAccountUpdateRequest = z.infer<typeof ChannelAccountUpdateRequest>;
+
+export const ChannelAccountMutateResponse = z
+  .object({
+    status: z.literal("ok"),
+    account: ConfiguredChannelAccount,
+  })
+  .strict();
+export type ChannelAccountMutateResponse = z.infer<typeof ChannelAccountMutateResponse>;
+
+export const ChannelAccountDeleteResponse = z
+  .object({
+    status: z.literal("ok"),
+    deleted: z.boolean(),
+    channel: ChannelType,
+    account_key: AccountId,
+  })
+  .strict();
+export type ChannelAccountDeleteResponse = z.infer<typeof ChannelAccountDeleteResponse>;
+
+export const ChannelFieldErrors = z.record(
+  z.string().trim().min(1),
+  z.array(z.string().trim().min(1)).min(1),
+);
+export type ChannelFieldErrors = z.infer<typeof ChannelFieldErrors>;
+
+export const ChannelInvalidRequestResponse = z
+  .object({
+    error: z.literal("invalid_request"),
+    message: z.string().trim().min(1),
+    field_errors: ChannelFieldErrors.optional(),
+  })
+  .strict();
+export type ChannelInvalidRequestResponse = z.infer<typeof ChannelInvalidRequestResponse>;

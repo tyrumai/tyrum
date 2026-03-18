@@ -1,14 +1,13 @@
 // @vitest-environment jsdom
 
-import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { stubAdminHttpFetch } from "../admin-http-fetch-test-support.js";
 import { setNativeValue } from "../test-utils.js";
 import { ADMIN_HTTP_EXECUTION_PROFILE_IDS } from "./admin-page.http.models.shared.js";
 import { setupFirstAssignmentSaveScenario } from "./admin-page.http.models.test-support.js";
 import {
+  TEST_TIMESTAMP,
   cleanupAdminHttpPage,
-  click,
   clickAndFlush,
   createAdminHttpTestCore,
   expectAuthorizedJsonRequest,
@@ -20,7 +19,6 @@ import {
   setSelectValue,
   switchHttpTab,
   waitForEnabledTestId,
-  waitForQuerySelector,
   waitForTestId,
 } from "./admin-page.http.test-support.js";
 
@@ -30,14 +28,13 @@ afterEach(() => {
 });
 
 describe("ConfigurePage (HTTP)", () => {
-  it("renders Routing config and Secrets panels", async () => {
+  it("renders Channels and Secrets panels", async () => {
     const { core } = createAdminHttpTestCore();
     const page = renderAdminHttpConfigurePage(core);
 
     await switchHttpTab(page.container, "admin-http-tab-routing-config");
-    expect(
-      page.container.querySelector("[data-testid='admin-http-routing-config']"),
-    ).not.toBeNull();
+    expect(page.container.querySelector("[data-testid='admin-http-channels']")).not.toBeNull();
+    expect(page.container.querySelector("[data-testid='admin-http-routing-config']")).toBeNull();
 
     await switchHttpTab(page.container, "admin-http-tab-secrets");
     expect(page.container.querySelector("[data-testid='admin-http-secrets']")).not.toBeNull();
@@ -83,198 +80,158 @@ describe("ConfigurePage (HTTP)", () => {
   });
 });
 
-describe("ConfigurePage (HTTP) routing config", () => {
-  it("filters structured routing rules", async () => {
+describe("ConfigurePage (HTTP) channels", () => {
+  it("loads the unified Channels panel and configured account cards", async () => {
     const { core } = createAdminHttpTestCore();
     stubAdminHttpFetch(core);
     const page = renderAdminHttpConfigurePage(core);
 
     await switchHttpTab(page.container, "admin-http-tab-routing-config");
-    await waitForQuerySelector<HTMLButtonElement>(
-      page.container,
-      '[aria-label="Remove Support room"]',
-    );
+    await waitForTestId(page.container, "admin-http-channels");
+    await waitForTestId(page.container, "channels-account-card-telegram-default");
 
-    expect(page.container.textContent).toContain("Support room");
+    expect(page.container.textContent).toContain("Account config is the source of truth");
+    expect(page.container.textContent).toContain("Friendly usernames or labels resolve");
+    expect(page.container.textContent).toContain("default");
+    expect(page.container.textContent).toContain("ops");
 
-    act(() => {
-      setNativeValue(getByTestId<HTMLInputElement>(page.container, "channels-filter"), "missing");
-    });
-    await flush();
-
-    expect(page.container.textContent).toContain("No routing rules match the current filter");
     cleanupAdminHttpPage(page);
   });
 
-  it("adds a thread override from the structured dialog", async () => {
-    const { core, routingConfigUpdate } = createAdminHttpTestCore();
-    const { writeSpy } = stubAdminHttpFetch(core, async (input: RequestInfo | URL, init) => {
-      expectAuthorizedJsonRequest(input, init, {
-        url: "http://example.test/routing/config",
-        method: "PUT",
-        body: {
-          config: {
-            v: 1,
-            telegram: {
-              accounts: {
-                default: {
-                  default_agent_key: "default",
-                  threads: { "tg-123": "agent-b" },
-                },
-                ops: {
-                  threads: { "tg-123": "default" },
-                },
-              },
-            },
-          },
-        },
-      });
-      return jsonResponse({ revision: 2, config: { v: 1 } }, 201);
-    });
-
-    const page = renderAdminHttpConfigurePage(core);
-    await switchHttpTab(page.container, "admin-http-tab-routing-config");
-    const addRuleButton = await waitForEnabledTestId<HTMLButtonElement>(
-      page.container,
-      "channels-add-open",
-    );
-
-    click(addRuleButton);
-    const dialog = await waitForTestId<HTMLElement>(document.body, "channels-rule-dialog");
-    setSelectValue(getByTestId<HTMLSelectElement>(dialog, "channels-rule-kind"), "thread");
-    setSelectValue(
-      getByTestId<HTMLSelectElement>(dialog, "channels-rule-thread"),
-      JSON.stringify(["ops", "tg-123"]),
-    );
-    await clickAndFlush(
-      await waitForEnabledTestId<HTMLButtonElement>(dialog, "channels-rule-save"),
-    );
-    await flush();
-
-    expect(routingConfigUpdate).toHaveBeenCalledTimes(0);
-    expect(writeSpy).toHaveBeenCalledTimes(1);
-    cleanupAdminHttpPage(page);
-  });
-
-  it("adds an account-scoped default route from the structured dialog", async () => {
+  it("switches Google Chat auth fields dynamically in the registry-driven dialog", async () => {
     const { core } = createAdminHttpTestCore();
-    const originalListChannelConfigs = core.http.routingConfig.listChannelConfigs;
-    core.http.routingConfig.listChannelConfigs = vi.fn(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-      return await originalListChannelConfigs();
-    });
-    const { writeSpy } = stubAdminHttpFetch(core, async (input: RequestInfo | URL, init) => {
-      expectAuthorizedJsonRequest(input, init, {
-        url: "http://example.test/routing/config",
-        method: "PUT",
-        body: {
-          config: {
-            v: 1,
-            telegram: {
-              accounts: {
-                default: {
-                  default_agent_key: "default",
-                  threads: { "tg-123": "agent-b" },
-                },
-                ops: {
-                  default_agent_key: "default",
-                },
-              },
-            },
-          },
-        },
-      });
-      return jsonResponse({ revision: 2, config: { v: 1 } }, 201);
-    });
-
+    stubAdminHttpFetch(core);
     const page = renderAdminHttpConfigurePage(core);
+
     await switchHttpTab(page.container, "admin-http-tab-routing-config");
-    const addRuleButton = await waitForEnabledTestId<HTMLButtonElement>(
-      page.container,
-      "channels-add-open",
-    );
-
-    click(addRuleButton);
-    const dialog = await waitForTestId<HTMLElement>(document.body, "channels-rule-dialog");
     await clickAndFlush(
-      await waitForEnabledTestId<HTMLButtonElement>(dialog, "channels-rule-save"),
+      await waitForEnabledTestId<HTMLButtonElement>(page.container, "channels-add-open"),
     );
 
-    expect(writeSpy).toHaveBeenCalledTimes(1);
-    cleanupAdminHttpPage(page);
-  });
-
-  it("removes a routing rule via the row action", async () => {
-    const { core, routingConfigUpdate } = createAdminHttpTestCore();
-    const { writeSpy } = stubAdminHttpFetch(core, async (input: RequestInfo | URL, init) => {
-      expectAuthorizedJsonRequest(input, init, {
-        url: "http://example.test/routing/config",
-        method: "PUT",
-        body: {
-          config: {
-            v: 1,
-            telegram: {
-              accounts: {
-                default: {
-                  default_agent_key: "default",
-                },
-              },
-            },
-          },
-        },
-      });
-      return jsonResponse({ revision: 2, config: { v: 1 } }, 201);
-    });
-
-    const page = renderAdminHttpConfigurePage(core);
-    await switchHttpTab(page.container, "admin-http-tab-routing-config");
-    click(
-      await waitForQuerySelector<HTMLButtonElement>(
-        page.container,
-        '[aria-label="Remove Support room"]',
-      ),
-    );
-    const confirmDialog = await waitForTestId<HTMLElement>(document.body, "confirm-danger-dialog");
-    click(getByTestId<HTMLElement>(confirmDialog, "confirm-danger-checkbox"));
-    await clickAndFlush(
-      await waitForEnabledTestId<HTMLButtonElement>(confirmDialog, "confirm-danger-confirm"),
+    const dialog = await waitForTestId<HTMLElement>(document.body, "channels-account-dialog");
+    setSelectValue(
+      getByTestId<HTMLSelectElement>(dialog, "channels-account-channel"),
+      "googlechat",
     );
     await flush();
 
-    expect(routingConfigUpdate).toHaveBeenCalledTimes(0);
-    expect(writeSpy).toHaveBeenCalledTimes(1);
+    expect(
+      dialog.querySelector("[data-testid='channels-account-field-service_account_file']"),
+    ).not.toBeNull();
+    expect(
+      dialog.querySelector("[data-testid='channels-account-field-service_account_json']"),
+    ).toBeNull();
+
+    setSelectValue(
+      getByTestId<HTMLSelectElement>(dialog, "channels-account-field-auth_method"),
+      "inline_json",
+    );
+    await flush();
+
+    expect(
+      dialog.querySelector("[data-testid='channels-account-field-service_account_file']"),
+    ).toBeNull();
+    expect(
+      dialog.querySelector("[data-testid='channels-account-field-service_account_json']"),
+    ).not.toBeNull();
+
     cleanupAdminHttpPage(page);
   });
 
-  it("reverts from the structured history table", async () => {
-    const { core, routingConfigRevert } = createAdminHttpTestCore();
+  it("creates a Discord account through the dynamic channel form", async () => {
+    const { core } = createAdminHttpTestCore();
+    const nextChannels = {
+      status: "ok" as const,
+      channels: [
+        {
+          channel: "discord",
+          name: "Discord",
+          doc: null,
+          supported: true,
+          configurable: true,
+          accounts: [
+            {
+              channel: "discord",
+              account_key: "community",
+              config: {
+                agent_key: "agent-b",
+                allowed_user_ids: ["100"],
+                allowed_channels: ["guild:1/channel:2"],
+              },
+              configured_secret_keys: ["bot_token"],
+              created_at: TEST_TIMESTAMP,
+              updated_at: TEST_TIMESTAMP,
+            },
+          ],
+        },
+      ],
+    };
+
     const { writeSpy } = stubAdminHttpFetch(core, async (input: RequestInfo | URL, init) => {
       expectAuthorizedJsonRequest(input, init, {
-        url: "http://example.test/routing/config/revert",
+        url: "http://example.test/config/channels/accounts",
         method: "POST",
-        body: { revision: 1 },
+        body: {
+          channel: "discord",
+          account_key: "community",
+          config: {
+            allowed_user_ids: "@alice",
+            allowed_channels: "My Server/#general",
+            agent_key: "agent-b",
+          },
+          secrets: {
+            bot_token: "discord-bot-token",
+          },
+        },
       });
-      return jsonResponse({ revision: 2, config: { v: 1 } }, 201);
+      core.http.channelConfig.listChannels = vi.fn(async () => nextChannels);
+      return jsonResponse(
+        {
+          status: "ok",
+          account: nextChannels.channels[0]?.accounts[0],
+        },
+        201,
+      );
     });
 
     const page = renderAdminHttpConfigurePage(core);
     await switchHttpTab(page.container, "admin-http-tab-routing-config");
-    click(
-      await waitForQuerySelector<HTMLButtonElement>(
-        page.container,
-        '[aria-label="Revert to revision 1"]',
-      ),
-    );
-    const confirmDialog = await waitForTestId<HTMLElement>(document.body, "confirm-danger-dialog");
-    click(getByTestId<HTMLElement>(confirmDialog, "confirm-danger-checkbox"));
     await clickAndFlush(
-      await waitForEnabledTestId<HTMLButtonElement>(confirmDialog, "confirm-danger-confirm"),
+      await waitForEnabledTestId<HTMLButtonElement>(page.container, "channels-add-open"),
+    );
+
+    const dialog = await waitForTestId<HTMLElement>(document.body, "channels-account-dialog");
+    setSelectValue(getByTestId<HTMLSelectElement>(dialog, "channels-account-channel"), "discord");
+    setNativeValue(
+      getByTestId<HTMLInputElement>(dialog, "channels-account-account-key"),
+      "community",
+    );
+    setNativeValue(
+      getByTestId<HTMLInputElement>(dialog, "channels-account-field-bot_token"),
+      "discord-bot-token",
+    );
+    setNativeValue(
+      getByTestId<HTMLTextAreaElement>(dialog, "channels-account-field-allowed_user_ids"),
+      "@alice",
+    );
+    setNativeValue(
+      getByTestId<HTMLTextAreaElement>(dialog, "channels-account-field-allowed_channels"),
+      "My Server/#general",
+    );
+    setSelectValue(
+      getByTestId<HTMLSelectElement>(dialog, "channels-account-field-agent_key"),
+      "agent-b",
     );
     await flush();
 
-    expect(routingConfigRevert).toHaveBeenCalledTimes(0);
+    await clickAndFlush(
+      await waitForEnabledTestId<HTMLButtonElement>(dialog, "channels-account-save"),
+    );
+    await waitForTestId(page.container, "channels-account-card-discord-community");
+
     expect(writeSpy).toHaveBeenCalledTimes(1);
+    expect(page.container.textContent).toContain("community");
+
     cleanupAdminHttpPage(page);
   });
 });

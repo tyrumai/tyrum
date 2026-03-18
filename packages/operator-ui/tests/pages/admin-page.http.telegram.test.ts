@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 
-import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { stubAdminHttpFetch } from "../admin-http-fetch-test-support.js";
 import { setNativeValue } from "../test-utils.js";
 import {
+  TEST_TIMESTAMP,
   cleanupAdminHttpPage,
   click,
   clickAndFlush,
@@ -16,6 +16,7 @@ import {
   renderAdminHttpConfigurePage,
   switchHttpTab,
   waitForEnabledTestId,
+  waitForQuerySelector,
   waitForTestId,
 } from "./admin-page.http.test-support.js";
 
@@ -24,58 +25,80 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("ConfigurePage (HTTP) channel configs", () => {
-  it("renders configured channels collapsed by default and expands an instance inline", async () => {
+describe("ConfigurePage (HTTP) Telegram channels", () => {
+  it("shows Telegram setup guidance in the unified edit dialog", async () => {
     const { core } = createAdminHttpTestCore();
     stubAdminHttpFetch(core);
     const page = renderAdminHttpConfigurePage(core);
 
     await switchHttpTab(page.container, "admin-http-tab-routing-config");
-    const toggleButton = await waitForEnabledTestId<HTMLButtonElement>(
-      page.container,
-      "channels-instance-toggle-default",
+    await clickAndFlush(
+      await waitForQuerySelector<HTMLButtonElement>(
+        page.container,
+        '[aria-label="Edit telegram default"]',
+      ),
     );
 
-    expect(page.container.textContent).toContain("Configured channels");
-    expect(page.container.textContent).toContain("default");
-    expect(
-      page.container.querySelector("[data-testid='channels-instance-default-bot-token']"),
-    ).toBeNull();
+    const dialog = await waitForTestId<HTMLElement>(document.body, "channels-account-dialog");
+    expect(dialog.textContent).toContain("@BotFather");
+    expect(dialog.textContent).toContain("message.from.id");
+    expect(dialog.textContent).toContain("Add yourself to the allowlist first");
 
-    click(toggleButton);
-    await flush();
-
-    expect(
-      page.container.querySelector("[data-testid='channels-instance-default-bot-token']"),
-    ).not.toBeNull();
     cleanupAdminHttpPage(page);
   });
 
-  it("adds a Telegram channel from the top-level add action", async () => {
+  it("creates a Telegram account from the unified channel flow", async () => {
     const { core } = createAdminHttpTestCore();
+    const nextChannels = {
+      status: "ok" as const,
+      channels: [
+        {
+          channel: "telegram",
+          name: "Telegram",
+          doc: null,
+          supported: true,
+          configurable: true,
+          accounts: [
+            {
+              channel: "telegram",
+              account_key: "alerts",
+              config: {
+                agent_key: "default",
+                allowed_user_ids: ["9001", "9002"],
+                pipeline_enabled: true,
+              },
+              configured_secret_keys: ["bot_token", "webhook_secret"],
+              created_at: TEST_TIMESTAMP,
+              updated_at: TEST_TIMESTAMP,
+            },
+          ],
+        },
+      ],
+    };
+
     const { writeSpy } = stubAdminHttpFetch(core, async (input: RequestInfo | URL, init) => {
       expectAuthorizedJsonRequest(input, init, {
-        url: "http://example.test/routing/channels/configs",
+        url: "http://example.test/config/channels/accounts",
         method: "POST",
         body: {
           channel: "telegram",
           account_key: "alerts",
-          bot_token: "alerts-bot-token",
-          webhook_secret: "alerts-webhook-secret",
-          allowed_user_ids: ["9001", "9002"],
-          pipeline_enabled: false,
+          config: {
+            allowed_user_ids: "9001\n9002",
+            agent_key: "default",
+            pipeline_enabled: true,
+          },
+          secrets: {
+            bot_token: "alerts-bot-token",
+            webhook_secret: "alerts-webhook-secret",
+          },
         },
       });
+      core.http.channelConfig.listChannels = vi.fn(async () => nextChannels);
       return jsonResponse(
         {
-          config: {
-            channel: "telegram",
-            account_key: "alerts",
-            bot_token_configured: true,
-            webhook_secret_configured: true,
-            allowed_user_ids: ["9001", "9002"],
-            pipeline_enabled: false,
-          },
+          status: "ok",
+          account: nextChannels.channels[0]?.accounts[0],
         },
         201,
       );
@@ -83,111 +106,100 @@ describe("ConfigurePage (HTTP) channel configs", () => {
 
     const page = renderAdminHttpConfigurePage(core);
     await switchHttpTab(page.container, "admin-http-tab-routing-config");
-    const addChannelButton = await waitForEnabledTestId<HTMLButtonElement>(
-      page.container,
-      "channels-instance-add-open",
-    );
-
-    click(addChannelButton);
-    const dialog = await waitForTestId<HTMLElement>(
-      document.body,
-      "channels-instance-create-dialog",
-    );
-
-    act(() => {
-      setNativeValue(
-        getByTestId<HTMLInputElement>(dialog, "channels-instance-create-account-key"),
-        "alerts",
-      );
-      setNativeValue(
-        getByTestId<HTMLInputElement>(dialog, "channels-instance-create-bot-token"),
-        "alerts-bot-token",
-      );
-      setNativeValue(
-        getByTestId<HTMLInputElement>(dialog, "channels-instance-create-webhook-secret"),
-        "alerts-webhook-secret",
-      );
-      setNativeValue(
-        getByTestId<HTMLTextAreaElement>(dialog, "channels-instance-create-allowed-user-ids"),
-        "9001\n9002",
-      );
-    });
-    await flush();
-
-    click(getByTestId<HTMLElement>(dialog, "channels-instance-create-pipeline-enabled"));
-    await flush();
     await clickAndFlush(
-      await waitForEnabledTestId<HTMLButtonElement>(dialog, "channels-instance-create-save"),
+      await waitForEnabledTestId<HTMLButtonElement>(page.container, "channels-add-open"),
     );
+
+    const dialog = await waitForTestId<HTMLElement>(document.body, "channels-account-dialog");
+    setNativeValue(getByTestId<HTMLInputElement>(dialog, "channels-account-account-key"), "alerts");
+    setNativeValue(
+      getByTestId<HTMLInputElement>(dialog, "channels-account-field-bot_token"),
+      "alerts-bot-token",
+    );
+    setNativeValue(
+      getByTestId<HTMLInputElement>(dialog, "channels-account-field-webhook_secret"),
+      "alerts-webhook-secret",
+    );
+    setNativeValue(
+      getByTestId<HTMLTextAreaElement>(dialog, "channels-account-field-allowed_user_ids"),
+      "9001\n9002",
+    );
+    await flush();
+
+    await clickAndFlush(
+      await waitForEnabledTestId<HTMLButtonElement>(dialog, "channels-account-save"),
+    );
+    await flush();
 
     expect(writeSpy).toHaveBeenCalledTimes(1);
-    expect(page.container.textContent).toContain("alerts");
     cleanupAdminHttpPage(page);
   });
 
-  it("saves an expanded Telegram account and prefers clear flags over typed secrets", async () => {
+  it("updates a Telegram account while preserving required saved secrets", async () => {
     const { core } = createAdminHttpTestCore();
     const { writeSpy } = stubAdminHttpFetch(core, async (input: RequestInfo | URL, init) => {
       expectAuthorizedJsonRequest(input, init, {
-        url: "http://example.test/routing/channels/configs/telegram/default",
+        url: "http://example.test/config/channels/accounts/telegram/default",
         method: "PATCH",
         body: {
-          clear_bot_token: true,
-          clear_webhook_secret: true,
-          allowed_user_ids: ["123", "456"],
-          pipeline_enabled: false,
+          config: {
+            allowed_user_ids: "123\n456",
+            agent_key: "default",
+            pipeline_enabled: false,
+          },
+          secrets: {
+            bot_token: "typed-then-cleared-bot-token",
+            webhook_secret: "typed-then-cleared-webhook-secret",
+          },
+          clear_secret_keys: [],
         },
       });
       return jsonResponse({
-        config: {
+        status: "ok",
+        account: {
           channel: "telegram",
           account_key: "default",
-          bot_token_configured: false,
-          webhook_secret_configured: false,
-          allowed_user_ids: ["123", "456"],
-          pipeline_enabled: false,
+          config: {
+            agent_key: "default",
+            allowed_user_ids: ["123", "456"],
+            pipeline_enabled: false,
+          },
+          configured_secret_keys: ["bot_token", "webhook_secret"],
+          created_at: TEST_TIMESTAMP,
+          updated_at: TEST_TIMESTAMP,
         },
       });
     });
 
     const page = renderAdminHttpConfigurePage(core);
     await switchHttpTab(page.container, "admin-http-tab-routing-config");
-    const toggleButton = await waitForEnabledTestId<HTMLButtonElement>(
-      page.container,
-      "channels-instance-toggle-default",
+    await clickAndFlush(
+      await waitForQuerySelector<HTMLButtonElement>(
+        page.container,
+        '[aria-label="Edit telegram default"]',
+      ),
     );
 
-    click(toggleButton);
-    await flush();
-
-    act(() => {
-      setNativeValue(
-        getByTestId<HTMLInputElement>(page.container, "channels-instance-default-bot-token"),
-        "typed-then-cleared-bot-token",
-      );
-      setNativeValue(
-        getByTestId<HTMLInputElement>(page.container, "channels-instance-default-webhook-secret"),
-        "typed-then-cleared-webhook-secret",
-      );
-      setNativeValue(
-        getByTestId<HTMLTextAreaElement>(
-          page.container,
-          "channels-instance-default-allowed-user-ids",
-        ),
-        "123\n456",
-      );
-    });
-    await flush();
-
-    click(getByTestId<HTMLElement>(page.container, "channels-instance-default-clear-bot-token"));
-    click(
-      getByTestId<HTMLElement>(page.container, "channels-instance-default-clear-webhook-secret"),
+    const dialog = await waitForTestId<HTMLElement>(document.body, "channels-account-dialog");
+    setNativeValue(
+      getByTestId<HTMLInputElement>(dialog, "channels-account-field-bot_token"),
+      "typed-then-cleared-bot-token",
     );
-    click(getByTestId<HTMLElement>(page.container, "channels-instance-default-pipeline-enabled"));
+    setNativeValue(
+      getByTestId<HTMLInputElement>(dialog, "channels-account-field-webhook_secret"),
+      "typed-then-cleared-webhook-secret",
+    );
+    setNativeValue(
+      getByTestId<HTMLTextAreaElement>(dialog, "channels-account-field-allowed_user_ids"),
+      "123\n456",
+    );
+    await flush();
+
+    click(getByTestId<HTMLElement>(dialog, "channels-account-field-pipeline_enabled"));
     await flush();
 
     await clickAndFlush(
-      getByTestId<HTMLButtonElement>(page.container, "channels-instance-save-default"),
+      await waitForEnabledTestId<HTMLButtonElement>(dialog, "channels-account-save"),
     );
 
     expect(writeSpy).toHaveBeenCalledTimes(1);
@@ -196,11 +208,40 @@ describe("ConfigurePage (HTTP) channel configs", () => {
 
   it("deletes a configured Telegram account", async () => {
     const { core } = createAdminHttpTestCore();
+    const nextChannels = {
+      status: "ok" as const,
+      channels: [
+        {
+          channel: "telegram",
+          name: "Telegram",
+          doc: null,
+          supported: true,
+          configurable: true,
+          accounts: [
+            {
+              channel: "telegram",
+              account_key: "default",
+              config: {
+                agent_key: "default",
+                allowed_user_ids: ["123"],
+                pipeline_enabled: true,
+              },
+              configured_secret_keys: ["bot_token", "webhook_secret"],
+              created_at: TEST_TIMESTAMP,
+              updated_at: TEST_TIMESTAMP,
+            },
+          ],
+        },
+      ],
+    };
+
     const { writeSpy } = stubAdminHttpFetch(core, async (input: RequestInfo | URL, init) => {
-      expect(String(input)).toBe("http://example.test/routing/channels/configs/telegram/ops");
+      expect(String(input)).toBe("http://example.test/config/channels/accounts/telegram/ops");
       expect(init?.method).toBe("DELETE");
       expect(new Headers(init?.headers).get("authorization")).toBe("Bearer test-elevated-token");
+      core.http.channelConfig.listChannels = vi.fn(async () => nextChannels);
       return jsonResponse({
+        status: "ok",
         deleted: true,
         channel: "telegram",
         account_key: "ops",
@@ -209,24 +250,24 @@ describe("ConfigurePage (HTTP) channel configs", () => {
 
     const page = renderAdminHttpConfigurePage(core);
     await switchHttpTab(page.container, "admin-http-tab-routing-config");
-    click(
-      await waitForEnabledTestId<HTMLButtonElement>(page.container, "channels-instance-toggle-ops"),
-    );
-    await flush();
-    click(
-      await waitForEnabledTestId<HTMLButtonElement>(
+    await clickAndFlush(
+      await waitForQuerySelector<HTMLButtonElement>(
         page.container,
-        "channels-instance-delete-open-ops",
+        '[aria-label="Delete telegram ops"]',
       ),
     );
+
     const confirmDialog = await waitForTestId<HTMLElement>(document.body, "confirm-danger-dialog");
     click(getByTestId<HTMLElement>(confirmDialog, "confirm-danger-checkbox"));
     await clickAndFlush(
       await waitForEnabledTestId<HTMLButtonElement>(confirmDialog, "confirm-danger-confirm"),
     );
+    await flush();
 
     expect(writeSpy).toHaveBeenCalledTimes(1);
-    expect(page.container.querySelector("[data-testid='channels-instance-card-ops']")).toBeNull();
+    expect(
+      page.container.querySelector("[data-testid='channels-account-card-telegram-ops']"),
+    ).toBeNull();
     cleanupAdminHttpPage(page);
   });
 });

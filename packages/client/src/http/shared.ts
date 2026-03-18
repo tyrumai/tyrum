@@ -1,4 +1,5 @@
 import { z, type ZodType } from "zod";
+import { ChannelFieldErrors } from "@tyrum/schemas";
 
 import { normalizeFingerprint256 } from "../tls/fingerprint.js";
 import { loadNodePinnedTransportModule } from "../load-node-pinned-transport.js";
@@ -8,6 +9,7 @@ const ErrorBodySchema = z
   .object({
     error: z.string().trim().min(1).optional(),
     message: z.string().trim().min(1).optional(),
+    field_errors: ChannelFieldErrors.optional(),
   })
   .passthrough();
 
@@ -75,6 +77,7 @@ export class TyrumHttpClientError extends Error {
   readonly code: TyrumHttpErrorCode;
   readonly status?: number;
   readonly error?: string;
+  readonly fieldErrors?: z.infer<typeof ChannelFieldErrors>;
 
   constructor(
     code: TyrumHttpErrorCode,
@@ -83,6 +86,7 @@ export class TyrumHttpClientError extends Error {
       cause?: unknown;
       status?: number;
       error?: string;
+      fieldErrors?: z.infer<typeof ChannelFieldErrors>;
     },
   ) {
     super(message, options);
@@ -90,6 +94,7 @@ export class TyrumHttpClientError extends Error {
     this.code = code;
     this.status = options?.status;
     this.error = options?.error;
+    this.fieldErrors = options?.fieldErrors;
   }
 }
 
@@ -388,6 +393,7 @@ export class HttpTransport {
       throw new TyrumHttpClientError("http_error", errorMessage, {
         status: response.status,
         error: errorCode,
+        fieldErrors: parsedError.success ? parsedError.data.field_errors : undefined,
       });
     }
 
@@ -475,6 +481,7 @@ export class HttpTransport {
       throw new TyrumHttpClientError("http_error", errorMessage, {
         status: response.status,
         error: errorCode,
+        fieldErrors: parsedError.success ? parsedError.data.field_errors : undefined,
       });
     }
 

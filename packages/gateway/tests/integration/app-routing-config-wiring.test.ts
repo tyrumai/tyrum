@@ -36,6 +36,16 @@ describe("gateway app routing config wiring", () => {
       expect(res.status).toBe(200);
       const body = (await res.json()) as { revision: number };
       expect(body.revision).toBe(0);
+
+      const writeRes = await app.request("/routing/config", {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${auth.tenantAdminToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ config: { v: 1 }, reason: "blocked" }),
+      });
+      expect(writeRes.status).toBe(405);
     } finally {
       await container.db.close();
     }

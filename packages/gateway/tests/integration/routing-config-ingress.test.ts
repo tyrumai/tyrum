@@ -31,6 +31,7 @@ describe("routing config (durable) + ingress", () => {
 
   async function seedTelegramAccount(input: {
     accountKey: string;
+    agentKey?: string;
     botToken?: string;
     webhookSecret?: string;
     allowedUserIds?: string[];
@@ -39,6 +40,7 @@ describe("routing config (durable) + ingress", () => {
     await new ChannelConfigDal(db).createTelegram({
       tenantId: DEFAULT_TENANT_ID,
       accountKey: input.accountKey,
+      agentKey: input.agentKey,
       botToken: input.botToken,
       webhookSecret: input.webhookSecret,
       allowedUserIds: input.allowedUserIds,
@@ -129,6 +131,12 @@ describe("routing config (durable) + ingress", () => {
     expect(res.status).toBe(200);
     expect(capturedAgentId).toBe("agent-b");
     expect(capturedAccountId).toBe("work");
+
+    const stored = await new ChannelConfigDal(db).getTelegramByAccountKey({
+      tenantId: DEFAULT_TENANT_ID,
+      accountKey: "work",
+    });
+    expect(stored?.agent_key).toBeUndefined();
   });
 
   it("falls back to the default agent when durable routing config state is invalid", async () => {
@@ -195,6 +203,68 @@ describe("routing config (durable) + ingress", () => {
 
     expect(res.status).toBe(200);
     expect(capturedAgentId).toBe("default");
+  });
+
+  it("ignores telegram agent_key query overrides once an account binding exists", async () => {
+    await seedTelegramAccount({
+      accountKey: "work",
+      agentKey: "agent-b",
+      botToken: "bot-token-work",
+      webhookSecret: "secret-work",
+      pipelineEnabled: true,
+    });
+
+    let capturedAgentId: string | undefined;
+
+    const app = new Hono();
+    app.route(
+      "/",
+      createIngressRoutes({
+        telegramRuntime: createTelegramRuntime(),
+        agents: {} as never,
+        telegramQueue: {
+          enqueue: async (_normalized, opts) => {
+            capturedAgentId = opts?.agentId;
+            return {
+              inbox: { inbox_id: 1, status: "queued" },
+              deduped: false,
+              message_text: "Hello bot",
+            };
+          },
+        } as never,
+      }),
+    );
+
+    const update = {
+      update_id: 100,
+      message: {
+        message_id: 42,
+        date: 1700000000,
+        from: {
+          id: 999,
+          is_bot: false,
+          first_name: "Alice",
+          username: "alice",
+        },
+        chat: {
+          id: 123,
+          type: "private",
+        },
+        text: "Hello bot",
+      },
+    };
+
+    const res = await app.request("/ingress/telegram?agent_key=default", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-telegram-bot-api-secret-token": "secret-work",
+      },
+      body: JSON.stringify(update),
+    });
+
+    expect(res.status).toBe(200);
+    expect(capturedAgentId).toBe("agent-b");
   });
 
   it("ignores telegram updates from senders outside the configured allowlist", async () => {

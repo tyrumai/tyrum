@@ -1,9 +1,16 @@
 /**
- * Ingress routes — Telegram webhook normalization + agent flow.
+ * Ingress routes — channel webhook normalization + agent flow.
  */
 
 import { Hono } from "hono";
 import { normalizeUpdate, TelegramNormalizationError } from "../modules/ingress/telegram.js";
+import {
+  buildGoogleChatEnvelope,
+  extractGoogleChatText,
+  parseGoogleChatEvent,
+  GoogleChatNormalizationError,
+} from "../modules/ingress/googlechat.js";
+import { verifyGoogleChatRequest } from "../modules/ingress/googlechat-auth.js";
 import { secureStringEqual } from "../utils/secure-string-equal.js";
 import type { TelegramBot } from "../modules/ingress/telegram-bot.js";
 import type { AgentRegistry } from "../modules/agent/registry.js";
@@ -16,6 +23,7 @@ import {
 import { resolveTelegramAgentId } from "../modules/channels/routing.js";
 import type { RoutingConfigDal } from "../modules/channels/routing-config-dal.js";
 import type { TelegramChannelRuntime } from "../modules/channels/telegram-runtime.js";
+import type { GoogleChatChannelRuntime } from "../modules/channels/googlechat-runtime.js";
 import type { MemoryDal } from "../modules/memory/memory-dal.js";
 import { recordMemorySystemEpisode } from "../modules/memory/memory-episode-recorder.js";
 import type { Logger } from "../modules/observability/logger.js";
@@ -24,6 +32,7 @@ import { safeDetail } from "../utils/safe-detail.js";
 
 export interface IngressDeps {
   telegramRuntime?: TelegramChannelRuntime;
+  googleChatRuntime?: GoogleChatChannelRuntime;
   telegramBot?: TelegramBot;
   telegramWebhookSecret?: string;
   telegramAllowedUserIds?: string[];
@@ -35,6 +44,13 @@ export interface IngressDeps {
 }
 
 const TELEGRAM_SECRET_HEADER = "x-telegram-bot-api-secret-token";
+
+function extractBearerToken(headerValue: string | undefined): string | undefined {
+  const raw = headerValue?.trim();
+  if (!raw) return undefined;
+  const match = raw.match(/^Bearer\s+(.+)$/i);
+  return match?.[1]?.trim();
+}
 
 function matchTelegramAccountByWebhookSecret(
   accounts: readonly StoredTelegramChannelConfig[],
@@ -178,7 +194,7 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
     }
 
     let durable;
-    if (deps.routingConfigDal) {
+    if (deps.routingConfigDal && (!deps.telegramRuntime || telegramBot)) {
       try {
         durable = await deps.routingConfigDal.getLatest(DEFAULT_TENANT_ID);
       } catch (err) {
@@ -189,9 +205,15 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
       }
     }
     const routing = durable?.config ?? { v: 1 };
-    const routedAgentId =
-      c.req.query("agent_key")?.trim() ||
-      resolveTelegramAgentId(routing, telegramAccountKey, chatId);
+    const storedTelegramAccount = deps.telegramRuntime
+      ? await deps.telegramRuntime.getTelegramAccountByAccountKey({
+          tenantId: DEFAULT_TENANT_ID,
+          accountKey: telegramAccountKey,
+        })
+      : undefined;
+    const storedAgentKey = storedTelegramAccount?.agent_key?.trim();
+    const routedFromLegacy = resolveTelegramAgentId(routing, telegramAccountKey, chatId);
+    const routedAgentId = storedAgentKey || routedFromLegacy;
 
     if (deps.telegramQueue && telegramPipelineEnabled) {
       try {
@@ -312,6 +334,124 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
         });
       }
       return c.json({ ok: true, error: "agent_error" });
+    }
+  });
+
+  ingressRouter.post("/ingress/googlechat", async (c) => {
+    const accounts = deps.googleChatRuntime
+      ? await deps.googleChatRuntime.listGoogleChatAccounts(DEFAULT_TENANT_ID)
+      : [];
+    if (accounts.length === 0) {
+      return c.json(
+        {
+          error: "misconfigured",
+          message: "Google Chat accounts must be configured when Google Chat ingress is enabled.",
+        },
+        503,
+      );
+    }
+
+    const bearer = extractBearerToken(c.req.header("authorization"));
+    if (!bearer) {
+      return c.json({ error: "unauthorized", message: "invalid google chat bearer" }, 401);
+    }
+
+    const verificationResults = await Promise.all(
+      accounts.map(async (account) => ({
+        account,
+        verification: await verifyGoogleChatRequest({
+          bearer,
+          audienceType: account.audience_type,
+          audience: account.audience,
+        }),
+      })),
+    );
+    const matchedAccounts = verificationResults
+      .filter((result) => result.verification.ok)
+      .map((result) => result.account);
+    if (matchedAccounts.length !== 1) {
+      return c.json({ error: "unauthorized", message: "invalid google chat bearer" }, 401);
+    }
+
+    const matchedAccount = matchedAccounts[0]!;
+    const rawBody = await c.req.text();
+    if (!rawBody) {
+      return c.json({ error: "invalid_request", message: "request body is empty" }, 400);
+    }
+
+    let event;
+    try {
+      event = parseGoogleChatEvent(rawBody);
+    } catch (err) {
+      if (err instanceof GoogleChatNormalizationError) {
+        return c.json({ error: "normalization_error", message: err.message }, 400);
+      }
+      throw err;
+    }
+
+    if ((event.type ?? "").trim().toUpperCase() !== "MESSAGE" || !event.message || !event.space) {
+      return c.json({}, 200);
+    }
+
+    if (!deps.agents) {
+      return c.json(event, 200);
+    }
+
+    let inbound;
+    try {
+      inbound = buildGoogleChatEnvelope({
+        accountKey: matchedAccount.account_key,
+        event,
+      });
+    } catch (err) {
+      if (err instanceof GoogleChatNormalizationError) {
+        return c.json({ error: "normalization_error", message: err.message }, 400);
+      }
+      throw err;
+    }
+
+    if (
+      matchedAccount.allowed_users.length > 0 &&
+      !matchedAccount.allowed_users.includes(inbound.senderId) &&
+      (!inbound.senderEmail || !matchedAccount.allowed_users.includes(inbound.senderEmail))
+    ) {
+      deps.logger?.info("ingress.googlechat.sender_blocked", {
+        sender_id: inbound.senderId,
+        sender_email: inbound.senderEmail ?? null,
+        account_key: matchedAccount.account_key,
+        reason: "googlechat_user_not_allowlisted",
+      });
+      return c.json({}, 200);
+    }
+
+    if (inbound.senderType === "BOT" || inbound.senderId === "users/app") {
+      return c.json({}, 200);
+    }
+
+    if (!extractGoogleChatText(event)) {
+      return c.json({}, 200);
+    }
+
+    try {
+      const runtime = await deps.agents.getRuntime({
+        tenantId: DEFAULT_TENANT_ID,
+        agentKey: matchedAccount.agent_key,
+      });
+      const result = await runtime.turn({
+        channel: "googlechat",
+        thread_id: inbound.containerId,
+        envelope: inbound.envelope,
+      });
+      return c.json({ text: result.reply }, 200);
+    } catch (err) {
+      deps.logger?.warn("ingress.googlechat.agent_turn_failed", {
+        account_key: matchedAccount.account_key,
+        sender_id: inbound.senderId,
+        container_id: inbound.containerId,
+        agent_id: matchedAccount.agent_key,
+        error: safeDetail(err) ?? "unknown_error",
+      });
+      return c.json({ text: "Sorry, something went wrong. Please try again later." }, 200);
     }
   });
 

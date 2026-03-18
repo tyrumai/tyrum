@@ -96,6 +96,14 @@ export type {
 export type { AgentListResult } from "./agent-list.js";
 export type { AgentStatusResult } from "./agent-status.js";
 export type {
+  ChannelRegistryResult,
+  ConfiguredChannelListResult,
+  ChannelAccountCreateInput,
+  ChannelAccountUpdateInput,
+  ChannelAccountMutateResult,
+  ChannelAccountDeleteResult,
+} from "./channel-config.js";
+export type {
   RoutingConfigGetResult,
   RoutingConfigRevisionListResult,
   RoutingConfigUpdateInput,

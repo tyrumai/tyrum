@@ -1,10 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Hono } from "hono";
 import { createRoutingConfigRoutes } from "../../src/routes/routing-config.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { RoutingConfigDal } from "../../src/modules/channels/routing-config-dal.js";
 import { ChannelThreadDal } from "../../src/modules/channels/thread-dal.js";
+import { ChannelConfigDal } from "../../src/modules/channels/channel-config-dal.js";
 import {
   DEFAULT_AGENT_KEY,
   DEFAULT_TENANT_ID,
@@ -28,7 +29,7 @@ describe("routing config routes", () => {
     await db.close();
   });
 
-  function createAuthedApp(send?: ReturnType<typeof vi.fn>): Hono {
+  function createAuthedApp(): Hono {
     const app = new Hono();
     app.use("*", async (c, next) => {
       c.set("authClaims", {
@@ -47,27 +48,6 @@ describe("routing config routes", () => {
         db,
         routingConfigDal: new RoutingConfigDal(db),
         channelThreadDal: new ChannelThreadDal(db),
-        ...(send
-          ? {
-              ws: {
-                connectionManager: {
-                  allClients: () => [
-                    {
-                      role: "client",
-                      auth_claims: {
-                        token_kind: "admin",
-                        token_id: "test-token",
-                        tenant_id: DEFAULT_TENANT_ID,
-                        role: "admin",
-                        scopes: ["*"],
-                      },
-                      ws: { send },
-                    },
-                  ],
-                },
-              },
-            }
-          : {}),
       } as never),
     );
 
@@ -98,131 +78,60 @@ describe("routing config routes", () => {
     return app;
   }
 
-  it("persists routing config revisions and emits ws events", async () => {
-    const send = vi.fn();
-    const app = createAuthedApp(send);
-
-    const res = await app.request("/routing/config", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        config: {
-          v: 1,
-          telegram: {
-            accounts: {
-              default: {
-                default_agent_key: "default",
-                threads: {
-                  "123": "agent-b",
-                },
+  it("serves legacy routing config as a read-only compatibility surface", async () => {
+    await new RoutingConfigDal(db).set({
+      tenantId: DEFAULT_TENANT_ID,
+      config: {
+        v: 1,
+        telegram: {
+          accounts: {
+            default: {
+              default_agent_key: "default",
+              threads: {
+                "123": "agent-b",
               },
             },
-          },
-        },
-        reason: "seed",
-      }),
-    });
-
-    expect(res.status).toBe(201);
-    const body = (await res.json()) as { revision: number; config: unknown };
-    expect(body.revision).toBeGreaterThan(0);
-    expect(body.config).toMatchObject({
-      telegram: {
-        accounts: {
-          default: {
-            threads: { "123": "agent-b" },
           },
         },
       },
+      createdBy: { kind: "test" },
+      reason: "seed",
+      occurredAtIso: "2026-03-01T00:00:00.000Z",
     });
 
+    const app = createAuthedApp();
     const fetchRes = await app.request("/routing/config", { method: "GET" });
     expect(fetchRes.status).toBe(200);
-    const fetched = (await fetchRes.json()) as { revision: number; config: unknown };
-    expect(fetched.revision).toBe(body.revision);
-
-    expect(send).toHaveBeenCalled();
-    const payload = send.mock.calls[0]?.[0];
-    expect(typeof payload).toBe("string");
-    const evt = JSON.parse(String(payload)) as { type?: string; payload?: unknown };
-    expect(evt.type).toBe("routing.config.updated");
-    expect(evt.payload).toMatchObject({ revision: body.revision, reason: "seed" });
-    expect(evt.payload as Record<string, unknown>).not.toHaveProperty("config");
-  });
-
-  it("reverts to an earlier revision", async () => {
-    const send = vi.fn();
-    const app = createAuthedApp(send);
-
-    const created = await app.request("/routing/config", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        config: {
-          v: 1,
-          telegram: {
-            accounts: {
-              default: {
-                default_agent_key: "default",
-                threads: {
-                  "123": "agent-b",
-                },
-              },
+    await expect(fetchRes.json()).resolves.toMatchObject({
+      revision: 1,
+      config: {
+        telegram: {
+          accounts: {
+            default: {
+              threads: { "123": "agent-b" },
             },
           },
         },
-        reason: "seed",
-      }),
+      },
+      reason: "seed",
     });
-    expect(created.status).toBe(201);
-    const createdBody = (await created.json()) as { revision: number; config: unknown };
 
-    const updated = await app.request("/routing/config", {
+    const putRes = await app.request("/routing/config", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        config: { v: 1 },
-        reason: "blank",
-      }),
+      body: JSON.stringify({ config: { v: 1 }, reason: "blocked" }),
     });
-    expect(updated.status).toBe(201);
+    expect(putRes.status).toBe(405);
+    await expect(putRes.json()).resolves.toMatchObject({
+      error: "unsupported_operation",
+    });
 
-    const reverted = await app.request("/routing/config/revert", {
+    const revertRes = await app.request("/routing/config/revert", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ revision: createdBody.revision, reason: "rollback" }),
+      body: JSON.stringify({ revision: 1, reason: "blocked" }),
     });
-
-    expect(reverted.status).toBe(201);
-    const revertedBody = (await reverted.json()) as { revision: number; config: unknown };
-    expect(revertedBody.revision).toBeGreaterThan(createdBody.revision);
-    expect(revertedBody.config).toEqual(createdBody.config);
-
-    const latest = await app.request("/routing/config", { method: "GET" });
-    expect(latest.status).toBe(200);
-    await expect(latest.json()).resolves.toMatchObject({
-      revision: revertedBody.revision,
-      reverted_from_revision: createdBody.revision,
-    });
-
-    const audit = await db.all<{ action_json: string }>(
-      `SELECT pe.action_json
-       FROM planner_events pe
-       JOIN plans p
-         ON p.tenant_id = pe.tenant_id
-        AND p.plan_id = pe.plan_id
-       WHERE pe.tenant_id = ?
-         AND p.plan_key = ?
-       ORDER BY pe.step_index ASC`,
-      [DEFAULT_TENANT_ID, "routing.config"],
-    );
-    expect(audit).toHaveLength(3);
-    const action = JSON.parse(audit[2]!.action_json) as Record<string, unknown>;
-    expect(action).toMatchObject({
-      type: "routing.config.updated",
-      revision: revertedBody.revision,
-      reverted_from_revision: createdBody.revision,
-    });
+    expect(revertRes.status).toBe(405);
   });
 
   it("returns a structured error when the durable routing config state is corrupt", async () => {
@@ -240,27 +149,25 @@ describe("routing config routes", () => {
   it("lists routing config revisions newest first", async () => {
     const app = createAuthedApp();
 
-    await app.request("/routing/config", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        config: {
-          v: 1,
-          telegram: { accounts: { default: { default_agent_key: "default" } } },
-        },
-        reason: "first",
-      }),
+    await new RoutingConfigDal(db).set({
+      tenantId: DEFAULT_TENANT_ID,
+      config: {
+        v: 1,
+        telegram: { accounts: { default: { default_agent_key: "default" } } },
+      },
+      reason: "first",
+      createdBy: { kind: "test" },
+      occurredAtIso: "2026-03-01T00:00:00.000Z",
     });
-    await app.request("/routing/config", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        config: {
-          v: 1,
-          telegram: { accounts: { default: { default_agent_key: "agent-b" } } },
-        },
-        reason: "second",
-      }),
+    await new RoutingConfigDal(db).set({
+      tenantId: DEFAULT_TENANT_ID,
+      config: {
+        v: 1,
+        telegram: { accounts: { default: { default_agent_key: "agent-b" } } },
+      },
+      reason: "second",
+      createdBy: { kind: "test" },
+      occurredAtIso: "2026-03-02T00:00:00.000Z",
     });
 
     const res = await app.request("/routing/config/revisions?limit=1", { method: "GET" });
@@ -345,33 +252,17 @@ describe("routing config routes", () => {
     });
   });
 
-  it("creates, lists, updates, and deletes telegram channel configs without returning secret values", async () => {
+  it("lists telegram channel configs without returning secret values and blocks legacy writes", async () => {
+    await new ChannelConfigDal(db).createTelegram({
+      tenantId: DEFAULT_TENANT_ID,
+      accountKey: "work",
+      botToken: "telegram-bot-token",
+      webhookSecret: "telegram-webhook-secret",
+      allowedUserIds: ["123", "456"],
+      pipelineEnabled: false,
+    });
+
     const app = createAuthedApp();
-
-    const create = await app.request("/routing/channels/configs", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        channel: "telegram",
-        account_key: "work",
-        bot_token: "telegram-bot-token",
-        webhook_secret: "telegram-webhook-secret",
-        allowed_user_ids: ["123", "456"],
-        pipeline_enabled: false,
-      }),
-    });
-
-    expect(create.status).toBe(201);
-    await expect(create.json()).resolves.toMatchObject({
-      config: {
-        channel: "telegram",
-        account_key: "work",
-        bot_token_configured: true,
-        webhook_secret_configured: true,
-        allowed_user_ids: ["123", "456"],
-        pipeline_enabled: false,
-      },
-    });
 
     const fetchRes = await app.request("/routing/channels/configs", { method: "GET" });
     expect(fetchRes.status).toBe(200);
@@ -391,6 +282,16 @@ describe("routing config routes", () => {
     expect(fetched.channels[0]).not.toHaveProperty("bot_token");
     expect(fetched.channels[0]).not.toHaveProperty("webhook_secret");
 
+    const create = await app.request("/routing/channels/configs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        channel: "telegram",
+        account_key: "other",
+      }),
+    });
+    expect(create.status).toBe(405);
+
     const update = await app.request("/routing/channels/configs/telegram/work", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -400,31 +301,23 @@ describe("routing config routes", () => {
         allowed_user_ids: ["123"],
       }),
     });
-    expect(update.status).toBe(200);
-    await expect(update.json()).resolves.toMatchObject({
-      config: {
-        channel: "telegram",
-        account_key: "work",
-        bot_token_configured: false,
-        webhook_secret_configured: false,
-        allowed_user_ids: ["123"],
-        pipeline_enabled: false,
-      },
-    });
+    expect(update.status).toBe(405);
 
     const removed = await app.request("/routing/channels/configs/telegram/work", {
       method: "DELETE",
     });
-    expect(removed.status).toBe(200);
-    await expect(removed.json()).resolves.toMatchObject({
-      deleted: true,
-      channel: "telegram",
-      account_key: "work",
-    });
+    expect(removed.status).toBe(405);
 
     const listAfterDelete = await app.request("/routing/channels/configs", { method: "GET" });
     expect(listAfterDelete.status).toBe(200);
-    await expect(listAfterDelete.json()).resolves.toMatchObject({ channels: [] });
+    await expect(listAfterDelete.json()).resolves.toMatchObject({
+      channels: [
+        {
+          channel: "telegram",
+          account_key: "work",
+        },
+      ],
+    });
   });
 
   it("imports the legacy singleton telegram deployment config into the default account on first list", async () => {

@@ -42,7 +42,7 @@ describe("Ingress routes", () => {
       },
     };
 
-    const res = await app.request("/ingress/telegram?agent_key=default", {
+    const res = await app.request("/ingress/telegram", {
       method: "POST",
       headers: {
         "x-telegram-bot-api-secret-token": "test-secret",
@@ -58,7 +58,7 @@ describe("Ingress routes", () => {
     );
   });
 
-  it("reuses preloaded account state without extra runtime lookups", async () => {
+  it("reuses preloaded webhook-matched account state and only reloads the account binding", async () => {
     const enqueue = vi.fn(async () => ({
       inbox: { status: "queued", inbox_id: "inbox-1" },
       deduped: false,
@@ -115,7 +115,11 @@ describe("Ingress routes", () => {
     expect(res.status).toBe(200);
     expect(enqueue).toHaveBeenCalledOnce();
     expect(getTelegramAccountByWebhookSecret).not.toHaveBeenCalled();
-    expect(getTelegramAccountByAccountKey).not.toHaveBeenCalled();
+    expect(getTelegramAccountByAccountKey).toHaveBeenCalledOnce();
+    expect(getTelegramAccountByAccountKey).toHaveBeenCalledWith({
+      tenantId: "00000000-0000-4000-8000-000000000001",
+      accountKey: "work",
+    });
     expect(getBotForAccount).not.toHaveBeenCalled();
   });
 

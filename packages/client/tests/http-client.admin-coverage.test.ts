@@ -31,6 +31,46 @@ const telegramChannel = {
   pipeline_enabled: true,
 } as const;
 
+const channelRegistryEntry = {
+  channel: "telegram",
+  name: "Telegram",
+  doc: null,
+  supported: true,
+  configurable: true,
+  intro_title: "Telegram setup",
+  intro_lines: ["Telegram accounts need a bot token."],
+  fields: [
+    {
+      key: "bot_token",
+      label: "Bot token",
+      description: "Required",
+      kind: "secret",
+      input: "password",
+      section: "credentials",
+      required: true,
+      placeholder: null,
+      help_title: "How to get a bot token",
+      help_lines: ["Talk to @BotFather."],
+      options: [],
+      option_source: null,
+      visible_when: null,
+    },
+  ],
+} as const;
+
+const configuredChannelAccount = {
+  channel: "telegram",
+  account_key: "default",
+  config: {
+    agent_key: "default",
+    allowed_user_ids: ["1001"],
+    pipeline_enabled: true,
+  },
+  configured_secret_keys: ["bot_token", "webhook_secret"],
+  created_at: "2026-03-10T00:00:00.000Z",
+  updated_at: "2026-03-11T00:00:00.000Z",
+} as const;
+
 const skillSummary = {
   kind: "skill",
   key: "ops-pack",
@@ -180,6 +220,74 @@ const contextReportRow = {
 } as const;
 
 describe("admin HTTP client coverage", () => {
+  it("covers channel config admin endpoints", async () => {
+    const fetch = makeFetchMock(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/config/channels/registry")) {
+        return jsonResponse({ status: "ok", channels: [channelRegistryEntry] });
+      }
+      if (url.endsWith("/config/channels") && init?.method === "GET") {
+        return jsonResponse({
+          status: "ok",
+          channels: [
+            {
+              channel: "telegram",
+              name: "Telegram",
+              doc: null,
+              supported: true,
+              configurable: true,
+              accounts: [configuredChannelAccount],
+            },
+          ],
+        });
+      }
+      if (url.endsWith("/config/channels/accounts") && init?.method === "POST") {
+        return jsonResponse({ status: "ok", account: configuredChannelAccount }, 201);
+      }
+      if (url.endsWith("/config/channels/accounts/telegram/default") && init?.method === "PATCH") {
+        return jsonResponse({
+          status: "ok",
+          account: {
+            ...configuredChannelAccount,
+            config: {
+              ...configuredChannelAccount.config,
+              allowed_user_ids: ["1001", "1002"],
+            },
+          },
+        });
+      }
+      if (url.endsWith("/config/channels/accounts/telegram/default") && init?.method === "DELETE") {
+        return jsonResponse({
+          status: "ok",
+          deleted: true,
+          channel: "telegram",
+          account_key: "default",
+        });
+      }
+      throw new Error(`unexpected request ${url}`);
+    });
+
+    const client = createTestClient({ fetch });
+    const registry = await client.channelConfig.listRegistry();
+    const listed = await client.channelConfig.listChannels();
+    const created = await client.channelConfig.createAccount({
+      channel: "telegram",
+      account_key: "default",
+      config: { agent_key: "default" },
+      secrets: { bot_token: "token", webhook_secret: "secret" },
+    });
+    const updated = await client.channelConfig.updateAccount("telegram", "default", {
+      config: { agent_key: "default", allowed_user_ids: "1001\n1002" },
+    });
+    const removed = await client.channelConfig.deleteAccount("telegram", "default");
+
+    expect(registry.channels[0]?.channel).toBe("telegram");
+    expect(listed.channels[0]?.accounts[0]?.account_key).toBe("default");
+    expect(created.account.account_key).toBe("default");
+    expect(updated.account.config).toMatchObject({ allowed_user_ids: ["1001", "1002"] });
+    expect(removed.deleted).toBe(true);
+  });
+
   it("covers routing config admin endpoints", async () => {
     const fetch = makeFetchMock(async (input, init) => {
       const url = String(input);

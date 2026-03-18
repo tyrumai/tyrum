@@ -60,6 +60,14 @@ async function routeAdminReadRequest(
       return jsonResponse(await core.http.providerConfig.listProviders());
     case "/config/providers/registry":
       return jsonResponse(await core.http.providerConfig.listRegistry());
+    case "/config/channels":
+      return core.http.channelConfig
+        ? jsonResponse(await core.http.channelConfig.listChannels())
+        : undefined;
+    case "/config/channels/registry":
+      return core.http.channelConfig
+        ? jsonResponse(await core.http.channelConfig.listRegistry())
+        : undefined;
     case "/config/tools":
       return jsonResponse(await core.http.toolRegistry.list());
     case "/policy/bundle":

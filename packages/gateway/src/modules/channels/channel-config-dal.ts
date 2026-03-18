@@ -1,48 +1,23 @@
-import {
-  ChannelConfigView as ChannelConfigViewSchema,
-  type ChannelConfigView as ChannelConfigViewT,
-} from "@tyrum/schemas";
-import { AccountId } from "@tyrum/schemas";
-import { z } from "zod";
 import type { SqlDb } from "../../statestore/types.js";
 import { DeploymentConfigDal } from "../config/deployment-config-dal.js";
-import { safeJsonParse } from "../../utils/json.js";
 import { secureStringEqual } from "../../utils/secure-string-equal.js";
 import { isUniqueViolation } from "../../utils/sql-errors.js";
+import {
+  StoredTelegramChannelConfigSchema,
+  type StoredChannelConfig,
+  type StoredTelegramChannelConfig,
+  asStoredTelegramConfig,
+  canonicalizeNumericIds,
+  parseStoredChannelConfigOrThrow,
+} from "./channel-config-model.js";
 
-function canonicalizeTelegramAllowedUserIds(userIds: readonly string[]): string[] {
-  const seen = new Set<string>();
-  const normalized: string[] = [];
-  for (const userId of userIds) {
-    const trimmed = userId.trim();
-    if (!trimmed || seen.has(trimmed)) continue;
-    seen.add(trimmed);
-    normalized.push(trimmed);
-  }
-  return normalized;
-}
-
-const StoredTelegramChannelConfig = z
-  .object({
-    channel: z.literal("telegram"),
-    account_key: AccountId,
-    bot_token: z.string().trim().min(1).optional(),
-    webhook_secret: z.string().trim().min(1).optional(),
-    allowed_user_ids: z
-      .array(
-        z
-          .string()
-          .trim()
-          .regex(/^[0-9]+$/),
-      )
-      .default([]),
-    pipeline_enabled: z.boolean().default(true),
-  })
-  .strict();
-export type StoredTelegramChannelConfig = z.infer<typeof StoredTelegramChannelConfig>;
-
-const StoredChannelConfig = z.discriminatedUnion("channel", [StoredTelegramChannelConfig]);
-type StoredChannelConfig = z.infer<typeof StoredChannelConfig>;
+export { toChannelConfigView } from "./channel-config-model.js";
+export type {
+  StoredDiscordChannelConfig,
+  StoredGoogleChatChannelConfig,
+  StoredChannelConfig,
+  StoredTelegramChannelConfig,
+} from "./channel-config-model.js";
 
 // Hidden sentinel row so a tenant that deleted every live channel config does not
 // re-import the legacy singleton deployment config on the next read.
@@ -54,28 +29,34 @@ type RawChannelConfigRow = {
   connector_key: string;
   account_key: string;
   config_json: string;
+  created_at?: string;
+  updated_at?: string;
 };
 
-function parseStoredChannelConfigOrThrow(row: RawChannelConfigRow): StoredChannelConfig {
-  const parsed = safeJsonParse(row.config_json, null);
-  const config = StoredChannelConfig.safeParse(parsed);
-  if (!config.success) {
-    throw new Error(
-      `channel config ${row.connector_key}:${row.account_key} failed schema validation: ${config.error.message}`,
-    );
-  }
-  return config.data;
-}
+export type StoredChannelConfigEntry = {
+  config: StoredChannelConfig;
+  createdAt: string;
+  updatedAt: string;
+};
 
-export function toChannelConfigView(config: StoredChannelConfig): ChannelConfigViewT {
-  return ChannelConfigViewSchema.parse({
-    channel: config.channel,
-    account_key: config.account_key,
-    bot_token_configured: Boolean(config.bot_token?.trim()),
-    webhook_secret_configured: Boolean(config.webhook_secret?.trim()),
-    allowed_user_ids: config.allowed_user_ids,
-    pipeline_enabled: config.pipeline_enabled,
-  });
+function normalizeIsoTimestamp(value: string | undefined): string {
+  if (!value?.trim()) {
+    return new Date().toISOString();
+  }
+  const normalized = value
+    .trim()
+    .replace(/^(\d{4}-\d{2}-\d{2})\s+/, "$1T")
+    .replace(/\s+([+-]\d{2}(?::?\d{2})?|[zZ])$/, "$1");
+  const normalizedOffset = /[+-]\d{4}$/.test(normalized)
+    ? `${normalized.slice(0, -2)}:${normalized.slice(-2)}`
+    : /[+-]\d{2}$/.test(normalized)
+      ? `${normalized}:00`
+      : normalized;
+  const withZone = /(?:[zZ]|[+-]\d{2}(?::?\d{2})?)$/.test(normalizedOffset)
+    ? normalizedOffset
+    : `${normalizedOffset}Z`;
+  const parsed = new Date(withZone);
+  return Number.isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
 }
 
 function webhookSecretsEqual(left: string | undefined, right: string | undefined): boolean {
@@ -114,31 +95,63 @@ export class ChannelConfigDal {
     return await this.listRaw({ tenantId });
   }
 
+  async listEntries(tenantId: string): Promise<StoredChannelConfigEntry[]> {
+    await this.ensureLegacyImported(tenantId);
+    return await this.listEntryRows({ tenantId });
+  }
+
   async listTelegram(tenantId: string): Promise<StoredTelegramChannelConfig[]> {
     await this.ensureLegacyImported(tenantId);
     const rows = await this.listRaw({ tenantId, connectorKey: "telegram" });
-    return rows.filter(
-      (config): config is StoredTelegramChannelConfig => config.channel === "telegram",
+    return rows.flatMap((config) => {
+      const telegram = asStoredTelegramConfig(config);
+      return telegram ? [telegram] : [];
+    });
+  }
+
+  async getByChannelAndAccountKey(input: {
+    tenantId: string;
+    connectorKey: StoredChannelConfig["channel"];
+    accountKey: string;
+  }): Promise<StoredChannelConfig | undefined> {
+    const entry = await this.getEntryByChannelAndAccountKey(input);
+    return entry?.config;
+  }
+
+  async getEntryByChannelAndAccountKey(input: {
+    tenantId: string;
+    connectorKey: StoredChannelConfig["channel"];
+    accountKey: string;
+  }): Promise<StoredChannelConfigEntry | undefined> {
+    await this.ensureLegacyImported(input.tenantId);
+    const row = await this.db.get<RawChannelConfigRow>(
+      `SELECT tenant_id, connector_key, account_key, config_json, created_at, updated_at
+       FROM channel_configs
+       WHERE tenant_id = ?
+         AND connector_key = ?
+         AND account_key = ?
+       LIMIT 1`,
+      [input.tenantId, input.connectorKey, input.accountKey],
     );
+    return row
+      ? {
+          config: parseStoredChannelConfigOrThrow(row),
+          createdAt: normalizeIsoTimestamp(row.created_at),
+          updatedAt: normalizeIsoTimestamp(row.updated_at ?? row.created_at),
+        }
+      : undefined;
   }
 
   async getTelegramByAccountKey(input: {
     tenantId: string;
     accountKey: string;
   }): Promise<StoredTelegramChannelConfig | undefined> {
-    await this.ensureLegacyImported(input.tenantId);
-    const row = await this.db.get<RawChannelConfigRow>(
-      `SELECT tenant_id, connector_key, account_key, config_json
-       FROM channel_configs
-       WHERE tenant_id = ?
-         AND connector_key = 'telegram'
-         AND account_key = ?
-       LIMIT 1`,
-      [input.tenantId, input.accountKey],
-    );
-    if (!row) return undefined;
-    const config = parseStoredChannelConfigOrThrow(row);
-    return config.channel === "telegram" ? config : undefined;
+    const config = await this.getByChannelAndAccountKey({
+      tenantId: input.tenantId,
+      connectorKey: "telegram",
+      accountKey: input.accountKey,
+    });
+    return config ? asStoredTelegramConfig(config) : undefined;
   }
 
   async getTelegramByWebhookSecret(input: {
@@ -157,28 +170,17 @@ export class ChannelConfigDal {
     return matched;
   }
 
-  async createTelegram(input: {
+  async create(input: {
     tenantId: string;
-    accountKey: string;
-    botToken?: string;
-    webhookSecret?: string;
-    allowedUserIds?: string[];
-    pipelineEnabled?: boolean;
-  }): Promise<StoredTelegramChannelConfig> {
+    config: StoredChannelConfig;
+  }): Promise<StoredChannelConfig> {
     await this.ensureLegacyImported(input.tenantId);
-    const config = StoredTelegramChannelConfig.parse({
-      channel: "telegram",
-      account_key: input.accountKey,
-      ...(input.botToken?.trim() ? { bot_token: input.botToken } : {}),
-      ...(input.webhookSecret?.trim() ? { webhook_secret: input.webhookSecret } : {}),
-      allowed_user_ids: canonicalizeTelegramAllowedUserIds(input.allowedUserIds ?? []),
-      pipeline_enabled: input.pipelineEnabled ?? true,
-    });
-    await this.assertUniqueTelegramWebhookSecret({
-      tenantId: input.tenantId,
-      webhookSecret: config.webhook_secret,
-      accountKey: undefined,
-    });
+    if (input.config.channel === "telegram") {
+      await this.assertUniqueTelegramWebhookSecret({
+        tenantId: input.tenantId,
+        webhookSecret: input.config.webhook_secret,
+      });
+    }
 
     let inserted;
     try {
@@ -189,29 +191,119 @@ export class ChannelConfigDal {
            account_key,
            config_json
          )
-         VALUES (?, 'telegram', ?, ?)
+         VALUES (?, ?, ?, ?)
          ON CONFLICT (tenant_id, connector_key, account_key) DO NOTHING`,
-        [input.tenantId, config.account_key, JSON.stringify(config)],
+        [
+          input.tenantId,
+          input.config.channel,
+          input.config.account_key,
+          JSON.stringify(input.config),
+        ],
       );
     } catch (err) {
-      if (config.webhook_secret && isUniqueViolation(err)) {
+      if (
+        input.config.channel === "telegram" &&
+        input.config.webhook_secret &&
+        isUniqueViolation(err)
+      ) {
         throw await this.createTelegramWebhookSecretConflictError({
           tenantId: input.tenantId,
-          webhookSecret: config.webhook_secret,
-          accountKey: config.account_key,
+          webhookSecret: input.config.webhook_secret,
+          accountKey: input.config.account_key,
         });
       }
       throw err;
     }
+
     if (inserted.changes !== 1) {
-      throw new Error(`channel config telegram:${config.account_key} already exists`);
+      throw new Error(
+        `channel config ${input.config.channel}:${input.config.account_key} already exists`,
+      );
     }
+    return input.config;
+  }
+
+  async replace(input: {
+    tenantId: string;
+    config: StoredChannelConfig;
+  }): Promise<StoredChannelConfig | undefined> {
+    await this.ensureLegacyImported(input.tenantId);
+    const existing = await this.getByChannelAndAccountKey({
+      tenantId: input.tenantId,
+      connectorKey: input.config.channel,
+      accountKey: input.config.account_key,
+    });
+    if (!existing) return undefined;
+
+    if (input.config.channel === "telegram") {
+      await this.assertUniqueTelegramWebhookSecret({
+        tenantId: input.tenantId,
+        webhookSecret: input.config.webhook_secret,
+        accountKey: input.config.account_key,
+      });
+    }
+
+    try {
+      await this.db.run(
+        `UPDATE channel_configs
+         SET config_json = ?,
+             updated_at = ?
+         WHERE tenant_id = ?
+           AND connector_key = ?
+           AND account_key = ?`,
+        [
+          JSON.stringify(input.config),
+          new Date().toISOString(),
+          input.tenantId,
+          input.config.channel,
+          input.config.account_key,
+        ],
+      );
+    } catch (err) {
+      if (
+        input.config.channel === "telegram" &&
+        input.config.webhook_secret &&
+        isUniqueViolation(err)
+      ) {
+        throw await this.createTelegramWebhookSecretConflictError({
+          tenantId: input.tenantId,
+          webhookSecret: input.config.webhook_secret,
+          accountKey: input.config.account_key,
+        });
+      }
+      throw err;
+    }
+
+    return input.config;
+  }
+
+  async createTelegram(input: {
+    tenantId: string;
+    accountKey: string;
+    agentKey?: string;
+    botToken?: string;
+    webhookSecret?: string;
+    allowedUserIds?: string[];
+    pipelineEnabled?: boolean;
+  }): Promise<StoredTelegramChannelConfig> {
+    const config = StoredTelegramChannelConfigSchema.parse({
+      channel: "telegram",
+      account_key: input.accountKey,
+      ...(input.agentKey?.trim() ? { agent_key: input.agentKey } : {}),
+      ...(input.botToken?.trim() ? { bot_token: input.botToken } : {}),
+      ...(input.webhookSecret?.trim() ? { webhook_secret: input.webhookSecret } : {}),
+      allowed_user_ids: canonicalizeNumericIds(input.allowedUserIds ?? []),
+      pipeline_enabled: input.pipelineEnabled ?? true,
+    });
+    await this.create({ tenantId: input.tenantId, config });
     return config;
   }
 
   async updateTelegram(input: {
     tenantId: string;
     accountKey: string;
+    agentKey?: string;
+    clearAgentKey?: boolean;
     botToken?: string;
     clearBotToken?: boolean;
     webhookSecret?: string;
@@ -219,12 +311,17 @@ export class ChannelConfigDal {
     allowedUserIds?: string[];
     pipelineEnabled?: boolean;
   }): Promise<StoredTelegramChannelConfig | undefined> {
-    await this.ensureLegacyImported(input.tenantId);
     const current = await this.getTelegramByAccountKey({
       tenantId: input.tenantId,
       accountKey: input.accountKey,
     });
     if (!current) return undefined;
+
+    const nextAgentKey = input.clearAgentKey
+      ? undefined
+      : input.agentKey?.trim()
+        ? input.agentKey
+        : current.agent_key;
     const nextBotToken = input.clearBotToken
       ? undefined
       : input.botToken?.trim()
@@ -236,42 +333,16 @@ export class ChannelConfigDal {
         ? input.webhookSecret
         : current.webhook_secret;
 
-    const next = StoredTelegramChannelConfig.parse({
+    const next = StoredTelegramChannelConfigSchema.parse({
       channel: "telegram",
       account_key: current.account_key,
+      ...(nextAgentKey ? { agent_key: nextAgentKey } : {}),
       ...(nextBotToken ? { bot_token: nextBotToken } : {}),
       ...(nextWebhookSecret ? { webhook_secret: nextWebhookSecret } : {}),
-      allowed_user_ids: canonicalizeTelegramAllowedUserIds(
-        input.allowedUserIds ?? current.allowed_user_ids,
-      ),
+      allowed_user_ids: canonicalizeNumericIds(input.allowedUserIds ?? current.allowed_user_ids),
       pipeline_enabled: input.pipelineEnabled ?? current.pipeline_enabled,
     });
-    await this.assertUniqueTelegramWebhookSecret({
-      tenantId: input.tenantId,
-      webhookSecret: next.webhook_secret,
-      accountKey: next.account_key,
-    });
-
-    try {
-      await this.db.run(
-        `UPDATE channel_configs
-         SET config_json = ?,
-             updated_at = ?
-         WHERE tenant_id = ?
-           AND connector_key = 'telegram'
-           AND account_key = ?`,
-        [JSON.stringify(next), new Date().toISOString(), input.tenantId, next.account_key],
-      );
-    } catch (err) {
-      if (next.webhook_secret && isUniqueViolation(err)) {
-        throw await this.createTelegramWebhookSecretConflictError({
-          tenantId: input.tenantId,
-          webhookSecret: next.webhook_secret,
-          accountKey: next.account_key,
-        });
-      }
-      throw err;
-    }
+    await this.replace({ tenantId: input.tenantId, config: next });
     return next;
   }
 
@@ -307,14 +378,14 @@ export class ChannelConfigDal {
     }
 
     const channels = latest.config.channels;
-    const legacy = StoredTelegramChannelConfig.parse({
+    const legacy = StoredTelegramChannelConfigSchema.parse({
       channel: "telegram",
       account_key: "default",
       ...(channels.telegramBotToken?.trim() ? { bot_token: channels.telegramBotToken } : {}),
       ...(channels.telegramWebhookSecret?.trim()
         ? { webhook_secret: channels.telegramWebhookSecret }
         : {}),
-      allowed_user_ids: canonicalizeTelegramAllowedUserIds(channels.telegramAllowedUserIds ?? []),
+      allowed_user_ids: canonicalizeNumericIds(channels.telegramAllowedUserIds ?? []),
       pipeline_enabled: channels.pipelineEnabled ?? true,
     });
 
@@ -351,8 +422,16 @@ export class ChannelConfigDal {
     tenantId: string;
     connectorKey?: string;
   }): Promise<StoredChannelConfig[]> {
+    const rows = await this.listEntryRows(input);
+    return rows.map((row) => row.config);
+  }
+
+  private async listEntryRows(input: {
+    tenantId: string;
+    connectorKey?: string;
+  }): Promise<StoredChannelConfigEntry[]> {
     const rows = await this.db.all<RawChannelConfigRow>(
-      `SELECT tenant_id, connector_key, account_key, config_json
+      `SELECT tenant_id, connector_key, account_key, config_json, created_at, updated_at
        FROM channel_configs
        WHERE tenant_id = ?
          AND connector_key != ?
@@ -362,7 +441,11 @@ export class ChannelConfigDal {
         ? [input.tenantId, LEGACY_IMPORT_MARKER_CONNECTOR_KEY, input.connectorKey]
         : [input.tenantId, LEGACY_IMPORT_MARKER_CONNECTOR_KEY],
     );
-    return rows.map(parseStoredChannelConfigOrThrow);
+    return rows.map((row) => ({
+      config: parseStoredChannelConfigOrThrow(row),
+      createdAt: normalizeIsoTimestamp(row.created_at),
+      updatedAt: normalizeIsoTimestamp(row.updated_at ?? row.created_at),
+    }));
   }
 
   private async assertUniqueTelegramWebhookSecret(input: {

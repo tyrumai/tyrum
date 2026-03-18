@@ -9,7 +9,7 @@ import { AdminHttpModelsPanel } from "./admin-http-models.js";
 import { AdminHttpLocationPanel } from "./admin-http-location.js";
 import { AdminHttpProvidersPanel } from "./admin-http-providers.js";
 import { AdminHttpPolicyAuthPanels } from "./admin-http-policy-auth-panels.js";
-import { AdminHttpRoutingConfigPanel } from "./admin-http-routing-config.js";
+import { AdminHttpChannelsPanel } from "./admin-http-channels.js";
 import { AdminHttpSecretsPanel } from "./admin-http-secrets.js";
 import { AdminWsCommandPanel } from "./admin-ws-command-panel.js";
 import { AdminMutationGate } from "./admin-http-shared.js";
@@ -132,7 +132,7 @@ function ConfigurePageContent({ core, mode, webAuthPersistence }: ConfigurePageP
         </TabsContent>
 
         <TabsContent value="routing-config">
-          <AdminHttpRoutingConfigPanel core={core} />
+          <AdminHttpChannelsPanel core={core} />
         </TabsContent>
 
         <TabsContent value="location">
