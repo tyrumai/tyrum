@@ -109,6 +109,7 @@ export function AiSdkConversation({
 }) {
   const [draft, setDraft] = useState("");
   const [followRequestId, setFollowRequestId] = useState(0);
+  const [sendErrorDismissed, setSendErrorDismissed] = useState(false);
   const draftRef = useRef<HTMLTextAreaElement | null>(null);
   const previousStatusRef = useRef<ReturnType<typeof useChat<UIMessage>>["status"]>("ready");
   const chat = useChat<UIMessage>({
@@ -162,6 +163,10 @@ export function AiSdkConversation({
     }
     syncDraftHeight(textarea);
   }, [draft]);
+
+  useEffect(() => {
+    setSendErrorDismissed(false);
+  }, [chat.error]);
 
   useEffect(() => {
     draftRef.current?.focus();
@@ -251,9 +256,14 @@ export function AiSdkConversation({
         working={working}
       />
 
-      {chat.error ? (
+      {chat.error && !sendErrorDismissed ? (
         <div className="px-3 pb-2">
-          <Alert variant="error" title="Failed to send message" description={chat.error.message} />
+          <Alert
+            variant="error"
+            title="Failed to send message"
+            description={chat.error.message}
+            onDismiss={() => setSendErrorDismissed(true)}
+          />
         </div>
       ) : null}
 

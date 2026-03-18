@@ -71,6 +71,11 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
   >({});
   const [managedAgents, setManagedAgents] = useState<ManagedAgentOption[]>([]);
   const [agentFilter, setAgentFilter] = useState("all");
+  const [approvalsErrorDismissed, setApprovalsErrorDismissed] = useState(false);
+
+  useEffect(() => {
+    setApprovalsErrorDismissed(false);
+  }, [approvals.error]);
 
   useEffect(() => {
     let cancelled = false;
@@ -375,8 +380,13 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
         {approvals.pendingIds.length} approvals awaiting action
       </LiveRegion>
 
-      {approvals.error ? (
-        <Alert variant="error" title="Approvals failed to load" description={approvals.error} />
+      {approvals.error && !approvalsErrorDismissed ? (
+        <Alert
+          variant="error"
+          title="Approvals failed to load"
+          description={approvals.error}
+          onDismiss={() => setApprovalsErrorDismissed(true)}
+        />
       ) : null}
 
       <Card data-testid="approvals-filters">

@@ -305,7 +305,12 @@ export function ExtensionsPage({ core }: { core: OperatorCore }) {
             </Button>
           </div>
           {error ? (
-            <Alert variant="error" title="Failed to load extensions" description={error} />
+            <Alert
+              variant="error"
+              title="Failed to load extensions"
+              description={error}
+              onDismiss={() => setError(null)}
+            />
           ) : null}
         </CardContent>
       </Card>
@@ -404,6 +409,7 @@ export function ExtensionsPage({ core }: { core: OperatorCore }) {
           variant="error"
           title="Extension action failed"
           description={toErrorMessage(mutation.state.error)}
+          onDismiss={() => mutation.reset()}
         />
       ) : null}
 

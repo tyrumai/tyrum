@@ -247,7 +247,12 @@ export function ToolRegistryCard({ core }: { core: OperatorCore }): React.ReactE
         </div>
 
         {errorMessage ? (
-          <Alert variant="error" title="Failed to load tools" description={errorMessage} />
+          <Alert
+            variant="error"
+            title="Failed to load tools"
+            description={errorMessage}
+            onDismiss={() => setErrorMessage(null)}
+          />
         ) : null}
 
         {loading ? <LoadingState label="Loading tool registry..." /> : null}

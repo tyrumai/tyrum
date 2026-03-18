@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
 import { Archive, ArchiveRestore, ChevronDown, Plus, RefreshCw } from "lucide-react";
+import { useEffect, useState } from "react";
 import { cn } from "../../lib/cn.js";
 import { formatRelativeTime } from "../../utils/format-relative-time.js";
 import { Alert } from "../ui/alert.js";
@@ -70,6 +70,12 @@ export function ChatThreadsPanel({
   onLoadArchived: () => void;
   onLoadMoreArchived: () => void;
 }) {
+  const [errorDismissed, setErrorDismissed] = useState(false);
+
+  useEffect(() => {
+    setErrorDismissed(false);
+  }, [errorMessage]);
+
   return (
     <div
       className={cn(
@@ -121,9 +127,14 @@ export function ChatThreadsPanel({
         </div>
       </div>
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        {errorMessage ? (
+        {errorMessage && !errorDismissed ? (
           <div className="p-3">
-            <Alert variant="error" title="Failed to load sessions" description={errorMessage} />
+            <Alert
+              variant="error"
+              title="Failed to load sessions"
+              description={errorMessage}
+              onDismiss={() => setErrorDismissed(true)}
+            />
           </div>
         ) : null}
         <div className="min-h-0 flex-1 overflow-hidden">

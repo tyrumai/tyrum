@@ -40,6 +40,8 @@ export function ConnectPage({
   const isWeb = mode === "web";
   const hasSavedWebToken = isWeb && webAuthPersistence?.hasStoredToken === true;
 
+  const [disconnectDismissed, setDisconnectDismissed] = useState(false);
+
   const lastDisconnect = connection.lastDisconnect;
   const nextRetryAtMs = connection.nextRetryAtMs;
   const hasScheduledRetry = typeof nextRetryAtMs === "number";
@@ -50,6 +52,10 @@ export function ConnectPage({
       ? `${lastDisconnect.reason} (code ${lastDisconnect.code})`
       : `Code ${lastDisconnect.code}`
     : null;
+
+  useEffect(() => {
+    setDisconnectDismissed(false);
+  }, [lastDisconnect, connection.transportError]);
 
   useEffect(() => {
     if (!hasScheduledRetry) return;
@@ -251,16 +257,27 @@ export function ConnectPage({
           ) : null}
 
           {loginError ? (
-            <Alert variant="error" title="Login failed" description={loginError} />
+            <Alert
+              variant="error"
+              title="Login failed"
+              description={loginError}
+              onDismiss={() => setLoginError(null)}
+            />
           ) : null}
 
-          {disconnectDescription ? (
-            <Alert variant="error" title="Disconnected" description={disconnectDescription} />
-          ) : connection.transportError ? (
+          {disconnectDescription && !disconnectDismissed ? (
+            <Alert
+              variant="error"
+              title="Disconnected"
+              description={disconnectDescription}
+              onDismiss={() => setDisconnectDismissed(true)}
+            />
+          ) : connection.transportError && !disconnectDismissed ? (
             <Alert
               variant="error"
               title="Transport error"
               description={connection.transportError}
+              onDismiss={() => setDisconnectDismissed(true)}
             />
           ) : null}
         </CardContent>

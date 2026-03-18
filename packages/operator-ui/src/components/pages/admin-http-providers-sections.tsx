@@ -272,6 +272,11 @@ export function ProvidersCard({
   onRemoveAccount: (account: ConfiguredProviderAccount) => void;
   requestEnter: () => void;
 }): React.ReactElement {
+  const [errorDismissed, setErrorDismissed] = React.useState(false);
+  React.useEffect(() => {
+    setErrorDismissed(false);
+  }, [errorMessage]);
+
   return (
     <Card>
       <CardHeader className="pb-2.5">
@@ -308,8 +313,13 @@ export function ProvidersCard({
         </div>
       </CardHeader>
       <CardContent className="grid gap-4">
-        {errorMessage ? (
-          <Alert variant="error" title="Provider config failed" description={errorMessage} />
+        {errorMessage && !errorDismissed ? (
+          <Alert
+            variant="error"
+            title="Provider config failed"
+            description={errorMessage}
+            onDismiss={() => setErrorDismissed(true)}
+          />
         ) : null}
 
         {unsupportedProviders.length > 0 ? (

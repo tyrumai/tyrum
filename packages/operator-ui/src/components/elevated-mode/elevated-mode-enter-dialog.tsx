@@ -102,7 +102,12 @@ export function ElevatedModeEnterDialog() {
           </label>
 
           {errorMessage ? (
-            <Alert variant="error" title="Admin access error" description={errorMessage} />
+            <Alert
+              variant="error"
+              title="Admin access error"
+              description={errorMessage}
+              onDismiss={() => setErrorMessage(null)}
+            />
           ) : null}
         </div>
 

@@ -71,6 +71,7 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
   );
   const [drilldownBusy, setDrilldownBusy] = useState(false);
   const [drilldownError, setDrilldownError] = useState<string | null>(null);
+  const [workboardErrorDismissed, setWorkboardErrorDismissed] = useState(false);
   const [transitionTarget, setTransitionTarget] = useState<WorkItem["status"] | null>(null);
   const [selectedItem, setSelectedItem] = useState<WorkItem | null>(null);
   const [artifacts, setArtifacts] = useState<WorkArtifact[]>([]);
@@ -78,6 +79,10 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
   const [signals, setSignals] = useState<WorkSignal[]>([]);
   const [agentKvEntries, setAgentKvEntries] = useState<WorkStateKvEntry[]>([]);
   const [workItemKvEntries, setWorkItemKvEntries] = useState<WorkStateKvEntry[]>([]);
+
+  useEffect(() => {
+    setWorkboardErrorDismissed(false);
+  }, [workboard.error]);
 
   useEffect(() => {
     setSelectedWorkItemId(null);
@@ -341,8 +346,13 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
         <div className="min-h-0 flex-1 overflow-hidden">
           <ScrollArea className="h-full">
             <div data-layout-content="" className="grid gap-4 px-4 py-4 md:px-5 md:py-5">
-              {workboard.error ? (
-                <Alert variant="error" title="WorkBoard error" description={workboard.error} />
+              {workboard.error && !workboardErrorDismissed ? (
+                <Alert
+                  variant="error"
+                  title="WorkBoard error"
+                  description={workboard.error}
+                  onDismiss={() => setWorkboardErrorDismissed(true)}
+                />
               ) : null}
 
               <div
@@ -424,8 +434,13 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
         <div className="min-h-0 flex-1 overflow-hidden">
           <ScrollArea className="h-full">
             <div data-layout-content="" className="grid gap-4 px-4 py-4 md:px-5 md:py-5">
-              {workboard.error ? (
-                <Alert variant="error" title="WorkBoard error" description={workboard.error} />
+              {workboard.error && !workboardErrorDismissed ? (
+                <Alert
+                  variant="error"
+                  title="WorkBoard error"
+                  description={workboard.error}
+                  onDismiss={() => setWorkboardErrorDismissed(true)}
+                />
               ) : null}
 
               <div className="grid gap-3">

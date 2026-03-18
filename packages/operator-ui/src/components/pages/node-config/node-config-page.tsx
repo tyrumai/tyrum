@@ -1,5 +1,5 @@
 import type { OperatorCore } from "@tyrum/operator-core";
-import { useCallback, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import type { DesktopApi } from "../../../desktop-api.js";
 import { useHostApi } from "../../../host/host-api.js";
 import { useReconnectScrollArea } from "../../../reconnect-ui-state.js";
@@ -114,6 +114,11 @@ function SectionLabel({ children }: { children: ReactNode }) {
 
 function NodeConfigPageLayout({ model }: { model: UnifiedNodeConfigModel }) {
   const scrollAreaRef = useReconnectScrollArea(`node-config:${model.platform}`);
+  const [loadErrorDismissed, setLoadErrorDismissed] = useState(false);
+
+  useEffect(() => {
+    setLoadErrorDismissed(false);
+  }, [model.loadError]);
 
   if (model.loading) {
     return (
@@ -127,10 +132,15 @@ function NodeConfigPageLayout({ model }: { model: UnifiedNodeConfigModel }) {
     );
   }
 
-  if (model.loadError) {
+  if (model.loadError && !loadErrorDismissed) {
     return (
       <AppPage contentClassName="max-w-5xl gap-4">
-        <Alert variant="error" title="Failed to load node settings" description={model.loadError} />
+        <Alert
+          variant="error"
+          title="Failed to load node settings"
+          description={model.loadError}
+          onDismiss={() => setLoadErrorDismissed(true)}
+        />
       </AppPage>
     );
   }

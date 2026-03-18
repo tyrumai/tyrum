@@ -99,6 +99,11 @@ export function RevisionHistoryCard(props: {
   requestEnter: () => void;
   onRevert: (revision: PolicyConfigRevision) => void;
 }): React.ReactElement {
+  const [errorDismissed, setErrorDismissed] = React.useState(false);
+  React.useEffect(() => {
+    setErrorDismissed(false);
+  }, [props.error]);
+
   return (
     <Card data-testid="policy-config-history">
       <CardHeader>
@@ -115,11 +120,12 @@ export function RevisionHistoryCard(props: {
             description="This gateway is not exposing deployment policy revision routes, so this view is read-only."
           />
         ) : null}
-        {props.error ? (
+        {props.error && !errorDismissed ? (
           <Alert
             variant="error"
             title="Policy history failed to load"
             description={formatErrorMessage(props.error)}
+            onDismiss={() => setErrorDismissed(true)}
           />
         ) : null}
         {!props.configUnavailable && !props.error && props.revisions.length === 0 ? (

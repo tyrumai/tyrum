@@ -2,6 +2,7 @@ import type { AuditExportResult, AuditForgetResult } from "@tyrum/client/browser
 import type { OperatorCore } from "@tyrum/operator-core";
 import { FileSearch } from "lucide-react";
 import * as React from "react";
+import { toast } from "sonner";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { useApiAction } from "../../hooks/use-api-action.js";
 import { ElevatedModeTooltip } from "../elevated-mode/elevated-mode-tooltip.js";
@@ -54,7 +55,11 @@ export function AuditPanel({ core }: { core: OperatorCore }) {
   const [filterValue, setFilterValue] = React.useState("");
   const [selectedPlanKey, setSelectedPlanKey] = React.useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = React.useState(false);
-  const [downloadError, setDownloadError] = React.useState<string | null>(null);
+  const [unavailableDismissed, setUnavailableDismissed] = React.useState(false);
+
+  React.useEffect(() => {
+    setUnavailableDismissed(false);
+  }, [auditApi]);
 
   const visiblePlans = React.useMemo(() => filterPlans(plans, filterValue), [plans, filterValue]);
   const selectedPlan =
@@ -69,7 +74,6 @@ export function AuditPanel({ core }: { core: OperatorCore }) {
   React.useEffect(() => {
     exportAction.reset();
     forgetAction.reset();
-    setDownloadError(null);
   }, [selectedPlanKey]);
 
   React.useEffect(() => {
@@ -130,9 +134,15 @@ export function AuditPanel({ core }: { core: OperatorCore }) {
         <CardHeader>
           <div className="text-sm font-medium text-fg">Audit</div>
         </CardHeader>
-        <CardContent>
-          <Alert variant="error" title="Audit API unavailable" />
-        </CardContent>
+        {!unavailableDismissed ? (
+          <CardContent>
+            <Alert
+              variant="error"
+              title="Audit API unavailable"
+              onDismiss={() => setUnavailableDismissed(true)}
+            />
+          </CardContent>
+        ) : null}
       </Card>
     );
   }
@@ -217,10 +227,15 @@ export function AuditPanel({ core }: { core: OperatorCore }) {
                     variant="primary"
                     isLoading={exportAction.isLoading}
                     onClick={() => {
-                      setDownloadError(null);
-                      void exportAction.run(() =>
-                        auditApi.exportReceiptBundle(selectedPlan.plan_key),
-                      );
+                      void exportAction
+                        .run(() => auditApi.exportReceiptBundle(selectedPlan.plan_key), {
+                          throwOnError: true,
+                        })
+                        .catch((error: unknown) => {
+                          toast.error("Export failed", {
+                            description: formatErrorMessage(error),
+                          });
+                        });
                     }}
                   >
                     Export receipt bundle
@@ -254,15 +269,12 @@ export function AuditPanel({ core }: { core: OperatorCore }) {
           <AuditExportResultCard
             plan={selectedPlan}
             result={exportAction.value}
-            error={exportAction.error}
-            downloadError={downloadError}
             onDownload={() => {
               if (!selectedPlan || !exportAction.value) return;
               try {
                 downloadReceiptBundle(exportAction.value, selectedPlan.plan_key);
-                setDownloadError(null);
               } catch (error) {
-                setDownloadError(formatErrorMessage(error));
+                toast.error("Download failed", { description: formatErrorMessage(error) });
               }
             }}
           />
@@ -270,7 +282,6 @@ export function AuditPanel({ core }: { core: OperatorCore }) {
           <AuditForgetResultCard
             planKey={selectedPlan?.plan_key ?? selectedPlanKey}
             result={forgetAction.value}
-            error={forgetAction.error}
           />
         </div>
       </CardContent>
@@ -289,19 +300,24 @@ export function AuditPanel({ core }: { core: OperatorCore }) {
             throw new Error("Authorize admin access to forget audit receipts.");
           }
           if (!selectedPlan) return;
-          await forgetAction.run(
-            async () => {
-              const result = await auditApi.forget({
-                confirm: "FORGET",
-                entity_type: "plan",
-                entity_id: selectedPlan.plan_key,
-                decision: "delete",
-              });
-              await refreshPlans();
-              return result;
-            },
-            { throwOnError: true },
-          );
+          try {
+            await forgetAction.run(
+              async () => {
+                const result = await auditApi.forget({
+                  confirm: "FORGET",
+                  entity_type: "plan",
+                  entity_id: selectedPlan.plan_key,
+                  decision: "delete",
+                });
+                await refreshPlans();
+                return result;
+              },
+              { throwOnError: true },
+            );
+          } catch (error) {
+            toast.error("Forget failed", { description: formatErrorMessage(error) });
+            throw error;
+          }
         }}
       >
         {selectedPlan ? <AuditSelectionSummary plan={selectedPlan} /> : null}
