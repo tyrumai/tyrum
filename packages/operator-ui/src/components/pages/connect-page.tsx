@@ -78,9 +78,11 @@ export function ConnectPage({
       setLoadingSavedToken(false);
       return;
     }
+    const { readToken } = webAuthPersistence;
     let cancelled = false;
     setLoadingSavedToken(true);
-    void Promise.resolve(webAuthPersistence.readToken())
+    void Promise.resolve()
+      .then(() => readToken())
       .then((storedToken) => {
         if (cancelled) return;
         const normalizedToken =
