@@ -209,6 +209,7 @@ export class NodeInventoryService {
           }
         }
 
+        const catalogDescription = catalog?.actions[0]?.description;
         summaries.push({
           capability: descriptorId,
           capability_version:
@@ -217,6 +218,7 @@ export class NodeInventoryService {
             advertisedCapability?.version ??
             pairedCapability?.version ??
             CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+          ...(catalogDescription ? { description: catalogDescription } : {}),
           connected: node.connected && advertisedCapability !== undefined,
           paired,
           dispatchable: node.connected && ready && paired && enabledActionCount > 0,

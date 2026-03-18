@@ -86,6 +86,7 @@ export const NodeCapabilitySummary = z
   .object({
     capability: CapabilityDescriptor.shape.id,
     capability_version: CapabilityDescriptor.shape.version,
+    description: z.string().trim().min(1).optional(),
     connected: z.boolean(),
     paired: z.boolean(),
     dispatchable: z.boolean(),

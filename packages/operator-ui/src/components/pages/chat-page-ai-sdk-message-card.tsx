@@ -21,6 +21,7 @@ import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
 import { JsonViewer } from "../ui/json-viewer.js";
 import { ApprovalActions } from "./approval-actions.js";
+import { useArtifactAwareMarkdownComponents } from "./chat-page-ai-sdk-artifact-markdown.js";
 import { DisclosureCard, useAutoDisclosure } from "./chat-page-ai-sdk-disclosure-card.js";
 import { renderMetaMessagePart } from "./chat-page-ai-sdk-meta-part-card.js";
 import {
@@ -165,11 +166,25 @@ const MARKDOWN_PROSE_CLASS_NAME = [
   "prose-pre:my-2 prose-pre:overflow-x-auto prose-pre:whitespace-pre-wrap prose-pre:break-words prose-pre:bg-bg-subtle prose-pre:text-fg prose-pre:[overflow-wrap:anywhere]",
 ].join(" ");
 
-function TextBlock({ value, renderMode }: { value: string; renderMode: "markdown" | "text" }) {
+function TextBlock({
+  value,
+  renderMode,
+  core,
+  runId,
+}: {
+  value: string;
+  renderMode: "markdown" | "text";
+  core?: OperatorCore;
+  runId: string | null;
+}) {
+  const components = useArtifactAwareMarkdownComponents(core, runId);
+
   if (renderMode === "markdown") {
     return (
       <div className={MARKDOWN_PROSE_CLASS_NAME}>
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>{value}</ReactMarkdown>
+        <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+          {value}
+        </ReactMarkdown>
       </div>
     );
   }
@@ -189,7 +204,7 @@ function ReasoningPartCard({
 
   return (
     <DisclosureCard header="Thinking" open={open} onToggle={toggleOpen}>
-      <TextBlock value={part.text} renderMode="text" />
+      <TextBlock value={part.text} renderMode="text" runId={null} />
     </DisclosureCard>
   );
 }
@@ -425,6 +440,8 @@ export function MessageCard({
                 key={`${message.id}:text:${index}`}
                 value={part.text}
                 renderMode={renderMode}
+                core={core}
+                runId={runId}
               />
             );
           }
