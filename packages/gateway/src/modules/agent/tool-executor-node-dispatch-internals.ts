@@ -39,6 +39,7 @@ export function stripNodeListControlState(
       capabilities: node.capabilities.map((capabilitySummary) => ({
         capability: capabilitySummary.capability,
         capability_version: capabilitySummary.capability_version,
+        ...(capabilitySummary.description ? { description: capabilitySummary.description } : {}),
         connected: capabilitySummary.connected,
         supported_action_count: capabilitySummary.supported_action_count,
         enabled_action_count: capabilitySummary.enabled_action_count,
