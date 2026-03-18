@@ -133,7 +133,10 @@ export function ElevatedModeProvider({
     core.elevatedModeStore.exit();
   };
 
-  // Auto-enter elevated mode when "always-on" and connected
+  // Auto-enter elevated mode when "always-on" and connected.
+  // autoEnterAttemptedRef guards against concurrent duplicate requests
+  // and is kept set after failure to prevent retry loops. On success it
+  // is cleared so that a later token expiry can trigger re-entry.
   useEffect(() => {
     if (adminAccessMode !== "always-on") {
       autoEnterAttemptedRef.current = false;
@@ -147,23 +150,23 @@ export function ElevatedModeProvider({
     if (autoEnterAttemptedRef.current) return;
 
     autoEnterAttemptedRef.current = true;
-    let cancelled = false;
     void (async () => {
       try {
         await enterElevatedMode();
+        // Success: clear the guard so a future token expiry can re-trigger.
+        // The isElevatedModeActive check above prevents immediate re-entry.
+        autoEnterAttemptedRef.current = false;
       } catch {
-        if (!cancelled) {
-          // Auto-enter failed; fall back to on-demand behavior.
-        }
+        // Failure: keep autoEnterAttemptedRef set to prevent retry loops.
+        // A disconnect/reconnect or mode toggle will reset it.
       }
     })();
-
-    return () => {
-      cancelled = true;
-    };
   });
 
-  // Auto-renew elevated mode token when "always-on" and nearing expiry
+  // Auto-renew elevated mode token when "always-on" and nearing expiry.
+  // renewingRef prevents concurrent renewal requests. It is always reset
+  // when the async operation completes — refs are safe to mutate after
+  // effect cleanup, unlike React state.
   useEffect(() => {
     if (adminAccessMode !== "always-on") return;
     if (elevatedMode.status !== "active") return;
@@ -172,22 +175,15 @@ export function ElevatedModeProvider({
     if (renewingRef.current) return;
 
     renewingRef.current = true;
-    let cancelled = false;
     void (async () => {
       try {
         await enterElevatedMode();
       } catch {
         // Renewal failed; existing token still has time left.
       } finally {
-        if (!cancelled) {
-          renewingRef.current = false;
-        }
+        renewingRef.current = false;
       }
     })();
-
-    return () => {
-      cancelled = true;
-    };
   });
 
   // Exit elevated mode when switching from "always-on" to "on-demand"
