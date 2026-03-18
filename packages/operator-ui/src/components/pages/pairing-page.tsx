@@ -391,6 +391,7 @@ export function PairingPage({ core }: { core: OperatorCore }) {
           />
           <Select
             bare
+            aria-label="Filter by state"
             data-testid="pairing-state-filter"
             value={stateFilter}
             onChange={(event) => setStateFilter(event.currentTarget.value as StateFilter)}
