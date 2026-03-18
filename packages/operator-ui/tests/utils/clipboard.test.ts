@@ -30,17 +30,17 @@ function createMobileHost(writeText: (text: string) => Promise<void>): OperatorU
           deviceId: "mobile-node-1",
           error: null,
           actions: {
-            "location.get_current": {
+            get: {
               enabled: true,
               availabilityStatus: "ready",
               unavailableReason: null,
             },
-            "camera.capture_photo": {
+            capture_photo: {
               enabled: true,
               availabilityStatus: "ready",
               unavailableReason: null,
             },
-            "audio.record_clip": {
+            record: {
               enabled: true,
               availabilityStatus: "ready",
               unavailableReason: null,

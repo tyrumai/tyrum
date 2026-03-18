@@ -3,10 +3,7 @@ import type { DesktopApi } from "../desktop-api.js";
 
 export type MobileHostPlatform = "ios" | "android";
 
-export type MobileHostActionName =
-  | "location.get_current"
-  | "camera.capture_photo"
-  | "audio.record_clip";
+export type MobileHostActionName = "get" | "capture_photo" | "record";
 
 export interface MobileHostActionState {
   enabled: boolean;

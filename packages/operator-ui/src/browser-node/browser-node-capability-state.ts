@@ -4,10 +4,7 @@ import {
   type NodeCapabilityState,
 } from "@tyrum/schemas";
 
-export type BrowserCapabilityName =
-  | "geolocation.get"
-  | "camera.capture_photo"
-  | "microphone.record";
+export type BrowserCapabilityName = "get" | "capture_photo" | "record";
 
 export type BrowserCapabilityState = {
   supported: true;
@@ -18,25 +15,21 @@ export type BrowserCapabilityState = {
 
 export type BrowserCapabilitySettings = Record<BrowserCapabilityName, boolean>;
 
-export const BROWSER_CAPABILITY_NAMES: BrowserCapabilityName[] = [
-  "geolocation.get",
-  "camera.capture_photo",
-  "microphone.record",
-];
+export const BROWSER_CAPABILITY_NAMES: BrowserCapabilityName[] = ["get", "capture_photo", "record"];
 
 const BROWSER_CAPABILITY_DESCRIPTOR_IDS: Record<BrowserCapabilityName, string> = {
-  "geolocation.get": "tyrum.location.get",
-  "camera.capture_photo": "tyrum.camera.capture-photo",
-  "microphone.record": "tyrum.audio.record",
+  get: "tyrum.location.get",
+  capture_photo: "tyrum.camera.capture-photo",
+  record: "tyrum.audio.record",
 };
 
 const ENABLED_STORAGE_KEY = "tyrum.operator-ui.browserNode.enabled";
 const CAPABILITY_SETTINGS_STORAGE_KEY = "tyrum.operator-ui.browserNode.capabilities";
 
 const DEFAULT_CAPABILITY_SETTINGS: BrowserCapabilitySettings = {
-  "geolocation.get": true,
-  "camera.capture_photo": true,
-  "microphone.record": true,
+  get: true,
+  capture_photo: true,
+  record: true,
 };
 
 export function readEnabledFromStorage(): boolean {
@@ -75,18 +68,15 @@ export function readCapabilitySettingsFromStorage(): BrowserCapabilitySettings {
     if (!raw) return DEFAULT_CAPABILITY_SETTINGS;
     const parsed = JSON.parse(raw) as Record<string, unknown>;
     return {
-      "geolocation.get":
-        typeof parsed["geolocation.get"] === "boolean"
-          ? parsed["geolocation.get"]
-          : DEFAULT_CAPABILITY_SETTINGS["geolocation.get"],
-      "camera.capture_photo":
-        typeof parsed["camera.capture_photo"] === "boolean"
-          ? parsed["camera.capture_photo"]
-          : DEFAULT_CAPABILITY_SETTINGS["camera.capture_photo"],
-      "microphone.record":
-        typeof parsed["microphone.record"] === "boolean"
-          ? parsed["microphone.record"]
-          : DEFAULT_CAPABILITY_SETTINGS["microphone.record"],
+      get: typeof parsed["get"] === "boolean" ? parsed["get"] : DEFAULT_CAPABILITY_SETTINGS["get"],
+      capture_photo:
+        typeof parsed["capture_photo"] === "boolean"
+          ? parsed["capture_photo"]
+          : DEFAULT_CAPABILITY_SETTINGS["capture_photo"],
+      record:
+        typeof parsed["record"] === "boolean"
+          ? parsed["record"]
+          : DEFAULT_CAPABILITY_SETTINGS["record"],
     };
   } catch {
     return DEFAULT_CAPABILITY_SETTINGS;
@@ -112,17 +102,17 @@ export function resolveBrowserCapabilityStates(
   const hasMediaRecorder = typeof globalThis.MediaRecorder === "function";
 
   return {
-    "geolocation.get": {
+    get: {
       supported: true,
-      enabled: settings["geolocation.get"],
+      enabled: settings["get"],
       availability_status: geolocationAvailable ? "available" : "unavailable",
       ...(geolocationAvailable
         ? undefined
         : { unavailable_reason: "Geolocation requires a secure context and browser support." }),
     },
-    "camera.capture_photo": {
+    capture_photo: {
       supported: true,
-      enabled: settings["camera.capture_photo"],
+      enabled: settings["capture_photo"],
       availability_status: canUseMediaDevices ? "unknown" : "unavailable",
       ...(canUseMediaDevices
         ? undefined
@@ -131,9 +121,9 @@ export function resolveBrowserCapabilityStates(
               "Camera capture requires a secure context and mediaDevices.getUserMedia.",
           }),
     },
-    "microphone.record": {
+    record: {
       supported: true,
-      enabled: settings["microphone.record"],
+      enabled: settings["record"],
       availability_status: canUseMediaDevices && hasMediaRecorder ? "unknown" : "unavailable",
       ...(canUseMediaDevices && hasMediaRecorder
         ? undefined

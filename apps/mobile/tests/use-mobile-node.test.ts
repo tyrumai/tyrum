@@ -177,9 +177,9 @@ describe("useMobileNode", () => {
       wsUrl: "ws://127.0.0.1:8788/ws",
       nodeEnabled: true,
       actionSettings: {
-        "location.get_current": true,
-        "camera.capture_photo": true,
-        "audio.record_clip": true,
+        get: true,
+        capture_photo: true,
+        record: true,
       },
       locationStreaming: {
         streamEnabled: true,
@@ -234,9 +234,9 @@ describe("useMobileNode", () => {
       wsUrl: "ws://127.0.0.1:8788/ws",
       nodeEnabled: true,
       actionSettings: {
-        "location.get_current": true,
-        "camera.capture_photo": true,
-        "audio.record_clip": true,
+        get: true,
+        capture_photo: true,
+        record: true,
       },
       locationStreaming: {
         streamEnabled: true,
@@ -299,9 +299,9 @@ describe("useMobileNode", () => {
       wsUrl: "ws://127.0.0.1:8788/ws",
       nodeEnabled: true,
       actionSettings: {
-        "location.get_current": true,
-        "camera.capture_photo": true,
-        "audio.record_clip": true,
+        get: true,
+        capture_photo: true,
+        record: true,
       },
       locationStreaming: {
         streamEnabled: true,
@@ -361,9 +361,9 @@ describe("useMobileNode", () => {
       wsUrl: "ws://127.0.0.1:8788/ws",
       nodeEnabled: true,
       actionSettings: {
-        "location.get_current": true,
-        "camera.capture_photo": true,
-        "audio.record_clip": true,
+        get: true,
+        capture_photo: true,
+        record: true,
       },
       locationStreaming: {
         streamEnabled: true,
@@ -422,9 +422,9 @@ describe("useMobileNode", () => {
       wsUrl: "ws://127.0.0.1:8788/ws",
       nodeEnabled: true,
       actionSettings: {
-        "location.get_current": true,
-        "camera.capture_photo": true,
-        "audio.record_clip": true,
+        get: true,
+        capture_photo: true,
+        record: true,
       },
     } as unknown as MobileConnectionConfig;
 

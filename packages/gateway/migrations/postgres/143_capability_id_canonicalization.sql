@@ -64,16 +64,18 @@ UPDATE connections SET capabilities_json = REPLACE(capabilities_json, '"tyrum.br
 UPDATE connections SET ready_capabilities_json = REPLACE(ready_capabilities_json, '"tyrum.browser.microphone.record"', '"tyrum.audio.record"') WHERE ready_capabilities_json LIKE '%tyrum.browser.microphone.record%';
 UPDATE connections SET capability_states_json = REPLACE(capability_states_json, '"tyrum.browser.microphone.record"', '"tyrum.audio.record"') WHERE capability_states_json LIKE '%tyrum.browser.microphone.record%';
 
--- tyrum.cli → tyrum.cli.execute (exact match only — avoid double-replacing tyrum.cli.execute)
-UPDATE node_pairings SET capabilities_json = REPLACE(capabilities_json, '"tyrum.cli"', '"tyrum.cli.execute"') WHERE capabilities_json LIKE '%"tyrum.cli"%' AND capabilities_json NOT LIKE '%tyrum.cli.execute%';
-UPDATE node_pairings SET capability_allowlist_json = REPLACE(capability_allowlist_json, '"tyrum.cli"', '"tyrum.cli.execute"') WHERE capability_allowlist_json LIKE '%"tyrum.cli"%' AND capability_allowlist_json NOT LIKE '%tyrum.cli.execute%';
-UPDATE connections SET capabilities_json = REPLACE(capabilities_json, '"tyrum.cli"', '"tyrum.cli.execute"') WHERE capabilities_json LIKE '%"tyrum.cli"%' AND capabilities_json NOT LIKE '%tyrum.cli.execute%';
-UPDATE connections SET ready_capabilities_json = REPLACE(ready_capabilities_json, '"tyrum.cli"', '"tyrum.cli.execute"') WHERE ready_capabilities_json LIKE '%"tyrum.cli"%' AND ready_capabilities_json NOT LIKE '%tyrum.cli.execute%';
-UPDATE connections SET capability_states_json = REPLACE(capability_states_json, '"tyrum.cli"', '"tyrum.cli.execute"') WHERE capability_states_json LIKE '%"tyrum.cli"%' AND capability_states_json NOT LIKE '%tyrum.cli.execute%';
+-- tyrum.cli → tyrum.cli.execute
+-- REPLACE is safe: '"tyrum.cli"' (with closing quote) won't match inside '"tyrum.cli.execute"'
+UPDATE node_pairings SET capabilities_json = REPLACE(capabilities_json, '"tyrum.cli"', '"tyrum.cli.execute"') WHERE capabilities_json LIKE '%"tyrum.cli"%';
+UPDATE node_pairings SET capability_allowlist_json = REPLACE(capability_allowlist_json, '"tyrum.cli"', '"tyrum.cli.execute"') WHERE capability_allowlist_json LIKE '%"tyrum.cli"%';
+UPDATE connections SET capabilities_json = REPLACE(capabilities_json, '"tyrum.cli"', '"tyrum.cli.execute"') WHERE capabilities_json LIKE '%"tyrum.cli"%';
+UPDATE connections SET ready_capabilities_json = REPLACE(ready_capabilities_json, '"tyrum.cli"', '"tyrum.cli.execute"') WHERE ready_capabilities_json LIKE '%"tyrum.cli"%';
+UPDATE connections SET capability_states_json = REPLACE(capability_states_json, '"tyrum.cli"', '"tyrum.cli.execute"') WHERE capability_states_json LIKE '%"tyrum.cli"%';
 
--- tyrum.http → tyrum.http.request (exact match only — avoid double-replacing tyrum.http.request)
-UPDATE node_pairings SET capabilities_json = REPLACE(capabilities_json, '"tyrum.http"', '"tyrum.http.request"') WHERE capabilities_json LIKE '%"tyrum.http"%' AND capabilities_json NOT LIKE '%tyrum.http.request%';
-UPDATE node_pairings SET capability_allowlist_json = REPLACE(capability_allowlist_json, '"tyrum.http"', '"tyrum.http.request"') WHERE capability_allowlist_json LIKE '%"tyrum.http"%' AND capability_allowlist_json NOT LIKE '%tyrum.http.request%';
-UPDATE connections SET capabilities_json = REPLACE(capabilities_json, '"tyrum.http"', '"tyrum.http.request"') WHERE capabilities_json LIKE '%"tyrum.http"%' AND capabilities_json NOT LIKE '%tyrum.http.request%';
-UPDATE connections SET ready_capabilities_json = REPLACE(ready_capabilities_json, '"tyrum.http"', '"tyrum.http.request"') WHERE ready_capabilities_json LIKE '%"tyrum.http"%' AND ready_capabilities_json NOT LIKE '%tyrum.http.request%';
-UPDATE connections SET capability_states_json = REPLACE(capability_states_json, '"tyrum.http"', '"tyrum.http.request"') WHERE capability_states_json LIKE '%"tyrum.http"%' AND capability_states_json NOT LIKE '%tyrum.http.request%';
+-- tyrum.http → tyrum.http.request
+-- REPLACE is safe: '"tyrum.http"' (with closing quote) won't match inside '"tyrum.http.request"'
+UPDATE node_pairings SET capabilities_json = REPLACE(capabilities_json, '"tyrum.http"', '"tyrum.http.request"') WHERE capabilities_json LIKE '%"tyrum.http"%';
+UPDATE node_pairings SET capability_allowlist_json = REPLACE(capability_allowlist_json, '"tyrum.http"', '"tyrum.http.request"') WHERE capability_allowlist_json LIKE '%"tyrum.http"%';
+UPDATE connections SET capabilities_json = REPLACE(capabilities_json, '"tyrum.http"', '"tyrum.http.request"') WHERE capabilities_json LIKE '%"tyrum.http"%';
+UPDATE connections SET ready_capabilities_json = REPLACE(ready_capabilities_json, '"tyrum.http"', '"tyrum.http.request"') WHERE ready_capabilities_json LIKE '%"tyrum.http"%';
+UPDATE connections SET capability_states_json = REPLACE(capability_states_json, '"tyrum.http"', '"tyrum.http.request"') WHERE capability_states_json LIKE '%"tyrum.http"%';

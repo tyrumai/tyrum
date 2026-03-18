@@ -257,15 +257,15 @@ export function createMobileHostApi(
     deviceId: "mobile-node-1",
     error: null,
     actions: {
-      "location.get_current": {
+      get: {
         enabled: true,
         availabilityStatus: "ready" as const,
       },
-      "camera.capture_photo": {
+      capture_photo: {
         enabled: true,
         availabilityStatus: "ready" as const,
       },
-      "audio.record_clip": {
+      record: {
         enabled: true,
         availabilityStatus: "ready" as const,
       },

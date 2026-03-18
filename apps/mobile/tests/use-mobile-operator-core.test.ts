@@ -104,9 +104,9 @@ describe("useMobileOperatorCore", () => {
       token: "token-1",
       nodeEnabled: true,
       actionSettings: {
-        "location.get_current": true,
-        "camera.capture_photo": true,
-        "audio.record_clip": true,
+        get: true,
+        capture_photo: true,
+        record: true,
       },
       locationStreaming: {
         streamEnabled: true,
@@ -137,15 +137,15 @@ describe("useMobileOperatorCore", () => {
 
     expect(connectMock).toHaveBeenCalledTimes(1);
     expect(createOperatorCoreManagerMock).toHaveBeenCalledTimes(1);
-    expect(state?.bootstrap?.actionSettings["camera.capture_photo"]).toBe(true);
+    expect(state?.bootstrap?.actionSettings["capture_photo"]).toBe(true);
 
     await act(async () => {
       await state?.updateConfig({
         nodeEnabled: false,
         actionSettings: {
-          "location.get_current": true,
-          "camera.capture_photo": false,
-          "audio.record_clip": true,
+          get: true,
+          capture_photo: false,
+          record: true,
         },
       });
       await Promise.resolve();
@@ -154,7 +154,7 @@ describe("useMobileOperatorCore", () => {
 
     expect(updateConfigMock).toHaveBeenCalledTimes(1);
     expect(state?.bootstrap?.nodeEnabled).toBe(false);
-    expect(state?.bootstrap?.actionSettings["camera.capture_photo"]).toBe(false);
+    expect(state?.bootstrap?.actionSettings["capture_photo"]).toBe(false);
     expect(connectMock).toHaveBeenCalledTimes(1);
     expect(createOperatorCoreManagerMock).toHaveBeenCalledTimes(1);
     expect(managerDisposeMock).not.toHaveBeenCalled();

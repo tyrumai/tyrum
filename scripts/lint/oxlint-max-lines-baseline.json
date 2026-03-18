@@ -1,5 +1,6 @@
 {
   "apps/desktop/tests/playwright-provider.test.ts": 527,
-  "packages/gateway/src/modules/node/capability-catalog.ts": 578,
+  "packages/gateway/src/modules/agent/tool-executor-node-dispatch.ts": 502,
+  "packages/gateway/src/modules/node/capability-catalog.ts": 584,
   "packages/operator-ui/src/components/pages/admin-http-routing-config.tsx": 567
 }

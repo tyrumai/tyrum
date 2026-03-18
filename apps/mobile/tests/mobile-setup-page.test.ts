@@ -41,9 +41,9 @@ describe("MobileSetupPage", () => {
           token: "next-token",
           nodeEnabled: true,
           actionSettings: {
-            "location.get_current": true,
-            "camera.capture_photo": true,
-            "audio.record_clip": true,
+            get: true,
+            capture_photo: true,
+            record: true,
           },
         },
         existingConfig: {
@@ -52,9 +52,9 @@ describe("MobileSetupPage", () => {
           token: "saved-token",
           nodeEnabled: true,
           actionSettings: {
-            "location.get_current": true,
-            "camera.capture_photo": true,
-            "audio.record_clip": true,
+            get: true,
+            capture_photo: true,
+            record: true,
           },
         },
         onSubmit,
@@ -87,9 +87,9 @@ describe("MobileSetupPage", () => {
         token: "next-token",
         nodeEnabled: true,
         actionSettings: {
-          "location.get_current": true,
-          "camera.capture_photo": true,
-          "audio.record_clip": true,
+          get: true,
+          capture_photo: true,
+          record: true,
         },
         locationStreaming: getDefaultLocationStreamingConfig(),
       });
@@ -115,9 +115,9 @@ describe("MobileSetupPage", () => {
           token: "next-token",
           nodeEnabled: true,
           actionSettings: {
-            "location.get_current": true,
-            "camera.capture_photo": true,
-            "audio.record_clip": true,
+            get: true,
+            capture_photo: true,
+            record: true,
           },
         },
         existingConfig: {
@@ -126,9 +126,9 @@ describe("MobileSetupPage", () => {
           token: "saved-token",
           nodeEnabled: true,
           actionSettings: {
-            "location.get_current": true,
-            "camera.capture_photo": true,
-            "audio.record_clip": true,
+            get: true,
+            capture_photo: true,
+            record: true,
           },
         },
         onSubmit,
@@ -204,9 +204,9 @@ describe("MobileSetupPage", () => {
       token: "saved-token",
       nodeEnabled: true,
       actionSettings: {
-        "location.get_current": true,
-        "camera.capture_photo": true,
-        "audio.record_clip": true,
+        get: true,
+        capture_photo: true,
+        record: true,
       },
     } as const;
 

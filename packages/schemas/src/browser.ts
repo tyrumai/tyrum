@@ -6,7 +6,7 @@ import { z } from "zod";
 
 export const BrowserGeolocationGetArgs = z
   .object({
-    op: z.literal("geolocation.get"),
+    op: z.literal("get"),
     enable_high_accuracy: z.boolean().default(false),
     timeout_ms: z.number().int().min(0).max(600_000).default(30_000),
     maximum_age_ms: z.number().int().min(0).max(600_000).default(0),
@@ -22,7 +22,7 @@ export type BrowserCameraCapturePhotoFormat = z.infer<typeof BrowserCameraCaptur
 
 export const BrowserCameraCapturePhotoArgs = z
   .object({
-    op: z.literal("camera.capture_photo"),
+    op: z.literal("capture_photo"),
     facing_mode: BrowserCameraFacingMode.optional(),
     device_id: z.string().trim().min(1).optional(),
     format: BrowserCameraCapturePhotoFormat.default("jpeg"),
@@ -33,7 +33,7 @@ export type BrowserCameraCapturePhotoArgs = z.infer<typeof BrowserCameraCaptureP
 
 export const BrowserMicrophoneRecordArgs = z
   .object({
-    op: z.literal("microphone.record"),
+    op: z.literal("record"),
     duration_ms: z.number().int().min(250).max(300_000).default(5_000),
     mime: z.string().trim().min(1).optional(),
     device_id: z.string().trim().min(1).optional(),
@@ -68,7 +68,7 @@ export type BrowserGeolocationCoords = z.infer<typeof BrowserGeolocationCoords>;
 
 export const BrowserGeolocationGetResult = z
   .object({
-    op: z.literal("geolocation.get"),
+    op: z.literal("get"),
     coords: BrowserGeolocationCoords,
     timestamp: z.string().datetime(),
   })
@@ -77,7 +77,7 @@ export type BrowserGeolocationGetResult = z.infer<typeof BrowserGeolocationGetRe
 
 export const BrowserCameraCapturePhotoResult = z
   .object({
-    op: z.literal("camera.capture_photo"),
+    op: z.literal("capture_photo"),
     bytesBase64: z.string().min(1),
     mime: z.string().trim().min(1),
     width: z.number().int().positive().optional(),
@@ -89,7 +89,7 @@ export type BrowserCameraCapturePhotoResult = z.infer<typeof BrowserCameraCaptur
 
 export const BrowserMicrophoneRecordResult = z
   .object({
-    op: z.literal("microphone.record"),
+    op: z.literal("record"),
     bytesBase64: z.string().min(1),
     mime: z.string().trim().min(1),
     duration_ms: z.number().int().nonnegative(),

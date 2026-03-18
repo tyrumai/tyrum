@@ -171,17 +171,17 @@ function createMobileState(input: {
     deviceId: input.deviceId,
     error: null,
     actions: {
-      "location.get_current": {
+      get: {
         enabled: true,
         availabilityStatus: "ready",
         unavailableReason: null,
       },
-      "camera.capture_photo": {
+      capture_photo: {
         enabled: true,
         availabilityStatus: "ready",
         unavailableReason: null,
       },
-      "audio.record_clip": {
+      record: {
         enabled: true,
         availabilityStatus: "ready",
         unavailableReason: null,

@@ -12,16 +12,12 @@ import type {
 } from "@tyrum/operator-ui";
 import type { MobileActionSettings } from "./mobile-config.js";
 
-export const MOBILE_ACTION_NAMES: MobileHostActionName[] = [
-  "location.get_current",
-  "camera.capture_photo",
-  "audio.record_clip",
-];
+export const MOBILE_ACTION_NAMES: MobileHostActionName[] = ["get", "capture_photo", "record"];
 
 const MOBILE_CAPABILITY_DESCRIPTOR_IDS: Record<MobileHostActionName, string> = {
-  "location.get_current": "tyrum.location.get",
-  "camera.capture_photo": "tyrum.camera.capture-photo",
-  "audio.record_clip": "tyrum.audio.record",
+  get: "tyrum.location.get",
+  capture_photo: "tyrum.camera.capture-photo",
+  record: "tyrum.audio.record",
 };
 
 export function resolveMobilePlatform(): MobileHostPlatform {
@@ -39,20 +35,20 @@ export function resolveMobileActionStates(
     typeof globalThis.MediaRecorder === "function";
 
   return {
-    "location.get_current": {
-      enabled: settings["location.get_current"],
+    get: {
+      enabled: settings["get"],
       availabilityStatus: hasGeolocation ? "ready" : "unavailable",
       unavailableReason: hasGeolocation
         ? null
         : "Location services are unavailable in this runtime.",
     },
-    "camera.capture_photo": {
-      enabled: settings["camera.capture_photo"],
+    capture_photo: {
+      enabled: settings["capture_photo"],
       availabilityStatus: hasCamera ? "ready" : "unavailable",
       unavailableReason: hasCamera ? null : "Camera capture is unavailable in this runtime.",
     },
-    "audio.record_clip": {
-      enabled: settings["audio.record_clip"],
+    record: {
+      enabled: settings["record"],
       availabilityStatus: hasAudio ? "ready" : "unavailable",
       unavailableReason: hasAudio
         ? null

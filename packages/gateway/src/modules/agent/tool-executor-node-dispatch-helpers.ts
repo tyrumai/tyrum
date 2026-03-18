@@ -247,6 +247,7 @@ export async function shapeNodeDispatchEvidence(
   if (
     actionKind !== "Desktop" &&
     actionKind !== "Browser" &&
+    actionKind !== "Web" &&
     actionKind !== "IOS" &&
     actionKind !== "Android"
   ) {

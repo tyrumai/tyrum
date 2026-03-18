@@ -31,7 +31,7 @@ export interface PlaywrightBackend {
   }): Promise<boolean>;
   listTabs(): Promise<{
     tabs: Array<{ index: number; url: string; title?: string }>;
-    activeIndex: number;
+    active_index: number;
   }>;
   switchTab(index: number): Promise<void>;
   uploadFile(selector: string, paths: string[]): Promise<number>;

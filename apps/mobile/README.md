@@ -128,9 +128,9 @@ Capacitor mobile shell for Tyrum and the local iOS/Android node runtime.
 - Secrets are stored with `@aparajita/capacitor-secure-storage`.
 - Non-secret mobile config is stored with `@capacitor/preferences`.
 - The local mobile node advertises `tyrum.ios` or `tyrum.android` and supports:
-  - `location.get_current`
-  - `camera.capture_photo`
-  - `audio.record_clip`
+  - `get` (location)
+  - `capture_photo` (camera)
+  - `record` (audio)
 - Local mobile node support is only enabled on Capacitor iOS and Android targets, not the browser `vite` dev server.
 - Manual QA checklist: [`QA.md`](./QA.md)
 - Keep the `tyrum://bootstrap` deep-link scheme, Android intent filter, and camera permission strings in sync when updating native QR onboarding support.

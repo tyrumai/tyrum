@@ -131,16 +131,8 @@ function canonicalizeMessagingTarget(
 
 type DesktopDispatchOp = "snapshot" | "query" | "act" | "wait_for" | "unknown";
 type DesktopActSubtype = "ui" | "mouse" | "keyboard" | "unknown";
-type BrowserDispatchOp =
-  | "geolocation.get"
-  | "camera.capture_photo"
-  | "microphone.record"
-  | "unknown";
-type MobileDispatchOp =
-  | "location.get_current"
-  | "camera.capture_photo"
-  | "audio.record_clip"
-  | "unknown";
+type BrowserDispatchOp = "get" | "capture_photo" | "record" | "unknown";
+type MobileDispatchOp = "get" | "capture_photo" | "record" | "unknown";
 type ScheduleExecutionKind = "agent_turn" | "playbook" | "steps" | "unknown";
 
 function normalizeNodeDispatchOpRaw(parsed: Record<string, unknown> | null): string | undefined {
@@ -183,9 +175,9 @@ function canonicalizeBrowserDispatchOp(parsed: Record<string, unknown> | null): 
   if (!opRaw) return "unknown";
 
   switch (opRaw) {
-    case "geolocation.get":
-    case "camera.capture_photo":
-    case "microphone.record":
+    case "get":
+    case "capture_photo":
+    case "record":
       return opRaw;
     default:
       return "unknown";
@@ -197,9 +189,9 @@ function canonicalizeMobileDispatchOp(parsed: Record<string, unknown> | null): M
   if (!opRaw) return "unknown";
 
   switch (opRaw) {
-    case "location.get_current":
-    case "camera.capture_photo":
-    case "audio.record_clip":
+    case "get":
+    case "capture_photo":
+    case "record":
       return opRaw;
     default:
       return "unknown";
@@ -225,20 +217,26 @@ function inferPrimitiveFromUnknownCapability(
   const capabilityHint = inferPrimitiveFromCapabilityHint(capability);
   if (capabilityHint) return capabilityHint;
 
-  if (actionName.startsWith("location.") || actionName.startsWith("audio.")) {
+  if (actionName === "get") {
+    // Ambiguous — "get" is the location op; use input shape to disambiguate
+    if (normalizeToken(input?.["facing_mode"]) || normalizeToken(input?.["device_id"])) {
+      return "Browser";
+    }
     return "IOS";
   }
-  if (actionName.startsWith("geolocation.") || actionName.startsWith("microphone.")) {
-    return "Browser";
+  if (actionName === "record") {
+    // Ambiguous — "record" is the audio op; use input shape to disambiguate
+    if (normalizeToken(input?.["device_id"])) return "Browser";
+    return "IOS";
   }
-  if (actionName === "camera.capture_photo") {
+  if (actionName === "capture_photo") {
     if (normalizeToken(input?.["camera"])) return "IOS";
     if (normalizeToken(input?.["facing_mode"]) || normalizeToken(input?.["device_id"])) {
       return "Browser";
     }
     return "Browser";
   }
-  if (actionName.startsWith("camera.")) return "Browser";
+  if (actionName === "capture_video") return "Browser";
   return "Desktop";
 }
 

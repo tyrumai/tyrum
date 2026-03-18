@@ -231,12 +231,12 @@ export class RealPlaywrightBackend implements PlaywrightBackend {
 
   async listTabs(): Promise<{
     tabs: Array<{ index: number; url: string; title?: string }>;
-    activeIndex: number;
+    active_index: number;
   }> {
     const context = this.getContext();
     const pages = context.pages();
     const page = this.getPage();
-    const activeIndex = pages.indexOf(page);
+    const active_index = pages.indexOf(page);
     const tabs = await Promise.all(
       pages.map(async (p, index) => ({
         index,
@@ -244,7 +244,7 @@ export class RealPlaywrightBackend implements PlaywrightBackend {
         title: await p.title().catch(() => undefined),
       })),
     );
-    return { tabs, activeIndex: activeIndex >= 0 ? activeIndex : 0 };
+    return { tabs, active_index: active_index >= 0 ? active_index : 0 };
   }
 
   async switchTab(index: number): Promise<void> {

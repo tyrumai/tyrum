@@ -41,9 +41,9 @@ const SECURE_OPERATOR_IDENTITY_KEY = "operator.identity";
 const SECURE_NODE_IDENTITY_KEY = "node.identity";
 
 const DEFAULT_ACTION_SETTINGS: MobileActionSettings = {
-  "location.get_current": true,
-  "camera.capture_photo": true,
-  "audio.record_clip": true,
+  get: true,
+  capture_photo: true,
+  record: true,
 };
 
 const DEFAULT_LOCATION_STREAMING_CONFIG: MobileLocationStreamingConfig = {
@@ -96,18 +96,18 @@ function parseConnectionConfig(raw: unknown): MobileConnectionConfig | null {
     wsUrl,
     nodeEnabled: record["nodeEnabled"] !== false,
     actionSettings: {
-      "location.get_current":
-        typeof actionRecord["location.get_current"] === "boolean"
-          ? actionRecord["location.get_current"]
-          : DEFAULT_ACTION_SETTINGS["location.get_current"],
-      "camera.capture_photo":
-        typeof actionRecord["camera.capture_photo"] === "boolean"
-          ? actionRecord["camera.capture_photo"]
-          : DEFAULT_ACTION_SETTINGS["camera.capture_photo"],
-      "audio.record_clip":
-        typeof actionRecord["audio.record_clip"] === "boolean"
-          ? actionRecord["audio.record_clip"]
-          : DEFAULT_ACTION_SETTINGS["audio.record_clip"],
+      get:
+        typeof actionRecord["get"] === "boolean"
+          ? actionRecord["get"]
+          : DEFAULT_ACTION_SETTINGS["get"],
+      capture_photo:
+        typeof actionRecord["capture_photo"] === "boolean"
+          ? actionRecord["capture_photo"]
+          : DEFAULT_ACTION_SETTINGS["capture_photo"],
+      record:
+        typeof actionRecord["record"] === "boolean"
+          ? actionRecord["record"]
+          : DEFAULT_ACTION_SETTINGS["record"],
     },
     locationStreaming: {
       streamEnabled:

@@ -215,12 +215,10 @@ describe("canonicalizeToolMatchTarget", () => {
   it("canonicalizes browser node dispatch by capability + action + browser op", () => {
     const geoTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
       capability: "tyrum.browser.geolocation.get",
-      action_name: "geolocation.get",
+      action_name: "get",
       input: { enable_high_accuracy: true },
     });
-    expect(geoTarget).toBe(
-      "capability:tyrum.browser.geolocation.get;action:Browser;op:geolocation.get",
-    );
+    expect(geoTarget).toBe("capability:tyrum.browser.geolocation.get;action:Browser;op:get");
     expect(geoTarget).not.toContain("enable_high_accuracy");
 
     const unknownTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
@@ -237,21 +235,19 @@ describe("canonicalizeToolMatchTarget", () => {
   it("canonicalizes iOS and Android node dispatch by capability + action + mobile op", () => {
     const iosTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
       capability: "tyrum.ios.location.get-current",
-      action_name: "location.get_current",
+      action_name: "get",
       input: { enable_high_accuracy: true },
     });
-    expect(iosTarget).toBe(
-      "capability:tyrum.ios.location.get-current;action:IOS;op:location.get_current",
-    );
+    expect(iosTarget).toBe("capability:tyrum.ios.location.get-current;action:IOS;op:get");
     expect(iosTarget).not.toContain("enable_high_accuracy");
 
     const androidTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
       capability: "tyrum.android.audio.record-clip",
-      action_name: "audio.record_clip",
+      action_name: "record",
       input: { duration_ms: 5000 },
     });
     expect(androidTarget).toBe(
-      "capability:tyrum.android.audio.record-clip;action:Android;op:audio.record_clip",
+      "capability:tyrum.android.audio.record-clip;action:Android;op:record",
     );
     expect(androidTarget).not.toContain("5000");
 
@@ -267,67 +263,61 @@ describe("canonicalizeToolMatchTarget", () => {
   it("defaults unknown mobile-like capabilities to IOS for location/audio fallback inference", () => {
     const locationTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
       capability: "tyrum.mobile-preview",
-      action_name: "location.get_current",
+      action_name: "get",
       input: { enable_high_accuracy: true },
     });
-    expect(locationTarget).toBe(
-      "capability:tyrum.mobile-preview;action:IOS;op:location.get_current",
-    );
+    expect(locationTarget).toBe("capability:tyrum.mobile-preview;action:IOS;op:get");
 
     const audioTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
       capability: "",
-      action_name: "audio.record_clip",
+      action_name: "record",
       input: { duration_ms: 5000 },
     });
-    expect(audioTarget).toBe("capability:;action:IOS;op:audio.record_clip");
+    expect(audioTarget).toBe("capability:;action:IOS;op:record");
   });
 
-  it("uses capability hints and input shape to disambiguate camera.capture_photo for unknown capabilities", () => {
+  it("uses capability hints and input shape to disambiguate capture_photo for unknown capabilities", () => {
     const hintedMobileTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
       capability: "acme.mobile-camera",
-      action_name: "camera.capture_photo",
+      action_name: "capture_photo",
       input: { format: "jpeg" },
     });
-    expect(hintedMobileTarget).toBe(
-      "capability:acme.mobile-camera;action:IOS;op:camera.capture_photo",
-    );
+    expect(hintedMobileTarget).toBe("capability:acme.mobile-camera;action:IOS;op:capture_photo");
 
     const androidHintTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
       capability: "vendor.android-edge",
-      action_name: "camera.capture_photo",
+      action_name: "capture_photo",
       input: { format: "jpeg" },
     });
     expect(androidHintTarget).toBe(
-      "capability:vendor.android-edge;action:Android;op:camera.capture_photo",
+      "capability:vendor.android-edge;action:Android;op:capture_photo",
     );
 
     const mobileInputTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
       capability: "custom.camera-node",
-      action_name: "camera.capture_photo",
+      action_name: "capture_photo",
       input: { camera: "rear", format: "jpeg" },
     });
-    expect(mobileInputTarget).toBe(
-      "capability:custom.camera-node;action:IOS;op:camera.capture_photo",
-    );
+    expect(mobileInputTarget).toBe("capability:custom.camera-node;action:IOS;op:capture_photo");
 
     const browserInputTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
       capability: "custom.camera-node",
-      action_name: "camera.capture_photo",
+      action_name: "capture_photo",
       input: { facing_mode: "environment", format: "jpeg" },
     });
     expect(browserInputTarget).toBe(
-      "capability:custom.camera-node;action:Browser;op:camera.capture_photo",
+      "capability:custom.camera-node;action:Browser;op:capture_photo",
     );
   });
 
   it("does not treat incidental ios substrings inside capability words as mobile hints", () => {
     const target = canonicalizeToolMatchTarget("tool.node.dispatch", {
       capability: "acme.studios-camera",
-      action_name: "camera.capture_photo",
+      action_name: "capture_photo",
       input: { format: "jpeg" },
     });
 
-    expect(target).toBe("capability:acme.studios-camera;action:Browser;op:camera.capture_photo");
+    expect(target).toBe("capability:acme.studios-camera;action:Browser;op:capture_photo");
   });
 
   it("canonicalizes heartbeat schedule creation using normalized schedule semantics", () => {

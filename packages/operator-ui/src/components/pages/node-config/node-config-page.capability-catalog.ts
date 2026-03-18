@@ -101,7 +101,7 @@ export const TEST_ACTION_DEFINITIONS: Readonly<Record<string, readonly TestActio
   location: [
     {
       label: "Get location",
-      actionName: "geolocation.get",
+      actionName: "get",
       defaultInput: {
         enable_high_accuracy: false,
         timeout_ms: 30_000,
@@ -112,14 +112,14 @@ export const TEST_ACTION_DEFINITIONS: Readonly<Record<string, readonly TestActio
   camera: [
     {
       label: "Capture photo",
-      actionName: "camera.capture_photo",
+      actionName: "capture_photo",
       defaultInput: { format: "jpeg", quality: 0.92 },
     },
   ],
   audio: [
     {
       label: "Record 3s audio",
-      actionName: "microphone.record",
+      actionName: "record",
       defaultInput: { duration_ms: 3_000 },
     },
   ],

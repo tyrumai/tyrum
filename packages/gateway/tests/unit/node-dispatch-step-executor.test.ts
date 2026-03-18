@@ -35,7 +35,7 @@ describe("NodeDispatchStepExecutor", () => {
     });
 
     const result = await executor.execute(
-      { type: "Browser", args: { op: "geolocation.get" } },
+      { type: "Browser", args: { op: "get" } },
       "plan-1",
       0,
       10_000,
@@ -85,7 +85,7 @@ describe("NodeDispatchStepExecutor", () => {
     });
 
     const result = await executor.execute(
-      { type: "IOS", args: { op: "location.get_current" } },
+      { type: "IOS", args: { op: "get" } },
       "plan-1",
       0,
       10_000,
