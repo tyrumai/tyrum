@@ -37,7 +37,11 @@ export function ConnectPage({
   const [gatewayUrl, setGatewayUrl] = useState(core.httpBaseUrl);
   const [tokenValue, setTokenValue] = useState("");
   const [savedTokenValue, setSavedTokenValue] = useState<string | null>(null);
-  const [loadingSavedToken, setLoadingSavedToken] = useState(false);
+  const [loadingSavedToken, setLoadingSavedToken] = useState(
+    mode === "web" &&
+      webAuthPersistence?.hasStoredToken === true &&
+      !!webAuthPersistence?.readToken,
+  );
   const [nowMs, setNowMs] = useState(() => Date.now());
 
   const tokenEditedRef = useRef(false);
