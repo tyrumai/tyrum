@@ -8,6 +8,7 @@ import {
   createDeferredBrowserNodeIdentity,
   flushEffects,
   getBrowserNodeRuntimeState,
+  getToNodeCapabilityStatesMock,
   renderProvider,
   resetBrowserNodeProviderHarness,
   stubBrowserApis,
@@ -97,11 +98,17 @@ describe("BrowserNodeProvider lifecycle", () => {
       expect(getApi().error).toBe("network down");
 
       stubBrowserApis();
+      const toNodeCapabilityStatesCallsBeforeToggle =
+        getToNodeCapabilityStatesMock().mock.calls.length;
+      const publishCallsBeforeToggle = getBrowserNodeRuntimeState().publishCalls.length;
       act(() => {
         api.setCapabilityEnabled("get", false);
       });
       await flushEffects();
-      expect(getBrowserNodeRuntimeState().publishCalls.length).toBeGreaterThan(0);
+      expect(getToNodeCapabilityStatesMock().mock.calls.length).toBe(
+        toNodeCapabilityStatesCallsBeforeToggle + 1,
+      );
+      expect(getBrowserNodeRuntimeState().publishCalls.length).toBe(publishCallsBeforeToggle + 1);
       expect(getBrowserNodeRuntimeState().clients.at(-1)?.capabilityReady).toHaveBeenCalled();
 
       act(() => {

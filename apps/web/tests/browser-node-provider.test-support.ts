@@ -77,6 +77,10 @@ const runtimeState = vi.hoisted(
   }),
 );
 
+const capabilityStateMocks = vi.hoisted(() => ({
+  toNodeCapabilityStates: vi.fn(),
+}));
+
 vi.mock("@tyrum/contracts", () => ({
   BrowserActionArgs: {
     safeParse(input: unknown) {
@@ -91,6 +95,17 @@ vi.mock("@tyrum/contracts", () => ({
     },
   },
 }));
+
+vi.mock("../src/browser-node/browser-node-capability-state.js", async () => {
+  const actual = await vi.importActual<
+    typeof import("../src/browser-node/browser-node-capability-state.js")
+  >("../src/browser-node/browser-node-capability-state.js");
+  capabilityStateMocks.toNodeCapabilityStates.mockImplementation(actual.toNodeCapabilityStates);
+  return {
+    ...actual,
+    toNodeCapabilityStates: capabilityStateMocks.toNodeCapabilityStates,
+  };
+});
 
 vi.mock("../../../packages/operator-ui/src/components/ui/alert.js", () => ({
   Alert: ({ description, title }: { description: string; title: string }) =>
@@ -420,6 +435,7 @@ export function clickByTestId(testId: string): void {
 
 export function resetBrowserNodeProviderHarness(): void {
   runtimeState.reset();
+  capabilityStateMocks.toNodeCapabilityStates.mockClear();
 }
 
 export function cleanupBrowserNodeProviderHarness(): void {
@@ -434,4 +450,8 @@ export function createDeferredBrowserNodeIdentity(): DeferredIdentity {
 
 export function getBrowserNodeRuntimeState(): RuntimeState {
   return runtimeState;
+}
+
+export function getToNodeCapabilityStatesMock(): typeof capabilityStateMocks.toNodeCapabilityStates {
+  return capabilityStateMocks.toNodeCapabilityStates;
 }

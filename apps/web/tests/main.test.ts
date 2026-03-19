@@ -308,6 +308,13 @@ describe("apps/web main bootstrap", () => {
     await expect(import("../src/main.tsx")).rejects.toThrow("Missing root element (#root).");
   });
 
+  it("throws when the rendered tree does not contain OperatorUiApp props", () => {
+    const root = { render: vi.fn() };
+    root.render(null);
+
+    expect(() => getRenderedOperatorUiProps(root)).toThrow();
+  });
+
   it("re-renders on manager updates and wires reload, gateway, and token persistence actions", async () => {
     const { manager, operatorCore, reloadPage, root, urlAuth } = await arrangeBootstrap("/ui");
 

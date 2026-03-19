@@ -317,12 +317,15 @@ export function BrowserNodeProvider({
       const lifecycle = createManagedNodeClientLifecycle({
         client,
         providers: [provider],
-        getCapabilityReadyPayload: () => ({
-          capabilities: toNodeCapabilityStates(capabilityStatesRef.current).map(
-            (capabilityState) => capabilityState.capability,
-          ),
-          capability_states: toNodeCapabilityStates(capabilityStatesRef.current),
-        }),
+        getCapabilityReadyPayload: () => {
+          const capabilityStatesPayload = toNodeCapabilityStates(capabilityStatesRef.current);
+          return {
+            capabilities: capabilityStatesPayload.map(
+              (capabilityState) => capabilityState.capability,
+            ),
+            capability_states: capabilityStatesPayload,
+          };
+        },
         onConnected: (event) => {
           if (disposed) return;
           setClientId(event.clientId);

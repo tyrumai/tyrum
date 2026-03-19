@@ -229,7 +229,7 @@ export const jsonResponse = (status: number, body: unknown): Response =>
 export function getRenderedOperatorUiProps(root: RootMock): OperatorUiAppProps {
   const strictModeElement = root.render.mock.calls.at(-1)?.[0];
   const props = findOperatorUiProps(strictModeElement);
-  expect(props).toBeDefined();
+  expect(props).not.toBeNull();
   return props;
 }
 
