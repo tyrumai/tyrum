@@ -90,9 +90,8 @@ afterEach(() => {
 
 describe("createBrowserCapabilityProvider", () => {
   it("surfaces geolocation failures when the browser API is unavailable or rejects", async () => {
-    const { createBrowserCapabilityProvider } = await import(
-      "../src/browser-node/browser-capability-provider.js"
-    );
+    const { createBrowserCapabilityProvider } =
+      await import("../src/browser-node/browser-capability-provider.js");
 
     vi.stubGlobal("navigator", {});
     const unavailableProvider = createBrowserCapabilityProvider({
@@ -133,9 +132,8 @@ describe("createBrowserCapabilityProvider", () => {
   });
 
   it("captures a photo with modern browser APIs and preserves constraints", async () => {
-    const { createBrowserCapabilityProvider } = await import(
-      "../src/browser-node/browser-capability-provider.js"
-    );
+    const { createBrowserCapabilityProvider } =
+      await import("../src/browser-node/browser-capability-provider.js");
     const { drawImage, play } = installCreateElementStub({});
 
     class FileReaderWithEvents {
@@ -219,9 +217,8 @@ describe("createBrowserCapabilityProvider", () => {
   });
 
   it("returns descriptive capture errors when the canvas cannot produce an image", async () => {
-    const { createBrowserCapabilityProvider } = await import(
-      "../src/browser-node/browser-capability-provider.js"
-    );
+    const { createBrowserCapabilityProvider } =
+      await import("../src/browser-node/browser-capability-provider.js");
 
     installCreateElementStub({
       getContext: () => null,
@@ -273,9 +270,8 @@ describe("createBrowserCapabilityProvider", () => {
   });
 
   it("rejects denied camera and microphone consent requests", async () => {
-    const { createBrowserCapabilityProvider } = await import(
-      "../src/browser-node/browser-capability-provider.js"
-    );
+    const { createBrowserCapabilityProvider } =
+      await import("../src/browser-node/browser-capability-provider.js");
     const deniedProvider = createBrowserCapabilityProvider({
       requestConsent: async (request) => request.scope !== "camera",
     });
@@ -305,9 +301,8 @@ describe("createBrowserCapabilityProvider", () => {
   });
 
   it("returns recording errors when media APIs are missing or recorder events fail", async () => {
-    const { createBrowserCapabilityProvider } = await import(
-      "../src/browser-node/browser-capability-provider.js"
-    );
+    const { createBrowserCapabilityProvider } =
+      await import("../src/browser-node/browser-capability-provider.js");
 
     vi.stubGlobal("navigator", {});
     const noMediaProvider = createBrowserCapabilityProvider({

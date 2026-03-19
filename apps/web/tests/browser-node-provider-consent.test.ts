@@ -182,7 +182,10 @@ describe("BrowserNodeProvider consent flow", () => {
       });
       await flushEffects();
 
-      await expect(first).resolves.toMatchObject({ success: false, error: "location access denied" });
+      await expect(first).resolves.toMatchObject({
+        success: false,
+        error: "location access denied",
+      });
       await expect(second).resolves.toMatchObject({
         success: false,
         error: "camera access denied",

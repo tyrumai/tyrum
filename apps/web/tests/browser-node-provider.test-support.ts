@@ -54,26 +54,28 @@ function createDeferredIdentity(): DeferredIdentity {
   return { promise, resolve, reject };
 }
 
-const runtimeState = vi.hoisted((): RuntimeState => ({
-  clients: [],
-  connectMode: "connected",
-  deferredIdentity: null,
-  disconnectOnDispose: true,
-  identityError: new Error("identity unavailable"),
-  identityMode: "resolve",
-  lifecycleInputs: [],
-  publishCalls: [],
-  reset() {
-    this.clients.length = 0;
-    this.connectMode = "connected";
-    this.deferredIdentity = null;
-    this.disconnectOnDispose = true;
-    this.identityError = new Error("identity unavailable");
-    this.identityMode = "resolve";
-    this.lifecycleInputs.length = 0;
-    this.publishCalls.length = 0;
-  },
-}));
+const runtimeState = vi.hoisted(
+  (): RuntimeState => ({
+    clients: [],
+    connectMode: "connected",
+    deferredIdentity: null,
+    disconnectOnDispose: true,
+    identityError: new Error("identity unavailable"),
+    identityMode: "resolve",
+    lifecycleInputs: [],
+    publishCalls: [],
+    reset() {
+      this.clients.length = 0;
+      this.connectMode = "connected";
+      this.deferredIdentity = null;
+      this.disconnectOnDispose = true;
+      this.identityError = new Error("identity unavailable");
+      this.identityMode = "resolve";
+      this.lifecycleInputs.length = 0;
+      this.publishCalls.length = 0;
+    },
+  }),
+);
 
 vi.mock("@tyrum/contracts", () => ({
   BrowserActionArgs: {
@@ -91,13 +93,8 @@ vi.mock("@tyrum/contracts", () => ({
 }));
 
 vi.mock("../../../packages/operator-ui/src/components/ui/alert.js", () => ({
-  Alert: ({
-    description,
-    title,
-  }: {
-    description: string;
-    title: string;
-  }) => React.createElement("div", { "data-testid": "browser-node-alert" }, `${title}:${description}`),
+  Alert: ({ description, title }: { description: string; title: string }) =>
+    React.createElement("div", { "data-testid": "browser-node-alert" }, `${title}:${description}`),
 }));
 
 vi.mock("../../../packages/operator-ui/src/components/ui/button.js", () => ({

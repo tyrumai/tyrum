@@ -147,8 +147,7 @@ describe("browser node capability state", () => {
     expect(unavailable.capture_photo).toMatchObject({
       enabled: false,
       availability_status: "unavailable",
-      unavailable_reason:
-        "Camera capture requires a secure context and mediaDevices.getUserMedia.",
+      unavailable_reason: "Camera capture requires a secure context and mediaDevices.getUserMedia.",
     });
     expect(unavailable.record).toMatchObject({
       enabled: true,
