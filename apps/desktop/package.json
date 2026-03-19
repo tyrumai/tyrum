@@ -10,13 +10,13 @@
   "main": "dist/main/index.mjs",
   "scripts": {
     "dev": "electron dist/main/index.mjs",
-    "pretest": "pnpm --filter @tyrum/contracts build && pnpm --filter @tyrum/runtime-policy build && pnpm --filter @tyrum/transport-sdk build && pnpm --filter @tyrum/node-sdk build && pnpm --filter @tyrum/client build && pnpm --filter @tyrum/cli-utils build && pnpm --filter @tyrum/operator-app build && pnpm --filter @tyrum/operator-ui build && pnpm --filter @tyrum/runtime-node-control build && pnpm --filter @tyrum/desktop-node build",
+    "pretest": "pnpm --filter @tyrum/contracts build && pnpm --filter @tyrum/runtime-policy build && pnpm --filter @tyrum/transport-sdk build && pnpm --filter @tyrum/node-sdk build && pnpm --filter @tyrum/client build && pnpm --filter @tyrum/cli-utils build && pnpm --filter @tyrum/operator-app build && pnpm --filter @tyrum/operator-ui build && pnpm --filter @tyrum/runtime-node-control build && pnpm --filter @tyrum/runtime-execution build && pnpm --filter @tyrum/desktop-node build",
     "test": "pnpm -w vitest run apps/desktop/tests",
     "build:main": "tsdown --config tsdown.config.ts --filter desktop-main",
     "build:preload": "tsdown --config tsdown.config.ts --filter desktop-preload",
     "build:renderer": "vite build",
     "build": "pnpm build:main && pnpm build:preload && pnpm build:renderer",
-    "build:gateway": "pnpm --filter @tyrum/contracts build && pnpm --filter @tyrum/runtime-policy build && pnpm --filter @tyrum/cli-utils build && pnpm --filter @tyrum/node-sdk build && pnpm --filter @tyrum/runtime-node-control build && pnpm --filter @tyrum/gateway build && node ./scripts/stage-gateway-bin.mjs",
+    "build:gateway": "pnpm --filter @tyrum/contracts build && pnpm --filter @tyrum/runtime-policy build && pnpm --filter @tyrum/cli-utils build && pnpm --filter @tyrum/node-sdk build && pnpm --filter @tyrum/runtime-node-control build && pnpm --filter @tyrum/runtime-execution build && pnpm --filter @tyrum/gateway build && node ./scripts/stage-gateway-bin.mjs",
     "icons:generate": "node ./scripts/generate-icons.mjs",
     "dist": "pnpm build:gateway && pnpm build && electron-builder --publish never"
   },

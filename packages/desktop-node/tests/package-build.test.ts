@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -18,10 +18,12 @@ beforeAll(() => {
     cwd: repoRoot,
     stdio: "pipe",
   });
-  execFileSync(pnpmCommand(), ["--filter", "@tyrum/desktop-node", "build"], {
-    cwd: repoRoot,
-    stdio: "pipe",
-  });
+  if (!existsSync(distEntry)) {
+    execFileSync(pnpmCommand(), ["--filter", "@tyrum/desktop-node", "build"], {
+      cwd: repoRoot,
+      stdio: "pipe",
+    });
+  }
 });
 
 describe("@tyrum/desktop-node package build", () => {

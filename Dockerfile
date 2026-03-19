@@ -31,6 +31,7 @@ RUN pnpm --filter @tyrum/contracts build \
   && pnpm --filter @tyrum/runtime-node-control build \
   && pnpm --filter @tyrum/cli-utils build \
   && pnpm --filter @tyrum/runtime-policy build \
+  && pnpm --filter @tyrum/runtime-execution build \
   && pnpm --filter @tyrum/gateway build
 
 RUN mkdir -p /app/apps/desktop \

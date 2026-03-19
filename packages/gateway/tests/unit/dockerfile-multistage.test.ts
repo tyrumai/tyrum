@@ -38,4 +38,11 @@ describe("Dockerfile (multi-stage build)", () => {
     expect(finalStage).not.toMatch(/g\+\+/i);
     expect(finalStage).not.toMatch(/\bmake\b/i);
   });
+
+  test("builds runtime-execution before deploying gateway artifacts", () => {
+    const dockerfile = readFileSync(fileURLToPath(dockerfileUrl), "utf8");
+
+    expect(dockerfile).toContain("pnpm --filter @tyrum/runtime-execution build");
+    expect(dockerfile).toContain("pnpm --filter @tyrum/gateway deploy --legacy --prod /app/deploy");
+  });
 });

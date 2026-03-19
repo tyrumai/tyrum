@@ -552,12 +552,15 @@ importers:
       '@tyrum/contracts':
         specifier: workspace:*
         version: link:../contracts
-      '@tyrum/runtime-policy':
+      '@tyrum/runtime-execution':
         specifier: workspace:*
-        version: link:../runtime-policy
+        version: link:../runtime-execution
       '@tyrum/runtime-node-control':
         specifier: workspace:*
         version: link:../runtime-node-control
+      '@tyrum/runtime-policy':
+        specifier: workspace:*
+        version: link:../runtime-policy
       '@tyrum/transport-sdk':
         specifier: workspace:*
         version: link:../transport-sdk
@@ -768,6 +771,16 @@ importers:
       vite:
         specifier: ^8.0.0
         version: 8.0.0(@types/node@24.12.0)(esbuild@0.27.3)(jiti@2.6.1)(terser@5.46.0)(yaml@2.8.2)
+
+  packages/runtime-execution:
+    dependencies:
+      '@tyrum/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+    devDependencies:
+      '@types/node':
+        specifier: ^24.12.0
+        version: 24.12.0
 
   packages/runtime-node-control:
     dependencies:
