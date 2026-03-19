@@ -27,7 +27,7 @@ describe("NodeInventoryService", () => {
       nodeId: "node-1",
       label: "Node One",
       capabilities: ["desktop"],
-      metadata: { mode: "desktop", version: "1.2.3" },
+      metadata: { mode: "  desktop  ", version: "  1.2.3  " },
       nowIso: "2026-03-08T00:00:00.000Z",
     });
 

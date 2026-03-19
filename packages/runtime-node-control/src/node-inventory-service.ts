@@ -406,5 +406,9 @@ function readRecordString(input: unknown, key: string): string | undefined {
     return undefined;
   }
   const value = (input as Record<string, unknown>)[key];
-  return typeof value === "string" && value.trim().length > 0 ? value : undefined;
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
 }
