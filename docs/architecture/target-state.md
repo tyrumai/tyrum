@@ -105,6 +105,13 @@ flowchart LR
 5. New operator behavior belongs in `@tyrum/operator-app`; `@tyrum/operator-ui` stays presentation-only.
 6. New runtime and business logic belongs in the runtime packages behind explicit ports; `@tyrum/gateway` stays the composition root.
 
+## Boundary check maintenance
+
+- Run `pnpm lint:boundaries` locally to evaluate the workspace boundary gate directly. `pnpm lint` includes the same check and CI gates merges through that normal lint step.
+- Keep `scripts/lint/package-boundaries.config.mjs` in sync with this page and [ARCH-01 clean-break target-state decision record](./reference/arch-01-clean-break-target-state.md). Update the doc and the executable rule set together in the same PR.
+- Use `scripts/lint/package-boundaries-baseline.json` only for temporary coexistence entries that are still required to land the linked migration issue safely. Every allowlist entry should carry a linked issue in the `reason`, and it should be removed as soon as the migration step lands.
+- When a replacement package first appears, add only the minimum coexistence allowlist entries needed to keep the repo green. The boundary gate should then block any new legacy-package edges outside that explicit baseline.
+
 ## Related docs
 
 - [Architecture overview](/architecture)
