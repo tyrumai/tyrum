@@ -161,10 +161,20 @@ describe("desktop renderer main bootstrap", () => {
 
     const rootElement = renderMock.mock.calls[0]?.[0] as unknown;
     expect(isReactElementLike(rootElement)).toBe(true);
-    expect((rootElement as ReactElementLike).type).toBe(ThemeProviderMock);
+    expect((rootElement as ReactElementLike).type).toBe(OperatorUiHostProviderMock);
+    expect((rootElement as ReactElementLike).props.value).toEqual({
+      kind: "desktop",
+      api: desktopApi,
+    });
+
+    const themeProviderElement = unwrapSingleChild(
+      (rootElement as ReactElementLike).props.children,
+    ) as unknown;
+    expect(isReactElementLike(themeProviderElement)).toBe(true);
+    expect((themeProviderElement as ReactElementLike).type).toBe(ThemeProviderMock);
 
     const errorBoundaryElement = unwrapSingleChild(
-      (rootElement as ReactElementLike).props.children,
+      (themeProviderElement as ReactElementLike).props.children,
     ) as unknown;
     expect(isReactElementLike(errorBoundaryElement)).toBe(true);
     expect((errorBoundaryElement as ReactElementLike).type).toBe(ErrorBoundaryMock);
@@ -198,16 +208,11 @@ describe("desktop renderer main bootstrap", () => {
     const tree = DesktopBootstrap();
 
     expect(isReactElementLike(tree)).toBe(true);
-    expect((tree as ReactElementLike).type).toBe(OperatorUiHostProviderMock);
-    expect((tree as ReactElementLike).props.value).toEqual({ kind: "desktop", api: desktopApi });
-
-    const operatorUiAppElement = unwrapSingleChild((tree as ReactElementLike).props.children);
-    expect(isReactElementLike(operatorUiAppElement)).toBe(true);
-    expect((operatorUiAppElement as ReactElementLike).type).toBe(OperatorUiAppMock);
-    expect((operatorUiAppElement as ReactElementLike).props.core).toBe(core);
-    expect((operatorUiAppElement as ReactElementLike).props.mode).toBe("desktop");
-    expect((operatorUiAppElement as ReactElementLike).props.adminAccessController).not.toBeNull();
-    expect((operatorUiAppElement as ReactElementLike).props.onReloadPage).toBe(retry);
+    expect((tree as ReactElementLike).type).toBe(OperatorUiAppMock);
+    expect((tree as ReactElementLike).props.core).toBe(core);
+    expect((tree as ReactElementLike).props.mode).toBe("desktop");
+    expect((tree as ReactElementLike).props.adminAccessController).not.toBeNull();
+    expect((tree as ReactElementLike).props.onReloadPage).toBe(retry);
   });
 
   it("shows an error state and wires Retry to operatorCore.retry", async () => {

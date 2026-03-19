@@ -198,7 +198,6 @@ function DesktopSetupWizard({ onConfigured }: { onConfigured: () => void }) {
 
 function DesktopBootstrap() {
   const operatorCore = useDesktopOperatorCore();
-  const hostApi = { kind: "desktop" as const, api: window.tyrumDesktop ?? null };
 
   if (operatorCore.needsConfiguration) {
     return <DesktopSetupWizard onConfigured={operatorCore.retry} />;
@@ -241,25 +240,26 @@ function DesktopBootstrap() {
   }
 
   return (
-    <OperatorUiHostProvider value={hostApi}>
-      <OperatorUiApp
-        core={operatorCore.core}
-        mode="desktop"
-        adminAccessController={operatorCore.adminAccessController ?? undefined}
-        onReloadPage={operatorCore.retry}
-      />
-    </OperatorUiHostProvider>
+    <OperatorUiApp
+      core={operatorCore.core}
+      mode="desktop"
+      adminAccessController={operatorCore.adminAccessController ?? undefined}
+      onReloadPage={operatorCore.retry}
+    />
   );
 }
 
 function bootstrap(): void {
   const root = document.getElementById("root")!;
+  const hostApi = { kind: "desktop" as const, api: window.tyrumDesktop ?? null };
   createRoot(root).render(
-    <ThemeProvider>
-      <ErrorBoundary onReloadPage={() => window.location.reload()}>
-        <DesktopBootstrap />
-      </ErrorBoundary>
-    </ThemeProvider>,
+    <OperatorUiHostProvider value={hostApi}>
+      <ThemeProvider>
+        <ErrorBoundary onReloadPage={() => window.location.reload()}>
+          <DesktopBootstrap />
+        </ErrorBoundary>
+      </ThemeProvider>
+    </OperatorUiHostProvider>,
   );
 }
 
