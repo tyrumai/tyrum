@@ -169,7 +169,7 @@ describe("apply_patch", () => {
     const result = await provider.execute(makeAction({ op: "apply_patch", patch }));
     expect(result.success).toBe(true);
     expect((result.result as ResultPayload).applied).toEqual(["add new.txt"]);
-    expect(await readFile(join(sandboxRoot, "new.txt"), "utf-8")).toBe("line one\nline two");
+    expect(await readFile(join(sandboxRoot, "new.txt"), "utf-8")).toBe("line one\nline two\n");
   });
 
   it("updates an existing file", async () => {

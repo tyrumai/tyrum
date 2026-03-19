@@ -214,7 +214,7 @@ export async function applyPatch(sandboxRoot: string, patchText: string): Promis
     const safePath = assertSandboxed(sandboxRoot, hunk.path);
     if (hunk.kind === "add") {
       await mkdir(dirname(safePath), { recursive: true });
-      await writeFile(safePath, hunk.lines.join("\n"), "utf-8");
+      await writeFile(safePath, renderPatchedText(hunk.lines.join("\n"), true), "utf-8");
       applied.push(`add ${hunk.path}`);
       continue;
     }
