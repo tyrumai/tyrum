@@ -25,7 +25,7 @@ describe("rebased PR overwrite analyzer git ref resolution", () => {
 
     const { getRefOid } = await loadDataModule();
 
-    expect(getRefOid("rhernaus", "tyrum", "main")).toBe("abc123");
+    expect(getRefOid("tyrumai", "tyrum", "main")).toBe("abc123");
     expect(spawnSyncMock.mock.calls).toEqual([
       ["git", ["rev-parse", "main"], expect.any(Object)],
       ["git", ["rev-parse", "origin/main"], expect.any(Object)],
@@ -40,7 +40,7 @@ describe("rebased PR overwrite analyzer git ref resolution", () => {
 
     const { getMergeBase } = await loadDataModule();
 
-    expect(getMergeBase("rhernaus", "tyrum", "main", "head789")).toBe("def456");
+    expect(getMergeBase("tyrumai", "tyrum", "main", "head789")).toBe("def456");
     expect(spawnSyncMock.mock.calls).toEqual([
       ["git", ["merge-base", "main", "head789"], expect.any(Object)],
       ["git", ["merge-base", "origin/main", "head789"], expect.any(Object)],

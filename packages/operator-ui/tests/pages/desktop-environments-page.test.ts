@@ -476,7 +476,7 @@ describe("DesktopEnvironmentsPage", () => {
     expect(desktopEnvironmentsApi.create).toHaveBeenCalledWith({
       host_id: "host-1",
       label: undefined,
-      image_ref: "ghcr.io/rhernaus/tyrum-desktop-sandbox:stable",
+      image_ref: "ghcr.io/tyrumai/tyrum-desktop-sandbox:stable",
       desired_running: false,
     });
     expect(desktopEnvironmentsApi.logs).toHaveBeenCalledTimes(1);

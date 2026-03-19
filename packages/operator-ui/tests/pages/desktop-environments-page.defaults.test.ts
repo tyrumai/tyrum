@@ -177,7 +177,7 @@ describe("DesktopEnvironmentsPage defaults and availability", () => {
     expect(createButton).not.toBeNull();
 
     await act(async () => {
-      setNativeValue(defaultImageInput!, "ghcr.io/rhernaus/tyrum-desktop-sandbox:sha-1234");
+      setNativeValue(defaultImageInput!, "ghcr.io/tyrumai/tyrum-desktop-sandbox:sha-1234");
       click(saveButton!);
       await Promise.resolve();
       await Promise.resolve();
@@ -189,13 +189,13 @@ describe("DesktopEnvironmentsPage defaults and availability", () => {
     });
 
     expect(http.desktopEnvironments.updateDefaults).toHaveBeenCalledWith({
-      default_image_ref: "ghcr.io/rhernaus/tyrum-desktop-sandbox:sha-1234",
+      default_image_ref: "ghcr.io/tyrumai/tyrum-desktop-sandbox:sha-1234",
       reason: undefined,
     });
     expect(http.desktopEnvironments.create).toHaveBeenLastCalledWith({
       host_id: "host-1",
       label: undefined,
-      image_ref: "ghcr.io/rhernaus/tyrum-desktop-sandbox:sha-1234",
+      image_ref: "ghcr.io/tyrumai/tyrum-desktop-sandbox:sha-1234",
       desired_running: false,
     });
 
@@ -235,7 +235,7 @@ describe("DesktopEnvironmentsPage defaults and availability", () => {
     expect(saveButton).not.toBeNull();
 
     await act(async () => {
-      setNativeValue(defaultImageInput!, "ghcr.io/rhernaus/tyrum-desktop-sandbox:broken");
+      setNativeValue(defaultImageInput!, "ghcr.io/tyrumai/tyrum-desktop-sandbox:broken");
       click(saveButton!);
       await Promise.resolve();
       await Promise.resolve();

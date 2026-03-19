@@ -7,7 +7,7 @@ set -euo pipefail
 #   curl -fsSL https://get.tyrum.ai/install.sh | bash -s -- --channel beta
 #   curl -fsSL https://get.tyrum.ai/install.sh | bash -s -- 2026.2.18
 
-REPO="${TYRUM_REPO:-rhernaus/tyrum}"
+REPO="${TYRUM_REPO:-tyrumai/tyrum}"
 CHANNEL="${TYRUM_CHANNEL:-stable}"
 REQUESTED_VERSION="${TYRUM_VERSION:-}"
 INSTALL_CMD="tyrum"

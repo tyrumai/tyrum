@@ -42,7 +42,7 @@ vi.mock("../../src/modules/desktop-environments/docker-cli.js", () => ({
 
 import { DesktopEnvironmentRuntimeManager } from "../../src/modules/desktop-environments/runtime-manager.js";
 
-const OFFICIAL_SANDBOX_IMAGE = "ghcr.io/rhernaus/tyrum-desktop-sandbox:main";
+const OFFICIAL_SANDBOX_IMAGE = "ghcr.io/tyrumai/tyrum-desktop-sandbox:main";
 const TEST_IMAGE = "ghcr.io/tyrum/desktop:latest";
 const TEST_TIMESTAMP = "2026-03-12T00:00:00.000Z";
 

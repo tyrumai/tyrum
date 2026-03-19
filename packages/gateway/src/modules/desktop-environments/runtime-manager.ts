@@ -21,7 +21,7 @@ const DEFAULT_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 30;
 const CONTAINER_NODE_HOME = "/var/lib/tyrum-node";
 const CONTAINER_IDENTITY_PATH = `${CONTAINER_NODE_HOME}/desktop-node/device-identity.json`;
 const CONTAINER_GATEWAY_TOKEN_PATH = "/run/tyrum/gateway-token";
-const OFFICIAL_DESKTOP_SANDBOX_IMAGE_REF_PREFIX = "ghcr.io/rhernaus/tyrum-desktop-sandbox:";
+const OFFICIAL_DESKTOP_SANDBOX_IMAGE_REF_PREFIX = "ghcr.io/tyrumai/tyrum-desktop-sandbox:";
 
 type DesktopEnvironmentRuntimeManagerOptions = {
   hostId: string;

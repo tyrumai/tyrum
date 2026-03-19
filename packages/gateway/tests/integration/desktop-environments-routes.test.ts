@@ -36,14 +36,14 @@ describe("desktop environment routes", () => {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        default_image_ref: "ghcr.io/rhernaus/tyrum-desktop-sandbox:stable",
+        default_image_ref: "ghcr.io/tyrumai/tyrum-desktop-sandbox:stable",
         reason: "promote stable image",
       }),
     });
 
     expect(updateRes.status).toBe(200);
     await expect(updateRes.json()).resolves.toMatchObject({
-      default_image_ref: "ghcr.io/rhernaus/tyrum-desktop-sandbox:stable",
+      default_image_ref: "ghcr.io/tyrumai/tyrum-desktop-sandbox:stable",
       revision: 2,
       reason: "promote stable image",
     });
@@ -53,7 +53,7 @@ describe("desktop environment routes", () => {
     const { app, container } = await createTestApp({
       deploymentConfig: {
         desktopEnvironments: {
-          defaultImageRef: "ghcr.io/rhernaus/tyrum-desktop-sandbox:stable",
+          defaultImageRef: "ghcr.io/tyrumai/tyrum-desktop-sandbox:stable",
         },
       },
     });
@@ -82,7 +82,7 @@ describe("desktop environment routes", () => {
     expect(createRes.status).toBe(201);
     await expect(createRes.json()).resolves.toMatchObject({
       environment: {
-        image_ref: "ghcr.io/rhernaus/tyrum-desktop-sandbox:stable",
+        image_ref: "ghcr.io/tyrumai/tyrum-desktop-sandbox:stable",
       },
     });
   });
