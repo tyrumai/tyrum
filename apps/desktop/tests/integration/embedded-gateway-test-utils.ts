@@ -24,11 +24,11 @@ const CLI_UTILS_DIST = resolve(REPO_ROOT, "packages/cli-utils/dist/index.mjs");
 const CLI_UTILS_PACKAGE_JSON = resolve(REPO_ROOT, "packages/cli-utils/package.json");
 const CLI_UTILS_TSCONFIG = resolve(REPO_ROOT, "packages/cli-utils/tsconfig.json");
 const CLI_UTILS_SRC_DIR = resolve(REPO_ROOT, "packages/cli-utils/src");
-const SCHEMAS_DIST = resolve(REPO_ROOT, "packages/schemas/dist/index.mjs");
-const SCHEMAS_PACKAGE_JSON = resolve(REPO_ROOT, "packages/schemas/package.json");
-const SCHEMAS_TSCONFIG = resolve(REPO_ROOT, "packages/schemas/tsconfig.json");
-const SCHEMAS_SRC_DIR = resolve(REPO_ROOT, "packages/schemas/src");
-const SCHEMAS_SCRIPTS_DIR = resolve(REPO_ROOT, "packages/schemas/scripts");
+const SCHEMAS_DIST = resolve(REPO_ROOT, "packages/contracts/dist/index.mjs");
+const SCHEMAS_PACKAGE_JSON = resolve(REPO_ROOT, "packages/contracts/package.json");
+const SCHEMAS_TSCONFIG = resolve(REPO_ROOT, "packages/contracts/tsconfig.json");
+const SCHEMAS_SRC_DIR = resolve(REPO_ROOT, "packages/contracts/src");
+const SCHEMAS_SCRIPTS_DIR = resolve(REPO_ROOT, "packages/contracts/scripts");
 const GATEWAY_SRC_DIR = resolve(REPO_ROOT, "packages/gateway/src");
 const GATEWAY_BUILD_LOCK = resolve(REPO_ROOT, ".tyrum-gateway-build.lock");
 export const OPERATOR_UI_DIR_ENV = "TYRUM_OPERATOR_UI_ASSETS_DIR";
@@ -195,9 +195,9 @@ export function acquireGatewayBuildLock(timeoutMs = 180_000): () => void {
 export function ensureGatewayBuild(): void {
   if (!gatewayBuildIsStale()) return;
   ensureWorkspaceBuild(
-    "@tyrum/schemas",
+    "@tyrum/contracts",
     SCHEMAS_DIST,
-    "Failed to build @tyrum/schemas before desktop integration test.",
+    "Failed to build @tyrum/contracts before desktop integration test.",
   );
   ensureWorkspaceBuild(
     "@tyrum/cli-utils",

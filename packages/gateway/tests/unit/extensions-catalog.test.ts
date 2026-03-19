@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AgentConfig } from "@tyrum/schemas";
+import { AgentConfig } from "@tyrum/contracts";
 import { countAssignments } from "../../src/modules/extensions/catalog.js";
 
 function createConfig(input?: {

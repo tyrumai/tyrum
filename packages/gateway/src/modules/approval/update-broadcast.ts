@@ -1,4 +1,4 @@
-import type { Approval } from "@tyrum/schemas";
+import type { Approval } from "@tyrum/contracts";
 import type { ApprovalRow } from "./dal.js";
 import { toApprovalContract } from "./to-contract.js";
 import type { ProtocolDeps } from "../../ws/protocol.js";

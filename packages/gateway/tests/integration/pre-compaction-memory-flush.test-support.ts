@@ -1,4 +1,4 @@
-import { AgentConfig } from "@tyrum/schemas";
+import { AgentConfig } from "@tyrum/contracts";
 import { MockLanguageModelV3 } from "ai/test";
 import { vi } from "vitest";
 import type { GatewayContainer } from "../../src/container.js";

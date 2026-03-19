@@ -1,4 +1,4 @@
-import type { LocationBeacon, LocationEvent, LocationProfile } from "@tyrum/schemas";
+import type { LocationBeacon, LocationEvent, LocationProfile } from "@tyrum/contracts";
 import { DEFAULT_CATEGORY_EXIT_M, evaluateCategoryEvent } from "./event-evaluator.js";
 import { recordLocationEpisode } from "./trigger-execution.js";
 import type { LocationAutomationTriggerRecord } from "./types.js";

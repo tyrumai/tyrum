@@ -10,7 +10,7 @@ import {
   type ChannelFieldErrors,
   type ConfiguredChannelAccount,
   type RoutingConfig,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import { z } from "zod";
 import type { SqlDb } from "../statestore/types.js";
 import { requireTenantId } from "../modules/auth/claims.js";

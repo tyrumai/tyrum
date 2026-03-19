@@ -1,5 +1,5 @@
 import type { OperatorCore } from "@tyrum/operator-core";
-import type { ManagedExtensionDetail } from "@tyrum/schemas";
+import type { ManagedExtensionDetail } from "@tyrum/contracts";
 import { Blocks, RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useApiAction } from "../../hooks/use-api-action.js";

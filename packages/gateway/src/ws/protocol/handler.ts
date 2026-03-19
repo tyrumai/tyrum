@@ -5,8 +5,8 @@
  * (state machine, postcondition evaluator, etc.).
  */
 
-import { WsMessageEnvelope } from "@tyrum/schemas";
-import type { WsEventEnvelope, WsResponseEnvelope } from "@tyrum/schemas";
+import { WsMessageEnvelope } from "@tyrum/contracts";
+import type { WsEventEnvelope, WsResponseEnvelope } from "@tyrum/contracts";
 import { hasAnyRequiredScope } from "../../modules/auth/scopes.js";
 import { resolveWsRequestRequiredScopes } from "../../modules/authz/ws-scope-matrix.js";
 import type { ConnectedClient } from "../connection-manager.js";

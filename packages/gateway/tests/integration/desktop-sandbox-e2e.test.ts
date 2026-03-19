@@ -11,7 +11,7 @@ import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   descriptorIdsForClientCapability,
   type DesktopQueryMatch,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 
 import { createContainer } from "../../src/container.js";
 import { createApp } from "../../src/app.js";

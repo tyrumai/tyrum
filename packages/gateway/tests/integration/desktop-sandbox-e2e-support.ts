@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { type CapabilityDescriptor, descriptorIdsForClientCapability } from "@tyrum/schemas";
+import { type CapabilityDescriptor, descriptorIdsForClientCapability } from "@tyrum/contracts";
 import type { McpManager } from "../../src/modules/agent/mcp-manager.js";
 import {
   DEFAULT_AGENT_ID,

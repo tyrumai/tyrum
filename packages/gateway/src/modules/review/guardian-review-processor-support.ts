@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { Approval, NodePairingRequest } from "@tyrum/schemas";
+import type { Approval, NodePairingRequest } from "@tyrum/contracts";
 import type { GatewayContainer } from "../../container.js";
 import { AgentRuntime } from "../agent/runtime.js";
 import { resolveAgentHome } from "../agent/home.js";

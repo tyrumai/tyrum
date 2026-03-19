@@ -1,4 +1,4 @@
-import { AgentKey, AgentStatusResponse } from "@tyrum/schemas";
+import { AgentKey, AgentStatusResponse } from "@tyrum/contracts";
 import { z } from "zod";
 import { HttpTransport, validateOrThrow, type TyrumRequestOptions } from "./shared.js";
 

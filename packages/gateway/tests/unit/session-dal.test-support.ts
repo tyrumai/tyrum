@@ -8,7 +8,7 @@ import { ChannelInboxDal } from "../../src/modules/channels/inbox-dal.js";
 import { ChannelOutboxDal } from "../../src/modules/channels/outbox-dal.js";
 import { seedCompletedTelegramTurn } from "../helpers/channel-session-repair.js";
 import type { SessionRow } from "../../src/modules/agent/session-dal.js";
-import type { SessionContextState, TyrumUIMessage } from "@tyrum/schemas";
+import type { SessionContextState, TyrumUIMessage } from "@tyrum/contracts";
 
 export function textTranscript(session: { messages?: TyrumUIMessage[] | undefined }) {
   return (session.messages ?? [])

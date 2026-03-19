@@ -4,7 +4,7 @@ import { Hono } from "hono";
 import { createTestContainer } from "./helpers.js";
 import { AuthProfileDal } from "../../src/modules/models/auth-profile-dal.js";
 import type { SecretProvider } from "../../src/modules/secret/provider.js";
-import type { SecretHandle } from "@tyrum/schemas";
+import type { SecretHandle } from "@tyrum/contracts";
 import { createSecretRoutes } from "../../src/routes/secret.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 

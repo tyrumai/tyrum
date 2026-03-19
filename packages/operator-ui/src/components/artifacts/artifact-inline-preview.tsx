@@ -1,4 +1,4 @@
-import type { ArtifactRef } from "@tyrum/schemas";
+import type { ArtifactRef } from "@tyrum/contracts";
 import type { OperatorCore } from "@tyrum/operator-core";
 import { useEffect, useState, type ReactNode } from "react";
 import { Badge } from "../ui/badge.js";

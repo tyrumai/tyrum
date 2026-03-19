@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
-import { ModelsDevCatalog } from "@tyrum/schemas";
-import type { ModelsDevCatalog as ModelsDevCatalogT } from "@tyrum/schemas";
+import { ModelsDevCatalog } from "@tyrum/contracts";
+import type { ModelsDevCatalog as ModelsDevCatalogT } from "@tyrum/contracts";
 import type { Logger } from "../observability/logger.js";
 import type { ModelsDevCacheSource } from "./models-dev-cache-dal.js";
 import { ModelsDevCacheDal } from "./models-dev-cache-dal.js";

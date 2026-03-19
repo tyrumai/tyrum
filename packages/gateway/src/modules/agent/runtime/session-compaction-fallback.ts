@@ -1,4 +1,4 @@
-import type { CheckpointSummary, TyrumUIMessage } from "@tyrum/schemas";
+import type { CheckpointSummary, TyrumUIMessage } from "@tyrum/contracts";
 import { extractMessageText } from "./session-context-state.js";
 
 function truncateSummaryLine(value: string, maxLength = 240): string {

@@ -1,5 +1,5 @@
-import { LifecycleHooksConfig } from "@tyrum/schemas";
-import type { LifecycleHookDefinition as LifecycleHookDefinitionT } from "@tyrum/schemas";
+import { LifecycleHooksConfig } from "@tyrum/contracts";
+import type { LifecycleHookDefinition as LifecycleHookDefinitionT } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import { normalizeDbDateTime } from "../../utils/db-time.js";
 import { safeJsonParse } from "../../utils/json.js";

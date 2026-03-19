@@ -1,4 +1,4 @@
-import { WorkItemFingerprint } from "@tyrum/schemas";
+import { WorkItemFingerprint } from "@tyrum/contracts";
 import type {
   AgentStateKVEntry,
   ArtifactRef,
@@ -20,7 +20,7 @@ import type {
   WorkSignalStatus,
   WorkSignalTriggerKind,
   Lane,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type { WsBroadcastAudience } from "../../ws/audience.js";
 
 type RawTime = string | Date;

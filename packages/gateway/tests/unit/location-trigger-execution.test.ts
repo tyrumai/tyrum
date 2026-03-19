@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { LocationEvent } from "@tyrum/schemas";
+import type { LocationEvent } from "@tyrum/contracts";
 import type { LocationAutomationTriggerRecord } from "../../src/modules/location/types.js";
 import {
   fireLocationTriggers,

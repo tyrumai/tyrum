@@ -1,4 +1,4 @@
-import type { ManagedExtensionDetail } from "@tyrum/schemas";
+import type { ManagedExtensionDetail } from "@tyrum/contracts";
 import React, { act } from "react";
 import { expect } from "vitest";
 import { setNativeValue } from "../test-utils.js";

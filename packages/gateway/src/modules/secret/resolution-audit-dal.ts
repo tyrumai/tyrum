@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { SecretProviderKind, WsEventEnvelope } from "@tyrum/schemas";
+import type { SecretProviderKind, WsEventEnvelope } from "@tyrum/contracts";
 import type { Logger } from "../observability/logger.js";
 import type { SqlDb } from "../../statestore/types.js";
 import { enqueueWsBroadcastMessage } from "../../ws/outbox.js";

@@ -6,7 +6,7 @@ import type {
   MemoryProvenanceSourceKind,
   MemorySensitivity,
   MemoryTombstone,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 
 export type MemoryProvenanceFilter = {
   source_kinds?: MemoryProvenanceSourceKind[];

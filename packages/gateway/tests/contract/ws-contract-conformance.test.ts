@@ -10,7 +10,7 @@ import {
   WsTaskExecuteRequest,
   WsTaskExecuteResponseEnvelope,
   WsWorkSignalFiredEvent,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { createWsHandler } from "../../src/routes/ws.js";
 import { dispatchTask } from "../../src/ws/protocol.js";
@@ -167,7 +167,7 @@ describe("WS contract conformance (gateway <-> client <-> schemas)", () => {
     }
   });
 
-  it("vNext handshake + task.execute exchange conform to @tyrum/schemas contracts", async () => {
+  it("vNext handshake + task.execute exchange conform to @tyrum/contracts contracts", async () => {
     let resolveTaskResult:
       | ((value: {
           taskId: string;
@@ -302,7 +302,7 @@ describe("WS contract conformance (gateway <-> client <-> schemas)", () => {
     WsTaskExecuteResponseEnvelope.parse(resultMsg);
   });
 
-  it("connect.init/connect.proof handshake frames conform to @tyrum/schemas contracts", async () => {
+  it("connect.init/connect.proof handshake frames conform to @tyrum/contracts contracts", async () => {
     server = await startInstrumentedGateway((connectionManager) => ({ connectionManager }));
 
     client = new TyrumClient({
@@ -347,7 +347,7 @@ describe("WS contract conformance (gateway <-> client <-> schemas)", () => {
     WsConnectProofResponseEnvelope.parse(proofRes);
   });
 
-  it("work.signal.fired conforms to @tyrum/schemas contracts (event-based WorkSignals)", async () => {
+  it("work.signal.fired conforms to @tyrum/contracts contracts (event-based WorkSignals)", async () => {
     server = await startInstrumentedGateway((connectionManager) => ({
       connectionManager,
       db: openTestSqliteDb(),

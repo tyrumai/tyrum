@@ -1,5 +1,5 @@
 import { z, type ZodType } from "zod";
-import { ChannelFieldErrors } from "@tyrum/schemas";
+import { ChannelFieldErrors } from "@tyrum/contracts";
 
 import { normalizeFingerprint256 } from "../tls/fingerprint.js";
 import { loadNodePinnedTransportModule } from "../load-node-pinned-transport.js";

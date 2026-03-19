@@ -1,8 +1,8 @@
 import {
   NormalizedThreadMessage as NormalizedThreadMessageSchema,
   parseTyrumKey,
-} from "@tyrum/schemas";
-import type { NormalizedMessageEnvelope } from "@tyrum/schemas";
+} from "@tyrum/contracts";
+import type { NormalizedMessageEnvelope } from "@tyrum/contracts";
 import type { ChannelInboxRow } from "./inbox-dal.js";
 import type { SqlDb } from "../../statestore/types.js";
 import type { Logger } from "../observability/logger.js";

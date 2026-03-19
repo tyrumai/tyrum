@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { vi } from "vitest";
-import type { SessionContextState, TyrumUIMessage } from "@tyrum/schemas";
+import type { SessionContextState, TyrumUIMessage } from "@tyrum/contracts";
 import { SessionDal } from "../../src/modules/agent/session-dal.js";
 import { ChannelInboxDal } from "../../src/modules/channels/inbox-dal.js";
 import { ChannelOutboxDal } from "../../src/modules/channels/outbox-dal.js";

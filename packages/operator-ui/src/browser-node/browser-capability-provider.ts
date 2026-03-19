@@ -1,5 +1,5 @@
 import type { CapabilityProvider, TaskExecuteContext, TaskResult } from "@tyrum/client";
-import { BrowserActionArgs, type ActionPrimitive } from "@tyrum/schemas";
+import { BrowserActionArgs, type ActionPrimitive } from "@tyrum/contracts";
 
 export type BrowserConsentScope = "geolocation" | "camera" | "microphone";
 

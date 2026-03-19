@@ -1,4 +1,4 @@
-import type { ApprovalKind as ApprovalKindT, ReviewEntry as ReviewEntryT } from "@tyrum/schemas";
+import type { ApprovalKind as ApprovalKindT, ReviewEntry as ReviewEntryT } from "@tyrum/contracts";
 import type { CreateReviewEntryParams, ReviewerKind } from "../review/dal.js";
 import type { ApprovalStatus } from "./status.js";
 

@@ -1,5 +1,5 @@
 import type { Context } from "hono";
-import { ConfiguredProviderAccount, ModelConfigDeleteConflictResponse } from "@tyrum/schemas";
+import { ConfiguredProviderAccount, ModelConfigDeleteConflictResponse } from "@tyrum/contracts";
 import type { AuthProfileRow } from "../modules/models/auth-profile-dal.js";
 import type { ConfiguredModelPresetDal } from "../modules/models/configured-model-preset-dal.js";
 import type { ExecutionProfileModelAssignmentDal } from "../modules/models/execution-profile-model-assignment-dal.js";

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { AgentConfig, BuiltinMemoryServerSettings, DeploymentConfig } from "@tyrum/schemas";
+import { AgentConfig, BuiltinMemoryServerSettings, DeploymentConfig } from "@tyrum/contracts";
 import { createContainer } from "../../src/container.js";
 import { AgentConfigDal } from "../../src/modules/config/agent-config-dal.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";

@@ -3,7 +3,7 @@
  */
 
 import { Hono } from "hono";
-import { ChannelConfigListResponse } from "@tyrum/schemas";
+import { ChannelConfigListResponse } from "@tyrum/contracts";
 import type { SqlDb } from "../statestore/types.js";
 import type { ConnectionManager } from "../ws/connection-manager.js";
 import type { OutboxDal } from "../modules/backplane/outbox-dal.js";

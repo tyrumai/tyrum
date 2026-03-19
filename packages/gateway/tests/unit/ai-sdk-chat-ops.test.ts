@@ -8,7 +8,7 @@ import {
   WsChatSessionGetResult,
   type WsResponseEnvelope,
   type WsResponseOkEnvelope,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { handleAiSdkChatMessage } from "../../src/ws/protocol/ai-sdk-chat-ops.js";

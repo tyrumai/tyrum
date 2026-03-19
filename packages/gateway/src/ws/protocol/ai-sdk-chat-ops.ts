@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { type UIMessage } from "ai";
-import type { WsResponseEnvelope } from "@tyrum/schemas";
+import type { WsResponseEnvelope } from "@tyrum/contracts";
 import type { ConnectedClient } from "../connection-manager.js";
 import { errorResponse } from "./helpers.js";
 import type { ProtocolDeps, ProtocolRequestEnvelope } from "./types.js";

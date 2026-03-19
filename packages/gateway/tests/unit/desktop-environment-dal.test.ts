@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF } from "@tyrum/schemas";
+import { DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF } from "@tyrum/contracts";
 import {
   DesktopEnvironmentDal,
   DesktopEnvironmentHostDal,

@@ -1,4 +1,4 @@
-import type { Decision as DecisionT } from "@tyrum/schemas";
+import type { Decision as DecisionT } from "@tyrum/contracts";
 import type { ModelMessage } from "ai";
 
 export const DEFAULT_TOOL_APPROVAL_WAIT_MS = 120_000;

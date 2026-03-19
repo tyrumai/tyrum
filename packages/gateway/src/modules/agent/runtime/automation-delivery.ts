@@ -2,7 +2,7 @@ import type {
   AgentTurnRequest as AgentTurnRequestT,
   AgentTurnResponse as AgentTurnResponseT,
   WorkScope,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import { WorkboardDal } from "../../workboard/dal.js";
 import { ChannelOutboxDal } from "../../channels/outbox-dal.js";
 import { DEFAULT_CHANNEL_ACCOUNT_ID, parseChannelSourceKey } from "../../channels/interface.js";

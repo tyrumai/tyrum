@@ -1,5 +1,5 @@
-import type { ActionPrimitive as ActionPrimitiveT } from "@tyrum/schemas";
-import { requiredCapability } from "@tyrum/schemas";
+import type { ActionPrimitive as ActionPrimitiveT } from "@tyrum/contracts";
+import { requiredCapability } from "@tyrum/contracts";
 import { randomUUID } from "node:crypto";
 import { releaseWorkspaceLeaseTx, tryAcquireWorkspaceLeaseTx } from "../../workspace/lease.js";
 import {

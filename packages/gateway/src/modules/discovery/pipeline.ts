@@ -10,7 +10,7 @@ import type {
   DiscoveryOutcome,
   DiscoveryResolution,
   DiscoveryStrategy,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type { CapabilityMemorySource } from "./strategies/capability-memory.js";
 import type { McpToolSource } from "./strategies/mcp-tools.js";
 import { resolveFromCapabilityMemory } from "./strategies/capability-memory.js";

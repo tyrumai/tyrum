@@ -1,4 +1,4 @@
-import { AgentKey } from "@tyrum/schemas";
+import { AgentKey } from "@tyrum/contracts";
 import { readdir } from "node:fs/promises";
 import type { PolicyService } from "../policy/service.js";
 import { PolicyService as PolicyServiceImpl } from "../policy/service.js";

@@ -1,4 +1,4 @@
-import type { ActionPrimitive as ActionPrimitiveT } from "@tyrum/schemas";
+import type { ActionPrimitive as ActionPrimitiveT } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import type { NodeDispatchService } from "../agent/node-dispatch-service.js";
 import type { ArtifactStore } from "../artifact/store.js";

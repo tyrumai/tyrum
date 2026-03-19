@@ -12,7 +12,7 @@ import { matchesPathPrefixSegment } from "../../app-path.js";
 import { getClientIp } from "./client-ip.js";
 import { requestIdForAudit } from "../observability/request-id.js";
 import type { Logger } from "../observability/logger.js";
-import type { AuthTokenClaims } from "@tyrum/schemas";
+import type { AuthTokenClaims } from "@tyrum/contracts";
 import type { AuthTokenService } from "./auth-token-service.js";
 import { AUTH_COOKIE_NAME, extractBearerToken } from "./http.js";
 import type { AuthAudit } from "./audit.js";

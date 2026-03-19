@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   capabilityDescriptorsForClientCapability,
   descriptorIdForClientCapability,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { MetricsRegistry } from "../../src/modules/observability/metrics.js";
 

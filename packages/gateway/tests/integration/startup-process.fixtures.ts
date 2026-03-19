@@ -1,7 +1,7 @@
 import type {
   LifecycleHookDefinition as LifecycleHookDefinitionT,
   PolicyBundle as PolicyBundleT,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 
 export type ApprovalRunSeed = {
   jobId: string;

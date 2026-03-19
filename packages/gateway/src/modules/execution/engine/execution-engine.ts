@@ -1,7 +1,7 @@
 import type {
   ActionPrimitive as ActionPrimitiveT,
   ArtifactRef as ArtifactRefT,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type { RedactionEngine } from "../../redaction/engine.js";
 import type { Logger } from "../../observability/logger.js";
 import type { PolicyService } from "../../policy/service.js";

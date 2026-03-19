@@ -48,7 +48,7 @@ That routing rule is the safety boundary: a connected node is not automatically 
 - **iOS / Android**: current location, photo capture, audio capture
 - **Desktop**: screenshot, snapshot, query, act, input, wait-for
 
-These families map onto typed request/response schemas shared from `@tyrum/schemas`, so gateway routing and node implementations stay aligned.
+These families map onto typed request/response schemas shared from `@tyrum/contracts`, so gateway routing and node implementations stay aligned.
 
 ## Why this boundary matters
 

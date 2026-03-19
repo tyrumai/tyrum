@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { NormalizedContainerKind } from "@tyrum/schemas";
+import type { NormalizedContainerKind } from "@tyrum/contracts";
 import { normalizeDbDateTime } from "../../utils/db-time.js";
 import type { SqlDb } from "../../statestore/types.js";
 

@@ -1,4 +1,4 @@
-import type { ActionPrimitive as ActionPrimitiveT } from "@tyrum/schemas";
+import type { ActionPrimitive as ActionPrimitiveT } from "@tyrum/contracts";
 import { canonicalizeToolMatchTarget } from "../../policy/match-target.js";
 
 export function toolCallFromAction(action: ActionPrimitiveT): {

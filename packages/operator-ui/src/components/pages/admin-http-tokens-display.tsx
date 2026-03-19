@@ -2,7 +2,7 @@ import {
   createMobileBootstrapUrl,
   inferGatewayWsUrl,
   normalizeGatewayHttpBaseUrl,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type * as React from "react";
 import QRCode from "qrcode";
 import { useEffect, useMemo, useState } from "react";

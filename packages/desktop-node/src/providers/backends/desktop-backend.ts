@@ -1,4 +1,4 @@
-import type { DesktopDisplayTarget } from "@tyrum/schemas";
+import type { DesktopDisplayTarget } from "@tyrum/contracts";
 
 export interface ScreenCapture {
   width: number;

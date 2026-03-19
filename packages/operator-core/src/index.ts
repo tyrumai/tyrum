@@ -138,7 +138,7 @@ export type {
   WorkItemStateKVEntry,
   WorkSignal,
   WorkStateKVScope,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 export {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   capabilityDescriptorsForClientCapability,
@@ -146,8 +146,8 @@ export {
   descriptorIdsForClientCapability,
   deviceIdFromSha256Digest,
   migrateCapabilityDescriptorId,
-} from "@tyrum/schemas";
-export type { WsCapabilityReadyPayload } from "@tyrum/schemas";
+} from "@tyrum/contracts";
+export type { WsCapabilityReadyPayload } from "@tyrum/contracts";
 export type {
   DeviceIdentity,
   CapabilityProvider,

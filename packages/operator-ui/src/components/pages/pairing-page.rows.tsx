@@ -1,5 +1,5 @@
 import type { OperatorCore, Pairing } from "@tyrum/operator-core";
-import type { NodeInventoryEntry } from "@tyrum/schemas";
+import type { NodeInventoryEntry } from "@tyrum/contracts";
 import { Badge, type BadgeVariant } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
 import { formatRelativeTime } from "../../utils/format-relative-time.js";

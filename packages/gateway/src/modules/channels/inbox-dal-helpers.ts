@@ -1,8 +1,8 @@
 import {
   NormalizedThreadMessage as NormalizedThreadMessageSchema,
   normalizedContainerKindFromThreadKind,
-} from "@tyrum/schemas";
-import type { NormalizedThreadMessage } from "@tyrum/schemas";
+} from "@tyrum/contracts";
+import type { NormalizedThreadMessage } from "@tyrum/contracts";
 import { randomUUID } from "node:crypto";
 import type { SqlDb } from "../../statestore/types.js";
 import { safeJsonParse } from "../../utils/json.js";

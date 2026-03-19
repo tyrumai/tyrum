@@ -1,5 +1,5 @@
 import { isAbsolute, relative, resolve } from "node:path";
-import type { McpServerSpec as McpServerSpecT } from "@tyrum/schemas";
+import type { McpServerSpec as McpServerSpecT } from "@tyrum/contracts";
 import type { ArtifactStore } from "../artifact/store.js";
 import { requireTenantIdValue } from "../identity/scope.js";
 import type { IdentityScopeDal } from "../identity/scope.js";

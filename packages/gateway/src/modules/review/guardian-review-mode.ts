@@ -1,4 +1,4 @@
-import { CapabilityDescriptor, NodePairingTrustLevel } from "@tyrum/schemas";
+import { CapabilityDescriptor, NodePairingTrustLevel } from "@tyrum/contracts";
 import { z } from "zod";
 
 const ReviewRiskLevelSchema = z.enum(["low", "medium", "high", "critical"]);

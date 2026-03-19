@@ -9,8 +9,8 @@ import {
   WsSubagentSendResult,
   WsSubagentSpawnRequest,
   WsSubagentSpawnResult,
-} from "@tyrum/schemas";
-import type { WsResponseEnvelope } from "@tyrum/schemas";
+} from "@tyrum/contracts";
+import type { WsResponseEnvelope } from "@tyrum/contracts";
 import type { ConnectedClient } from "../connection-manager.js";
 import { WORKBOARD_WS_AUDIENCE } from "../workboard-audience.js";
 import { SubagentService } from "../../modules/workboard/subagent-service.js";

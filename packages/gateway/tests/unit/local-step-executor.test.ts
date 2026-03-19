@@ -3,13 +3,13 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { ActionPrimitive } from "@tyrum/schemas";
+import { ActionPrimitive } from "@tyrum/contracts";
 import { Ajv2019 } from "ajv/dist/2019.js";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { McpManager } from "../../src/modules/agent/mcp-manager.js";
 import { createLocalStepExecutor } from "../../src/modules/execution/local-step-executor.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
-import type { SecretHandle } from "@tyrum/schemas";
+import type { SecretHandle } from "@tyrum/contracts";
 import type { SecretProvider } from "../../src/modules/secret/provider.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));

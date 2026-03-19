@@ -2,7 +2,7 @@ import {
   DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF,
   describeDesktopEnvironmentHostAvailability,
   isDesktopEnvironmentHostAvailable,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type { BadgeVariant } from "../ui/badge.js";
 import { normalizeHttpUrl } from "../../utils/normalize-http-url.js";
 

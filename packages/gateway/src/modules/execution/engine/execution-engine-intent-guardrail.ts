@@ -1,5 +1,5 @@
-import type { ActionPrimitive as ActionPrimitiveT } from "@tyrum/schemas";
-import { requiresPostcondition } from "@tyrum/schemas";
+import type { ActionPrimitive as ActionPrimitiveT } from "@tyrum/contracts";
+import { requiresPostcondition } from "@tyrum/contracts";
 import type { Logger } from "../../observability/logger.js";
 import type { SqlDb } from "../../../statestore/types.js";
 import { WorkboardDal } from "../../workboard/dal.js";

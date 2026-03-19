@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { CheckpointSummary, TyrumUIMessage } from "@tyrum/schemas";
+import type { CheckpointSummary, TyrumUIMessage } from "@tyrum/contracts";
 import { buildCheckpointPromptText, renderMessagesForCompaction } from "./session-context-state.js";
 
 export const COMPACTION_JSON_SCHEMA = z.object({

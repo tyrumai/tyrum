@@ -1,7 +1,7 @@
 import type { AgentRegistry } from "./registry.js";
 import type { ToolResult, WorkspaceLeaseConfig } from "./tool-executor-shared.js";
 import type { SqlDb } from "../../statestore/types.js";
-import type { WorkScope } from "@tyrum/schemas";
+import type { WorkScope } from "@tyrum/contracts";
 import type { WorkboardBroadcastDeps } from "../workboard/item-broadcast.js";
 import { WorkboardDal } from "../workboard/dal.js";
 export { resolveAgentKeyById, runSubagentTurn } from "../workboard/subagent-runtime-support.js";

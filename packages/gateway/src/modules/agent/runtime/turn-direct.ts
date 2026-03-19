@@ -4,7 +4,7 @@ import type {
   AgentTurnRequest as AgentTurnRequestT,
   AgentTurnResponse as AgentTurnResponseT,
   WorkScope,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import {
   createGuardianReviewTurnControl,
   stripEmbeddedSessionContext,

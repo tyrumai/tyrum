@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { NodePairingRequest } from "@tyrum/schemas";
+import type { NodePairingRequest } from "@tyrum/contracts";
 import type { ApprovalRow } from "../../src/modules/approval/dal.js";
 import {
   buildGuardianReviewSystemPrompt,

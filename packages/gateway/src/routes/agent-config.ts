@@ -10,11 +10,11 @@ import {
   AgentConfigGetResponse,
   AgentConfigListResponse,
   AgentConfigUpdateRequest,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type {
   AgentConfig,
   AgentConfigGetResponse as AgentConfigGetResponseT,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type { SqlDb } from "../statestore/types.js";
 import type { IdentityScopeDal } from "../modules/identity/scope.js";
 import { requireAuthClaims, requireTenantId } from "../modules/auth/claims.js";

@@ -1,4 +1,4 @@
-import type { WsEventEnvelope } from "@tyrum/schemas";
+import type { WsEventEnvelope } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import type { RedactionEngine } from "../redaction/engine.js";
 import { DEFAULT_TENANT_ID } from "../identity/scope.js";

@@ -1,4 +1,4 @@
-import type { Decision } from "@tyrum/schemas";
+import type { Decision } from "@tyrum/contracts";
 import { wildcardMatch } from "./wildcard.js";
 
 export type PolicyDomainConfig = {

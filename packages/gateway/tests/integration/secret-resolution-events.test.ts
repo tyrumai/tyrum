@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { ToolExecutor } from "../../src/modules/agent/tool-executor.js";
 import type { McpManager } from "../../src/modules/agent/mcp-manager.js";
 import type { SecretProvider } from "../../src/modules/secret/provider.js";
-import type { SecretHandle } from "@tyrum/schemas";
+import type { SecretHandle } from "@tyrum/contracts";
 import { createTestContainer } from "./helpers.js";
 import { DEFAULT_TENANT_ID, DEFAULT_WORKSPACE_ID } from "../../src/modules/identity/scope.js";
 

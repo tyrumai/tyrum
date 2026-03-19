@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { AuditEvent, ReceiptBundle, ChainVerification } from "@tyrum/schemas";
+import type { AuditEvent, ReceiptBundle, ChainVerification } from "@tyrum/contracts";
 
 export interface HashableEvent {
   plan_id: string;

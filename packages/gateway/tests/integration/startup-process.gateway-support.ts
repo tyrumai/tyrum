@@ -25,11 +25,11 @@ const REPO_ROOT = resolve(PACKAGE_ROOT, "../..");
 const GATEWAY_BIN = resolve(PACKAGE_ROOT, "bin/tyrum.mjs");
 const GATEWAY_ENTRYPOINT = resolve(PACKAGE_ROOT, "dist/index.mjs");
 const GATEWAY_MIGRATIONS_DIR = resolve(PACKAGE_ROOT, "migrations/sqlite");
-const SCHEMAS_DIST = resolve(REPO_ROOT, "packages/schemas/dist/index.mjs");
-const SCHEMAS_PACKAGE_JSON = resolve(REPO_ROOT, "packages/schemas/package.json");
-const SCHEMAS_TSCONFIG = resolve(REPO_ROOT, "packages/schemas/tsconfig.json");
-const SCHEMAS_SRC_DIR = resolve(REPO_ROOT, "packages/schemas/src");
-const SCHEMAS_SCRIPTS_DIR = resolve(REPO_ROOT, "packages/schemas/scripts");
+const SCHEMAS_DIST = resolve(REPO_ROOT, "packages/contracts/dist/index.mjs");
+const SCHEMAS_PACKAGE_JSON = resolve(REPO_ROOT, "packages/contracts/package.json");
+const SCHEMAS_TSCONFIG = resolve(REPO_ROOT, "packages/contracts/tsconfig.json");
+const SCHEMAS_SRC_DIR = resolve(REPO_ROOT, "packages/contracts/src");
+const SCHEMAS_SCRIPTS_DIR = resolve(REPO_ROOT, "packages/contracts/scripts");
 const GATEWAY_SRC_DIR = resolve(PACKAGE_ROOT, "src");
 const GATEWAY_BUILD_LOCK = resolve(REPO_ROOT, ".tyrum-gateway-build.lock");
 
@@ -240,9 +240,9 @@ function ensureGatewayBuild(): void {
   if (!gatewayBuildIsStale()) return;
 
   ensureWorkspaceBuild(
-    "@tyrum/schemas",
+    "@tyrum/contracts",
     SCHEMAS_DIST,
-    "Failed to build @tyrum/schemas before startup test.",
+    "Failed to build @tyrum/contracts before startup test.",
   );
   ensureWorkspaceBuild(
     "@tyrum/gateway",

@@ -2,7 +2,7 @@ import {
   WsChatSessionDeleteRequest,
   WsChatSessionDeleteResult,
   type WsResponseEnvelope,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import { SessionDal } from "../../modules/agent/session-dal.js";
 import { resolveStoredKeyLaneByChannelThread } from "../../modules/agent/stored-key-lane-resolution.js";
 import { SessionSendPolicyOverrideDal } from "../../modules/channels/send-policy-override-dal.js";

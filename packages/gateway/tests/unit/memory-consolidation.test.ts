@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { MemoryDal } from "../../src/modules/memory/memory-dal.js";
 import { VectorDal } from "../../src/modules/memory/vector-dal.js";
-import type { BuiltinMemoryServerSettings } from "@tyrum/schemas";
+import type { BuiltinMemoryServerSettings } from "@tyrum/contracts";
 import { DEFAULT_AGENT_ID, DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 describe("Memory v1 consolidation pipeline", () => {

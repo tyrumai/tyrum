@@ -7,7 +7,7 @@ import {
   type ManagedNodeClientLifecycle,
   type TaskResult,
 } from "@tyrum/client/browser";
-import { BrowserActionArgs } from "@tyrum/schemas";
+import { BrowserActionArgs } from "@tyrum/contracts";
 import {
   createContext,
   useCallback,

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { DeploymentConfig } from "@tyrum/schemas";
+import { DeploymentConfig } from "@tyrum/contracts";
 
 describe("lifecycle hooks startup gating", () => {
   it("does not auto-fire gateway.start hooks when no worker loop is running", async () => {

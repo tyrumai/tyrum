@@ -4,7 +4,7 @@ import type {
   ReviewState as ReviewStateT,
   ReviewTargetType as ReviewTargetTypeT,
   ReviewerKind as ReviewerKindT,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import { randomUUID } from "node:crypto";
 import type { SqlDb } from "../../statestore/types.js";
 import { normalizeDbDateTime } from "../../utils/db-time.js";

@@ -6,12 +6,12 @@
  * the matching provider and report results back to the gateway.
  */
 
-import type { ActionPrimitive, ClientCapability } from "@tyrum/schemas";
+import type { ActionPrimitive, ClientCapability } from "@tyrum/contracts";
 import {
   requiredCapabilityDescriptorForAction,
   descriptorIdsForClientCapability,
   migrateCapabilityDescriptorId,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type { TyrumClient } from "./ws-client.js";
 
 // ---------------------------------------------------------------------------

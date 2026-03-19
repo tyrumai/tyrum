@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { TelegramChannelQueue, telegramThreadKey } from "../../src/modules/channels/telegram.js";
-import type { NormalizedThreadMessage } from "@tyrum/schemas";
+import type { NormalizedThreadMessage } from "@tyrum/contracts";
 import { DEFAULT_TENANT_ID, IdentityScopeDal } from "../../src/modules/identity/scope.js";
 import { ChannelThreadDal } from "../../src/modules/channels/thread-dal.js";
 import { SessionDal } from "../../src/modules/agent/session-dal.js";

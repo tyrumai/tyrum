@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
-import { RoutingConfig as RoutingConfigSchema } from "@tyrum/schemas";
-import type { RoutingConfig as RoutingConfigT } from "@tyrum/schemas";
+import { RoutingConfig as RoutingConfigSchema } from "@tyrum/contracts";
+import type { RoutingConfig as RoutingConfigT } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import { normalizeDbDateTime } from "../../utils/db-time.js";
 import { safeJsonParse } from "../../utils/json.js";

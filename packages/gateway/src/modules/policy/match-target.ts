@@ -3,7 +3,7 @@ import {
   ActionPrimitiveKind,
   canonicalizeToolId,
   clientCapabilityFromDescriptorId,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {

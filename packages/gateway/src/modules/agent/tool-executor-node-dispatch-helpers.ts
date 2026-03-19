@@ -5,7 +5,7 @@ import {
   type NodeActionDispatchError,
   type NodeActionDispatchRequest,
   type NodeActionDispatchResponse as NodeActionDispatchResponseT,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import { ZodError } from "zod";
 import {
   NoCapableNodeError,

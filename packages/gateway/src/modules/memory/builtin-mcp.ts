@@ -6,7 +6,7 @@ import {
   BuiltinMemoryWriteArgs,
   type BuiltinMemoryServerSettings as BuiltinMemoryServerSettingsT,
   type McpServerSpec as McpServerSpecT,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import { makeToolResult } from "../agent/tool-executor-local-utils.js";
 import type { ToolResult } from "../agent/tool-executor-shared.js";
 import type { McpToolInfo } from "../agent/mcp-manager.js";

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { IdentityPack as IdentityPackSchema } from "@tyrum/schemas";
-import type { IdentityPack as IdentityPackT } from "@tyrum/schemas";
+import { IdentityPack as IdentityPackSchema } from "@tyrum/contracts";
+import type { IdentityPack as IdentityPackT } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import { normalizeDbDateTime } from "../../utils/db-time.js";
 import { safeJsonParse } from "../../utils/json.js";

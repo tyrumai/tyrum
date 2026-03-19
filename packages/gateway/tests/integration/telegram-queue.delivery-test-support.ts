@@ -1,4 +1,4 @@
-import { WsDeliveryReceiptEvent } from "@tyrum/schemas";
+import { WsDeliveryReceiptEvent } from "@tyrum/contracts";
 import { expect, it, vi } from "vitest";
 import { normalizeUpdate } from "../../src/modules/ingress/telegram.js";
 import {

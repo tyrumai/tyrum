@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { ActionPrimitive } from "@tyrum/schemas";
+import { ActionPrimitive } from "@tyrum/contracts";
 import { createToolRunnerStepExecutor } from "../../src/modules/execution/toolrunner-step-executor.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));

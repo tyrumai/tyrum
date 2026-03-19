@@ -3,7 +3,7 @@ import {
   AgentConfigListResponse,
   AgentConfigUpdateRequest,
   AgentConfigUpdateResponse,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type { z } from "zod";
 import { HttpTransport, validateOrThrow, type TyrumRequestOptions } from "./shared.js";
 

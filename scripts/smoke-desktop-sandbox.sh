@@ -59,7 +59,7 @@ wait_for_novnc
 docker compose exec -T -w /app/packages/gateway tyrum node --input-type=module -e '
   import Database from "better-sqlite3";
   import { randomUUID } from "node:crypto";
-  import { CAPABILITY_DESCRIPTOR_DEFAULT_VERSION, descriptorIdForClientCapability } from "@tyrum/schemas";
+  import { CAPABILITY_DESCRIPTOR_DEFAULT_VERSION, descriptorIdForClientCapability } from "@tyrum/contracts";
 
   const baseUrl = "http://127.0.0.1:8788";
   const token = process.env.GATEWAY_TOKEN?.trim();

@@ -8,13 +8,13 @@ Read this if: you need to know where interface truth lives and how Tyrum keeps w
 
 Skip this if: you only need the high-level protocol picture; start with [Protocol](/architecture/protocol).
 
-Go deeper: [Protocol](/architecture/protocol), [API surfaces (WebSocket vs HTTP)](/architecture/api-surfaces), `packages/schemas`.
+Go deeper: [Protocol](/architecture/protocol), [API surfaces (WebSocket vs HTTP)](/architecture/api-surfaces), `packages/contracts`.
 
 Contracts are the schema authority for Tyrum interfaces. They keep protocol messages, tool surfaces, plugin manifests, and persisted payloads machine-valid and interoperable.
 
 ```mermaid
 flowchart LR
-  Schemas["packages/schemas<br/>authoritative definitions"] --> Export["JSON Schema artifacts"]
+  Schemas["packages/contracts<br/>authoritative definitions"] --> Export["JSON Schema artifacts"]
   Export --> Gateway["Gateway validators"]
   Export --> Clients["Clients / operators"]
   Export --> Persisted["Stored payloads<br/>events + records"]
@@ -34,7 +34,7 @@ When prose and schema disagree, schema wins.
 
 ## Source of truth and distribution
 
-The canonical contract definitions live in `packages/schemas`. During build, Tyrum exports JSON Schema artifacts such as per-schema `*.json` files and a `catalog.json` index. The gateway publishes those artifacts so clients and operators can fetch the exact machine-readable definitions.
+The canonical contract definitions live in `packages/contracts`. During build, Tyrum exports JSON Schema artifacts such as per-schema `*.json` files and a `catalog.json` index. The gateway publishes those artifacts so clients and operators can fetch the exact machine-readable definitions.
 
 ## Contract properties
 

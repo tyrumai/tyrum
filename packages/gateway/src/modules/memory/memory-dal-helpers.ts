@@ -2,7 +2,7 @@ import type {
   BuiltinMemoryServerSettings,
   MemoryItemKind,
   MemorySensitivity,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import { irToPlainText, markdownToIr } from "../markdown/ir.js";
 import type { MemoryItemFilter, MemoryItemPatch } from "./types.js";
 import type {

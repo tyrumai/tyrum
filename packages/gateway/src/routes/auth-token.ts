@@ -9,7 +9,7 @@ import {
   AuthTokenUpdateRequest,
   AuthTokenUpdateResponse,
   TenantAuthTokenIssueRequest,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type { AuthTokenService } from "../modules/auth/auth-token-service.js";
 import type { AuthTokenListRow, AuthTokenRow } from "../modules/auth/auth-token-dal.js";
 import { requireOperatorAdminAccess, requireTenantId } from "../modules/auth/claims.js";

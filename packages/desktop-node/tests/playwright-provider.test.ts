@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ActionPrimitive } from "@tyrum/schemas";
+import type { ActionPrimitive } from "@tyrum/contracts";
 import {
   PlaywrightProvider,
   type PlaywrightProviderConfig,

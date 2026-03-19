@@ -4,7 +4,7 @@ import {
   type OperatorCore,
   type Pairing,
 } from "@tyrum/operator-core";
-import type { NodeInventoryEntry } from "@tyrum/schemas";
+import type { NodeInventoryEntry } from "@tyrum/contracts";
 import { Link2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { AppPage } from "../layout/app-page.js";

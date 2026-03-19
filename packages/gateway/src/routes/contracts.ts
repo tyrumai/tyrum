@@ -7,12 +7,12 @@ import type { ZodTypeAny } from "zod";
 const TRANSIENT_READ_MAX_ATTEMPTS = 50;
 const TRANSIENT_READ_DELAY_MS = 100;
 
-function resolveSchemasJsonSchemaDir(): string {
-  return fileURLToPath(new URL("../../../schemas/dist/jsonschema", import.meta.url));
+function resolveContractsJsonSchemaDir(): string {
+  return fileURLToPath(new URL("../../../contracts/dist/jsonschema", import.meta.url));
 }
 
-function resolveSchemasPackageJsonPath(): string {
-  return fileURLToPath(new URL("../../../schemas/package.json", import.meta.url));
+function resolveContractsPackageJsonPath(): string {
+  return fileURLToPath(new URL("../../../contracts/package.json", import.meta.url));
 }
 
 function delay(ms: number): Promise<void> {
@@ -60,7 +60,7 @@ function resolveSchemaDirState(): {
   jsonSchemaDirResolved: string | undefined;
 } {
   try {
-    const jsonSchemaDir = resolveSchemasJsonSchemaDir();
+    const jsonSchemaDir = resolveContractsJsonSchemaDir();
     return {
       jsonSchemaDir,
       jsonSchemaDirResolved: resolve(jsonSchemaDir),
@@ -150,7 +150,7 @@ interface GeneratedContractCatalog {
   format: "tyrum.contracts.jsonschema.catalog.v1";
   generated_at: string;
   package: {
-    name: "@tyrum/schemas";
+    name: "@tyrum/contracts";
     version: string;
   };
   schemas: GeneratedContractCatalogSchemaEntry[];
@@ -183,9 +183,9 @@ function hasToJsonSchema(value: unknown): value is ZodTypeAny & {
 }
 
 async function buildGeneratedContractState(): Promise<GeneratedContractState> {
-  const [schemasModule, schemasPackageRaw] = await Promise.all([
-    import("@tyrum/schemas"),
-    readFile(resolveSchemasPackageJsonPath(), "utf-8").catch(() => undefined),
+  const [contractsModule, contractsPackageRaw] = await Promise.all([
+    import("@tyrum/contracts"),
+    readFile(resolveContractsPackageJsonPath(), "utf-8").catch(() => undefined),
   ]);
 
   const generatedAt = new Date().toISOString();
@@ -193,9 +193,9 @@ async function buildGeneratedContractState(): Promise<GeneratedContractState> {
   const catalogSchemas: GeneratedContractCatalogSchemaEntry[] = [];
   const errors: Array<{ name: string; error: string }> = [];
   const packageVersion = (() => {
-    if (!schemasPackageRaw) return "0.0.0-dev";
+    if (!contractsPackageRaw) return "0.0.0-dev";
     try {
-      const parsed = JSON.parse(schemasPackageRaw) as { version?: unknown };
+      const parsed = JSON.parse(contractsPackageRaw) as { version?: unknown };
       return typeof parsed.version === "string" ? parsed.version : "0.0.0-dev";
     } catch (err) {
       void err;
@@ -203,7 +203,7 @@ async function buildGeneratedContractState(): Promise<GeneratedContractState> {
     }
   })();
 
-  for (const [name, value] of Object.entries(schemasModule)) {
+  for (const [name, value] of Object.entries(contractsModule)) {
     if (!hasToJsonSchema(value)) continue;
 
     try {
@@ -211,7 +211,7 @@ async function buildGeneratedContractState(): Promise<GeneratedContractState> {
       if (!schema || typeof schema !== "object") continue;
 
       const file = `${name}.json`;
-      const id = `https://schemas.tyrum.dev/${packageVersion}/${encodeURIComponent(name)}.json`;
+      const id = `https://contracts.tyrum.dev/${packageVersion}/${encodeURIComponent(name)}.json`;
       if (!("$id" in schema)) {
         schema.$id = id;
       }
@@ -236,7 +236,7 @@ async function buildGeneratedContractState(): Promise<GeneratedContractState> {
       format: "tyrum.contracts.jsonschema.catalog.v1",
       generated_at: generatedAt,
       package: {
-        name: "@tyrum/schemas",
+        name: "@tyrum/contracts",
         version: packageVersion,
       },
       schemas: catalogSchemas,

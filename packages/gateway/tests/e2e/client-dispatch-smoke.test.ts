@@ -22,7 +22,7 @@ import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { dispatchTask, type ProtocolDeps } from "../../src/ws/protocol.js";
 import { TyrumClient } from "../../../client/src/ws-client.js";
 import { generateKeyPairSync } from "node:crypto";
-import { CAPABILITY_DESCRIPTOR_DEFAULT_VERSION } from "@tyrum/schemas";
+import { CAPABILITY_DESCRIPTOR_DEFAULT_VERSION } from "@tyrum/contracts";
 import { waitForCondition } from "../helpers/wait-for.js";
 import type { AuthTokenService } from "../../src/modules/auth/auth-token-service.js";
 

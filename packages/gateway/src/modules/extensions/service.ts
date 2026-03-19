@@ -3,7 +3,7 @@ import type {
   ExtensionKind as ExtensionKindT,
   ManagedExtensionDetail,
   ManagedExtensionSummary,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type { GatewayContainer } from "../../container.js";
 import { RuntimePackageDal } from "../agent/runtime-package-dal.js";
 import {

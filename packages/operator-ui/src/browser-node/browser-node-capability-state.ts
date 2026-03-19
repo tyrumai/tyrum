@@ -2,7 +2,7 @@ import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   type NodeCapabilityActionState,
   type NodeCapabilityState,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 
 export type BrowserCapabilityName = "get" | "capture_photo" | "record";
 

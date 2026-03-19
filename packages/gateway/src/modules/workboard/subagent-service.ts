@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { Lane, SubagentDescriptor, SubagentStatus, WorkScope } from "@tyrum/schemas";
+import type { Lane, SubagentDescriptor, SubagentStatus, WorkScope } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import type { AgentRegistry } from "../agent/registry.js";
 import { WorkboardDal } from "./dal.js";

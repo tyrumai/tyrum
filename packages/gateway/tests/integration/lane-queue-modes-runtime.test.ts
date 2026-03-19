@@ -11,7 +11,7 @@ import {
   LaneQueueInterruptError,
 } from "../../src/modules/lanes/queue-signal-dal.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
-import { AgentConfig } from "@tyrum/schemas";
+import { AgentConfig } from "@tyrum/contracts";
 import { AgentConfigDal } from "../../src/modules/config/agent-config-dal.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));

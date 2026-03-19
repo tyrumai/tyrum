@@ -1,5 +1,5 @@
-import type { ActionPrimitive as ActionPrimitiveT } from "@tyrum/schemas";
-import { ActionPrimitive } from "@tyrum/schemas";
+import type { ActionPrimitive as ActionPrimitiveT } from "@tyrum/contracts";
+import { ActionPrimitive } from "@tyrum/contracts";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -16,7 +16,7 @@ import { PolicySnapshotDal } from "./modules/policy/snapshot-dal.js";
 import { SqliteDb } from "./statestore/sqlite.js";
 import { PostgresDb } from "./statestore/postgres.js";
 import { isPostgresDbUri } from "./statestore/db-uri.js";
-import { DeploymentConfig } from "@tyrum/schemas";
+import { DeploymentConfig } from "@tyrum/contracts";
 import { DeploymentConfigDal } from "./modules/config/deployment-config-dal.js";
 
 interface ToolRunnerStdioRequest {

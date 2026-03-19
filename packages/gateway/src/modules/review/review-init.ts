@@ -1,4 +1,4 @@
-import type { NodePairingRequest as NodePairingRequestT } from "@tyrum/schemas";
+import type { NodePairingRequest as NodePairingRequestT } from "@tyrum/contracts";
 import type { ApprovalRow } from "../approval/dal.js";
 import type { ApprovalDal, ApprovalStatus, CreateApprovalParams } from "../approval/dal.js";
 import type { NodePairingDal, NodePairingStatus } from "../node/pairing-dal.js";

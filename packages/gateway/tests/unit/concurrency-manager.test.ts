@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import type { ActionPrimitive } from "@tyrum/schemas";
+import type { ActionPrimitive } from "@tyrum/contracts";
 import type { StepExecutor } from "../../src/modules/execution/engine.js";
 import {
   executeWithTimeout,

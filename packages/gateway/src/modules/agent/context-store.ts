@@ -2,7 +2,7 @@ import type {
   AgentConfig as AgentConfigT,
   IdentityPack as IdentityPackT,
   McpServerSpec as McpServerSpecT,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import {
   ensureWorkspaceInitialized,
   resolveBundledSkillsDir,

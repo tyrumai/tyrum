@@ -1,5 +1,5 @@
 import { getToolName, isTextUIPart, isToolUIPart, type UIMessage, validateUIMessages } from "ai";
-import type { TyrumUIMessage, WsResponseEnvelope } from "@tyrum/schemas";
+import type { TyrumUIMessage, WsResponseEnvelope } from "@tyrum/contracts";
 export {
   WsChatSessionArchiveRequest as ChatSessionArchiveRequest,
   WsChatSessionCreateRequest as ChatSessionCreateRequest,
@@ -8,7 +8,7 @@ export {
   WsChatSessionListRequest as ChatSessionListRequest,
   WsChatSessionReconnectRequest as ChatSessionReconnectRequest,
   WsChatSessionSendRequest as ChatSessionSendRequest,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type { ConnectedClient } from "../connection-manager.js";
 import { errorResponse } from "./helpers.js";
 import type { ProtocolRequestEnvelope } from "./types.js";

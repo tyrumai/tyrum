@@ -3,7 +3,7 @@ import type {
   TyrumAiSdkChatSessionSummary,
   UIMessage,
 } from "@tyrum/client/browser";
-import type { AgentPersona } from "@tyrum/schemas";
+import type { AgentPersona } from "@tyrum/contracts";
 import type { OperatorHttpClient, OperatorWsClient } from "../deps.js";
 import type { OperatorCoreError } from "../operator-error.js";
 import type { ExternalStore } from "../store.js";

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { BuiltinMemoryServerSettings } from "@tyrum/schemas";
+import { BuiltinMemoryServerSettings } from "@tyrum/contracts";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { MemoryDal } from "../../src/modules/memory/memory-dal.js";
 import { buildMemoryDigest } from "../../src/modules/memory/memory-digest.js";

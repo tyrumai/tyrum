@@ -8,7 +8,7 @@ The wire shapes are defined by shared, versioned contracts (see [Contracts](/arc
 
 - **Read this if:** you are implementing event producers/consumers, reviewing replay behavior, or validating event payload contracts.
 - **Skip this if:** you are still building a mental model of gateway/protocol architecture; start at [Protocol](/architecture/protocol) first.
-- **Go deeper:** use [Backplane](/architecture/backplane) for cluster delivery mechanics and `packages/schemas` for authoritative payload definitions.
+- **Go deeper:** use [Backplane](/architecture/backplane) for cluster delivery mechanics and `packages/contracts` for authoritative payload definitions.
 
 ## Event family map
 
@@ -32,7 +32,7 @@ flowchart LR
 
 ## Event envelope
 
-For current event names and payloads, treat the schema exports in `packages/schemas` as
+For current event names and payloads, treat the schema exports in `packages/contracts` as
 authoritative. This page mirrors that contract for operator and implementation guidance.
 
 - `event_id`: unique id for dedupe. For `approval.updated`, `pairing.updated`, and `policy_override.created`, the gateway persists event identity so re-emission of the same transition reuses the same `event_id`.

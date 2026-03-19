@@ -6,7 +6,7 @@ import {
   ProviderAccountMutateResponse,
   ProviderAccountUpdateRequest,
   ProviderRegistryResponse,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import { z } from "zod";
 import {
   HttpTransport,

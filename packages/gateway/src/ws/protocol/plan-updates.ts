@@ -1,4 +1,4 @@
-import type { WsEventEnvelope } from "@tyrum/schemas";
+import type { WsEventEnvelope } from "@tyrum/contracts";
 import type { ProtocolDeps } from "./types.js";
 import { broadcastEvent } from "./helpers.js";
 

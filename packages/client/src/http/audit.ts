@@ -6,7 +6,7 @@ import {
   DateTimeSchema,
   ReceiptBundle,
   Sha256Hex,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import { z } from "zod";
 import {
   HttpTransport,

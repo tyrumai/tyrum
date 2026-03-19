@@ -10,7 +10,7 @@ import {
 } from "../unit/stub-language-model.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { buildAgentTurnKey } from "../../src/modules/agent/turn-key.js";
-import { AgentConfig } from "@tyrum/schemas";
+import { AgentConfig } from "@tyrum/contracts";
 import { AgentConfigDal } from "../../src/modules/config/agent-config-dal.js";
 import { AgentIdentityDal } from "../../src/modules/agent/identity-dal.js";
 

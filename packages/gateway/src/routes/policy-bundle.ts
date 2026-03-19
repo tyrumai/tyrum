@@ -13,7 +13,7 @@ import {
   PolicyOverrideRevokeRequest,
   PolicyOverrideRevokeResponse,
   type WsEventEnvelope,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import { Hono } from "hono";
 import type { ConnectionManager } from "../ws/connection-manager.js";
 import type { OutboxDal } from "../modules/backplane/outbox-dal.js";

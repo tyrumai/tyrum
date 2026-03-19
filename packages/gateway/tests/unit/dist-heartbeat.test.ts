@@ -11,10 +11,10 @@ const REPO_ROOT = resolve(PACKAGE_ROOT, "../..");
 const WORKSPACE_MARKER = resolve(REPO_ROOT, "pnpm-workspace.yaml");
 const DIST_ENTRYPOINT = resolve(PACKAGE_ROOT, "dist/index.mjs");
 const SRC_ROOT = resolve(PACKAGE_ROOT, "src");
-const SCHEMAS_DIST_ENTRYPOINT = resolve(REPO_ROOT, "packages/schemas/dist/index.mjs");
+const SCHEMAS_DIST_ENTRYPOINT = resolve(REPO_ROOT, "packages/contracts/dist/index.mjs");
 const SCHEMAS_JSONSCHEMA_CATALOG = resolve(
   REPO_ROOT,
-  "packages/schemas/dist/jsonschema/catalog.json",
+  "packages/contracts/dist/jsonschema/catalog.json",
 );
 const GATEWAY_BUILD_LOCK = resolve(REPO_ROOT, ".tyrum-gateway-build.lock");
 
@@ -145,7 +145,7 @@ async function ensureGatewayBuild(): Promise<void> {
 
     const commands = [
       ...(!existsSync(SCHEMAS_DIST_ENTRYPOINT) || !existsSync(SCHEMAS_JSONSCHEMA_CATALOG)
-        ? ([["--filter", "@tyrum/schemas", "build"]] as const)
+        ? ([["--filter", "@tyrum/contracts", "build"]] as const)
         : ([] as const)),
       ["--filter", "@tyrum/gateway", "build"],
     ] as const;

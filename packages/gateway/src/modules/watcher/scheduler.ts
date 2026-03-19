@@ -1,6 +1,6 @@
 import type { Emitter } from "mitt";
 import type { GatewayEvents } from "../../event-bus.js";
-import type { ActionPrimitive, Lane as LaneT, Playbook } from "@tyrum/schemas";
+import type { ActionPrimitive, Lane as LaneT, Playbook } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import { sqlActiveWhereClause } from "../../statestore/sql.js";
 import type { MemoryDal } from "../memory/memory-dal.js";

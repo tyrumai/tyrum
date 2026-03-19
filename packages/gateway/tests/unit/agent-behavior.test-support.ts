@@ -5,7 +5,7 @@ import type {
   LanguageModelV3StreamResult,
 } from "@ai-sdk/provider";
 import { simulateReadableStream } from "ai";
-import type { NormalizedThreadMessage } from "@tyrum/schemas";
+import type { NormalizedThreadMessage } from "@tyrum/contracts";
 
 export const TITLE_PROMPT_TEXT = "Write a concise session title.";
 export const PRETURN_MEMORY_SECTION_LABEL = "Pre-turn recall (mcp.memory.seed):";

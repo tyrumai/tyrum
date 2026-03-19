@@ -6,7 +6,7 @@ import {
   type NodePairingRequest as NodePairingRequestT,
   type NodePairingTrustLevel,
   type ReviewEntry as ReviewEntryT,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import { createHash, randomBytes } from "node:crypto";
 import type { SqlDb } from "../../statestore/types.js";
 import { normalizeDbDateTime } from "../../utils/db-time.js";

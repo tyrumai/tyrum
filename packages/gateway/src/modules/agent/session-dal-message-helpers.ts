@@ -1,4 +1,4 @@
-import type { TyrumUIMessage } from "@tyrum/schemas";
+import type { TyrumUIMessage } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import { createTextChatMessage } from "../ai-sdk/message-utils.js";
 

@@ -3,7 +3,7 @@ import type {
   AgentCapabilitiesResponse,
   ManagedAgentDetail,
   ManagedExtensionDetail,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import * as React from "react";
 import { toast } from "sonner";
 import { useApiAction } from "../../hooks/use-api-action.js";

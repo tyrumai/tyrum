@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { WorkItem, WorkItemState, WorkScope } from "@tyrum/schemas";
+import type { WorkItem, WorkItemState, WorkScope } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import { LaneQueueSignalDal } from "../lanes/queue-signal-dal.js";
 

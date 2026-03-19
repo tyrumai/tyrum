@@ -1,5 +1,5 @@
-import { AgentConfig, BuiltinMemoryServerSettings } from "@tyrum/schemas";
-import type { AgentConfig as AgentConfigT, IdentityPack as IdentityPackT } from "@tyrum/schemas";
+import { AgentConfig, BuiltinMemoryServerSettings } from "@tyrum/contracts";
+import type { AgentConfig as AgentConfigT, IdentityPack as IdentityPackT } from "@tyrum/contracts";
 
 const DEFAULT_CONFIG = AgentConfig.parse({
   model: { model: null },

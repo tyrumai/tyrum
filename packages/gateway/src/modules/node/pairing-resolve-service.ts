@@ -3,8 +3,8 @@ import type {
   NodePairingRequest as NodePairingRequestT,
   NodePairingTrustLevel,
   WsEventEnvelope,
-} from "@tyrum/schemas";
-import { isLegacyUmbrellaCapabilityDescriptorId } from "@tyrum/schemas";
+} from "@tyrum/contracts";
+import { isLegacyUmbrellaCapabilityDescriptorId } from "@tyrum/contracts";
 import type { WsEventDal } from "../ws-event/dal.js";
 import type { NodePairingDal } from "./pairing-dal.js";
 import type { WsBroadcastAudience } from "../../ws/audience.js";

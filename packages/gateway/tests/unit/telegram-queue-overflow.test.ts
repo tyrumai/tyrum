@@ -4,8 +4,8 @@ import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import type { RunResult, SqlDb } from "../../src/statestore/types.js";
 import { ChannelInboxDal } from "../../src/modules/channels/inbox-dal.js";
 import { TelegramChannelQueue } from "../../src/modules/channels/telegram.js";
-import { WsEventEnvelope, WsEvent } from "@tyrum/schemas";
-import type { NormalizedThreadMessage } from "@tyrum/schemas";
+import { WsEventEnvelope, WsEvent } from "@tyrum/contracts";
+import type { NormalizedThreadMessage } from "@tyrum/contracts";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 function makeNormalizedTextMessage(input: {

@@ -1,4 +1,4 @@
-import { ModelConfigDeleteConflictResponse, ModelConfigDeleteResponse } from "@tyrum/schemas";
+import { ModelConfigDeleteConflictResponse, ModelConfigDeleteResponse } from "@tyrum/contracts";
 import { z } from "zod";
 import { validateOrThrow } from "./shared.js";
 

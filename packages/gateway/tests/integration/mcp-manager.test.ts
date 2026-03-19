@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
-import type { McpServerSpec as McpServerSpecT } from "@tyrum/schemas";
+import type { McpServerSpec as McpServerSpecT } from "@tyrum/contracts";
 import { McpManager } from "../../src/modules/agent/mcp-manager.js";
 
 const mockServerPath = fileURLToPath(new URL("../fixtures/mcp/mock-server.mjs", import.meta.url));

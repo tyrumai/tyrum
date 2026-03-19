@@ -4,7 +4,7 @@ import { runPackageBin } from "../../../scripts/package-bin-bootstrap.mjs";
 
 await runPackageBin({
   metaUrl: import.meta.url,
-  buildPackages: ["@tyrum/schemas", "@tyrum/client", "@tyrum/desktop-node"],
-  dependencyEntrypoints: ["packages/schemas/dist/index.mjs", "packages/client/dist/index.mjs"],
+  buildPackages: ["@tyrum/contracts", "@tyrum/client", "@tyrum/desktop-node"],
+  dependencyEntrypoints: ["packages/contracts/dist/index.mjs", "packages/client/dist/index.mjs"],
   sourceExtensions: [".ts", ".tsx"],
 });

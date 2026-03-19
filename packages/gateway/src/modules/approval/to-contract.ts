@@ -1,5 +1,5 @@
-import { AgentId, Approval, Lane, TyrumKey } from "@tyrum/schemas";
-import type { Approval as ApprovalT } from "@tyrum/schemas";
+import { AgentId, Approval, Lane, TyrumKey } from "@tyrum/contracts";
+import type { Approval as ApprovalT } from "@tyrum/contracts";
 import type { ApprovalRow } from "./dal.js";
 
 function isObject(value: unknown): value is Record<string, unknown> {

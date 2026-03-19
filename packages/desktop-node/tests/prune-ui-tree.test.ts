@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DesktopUiTree } from "@tyrum/schemas";
+import { DesktopUiTree } from "@tyrum/contracts";
 import { pruneUiTree } from "../src/providers/a11y/prune-ui-tree.js";
 
 describe("pruneUiTree", () => {

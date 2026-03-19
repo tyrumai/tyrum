@@ -1,4 +1,4 @@
-import type { IdentityPack as IdentityPackT } from "@tyrum/schemas";
+import type { IdentityPack as IdentityPackT } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import { AgentIdentityDal } from "./identity-dal.js";
 

@@ -1,4 +1,4 @@
-import type { NodeInventoryEntry } from "@tyrum/schemas";
+import type { NodeInventoryEntry } from "@tyrum/contracts";
 import { MapPin } from "lucide-react";
 import { formatRelativeTime } from "../../utils/format-relative-time.js";
 import { Alert } from "../ui/alert.js";

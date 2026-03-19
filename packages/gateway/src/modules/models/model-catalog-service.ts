@@ -1,4 +1,4 @@
-import type { ModelsDevCatalog as ModelsDevCatalogT } from "@tyrum/schemas";
+import type { ModelsDevCatalog as ModelsDevCatalogT } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import { safeJsonParse } from "../../utils/json.js";
 import { coerceRecord, coerceStringRecord } from "../util/coerce.js";

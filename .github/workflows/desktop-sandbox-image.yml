@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths:
       - "docker/desktop-sandbox/**"
-      - "packages/schemas/**"
+      - "packages/contracts/**"
       - "packages/cli-utils/**"
       - "packages/client/**"
       - "packages/desktop-node/**"

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { MemoryItem } from "@tyrum/schemas";
+import type { MemoryItem } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import type { RawMemoryItemRow } from "./memory-dal-types.js";
 import type { MemoryCreateInput, MemoryItemPatch } from "./types.js";

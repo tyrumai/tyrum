@@ -2,12 +2,12 @@ import type {
   PolicyOverride as PolicyOverrideT,
   PolicyOverrideStatus as PolicyOverrideStatusT,
   WsEventEnvelope,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import {
   PolicyOverride,
   canonicalizeToolId,
   isLegacyUmbrellaCapabilityDescriptorId,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import { randomUUID } from "node:crypto";
 import type { SqlDb } from "../../statestore/types.js";
 import { POLICY_WS_AUDIENCE } from "../../ws/audience.js";

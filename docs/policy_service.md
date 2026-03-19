@@ -105,4 +105,4 @@ The overall `decision` is `deny` if any rule denies, `require_approval` if any r
 }
 ```
 
-Future work can replace the static thresholds (currently constants in `packages/gateway/src/modules/policy/engine.ts`) with user-configured profiles and learned policies, while keeping `@tyrum/schemas` as the shared contract.
+Future work can replace the static thresholds (currently constants in `packages/gateway/src/modules/policy/engine.ts`) with user-configured profiles and learned policies, while keeping `@tyrum/contracts` as the shared contract.

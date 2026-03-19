@@ -9,7 +9,7 @@
  * - Bounded retries with exponential backoff for transient failures
  */
 
-import type { WsEventEnvelope, WorkItemState } from "@tyrum/schemas";
+import type { WsEventEnvelope, WorkItemState } from "@tyrum/contracts";
 import type { ConnectionManager } from "../../ws/connection-manager.js";
 import type { WsBroadcastAudience } from "../../ws/audience.js";
 import { broadcastWsEvent } from "../../ws/broadcast.js";

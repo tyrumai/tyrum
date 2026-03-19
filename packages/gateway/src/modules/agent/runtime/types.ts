@@ -3,7 +3,7 @@ import type {
   AgentConfig as AgentConfigT,
   IdentityPack as IdentityPackT,
   McpServerSpec as McpServerSpecT,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type { GatewayContainer } from "../../../container.js";
 import type { McpManager } from "../mcp-manager.js";
 import type { SessionDal } from "../session-dal.js";

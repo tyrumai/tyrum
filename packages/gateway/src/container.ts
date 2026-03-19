@@ -30,7 +30,7 @@ import type { OauthRefreshLeaseDal } from "./modules/oauth/refresh-lease-dal.js"
 import type { OAuthProviderRegistry } from "./modules/oauth/provider-registry.js";
 import type { IdentityScopeDal } from "./modules/identity/scope.js";
 import type { ChannelThreadDal } from "./modules/channels/thread-dal.js";
-import { DeploymentConfig, type DeploymentConfig as DeploymentConfigT } from "@tyrum/schemas";
+import { DeploymentConfig, type DeploymentConfig as DeploymentConfigT } from "@tyrum/contracts";
 
 import { createEventBus } from "./event-bus.js";
 import { MemoryDal as MemoryDalImpl } from "./modules/memory/memory-dal.js";

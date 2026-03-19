@@ -1,6 +1,6 @@
 import { generateText, type LanguageModel } from "ai";
-import type { AgentTurnResponse as AgentTurnResponseT, TyrumUIMessage } from "@tyrum/schemas";
-import { AgentTurnResponse } from "@tyrum/schemas";
+import type { AgentTurnResponse as AgentTurnResponseT, TyrumUIMessage } from "@tyrum/contracts";
+import { AgentTurnResponse } from "@tyrum/contracts";
 import type { GatewayContainer } from "../../../container.js";
 import type { ModelMessage } from "ai";
 import { decideCrossTurnLoopWarning, LOOP_WARNING_PREFIX } from "../loop-detection.js";

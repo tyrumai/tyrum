@@ -3,7 +3,7 @@ import {
   type ManagedExtensionDetail,
   type ManagedExtensionSourceDescriptor,
   type ManagedExtensionSummary,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import { RuntimePackageDal, type RuntimePackageRevision } from "../agent/runtime-package-dal.js";
 import { isAgentAccessAllowed } from "../agent/access-config.js";
 import {

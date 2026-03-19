@@ -1,7 +1,7 @@
 import type {
   LifecycleHookDefinition as LifecycleHookDefinitionT,
   PolicyBundle as PolicyBundleT,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import { LifecycleHookConfigDal } from "../hooks/config-dal.js";
 import { PolicyBundleConfigDal } from "../policy/config-dal.js";
 import type { SqlDb } from "../../statestore/types.js";

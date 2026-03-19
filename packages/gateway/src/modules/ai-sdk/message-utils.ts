@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { convertToModelMessages, type ModelMessage, type UIMessage } from "ai";
-import { TyrumUIMessage as TyrumUIMessageSchema } from "@tyrum/schemas";
-import type { TyrumUIMessage } from "@tyrum/schemas";
+import { TyrumUIMessage as TyrumUIMessageSchema } from "@tyrum/contracts";
+import type { TyrumUIMessage } from "@tyrum/contracts";
 import { coerceRecord } from "../util/coerce.js";
 
 function toTextPart(text: string): TyrumUIMessage["parts"][number] {

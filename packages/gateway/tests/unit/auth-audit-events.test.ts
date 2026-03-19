@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Hono } from "hono";
-import { WsEventEnvelope } from "@tyrum/schemas";
+import { WsEventEnvelope } from "@tyrum/contracts";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { EventLog } from "../../src/modules/planner/event-log.js";
 import { createAuthMiddleware } from "../../src/modules/auth/middleware.js";

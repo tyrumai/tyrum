@@ -1,4 +1,4 @@
-import { canonicalizeToolIdList, type PolicyBundle as PolicyBundleT } from "@tyrum/schemas";
+import { canonicalizeToolIdList, type PolicyBundle as PolicyBundleT } from "@tyrum/contracts";
 
 export type PolicyDecisionValue = "allow" | "require_approval" | "deny";
 

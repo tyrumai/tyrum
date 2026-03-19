@@ -1,5 +1,5 @@
-import { WsTaskExecuteResult } from "@tyrum/schemas";
-import type { WsEventEnvelope, WsResponseEnvelope } from "@tyrum/schemas";
+import { WsTaskExecuteResult } from "@tyrum/contracts";
+import type { WsEventEnvelope, WsResponseEnvelope } from "@tyrum/contracts";
 import type { ConnectedClient } from "../connection-manager.js";
 import { errorEvent } from "./helpers.js";
 import type { ProtocolDeps, ProtocolResponseEnvelope } from "./types.js";

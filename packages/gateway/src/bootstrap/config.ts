@@ -2,7 +2,7 @@ import { existsSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { DeploymentConfig } from "@tyrum/schemas";
+import { DeploymentConfig } from "@tyrum/contracts";
 import type { GatewayContainer } from "../container.js";
 import type { LogLevel } from "../modules/observability/logger.js";
 import type { SqlDb } from "../statestore/types.js";

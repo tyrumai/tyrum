@@ -8,7 +8,7 @@ import { AgentRuntime } from "../../src/modules/agent/runtime.js";
 import { buildAgentTurnKey } from "../../src/modules/agent/turn-key.js";
 import { WorkboardDal } from "../../src/modules/workboard/dal.js";
 import { createStubLanguageModel } from "./stub-language-model.js";
-import { buildAgentSessionKey } from "@tyrum/schemas";
+import { buildAgentSessionKey } from "@tyrum/contracts";
 import {
   DEFAULT_AGENT_ID,
   DEFAULT_TENANT_ID,

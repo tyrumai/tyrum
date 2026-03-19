@@ -1,4 +1,4 @@
-import type { DeploymentConfig as DeploymentConfigT } from "@tyrum/schemas";
+import type { DeploymentConfig as DeploymentConfigT } from "@tyrum/contracts";
 import {
   DeploymentConfigDal,
   type DeploymentConfigRevision,

@@ -5,7 +5,7 @@ import type {
   MemoryProvenance,
   MemorySensitivity,
   MemoryTombstone,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 
 export interface RawMemoryItemRow {
   memory_item_id: string;

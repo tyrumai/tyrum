@@ -1,5 +1,5 @@
 import { createCipheriv, createDecipheriv, randomBytes, randomUUID } from "node:crypto";
-import type { SecretHandle as SecretHandleT } from "@tyrum/schemas";
+import type { SecretHandle as SecretHandleT } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import { isUniqueViolation } from "../../utils/sql-errors.js";
 

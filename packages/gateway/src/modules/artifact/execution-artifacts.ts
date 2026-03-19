@@ -1,9 +1,9 @@
-import type { ArtifactRef as ArtifactRefT } from "@tyrum/schemas";
+import type { ArtifactRef as ArtifactRefT } from "@tyrum/contracts";
 import { randomUUID } from "node:crypto";
 import type { SqlDb } from "../../statestore/types.js";
-import type { ArtifactKind } from "@tyrum/schemas";
+import type { ArtifactKind } from "@tyrum/contracts";
 import type { ArtifactStore } from "./store.js";
-import type { WsEventEnvelope as WsEventEnvelopeT } from "@tyrum/schemas";
+import type { WsEventEnvelope as WsEventEnvelopeT } from "@tyrum/contracts";
 import { enqueueWsBroadcastMessage } from "../../ws/outbox.js";
 
 export type ExecutionArtifactSensitivity = "normal" | "sensitive";

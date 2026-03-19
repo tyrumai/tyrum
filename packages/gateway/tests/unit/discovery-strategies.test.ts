@@ -8,7 +8,7 @@ import {
   resolveFromMcpTools,
   type McpToolSource,
 } from "../../src/modules/discovery/strategies/mcp-tools.js";
-import type { DiscoveryRequest } from "@tyrum/schemas";
+import type { DiscoveryRequest } from "@tyrum/contracts";
 
 function makeRow(overrides: Partial<CapabilityMemoryRow> = {}): CapabilityMemoryRow {
   return {

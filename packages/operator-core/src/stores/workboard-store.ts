@@ -1,4 +1,4 @@
-import type { WorkItem } from "@tyrum/schemas";
+import type { WorkItem } from "@tyrum/contracts";
 import type { OperatorWsClient } from "../deps.js";
 import { createStore, type ExternalStore } from "../store.js";
 import { toErrorMessage } from "../to-error-message.js";

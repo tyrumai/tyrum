@@ -1,8 +1,8 @@
 import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   requiredCapabilityDescriptorForAction,
-} from "@tyrum/schemas";
-import type { ActionPrimitive, CapabilityDescriptor, WsRequestEnvelope } from "@tyrum/schemas";
+} from "@tyrum/contracts";
+import type { ActionPrimitive, CapabilityDescriptor, WsRequestEnvelope } from "@tyrum/contracts";
 import { canonicalizeNodeDispatchMatchTarget } from "../../modules/policy/match-target.js";
 import type { ConnectionDirectoryRow } from "../../modules/backplane/connection-directory.js";
 import type { ConnectedClient } from "../connection-manager.js";

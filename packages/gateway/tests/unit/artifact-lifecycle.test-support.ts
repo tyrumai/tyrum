@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { PolicyBundle, type ArtifactKind, type ArtifactRef } from "@tyrum/schemas";
+import { PolicyBundle, type ArtifactKind, type ArtifactRef } from "@tyrum/contracts";
 import { ArtifactLifecycleScheduler } from "../../src/modules/artifact/lifecycle.js";
 import { FsArtifactStore } from "../../src/modules/artifact/store.js";
 import {

@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
-import { PolicyBundle } from "@tyrum/schemas";
-import type { PolicyBundle as PolicyBundleT } from "@tyrum/schemas";
+import { PolicyBundle } from "@tyrum/contracts";
+import type { PolicyBundle as PolicyBundleT } from "@tyrum/contracts";
 import { isRecord, parseJsonOrYaml } from "../../utils/parse-json-or-yaml.js";
 
 export async function loadPolicyBundleFromFile(path: string): Promise<PolicyBundleT> {

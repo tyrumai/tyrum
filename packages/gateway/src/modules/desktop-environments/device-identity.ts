@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import { deviceIdFromSha256Digest } from "@tyrum/schemas";
+import { deviceIdFromSha256Digest } from "@tyrum/contracts";
 
 type StoredDeviceIdentity = {
   deviceId: string;

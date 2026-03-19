@@ -21,7 +21,7 @@ import { createWsHandler } from "../../src/routes/ws.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { dispatchTask } from "../../src/ws/protocol.js";
-import { CAPABILITY_DESCRIPTOR_DEFAULT_VERSION } from "@tyrum/schemas";
+import { CAPABILITY_DESCRIPTOR_DEFAULT_VERSION } from "@tyrum/contracts";
 
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import {

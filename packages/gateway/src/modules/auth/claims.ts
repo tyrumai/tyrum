@@ -1,5 +1,5 @@
 import { HTTPException } from "hono/http-exception";
-import type { AuthTokenClaims } from "@tyrum/schemas";
+import type { AuthTokenClaims } from "@tyrum/contracts";
 import { hasAnyRequiredScope } from "./scopes.js";
 import { requireTenantIdValue } from "../identity/scope.js";
 

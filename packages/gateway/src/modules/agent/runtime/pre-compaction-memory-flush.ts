@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { generateText, jsonSchema, stepCountIs, tool as aiTool } from "ai";
 import type { LanguageModel, Tool, ToolExecutionOptions } from "ai";
-import type { AgentConfig as AgentConfigT, TyrumUIMessage } from "@tyrum/schemas";
+import type { AgentConfig as AgentConfigT, TyrumUIMessage } from "@tyrum/contracts";
 import { sha256HexFromString } from "../../policy/canonical-json.js";
 import { redactSecretLikeText } from "./secrets.js";
 import type { SessionRow } from "../session-dal.js";

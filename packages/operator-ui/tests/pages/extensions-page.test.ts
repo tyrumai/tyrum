@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { createElevatedModeStore, type OperatorCore } from "@tyrum/operator-core";
-import type { ManagedExtensionDetail } from "@tyrum/schemas";
+import type { ManagedExtensionDetail } from "@tyrum/contracts";
 import React, { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ExtensionsPage } from "../../src/components/pages/extensions-page.js";

@@ -2,7 +2,7 @@ import {
   ActionPrimitive as ActionPrimitiveSchema,
   UuidSchema,
   type ActionPrimitive,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import { Hono } from "hono";
 import { DEFAULT_TENANT_ID } from "../modules/identity/scope.js";
 import {

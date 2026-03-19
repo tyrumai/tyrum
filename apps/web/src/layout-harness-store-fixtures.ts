@@ -1,6 +1,6 @@
 import type { StatusResponse } from "@tyrum/client";
 import { createStore } from "../../../packages/operator-core/src/store.js";
-import { AgentConfig, IdentityPack } from "../../../packages/schemas/src/index.js";
+import { AgentConfig, IdentityPack } from "../../../packages/contracts/src/index.js";
 
 export function createConnectionStore() {
   return createStore({

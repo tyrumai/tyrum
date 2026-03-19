@@ -2,7 +2,7 @@
   "files": [],
   "references": [
     { "path": "packages/cli-utils" },
-    { "path": "packages/schemas" },
+    { "path": "packages/contracts" },
     { "path": "packages/gateway" },
     { "path": "packages/client" },
     { "path": "packages/desktop-node" },

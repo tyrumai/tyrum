@@ -1,4 +1,4 @@
-import { DateTimeSchema } from "@tyrum/schemas";
+import { DateTimeSchema } from "@tyrum/contracts";
 import { z } from "zod";
 import {
   HttpTransport,

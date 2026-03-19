@@ -2,24 +2,24 @@ import { resolve } from "node:path";
 
 export const PACKAGE_BUILD_SPECS = [
   {
-    key: "schemas",
-    name: "@tyrum/schemas",
+    key: "contracts",
+    name: "@tyrum/contracts",
     inputPaths: [
-      "packages/schemas/package.json",
-      "packages/schemas/tsconfig.json",
-      "packages/schemas/src",
-      "packages/schemas/scripts",
+      "packages/contracts/package.json",
+      "packages/contracts/tsconfig.json",
+      "packages/contracts/src",
+      "packages/contracts/scripts",
     ],
     outputPaths: [
-      "packages/schemas/dist/index.mjs",
-      "packages/schemas/dist/index.d.ts",
-      "packages/schemas/dist/jsonschema/catalog.json",
+      "packages/contracts/dist/index.mjs",
+      "packages/contracts/dist/index.d.ts",
+      "packages/contracts/dist/jsonschema/catalog.json",
     ],
   },
   {
     key: "client",
     name: "@tyrum/client",
-    dependencies: ["schemas"],
+    dependencies: ["contracts"],
     inputPaths: [
       "packages/client/package.json",
       "packages/client/tsconfig.json",
@@ -30,7 +30,7 @@ export const PACKAGE_BUILD_SPECS = [
   {
     key: "operator-core",
     name: "@tyrum/operator-core",
-    dependencies: ["schemas", "client"],
+    dependencies: ["contracts", "client"],
     inputPaths: [
       "packages/operator-core/package.json",
       "packages/operator-core/tsconfig.json",
@@ -41,7 +41,7 @@ export const PACKAGE_BUILD_SPECS = [
   {
     key: "operator-ui",
     name: "@tyrum/operator-ui",
-    dependencies: ["schemas", "client", "operator-core"],
+    dependencies: ["contracts", "client", "operator-core"],
     inputPaths: [
       "packages/operator-ui/package.json",
       "packages/operator-ui/tsconfig.json",

@@ -2,7 +2,7 @@ import {
   LocationPlaceCreateRequest,
   LocationPlacePatchRequest,
   LocationProfileUpdateRequest,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import { Hono } from "hono";
 import { requireTenantId } from "../modules/auth/claims.js";
 import { ScopeNotFoundError } from "../modules/identity/scope.js";

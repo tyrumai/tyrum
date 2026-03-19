@@ -1,4 +1,4 @@
-import { deviceIdFromSha256Digest } from "@tyrum/schemas";
+import { deviceIdFromSha256Digest } from "@tyrum/contracts";
 
 export interface DeviceIdentity {
   deviceId: string;

@@ -3,7 +3,7 @@ import type { Server } from "node:http";
 import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   descriptorIdForClientCapability,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import {
   buildTranscript,
   completeHandshake,
@@ -27,7 +27,7 @@ export { AUTH_COOKIE_NAME } from "../../src/modules/auth/http.js";
 export {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   descriptorIdForClientCapability,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 
 export interface TestContext {
   server: Server | undefined;

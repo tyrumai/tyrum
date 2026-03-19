@@ -1,4 +1,4 @@
-import type { PluginManifest as PluginManifestT } from "@tyrum/schemas";
+import type { PluginManifest as PluginManifestT } from "@tyrum/contracts";
 import type { Hono } from "hono";
 import { type Dirent } from "node:fs";
 import { readdir } from "node:fs/promises";

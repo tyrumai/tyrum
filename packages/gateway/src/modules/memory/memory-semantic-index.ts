@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { MemoryItemKind, MemorySensitivity } from "@tyrum/schemas";
+import type { MemoryItemKind, MemorySensitivity } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import { normalizeSnippet } from "./memory-dal-helpers.js";
 import { VectorDal, cosineSimilarity } from "./vector-dal.js";

@@ -1,4 +1,4 @@
-import type { MemoryProvenanceSourceKind, MemorySensitivity } from "@tyrum/schemas";
+import type { MemoryProvenanceSourceKind, MemorySensitivity } from "@tyrum/contracts";
 import type { MemoryDal } from "./memory-dal.js";
 
 export type MemorySystemEpisodeInput = {

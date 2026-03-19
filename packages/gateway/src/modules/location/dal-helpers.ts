@@ -5,7 +5,7 @@ import type {
   LocationEventTransition,
   LocationPlace,
   LocationProfile,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type {
   LocationAutomationTriggerRecord,
   LocationTriggerCondition,

@@ -1,4 +1,7 @@
-import type { AgentConfig as AgentConfigT, ExtensionKind as ExtensionKindT } from "@tyrum/schemas";
+import type {
+  AgentConfig as AgentConfigT,
+  ExtensionKind as ExtensionKindT,
+} from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import { normalizeDbDateTime } from "../../utils/db-time.js";
 

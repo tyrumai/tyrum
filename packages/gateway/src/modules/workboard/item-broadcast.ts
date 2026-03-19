@@ -1,4 +1,4 @@
-import type { WorkItem } from "@tyrum/schemas";
+import type { WorkItem } from "@tyrum/contracts";
 import { broadcastWsEvent } from "../../ws/broadcast.js";
 import type { ProtocolDeps } from "../../ws/protocol.js";
 import { WORKBOARD_WS_AUDIENCE } from "../../ws/workboard-audience.js";

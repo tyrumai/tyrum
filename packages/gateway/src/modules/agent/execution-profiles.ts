@@ -1,4 +1,4 @@
-import type { ExecutionBudgets, Lane } from "@tyrum/schemas";
+import type { ExecutionBudgets, Lane } from "@tyrum/contracts";
 
 export type ExecutionProfileCapability = "subagent.spawn" | "work.write";
 

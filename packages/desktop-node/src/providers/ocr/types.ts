@@ -1,4 +1,4 @@
-import type { DesktopUiRect } from "@tyrum/schemas";
+import type { DesktopUiRect } from "@tyrum/contracts";
 
 export interface OcrMatch {
   text: string;

@@ -1,4 +1,4 @@
-import type { ReviewEntry as ReviewEntryT } from "@tyrum/schemas";
+import type { ReviewEntry as ReviewEntryT } from "@tyrum/contracts";
 import { randomUUID } from "node:crypto";
 import type { SqlDb } from "../../statestore/types.js";
 import { ReviewEntryDal, type ReviewEntryRow, type ReviewerKind } from "../review/dal.js";

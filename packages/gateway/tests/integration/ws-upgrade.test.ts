@@ -13,7 +13,7 @@ import { createServer } from "node:http";
 import type { Server } from "node:http";
 import { getRequestListener } from "@hono/node-server";
 import { Hono } from "hono";
-import { BROWSER_AUTOMATION_CAPABILITY_IDS } from "@tyrum/schemas";
+import { BROWSER_AUTOMATION_CAPABILITY_IDS } from "@tyrum/contracts";
 import { createWsHandler } from "../../src/routes/ws.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { TyrumClient } from "../../../client/src/ws-client.js";

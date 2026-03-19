@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { LifecycleHookDefinition, PolicyBundle } from "@tyrum/schemas";
+import { LifecycleHookDefinition, PolicyBundle } from "@tyrum/contracts";
 import type { SqlDb } from "../statestore/types.js";
 import type { IdentityScopeDal } from "../modules/identity/scope.js";
 import { DEFAULT_WORKSPACE_KEY } from "../modules/identity/scope.js";

@@ -4,8 +4,8 @@ import {
   ApprovalResolveResponse,
   WsApprovalListRequest,
   WsApprovalResolveRequest,
-} from "@tyrum/schemas";
-import type { Approval as ApprovalT, WsResponseEnvelope } from "@tyrum/schemas";
+} from "@tyrum/contracts";
+import type { Approval as ApprovalT, WsResponseEnvelope } from "@tyrum/contracts";
 import { isApprovalTerminalStatus } from "../../modules/approval/dal.js";
 import { resolveApproval } from "../../modules/approval/resolve-service.js";
 import { toApprovalContract } from "../../modules/approval/to-contract.js";

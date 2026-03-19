@@ -3,7 +3,7 @@ import type { RequestInit } from "undici";
 import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   descriptorIdForClientCapability,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import { createTyrumHttpClient, type TyrumHttpFetch } from "../src/index.js";
 
 const clientApiPaths = [

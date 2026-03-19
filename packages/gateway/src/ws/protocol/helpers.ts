@@ -1,5 +1,5 @@
-import type { WsEventEnvelope, WsResponseErrEnvelope } from "@tyrum/schemas";
-import { WsError } from "@tyrum/schemas";
+import type { WsEventEnvelope, WsResponseErrEnvelope } from "@tyrum/contracts";
+import { WsError } from "@tyrum/contracts";
 import type { WsBroadcastAudience } from "../audience.js";
 import { broadcastWsEvent } from "../broadcast.js";
 import type { ProtocolDeps } from "./types.js";

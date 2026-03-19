@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { ActionPrimitive } from "@tyrum/schemas";
+import type { ActionPrimitive } from "@tyrum/contracts";
 import { resolvePermissions } from "../src/main/config/permissions.js";
 import {
   DesktopProvider,

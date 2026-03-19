@@ -3,8 +3,8 @@
  */
 
 import { createHash, createHmac } from "node:crypto";
-import { AgentKey, SecretHandle, WorkspaceId } from "@tyrum/schemas";
-import type { SecretHandle as SecretHandleT } from "@tyrum/schemas";
+import { AgentKey, SecretHandle, WorkspaceId } from "@tyrum/contracts";
+import type { SecretHandle as SecretHandleT } from "@tyrum/contracts";
 import { Hono } from "hono";
 import type { SecretProvider } from "../modules/secret/provider.js";
 import { secureStringEqual } from "../utils/secure-string-equal.js";

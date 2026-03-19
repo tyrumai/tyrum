@@ -1,13 +1,13 @@
 import { readdir, readFile } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 import { parse as parseYaml } from "yaml";
-import { SkillManifest, McpServerSpec } from "@tyrum/schemas";
+import { SkillManifest, McpServerSpec } from "@tyrum/contracts";
 import type {
   AgentConfig as AgentConfigT,
   SkillProvenanceSource as SkillProvenanceSourceT,
   SkillManifest as SkillManifestT,
   McpServerSpec as McpServerSpecT,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import {
   resolveSkillsDir,
   resolveUserSkillsDir,

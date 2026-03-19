@@ -1,4 +1,4 @@
-import type { BuiltinMemoryServerSettings, MemoryItem, MemoryItemKind } from "@tyrum/schemas";
+import type { BuiltinMemoryServerSettings, MemoryItem, MemoryItemKind } from "@tyrum/contracts";
 import { normalizeSnippet, truncate } from "./memory-dal-helpers.js";
 import type { MemorySemanticSearchHit } from "./memory-semantic-index.js";
 import type { MemoryDal } from "./memory-dal.js";

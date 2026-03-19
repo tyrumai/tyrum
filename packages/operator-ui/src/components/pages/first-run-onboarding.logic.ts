@@ -1,4 +1,4 @@
-import { AgentConfig, type AgentConfig as AgentConfigT } from "@tyrum/schemas";
+import { AgentConfig, type AgentConfig as AgentConfigT } from "@tyrum/contracts";
 import type { OperatorCore } from "@tyrum/operator-core";
 import * as React from "react";
 import { useOperatorStore } from "../../use-operator-store.js";

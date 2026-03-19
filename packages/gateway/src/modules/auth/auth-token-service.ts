@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
-import type { AuthTokenClaims } from "@tyrum/schemas";
+import type { AuthTokenClaims } from "@tyrum/contracts";
 import {
   AuthTokenDal,
   type AuthTokenListRow,

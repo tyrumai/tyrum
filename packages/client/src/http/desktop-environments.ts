@@ -11,7 +11,7 @@ import {
   DesktopEnvironmentMutateResponse,
   DesktopEnvironmentTakeoverResponse,
   DesktopEnvironmentUpdateRequest,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import { HttpTransport, validateOrThrow, type TyrumRequestOptions } from "./shared.js";
 
 export type DesktopEnvironmentHostListResult = DesktopEnvironmentHostListResponse;

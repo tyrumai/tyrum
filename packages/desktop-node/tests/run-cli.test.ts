@@ -6,7 +6,7 @@ import {
   BROWSER_AUTOMATION_CAPABILITY_IDS,
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   FILESYSTEM_CAPABILITY_IDS,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 
 const {
   clientCtorSpy,

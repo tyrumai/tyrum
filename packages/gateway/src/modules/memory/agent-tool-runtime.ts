@@ -5,7 +5,7 @@ import type {
   BuiltinMemoryWriteArgs,
   MemoryItem,
   MemoryItemKind,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import type { MemoryDal } from "./memory-dal.js";
 import { retrieveMemory, buildMemoryPreview } from "./memory-retrieval.js";

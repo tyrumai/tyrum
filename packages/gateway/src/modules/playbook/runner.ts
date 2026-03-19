@@ -5,7 +5,7 @@
  * and tracks per-playbook execution metadata.
  */
 
-import type { ActionPrimitive, Playbook, PlaybookStep } from "@tyrum/schemas";
+import type { ActionPrimitive, Playbook, PlaybookStep } from "@tyrum/contracts";
 import { PlaybookCompileError } from "./errors.js";
 
 export interface PlaybookRunResult {

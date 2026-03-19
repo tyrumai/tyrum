@@ -4,7 +4,7 @@ import {
   DeploymentPolicyConfigListRevisionsResponse,
   DeploymentPolicyConfigRevertRequest,
   DeploymentPolicyConfigUpdateRequest,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 
 describe("DeploymentPolicyConfig schemas", () => {
   it("parses revision metadata and structured bundles", () => {

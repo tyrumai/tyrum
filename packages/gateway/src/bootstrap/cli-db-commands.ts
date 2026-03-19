@@ -1,4 +1,4 @@
-import { DeploymentConfig } from "@tyrum/schemas";
+import { DeploymentConfig } from "@tyrum/contracts";
 import type { SqlDb } from "../statestore/types.js";
 import { AuthTokenService } from "../modules/auth/auth-token-service.js";
 import { DeploymentConfigDal } from "../modules/config/deployment-config-dal.js";

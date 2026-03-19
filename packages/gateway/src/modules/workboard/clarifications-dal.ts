@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { WorkClarification, WorkClarificationStatus, WorkScope } from "@tyrum/schemas";
+import type { WorkClarification, WorkClarificationStatus, WorkScope } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 
 import type { GetItemFn } from "./dal-deps.js";

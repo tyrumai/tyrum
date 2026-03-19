@@ -1,4 +1,4 @@
-import type { AgentStatusResponse } from "@tyrum/schemas";
+import type { AgentStatusResponse } from "@tyrum/contracts";
 import { RefreshCw } from "lucide-react";
 import type { ReactNode } from "react";
 import { Badge } from "../ui/badge.js";

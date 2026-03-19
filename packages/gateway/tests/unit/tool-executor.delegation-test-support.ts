@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { type McpServerSpec } from "@tyrum/schemas";
+import { type McpServerSpec } from "@tyrum/contracts";
 import { expect, it, vi } from "vitest";
 import type { McpManager } from "../../src/modules/agent/mcp-manager.js";
 import {

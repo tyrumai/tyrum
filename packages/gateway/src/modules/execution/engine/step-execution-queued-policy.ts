@@ -2,8 +2,8 @@ import type {
   ActionPrimitive as ActionPrimitiveT,
   Decision as DecisionT,
   PolicyBundle as PolicyBundleT,
-} from "@tyrum/schemas";
-import { PolicyBundle } from "@tyrum/schemas";
+} from "@tyrum/contracts";
+import { PolicyBundle } from "@tyrum/contracts";
 import { randomUUID } from "node:crypto";
 import {
   evaluateDomain,

@@ -3,7 +3,7 @@ import {
   AgentKey,
   ChannelConfigView as ChannelConfigViewSchema,
   type ChannelConfigView as ChannelConfigViewT,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import { z } from "zod";
 import { safeJsonParse } from "../../utils/json.js";
 

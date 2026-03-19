@@ -16,7 +16,7 @@ import type {
   LegalContext,
   ConnectorScopeContext,
   PolicyCheckRequest,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 
 // ---------------------------------------------------------------------------
 // Constants

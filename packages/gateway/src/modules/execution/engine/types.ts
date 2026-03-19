@@ -7,7 +7,7 @@ import type {
   EvaluationContext,
   ExecutionBudgets as ExecutionBudgetsT,
   ExecutionTrigger as ExecutionTriggerT,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 
 export interface StepResult {
   success: boolean;

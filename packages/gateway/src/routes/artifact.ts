@@ -4,12 +4,12 @@
 
 import { Hono } from "hono";
 import { randomUUID } from "node:crypto";
-import { ArtifactId, ArtifactKind, ArtifactRef, AuthTokenClaims } from "@tyrum/schemas";
+import { ArtifactId, ArtifactKind, ArtifactRef, AuthTokenClaims } from "@tyrum/contracts";
 import type {
   ArtifactRef as ArtifactRefT,
   AuthTokenClaims as AuthTokenClaimsT,
   WsEventEnvelope,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type { ArtifactStore } from "../modules/artifact/store.js";
 import type { Logger } from "../modules/observability/logger.js";
 import type { PolicySnapshotDal } from "../modules/policy/snapshot-dal.js";

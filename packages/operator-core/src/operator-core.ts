@@ -35,7 +35,7 @@ import { createDesktopEnvironmentHostsStore } from "./stores/desktop-environment
 import { createDesktopEnvironmentsStore } from "./stores/desktop-environments-store.js";
 import { registerActivityWsHandlers } from "./operator-core.activity-events.js";
 import { readOccurredAt, readPayload } from "./operator-core.event-helpers.js";
-import type { Approval, WorkItem } from "@tyrum/schemas";
+import type { Approval, WorkItem } from "@tyrum/contracts";
 import type { WorkTaskEvent } from "./workboard/workboard-utils.js";
 export type { OperatorCore, OperatorCoreOptions } from "./operator-core.types.js";
 

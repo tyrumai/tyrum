@@ -1,4 +1,4 @@
-import type { PolicyBundle as PolicyBundleT } from "@tyrum/schemas";
+import type { PolicyBundle as PolicyBundleT } from "@tyrum/contracts";
 
 export function deriveElevatedExecutionAvailableFromPolicyBundle(bundle: PolicyBundleT): boolean {
   const tools = bundle.tools;

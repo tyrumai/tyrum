@@ -5,7 +5,7 @@ import { WsEvent, WsRequest, WsResponse } from "../src/protocol.js";
 import { expectRejects } from "./test-helpers.js";
 
 describe("Subagent WS protocol", () => {
-  it("exports Subagent schemas from @tyrum/schemas", () => {
+  it("exports Subagent schemas from @tyrum/contracts", () => {
     expect("SubagentId" in Schemas).toBe(true);
     expect("SubagentStatus" in Schemas).toBe(true);
     expect("SubagentDescriptor" in Schemas).toBe(true);

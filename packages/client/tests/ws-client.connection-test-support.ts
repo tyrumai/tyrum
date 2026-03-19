@@ -2,7 +2,7 @@ import { expect, it, vi } from "vitest";
 import {
   BROWSER_AUTOMATION_CAPABILITY_IDS,
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import * as deviceIdentity from "../src/device-identity.js";
 import type { TyrumClientProtocolErrorInfo } from "../src/ws-client.js";
 import { TyrumClient } from "../src/ws-client.js";

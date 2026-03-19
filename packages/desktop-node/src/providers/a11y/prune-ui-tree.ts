@@ -1,4 +1,4 @@
-import type { DesktopUiNode, DesktopUiTree } from "@tyrum/schemas";
+import type { DesktopUiNode, DesktopUiTree } from "@tyrum/contracts";
 
 import {
   MAX_ACTION_CHARS,

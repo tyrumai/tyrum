@@ -7,8 +7,8 @@ import type {
   NormalizedContainerKind,
   NormalizedMessageEnvelope as NormalizedMessageEnvelopeT,
   WorkScope,
-} from "@tyrum/schemas";
-import { AgentTurnRequest, SubagentSessionKey } from "@tyrum/schemas";
+} from "@tyrum/contracts";
+import { AgentTurnRequest, SubagentSessionKey } from "@tyrum/contracts";
 import { readRecordString } from "../../util/coerce.js";
 import {
   applyDeterministicContextCompactionAndToolPruning,

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { NormalizedThreadMessage } from "@tyrum/schemas";
+import type { NormalizedThreadMessage } from "@tyrum/contracts";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import type { AgentRegistry } from "../../src/modules/agent/registry.js";

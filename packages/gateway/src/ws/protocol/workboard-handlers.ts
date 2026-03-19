@@ -40,7 +40,7 @@ import {
   WsWorkUpdateRequest,
   WsWorkUpdateResult,
   type WsResponseEnvelope,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type { ConnectedClient } from "../connection-manager.js";
 import { enqueueWorkItemStateChangeNotification } from "../../modules/workboard/notifications.js";
 import type { ProtocolDeps, ProtocolRequestEnvelope } from "./types.js";

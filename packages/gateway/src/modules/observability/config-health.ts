@@ -1,4 +1,4 @@
-import { AgentConfig } from "@tyrum/schemas";
+import { AgentConfig } from "@tyrum/contracts";
 import type { ModelsDevService } from "../models/models-dev-service.js";
 import {
   normalizePublicExecutionProfileId,

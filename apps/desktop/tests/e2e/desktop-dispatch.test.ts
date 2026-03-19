@@ -31,7 +31,7 @@ import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   descriptorIdsForClientCapability,
   migrateCapabilityDescriptorId,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import { AuthTokenService } from "../../../../packages/gateway/src/modules/auth/auth-token-service.js";
 import { DEFAULT_TENANT_ID } from "../../../../packages/gateway/src/modules/identity/scope.js";
 import { createDbSecretProviderFactory } from "../../../../packages/gateway/src/modules/secret/create-secret-provider.js";

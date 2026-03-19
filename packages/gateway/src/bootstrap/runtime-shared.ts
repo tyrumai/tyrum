@@ -13,7 +13,7 @@ import type { DiscordChannelMonitor } from "../modules/channels/discord-monitor.
 import type { TelegramChannelProcessor } from "../modules/channels/telegram.js";
 import type { ExecutionEngine } from "../modules/execution/engine.js";
 import type { ExecutionWorkerLoop } from "../modules/execution/worker-loop.js";
-import type { LifecycleHookDefinition as LifecycleHookDefinitionT } from "@tyrum/schemas";
+import type { LifecycleHookDefinition as LifecycleHookDefinitionT } from "@tyrum/contracts";
 import type { LifecycleHooksRuntime } from "../modules/hooks/runtime.js";
 import type { OtelRuntime } from "../modules/observability/otel.js";
 import type { PluginRegistry } from "../modules/plugins/registry.js";

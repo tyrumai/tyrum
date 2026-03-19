@@ -11,7 +11,7 @@ import {
   WsChatSessionCreateResult,
   WsChatSessionDeleteResult,
   WsChatSessionGetResult,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import { OperatorUiApp } from "../src/index.js";
 import { formatAxeIncompleteSummary, OPERATOR_UI_WCAG_AA_RUN_OPTIONS } from "./a11y-config.js";
 import { stubMatchMedia } from "./test-utils.js";

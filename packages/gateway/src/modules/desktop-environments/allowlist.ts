@@ -3,7 +3,7 @@ import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   descriptorIdsForClientCapability,
   FILESYSTEM_CAPABILITY_IDS,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 
 export const SANDBOX_CAPABILITY_ALLOWLIST = [
   ...descriptorIdsForClientCapability("desktop"),

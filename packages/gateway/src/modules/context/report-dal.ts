@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { ContextReport } from "@tyrum/schemas";
+import { ContextReport } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import { DEFAULT_TENANT_ID } from "../identity/scope.js";
 

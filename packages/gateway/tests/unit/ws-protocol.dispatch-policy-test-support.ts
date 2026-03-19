@@ -1,5 +1,5 @@
 import { expect, it, vi } from "vitest";
-import { CAPABILITY_DESCRIPTOR_DEFAULT_VERSION, type ActionPrimitive } from "@tyrum/schemas";
+import { CAPABILITY_DESCRIPTOR_DEFAULT_VERSION, type ActionPrimitive } from "@tyrum/contracts";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { dispatchTask, handleClientMessage, NoCapableClientError } from "../../src/ws/protocol.js";
 import { NoCapableNodeError, NodeNotPairedError } from "../../src/ws/protocol/errors.js";

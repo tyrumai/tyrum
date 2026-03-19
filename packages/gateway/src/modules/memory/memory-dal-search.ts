@@ -1,4 +1,4 @@
-import type { MemoryItemKind, MemoryProvenance } from "@tyrum/schemas";
+import type { MemoryItemKind, MemoryProvenance } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import type { MemoryItemFilter, MemorySearchInput, MemorySearchResult } from "./types.js";
 import type { RawSearchRow } from "./memory-dal-types.js";

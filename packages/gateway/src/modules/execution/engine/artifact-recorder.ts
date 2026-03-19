@@ -1,4 +1,4 @@
-import type { ArtifactRef as ArtifactRefT } from "@tyrum/schemas";
+import type { ArtifactRef as ArtifactRefT } from "@tyrum/contracts";
 import type { SqlDb } from "../../../statestore/types.js";
 import { insertExecutionArtifactRowTx } from "../../artifact/execution-artifacts.js";
 import type { ExecutionEngineEventEmitter } from "./event-emitter.js";

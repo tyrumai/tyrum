@@ -7,7 +7,7 @@ import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   capabilityDescriptorsForClientCapability,
   descriptorIdsForClientCapability,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 
 interface MockWebSocket {
   send: ReturnType<typeof vi.fn>;

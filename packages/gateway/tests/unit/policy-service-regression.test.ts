@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { PolicyBundle } from "@tyrum/schemas";
+import { PolicyBundle } from "@tyrum/contracts";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { PolicyService } from "../../src/modules/policy/service.js";
 import { PolicySnapshotDal } from "../../src/modules/policy/snapshot-dal.js";

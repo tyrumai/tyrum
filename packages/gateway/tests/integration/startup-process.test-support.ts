@@ -2,7 +2,7 @@ import Database from "better-sqlite3";
 import type {
   LifecycleHookDefinition as LifecycleHookDefinitionT,
   PolicyBundle as PolicyBundleT,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import { join } from "node:path";
 import {
   DEFAULT_AGENT_ID,

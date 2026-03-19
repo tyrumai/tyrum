@@ -2,7 +2,7 @@ import {
   WsChatSessionCreateResult,
   WsChatSessionDeleteResult,
   WsChatSessionGetResult,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import { vi } from "vitest";
 import type { OperatorWsClient } from "../../operator-core/src/deps.js";
 import type { Handler } from "./operator-ui.test-support.js";

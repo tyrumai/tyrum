@@ -5,7 +5,7 @@ import {
   NodeCapabilityInspectionResponse,
   NodeInventoryResponse,
   isLegacyUmbrellaCapabilityDescriptorId,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import { requireTenantId } from "../modules/auth/claims.js";
 import { NodeInventoryService } from "../modules/node/inventory-service.js";
 import { NodeCapabilityInspectionService } from "../modules/node/capability-inspection-service.js";

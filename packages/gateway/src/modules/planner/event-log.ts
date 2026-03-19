@@ -3,7 +3,7 @@ import type { ChainableEvent } from "../audit/hash-chain.js";
 import type { RedactionEngine } from "../redaction/engine.js";
 import type { Logger } from "../observability/logger.js";
 import type { SqlDb } from "../../statestore/types.js";
-import type { AuditPlanSummary } from "@tyrum/schemas";
+import type { AuditPlanSummary } from "@tyrum/contracts";
 import { isUniqueViolation } from "../../utils/sql-errors.js";
 import { insertPlannerEventNext, retryOnUniqueViolation } from "./planner-events.js";
 import { PlanDal } from "./plan-dal.js";

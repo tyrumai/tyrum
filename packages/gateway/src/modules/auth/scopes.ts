@@ -1,4 +1,4 @@
-import type { AuthTokenClaims } from "@tyrum/schemas";
+import type { AuthTokenClaims } from "@tyrum/contracts";
 
 export function normalizeScopes(scopes: string[] | undefined): string[] {
   if (!Array.isArray(scopes)) return [];

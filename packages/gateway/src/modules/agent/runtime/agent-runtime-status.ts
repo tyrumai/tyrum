@@ -1,7 +1,7 @@
 import {
   AgentStatusResponse,
   type AgentStatusResponse as AgentStatusResponseT,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type { PluginRegistry } from "../../plugins/registry.js";
 import { resolveGatewayStateMode } from "../../runtime-state/mode.js";
 import { materializeAllowedAgentIds } from "../access-config.js";

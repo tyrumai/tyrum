@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { IosActionResult } from "@tyrum/schemas";
+import { IosActionResult } from "@tyrum/contracts";
 
 vi.mock("@capacitor/core", () => ({
   Capacitor: {

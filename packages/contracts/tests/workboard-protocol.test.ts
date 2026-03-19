@@ -5,7 +5,7 @@ import { WsEvent, WsRequest, WsResponse } from "../src/protocol.js";
 import { expectRejects } from "./test-helpers.js";
 
 describe("WorkBoard WS protocol", () => {
-  it("exports WorkBoard schemas from @tyrum/schemas", () => {
+  it("exports WorkBoard schemas from @tyrum/contracts", () => {
     expect("WorkItem" in Schemas).toBe(true);
     expect("WorkItemFingerprint" in Schemas).toBe(true);
     expect("WorkItemTask" in Schemas).toBe(true);

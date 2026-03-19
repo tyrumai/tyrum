@@ -5,7 +5,7 @@ import { TelegramChannelProcessor } from "../../src/modules/channels/telegram.js
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import type { AgentRegistry } from "../../src/modules/agent/registry.js";
 import type { TelegramBot } from "../../src/modules/ingress/telegram-bot.js";
-import type { NormalizedThreadMessage } from "@tyrum/schemas";
+import type { NormalizedThreadMessage } from "@tyrum/contracts";
 
 function makeNormalizedTextMessage(input: {
   threadId: string;

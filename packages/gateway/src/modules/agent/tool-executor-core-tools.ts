@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, relative, resolve } from "node:path";
-import type { McpServerSpec as McpServerSpecT } from "@tyrum/schemas";
+import type { McpServerSpec as McpServerSpecT } from "@tyrum/contracts";
 import type { SecretProvider } from "../secret/provider.js";
 import type { McpManager } from "./mcp-manager.js";
 import { tagContent } from "./provenance.js";

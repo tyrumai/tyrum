@@ -1,4 +1,4 @@
-import type { PolicyBundle as PolicyBundleT } from "@tyrum/schemas";
+import type { PolicyBundle as PolicyBundleT } from "@tyrum/contracts";
 import type { PolicyService } from "./service.js";
 
 export async function loadScopedPolicyBundle(

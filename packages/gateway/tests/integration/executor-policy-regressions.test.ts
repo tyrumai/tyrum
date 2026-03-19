@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { ActionPrimitive, PolicyBundle, type SecretHandle } from "@tyrum/schemas";
+import { ActionPrimitive, PolicyBundle, type SecretHandle } from "@tyrum/contracts";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { ExecutionEngine } from "../../src/modules/execution/engine.js";
 import { createLocalStepExecutor } from "../../src/modules/execution/local-step-executor.js";

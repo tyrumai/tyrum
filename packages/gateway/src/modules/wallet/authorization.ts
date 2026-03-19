@@ -9,7 +9,7 @@ import type {
   SpendAuthorizeResponse,
   AuthorizationDecision,
   Thresholds,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 
 // ---------------------------------------------------------------------------
 // Constants

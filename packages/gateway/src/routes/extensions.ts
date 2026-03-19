@@ -2,7 +2,7 @@ import {
   ExtensionsDetailResponse,
   ExtensionsListResponse,
   ExtensionsMutateResponse,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import { Hono } from "hono";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";

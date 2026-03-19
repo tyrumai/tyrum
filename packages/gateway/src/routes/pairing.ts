@@ -13,7 +13,11 @@ import { resolveNodePairing } from "../modules/node/pairing-resolve-service.js";
 import { emitPairingApprovedEvent } from "../ws/pairing-approved.js";
 import { PAIRING_WS_AUDIENCE } from "../ws/audience.js";
 import { broadcastWsEvent } from "../ws/broadcast.js";
-import { CapabilityDescriptor, NodePairingTrustLevel, type WsEventEnvelope } from "@tyrum/schemas";
+import {
+  CapabilityDescriptor,
+  NodePairingTrustLevel,
+  type WsEventEnvelope,
+} from "@tyrum/contracts";
 import { getClientIp } from "../modules/auth/client-ip.js";
 import { requireTenantId } from "../modules/auth/claims.js";
 

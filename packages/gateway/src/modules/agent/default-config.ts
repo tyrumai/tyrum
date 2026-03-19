@@ -1,5 +1,5 @@
-import { AgentConfig } from "@tyrum/schemas";
-import type { AgentConfig as AgentConfigT } from "@tyrum/schemas";
+import { AgentConfig } from "@tyrum/contracts";
+import type { AgentConfig as AgentConfigT } from "@tyrum/contracts";
 import type { GatewayStateMode } from "../runtime-state/mode.js";
 import type { SqlDb } from "../../statestore/types.js";
 import { AgentConfigDal, type AgentConfigRevision } from "../config/agent-config-dal.js";

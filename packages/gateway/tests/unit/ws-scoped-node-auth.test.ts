@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   descriptorIdForClientCapability,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { handleClientMessage } from "../../src/ws/protocol.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";

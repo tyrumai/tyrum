@@ -1,4 +1,4 @@
-import type { PluginManifest as PluginManifestT, WsEventEnvelope } from "@tyrum/schemas";
+import type { PluginManifest as PluginManifestT, WsEventEnvelope } from "@tyrum/contracts";
 import { randomUUID } from "node:crypto";
 import type { GatewayContainer } from "../../container.js";
 import { OPERATOR_WS_AUDIENCE } from "../../ws/audience.js";

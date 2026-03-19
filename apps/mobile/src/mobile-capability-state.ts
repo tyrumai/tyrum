@@ -2,7 +2,7 @@ import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   type NodeCapabilityActionState,
   type NodeCapabilityState,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import { Capacitor } from "@capacitor/core";
 import type {
   MobileHostActionName,

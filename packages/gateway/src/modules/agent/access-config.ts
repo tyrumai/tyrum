@@ -1,4 +1,4 @@
-import type { AgentSkillConfig } from "@tyrum/schemas";
+import type { AgentSkillConfig } from "@tyrum/contracts";
 import { wildcardMatch } from "../policy/wildcard.js";
 
 type AgentAccessConfig = Pick<AgentSkillConfig, "default_mode" | "allow" | "deny">;

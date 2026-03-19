@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { MockLanguageModelV3 } from "ai/test";
-import { AgentConfig } from "@tyrum/schemas";
+import { AgentConfig } from "@tyrum/contracts";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { AgentConfigDal } from "../../src/modules/config/agent-config-dal.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";

@@ -3,7 +3,7 @@ import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   descriptorIdsForClientCapability,
   migrateCapabilityDescriptorId,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import { ConnectionDirectoryDal } from "../../src/modules/backplane/connection-directory.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";

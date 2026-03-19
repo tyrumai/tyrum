@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { Hono } from "hono";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { DeploymentConfig } from "@tyrum/schemas";
+import { DeploymentConfig } from "@tyrum/contracts";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 

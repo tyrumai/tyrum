@@ -1,4 +1,4 @@
-import type { AgentCapabilitiesResponse, ManagedExtensionDetail } from "@tyrum/schemas";
+import type { AgentCapabilitiesResponse, ManagedExtensionDetail } from "@tyrum/contracts";
 import { Select } from "../ui/select.js";
 import { Textarea } from "../ui/textarea.js";
 

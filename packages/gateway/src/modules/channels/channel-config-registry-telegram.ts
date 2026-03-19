@@ -1,4 +1,4 @@
-import { ChannelRegistryEntry } from "@tyrum/schemas";
+import { ChannelRegistryEntry } from "@tyrum/contracts";
 import type { StoredTelegramChannelConfig } from "./channel-config-dal.js";
 import {
   type ChannelRegistrySpec,

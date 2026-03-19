@@ -2,7 +2,7 @@ import type {
   ActionPrimitive as ActionPrimitiveT,
   ExecutionTrigger as ExecutionTriggerT,
   Lane as LaneT,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import { randomUUID } from "node:crypto";
 import type { SqlDb } from "../../statestore/types.js";
 import type { ExecutionEngine } from "../execution/engine.js";

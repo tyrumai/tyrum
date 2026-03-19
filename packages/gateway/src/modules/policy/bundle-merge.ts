@@ -1,5 +1,5 @@
-import type { PolicyBundle as PolicyBundleT, Decision } from "@tyrum/schemas";
-import { PolicyBundle } from "@tyrum/schemas";
+import type { PolicyBundle as PolicyBundleT, Decision } from "@tyrum/contracts";
+import { PolicyBundle } from "@tyrum/contracts";
 import { mostRestrictiveDecision, normalizeDomain, type PolicyDomainConfig } from "./domain.js";
 
 function unionStrings(a: readonly string[], b: readonly string[]): string[] {

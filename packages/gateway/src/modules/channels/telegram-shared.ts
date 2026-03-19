@@ -3,9 +3,9 @@ import {
   buildAgentSessionKey,
   normalizedContainerKindFromThreadKind,
   resolveDmScope,
-} from "@tyrum/schemas";
-import type { NormalizedMessageEnvelope, NormalizedThreadMessage } from "@tyrum/schemas";
-import type { DmScope } from "@tyrum/schemas";
+} from "@tyrum/contracts";
+import type { NormalizedMessageEnvelope, NormalizedThreadMessage } from "@tyrum/contracts";
+import type { DmScope } from "@tyrum/contracts";
 import type { TelegramBot } from "../ingress/telegram-bot.js";
 import type { SqlDb } from "../../statestore/types.js";
 import {

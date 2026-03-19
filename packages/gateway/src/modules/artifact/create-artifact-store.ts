@@ -1,5 +1,5 @@
 import { S3Client } from "@aws-sdk/client-s3";
-import type { DeploymentConfigArtifacts } from "@tyrum/schemas";
+import type { DeploymentConfigArtifacts } from "@tyrum/contracts";
 import type { RedactionEngine } from "../redaction/engine.js";
 import type { ArtifactStore } from "./store.js";
 import { FsArtifactStore, S3ArtifactStore } from "./store.js";

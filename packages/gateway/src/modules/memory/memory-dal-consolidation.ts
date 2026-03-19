@@ -5,7 +5,7 @@ import type {
   MemoryItemKind,
   MemorySensitivity,
   MemoryTombstone,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import type { MemoryConsolidationResult, RawBudgetRow } from "./memory-dal-types.js";
 import type { MemoryCreateInput } from "./types.js";

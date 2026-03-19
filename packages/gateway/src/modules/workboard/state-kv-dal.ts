@@ -3,7 +3,7 @@ import type {
   WorkItemStateKVEntry,
   WorkStateKVKey,
   WorkStateKVScopeIds,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 
 import type { GetItemFn } from "./dal-deps.js";

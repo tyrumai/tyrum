@@ -1,4 +1,4 @@
-import type { WsCapabilityReadyPayload } from "@tyrum/schemas";
+import type { WsCapabilityReadyPayload } from "@tyrum/contracts";
 import type { CapabilityProvider } from "./capability.js";
 import { autoExecute } from "./capability.js";
 import type { TyrumClient } from "./ws-client.js";

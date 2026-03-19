@@ -1,4 +1,4 @@
-import { haversineDistanceMeters, type LocationCoords } from "@tyrum/schemas";
+import { haversineDistanceMeters, type LocationCoords } from "@tyrum/contracts";
 
 type NativeLocationCoordsInput = {
   latitude: number;

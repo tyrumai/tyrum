@@ -20,7 +20,7 @@ import {
   TenantCreateRequest,
   TenantCreateResponse,
   TenantListResponse,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type { SqlDb } from "../statestore/types.js";
 import type { AuthTokenService } from "../modules/auth/auth-token-service.js";
 import { DeploymentConfigDal } from "../modules/config/deployment-config-dal.js";

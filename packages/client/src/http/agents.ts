@@ -5,7 +5,7 @@ import {
   ManagedAgentGetResponse,
   ManagedAgentListResponse,
   ManagedAgentUpdateRequest,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type { z } from "zod";
 import { HttpTransport, type TyrumRequestOptions, validateOrThrow } from "./shared.js";
 

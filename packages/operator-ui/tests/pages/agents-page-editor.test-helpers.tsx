@@ -1,4 +1,4 @@
-import { AgentConfig, IdentityPack, type ManagedExtensionDetail } from "@tyrum/schemas";
+import { AgentConfig, IdentityPack, type ManagedExtensionDetail } from "@tyrum/contracts";
 import type { OperatorCore } from "../../../operator-core/src/index.js";
 import { createStore } from "../../../operator-core/src/store.js";
 import { act, type Mock } from "react";

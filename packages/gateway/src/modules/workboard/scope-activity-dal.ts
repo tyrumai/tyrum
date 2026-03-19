@@ -1,4 +1,4 @@
-import type { WorkScope } from "@tyrum/schemas";
+import type { WorkScope } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 
 import type * as DalHelpers from "./dal-helpers.js";

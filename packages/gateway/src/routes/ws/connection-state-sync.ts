@@ -1,4 +1,4 @@
-import type { AuthTokenClaims, NodePairingRequest } from "@tyrum/schemas";
+import type { AuthTokenClaims, NodePairingRequest } from "@tyrum/contracts";
 import { SANDBOX_CAPABILITY_ALLOWLIST } from "../../modules/desktop-environments/allowlist.js";
 import type { DesktopEnvironmentDal } from "../../modules/desktop-environments/dal.js";
 import { isPairingBlockedStatus, type NodePairingDal } from "../../modules/node/pairing-dal.js";

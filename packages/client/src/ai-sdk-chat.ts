@@ -20,7 +20,7 @@ import {
   type WsChatSessionSendPayload as WsChatSessionSendPayloadT,
   type WsChatSessionSendTrigger,
   type WsChatSessionSummary,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type { TyrumClientDynamicSchema } from "./ws-client.js";
 
 export interface TyrumAiSdkChatSocket {
