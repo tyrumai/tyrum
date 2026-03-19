@@ -1,9 +1,9 @@
 import { isAbsolute, relative, resolve } from "node:path";
 import type { McpServerSpec as McpServerSpecT } from "@tyrum/contracts";
+import type { NodeDispatchService, NodeInventoryService } from "@tyrum/runtime-node-control";
 import type { ArtifactStore } from "../artifact/store.js";
 import { requireTenantIdValue } from "../identity/scope.js";
 import type { IdentityScopeDal } from "../identity/scope.js";
-import type { NodeInventoryService } from "../node/inventory-service.js";
 import type { RedactionEngine } from "../redaction/engine.js";
 import type { SecretProvider } from "../secret/provider.js";
 import type { SecretResolutionAuditDal } from "../secret/resolution-audit-dal.js";
@@ -24,7 +24,6 @@ import {
   type ArtifactDescribeToolRuntime,
 } from "./tool-executor-artifact-tools.js";
 import type { McpManager } from "./mcp-manager.js";
-import type { NodeDispatchService } from "./node-dispatch-service.js";
 import type { NodeCapabilityInspectionService } from "../node/capability-inspection-service.js";
 import type { AgentRegistry } from "./registry.js";
 import type { WorkboardBroadcastDeps } from "../workboard/item-broadcast.js";

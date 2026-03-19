@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { NodeDispatchService } from "@tyrum/runtime-node-control";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { TaskResultRegistry } from "../../src/ws/protocol/task-result-registry.js";
 import type { ProtocolDeps } from "../../src/ws/protocol.js";
@@ -39,9 +40,6 @@ describe("NodeDispatchService", () => {
   } as const;
 
   it("dispatches task.execute and awaits the task result registry", async () => {
-    const { NodeDispatchService } =
-      await import("../../src/modules/agent/node-dispatch-service.js");
-
     const cm = new ConnectionManager();
     const registry = new TaskResultRegistry();
     const nodeWs = createMockWs(registry);
@@ -65,7 +63,11 @@ describe("NodeDispatchService", () => {
       } as never,
     };
 
-    const service = new NodeDispatchService(deps);
+    const service = new NodeDispatchService({
+      dispatchTask: async (action, scope, nodeId) =>
+        await depsDispatchTask(deps, action, scope, nodeId),
+      taskResults: registry,
+    });
     const res = await service.dispatchAndWait(
       { type: "Desktop", args: { op: "act" } },
       {
@@ -82,9 +84,6 @@ describe("NodeDispatchService", () => {
   });
 
   it("evaluates policy using an op-aware desktop match target", async () => {
-    const { NodeDispatchService } =
-      await import("../../src/modules/agent/node-dispatch-service.js");
-
     const cm = new ConnectionManager();
     const registry = new TaskResultRegistry();
     const nodeWs = createMockWs(registry);
@@ -117,7 +116,11 @@ describe("NodeDispatchService", () => {
       } as never,
     };
 
-    const service = new NodeDispatchService(deps);
+    const service = new NodeDispatchService({
+      dispatchTask: async (action, scope, nodeId) =>
+        await depsDispatchTask(deps, action, scope, nodeId),
+      taskResults: registry,
+    });
     await service.dispatchAndWait(
       { type: "Desktop", args: { op: "mouse", action: "click", x: 1, y: 2 } },
       {
@@ -137,9 +140,6 @@ describe("NodeDispatchService", () => {
   });
 
   it("dispatches to approved nodes even when policy returns require_approval", async () => {
-    const { NodeDispatchService } =
-      await import("../../src/modules/agent/node-dispatch-service.js");
-
     const cm = new ConnectionManager();
     const registry = new TaskResultRegistry();
     const nodeWs = createMockWs(registry);
@@ -170,7 +170,11 @@ describe("NodeDispatchService", () => {
       } as never,
     };
 
-    const service = new NodeDispatchService(deps);
+    const service = new NodeDispatchService({
+      dispatchTask: async (action, scope, nodeId) =>
+        await depsDispatchTask(deps, action, scope, nodeId),
+      taskResults: registry,
+    });
     const res = await service.dispatchAndWait(
       { type: "Desktop", args: { op: "act" } },
       {
@@ -186,9 +190,6 @@ describe("NodeDispatchService", () => {
   });
 
   it("targets the requested node id without falling back to another eligible node", async () => {
-    const { NodeDispatchService } =
-      await import("../../src/modules/agent/node-dispatch-service.js");
-
     const cm = new ConnectionManager();
     const registry = new TaskResultRegistry();
     const firstWs = createMockWs(registry);
@@ -220,7 +221,11 @@ describe("NodeDispatchService", () => {
       } as never,
     };
 
-    const service = new NodeDispatchService(deps);
+    const service = new NodeDispatchService({
+      dispatchTask: async (action, scope, nodeId) =>
+        await depsDispatchTask(deps, action, scope, nodeId),
+      taskResults: registry,
+    });
     await expect(
       service.dispatchAndWait(
         { type: "Desktop", args: { op: "act" } },
@@ -239,9 +244,6 @@ describe("NodeDispatchService", () => {
   });
 
   it("targets the requested approved node when multiple eligible nodes exist", async () => {
-    const { NodeDispatchService } =
-      await import("../../src/modules/agent/node-dispatch-service.js");
-
     const cm = new ConnectionManager();
     const registry = new TaskResultRegistry();
     const firstWs = createMockWs(registry);
@@ -272,7 +274,11 @@ describe("NodeDispatchService", () => {
       } as never,
     };
 
-    const service = new NodeDispatchService(deps);
+    const service = new NodeDispatchService({
+      dispatchTask: async (action, scope, nodeId) =>
+        await depsDispatchTask(deps, action, scope, nodeId),
+      taskResults: registry,
+    });
     const res = await service.dispatchAndWait(
       { type: "Desktop", args: { op: "act" } },
       {
@@ -290,9 +296,6 @@ describe("NodeDispatchService", () => {
   });
 
   it("prefers a remote edge row for targeted dispatch when a stale local row is fresher", async () => {
-    const { NodeDispatchService } =
-      await import("../../src/modules/agent/node-dispatch-service.js");
-
     const cm = new ConnectionManager();
     const registry = new TaskResultRegistry();
     const enqueue = vi.fn(async (_tenantId: string, _topic: string, payload: unknown) => {
@@ -347,7 +350,11 @@ describe("NodeDispatchService", () => {
       } as never,
     };
 
-    const service = new NodeDispatchService(deps);
+    const service = new NodeDispatchService({
+      dispatchTask: async (action, scope, nodeId) =>
+        await depsDispatchTask(deps, action, scope, nodeId),
+      taskResults: registry,
+    });
     const res = await service.dispatchAndWait(
       { type: "Desktop", args: { op: "act" } },
       {
@@ -369,15 +376,15 @@ describe("NodeDispatchService", () => {
   });
 
   it("rejects when task result registry is missing", async () => {
-    const { NodeDispatchService } =
-      await import("../../src/modules/agent/node-dispatch-service.js");
-
     const cm = new ConnectionManager();
     const deps: ProtocolDeps = {
       connectionManager: cm,
     };
 
-    const service = new NodeDispatchService(deps);
+    const service = new NodeDispatchService({
+      dispatchTask: async (action, scope, nodeId) =>
+        await depsDispatchTask(deps, action, scope, nodeId),
+    });
 
     await expect(
       service.dispatchAndWait(
@@ -392,3 +399,13 @@ describe("NodeDispatchService", () => {
     ).rejects.toThrow(/task result registry/i);
   });
 });
+
+async function depsDispatchTask(
+  deps: ProtocolDeps,
+  action: Parameters<(typeof import("../../src/ws/protocol.js"))["dispatchTask"]>[0],
+  scope: Parameters<(typeof import("../../src/ws/protocol.js"))["dispatchTask"]>[1],
+  nodeId?: string,
+) {
+  const { dispatchTask } = await import("../../src/ws/protocol.js");
+  return await dispatchTask(action, scope, deps, nodeId);
+}

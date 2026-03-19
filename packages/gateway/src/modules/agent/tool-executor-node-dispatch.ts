@@ -6,12 +6,11 @@ import {
   type NodeActionDispatchRequest as NodeActionDispatchRequestT,
   type NodeActionDispatchResponse as NodeActionDispatchResponseT,
 } from "@tyrum/contracts";
+import type { NodeDispatchService, NodeInventoryService } from "@tyrum/runtime-node-control";
 import type { ArtifactStore } from "../artifact/store.js";
 import type { NodeCapabilityInspectionService } from "../node/capability-inspection-service.js";
 import type { ConnectionManager } from "../../ws/connection-manager.js";
 import type { ConnectionDirectoryDal } from "../backplane/connection-directory.js";
-import type { NodeInventoryService } from "../node/inventory-service.js";
-import type { NodeDispatchService } from "./node-dispatch-service.js";
 import { tagContent } from "./provenance.js";
 import { sanitizeForModel } from "./sanitizer.js";
 import type { ToolResult, WorkspaceLeaseConfig } from "./tool-executor-shared.js";

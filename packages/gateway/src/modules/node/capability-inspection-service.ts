@@ -3,9 +3,9 @@ import {
   type NodeCapabilityActionDefinition,
   type NodeCapabilityInspectionResponse as NodeCapabilityInspectionResponseT,
 } from "@tyrum/contracts";
+import type { NodeInventoryService } from "@tyrum/runtime-node-control";
 import type { ConnectionDirectoryDal } from "../backplane/connection-directory.js";
 import type { ConnectionManager } from "../../ws/connection-manager.js";
-import type { NodeInventoryService } from "./inventory-service.js";
 import { getCapabilityCatalogEntry } from "./capability-catalog.js";
 
 export class NodeCapabilityInspectionService {

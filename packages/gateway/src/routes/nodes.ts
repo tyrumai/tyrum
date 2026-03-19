@@ -1,3 +1,4 @@
+import type { NodeDispatchService, NodeInventoryService } from "@tyrum/runtime-node-control";
 import { Hono } from "hono";
 import {
   NodeActionDispatchRequest,
@@ -7,10 +8,8 @@ import {
   isLegacyUmbrellaCapabilityDescriptorId,
 } from "@tyrum/contracts";
 import { requireTenantId } from "../modules/auth/claims.js";
-import { NodeInventoryService } from "../modules/node/inventory-service.js";
 import { NodeCapabilityInspectionService } from "../modules/node/capability-inspection-service.js";
 import { executeHttpNodeDispatch } from "../modules/agent/tool-executor-node-dispatch.js";
-import type { NodeDispatchService } from "../modules/agent/node-dispatch-service.js";
 import type { ArtifactStore } from "../modules/artifact/store.js";
 
 export function createNodesRoute(deps: {

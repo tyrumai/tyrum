@@ -64,15 +64,16 @@ import { isAuthProfilesEnabled } from "./modules/models/auth-profiles-enabled.js
 import type { SessionProviderPinDal } from "./modules/models/session-pin-dal.js";
 import { gatewayMetrics } from "./modules/observability/metrics.js";
 import { PolicyBundleConfigDal } from "./modules/policy/config-dal.js";
-import { NodeInventoryService } from "./modules/node/inventory-service.js";
+import { listCapabilityCatalogEntries } from "./modules/node/capability-catalog.js";
+import { createNodeDispatchServiceFromProtocolDeps } from "./modules/node/runtime-node-control-adapters.js";
 import { NodeCapabilityInspectionService } from "./modules/node/capability-inspection-service.js";
-import { NodeDispatchService } from "./modules/agent/node-dispatch-service.js";
 import { isSharedStateMode, resolveGatewayStateMode } from "./modules/runtime-state/mode.js";
 import type { WsEventDal } from "./modules/ws-event/dal.js";
 import {
   DesktopEnvironmentLifecycleService,
   UnsupportedDesktopEnvironmentLifecycleService,
 } from "./modules/desktop-environments/lifecycle-service.js";
+import { NodeInventoryService } from "@tyrum/runtime-node-control";
 import type {
   DesktopEnvironmentDal,
   DesktopEnvironmentHostDal,
@@ -141,6 +142,7 @@ export function registerSystemAndPublicRoutes(context: AppRouteContext): void {
       nodePairingDal: context.container.nodePairingDal,
       presenceDal: context.container.presenceDal,
       attachmentDal: context.container.sessionLaneNodeAttachmentDal,
+      capabilityCatalogEntries: listCapabilityCatalogEntries(),
     });
     const inspectionService = context.opts.protocolDeps
       ? new NodeCapabilityInspectionService({
@@ -155,7 +157,7 @@ export function registerSystemAndPublicRoutes(context: AppRouteContext): void {
         inventoryService,
         inspectionService,
         nodeDispatchService: context.opts.protocolDeps
-          ? new NodeDispatchService(context.opts.protocolDeps)
+          ? createNodeDispatchServiceFromProtocolDeps(context.opts.protocolDeps)
           : undefined,
         artifactStore: context.container.artifactStore,
       }),

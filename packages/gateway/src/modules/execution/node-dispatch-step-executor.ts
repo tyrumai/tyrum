@@ -1,6 +1,6 @@
 import type { ActionPrimitive as ActionPrimitiveT } from "@tyrum/contracts";
+import type { NodeDispatchService } from "@tyrum/runtime-node-control";
 import type { SqlDb } from "../../statestore/types.js";
-import type { NodeDispatchService } from "../agent/node-dispatch-service.js";
 import type { ArtifactStore } from "../artifact/store.js";
 import {
   resolveDesktopEvidenceSensitivity,

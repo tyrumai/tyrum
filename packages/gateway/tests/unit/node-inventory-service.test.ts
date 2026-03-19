@@ -1,7 +1,7 @@
 import { descriptorIdForClientCapability } from "@tyrum/contracts";
+import { NodeInventoryService } from "@tyrum/runtime-node-control";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
-import { NodeInventoryService } from "../../src/modules/node/inventory-service.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { createTestContainer } from "../integration/helpers.js";
 

@@ -1,5 +1,5 @@
+import { resolveNodePairing } from "@tyrum/runtime-node-control";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { resolveNodePairing } from "../../src/modules/node/pairing-resolve-service.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { NodePairingDal } from "../../src/modules/node/pairing-dal.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";

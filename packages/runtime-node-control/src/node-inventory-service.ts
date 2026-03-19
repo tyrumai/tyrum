@@ -6,17 +6,9 @@ import {
   type NodeCapabilityState,
   type NodeCapabilitySummary,
   type NodeInventoryEntry,
+  type NodePairingRequest,
+  type NodePairingStatus,
 } from "@tyrum/contracts";
-import type {
-  ConnectionDirectoryDal,
-  ConnectionDirectoryRow,
-} from "../backplane/connection-directory.js";
-import type { NodePairingDal } from "./pairing-dal.js";
-import type { PresenceDal } from "../presence/dal.js";
-import { readRecordString } from "../util/coerce.js";
-import type { ConnectionManager, ConnectedClient } from "../../ws/connection-manager.js";
-import { SessionLaneNodeAttachmentDal } from "../agent/session-lane-node-attachment-dal.js";
-import { listCapabilityCatalogEntries } from "./capability-catalog.js";
 
 type InventoryNode = {
   nodeId: string;
@@ -33,13 +25,94 @@ type InventoryNode = {
   lastSeenAtMs?: number;
 };
 
-type NodeInventoryServiceDeps = {
-  connectionManager: ConnectionManager;
-  connectionDirectory?: ConnectionDirectoryDal;
-  nodePairingDal?: NodePairingDal;
-  presenceDal?: PresenceDal;
-  attachmentDal?: SessionLaneNodeAttachmentDal;
-};
+export interface NodeInventoryConnectedClient {
+  id: string;
+  role: "client" | "node";
+  device_id?: string;
+  device_type?: DeviceType;
+  device_platform?: DevicePlatform;
+  device_model?: string;
+  auth_claims?: {
+    tenant_id?: string | null;
+  };
+  capabilities: readonly CapabilityDescriptor[];
+  readyCapabilities: readonly CapabilityDescriptor[];
+  capabilityStates: ReadonlyMap<string, NodeCapabilityState>;
+  lastWsPongAt: number;
+}
+
+export interface NodeInventoryConnectionManagerPort {
+  allClients(): Iterable<NodeInventoryConnectedClient>;
+}
+
+export interface NodeInventoryConnectionDirectoryRow {
+  role: "client" | "node";
+  connection_id: string;
+  device_id: string | null;
+  label: string | null;
+  mode: string | null;
+  version: string | null;
+  device_type: DeviceType | null;
+  device_platform: DevicePlatform | null;
+  device_model: string | null;
+  capabilities: readonly CapabilityDescriptor[];
+  ready_capabilities: readonly CapabilityDescriptor[];
+  capability_states: readonly NodeCapabilityState[];
+  last_seen_at_ms: number;
+}
+
+export interface NodeInventoryConnectionDirectoryPort {
+  listNonExpired(
+    tenantId: string,
+    nowMs: number,
+  ): Promise<readonly NodeInventoryConnectionDirectoryRow[]>;
+}
+
+export interface NodeInventoryPairingPort {
+  list(input: {
+    tenantId: string;
+    status?: NodePairingStatus;
+    limit?: number;
+  }): Promise<readonly NodePairingRequest[]>;
+}
+
+export interface NodeInventoryPresenceRow {
+  role: "gateway" | "client" | "node";
+  connection_id: string | null;
+  last_input_seconds: number | null;
+  last_seen_at_ms: number;
+}
+
+export interface NodeInventoryPresencePort {
+  listNonExpired(nowMs: number, limit?: number): Promise<readonly NodeInventoryPresenceRow[]>;
+}
+
+export interface NodeInventoryAttachmentPort {
+  get(input: { tenantId: string; key: string; lane: string }): Promise<
+    | {
+        source_client_device_id: string | null;
+        attached_node_id: string | null;
+      }
+    | undefined
+  >;
+}
+
+export interface NodeCapabilityCatalogEntry {
+  descriptor: CapabilityDescriptor;
+  actions: ReadonlyArray<{
+    name: string;
+    description: string;
+  }>;
+}
+
+export interface NodeInventoryServiceDeps {
+  connectionManager: NodeInventoryConnectionManagerPort;
+  connectionDirectory?: NodeInventoryConnectionDirectoryPort;
+  nodePairingDal?: NodeInventoryPairingPort;
+  presenceDal?: NodeInventoryPresencePort;
+  attachmentDal?: NodeInventoryAttachmentPort;
+  capabilityCatalogEntries?: readonly NodeCapabilityCatalogEntry[];
+}
 
 function capabilityMap(
   values: readonly CapabilityDescriptor[] | undefined,
@@ -79,7 +152,7 @@ function upsertNode(map: Map<string, InventoryNode>, next: InventoryNode): void 
   }
 }
 
-function fromDirectoryRow(row: ConnectionDirectoryRow): InventoryNode | undefined {
+function fromDirectoryRow(row: NodeInventoryConnectionDirectoryRow): InventoryNode | undefined {
   if (row.role !== "node" || !row.device_id) return undefined;
   return {
     nodeId: row.device_id,
@@ -97,7 +170,7 @@ function fromDirectoryRow(row: ConnectionDirectoryRow): InventoryNode | undefine
   };
 }
 
-function fromConnectedClient(client: ConnectedClient): InventoryNode | undefined {
+function fromConnectedClient(client: NodeInventoryConnectedClient): InventoryNode | undefined {
   if (client.role !== "node" || !client.device_id) return undefined;
   return {
     nodeId: client.device_id,
@@ -124,24 +197,39 @@ export class NodeInventoryService {
   }): Promise<{ key?: string; lane?: string; nodes: NodeInventoryEntry[] }> {
     const nowMs = Date.now();
     const nodesById = new Map<string, InventoryNode>();
+    const nodeIdByConnectionId = new Map<string, string>();
 
     if (this.deps.connectionDirectory) {
       const rows = await this.deps.connectionDirectory.listNonExpired(input.tenantId, nowMs);
       for (const row of rows) {
+        if (row.role === "node" && row.device_id) {
+          nodeIdByConnectionId.set(row.connection_id, row.device_id);
+        }
         const node = fromDirectoryRow(row);
-        if (node) upsertNode(nodesById, node);
+        if (node) {
+          upsertNode(nodesById, node);
+        }
       }
     } else {
       for (const client of this.deps.connectionManager.allClients()) {
         if (client.auth_claims?.tenant_id !== input.tenantId) continue;
+        if (client.role === "node" && client.device_id) {
+          nodeIdByConnectionId.set(client.id, client.device_id);
+        }
         const node = fromConnectedClient(client);
-        if (node) upsertNode(nodesById, node);
+        if (node) {
+          upsertNode(nodesById, node);
+        }
       }
     }
 
     const pairings = this.deps.nodePairingDal
       ? await this.deps.nodePairingDal.list({ tenantId: input.tenantId, limit: 500 })
       : [];
+    const pairingsByNodeId = new Map(
+      pairings.map((pairing) => [pairing.node.node_id, pairing] as const),
+    );
+
     for (const pairing of pairings) {
       const lastSeenAtMs = Date.parse(pairing.node.last_seen_at);
       upsertNode(nodesById, {
@@ -169,28 +257,20 @@ export class NodeInventoryService {
           })
         : undefined;
 
-    // Build a lookup of last Tyrum interaction timestamps from presence data.
-    // Presence entries store `last_input_seconds` (relative) and `last_seen_at_ms` (absolute).
     const presenceByNodeId = new Map<string, { lastTyrumInteractionAt: string }>();
     if (this.deps.presenceDal) {
       const presenceEntries = await this.deps.presenceDal.listNonExpired(nowMs, 500);
       for (const entry of presenceEntries) {
         if (entry.role !== "node" || entry.last_input_seconds == null) continue;
         const interactionMs = entry.last_seen_at_ms - entry.last_input_seconds * 1000;
-        if (interactionMs > 0) {
-          // Use connection_id to correlate — find which node this presence entry belongs to.
-          // The connection_id on the presence entry matches a ConnectedClient.id, and we need
-          // the device_id (node_id) from that client. Build the mapping from connected clients.
-          const connectionId = entry.connection_id;
-          if (connectionId) {
-            const client = this.deps.connectionManager.getClient(connectionId);
-            if (client?.device_id) {
-              presenceByNodeId.set(client.device_id, {
-                lastTyrumInteractionAt: new Date(interactionMs).toISOString(),
-              });
-            }
-          }
-        }
+        if (interactionMs <= 0) continue;
+        const nodeId = entry.connection_id
+          ? nodeIdByConnectionId.get(entry.connection_id)
+          : undefined;
+        if (!nodeId) continue;
+        presenceByNodeId.set(nodeId, {
+          lastTyrumInteractionAt: new Date(interactionMs).toISOString(),
+        });
       }
     }
 
@@ -198,11 +278,13 @@ export class NodeInventoryService {
     const dispatchableOnly = input.dispatchableOnly === true;
     const entries: NodeInventoryEntry[] = [];
     const catalogEntries = new Map(
-      listCapabilityCatalogEntries().map((entry) => [entry.descriptor.id, entry] as const),
+      (this.deps.capabilityCatalogEntries ?? []).map(
+        (entry) => [entry.descriptor.id, entry] as const,
+      ),
     );
 
     for (const [nodeId, node] of nodesById) {
-      const pairing = pairings.find((entry) => entry.node.node_id === nodeId);
+      const pairing = pairingsByNodeId.get(nodeId);
       const allowlist = pairing?.capability_allowlist ?? [];
       const summaries: NodeCapabilitySummary[] = [];
       const candidateDescriptorIds = [
@@ -317,4 +399,12 @@ export class NodeInventoryService {
       nodes: entries,
     };
   }
+}
+
+function readRecordString(input: unknown, key: string): string | undefined {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return undefined;
+  }
+  const value = (input as Record<string, unknown>)[key];
+  return typeof value === "string" && value.trim().length > 0 ? value : undefined;
 }

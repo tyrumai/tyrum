@@ -195,7 +195,7 @@ describe("gateway approval engine action fallback", () => {
       createNodeDispatchStepExecutor: vi.fn(() => ({ kind: "node-dispatch-step-executor" })),
     }));
 
-    vi.doMock("../../src/modules/agent/node-dispatch-service.js", () => ({
+    vi.doMock("@tyrum/runtime-node-control", () => ({
       NodeDispatchService: function NodeDispatchService() {},
     }));
 

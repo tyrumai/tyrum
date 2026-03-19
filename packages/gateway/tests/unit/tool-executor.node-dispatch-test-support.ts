@@ -1,8 +1,9 @@
 import { CAPABILITY_DESCRIPTOR_DEFAULT_VERSION } from "@tyrum/contracts";
+import { NodeDispatchService } from "@tyrum/runtime-node-control";
 import { expect, it, vi } from "vitest";
 import { DEFAULT_TENANT_ID, DEFAULT_WORKSPACE_ID } from "../../src/modules/identity/scope.js";
-import { NodeDispatchService } from "../../src/modules/agent/node-dispatch-service.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
+import type { ProtocolDeps } from "../../src/ws/protocol.js";
 import { TaskResultRegistry } from "../../src/ws/protocol/task-result-registry.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import {
@@ -56,6 +57,24 @@ function createConnectedDesktopDeps(overrides: Record<string, unknown> = {}) {
     taskResults,
     ...overrides,
   };
+}
+
+function createNodeDispatchService(deps: ProtocolDeps): NodeDispatchService {
+  return new NodeDispatchService({
+    dispatchTask: async (action, scope, nodeId) =>
+      await dispatchWithDeps(deps, action, scope, nodeId),
+    taskResults: deps.taskResults,
+  });
+}
+
+async function dispatchWithDeps(
+  deps: ProtocolDeps,
+  action: Parameters<(typeof import("../../src/ws/protocol.js"))["dispatchTask"]>[0],
+  scope: Parameters<(typeof import("../../src/ws/protocol.js"))["dispatchTask"]>[1],
+  nodeId?: string,
+) {
+  const { dispatchTask } = await import("../../src/ws/protocol.js");
+  return await dispatchTask(action, scope, deps, nodeId);
 }
 
 async function executeNodeDispatch(
@@ -327,16 +346,16 @@ export function registerToolExecutorNodeDispatchTests(home: HomeDirState): void 
     {
       name: "tool.node.dispatch returns a structured unknown_node error when the target node is unknown",
       service: () =>
-        new NodeDispatchService({
+        createNodeDispatchService({
           connectionManager: new ConnectionManager(),
           taskResults: new TaskResultRegistry(),
-        } as never),
+        }),
       expectedCode: "runtime_unavailable",
     },
     {
       name: "tool.node.dispatch returns a structured not_paired error when a desktop node is connected but not paired",
       service: () =>
-        new NodeDispatchService(
+        createNodeDispatchService(
           createConnectedDesktopDeps({
             nodePairingDal: {
               getByNodeId: vi.fn(async () => ({
@@ -344,14 +363,14 @@ export function registerToolExecutorNodeDispatchTests(home: HomeDirState): void 
                 capability_allowlist: [],
               })),
             },
-          }) as never,
+          }) as ProtocolDeps,
         ),
       expectedCode: "capability_not_paired",
     },
     {
       name: "tool.node.dispatch returns a structured policy_denied error when policy denies node dispatch",
       service: () =>
-        new NodeDispatchService(
+        createNodeDispatchService(
           createConnectedDesktopDeps({
             nodePairingDal: {
               getByNodeId: vi.fn(async () => ({
@@ -372,7 +391,7 @@ export function registerToolExecutorNodeDispatchTests(home: HomeDirState): void 
                 policy_snapshot: { policy_snapshot_id: "snap-1" },
               })),
             },
-          }) as never,
+          }) as ProtocolDeps,
         ),
       expectedCode: "execution_failed",
     },

@@ -62,7 +62,9 @@ function registerCapabilityReadyTests(): void {
       frames.some(
         (msg) =>
           msg["type"] === "capability.ready" &&
-          (msg["payload"] as { node_id?: string } | undefined)?.node_id === "dev_test",
+          (msg["payload"] as { node_id?: string } | undefined)?.node_id === "dev_test" &&
+          (msg["scope"] as { kind?: string; node_id?: string } | undefined)?.kind === "node" &&
+          (msg["scope"] as { kind?: string; node_id?: string } | undefined)?.node_id === "dev_test",
       ),
     ).toBe(true);
   });

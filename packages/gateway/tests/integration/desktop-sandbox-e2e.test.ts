@@ -20,7 +20,7 @@ import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import type { ProtocolDeps } from "../../src/ws/protocol.js";
 import { TaskResultRegistry } from "../../src/ws/protocol/task-result-registry.js";
 import { AuthTokenService } from "../../src/modules/auth/auth-token-service.js";
-import { NodeDispatchService } from "../../src/modules/agent/node-dispatch-service.js";
+import { createNodeDispatchServiceFromProtocolDeps } from "../../src/modules/node/runtime-node-control-adapters.js";
 import { ToolExecutor } from "../../src/modules/agent/tool-executor.js";
 import { DEFAULT_TENANT_ID, DEFAULT_WORKSPACE_ID } from "../../src/modules/identity/scope.js";
 import {
@@ -170,7 +170,7 @@ describe("e2e: tool.node.dispatch against docker desktop-sandbox", () => {
           };
           await seedExecutionScope(container.db, scope);
 
-          const nodeDispatchService = new NodeDispatchService(protocolDeps);
+          const nodeDispatchService = createNodeDispatchServiceFromProtocolDeps(protocolDeps);
           const executor = new ToolExecutor(
             tyrumHome,
             stubMcpManager(),

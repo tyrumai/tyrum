@@ -2,6 +2,7 @@
  * Node pairing routes — durable allowlisting for node capability execution.
  */
 
+import { resolveNodePairing } from "@tyrum/runtime-node-control";
 import { Hono } from "hono";
 import type { NodePairingDal } from "../modules/node/pairing-dal.js";
 import type { Logger } from "../modules/observability/logger.js";
@@ -9,7 +10,7 @@ import type { WsEventDal } from "../modules/ws-event/dal.js";
 import type { ConnectionManager } from "../ws/connection-manager.js";
 import type { OutboxDal } from "../modules/backplane/outbox-dal.js";
 import type { ConnectionDirectoryDal } from "../modules/backplane/connection-directory.js";
-import { resolveNodePairing } from "../modules/node/pairing-resolve-service.js";
+import { createResolveNodePairingDeps } from "../modules/node/runtime-node-control-adapters.js";
 import { emitPairingApprovedEvent } from "../ws/pairing-approved.js";
 import { PAIRING_WS_AUDIENCE } from "../ws/audience.js";
 import { broadcastWsEvent } from "../ws/broadcast.js";
@@ -114,9 +115,8 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
     }
 
     const result = await resolveNodePairing(
-      {
+      createResolveNodePairingDeps({
         nodePairingDal: deps.nodePairingDal,
-        wsEventDal: deps.wsEventDal,
         emitEvent: ({ tenantId: eventTenantId, event }) => {
           emitEvent(deps, eventTenantId, event);
         },
@@ -129,7 +129,8 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
               });
             }
           : undefined,
-      },
+        wsEventDal: deps.wsEventDal,
+      }),
       {
         tenantId,
         pairingId: id,
@@ -163,13 +164,13 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
     const body = (await c.req.json()) as { reason?: string };
 
     const result = await resolveNodePairing(
-      {
+      createResolveNodePairingDeps({
         nodePairingDal: deps.nodePairingDal,
-        wsEventDal: deps.wsEventDal,
         emitEvent: ({ tenantId: eventTenantId, event }) => {
           emitEvent(deps, eventTenantId, event);
         },
-      },
+        wsEventDal: deps.wsEventDal,
+      }),
       {
         tenantId,
         pairingId: id,
@@ -201,13 +202,13 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
     const body = (await c.req.json()) as { reason?: string };
 
     const result = await resolveNodePairing(
-      {
+      createResolveNodePairingDeps({
         nodePairingDal: deps.nodePairingDal,
-        wsEventDal: deps.wsEventDal,
         emitEvent: ({ tenantId: eventTenantId, event }) => {
           emitEvent(deps, eventTenantId, event);
         },
-      },
+        wsEventDal: deps.wsEventDal,
+      }),
       {
         tenantId,
         pairingId: id,
