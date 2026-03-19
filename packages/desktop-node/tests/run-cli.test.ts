@@ -42,6 +42,10 @@ const {
   playwrightBackendCloseSpy: vi.fn(async () => {}),
 }));
 
+const FILESYSTEM_CAPABILITY_IDS_WITHOUT_BASH = FILESYSTEM_CAPABILITY_IDS.filter(
+  (id) => id !== "tyrum.fs.bash",
+);
+
 vi.mock("@tyrum/client/node", () => {
   class TyrumClient {
     private readonly handlers = new Map<string, Set<(data: unknown) => void>>();
@@ -102,6 +106,8 @@ vi.mock("../src/providers/filesystem-provider.js", () => ({
   FilesystemProvider: function FilesystemProvider(...args: unknown[]) {
     filesystemProviderCtorSpy(...args);
   },
+  resolveFilesystemCapabilityIds: ({ allowBash }: { allowBash?: boolean }) =>
+    allowBash ? FILESYSTEM_CAPABILITY_IDS : FILESYSTEM_CAPABILITY_IDS_WITHOUT_BASH,
 }));
 
 vi.mock("../src/providers/playwright-provider.js", () => ({
@@ -149,6 +155,7 @@ describe("runCli", () => {
     TYRUM_BROWSER_ENABLED: process.env["TYRUM_BROWSER_ENABLED"],
     TYRUM_BROWSER_HEADLESS: process.env["TYRUM_BROWSER_HEADLESS"],
     TYRUM_FS_SANDBOX_ROOT: process.env["TYRUM_FS_SANDBOX_ROOT"],
+    TYRUM_FS_BASH_ENABLED: process.env["TYRUM_FS_BASH_ENABLED"],
     DISPLAY: process.env["DISPLAY"],
     WAYLAND_DISPLAY: process.env["WAYLAND_DISPLAY"],
   };
@@ -305,22 +312,56 @@ describe("runCli", () => {
     const code = await runWithSigterm(runCli([]));
 
     expect(code).toBe(0);
-    expect(filesystemProviderCtorSpy).toHaveBeenCalledWith({ sandboxRoot: "/sandbox/root" });
+    expect(filesystemProviderCtorSpy).toHaveBeenCalledWith({
+      sandboxRoot: "/sandbox/root",
+      allowBash: false,
+    });
 
     const opts = clientCtorSpy.mock.calls[0]?.[0] as {
       advertisedCapabilities: Array<{ id: string; version: string }>;
     };
     expect(opts.advertisedCapabilities).toEqual(
       expect.arrayContaining(
-        FILESYSTEM_CAPABILITY_IDS.map((id) => ({
+        FILESYSTEM_CAPABILITY_IDS_WITHOUT_BASH.map((id) => ({
           id,
           version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
         })),
       ),
     );
+    expect(opts.advertisedCapabilities).not.toContainEqual({
+      id: "tyrum.fs.bash",
+      version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+    });
 
     const providers = autoExecuteSpy.mock.calls[0]?.[1] as unknown[];
     expect(providers).toHaveLength(2);
+  });
+
+  it("advertises filesystem bash only when TYRUM_FS_BASH_ENABLED is set", async () => {
+    vi.resetModules();
+    process.env["TYRUM_GATEWAY_TOKEN"] = "test-token";
+    process.env["TYRUM_FS_SANDBOX_ROOT"] = "/sandbox/root";
+    process.env["TYRUM_FS_BASH_ENABLED"] = "1";
+
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const { runCli } = await import("../src/cli/run-cli.js");
+    const code = await runWithSigterm(runCli([]));
+
+    expect(code).toBe(0);
+    expect(filesystemProviderCtorSpy).toHaveBeenCalledWith({
+      sandboxRoot: "/sandbox/root",
+      allowBash: true,
+    });
+
+    const opts = clientCtorSpy.mock.calls[0]?.[0] as {
+      advertisedCapabilities: Array<{ id: string; version: string }>;
+    };
+    expect(opts.advertisedCapabilities).toContainEqual({
+      id: "tyrum.fs.bash",
+      version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+    });
   });
 
   it("advertises browser capabilities from the schema list when browser mode is enabled", async () => {

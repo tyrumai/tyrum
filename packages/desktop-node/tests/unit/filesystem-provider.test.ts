@@ -189,12 +189,33 @@ describe("apply_patch", () => {
 });
 
 // ---------------------------------------------------------------------------
+// capability ids
+// ---------------------------------------------------------------------------
+
+describe("capabilityIds", () => {
+  it("omits bash unless explicitly enabled", () => {
+    expect(provider.capabilityIds).not.toContain("tyrum.fs.bash");
+  });
+
+  it("includes bash when explicitly enabled", () => {
+    expect(makeProvider({ allowBash: true }).capabilityIds).toContain("tyrum.fs.bash");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // bash
 // ---------------------------------------------------------------------------
 
 describe("bash", () => {
-  it("executes a simple command", async () => {
+  it("rejects bash when it is not explicitly enabled", async () => {
     const result = await provider.execute(makeAction({ op: "bash", command: "echo hello" }));
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("Filesystem bash is disabled");
+  });
+
+  it("executes a simple command", async () => {
+    const bashProvider = makeProvider({ allowBash: true });
+    const result = await bashProvider.execute(makeAction({ op: "bash", command: "echo hello" }));
     expect(result.success).toBe(true);
     const data = result.result as ResultPayload;
     expect((data.output as string).trim()).toBe("hello");
@@ -202,13 +223,15 @@ describe("bash", () => {
   });
 
   it("captures exit code", async () => {
-    const result = await provider.execute(makeAction({ op: "bash", command: "exit 42" }));
+    const bashProvider = makeProvider({ allowBash: true });
+    const result = await bashProvider.execute(makeAction({ op: "bash", command: "exit 42" }));
     expect(result.success).toBe(true);
     expect((result.result as ResultPayload).exit_code).toBe(42);
   });
 
   it("returns failure when bash cannot spawn", async () => {
-    const result = await provider.execute(
+    const bashProvider = makeProvider({ allowBash: true });
+    const result = await bashProvider.execute(
       makeAction({ op: "bash", command: "echo hello", cwd: "missing-dir" }),
     );
     expect(result.success).toBe(false);
@@ -216,7 +239,11 @@ describe("bash", () => {
   });
 
   it("respects timeout", async () => {
-    const fast = makeProvider({ defaultExecTimeoutMs: 500, maxExecTimeoutMs: 1000 });
+    const fast = makeProvider({
+      allowBash: true,
+      defaultExecTimeoutMs: 500,
+      maxExecTimeoutMs: 1000,
+    });
     const result = await fast.execute(
       makeAction({ op: "bash", command: "sleep 10", timeout_ms: 500 }),
     );
@@ -227,7 +254,8 @@ describe("bash", () => {
   }, 10_000);
 
   it("uses sandbox root as default cwd", async () => {
-    const result = await provider.execute(makeAction({ op: "bash", command: "pwd" }));
+    const bashProvider = makeProvider({ allowBash: true });
+    const result = await bashProvider.execute(makeAction({ op: "bash", command: "pwd" }));
     expect(result.success).toBe(true);
     const output = ((result.result as ResultPayload).output as string).trim();
     // realpath may differ from sandboxRoot if tmpdir is a symlink

@@ -193,6 +193,8 @@ export class DesktopEnvironmentRuntimeManager {
         "TYRUM_BROWSER_ENABLED=1",
         "--env",
         `TYRUM_FS_SANDBOX_ROOT=${CONTAINER_NODE_HOME}`,
+        "--env",
+        "TYRUM_FS_BASH_ENABLED=1",
       );
       if (this.options.tlsSelfSigned && this.options.tlsFingerprint256) {
         runArgs.push(

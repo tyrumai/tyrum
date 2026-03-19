@@ -23,9 +23,19 @@ import type {
   FsGrepArgs,
 } from "@tyrum/schemas";
 
+const FILESYSTEM_BASH_CAPABILITY_ID = "tyrum.fs.bash";
+const FILESYSTEM_CAPABILITY_IDS_WITHOUT_BASH = FILESYSTEM_CAPABILITY_IDS.filter(
+  (id) => id !== FILESYSTEM_BASH_CAPABILITY_ID,
+);
+
 export interface FilesystemProviderConfig {
-  /** Root directory — all paths resolved relative to this, cannot escape. */
+  /** Root directory for file operations; bash cwd defaults here but shell access is not path-confined. */
   sandboxRoot: string;
+  /**
+   * Enable `tyrum.fs.bash`.
+   * Only use when the runtime already has a real OS/container sandbox.
+   */
+  allowBash?: boolean;
   /** Max output bytes (default 32_768). */
   maxResponseBytes?: number;
   /** Default bash timeout in ms (default 30_000). */
@@ -34,16 +44,23 @@ export interface FilesystemProviderConfig {
   maxExecTimeoutMs?: number;
 }
 
+export function resolveFilesystemCapabilityIds(input?: { allowBash?: boolean }): readonly string[] {
+  return input?.allowBash ? FILESYSTEM_CAPABILITY_IDS : FILESYSTEM_CAPABILITY_IDS_WITHOUT_BASH;
+}
+
 export class FilesystemProvider implements CapabilityProvider {
-  readonly capabilityIds = FILESYSTEM_CAPABILITY_IDS;
+  readonly capabilityIds: readonly string[];
 
   private readonly sandboxRoot: string;
+  private readonly allowBash: boolean;
   private readonly maxResponseBytes: number;
   private readonly defaultExecTimeoutMs: number;
   private readonly maxExecTimeoutMs: number;
 
   constructor(config: FilesystemProviderConfig) {
     this.sandboxRoot = resolve(config.sandboxRoot);
+    this.allowBash = config.allowBash ?? false;
+    this.capabilityIds = resolveFilesystemCapabilityIds({ allowBash: this.allowBash });
     this.maxResponseBytes = config.maxResponseBytes ?? 32_768;
     this.defaultExecTimeoutMs = config.defaultExecTimeoutMs ?? 30_000;
     this.maxExecTimeoutMs = config.maxExecTimeoutMs ?? 300_000;
@@ -65,6 +82,13 @@ export class FilesystemProvider implements CapabilityProvider {
         case "apply_patch":
           return await this.applyPatch(parsed.data);
         case "bash":
+          if (!this.allowBash) {
+            return {
+              success: false,
+              error:
+                "Filesystem bash is disabled. Enable it only when the runtime already provides OS/container sandboxing.",
+            };
+          }
           return await this.bash(parsed.data);
         case "glob":
           return await this.glob(parsed.data);

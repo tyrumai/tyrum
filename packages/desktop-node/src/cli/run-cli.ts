@@ -15,11 +15,13 @@ import {
   capabilityDescriptorsForClientCapability,
   BROWSER_AUTOMATION_CAPABILITY_IDS,
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-  FILESYSTEM_CAPABILITY_IDS,
 } from "@tyrum/schemas";
 
 import { DesktopProvider } from "../providers/desktop-provider.js";
-import { FilesystemProvider } from "../providers/filesystem-provider.js";
+import {
+  FilesystemProvider,
+  resolveFilesystemCapabilityIds,
+} from "../providers/filesystem-provider.js";
 import { NutJsDesktopBackend } from "../providers/backends/nutjs-desktop-backend.js";
 import { AtSpiDesktopA11yBackend } from "../providers/backends/atspi-a11y-backend.js";
 import { getTesseractOcrEngine } from "../providers/ocr/tesseract-engine.js";
@@ -126,6 +128,11 @@ function resolveFilesystemSandboxRoot(): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
+function resolveFilesystemBashEnabled(): boolean {
+  const raw = process.env["TYRUM_FS_BASH_ENABLED"]?.trim().toLowerCase();
+  return Boolean(raw && ["1", "true", "yes", "on"].includes(raw));
+}
+
 function hasDisplayServer(): boolean {
   if (process.platform === "darwin" || process.platform === "win32") return true;
   return Boolean(process.env["DISPLAY"]?.trim() || process.env["WAYLAND_DISPLAY"]?.trim());
@@ -157,11 +164,13 @@ function printHelp(): void {
       "  TYRUM_BROWSER_ENABLED     Enable browser automation (1/true/yes/on)",
       "  TYRUM_BROWSER_HEADLESS    Force headless browser mode (1/true/yes/on or 0/false/no/off)",
       "  TYRUM_FS_SANDBOX_ROOT     Enable filesystem capabilities rooted at this directory",
+      "  TYRUM_FS_BASH_ENABLED    Also advertise tyrum.fs.bash (only in a real OS/container sandbox)",
       "",
       "Notes:",
       "  - This node advertises the 'desktop' capability and executes tasks via @nut-tree-fork/nut-js.",
       "  - When --browser is set, also advertises browser automation capabilities via Playwright.",
-      "  - When TYRUM_FS_SANDBOX_ROOT is set, also advertises sandboxed filesystem capabilities.",
+      "  - TYRUM_FS_SANDBOX_ROOT roots file operations, but does not confine shell commands by itself.",
+      "  - TYRUM_FS_BASH_ENABLED should only be set when the runtime already has OS/container sandboxing.",
       "  - Use Docker desktop-sandbox profile (issue #786) for a full GUI + noVNC environment.",
     ].join("\n"),
   );
@@ -216,6 +225,7 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
 
   const browserEnabled = resolveBrowserEnabled(args.browser);
   const filesystemSandboxRoot = resolveFilesystemSandboxRoot();
+  const filesystemBashEnabled = resolveFilesystemBashEnabled();
   const browserDescriptors = browserEnabled
     ? BROWSER_AUTOMATION_CAPABILITY_IDS.map((id) => ({
         id,
@@ -223,7 +233,7 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
       }))
     : [];
   const filesystemDescriptors = filesystemSandboxRoot
-    ? FILESYSTEM_CAPABILITY_IDS.map((id) => ({
+    ? resolveFilesystemCapabilityIds({ allowBash: filesystemBashEnabled }).map((id) => ({
         id,
         version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
       }))
@@ -297,7 +307,12 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
 
   const providers: CapabilityProvider[] = [desktopProvider];
   if (filesystemSandboxRoot) {
-    providers.push(new FilesystemProvider({ sandboxRoot: filesystemSandboxRoot }));
+    providers.push(
+      new FilesystemProvider({
+        sandboxRoot: filesystemSandboxRoot,
+        allowBash: filesystemBashEnabled,
+      }),
+    );
   }
 
   let playwrightBackend: RealPlaywrightBackend | null = null;
