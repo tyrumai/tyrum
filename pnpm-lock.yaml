@@ -427,9 +427,6 @@ importers:
       '@tyrum/node-sdk':
         specifier: workspace:*
         version: link:../node-sdk
-      '@tyrum/transport-sdk':
-        specifier: workspace:*
-        version: link:../transport-sdk
       commander:
         specifier: ^14.0.3
         version: 14.0.3

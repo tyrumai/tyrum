@@ -6,6 +6,7 @@ import {
   type BrowserTyrumHttpClientOptions,
 } from "@tyrum/transport-sdk/browser";
 import type { OperatorAdminClient } from "./operator-core.types.js";
+import type { OperatorHttpClient } from "./deps.js";
 
 export * from "./index.js";
 export { autoExecute } from "@tyrum/node-sdk/browser";
@@ -51,10 +52,16 @@ export type * from "@tyrum/transport-sdk";
 export type OperatorAdminClientOptions = BrowserTyrumHttpClientOptions;
 export type OperatorCommandClientOptions = Pick<BrowserTyrumClientOptions, "url" | "token">;
 
+export function createOperatorHttpClient(
+  options: BrowserTyrumHttpClientOptions,
+): OperatorHttpClient {
+  return createTyrumHttpClient(options);
+}
+
 export function createOperatorAdminClient(
   options: OperatorAdminClientOptions,
 ): OperatorAdminClient {
-  return createTyrumHttpClient(options);
+  return createOperatorHttpClient(options);
 }
 
 export async function executeOperatorCommand(

@@ -13,8 +13,8 @@ const {
   createDeviceIdentityMock,
   createElevatedModeStoreMock,
   createOperatorCoreManagerMock,
+  createOperatorHttpClientMock,
   createAdminAccessControllerMock,
-  createTyrumHttpClientMock,
   gatewayGetOperatorConnectionMock,
   managerDisposeMock,
   retryingConnectionMock,
@@ -35,7 +35,7 @@ const {
   }));
   const storeDisposeMockInner = vi.fn();
   const createElevatedModeStoreMockInner = vi.fn(() => ({ dispose: storeDisposeMockInner }));
-  const createTyrumHttpClientMockInner = vi.fn(() => ({}));
+  const createOperatorHttpClientMockInner = vi.fn(() => ({}));
   const createOperatorCoreManagerMockInner = vi.fn(() => ({
     getCore: vi.fn(() => ({ connect: connectMockInner })),
     subscribe: managerSubscribeMockInner,
@@ -49,8 +49,8 @@ const {
     createAdminAccessControllerMock: createAdminAccessControllerMockInner,
     createDeviceIdentityMock: createDeviceIdentityMockInner,
     createElevatedModeStoreMock: createElevatedModeStoreMockInner,
+    createOperatorHttpClientMock: createOperatorHttpClientMockInner,
     createOperatorCoreManagerMock: createOperatorCoreManagerMockInner,
-    createTyrumHttpClientMock: createTyrumHttpClientMockInner,
     gatewayGetOperatorConnectionMock: gatewayGetOperatorConnectionMockInner,
     managerDisposeMock: managerDisposeMockInner,
     retryingConnectionMock: retryingConnectionMockInner,
@@ -66,9 +66,9 @@ vi.mock("@tyrum/operator-app", () => ({
   httpAuthForAuth: vi.fn((auth: unknown) => auth),
 }));
 
-vi.mock("@tyrum/transport-sdk/browser", () => ({
+vi.mock("@tyrum/operator-app/browser", () => ({
   createDeviceIdentity: createDeviceIdentityMock,
-  createTyrumHttpClient: createTyrumHttpClientMock,
+  createOperatorHttpClient: createOperatorHttpClientMock,
 }));
 
 vi.mock("@tyrum/operator-ui", () => ({

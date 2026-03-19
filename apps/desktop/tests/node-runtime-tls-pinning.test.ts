@@ -4,7 +4,7 @@ const { ctorSpy } = vi.hoisted(() => ({
   ctorSpy: vi.fn(),
 }));
 
-vi.mock("@tyrum/transport-sdk/node", () => {
+vi.mock("@tyrum/node-sdk/node", () => {
   class TyrumClient {
     on = vi.fn();
     connect = vi.fn();
@@ -17,17 +17,16 @@ vi.mock("@tyrum/transport-sdk/node", () => {
 
   return {
     TyrumClient,
+    createManagedNodeClientLifecycle: vi.fn(
+      (input: { client: unknown; providers?: unknown[] }) => ({
+        client: input.client,
+        connect: vi.fn(),
+        publishCapabilityState: vi.fn(),
+        dispose: vi.fn(),
+      }),
+    ),
   };
 });
-
-vi.mock("@tyrum/node-sdk/node", () => ({
-  createManagedNodeClientLifecycle: vi.fn((input: { client: unknown; providers?: unknown[] }) => ({
-    client: input.client,
-    connect: vi.fn(),
-    publishCapabilityState: vi.fn(),
-    dispose: vi.fn(),
-  })),
-}));
 
 describe("NodeRuntime remote TLS pinning", () => {
   it(
