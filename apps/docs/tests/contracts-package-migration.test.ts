@@ -22,8 +22,8 @@ const scanRoots = [
   "tsconfig.json",
   "vitest.config.ts",
 ] as const;
-const scannedExtensions = new Set([".json", ".md", ".mjs", ".ts", ".tsx"]);
-const scannedRootFiles = new Set(["Dockerfile", "pnpm-workspace.yaml"]);
+const scannedExtensions = new Set([".json", ".md", ".mjs", ".ts", ".tsx", ".yaml", ".yml"]);
+const scannedRootFiles = new Set(["Dockerfile"]);
 const ignoredScanFiles = new Set(["apps/docs/tests/contracts-package-migration.test.ts"]);
 
 function listTrackedFiles(): string[] {
@@ -44,6 +44,13 @@ describe("contracts package migration", () => {
 
     expect(trackedFiles).toContain("packages/contracts/package.json");
     expect(trackedFiles.some((path) => path.startsWith("packages/schemas/"))).toBe(false);
+  });
+
+  it("scans YAML workflow files for stale package references", () => {
+    const scannedFiles = listTrackedFiles().filter(shouldScanFile);
+
+    expect(scannedFiles).toContain(".github/workflows/release.yml");
+    expect(scannedFiles).toContain("pnpm-workspace.yaml");
   });
 
   it("uses @tyrum/contracts as the canonical contract package across tracked source and docs", async () => {
