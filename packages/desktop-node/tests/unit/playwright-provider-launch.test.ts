@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ActionPrimitive } from "@tyrum/schemas";
+import { BROWSER_AUTOMATION_CAPABILITY_IDS, type ActionPrimitive } from "@tyrum/schemas";
 import {
   PlaywrightProvider,
   type PlaywrightProviderConfig,
@@ -65,9 +65,9 @@ describe("PlaywrightProvider launch", () => {
     expect(backend.calls[1]).toMatchObject({ method: "launch", args: [{ headless: true }] });
   });
 
-  it("capabilityIds includes tyrum.browser.launch", () => {
+  it("capabilityIds matches the schema browser capability list", () => {
     const { provider } = makeProvider();
-    expect(provider.capabilityIds).toContain("tyrum.browser.launch");
+    expect(provider.capabilityIds).toEqual(BROWSER_AUTOMATION_CAPABILITY_IDS);
   });
 
   it("launch backend error is caught and returned as failure", async () => {

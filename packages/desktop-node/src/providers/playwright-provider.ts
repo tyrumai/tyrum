@@ -1,6 +1,9 @@
-import type { ActionPrimitive } from "@tyrum/schemas";
-import { checkPostcondition } from "@tyrum/schemas";
-import type { EvaluationContext } from "@tyrum/schemas";
+import {
+  BROWSER_AUTOMATION_CAPABILITY_IDS,
+  checkPostcondition,
+  type ActionPrimitive,
+  type EvaluationContext,
+} from "@tyrum/schemas";
 import type { CapabilityProvider, TaskResult } from "@tyrum/client";
 import type { PlaywrightBackend } from "./backends/playwright-backend.js";
 
@@ -11,30 +14,7 @@ export interface PlaywrightProviderConfig {
 }
 
 export class PlaywrightProvider implements CapabilityProvider {
-  readonly capabilityIds = [
-    "tyrum.browser.launch",
-    "tyrum.browser.navigate",
-    "tyrum.browser.navigate-back",
-    "tyrum.browser.snapshot",
-    "tyrum.browser.click",
-    "tyrum.browser.type",
-    "tyrum.browser.fill-form",
-    "tyrum.browser.select-option",
-    "tyrum.browser.hover",
-    "tyrum.browser.drag",
-    "tyrum.browser.press-key",
-    "tyrum.browser.screenshot",
-    "tyrum.browser.evaluate",
-    "tyrum.browser.wait-for",
-    "tyrum.browser.tabs",
-    "tyrum.browser.upload-file",
-    "tyrum.browser.console-messages",
-    "tyrum.browser.network-requests",
-    "tyrum.browser.resize",
-    "tyrum.browser.close",
-    "tyrum.browser.handle-dialog",
-    "tyrum.browser.run-code",
-  ] as const;
+  readonly capabilityIds = BROWSER_AUTOMATION_CAPABILITY_IDS;
 
   private config: PlaywrightProviderConfig;
 

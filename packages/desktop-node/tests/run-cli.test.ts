@@ -2,7 +2,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
-import { CAPABILITY_DESCRIPTOR_DEFAULT_VERSION, FILESYSTEM_CAPABILITY_IDS } from "@tyrum/schemas";
+import {
+  BROWSER_AUTOMATION_CAPABILITY_IDS,
+  CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+  FILESYSTEM_CAPABILITY_IDS,
+} from "@tyrum/schemas";
 
 const {
   clientCtorSpy,
@@ -313,6 +317,31 @@ describe("runCli", () => {
 
     const providers = autoExecuteSpy.mock.calls[0]?.[1] as unknown[];
     expect(providers).toHaveLength(2);
+  });
+
+  it("advertises browser capabilities from the schema list when browser mode is enabled", async () => {
+    vi.resetModules();
+    process.env["TYRUM_GATEWAY_TOKEN"] = "test-token";
+
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const { runCli } = await import("../src/cli/run-cli.js");
+    const code = await runWithSigterm(runCli(["--browser"]));
+
+    expect(code).toBe(0);
+    const opts = clientCtorSpy.mock.calls[0]?.[0] as {
+      advertisedCapabilities: Array<{ id: string; version: string }>;
+    };
+    expect(opts.advertisedCapabilities).toEqual(
+      expect.arrayContaining(
+        BROWSER_AUTOMATION_CAPABILITY_IDS.map((id) => ({
+          id,
+          version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+        })),
+      ),
+    );
+    expect(playwrightProviderCtorSpy).toHaveBeenCalledTimes(1);
   });
 
   it("closes the Playwright backend on shutdown when browser mode is enabled", async () => {
