@@ -146,6 +146,7 @@ describe("runCli", () => {
     TYRUM_NODE_MODE: process.env["TYRUM_NODE_MODE"],
     TYRUM_TAKEOVER_URL: process.env["TYRUM_TAKEOVER_URL"],
     TYRUM_DESKTOP_SANDBOX_TAKEOVER_URL: process.env["TYRUM_DESKTOP_SANDBOX_TAKEOVER_URL"],
+    TYRUM_BROWSER_ENABLED: process.env["TYRUM_BROWSER_ENABLED"],
     TYRUM_BROWSER_HEADLESS: process.env["TYRUM_BROWSER_HEADLESS"],
     TYRUM_FS_SANDBOX_ROOT: process.env["TYRUM_FS_SANDBOX_ROOT"],
     DISPLAY: process.env["DISPLAY"],
@@ -344,6 +345,21 @@ describe("runCli", () => {
         })),
       ),
     );
+    expect(playwrightProviderCtorSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("enables browser mode from TYRUM_BROWSER_ENABLED", async () => {
+    vi.resetModules();
+    process.env["TYRUM_GATEWAY_TOKEN"] = "test-token";
+    process.env["TYRUM_BROWSER_ENABLED"] = "1";
+
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const { runCli } = await import("../src/cli/run-cli.js");
+    const code = await runWithSigterm(runCli([]));
+
+    expect(code).toBe(0);
     expect(playwrightProviderCtorSpy).toHaveBeenCalledTimes(1);
   });
 
