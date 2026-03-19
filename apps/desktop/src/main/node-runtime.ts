@@ -8,11 +8,11 @@ import {
   type WsCapabilityReadyPayload,
 } from "@tyrum/contracts";
 import {
+  TyrumClient,
   createManagedNodeClientLifecycle,
   type CapabilityProvider,
   type ManagedNodeClientLifecycle,
 } from "@tyrum/node-sdk/node";
-import { TyrumClient } from "@tyrum/transport-sdk/node";
 import type { DesktopNodeConfig } from "./config/schema.js";
 import type { ResolvedPermissions } from "./config/permissions.js";
 import { saveConfig } from "./config/store.js";

@@ -9,8 +9,8 @@ import {
   type OperatorCore,
   type OperatorCoreManager,
 } from "@tyrum/operator-app";
+import { createDeviceIdentity, createOperatorHttpClient } from "@tyrum/operator-app/browser";
 import { createAdminAccessController, type AdminAccessController } from "@tyrum/operator-ui";
-import { createDeviceIdentity, createTyrumHttpClient } from "@tyrum/transport-sdk/browser";
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
 import { toErrorMessage } from "./errors.js";
 
@@ -106,7 +106,7 @@ function createDesktopOperatorCoreManager({
     baselineAuth,
     elevatedModeStore,
     createCore(coreOptions) {
-      const http = createTyrumHttpClient({
+      const http = createOperatorHttpClient({
         baseUrl: coreOptions.httpBaseUrl,
         auth: httpAuthForAuth(coreOptions.auth),
         fetch: ipcFetch,
@@ -126,7 +126,7 @@ function createDesktopOperatorCoreManager({
               return null;
             }
 
-            return createTyrumHttpClient({
+            return createOperatorHttpClient({
               baseUrl: coreOptions.httpBaseUrl,
               auth: { type: "bearer", token },
               fetch: ipcFetch,
@@ -150,7 +150,7 @@ function createDesktopElevatedModeController({
   elevatedModeStore: ElevatedModeStore;
 }): AdminAccessController {
   const baselineAuth = createBearerTokenAuth(connection.token);
-  const http = createTyrumHttpClient({
+  const http = createOperatorHttpClient({
     baseUrl: connection.httpBaseUrl,
     auth: httpAuthForAuth(baselineAuth),
     fetch: ipcFetch,

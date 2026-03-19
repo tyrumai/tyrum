@@ -11,6 +11,7 @@ describe("@tyrum/operator-app entrypoints", () => {
     const nodeEntry = (await import("../src/node.js")) as Record<string, unknown>;
 
     expect(typeof browserEntry["autoExecute"]).toBe("function");
+    expect(typeof browserEntry["createOperatorHttpClient"]).toBe("function");
     expect(typeof browserEntry["createManagedNodeClientLifecycle"]).toBe("function");
     expect(typeof browserEntry["TyrumClient"]).toBe("function");
     expect(typeof browserEntry["createBrowserLocalStorageDeviceIdentityStorage"]).toBe("function");
