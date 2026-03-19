@@ -1,8 +1,8 @@
 import {
+  ArtifactKind,
   ArtifactRef,
   artifactFilenameFromMetadata,
   artifactMediaClassFromMimeType,
-  type ArtifactKind,
   type ArtifactRef as ArtifactRefT,
 } from "@tyrum/contracts";
 import { randomUUID, createHash } from "node:crypto";
@@ -165,7 +165,11 @@ export class FsArtifactStore implements ArtifactStore {
     const { dataPath, metaPath } = this.paths(artifactId);
     try {
       const [body, metaRaw] = await Promise.all([readFile(dataPath), readFile(metaPath, "utf8")]);
-      const ref = ArtifactRef.parse(JSON.parse(metaRaw) as unknown);
+      const ref = parseStoredArtifactRef({
+        artifactId,
+        publicBaseUrl: this.publicBaseUrl,
+        candidate: JSON.parse(metaRaw) as unknown,
+      });
       return { ref, body };
     } catch (err) {
       const code = err && typeof err === "object" ? (err as { code?: string }).code : undefined;
@@ -227,14 +231,109 @@ type PresignGetObjectFn = (input: {
   expiresInSeconds: number;
 }) => Promise<string>;
 
-function parseArtifactManifest(artifactId: string, candidate: unknown): ArtifactManifestV1 {
+function parseStoredArtifactRef(input: {
+  artifactId: string;
+  publicBaseUrl: string;
+  candidate: unknown;
+}): ArtifactRefT {
+  const parsed = ArtifactRef.safeParse(input.candidate);
+  if (parsed.success) {
+    if (parsed.data.artifact_id !== input.artifactId) {
+      throw new Error(`invalid artifact metadata for ${input.artifactId}`);
+    }
+    return parsed.data;
+  }
+
+  if (!input.candidate || typeof input.candidate !== "object" || Array.isArray(input.candidate)) {
+    throw new Error(`invalid artifact metadata for ${input.artifactId}`);
+  }
+
+  const maybe = input.candidate as Partial<ArtifactRefT> & {
+    artifact_id?: unknown;
+    kind?: unknown;
+    created_at?: unknown;
+    uri?: unknown;
+    external_url?: unknown;
+    media_class?: unknown;
+    filename?: unknown;
+    mime_type?: unknown;
+    size_bytes?: unknown;
+    sha256?: unknown;
+    labels?: unknown;
+    metadata?: unknown;
+  };
+  const artifactId = typeof maybe.artifact_id === "string" ? maybe.artifact_id : input.artifactId;
+  if (artifactId !== input.artifactId) {
+    throw new Error(`invalid artifact metadata for ${input.artifactId}`);
+  }
+
+  const kind = ArtifactKind.safeParse(maybe.kind);
+  if (!kind.success || typeof maybe.created_at !== "string") {
+    throw new Error(`invalid artifact metadata for ${input.artifactId}`);
+  }
+
+  const mimeType =
+    typeof maybe.mime_type === "string" && maybe.mime_type.trim().length > 0
+      ? maybe.mime_type.trim()
+      : undefined;
+  const filename = artifactFilenameFromMetadata({
+    artifactId,
+    kind: kind.data,
+    filename: typeof maybe.filename === "string" ? maybe.filename : undefined,
+    mimeType,
+  });
+  const normalized = {
+    artifact_id: artifactId,
+    uri: typeof maybe.uri === "string" ? maybe.uri : artifactUri(artifactId),
+    external_url:
+      typeof maybe.external_url === "string"
+        ? maybe.external_url
+        : buildExternalUrl(input.publicBaseUrl, artifactId),
+    kind: kind.data,
+    media_class:
+      typeof maybe.media_class === "string" && maybe.media_class.trim().length > 0
+        ? maybe.media_class
+        : artifactMediaClassFromMimeType(mimeType, filename),
+    created_at: maybe.created_at,
+    filename,
+    ...(mimeType ? { mime_type: mimeType } : {}),
+    ...(typeof maybe.size_bytes === "number" ? { size_bytes: maybe.size_bytes } : {}),
+    ...(typeof maybe.sha256 === "string" ? { sha256: maybe.sha256 } : {}),
+    labels: Array.isArray(maybe.labels)
+      ? maybe.labels.filter((label): label is string => typeof label === "string")
+      : [],
+    ...("metadata" in maybe ? { metadata: maybe.metadata } : {}),
+  };
+
+  try {
+    return ArtifactRef.parse(normalized);
+  } catch (err) {
+    throw new Error(`invalid artifact metadata for ${input.artifactId}`, { cause: err });
+  }
+}
+
+function parseArtifactManifest(
+  artifactId: string,
+  publicBaseUrl: string,
+  candidate: unknown,
+): ArtifactManifestV1 {
   const maybe = candidate as Partial<ArtifactManifestV1> | null;
   if (!maybe || maybe.v !== 1 || typeof maybe.blob_key !== "string" || !maybe.ref) {
     throw new Error(`invalid artifact manifest for ${artifactId}`);
   }
+  let ref: ArtifactRefT;
+  try {
+    ref = parseStoredArtifactRef({
+      artifactId,
+      publicBaseUrl,
+      candidate: maybe.ref,
+    });
+  } catch (err) {
+    throw new Error(`invalid artifact manifest for ${artifactId}`, { cause: err });
+  }
   return {
     v: 1,
-    ref: ArtifactRef.parse(maybe.ref),
+    ref,
     blob_key: maybe.blob_key,
   };
 }
@@ -309,7 +408,7 @@ export class S3ArtifactStore implements ArtifactStore {
       } catch (err) {
         throw new Error(`invalid artifact manifest for ${artifactId}`, { cause: err });
       }
-      parsedManifest = parseArtifactManifest(artifactId, candidate);
+      parsedManifest = parseArtifactManifest(artifactId, this.publicBaseUrl, candidate);
     } catch (err) {
       if (isNoSuchKey(err)) return null;
       throw err;
@@ -401,6 +500,7 @@ export class S3ArtifactStore implements ArtifactStore {
       const manifestBuf = await bodyToBuffer(manifestRes.Body);
       const parsed = parseArtifactManifest(
         artifactId,
+        this.publicBaseUrl,
         JSON.parse(manifestBuf.toString("utf8")) as unknown,
       );
 
