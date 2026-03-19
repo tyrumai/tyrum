@@ -41,6 +41,7 @@ import {
   buildDelegationStreamResult,
   buildDirectPromptMessages,
   createDirectTurnDownloadFunction,
+  pruneDirectPromptMessages,
   reloadActiveSession,
 } from "./turn-direct-runtime.js";
 export {
@@ -165,12 +166,7 @@ export async function turnDirect(
     threadId: resolved.thread_id,
   });
   activeSession = await reloadActiveSession(deps, activeSession);
-  let messages: ModelMessage[] = await buildDirectPromptMessages({
-    activeSession,
-    contextPruning: ctx.config.sessions.context_pruning,
-    rewriteHistoryAttachmentsForModel,
-    userContent,
-  });
+  let messages: ModelMessage[] | undefined;
   let stepsUsedSoFar = 0;
 
   const stepApprovalId = turnOpts?.execution?.stepApprovalId;
@@ -189,20 +185,31 @@ export async function turnDirect(
           memoryWriteState.wrote = true;
         }
         stepsUsedSoFar = resumeState.steps_used ?? countAssistantMessages(resumeState.messages);
-        messages = appendToolApprovalResponseMessage(resumeState.messages, {
-          approvalId: resumeState.approval_id,
-          approved: approval.status === "approved",
-          reason:
-            approval.latest_review?.reason ??
-            (approval.status === "expired"
-              ? "approval expired"
-              : approval.status === "cancelled"
-                ? "approval cancelled"
-                : undefined),
-        });
+        messages = pruneDirectPromptMessages(
+          appendToolApprovalResponseMessage(resumeState.messages, {
+            approvalId: resumeState.approval_id,
+            approved: approval.status === "approved",
+            reason:
+              approval.latest_review?.reason ??
+              (approval.status === "expired"
+                ? "approval expired"
+                : approval.status === "cancelled"
+                  ? "approval cancelled"
+                  : undefined),
+          }),
+          ctx.config.sessions.context_pruning,
+        );
       }
     }
   }
+  const promptMessages =
+    messages ??
+    (await buildDirectPromptMessages({
+      activeSession,
+      contextPruning: ctx.config.sessions.context_pruning,
+      rewriteHistoryAttachmentsForModel,
+      userContent,
+    }));
 
   const remainingSteps = deps.maxSteps - stepsUsedSoFar;
   if (remainingSteps <= 0) {
@@ -231,7 +238,7 @@ export async function turnDirect(
     result = await generateText({
       model,
       system: systemPrompt,
-      messages,
+      messages: promptMessages,
       experimental_download: downloadPartUrl,
       tools: toolSet,
       toolChoice: guardianReviewTurnControl?.toolChoice,
@@ -282,7 +289,7 @@ export async function turnDirect(
       usedTools,
       memoryWriteState,
       stepsUsedAfterCall,
-      messages,
+      promptMessages,
       result,
     );
   }

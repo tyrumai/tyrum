@@ -7,6 +7,12 @@ const finalizeTurnMock = vi.hoisted(() => vi.fn());
 const compactForOverflowMock = vi.hoisted(() => vi.fn());
 const maybeAutoCompactSessionMock = vi.hoisted(() => vi.fn());
 const extractToolApprovalResumeStateMock = vi.hoisted(() => vi.fn(() => undefined));
+const appendToolApprovalResponseMessageMock = vi.hoisted(() =>
+  vi.fn((messages: unknown) => messages),
+);
+const applyDeterministicContextCompactionAndToolPruningMock = vi.hoisted(() =>
+  vi.fn((messages: unknown) => messages),
+);
 const sessionMessagesToModelMessagesMock = vi.hoisted(() => vi.fn(async () => []));
 const buildPromptVisibleMessagesMock = vi.hoisted(() => vi.fn((messages: unknown) => messages));
 
@@ -61,13 +67,14 @@ vi.mock("../../src/modules/agent/runtime/automation-delivery.js", () => ({
 }));
 
 vi.mock("../../src/modules/ai-sdk/message-utils.js", () => ({
-  appendToolApprovalResponseMessage: vi.fn((messages: unknown) => messages),
+  appendToolApprovalResponseMessage: appendToolApprovalResponseMessageMock,
   countAssistantMessages: vi.fn(() => 0),
   sessionMessagesToModelMessages: sessionMessagesToModelMessagesMock,
 }));
 
 vi.mock("../../src/modules/agent/runtime/context-pruning.js", () => ({
-  applyDeterministicContextCompactionAndToolPruning: vi.fn((messages: unknown) => messages),
+  applyDeterministicContextCompactionAndToolPruning:
+    applyDeterministicContextCompactionAndToolPruningMock,
 }));
 
 vi.mock("../../src/modules/agent/runtime/session-context-state.js", () => ({
@@ -381,6 +388,14 @@ describe("turnDirect approval resume state", () => {
     finalizeTurnMock.mockReset();
     maybeAutoCompactSessionMock.mockReset();
     extractToolApprovalResumeStateMock.mockReset();
+    appendToolApprovalResponseMessageMock.mockReset();
+    appendToolApprovalResponseMessageMock.mockImplementation((messages: unknown) => messages);
+    applyDeterministicContextCompactionAndToolPruningMock.mockReset();
+    applyDeterministicContextCompactionAndToolPruningMock.mockImplementation(
+      (messages: unknown) => messages,
+    );
+    sessionMessagesToModelMessagesMock.mockReset();
+    sessionMessagesToModelMessagesMock.mockResolvedValue([]);
   });
 
   it("restores memory_written from approval resume state", async () => {
@@ -416,6 +431,70 @@ describe("turnDirect approval resume state", () => {
     });
 
     expect(finalizeTurnMock).toHaveBeenCalledWith(expect.objectContaining({ memoryWritten: true }));
+  });
+
+  it("prunes approval resume messages after appending the approval response", async () => {
+    prepareTurnMock.mockResolvedValue(samplePreparedTurn(new Set()));
+    const resumeMessages = [
+      {
+        role: "assistant" as const,
+        content: [{ type: "text", text: "resume assistant" }],
+      },
+    ];
+    const resumedWithApproval = [
+      ...resumeMessages,
+      {
+        role: "tool" as const,
+        content: [{ type: "tool-approval-response", approvalId: "approval-1", approved: true }],
+      },
+    ];
+    extractToolApprovalResumeStateMock.mockReturnValue({
+      approval_id: "approval-1",
+      messages: resumeMessages,
+      memory_written: false,
+      used_tools: [],
+      steps_used: 0,
+    });
+    appendToolApprovalResponseMessageMock.mockReturnValue(resumedWithApproval);
+    applyDeterministicContextCompactionAndToolPruningMock.mockReturnValue(resumedWithApproval);
+    generateTextMock.mockResolvedValue({
+      text: "ok",
+      steps: [],
+      totalUsage: undefined,
+      response: { messages: [] },
+    });
+    finalizeTurnMock.mockResolvedValue({ reply: "ok" });
+
+    const deps = sampleDeps();
+    deps.approvalDal = {
+      getById: vi.fn(async () => ({
+        status: "approved",
+        context: {},
+        resolution: null,
+      })),
+    } as never;
+
+    const { turnDirect } = await import("../../src/modules/agent/runtime/turn-direct.js");
+
+    await turnDirect(deps, { channel: "ui", thread_id: "thread-1", message: "hello" } as never, {
+      execution: { stepApprovalId: "approval-1" } as never,
+    });
+
+    expect(appendToolApprovalResponseMessageMock).toHaveBeenCalledWith(resumeMessages, {
+      approvalId: "approval-1",
+      approved: true,
+      reason: undefined,
+    });
+    expect(applyDeterministicContextCompactionAndToolPruningMock).toHaveBeenCalledWith(
+      resumedWithApproval,
+      {},
+    );
+    expect(sessionMessagesToModelMessagesMock).not.toHaveBeenCalled();
+    expect(generateTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messages: resumedWithApproval,
+      }),
+    );
   });
 });
 

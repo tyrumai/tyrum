@@ -21,6 +21,13 @@ type ActiveSession = {
 type UserContent = Parameters<typeof stripEmbeddedSessionContext>[0];
 type ContextPruningConfig = Parameters<typeof applyDeterministicContextCompactionAndToolPruning>[1];
 
+export function pruneDirectPromptMessages(
+  messages: ModelMessage[],
+  contextPruning: ContextPruningConfig,
+): ModelMessage[] {
+  return applyDeterministicContextCompactionAndToolPruning(messages, contextPruning);
+}
+
 export function createDirectTurnDownloadFunction(deps: TurnDirectDeps) {
   return createAttachmentDownloadFunction({
     fetchImpl: deps.prepareTurnDeps.fetchImpl,
@@ -57,7 +64,7 @@ export async function buildDirectPromptMessages(input: {
     ? rewriteHistoryMessagesForHelperMode(promptVisibleMessages)
     : promptVisibleMessages;
 
-  return applyDeterministicContextCompactionAndToolPruning(
+  return pruneDirectPromptMessages(
     [
       ...(await sessionMessagesToModelMessages(historyMessages)),
       { role: "user" as const, content: promptUserContent },

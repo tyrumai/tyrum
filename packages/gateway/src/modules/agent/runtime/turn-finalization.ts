@@ -229,12 +229,6 @@ export async function finalizeTurn(input: {
     const assistantAttachmentParts = assistantArtifacts
       .map((artifact) => createArtifactFilePart(artifact))
       .filter((part): part is NonNullable<typeof part> => part !== undefined);
-    const nextMessages = await materializeStoredMessageFiles(
-      [...input.session.messages, currentUserMessage],
-      input.container.artifactStore,
-      undefined,
-      artifactRecordScope,
-    );
     const appendedWithAttachments =
       assistantAttachmentParts.length > 0
         ? [
@@ -246,7 +240,10 @@ export async function finalizeTurn(input: {
             },
           ]
         : appendedMessages;
-    const mergedMessages = appendWithoutDuplicateOverlap(nextMessages, appendedWithAttachments);
+    const mergedMessages = appendWithoutDuplicateOverlap(
+      [...input.session.messages, currentUserMessage],
+      appendedWithAttachments,
+    );
     await input.sessionDal.replaceMessages({
       tenantId: input.session.tenant_id,
       sessionId: input.session.session_id,
