@@ -1,6 +1,6 @@
 import { expect, vi } from "vitest";
 import type * as OperatorApp from "@tyrum/operator-app";
-import type * as TransportBrowser from "@tyrum/transport-sdk/browser";
+import type * as OperatorAppBrowser from "@tyrum/operator-app/browser";
 import type * as UrlAuthModule from "../src/url-auth.js";
 
 vi.mock("@tyrum/operator-app", () => ({
@@ -13,7 +13,7 @@ vi.mock("@tyrum/operator-app", () => ({
   httpAuthForAuth: vi.fn(),
 }));
 
-vi.mock("@tyrum/transport-sdk/browser", () => ({
+vi.mock("@tyrum/operator-app/browser", () => ({
   createDeviceIdentity: vi.fn(),
   createTyrumHttpClient: vi.fn(),
 }));
@@ -48,7 +48,7 @@ vi.mock("../src/reload-page.js", () => ({
   reloadPage: vi.fn(),
 }));
 
-type OperatorCoreBrowserModule = typeof OperatorApp & typeof TransportBrowser;
+type OperatorCoreBrowserModule = typeof OperatorApp & typeof OperatorAppBrowser;
 type UrlAuthModuleT = typeof UrlAuthModule;
 
 export type RootMock = { render: ReturnType<typeof vi.fn> };
@@ -164,8 +164,8 @@ export function expectDisposedOnUnload(params: {
 export async function arrangeBootstrap(initialUrl: string) {
   const replaceStateSpy = setupDom(initialUrl);
   const operatorApp = await import("@tyrum/operator-app");
-  const transportBrowser = await import("@tyrum/transport-sdk/browser");
-  const operatorCore = { ...operatorApp, ...transportBrowser } as OperatorCoreBrowserModule;
+  const operatorAppBrowser = await import("@tyrum/operator-app/browser");
+  const operatorCore = { ...operatorApp, ...operatorAppBrowser } as OperatorCoreBrowserModule;
   const reloadPage = await import("../src/reload-page.js");
   const urlAuth = await import("../src/url-auth.js");
   const reactDomClient = await import("react-dom/client");
@@ -179,8 +179,10 @@ export async function arrangeBootstrap(initialUrl: string) {
     publicKey: "test-public-key",
     privateKey: "test-private-key",
   };
-  vi.mocked(transportBrowser.createDeviceIdentity).mockResolvedValue(
-    deviceIdentity as unknown as Awaited<ReturnType<typeof transportBrowser.createDeviceIdentity>>,
+  vi.mocked(operatorAppBrowser.createDeviceIdentity).mockResolvedValue(
+    deviceIdentity as unknown as Awaited<
+      ReturnType<typeof operatorAppBrowser.createDeviceIdentity>
+    >,
   );
   vi.mocked(operatorApp.createOperatorCore).mockReturnValue({} as never);
   vi.mocked(operatorApp.createGatewayAuthSession).mockResolvedValue(
@@ -190,7 +192,7 @@ export async function arrangeBootstrap(initialUrl: string) {
     new Response(null, { status: 204 }),
   );
   vi.mocked(operatorApp.httpAuthForAuth).mockReturnValue({ type: "bearer", token: "baseline" });
-  vi.mocked(transportBrowser.createTyrumHttpClient).mockReturnValue({
+  vi.mocked(operatorAppBrowser.createTyrumHttpClient).mockReturnValue({
     deviceTokens: { issue: vi.fn(), revoke: vi.fn() },
   } as never);
   vi.mocked(operatorApp.createBearerTokenAuth).mockImplementation(((token: string) => ({

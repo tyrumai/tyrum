@@ -9,7 +9,7 @@ import {
   createOperatorCoreManager,
   httpAuthForAuth,
 } from "@tyrum/operator-app";
-import { createDeviceIdentity, createTyrumHttpClient } from "@tyrum/transport-sdk/browser";
+import { createDeviceIdentity, createTyrumHttpClient } from "@tyrum/operator-app/browser";
 import {
   createAdminAccessController,
   OperatorUiApp,

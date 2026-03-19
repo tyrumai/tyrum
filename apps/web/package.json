@@ -13,10 +13,8 @@
     "typecheck": "pnpm exec tsc --noEmit --project tsconfig.json"
   },
   "dependencies": {
-    "@tyrum/contracts": "workspace:*",
     "@tyrum/operator-app": "workspace:*",
     "@tyrum/operator-ui": "workspace:*",
-    "@tyrum/transport-sdk": "workspace:*",
     "react": "^19.2.4",
     "react-dom": "^19.2.4"
   },

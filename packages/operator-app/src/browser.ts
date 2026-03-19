@@ -12,6 +12,7 @@ export { autoExecute } from "@tyrum/node-sdk/browser";
 export { createManagedNodeClientLifecycle };
 export {
   createBrowserLocalStorageDeviceIdentityStorage,
+  createTyrumHttpClient,
   createDeviceIdentity,
   formatDeviceIdentityError,
   loadOrCreateDeviceIdentity,

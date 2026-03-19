@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@tyrum/contracts", () => ({
+vi.mock("../../../../apps/web/src/browser-node/browser-runtime.js", () => ({
   BrowserActionArgs: {
     safeParse(input: unknown) {
       if (!input || typeof input !== "object" || Array.isArray(input)) {

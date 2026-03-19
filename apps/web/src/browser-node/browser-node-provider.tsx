@@ -1,18 +1,17 @@
 import {
+  Alert,
   BrowserNodeProvider as BrowserNodeContextProvider,
-  type BrowserNodeApi,
-} from "../../../../packages/operator-ui/src/browser-node/browser-node-provider.js";
-import { Alert } from "../../../../packages/operator-ui/src/components/ui/alert.js";
-import { Button } from "../../../../packages/operator-ui/src/components/ui/button.js";
-import {
+  Button,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "../../../../packages/operator-ui/src/components/ui/dialog.js";
+  type BrowserNodeApi,
+} from "@tyrum/operator-ui";
 import {
+  BrowserActionArgs,
   createManagedNodeClientLifecycle,
   createBrowserLocalStorageDeviceIdentityStorage,
   formatDeviceIdentityError,
@@ -21,7 +20,6 @@ import {
   type ManagedNodeClientLifecycle,
   type TaskResult,
 } from "./browser-runtime.js";
-import { BrowserActionArgs } from "@tyrum/contracts";
 import {
   useCallback,
   useEffect,
