@@ -356,6 +356,12 @@ async function handleChatSessionSendMessage(
               await validateSubmittedTurnMessages(parsed.data.payload.messages),
               deps.artifactStore,
               deps.artifactMaxUploadBytes,
+              {
+                db: deps.db,
+                tenantId: auth.tenantId,
+                workspaceId: looked.session.workspace_id,
+                agentId: looked.session.agent_id,
+              },
             )
           : await validateSubmittedTurnMessages(parsed.data.payload.messages)
         : undefined;

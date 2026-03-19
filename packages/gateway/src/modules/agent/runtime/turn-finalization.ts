@@ -20,7 +20,10 @@ import {
 } from "../../ai-sdk/attachment-parts.js";
 import { normalizeSessionTitle } from "../session-dal-helpers.js";
 
-type FinalizeContainer = Pick<GatewayContainer, "artifactStore" | "contextReportDal" | "logger">;
+type FinalizeContainer = Pick<
+  GatewayContainer,
+  "artifactStore" | "contextReportDal" | "db" | "logger"
+>;
 
 function messagesEqualIgnoringId(left: TyrumUIMessage, right: TyrumUIMessage): boolean {
   return left.role === right.role && JSON.stringify(left.parts) === JSON.stringify(right.parts);
@@ -203,6 +206,12 @@ export async function finalizeTurn(input: {
   const finalizedReply = applyCrossTurnLoopWarning(input);
   const memoryWritten = input.turnKind !== "skip" && input.memoryWritten;
   let responseAttachments: AgentTurnResponseT["attachments"] = [];
+  const artifactRecordScope = {
+    db: input.container.db,
+    tenantId: input.session.tenant_id,
+    workspaceId: input.session.workspace_id,
+    agentId: input.session.agent_id,
+  };
 
   await persistContextReport(input);
   let updatedSession: SessionRow;
@@ -223,6 +232,8 @@ export async function finalizeTurn(input: {
     const nextMessages = await materializeStoredMessageFiles(
       [...input.session.messages, currentUserMessage],
       input.container.artifactStore,
+      undefined,
+      artifactRecordScope,
     );
     const appendedWithAttachments =
       assistantAttachmentParts.length > 0
@@ -239,7 +250,12 @@ export async function finalizeTurn(input: {
     await input.sessionDal.replaceMessages({
       tenantId: input.session.tenant_id,
       sessionId: input.session.session_id,
-      messages: await materializeStoredMessageFiles(mergedMessages, input.container.artifactStore),
+      messages: await materializeStoredMessageFiles(
+        mergedMessages,
+        input.container.artifactStore,
+        undefined,
+        artifactRecordScope,
+      ),
       updatedAt: nowIso,
     });
     updatedSession =
@@ -258,6 +274,8 @@ export async function finalizeTurn(input: {
         createTextChatMessage({ role: "assistant", text: finalizedReply }),
       ],
       input.container.artifactStore,
+      undefined,
+      artifactRecordScope,
     );
     await input.sessionDal.replaceMessages({
       tenantId: input.session.tenant_id,

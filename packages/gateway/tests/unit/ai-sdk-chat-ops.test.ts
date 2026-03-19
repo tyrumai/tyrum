@@ -10,6 +10,7 @@ import {
   type WsResponseOkEnvelope,
 } from "@tyrum/contracts";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
+import { extractArtifactIdFromUrl } from "../../src/modules/artifact/dal.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { handleAiSdkChatMessage } from "../../src/ws/protocol/ai-sdk-chat-ops.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
@@ -285,5 +286,138 @@ describe("ai-sdk chat ops", () => {
     });
 
     expect(erroredSession.session.messages.at(-1)?.role).toBe("assistant");
+  });
+
+  it("persists uploaded chat files as artifact records before linking them to the session", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-ai-sdk-chat-ops-"));
+    container = createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+      tyrumHome: homeDir,
+    });
+
+    const connectionManager = new ConnectionManager();
+    const { id } = makeClient(connectionManager, []);
+    const client = connectionManager.getClient(id);
+    expect(client).toBeTruthy();
+
+    const session = await container.sessionDal.getOrCreate({
+      tenantId: DEFAULT_TENANT_ID,
+      scopeKeys: { agentKey: "default", workspaceKey: "default" },
+      connectorKey: "ui",
+      providerThreadId: "ui-thread-upload",
+      containerKind: "channel",
+    });
+
+    const runtime = {
+      turnStream: vi.fn(async () => ({
+        finalize: vi.fn(async () => undefined),
+        streamResult: {
+          toUIMessageStream: () => createChunkStream([]),
+        },
+      })),
+    };
+    const deps = makeDeps(connectionManager, {
+      agents: {
+        getRuntime: vi.fn(async () => runtime),
+      } as never,
+      artifactMaxUploadBytes: 1024,
+      artifactStore: container.artifactStore,
+      db: container.db,
+      logger: createSpyLogger(),
+      redactionEngine: container.redactionEngine,
+    });
+
+    const response = await handleAiSdkChatMessage(
+      client!,
+      {
+        request_id: "req-send-upload-1",
+        type: "chat.session.send",
+        payload: {
+          session_id: session.session_key,
+          messages: [
+            {
+              id: "user-upload-1",
+              role: "user",
+              parts: [
+                {
+                  type: "file",
+                  url: "data:text/plain;base64,aGVsbG8=",
+                  mediaType: "text/plain",
+                  filename: "hello.txt",
+                },
+              ],
+            },
+          ],
+          trigger: "submit-message",
+        },
+      } as never,
+      deps,
+    );
+
+    readOkResult<{ stream_id: string }>(response);
+    expect(runtime.turnStream).toHaveBeenCalledWith(
+      expect.objectContaining({
+        parts: [
+          expect.objectContaining({
+            type: "file",
+            url: expect.stringMatching(/\/a\//),
+            filename: "hello.txt",
+            mediaType: "text/plain",
+          }),
+        ],
+      }),
+    );
+
+    const updated = await waitFor(async () => {
+      const candidate = await container?.sessionDal.getById({
+        tenantId: session.tenant_id,
+        sessionId: session.session_id,
+      });
+      const url = candidate?.messages.at(-1)?.parts[0];
+      return url?.type === "file" && typeof url.url === "string" ? candidate : undefined;
+    });
+
+    const filePart = updated.messages.at(-1)?.parts[0];
+    expect(filePart?.type).toBe("file");
+    if (filePart?.type !== "file") {
+      throw new Error("expected a persisted file part");
+    }
+    expect(filePart.url.startsWith("data:")).toBe(false);
+    const artifactId = extractArtifactIdFromUrl(filePart.url);
+    expect(artifactId).toBeTruthy();
+    if (!artifactId) {
+      throw new Error("expected an artifact-backed file URL");
+    }
+
+    const artifactRow = await container.db.get<{
+      agent_id: string | null;
+      filename: string | null;
+      mime_type: string | null;
+      workspace_id: string;
+    }>(
+      `SELECT agent_id, workspace_id, filename, mime_type
+       FROM artifacts
+       WHERE tenant_id = ? AND artifact_id = ?`,
+      [session.tenant_id, artifactId],
+    );
+    expect(artifactRow).toEqual({
+      agent_id: session.agent_id,
+      workspace_id: session.workspace_id,
+      filename: "hello.txt",
+      mime_type: "text/plain",
+    });
+
+    const links = await container.db.all<{ parent_id: string; parent_kind: string }>(
+      `SELECT parent_kind, parent_id
+       FROM artifact_links
+       WHERE tenant_id = ? AND artifact_id = ?
+       ORDER BY parent_kind ASC, parent_id ASC`,
+      [session.tenant_id, artifactId],
+    );
+    expect(links).toEqual([
+      { parent_kind: "chat_message", parent_id: "user-upload-1" },
+      { parent_kind: "chat_session", parent_id: session.session_id },
+    ]);
   });
 });

@@ -6,17 +6,35 @@ function sampleInput(responseMessages: readonly ModelMessage[]) {
   const sessionId = "11111111-1111-4111-8111-111111111111";
   const replaceMessages = vi.fn(async () => undefined);
   const getById = vi.fn(async () => ({
+    agent_id: "agent-1",
+    archived: false,
+    channel_thread_id: "thread-1",
+    context_state: {
+      version: 1,
+      recent_message_ids: [],
+      checkpoint: null,
+      pending_approvals: [],
+      pending_tool_state: [],
+      updated_at: "2026-03-13T00:00:00.000Z",
+    },
+    created_at: "2026-03-13T00:00:00.000Z",
     tenant_id: "tenant-1",
     session_id: sessionId,
     session_key: "agent:agent-1:main",
+    summary: "",
     title: "Existing title",
+    transcript: [],
+    updated_at: "2026-03-13T00:00:00.000Z",
+    workspace_id: "workspace-1",
     messages: [],
   }));
 
   return {
     args: {
       container: {
+        artifactStore: undefined as never,
         contextReportDal: { insert: vi.fn(async () => undefined) },
+        db: {} as never,
         logger: { warn: vi.fn(), info: vi.fn() },
       },
       sessionDal: {
@@ -40,10 +58,26 @@ function sampleInput(responseMessages: readonly ModelMessage[]) {
         },
       },
       session: {
+        agent_id: "agent-1",
+        archived: false,
+        channel_thread_id: "thread-1",
+        context_state: {
+          version: 1,
+          recent_message_ids: [],
+          checkpoint: null,
+          pending_approvals: [],
+          pending_tool_state: [],
+          updated_at: "2026-03-13T00:00:00.000Z",
+        },
+        created_at: "2026-03-13T00:00:00.000Z",
         tenant_id: "tenant-1",
         session_id: sessionId,
         session_key: "agent:agent-1:main",
+        summary: "",
         title: "Existing title",
+        transcript: [],
+        updated_at: "2026-03-13T00:00:00.000Z",
+        workspace_id: "workspace-1",
         messages: [],
       },
       resolved: {

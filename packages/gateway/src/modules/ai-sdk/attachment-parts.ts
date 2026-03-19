@@ -7,6 +7,8 @@ import {
   type TyrumUIMessage,
   type TyrumUIMessagePart,
 } from "@tyrum/contracts";
+import type { SqlDb } from "../../statestore/types.js";
+import { insertArtifactRecordTx } from "../artifact/dal.js";
 import type { ArtifactStore } from "../artifact/store.js";
 
 export type FileMessagePart = TyrumUIMessagePart & {
@@ -19,6 +21,13 @@ export type FileMessagePart = TyrumUIMessagePart & {
 type TextMessagePart = TyrumUIMessagePart & {
   type: "text";
   text: string;
+};
+
+export type MaterializedArtifactRecordScope = {
+  db: SqlDb;
+  tenantId: string;
+  workspaceId: string;
+  agentId: string | null;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -57,6 +66,7 @@ async function materializeFilePart(
   part: FileMessagePart,
   artifactStore: ArtifactStore,
   maxUploadBytes?: number,
+  artifactRecordScope?: MaterializedArtifactRecordScope,
 ): Promise<FileMessagePart> {
   const parsed = parseDataUrl(part.url);
   if (!parsed) {
@@ -80,6 +90,18 @@ async function materializeFilePart(
   if (!artifact.external_url) {
     throw new Error(`artifact '${artifact.artifact_id}' is missing external_url`);
   }
+  if (artifactRecordScope) {
+    await artifactRecordScope.db.transaction(async (tx) => {
+      await insertArtifactRecordTx(tx, {
+        artifact,
+        tenantId: artifactRecordScope.tenantId,
+        workspaceId: artifactRecordScope.workspaceId,
+        agentId: artifactRecordScope.agentId,
+        sensitivity: "normal",
+        policySnapshotId: null,
+      });
+    });
+  }
 
   return {
     ...part,
@@ -93,6 +115,7 @@ export async function materializeUiMessagesUploadedFiles(
   messages: readonly UIMessage[],
   artifactStore: ArtifactStore | undefined,
   maxUploadBytes?: number,
+  artifactRecordScope?: MaterializedArtifactRecordScope,
 ): Promise<UIMessage[]> {
   if (!artifactStore) {
     return messages.map((message) => ({
@@ -110,6 +133,7 @@ export async function materializeUiMessagesUploadedFiles(
             part as FileMessagePart,
             artifactStore,
             maxUploadBytes,
+            artifactRecordScope,
           )) as unknown as UIMessage["parts"][number],
         );
         continue;
@@ -125,6 +149,7 @@ export async function materializeStoredMessageFiles(
   messages: readonly TyrumUIMessage[],
   artifactStore: ArtifactStore | undefined,
   maxUploadBytes?: number,
+  artifactRecordScope?: MaterializedArtifactRecordScope,
 ): Promise<TyrumUIMessage[]> {
   if (!artifactStore) {
     return messages.map((message) => ({
@@ -137,7 +162,9 @@ export async function materializeStoredMessageFiles(
     const nextParts: TyrumUIMessagePart[] = [];
     for (const part of message.parts) {
       if (isFileMessagePart(part)) {
-        nextParts.push(await materializeFilePart(part, artifactStore, maxUploadBytes));
+        nextParts.push(
+          await materializeFilePart(part, artifactStore, maxUploadBytes, artifactRecordScope),
+        );
         continue;
       }
       nextParts.push(part);
