@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
-import { dirname, extname, resolve } from "node:path";
+import { basename, dirname, extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
@@ -23,7 +23,7 @@ const scanRoots = [
   "vitest.config.ts",
 ] as const;
 const scannedExtensions = new Set([".json", ".md", ".mjs", ".ts", ".tsx", ".yaml", ".yml"]);
-const scannedRootFiles = new Set(["Dockerfile"]);
+const scannedBasenames = new Set(["Dockerfile"]);
 const ignoredScanFiles = new Set(["apps/docs/tests/contracts-package-migration.test.ts"]);
 
 function listTrackedFiles(): string[] {
@@ -35,7 +35,7 @@ function listTrackedFiles(): string[] {
 
 function shouldScanFile(path: string): boolean {
   if (ignoredScanFiles.has(path)) return false;
-  return scannedRootFiles.has(path) || scannedExtensions.has(extname(path));
+  return scannedBasenames.has(basename(path)) || scannedExtensions.has(extname(path));
 }
 
 describe("contracts package migration", () => {
@@ -51,6 +51,13 @@ describe("contracts package migration", () => {
 
     expect(scannedFiles).toContain(".github/workflows/release.yml");
     expect(scannedFiles).toContain("pnpm-workspace.yaml");
+  });
+
+  it("scans nested Dockerfiles for stale package references", () => {
+    const scannedFiles = listTrackedFiles().filter(shouldScanFile);
+
+    expect(scannedFiles).toContain("Dockerfile");
+    expect(scannedFiles).toContain("docker/desktop-sandbox/Dockerfile");
   });
 
   it("uses @tyrum/contracts as the canonical contract package across tracked source and docs", async () => {
