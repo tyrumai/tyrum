@@ -190,15 +190,14 @@ class TelegramPollingWorker {
         this.abortController?.abort();
       },
     });
+    let primaryError: unknown = null;
     try {
       const pollingAccount = await this.loadPollingAccount();
       const bot = this.deps.runtime.getBotForTelegramAccount({
         tenantId: this.deps.tenantId,
         account: pollingAccount,
       });
-      if (!bot) {
-        throw new Error("Telegram bot token is required for polling mode");
-      }
+      if (!bot) throw new Error("Telegram bot token is required for polling mode");
 
       const botUserId = await this.getBotUserId(bot);
       const state = await this.deps.stateDal.get({
@@ -272,9 +271,7 @@ class TelegramPollingWorker {
           tenantId: this.deps.tenantId,
           account: currentAccount,
         });
-        if (!currentBot) {
-          throw new Error("Telegram bot token is required for polling mode");
-        }
+        if (!currentBot) throw new Error("Telegram bot token is required for polling mode");
         const nextUpdateId = update.update_id + 1;
         try {
           await processTelegramInboundUpdate({
@@ -346,8 +343,11 @@ class TelegramPollingWorker {
           reason: "processed",
         });
       }
+    } catch (err) {
+      primaryError = err;
+      throw err;
     } finally {
-      await leaseHeartbeat.stop();
+      await leaseHeartbeat.stop({ suppressThrow: primaryError !== null });
     }
   }
 
@@ -423,9 +423,10 @@ export class TelegramPollingMonitor {
     }
     this.running = true;
     this.scheduleReconcile();
-    this.reconcileTimer = setInterval(() => {
-      this.scheduleReconcile();
-    }, this.deps.reconcileIntervalMs ?? DEFAULT_RECONCILE_INTERVAL_MS);
+    this.reconcileTimer = setInterval(
+      () => this.scheduleReconcile(),
+      this.deps.reconcileIntervalMs ?? DEFAULT_RECONCILE_INTERVAL_MS,
+    );
     this.reconcileTimer.unref?.();
   }
 
@@ -491,8 +492,6 @@ export class TelegramPollingMonitor {
       }
       if (existing) {
         this.trackWorkerShutdown(existing.worker);
-      }
-      if (existing) {
         this.deps.logger?.info?.("channel.telegram.polling.worker_restarted", {
           account_key: config.account_key,
           owner: this.deps.owner,

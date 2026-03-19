@@ -245,4 +245,73 @@ describe("TelegramPollingMonitor regressions", () => {
     expect(workerAQueue.enqueue).toHaveBeenCalledOnce();
     expect(workerBQueue.enqueue).not.toHaveBeenCalled();
   });
+
+  it("preserves config-changed shutdown when lease cleanup notices a lost lease", async () => {
+    await dal.createTelegram({
+      tenantId: DEFAULT_TENANT_ID,
+      accountKey: "alerts",
+      ingressMode: "polling",
+      botToken: "bot-token",
+      webhookSecret: "saved-webhook-secret",
+    });
+
+    let releaseFirstPoll: ((updates: ReturnType<typeof makeTelegramUpdate>[]) => void) | undefined;
+    const firstPoll = new Promise<ReturnType<typeof makeTelegramUpdate>[]>((resolve) => {
+      releaseFirstPoll = resolve;
+    });
+    let resolveRenewLease: ((value: boolean) => void) | undefined;
+    const renewLeaseResult = new Promise<boolean>((resolve) => {
+      resolveRenewLease = resolve;
+    });
+    const renewLeaseSpy = vi
+      .spyOn(stateDal, "renewLease")
+      .mockImplementationOnce(async () => await renewLeaseResult)
+      .mockImplementation(async () => true);
+    const logger = { info: vi.fn(), warn: vi.fn() };
+    const bot = {
+      getMe: vi.fn(async () => ({ id: 555, is_bot: true, first_name: "Tyrum" })),
+      deleteWebhook: vi.fn(async () => true),
+      getUpdates: vi.fn(async (opts?: { offset?: number; signal?: AbortSignal }) =>
+        typeof opts?.offset === "number" ? await waitForAbort(opts.signal) : await firstPoll,
+      ),
+    };
+
+    const monitor = new TelegramPollingMonitor({
+      owner: "worker-a",
+      channelConfigDal: dal,
+      runtime: { getBotForTelegramAccount: vi.fn(() => bot) } as never,
+      queue: { enqueue: vi.fn() } as never,
+      agents: {} as never,
+      stateDal,
+      logger: logger as never,
+      reconcileIntervalMs: 10_000,
+      leaseTtlMs: 30,
+      idleDelayMs: 5,
+      errorBackoffMs: 5,
+    });
+
+    monitor.start();
+    await waitUntil(() => bot.getUpdates.mock.calls.length > 0);
+    await waitUntil(() => renewLeaseSpy.mock.calls.length > 0);
+
+    await dal.updateTelegram({
+      tenantId: DEFAULT_TENANT_ID,
+      accountKey: "alerts",
+      ingressMode: "webhook",
+    });
+    releaseFirstPoll?.([makeTelegramUpdate(100)]);
+    resolveRenewLease?.(false);
+
+    await waitUntil(() =>
+      logger.info.mock.calls.some(
+        ([event]) => event === "channel.telegram.polling.worker_config_changed",
+      ),
+    );
+    await monitor.stop();
+
+    expect(logger.warn).not.toHaveBeenCalledWith(
+      "channel.telegram.polling.lease_lost",
+      expect.anything(),
+    );
+  });
 });

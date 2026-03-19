@@ -8,7 +8,7 @@ export class TelegramPollingWorkerLeaseLostError extends Error {
 }
 
 export type TelegramPollingLeaseHeartbeat = {
-  stop(): Promise<void>;
+  stop(options?: { suppressThrow?: boolean }): Promise<void>;
   throwIfLeaseLost(): void;
 };
 
@@ -68,11 +68,13 @@ export function startTelegramPollingLeaseHeartbeat(input: {
   };
 
   return {
-    async stop(): Promise<void> {
+    async stop(options?: { suppressThrow?: boolean }): Promise<void> {
       stopped = true;
       clearInterval(timer);
       await renewPromise;
-      throwIfLeaseLost();
+      if (!options?.suppressThrow) {
+        throwIfLeaseLost();
+      }
     },
     throwIfLeaseLost,
   };
