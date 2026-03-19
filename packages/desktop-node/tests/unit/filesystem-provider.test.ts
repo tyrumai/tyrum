@@ -313,6 +313,15 @@ describe("grep", () => {
     expect(matches.length).toBe(2);
   });
 
+  it("rejects overly complex regex patterns", async () => {
+    await writeFile(join(sandboxRoot, "rx.txt"), `${"a".repeat(512)}!\n`, "utf-8");
+    const result = await provider.execute(
+      makeAction({ op: "grep", pattern: "(a+)+$", regex: true }),
+    );
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("too complex");
+  });
+
   it("supports ignore_case", async () => {
     await writeFile(join(sandboxRoot, "case.txt"), "Hello\nhello\nHELLO\n", "utf-8");
     const result = await provider.execute(

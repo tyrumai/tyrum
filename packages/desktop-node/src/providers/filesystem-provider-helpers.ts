@@ -436,7 +436,25 @@ export async function globFiles(basePath: string, pattern: string): Promise<stri
 // Grep
 // ---------------------------------------------------------------------------
 
+const MAX_GREP_REGEX_PATTERN_LENGTH = 256;
+const NESTED_GREP_REGEX_QUANTIFIER =
+  /\((?:\?:)?(?:[^()\\]|\\.)*[+*{](?:[^()\\]|\\.)*\)\s*(?:[+*]|\{\d+(?:,\d*)?\})/;
+
+function assertSafeGrepRegexPattern(pattern: string): void {
+  if (pattern.length > MAX_GREP_REGEX_PATTERN_LENGTH) {
+    throw new Error(
+      `grep regex pattern exceeds ${String(MAX_GREP_REGEX_PATTERN_LENGTH)} characters`,
+    );
+  }
+  if (NESTED_GREP_REGEX_QUANTIFIER.test(pattern)) {
+    throw new Error("grep regex pattern is too complex");
+  }
+}
+
 function buildGrepRegExp(pattern: string, regex: boolean, ignoreCase: boolean): RegExp {
+  if (regex) {
+    assertSafeGrepRegexPattern(pattern);
+  }
   return regex
     ? new RegExp(pattern, ignoreCase ? "gi" : "g")
     : new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), ignoreCase ? "gi" : "g");
