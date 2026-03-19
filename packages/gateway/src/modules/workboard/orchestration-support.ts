@@ -3,9 +3,6 @@ import {
   DeploymentConfig,
   isDesktopEnvironmentHostAvailable,
   type DeploymentConfig as DeploymentConfigT,
-  type WorkItem,
-  type WorkItemTask,
-  type WorkScope,
 } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import { DeploymentConfigDal } from "../config/deployment-config-dal.js";
@@ -13,36 +10,6 @@ import { DesktopEnvironmentDal, DesktopEnvironmentHostDal } from "../desktop-env
 import { readDesktopEnvironmentDefaultImageRef } from "../desktop-environments/default-image.js";
 import { DesktopEnvironmentLifecycleService } from "../desktop-environments/lifecycle-service.js";
 import type { SessionLaneNodeAttachmentDal } from "../agent/session-lane-node-attachment-dal.js";
-import { WorkboardDal } from "./dal.js";
-export {
-  resolveAgentKeyById,
-  runSubagentTurn as runManagedSubagentTurn,
-} from "./subagent-runtime-support.js";
-
-export function buildPlannerInstruction(item: WorkItem): string {
-  return [
-    `You own refinement for WorkItem ${item.work_item_id}: ${item.title}`,
-    "Use WorkBoard tools to inspect state, artifacts, decisions, and clarifications before acting.",
-    "Request clarification through workboard.clarification.request only when scope is blocked on missing human input, not to ask for permission to proceed.",
-    "If the work is large, decompose it into child work items or execution tasks.",
-    "When scope, sizing, and decomposition are complete, transition the work item to ready.",
-  ].join("\n");
-}
-
-export function buildExecutorInstruction(params: {
-  item: WorkItem;
-  task: WorkItemTask;
-  attachedNodeId?: string;
-}): string {
-  return [
-    `You own execution for WorkItem ${params.item.work_item_id}: ${params.item.title}`,
-    `Task ${params.task.task_id} profile=${params.task.execution_profile}`,
-    "Use WorkBoard tools to record results and update task state. Request clarification only when blocked on missing human input, not to ask for permission to proceed.",
-    ...(params.attachedNodeId
-      ? [`A managed desktop node is attached for this run: ${params.attachedNodeId}`]
-      : []),
-  ].join("\n");
-}
 
 export async function provisionManagedDesktop(params: {
   db: SqlDb;
@@ -117,32 +84,4 @@ export async function cleanupManagedDesktop(params: {
     tenantId: params.tenantId,
     environmentId: params.environmentId,
   });
-}
-
-export async function maybeFinalizeWorkItem(params: {
-  workboard: WorkboardDal;
-  scope: WorkScope;
-  workItemId: string;
-}): Promise<void> {
-  const tasks = await params.workboard.listTasks({
-    scope: params.scope,
-    work_item_id: params.workItemId,
-  });
-  if (
-    tasks.length > 0 &&
-    tasks.every((task) => task.status === "completed" || task.status === "skipped")
-  ) {
-    const item = await params.workboard.getItem({
-      scope: params.scope,
-      work_item_id: params.workItemId,
-    });
-    if (item?.status === "doing") {
-      await params.workboard.transitionItem({
-        scope: params.scope,
-        work_item_id: params.workItemId,
-        status: "done",
-        reason: "All execution tasks completed.",
-      });
-    }
-  }
 }
