@@ -21,6 +21,13 @@ const DEFAULT_IDLE_DELAY_MS = 5_000;
 const DEFAULT_ERROR_BACKOFF_MS = 5_000;
 const ALLOWED_UPDATES = ["message", "edited_message"];
 
+class TelegramPollingWorkerConfigChangedError extends Error {
+  constructor() {
+    super("Telegram polling worker config is no longer active");
+    this.name = "TelegramPollingWorkerConfigChangedError";
+  }
+}
+
 function accountFingerprint(config: StoredTelegramChannelConfig): string {
   return JSON.stringify({
     account_key: config.account_key,
@@ -50,7 +57,8 @@ class TelegramPollingWorker {
     private readonly deps: {
       tenantId: string;
       owner: string;
-      account: StoredTelegramChannelConfig;
+      accountKey: string;
+      channelConfigDal: ChannelConfigDal;
       runtime: TelegramChannelRuntime;
       queue: TelegramChannelQueue;
       agents: AgentRegistry;
@@ -72,7 +80,7 @@ class TelegramPollingWorker {
     }
     this.stopped = false;
     this.deps.logger?.info?.("channel.telegram.polling.worker_started", {
-      account_key: this.deps.account.account_key,
+      account_key: this.deps.accountKey,
       owner: this.deps.owner,
     });
     this.loopPromise = this.run();
@@ -92,7 +100,7 @@ class TelegramPollingWorker {
       const nowMs = Date.now();
       const acquired = await this.deps.stateDal.tryAcquire({
         tenantId: this.deps.tenantId,
-        accountKey: this.deps.account.account_key,
+        accountKey: this.deps.accountKey,
         owner: this.deps.owner,
         nowMs,
         leaseTtlMs: this.deps.leaseTtlMs,
@@ -102,7 +110,7 @@ class TelegramPollingWorker {
           this.hasLease = false;
           this.clearedWebhookForLease = false;
           this.deps.logger?.warn("channel.telegram.polling.lease_lost", {
-            account_key: this.deps.account.account_key,
+            account_key: this.deps.accountKey,
             owner: this.deps.owner,
           });
         }
@@ -113,7 +121,7 @@ class TelegramPollingWorker {
         this.hasLease = true;
         this.clearedWebhookForLease = false;
         this.deps.logger?.info?.("channel.telegram.polling.lease_acquired", {
-          account_key: this.deps.account.account_key,
+          account_key: this.deps.accountKey,
           owner: this.deps.owner,
         });
       }
@@ -124,15 +132,23 @@ class TelegramPollingWorker {
         if (this.stopped) {
           break;
         }
+        if (err instanceof TelegramPollingWorkerConfigChangedError) {
+          this.stopped = true;
+          this.deps.logger?.info?.("channel.telegram.polling.worker_config_changed", {
+            account_key: this.deps.accountKey,
+            owner: this.deps.owner,
+          });
+          break;
+        }
         const message = err instanceof Error ? err.message : String(err);
         const occurredAt = new Date().toISOString();
         this.deps.logger?.warn("channel.telegram.polling.poll_failed", {
-          account_key: this.deps.account.account_key,
+          account_key: this.deps.accountKey,
           error: message,
         });
         await this.deps.stateDal.markError({
           tenantId: this.deps.tenantId,
-          accountKey: this.deps.account.account_key,
+          accountKey: this.deps.accountKey,
           owner: this.deps.owner,
           occurredAt,
           message,
@@ -143,27 +159,28 @@ class TelegramPollingWorker {
 
     await this.deps.stateDal.release({
       tenantId: this.deps.tenantId,
-      accountKey: this.deps.account.account_key,
+      accountKey: this.deps.accountKey,
       owner: this.deps.owner,
     });
     if (this.hasLease) {
       this.deps.logger?.info?.("channel.telegram.polling.lease_released", {
-        account_key: this.deps.account.account_key,
+        account_key: this.deps.accountKey,
         owner: this.deps.owner,
       });
     }
     this.hasLease = false;
     this.clearedWebhookForLease = false;
     this.deps.logger?.info?.("channel.telegram.polling.worker_stopped", {
-      account_key: this.deps.account.account_key,
+      account_key: this.deps.accountKey,
       owner: this.deps.owner,
     });
   }
 
   private async pollOnce(): Promise<void> {
+    const pollingAccount = await this.loadPollingAccount();
     const bot = this.deps.runtime.getBotForTelegramAccount({
       tenantId: this.deps.tenantId,
-      account: this.deps.account,
+      account: pollingAccount,
     });
     if (!bot) {
       throw new Error("Telegram bot token is required for polling mode");
@@ -173,28 +190,28 @@ class TelegramPollingWorker {
     const botUserId = String(me.id);
     const state = await this.deps.stateDal.get({
       tenantId: this.deps.tenantId,
-      accountKey: this.deps.account.account_key,
+      accountKey: this.deps.accountKey,
     });
     const polledAt = new Date().toISOString();
     let nextOffset = state?.next_update_id ?? undefined;
     if (state?.bot_user_id && state.bot_user_id !== botUserId) {
       await this.deps.stateDal.resetCursorForBot({
         tenantId: this.deps.tenantId,
-        accountKey: this.deps.account.account_key,
+        accountKey: this.deps.accountKey,
         owner: this.deps.owner,
         botUserId,
         polledAt,
       });
       nextOffset = undefined;
       this.deps.logger?.info?.("channel.telegram.polling.bot_identity_changed", {
-        account_key: this.deps.account.account_key,
+        account_key: this.deps.accountKey,
         previous_bot_user_id: state.bot_user_id,
         next_bot_user_id: botUserId,
       });
     } else {
       await this.deps.stateDal.markRunning({
         tenantId: this.deps.tenantId,
-        accountKey: this.deps.account.account_key,
+        accountKey: this.deps.accountKey,
         owner: this.deps.owner,
         botUserId,
         polledAt,
@@ -205,7 +222,7 @@ class TelegramPollingWorker {
       await bot.deleteWebhook({ drop_pending_updates: false });
       this.clearedWebhookForLease = true;
       this.deps.logger?.info?.("channel.telegram.polling.webhook_deleted", {
-        account_key: this.deps.account.account_key,
+        account_key: this.deps.accountKey,
         owner: this.deps.owner,
       });
     }
@@ -223,7 +240,7 @@ class TelegramPollingWorker {
     if (updates.length === 0) {
       await this.deps.stateDal.markRunning({
         tenantId: this.deps.tenantId,
-        accountKey: this.deps.account.account_key,
+        accountKey: this.deps.accountKey,
         owner: this.deps.owner,
         botUserId,
         polledAt: batchPolledAt,
@@ -232,18 +249,26 @@ class TelegramPollingWorker {
     }
 
     for (const update of updates) {
+      const currentAccount = await this.loadPollingAccount();
+      const currentBot = this.deps.runtime.getBotForTelegramAccount({
+        tenantId: this.deps.tenantId,
+        account: currentAccount,
+      });
+      if (!currentBot) {
+        throw new Error("Telegram bot token is required for polling mode");
+      }
       const nextUpdateId = update.update_id + 1;
       try {
         await processTelegramInboundUpdate({
           rawBody: JSON.stringify(update),
           tenantId: this.deps.tenantId,
           account: {
-            accountKey: this.deps.account.account_key,
-            agentKey: this.deps.account.agent_key,
-            allowedUserIds: this.deps.account.allowed_user_ids,
-            pipelineEnabled: this.deps.account.pipeline_enabled,
+            accountKey: currentAccount.account_key,
+            agentKey: currentAccount.agent_key,
+            allowedUserIds: currentAccount.allowed_user_ids,
+            pipelineEnabled: currentAccount.pipeline_enabled,
           },
-          telegramBot: bot,
+          telegramBot: currentBot,
           agents: this.deps.agents,
           telegramQueue: this.deps.queue,
           routingConfigDal: this.deps.routingConfigDal,
@@ -253,20 +278,20 @@ class TelegramPollingWorker {
       } catch (err) {
         if (err instanceof TelegramNormalizationError) {
           this.deps.logger?.warn("channel.telegram.polling.update_skipped", {
-            account_key: this.deps.account.account_key,
+            account_key: this.deps.accountKey,
             update_id: update.update_id,
             error: err.message,
           });
           await this.deps.stateDal.updateCursor({
             tenantId: this.deps.tenantId,
-            accountKey: this.deps.account.account_key,
+            accountKey: this.deps.accountKey,
             owner: this.deps.owner,
             botUserId,
             nextUpdateId,
             polledAt: new Date().toISOString(),
           });
           this.deps.logger?.info?.("channel.telegram.polling.offset_advanced", {
-            account_key: this.deps.account.account_key,
+            account_key: this.deps.accountKey,
             update_id: update.update_id,
             next_update_id: nextUpdateId,
             reason: "normalization_skipped",
@@ -275,7 +300,7 @@ class TelegramPollingWorker {
         }
         if (err instanceof TelegramInboundTemporaryFailure) {
           this.deps.logger?.warn("channel.telegram.polling.retrying_update", {
-            account_key: this.deps.account.account_key,
+            account_key: this.deps.accountKey,
             update_id: update.update_id,
             error: err.message,
           });
@@ -286,19 +311,30 @@ class TelegramPollingWorker {
 
       await this.deps.stateDal.updateCursor({
         tenantId: this.deps.tenantId,
-        accountKey: this.deps.account.account_key,
+        accountKey: this.deps.accountKey,
         owner: this.deps.owner,
         botUserId,
         nextUpdateId,
         polledAt: new Date().toISOString(),
       });
       this.deps.logger?.info?.("channel.telegram.polling.offset_advanced", {
-        account_key: this.deps.account.account_key,
+        account_key: this.deps.accountKey,
         update_id: update.update_id,
         next_update_id: nextUpdateId,
         reason: "processed",
       });
     }
+  }
+
+  private async loadPollingAccount(): Promise<StoredTelegramChannelConfig> {
+    const account = await this.deps.channelConfigDal.getTelegramByAccountKey({
+      tenantId: this.deps.tenantId,
+      accountKey: this.deps.accountKey,
+    });
+    if (!account || account.ingress_mode !== "polling" || !account.bot_token?.trim()) {
+      throw new TelegramPollingWorkerConfigChangedError();
+    }
+    return account;
   }
 }
 
@@ -307,7 +343,10 @@ export class TelegramPollingMonitor {
     string,
     { fingerprint: string; worker: TelegramPollingWorker }
   >();
+  private readonly workerShutdowns = new Set<Promise<void>>();
   private reconcileTimer: ReturnType<typeof setInterval> | null = null;
+  private reconcilePromise: Promise<void> | null = null;
+  private running = false;
 
   constructor(
     private readonly deps: {
@@ -331,37 +370,60 @@ export class TelegramPollingMonitor {
   ) {}
 
   start(): void {
-    if (this.reconcileTimer) {
+    if (this.running) {
       return;
     }
-    void this.reconcile();
+    this.running = true;
+    this.scheduleReconcile();
     this.reconcileTimer = setInterval(() => {
-      void this.reconcile();
+      this.scheduleReconcile();
     }, this.deps.reconcileIntervalMs ?? DEFAULT_RECONCILE_INTERVAL_MS);
     this.reconcileTimer.unref?.();
   }
 
-  stop(): void {
+  async stop(): Promise<void> {
+    this.running = false;
     if (this.reconcileTimer) {
       clearInterval(this.reconcileTimer);
       this.reconcileTimer = null;
     }
-    for (const managed of this.workers.values()) {
-      managed.worker.stop();
-    }
+    await this.reconcilePromise;
+    const workers = Array.from(this.workers.values(), ({ worker }) => worker);
     this.workers.clear();
+    for (const worker of workers) {
+      this.trackWorkerShutdown(worker);
+    }
+    await Promise.allSettled(this.workerShutdowns);
+  }
+
+  private scheduleReconcile(): void {
+    if (!this.running || this.reconcilePromise) {
+      return;
+    }
+    const reconcilePromise = this.reconcile().finally(() => {
+      if (this.reconcilePromise === reconcilePromise) {
+        this.reconcilePromise = null;
+      }
+    });
+    this.reconcilePromise = reconcilePromise;
   }
 
   private async reconcile(): Promise<void> {
+    if (!this.running) {
+      return;
+    }
     const tenantId = this.deps.tenantId ?? DEFAULT_TENANT_ID;
     const configs = (await this.deps.channelConfigDal.listTelegram(tenantId)).flatMap((config) =>
       config.ingress_mode === "polling" && config.bot_token?.trim() ? [config] : [],
     );
+    if (!this.running) {
+      return;
+    }
     const desiredKeys = new Set(configs.map((config) => config.account_key));
 
     for (const [accountKey, managed] of this.workers.entries()) {
       if (!desiredKeys.has(accountKey)) {
-        managed.worker.stop();
+        this.trackWorkerShutdown(managed.worker);
         this.workers.delete(accountKey);
         this.deps.logger?.info?.("channel.telegram.polling.worker_removed", {
           account_key: accountKey,
@@ -371,12 +433,17 @@ export class TelegramPollingMonitor {
     }
 
     for (const config of configs) {
+      if (!this.running) {
+        return;
+      }
       const fingerprint = accountFingerprint(config);
       const existing = this.workers.get(config.account_key);
       if (existing && existing.fingerprint === fingerprint) {
         continue;
       }
-      existing?.worker.stop();
+      if (existing) {
+        this.trackWorkerShutdown(existing.worker);
+      }
       if (existing) {
         this.deps.logger?.info?.("channel.telegram.polling.worker_restarted", {
           account_key: config.account_key,
@@ -386,7 +453,8 @@ export class TelegramPollingMonitor {
       const worker = new TelegramPollingWorker({
         tenantId,
         owner: this.deps.owner,
-        account: config,
+        accountKey: config.account_key,
+        channelConfigDal: this.deps.channelConfigDal,
         runtime: this.deps.runtime,
         queue: this.deps.queue,
         agents: this.deps.agents,
@@ -403,5 +471,13 @@ export class TelegramPollingMonitor {
       worker.start();
       this.workers.set(config.account_key, { fingerprint, worker });
     }
+  }
+
+  private trackWorkerShutdown(worker: TelegramPollingWorker): void {
+    worker.stop();
+    const donePromise = worker.done().finally(() => {
+      this.workerShutdowns.delete(donePromise);
+    });
+    this.workerShutdowns.add(donePromise);
   }
 }

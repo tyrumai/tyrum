@@ -122,11 +122,7 @@ describe("Telegram polling end-to-end", () => {
 
       monitor.start();
       await waitUntil(() => enqueue.mock.calls.length === 2);
-      monitor.stop();
-      await waitUntil(async () => {
-        const row = await stateDal.get({ tenantId: DEFAULT_TENANT_ID, accountKey: "default" });
-        return row?.lease_owner === null;
-      });
+      await monitor.stop();
 
       const [webhookEnvelope, webhookOptions] = enqueue.mock.calls[0] as [
         unknown,
@@ -211,11 +207,7 @@ describe("Telegram polling end-to-end", () => {
       expect(sendBody["text"]).toBe("I can help with that!");
       expect(sendBody["parse_mode"]).toBe("HTML");
     } finally {
-      monitor.stop();
-      await waitUntil(async () => {
-        const row = await stateDal.get({ tenantId: DEFAULT_TENANT_ID, accountKey: "default" });
-        return row?.lease_owner === null;
-      });
+      await monitor.stop();
       await db.close();
       state.db = undefined;
     }

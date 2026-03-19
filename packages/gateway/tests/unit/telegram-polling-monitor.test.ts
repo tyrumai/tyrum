@@ -95,11 +95,7 @@ describe("TelegramPollingMonitor", () => {
       const row = await stateDal.get({ tenantId: DEFAULT_TENANT_ID, accountKey: "alerts" });
       return row?.next_update_id === 101;
     });
-    monitor.stop();
-    await waitUntil(async () => {
-      const row = await stateDal.get({ tenantId: DEFAULT_TENANT_ID, accountKey: "alerts" });
-      return row?.lease_owner === null;
-    });
+    await monitor.stop();
 
     expect(enqueue).toHaveBeenCalledOnce();
     expect(bot.deleteWebhook).toHaveBeenCalledOnce();
@@ -159,11 +155,7 @@ describe("TelegramPollingMonitor", () => {
       const row = await stateDal.get({ tenantId: DEFAULT_TENANT_ID, accountKey: "alerts" });
       return row?.status === "error";
     });
-    monitor.stop();
-    await waitUntil(async () => {
-      const row = await stateDal.get({ tenantId: DEFAULT_TENANT_ID, accountKey: "alerts" });
-      return row?.lease_owner === null;
-    });
+    await monitor.stop();
 
     const row = await stateDal.get({ tenantId: DEFAULT_TENANT_ID, accountKey: "alerts" });
     expect(row).toMatchObject({
@@ -223,7 +215,7 @@ describe("TelegramPollingMonitor", () => {
     });
 
     await waitUntil(() => aborted);
-    monitor.stop();
+    await monitor.stop();
 
     const stored = await dal.getTelegramByAccountKey({
       tenantId: DEFAULT_TENANT_ID,
@@ -292,12 +284,7 @@ describe("TelegramPollingMonitor", () => {
       return row?.next_update_id === 101;
     });
 
-    monitorA.stop();
-    monitorB.stop();
-    await waitUntil(async () => {
-      const row = await stateDal.get({ tenantId: DEFAULT_TENANT_ID, accountKey: "alerts" });
-      return row?.lease_owner === null;
-    });
+    await Promise.all([monitorA.stop(), monitorB.stop()]);
 
     expect(enqueue).toHaveBeenCalledOnce();
   });
@@ -355,11 +342,7 @@ describe("TelegramPollingMonitor", () => {
 
     monitor.start();
     await waitUntil(() => bot.getUpdates.mock.calls.length > 0);
-    monitor.stop();
-    await waitUntil(async () => {
-      const row = await stateDal.get({ tenantId: DEFAULT_TENANT_ID, accountKey: "alerts" });
-      return row?.lease_owner === null;
-    });
+    await monitor.stop();
 
     expect(bot.getUpdates).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -412,11 +395,7 @@ describe("TelegramPollingMonitor", () => {
       const row = await stateDal.get({ tenantId: DEFAULT_TENANT_ID, accountKey: "alerts" });
       return row?.next_update_id === 101;
     });
-    monitor.stop();
-    await waitUntil(async () => {
-      const row = await stateDal.get({ tenantId: DEFAULT_TENANT_ID, accountKey: "alerts" });
-      return row?.lease_owner === null;
-    });
+    await monitor.stop();
 
     expect(logger.warn).toHaveBeenCalledWith(
       "channel.telegram.polling.update_skipped",
@@ -477,11 +456,7 @@ describe("TelegramPollingMonitor", () => {
       const row = await stateDal.get({ tenantId: DEFAULT_TENANT_ID, accountKey: "alerts" });
       return row?.next_update_id === 101;
     });
-    monitor.stop();
-    await waitUntil(async () => {
-      const row = await stateDal.get({ tenantId: DEFAULT_TENANT_ID, accountKey: "alerts" });
-      return row?.lease_owner === null;
-    });
+    await monitor.stop();
 
     const stored = await dal.getTelegramByAccountKey({
       tenantId: DEFAULT_TENANT_ID,

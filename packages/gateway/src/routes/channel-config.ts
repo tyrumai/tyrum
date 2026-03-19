@@ -130,8 +130,8 @@ async function listConfiguredChannelGroups(
   deps: ChannelConfigRouteDeps,
   tenantId: string,
   dal: ChannelConfigDal,
+  telegramPollingStateDal: TelegramPollingStateDal,
 ) {
-  const telegramPollingStateDal = new TelegramPollingStateDal(deps.db);
   const [entries, legacyRouting] = await Promise.all([
     dal.listEntries(tenantId),
     deps.routingConfigDal?.getLatest(tenantId),
@@ -213,6 +213,7 @@ async function listConfiguredChannelGroups(
 export function createChannelConfigRoutes(deps: ChannelConfigRouteDeps): Hono {
   const app = new Hono();
   const dal = new ChannelConfigDal(deps.db);
+  const telegramPollingStateDal = new TelegramPollingStateDal(deps.db);
 
   app.get("/config/channels/registry", async (c) => {
     return c.json(
@@ -225,7 +226,7 @@ export function createChannelConfigRoutes(deps: ChannelConfigRouteDeps): Hono {
 
   app.get("/config/channels", async (c) => {
     const tenantId = requireTenantId(c);
-    return c.json(await listConfiguredChannelGroups(deps, tenantId, dal));
+    return c.json(await listConfiguredChannelGroups(deps, tenantId, dal, telegramPollingStateDal));
   });
 
   app.post("/config/channels/accounts", async (c) => {
