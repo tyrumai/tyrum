@@ -11,7 +11,6 @@
     { "path": "packages/transport-sdk" },
     { "path": "packages/gateway" },
     { "path": "packages/node-sdk" },
-    { "path": "packages/client" },
     { "path": "packages/desktop-node" },
     { "path": "packages/cli" },
     { "path": "packages/operator-app" },

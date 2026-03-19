@@ -6,5 +6,5 @@
     "jsx": "react-jsx"
   },
   "include": ["src"],
-  "references": [{ "path": "../cli-utils" }, { "path": "../client" }, { "path": "../operator-app" }]
+  "references": [{ "path": "../cli-utils" }, { "path": "../operator-app" }]
 }

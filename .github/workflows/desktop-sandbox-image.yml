@@ -7,7 +7,6 @@ on:
       - "docker/desktop-sandbox/**"
       - "packages/contracts/**"
       - "packages/cli-utils/**"
-      - "packages/client/**"
       - "packages/desktop-node/**"
       - "package.json"
       - "pnpm-lock.yaml"

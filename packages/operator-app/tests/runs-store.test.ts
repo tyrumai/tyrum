@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ExecutionAttempt, ExecutionRun, ExecutionStep } from "@tyrum/client";
+import type { ExecutionAttempt, ExecutionRun, ExecutionStep } from "@tyrum/contracts";
 import { createRunsStore } from "../src/stores/runs-store.js";
 
 describe("createRunsStore", () => {

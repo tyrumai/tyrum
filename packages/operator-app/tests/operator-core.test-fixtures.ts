@@ -14,7 +14,7 @@ import type {
   PresenceResponse,
   StatusResponse,
   UsageResponse,
-} from "@tyrum/client";
+} from "@tyrum/transport-sdk";
 
 export function sampleStatusResponse(): StatusResponse {
   return {

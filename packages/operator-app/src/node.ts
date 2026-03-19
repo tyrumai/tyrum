@@ -1,6 +1,4 @@
 export * from "./index.js";
-export { autoExecute } from "@tyrum/node-sdk/node";
-export { createManagedNodeClientLifecycle } from "@tyrum/client/node";
 export {
   TyrumClient,
   createDeviceIdentity,
@@ -12,9 +10,7 @@ export {
   loadOrCreateDeviceIdentity,
   normalizeFingerprint256,
 } from "@tyrum/transport-sdk/node";
-export type { ManagedNodeClientLifecycle } from "@tyrum/client/node";
-export type { ExecutionAttempt, ExecutionRun, ExecutionStep, MemoryItem } from "@tyrum/client/node";
-export type { CapabilityProvider, TaskResult } from "@tyrum/node-sdk/node";
+export type { ExecutionAttempt, ExecutionRun, ExecutionStep, MemoryItem } from "@tyrum/contracts";
 export type {
   DeviceIdentity,
   NodePinnedTlsOptions,

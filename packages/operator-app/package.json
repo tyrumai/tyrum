@@ -25,9 +25,7 @@
     "build": "tsdown src/index.ts src/browser.ts src/node.ts --format esm --dts"
   },
   "dependencies": {
-    "@tyrum/client": "workspace:*",
     "@tyrum/contracts": "workspace:*",
-    "@tyrum/node-sdk": "workspace:*",
     "@tyrum/transport-sdk": "workspace:*"
   }
 }

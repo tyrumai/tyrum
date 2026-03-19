@@ -18,6 +18,13 @@ import {
   type TyrumClientProtocolErrorInfo,
   type TyrumClientProtocolErrorKind,
 } from "./ws-client.js";
+export {
+  createTyrumAiSdkChatSessionClient,
+  createTyrumAiSdkChatTransport,
+  DEFAULT_TYRUM_AI_SDK_CHAT_OPERATIONS,
+  supportsTyrumAiSdkChatSocket,
+  TyrumAiSdkChatTransport,
+} from "./ai-sdk-chat.js";
 import { normalizeFingerprint256 } from "./tls/fingerprint.js";
 import { VERSION } from "./version.js";
 

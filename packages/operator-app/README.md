@@ -1,6 +1,6 @@
 # `@tyrum/operator-app`
 
-Shared, renderer-agnostic operator state + actions built on top of `@tyrum/client` (WS + HTTP).
+Shared, renderer-agnostic operator state + actions built on top of `@tyrum/transport-sdk` (WS + HTTP).
 This package is the client-side foundation used by the web app, desktop app, mobile app, and TUI.
 
 ## Usage

@@ -46,7 +46,7 @@ describe("Target-state architecture docs", () => {
     }
   });
 
-  it("defines the clean-break target package graph and migration rules", async () => {
+  it("defines the clean-break target package graph as the live architecture", async () => {
     const targetState = await readRepoFile(targetStateDocPath);
 
     expect(targetState).toMatch(/Read this if/i);
@@ -56,8 +56,10 @@ describe("Target-state architecture docs", () => {
     expect(targetState).toMatch(/allowed dependency directions/i);
     expect(targetState).toMatch(/clean-break rule/i);
     expect(targetState).toMatch(/no backwards-compatibility shims/i);
-    expect(targetState).toMatch(/temporary coexistence/i);
     expect(targetState).toMatch(/composition root/i);
+    expect(targetState).not.toMatch(/temporary coexistence/i);
+    expect(targetState).not.toContain("@tyrum/client");
+    expect(targetState).not.toContain("@tyrum/operator-core");
 
     for (const packageName of targetStatePackages) {
       expect(targetState, `${targetStateDocPath} should mention ${packageName}`).toContain(
@@ -87,16 +89,16 @@ describe("Target-state architecture docs", () => {
     expect(gatewayDoc).toMatch(/bundled operator/i);
   });
 
-  it("adds a PR template architecture checklist for the migration", async () => {
+  it("adds a PR template architecture checklist for the live target-state graph", async () => {
     const prTemplate = await readRepoFile(prTemplatePath);
 
     expect(prTemplate).toMatch(/Closes #<issue>/);
     expect(prTemplate).toMatch(/target package\/layer/i);
-    expect(prTemplate).toMatch(/legacy package/i);
     expect(prTemplate).toMatch(/@tyrum\/contracts/);
     expect(prTemplate).not.toMatch(/@tyrum\/schemas/);
-    expect(prTemplate).toMatch(/@tyrum\/client/);
-    expect(prTemplate).toMatch(/@tyrum\/operator-core/);
+    expect(prTemplate).not.toMatch(/@tyrum\/client/);
+    expect(prTemplate).not.toMatch(/@tyrum\/operator-core/);
+    expect(prTemplate).not.toMatch(/temporary coexistence/i);
     expect(prTemplate).toMatch(/target-state architecture/i);
   });
 });

@@ -5,10 +5,5 @@
     "outDir": "dist"
   },
   "include": ["src"],
-  "references": [
-    { "path": "../contracts" },
-    { "path": "../transport-sdk" },
-    { "path": "../node-sdk" },
-    { "path": "../client" }
-  ]
+  "references": [{ "path": "../contracts" }, { "path": "../transport-sdk" }]
 }

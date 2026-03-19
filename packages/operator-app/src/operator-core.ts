@@ -1,5 +1,5 @@
 import { TyrumClient, createTyrumHttpClient } from "@tyrum/transport-sdk/browser";
-import type { ExecutionAttempt, ExecutionRun, ExecutionStep } from "@tyrum/client";
+import type { ExecutionAttempt, ExecutionRun, ExecutionStep } from "@tyrum/contracts";
 import type { TyrumClientEvents } from "@tyrum/transport-sdk/browser";
 import { httpAuthForAuth, wsTokenForAuth } from "./auth.js";
 import type { OperatorHttpClient, OperatorWsClient } from "./deps.js";

@@ -5,7 +5,7 @@ import type {
   PresenceResponse,
   StatusResponse,
   UsageResponse,
-} from "@tyrum/client";
+} from "@tyrum/transport-sdk";
 import { createElevatedModeStore } from "../src/index.js";
 import {
   FakeWsClient,

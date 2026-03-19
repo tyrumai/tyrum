@@ -67,7 +67,7 @@ describe("release workflow parity gate", () => {
       '["@tyrum/contracts"]="release-assets/tyrum-contracts-${RELEASE_VERSION}.tgz"',
     );
     expect(runScript).toContain(
-      '["@tyrum/client"]="release-assets/tyrum-client-${RELEASE_VERSION}.tgz"',
+      '["@tyrum/transport-sdk"]="release-assets/tyrum-transport-sdk-${RELEASE_VERSION}.tgz"',
     );
     expect(runScript).toContain(
       '["@tyrum/node-sdk"]="release-assets/tyrum-node-sdk-${RELEASE_VERSION}.tgz"',

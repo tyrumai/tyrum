@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Approval, AgentPersona, ExecutionRun } from "@tyrum/client";
+import type { AgentPersona, Approval, ExecutionRun } from "@tyrum/contracts";
 import type { ApprovalsState, ChatState, StatusState } from "../src/index.js";
 import { createStore } from "../src/store.js";
 import { createActivityStore } from "../src/stores/activity-store.js";
@@ -32,6 +32,13 @@ function createChatState(): ChatState {
     agentId: "default",
     agents: { agents: [], loading: false, error: null },
     sessions: { sessions: [], nextCursor: null, loading: false, error: null },
+    archivedSessions: {
+      sessions: [],
+      nextCursor: null,
+      loading: false,
+      loaded: false,
+      error: null,
+    },
     active: { sessionId: null, session: null, loading: false, error: null },
   };
 }

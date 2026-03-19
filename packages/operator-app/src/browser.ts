@@ -1,4 +1,3 @@
-import { createManagedNodeClientLifecycle } from "@tyrum/client/browser";
 import {
   createTyrumHttpClient,
   TyrumClient,
@@ -9,8 +8,6 @@ import type { OperatorAdminClient } from "./operator-core.types.js";
 import type { OperatorHttpClient } from "./deps.js";
 
 export * from "./index.js";
-export { autoExecute } from "@tyrum/node-sdk/browser";
-export { createManagedNodeClientLifecycle };
 export {
   createBrowserLocalStorageDeviceIdentityStorage,
   createTyrumHttpClient,
@@ -21,8 +18,6 @@ export {
   TyrumClient,
   TyrumHttpClientError,
 } from "@tyrum/transport-sdk/browser";
-export type { ManagedNodeClientLifecycle } from "@tyrum/client/browser";
-export type { CapabilityProvider, TaskExecuteContext, TaskResult } from "@tyrum/node-sdk/browser";
 export { BrowserActionArgs } from "@tyrum/contracts";
 export type {
   AgentListResult,
@@ -41,13 +36,13 @@ export type {
   BrowserTyrumHttpClientOptions,
   DeviceIdentity,
 } from "@tyrum/transport-sdk/browser";
-export type { ActionPrimitive } from "@tyrum/contracts";
 export type {
+  ActionPrimitive,
   ExecutionAttempt,
   ExecutionRun,
   ExecutionStep,
   MemoryItem,
-} from "@tyrum/client/browser";
+} from "@tyrum/contracts";
 export type * from "@tyrum/transport-sdk";
 
 export type OperatorAdminClientOptions = BrowserTyrumHttpClientOptions;
