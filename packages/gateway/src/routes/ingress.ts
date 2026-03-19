@@ -47,6 +47,10 @@ export interface IngressDeps {
 
 const TELEGRAM_SECRET_HEADER = "x-telegram-bot-api-secret-token";
 
+function hasConfiguredTelegramProcessing(deps: IngressDeps): boolean {
+  return Boolean(deps.agents || deps.telegramQueue);
+}
+
 function extractBearerToken(headerValue: string | undefined): string | undefined {
   const raw = headerValue?.trim();
   if (!raw) return undefined;
@@ -129,17 +133,10 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
         return c.json({ error: "unauthorized", message: "invalid telegram webhook secret" }, 401);
       }
 
-<<<<<<< HEAD
       const matchedAccount = matchTelegramAccountByWebhookSecret(
         botBackedAccountsWithSecret,
         providedSecret,
       );
-=======
-      const matchedAccount = matchTelegramAccountByWebhookSecret(
-        botBackedAccountsWithSecret,
-        providedSecret,
-      );
->>>>>>> 9bf472a6 (fix(gateway): tighten telegram ingress account matching)
       if (!matchedAccount || !matchedAccount.webhook_secret) {
         return c.json({ error: "unauthorized", message: "invalid telegram webhook secret" }, 401);
       }
@@ -181,6 +178,14 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
       if (!providedSecret || !secureStringEqual(providedSecret, expectedSecret)) {
         return c.json({ error: "unauthorized", message: "invalid telegram webhook secret" }, 401);
       }
+    } else if (hasConfiguredTelegramProcessing(deps)) {
+      return c.json(
+        {
+          error: "misconfigured",
+          message: "Telegram runtime must be configured when Telegram ingress is enabled.",
+        },
+        503,
+      );
     }
 
     const rawBody = await c.req.text();

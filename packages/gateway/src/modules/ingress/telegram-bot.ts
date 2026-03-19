@@ -33,6 +33,33 @@ type TelegramFileResponse = {
   file_size?: number;
 };
 
+export interface TelegramBotUser {
+  id: number;
+  is_bot: boolean;
+  first_name: string;
+  username?: string;
+}
+
+export interface TelegramGetUpdatesOptions {
+  offset?: number;
+  limit?: number;
+  timeout?: number;
+  allowed_updates?: string[];
+  signal?: AbortSignal;
+}
+
+export interface TelegramUpdate {
+  update_id: number;
+  message?: unknown;
+  edited_message?: unknown;
+}
+
+interface TelegramApiResponse<TResult> {
+  ok?: boolean;
+  result?: TResult;
+  description?: string;
+}
+
 function applySendOptions(
   target: FormData | Record<string, unknown>,
   opts?: SendMessageOptions,
@@ -70,27 +97,6 @@ function applySendOptions(
   }
 }
 
-export interface TelegramBotUser {
-  id: number;
-  is_bot: boolean;
-  first_name: string;
-  username?: string;
-}
-
-export interface TelegramGetUpdatesOptions {
-  offset?: number;
-  limit?: number;
-  timeout?: number;
-  allowed_updates?: string[];
-  signal?: AbortSignal;
-}
-
-export interface TelegramUpdate {
-  update_id: number;
-  message?: unknown;
-  edited_message?: unknown;
-}
-
 export class TelegramBot {
   private readonly apiBase: string;
   private readonly fileBase: string;
@@ -113,7 +119,7 @@ export class TelegramBot {
       text,
     };
     applySendOptions(body, opts);
-    return await this.callJson("sendMessage", body);
+    return await this.callEnvelope("sendMessage", body);
   }
 
   async sendInlineKeyboard(
@@ -130,7 +136,7 @@ export class TelegramBot {
       },
     };
     applySendOptions(body, opts);
-    return await this.callJson("sendMessage", body);
+    return await this.callEnvelope("sendMessage", body);
   }
 
   async sendPhoto(
@@ -174,23 +180,23 @@ export class TelegramBot {
   }
 
   async setWebhook(url: string): Promise<unknown> {
-    return await this.callJson("setWebhook", { url });
+    return await this.callEnvelope("setWebhook", { url });
   }
 
   /** Remove the current webhook so long polling can resume. */
   async deleteWebhook(opts?: { drop_pending_updates?: boolean }): Promise<unknown> {
     const body = opts?.drop_pending_updates === true ? { drop_pending_updates: true } : {};
-    return await this.callJson("deleteWebhook", body);
+    return await this.callEnvelope("deleteWebhook", body);
   }
 
   /** Return basic bot identity metadata for token/account validation. */
   async getMe(): Promise<TelegramBotUser> {
-    return await this.callJson("getMe", {});
+    return await this.callResult("getMe", {});
   }
 
   /** Read updates using Telegram long polling. */
   async getUpdates(opts: TelegramGetUpdatesOptions = {}): Promise<TelegramUpdate[]> {
-    return await this.callJson(
+    return await this.callResult(
       "getUpdates",
       {
         ...(typeof opts.offset === "number" ? { offset: opts.offset } : {}),
@@ -204,11 +210,11 @@ export class TelegramBot {
 
   /** Send a chat action (for example typing) to a chat. */
   async sendChatAction(chatId: string | number, action: TelegramChatAction): Promise<unknown> {
-    return await this.callJson("sendChatAction", { chat_id: chatId, action });
+    return await this.callEnvelope("sendChatAction", { chat_id: chatId, action });
   }
 
   async getFile(fileId: string): Promise<TelegramFileResponse> {
-    const result = await this.callJson<TelegramFileResponse>("getFile", { file_id: fileId });
+    const result = await this.callResult<TelegramFileResponse>("getFile", { file_id: fileId });
     const filePath = result.file_path.trim();
     if (!filePath) {
       throw new Error(`Telegram Bot API getFile returned no file_path for file '${fileId}'`);
@@ -261,14 +267,14 @@ export class TelegramBot {
       }),
       file.filename ?? `${fieldName}.bin`,
     );
-    return await this.callForm(method, form);
+    return await this.callFormEnvelope(method, form);
   }
 
-  private async callJson<TResult = unknown>(
+  private async callEnvelope<TResult = unknown>(
     method: string,
     body: Record<string, unknown>,
     opts?: { signal?: AbortSignal },
-  ): Promise<TResult> {
+  ): Promise<TelegramApiResponse<TResult>> {
     const response = await this.fetchImpl(`${this.apiBase}/${method}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -278,7 +284,10 @@ export class TelegramBot {
     return await this.parseResponse(method, response);
   }
 
-  private async callForm<TResult = unknown>(method: string, form: FormData): Promise<TResult> {
+  private async callFormEnvelope<TResult = unknown>(
+    method: string,
+    form: FormData,
+  ): Promise<TelegramApiResponse<TResult>> {
     const response = await this.fetchImpl(`${this.apiBase}/${method}`, {
       method: "POST",
       body: form,
@@ -286,25 +295,30 @@ export class TelegramBot {
     return await this.parseResponse(method, response);
   }
 
-  private async parseResponse<TResult>(method: string, response: Response): Promise<TResult> {
+  private async callResult<TResult>(
+    method: string,
+    body: Record<string, unknown>,
+    opts?: { signal?: AbortSignal },
+  ): Promise<TResult> {
+    const parsed = await this.callEnvelope<TResult>(method, body, opts);
+    return parsed.result as TResult;
+  }
+
+  private async parseResponse<TResult>(
+    method: string,
+    response: Response,
+  ): Promise<TelegramApiResponse<TResult>> {
     if (!response.ok) {
       const text = await response.text();
       throw new Error(`Telegram Bot API ${method} failed (${String(response.status)}): ${text}`);
     }
 
-    const parsed = (await response.json()) as {
-      ok?: boolean;
-      result?: TResult;
-      description?: string;
-    };
-    if (parsed.ok === false) {
+    const parsed = (await response.json()) as TelegramApiResponse<TResult>;
+    if (!parsed.ok) {
       throw new Error(
         `Telegram Bot API ${method} failed: ${parsed.description?.trim() || "unknown error"}`,
       );
     }
-    if (parsed.ok === true) {
-      return (parsed.result ?? (undefined as TResult)) as TResult;
-    }
-    return parsed as TResult;
+    return parsed;
   }
 }

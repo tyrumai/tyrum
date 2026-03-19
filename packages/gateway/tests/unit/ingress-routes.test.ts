@@ -226,4 +226,35 @@ describe("Ingress routes", () => {
     });
     expect(telegramRuntime.getBotForTelegramAccount).not.toHaveBeenCalled();
   });
+
+  it("fails closed when telegram processing is configured without a telegram runtime", async () => {
+    const app = new Hono().route(
+      "/",
+      createIngressRoutes({
+        agents: {} as never,
+      }),
+    );
+
+    const res = await app.request("/ingress/telegram", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        update_id: 1,
+        message: {
+          message_id: 1,
+          date: 1_700_000_000,
+          chat: { id: 123, type: "private" },
+          text: "hi",
+        },
+      }),
+    });
+
+    expect(res.status).toBe(503);
+    await expect(res.json()).resolves.toMatchObject({
+      error: "misconfigured",
+      message: "Telegram runtime must be configured when Telegram ingress is enabled.",
+    });
+  });
 });
