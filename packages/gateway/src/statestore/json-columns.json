@@ -178,8 +178,8 @@
     "table": "channel_outbox",
     "column": "attachments_json",
     "shape": "array",
-    "nullable": true,
-    "default": null
+    "nullable": false,
+    "default": "[]"
   },
   {
     "table": "channel_outbox",

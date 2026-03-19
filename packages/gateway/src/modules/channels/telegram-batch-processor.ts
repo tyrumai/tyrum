@@ -178,11 +178,13 @@ export async function processTelegramBatch(
       typingTimeout = setTimeout(startTyping, CHANNEL_TYPING_MESSAGE_START_DELAY_MS);
     }
     const result = await runtime.turn({
+      ...(mergedEnvelope
+        ? { envelope: mergedEnvelope }
+        : { parts: [{ type: "text" as const, text: combined }] }),
       metadata: {
         tyrum_key: leader.key,
         lane: leader.lane,
       },
-      envelope: mergedEnvelope,
       channel: connectorId,
       thread_id: leader.thread_id,
     });

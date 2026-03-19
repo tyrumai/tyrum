@@ -290,6 +290,7 @@ CREATE TABLE channel_outbox (
   dedupe_key          TEXT NOT NULL,
   chunk_index         INTEGER NOT NULL DEFAULT 0,
   text                TEXT NOT NULL,
+  attachments_json    TEXT NOT NULL DEFAULT '[]',
   parse_mode          TEXT,
   status              TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued','sending','sent','failed')),
   attempt             INTEGER NOT NULL DEFAULT 0,
