@@ -21,6 +21,10 @@ export const STAGED_RUNTIME_EXECUTION_DIST = resolve(
   STAGED_GATEWAY_DIR,
   "node_modules/@tyrum/runtime-execution/dist/index.mjs",
 );
+export const STAGED_RUNTIME_AGENT_DIST = resolve(
+  STAGED_GATEWAY_DIR,
+  "node_modules/@tyrum/runtime-agent/dist/index.mjs",
+);
 export const STAGED_BUNDLED_OPERATOR_UI_INDEX = resolve(STAGED_GATEWAY_DIR, "dist/ui/index.html");
 const STAGE_GATEWAY_BIN_SCRIPT = resolve(REPO_ROOT, "apps/desktop/scripts/stage-gateway-bin.mjs");
 const electronPackageExport = require("electron");
@@ -63,6 +67,74 @@ const RUNTIME_EXECUTION_PACKAGE_JSON = resolve(
 );
 const RUNTIME_EXECUTION_TSCONFIG = resolve(REPO_ROOT, "packages/runtime-execution/tsconfig.json");
 const RUNTIME_EXECUTION_SRC_DIR = resolve(REPO_ROOT, "packages/runtime-execution/src");
+const RUNTIME_AGENT_DIST = resolve(REPO_ROOT, "packages/runtime-agent/dist/index.mjs");
+const RUNTIME_AGENT_PACKAGE_JSON = resolve(REPO_ROOT, "packages/runtime-agent/package.json");
+const RUNTIME_AGENT_TSCONFIG = resolve(REPO_ROOT, "packages/runtime-agent/tsconfig.json");
+const RUNTIME_AGENT_SRC_DIR = resolve(REPO_ROOT, "packages/runtime-agent/src");
+const GATEWAY_BUILD_DEPENDENCIES = [
+  {
+    filter: "@tyrum/contracts",
+    outputPath: CONTRACTS_DIST,
+    packageJsonPath: CONTRACTS_PACKAGE_JSON,
+    tsconfigPath: CONTRACTS_TSCONFIG,
+    sourceDirs: [CONTRACTS_SRC_DIR, CONTRACTS_SCRIPTS_DIR],
+    failurePrefix: "Failed to build @tyrum/contracts before desktop integration test.",
+  },
+  {
+    filter: "@tyrum/runtime-policy",
+    outputPath: RUNTIME_POLICY_DIST,
+    packageJsonPath: RUNTIME_POLICY_PACKAGE_JSON,
+    tsconfigPath: RUNTIME_POLICY_TSCONFIG,
+    sourceDirs: [RUNTIME_POLICY_SRC_DIR],
+    failurePrefix: "Failed to build @tyrum/runtime-policy before desktop integration test.",
+  },
+  {
+    filter: "@tyrum/cli-utils",
+    outputPath: CLI_UTILS_DIST,
+    packageJsonPath: CLI_UTILS_PACKAGE_JSON,
+    tsconfigPath: CLI_UTILS_TSCONFIG,
+    sourceDirs: [CLI_UTILS_SRC_DIR],
+    failurePrefix: "Failed to build @tyrum/cli-utils before desktop integration test.",
+  },
+  {
+    filter: "@tyrum/runtime-node-control",
+    outputPath: RUNTIME_NODE_CONTROL_DIST,
+    packageJsonPath: RUNTIME_NODE_CONTROL_PACKAGE_JSON,
+    tsconfigPath: RUNTIME_NODE_CONTROL_TSCONFIG,
+    sourceDirs: [RUNTIME_NODE_CONTROL_SRC_DIR],
+    failurePrefix: "Failed to build @tyrum/runtime-node-control before desktop integration test.",
+  },
+  {
+    filter: "@tyrum/runtime-execution",
+    outputPath: RUNTIME_EXECUTION_DIST,
+    packageJsonPath: RUNTIME_EXECUTION_PACKAGE_JSON,
+    tsconfigPath: RUNTIME_EXECUTION_TSCONFIG,
+    sourceDirs: [RUNTIME_EXECUTION_SRC_DIR],
+    failurePrefix: "Failed to build @tyrum/runtime-execution before desktop integration test.",
+  },
+  {
+    filter: "@tyrum/runtime-agent",
+    outputPath: RUNTIME_AGENT_DIST,
+    packageJsonPath: RUNTIME_AGENT_PACKAGE_JSON,
+    tsconfigPath: RUNTIME_AGENT_TSCONFIG,
+    sourceDirs: [RUNTIME_AGENT_SRC_DIR],
+    failurePrefix: "Failed to build @tyrum/runtime-agent before desktop integration test.",
+  },
+] as const;
+const STAGED_GATEWAY_BUILD_DEPENDENCIES = [
+  {
+    stagedPath: STAGED_RUNTIME_NODE_CONTROL_DIST,
+    sourcePath: RUNTIME_NODE_CONTROL_DIST,
+  },
+  {
+    stagedPath: STAGED_RUNTIME_EXECUTION_DIST,
+    sourcePath: RUNTIME_EXECUTION_DIST,
+  },
+  {
+    stagedPath: STAGED_RUNTIME_AGENT_DIST,
+    sourcePath: RUNTIME_AGENT_DIST,
+  },
+] as const;
 export const OPERATOR_UI_DIR_ENV = "TYRUM_OPERATOR_UI_ASSETS_DIR";
 export const EMBEDDED_GATEWAY_BUNDLE_SOURCE_ENV = "TYRUM_EMBEDDED_GATEWAY_BUNDLE_SOURCE";
 const DEFAULT_TENANT_ADMIN_TOKEN_PATTERN =
@@ -135,108 +207,55 @@ function latestMtimeInDir(rootDir: string): number {
   return latest;
 }
 
+function buildOutputIsStale(input: {
+  outputPath: string;
+  packageJsonPath?: string;
+  tsconfigPath?: string;
+  sourceDirs?: readonly string[];
+}): boolean {
+  if (!existsSync(input.outputPath)) return true;
+  const outputMtime = statSync(input.outputPath).mtimeMs;
+  if (input.packageJsonPath && existsSync(input.packageJsonPath)) {
+    if (outputMtime < statSync(input.packageJsonPath).mtimeMs) return true;
+  }
+  if (input.tsconfigPath && existsSync(input.tsconfigPath)) {
+    if (outputMtime < statSync(input.tsconfigPath).mtimeMs) return true;
+  }
+  for (const sourceDir of input.sourceDirs ?? []) {
+    if (existsSync(sourceDir) && outputMtime < latestMtimeInDir(sourceDir)) return true;
+  }
+  return false;
+}
+
 function gatewayBuildIsStale(): boolean {
-  if (!existsSync(GATEWAY_BIN)) return true;
-  if (!existsSync(CLI_UTILS_DIST)) return true;
-  if (!existsSync(CONTRACTS_DIST)) return true;
-  if (!existsSync(RUNTIME_POLICY_DIST)) return true;
-  if (!existsSync(RUNTIME_NODE_CONTROL_DIST)) return true;
-  if (!existsSync(RUNTIME_EXECUTION_DIST)) return true;
-  if (!existsSync(BUNDLED_OPERATOR_UI_INDEX)) return true;
+  if (!existsSync(GATEWAY_BIN) || !existsSync(BUNDLED_OPERATOR_UI_INDEX)) return true;
 
   const gatewayMtime = statSync(GATEWAY_BIN).mtimeMs;
-  const runtimePolicyMtime = statSync(RUNTIME_POLICY_DIST).mtimeMs;
-  const runtimeNodeControlMtime = statSync(RUNTIME_NODE_CONTROL_DIST).mtimeMs;
-  const runtimeExecutionMtime = statSync(RUNTIME_EXECUTION_DIST).mtimeMs;
   if (existsSync(GATEWAY_SRC_DIR) && gatewayMtime < latestMtimeInDir(GATEWAY_SRC_DIR)) return true;
-  if (existsSync(CLI_UTILS_PACKAGE_JSON) && gatewayMtime < statSync(CLI_UTILS_PACKAGE_JSON).mtimeMs)
-    return true;
-  if (existsSync(CLI_UTILS_TSCONFIG) && gatewayMtime < statSync(CLI_UTILS_TSCONFIG).mtimeMs)
-    return true;
-  if (existsSync(CLI_UTILS_SRC_DIR) && gatewayMtime < latestMtimeInDir(CLI_UTILS_SRC_DIR))
-    return true;
-  if (existsSync(CONTRACTS_PACKAGE_JSON) && gatewayMtime < statSync(CONTRACTS_PACKAGE_JSON).mtimeMs)
-    return true;
-  if (existsSync(CONTRACTS_TSCONFIG) && gatewayMtime < statSync(CONTRACTS_TSCONFIG).mtimeMs)
-    return true;
-  if (existsSync(CONTRACTS_SRC_DIR) && gatewayMtime < latestMtimeInDir(CONTRACTS_SRC_DIR))
-    return true;
-  if (existsSync(CONTRACTS_SCRIPTS_DIR) && gatewayMtime < latestMtimeInDir(CONTRACTS_SCRIPTS_DIR))
-    return true;
-  if (
-    existsSync(RUNTIME_POLICY_PACKAGE_JSON) &&
-    runtimePolicyMtime < statSync(RUNTIME_POLICY_PACKAGE_JSON).mtimeMs
-  ) {
-    return true;
+
+  for (const dependency of GATEWAY_BUILD_DEPENDENCIES) {
+    if (buildOutputIsStale(dependency)) return true;
+    if (gatewayMtime < statSync(dependency.outputPath).mtimeMs) return true;
   }
-  if (
-    existsSync(RUNTIME_POLICY_TSCONFIG) &&
-    runtimePolicyMtime < statSync(RUNTIME_POLICY_TSCONFIG).mtimeMs
-  ) {
-    return true;
-  }
-  if (
-    existsSync(RUNTIME_POLICY_SRC_DIR) &&
-    runtimePolicyMtime < latestMtimeInDir(RUNTIME_POLICY_SRC_DIR)
-  ) {
-    return true;
-  }
-  if (
-    existsSync(RUNTIME_NODE_CONTROL_PACKAGE_JSON) &&
-    runtimeNodeControlMtime < statSync(RUNTIME_NODE_CONTROL_PACKAGE_JSON).mtimeMs
-  ) {
-    return true;
-  }
-  if (
-    existsSync(RUNTIME_NODE_CONTROL_TSCONFIG) &&
-    runtimeNodeControlMtime < statSync(RUNTIME_NODE_CONTROL_TSCONFIG).mtimeMs
-  ) {
-    return true;
-  }
-  if (
-    existsSync(RUNTIME_NODE_CONTROL_SRC_DIR) &&
-    runtimeNodeControlMtime < latestMtimeInDir(RUNTIME_NODE_CONTROL_SRC_DIR)
-  ) {
-    return true;
-  }
-  if (
-    existsSync(RUNTIME_EXECUTION_PACKAGE_JSON) &&
-    runtimeExecutionMtime < statSync(RUNTIME_EXECUTION_PACKAGE_JSON).mtimeMs
-  ) {
-    return true;
-  }
-  if (
-    existsSync(RUNTIME_EXECUTION_TSCONFIG) &&
-    runtimeExecutionMtime < statSync(RUNTIME_EXECUTION_TSCONFIG).mtimeMs
-  ) {
-    return true;
-  }
-  if (
-    existsSync(RUNTIME_EXECUTION_SRC_DIR) &&
-    runtimeExecutionMtime < latestMtimeInDir(RUNTIME_EXECUTION_SRC_DIR)
-  ) {
-    return true;
-  }
-  if (gatewayMtime < statSync(CONTRACTS_DIST).mtimeMs) return true;
-  if (gatewayMtime < statSync(RUNTIME_POLICY_DIST).mtimeMs) return true;
-  if (gatewayMtime < statSync(RUNTIME_EXECUTION_DIST).mtimeMs) return true;
-  return gatewayMtime < statSync(CLI_UTILS_DIST).mtimeMs;
+
+  return false;
 }
 
 function stagedGatewayBuildIsStale(): boolean {
-  if (!existsSync(STAGED_GATEWAY_BIN)) return true;
-  if (!existsSync(STAGED_RUNTIME_NODE_CONTROL_DIST)) return true;
-  if (!existsSync(STAGED_RUNTIME_EXECUTION_DIST)) return true;
-  if (!existsSync(STAGED_BUNDLED_OPERATOR_UI_INDEX)) return true;
+  if (!existsSync(STAGED_GATEWAY_BIN) || !existsSync(STAGED_BUNDLED_OPERATOR_UI_INDEX)) return true;
 
   const stagedGatewayMtime = statSync(STAGED_GATEWAY_BIN).mtimeMs;
-  const stagedRuntimeNodeControlMtime = statSync(STAGED_RUNTIME_NODE_CONTROL_DIST).mtimeMs;
-  const stagedRuntimeExecutionMtime = statSync(STAGED_RUNTIME_EXECUTION_DIST).mtimeMs;
   const stagedOperatorUiMtime = statSync(STAGED_BUNDLED_OPERATOR_UI_INDEX).mtimeMs;
   if (stagedGatewayMtime < statSync(GATEWAY_BIN).mtimeMs) return true;
-  if (stagedRuntimeNodeControlMtime < statSync(RUNTIME_NODE_CONTROL_DIST).mtimeMs) return true;
-  if (stagedRuntimeExecutionMtime < statSync(RUNTIME_EXECUTION_DIST).mtimeMs) return true;
   if (stagedOperatorUiMtime < statSync(BUNDLED_OPERATOR_UI_INDEX).mtimeMs) return true;
+
+  for (const dependency of STAGED_GATEWAY_BUILD_DEPENDENCIES) {
+    if (!existsSync(dependency.stagedPath)) return true;
+    if (statSync(dependency.stagedPath).mtimeMs < statSync(dependency.sourcePath).mtimeMs) {
+      return true;
+    }
+  }
+
   return existsSync(STAGE_GATEWAY_BIN_SCRIPT)
     ? stagedGatewayMtime < statSync(STAGE_GATEWAY_BIN_SCRIPT).mtimeMs
     : false;
@@ -295,31 +314,9 @@ export function acquireGatewayBuildLock(timeoutMs = 180_000): () => void {
 
 export function ensureGatewayBuild(): void {
   if (!gatewayBuildIsStale()) return;
-  ensureWorkspaceBuild(
-    "@tyrum/contracts",
-    CONTRACTS_DIST,
-    "Failed to build @tyrum/contracts before desktop integration test.",
-  );
-  ensureWorkspaceBuild(
-    "@tyrum/runtime-policy",
-    RUNTIME_POLICY_DIST,
-    "Failed to build @tyrum/runtime-policy before desktop integration test.",
-  );
-  ensureWorkspaceBuild(
-    "@tyrum/cli-utils",
-    CLI_UTILS_DIST,
-    "Failed to build @tyrum/cli-utils before desktop integration test.",
-  );
-  ensureWorkspaceBuild(
-    "@tyrum/runtime-node-control",
-    RUNTIME_NODE_CONTROL_DIST,
-    "Failed to build @tyrum/runtime-node-control before desktop integration test.",
-  );
-  ensureWorkspaceBuild(
-    "@tyrum/runtime-execution",
-    RUNTIME_EXECUTION_DIST,
-    "Failed to build @tyrum/runtime-execution before desktop integration test.",
-  );
+  for (const dependency of GATEWAY_BUILD_DEPENDENCIES) {
+    ensureWorkspaceBuild(dependency.filter, dependency.outputPath, dependency.failurePrefix);
+  }
   ensureWorkspaceBuild(
     "@tyrum/gateway",
     GATEWAY_BIN,

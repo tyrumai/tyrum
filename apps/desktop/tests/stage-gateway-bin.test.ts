@@ -57,6 +57,13 @@ describe("stage-gateway-bin script", () => {
     expect(script).toContain("pnpm --filter @tyrum/runtime-execution build");
   });
 
+  it("fails staging early when the runtime-agent bundle was not built", () => {
+    const script = readFileSync(stageGatewayBinPath, "utf8");
+
+    expect(script).toContain("node_modules/@tyrum/runtime-agent/dist/index.mjs");
+    expect(script).toContain("pnpm --filter @tyrum/runtime-agent build");
+  });
+
   it("invokes prebuild-install from its resolved JS entrypoint", () => {
     const script = readFileSync(stageGatewayBinPath, "utf8");
 
@@ -103,5 +110,14 @@ describe("stage-gateway-bin script", () => {
 
     expect(packageJson.scripts?.pretest).toContain("@tyrum/runtime-execution build");
     expect(packageJson.scripts?.["build:gateway"]).toContain("@tyrum/runtime-execution build");
+  });
+
+  it("builds runtime-agent before desktop gateway staging and tests", () => {
+    const packageJson = JSON.parse(readFileSync(desktopPackageJsonPath, "utf8")) as {
+      scripts?: Record<string, string>;
+    };
+
+    expect(packageJson.scripts?.pretest).toContain("@tyrum/runtime-agent build");
+    expect(packageJson.scripts?.["build:gateway"]).toContain("@tyrum/runtime-agent build");
   });
 });
