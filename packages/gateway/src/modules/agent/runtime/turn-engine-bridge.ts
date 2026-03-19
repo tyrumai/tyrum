@@ -208,6 +208,7 @@ export async function turnViaExecutionEngine(
     channel: resolvedInput.channel,
     thread_id: resolvedInput.thread_id,
     container_kind: containerKind,
+    message: resolvedInput.message,
     parts: resolvedInput.parts,
     envelope: resolvedInput.envelope,
     ...(tenantKey ? { tenant_key: tenantKey } : {}),
