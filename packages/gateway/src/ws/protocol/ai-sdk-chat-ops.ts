@@ -35,6 +35,7 @@ import {
 } from "./ai-sdk-chat-shared.js";
 import { createAiSdkChatLiveState } from "./ai-sdk-chat-live-state.js";
 import { materializeUiMessagesUploadedFiles } from "../../modules/ai-sdk/attachment-parts.js";
+import type { ArtifactRecordInsertInput } from "../../modules/artifact/dal.js";
 
 export async function handleAiSdkChatMessage(
   client: ConnectedClient,
@@ -349,6 +350,7 @@ async function handleChatSessionSendMessage(
     }
 
     const persistedMessages = looked.session.messages as unknown as UIMessage[];
+    const artifactRecords: ArtifactRecordInsertInput[] = [];
     const submittedMessages =
       parsed.data.payload.trigger === "submit-message"
         ? deps.artifactStore
@@ -357,11 +359,11 @@ async function handleChatSessionSendMessage(
               deps.artifactStore,
               deps.artifactMaxUploadBytes,
               {
-                db: deps.db,
                 tenantId: auth.tenantId,
                 workspaceId: looked.session.workspace_id,
                 agentId: looked.session.agent_id,
               },
+              artifactRecords,
             )
           : await validateSubmittedTurnMessages(parsed.data.payload.messages)
         : undefined;
@@ -375,6 +377,7 @@ async function handleChatSessionSendMessage(
       tenantId: auth.tenantId,
       sessionId: looked.session.session_id,
       messages: toStoredChatMessages(split.originalMessages),
+      artifactRecords,
       updatedAt: new Date().toISOString(),
     });
 

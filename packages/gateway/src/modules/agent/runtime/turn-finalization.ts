@@ -3,6 +3,7 @@ import type { AgentTurnResponse as AgentTurnResponseT, TyrumUIMessage } from "@t
 import { AgentTurnResponse } from "@tyrum/contracts";
 import type { GatewayContainer } from "../../../container.js";
 import type { ModelMessage } from "ai";
+import type { ArtifactRecordInsertInput } from "../../artifact/dal.js";
 import { decideCrossTurnLoopWarning, LOOP_WARNING_PREFIX } from "../loop-detection.js";
 import type { SessionDal, SessionRow } from "../session-dal.js";
 import type { ResolvedAgentTurnInput } from "./turn-helpers.js";
@@ -20,10 +21,7 @@ import {
 } from "../../ai-sdk/attachment-parts.js";
 import { normalizeSessionTitle } from "../session-dal-helpers.js";
 
-type FinalizeContainer = Pick<
-  GatewayContainer,
-  "artifactStore" | "contextReportDal" | "db" | "logger"
->;
+type FinalizeContainer = Pick<GatewayContainer, "artifactStore" | "contextReportDal" | "logger">;
 
 function messagesEqualIgnoringId(left: TyrumUIMessage, right: TyrumUIMessage): boolean {
   return left.role === right.role && JSON.stringify(left.parts) === JSON.stringify(right.parts);
@@ -207,7 +205,6 @@ export async function finalizeTurn(input: {
   const memoryWritten = input.turnKind !== "skip" && input.memoryWritten;
   let responseAttachments: AgentTurnResponseT["attachments"] = [];
   const artifactRecordScope = {
-    db: input.container.db,
     tenantId: input.session.tenant_id,
     workspaceId: input.session.workspace_id,
     agentId: input.session.agent_id,
@@ -244,6 +241,7 @@ export async function finalizeTurn(input: {
       [...input.session.messages, currentUserMessage],
       appendedWithAttachments,
     );
+    const artifactRecords: ArtifactRecordInsertInput[] = [];
     await input.sessionDal.replaceMessages({
       tenantId: input.session.tenant_id,
       sessionId: input.session.session_id,
@@ -252,7 +250,9 @@ export async function finalizeTurn(input: {
         input.container.artifactStore,
         undefined,
         artifactRecordScope,
+        artifactRecords,
       ),
+      artifactRecords,
       updatedAt: nowIso,
     });
     updatedSession =
@@ -261,6 +261,7 @@ export async function finalizeTurn(input: {
         sessionId: input.session.session_id,
       })) ?? input.session;
   } else {
+    const artifactRecords: ArtifactRecordInsertInput[] = [];
     const nextMessages = await materializeStoredMessageFiles(
       [
         ...input.session.messages,
@@ -273,11 +274,13 @@ export async function finalizeTurn(input: {
       input.container.artifactStore,
       undefined,
       artifactRecordScope,
+      artifactRecords,
     );
     await input.sessionDal.replaceMessages({
       tenantId: input.session.tenant_id,
       sessionId: input.session.session_id,
       messages: nextMessages,
+      artifactRecords,
       updatedAt: nowIso,
     });
     updatedSession =

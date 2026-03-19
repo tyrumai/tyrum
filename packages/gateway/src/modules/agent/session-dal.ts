@@ -57,6 +57,8 @@ import {
   setSessionTitleIfBlank,
 } from "./session-dal-message-helpers.js";
 import { replaceSessionArtifactLinksTx } from "../artifact/dal.js";
+import { insertArtifactRecordTx } from "../artifact/dal.js";
+import type { ArtifactRecordInsertInput } from "../artifact/dal.js";
 
 export type {
   SessionContextState,
@@ -123,7 +125,11 @@ export class SessionDal {
   }
 
   async replaceMessages(
-    input: SessionIdentity & { messages: TyrumUIMessage[]; updatedAt?: string },
+    input: SessionIdentity & {
+      messages: TyrumUIMessage[];
+      updatedAt?: string;
+      artifactRecords?: readonly ArtifactRecordInsertInput[];
+    },
   ): Promise<void> {
     const session = await this.requireSession({
       tenantId: input.tenantId,
@@ -144,6 +150,9 @@ export class SessionDal {
         input.tenantId,
         input.sessionId,
       ]);
+      for (const artifactRecord of input.artifactRecords ?? []) {
+        await insertArtifactRecordTx(tx, artifactRecord);
+      }
       await replaceSessionArtifactLinksTx(tx, {
         tenantId: input.tenantId,
         sessionId: input.sessionId,

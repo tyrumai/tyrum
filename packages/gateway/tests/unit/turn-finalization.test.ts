@@ -159,29 +159,58 @@ describe("finalizeTurn", () => {
 
   it("does not duplicate file-bearing user turns when materialization rewrites data URLs", async () => {
     const dataUrl = "data:text/plain;base64,aGVsbG8=";
-    materializeStoredMessageFilesMock.mockImplementation(async (messages: unknown) => {
-      const output: Array<{ parts: Array<Record<string, unknown>> }> = [];
-      for (const message of messages as Array<{ parts: Array<Record<string, unknown>> }>) {
-        const nextParts: Array<Record<string, unknown>> = [];
-        for (const part of message.parts) {
-          if (part["type"] === "file" && part["url"] === dataUrl) {
-            nextParts.push({
-              type: "file",
-              url: "https://example.com/a/upload-1",
-              mediaType: part["mediaType"],
-              filename: part["filename"],
-            });
-            continue;
-          }
-          nextParts.push(part);
-        }
-        output.push({
-          ...message,
-          parts: nextParts,
+    materializeStoredMessageFilesMock.mockImplementation(
+      async (
+        messages: unknown,
+        _artifactStore: unknown,
+        _maxUploadBytes: unknown,
+        _artifactRecordScope: unknown,
+        artifactRecords?: Array<Record<string, unknown>>,
+      ) => {
+        artifactRecords?.push({
+          artifact: {
+            artifact_id: "upload-1",
+            uri: "artifact://upload-1",
+            external_url: "https://example.com/a/upload-1",
+            kind: "file",
+            media_class: "other",
+            created_at: "2026-03-13T00:00:00.000Z",
+            filename: "hello.txt",
+            mime_type: "text/plain",
+            size_bytes: 5,
+            sha256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            labels: [],
+            metadata: { source: "test" },
+          },
+          tenantId: "tenant-1",
+          workspaceId: "workspace-1",
+          agentId: "agent-1",
+          sensitivity: "normal",
+          policySnapshotId: null,
         });
-      }
-      return output;
-    });
+        const output: Array<{ parts: Array<Record<string, unknown>> }> = [];
+        for (const message of messages as Array<{ parts: Array<Record<string, unknown>> }>) {
+          const nextParts: Array<Record<string, unknown>> = [];
+          for (const part of message.parts) {
+            if (part["type"] === "file" && part["url"] === dataUrl) {
+              nextParts.push({
+                type: "file",
+                url: "https://example.com/a/upload-1",
+                mediaType: part["mediaType"],
+                filename: part["filename"],
+              });
+              continue;
+            }
+            nextParts.push(part);
+          }
+          output.push({
+            ...message,
+            parts: nextParts,
+          });
+        }
+        return output;
+      },
+    );
 
     const { args, replaceMessages } = sampleInput(
       [
@@ -232,5 +261,28 @@ describe("finalizeTurn", () => {
     });
     expect(persisted?.[1]?.role).toBe("assistant");
     expect(persisted?.[1]?.parts).toEqual([{ type: "text", text: "ok" }]);
+    expect(replaceMessages.mock.calls[0]?.[0]?.artifactRecords).toEqual([
+      {
+        artifact: {
+          artifact_id: "upload-1",
+          uri: "artifact://upload-1",
+          external_url: "https://example.com/a/upload-1",
+          kind: "file",
+          media_class: "other",
+          created_at: "2026-03-13T00:00:00.000Z",
+          filename: "hello.txt",
+          mime_type: "text/plain",
+          size_bytes: 5,
+          sha256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          labels: [],
+          metadata: { source: "test" },
+        },
+        tenantId: "tenant-1",
+        workspaceId: "workspace-1",
+        agentId: "agent-1",
+        sensitivity: "normal",
+        policySnapshotId: null,
+      },
+    ]);
   });
 });

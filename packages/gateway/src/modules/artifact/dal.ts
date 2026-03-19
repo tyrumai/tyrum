@@ -115,16 +115,7 @@ export async function getArtifactRowsByIds(
 
 export async function insertArtifactRecordTx(
   tx: SqlDb,
-  input: {
-    artifact: ArtifactRefT;
-    tenantId: string;
-    workspaceId: string;
-    agentId: string | null;
-    sensitivity: "normal" | "sensitive";
-    policySnapshotId: string | null;
-    labelsJson?: string;
-    metadataJson?: string;
-  },
+  input: ArtifactRecordInsertInput,
 ): Promise<{ inserted: boolean; accessId: string }> {
   const accessId = artifactAccessIdForRef(input.artifact);
   const labelsJson = input.labelsJson ?? JSON.stringify(input.artifact.labels ?? []);
@@ -228,6 +219,17 @@ export async function insertArtifactRecordTx(
     accessId,
   };
 }
+
+export type ArtifactRecordInsertInput = {
+  artifact: ArtifactRefT;
+  tenantId: string;
+  workspaceId: string;
+  agentId: string | null;
+  sensitivity: "normal" | "sensitive";
+  policySnapshotId: string | null;
+  labelsJson?: string;
+  metadataJson?: string;
+};
 
 export async function linkArtifactTx(
   tx: SqlDb,
