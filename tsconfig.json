@@ -4,6 +4,7 @@
     { "path": "packages/cli-utils" },
     { "path": "packages/contracts" },
     { "path": "packages/gateway" },
+    { "path": "packages/node-sdk" },
     { "path": "packages/client" },
     { "path": "packages/desktop-node" },
     { "path": "packages/cli" },

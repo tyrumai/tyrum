@@ -1,4 +1,4 @@
-import type { ActionPrimitive } from "@tyrum/client";
+import type { ActionPrimitive } from "@tyrum/contracts";
 
 export const WORKFLOW_LANES = ["main", "cron", "heartbeat", "subagent"] as const;
 export type WorkflowLane = (typeof WORKFLOW_LANES)[number];

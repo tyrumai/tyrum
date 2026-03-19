@@ -1,8 +1,8 @@
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { dirname, relative, resolve } from "node:path";
-import type { CapabilityProvider, TaskResult, TaskExecuteContext } from "@tyrum/client";
 import type { ActionPrimitive } from "@tyrum/contracts";
 import { FilesystemActionArgs, FILESYSTEM_CAPABILITY_IDS } from "@tyrum/contracts";
+import type { CapabilityProvider, TaskExecuteContext, TaskResult } from "@tyrum/node-sdk";
 import {
   assertSandboxed,
   truncateOutput,

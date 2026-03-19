@@ -23,7 +23,7 @@
   },
   "dependencies": {
     "@tyrum/cli-utils": "workspace:*",
-    "@tyrum/client": "workspace:*",
+    "@tyrum/contracts": "workspace:*",
     "@tyrum/transport-sdk": "workspace:*",
     "commander": "^14.0.3"
   },

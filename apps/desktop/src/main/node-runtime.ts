@@ -1,5 +1,5 @@
-import { TyrumClient, createManagedNodeClientLifecycle } from "@tyrum/operator-core/node";
-import type { CapabilityProvider, ManagedNodeClientLifecycle } from "@tyrum/operator-core/node";
+import { TyrumClient, createManagedNodeClientLifecycle } from "@tyrum/node-sdk/node";
+import type { CapabilityProvider, ManagedNodeClientLifecycle } from "@tyrum/node-sdk/node";
 import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   descriptorIdsForClientCapability,

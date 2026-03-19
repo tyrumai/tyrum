@@ -8,8 +8,8 @@ import {
   type CapabilityDescriptor,
   type ClientCapability,
 } from "@tyrum/contracts";
-import type { CapabilityProvider, TaskResult } from "@tyrum/client";
 import type { WsCapabilityReadyPayload } from "@tyrum/contracts";
+import type { CapabilityProvider, TaskResult } from "@tyrum/node-sdk";
 import { NodeRuntime } from "../src/main/node-runtime.js";
 import { resolvePermissions } from "../src/main/config/permissions.js";
 import { DEFAULT_CONFIG } from "../src/main/config/schema.js";

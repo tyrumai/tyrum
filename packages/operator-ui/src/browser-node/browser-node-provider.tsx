@@ -2,8 +2,6 @@ import {
   createManagedNodeClientLifecycle,
   type ManagedNodeClientLifecycle,
   type TaskResult,
-} from "@tyrum/client/browser";
-import {
   createBrowserLocalStorageDeviceIdentityStorage,
   formatDeviceIdentityError,
   loadOrCreateDeviceIdentity,

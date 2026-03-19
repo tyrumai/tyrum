@@ -488,7 +488,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Build desktop type dependencies
-        run: pnpm --filter @tyrum/contracts build && pnpm --filter @tyrum/client build && pnpm --filter @tyrum/operator-core build && pnpm --filter @tyrum/operator-ui build && pnpm --filter @tyrum/desktop-node build
+        run: pnpm --filter @tyrum/contracts build && pnpm --filter @tyrum/transport-sdk build && pnpm --filter @tyrum/node-sdk build && pnpm --filter @tyrum/client build && pnpm --filter @tyrum/operator-core build && pnpm --filter @tyrum/operator-ui build && pnpm --filter @tyrum/desktop-node build
 
       - name: Build desktop release files
         run: pnpm --filter tyrum-desktop dist

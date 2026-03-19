@@ -91,6 +91,9 @@ importers:
       '@tyrum/desktop-node':
         specifier: workspace:*
         version: link:../../packages/desktop-node
+      '@tyrum/node-sdk':
+        specifier: workspace:*
+        version: link:../../packages/node-sdk
       '@tyrum/operator-core':
         specifier: workspace:*
         version: link:../../packages/operator-core
@@ -233,12 +236,12 @@ importers:
       '@capacitor/preferences':
         specifier: ^8.0.1
         version: 8.0.1(@capacitor/core@8.2.0)
-      '@tyrum/client':
-        specifier: workspace:*
-        version: link:../../packages/client
       '@tyrum/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@tyrum/node-sdk':
+        specifier: workspace:*
+        version: link:../../packages/node-sdk
       '@tyrum/operator-core':
         specifier: workspace:*
         version: link:../../packages/operator-core
@@ -331,9 +334,9 @@ importers:
       '@tyrum/cli-utils':
         specifier: workspace:*
         version: link:../cli-utils
-      '@tyrum/client':
+      '@tyrum/contracts':
         specifier: workspace:*
-        version: link:../client
+        version: link:../contracts
       '@tyrum/transport-sdk':
         specifier: workspace:*
         version: link:../transport-sdk
@@ -360,6 +363,9 @@ importers:
       '@tyrum/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@tyrum/node-sdk':
+        specifier: workspace:*
+        version: link:../node-sdk
       '@tyrum/transport-sdk':
         specifier: workspace:*
         version: link:../transport-sdk
@@ -403,12 +409,12 @@ importers:
       '@tyrum/cli-utils':
         specifier: workspace:*
         version: link:../cli-utils
-      '@tyrum/client':
-        specifier: workspace:*
-        version: link:../client
       '@tyrum/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@tyrum/node-sdk':
+        specifier: workspace:*
+        version: link:../node-sdk
       '@tyrum/transport-sdk':
         specifier: workspace:*
         version: link:../transport-sdk
@@ -611,6 +617,22 @@ importers:
         specifier: ^3.0.14
         version: 3.0.14
 
+  packages/node-sdk:
+    dependencies:
+      '@tyrum/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@tyrum/transport-sdk':
+        specifier: workspace:*
+        version: link:../transport-sdk
+    devDependencies:
+      '@types/ws':
+        specifier: ^8.18.1
+        version: 8.18.1
+      ws:
+        specifier: ^8.19.0
+        version: 8.19.0
+
   packages/operator-core:
     dependencies:
       '@tyrum/client':
@@ -619,6 +641,9 @@ importers:
       '@tyrum/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@tyrum/node-sdk':
+        specifier: workspace:*
+        version: link:../node-sdk
       '@tyrum/transport-sdk':
         specifier: workspace:*
         version: link:../transport-sdk
@@ -673,6 +698,9 @@ importers:
       '@tyrum/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@tyrum/node-sdk':
+        specifier: workspace:*
+        version: link:../node-sdk
       '@tyrum/operator-core':
         specifier: workspace:*
         version: link:../operator-core

@@ -1,5 +1,5 @@
 export * from "./index.js";
-export { autoExecute } from "@tyrum/client/browser";
+export { autoExecute, createManagedNodeClientLifecycle } from "@tyrum/node-sdk/browser";
 export {
   TyrumClient,
   normalizeFingerprint256,
@@ -12,11 +12,15 @@ export {
 } from "@tyrum/transport-sdk/browser";
 export type {
   CapabilityProvider,
+  ManagedNodeClientLifecycle,
+  TaskExecuteContext,
+  TaskResult,
+} from "@tyrum/node-sdk/browser";
+export type {
   ExecutionAttempt,
   ExecutionRun,
   ExecutionStep,
   MemoryItem,
-  TaskResult,
 } from "@tyrum/client/browser";
 export type {
   BrowserTyrumClientOptions,

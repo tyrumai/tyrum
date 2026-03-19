@@ -23,7 +23,7 @@ COPY scripts ./scripts
 COPY packages/contracts ./packages/contracts
 COPY packages/cli-utils ./packages/cli-utils
 COPY packages/transport-sdk ./packages/transport-sdk
-COPY packages/client ./packages/client
+COPY packages/node-sdk ./packages/node-sdk
 COPY packages/desktop-node ./packages/desktop-node
 
 RUN pnpm install --frozen-lockfile
@@ -32,7 +32,7 @@ RUN node ./scripts/check-desktop-sandbox-native.mjs
 RUN pnpm --filter @tyrum/contracts build \
   && pnpm --filter @tyrum/cli-utils build \
   && pnpm --filter @tyrum/transport-sdk build \
-  && pnpm --filter @tyrum/client build \
+  && pnpm --filter @tyrum/node-sdk build \
   && pnpm --filter @tyrum/desktop-node build
 
 # ---------------------------------------------------------------------------
@@ -81,9 +81,9 @@ COPY --from=builder /app/packages/transport-sdk/package.json ./packages/transpor
 COPY --from=builder /app/packages/transport-sdk/dist ./packages/transport-sdk/dist
 COPY --from=builder /app/packages/transport-sdk/node_modules ./packages/transport-sdk/node_modules
 
-COPY --from=builder /app/packages/client/package.json ./packages/client/package.json
-COPY --from=builder /app/packages/client/dist ./packages/client/dist
-COPY --from=builder /app/packages/client/node_modules ./packages/client/node_modules
+COPY --from=builder /app/packages/node-sdk/package.json ./packages/node-sdk/package.json
+COPY --from=builder /app/packages/node-sdk/dist ./packages/node-sdk/dist
+COPY --from=builder /app/packages/node-sdk/node_modules ./packages/node-sdk/node_modules
 
 COPY --from=builder /app/packages/desktop-node/package.json ./packages/desktop-node/package.json
 COPY --from=builder /app/packages/desktop-node/dist ./packages/desktop-node/dist

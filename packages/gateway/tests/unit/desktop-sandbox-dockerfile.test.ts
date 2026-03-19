@@ -29,17 +29,19 @@ describe("desktop-sandbox Dockerfile", () => {
     expect(dockerfile).toContain("RUN node ./scripts/check-desktop-sandbox-native.mjs");
   });
 
-  test("copies and builds transport-sdk before client in the builder stage", () => {
+  test("copies and builds transport-sdk before node-sdk in the builder stage", () => {
     const dockerfile = readFileSync(fileURLToPath(dockerfileUrl), "utf8");
 
     expect(dockerfile).toContain("COPY packages/transport-sdk ./packages/transport-sdk");
+    expect(dockerfile).toContain("COPY packages/node-sdk ./packages/node-sdk");
     expect(dockerfile).toContain("pnpm --filter @tyrum/transport-sdk build");
+    expect(dockerfile).toContain("pnpm --filter @tyrum/node-sdk build");
     expect(dockerfile.indexOf("pnpm --filter @tyrum/transport-sdk build")).toBeLessThan(
-      dockerfile.indexOf("pnpm --filter @tyrum/client build"),
+      dockerfile.indexOf("pnpm --filter @tyrum/node-sdk build"),
     );
   });
 
-  test("copies transport-sdk into the runtime image for workspace package resolution", () => {
+  test("copies node and transport SDKs into the runtime image for workspace package resolution", () => {
     const dockerfile = readFileSync(fileURLToPath(dockerfileUrl), "utf8");
 
     expect(dockerfile).toContain(
@@ -47,6 +49,12 @@ describe("desktop-sandbox Dockerfile", () => {
     );
     expect(dockerfile).toContain(
       "COPY --from=builder /app/packages/transport-sdk/dist ./packages/transport-sdk/dist",
+    );
+    expect(dockerfile).toContain(
+      "COPY --from=builder /app/packages/node-sdk/package.json ./packages/node-sdk/package.json",
+    );
+    expect(dockerfile).toContain(
+      "COPY --from=builder /app/packages/node-sdk/dist ./packages/node-sdk/dist",
     );
   });
 

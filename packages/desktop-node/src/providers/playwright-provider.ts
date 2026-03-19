@@ -4,7 +4,7 @@ import {
   type ActionPrimitive,
   type EvaluationContext,
 } from "@tyrum/contracts";
-import type { CapabilityProvider, TaskResult } from "@tyrum/client";
+import type { CapabilityProvider, TaskResult } from "@tyrum/node-sdk";
 import type { PlaywrightBackend } from "./backends/playwright-backend.js";
 
 export interface PlaywrightProviderConfig {

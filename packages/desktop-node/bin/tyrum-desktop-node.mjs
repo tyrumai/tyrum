@@ -7,13 +7,13 @@ await runPackageBin({
   buildPackages: [
     "@tyrum/contracts",
     "@tyrum/transport-sdk",
-    "@tyrum/client",
+    "@tyrum/node-sdk",
     "@tyrum/desktop-node",
   ],
   dependencyEntrypoints: [
     "packages/contracts/dist/index.mjs",
     "packages/transport-sdk/dist/index.mjs",
-    "packages/client/dist/index.mjs",
+    "packages/node-sdk/dist/index.mjs",
   ],
   sourceExtensions: [".ts", ".tsx"],
 });

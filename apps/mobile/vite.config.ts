@@ -15,6 +15,9 @@ export default defineConfig({
   resolve: {
     alias: {
       "@tyrum/contracts": resolve(repoRoot, "packages/contracts/src/index.ts"),
+      "@tyrum/node-sdk/browser": resolve(repoRoot, "packages/node-sdk/src/browser.ts"),
+      "@tyrum/node-sdk/node": resolve(repoRoot, "packages/node-sdk/src/node.ts"),
+      "@tyrum/node-sdk": resolve(repoRoot, "packages/node-sdk/src/index.ts"),
       "@tyrum/transport-sdk/browser": resolve(repoRoot, "packages/transport-sdk/src/browser.ts"),
       "@tyrum/transport-sdk/node": resolve(repoRoot, "packages/transport-sdk/src/node.ts"),
       "@tyrum/transport-sdk": resolve(repoRoot, "packages/transport-sdk/src/index.ts"),
