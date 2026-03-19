@@ -42,6 +42,7 @@ describe("@tyrum/mobile migration surface", () => {
     expect(locationStreamSource).toContain('from "@tyrum/node-sdk/browser"');
     expect(locationStreamSource).not.toContain('from "@tyrum/transport-sdk');
 
+    expect(configSource).toContain('from "@tyrum/node-sdk"');
     expect(configSource).not.toContain('from "@tyrum/client"');
     expect(configSource).not.toContain('from "@tyrum/transport-sdk');
   });
