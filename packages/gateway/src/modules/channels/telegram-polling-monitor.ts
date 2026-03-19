@@ -10,6 +10,7 @@ import {
   TelegramInboundTemporaryFailure,
 } from "./telegram-inbound.js";
 import { TelegramNormalizationError } from "../ingress/telegram.js";
+import type { TelegramBot } from "../ingress/telegram-bot.js";
 import type { RoutingConfigDal } from "./routing-config-dal.js";
 import type { MemoryDal } from "../memory/memory-dal.js";
 
@@ -52,6 +53,7 @@ class TelegramPollingWorker {
   private abortController: AbortController | null = null;
   private hasLease = false;
   private clearedWebhookForLease = false;
+  private botIdentityCache: { bot: TelegramBot; botUserId: string } | null = null;
 
   constructor(
     private readonly deps: {
@@ -186,8 +188,7 @@ class TelegramPollingWorker {
       throw new Error("Telegram bot token is required for polling mode");
     }
 
-    const me = await bot.getMe();
-    const botUserId = String(me.id);
+    const botUserId = await this.getBotUserId(bot);
     const state = await this.deps.stateDal.get({
       tenantId: this.deps.tenantId,
       accountKey: this.deps.accountKey,
@@ -335,6 +336,17 @@ class TelegramPollingWorker {
       throw new TelegramPollingWorkerConfigChangedError();
     }
     return account;
+  }
+
+  private async getBotUserId(bot: TelegramBot): Promise<string> {
+    if (this.botIdentityCache?.bot === bot) {
+      return this.botIdentityCache.botUserId;
+    }
+
+    const me = await bot.getMe();
+    const botUserId = String(me.id);
+    this.botIdentityCache = { bot, botUserId };
+    return botUserId;
   }
 }
 

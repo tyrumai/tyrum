@@ -129,7 +129,17 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
         return c.json({ error: "unauthorized", message: "invalid telegram webhook secret" }, 401);
       }
 
-      const matchedAccount = matchTelegramAccountByWebhookSecret(webhookAccounts, providedSecret);
+<<<<<<< HEAD
+      const matchedAccount = matchTelegramAccountByWebhookSecret(
+        botBackedAccountsWithSecret,
+        providedSecret,
+      );
+=======
+      const matchedAccount = matchTelegramAccountByWebhookSecret(
+        botBackedAccountsWithSecret,
+        providedSecret,
+      );
+>>>>>>> 9bf472a6 (fix(gateway): tighten telegram ingress account matching)
       if (!matchedAccount || !matchedAccount.webhook_secret) {
         return c.json({ error: "unauthorized", message: "invalid telegram webhook secret" }, 401);
       }

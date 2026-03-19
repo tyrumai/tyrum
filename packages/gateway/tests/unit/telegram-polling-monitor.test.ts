@@ -469,4 +469,43 @@ describe("TelegramPollingMonitor", () => {
     expect(bot.deleteWebhook).toHaveBeenCalledOnce();
     expect(enqueue).toHaveBeenCalledOnce();
   });
+
+  it("reuses the bot identity across poll cycles until the bot instance changes", async () => {
+    await dal.createTelegram({
+      tenantId: DEFAULT_TENANT_ID,
+      accountKey: "alerts",
+      ingressMode: "polling",
+      botToken: "bot-token",
+      webhookSecret: "saved-webhook-secret",
+    });
+
+    const bot = {
+      getMe: vi.fn(async () => ({ id: 555, is_bot: true, first_name: "Tyrum" })),
+      deleteWebhook: vi.fn(async () => true),
+      getUpdates: vi.fn(async (opts?: { signal?: AbortSignal }) => {
+        if (bot.getUpdates.mock.calls.length >= 2) {
+          return await waitForAbort(opts?.signal);
+        }
+        return [];
+      }),
+    };
+
+    const monitor = new TelegramPollingMonitor({
+      owner: "worker-a",
+      channelConfigDal: dal,
+      runtime: { getBotForTelegramAccount: vi.fn(() => bot) } as never,
+      queue: { enqueue: vi.fn() } as never,
+      agents: {} as never,
+      stateDal,
+      reconcileIntervalMs: 20,
+      idleDelayMs: 10,
+      errorBackoffMs: 10,
+    });
+
+    monitor.start();
+    await waitUntil(() => bot.getUpdates.mock.calls.length >= 2);
+    await monitor.stop();
+
+    expect(bot.getMe).toHaveBeenCalledOnce();
+  });
 });

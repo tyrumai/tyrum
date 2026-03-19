@@ -168,4 +168,62 @@ describe("Ingress routes", () => {
       message: "Telegram bot token must be configured when Telegram ingress is enabled.",
     });
   });
+
+  it("rejects webhook secrets that only belong to polling accounts", async () => {
+    const telegramRuntime = {
+      listTelegramAccounts: vi.fn(async () => [
+        {
+          account_key: "webhook",
+          ingress_mode: "webhook",
+          bot_token: "webhook-token",
+          webhook_secret: "webhook-secret",
+          allowed_user_ids: [],
+          pipeline_enabled: true,
+        },
+        {
+          account_key: "polling",
+          ingress_mode: "polling",
+          bot_token: "polling-token",
+          webhook_secret: "polling-secret",
+          allowed_user_ids: [],
+          pipeline_enabled: true,
+        },
+      ]),
+      getBotForTelegramAccount: vi.fn(() => ({ sendMessage: vi.fn(async () => undefined) })),
+    } as any;
+
+    const app = new Hono().route(
+      "/",
+      createIngressRoutes({
+        telegramRuntime,
+        agents: {} as any,
+        telegramQueue: { enqueue: vi.fn() } as any,
+      }),
+    );
+
+    const res = await app.request("/ingress/telegram", {
+      method: "POST",
+      headers: {
+        "x-telegram-bot-api-secret-token": "polling-secret",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        update_id: 1,
+        message: {
+          message_id: 1,
+          date: 1_700_000_000,
+          from: { id: 123, is_bot: false, first_name: "Alice" },
+          chat: { id: 123, type: "private" },
+          text: "hi",
+        },
+      }),
+    });
+
+    expect(res.status).toBe(401);
+    await expect(res.json()).resolves.toMatchObject({
+      error: "unauthorized",
+      message: "invalid telegram webhook secret",
+    });
+    expect(telegramRuntime.getBotForTelegramAccount).not.toHaveBeenCalled();
+  });
 });
