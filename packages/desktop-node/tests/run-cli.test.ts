@@ -15,6 +15,9 @@ const {
   providerCtorSpy,
   filesystemProviderCtorSpy,
   backendCtorSpy,
+  playwrightProviderCtorSpy,
+  playwrightBackendCtorSpy,
+  playwrightBackendCloseSpy,
 } = vi.hoisted(() => ({
   clientCtorSpy: vi.fn(),
   clientConnectSpy: vi.fn(),
@@ -30,6 +33,9 @@ const {
   providerCtorSpy: vi.fn(),
   filesystemProviderCtorSpy: vi.fn(),
   backendCtorSpy: vi.fn(),
+  playwrightProviderCtorSpy: vi.fn(),
+  playwrightBackendCtorSpy: vi.fn(),
+  playwrightBackendCloseSpy: vi.fn(async () => {}),
 }));
 
 vi.mock("@tyrum/client/node", () => {
@@ -94,9 +100,24 @@ vi.mock("../src/providers/filesystem-provider.js", () => ({
   },
 }));
 
+vi.mock("../src/providers/playwright-provider.js", () => ({
+  PlaywrightProvider: function PlaywrightProvider(...args: unknown[]) {
+    playwrightProviderCtorSpy(...args);
+  },
+}));
+
 vi.mock("../src/providers/backends/nutjs-desktop-backend.js", () => ({
   NutJsDesktopBackend: function NutJsDesktopBackend() {
     backendCtorSpy();
+  },
+}));
+
+vi.mock("../src/providers/backends/real-playwright-backend.js", () => ({
+  RealPlaywrightBackend: function RealPlaywrightBackend(...args: unknown[]) {
+    playwrightBackendCtorSpy(...args);
+    this.close = async () => {
+      await playwrightBackendCloseSpy();
+    };
   },
 }));
 
@@ -292,6 +313,22 @@ describe("runCli", () => {
 
     const providers = autoExecuteSpy.mock.calls[0]?.[1] as unknown[];
     expect(providers).toHaveLength(2);
+  });
+
+  it("closes the Playwright backend on shutdown when browser mode is enabled", async () => {
+    vi.resetModules();
+    process.env["TYRUM_GATEWAY_TOKEN"] = "test-token";
+
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const { runCli } = await import("../src/cli/run-cli.js");
+    const code = await runWithSigterm(runCli(["--browser", "--browser-headless"]));
+
+    expect(code).toBe(0);
+    expect(playwrightBackendCtorSpy).toHaveBeenCalledWith({ headless: true });
+    expect(playwrightProviderCtorSpy).toHaveBeenCalledTimes(1);
+    expect(playwrightBackendCloseSpy).toHaveBeenCalledTimes(1);
   });
 
   it("loads gateway token from env token path file", async () => {

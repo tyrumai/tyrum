@@ -300,9 +300,10 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
     providers.push(new FilesystemProvider({ sandboxRoot: filesystemSandboxRoot }));
   }
 
+  let playwrightBackend: RealPlaywrightBackend | null = null;
   if (browserEnabled) {
     const headless = resolveBrowserHeadless(args.browserHeadless);
-    const playwrightBackend = new RealPlaywrightBackend({ headless });
+    playwrightBackend = new RealPlaywrightBackend({ headless });
     const playwrightProvider = new PlaywrightProvider(
       {
         allowedDomains: ["*"],
@@ -322,7 +323,11 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
   });
 
   client.connect();
-  await stop;
-  client.disconnect();
+  try {
+    await stop;
+  } finally {
+    client.disconnect();
+    await playwrightBackend?.close();
+  }
   return 0;
 }

@@ -478,9 +478,8 @@ export class PlaywrightProvider implements CapabilityProvider {
     };
   }
 
-  private async launchOp(args: Record<string, unknown>): Promise<TaskResult> {
-    const headless = typeof args["headless"] === "boolean" ? args["headless"] : undefined;
-    const result = await this.backend.launch({ headless });
+  private async launchOp(_args: Record<string, unknown>): Promise<TaskResult> {
+    const result = await this.backend.launch({ headless: this.config.headless });
     return {
       success: true,
       result: {

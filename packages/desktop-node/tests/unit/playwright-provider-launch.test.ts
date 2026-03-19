@@ -23,27 +23,30 @@ function makeProvider(overrides: Partial<PlaywrightProviderConfig> = {}) {
 
 describe("PlaywrightProvider launch", () => {
   it("launch with default settings returns headless true", async () => {
-    const { provider } = makeProvider();
+    const { provider, backend } = makeProvider();
     const result = await provider.execute(makeAction({ op: "launch" }));
 
     expect(result.success).toBe(true);
     expect(result.result).toEqual({ headless: true, browser: "chromium" });
+    expect(backend.calls[0]).toMatchObject({ method: "launch", args: [{ headless: true }] });
   });
 
-  it("launch with explicit headless: false", async () => {
-    const { provider } = makeProvider();
+  it("launch ignores an explicit headless override and uses the configured value", async () => {
+    const { provider, backend } = makeProvider();
     const result = await provider.execute(makeAction({ op: "launch", headless: false }));
 
     expect(result.success).toBe(true);
-    expect(result.result).toEqual({ headless: false, browser: "chromium" });
+    expect(result.result).toEqual({ headless: true, browser: "chromium" });
+    expect(backend.calls[0]).toMatchObject({ method: "launch", args: [{ headless: true }] });
   });
 
-  it("launch with explicit headless: true", async () => {
-    const { provider } = makeProvider();
+  it("launch preserves a configured non-headless mode", async () => {
+    const { provider, backend } = makeProvider({ headless: false });
     const result = await provider.execute(makeAction({ op: "launch", headless: true }));
 
     expect(result.success).toBe(true);
-    expect(result.result).toEqual({ headless: true, browser: "chromium" });
+    expect(result.result).toEqual({ headless: false, browser: "chromium" });
+    expect(backend.calls[0]).toMatchObject({ method: "launch", args: [{ headless: false }] });
   });
 
   it("launch when browser already running closes and relaunches", async () => {
@@ -57,9 +60,9 @@ describe("PlaywrightProvider launch", () => {
     // Second launch should still call backend.launch (which handles close + relaunch)
     const result = await provider.execute(makeAction({ op: "launch", headless: false }));
     expect(result.success).toBe(true);
-    expect(result.result).toEqual({ headless: false, browser: "chromium" });
+    expect(result.result).toEqual({ headless: true, browser: "chromium" });
     expect(backend.calls).toHaveLength(2);
-    expect(backend.calls[1]).toMatchObject({ method: "launch", args: [{ headless: false }] });
+    expect(backend.calls[1]).toMatchObject({ method: "launch", args: [{ headless: true }] });
   });
 
   it("capabilityIds includes tyrum.browser.launch", () => {
