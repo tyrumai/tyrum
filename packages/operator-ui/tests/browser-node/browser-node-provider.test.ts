@@ -3,7 +3,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import React, { act, useEffect } from "react";
 import { cleanupTestRoot, createTestRoot } from "../test-utils.js";
-import { createManagedNodeClientLifecycleMock } from "../../../client/tests/managed-node-client.test-support.js";
+import { createManagedNodeClientLifecycleMock } from "../../../node-sdk/tests/managed-node-client.test-support.js";
 
 const clientInstances: FakeTyrumClient[] = [];
 
@@ -56,7 +56,7 @@ class FakeTyrumClient {
   }
 }
 
-vi.mock("@tyrum/client/browser", () => {
+vi.mock("@tyrum/operator-core/browser", () => {
   const autoExecute = vi.fn();
 
   return {
@@ -65,11 +65,6 @@ vi.mock("@tyrum/client/browser", () => {
       autoExecute,
       requireConnectedObject: true,
     }),
-  };
-});
-
-vi.mock("@tyrum/operator-core/browser", () => {
-  return {
     createBrowserLocalStorageDeviceIdentityStorage: vi.fn((_key: string) => ({})),
     formatDeviceIdentityError: vi.fn((err: unknown) => String(err)),
     loadOrCreateDeviceIdentity: vi.fn(async () => ({

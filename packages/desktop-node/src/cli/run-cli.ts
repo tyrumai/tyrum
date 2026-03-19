@@ -4,12 +4,13 @@ import { join } from "node:path";
 
 import {
   TyrumClient,
+  autoExecute,
   createNodeFileDeviceIdentityStorage,
   formatDeviceIdentityError,
   loadOrCreateDeviceIdentity,
   normalizeFingerprint256,
-} from "@tyrum/transport-sdk/node";
-import { autoExecute, type CapabilityProvider } from "@tyrum/client";
+  type CapabilityProvider,
+} from "@tyrum/node-sdk/node";
 import {
   capabilityDescriptorsForClientCapability,
   BROWSER_AUTOMATION_CAPABILITY_IDS,

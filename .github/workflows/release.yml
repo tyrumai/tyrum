@@ -179,6 +179,7 @@ jobs:
           mkdir -p artifacts/npm
           (cd packages/contracts && pnpm pack --pack-destination ../../artifacts/npm)
           (cd packages/client && pnpm pack --pack-destination ../../artifacts/npm)
+          (cd packages/node-sdk && pnpm pack --pack-destination ../../artifacts/npm)
           (cd packages/gateway && pnpm pack --pack-destination ../../artifacts/npm)
           ls -lah artifacts/npm
 
@@ -475,6 +476,7 @@ jobs:
           declare -A packages=(
             ["@tyrum/contracts"]="release-assets/tyrum-contracts-${RELEASE_VERSION}.tgz"
             ["@tyrum/client"]="release-assets/tyrum-client-${RELEASE_VERSION}.tgz"
+            ["@tyrum/node-sdk"]="release-assets/tyrum-node-sdk-${RELEASE_VERSION}.tgz"
             ["@tyrum/gateway"]="release-assets/tyrum-gateway-${RELEASE_VERSION}.tgz"
           )
 

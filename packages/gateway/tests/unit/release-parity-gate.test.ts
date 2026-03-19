@@ -70,6 +70,9 @@ describe("release workflow parity gate", () => {
       '["@tyrum/client"]="release-assets/tyrum-client-${RELEASE_VERSION}.tgz"',
     );
     expect(runScript).toContain(
+      '["@tyrum/node-sdk"]="release-assets/tyrum-node-sdk-${RELEASE_VERSION}.tgz"',
+    );
+    expect(runScript).toContain(
       '["@tyrum/gateway"]="release-assets/tyrum-gateway-${RELEASE_VERSION}.tgz"',
     );
   });

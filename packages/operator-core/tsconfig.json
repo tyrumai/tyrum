@@ -5,5 +5,5 @@
     "outDir": "dist"
   },
   "include": ["src"],
-  "references": [{ "path": "../client" }]
+  "references": [{ "path": "../node-sdk" }, { "path": "../client" }]
 }

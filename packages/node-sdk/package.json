@@ -1,5 +1,5 @@
 {
-  "name": "@tyrum/operator-core",
+  "name": "@tyrum/node-sdk",
   "version": "0.1.0",
   "author": "Ron Hernaus <ron@virtunet.nl>",
   "license": "MIT",
@@ -25,9 +25,11 @@
     "build": "tsdown src/index.ts src/browser.ts src/node.ts --format esm --dts"
   },
   "dependencies": {
-    "@tyrum/client": "workspace:*",
     "@tyrum/contracts": "workspace:*",
-    "@tyrum/node-sdk": "workspace:*",
     "@tyrum/transport-sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.1",
+    "ws": "^8.19.0"
   }
 }

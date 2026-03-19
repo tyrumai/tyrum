@@ -3,7 +3,7 @@ import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MobileConnectionConfig } from "../src/mobile-config.js";
-import { createManagedNodeClientLifecycleMock } from "../../../packages/client/tests/managed-node-client.test-support.js";
+import { createManagedNodeClientLifecycleMock } from "../../../packages/node-sdk/tests/managed-node-client.test-support.js";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -107,11 +107,8 @@ vi.mock("@capacitor/clipboard", () => ({
   },
 }));
 
-vi.mock("@tyrum/client/browser", () => ({
+vi.mock("@tyrum/node-sdk/browser", () => ({
   createManagedNodeClientLifecycle: createManagedNodeClientLifecycleMock(),
-}));
-
-vi.mock("@tyrum/transport-sdk/browser", () => ({
   formatDeviceIdentityError: vi.fn((error: unknown) =>
     error instanceof Error ? error.message : String(error),
   ),

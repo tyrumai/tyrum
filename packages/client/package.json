@@ -27,6 +27,7 @@
   "dependencies": {
     "ai": "^6.0.116",
     "@tyrum/contracts": "workspace:*",
+    "@tyrum/node-sdk": "workspace:*",
     "@tyrum/transport-sdk": "workspace:*",
     "mitt": "^3.0.1",
     "undici": "^7.24.4",

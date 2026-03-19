@@ -1,4 +1,4 @@
-import type { CapabilityProvider, TaskResult } from "@tyrum/client";
+import type { CapabilityProvider, TaskResult } from "@tyrum/node-sdk";
 import {
   DesktopActionArgs,
   type ActionPrimitive,

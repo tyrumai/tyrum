@@ -1,4 +1,8 @@
-import type { CapabilityProvider, TaskExecuteContext, TaskResult } from "@tyrum/client";
+import type {
+  CapabilityProvider,
+  TaskExecuteContext,
+  TaskResult,
+} from "@tyrum/operator-core/browser";
 import { BrowserActionArgs, type ActionPrimitive } from "@tyrum/contracts";
 
 export type BrowserConsentScope = "geolocation" | "camera" | "microphone";

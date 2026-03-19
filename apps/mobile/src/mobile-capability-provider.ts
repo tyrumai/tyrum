@@ -1,4 +1,4 @@
-import type { CapabilityProvider, TaskExecuteContext, TaskResult } from "@tyrum/client";
+import type { CapabilityProvider, TaskExecuteContext, TaskResult } from "@tyrum/node-sdk";
 import { Camera, CameraDirection, CameraResultType, CameraSource } from "@capacitor/camera";
 import { Capacitor } from "@capacitor/core";
 import { Geolocation } from "@capacitor/geolocation";
