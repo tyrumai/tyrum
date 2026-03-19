@@ -19,6 +19,7 @@ const targetStatePackages = [
   "@tyrum/transport-sdk",
   "@tyrum/node-sdk",
   "@tyrum/operator-app",
+  "@tyrum/operator-ui",
   "@tyrum/runtime-policy",
   "@tyrum/runtime-node-control",
   "@tyrum/runtime-execution",
