@@ -156,15 +156,17 @@ export async function enqueuePlanInTx(
          step_index,
          status,
          action_json,
+         max_attempts,
          idempotency_key,
          postcondition_json
-       ) VALUES (?, ?, ?, ?, 'queued', ?, ?, ?)`,
+       ) VALUES (?, ?, ?, ?, 'queued', ?, ?, ?, ?)`,
       [
         tenantId,
         stepId,
         runId,
         idx,
         JSON.stringify(action),
+        1,
         action.idempotency_key ?? null,
         action.postcondition ? JSON.stringify(action.postcondition) : null,
       ],

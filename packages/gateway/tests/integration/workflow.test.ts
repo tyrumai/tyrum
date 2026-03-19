@@ -42,11 +42,12 @@ describe("workflow routes", () => {
     );
     expect(run?.status).toBe("queued");
 
-    const stepAgg = await container.db.get<{ n: number }>(
-      "SELECT COUNT(*) AS n FROM execution_steps WHERE tenant_id = ? AND run_id = ?",
+    const stepAgg = await container.db.get<{ n: number; max_attempts: number }>(
+      "SELECT COUNT(*) AS n, MIN(max_attempts) AS max_attempts FROM execution_steps WHERE tenant_id = ? AND run_id = ?",
       [DEFAULT_TENANT_ID, payload.run_id],
     );
     expect(stepAgg?.n).toBe(1);
+    expect(stepAgg?.max_attempts).toBe(1);
 
     const outboxRows = await container.db.all<{ topic: string; payload_json: string }>(
       "SELECT topic, payload_json FROM outbox ORDER BY id ASC",
