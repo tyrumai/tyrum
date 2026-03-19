@@ -105,14 +105,10 @@ export class AgentRegistry {
     const existing = this.policyServiceByAgentId.get(id);
     if (existing) return existing;
 
-    const home = this.resolveAgentHome(id);
     const service = new PolicyServiceImpl({
-      home,
       snapshotDal: this.opts.container.policySnapshotDal,
       overrideDal: this.opts.container.policyOverrideDal,
-      logger: this.opts.logger,
       deploymentPolicy: this.opts.container.deploymentConfig.policy,
-      includeAgentHomeBundle: !isSharedStateMode(this.opts.container.deploymentConfig),
       configStore: this.opts.container.gatewayConfigStore,
     });
     this.policyServiceByAgentId.set(id, service);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { PolicyBundle } from "@tyrum/contracts";
@@ -29,7 +29,6 @@ describe("PolicyService regressions (precedence + overrides)", () => {
     const db = openTestSqliteDb();
     try {
       const policy = new PolicyService({
-        home: "/tmp/unused",
         snapshotDal: new PolicySnapshotDal(db),
         overrideDal: new PolicyOverrideDal(db),
       });
@@ -43,60 +42,8 @@ describe("PolicyService regressions (precedence + overrides)", () => {
     }
   });
 
-  it("can disable per-agent home policy bundles for shared mode", async () => {
-    await withTempDir(async (home) => {
-      const db = openTestSqliteDb();
-      try {
-        await writeFile(
-          join(home, "policy.yml"),
-          [
-            "v: 1",
-            "tools:",
-            "  default: deny",
-            "  allow: []",
-            "  require_approval:",
-            "    - bash",
-            "  deny: []",
-            "",
-          ].join("\n"),
-          "utf-8",
-        );
-
-        const playbookBundle = PolicyBundle.parse({
-          v: 1,
-          tools: {
-            default: "deny",
-            allow: ["bash"],
-            require_approval: [],
-            deny: [],
-          },
-        });
-
-        const policy = new PolicyService({
-          home,
-          snapshotDal: new PolicySnapshotDal(db),
-          overrideDal: new PolicyOverrideDal(db),
-          includeAgentHomeBundle: false,
-        });
-
-        const res = await policy.evaluateToolCall({
-          tenantId: DEFAULT_TENANT_ID,
-          agentId: DEFAULT_AGENT_ID,
-          workspaceId: DEFAULT_WORKSPACE_ID,
-          toolId: "bash",
-          toolMatchTarget: "echo ok",
-          playbookBundle,
-        });
-
-        expect(res.decision).toBe("allow");
-      } finally {
-        await db.close();
-      }
-    });
-  });
-
   it("enforces require_approval over allow when patterns overlap", async () => {
-    await withTempDir(async (home) => {
+    await withTempDir(async (_home) => {
       const db = openTestSqliteDb();
       try {
         const playbookBundle = PolicyBundle.parse({
@@ -110,7 +57,6 @@ describe("PolicyService regressions (precedence + overrides)", () => {
         });
 
         const policy = new PolicyService({
-          home,
           snapshotDal: new PolicySnapshotDal(db),
           overrideDal: new PolicyOverrideDal(db),
         });
@@ -132,7 +78,7 @@ describe("PolicyService regressions (precedence + overrides)", () => {
   });
 
   it("enforces deny over require_approval and allow when patterns overlap", async () => {
-    await withTempDir(async (home) => {
+    await withTempDir(async (_home) => {
       const db = openTestSqliteDb();
       try {
         const playbookBundle = PolicyBundle.parse({
@@ -146,7 +92,6 @@ describe("PolicyService regressions (precedence + overrides)", () => {
         });
 
         const policy = new PolicyService({
-          home,
           snapshotDal: new PolicySnapshotDal(db),
           overrideDal: new PolicyOverrideDal(db),
         });
@@ -168,7 +113,7 @@ describe("PolicyService regressions (precedence + overrides)", () => {
   });
 
   it("merges multiple bundles conservatively (require_approval wins over allow)", async () => {
-    await withTempDir(async (home) => {
+    await withTempDir(async (_home) => {
       const db = openTestSqliteDb();
       try {
         await seedAgentPolicyBundle(db, {
@@ -195,14 +140,9 @@ describe("PolicyService regressions (precedence + overrides)", () => {
         });
 
         const policy = new PolicyService({
-          home,
           snapshotDal: new PolicySnapshotDal(db),
           overrideDal: new PolicyOverrideDal(db),
-          configStore: createGatewayConfigStore({
-            db,
-            home,
-            deploymentConfig: {},
-          }),
+          configStore: createGatewayConfigStore({ db }),
         });
 
         const res = await policy.evaluateToolCall({
@@ -222,7 +162,7 @@ describe("PolicyService regressions (precedence + overrides)", () => {
   });
 
   it("does not allow policy overrides to bypass explicit tool denies", async () => {
-    await withTempDir(async (home) => {
+    await withTempDir(async (_home) => {
       const db = openTestSqliteDb();
       try {
         const playbookBundle = PolicyBundle.parse({
@@ -237,7 +177,6 @@ describe("PolicyService regressions (precedence + overrides)", () => {
 
         const overrideDal = new PolicyOverrideDal(db);
         const policy = new PolicyService({
-          home,
           snapshotDal: new PolicySnapshotDal(db),
           overrideDal,
         });
@@ -268,7 +207,7 @@ describe("PolicyService regressions (precedence + overrides)", () => {
   });
 
   it("does not allow connector send overrides to bypass explicit connector denies", async () => {
-    await withTempDir(async (home) => {
+    await withTempDir(async (_home) => {
       const db = openTestSqliteDb();
       try {
         const playbookBundle = PolicyBundle.parse({
@@ -283,7 +222,6 @@ describe("PolicyService regressions (precedence + overrides)", () => {
 
         const overrideDal = new PolicyOverrideDal(db);
         const policy = new PolicyService({
-          home,
           snapshotDal: new PolicySnapshotDal(db),
           overrideDal,
         });
@@ -312,7 +250,7 @@ describe("PolicyService regressions (precedence + overrides)", () => {
   });
 
   it("does not allow policy overrides to bypass non-tool approval gates (egress)", async () => {
-    await withTempDir(async (home) => {
+    await withTempDir(async (_home) => {
       const db = openTestSqliteDb();
       try {
         const playbookBundle = PolicyBundle.parse({
@@ -333,7 +271,6 @@ describe("PolicyService regressions (precedence + overrides)", () => {
 
         const overrideDal = new PolicyOverrideDal(db);
         const policy = new PolicyService({
-          home,
           snapshotDal: new PolicySnapshotDal(db),
           overrideDal,
         });
@@ -365,7 +302,7 @@ describe("PolicyService regressions (precedence + overrides)", () => {
   });
 
   it("allows policy overrides to relax require_approval → allow for matching tool actions", async () => {
-    await withTempDir(async (home) => {
+    await withTempDir(async (_home) => {
       const db = openTestSqliteDb();
       try {
         const playbookBundle = PolicyBundle.parse({
@@ -380,7 +317,6 @@ describe("PolicyService regressions (precedence + overrides)", () => {
 
         const overrideDal = new PolicyOverrideDal(db);
         const policy = new PolicyService({
-          home,
           snapshotDal: new PolicySnapshotDal(db),
           overrideDal,
         });

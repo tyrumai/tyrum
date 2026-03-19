@@ -26,14 +26,9 @@ describe("PolicyService provenance rules", () => {
       });
 
       const policy = new PolicyService({
-        home: "/tmp/unused",
         snapshotDal: new PolicySnapshotDal(db),
         overrideDal: new PolicyOverrideDal(db),
-        configStore: createGatewayConfigStore({
-          db,
-          home: "/tmp/unused",
-          deploymentConfig: {},
-        }),
+        configStore: createGatewayConfigStore({ db }),
       });
 
       const untrusted = await policy.evaluateToolCall({
@@ -67,14 +62,9 @@ describe("PolicyService provenance rules", () => {
       });
 
       const policy = new PolicyService({
-        home: "/tmp/unused",
         snapshotDal: new PolicySnapshotDal(db),
         overrideDal: new PolicyOverrideDal(db),
-        configStore: createGatewayConfigStore({
-          db,
-          home: "/tmp/unused",
-          deploymentConfig: {},
-        }),
+        configStore: createGatewayConfigStore({ db }),
       });
 
       const trusted = await policy.evaluateToolCall({
@@ -119,14 +109,9 @@ describe("PolicyService provenance rules", () => {
 
       const overrideDal = new PolicyOverrideDal(db);
       const policy = new PolicyService({
-        home: "/tmp/unused",
         snapshotDal: new PolicySnapshotDal(db),
         overrideDal,
-        configStore: createGatewayConfigStore({
-          db,
-          home: "/tmp/unused",
-          deploymentConfig: {},
-        }),
+        configStore: createGatewayConfigStore({ db }),
       });
 
       const override = await overrideDal.create({

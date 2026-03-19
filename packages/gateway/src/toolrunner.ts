@@ -198,10 +198,8 @@ export async function runToolRunnerFromStdio(params?: {
       reason: "seed",
     });
     const policyService = new PolicyService({
-      home: tyrumHome,
       snapshotDal: new PolicySnapshotDal(db),
       overrideDal: new PolicyOverrideDal(db),
-      logger,
       deploymentPolicy: deployment.config.policy,
     });
 

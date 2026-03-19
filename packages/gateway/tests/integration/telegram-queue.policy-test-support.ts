@@ -43,14 +43,9 @@ async function createApprovalPolicyService(db: NonNullable<TelegramQueueTestStat
   });
 
   return new PolicyService({
-    home: "/tmp/unused",
     snapshotDal: new PolicySnapshotDal(db),
     overrideDal: new PolicyOverrideDal(db),
-    configStore: createGatewayConfigStore({
-      db,
-      home: "/tmp/unused",
-      deploymentConfig: {},
-    }),
+    configStore: createGatewayConfigStore({ db }),
   });
 }
 
@@ -207,14 +202,9 @@ export function registerTelegramQueuePolicyTests(state: TelegramQueueTestState):
         await createApprovalPolicyService(db);
         policyOverrideDal = new PolicyOverrideDal(db);
         return new PolicyService({
-          home: "/tmp/unused",
           snapshotDal: new PolicySnapshotDal(db),
           overrideDal: policyOverrideDal,
-          configStore: createGatewayConfigStore({
-            db,
-            home: "/tmp/unused",
-            deploymentConfig: {},
-          }),
+          configStore: createGatewayConfigStore({ db }),
         });
       },
       queueOptions: { agentId: "agent-1" },

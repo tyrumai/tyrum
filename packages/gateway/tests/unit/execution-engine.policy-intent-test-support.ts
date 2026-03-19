@@ -216,7 +216,7 @@ function registerPolicyApprovalTests(fixture: { db: () => SqliteDb }): void {
     try {
       const snapshotDal = new PolicySnapshotDal(db);
       const overrideDal = new PolicyOverrideDal(db);
-      const policyService = new PolicyService({ home, snapshotDal, overrideDal });
+      const policyService = new PolicyService({ snapshotDal, overrideDal });
       const invalidSnapshotId = "11111111-1111-1111-8111-111111111111";
       await db.run(
         `INSERT INTO policy_snapshots (tenant_id, policy_snapshot_id, sha256, bundle_json) VALUES (?, ?, ?, ?)`,
@@ -266,7 +266,7 @@ function registerPolicyPersistenceTests(fixture: { db: () => SqliteDb }): void {
     const home = await mkdtemp(join(tmpdir(), "tyrum-policy-home-"));
     const snapshotDal = new PolicySnapshotDal(db);
     const overrideDal = new PolicyOverrideDal(db);
-    const policyService = new PolicyService({ home, snapshotDal, overrideDal });
+    const policyService = new PolicyService({ snapshotDal, overrideDal });
     const snapshot = await snapshotDal.getOrCreate(DEFAULT_TENANT_ID, defaultPolicyBundle());
     const scopeIds = await new IdentityScopeDal(db).resolveScopeIds({
       agentKey: "agent-1",
@@ -318,7 +318,7 @@ function registerPolicyPersistenceTests(fixture: { db: () => SqliteDb }): void {
     const home = await mkdtemp(join(tmpdir(), "tyrum-policy-home-"));
     const snapshotDal = new PolicySnapshotDal(db);
     const overrideDal = new PolicyOverrideDal(db);
-    const policyService = new PolicyService({ home, snapshotDal, overrideDal });
+    const policyService = new PolicyService({ snapshotDal, overrideDal });
     const snapshot = await snapshotDal.getOrCreate(DEFAULT_TENANT_ID, defaultPolicyBundle());
     const engine = new ExecutionEngine({ db, policyService });
     await enqueuePlan(engine, {
@@ -366,7 +366,7 @@ function registerPolicyPersistenceTests(fixture: { db: () => SqliteDb }): void {
     const home = await mkdtemp(join(tmpdir(), "tyrum-policy-home-"));
     const snapshotDal = new PolicySnapshotDal(db);
     const overrideDal = new PolicyOverrideDal(db);
-    const policyService = new PolicyService({ home, snapshotDal, overrideDal });
+    const policyService = new PolicyService({ snapshotDal, overrideDal });
     const bundle = PolicyBundle.parse({
       v: 1,
       tools: { default: "deny", allow: ["bash"], require_approval: [], deny: [] },
@@ -420,7 +420,7 @@ function registerPolicyPersistenceTests(fixture: { db: () => SqliteDb }): void {
     try {
       const snapshotDal = new PolicySnapshotDal(db);
       const overrideDal = new PolicyOverrideDal(db);
-      const policyService = new PolicyService({ home, snapshotDal, overrideDal });
+      const policyService = new PolicyService({ snapshotDal, overrideDal });
       const snapshot = await snapshotDal.getOrCreate(
         DEFAULT_TENANT_ID,
         PolicyBundle.parse({

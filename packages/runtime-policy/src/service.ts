@@ -24,6 +24,15 @@ export interface PolicyEvaluation {
   decision_record?: PolicyDecisionT;
 }
 
+interface PolicyServiceOptions {
+  snapshotDal: PolicySnapshotStore;
+  overrideDal: PolicyOverrideStore;
+  deploymentPolicy?: {
+    mode?: string;
+  };
+  configStore?: PolicyBundleStore;
+}
+
 export class PolicyService {
   private readonly deploymentBundleCache = new Map<
     string,
@@ -34,19 +43,7 @@ export class PolicyService {
     { path: string | null; bundle: PolicyBundleT | null; sha256: string | null }
   >();
 
-  constructor(
-    private readonly opts: {
-      home?: string;
-      snapshotDal: PolicySnapshotStore;
-      overrideDal: PolicyOverrideStore;
-      logger?: unknown;
-      deploymentPolicy?: {
-        mode?: string;
-      };
-      includeAgentHomeBundle?: boolean;
-      configStore?: PolicyBundleStore;
-    },
-  ) {}
+  constructor(private readonly opts: PolicyServiceOptions) {}
 
   isObserveOnly(): boolean {
     const mode = this.opts.deploymentPolicy?.mode?.trim().toLowerCase();

@@ -15,7 +15,6 @@ describe("PolicyService effect defaults", () => {
     const db = openTestSqliteDb();
     try {
       const policy = new PolicyService({
-        home: "/tmp/unused",
         snapshotDal: new PolicySnapshotDal(db),
         overrideDal: new PolicyOverrideDal(db),
       });
@@ -40,7 +39,6 @@ describe("PolicyService effect defaults", () => {
     const db = openTestSqliteDb();
     try {
       const policy = new PolicyService({
-        home: "/tmp/unused",
         snapshotDal: new PolicySnapshotDal(db),
         overrideDal: new PolicyOverrideDal(db),
       });
@@ -65,7 +63,6 @@ describe("PolicyService effect defaults", () => {
     const db = openTestSqliteDb();
     try {
       const policy = new PolicyService({
-        home: "/tmp/unused",
         snapshotDal: new PolicySnapshotDal(db),
         overrideDal: new PolicyOverrideDal(db),
       });
@@ -113,14 +110,9 @@ describe("PolicyService effect defaults", () => {
       );
 
       const policy = new PolicyService({
-        home: "/tmp/unused",
         snapshotDal: new PolicySnapshotDal(db),
         overrideDal: new PolicyOverrideDal(db),
-        configStore: createGatewayConfigStore({
-          db,
-          home: "/tmp/unused",
-          deploymentConfig: { state: { mode: "shared" } },
-        }),
+        configStore: createGatewayConfigStore({ db }),
       });
 
       const res = await policy.evaluateToolCall({
@@ -150,7 +142,6 @@ describe("PolicyService effect defaults", () => {
     const db = openTestSqliteDb();
     try {
       const policy = new PolicyService({
-        home: "/tmp/unused",
         snapshotDal: new PolicySnapshotDal(db),
         overrideDal: new PolicyOverrideDal(db),
       });
@@ -214,15 +205,9 @@ describe("PolicyService effect defaults", () => {
       );
 
       const policy = new PolicyService({
-        home: "/tmp/unused",
         snapshotDal: new PolicySnapshotDal(db),
         overrideDal: new PolicyOverrideDal(db),
-        includeAgentHomeBundle: false,
-        configStore: createGatewayConfigStore({
-          db,
-          home: "/tmp/unused",
-          deploymentConfig: { state: { mode: "shared" } },
-        }),
+        configStore: createGatewayConfigStore({ db }),
       });
 
       const res = await policy.evaluateToolCall({
@@ -242,16 +227,10 @@ describe("PolicyService effect defaults", () => {
   it("refreshes shared deployment bundles after config-store updates", async () => {
     const db = openTestSqliteDb();
     try {
-      const configStore = createGatewayConfigStore({
-        db,
-        home: "/tmp/unused",
-        deploymentConfig: { state: { mode: "shared" } },
-      });
+      const configStore = createGatewayConfigStore({ db });
       const policy = new PolicyService({
-        home: "/tmp/unused",
         snapshotDal: new PolicySnapshotDal(db),
         overrideDal: new PolicyOverrideDal(db),
-        includeAgentHomeBundle: false,
         configStore,
       });
 

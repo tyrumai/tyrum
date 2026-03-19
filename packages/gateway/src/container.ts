@@ -76,7 +76,6 @@ import { OauthRefreshLeaseDal as OauthRefreshLeaseDalImpl } from "./modules/oaut
 import { OAuthProviderRegistry as OAuthProviderRegistryImpl } from "./modules/oauth/provider-registry.js";
 import { IdentityScopeDal as IdentityScopeDalImpl } from "./modules/identity/scope.js";
 import { ChannelThreadDal as ChannelThreadDalImpl } from "./modules/channels/thread-dal.js";
-import { isSharedStateMode } from "./modules/runtime-state/mode.js";
 import {
   createGatewayConfigStore,
   type GatewayConfigStore,
@@ -218,20 +217,11 @@ export function wireContainer(
     redactionEngine,
     deploymentConfig.server.publicBaseUrl,
   );
-  const gatewayConfigStore = createGatewayConfigStore({
-    db,
-    home: tyrumHome,
-    logger,
-    deploymentConfig,
-    includeAgentHomeBundle: !isSharedStateMode(deploymentConfig),
-  });
+  const gatewayConfigStore = createGatewayConfigStore({ db });
   const policyService = new PolicyServiceImpl({
-    home: tyrumHome,
     snapshotDal: policySnapshotDal,
     overrideDal: policyOverrideDal,
-    logger,
     deploymentPolicy: deploymentConfig.policy,
-    includeAgentHomeBundle: !isSharedStateMode(deploymentConfig),
     configStore: gatewayConfigStore,
   });
 

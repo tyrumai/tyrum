@@ -31,7 +31,6 @@ describe("LifecycleHooksRuntime", () => {
     const policySnapshotDal = new PolicySnapshotDal(db);
     const policyOverrideDal = new PolicyOverrideDal(db);
     const policyService = new PolicyService({
-      home: homeDir,
       snapshotDal: policySnapshotDal,
       overrideDal: policyOverrideDal,
     });
@@ -104,7 +103,6 @@ describe("LifecycleHooksRuntime", () => {
     const policySnapshotDal = new PolicySnapshotDal(db);
     const policyOverrideDal = new PolicyOverrideDal(db);
     const policyService = new PolicyService({
-      home: homeDir,
       snapshotDal: policySnapshotDal,
       overrideDal: policyOverrideDal,
     });
@@ -146,7 +144,6 @@ describe("LifecycleHooksRuntime", () => {
     const policySnapshotDal = new PolicySnapshotDal(db);
     const policyOverrideDal = new PolicyOverrideDal(db);
     const policyService = new PolicyService({
-      home: homeDir,
       snapshotDal: policySnapshotDal,
       overrideDal: policyOverrideDal,
     });
