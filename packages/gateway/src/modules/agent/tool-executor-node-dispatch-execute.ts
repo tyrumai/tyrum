@@ -11,12 +11,12 @@ import {
   type NodeCapabilityInspectionResponse as NodeCapabilityInspectionResponseT,
   type NodeInventoryEntry as NodeInventoryEntryT,
 } from "@tyrum/contracts";
+import type { NodeDispatchService } from "@tyrum/runtime-node-control";
 import type { ArtifactStore } from "../artifact/store.js";
 import type { NodeCapabilityInspectionService } from "../node/capability-inspection-service.js";
 import type { ConnectionManager } from "../../ws/connection-manager.js";
 import type { ConnectionDirectoryDal } from "../backplane/connection-directory.js";
 import { getCapabilityCatalogAction } from "../node/capability-catalog.js";
-import type { NodeDispatchService } from "./node-dispatch-service.js";
 import type { WorkspaceLeaseConfig } from "./tool-executor-shared.js";
 import { ensureSyntheticExecutionScope } from "./tool-executor-node-dispatch-internals.js";
 import {
