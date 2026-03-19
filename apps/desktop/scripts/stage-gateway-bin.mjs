@@ -35,6 +35,10 @@ const runtimeExecutionDist = join(
   "node_modules/@tyrum/runtime-execution/dist/index.mjs",
 );
 const runtimeAgentDist = join(targetDir, "node_modules/@tyrum/runtime-agent/dist/index.mjs");
+const runtimeWorkboardDist = join(
+  targetDir,
+  "node_modules/@tyrum/runtime-workboard/dist/index.mjs",
+);
 const isWindows = process.platform === "win32";
 
 if (!existsSync(sourcePath)) {
@@ -123,6 +127,12 @@ if (!existsSync(runtimeExecutionDist)) {
 if (!existsSync(runtimeAgentDist)) {
   throw new Error(
     `Staged gateway dependency missing at ${runtimeAgentDist}. Run "pnpm --filter @tyrum/runtime-agent build" before staging the desktop gateway bundle.`,
+  );
+}
+
+if (!existsSync(runtimeWorkboardDist)) {
+  throw new Error(
+    `Staged gateway dependency missing at ${runtimeWorkboardDist}. Run "pnpm --filter @tyrum/runtime-workboard build" before staging the desktop gateway bundle.`,
   );
 }
 
