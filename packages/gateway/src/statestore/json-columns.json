@@ -245,14 +245,14 @@
     "default": "[]"
   },
   {
-    "table": "execution_artifacts",
+    "table": "artifacts",
     "column": "labels_json",
     "shape": "array",
     "nullable": false,
     "default": "[]"
   },
   {
-    "table": "execution_artifacts",
+    "table": "artifacts",
     "column": "metadata_json",
     "shape": "object",
     "nullable": false,

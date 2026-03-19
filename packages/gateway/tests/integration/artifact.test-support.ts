@@ -12,6 +12,8 @@ import {
   decorateAppWithDefaultAuth,
 } from "./helpers.js";
 
+const TEST_PUBLIC_BASE_URL = "https://gateway.example.test";
+
 type SqlRunner = {
   run(sql: string, params?: unknown[]): Promise<unknown>;
 };
@@ -28,7 +30,10 @@ type ExecutionArtifactRecord = {
   kind: ArtifactRef["kind"];
   uri: string;
   createdAt: string;
+  mediaClass?: ArtifactRef["media_class"];
+  filename?: string;
   mimeType?: string;
+  externalUrl?: string;
   sizeBytes?: number;
   sha256?: string;
   labels?: string[];
@@ -43,16 +48,17 @@ type ExecutionArtifactRecord = {
 
 const EXECUTION_KEY = "agent:agent-1:thread:thread-1";
 const EXECUTION_LANE = "main";
-const INSERT_EXECUTION_ARTIFACT_SQL = `INSERT INTO execution_artifacts (
+const INSERT_ARTIFACT_SQL = `INSERT INTO artifacts (
   tenant_id,
   artifact_id,
+  access_id,
   workspace_id,
   agent_id,
-  run_id,
-  step_id,
-  attempt_id,
   kind,
   uri,
+  external_url,
+  media_class,
+  filename,
   created_at,
   mime_type,
   size_bytes,
@@ -62,7 +68,26 @@ const INSERT_EXECUTION_ARTIFACT_SQL = `INSERT INTO execution_artifacts (
   sensitivity,
   policy_snapshot_id
 )
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+
+const INSERT_ARTIFACT_ACCESS_SQL = `INSERT INTO artifact_access (
+  access_id,
+  tenant_id,
+  artifact_id,
+  created_at
+)
+VALUES (?, ?, ?, ?)
+ON CONFLICT (tenant_id, artifact_id) DO NOTHING`;
+
+const INSERT_ARTIFACT_LINK_SQL = `INSERT INTO artifact_links (
+  tenant_id,
+  artifact_id,
+  parent_kind,
+  parent_id,
+  created_at
+)
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT (tenant_id, artifact_id, parent_kind, parent_id) DO NOTHING`;
 
 function withDefault<T>(value: T | null | undefined, fallback: T): T | null {
   if (value === undefined) return fallback;
@@ -120,16 +145,19 @@ export async function insertExecutionArtifactRecord(
   db: SqlRunner,
   record: ExecutionArtifactRecord,
 ): Promise<void> {
-  await db.run(INSERT_EXECUTION_ARTIFACT_SQL, [
+  const externalUrl = record.externalUrl ?? `${TEST_PUBLIC_BASE_URL}/a/${record.artifactId}`;
+
+  await db.run(INSERT_ARTIFACT_SQL, [
     DEFAULT_TENANT_ID,
+    record.artifactId,
     record.artifactId,
     withDefault(record.workspaceId, DEFAULT_WORKSPACE_ID),
     withDefault(record.agentId, DEFAULT_AGENT_ID),
-    withDefault(record.runId, null),
-    withDefault(record.stepId, null),
-    withDefault(record.attemptId, null),
     record.kind,
     record.uri,
+    externalUrl,
+    record.mediaClass ?? "other",
+    record.filename ?? `${record.artifactId}.bin`,
     record.createdAt,
     record.mimeType ?? null,
     record.sizeBytes ?? null,
@@ -138,6 +166,13 @@ export async function insertExecutionArtifactRecord(
     JSON.stringify(record.metadata ?? {}),
     "normal",
     withDefault(record.policySnapshotId, null),
+  ]);
+
+  await db.run(INSERT_ARTIFACT_ACCESS_SQL, [
+    record.artifactId,
+    DEFAULT_TENANT_ID,
+    record.artifactId,
+    record.createdAt,
   ]);
 }
 
@@ -153,7 +188,10 @@ export async function linkArtifactToExecution(
     kind: ref.kind,
     uri: scope.uri ?? ref.uri,
     createdAt: ref.created_at,
+    mediaClass: ref.media_class,
+    filename: ref.filename,
     mimeType: ref.mime_type,
+    externalUrl: ref.external_url,
     sizeBytes: ref.size_bytes,
     sha256: ref.sha256,
     labels: ref.labels,
@@ -165,6 +203,34 @@ export async function linkArtifactToExecution(
     attemptId: scope.attemptId,
     policySnapshotId: scope.policySnapshotId,
   });
+
+  if (scope.runId) {
+    await db.run(INSERT_ARTIFACT_LINK_SQL, [
+      DEFAULT_TENANT_ID,
+      ref.artifact_id,
+      "execution_run",
+      scope.runId,
+      ref.created_at,
+    ]);
+  }
+  if (scope.stepId) {
+    await db.run(INSERT_ARTIFACT_LINK_SQL, [
+      DEFAULT_TENANT_ID,
+      ref.artifact_id,
+      "execution_step",
+      scope.stepId,
+      ref.created_at,
+    ]);
+  }
+  if (scope.attemptId) {
+    await db.run(INSERT_ARTIFACT_LINK_SQL, [
+      DEFAULT_TENANT_ID,
+      ref.artifact_id,
+      "execution_attempt",
+      scope.attemptId,
+      ref.created_at,
+    ]);
+  }
 }
 
 export async function putTextArtifact(
@@ -183,7 +249,16 @@ export async function setupArtifactRouteTest(
   homeDir: string | undefined,
   container?: GatewayContainer,
 ) {
-  const resolvedContainer = container ?? (await createTestContainer({ tyrumHome: homeDir }));
+  const resolvedContainer =
+    container ??
+    (await createTestContainer({
+      tyrumHome: homeDir,
+      deploymentConfig: {
+        server: {
+          publicBaseUrl: TEST_PUBLIC_BASE_URL,
+        },
+      },
+    }));
   const { authTokens, tenantAdminToken, secretProviderForTenant } = await createTestAuthAndSecrets(
     resolvedContainer,
     { tyrumHome: homeDir },

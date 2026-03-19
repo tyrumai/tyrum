@@ -1,12 +1,7 @@
-import {
-  PeerId,
-  WsChannelQueueOverflowEvent,
-  buildAgentSessionKey,
-  parseTyrumKey,
-  resolveDmScope,
-} from "@tyrum/contracts";
+import { PeerId, buildAgentSessionKey, parseTyrumKey, resolveDmScope } from "@tyrum/contracts";
 import type { NormalizedThreadMessage, WsEventEnvelope } from "@tyrum/contracts";
 import type { DmScope } from "@tyrum/contracts";
+import { Lane } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import type { Logger } from "../observability/logger.js";
 import { ChannelInboxDal, type ChannelInboxConfig, type ChannelInboxRow } from "./inbox-dal.js";
@@ -160,14 +155,16 @@ export class TelegramChannelQueue {
       activeLease.lease_expires_at_ms > nowMs;
 
     if (!deduped && overflow && overflow.dropped.length > 0) {
-      const candidate = {
+      const parsedLane = Lane.safeParse(lane);
+      const laneScope = parsedLane.success ? parsedLane.data : undefined;
+      const overflowEvent: WsEventEnvelope = {
         event_id: randomUUID(),
         type: "channel.queue.overflow",
         occurred_at: new Date().toISOString(),
-        scope: { kind: "key", key, lane },
+        scope: { kind: "key", key, lane: laneScope },
         payload: {
           key,
-          lane,
+          lane: laneScope,
           cap: overflow.cap,
           overflow: overflow.policy,
           queued_before: overflow.queued_before,
@@ -182,10 +179,7 @@ export class TelegramChannelQueue {
             : {}),
         },
       };
-      const overflowEvent = WsChannelQueueOverflowEvent.safeParse(candidate);
-      if (overflowEvent.success) {
-        this.emitWsEvent(row.tenant_id, overflowEvent.data);
-      }
+      this.emitWsEvent(row.tenant_id, overflowEvent);
     }
 
     const effectiveQueueMode = row.queue_mode;

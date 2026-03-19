@@ -49,7 +49,7 @@ export async function runSubagentTurn(params: {
   const response = await runtime.turn({
     channel: "subagent",
     thread_id: params.subagent.subagent_id,
-    message: params.message,
+    parts: [{ type: "text", text: params.message }],
     metadata: {
       tyrum_key: params.subagent.session_key,
       lane: params.subagent.lane,

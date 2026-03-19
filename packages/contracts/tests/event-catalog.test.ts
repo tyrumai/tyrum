@@ -13,8 +13,11 @@ describe("WS event catalog", () => {
         artifact: {
           artifact_id: "123e4567-e89b-12d3-a456-426614174000",
           uri: "artifact://123e4567-e89b-12d3-a456-426614174000",
+          external_url: "https://gateway.example.test/a/123e4567-e89b-12d3-a456-426614174000",
           kind: "log",
+          media_class: "document",
           created_at: "2026-02-19T12:00:00Z",
+          filename: "123e4567-e89b-12d3-a456-426614174000.txt",
           labels: ["log"],
           metadata: { test: true },
         },
@@ -34,8 +37,11 @@ describe("WS event catalog", () => {
         artifact: {
           artifact_id: "123e4567-e89b-12d3-a456-426614174000",
           uri: "artifact://123e4567-e89b-12d3-a456-426614174000",
+          external_url: "https://gateway.example.test/a/123e4567-e89b-12d3-a456-426614174000",
           kind: "log",
+          media_class: "document",
           created_at: "2026-02-19T12:00:00Z",
+          filename: "123e4567-e89b-12d3-a456-426614174000.txt",
           labels: ["log"],
         },
         step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",

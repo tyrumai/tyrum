@@ -93,4 +93,43 @@ describe("ChatThreadsPanel", () => {
 
     cleanupTestRoot(testRoot);
   });
+
+  it("shows an attachment label when a thread has messages but no text preview", () => {
+    const testRoot = renderIntoDocument(
+      e(ChatThreadsPanel, {
+        splitView: true,
+        connected: true,
+        loading: false,
+        agentsLoading: false,
+        errorMessage: null,
+        threads: [
+          {
+            agent_id: "default",
+            session_id: "session-1",
+            channel: "ui",
+            thread_id: "thread-1",
+            title: "Attachment thread",
+            created_at: "2026-03-13T00:00:00.000Z",
+            updated_at: "2026-03-14T00:00:00.000Z",
+            message_count: 2,
+            preview: "",
+            archived: false,
+          },
+        ],
+        activeSessionId: null,
+        onRefresh: vi.fn(),
+        onLoadMore: vi.fn(),
+        canLoadMore: false,
+        onOpenThread: vi.fn(),
+        agentId: "default",
+        agents: [{ agent_id: "default", label: "Default" }],
+        onAgentChange: vi.fn(),
+        onNewChat: vi.fn(),
+        ...archivedDefaults,
+      }),
+    );
+
+    expect(testRoot.container.textContent).toContain("Attachment");
+    cleanupTestRoot(testRoot);
+  });
 });

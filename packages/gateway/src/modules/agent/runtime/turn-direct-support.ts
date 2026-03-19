@@ -51,9 +51,15 @@ export function createGuardianReviewTurnControl(): {
 }
 
 export function stripEmbeddedSessionContext(
-  userContent: ReadonlyArray<{ type: "text"; text: string }>,
+  userContent: ReadonlyArray<
+    | { type: "text"; text: string }
+    | { type: "file"; data: string; mediaType: string; filename?: string }
+  >,
   contextState: SessionContextState | null | undefined,
-): Array<{ type: "text"; text: string }> {
+): Array<
+  | { type: "text"; text: string }
+  | { type: "file"; data: string; mediaType: string; filename?: string }
+> {
   const hasPromptInjectedContext = Boolean(
     contextState?.checkpoint ||
     contextState?.pending_approvals.length ||
@@ -62,5 +68,7 @@ export function stripEmbeddedSessionContext(
   if (!hasPromptInjectedContext) {
     return [...userContent];
   }
-  return userContent.filter((part) => !part.text.startsWith("Session state:\n"));
+  return userContent.filter(
+    (part) => part.type !== "text" || !part.text.startsWith("Session state:\n"),
+  );
 }

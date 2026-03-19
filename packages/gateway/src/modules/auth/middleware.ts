@@ -30,6 +30,7 @@ const AUTH_UNAVAILABLE_BODY = {
 const AUTH_SESSION_ROUTE_PATH = "/auth/session";
 const AUTH_LOGOUT_ROUTE_PATH = "/auth/logout";
 const UI_PATH_PREFIX = "/ui";
+const ARTIFACT_CAPABILITY_PATH_PREFIX = "/a";
 const OAUTH_CALLBACK_ROUTE_PATH_SUFFIX = "/providers/:provider/oauth/callback";
 const OAUTH_CALLBACK_REQUEST_PATH_PATTERN = /(?:^|\/)providers\/[^/]+\/oauth\/callback$/;
 
@@ -59,6 +60,10 @@ export const PUBLIC_PATHS: readonly PublicPathExemption[] = [
   {
     label: `${UI_PATH_PREFIX}/*`,
     matches: (c) => matchesPathPrefixSegment(c.req.path, UI_PATH_PREFIX),
+  },
+  {
+    label: `${ARTIFACT_CAPABILITY_PATH_PREFIX}/*`,
+    matches: (c) => matchesPathPrefixSegment(c.req.path, ARTIFACT_CAPABILITY_PATH_PREFIX),
   },
   {
     label: AUTH_SESSION_ROUTE_PATH,

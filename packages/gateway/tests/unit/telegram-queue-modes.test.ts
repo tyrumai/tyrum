@@ -7,6 +7,17 @@ import type { AgentRegistry } from "../../src/modules/agent/registry.js";
 import type { TelegramBot } from "../../src/modules/ingress/telegram-bot.js";
 import type { NormalizedThreadMessage } from "@tyrum/contracts";
 
+function textFromTurnRequest(req: {
+  parts?: Array<{ type?: string; text?: string }>;
+  envelope?: { content?: { text?: string } };
+}): string | undefined {
+  const partsText = req.parts
+    ?.filter((part) => part.type === "text" && typeof part.text === "string")
+    .map((part) => part.text)
+    .join("\n");
+  return partsText && partsText.length > 0 ? partsText : req.envelope?.content?.text;
+}
+
 function makeNormalizedTextMessage(input: {
   threadId: string;
   messageId: string;
@@ -25,7 +36,7 @@ function makeNormalizedTextMessage(input: {
       id: input.messageId,
       thread_id: input.threadId,
       source: "telegram",
-      content: { kind: "text", text: input.text },
+      content: { text: input.text, attachments: [] },
       sender: {
         id: "peer-1",
         is_bot: false,
@@ -70,15 +81,21 @@ describe("Telegram channel queue modes", () => {
 
     const agents: AgentRegistry = {
       getRuntime: vi.fn(async () => ({
-        turn: vi.fn(async (req: { message?: string }) => {
-          turnCalls.push({ message: req.message });
-          return {
-            reply: req.message ?? "",
-            session_id: "session-1",
-            used_tools: [],
-            memory_written: false,
-          };
-        }),
+        turn: vi.fn(
+          async (req: {
+            parts?: Array<{ type?: string; text?: string }>;
+            envelope?: { content?: { text?: string } };
+          }) => {
+            const message = textFromTurnRequest(req);
+            turnCalls.push({ message });
+            return {
+              reply: message ?? "",
+              session_id: "session-1",
+              used_tools: [],
+              memory_written: false,
+            };
+          },
+        ),
       })),
     } as unknown as AgentRegistry;
 
@@ -136,15 +153,21 @@ describe("Telegram channel queue modes", () => {
 
     const agents: AgentRegistry = {
       getRuntime: vi.fn(async () => ({
-        turn: vi.fn(async (req: { message?: string }) => {
-          turnCalls.push({ message: req.message });
-          return {
-            reply: req.message ?? "",
-            session_id: "session-1",
-            used_tools: [],
-            memory_written: false,
-          };
-        }),
+        turn: vi.fn(
+          async (req: {
+            parts?: Array<{ type?: string; text?: string }>;
+            envelope?: { content?: { text?: string } };
+          }) => {
+            const message = textFromTurnRequest(req);
+            turnCalls.push({ message });
+            return {
+              reply: message ?? "",
+              session_id: "session-1",
+              used_tools: [],
+              memory_written: false,
+            };
+          },
+        ),
       })),
     } as unknown as AgentRegistry;
 
@@ -202,15 +225,21 @@ describe("Telegram channel queue modes", () => {
 
     const agents: AgentRegistry = {
       getRuntime: vi.fn(async () => ({
-        turn: vi.fn(async (req: { message?: string }) => {
-          turnCalls.push({ message: req.message });
-          return {
-            reply: req.message ?? "",
-            session_id: "session-1",
-            used_tools: [],
-            memory_written: false,
-          };
-        }),
+        turn: vi.fn(
+          async (req: {
+            parts?: Array<{ type?: string; text?: string }>;
+            envelope?: { content?: { text?: string } };
+          }) => {
+            const message = textFromTurnRequest(req);
+            turnCalls.push({ message });
+            return {
+              reply: message ?? "",
+              session_id: "session-1",
+              used_tools: [],
+              memory_written: false,
+            };
+          },
+        ),
       })),
     } as unknown as AgentRegistry;
 
@@ -270,15 +299,21 @@ describe("Telegram channel queue modes", () => {
 
     const agents: AgentRegistry = {
       getRuntime: vi.fn(async () => ({
-        turn: vi.fn(async (req: { message?: string }) => {
-          turnCalls.push({ message: req.message });
-          return {
-            reply: req.message ?? "",
-            session_id: "session-1",
-            used_tools: [],
-            memory_written: false,
-          };
-        }),
+        turn: vi.fn(
+          async (req: {
+            parts?: Array<{ type?: string; text?: string }>;
+            envelope?: { content?: { text?: string } };
+          }) => {
+            const message = textFromTurnRequest(req);
+            turnCalls.push({ message });
+            return {
+              reply: message ?? "",
+              session_id: "session-1",
+              used_tools: [],
+              memory_written: false,
+            };
+          },
+        ),
       })),
     } as unknown as AgentRegistry;
 

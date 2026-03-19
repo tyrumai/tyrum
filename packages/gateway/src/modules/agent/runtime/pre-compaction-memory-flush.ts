@@ -244,6 +244,7 @@ async function resolvePreCompactionFlushTooling(params: {
     channel: params.channel ?? "system",
     thread_id: params.threadId ?? params.session.session_id,
     message: "Pre-compaction memory flush",
+    parts: [{ type: "text", text: "Pre-compaction memory flush" }],
     metadata: {
       source: "system.pre_compaction_memory_flush",
     },

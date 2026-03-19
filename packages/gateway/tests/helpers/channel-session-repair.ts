@@ -29,7 +29,7 @@ export function createTelegramNormalizedMessage(input: {
       id: input.messageId,
       thread_id: input.threadId,
       source: "telegram",
-      content: { kind: "text", text: input.text },
+      content: { text: input.text, attachments: [] },
       timestamp: input.receivedAt,
       pii_fields: ["message_text"],
       envelope: {

@@ -23,6 +23,10 @@ const baseMemoryBudgets = {
   },
 } as const;
 
+function textParts(text: string): Array<{ type: "text"; text: string }> {
+  return [{ type: "text", text }];
+}
+
 vi.mock("ai", async (importOriginal) => {
   const actual = await importOriginal<typeof import("ai")>();
   return {
@@ -114,7 +118,11 @@ describe("AgentRuntime (memory MCP pre-turn injection)", () => {
       fetchImpl: fetch404,
     } as ConstructorParameters<typeof AgentRuntime>[0]);
 
-    const res = await runtime.turn({ channel: "test", thread_id: "thread-1", message: "pizza" });
+    const res = await runtime.turn({
+      channel: "test",
+      thread_id: "thread-1",
+      parts: textParts("pizza"),
+    });
     expect(res.reply).toBe("ok");
     const reportRow = (
       await container.contextReportDal.list({ sessionId: res.session_id, limit: 1 })
@@ -169,7 +177,11 @@ describe("AgentRuntime (memory MCP pre-turn injection)", () => {
       fetchImpl: fetch404,
     } as ConstructorParameters<typeof AgentRuntime>[0]);
 
-    const res = await runtime.turn({ channel: "test", thread_id: "thread-1", message: "hello" });
+    const res = await runtime.turn({
+      channel: "test",
+      thread_id: "thread-1",
+      parts: textParts("hello"),
+    });
     expect(res.reply).toBe("ok");
 
     const call = generateTextMock.mock.calls[0]?.[0] as
@@ -224,7 +236,11 @@ describe("AgentRuntime (memory MCP pre-turn injection)", () => {
       fetchImpl: fetch404,
     } as ConstructorParameters<typeof AgentRuntime>[0]);
 
-    const res = await runtime.turn({ channel: "test", thread_id: "thread-1", message: "hello" });
+    const res = await runtime.turn({
+      channel: "test",
+      thread_id: "thread-1",
+      parts: textParts("hello"),
+    });
     expect(res.reply).toBe("ok");
     const reportRow = (
       await container.contextReportDal.list({ sessionId: res.session_id, limit: 1 })
@@ -304,7 +320,7 @@ describe("AgentRuntime (memory MCP pre-turn injection)", () => {
     const res = await runtime.turn({
       channel: "ui",
       thread_id: "thread-identity",
-      message: "Do you know my name?",
+      parts: textParts("Do you know my name?"),
     });
     expect(res.reply).toBe("ok");
 

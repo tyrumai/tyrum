@@ -18,6 +18,10 @@ const migrationsDir = join(__dirname, "../../migrations/sqlite");
 const generateTextMock = vi.hoisted(() => vi.fn());
 const TITLE_PROMPT_TEXT = "Write a concise session title.";
 
+function textParts(text: string): Array<{ type: "text"; text: string }> {
+  return [{ type: "text", text }];
+}
+
 function isTitleGenerateRequest(value: unknown): boolean {
   return (
     typeof (value as { system?: unknown } | undefined)?.system === "string" &&
@@ -131,7 +135,7 @@ describe("AgentRuntime (WorkBoard integration)", () => {
     const result = await runtime.turn({
       channel: "test",
       thread_id: "thread-1",
-      message: "status?",
+      parts: textParts("status?"),
     });
 
     expect(result.reply).toContain(workItemId);
@@ -156,7 +160,11 @@ describe("AgentRuntime (WorkBoard integration)", () => {
       fetchImpl: fetch404,
     } as ConstructorParameters<typeof AgentRuntime>[0]);
 
-    await runtime.turn({ channel: "test", thread_id: "thread-1", message: "hello" });
+    await runtime.turn({
+      channel: "test",
+      thread_id: "thread-1",
+      parts: textParts("hello"),
+    });
 
     const row = await container.db.get<{ last_active_session_key: string }>(
       `SELECT last_active_session_key
@@ -201,7 +209,11 @@ describe("AgentRuntime (WorkBoard integration)", () => {
       fetchImpl: fetch404,
     } as ConstructorParameters<typeof AgentRuntime>[0]);
 
-    const res = await runtime.turn({ channel: "test", thread_id: "thread-1", message: "hello" });
+    const res = await runtime.turn({
+      channel: "test",
+      thread_id: "thread-1",
+      parts: textParts("hello"),
+    });
     expect(res.reply).toBe("ok");
 
     const call = firstNonTitleGenerateCall() as
@@ -260,7 +272,11 @@ describe("AgentRuntime (WorkBoard integration)", () => {
       fetchImpl: fetch404,
     } as ConstructorParameters<typeof AgentRuntime>[0]);
 
-    const res = await runtime.turn({ channel: "test", thread_id: "thread-1", message: "hello" });
+    const res = await runtime.turn({
+      channel: "test",
+      thread_id: "thread-1",
+      parts: textParts("hello"),
+    });
     expect(res.reply).toBe("ok");
 
     const call = firstNonTitleGenerateCall() as
@@ -293,7 +309,7 @@ describe("AgentRuntime (WorkBoard integration)", () => {
     const result = await runtime.turn({
       channel: "test",
       thread_id: "thread-1",
-      message: "/delegate_execute Ship a WorkItem quickly",
+      parts: textParts("/delegate_execute Ship a WorkItem quickly"),
     });
 
     const item = await container.db.get<{
@@ -344,7 +360,7 @@ describe("AgentRuntime (WorkBoard integration)", () => {
     const result = await runtime.turn({
       channel: "test",
       thread_id: "thread-1",
-      message: "/delegate_plan Design a safe rollout plan",
+      parts: textParts("/delegate_plan Design a safe rollout plan"),
     });
 
     const item = await container.db.get<{ work_item_id: string; kind: string; title: string }>(
@@ -386,7 +402,7 @@ describe("AgentRuntime (WorkBoard integration)", () => {
     const result = await runtime.turn({
       channel: "test",
       thread_id: "thread-1",
-      message: "/delegate_executeX not a real directive",
+      parts: textParts("/delegate_executeX not a real directive"),
     });
 
     expect(result.reply).toBe("ok");

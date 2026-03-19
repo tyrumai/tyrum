@@ -23,6 +23,7 @@ import type { TaskResultRegistry } from "./task-result-registry.js";
 import type { WsMessageEnvelope } from "@tyrum/contracts";
 import type { IdentityScopeDal } from "../../modules/identity/scope.js";
 import type { LocationService } from "../../modules/location/service.js";
+import type { ArtifactStore } from "../../modules/artifact/store.js";
 
 export type ProtocolRequestEnvelope = Extract<
   WsMessageEnvelope,
@@ -39,6 +40,8 @@ export interface ProtocolDeps {
   wsEventDal?: WsEventDal;
   identityScopeDal?: IdentityScopeDal;
   locationService?: LocationService;
+  artifactStore?: ArtifactStore;
+  artifactMaxUploadBytes?: number;
   redactionEngine?: RedactionEngine;
   contextReportDal?: ContextReportDal;
   runtime?: {

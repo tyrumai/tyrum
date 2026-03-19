@@ -467,7 +467,7 @@ describe("snapshot routes", () => {
       artifacts: {
         bytes: { included: false, included_sensitivity: [] },
         retention: {
-          execution_artifacts: {
+          artifacts: {
             included: true,
             has_retention_expires_at: true,
             has_bytes_deleted_at: true,
@@ -478,8 +478,8 @@ describe("snapshot routes", () => {
     });
 
     const tables = bundle["tables"] as Record<string, { columns?: unknown }> | undefined;
-    const executionArtifacts = tables?.["execution_artifacts"];
-    expect(executionArtifacts?.columns).toEqual(
+    const artifacts = tables?.["artifacts"];
+    expect(artifacts?.columns).toEqual(
       expect.arrayContaining(["retention_expires_at", "bytes_deleted_at", "bytes_deleted_reason"]),
     );
 

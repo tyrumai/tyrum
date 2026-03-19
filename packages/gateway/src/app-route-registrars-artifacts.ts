@@ -37,6 +37,7 @@ export function registerArtifactsAuditAndUiRoutes(context: AppRouteContext): voi
     createArtifactRoutes({
       db: context.container.db,
       artifactStore: context.container.artifactStore,
+      publicBaseUrl: context.container.deploymentConfig.server.publicBaseUrl,
       logger: context.container.logger,
       policySnapshotDal: context.container.policySnapshotDal,
       policyService: context.container.policyService,

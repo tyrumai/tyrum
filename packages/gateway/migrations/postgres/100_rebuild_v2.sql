@@ -22,7 +22,9 @@ DROP TABLE IF EXISTS channel_outbox CASCADE;
 DROP TABLE IF EXISTS concurrency_slots CASCADE;
 DROP TABLE IF EXISTS connection_directory CASCADE;
 DROP TABLE IF EXISTS context_reports CASCADE;
-DROP TABLE IF EXISTS execution_artifacts CASCADE;
+DROP TABLE IF EXISTS artifact_links CASCADE;
+DROP TABLE IF EXISTS artifact_access CASCADE;
+DROP TABLE IF EXISTS artifacts CASCADE;
 DROP TABLE IF EXISTS execution_attempts CASCADE;
 DROP TABLE IF EXISTS execution_jobs CASCADE;
 DROP TABLE IF EXISTS execution_runs CASCADE;
@@ -596,16 +598,17 @@ CREATE TABLE execution_attempts (
     REFERENCES policy_snapshots(tenant_id, policy_snapshot_id) ON DELETE SET NULL
 );
 
-CREATE TABLE execution_artifacts (
+CREATE TABLE artifacts (
   tenant_id    UUID NOT NULL,
   artifact_id  UUID NOT NULL,
+  access_id    UUID NOT NULL,
   workspace_id UUID NOT NULL,
   agent_id     UUID,
-  run_id       UUID,
-  step_id      UUID,
-  attempt_id   UUID,
   kind         TEXT NOT NULL,
   uri          TEXT NOT NULL,
+  external_url TEXT NOT NULL,
+  media_class  TEXT,
+  filename     TEXT,
   created_at   TIMESTAMPTZ NOT NULL,
   mime_type    TEXT,
   size_bytes   BIGINT,
@@ -618,19 +621,45 @@ CREATE TABLE execution_artifacts (
   bytes_deleted_at TIMESTAMPTZ,
   bytes_deleted_reason TEXT,
   PRIMARY KEY (tenant_id, artifact_id),
-  CONSTRAINT execution_artifacts_workspace_fk
+  UNIQUE (access_id),
+  CONSTRAINT artifacts_workspace_fk
     FOREIGN KEY (tenant_id, workspace_id) REFERENCES workspaces(tenant_id, workspace_id) ON DELETE CASCADE,
-  CONSTRAINT execution_artifacts_agent_fk
+  CONSTRAINT artifacts_agent_fk
     FOREIGN KEY (tenant_id, agent_id) REFERENCES agents(tenant_id, agent_id) ON DELETE SET NULL,
-  CONSTRAINT execution_artifacts_run_fk
-    FOREIGN KEY (tenant_id, run_id) REFERENCES execution_runs(tenant_id, run_id) ON DELETE SET NULL,
-  CONSTRAINT execution_artifacts_step_fk
-    FOREIGN KEY (tenant_id, step_id) REFERENCES execution_steps(tenant_id, step_id) ON DELETE SET NULL,
-  CONSTRAINT execution_artifacts_attempt_fk
-    FOREIGN KEY (tenant_id, attempt_id) REFERENCES execution_attempts(tenant_id, attempt_id) ON DELETE SET NULL,
-  CONSTRAINT execution_artifacts_policy_snapshot_fk
+  CONSTRAINT artifacts_policy_snapshot_fk
     FOREIGN KEY (tenant_id, policy_snapshot_id)
     REFERENCES policy_snapshots(tenant_id, policy_snapshot_id) ON DELETE SET NULL
+);
+
+CREATE TABLE artifact_access (
+  access_id   UUID PRIMARY KEY,
+  tenant_id   UUID NOT NULL,
+  artifact_id UUID NOT NULL,
+  created_at  TIMESTAMPTZ NOT NULL,
+  UNIQUE (tenant_id, artifact_id),
+  CONSTRAINT artifact_access_artifact_fk
+    FOREIGN KEY (tenant_id, artifact_id)
+    REFERENCES artifacts(tenant_id, artifact_id) ON DELETE CASCADE
+);
+
+CREATE TABLE artifact_links (
+  tenant_id    UUID NOT NULL,
+  artifact_id  UUID NOT NULL,
+  parent_kind  TEXT NOT NULL CHECK (
+    parent_kind IN (
+      'execution_run',
+      'execution_step',
+      'execution_attempt',
+      'chat_session',
+      'chat_message'
+    )
+  ),
+  parent_id    TEXT NOT NULL,
+  created_at   TIMESTAMPTZ NOT NULL,
+  PRIMARY KEY (tenant_id, artifact_id, parent_kind, parent_id),
+  CONSTRAINT artifact_links_artifact_fk
+    FOREIGN KEY (tenant_id, artifact_id)
+    REFERENCES artifacts(tenant_id, artifact_id) ON DELETE CASCADE
 );
 
 CREATE TABLE resume_tokens (

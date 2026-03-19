@@ -11,12 +11,13 @@ import type {
   ApprovalKind as ApprovalKindT,
   NormalizedContainerKind,
   NormalizedMessageEnvelope as NormalizedMessageEnvelopeT,
+  TyrumUIMessagePart,
 } from "@tyrum/contracts";
 import type { ModelMessage } from "ai";
 import { coerceModelMessages } from "../../ai-sdk/message-utils.js";
+import { normalizeTurnParts, renderTurnPartsText } from "../../ai-sdk/attachment-parts.js";
 import { coerceRecord } from "../../util/coerce.js";
 import { buildAgentTurnKey } from "../turn-key.js";
-import { renderEnvelopeMessageText } from "../session-message-text.js";
 import type { LaneQueueScope } from "./turn-engine-bridge.js";
 
 export function createStaticLanguageModelV3(text: string): LanguageModelV3 {
@@ -139,6 +140,7 @@ export type ResolvedAgentTurnInput = {
   channel: string;
   thread_id: string;
   message: string;
+  parts: TyrumUIMessagePart[];
   envelope?: NormalizedMessageEnvelopeT;
   metadata?: Record<string, unknown>;
 };
@@ -155,19 +157,21 @@ export function resolveAgentTurnInput(input: AgentTurnRequestT): ResolvedAgentTu
     throw new Error("thread_id is required");
   }
 
-  const message = renderEnvelopeMessageText({
+  const parts = normalizeTurnParts({
     envelope,
-    fallbackText: input.message ?? envelope?.content.text ?? "",
+    parts: input.parts,
   });
+  const message = renderTurnPartsText(parts);
 
-  if (message.length === 0) {
-    throw new Error("message is required (either message text or envelope content)");
+  if (parts.length === 0 && message.length === 0) {
+    throw new Error("turn input is required (parts or envelope content)");
   }
 
   return {
     channel,
     thread_id: threadId,
     message,
+    parts,
     envelope,
     metadata: input.metadata,
   };

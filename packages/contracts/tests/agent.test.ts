@@ -367,7 +367,19 @@ describe("AgentTurnRequest", () => {
       id: "user-42",
     },
     content: {
-      attachments: [{ kind: "photo" }],
+      attachments: [
+        {
+          artifact_id: "550e8400-e29b-41d4-a716-446655440000",
+          uri: "artifact://550e8400-e29b-41d4-a716-446655440000",
+          external_url: "https://example.test/a/550e8400-e29b-41d4-a716-446655440000",
+          kind: "file",
+          media_class: "image",
+          created_at: "2025-10-05T16:31:09Z",
+          mime_type: "image/jpeg",
+          filename: "photo.jpg",
+          labels: [],
+        },
+      ],
     },
     provenance: ["user"],
   } as const;
@@ -379,7 +391,7 @@ describe("AgentTurnRequest", () => {
 
     expect(parsed.success).toBe(true);
     if (!parsed.success) return;
-    expect(parsed.data.envelope?.content.attachments).toEqual([{ kind: "photo" }]);
+    expect(parsed.data.envelope?.content.attachments).toEqual(baseEnvelope.content.attachments);
   });
 
   it("rejects envelope requests with mismatched channel", () => {
@@ -397,18 +409,23 @@ describe("AgentTurnRequest", () => {
   });
 
   it("rejects requests missing channel when envelope is not provided", () => {
-    expectRejects(AgentTurnRequest, { thread_id: "chat-123", message: "hi" });
+    expectRejects(AgentTurnRequest, {
+      thread_id: "chat-123",
+      parts: [{ type: "text", text: "hi" }],
+    });
   });
 
   it("rejects requests missing thread_id when envelope is not provided", () => {
-    expectRejects(AgentTurnRequest, { channel: "telegram", message: "hi" });
+    expectRejects(AgentTurnRequest, {
+      channel: "telegram",
+      parts: [{ type: "text", text: "hi" }],
+    });
   });
 
-  it("rejects blank message content", () => {
+  it("rejects requests missing parts when envelope is not provided", () => {
     const parsed = AgentTurnRequest.safeParse({
       channel: "telegram",
       thread_id: "123",
-      message: "   ",
     });
 
     expect(parsed.success).toBe(false);

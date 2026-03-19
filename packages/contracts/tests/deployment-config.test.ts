@@ -7,14 +7,21 @@ import {
 } from "../src/index.js";
 
 describe("DeploymentConfig lifecycle retention", () => {
+  const baseConfig = {
+    server: {
+      publicBaseUrl: "https://gateway.example.test",
+    },
+  } as const;
+
   it("defaults state.mode to local", () => {
-    const parsed = DeploymentConfig.parse({});
+    const parsed = DeploymentConfig.parse(baseConfig);
 
     expect(parsed.state.mode).toBe("local");
   });
 
   it("accepts shared state mode", () => {
     const parsed = DeploymentConfig.parse({
+      ...baseConfig,
       state: {
         mode: "shared",
       },
@@ -24,7 +31,7 @@ describe("DeploymentConfig lifecycle retention", () => {
   });
 
   it("applies safe defaults for session and channel retention", () => {
-    const parsed = DeploymentConfig.parse({});
+    const parsed = DeploymentConfig.parse(baseConfig);
 
     expect(parsed.lifecycle.sessions.ttlDays).toBe(30);
     expect(parsed.lifecycle.channels.terminalRetentionDays).toBe(7);
@@ -32,6 +39,7 @@ describe("DeploymentConfig lifecycle retention", () => {
 
   it("accepts explicit retention overrides", () => {
     const parsed = DeploymentConfig.parse({
+      ...baseConfig,
       lifecycle: {
         sessions: { ttlDays: 14 },
         channels: { terminalRetentionDays: 3 },
@@ -43,7 +51,7 @@ describe("DeploymentConfig lifecycle retention", () => {
   });
 
   it("defaults desktop environments to the published sandbox image", () => {
-    const parsed = DeploymentConfig.parse({});
+    const parsed = DeploymentConfig.parse(baseConfig);
 
     expect(parsed.desktopEnvironments.defaultImageRef).toBe(DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF);
   });
@@ -78,5 +86,9 @@ describe("DeploymentConfig lifecycle retention", () => {
         last_error: null,
       }),
     ).toBe("docker unavailable");
+  });
+
+  it("requires server.publicBaseUrl when server config is provided explicitly", () => {
+    expect(() => DeploymentConfig.parse({ server: {} })).toThrow();
   });
 });

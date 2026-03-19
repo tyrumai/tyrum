@@ -1,8 +1,4 @@
-export function buildGatewayArtifactUrl(
-  httpBaseUrl: string,
-  runId: string,
-  artifactId: string,
-): string {
+export function buildGatewayArtifactUrl(httpBaseUrl: string, artifactId: string): string {
   const base = httpBaseUrl.replace(/\/$/, "");
-  return `${base}/runs/${encodeURIComponent(runId)}/artifacts/${encodeURIComponent(artifactId)}`;
+  return `${base}/a/${encodeURIComponent(artifactId)}`;
 }

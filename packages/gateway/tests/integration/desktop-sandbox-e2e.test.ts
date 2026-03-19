@@ -274,30 +274,51 @@ describe("e2e: tool.node.dispatch against docker desktop-sandbox", () => {
 
           expect(snapshotResult.error).toBeUndefined();
           expect(snapshotResult.output).toContain('"ok":true');
-          expect(snapshotResult.output).toContain("artifact://");
-          expect(snapshotResult.output).toContain("tree_artifact");
           expect(snapshotResult.output).not.toContain("bytesBase64");
 
           const artifactRow = await container.db.get<{
             artifact_id: string;
-            run_id: string | null;
-            step_id: string | null;
-            attempt_id: string | null;
           }>(
-            `SELECT artifact_id, run_id, step_id, attempt_id
-	             FROM execution_artifacts
-	             WHERE run_id = ? AND step_id = ? AND kind = 'screenshot'
-	             ORDER BY created_at DESC
+            `SELECT a.artifact_id
+	             FROM artifacts a
+	             INNER JOIN artifact_links l
+	               ON l.tenant_id = a.tenant_id
+	              AND l.artifact_id = a.artifact_id
+	              AND l.parent_kind = 'execution_step'
+	              AND l.parent_id = ?
+	             WHERE a.tenant_id = ?
+	               AND a.kind = 'screenshot'
+	             ORDER BY a.created_at DESC
 	             LIMIT 1`,
-            [scope.runId, scope.stepId],
+            [scope.stepId, DEFAULT_TENANT_ID],
           );
           expect(artifactRow).toBeTruthy();
-          expect(artifactRow?.attempt_id).toBe(scope.attemptId);
 
-          const artifactRes = await app.request(
-            `/runs/${scope.runId}/artifacts/${artifactRow!.artifact_id}`,
-            { headers: { authorization: `Bearer ${adminToken}` } },
+          const screenshotLinks = await container.db.all<{
+            parent_kind: string;
+            parent_id: string;
+          }>(
+            `SELECT parent_kind, parent_id
+             FROM artifact_links
+             WHERE tenant_id = ?
+               AND artifact_id = ?
+             ORDER BY parent_kind, parent_id`,
+            [DEFAULT_TENANT_ID, artifactRow!.artifact_id],
           );
+          expect(screenshotLinks).toEqual(
+            expect.arrayContaining([
+              expect.objectContaining({ parent_kind: "execution_run", parent_id: scope.runId }),
+              expect.objectContaining({ parent_kind: "execution_step", parent_id: scope.stepId }),
+              expect.objectContaining({
+                parent_kind: "execution_attempt",
+                parent_id: scope.attemptId,
+              }),
+            ]),
+          );
+
+          const artifactRes = await app.request(`/a/${artifactRow!.artifact_id}`, {
+            headers: { authorization: `Bearer ${adminToken}` },
+          });
           expect(artifactRes.status).toBe(200);
           expect(artifactRes.headers.get("content-type")).toBe("image/png");
           expect(Buffer.from(await artifactRes.arrayBuffer()).length).toBeGreaterThan(0);
@@ -305,19 +326,46 @@ describe("e2e: tool.node.dispatch against docker desktop-sandbox", () => {
           const treeRow = await container.db.get<{
             artifact_id: string;
           }>(
-            `SELECT artifact_id
-	             FROM execution_artifacts
-	             WHERE run_id = ? AND step_id = ? AND kind = 'dom_snapshot'
-	             ORDER BY created_at DESC
+            `SELECT a.artifact_id
+	             FROM artifacts a
+	             INNER JOIN artifact_links l
+	               ON l.tenant_id = a.tenant_id
+	              AND l.artifact_id = a.artifact_id
+	              AND l.parent_kind = 'execution_step'
+	              AND l.parent_id = ?
+	             WHERE a.tenant_id = ?
+	               AND a.kind = 'dom_snapshot'
+	             ORDER BY a.created_at DESC
 	             LIMIT 1`,
-            [scope.runId, scope.stepId],
+            [scope.stepId, DEFAULT_TENANT_ID],
           );
           expect(treeRow).toBeTruthy();
 
-          const treeRes = await app.request(
-            `/runs/${scope.runId}/artifacts/${treeRow!.artifact_id}`,
-            { headers: { authorization: `Bearer ${adminToken}` } },
+          const treeLinks = await container.db.all<{
+            parent_kind: string;
+            parent_id: string;
+          }>(
+            `SELECT parent_kind, parent_id
+             FROM artifact_links
+             WHERE tenant_id = ?
+               AND artifact_id = ?
+             ORDER BY parent_kind, parent_id`,
+            [DEFAULT_TENANT_ID, treeRow!.artifact_id],
           );
+          expect(treeLinks).toEqual(
+            expect.arrayContaining([
+              expect.objectContaining({ parent_kind: "execution_run", parent_id: scope.runId }),
+              expect.objectContaining({ parent_kind: "execution_step", parent_id: scope.stepId }),
+              expect.objectContaining({
+                parent_kind: "execution_attempt",
+                parent_id: scope.attemptId,
+              }),
+            ]),
+          );
+
+          const treeRes = await app.request(`/a/${treeRow!.artifact_id}`, {
+            headers: { authorization: `Bearer ${adminToken}` },
+          });
           expect(treeRes.status).toBe(200);
           expect(treeRes.headers.get("content-type")).toBe("application/json");
           const treeJson = (await treeRes.json()) as { root?: { role?: unknown } } | undefined;

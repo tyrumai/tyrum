@@ -12,6 +12,8 @@ import {
 import { IdentityPack } from "./agent-identity.js";
 import { AgentId, AgentKey, AgentSessionKey, TenantKey, WorkspaceKey } from "./keys.js";
 import { NormalizedContainerKind, NormalizedMessageEnvelope } from "./message.js";
+import { ArtifactRef } from "./artifact.js";
+import { TyrumUIMessagePart } from "./ui-message.js";
 
 function asPlainObject(value: unknown): Record<string, unknown> | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -37,7 +39,7 @@ export const AgentTurnRequest = z
     channel: z.string().trim().min(1).optional(),
     thread_id: z.string().trim().min(1).optional(),
     container_kind: NormalizedContainerKind.optional(),
-    message: z.string().trim().min(1).optional(),
+    parts: z.array(TyrumUIMessagePart).min(1).optional(),
     envelope: NormalizedMessageEnvelope.optional(),
     intake_mode: z.enum(["inline", "delegate_execute", "delegate_plan"]).optional(),
     metadata: z.record(z.string(), z.unknown()).optional(),
@@ -75,11 +77,11 @@ export const AgentTurnRequest = z
         message: "thread_id is required when envelope is not provided",
       });
     }
-    if (!value.message) {
+    if (!value.parts || value.parts.length === 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ["message"],
-        message: "message is required when envelope is not provided",
+        path: ["parts"],
+        message: "parts are required when envelope is not provided",
       });
     }
   });
@@ -89,6 +91,7 @@ export const AgentTurnResponse = z.object({
   reply: z.string(),
   session_id: UuidSchema,
   session_key: AgentSessionKey,
+  attachments: z.array(ArtifactRef).default([]),
   used_tools: z.array(z.string()).default([]),
   memory_written: z.boolean().default(false),
 });

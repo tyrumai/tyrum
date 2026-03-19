@@ -18,12 +18,10 @@ function ArtifactMarkdownImage({
   artifactId,
   alt,
   core,
-  runId,
 }: {
   artifactId: string;
   alt: string;
   core: OperatorCore;
-  runId: string;
 }) {
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -39,7 +37,7 @@ function ArtifactMarkdownImage({
 
     const controller = new AbortController();
     void artifactsApi
-      .getBytes(runId, artifactId, { signal: controller.signal })
+      .getBytes(artifactId, { signal: controller.signal })
       .then((res) => {
         if (res.kind === "redirect") {
           setBlobUrl(res.url);
@@ -63,7 +61,7 @@ function ArtifactMarkdownImage({
         return null;
       });
     };
-  }, [artifactId, core, runId]);
+  }, [artifactId, core]);
 
   if (error) {
     return <span className="text-xs text-danger-700">Image failed: {error}</span>;
@@ -77,7 +75,7 @@ function ArtifactMarkdownImage({
     );
   }
 
-  const downloadUrl = buildGatewayArtifactUrl(core.httpBaseUrl, runId, artifactId);
+  const downloadUrl = buildGatewayArtifactUrl(core.httpBaseUrl, artifactId);
   return (
     <span className="block">
       <img
@@ -101,17 +99,16 @@ function ArtifactMarkdownImage({
 
 export function useArtifactAwareMarkdownComponents(
   core: OperatorCore | undefined,
-  runId: string | null,
 ): Components | undefined {
   return useMemo(() => {
-    if (!core || !runId) return undefined;
+    if (!core) return undefined;
 
     return {
       a({ href, children, ...rest }) {
         if (href) {
           const artifactId = parseArtifactUri(href);
           if (artifactId) {
-            const downloadUrl = buildGatewayArtifactUrl(core.httpBaseUrl, runId, artifactId);
+            const downloadUrl = buildGatewayArtifactUrl(core.httpBaseUrl, artifactId);
             return (
               <a {...rest} href={downloadUrl} target="_blank" rel="noreferrer noopener" download>
                 {children} <Download className="ml-0.5 inline h-3 w-3" />
@@ -129,18 +126,11 @@ export function useArtifactAwareMarkdownComponents(
         if (src) {
           const artifactId = parseArtifactUri(src);
           if (artifactId) {
-            return (
-              <ArtifactMarkdownImage
-                artifactId={artifactId}
-                alt={alt ?? ""}
-                core={core}
-                runId={runId}
-              />
-            );
+            return <ArtifactMarkdownImage artifactId={artifactId} alt={alt ?? ""} core={core} />;
           }
         }
         return <img {...rest} src={src} alt={alt} />;
       },
     } satisfies Components;
-  }, [core, runId]);
+  }, [core]);
 }

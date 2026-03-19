@@ -56,6 +56,7 @@ import {
   resetSessionContent,
   setSessionTitleIfBlank,
 } from "./session-dal-message-helpers.js";
+import { replaceSessionArtifactLinksTx } from "../artifact/dal.js";
 
 export type {
   SessionContextState,
@@ -128,17 +129,27 @@ export class SessionDal {
       tenantId: input.tenantId,
       sessionId: input.sessionId,
     });
-    await this.writeSession({
-      tenantId: input.tenantId,
-      sessionId: input.sessionId,
-      messages: input.messages,
-      title: session.title,
-      contextState: createSessionContextStateForMessages(
+    await this.db.transaction(async (tx) => {
+      const updatedAt = input.updatedAt ?? new Date().toISOString();
+      const contextState = createSessionContextStateForMessages(
         input.messages,
-        input.updatedAt ?? new Date().toISOString(),
+        updatedAt,
         session.context_state,
-      ),
-      updatedAt: input.updatedAt,
+      );
+      await tx.run(UPDATE_SESSION_SQL, [
+        stringifySessionMessages(input.messages),
+        stringifySessionContextState(contextState),
+        session.title,
+        updatedAt,
+        input.tenantId,
+        input.sessionId,
+      ]);
+      await replaceSessionArtifactLinksTx(tx, {
+        tenantId: input.tenantId,
+        sessionId: input.sessionId,
+        previousMessages: session.messages,
+        nextMessages: input.messages,
+      });
     });
   }
 

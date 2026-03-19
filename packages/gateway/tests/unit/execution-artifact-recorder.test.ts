@@ -89,8 +89,14 @@ describe("ExecutionEngineArtifactRecorder", () => {
     const artifact = {
       artifact_id: "550e8400-e29b-41d4-a716-446655440111",
       uri: "artifact://550e8400-e29b-41d4-a716-446655440111",
+      external_url: "https://gateway.example.test/a/550e8400-e29b-41d4-a716-446655440111",
       kind: "log",
+      media_class: "other",
       created_at: nowIso,
+      filename: "artifact-550e8400-e29b-41d4-a716-446655440111.log",
+      mime_type: "text/plain",
+      size_bytes: 7,
+      sha256: "a".repeat(64),
       labels: ["label-1"],
       metadata: { ok: true },
     } as const;
@@ -123,11 +129,26 @@ describe("ExecutionEngineArtifactRecorder", () => {
     });
 
     const row = await db.get<{ artifact_id: string; uri: string }>(
-      "SELECT artifact_id, uri FROM execution_artifacts WHERE tenant_id = ? AND artifact_id = ?",
+      "SELECT artifact_id, uri FROM artifacts WHERE tenant_id = ? AND artifact_id = ?",
       [DEFAULT_TENANT_ID, artifact.artifact_id],
     );
     expect(row?.artifact_id).toBe(artifact.artifact_id);
     expect(row?.uri).toBe(artifact.uri);
+
+    const links = await db.all<{ parent_kind: string; parent_id: string }>(
+      `SELECT parent_kind, parent_id
+       FROM artifact_links
+       WHERE tenant_id = ? AND artifact_id = ?
+       ORDER BY parent_kind, parent_id`,
+      [DEFAULT_TENANT_ID, artifact.artifact_id],
+    );
+    expect(links).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ parent_kind: "execution_run", parent_id: scope.runId }),
+        expect.objectContaining({ parent_kind: "execution_step", parent_id: scope.stepId }),
+        expect.objectContaining({ parent_kind: "execution_attempt", parent_id: scope.attemptId }),
+      ]),
+    );
 
     const outbox = await db.all<{ payload_json: string }>(
       "SELECT payload_json FROM outbox WHERE topic = ?",

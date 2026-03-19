@@ -317,7 +317,7 @@ describe("Managed agents routes integration", () => {
 
     const artifact = await container.db.get<{ agent_id: string | null }>(
       `SELECT agent_id
-       FROM execution_artifacts
+       FROM artifacts
        WHERE tenant_id = ? AND artifact_id = ?`,
       [DEFAULT_TENANT_ID, artifactId],
     );

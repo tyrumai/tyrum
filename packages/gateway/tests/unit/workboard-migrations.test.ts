@@ -63,7 +63,9 @@ describe("WorkBoard migrations", () => {
 
     const indexOfDrop = (tableName: string): number => dropOrder.indexOf(tableName);
 
-    expect(indexOfDrop("execution_artifacts")).toBeLessThan(indexOfDrop("execution_attempts"));
+    expect(indexOfDrop("artifact_links")).toBeLessThan(indexOfDrop("artifact_access"));
+    expect(indexOfDrop("artifact_access")).toBeLessThan(indexOfDrop("artifacts"));
+    expect(indexOfDrop("artifacts")).toBeLessThan(indexOfDrop("execution_attempts"));
     expect(indexOfDrop("execution_attempts")).toBeLessThan(indexOfDrop("execution_steps"));
     expect(indexOfDrop("resume_tokens")).toBeLessThan(indexOfDrop("execution_runs"));
     expect(indexOfDrop("execution_steps")).toBeLessThan(indexOfDrop("execution_runs"));

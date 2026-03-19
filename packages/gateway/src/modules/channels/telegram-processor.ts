@@ -1,4 +1,3 @@
-import { WsDeliveryReceiptEvent } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import type { Logger } from "../observability/logger.js";
 import { ChannelInboxDal, type ChannelInboxConfig, type ChannelInboxRow } from "./inbox-dal.js";
@@ -27,6 +26,7 @@ import {
   createTelegramEgressConnector,
   tryAcquireLaneLease,
 } from "./telegram-shared.js";
+import { Lane, type WsEventEnvelope } from "@tyrum/contracts";
 
 export class TelegramChannelProcessor {
   private readonly db: SqlDb;
@@ -313,7 +313,10 @@ export class TelegramChannelProcessor {
       const resp = await connector.sendMessage({
         accountId: address.accountId,
         containerId: next.thread_id,
-        text: next.text,
+        content: {
+          ...(next.text.trim().length > 0 ? { text: next.text } : {}),
+          ...(next.attachments.length > 0 ? { attachments: next.attachments } : {}),
+        },
         parseMode: next.parse_mode ?? undefined,
       });
       const marked = await this.outbox.markSent({
@@ -409,15 +412,17 @@ export class TelegramChannelProcessor {
     try {
       const inbox = await this.inbox.getById(input.outbox.inbox_id);
       if (!inbox) return;
+      const parsedLane = Lane.safeParse(inbox.lane);
+      const lane = parsedLane.success ? parsedLane.data : undefined;
 
-      const candidate = {
+      const event: WsEventEnvelope = {
         event_id: `delivery.receipt:${input.outbox.dedupe_key}`,
         type: "delivery.receipt",
         occurred_at: new Date().toISOString(),
-        scope: { kind: "key", key: inbox.key, lane: inbox.lane },
+        scope: { kind: "key", key: inbox.key, lane },
         payload: {
           session_id: inbox.key,
-          lane: inbox.lane,
+          lane,
           channel: parseChannelSourceKey(input.outbox.source).connector,
           thread_id: input.outbox.thread_id,
           status: input.status,
@@ -426,18 +431,8 @@ export class TelegramChannelProcessor {
         },
       };
 
-      const parsed = WsDeliveryReceiptEvent.safeParse(candidate);
-      if (!parsed.success) {
-        this.logger?.warn("channels.egress.delivery_receipt.invalid", {
-          dedupe_key: input.outbox.dedupe_key,
-          status: input.status,
-          error: parsed.error.message,
-        });
-        return;
-      }
-
       try {
-        await enqueueWsBroadcastMessage(this.db, inbox.tenant_id, parsed.data);
+        await enqueueWsBroadcastMessage(this.db, inbox.tenant_id, event);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         this.logger?.warn("channels.egress.delivery_receipt.enqueue_failed", {

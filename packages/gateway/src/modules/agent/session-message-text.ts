@@ -35,12 +35,8 @@ export function renderEnvelopeMessageText(input: {
 }
 
 export function renderNormalizedThreadMessageText(input: NormalizedThreadMessageT): string {
-  const fallbackText =
-    input.message.content.kind === "text"
-      ? input.message.content.text
-      : (input.message.content.caption ?? "");
   return renderEnvelopeMessageText({
     envelope: input.message.envelope,
-    fallbackText,
+    fallbackText: input.message.content.text ?? "",
   });
 }

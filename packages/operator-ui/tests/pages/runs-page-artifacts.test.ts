@@ -73,8 +73,7 @@ describe("RunsPage (artifacts)", () => {
       attemptIdsByStepId: { [stepId]: [attemptId] },
     });
 
-    const getBytes = vi.fn(async (requestedRunId: string, artifactId: string) => {
-      expect(requestedRunId).toBe(runId);
+    const getBytes = vi.fn(async (artifactId: string) => {
       if (artifactId === screenshotArtifactId) {
         return { kind: "bytes", bytes: new Uint8Array([1, 2, 3]), contentType: "image/png" };
       }
@@ -95,8 +94,7 @@ describe("RunsPage (artifacts)", () => {
       };
     });
 
-    const getMetadata = vi.fn(async (requestedRunId: string, artifactId: string) => {
-      expect(requestedRunId).toBe(runId);
+    const getMetadata = vi.fn(async (artifactId: string) => {
       return {
         artifact: artifactId === screenshotArtifactId ? screenshotArtifact : treeArtifact,
         scope: {
@@ -297,9 +295,7 @@ describe("RunsPage (artifacts)", () => {
 
       const link = document.body.querySelector<HTMLAnchorElement>("a");
       expect(link).not.toBeNull();
-      expect(link?.getAttribute("href")).toBe(
-        `http://example.test/runs/${runId}/artifacts/${artifactId}`,
-      );
+      expect(link?.getAttribute("href")).toBe(`http://example.test/a/${artifactId}`);
     } finally {
       cleanupTestRoot({ container, root });
     }

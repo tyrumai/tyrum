@@ -390,7 +390,7 @@ export function makeTelegramDmMessage(input: {
       id: input.messageId,
       thread_id: input.threadId,
       source: "telegram",
-      content: { kind: "text", text: input.text },
+      content: { text: input.text, attachments: [] },
       sender: {
         id: senderId,
         is_bot: false,

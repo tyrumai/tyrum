@@ -1,4 +1,10 @@
-import type { ArtifactKind, ArtifactRef as ArtifactRefT } from "@tyrum/contracts";
+import {
+  ArtifactRef,
+  artifactFilenameFromMetadata,
+  artifactMediaClassFromMimeType,
+  type ArtifactKind,
+  type ArtifactRef as ArtifactRefT,
+} from "@tyrum/contracts";
 import { randomUUID, createHash } from "node:crypto";
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -19,6 +25,7 @@ export interface ArtifactPutInput {
   body: Buffer;
   created_at?: string;
   mime_type?: string;
+  filename?: string;
   labels?: string[];
   metadata?: unknown;
 }
@@ -62,25 +69,40 @@ function artifactUri(artifactId: string): `artifact://${string}` {
   return `artifact://${artifactId}`;
 }
 
+function buildExternalUrl(publicBaseUrl: string, accessId: string): string {
+  return `${publicBaseUrl.replace(/\/$/, "")}/a/${accessId}`;
+}
+
 function artifactShard(artifactId: string): string {
   return artifactId.slice(0, 2).toLowerCase();
 }
 
 function buildRef(input: {
   artifact_id: string;
+  public_base_url: string;
   kind: ArtifactKind;
   created_at: string;
   mime_type?: string;
+  filename?: string;
   size_bytes?: number;
   sha256?: string;
   labels?: string[];
   metadata?: unknown;
 }): ArtifactRefT {
+  const filename = artifactFilenameFromMetadata({
+    artifactId: input.artifact_id,
+    kind: input.kind,
+    filename: input.filename,
+    mimeType: input.mime_type,
+  });
   return {
     artifact_id: input.artifact_id,
     uri: artifactUri(input.artifact_id),
+    external_url: buildExternalUrl(input.public_base_url, input.artifact_id),
     kind: input.kind,
+    media_class: artifactMediaClassFromMimeType(input.mime_type, filename),
     created_at: input.created_at,
+    filename,
     mime_type: input.mime_type,
     size_bytes: input.size_bytes,
     sha256: input.sha256,
@@ -92,7 +114,8 @@ function buildRef(input: {
 export class FsArtifactStore implements ArtifactStore {
   constructor(
     private readonly baseDir: string,
-    private readonly redactionEngine?: RedactionEngine,
+    private readonly redactionEngine: RedactionEngine | undefined,
+    private readonly publicBaseUrl: string,
   ) {}
 
   private paths(artifactId: string): { dir: string; dataPath: string; metaPath: string } {
@@ -120,9 +143,11 @@ export class FsArtifactStore implements ArtifactStore {
     const sha256 = sha256Hex(body);
     const ref = buildRef({
       artifact_id: artifactId,
+      public_base_url: this.publicBaseUrl,
       kind: input.kind,
       created_at: createdAt,
       mime_type: mimeType,
+      filename: input.filename?.trim() || undefined,
       size_bytes: sizeBytes,
       sha256,
       labels: input.labels,
@@ -140,7 +165,7 @@ export class FsArtifactStore implements ArtifactStore {
     const { dataPath, metaPath } = this.paths(artifactId);
     try {
       const [body, metaRaw] = await Promise.all([readFile(dataPath), readFile(metaPath, "utf8")]);
-      const ref = JSON.parse(metaRaw) as ArtifactRefT;
+      const ref = ArtifactRef.parse(JSON.parse(metaRaw) as unknown);
       return { ref, body };
     } catch (err) {
       const code = err && typeof err === "object" ? (err as { code?: string }).code : undefined;
@@ -202,6 +227,18 @@ type PresignGetObjectFn = (input: {
   expiresInSeconds: number;
 }) => Promise<string>;
 
+function parseArtifactManifest(artifactId: string, candidate: unknown): ArtifactManifestV1 {
+  const maybe = candidate as Partial<ArtifactManifestV1> | null;
+  if (!maybe || maybe.v !== 1 || typeof maybe.blob_key !== "string" || !maybe.ref) {
+    throw new Error(`invalid artifact manifest for ${artifactId}`);
+  }
+  return {
+    v: 1,
+    ref: ArtifactRef.parse(maybe.ref),
+    blob_key: maybe.blob_key,
+  };
+}
+
 function defaultPresignGetObject(client: S3Client): PresignGetObjectFn {
   return async ({ bucket, key, expiresInSeconds }) =>
     await getSignedUrl(client, new GetObjectCommand({ Bucket: bucket, Key: key }), {
@@ -217,7 +254,8 @@ export class S3ArtifactStore implements ArtifactStore {
     private readonly client: S3Client,
     private readonly bucket: string,
     private readonly keyPrefix = "artifacts",
-    private readonly redactionEngine?: RedactionEngine,
+    private readonly redactionEngine: RedactionEngine | undefined,
+    private readonly publicBaseUrl: string,
     presignGetObject?: PresignGetObjectFn,
   ) {
     this.presignGetObject = presignGetObject ?? defaultPresignGetObject(client);
@@ -271,11 +309,7 @@ export class S3ArtifactStore implements ArtifactStore {
       } catch (err) {
         throw new Error(`invalid artifact manifest for ${artifactId}`, { cause: err });
       }
-      const maybe = candidate as Partial<ArtifactManifestV1> | null;
-      if (!maybe || maybe.v !== 1 || typeof maybe.blob_key !== "string" || !maybe.ref) {
-        throw new Error(`invalid artifact manifest for ${artifactId}`);
-      }
-      parsedManifest = maybe as ArtifactManifestV1;
+      parsedManifest = parseArtifactManifest(artifactId, candidate);
     } catch (err) {
       if (isNoSuchKey(err)) return null;
       throw err;
@@ -317,9 +351,11 @@ export class S3ArtifactStore implements ArtifactStore {
     const sha256 = sha256Hex(body);
     const ref = buildRef({
       artifact_id: artifactId,
+      public_base_url: this.publicBaseUrl,
       kind: input.kind,
       created_at: createdAt,
       mime_type: mimeType,
+      filename: input.filename?.trim() || undefined,
       size_bytes: sizeBytes,
       sha256,
       labels: input.labels,
@@ -363,10 +399,10 @@ export class S3ArtifactStore implements ArtifactStore {
       );
 
       const manifestBuf = await bodyToBuffer(manifestRes.Body);
-      const parsed = JSON.parse(manifestBuf.toString("utf8")) as ArtifactManifestV1;
-      if (!parsed || parsed.v !== 1 || typeof parsed.blob_key !== "string" || !parsed.ref) {
-        throw new Error(`invalid artifact manifest for ${artifactId}`);
-      }
+      const parsed = parseArtifactManifest(
+        artifactId,
+        JSON.parse(manifestBuf.toString("utf8")) as unknown,
+      );
 
       const dataRes = await this.client.send(
         new GetObjectCommand({

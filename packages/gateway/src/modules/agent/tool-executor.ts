@@ -19,6 +19,10 @@ import {
 import { executeAutomationScheduleTool } from "./tool-executor-schedule-tools.js";
 import { executeSubagentTool } from "./tool-executor-subagent-tools.js";
 import { executeWorkboardTool } from "./tool-executor-workboard-tools.js";
+import {
+  executeArtifactDescribeTool,
+  type ArtifactDescribeToolRuntime,
+} from "./tool-executor-artifact-tools.js";
 import type { McpManager } from "./mcp-manager.js";
 import type { NodeDispatchService } from "./node-dispatch-service.js";
 import type { NodeCapabilityInspectionService } from "../node/capability-inspection-service.js";
@@ -63,6 +67,7 @@ export class ToolExecutor {
     private readonly memoryToolRuntime?: AgentMemoryToolRuntime,
     private readonly agents?: AgentRegistry,
     private readonly workboardBroadcastDeps?: WorkboardBroadcastDeps,
+    private readonly artifactDescribeRuntime?: ArtifactDescribeToolRuntime,
   ) {}
 
   private workspaceLeaseOwner(toolCallId: string): string {
@@ -235,6 +240,15 @@ export class ToolExecutor {
             output: "",
             error: "node capability inspection is not configured",
           };
+    }
+    const artifactDescribeResult = await executeArtifactDescribeTool(
+      this.artifactDescribeRuntime,
+      toolId,
+      toolCallId,
+      args,
+    );
+    if (artifactDescribeResult) {
+      return artifactDescribeResult;
     }
 
     const scheduleResult = await executeAutomationScheduleTool(

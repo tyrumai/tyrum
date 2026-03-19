@@ -327,7 +327,10 @@ export function registerTelegramQueueAccountTests(state: TelegramQueueTestState)
     expect(workSend).toHaveBeenCalledWith({
       accountId: "work",
       containerId: "123",
-      text: "Sorry, something went wrong. Please try again later.",
+      content: {
+        text: "Sorry, something went wrong. Please try again later.",
+        attachments: [],
+      },
       parseMode: "HTML",
     });
     expect(fetchFn).not.toHaveBeenCalled();

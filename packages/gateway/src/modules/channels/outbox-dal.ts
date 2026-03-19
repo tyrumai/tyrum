@@ -1,5 +1,6 @@
 import type { SqlDb } from "../../statestore/types.js";
 import { safeJsonParse } from "../../utils/json.js";
+import type { NormalizedAttachment } from "@tyrum/contracts";
 
 export type ChannelOutboxStatus = "queued" | "sending" | "sent" | "failed";
 
@@ -12,6 +13,7 @@ export interface ChannelOutboxRow {
   dedupe_key: string;
   chunk_index: number;
   text: string;
+  attachments: NormalizedAttachment[];
   parse_mode: string | null;
   status: ChannelOutboxStatus;
   attempt: number;
@@ -36,6 +38,7 @@ interface RawChannelOutboxRow {
   dedupe_key: string;
   chunk_index: number;
   text: string;
+  attachments_json: string | null;
   parse_mode: string | null;
   status: string;
   attempt: number;
@@ -66,6 +69,7 @@ function toRow(raw: RawChannelOutboxRow): ChannelOutboxRow {
     dedupe_key: raw.dedupe_key,
     chunk_index: raw.chunk_index,
     text: raw.text,
+    attachments: safeJsonParse(raw.attachments_json, [] as NormalizedAttachment[]),
     parse_mode: raw.parse_mode,
     status: raw.status as ChannelOutboxStatus,
     attempt: raw.attempt,
@@ -92,7 +96,8 @@ export class ChannelOutboxDal {
     thread_id: string;
     dedupe_key: string;
     chunk_index: number;
-    text: string;
+    text?: string;
+    attachments?: NormalizedAttachment[];
     parse_mode?: string;
     approval_id?: string | null;
     workspace_id: string;
@@ -108,6 +113,7 @@ export class ChannelOutboxDal {
          dedupe_key,
          chunk_index,
          text,
+         attachments_json,
          parse_mode,
          status,
          approval_id,
@@ -115,7 +121,7 @@ export class ChannelOutboxDal {
          session_id,
          channel_thread_id
        )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?, ?)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?, ?)
        ON CONFLICT (tenant_id, dedupe_key) DO NOTHING`,
       [
         input.tenant_id,
@@ -124,7 +130,8 @@ export class ChannelOutboxDal {
         input.thread_id,
         input.dedupe_key,
         input.chunk_index,
-        input.text,
+        input.text ?? "",
+        JSON.stringify(input.attachments ?? []),
         input.parse_mode ?? null,
         input.approval_id ?? null,
         input.workspace_id,

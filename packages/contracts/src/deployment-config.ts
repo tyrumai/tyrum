@@ -2,9 +2,13 @@ import { z } from "zod";
 import { DateTimeSchema } from "./common.js";
 import { DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF } from "./desktop-environment.js";
 import { canonicalizeTelegramAllowedUserIds } from "./telegram.js";
+import { AgentModelConfig } from "./agent-core.js";
+
+export const DEFAULT_PUBLIC_BASE_URL = "http://127.0.0.1:8788" as const;
 
 export const DeploymentConfigServer = z
   .object({
+    publicBaseUrl: z.string().trim().url(),
     trustedProxies: z.string().trim().min(1).optional(),
     corsOrigins: z.array(z.string().trim().min(1)).default([]),
     tlsReady: z.boolean().default(false),
@@ -178,6 +182,23 @@ export const DeploymentConfigContext = z
   .strict();
 export type DeploymentConfigContext = z.infer<typeof DeploymentConfigContext>;
 
+export const DeploymentConfigAttachments = z
+  .object({
+    helperModel: AgentModelConfig.prefault({ model: null }),
+    maxUploadBytes: z
+      .number()
+      .int()
+      .positive()
+      .default(20 * 1024 * 1024),
+    maxAnalysisBytes: z
+      .number()
+      .int()
+      .positive()
+      .default(20 * 1024 * 1024),
+  })
+  .strict();
+export type DeploymentConfigAttachments = z.infer<typeof DeploymentConfigAttachments>;
+
 export const DeploymentConfigLifecycleSessions = z
   .object({
     ttlDays: z.number().int().positive().default(30),
@@ -220,7 +241,7 @@ export const DeploymentConfig = z
   .object({
     v: z.number().int().min(1).default(1),
     state: DeploymentConfigState.prefault({}),
-    server: DeploymentConfigServer.prefault({}),
+    server: DeploymentConfigServer.prefault({ publicBaseUrl: DEFAULT_PUBLIC_BASE_URL }),
     auth: DeploymentConfigAuth.prefault({}),
     otel: DeploymentConfigOtel.prefault({}),
     artifacts: DeploymentConfigArtifacts.prefault({}),
@@ -233,6 +254,7 @@ export const DeploymentConfig = z
     automation: DeploymentConfigAutomation.prefault({}),
     snapshots: DeploymentConfigSnapshots.prefault({}),
     context: DeploymentConfigContext.prefault({}),
+    attachments: DeploymentConfigAttachments.prefault({}),
     lifecycle: DeploymentConfigLifecycle.prefault({}),
     logging: DeploymentConfigLogging.prefault({}),
     toolrunner: DeploymentConfigToolRunner.prefault({}),

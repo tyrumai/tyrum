@@ -195,9 +195,13 @@ describe("MessageCard tool output rendering", () => {
       core,
     );
 
+    const toggle = findToggle(testRoot.container, "tool.node.dispatch");
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+
     act(() => {
-      click(findToggle(testRoot.container, "tool.node.dispatch"));
+      click(toggle);
     });
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
 
     await act(async () => {
       await Promise.resolve();
@@ -212,13 +216,17 @@ describe("MessageCard tool output rendering", () => {
     expectStructuredJsonViewer(testRoot.container, "root: {2}");
     expect(preview).not.toBeNull();
     expect(preview?.getAttribute("src")).toBe("blob:chat-artifact-preview");
+    const downloadLink = testRoot.container.querySelector(
+      "[data-testid='artifact-download-aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa']",
+    ) as HTMLAnchorElement | null;
+    expect(downloadLink).not.toBeNull();
+    expect(downloadLink?.getAttribute("href")).toBe("blob:chat-artifact-preview");
+    expect(downloadLink?.getAttribute("download")).toBe("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa.png");
     expect(getBytes).toHaveBeenCalledWith(
-      "11111111-1111-1111-1111-111111111111",
       "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(getMetadata).toHaveBeenCalledWith(
-      "11111111-1111-1111-1111-111111111111",
       "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );

@@ -328,7 +328,6 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
                       <div className="flex flex-wrap items-center gap-2">
                         <AttemptArtifactsDialog
                           core={core}
-                          runId={artifacts.runId}
                           attemptId={artifacts.attemptId}
                           artifacts={artifacts.artifacts}
                         />

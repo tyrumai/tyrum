@@ -60,6 +60,28 @@ export function registerToolExecutorBuiltinCoreTests(home: HomeDirState): void {
     );
   });
 
+  it("artifact.describe delegates to the configured attachment analyzer", async () => {
+    const artifactDescribeRuntime = {
+      describe: vi.fn(async () => "Image shows a red warning banner."),
+    };
+
+    const result = await createToolExecutor({
+      homeDir: requireHomeDir(home),
+      artifactDescribeRuntime,
+    }).execute("artifact.describe", "call-artifact-describe-1", {
+      artifact_id: "123e4567-e89b-12d3-a456-426614174000",
+      prompt: "Describe the visible warning.",
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(result.output).toContain("red warning banner");
+    expect(artifactDescribeRuntime.describe).toHaveBeenCalledWith({
+      artifactIds: ["123e4567-e89b-12d3-a456-426614174000"],
+      prompt: "Describe the visible warning.",
+      toolCallId: "call-artifact-describe-1",
+    });
+  });
+
   it("fs.read returns file content", async () => {
     const homeDir = requireHomeDir(home);
     await writeFile(join(homeDir, "test.txt"), "hello world", "utf-8");

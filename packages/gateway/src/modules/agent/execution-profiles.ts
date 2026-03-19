@@ -68,6 +68,7 @@ const PROFILES: Record<ResolvedExecutionProfileId, ExecutionProfile> = {
     allowed_lanes: ["subagent"],
     tool_allowlist: [
       "read",
+      "artifact.describe",
       "webfetch",
       "websearch",
       "codesearch",
@@ -101,6 +102,7 @@ const PROFILES: Record<ResolvedExecutionProfileId, ExecutionProfile> = {
     allowed_lanes: ["subagent"],
     tool_allowlist: [
       "read",
+      "artifact.describe",
       "webfetch",
       "websearch",
       "codesearch",
@@ -134,6 +136,7 @@ const PROFILES: Record<ResolvedExecutionProfileId, ExecutionProfile> = {
     allowed_lanes: ["subagent"],
     tool_allowlist: [
       "read",
+      "artifact.describe",
       "webfetch",
       "websearch",
       "codesearch",
@@ -199,6 +202,7 @@ const PROFILES: Record<ResolvedExecutionProfileId, ExecutionProfile> = {
     allowed_lanes: ["subagent"],
     tool_allowlist: [
       "read",
+      "artifact.describe",
       "write",
       "edit",
       "apply_patch",

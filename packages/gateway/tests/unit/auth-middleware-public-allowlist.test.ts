@@ -7,6 +7,7 @@ describe("auth middleware public allowlist", () => {
     expect(PUBLIC_PATHS.map((entry) => entry.label)).toEqual([
       "/healthz",
       "/ui/*",
+      "/a/*",
       "/auth/session",
       "/auth/logout",
       "/providers/:provider/oauth/callback",

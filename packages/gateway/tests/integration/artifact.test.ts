@@ -16,6 +16,7 @@ import {
 } from "./artifact.test-support.js";
 
 describe("artifact routes", () => {
+  const publicBaseUrl = "https://gateway.example.test";
   let originalTyrumHome: string | undefined;
   let homeDir: string | undefined;
 
@@ -38,20 +39,52 @@ describe("artifact routes", () => {
     }
   });
 
-  it("GET /artifacts/:id rejects bare artifact_id-only fetch paths", async () => {
-    const { app, container } = await setupArtifactRouteTest(homeDir);
+  it("GET /artifacts/:id/metadata returns stored metadata and artifact links", async () => {
+    const { app, container, requestUnauthenticated, tenantAdminToken } =
+      await setupArtifactRouteTest(homeDir);
     const ref = await putTextArtifact(container);
+    const scope: ExecutionScopeIds = {
+      jobId: "job-artifacts-1",
+      runId: "run-artifacts-1",
+      stepId: "step-artifacts-1",
+      attemptId: "attempt-artifacts-1",
+    };
+    await seedExecutionScope(container.db, scope);
+    await linkArtifactToExecution(container.db, ref, {
+      runId: scope.runId,
+      stepId: scope.stepId,
+      attemptId: scope.attemptId,
+    });
 
-    const metaRes = await app.request(`/artifacts/${ref.artifact_id}/metadata`);
-    expect(metaRes.status).toBe(400);
+    const metaRes = await requestUnauthenticated(`/artifacts/${ref.artifact_id}/metadata`, {
+      headers: {
+        authorization: `Bearer ${tenantAdminToken}`,
+      },
+    });
+    expect(metaRes.status).toBe(200);
+    const metaBody = (await metaRes.json()) as {
+      artifact: { artifact_id: string; external_url: string; uri: string };
+      links: Array<{ parent_kind: string; parent_id: string }>;
+    };
+    expect(metaBody.artifact.artifact_id).toBe(ref.artifact_id);
+    expect(metaBody.artifact.external_url).toBe(ref.external_url);
+    expect(metaBody.links).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ parent_kind: "execution_run", parent_id: scope.runId }),
+        expect.objectContaining({ parent_kind: "execution_step", parent_id: scope.stepId }),
+        expect.objectContaining({ parent_kind: "execution_attempt", parent_id: scope.attemptId }),
+      ]),
+    );
 
-    const res = await app.request(`/artifacts/${ref.artifact_id}`);
-    expect(res.status).toBe(400);
+    const res = await app.request(`/a/${ref.artifact_id}`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("text/plain");
+    expect(await res.text()).toBe("hello");
 
     await container.db.close();
   });
 
-  it("GET /runs/:runId/artifacts/:id streams bytes for stored artifacts with metadata", async () => {
+  it("GET /a/:id streams bytes for stored artifacts", async () => {
     const { app, container } = await setupArtifactRouteTest(homeDir);
     const scope: ExecutionScopeIds = {
       jobId: "job-artifacts-1",
@@ -68,13 +101,7 @@ describe("artifact routes", () => {
       attemptId: scope.attemptId,
     });
 
-    const metaRes = await app.request(`/runs/${scope.runId}/artifacts/${ref.artifact_id}/metadata`);
-    expect(metaRes.status).toBe(200);
-    const metaBody = (await metaRes.json()) as { artifact: { uri: string; kind: string } };
-    expect(metaBody.artifact.uri).toBe(ref.uri);
-    expect(metaBody.artifact.kind).toBe(ref.kind);
-
-    const res = await app.request(`/runs/${scope.runId}/artifacts/${ref.artifact_id}`);
+    const res = await app.request(`/a/${ref.artifact_id}`);
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("text/plain");
     expect(await res.text()).toBe("hello");
@@ -82,7 +109,7 @@ describe("artifact routes", () => {
     await container.db.close();
   });
 
-  it("GET /runs/:runId/artifacts/:id emits artifact.fetched with requester identity and policy snapshot refs", async () => {
+  it("GET /a/:id emits artifact.fetched with requester identity and policy snapshot refs", async () => {
     const { container, requestUnauthenticated, tenantAdminToken } =
       await setupArtifactRouteTest(homeDir);
     const scope: ExecutionScopeIds = {
@@ -107,7 +134,7 @@ describe("artifact routes", () => {
     });
 
     const requestId = "req-artifacts-123";
-    const res = await requestUnauthenticated(`/runs/${scope.runId}/artifacts/${ref.artifact_id}`, {
+    const res = await requestUnauthenticated(`/a/${ref.artifact_id}`, {
       headers: {
         authorization: `Bearer ${tenantAdminToken}`,
         "x-request-id": requestId,
@@ -130,20 +157,22 @@ describe("artifact routes", () => {
     expect(fetched?.payload).toMatchObject({
       policy_snapshot_id: "ps-artifacts-request-id",
       fetched_by: {
-        kind: "http",
+        kind: "capability",
         request_id: requestId,
-        auth: {
-          token_kind: "admin",
-          role: "admin",
-        },
       },
     });
 
     await container.db.close();
   });
 
-  it("GET /runs/:runId/artifacts/:id redirects to a signed URL when the store supports it", async () => {
-    const container = await createTestContainer();
+  it("GET /a/:id redirects to a signed URL when the store supports it", async () => {
+    const container = await createTestContainer({
+      deploymentConfig: {
+        server: {
+          publicBaseUrl,
+        },
+      },
+    });
     const scope: ExecutionScopeIds = {
       jobId: "job-artifacts-signed-url",
       runId: "run-artifacts-signed-url",
@@ -170,7 +199,7 @@ describe("artifact routes", () => {
     };
 
     const { app } = await setupArtifactRouteTest(homeDir, container);
-    const res = await app.request(`/runs/${scope.runId}/artifacts/${ref.artifact_id}`);
+    const res = await app.request(`/a/${ref.artifact_id}`);
     expect(res.status).toBe(302);
     expect(res.headers.get("location")).toBe(signedUrl);
     expect(get).not.toHaveBeenCalled();
@@ -178,8 +207,14 @@ describe("artifact routes", () => {
     await container.db.close();
   });
 
-  it("GET /runs/:runId/artifacts/:id redirects using S3ArtifactStore instance (preserves this binding)", async () => {
-    const container = await createTestContainer();
+  it("GET /a/:id redirects using S3ArtifactStore instance (preserves this binding)", async () => {
+    const container = await createTestContainer({
+      deploymentConfig: {
+        server: {
+          publicBaseUrl,
+        },
+      },
+    });
     const scope: ExecutionScopeIds = {
       jobId: "job-artifacts-signed-url-s3-store",
       runId: "run-artifacts-signed-url-s3-store",
@@ -202,8 +237,11 @@ describe("artifact routes", () => {
             ref: {
               artifact_id: artifactId,
               uri: `artifact://${artifactId}`,
+              external_url: `${publicBaseUrl}/a/${artifactId}`,
               kind: "log",
+              media_class: "document",
               created_at: "2026-02-19T12:00:00.000Z",
+              filename: `artifact-${artifactId}.txt`,
               labels: [],
               sha256: "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
               size_bytes: 5,
@@ -232,6 +270,7 @@ describe("artifact routes", () => {
       "bucket",
       "artifacts",
       undefined,
+      publicBaseUrl,
       async () => signedUrl,
     );
 
@@ -239,6 +278,9 @@ describe("artifact routes", () => {
       artifactId,
       kind: "log",
       uri: `artifact://${artifactId}`,
+      externalUrl: `${publicBaseUrl}/a/${artifactId}`,
+      mediaClass: "document",
+      filename: `${artifactId}.txt`,
       createdAt: "2026-02-19T12:00:00.000Z",
       mimeType: "text/plain",
       sizeBytes: 5,
@@ -253,15 +295,21 @@ describe("artifact routes", () => {
     container.artifactStore = store;
 
     const { app } = await setupArtifactRouteTest(homeDir, container);
-    const res = await app.request(`/runs/${scope.runId}/artifacts/${artifactId}`);
+    const res = await app.request(`/a/${artifactId}`);
     expect(res.status).toBe(302);
     expect(res.headers.get("location")).toBe(signedUrl);
 
     await container.db.close();
   });
 
-  it("GET /runs/:runId/artifacts/:id still redirects when DB artifact metadata is invalid (signed URL path)", async () => {
-    const container = await createTestContainer();
+  it("GET /a/:id rejects invalid artifact metadata even when a signed URL is available", async () => {
+    const container = await createTestContainer({
+      deploymentConfig: {
+        server: {
+          publicBaseUrl,
+        },
+      },
+    });
     const scope: ExecutionScopeIds = {
       jobId: "job-artifacts-signed-url-invalid-meta",
       runId: "run-artifacts-signed-url-invalid-meta",
@@ -289,74 +337,20 @@ describe("artifact routes", () => {
     };
 
     const { app } = await setupArtifactRouteTest(homeDir, container);
-    const res = await app.request(`/runs/${scope.runId}/artifacts/${ref.artifact_id}`);
-    expect(res.status).toBe(302);
-    expect(res.headers.get("location")).toBe(signedUrl);
+    const res = await app.request(`/a/${ref.artifact_id}`);
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({
+      error: "invalid_state",
+      message: "artifact metadata is invalid",
+    });
     expect(get).not.toHaveBeenCalled();
 
     await container.db.close();
   });
 
-  it("GET /runs/:runId/artifacts/:id denies unlinked artifacts that lack durable execution scope", async () => {
-    const { container, app } = await setupArtifactRouteTest(homeDir);
-    const ref = await putTextArtifact(container);
-
-    await linkArtifactToExecution(container.db, ref, {
-      agentId: null,
-      runId: null,
-      stepId: null,
-      attemptId: null,
-    });
-
-    const metaRes = await app.request(
-      `/runs/run-does-not-matter/artifacts/${ref.artifact_id}/metadata`,
-    );
-    expect(metaRes.status).toBe(403);
-
-    const res = await app.request(`/runs/run-does-not-matter/artifacts/${ref.artifact_id}`);
-    expect(res.status).toBe(403);
-
-    await container.db.close();
-  });
-
-  it("GET /runs/:runId/artifacts/:id denies artifacts with inconsistent execution linkage", async () => {
-    const { container, app } = await setupArtifactRouteTest(homeDir);
-    const scopeA: ExecutionScopeIds = {
-      jobId: "job-artifacts-a",
-      runId: "run-artifacts-a",
-      stepId: "step-artifacts-a",
-      attemptId: "attempt-artifacts-a",
-    };
-    const scopeB: ExecutionScopeIds = {
-      jobId: "job-artifacts-b",
-      runId: "run-artifacts-b",
-      stepId: "step-artifacts-b",
-      attemptId: "attempt-artifacts-b",
-    };
-    await seedExecutionScope(container.db, scopeA);
-    await seedExecutionScope(container.db, scopeB);
-
-    const ref = await putTextArtifact(container);
-
-    await linkArtifactToExecution(container.db, ref, {
-      runId: scopeA.runId,
-      stepId: scopeB.stepId,
-      attemptId: scopeB.attemptId,
-    });
-
-    const metaRes = await app.request(
-      `/runs/${scopeA.runId}/artifacts/${ref.artifact_id}/metadata`,
-    );
-    expect(metaRes.status).toBe(403);
-
-    const res = await app.request(`/runs/${scopeA.runId}/artifacts/${ref.artifact_id}`);
-    expect(res.status).toBe(403);
-
-    await container.db.close();
-  });
-
-  it("GET /runs/:runId/artifacts/:id denies scope mismatches (runId does not match artifact scope)", async () => {
-    const { container, app } = await setupArtifactRouteTest(homeDir);
+  it("GET /artifacts/:id/metadata and GET /a/:id reject invalid ids cleanly", async () => {
+    const { container, app, requestUnauthenticated, tenantAdminToken } =
+      await setupArtifactRouteTest(homeDir);
     const scope: ExecutionScopeIds = {
       jobId: "job-artifacts-scope",
       runId: "run-artifacts-scope",
@@ -373,31 +367,56 @@ describe("artifact routes", () => {
       attemptId: scope.attemptId,
     });
 
-    const metaRes = await app.request(
-      `/runs/run-wrong-scope/artifacts/${ref.artifact_id}/metadata`,
+    const metaRes = await requestUnauthenticated(
+      `/artifacts/550e8400-e29b-41d4-a716-446655440000/metadata`,
+      {
+        headers: {
+          authorization: `Bearer ${tenantAdminToken}`,
+        },
+      },
     );
     expect(metaRes.status).toBe(404);
     const metaBody = (await metaRes.json()) as { error: string; message: string };
     expect(metaBody).toEqual({ error: "not_found", message: "artifact not found" });
 
-    const res = await app.request(`/runs/run-wrong-scope/artifacts/${ref.artifact_id}`);
+    const res = await app.request(`/a/550e8400-e29b-41d4-a716-446655440000`);
     expect(res.status).toBe(404);
     const body = (await res.json()) as { error: string; message: string };
     expect(body).toEqual({ error: "not_found", message: "artifact not found" });
 
-    const missingMetaRes = await app.request(
-      `/runs/${scope.runId}/artifacts/550e8400-e29b-41d4-a716-446655440000/metadata`,
-    );
-    expect(missingMetaRes.status).toBe(404);
-    const missingMetaBody = (await missingMetaRes.json()) as { error: string; message: string };
-    expect(missingMetaBody).toEqual(metaBody);
+    const invalidMetaRes = await requestUnauthenticated(`/artifacts/not-a-uuid/metadata`, {
+      headers: {
+        authorization: `Bearer ${tenantAdminToken}`,
+      },
+    });
+    expect(invalidMetaRes.status).toBe(400);
+    const invalidRes = await app.request(`/a/not-a-uuid`);
+    expect(invalidRes.status).toBe(400);
 
-    const missingRes = await app.request(
-      `/runs/${scope.runId}/artifacts/550e8400-e29b-41d4-a716-446655440000`,
-    );
-    expect(missingRes.status).toBe(404);
-    const missingBody = (await missingRes.json()) as { error: string; message: string };
-    expect(missingBody).toEqual(body);
+    await container.db.close();
+  });
+
+  it("GET /artifacts/:id/metadata rejects missing artifact metadata while preserving route shape", async () => {
+    const { container, requestUnauthenticated, tenantAdminToken } =
+      await setupArtifactRouteTest(homeDir);
+    const scope: ExecutionScopeIds = {
+      jobId: "job-artifacts-scope",
+      runId: "run-artifacts-scope",
+      stepId: "step-artifacts-scope",
+      attemptId: "attempt-artifacts-scope",
+    };
+    await seedExecutionScope(container.db, scope);
+
+    const ref = await putTextArtifact(container);
+
+    const metaRes = await requestUnauthenticated(`/artifacts/${ref.artifact_id}/metadata`, {
+      headers: {
+        authorization: `Bearer ${tenantAdminToken}`,
+      },
+    });
+    expect(metaRes.status).toBe(404);
+    const metaBody = (await metaRes.json()) as { error: string; message: string };
+    expect(metaBody).toEqual({ error: "not_found", message: "artifact not found" });
 
     await container.db.close();
   });

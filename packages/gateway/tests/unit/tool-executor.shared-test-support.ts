@@ -25,6 +25,7 @@ type ToolExecutorFactoryOptions = {
   nodeInventoryService?: ToolExecutorCtor[12];
   nodeCapabilityInspectionService?: ToolExecutorCtor[13];
   memoryToolRuntime?: ToolExecutorCtor[16];
+  artifactDescribeRuntime?: ToolExecutorCtor[19];
 };
 
 export function registerTempHomeLifecycle(prefix = "tool-executor-"): HomeDirState {
@@ -79,6 +80,7 @@ export function createToolExecutor({
   nodeInventoryService,
   nodeCapabilityInspectionService,
   memoryToolRuntime,
+  artifactDescribeRuntime,
 }: ToolExecutorFactoryOptions): ToolExecutor {
   return new ToolExecutor(
     homeDir,
@@ -98,5 +100,8 @@ export function createToolExecutor({
     undefined,
     undefined,
     memoryToolRuntime,
+    undefined,
+    undefined,
+    artifactDescribeRuntime,
   );
 }

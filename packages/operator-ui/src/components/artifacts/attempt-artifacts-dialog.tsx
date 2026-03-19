@@ -16,12 +16,10 @@ type ArtifactRef = ExecutionAttempt["artifacts"][number];
 
 export function AttemptArtifactsDialog({
   core,
-  runId,
   attemptId,
   artifacts,
 }: {
   core: OperatorCore;
-  runId: string;
   attemptId: string;
   artifacts: ArtifactRef[];
 }) {
@@ -66,7 +64,7 @@ export function AttemptArtifactsDialog({
                   </div>
                   <code className="text-xs text-fg-muted">{artifact.artifact_id}</code>
                 </div>
-                <ArtifactInlinePreview core={core} runId={runId} artifact={artifact} />
+                <ArtifactInlinePreview core={core} artifact={artifact} />
               </div>
             ))}
           </div>

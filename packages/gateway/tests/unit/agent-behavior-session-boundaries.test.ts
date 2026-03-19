@@ -23,50 +23,12 @@ import {
   setupTestEnv,
   teardownTestEnv,
 } from "./agent-runtime.test-helpers.js";
-
-function makeRuntimeConfig(input?: { memoryEnabled?: boolean }): Record<string, unknown> {
-  return {
-    model: { model: "openai/gpt-4.1" },
-    skills: { default_mode: "deny", workspace_trusted: false },
-    mcp: {
-      default_mode: "allow",
-      pre_turn_tools: ["mcp.memory.seed"],
-      server_settings: {
-        memory: input?.memoryEnabled
-          ? {
-              enabled: true,
-              keyword: { enabled: true, limit: 20 },
-              semantic: { enabled: false, limit: 1 },
-              structured: { fact_keys: [], tags: [] },
-              budgets: {
-                max_total_items: 10,
-                max_total_chars: 4000,
-                per_kind: {
-                  fact: { max_items: 4, max_chars: 1200 },
-                  note: { max_items: 6, max_chars: 2400 },
-                  procedure: { max_items: 2, max_chars: 1200 },
-                  episode: { max_items: 4, max_chars: 1600 },
-                },
-              },
-            }
-          : { enabled: false },
-      },
-    },
-    tools: { default_mode: "allow" },
-    sessions: { ttl_days: 30, max_turns: 20 },
-  };
-}
-
-function noteDecision(body_md: string) {
-  return {
-    should_store: true as const,
-    reason: "Durable user-provided information.",
-    memory: {
-      kind: "note" as const,
-      body_md,
-    },
-  };
-}
+import {
+  makeRuntimeConfig,
+  noteDecision,
+  textFromTurnRequest,
+  textParts,
+} from "./agent-behavior-session-boundaries.test-support.js";
 
 describe("Agent behavior - session boundaries", () => {
   let homeDir: string | undefined;
@@ -102,14 +64,14 @@ describe("Agent behavior - session boundaries", () => {
     await runtime.turn({
       channel: "telegram",
       thread_id: "dm-alice",
-      message: "my name is Alice",
+      parts: textParts("my name is Alice"),
       envelope: aliceIntro.message.envelope,
     });
 
     const sameDm = await runtime.turn({
       channel: "telegram",
       thread_id: "dm-alice",
-      message: "what is my name?",
+      parts: textParts("what is my name?"),
       envelope: makeTelegramDmMessage({
         threadId: "dm-alice",
         messageId: "dm-alice-2",
@@ -119,7 +81,7 @@ describe("Agent behavior - session boundaries", () => {
     const differentDm = await runtime.turn({
       channel: "telegram",
       thread_id: "dm-bob",
-      message: "what is my name?",
+      parts: textParts("what is my name?"),
       envelope: makeTelegramDmMessage({
         threadId: "dm-bob",
         messageId: "dm-bob-1",
@@ -205,17 +167,23 @@ describe("Agent behavior - session boundaries", () => {
 
       const agents = {
         getRuntime: vi.fn(async () => ({
-          turn: vi.fn(async (req: { message?: string }) => {
-            turnCalls.push(req.message);
-            return {
-              reply: req.message?.includes("Wednesday")
-                ? "Scheduled for Wednesday"
-                : "Scheduled for Tuesday",
-              session_id: "session-1",
-              used_tools: [],
-              memory_written: false,
-            };
-          }),
+          turn: vi.fn(
+            async (req: {
+              parts?: Array<{ type?: string; text?: string }>;
+              envelope?: { content?: { text?: string } };
+            }) => {
+              const message = textFromTurnRequest(req);
+              turnCalls.push(message);
+              return {
+                reply: message?.includes("Wednesday")
+                  ? "Scheduled for Wednesday"
+                  : "Scheduled for Tuesday",
+                session_id: "session-1",
+                used_tools: [],
+                memory_written: false,
+              };
+            },
+          ),
         })),
       };
       const telegramBot = {
@@ -306,17 +274,23 @@ describe("Agent behavior - session boundaries", () => {
 
       const agents = {
         getRuntime: vi.fn(async () => ({
-          turn: vi.fn(async (req: { message?: string }) => {
-            turnCalls.push(req.message);
-            return {
-              reply: req.message?.includes("Wednesday")
-                ? "Scheduled for Wednesday"
-                : "Scheduled for Tuesday",
-              session_id: "session-1",
-              used_tools: [],
-              memory_written: false,
-            };
-          }),
+          turn: vi.fn(
+            async (req: {
+              parts?: Array<{ type?: string; text?: string }>;
+              envelope?: { content?: { text?: string } };
+            }) => {
+              const message = textFromTurnRequest(req);
+              turnCalls.push(message);
+              return {
+                reply: message?.includes("Wednesday")
+                  ? "Scheduled for Wednesday"
+                  : "Scheduled for Tuesday",
+                session_id: "session-1",
+                used_tools: [],
+                memory_written: false,
+              };
+            },
+          ),
         })),
       };
       const telegramBot = {
@@ -380,7 +354,7 @@ describe("Agent behavior - session boundaries", () => {
     const repaired = await runtime.turn({
       channel: "telegram",
       thread_id: "repair-thread",
-      message: "what did I say earlier?",
+      parts: textParts("what did I say earlier?"),
     });
 
     expect(repaired.reply).toBe("UNKNOWN");
@@ -407,15 +381,20 @@ describe("Agent behavior - session boundaries", () => {
 
       const agents = {
         getRuntime: vi.fn(async () => ({
-          turn: vi.fn(async (req: { message?: string }) => {
-            turnCalls.push(req.message);
-            return {
-              reply: "processed once",
-              session_id: "session-1",
-              used_tools: [],
-              memory_written: false,
-            };
-          }),
+          turn: vi.fn(
+            async (req: {
+              parts?: Array<{ type?: string; text?: string }>;
+              envelope?: { content?: { text?: string } };
+            }) => {
+              turnCalls.push(textFromTurnRequest(req));
+              return {
+                reply: "processed once",
+                session_id: "session-1",
+                used_tools: [],
+                memory_written: false,
+              };
+            },
+          ),
         })),
       };
       const telegramBot = {
@@ -498,12 +477,12 @@ describe("Agent behavior - session boundaries", () => {
     await runtimeA.turn({
       channel: "ui",
       thread_id: "tenant-a-thread",
-      message: "remember that my name is Alice",
+      parts: textParts("remember that my name is Alice"),
     });
     const tenantBRecall = await runtimeB.turn({
       channel: "ui",
       thread_id: "tenant-b-thread",
-      message: "what is my name?",
+      parts: textParts("what is my name?"),
     });
 
     expect(tenantBRecall.reply).toBe("UNKNOWN");

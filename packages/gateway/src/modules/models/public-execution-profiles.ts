@@ -14,5 +14,7 @@ export function normalizePublicExecutionProfileId(
   if (normalized === "integrator") {
     return "executor_rw";
   }
-  return PUBLIC_EXECUTION_PROFILE_IDS.find((profileId) => profileId === normalized);
+  return PUBLIC_EXECUTION_PROFILE_IDS.find(
+    (profileId: PublicExecutionProfileId) => profileId === normalized,
+  );
 }

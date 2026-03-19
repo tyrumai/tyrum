@@ -7,6 +7,7 @@ import { FsArtifactStore, S3ArtifactStore } from "./store.js";
 export function createArtifactStore(
   artifacts: DeploymentConfigArtifacts,
   redactionEngine: RedactionEngine,
+  publicBaseUrl: string,
 ): ArtifactStore {
   if (artifacts.store === "s3") {
     const bucket = artifacts.s3.bucket ?? "tyrum-artifacts";
@@ -24,11 +25,11 @@ export function createArtifactStore(
             }
           : undefined,
     });
-    return new S3ArtifactStore(client, bucket, "artifacts", redactionEngine);
+    return new S3ArtifactStore(client, bucket, "artifacts", redactionEngine, publicBaseUrl);
   }
 
   if (!artifacts.dir) {
     throw new Error("artifacts.dir is required when artifacts.store=fs");
   }
-  return new FsArtifactStore(artifacts.dir, redactionEngine);
+  return new FsArtifactStore(artifacts.dir, redactionEngine, publicBaseUrl);
 }

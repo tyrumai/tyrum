@@ -51,7 +51,9 @@ const DEFAULT_TABLES = [
   "execution_runs",
   "execution_steps",
   "execution_attempts",
-  "execution_artifacts",
+  "artifacts",
+  "artifact_access",
+  "artifact_links",
   "idempotency_records",
   "resume_tokens",
   // Policy + pairing + channels
@@ -102,7 +104,9 @@ const IMPORT_ORDER = [
   "execution_runs",
   "execution_steps",
   "execution_attempts",
-  "execution_artifacts",
+  "artifacts",
+  "artifact_access",
+  "artifact_links",
   "idempotency_records",
   "resume_tokens",
 ] as const;
@@ -226,11 +230,11 @@ async function pruneSeededDefaultHeartbeatSchedules(db: SqlDb): Promise<void> {
      FROM watchers`,
   );
   const watcherIds = rows
-    .filter((row) => {
+    .filter((row: { watcher_id: string; trigger_config_json: string }) => {
       const config = parseScheduleConfig(row.trigger_config_json);
       return config?.schedule_kind === "heartbeat" && config.seeded_default === true;
     })
-    .map((row) => row.watcher_id);
+    .map((row: { watcher_id: string; trigger_config_json: string }) => row.watcher_id);
   if (watcherIds.length === 0) {
     return;
   }
@@ -266,7 +270,7 @@ async function importTable(db: SqlDb, table: string, data: SnapshotTableT): Prom
 
   let inserted = 0;
   for (const row of data.rows) {
-    const values = cols.map((col) => rowValue(row, col));
+    const values = cols.map((col: string) => rowValue(row, col));
     const res = await db.run(sql, values);
     inserted += res.changes;
   }
@@ -291,7 +295,7 @@ function prepareApprovalImportWithDeferredExecutionRefs(data: SnapshotTableT): {
   return {
     data: {
       columns: data.columns,
-      rows: data.rows.map((row) => {
+      rows: data.rows.map((row: Record<string, unknown>) => {
         const sanitizedRow: Record<string, unknown> = { ...row };
         for (const column of deferredColumns) {
           sanitizedRow[column] = null;
@@ -299,7 +303,7 @@ function prepareApprovalImportWithDeferredExecutionRefs(data: SnapshotTableT): {
         return sanitizedRow;
       }),
     },
-    deferredPatches: data.rows.flatMap((row) => {
+    deferredPatches: data.rows.flatMap((row: Record<string, unknown>) => {
       const patch = {
         tenantId: rowValue(row, "tenant_id"),
         approvalId: rowValue(row, "approval_id"),
@@ -382,7 +386,7 @@ export function createSnapshotRoutes(deps: SnapshotRouteDeps): Hono {
         tablesData[table] = await exportTable(tx, table);
       }
 
-      const executionArtifactsColumns = tablesData["execution_artifacts"]?.columns ?? [];
+      const artifactColumns = tablesData["artifacts"]?.columns ?? [];
       return SnapshotBundle.parse({
         format: "tyrum.snapshot.v2",
         exported_at: new Date().toISOString(),
@@ -391,11 +395,11 @@ export function createSnapshotRoutes(deps: SnapshotRouteDeps): Hono {
         artifacts: {
           bytes: { included: false, included_sensitivity: [] },
           retention: {
-            execution_artifacts: {
-              included: Boolean(tablesData["execution_artifacts"]),
-              has_retention_expires_at: executionArtifactsColumns.includes("retention_expires_at"),
-              has_bytes_deleted_at: executionArtifactsColumns.includes("bytes_deleted_at"),
-              has_bytes_deleted_reason: executionArtifactsColumns.includes("bytes_deleted_reason"),
+            artifacts: {
+              included: Boolean(tablesData["artifacts"]),
+              has_retention_expires_at: artifactColumns.includes("retention_expires_at"),
+              has_bytes_deleted_at: artifactColumns.includes("bytes_deleted_at"),
+              has_bytes_deleted_reason: artifactColumns.includes("bytes_deleted_reason"),
             },
           },
         },
