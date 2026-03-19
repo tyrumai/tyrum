@@ -1,5 +1,21 @@
 import type { PlaywrightBackend, PageSnapshot } from "./playwright-backend.js";
 
+function isMissingPlaywrightPackage(message: string): boolean {
+  return (
+    /\bERR_MODULE_NOT_FOUND\b/.test(message) ||
+    /Cannot find package ['"]playwright['"]/.test(message) ||
+    /Cannot find module ['"]playwright['"]/.test(message)
+  );
+}
+
+export function formatPlaywrightImportError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  if (isMissingPlaywrightPackage(message)) {
+    return `Playwright not available: ${message}. Install with: pnpm add playwright`;
+  }
+  return `Playwright failed to load: ${message}`;
+}
+
 export class RealPlaywrightBackend implements PlaywrightBackend {
   private browser: import("playwright").Browser | null = null;
   private page: import("playwright").Page | null = null;
@@ -39,10 +55,7 @@ export class RealPlaywrightBackend implements PlaywrightBackend {
       const pw = await import("playwright");
       chromium = pw.chromium;
     } catch (err) {
-      throw new Error(
-        `Playwright not available: ${(err as Error).message}. ` +
-          `Install with: pnpm add playwright`,
-      );
+      throw new Error(formatPlaywrightImportError(err));
     }
 
     try {
