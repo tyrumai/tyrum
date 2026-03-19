@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { ArtifactRef, type TyrumUIMessage } from "@tyrum/schemas";
+import { ArtifactRef, type TyrumUIMessage } from "@tyrum/contracts";
 import {
   extractArtifactIdFromUrl,
   insertArtifactRecordTx,

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ArtifactRef } from "@tyrum/schemas";
+import { ArtifactRef } from "@tyrum/contracts";
 
 const replaceSessionArtifactLinksTxMock = vi.hoisted(() =>
   vi.fn(async () => {

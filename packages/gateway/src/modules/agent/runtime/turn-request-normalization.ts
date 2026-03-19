@@ -1,4 +1,4 @@
-import type { AgentTurnRequest as AgentTurnRequestT, TyrumUIMessagePart } from "@tyrum/schemas";
+import type { AgentTurnRequest as AgentTurnRequestT, TyrumUIMessagePart } from "@tyrum/contracts";
 import { createArtifactFilePart } from "../../ai-sdk/attachment-parts.js";
 
 type MaybeLegacyTurnRequest = AgentTurnRequestT & {

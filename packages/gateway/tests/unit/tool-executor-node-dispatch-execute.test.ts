@@ -1,4 +1,4 @@
-import { CAPABILITY_DESCRIPTOR_DEFAULT_VERSION } from "@tyrum/schemas";
+import { CAPABILITY_DESCRIPTOR_DEFAULT_VERSION } from "@tyrum/contracts";
 import { describe, expect, it, vi } from "vitest";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { executeNodeDispatchRequest } from "../../src/modules/agent/tool-executor-node-dispatch-execute.js";

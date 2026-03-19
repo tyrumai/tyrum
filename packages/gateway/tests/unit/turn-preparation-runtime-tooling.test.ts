@@ -1,4 +1,4 @@
-import { AgentConfig, DeploymentConfig } from "@tyrum/schemas";
+import { AgentConfig, DeploymentConfig } from "@tyrum/contracts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { describeArtifactsForPromptMock } = vi.hoisted(() => ({

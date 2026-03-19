@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { vi } from "vitest";
-import { artifactFilenameFromMetadata } from "@tyrum/schemas";
+import { artifactFilenameFromMetadata } from "@tyrum/contracts";
 import type { AgentRegistry } from "../../src/modules/agent/registry.js";
 import { SessionDal } from "../../src/modules/agent/session-dal.js";
 import {

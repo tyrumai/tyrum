@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { AgentConfig } from "@tyrum/schemas";
+import { AgentConfig } from "@tyrum/contracts";
 import { MockLanguageModelV3 } from "ai/test";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";

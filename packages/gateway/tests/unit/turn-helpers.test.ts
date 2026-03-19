@@ -1,4 +1,4 @@
-import type { AgentTurnRequest as AgentTurnRequestT } from "@tyrum/schemas";
+import type { AgentTurnRequest as AgentTurnRequestT } from "@tyrum/contracts";
 import { describe, expect, it } from "vitest";
 import { resolveAgentTurnInput } from "../../src/modules/agent/runtime/turn-helpers.js";
 
