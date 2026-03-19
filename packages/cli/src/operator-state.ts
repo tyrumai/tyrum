@@ -4,7 +4,7 @@ import { dirname } from "node:path";
 import {
   createNodeFileDeviceIdentityStorage,
   normalizeFingerprint256,
-} from "@tyrum/transport-sdk/node";
+} from "@tyrum/operator-app/node";
 
 import {
   resolveOperatorConfigPath,

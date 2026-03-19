@@ -1,5 +1,9 @@
-import type { ExecutionAttempt, ExecutionRun, ExecutionStep } from "@tyrum/client";
-import type { RunsState } from "@tyrum/operator-app";
+import type {
+  ExecutionAttempt,
+  ExecutionRun,
+  ExecutionStep,
+  RunsState,
+} from "@tyrum/operator-app/node";
 
 export function getRunList(state: RunsState): ExecutionRun[] {
   return Object.values(state.runsById).toSorted((a, b) => {

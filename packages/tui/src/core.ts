@@ -1,22 +1,20 @@
 import {
   createBearerTokenAuth,
   createElevatedModeStore,
+  createNodeFileDeviceIdentityStorage,
   createOperatorCore,
   createOperatorCoreManager,
+  createTyrumHttpClient,
   httpAuthForAuth,
   isElevatedModeActive,
+  loadOrCreateDeviceIdentity,
+  TyrumClient,
   wsTokenForAuth,
   type OperatorCore,
   type OperatorCoreFactory,
   type OperatorCoreManager,
   type OperatorWsClient,
-} from "@tyrum/operator-app";
-import {
-  createNodeFileDeviceIdentityStorage,
-  createTyrumHttpClient,
-  loadOrCreateDeviceIdentity,
-  TyrumClient,
-} from "@tyrum/transport-sdk/node";
+} from "@tyrum/operator-app/node";
 
 export type TuiCoreOptions = {
   wsUrl: string;
