@@ -6,6 +6,7 @@ import type {
   AgentTurnResponse as AgentTurnResponseT,
   NormalizedContainerKind,
   NormalizedMessageEnvelope as NormalizedMessageEnvelopeT,
+  TyrumUIMessagePart,
   WorkScope,
 } from "@tyrum/contracts";
 import { AgentTurnRequest, SubagentSessionKey } from "@tyrum/contracts";
@@ -71,6 +72,7 @@ type ResolvedAgentTurnInput = {
   channel: string;
   thread_id: string;
   message: string;
+  parts: TyrumUIMessagePart[];
   envelope?: NormalizedMessageEnvelopeT;
   metadata?: Record<string, unknown>;
 };
@@ -206,7 +208,7 @@ export async function turnViaExecutionEngine(
     channel: resolvedInput.channel,
     thread_id: resolvedInput.thread_id,
     container_kind: containerKind,
-    parts: input.parts,
+    parts: resolvedInput.parts,
     envelope: resolvedInput.envelope,
     ...(tenantKey ? { tenant_key: tenantKey } : {}),
     agent_key: agentKey,

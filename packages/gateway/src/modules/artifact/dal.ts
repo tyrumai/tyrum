@@ -323,15 +323,37 @@ export async function replaceSessionArtifactLinksTx(
       `DELETE FROM artifact_links
        WHERE tenant_id = ?
          AND parent_kind = 'chat_message'
-         AND parent_id IN (${placeholders})`,
+       AND parent_id IN (${placeholders})`,
       [input.tenantId, ...previousMessageIds],
     );
   }
 
+  const nextArtifactAccessIds = uniqueStrings(
+    input.nextMessages.flatMap((message) => collectArtifactIdsFromMessage(message)),
+  );
+  const artifactIdByAccessId = new Map<string, string>();
+  if (nextArtifactAccessIds.length > 0) {
+    const placeholders = nextArtifactAccessIds.map(() => "?").join(", ");
+    const artifactRows = await tx.all<{ access_id: string; artifact_id: string }>(
+      `SELECT access_id, artifact_id
+       FROM artifacts
+       WHERE tenant_id = ?
+         AND access_id IN (${placeholders})`,
+      [input.tenantId, ...nextArtifactAccessIds],
+    );
+    for (const row of artifactRows) {
+      artifactIdByAccessId.set(row.access_id, row.artifact_id);
+    }
+  }
+
   const sessionArtifactIds = new Set<string>();
   for (const message of input.nextMessages) {
-    const artifactIds = collectArtifactIdsFromMessage(message);
-    for (const artifactId of artifactIds) {
+    const artifactAccessIds = collectArtifactIdsFromMessage(message);
+    for (const artifactAccessId of artifactAccessIds) {
+      const artifactId = artifactIdByAccessId.get(artifactAccessId);
+      if (!artifactId) {
+        continue;
+      }
       sessionArtifactIds.add(artifactId);
       if (typeof message.id === "string" && message.id.trim().length > 0) {
         await linkArtifactTx(tx, {
