@@ -7,6 +7,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "../../..");
 const targetStateDocPath = "docs/architecture/target-state.md";
 const targetStateDecisionPath = "docs/architecture/reference/arch-01-clean-break-target-state.md";
+const gatewayDocPath = "docs/architecture/gateway/index.md";
 const prTemplatePath = ".github/pull_request_template.md";
 const contributorEntryPoints = [
   "README.md",
@@ -75,6 +76,15 @@ describe("Target-state architecture docs", () => {
     expect(decisionRecord).toMatch(/reference decision record/i);
     expect(decisionRecord).toMatch(/clean-break/i);
     expect(decisionRecord).toMatch(/target package graph/i);
+  });
+
+  it("describes the gateway page as the public runtime entrypoint composition root", async () => {
+    const gatewayDoc = await readRepoFile(gatewayDocPath);
+
+    expect(gatewayDoc).toMatch(/public runtime entrypoint/i);
+    expect(gatewayDoc).toMatch(/composition root/i);
+    expect(gatewayDoc).toMatch(/transport adapters/i);
+    expect(gatewayDoc).toMatch(/bundled operator/i);
   });
 
   it("adds a PR template architecture checklist for the migration", async () => {

@@ -97,15 +97,15 @@ const workboardHandlers: Record<string, WorkboardHandler> = {
     action: "create work items",
     unsupportedMessage: "work.create not supported",
     schema: WsWorkCreateRequest,
-    run: async ({ msg, deps, tenantId, dal }, payload) => {
+    run: async ({ msg, deps, tenantId, workboardService }, payload) => {
       const { scope, keys } = await ensureWorkScope({ deps, tenantId, payload });
-      const item = await dal.createItem({
+      const item = await workboardService.createItem({
         scope,
         item: payload.item,
         createdFromSessionKey: `agent:${keys.agentKey}:main`,
       });
       broadcastWorkItemCreated({ item, deps });
-      await maybeEmitWorkItemOverlapWarningArtifact({ dal, scope, item, deps });
+      await maybeEmitWorkItemOverlapWarningArtifact({ workboardService, scope, item, deps });
       return okResult(msg, WsWorkCreateResult.parse({ item }));
     },
   }),
@@ -113,9 +113,9 @@ const workboardHandlers: Record<string, WorkboardHandler> = {
     action: "list work items",
     unsupportedMessage: "work.list not supported",
     schema: WsWorkListRequest,
-    run: async ({ msg, deps, tenantId, dal }, payload) => {
+    run: async ({ msg, deps, tenantId, workboardService }, payload) => {
       const { scope } = await resolveExistingWorkScope({ deps, tenantId, payload });
-      const { items, next_cursor } = await dal.listItems({
+      const { items, next_cursor } = await workboardService.listItems({
         scope,
         statuses: payload.statuses,
         kinds: payload.kinds,
@@ -129,9 +129,9 @@ const workboardHandlers: Record<string, WorkboardHandler> = {
     action: "fetch work items",
     unsupportedMessage: "work.get not supported",
     schema: WsWorkGetRequest,
-    run: async ({ msg, deps, tenantId, dal }, payload) => {
+    run: async ({ msg, deps, tenantId, workboardService }, payload) => {
       const { scope } = await resolveExistingWorkScope({ deps, tenantId, payload });
-      const item = await dal.getItem({ scope, work_item_id: payload.work_item_id });
+      const item = await workboardService.getItem({ scope, work_item_id: payload.work_item_id });
       return item ? okResult(msg, WsWorkGetResult.parse({ item })) : notFound(msg, "work item");
     },
   }),
@@ -139,9 +139,9 @@ const workboardHandlers: Record<string, WorkboardHandler> = {
     action: "update work items",
     unsupportedMessage: "work.update not supported",
     schema: WsWorkUpdateRequest,
-    run: async ({ msg, deps, tenantId, dal }, payload) => {
+    run: async ({ msg, deps, tenantId, workboardService }, payload) => {
       const { scope } = await resolveExistingWorkScope({ deps, tenantId, payload });
-      const item = await dal.updateItem({
+      const item = await workboardService.updateItem({
         scope,
         work_item_id: payload.work_item_id,
         patch: payload.patch,
@@ -149,7 +149,7 @@ const workboardHandlers: Record<string, WorkboardHandler> = {
       if (!item) return notFound(msg, "work item");
       broadcastAgentEvent(scope.tenant_id, "work.item.updated", item.agent_id, { item }, deps);
       await maybeEmitWorkItemOverlapWarningArtifact({
-        dal,
+        workboardService,
         scope,
         item,
         deps,
@@ -163,9 +163,9 @@ const workboardHandlers: Record<string, WorkboardHandler> = {
     unsupportedMessage: "work.transition not supported",
     schema: WsWorkTransitionRequest,
     run: async (ctx, payload) => {
-      const { msg, deps, tenantId, dal } = ctx;
+      const { msg, deps, tenantId, workboardService } = ctx;
       const { scope } = await resolveExistingWorkScope({ deps, tenantId, payload });
-      const item = await dal.transitionItem({
+      const item = await workboardService.transitionItem({
         scope,
         work_item_id: payload.work_item_id,
         status: payload.status,
@@ -186,17 +186,9 @@ const workboardHandlers: Record<string, WorkboardHandler> = {
   "work.link.create": createHandler({
     action: "manage work item links",
     schema: WsWorkLinkCreateRequest,
-    run: async ({ msg, deps, tenantId, dal }, payload) => {
+    run: async ({ msg, deps, tenantId, workboardService }, payload) => {
       const { scope } = await resolveExistingWorkScope({ deps, tenantId, payload });
-      if (payload.work_item_id === payload.linked_work_item_id) {
-        return errorResponse(
-          msg.request_id,
-          msg.type,
-          "invalid_request",
-          "work item cannot link to itself",
-        );
-      }
-      const link = await dal.createLink({
+      const link = await workboardService.createLink({
         scope,
         work_item_id: payload.work_item_id,
         linked_work_item_id: payload.linked_work_item_id,
@@ -221,9 +213,9 @@ const workboardHandlers: Record<string, WorkboardHandler> = {
   "work.link.list": createHandler({
     action: "manage work item links",
     schema: WsWorkLinkListRequest,
-    run: async ({ msg, deps, tenantId, dal }, payload) => {
+    run: async ({ msg, deps, tenantId, workboardService }, payload) => {
       const { scope } = await resolveExistingWorkScope({ deps, tenantId, payload });
-      const { links } = await dal.listLinks({
+      const { links } = await workboardService.listLinks({
         scope,
         work_item_id: payload.work_item_id,
         limit: payload.limit,
@@ -234,9 +226,9 @@ const workboardHandlers: Record<string, WorkboardHandler> = {
   "work.artifact.list": createHandler({
     action: "access work artifacts",
     schema: WsWorkArtifactListRequest,
-    run: async ({ msg, deps, tenantId, dal }, payload) => {
+    run: async ({ msg, deps, tenantId, workboardService }, payload) => {
       const { scope } = await resolveExistingWorkScope({ deps, tenantId, payload });
-      const { artifacts, next_cursor } = await dal.listArtifacts({
+      const { artifacts, next_cursor } = await workboardService.listArtifacts({
         scope,
         work_item_id: payload.work_item_id,
         limit: payload.limit,
@@ -248,9 +240,12 @@ const workboardHandlers: Record<string, WorkboardHandler> = {
   "work.artifact.get": createHandler({
     action: "access work artifacts",
     schema: WsWorkArtifactGetRequest,
-    run: async ({ msg, deps, tenantId, dal }, payload) => {
+    run: async ({ msg, deps, tenantId, workboardService }, payload) => {
       const { scope } = await resolveExistingWorkScope({ deps, tenantId, payload });
-      const artifact = await dal.getArtifact({ scope, artifact_id: payload.artifact_id });
+      const artifact = await workboardService.getArtifact({
+        scope,
+        artifact_id: payload.artifact_id,
+      });
       return artifact
         ? okResult(msg, WsWorkArtifactGetResult.parse({ artifact }))
         : notFound(msg, "artifact");
@@ -259,9 +254,9 @@ const workboardHandlers: Record<string, WorkboardHandler> = {
   "work.artifact.create": createHandler({
     action: "access work artifacts",
     schema: WsWorkArtifactCreateRequest,
-    run: async ({ msg, deps, tenantId, dal }, payload) => {
+    run: async ({ msg, deps, tenantId, workboardService }, payload) => {
       const { scope } = await resolveExistingWorkScope({ deps, tenantId, payload });
-      const artifact = await dal.createArtifact({ scope, artifact: payload.artifact });
+      const artifact = await workboardService.createArtifact({ scope, artifact: payload.artifact });
       broadcastAgentEvent(
         scope.tenant_id,
         "work.artifact.created",
@@ -275,9 +270,9 @@ const workboardHandlers: Record<string, WorkboardHandler> = {
   "work.decision.list": createHandler({
     action: "access decision records",
     schema: WsWorkDecisionListRequest,
-    run: async ({ msg, deps, tenantId, dal }, payload) => {
+    run: async ({ msg, deps, tenantId, workboardService }, payload) => {
       const { scope } = await resolveExistingWorkScope({ deps, tenantId, payload });
-      const { decisions, next_cursor } = await dal.listDecisions({
+      const { decisions, next_cursor } = await workboardService.listDecisions({
         scope,
         work_item_id: payload.work_item_id,
         limit: payload.limit,
@@ -289,9 +284,12 @@ const workboardHandlers: Record<string, WorkboardHandler> = {
   "work.decision.get": createHandler({
     action: "access decision records",
     schema: WsWorkDecisionGetRequest,
-    run: async ({ msg, deps, tenantId, dal }, payload) => {
+    run: async ({ msg, deps, tenantId, workboardService }, payload) => {
       const { scope } = await resolveExistingWorkScope({ deps, tenantId, payload });
-      const decision = await dal.getDecision({ scope, decision_id: payload.decision_id });
+      const decision = await workboardService.getDecision({
+        scope,
+        decision_id: payload.decision_id,
+      });
       return decision
         ? okResult(msg, WsWorkDecisionGetResult.parse({ decision }))
         : notFound(msg, "decision");
@@ -300,9 +298,9 @@ const workboardHandlers: Record<string, WorkboardHandler> = {
   "work.decision.create": createHandler({
     action: "access decision records",
     schema: WsWorkDecisionCreateRequest,
-    run: async ({ msg, deps, tenantId, dal }, payload) => {
+    run: async ({ msg, deps, tenantId, workboardService }, payload) => {
       const { scope } = await resolveExistingWorkScope({ deps, tenantId, payload });
-      const decision = await dal.createDecision({ scope, decision: payload.decision });
+      const decision = await workboardService.createDecision({ scope, decision: payload.decision });
       broadcastAgentEvent(
         scope.tenant_id,
         "work.decision.created",
@@ -316,9 +314,9 @@ const workboardHandlers: Record<string, WorkboardHandler> = {
   "work.signal.list": createHandler({
     action: "access work signals",
     schema: WsWorkSignalListRequest,
-    run: async ({ msg, deps, tenantId, dal }, payload) => {
+    run: async ({ msg, deps, tenantId, workboardService }, payload) => {
       const { scope } = await resolveExistingWorkScope({ deps, tenantId, payload });
-      const { signals, next_cursor } = await dal.listSignals({
+      const { signals, next_cursor } = await workboardService.listSignals({
         scope,
         work_item_id: payload.work_item_id,
         statuses: payload.statuses,
@@ -331,9 +329,9 @@ const workboardHandlers: Record<string, WorkboardHandler> = {
   "work.signal.get": createHandler({
     action: "access work signals",
     schema: WsWorkSignalGetRequest,
-    run: async ({ msg, deps, tenantId, dal }, payload) => {
+    run: async ({ msg, deps, tenantId, workboardService }, payload) => {
       const { scope } = await resolveExistingWorkScope({ deps, tenantId, payload });
-      const signal = await dal.getSignal({ scope, signal_id: payload.signal_id });
+      const signal = await workboardService.getSignal({ scope, signal_id: payload.signal_id });
       return signal
         ? okResult(msg, WsWorkSignalGetResult.parse({ signal }))
         : notFound(msg, "signal");
@@ -342,9 +340,9 @@ const workboardHandlers: Record<string, WorkboardHandler> = {
   "work.signal.create": createHandler({
     action: "access work signals",
     schema: WsWorkSignalCreateRequest,
-    run: async ({ msg, deps, tenantId, dal }, payload) => {
+    run: async ({ msg, deps, tenantId, workboardService }, payload) => {
       const { scope } = await resolveExistingWorkScope({ deps, tenantId, payload });
-      const signal = await dal.createSignal({ scope, signal: payload.signal });
+      const signal = await workboardService.createSignal({ scope, signal: payload.signal });
       broadcastAgentEvent(
         scope.tenant_id,
         "work.signal.created",
@@ -358,9 +356,9 @@ const workboardHandlers: Record<string, WorkboardHandler> = {
   "work.signal.update": createHandler({
     action: "access work signals",
     schema: WsWorkSignalUpdateRequest,
-    run: async ({ msg, deps, tenantId, dal }, payload) => {
+    run: async ({ msg, deps, tenantId, workboardService }, payload) => {
       const { scope } = await resolveExistingWorkScope({ deps, tenantId, payload });
-      const updated = await dal.updateSignal({
+      const updated = await workboardService.updateSignal({
         scope,
         signal_id: payload.signal_id,
         patch: payload.patch,
@@ -383,27 +381,27 @@ const workboardHandlers: Record<string, WorkboardHandler> = {
   "work.state_kv.get": createHandler({
     action: "access work state kv",
     schema: WsWorkStateKvGetRequest,
-    run: async ({ msg, deps, tenantId, dal }, payload) => {
+    run: async ({ msg, deps, tenantId, workboardService }, payload) => {
       const scope = await resolveExistingStateKvScope(deps, tenantId, payload.scope);
-      const entry = (await dal.getStateKv({ scope, key: payload.key })) ?? null;
+      const entry = (await workboardService.getStateKv({ scope, key: payload.key })) ?? null;
       return okResult(msg, WsWorkStateKvGetResult.parse({ entry }));
     },
   }),
   "work.state_kv.list": createHandler({
     action: "access work state kv",
     schema: WsWorkStateKvListRequest,
-    run: async ({ msg, deps, tenantId, dal }, payload) => {
+    run: async ({ msg, deps, tenantId, workboardService }, payload) => {
       const scope = await resolveExistingStateKvScope(deps, tenantId, payload.scope);
-      const { entries } = await dal.listStateKv({ scope, prefix: payload.prefix });
+      const { entries } = await workboardService.listStateKv({ scope, prefix: payload.prefix });
       return okResult(msg, WsWorkStateKvListResult.parse({ entries }));
     },
   }),
   "work.state_kv.set": createHandler({
     action: "access work state kv",
     schema: WsWorkStateKvSetRequest,
-    run: async ({ msg, deps, tenantId, dal }, payload) => {
+    run: async ({ msg, deps, tenantId, workboardService }, payload) => {
       const scope = await ensureStateKvScope(deps, tenantId, payload.scope);
-      const entry = await dal.setStateKv({
+      const entry = await workboardService.setStateKv({
         scope,
         key: payload.key,
         value_json: payload.value_json,

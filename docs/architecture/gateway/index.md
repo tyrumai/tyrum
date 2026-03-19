@@ -1,6 +1,6 @@
 # Gateway
 
-The gateway is Tyrum's control plane. It is the trusted boundary that keeps interactive control, durable orchestration, policy enforcement, and extension routing in one place.
+`@tyrum/gateway` is Tyrum's public runtime entrypoint and composition root. It owns bootstrap, transport adapters, dependency wiring across the runtime packages, and bundled operator asset serving at the trusted control-plane boundary.
 
 ## Read this page
 
@@ -40,14 +40,16 @@ flowchart TB
 
 ### What the gateway owns
 
-- Long-lived client and node connectivity over typed request/response/event surfaces.
-- Contract validation, auth/authz enforcement, policy checks, and approval/review gates.
-- Runtime routing across agent turns, execution runs, node dispatch, and extension calls.
-- Durable coordination through StateStore records and backplane delivery.
+- CLI/bootstrap entrypoints, runtime startup, shutdown, and cross-package dependency wiring.
+- Long-lived client and node connectivity through HTTP and WebSocket transport adapters.
+- Contract validation, auth/authz enforcement, and translation between transport envelopes and runtime package calls.
+- Bundled operator asset serving for `/ui` and other public gateway-hosted runtime surfaces.
 - Control-plane administration for managed runtime features such as desktop environments and location automation.
 
 ### What the gateway does not own
 
+- Agent, execution, workboard, node-control, or policy business logic that belongs in the focused runtime packages.
+- DAL-heavy orchestration inside route handlers or WebSocket handlers beyond auth, parsing, and translation.
 - Client UX rendering and host-specific presentation logic.
 - Node-local device execution internals.
 - Secret storage plaintext handling outside trusted providers.
@@ -57,18 +59,19 @@ flowchart TB
 ### Interactive control flow
 
 1. A client request enters through typed transport and is validated at the gateway boundary.
-2. The gateway routes into the agent or execution path and applies policy/approval controls before risky side effects.
-3. State transitions and evidence are persisted, then streamed back as server-push events.
+2. The gateway authenticates, authorizes, and translates the request onto the appropriate runtime package boundary.
+3. Runtime packages execute the business flow; resulting state transitions and evidence are persisted, then streamed back through gateway transport adapters.
 
 ### Durable execution flow
 
 1. Work is captured and handed to execution coordination.
-2. The gateway coordinates tools, nodes, approvals, retries, and evidence with durable state behind each transition.
-3. Outcomes are recorded and made observable through events, audit surfaces, and operator state.
+2. The gateway composes runtime packages that coordinate tools, nodes, approvals, retries, and evidence with durable state behind each transition.
+3. Outcomes are recorded and made observable through gateway-served events, audit surfaces, and operator state.
 
 ## Invariants for this boundary
 
 - Trusted inputs are validated and deny-by-default.
+- `@tyrum/gateway` remains the public runtime entrypoint and composition root, not the home for new runtime business logic.
 - Policy and approvals remain runtime controls, not prompt-only conventions.
 - Node capability execution is always gateway-mediated.
 - Durable state is authoritative for recovery across reconnects and scale changes.

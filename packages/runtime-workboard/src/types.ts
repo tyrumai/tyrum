@@ -1,13 +1,26 @@
 import type {
+  AgentStateKVEntry,
+  DecisionRecord,
+  WorkArtifact,
   Lane,
   SubagentDescriptor,
   SubagentStatus,
   WorkClarification,
+  WorkItemLink,
   WorkItem,
   WorkItemState,
   WorkItemTask,
   WorkItemTaskState,
   WorkScope,
+  WorkSignal,
+  WorkStateKVScopeIds,
+  WorkItemStateKVEntry,
+  WsWorkArtifactCreateInput,
+  WsWorkCreateItemInput,
+  WsWorkDecisionCreateInput,
+  WsWorkSignalCreateInput,
+  WsWorkSignalUpdatePatch,
+  WsWorkUpdatePatch,
 } from "@tyrum/contracts";
 
 export interface WorkboardLogger {
@@ -157,6 +170,98 @@ export interface WorkboardRepository {
     subagent_id: string;
     patch: UpdateSubagentPatch;
   }): Promise<SubagentDescriptor | undefined>;
+}
+
+export interface WorkboardCrudRepository {
+  createItem(params: {
+    scope: WorkScope;
+    item: WsWorkCreateItemInput;
+    createdFromSessionKey?: string;
+  }): Promise<WorkItem>;
+  listItems(params: {
+    scope: WorkScope;
+    statuses?: WorkItemState[];
+    kinds?: WorkItem["kind"][];
+    limit?: number;
+    cursor?: string;
+  }): Promise<{ items: WorkItem[]; next_cursor?: string }>;
+  getItem(params: { scope: WorkScope; work_item_id: string }): Promise<WorkItem | undefined>;
+  updateItem(params: {
+    scope: WorkScope;
+    work_item_id: string;
+    patch: WsWorkUpdatePatch;
+  }): Promise<WorkItem | undefined>;
+  transitionItem(params: {
+    scope: WorkScope;
+    work_item_id: string;
+    status: WorkItemState;
+    reason?: string;
+  }): Promise<WorkItem | undefined>;
+  createLink(params: {
+    scope: WorkScope;
+    work_item_id: string;
+    linked_work_item_id: string;
+    kind: WorkItemLink["kind"];
+    meta_json?: unknown;
+  }): Promise<WorkItemLink>;
+  listLinks(params: {
+    scope: WorkScope;
+    work_item_id: string;
+    limit?: number;
+  }): Promise<{ links: WorkItemLink[] }>;
+  listArtifacts(params: {
+    scope: WorkScope;
+    work_item_id?: string;
+    limit?: number;
+    cursor?: string;
+  }): Promise<{ artifacts: WorkArtifact[]; next_cursor?: string }>;
+  getArtifact(params: { scope: WorkScope; artifact_id: string }): Promise<WorkArtifact | undefined>;
+  createArtifact(params: {
+    scope: WorkScope;
+    artifact: WsWorkArtifactCreateInput;
+  }): Promise<WorkArtifact>;
+  listDecisions(params: {
+    scope: WorkScope;
+    work_item_id?: string;
+    limit?: number;
+    cursor?: string;
+  }): Promise<{ decisions: DecisionRecord[]; next_cursor?: string }>;
+  getDecision(params: {
+    scope: WorkScope;
+    decision_id: string;
+  }): Promise<DecisionRecord | undefined>;
+  createDecision(params: {
+    scope: WorkScope;
+    decision: WsWorkDecisionCreateInput;
+  }): Promise<DecisionRecord>;
+  listSignals(params: {
+    scope: WorkScope;
+    work_item_id?: string;
+    statuses?: WorkSignal["status"][];
+    limit?: number;
+    cursor?: string;
+  }): Promise<{ signals: WorkSignal[]; next_cursor?: string }>;
+  getSignal(params: { scope: WorkScope; signal_id: string }): Promise<WorkSignal | undefined>;
+  createSignal(params: { scope: WorkScope; signal: WsWorkSignalCreateInput }): Promise<WorkSignal>;
+  updateSignal(params: {
+    scope: WorkScope;
+    signal_id: string;
+    patch: WsWorkSignalUpdatePatch;
+  }): Promise<{ signal: WorkSignal; changed: boolean } | undefined>;
+  getStateKv(params: {
+    scope: WorkStateKVScopeIds;
+    key: string;
+  }): Promise<AgentStateKVEntry | WorkItemStateKVEntry | undefined>;
+  listStateKv(params: {
+    scope: WorkStateKVScopeIds;
+    prefix?: string;
+  }): Promise<{ entries: Array<AgentStateKVEntry | WorkItemStateKVEntry> }>;
+  setStateKv(params: {
+    scope: WorkStateKVScopeIds;
+    key: string;
+    value_json: unknown;
+    provenance_json?: unknown;
+  }): Promise<AgentStateKVEntry | WorkItemStateKVEntry>;
 }
 
 export type SubagentRepository = Pick<

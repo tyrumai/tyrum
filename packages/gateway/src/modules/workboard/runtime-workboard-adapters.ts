@@ -1,22 +1,28 @@
-import type { DeploymentConfig as DeploymentConfigT } from "@tyrum/contracts";
-import type {
-  ManagedDesktopProvisioner,
-  WorkboardRepository,
-  WorkboardSessionKeyBuilder,
-  WorkboardSubagentRuntime,
+import { WorkItemLink, type DeploymentConfig as DeploymentConfigT } from "@tyrum/contracts";
+import {
+  WorkboardService as RuntimeWorkboardService,
+  type ManagedDesktopProvisioner,
+  type WorkboardCrudRepository,
+  type WorkboardRepository,
+  type WorkboardSessionKeyBuilder,
+  type WorkboardSubagentRuntime,
 } from "@tyrum/runtime-workboard";
 import type { SqlDb } from "../../statestore/types.js";
 import type { AgentRegistry } from "../agent/registry.js";
 import type { SessionLaneNodeAttachmentDal } from "../agent/session-lane-node-attachment-dal.js";
+import type { RedactionEngine } from "../redaction/engine.js";
 import { WorkboardDal } from "./dal.js";
 import { provisionManagedDesktop } from "./orchestration-support.js";
 import { resolveAgentKeyById, runSubagentTurn } from "./subagent-runtime-support.js";
 
-class GatewayWorkboardRepository implements WorkboardRepository {
+class GatewayWorkboardRepository implements WorkboardRepository, WorkboardCrudRepository {
   private readonly workboard: WorkboardDal;
 
-  constructor(private readonly db: SqlDb) {
-    this.workboard = new WorkboardDal(db);
+  constructor(
+    private readonly db: SqlDb,
+    redactionEngine?: RedactionEngine,
+  ) {
+    this.workboard = new WorkboardDal(db, redactionEngine);
   }
 
   async listBacklogItems(limit: number) {
@@ -90,6 +96,18 @@ class GatewayWorkboardRepository implements WorkboardRepository {
     return await this.workboard.getItem(params);
   }
 
+  async createItem(params: Parameters<WorkboardDal["createItem"]>[0]) {
+    return await this.workboard.createItem(params);
+  }
+
+  async listItems(params: Parameters<WorkboardDal["listItems"]>[0]) {
+    return await this.workboard.listItems(params);
+  }
+
+  async updateItem(params: Parameters<WorkboardDal["updateItem"]>[0]) {
+    return await this.workboard.updateItem(params);
+  }
+
   async transitionItem(params: Parameters<WorkboardDal["transitionItem"]>[0]) {
     return await this.workboard.transitionItem(params);
   }
@@ -116,6 +134,10 @@ class GatewayWorkboardRepository implements WorkboardRepository {
 
   async setStateKv(params: Parameters<WorkboardDal["setStateKv"]>[0]) {
     return await this.workboard.setStateKv(params);
+  }
+
+  async listStateKv(params: Parameters<WorkboardDal["listStateKv"]>[0]) {
+    return await this.workboard.listStateKv(params);
   }
 
   async requeueOrphanedTasks(params: {
@@ -168,10 +190,75 @@ class GatewayWorkboardRepository implements WorkboardRepository {
   async updateSubagent(params: Parameters<WorkboardDal["updateSubagent"]>[0]) {
     return await this.workboard.updateSubagent(params);
   }
+
+  async createLink(params: Parameters<WorkboardDal["createLink"]>[0]) {
+    return WorkItemLink.parse(await this.workboard.createLink(params));
+  }
+
+  async listLinks(params: Parameters<WorkboardDal["listLinks"]>[0]) {
+    const { links } = await this.workboard.listLinks(params);
+    return { links: links.map((link) => WorkItemLink.parse(link)) };
+  }
+
+  async listArtifacts(params: Parameters<WorkboardDal["listArtifacts"]>[0]) {
+    return await this.workboard.listArtifacts(params);
+  }
+
+  async getArtifact(params: Parameters<WorkboardDal["getArtifact"]>[0]) {
+    return await this.workboard.getArtifact(params);
+  }
+
+  async createArtifact(params: Parameters<WorkboardDal["createArtifact"]>[0]) {
+    return await this.workboard.createArtifact(params);
+  }
+
+  async listDecisions(params: Parameters<WorkboardDal["listDecisions"]>[0]) {
+    return await this.workboard.listDecisions(params);
+  }
+
+  async getDecision(params: Parameters<WorkboardDal["getDecision"]>[0]) {
+    return await this.workboard.getDecision(params);
+  }
+
+  async createDecision(params: Parameters<WorkboardDal["createDecision"]>[0]) {
+    return await this.workboard.createDecision(params);
+  }
+
+  async listSignals(params: Parameters<WorkboardDal["listSignals"]>[0]) {
+    return await this.workboard.listSignals(params);
+  }
+
+  async getSignal(params: Parameters<WorkboardDal["getSignal"]>[0]) {
+    return await this.workboard.getSignal(params);
+  }
+
+  async createSignal(params: Parameters<WorkboardDal["createSignal"]>[0]) {
+    return await this.workboard.createSignal(params);
+  }
+
+  async updateSignal(params: Parameters<WorkboardDal["updateSignal"]>[0]) {
+    return await this.workboard.updateSignal(params);
+  }
 }
 
 export function createGatewayWorkboardRepository(db: SqlDb): WorkboardRepository {
   return new GatewayWorkboardRepository(db);
+}
+
+export function createGatewayWorkboardCrudRepository(opts: {
+  db: SqlDb;
+  redactionEngine?: RedactionEngine;
+}): WorkboardCrudRepository {
+  return new GatewayWorkboardRepository(opts.db, opts.redactionEngine);
+}
+
+export function createGatewayWorkboardService(opts: {
+  db: SqlDb;
+  redactionEngine?: RedactionEngine;
+}): RuntimeWorkboardService {
+  return new RuntimeWorkboardService({
+    repository: createGatewayWorkboardCrudRepository(opts),
+  });
 }
 
 export function createGatewaySessionKeyBuilder(opts: { db: SqlDb }): WorkboardSessionKeyBuilder {
