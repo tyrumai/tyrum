@@ -1,6 +1,7 @@
 import { createTyrumHttpClient } from "@tyrum/operator-app/node";
 
 import type { CliCommand } from "../cli-command.js";
+import { isTyrumHttpClientError } from "../http-client-error.js";
 import { resolveOperatorElevatedModePath } from "../operator-paths.js";
 import {
   clearOperatorElevatedModeState,
@@ -10,10 +11,6 @@ import {
   requireOperatorConfig,
   saveOperatorElevatedModeState,
 } from "../operator-state.js";
-
-function isHttpClientError(error: unknown): error is Error & { status?: number } {
-  return error instanceof Error && ("status" in error || "code" in error);
-}
 
 export async function handleElevatedModeStatus(
   _command: Extract<CliCommand, { kind: "elevated_mode_status" }>,
@@ -95,7 +92,7 @@ export async function handleElevatedModeEnter(
     console.log(`elevated-mode.enter: ok expires_at=${issued.expires_at}`);
     return 0;
   } catch (error) {
-    if (isHttpClientError(error)) {
+    if (isTyrumHttpClientError(error)) {
       const status = error.status ? `status=${String(error.status)}` : "status=unknown";
       console.error(`elevated-mode.enter: failed: ${status} message=${error.message}`);
       return 1;

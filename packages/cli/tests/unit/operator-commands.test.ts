@@ -389,4 +389,23 @@ describe("@tyrum/cli operator commands", () => {
       },
     );
   });
+
+  it("does not label non-http coded errors as status=unknown", { timeout: 15_000 }, async () => {
+    httpSecretsListSpy.mockRejectedValue(
+      Object.assign(new Error("connect ECONNREFUSED 127.0.0.1:8788"), {
+        code: "ECONNREFUSED",
+      }),
+    );
+
+    await withOperatorCli(
+      { authToken: "base", includeDeviceIdentity: false },
+      async ({ runCli, errSpy, logSpy }) => {
+        const code = await runCli(["secrets", "list", "--elevated-token", "admin"]);
+
+        expect(code).toBe(1);
+        expect(logSpy).not.toHaveBeenCalled();
+        expect(errSpy).toHaveBeenCalledWith("secrets: failed: connect ECONNREFUSED 127.0.0.1:8788");
+      },
+    );
+  });
 });

@@ -1,11 +1,8 @@
 import { TyrumClient, createTyrumHttpClient } from "@tyrum/operator-app/node";
 
+import { isTyrumHttpClientError } from "./http-client-error.js";
 import { resolveGatewayWsUrl } from "./operator-paths.js";
 import { requireOperatorConfig, requireOperatorDeviceIdentity } from "./operator-state.js";
-
-function isHttpClientError(error: unknown): error is Error & { status?: number } {
-  return error instanceof Error && ("status" in error || "code" in error);
-}
 
 async function withWsClient<T>(
   opts: ConstructorParameters<typeof TyrumClient>[0],
@@ -110,7 +107,7 @@ export async function runOperatorHttpCommand<T>(
     console.log(JSON.stringify(result, null, 2));
     return 0;
   } catch (error) {
-    if (isHttpClientError(error)) {
+    if (isTyrumHttpClientError(error)) {
       const status = error.status ? `status=${String(error.status)}` : "status=unknown";
       console.error(`${label}: failed: ${status} message=${error.message}`);
       return 1;
