@@ -101,7 +101,7 @@ async function emitResolvedEvent(
     : ({
         event_id: randomUUID(),
         type: "pairing.updated",
-        occurred_at: input.pairing.requested_at,
+        occurred_at: input.pairing.latest_review?.completed_at ?? input.pairing.requested_at,
         payload: {
           pairing: input.pairing,
           ...(input.scopedToken ? { scoped_token: input.scopedToken } : {}),

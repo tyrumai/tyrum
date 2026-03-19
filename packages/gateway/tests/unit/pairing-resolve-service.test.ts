@@ -185,4 +185,37 @@ describe("resolveNodePairing", () => {
       actor: { kind: "http" },
     });
   });
+
+  it("uses the resolution timestamp for fallback pairing.updated events", async () => {
+    const pairingId = await seedAwaitingHumanPairing("node-fallback");
+    const emittedEvents: Array<{ type: string; occurred_at: string }> = [];
+
+    const denied = await resolveNodePairing(
+      {
+        nodePairingDal,
+        emitEvent: ({ event }) => {
+          emittedEvents.push({
+            type: event.type,
+            occurred_at: event.occurred_at,
+          });
+        },
+      },
+      {
+        tenantId: DEFAULT_TENANT_ID,
+        pairingId,
+        decision: "denied",
+        reason: "too risky",
+        resolvedBy: { kind: "http" },
+      },
+    );
+
+    expect(denied.ok).toBe(true);
+    if (!denied.ok) throw new Error(denied.message);
+    expect(emittedEvents).toHaveLength(1);
+    expect(emittedEvents[0]).toMatchObject({
+      type: "pairing.updated",
+      occurred_at: denied.pairing.latest_review?.completed_at,
+    });
+    expect(emittedEvents[0]?.occurred_at).not.toBe(denied.pairing.requested_at);
+  });
 });
