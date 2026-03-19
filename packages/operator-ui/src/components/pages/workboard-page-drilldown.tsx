@@ -1,4 +1,4 @@
-import type { DecisionRecord, WorkArtifact, WorkItem, WorkSignal } from "@tyrum/operator-core";
+import type { DecisionRecord, WorkArtifact, WorkItem, WorkSignal } from "@tyrum/operator-app";
 import { useEffect, useState } from "react";
 import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";

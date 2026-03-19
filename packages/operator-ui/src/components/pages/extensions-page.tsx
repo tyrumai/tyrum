@@ -1,4 +1,4 @@
-import type { OperatorCore } from "@tyrum/operator-core";
+import type { OperatorCore } from "@tyrum/operator-app";
 import type { ManagedExtensionDetail } from "@tyrum/contracts";
 import { Blocks, RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";

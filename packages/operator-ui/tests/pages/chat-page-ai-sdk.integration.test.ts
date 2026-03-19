@@ -3,9 +3,9 @@
 import React, { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { UIMessage } from "ai";
-import type { OperatorCore } from "../../../operator-core/src/index.js";
-import { createChatStore } from "../../../operator-core/src/stores/chat-store.js";
-import { createStore } from "../../../operator-core/src/store.js";
+import type { OperatorCore } from "../../../operator-app/src/index.js";
+import { createChatStore } from "../../../operator-app/src/stores/chat-store.js";
+import { createStore } from "../../../operator-app/src/store.js";
 import { click, cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
 
 const e = React.createElement;
@@ -253,7 +253,10 @@ describe("AiSdkChatPage integration", () => {
       approvalsStore,
       chatStore,
       connectionStore,
+      admin: http,
       http,
+      chatSocket: ws,
+      workboard: ws,
       ws,
     } as unknown as OperatorCore;
 
@@ -383,7 +386,10 @@ describe("AiSdkChatPage integration", () => {
       approvalsStore,
       chatStore,
       connectionStore,
+      admin: http,
       http,
+      chatSocket: ws,
+      workboard: ws,
       ws,
     } as unknown as OperatorCore;
 
@@ -458,7 +464,10 @@ describe("AiSdkChatPage integration", () => {
       approvalsStore,
       chatStore,
       connectionStore,
+      admin: http,
       http,
+      chatSocket: ws,
+      workboard: ws,
       ws,
     } as unknown as OperatorCore;
 

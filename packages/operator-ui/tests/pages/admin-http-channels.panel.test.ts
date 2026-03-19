@@ -18,7 +18,7 @@ afterEach(() => {
 describe("ConfigurePage (HTTP) channels panel states", () => {
   it("shows the empty state when no channel accounts are configured", async () => {
     const { core } = createAdminHttpTestCore();
-    core.http.channelConfig.listChannels = vi.fn(async () => ({
+    core.admin.channelConfig.listChannels = vi.fn(async () => ({
       status: "ok",
       channels: [],
     }));
@@ -37,7 +37,7 @@ describe("ConfigurePage (HTTP) channels panel states", () => {
 
   it("surfaces an unavailable channels API", async () => {
     const { core } = createAdminHttpTestCore();
-    (core.http as Record<string, unknown>).channelConfig = undefined;
+    (core.admin as Record<string, unknown>).channelConfig = undefined;
 
     const page = renderAdminHttpConfigurePage(core);
     await switchHttpTab(page.container, "admin-http-tab-routing-config");

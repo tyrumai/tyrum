@@ -1,7 +1,7 @@
 import type { Approval } from "@tyrum/client";
-import type { OperatorCore } from "@tyrum/operator-core";
+import type { OperatorCore } from "@tyrum/operator-app";
 import type { UIMessage } from "ai";
-import type { ResolveApprovalInput } from "@tyrum/operator-core";
+import type { ResolveApprovalInput } from "@tyrum/operator-app";
 import { useEffect, useLayoutEffect, useRef } from "react";
 import { MessageCard } from "./chat-page-ai-sdk-message-card.js";
 

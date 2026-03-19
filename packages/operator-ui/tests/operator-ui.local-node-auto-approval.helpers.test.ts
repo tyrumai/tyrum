@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { PairingGetResponse } from "@tyrum/operator-core/browser";
+import type { PairingGetResponse } from "@tyrum/operator-app/browser";
 import {
   extractLatestTerminalReviewState,
   isBenignAutoApprovalRace,

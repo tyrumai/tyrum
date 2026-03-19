@@ -2,18 +2,25 @@
 
 import { describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
-import type { OperatorCore } from "../../../operator-core/src/index.js";
-import { createElevatedModeStore } from "../../../operator-core/src/index.js";
+import type { OperatorCore } from "../../../operator-app/src/index.js";
+import { createElevatedModeStore } from "../../../operator-app/src/index.js";
 import { AdminAccessProvider } from "../../src/index.js";
 import { ConfigurePage } from "../../src/components/pages/configure-page.js";
 import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
 
-vi.mock("../../src/components/pages/admin-http-shared.js", async () => {
-  const actual = await import("../../src/components/pages/admin-http-shared.js");
+const { executeOperatorCommandMock } = vi.hoisted(() => ({
+  executeOperatorCommandMock: vi.fn(async ({ command }: { command: string }) => ({
+    output: `ok:${command}`,
+  })),
+}));
+
+vi.mock("@tyrum/operator-app/browser", async () => {
+  const actual = await vi.importActual<typeof import("@tyrum/operator-app/browser")>(
+    "@tyrum/operator-app/browser",
+  );
   return {
     ...actual,
-    executeAdminWsCommand: async ({ core, command }: { core: OperatorCore; command: string }) =>
-      await core.ws.commandExecute(command),
+    executeOperatorCommand: executeOperatorCommandMock,
   };
 });
 
@@ -28,7 +35,6 @@ async function switchAdminTab(container: HTMLElement, testId: string): Promise<v
 
 function createCore(): {
   core: OperatorCore;
-  commandExecute: ReturnType<typeof vi.fn>;
 } {
   const nowMs = Date.parse("2026-03-01T00:00:00.000Z");
   const elevatedModeStore = createElevatedModeStore({ tickIntervalMs: 0, now: () => nowMs });
@@ -37,17 +43,29 @@ function createCore(): {
     expiresAt: "2026-03-01T00:10:00.000Z",
   });
 
-  const commandExecute = vi.fn(async (command: string) => ({ output: `ok:${command}` }));
-
   const core = {
+    wsUrl: "ws://example.test/ws",
     httpBaseUrl: "http://example.test",
-    ws: {
+    chatSocket: {
+      connected: false,
+      requestDynamic: vi.fn(),
+      onDynamicEvent: vi.fn(),
+      offDynamicEvent: vi.fn(),
+    },
+    workboard: {
       on: vi.fn(),
       off: vi.fn(),
-      commandExecute,
+      workArtifactList: vi.fn(),
+      workDecisionList: vi.fn(),
+      workGet: vi.fn(),
+      workSignalGet: vi.fn(),
+      workSignalList: vi.fn(),
+      workStateKvGet: vi.fn(),
+      workStateKvList: vi.fn(),
+      workTransition: vi.fn(),
     },
     elevatedModeStore,
-    http: {
+    admin: {
       policy: {
         getBundle: vi.fn(async () => ({ status: "ok" })),
         listOverrides: vi.fn(async () => ({ status: "ok", overrides: [] })),
@@ -122,7 +140,7 @@ function createCore(): {
     },
   } as unknown as OperatorCore;
 
-  return { core, commandExecute };
+  return { core };
 }
 
 describe("configure-page WS sections", () => {
@@ -149,7 +167,8 @@ describe("configure-page WS sections", () => {
   });
 
   it("executes commands via the remaining WS admin tab", async () => {
-    const { core, commandExecute } = createCore();
+    executeOperatorCommandMock.mockClear();
+    const { core } = createCore();
 
     const testRoot = renderIntoDocument(
       React.createElement(AdminAccessProvider, {
@@ -171,7 +190,11 @@ describe("configure-page WS sections", () => {
         await Promise.resolve();
       });
 
-      expect(commandExecute).toHaveBeenCalledWith("/help");
+      expect(executeOperatorCommandMock).toHaveBeenCalledWith({
+        url: "ws://example.test/ws",
+        token: "elevated-1",
+        command: "/help",
+      });
     } finally {
       cleanupTestRoot(testRoot);
     }

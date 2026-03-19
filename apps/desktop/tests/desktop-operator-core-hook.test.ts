@@ -58,14 +58,17 @@ const {
   };
 });
 
-vi.mock("@tyrum/operator-core/browser", () => ({
+vi.mock("@tyrum/operator-app", () => ({
   createBearerTokenAuth: vi.fn((token: string) => ({ type: "bearer", token })),
-  createDeviceIdentity: createDeviceIdentityMock,
   createElevatedModeStore: createElevatedModeStoreMock,
   createOperatorCore: vi.fn(() => ({})),
   createOperatorCoreManager: createOperatorCoreManagerMock,
-  createTyrumHttpClient: createTyrumHttpClientMock,
   httpAuthForAuth: vi.fn((auth: unknown) => auth),
+}));
+
+vi.mock("@tyrum/transport-sdk/browser", () => ({
+  createDeviceIdentity: createDeviceIdentityMock,
+  createTyrumHttpClient: createTyrumHttpClientMock,
 }));
 
 vi.mock("@tyrum/operator-ui", () => ({

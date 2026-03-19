@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createElevatedModeStore } from "../../../operator-core/src/stores/elevated-mode-store.js";
+import { createElevatedModeStore } from "../../../operator-app/src/stores/elevated-mode-store.js";
 import {
   ADMIN_ACCESS_TTL_SECONDS,
   ELEVATED_MODE_SCOPES,

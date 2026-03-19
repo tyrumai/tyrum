@@ -9,7 +9,7 @@ export {
   upsertWorkItem,
   upsertWorkSignal,
   upsertWorkStateKvEntry,
-} from "@tyrum/operator-core";
+} from "@tyrum/operator-app";
 export type {
   WorkItemStatus,
   WorkItemsByStatus,
@@ -18,4 +18,4 @@ export type {
   WorkTaskStatus,
   WorkTaskSummary,
   WorkTasksByWorkItemId,
-} from "@tyrum/operator-core";
+} from "@tyrum/operator-app";

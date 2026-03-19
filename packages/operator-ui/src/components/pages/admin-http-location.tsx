@@ -1,4 +1,4 @@
-import type { OperatorCore } from "@tyrum/operator-core";
+import type { OperatorCore } from "@tyrum/operator-app";
 import type { NodeInventoryEntry } from "@tyrum/contracts";
 import * as React from "react";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
@@ -30,7 +30,7 @@ export function AdminHttpLocationPanel({ core }: { core: OperatorCore }) {
   const mutationHttp = useAdminMutationHttpClient();
   const locationHttp =
     (adminHttp as { location?: LocationHttpApi }).location ??
-    (core.http as { location?: LocationHttpApi }).location;
+    (core.admin as { location?: LocationHttpApi }).location;
   const mutationLocationHttp =
     (mutationHttp as { location?: LocationHttpApi } | null)?.location ?? null;
 
@@ -59,7 +59,7 @@ export function AdminHttpLocationPanel({ core }: { core: OperatorCore }) {
       const [placesResponse, profileResponse, nodesResponse] = await Promise.all([
         locationHttp.listPlaces(),
         locationHttp.getProfile(),
-        core.http.nodes.list({ dispatchable_only: false }),
+        core.admin.nodes.list({ dispatchable_only: false }),
       ]);
       setPlaces(placesResponse.places);
       setProfile(profileResponse.profile);
@@ -70,7 +70,7 @@ export function AdminHttpLocationPanel({ core }: { core: OperatorCore }) {
     } finally {
       setLoading(false);
     }
-  }, [core.http.nodes, locationHttp]);
+  }, [core.admin.nodes, locationHttp]);
 
   React.useEffect(() => {
     void loadData();

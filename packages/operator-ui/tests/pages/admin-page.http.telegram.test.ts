@@ -119,7 +119,7 @@ describe("ConfigurePage (HTTP) Telegram channels", () => {
           },
         },
       });
-      core.http.channelConfig.listChannels = vi.fn(async () => nextChannels);
+      core.admin.channelConfig.listChannels = vi.fn(async () => nextChannels);
       return jsonResponse(
         {
           status: "ok",
@@ -417,7 +417,7 @@ describe("ConfigurePage (HTTP) Telegram channels", () => {
       expect(String(input)).toBe("http://example.test/config/channels/accounts/telegram/ops");
       expect(init?.method).toBe("DELETE");
       expect(new Headers(init?.headers).get("authorization")).toBe("Bearer test-elevated-token");
-      core.http.channelConfig.listChannels = vi.fn(async () => nextChannels);
+      core.admin.channelConfig.listChannels = vi.fn(async () => nextChannels);
       return jsonResponse({
         status: "ok",
         deleted: true,

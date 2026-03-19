@@ -6,7 +6,7 @@ import {
   createBearerTokenAuth,
   createOperatorCore,
   type OperatorCore,
-} from "../../../operator-core/src/index.js";
+} from "../../../operator-app/src/index.js";
 import { ElevatedModeProvider } from "../../src/components/elevated-mode/elevated-mode-provider.js";
 import { ElevatedModeGate } from "../../src/components/elevated-mode/elevated-mode-gate.js";
 import { AdminAccessModeProvider } from "../../src/hooks/use-admin-access-mode.js";

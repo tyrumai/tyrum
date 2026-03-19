@@ -6,7 +6,7 @@ import {
   createBearerTokenAuth,
   createBrowserCookieAuth,
   createOperatorCore,
-} from "../../operator-core/src/index.js";
+} from "../../operator-app/src/index.js";
 import { AdminAccessGate, AdminAccessProvider } from "../src/index.js";
 import { TEST_DEVICE_IDENTITY, requestInfoToUrl } from "./operator-ui.test-support.js";
 import { FakeWsClient, createFakeHttpClient } from "./operator-ui.test-fixtures.js";

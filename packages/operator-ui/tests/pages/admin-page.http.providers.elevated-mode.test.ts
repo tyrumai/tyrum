@@ -12,7 +12,7 @@ import {
   switchHttpTab,
 } from "./admin-page.http.test-support.js";
 import { TEST_TIMESTAMP, createAdminHttpTestCore } from "./admin-page.http-fixture-support.js";
-import { createElevatedModeStore } from "../../../operator-core/src/index.js";
+import { createElevatedModeStore } from "../../../operator-app/src/index.js";
 
 afterEach(() => {
   vi.useRealTimers();

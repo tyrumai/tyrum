@@ -2,8 +2,8 @@
 
 import { describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
-import type { OperatorCore } from "../../../operator-core/src/index.js";
-import { createElevatedModeStore } from "../../../operator-core/src/index.js";
+import type { OperatorCore } from "../../../operator-app/src/index.js";
+import { createElevatedModeStore } from "../../../operator-app/src/index.js";
 import { ElevatedModeProvider } from "../../src/elevated-mode.js";
 import { ConfigurePage } from "../../src/components/pages/configure-page.js";
 import * as adminHttpShared from "../../src/components/pages/admin-http-shared.js";
@@ -113,7 +113,13 @@ function createCore(activeAdminMode: boolean): { core: OperatorCore } {
         refresh: vi.fn(async () => ({ status: "ok" })),
       },
     },
-  } as unknown as OperatorCore;
+  } as unknown as OperatorCore & {
+    http: OperatorCore["admin"];
+    ws: unknown;
+  };
+  core.admin = core.http;
+  core.workboard = core.ws as OperatorCore["workboard"];
+  core.chatSocket = core.ws as OperatorCore["chatSocket"];
 
   return { core };
 }

@@ -1,4 +1,4 @@
-import type { OperatorCore } from "@tyrum/operator-core";
+import type { OperatorCore } from "@tyrum/operator-app";
 import { useEffect, useState } from "react";
 import { useKeyboardShortcut } from "./hooks/use-keyboard-shortcut.js";
 import {

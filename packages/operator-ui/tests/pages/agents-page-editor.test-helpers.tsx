@@ -1,6 +1,6 @@
 import { AgentConfig, IdentityPack, type ManagedExtensionDetail } from "@tyrum/contracts";
-import type { OperatorCore } from "../../../operator-core/src/index.js";
-import { createStore } from "../../../operator-core/src/store.js";
+import type { OperatorCore } from "../../../operator-app/src/index.js";
+import { createStore } from "../../../operator-app/src/store.js";
 import { act, type Mock } from "react";
 import { vi } from "vitest";
 import { setNativeValue } from "../test-utils.js";
@@ -283,7 +283,7 @@ export function createCore(
     attemptIdsByStepId: {},
   });
 
-  return {
+  const core = {
     connectionStore,
     statusStore,
     agentStatusStore: {
@@ -299,5 +299,9 @@ export function createCore(
       extensions,
     },
     runsStore,
-  } as unknown as OperatorCore;
+  } as unknown as OperatorCore & {
+    http: OperatorCore["admin"];
+  };
+  core.admin = core.http;
+  return core;
 }

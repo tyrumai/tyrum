@@ -2,15 +2,19 @@
 
 import { describe, expect, it, vi } from "vitest";
 import React from "react";
-import type { OperatorCore } from "../../../operator-core/src/index.js";
+import type { OperatorCore } from "../../../operator-app/src/index.js";
 import { RunsPageCard } from "../../src/components/pages/runs-page-card.js";
 import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
 
 function createCore(): OperatorCore {
-  return {
+  const core = {
     http: {},
     httpBaseUrl: "http://example.test",
-  } as unknown as OperatorCore;
+  } as unknown as OperatorCore & {
+    http: OperatorCore["admin"];
+  };
+  core.admin = core.http;
+  return core;
 }
 
 describe("RunsPageCard", () => {

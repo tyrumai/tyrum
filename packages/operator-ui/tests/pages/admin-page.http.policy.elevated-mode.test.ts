@@ -2,7 +2,7 @@
 
 import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { TyrumHttpClientError } from "@tyrum/operator-core/browser";
+import { TyrumHttpClientError } from "@tyrum/operator-app/browser";
 import { setNativeValue } from "../test-utils.js";
 import {
   cleanupAdminHttpPage,
@@ -48,19 +48,19 @@ describe("ConfigurePage (HTTP) policy elevated mode prompts", () => {
       status: 403,
       error: "forbidden",
     });
-    core.http.policy.getBundle = vi.fn(async () => {
+    core.admin.policy.getBundle = vi.fn(async () => {
       throw forbiddenError;
     });
-    core.http.policy.listOverrides = vi.fn(async () => {
+    core.admin.policy.listOverrides = vi.fn(async () => {
       throw forbiddenError;
     });
-    core.http.policyConfig!.getDeployment = vi.fn(async () => {
+    core.admin.policyConfig!.getDeployment = vi.fn(async () => {
       throw forbiddenError;
     });
-    core.http.policyConfig!.listDeploymentRevisions = vi.fn(async () => {
+    core.admin.policyConfig!.listDeploymentRevisions = vi.fn(async () => {
       throw forbiddenError;
     });
-    core.http.agents!.list = vi.fn(async () => {
+    core.admin.agents!.list = vi.fn(async () => {
       throw forbiddenError;
     });
     vi.stubGlobal(
@@ -96,19 +96,19 @@ describe("ConfigurePage (HTTP) policy elevated mode prompts", () => {
       status: 403,
       error: "forbidden",
     });
-    core.http.policy.getBundle = vi.fn(async () => {
+    core.admin.policy.getBundle = vi.fn(async () => {
       throw forbiddenError;
     });
-    core.http.policy.listOverrides = vi.fn(async () => {
+    core.admin.policy.listOverrides = vi.fn(async () => {
       throw forbiddenError;
     });
-    core.http.policyConfig!.getDeployment = vi.fn(async () => {
+    core.admin.policyConfig!.getDeployment = vi.fn(async () => {
       throw forbiddenError;
     });
-    core.http.policyConfig!.listDeploymentRevisions = vi.fn(async () => {
+    core.admin.policyConfig!.listDeploymentRevisions = vi.fn(async () => {
       throw forbiddenError;
     });
-    core.http.agents!.list = vi.fn(async () => {
+    core.admin.agents!.list = vi.fn(async () => {
       throw forbiddenError;
     });
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -290,7 +290,7 @@ describe("ConfigurePage (HTTP) policy elevated mode prompts", () => {
   it("re-prompts for Elevated Mode if policy revert is confirmed while access is inactive", async () => {
     const { core } = createAdminHttpTestCore();
     core.elevatedModeStore.exit();
-    core.http.policyConfig!.getDeployment = vi.fn(
+    core.admin.policyConfig!.getDeployment = vi.fn(
       async () =>
         ({
           revision: 2,
@@ -305,7 +305,7 @@ describe("ConfigurePage (HTTP) policy elevated mode prompts", () => {
           reverted_from_revision: null,
         }) as unknown,
     );
-    core.http.policyConfig!.listDeploymentRevisions = vi.fn(
+    core.admin.policyConfig!.listDeploymentRevisions = vi.fn(
       async () =>
         ({
           revisions: [
@@ -331,7 +331,7 @@ describe("ConfigurePage (HTTP) policy elevated mode prompts", () => {
     await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "confirm-danger-confirm"));
     await flush();
 
-    expect(core.http.policyConfig!.revertDeployment).toHaveBeenCalledTimes(0);
+    expect(core.admin.policyConfig!.revertDeployment).toHaveBeenCalledTimes(0);
     expect(getByTestId(document.body, "elevated-mode-dialog")).not.toBeNull();
     expect(document.body.textContent).not.toContain("Policy revert failed");
     expect(document.body.textContent).not.toContain("Action failed");
@@ -342,7 +342,7 @@ describe("ConfigurePage (HTTP) policy elevated mode prompts", () => {
   it("re-prompts for Elevated Mode if override revocation is confirmed while access is inactive", async () => {
     const { core } = createAdminHttpTestCore();
     core.elevatedModeStore.exit();
-    core.http.policy.listOverrides = vi.fn(
+    core.admin.policy.listOverrides = vi.fn(
       async () =>
         ({
           status: "ok",
@@ -382,7 +382,7 @@ describe("ConfigurePage (HTTP) policy elevated mode prompts", () => {
     await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "confirm-danger-confirm"));
     await flush();
 
-    expect(core.http.policy.revokeOverride).toHaveBeenCalledTimes(0);
+    expect(core.admin.policy.revokeOverride).toHaveBeenCalledTimes(0);
     expect(getByTestId(document.body, "elevated-mode-dialog")).not.toBeNull();
     expect(document.body.textContent).not.toContain("Override revocation failed");
     expect(document.body.textContent).not.toContain("Action failed");

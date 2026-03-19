@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { RunsState } from "../../../operator-core/src/stores/runs-store.js";
+import type { RunsState } from "../../../operator-app/src/stores/runs-store.js";
 import { buildRunTimeline, sortRunsByCreatedAt } from "../../src/components/pages/runs-page.lib.js";
 
 describe("runs-page.lib", () => {

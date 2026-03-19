@@ -1,5 +1,5 @@
-import { TyrumClient, createManagedNodeClientLifecycle } from "@tyrum/node-sdk/node";
-import type { CapabilityProvider, ManagedNodeClientLifecycle } from "@tyrum/node-sdk/node";
+import { createManagedNodeClientLifecycle } from "@tyrum/client/node";
+import type { ManagedNodeClientLifecycle } from "@tyrum/client/node";
 import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   descriptorIdsForClientCapability,
@@ -8,7 +8,9 @@ import {
   type CapabilityDescriptor,
   type ClientCapability,
   type WsCapabilityReadyPayload,
-} from "@tyrum/operator-core";
+} from "@tyrum/contracts";
+import type { CapabilityProvider } from "@tyrum/node-sdk/node";
+import { TyrumClient } from "@tyrum/transport-sdk/node";
 import type { DesktopNodeConfig } from "./config/schema.js";
 import type { ResolvedPermissions } from "./config/permissions.js";
 import { saveConfig } from "./config/store.js";

@@ -1,6 +1,6 @@
 import { act } from "react";
 import { expect, type Mock, vi } from "vitest";
-import type { OperatorCore } from "../../../operator-core/src/index.js";
+import type { OperatorCore } from "../../../operator-app/src/index.js";
 
 type ConnectionStatus = "disconnected" | "connecting" | "connected";
 
@@ -152,7 +152,7 @@ export function createCore(
 ) {
   const ws = createWsStub(wsOverrides);
   const workboard = createWorkboardStore(workboardSnapshot);
-  const http = {
+  const admin = {
     agents: {
       list: vi.fn(async () => ({
         agents: [{ agent_key: "default", persona: { name: "Default" } }],
@@ -162,12 +162,15 @@ export function createCore(
   const core = {
     connectionStore: createConnectionStore(status),
     workboardStore: workboard.store,
-    http,
+    admin,
+    http: admin,
+    workboard: ws,
+    chatSocket: ws,
     ws,
     connect: vi.fn(),
     disconnect: vi.fn(),
   } as unknown as OperatorCore;
-  return { core, ws, workboard, http };
+  return { core, ws, workboard, http: admin };
 }
 
 export async function flushEffects(): Promise<void> {

@@ -1,5 +1,5 @@
 import type { ExecutionAttempt, ExecutionRun, ExecutionStep } from "@tyrum/client";
-import type { OperatorCore } from "@tyrum/operator-core";
+import type { OperatorCore } from "@tyrum/operator-app";
 import { ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { AttemptArtifactsDialog } from "../artifacts/attempt-artifacts-dialog.js";

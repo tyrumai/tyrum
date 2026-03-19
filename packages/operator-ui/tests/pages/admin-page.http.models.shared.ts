@@ -1,5 +1,5 @@
 import { expect, vi } from "vitest";
-import type { OperatorCore } from "../../../operator-core/src/index.js";
+import type { OperatorCore } from "../../../operator-app/src/index.js";
 
 export const TEST_TIMESTAMP = "2026-03-01T00:00:00.000Z";
 export const ADMIN_HTTP_EXECUTION_PROFILE_IDS = [
@@ -90,7 +90,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 export function getModelConfig(core: OperatorCore): ModelConfigMocks {
-  return core.http.modelConfig as ModelConfigMocks;
+  return core.admin.modelConfig as ModelConfigMocks;
 }
 
 export function setModelConfigResponses(

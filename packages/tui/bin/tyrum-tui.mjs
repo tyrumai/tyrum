@@ -8,14 +8,14 @@ await runPackageBin({
     "@tyrum/contracts",
     "@tyrum/transport-sdk",
     "@tyrum/client",
-    "@tyrum/operator-core",
+    "@tyrum/operator-app",
     "@tyrum/tui",
   ],
   dependencyEntrypoints: [
     "packages/contracts/dist/index.mjs",
     "packages/transport-sdk/dist/index.mjs",
     "packages/client/dist/index.mjs",
-    "packages/operator-core/dist/index.mjs",
+    "packages/operator-app/dist/index.mjs",
   ],
   sourceExtensions: [".ts", ".tsx"],
 });

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { createElevatedModeStore, type OperatorCore } from "@tyrum/operator-core";
+import { createElevatedModeStore, type OperatorCore } from "@tyrum/operator-app";
 import type { ManagedExtensionDetail } from "@tyrum/contracts";
 import React, { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -197,13 +197,17 @@ const extensionsApi = {
 };
 
 function createCore(): OperatorCore {
-  return {
+  const core = {
     httpBaseUrl: "http://example.test",
     elevatedModeStore: createElevatedModeStore({ tickIntervalMs: 0, now: () => Date.now() }),
     http: {
       extensions: extensionsApi,
     },
-  } as unknown as OperatorCore;
+  } as unknown as OperatorCore & {
+    http: OperatorCore["admin"];
+  };
+  core.admin = core.http;
+  return core;
 }
 
 beforeEach(() => {

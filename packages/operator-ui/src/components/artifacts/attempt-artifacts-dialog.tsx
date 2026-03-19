@@ -1,5 +1,5 @@
 import type { ExecutionAttempt } from "@tyrum/client";
-import type { OperatorCore } from "@tyrum/operator-core";
+import type { OperatorCore } from "@tyrum/operator-app";
 import { useState } from "react";
 import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";

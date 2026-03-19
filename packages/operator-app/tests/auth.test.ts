@@ -9,7 +9,7 @@ import {
   wsTokenForAuth,
 } from "../src/index.js";
 
-describe("@tyrum/operator-core auth", () => {
+describe("@tyrum/operator-app auth", () => {
   it("maps operator auth to WS token", () => {
     expect(wsTokenForAuth(createBrowserCookieAuth())).toBe("");
     expect(wsTokenForAuth(createBearerTokenAuth("test-token"))).toBe("test-token");

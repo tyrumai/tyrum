@@ -1,4 +1,4 @@
-import type { OperatorCore } from "@tyrum/operator-core";
+import type { OperatorCore } from "@tyrum/operator-app";
 import { buildAgentSessionKey, type NodeInventoryEntry } from "@tyrum/contracts";
 import { useEffect, useMemo, useState } from "react";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
@@ -59,7 +59,7 @@ export function useNodeInventory(input: {
 
     setState((prev) => ({ ...prev, loading: true, error: null, key }));
 
-    void core.http.nodes
+    void core.admin.nodes
       .list({
         dispatchable_only: false,
         ...(key ? { key, lane: "main" } : {}),
@@ -92,7 +92,7 @@ export function useNodeInventory(input: {
     return () => {
       cancelled = true;
     };
-  }, [core.http.nodes, connected, key, refreshAt, activeSession?.updated_at]);
+  }, [core.admin.nodes, connected, key, refreshAt, activeSession?.updated_at]);
 
   return state;
 }

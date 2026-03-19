@@ -2,12 +2,12 @@
 
 import { describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
-import type { OperatorCore } from "../../../operator-core/src/index.js";
-import { createStore } from "../../../operator-core/src/store.js";
+import type { OperatorCore } from "../../../operator-app/src/index.js";
+import { createStore } from "../../../operator-app/src/store.js";
 import type {
   ElevatedModeState,
   ElevatedModeStore,
-} from "../../../operator-core/src/stores/elevated-mode-store.js";
+} from "../../../operator-app/src/stores/elevated-mode-store.js";
 import { ElevatedModeProvider } from "../../src/elevated-mode.js";
 import { ConfigurePage } from "../../src/components/pages/configure-page.js";
 import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
@@ -63,7 +63,11 @@ describe("ConfigurePage WorkBoard WS panels", () => {
         off: vi.fn(),
         commandExecute: vi.fn(async () => ({ output: "ok" })),
       },
-    } as unknown as OperatorCore;
+    } as unknown as OperatorCore & {
+      ws: unknown;
+    };
+    core.workboard = core.ws as OperatorCore["workboard"];
+    core.chatSocket = core.ws as OperatorCore["chatSocket"];
 
     const testRoot = renderIntoDocument(
       React.createElement(ElevatedModeProvider, {
@@ -94,7 +98,11 @@ describe("ConfigurePage WorkBoard WS panels", () => {
         off: vi.fn(),
         commandExecute: vi.fn(async () => ({ output: "ok" })),
       },
-    } as unknown as OperatorCore;
+    } as unknown as OperatorCore & {
+      ws: unknown;
+    };
+    core.workboard = core.ws as OperatorCore["workboard"];
+    core.chatSocket = core.ws as OperatorCore["chatSocket"];
 
     const testRoot = renderIntoDocument(
       React.createElement(ElevatedModeProvider, {

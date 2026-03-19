@@ -2,8 +2,8 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
-import type { OperatorCore } from "../../operator-core/src/index.js";
-import { createElevatedModeStore } from "../../operator-core/src/stores/elevated-mode-store.js";
+import type { OperatorCore } from "../../operator-app/src/index.js";
+import { createElevatedModeStore } from "../../operator-app/src/stores/elevated-mode-store.js";
 import { ElevatedModeProvider } from "../src/elevated-mode.js";
 import { AuditPanel } from "../src/components/admin-http/audit-panel.js";
 import { cleanupTestRoot, renderIntoDocument, setNativeValue } from "./test-utils.js";

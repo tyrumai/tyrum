@@ -2,7 +2,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 import React from "react";
-import { createElevatedModeStore, type OperatorCore } from "../../../operator-core/src/index.js";
+import { createElevatedModeStore, type OperatorCore } from "../../../operator-app/src/index.js";
 import { AdminAccessProvider } from "../../src/index.js";
 import { PendingPairingCard } from "../../src/components/pages/pairing-page.cards.js";
 import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";

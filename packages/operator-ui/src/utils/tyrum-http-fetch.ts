@@ -1,5 +1,6 @@
-import type { TyrumHttpFetch } from "@tyrum/operator-core/browser";
 import { getDesktopApi } from "../desktop-api.js";
+
+type TyrumHttpFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
 function headersToRecord(headers: HeadersInit | undefined): Record<string, string> | undefined {
   if (!headers) return undefined;

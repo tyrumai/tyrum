@@ -2,7 +2,7 @@ import {
   isPairingHumanActionableStatus,
   type OperatorCore,
   type Pairing,
-} from "@tyrum/operator-core";
+} from "@tyrum/operator-app";
 import type { CapabilityDescriptor, NodeInventoryEntry } from "@tyrum/contracts";
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";

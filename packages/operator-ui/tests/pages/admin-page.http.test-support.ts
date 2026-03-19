@@ -1,6 +1,6 @@
 import React, { act } from "react";
 import { expect, vi } from "vitest";
-import type { OperatorCore } from "../../../operator-core/src/index.js";
+import type { OperatorCore } from "../../../operator-app/src/index.js";
 import { ElevatedModeProvider } from "../../src/elevated-mode.js";
 import { ConfigurePage } from "../../src/components/pages/configure-page.js";
 import { cleanupTestRoot, renderIntoDocument, type TestRoot } from "../test-utils.js";
@@ -211,7 +211,7 @@ export function cleanupAdminHttpPage(testRoot: TestRoot): void {
   cleanupTestRoot(testRoot);
 }
 export function getModelConfig(core: OperatorCore): ModelConfigMocks {
-  return core.http.modelConfig as ModelConfigMocks;
+  return core.admin.modelConfig as ModelConfigMocks;
 }
 
 export function setModelConfigResponses(

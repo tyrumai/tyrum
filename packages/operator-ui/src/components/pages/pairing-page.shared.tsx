@@ -1,4 +1,4 @@
-import type { Pairing } from "@tyrum/operator-core";
+import type { Pairing } from "@tyrum/operator-app";
 import type { NodeIdentity, NodeInventoryEntry } from "@tyrum/contracts";
 import { type ComponentProps, useEffect, useRef } from "react";
 import { Badge } from "../ui/badge.js";

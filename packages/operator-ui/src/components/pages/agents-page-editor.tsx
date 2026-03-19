@@ -1,4 +1,4 @@
-import type { OperatorCore } from "@tyrum/operator-core";
+import type { OperatorCore } from "@tyrum/operator-app";
 import type {
   AgentCapabilitiesResponse,
   ManagedAgentDetail,
@@ -169,7 +169,7 @@ export function AgentsPageEditor({
         setLoadError(null);
         setLoading(false);
         try {
-          const presetList = await core.http.modelConfig.listPresets();
+          const presetList = await core.admin.modelConfig.listPresets();
           if (cancelled) return;
           setModelPresets(presetList.presets);
         } catch (error) {
@@ -195,8 +195,8 @@ export function AgentsPageEditor({
       setLoadError(null);
       try {
         const [detailResult, presetResult] = await Promise.allSettled([
-          core.http.agents.get(agentKey),
-          core.http.modelConfig.listPresets(),
+          core.admin.agents.get(agentKey),
+          core.admin.modelConfig.listPresets(),
         ]);
         if (cancelled) return;
 
@@ -237,7 +237,7 @@ export function AgentsPageEditor({
     return () => {
       cancelled = true;
     };
-  }, [agentKey, core.http.agents, core.http.modelConfig, createNonce, mode]);
+  }, [agentKey, core.admin.agents, core.admin.modelConfig, createNonce, mode]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -246,9 +246,9 @@ export function AgentsPageEditor({
       setMcpExtensionsLoading(true);
       setMcpExtensionsError(null);
       try {
-        const listed = await core.http.extensions.list("mcp");
+        const listed = await core.admin.extensions.list("mcp");
         const detailResults = await Promise.all(
-          listed.items.map(async (item) => await core.http.extensions.get("mcp", item.key)),
+          listed.items.map(async (item) => await core.admin.extensions.get("mcp", item.key)),
         );
         if (cancelled) return;
         setMcpExtensionsById(
@@ -269,7 +269,7 @@ export function AgentsPageEditor({
     return () => {
       cancelled = true;
     };
-  }, [core.http.extensions]);
+  }, [core.admin.extensions]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -278,7 +278,7 @@ export function AgentsPageEditor({
       setCapabilitiesLoading(true);
       setCapabilitiesError(null);
       try {
-        const result = await core.http.agents.capabilities(capabilitiesAgentKey);
+        const result = await core.admin.agents.capabilities(capabilitiesAgentKey);
         if (cancelled) return;
         setCapabilities(result);
       } catch (error) {
@@ -296,7 +296,7 @@ export function AgentsPageEditor({
     return () => {
       cancelled = true;
     };
-  }, [capabilitiesAgentKey, core.http.agents]);
+  }, [capabilitiesAgentKey, core.admin.agents]);
 
   const selectedPrimaryPreset = React.useMemo(
     () =>
@@ -384,7 +384,7 @@ export function AgentsPageEditor({
         draft.format === "json"
           ? parseJsonSettingsText(draft.text)
           : (
-              await core.http.extensions.parseMcpSettings({
+              await core.admin.extensions.parseMcpSettings({
                 settings_format: draft.format,
                 settings_text: draft.text,
               })
@@ -403,7 +403,7 @@ export function AgentsPageEditor({
         const created = await saveAction.runAndThrow(async () => {
           const resolvedMcpConfig = await buildResolvedMcpConfig();
           const payload = buildPayload(form, preservedModelOptions, resolvedMcpConfig);
-          return await core.http.agents.create(payload);
+          return await core.admin.agents.create(payload);
         });
         onSaved(created.agent_key);
         return;
@@ -413,7 +413,7 @@ export function AgentsPageEditor({
         const resolvedMcpConfig = await buildResolvedMcpConfig();
         const payload = buildPayload(form, preservedModelOptions, resolvedMcpConfig);
         const targetKey = agentKey ?? payload.agent_key;
-        return await core.http.agents.update(targetKey, {
+        return await core.admin.agents.update(targetKey, {
           config: payload.config,
         });
       });

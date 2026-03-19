@@ -38,7 +38,7 @@
     "@capacitor/preferences": "^8.0.1",
     "@tyrum/contracts": "workspace:*",
     "@tyrum/node-sdk": "workspace:*",
-    "@tyrum/operator-core": "workspace:*",
+    "@tyrum/operator-app": "workspace:*",
     "@tyrum/operator-ui": "workspace:*",
     "@tyrum/transport-sdk": "workspace:*",
     "react": "^19.2.4",

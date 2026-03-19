@@ -5,7 +5,7 @@ import {
   createBearerTokenAuth,
   createBrowserCookieAuth,
   createOperatorCore,
-} from "../../operator-core/src/index.js";
+} from "../../operator-app/src/index.js";
 import { OperatorUiApp, OperatorUiHostProvider } from "../src/index.js";
 import {
   TEST_DEVICE_IDENTITY,

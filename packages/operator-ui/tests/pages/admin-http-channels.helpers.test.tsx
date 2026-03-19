@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import React from "react";
-import { TyrumHttpClientError } from "@tyrum/operator-core/browser";
+import { TyrumHttpClientError } from "@tyrum/operator-app/browser";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ChannelFieldSections } from "../../src/components/pages/admin-http-channels-dialog-fields.js";
 import {
@@ -31,7 +31,7 @@ function getRegistryEntryByChannel(
   core: ReturnType<typeof createAdminHttpTestCore>["core"],
   channel: string,
 ) {
-  return core.http.channelConfig.listRegistry().then((result) => {
+  return core.admin.channelConfig.listRegistry().then((result) => {
     const entry = result.channels.find((candidate) => candidate.channel === channel);
     if (!entry) {
       throw new Error(`missing channel entry ${channel}`);
@@ -50,7 +50,7 @@ describe("admin http channel helpers", () => {
   it("loads agent options and builds channel payloads", async () => {
     const { core } = createAdminHttpTestCore();
     const telegramEntry = await getRegistryEntryByChannel(core, "telegram");
-    const agentOptions = await loadAgentOptions(core.http);
+    const agentOptions = await loadAgentOptions(core.admin);
 
     expect(agentOptions).toEqual<AgentOption[]>([
       { key: "default", label: "default" },
@@ -109,8 +109,8 @@ describe("admin http channel helpers", () => {
 
   it("renders field helper text and configured badges", async () => {
     const { core } = createAdminHttpTestCore();
-    const registry = await core.http.channelConfig.listRegistry();
-    const channels = await core.http.channelConfig.listChannels();
+    const registry = await core.admin.channelConfig.listRegistry();
+    const channels = await core.admin.channelConfig.listChannels();
     const telegramEntry = registry.channels.find((entry) => entry.channel === "telegram")!;
     const telegramAccount = channels.channels[0]!.accounts[0]!;
 
@@ -133,22 +133,22 @@ describe("admin http channel helpers", () => {
 
   it("updates telegram and google chat field state through the extracted field sections", async () => {
     const { core } = createAdminHttpTestCore();
-    const registry = await core.http.channelConfig.listRegistry();
-    const channels = await core.http.channelConfig.listChannels();
+    const registry = await core.admin.channelConfig.listRegistry();
+    const channels = await core.admin.channelConfig.listChannels();
     const telegramEntry = registry.channels.find((entry) => entry.channel === "telegram")!;
     const googleChatEntry = registry.channels.find((entry) => entry.channel === "googlechat")!;
     const telegramAccount = channels.channels[0]!.accounts[1]!;
-    const agentOptions = await loadAgentOptions(core.http);
+    const agentOptions = await loadAgentOptions(core.admin);
 
     function Harness({
       entry,
       account,
       initialFieldErrors,
     }: {
-      entry: Awaited<ReturnType<typeof core.http.channelConfig.listRegistry>>["channels"][number];
+      entry: Awaited<ReturnType<typeof core.admin.channelConfig.listRegistry>>["channels"][number];
       account:
         | Awaited<
-            ReturnType<typeof core.http.channelConfig.listChannels>
+            ReturnType<typeof core.admin.channelConfig.listChannels>
           >["channels"][number]["accounts"][number]
         | null;
       initialFieldErrors: ChannelFieldErrors;

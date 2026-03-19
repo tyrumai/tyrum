@@ -6,8 +6,8 @@ import {
   createElevatedModeStore,
   ElevatedModeRequiredError,
   type OperatorCore,
-} from "../../../operator-core/src/index.js";
-import { createStore } from "../../../operator-core/src/store.js";
+} from "../../../operator-app/src/index.js";
+import { createStore } from "../../../operator-app/src/store.js";
 import { AdminAccessProvider, toast } from "../../src/index.js";
 import { ApprovalsPage } from "../../src/components/pages/approvals-page.js";
 import { cleanupTestRoot, click, renderIntoDocument } from "../test-utils.js";

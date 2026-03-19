@@ -1,4 +1,4 @@
-import type { OperatorCore } from "../../../operator-core/src/index.js";
+import type { OperatorCore } from "../../../operator-app/src/index.js";
 import { expect } from "vitest";
 import {
   ADMIN_HTTP_EXECUTION_PROFILE_IDS,

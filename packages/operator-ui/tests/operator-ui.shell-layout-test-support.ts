@@ -1,7 +1,7 @@
 import { expect, it, vi } from "vitest";
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { createBearerTokenAuth, createOperatorCore } from "../../operator-core/src/index.js";
+import { createBearerTokenAuth, createOperatorCore } from "../../operator-app/src/index.js";
 import { OperatorUiApp } from "../src/index.js";
 import * as operatorUi from "../src/index.js";
 import { stubMatchMedia } from "./test-utils.js";

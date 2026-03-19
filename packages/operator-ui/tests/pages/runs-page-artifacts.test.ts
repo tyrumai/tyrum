@@ -2,8 +2,8 @@
 
 import { describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
-import type { OperatorCore } from "../../../operator-core/src/index.js";
-import { createStore } from "../../../operator-core/src/store.js";
+import type { OperatorCore } from "../../../operator-app/src/index.js";
+import { createStore } from "../../../operator-app/src/store.js";
 import { RunsPage } from "../../src/components/pages/runs-page.js";
 import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
 
@@ -126,7 +126,10 @@ describe("RunsPage (artifacts)", () => {
           getMetadata,
         },
       },
-    } as unknown as OperatorCore;
+    } as unknown as OperatorCore & {
+      http: OperatorCore["admin"];
+    };
+    core.admin = core.http;
 
     const { container, root } = renderIntoDocument(React.createElement(RunsPage, { core }));
 
@@ -260,7 +263,10 @@ describe("RunsPage (artifacts)", () => {
           getMetadata,
         },
       },
-    } as unknown as OperatorCore;
+    } as unknown as OperatorCore & {
+      http: OperatorCore["admin"];
+    };
+    core.admin = core.http;
 
     const { container, root } = renderIntoDocument(React.createElement(RunsPage, { core }));
 

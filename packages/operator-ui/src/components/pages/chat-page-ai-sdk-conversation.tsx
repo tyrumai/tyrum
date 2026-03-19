@@ -1,6 +1,6 @@
 import type { Approval } from "@tyrum/client";
-import type { ResolveApprovalInput } from "@tyrum/operator-core";
-import type { OperatorCore } from "@tyrum/operator-core";
+import type { ResolveApprovalInput } from "@tyrum/operator-app";
+import type { OperatorCore } from "@tyrum/operator-app";
 import { useChat } from "@ai-sdk/react";
 import type { FileUIPart, UIMessage } from "ai";
 import { ChevronLeft, Paperclip, Send, Trash2, X } from "lucide-react";

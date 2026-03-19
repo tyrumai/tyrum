@@ -184,7 +184,7 @@ describe("ConfigurePage (HTTP) channels", () => {
           },
         },
       });
-      core.http.channelConfig.listChannels = vi.fn(async () => nextChannels);
+      core.admin.channelConfig.listChannels = vi.fn(async () => nextChannels);
       return jsonResponse(
         {
           status: "ok",

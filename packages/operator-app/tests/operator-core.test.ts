@@ -29,12 +29,12 @@ describe("operator-core wiring", () => {
   it("exposes full HTTP client APIs even when deps.http is partial", () => {
     const { core } = createTestOperatorCore();
 
-    expect(typeof (core.http as Record<string, unknown>)["models"]).toBe("object");
-    expect(typeof (core.http as Record<string, unknown>)["authProfiles"]).toBe("object");
-    expect(typeof (core.http as Record<string, unknown>)["authPins"]).toBe("object");
-    expect(typeof (core.http as Record<string, unknown>)["secrets"]).toBe("object");
-    expect(typeof (core.http as Record<string, unknown>)["policy"]).toBe("object");
-    expect(typeof (core.http as Record<string, unknown>)["deviceTokens"]).toBe("object");
+    expect(typeof (core.admin as Record<string, unknown>)["models"]).toBe("object");
+    expect(typeof (core.admin as Record<string, unknown>)["authProfiles"]).toBe("object");
+    expect(typeof (core.admin as Record<string, unknown>)["authPins"]).toBe("object");
+    expect(typeof (core.admin as Record<string, unknown>)["secrets"]).toBe("object");
+    expect(typeof (core.admin as Record<string, unknown>)["policy"]).toBe("object");
+    expect(typeof (core.admin as Record<string, unknown>)["deviceTokens"]).toBe("object");
   });
 
   it("exposes wsUrl + httpBaseUrl on the core", () => {

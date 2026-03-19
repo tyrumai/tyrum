@@ -1,17 +1,17 @@
 import { describe, expect, it, vi } from "vitest";
-import type { ElevatedModeStore, OperatorAuthStrategy, OperatorCore } from "@tyrum/operator-core";
+import type { ElevatedModeStore, OperatorAuthStrategy, OperatorCore } from "@tyrum/operator-app";
 import {
   createBearerTokenAuth,
   createElevatedModeStore,
   createOperatorCoreManager,
-} from "../../../packages/operator-core/src/index.js";
+} from "../../../packages/operator-app/src/index.js";
 
 function createFakeCore(elevatedModeStore: ElevatedModeStore): OperatorCore {
   return {
     wsUrl: "ws://example.test/ws",
     httpBaseUrl: "http://example.test",
     ws: { connected: true } as unknown as OperatorCore["ws"],
-    http: {} as unknown as OperatorCore["http"],
+    http: {} as unknown as OperatorCore["admin"],
     elevatedModeStore,
     connectionStore: {
       getSnapshot() {

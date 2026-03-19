@@ -109,7 +109,7 @@ const COMPONENT_META = {
   "packages/contracts": { type: "contracts/validation" },
   "packages/gateway": { type: "gateway runtime (HTTP/WS + persistence)" },
   "packages/client": { type: "SDK/protocol client" },
-  "packages/operator-core": { type: "UI state/store logic" },
+  "packages/operator-app": { type: "UI state/store logic" },
   "packages/operator-ui": { type: "React UI library" },
   "packages/tui": { type: "terminal UI" },
   "packages/cli": { type: "CLI wiring" },

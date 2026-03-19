@@ -46,6 +46,11 @@ export {
 } from "./operator-core-manager.js";
 
 export type { OperatorHttpClient, OperatorWsClient } from "./deps.js";
+export type {
+  OperatorAdminClient,
+  OperatorChatSocket,
+  OperatorWorkboardClient,
+} from "./operator-core.types.js";
 
 export type { ExternalStore, Unsubscribe } from "./store.js";
 
@@ -125,35 +130,10 @@ export type {
   WorkTasksByWorkItemId,
 } from "./workboard/workboard-utils.js";
 
-// Re-exports for consumers (apps/desktop, packages/tui)
 export type {
-  ActionPrimitive,
-  ClientCapability,
-  CapabilityDescriptor,
-  EvaluationContext,
-  AgentStateKVEntry,
   DecisionRecord,
   WorkArtifact,
   WorkItem,
-  WorkItemStateKVEntry,
   WorkSignal,
   WorkStateKVScope,
 } from "@tyrum/contracts";
-export {
-  CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-  capabilityDescriptorsForClientCapability,
-  checkPostcondition,
-  descriptorIdsForClientCapability,
-  deviceIdFromSha256Digest,
-  migrateCapabilityDescriptorId,
-} from "@tyrum/contracts";
-export type { WsCapabilityReadyPayload } from "@tyrum/contracts";
-export type {
-  CapabilityProvider,
-  ExecutionAttempt,
-  ExecutionRun,
-  ExecutionStep,
-  MemoryItem,
-  TaskResult,
-} from "@tyrum/client";
-export type { DeviceIdentity } from "@tyrum/transport-sdk";

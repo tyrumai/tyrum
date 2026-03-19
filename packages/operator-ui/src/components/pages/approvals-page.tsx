@@ -3,7 +3,7 @@ import {
   isApprovalHumanActionableStatus,
   type OperatorCore,
   type ResolveApprovalInput,
-} from "@tyrum/operator-core";
+} from "@tyrum/operator-app";
 import { clientCapabilityFromDescriptorId, type CapabilityDescriptor } from "@tyrum/contracts";
 import { CircleCheck } from "lucide-react";
 import { type ComponentProps, useEffect, useMemo, useState } from "react";
@@ -79,7 +79,7 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
 
   useEffect(() => {
     let cancelled = false;
-    const listAgents = core.http?.agents?.list;
+    const listAgents = core.admin?.agents?.list;
 
     if (typeof listAgents !== "function") {
       setManagedAgents([]);
@@ -103,7 +103,7 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
     return () => {
       cancelled = true;
     };
-  }, [core.http]);
+  }, [core.admin]);
 
   const managedAgentsByIdentity = useMemo(
     () => createManagedAgentLookup(managedAgents),

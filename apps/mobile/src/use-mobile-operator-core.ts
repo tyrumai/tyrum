@@ -3,18 +3,18 @@ import {
   createElevatedModeStore,
   createOperatorCore,
   createOperatorCoreManager,
-  createTyrumHttpClient,
   httpAuthForAuth,
   type OperatorCore,
   type OperatorCoreManager,
-} from "@tyrum/operator-core/browser";
+} from "@tyrum/operator-app";
 import { createAdminAccessController, type AdminAccessController } from "@tyrum/operator-ui";
 import {
+  createTyrumHttpClient,
   formatDeviceIdentityError,
   loadOrCreateDeviceIdentity,
 } from "@tyrum/transport-sdk/browser";
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
-import type { ElevatedModeStore } from "@tyrum/operator-core/browser";
+import type { ElevatedModeStore } from "@tyrum/operator-app";
 import type { MobileBootstrapConfig, MobileConnectionConfig } from "./mobile-config.js";
 import {
   clearMobileBootstrapConfig,

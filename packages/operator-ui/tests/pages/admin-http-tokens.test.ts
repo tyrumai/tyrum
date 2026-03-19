@@ -2,8 +2,8 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
-import type { OperatorCore } from "../../../operator-core/src/index.js";
-import { createElevatedModeStore } from "../../../operator-core/src/stores/elevated-mode-store.js";
+import type { OperatorCore } from "../../../operator-app/src/index.js";
+import { createElevatedModeStore } from "../../../operator-app/src/stores/elevated-mode-store.js";
 import { ElevatedModeProvider } from "../../src/elevated-mode.js";
 import { AuthTokensCard } from "../../src/components/pages/admin-http-tokens.js";
 import { ThemeProvider } from "../../src/hooks/use-theme.js";
@@ -23,7 +23,7 @@ function createCore(): OperatorCore {
     expiresAt: "2026-03-01T00:10:00.000Z",
   });
 
-  return {
+  const core = {
     elevatedModeStore,
     httpBaseUrl: "http://example.test",
     http: {
@@ -44,7 +44,11 @@ function createCore(): OperatorCore {
         revoke: vi.fn(async () => ({ revoked: true, token_id: "token-1" })),
       },
     },
-  } as unknown as OperatorCore;
+  } as unknown as OperatorCore & {
+    http: OperatorCore["admin"];
+  };
+  core.admin = core.http;
+  return core;
 }
 
 async function issueToken(container: HTMLElement, name: string): Promise<void> {

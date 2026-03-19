@@ -1,13 +1,13 @@
 import React, { act } from "react";
 import { vi } from "vitest";
-import type { OperatorCore } from "../../../operator-core/src/index.js";
-import { createElevatedModeStore } from "../../../operator-core/src/stores/elevated-mode-store.js";
+import type { OperatorCore } from "../../../operator-app/src/index.js";
+import { createElevatedModeStore } from "../../../operator-app/src/stores/elevated-mode-store.js";
 import { ConfigurePage } from "../../src/components/pages/configure-page.js";
 import { ElevatedModeProvider } from "../../src/elevated-mode.js";
 import { ThemeProvider } from "../../src/hooks/use-theme.js";
 import { renderIntoDocument, type TestRoot } from "../test-utils.js";
 
-let adminHttpClient: OperatorCore["http"] | null = null;
+let adminHttpClient: OperatorCore["admin"] | null = null;
 
 vi.mock("../../src/components/pages/admin-http-shared.js", async () => {
   const actual = await import("../../src/components/pages/admin-http-shared.js");
@@ -40,13 +40,13 @@ async function readJsonResponse(response: Response): Promise<unknown> {
   return (await response.json()) as unknown;
 }
 
-function createFetchBackedAdminHttp(core: OperatorCore): OperatorCore["http"] {
+function createFetchBackedAdminHttp(core: OperatorCore): OperatorCore["admin"] {
   const token = core.elevatedModeStore.getSnapshot().elevatedToken ?? "";
-  const authTokens = core.http.authTokens;
-  const deviceTokens = core.http.deviceTokens;
+  const authTokens = core.admin.authTokens;
+  const deviceTokens = core.admin.deviceTokens;
 
   return {
-    ...core.http,
+    ...core.admin,
     authTokens: {
       ...authTokens,
       async list() {
@@ -101,7 +101,7 @@ function createFetchBackedAdminHttp(core: OperatorCore): OperatorCore["http"] {
         >;
       },
     },
-  } as OperatorCore["http"];
+  } as OperatorCore["admin"];
 }
 
 export async function switchAdminTab(container: HTMLElement, testId: string): Promise<void> {
@@ -381,7 +381,13 @@ export function createPanelsCore(activeAdminMode: boolean): { core: OperatorCore
         refresh: vi.fn(async () => ({ status: "ok" })),
       },
     },
-  } as unknown as OperatorCore;
+  } as unknown as OperatorCore & {
+    http: OperatorCore["admin"];
+    ws: unknown;
+  };
+  core.admin = core.http;
+  core.workboard = core.ws as OperatorCore["workboard"];
+  core.chatSocket = core.ws as OperatorCore["chatSocket"];
 
   return { core };
 }

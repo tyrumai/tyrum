@@ -1,4 +1,4 @@
-import { createStore } from "../../../packages/operator-core/src/store.js";
+import { createStore } from "../../../packages/operator-app/src/store.js";
 
 export function createChatStore() {
   const assistantMarkdown = [

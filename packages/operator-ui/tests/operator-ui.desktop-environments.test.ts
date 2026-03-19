@@ -3,7 +3,7 @@
 import { describe, expect, it } from "vitest";
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { createBearerTokenAuth, createOperatorCore } from "../../operator-core/src/index.js";
+import { createBearerTokenAuth, createOperatorCore } from "../../operator-app/src/index.js";
 import { ElevatedModeProvider } from "../src/components/elevated-mode/elevated-mode-provider.js";
 import { DesktopEnvironmentsPage } from "../src/components/pages/desktop-environments-page.js";
 import { FakeWsClient, createFakeHttpClient } from "./operator-ui.test-fixtures.js";

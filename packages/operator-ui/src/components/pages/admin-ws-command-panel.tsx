@@ -1,4 +1,4 @@
-import type { OperatorCore } from "@tyrum/operator-core";
+import type { OperatorCore } from "@tyrum/operator-app";
 import * as React from "react";
 import { useApiCallState } from "../../hooks/use-api-call-state.js";
 import { ElevatedModeTooltip } from "../elevated-mode/elevated-mode-tooltip.js";

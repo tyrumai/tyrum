@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { delay, startGateway, withTimeout } from "../../transport-sdk/tests/conformance/harness.js";
 import { createTuiCore } from "../src/core.js";
-import { ElevatedModeRequiredError, isElevatedModeActive } from "@tyrum/operator-core";
+import { ElevatedModeRequiredError, isElevatedModeActive } from "@tyrum/operator-app";
 import {
   createNodeFileDeviceIdentityStorage,
   createTyrumHttpClient,

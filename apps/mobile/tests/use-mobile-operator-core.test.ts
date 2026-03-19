@@ -56,12 +56,11 @@ const {
   };
 });
 
-vi.mock("@tyrum/operator-core/browser", () => ({
+vi.mock("@tyrum/operator-app", () => ({
   createBearerTokenAuth: vi.fn((token: string) => ({ type: "bearer", token })),
   createElevatedModeStore: vi.fn(() => ({ dispose: storeDisposeMock })),
   createOperatorCore: vi.fn(() => ({})),
   createOperatorCoreManager: createOperatorCoreManagerMock,
-  createTyrumHttpClient: vi.fn(() => ({})),
   httpAuthForAuth: vi.fn((auth: unknown) => auth),
 }));
 
@@ -70,6 +69,7 @@ vi.mock("@tyrum/operator-ui", () => ({
 }));
 
 vi.mock("@tyrum/transport-sdk/browser", () => ({
+  createTyrumHttpClient: vi.fn(() => ({})),
   formatDeviceIdentityError: vi.fn((error: unknown) =>
     error instanceof Error ? error.message : String(error),
   ),

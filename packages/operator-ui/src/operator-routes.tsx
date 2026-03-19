@@ -1,4 +1,4 @@
-import type { OperatorCore } from "@tyrum/operator-core";
+import type { OperatorCore } from "@tyrum/operator-app";
 import type { ExecutionRun } from "@tyrum/client";
 import type { LucideIcon } from "lucide-react";
 import {

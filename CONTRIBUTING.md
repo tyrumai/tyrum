@@ -14,7 +14,7 @@ Before changing packages, imports, or contributor-facing docs, read the [target-
 
 - Place each change in the target package or layer named there.
 - Shared contract work belongs in `@tyrum/contracts`.
-- Do not add new usage of `@tyrum/client` or `@tyrum/operator-core` unless the linked migration issue explicitly requires temporary coexistence.
+- Do not add new usage of `@tyrum/client` or `@tyrum/operator-app` unless the linked migration issue explicitly requires temporary coexistence.
 - If you must touch a legacy package during the migration window, explain why in the PR and keep the change scoped to the next migration step.
 - Use the [ARCH-01 clean-break target-state decision record](docs/architecture/reference/arch-01-clean-break-target-state.md) when you need the long-lived rationale behind the contributor contract.
 

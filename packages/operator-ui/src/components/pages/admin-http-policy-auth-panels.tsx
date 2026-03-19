@@ -1,4 +1,4 @@
-import type { OperatorCore } from "@tyrum/operator-core";
+import type { OperatorCore } from "@tyrum/operator-app";
 import { AdminHttpPolicyCard } from "./admin-http-policy-card.js";
 import { useAdminMutationAccess } from "./admin-http-shared.js";
 

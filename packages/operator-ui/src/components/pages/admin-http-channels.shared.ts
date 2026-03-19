@@ -1,4 +1,4 @@
-import type { OperatorCore } from "@tyrum/operator-core";
+import type { OperatorCore } from "@tyrum/operator-app";
 
 export type TelegramChannelConfig = {
   channel: "telegram";
@@ -73,7 +73,7 @@ export type ChannelRoutingRevisionSummary = {
   reverted_from_revision?: number;
 };
 
-export type ChannelRoutingApi = NonNullable<OperatorCore["http"]["routingConfig"]> & {
+export type ChannelRoutingApi = NonNullable<OperatorCore["admin"]["routingConfig"]> & {
   listChannelConfigs: () => Promise<ChannelConfigListResult>;
   createChannelConfig: (input: ChannelConfigCreateInput) => Promise<ChannelConfigCreateResult>;
   updateChannelConfig: (
@@ -93,7 +93,7 @@ export type ParsedUserIds = {
 };
 
 export function asChannelRoutingApi(
-  api: OperatorCore["http"]["routingConfig"] | null | undefined,
+  api: OperatorCore["admin"]["routingConfig"] | null | undefined,
 ): ChannelRoutingApi | null {
   return (api ?? null) as ChannelRoutingApi | null;
 }

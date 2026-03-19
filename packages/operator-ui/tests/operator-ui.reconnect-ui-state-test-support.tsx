@@ -2,9 +2,9 @@ import { AgentConfig, IdentityPack } from "@tyrum/contracts";
 import { describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { createBearerTokenAuth, createOperatorCore } from "../../operator-core/src/index.js";
-import { createStore } from "../../operator-core/src/store.js";
-import type { OperatorCore } from "../../operator-core/src/index.js";
+import { createBearerTokenAuth, createOperatorCore } from "../../operator-app/src/index.js";
+import { createStore } from "../../operator-app/src/store.js";
+import type { OperatorCore } from "../../operator-app/src/index.js";
 import { OperatorUiApp } from "../src/index.js";
 import { AgentsPage } from "../src/components/pages/agents-page.js";
 import { RetainedUiStateProvider, useReconnectTabState } from "../src/reconnect-ui-state.js";
@@ -78,7 +78,7 @@ function createAgentsCore(): OperatorCore {
     agentKeyByRunId: {},
   });
 
-  return {
+  const core = {
     connectionStore,
     statusStore,
     agentStatusStore: {
@@ -152,7 +152,11 @@ function createAgentsCore(): OperatorCore {
       modelConfig,
     },
     runsStore,
-  } as unknown as OperatorCore;
+  } as unknown as OperatorCore & {
+    http: OperatorCore["admin"];
+  };
+  core.admin = core.http;
+  return core;
 }
 
 function TabHarness() {

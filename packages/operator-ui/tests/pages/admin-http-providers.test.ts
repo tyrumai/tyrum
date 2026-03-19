@@ -106,7 +106,7 @@ describe("AdminHttpProvidersPanel", () => {
   it("filters the provider list, auto-selects the first match, and caps the visible list to five rows", async () => {
     const { core } = createAdminHttpProvidersTestCore();
     (
-      core.http.providerConfig.listRegistry as unknown as {
+      core.admin.providerConfig.listRegistry as unknown as {
         mockResolvedValue: (value: unknown) => void;
       }
     ).mockResolvedValue({

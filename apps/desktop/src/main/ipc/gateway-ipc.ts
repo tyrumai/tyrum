@@ -3,7 +3,7 @@ import {
   createPinnedNodeTransportState,
   destroyPinnedNodeDispatcher,
   normalizeFingerprint256,
-} from "@tyrum/operator-core/node";
+} from "@tyrum/transport-sdk/node";
 import { GatewayManager } from "../gateway-manager.js";
 import { configExists, loadConfig } from "../config/store.js";
 import { decryptToken } from "../config/token-store.js";

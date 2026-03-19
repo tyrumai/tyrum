@@ -5,8 +5,8 @@ import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { axe } from "vitest-axe";
 import { toHaveNoViolations } from "vitest-axe/matchers.js";
-import { createBearerTokenAuth, createOperatorCore } from "../../operator-core/src/index.js";
-import type { OperatorHttpClient, OperatorWsClient } from "../../operator-core/src/deps.js";
+import { createBearerTokenAuth, createOperatorCore } from "../../operator-app/src/index.js";
+import type { OperatorHttpClient, OperatorWsClient } from "../../operator-app/src/deps.js";
 import {
   WsChatSessionCreateResult,
   WsChatSessionDeleteResult,

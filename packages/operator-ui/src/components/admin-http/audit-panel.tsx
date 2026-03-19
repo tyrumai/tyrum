@@ -1,5 +1,5 @@
-import type { AuditExportResult, AuditForgetResult } from "@tyrum/operator-core/browser";
-import type { OperatorCore } from "@tyrum/operator-core";
+import type { AuditExportResult, AuditForgetResult } from "@tyrum/operator-app/browser";
+import type { OperatorCore } from "@tyrum/operator-app";
 import { FileSearch } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";

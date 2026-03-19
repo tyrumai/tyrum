@@ -1,5 +1,5 @@
-import { TyrumHttpClientError, type AgentListResult } from "@tyrum/operator-core/browser";
-import type { OperatorCore } from "@tyrum/operator-core";
+import { TyrumHttpClientError, type AgentListResult } from "@tyrum/operator-app/browser";
+import type { OperatorCore } from "@tyrum/operator-app";
 import * as React from "react";
 import { Badge } from "../ui/badge.js";
 import { useAdminHttpClient } from "./admin-http-shared.js";
@@ -45,7 +45,7 @@ function buildAgentOptions(agents: AgentListResult["agents"]): AgentOption[] {
   }));
 }
 
-export async function loadAgentOptions(http: Pick<OperatorCore["http"], "agentList" | "agents">) {
+export async function loadAgentOptions(http: Pick<OperatorCore["admin"], "agentList" | "agents">) {
   if (http.agentList) {
     const result = await http.agentList.get({ include_default: true });
     return buildAgentOptions(result.agents);

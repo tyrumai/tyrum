@@ -1,13 +1,15 @@
 import {
   createManagedNodeClientLifecycle,
   type ManagedNodeClientLifecycle,
-  type TaskResult,
+} from "@tyrum/client/browser";
+import { BrowserActionArgs } from "@tyrum/contracts";
+import {
   createBrowserLocalStorageDeviceIdentityStorage,
   formatDeviceIdentityError,
   loadOrCreateDeviceIdentity,
   TyrumClient,
-} from "@tyrum/operator-core/browser";
-import { BrowserActionArgs } from "@tyrum/contracts";
+  type TaskResult,
+} from "@tyrum/operator-app/browser";
 import {
   createContext,
   useCallback,

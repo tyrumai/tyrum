@@ -2,7 +2,7 @@
 
 import React, { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createStore } from "../../operator-core/src/store.js";
+import { createStore } from "../../operator-app/src/store.js";
 import { OperatorUiApp } from "../src/app.js";
 import { click, cleanupTestRoot, renderIntoDocument } from "./test-utils.js";
 

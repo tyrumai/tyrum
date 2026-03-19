@@ -1,17 +1,21 @@
 import { expect, vi } from "vitest";
-import type * as OperatorCoreBrowser from "@tyrum/operator-core/browser";
+import type * as OperatorApp from "@tyrum/operator-app";
+import type * as TransportBrowser from "@tyrum/transport-sdk/browser";
 import type * as UrlAuthModule from "../src/url-auth.js";
 
-vi.mock("@tyrum/operator-core/browser", () => ({
+vi.mock("@tyrum/operator-app", () => ({
   clearGatewayAuthSession: vi.fn(),
   createBearerTokenAuth: vi.fn(),
-  createDeviceIdentity: vi.fn(),
   createElevatedModeStore: vi.fn(),
   createGatewayAuthSession: vi.fn(),
   createOperatorCore: vi.fn(),
   createOperatorCoreManager: vi.fn(),
-  createTyrumHttpClient: vi.fn(),
   httpAuthForAuth: vi.fn(),
+}));
+
+vi.mock("@tyrum/transport-sdk/browser", () => ({
+  createDeviceIdentity: vi.fn(),
+  createTyrumHttpClient: vi.fn(),
 }));
 
 vi.mock("@tyrum/operator-ui", () => ({
@@ -44,7 +48,7 @@ vi.mock("../src/reload-page.js", () => ({
   reloadPage: vi.fn(),
 }));
 
-type OperatorCoreBrowserModule = typeof OperatorCoreBrowser;
+type OperatorCoreBrowserModule = typeof OperatorApp & typeof TransportBrowser;
 type UrlAuthModuleT = typeof UrlAuthModule;
 
 export type RootMock = { render: ReturnType<typeof vi.fn> };
@@ -116,42 +120,44 @@ export function expectDisposedOnUnload(params: {
 
 export async function arrangeBootstrap(initialUrl: string) {
   const replaceStateSpy = setupDom(initialUrl);
-  const operatorCore = await import("@tyrum/operator-core/browser");
+  const operatorApp = await import("@tyrum/operator-app");
+  const transportBrowser = await import("@tyrum/transport-sdk/browser");
+  const operatorCore = { ...operatorApp, ...transportBrowser } as OperatorCoreBrowserModule;
   const reloadPage = await import("../src/reload-page.js");
   const urlAuth = await import("../src/url-auth.js");
   const reactDomClient = await import("react-dom/client");
 
   const elevatedModeStore = { dispose: vi.fn() };
-  vi.mocked(operatorCore.createElevatedModeStore).mockReturnValue(
-    elevatedModeStore as unknown as ReturnType<typeof operatorCore.createElevatedModeStore>,
+  vi.mocked(operatorApp.createElevatedModeStore).mockReturnValue(
+    elevatedModeStore as unknown as ReturnType<typeof operatorApp.createElevatedModeStore>,
   );
   const deviceIdentity = {
     deviceId: "web-device-1",
     publicKey: "test-public-key",
     privateKey: "test-private-key",
   };
-  vi.mocked(operatorCore.createDeviceIdentity).mockResolvedValue(
-    deviceIdentity as unknown as Awaited<ReturnType<typeof operatorCore.createDeviceIdentity>>,
+  vi.mocked(transportBrowser.createDeviceIdentity).mockResolvedValue(
+    deviceIdentity as unknown as Awaited<ReturnType<typeof transportBrowser.createDeviceIdentity>>,
   );
-  vi.mocked(operatorCore.createOperatorCore).mockReturnValue({} as never);
-  vi.mocked(operatorCore.createGatewayAuthSession).mockResolvedValue(
+  vi.mocked(operatorApp.createOperatorCore).mockReturnValue({} as never);
+  vi.mocked(operatorApp.createGatewayAuthSession).mockResolvedValue(
     new Response(null, { status: 204 }),
   );
-  vi.mocked(operatorCore.clearGatewayAuthSession).mockResolvedValue(
+  vi.mocked(operatorApp.clearGatewayAuthSession).mockResolvedValue(
     new Response(null, { status: 204 }),
   );
-  vi.mocked(operatorCore.httpAuthForAuth).mockReturnValue({ type: "bearer", token: "baseline" });
-  vi.mocked(operatorCore.createTyrumHttpClient).mockReturnValue({
+  vi.mocked(operatorApp.httpAuthForAuth).mockReturnValue({ type: "bearer", token: "baseline" });
+  vi.mocked(transportBrowser.createTyrumHttpClient).mockReturnValue({
     deviceTokens: { issue: vi.fn(), revoke: vi.fn() },
   } as never);
-  vi.mocked(operatorCore.createBearerTokenAuth).mockImplementation(((token: string) => ({
+  vi.mocked(operatorApp.createBearerTokenAuth).mockImplementation(((token: string) => ({
     type: "bearer-token",
     token,
-  })) as typeof operatorCore.createBearerTokenAuth);
+  })) as typeof operatorApp.createBearerTokenAuth);
 
   const { manager, unsubscribe, core } = makeManagerMock();
-  vi.mocked(operatorCore.createOperatorCoreManager).mockReturnValue(
-    manager as unknown as ReturnType<typeof operatorCore.createOperatorCoreManager>,
+  vi.mocked(operatorApp.createOperatorCoreManager).mockReturnValue(
+    manager as unknown as ReturnType<typeof operatorApp.createOperatorCoreManager>,
   );
 
   const root = { render: vi.fn() };

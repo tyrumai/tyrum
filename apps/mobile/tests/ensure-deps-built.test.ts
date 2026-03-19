@@ -34,7 +34,7 @@ describe("createPackageBuilds", () => {
       ]),
     );
 
-    expect(buildsByName.get("@tyrum/operator-core")?.inputs).toEqual(
+    expect(buildsByName.get("@tyrum/operator-app")?.inputs).toEqual(
       expect.arrayContaining([
         resolve(repoRoot, "packages/node-sdk/dist/index.mjs"),
         resolve(repoRoot, "packages/transport-sdk/dist/index.mjs"),
@@ -48,7 +48,7 @@ describe("createPackageBuilds", () => {
         resolve(repoRoot, "packages/node-sdk/dist/index.mjs"),
         resolve(repoRoot, "packages/transport-sdk/dist/index.mjs"),
         resolve(repoRoot, "packages/client/dist/index.mjs"),
-        resolve(repoRoot, "packages/operator-core/dist/index.mjs"),
+        resolve(repoRoot, "packages/operator-app/dist/index.mjs"),
         resolve(repoRoot, "packages/contracts/dist/index.mjs"),
       ]),
     );

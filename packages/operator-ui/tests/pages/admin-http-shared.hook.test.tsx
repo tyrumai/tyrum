@@ -2,7 +2,7 @@
 
 import React, { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createElevatedModeStore, type OperatorCore } from "@tyrum/operator-core";
+import { createElevatedModeStore, type OperatorCore } from "@tyrum/operator-app";
 import { ElevatedModeProvider } from "../../src/elevated-mode.js";
 import { useAdminHttpClient } from "../../src/components/pages/admin-http-shared.js";
 import { cleanupTestRoot, renderIntoDocument, type TestRoot } from "../test-utils.js";
@@ -19,6 +19,7 @@ function createTestCore(options?: { tickIntervalMs?: number }) {
   };
   const readHttp = { providerConfig: { listRegistry: async () => ({ providers: [] }) } };
   const core = {
+    admin: readHttp,
     elevatedModeStore,
     http: readHttp,
     httpBaseUrl: "http://example.test",
@@ -27,7 +28,7 @@ function createTestCore(options?: { tickIntervalMs?: number }) {
   return {
     baseStore,
     core,
-    readHttp: readHttp as OperatorCore["http"],
+    readHttp: readHttp as OperatorCore["admin"],
     getSubscribeCalls: () => subscribeCalls,
   };
 }
@@ -41,7 +42,7 @@ describe("useAdminHttpClient", () => {
   it("returns the baseline read client until elevated access becomes active", () => {
     const { baseStore, core, readHttp, getSubscribeCalls } = createTestCore();
     let testRoot: TestRoot | null = null;
-    let resolvedClient: OperatorCore["http"] | null = null;
+    let resolvedClient: OperatorCore["admin"] | null = null;
 
     function ReadProbe() {
       resolvedClient = useAdminHttpClient();
@@ -112,7 +113,7 @@ describe("useAdminHttpClient", () => {
 
     const { baseStore, core, readHttp } = createTestCore({ tickIntervalMs: 1_000 });
     let testRoot: TestRoot | null = null;
-    let resolvedClient: OperatorCore["http"] | null = null;
+    let resolvedClient: OperatorCore["admin"] | null = null;
 
     function ReadProbe() {
       resolvedClient = useAdminHttpClient();

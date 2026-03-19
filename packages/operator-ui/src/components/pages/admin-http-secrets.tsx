@@ -1,5 +1,5 @@
 import type { SecretHandle } from "@tyrum/contracts";
-import type { OperatorCore } from "@tyrum/operator-core";
+import type { OperatorCore } from "@tyrum/operator-app";
 import { KeyRound, Plus, RefreshCw, RotateCcw, Trash2 } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
@@ -19,7 +19,7 @@ import {
   useAdminMutationHttpClient,
 } from "./admin-http-shared.js";
 
-type SecretsApi = OperatorCore["http"]["secrets"];
+type SecretsApi = OperatorCore["admin"]["secrets"];
 type SecretRow = {
   handle: SecretHandle;
   secretKey: string;

@@ -1,8 +1,8 @@
 import type {
   AgentListResult,
   ObservedTelegramThreadListResult,
-} from "@tyrum/operator-core/browser";
-import type { OperatorCore } from "@tyrum/operator-core";
+} from "@tyrum/operator-app/browser";
+import type { OperatorCore } from "@tyrum/operator-app";
 import { History, Pencil, Plus, RefreshCw, Search, Trash2, Undo2, Waypoints } from "lucide-react";
 import * as React from "react";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
@@ -42,7 +42,7 @@ import {
   type RoutingRuleRow,
 } from "./admin-http-routing-config.shared.js";
 
-type AgentHttpClient = Pick<OperatorCore["http"], "agentList" | "agents">;
+type AgentHttpClient = Pick<OperatorCore["admin"], "agentList" | "agents">;
 
 function buildAgentOptions(agents: AgentListResult["agents"]): RoutingAgentOption[] {
   return agents.map((agent) => ({

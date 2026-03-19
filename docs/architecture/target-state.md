@@ -91,7 +91,7 @@ flowchart LR
 | Current package                           | Target replacement                                                     | Contributor rule                                                                                                     |
 | ----------------------------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | `@tyrum/client`                           | `@tyrum/transport-sdk` and `@tyrum/node-sdk`                           | Do not add new transport or generic node APIs here unless the active migration step requires temporary coexistence.  |
-| `@tyrum/operator-core`                    | `@tyrum/operator-app`                                                  | Do not add new app-facing operator state or actions here after the replacement track is open.                        |
+| `@tyrum/operator-core`                    | `@tyrum/operator-app`                                                  | Do not add new app-facing operator state or actions to the legacy package after the replacement track is open.       |
 | `@tyrum/operator-ui` (current mixed role) | `@tyrum/operator-ui` presentation-only on top of `@tyrum/operator-app` | New UI behavior must arrive through `@tyrum/operator-app`, not by reaching through to transport or runtime packages. |
 | `@tyrum/gateway` (current monolith)       | `@tyrum/gateway` composition root plus `@tyrum/runtime-*` packages     | Keep new business logic out of gateway handlers and services.                                                        |
 

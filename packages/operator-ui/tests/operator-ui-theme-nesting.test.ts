@@ -2,8 +2,8 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
-import { createOperatorCore, createBearerTokenAuth } from "../../operator-core/src/index.js";
-import type { OperatorHttpClient, OperatorWsClient } from "../../operator-core/src/deps.js";
+import { createOperatorCore, createBearerTokenAuth } from "../../operator-app/src/index.js";
+import type { OperatorHttpClient, OperatorWsClient } from "../../operator-app/src/deps.js";
 import { ThemeProvider } from "../src/hooks/use-theme.js";
 import { OperatorUiApp } from "../src/app.js";
 import { cleanupTestRoot, renderIntoDocument } from "./test-utils.js";

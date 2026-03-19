@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { createStore } from "../../../operator-core/src/store.js";
+import { createStore } from "../../../operator-app/src/store.js";
 import { AppShell } from "../../src/components/layout/app-shell.js";
 import { DashboardPage } from "../../src/components/pages/dashboard-page.js";
 import {

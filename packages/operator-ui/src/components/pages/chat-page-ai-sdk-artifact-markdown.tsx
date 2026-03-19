@@ -1,4 +1,4 @@
-import type { OperatorCore } from "@tyrum/operator-core";
+import type { OperatorCore } from "@tyrum/operator-app";
 import { useEffect, useMemo, useState } from "react";
 import type { Components } from "react-markdown";
 import { Download } from "lucide-react";
@@ -29,7 +29,7 @@ function ArtifactMarkdownImage({
   useEffect(() => {
     setError(null);
 
-    const artifactsApi = core.http.artifacts;
+    const artifactsApi = core.admin.artifacts;
     if (!artifactsApi) {
       setError("Artifacts API unavailable");
       return;
