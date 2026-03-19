@@ -1,12 +1,13 @@
-import type { WsResponseEnvelope } from "@tyrum/contracts";
+import type { WorkItem, WsResponseEnvelope } from "@tyrum/contracts";
+import type { WorkboardService } from "@tyrum/runtime-workboard";
 import type { ConnectedClient } from "../connection-manager.js";
 import { WORKBOARD_WS_AUDIENCE } from "../workboard-audience.js";
-import { WorkboardDal } from "../../modules/workboard/dal.js";
 import {
   IdentityScopeDal,
   ScopeNotFoundError,
   normalizeScopeKeys,
 } from "../../modules/identity/scope.js";
+import { createGatewayWorkboardService } from "../../modules/workboard/service.js";
 import type { ProtocolDeps, ProtocolRequestEnvelope } from "./types.js";
 import { broadcastEvent, errorResponse, workboardErrorResponse } from "./helpers.js";
 
@@ -73,7 +74,7 @@ export async function resolveExistingWorkScope(params: {
 }
 
 export type WorkScope = Awaited<ReturnType<typeof ensureWorkScope>>["scope"];
-export type TransitionItem = NonNullable<Awaited<ReturnType<WorkboardDal["transitionItem"]>>>;
+export type TransitionItem = WorkItem;
 export type StateKvScopePayload = ScopeKeysPayload &
   ({ kind: "agent" } | { kind: "work_item"; work_item_id: string });
 export type RequestSchema<T> = {
@@ -88,7 +89,7 @@ export type ClientRequestContext = {
   tenantId: string;
 };
 export type ScopedHandlerContext = ClientRequestContext & {
-  dal: WorkboardDal;
+  workboardService: WorkboardService;
   db: NonNullable<ProtocolDeps["db"]>;
 };
 export type WorkboardHandler = (ctx: ClientRequestContext) => Promise<WsResponseEnvelope>;
@@ -112,7 +113,14 @@ export function requireClientWorkboardAccess(
       "unsupported_request",
       unsupportedMessage ?? `${ctx.msg.type} not supported`,
     );
-  return { ...ctx, db: ctx.deps.db, dal: new WorkboardDal(ctx.deps.db, ctx.deps.redactionEngine) };
+  return {
+    ...ctx,
+    db: ctx.deps.db,
+    workboardService: createGatewayWorkboardService({
+      db: ctx.deps.db,
+      redactionEngine: ctx.deps.redactionEngine,
+    }),
+  };
 }
 
 export function parseRequest<T>(
@@ -162,7 +170,7 @@ export function withClientDal(
 ): WorkboardHandler {
   return async (ctx) => {
     const access = requireClientWorkboardAccess(ctx, action, unsupportedMessage);
-    return "dal" in access ? handler(access) : access;
+    return "workboardService" in access ? handler(access) : access;
   };
 }
 

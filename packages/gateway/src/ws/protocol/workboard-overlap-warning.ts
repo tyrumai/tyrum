@@ -1,11 +1,11 @@
+import type { WorkboardService } from "@tyrum/runtime-workboard";
 import type { ProtocolDeps } from "./types.js";
 import { WORKBOARD_WS_AUDIENCE } from "../workboard-audience.js";
 import { broadcastEvent } from "./helpers.js";
-import type { WorkboardDal } from "../../modules/workboard/dal.js";
 
 export async function maybeEmitWorkItemOverlapWarningArtifact(params: {
-  dal: WorkboardDal;
-  scope: Parameters<WorkboardDal["listItems"]>[0]["scope"];
+  workboardService: WorkboardService;
+  scope: Parameters<WorkboardService["listItems"]>[0]["scope"];
   item: { work_item_id: string; title: string; fingerprint?: { resources: string[] } };
   deps: ProtocolDeps;
   fingerprintTouched?: boolean;
@@ -16,7 +16,7 @@ export async function maybeEmitWorkItemOverlapWarningArtifact(params: {
     const fingerprint = params.item.fingerprint;
     if (!fingerprint || fingerprint.resources.length === 0) return;
 
-    const { items: active } = await params.dal.listItems({
+    const { items: active } = await params.workboardService.listItems({
       scope: params.scope,
       statuses: ["doing", "blocked"],
       limit: 200,
@@ -45,13 +45,14 @@ export async function maybeEmitWorkItemOverlapWarningArtifact(params: {
       "Suggested next steps: queue this WorkItem, link it as a dependency, or explicitly merge.",
     ].join("\n");
 
-    const artifact = await params.dal.createArtifact({
+    const artifact = await params.workboardService.createArtifact({
       scope: params.scope,
       artifact: {
         work_item_id: params.item.work_item_id,
         kind: "risk",
         title: "WorkItem overlap detected",
         body_md,
+        refs: [],
       },
     });
 

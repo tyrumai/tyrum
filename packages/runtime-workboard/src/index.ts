@@ -1,4 +1,5 @@
 export type {
+  WorkboardCrudRepository,
   ManagedDesktopAttachment,
   ManagedDesktopProvisioner,
   SubagentRepository,
@@ -23,6 +24,7 @@ export {
 } from "./orchestration-support.js";
 export type { CreateSubagentParams } from "./subagent-service.js";
 export { SubagentService } from "./subagent-service.js";
+export { WorkboardService } from "./workboard-service.js";
 export { WorkboardOrchestrator } from "./orchestrator.js";
 export { WorkboardDispatcher } from "./dispatcher.js";
 export { WorkboardReconciler } from "./reconciler.js";
