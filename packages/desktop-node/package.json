@@ -18,7 +18,7 @@
     "bin"
   ],
   "scripts": {
-    "build": "tsdown src/index.ts --format esm --dts",
+    "build": "tsdown --config tsdown.config.ts",
     "start": "node bin/tyrum-desktop-node.mjs"
   },
   "dependencies": {
