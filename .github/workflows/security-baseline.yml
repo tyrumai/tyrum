@@ -67,8 +67,8 @@ jobs:
 
       - name: pnpm audit (workspace packages)
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push' || steps.filter.outputs.deps == 'true'
-        # CVE-2026-0540 (DOMPurify) has no released patched version yet.
-        # We apply the upstream fix via pnpm patchedDependencies and ignore it via pnpm auditConfig.
+        # CVE-2026-31808 (file-type) is fixed upstream, but @nut-tree-fork/nut-js still pulls file-type 16.5.4 via Jimp.
+        # We apply the loop-guard patch locally and keep the audit ignore until that transitive chain upgrades.
         run: pnpm audit
 
       - name: Report failure for triage

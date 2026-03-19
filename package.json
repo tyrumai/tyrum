@@ -65,7 +65,6 @@
     "allowUnusedPatches": true,
     "auditConfig": {
       "ignoreCves": [
-        "CVE-2026-0540",
         "CVE-2026-31808"
       ]
     },
