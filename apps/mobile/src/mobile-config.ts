@@ -3,13 +3,13 @@ import {
   normalizeGatewayHttpBaseUrl,
   type MobileBootstrapPayload,
 } from "@tyrum/contracts";
-import { SecureStorage } from "@aparajita/capacitor-secure-storage";
-import { Preferences } from "@capacitor/preferences";
 import {
   parseStoredDeviceIdentity,
   type DeviceIdentity,
   type DeviceIdentityStorage,
-} from "@tyrum/transport-sdk";
+} from "@tyrum/node-sdk";
+import { SecureStorage } from "@aparajita/capacitor-secure-storage";
+import { Preferences } from "@capacitor/preferences";
 import type { MobileHostActionName } from "@tyrum/operator-ui";
 
 export type MobileActionSettings = Record<MobileHostActionName, boolean>;

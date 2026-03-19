@@ -254,9 +254,6 @@ importers:
       '@tyrum/operator-ui':
         specifier: workspace:*
         version: link:../../packages/operator-ui
-      '@tyrum/transport-sdk':
-        specifier: workspace:*
-        version: link:../../packages/transport-sdk
       react:
         specifier: ^19.2.4
         version: 19.2.4

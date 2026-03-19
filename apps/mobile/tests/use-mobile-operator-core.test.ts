@@ -56,28 +56,25 @@ const {
   };
 });
 
-vi.mock("@tyrum/operator-app", () => ({
+vi.mock("@tyrum/operator-app/browser", () => ({
   createBearerTokenAuth: vi.fn((token: string) => ({ type: "bearer", token })),
   createElevatedModeStore: vi.fn(() => ({ dispose: storeDisposeMock })),
   createOperatorCore: vi.fn(() => ({})),
   createOperatorCoreManager: createOperatorCoreManagerMock,
-  httpAuthForAuth: vi.fn((auth: unknown) => auth),
-}));
-
-vi.mock("@tyrum/operator-ui", () => ({
-  createAdminAccessController: vi.fn(() => controller),
-}));
-
-vi.mock("@tyrum/transport-sdk/browser", () => ({
   createTyrumHttpClient: vi.fn(() => ({})),
   formatDeviceIdentityError: vi.fn((error: unknown) =>
     error instanceof Error ? error.message : String(error),
   ),
+  httpAuthForAuth: vi.fn((auth: unknown) => auth),
   loadOrCreateDeviceIdentity: vi.fn(async () => ({
     deviceId: "mobile-operator-device-1",
     publicKey: "public",
     privateKey: "private",
   })),
+}));
+
+vi.mock("@tyrum/operator-ui", () => ({
+  createAdminAccessController: vi.fn(() => controller),
 }));
 
 vi.mock("../src/mobile-config.js", () => ({
