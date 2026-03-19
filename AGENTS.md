@@ -9,6 +9,14 @@
 - Gateway persists to SQLite by default, supports Postgres for split roles, and serves the bundled operator UI at `/ui`.
 - Public docs live in `docs/` and are built as a Docusaurus site in `apps/docs`.
 
+## Target-state architecture
+
+- Canonical contributor contract: `docs/architecture/target-state.md`
+- Long-lived decision record: `docs/architecture/reference/arch-01-clean-break-target-state.md`
+- New work should land in the target package or layer from that doc, not by reinforcing the current migration-state package graph.
+- Do not add new code to `@tyrum/schemas`, `@tyrum/client`, or `@tyrum/operator-core` unless the linked migration issue requires temporary coexistence.
+- Temporary coexistence is allowed only for the migration window needed to land the linked issue safely.
+
 ## Repo map
 
 - `.github/` GitHub Actions + repo automation
@@ -109,6 +117,8 @@
 - `docs/install.md`
 - `docs/index.md`
 - `docs/architecture/index.md`
+- `docs/architecture/target-state.md`
+- `docs/architecture/reference/arch-01-clean-break-target-state.md`
 - `docs/desktop.md`
 - `apps/desktop/README.md`
 - `docker-compose.yml`

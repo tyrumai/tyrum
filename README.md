@@ -4,6 +4,8 @@ Tyrum is an autonomous worker platform built around a gateway, an agent runtime,
 
 The repository contains the gateway runtime, the client SDK, shared schemas, the desktop app, and the public docs site. Detailed architecture, deployment, and feature documentation lives under [`docs/`](docs/index.md).
 
+For new package work, treat the [target-state architecture](docs/architecture/target-state.md) as the contributor contract rather than reinforcing the current migration-state package graph.
+
 ## Install
 
 Use the installer:
@@ -46,12 +48,15 @@ Prereqs:
 - [Docs home](docs/index.md)
 - [Install guide](docs/install.md)
 - [Architecture overview](docs/architecture/index.md)
+- [Target-state architecture](docs/architecture/target-state.md)
 - [Contributing](CONTRIBUTING.md)
 - [Desktop app](apps/desktop/README.md)
 
 ## Workspace
 
-The main packages are:
+The current workspace still contains legacy packages while the clean-break migration is in flight. New work should land in the target package or layer described in [docs/architecture/target-state.md](docs/architecture/target-state.md).
+
+The main packages in the current tree are:
 
 - `packages/gateway`: gateway runtime and `tyrum` CLI
 - `packages/client`: client SDK

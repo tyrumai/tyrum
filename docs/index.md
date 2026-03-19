@@ -12,6 +12,7 @@ Public user-facing docs for install, onboarding, and architecture.
 
 ## Architecture
 
+- [Target-state package graph](./architecture/target-state.md)
 - [Architecture Overview](./architecture/index.md)
 - [Gateway](./architecture/gateway/index.md)
 - [Client](./architecture/client/index.md)

@@ -8,7 +8,18 @@ Thanks for helping build the Tyrum assistant platform.
 - Clone the repository and create branches as `<issue-number>-<slug>`.
 - Run `pnpm install` from the repo root to bootstrap all packages.
 
-## 2. Project Structure
+## 2. Architecture First
+
+Before changing packages, imports, or contributor-facing docs, read the [target-state architecture](docs/architecture/target-state.md).
+
+- Place each change in the target package or layer named there.
+- Do not add new usage of `@tyrum/schemas`, `@tyrum/client`, or `@tyrum/operator-core` unless the linked migration issue explicitly requires temporary coexistence.
+- If you must touch a legacy package during the migration window, explain why in the PR and keep the change scoped to the next migration step.
+- Use the [ARCH-01 clean-break target-state decision record](docs/architecture/reference/arch-01-clean-break-target-state.md) when you need the long-lived rationale behind the contributor contract.
+
+## 3. Current Repo Structure
+
+This table describes the current tree, not the target package graph for new work.
 
 | Directory          | Purpose                                               |
 | ------------------ | ----------------------------------------------------- |
@@ -21,7 +32,7 @@ Thanks for helping build the Tyrum assistant platform.
 | `config/`          | Runtime configuration (model gateway YAML)            |
 | `docs/`            | Architecture and design documentation                 |
 
-## 3. Local Development
+## 4. Local Development
 
 | Task                 | Command                              |
 | -------------------- | ------------------------------------ |
@@ -50,7 +61,7 @@ The repo-local hooks are:
 - `pre-commit`: runs `pnpm format:check-staged` and `pnpm lint` for fast checks on commit.
 - `pre-push`: runs `pnpm lint`, `pnpm typecheck`, `pnpm exec tsc --noEmit --project apps/desktop/tsconfig.json`, and `pnpm test` for stronger validation before pushing.
 
-## 4. Test Conventions
+## 5. Test Conventions
 
 Use the smallest test scope that proves the behavior you changed:
 
@@ -69,7 +80,7 @@ Name executable tests after the behavior under test and keep the scope in the fo
 - Prefer `tests/helpers/` and `tests/fixtures/` for shared helpers and reusable data; small scope-local `*-utils.ts` files are fine when they stay adjacent to one test family.
 - Avoid repeating the scope in the file name when the folder already provides it.
 
-## 5. Before Opening a PR
+## 6. Before Opening a PR
 
 Run these commands and verify all pass:
 
@@ -84,6 +95,7 @@ If your PR changes database migrations under `packages/gateway/migrations/*`, al
 
 - Naming conventions are followed (PK/FK/timestamps): `docs/architecture/scaling-ha/db-naming-conventions.md`
 - SQLite and Postgres stay aligned: `pnpm test packages/gateway/tests/contract/schema-contract.test.ts`
+- Complete the PR template architecture checklist and state the target package or layer for architecture-relevant changes.
 
 ### Coverage (optional locally, enforced in CI)
 
@@ -120,7 +132,7 @@ To audit the whole repo (warnings only):
 pnpm lint:oxlint:report
 ```
 
-## 6. Branch Protections & Reviews
+## 7. Branch Protections & Reviews
 
 Pull requests must reference their GitHub Issue and pass all required checks:
 
@@ -130,7 +142,7 @@ Pull requests must reference their GitHub Issue and pass all required checks:
 
 Follow the 72-character imperative commit style (e.g. `Add policy gate scaffold`).
 
-## 7. Static Analysis (SAST)
+## 8. Static Analysis (SAST)
 
 The `sast` workflow runs Semgrep on every PR and on pushes to `main` when there are changes under `packages/` or `apps/`.
 
