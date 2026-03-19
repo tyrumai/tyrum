@@ -1,4 +1,4 @@
-import { suggestedOverridesForToolCall } from "../policy/suggested-overrides.js";
+import { suggestedOverridesForToolCall } from "@tyrum/runtime-policy";
 
 export function buildExecutionPolicyApprovalContext(input: {
   policySnapshotId: string;

@@ -17,7 +17,7 @@ import type { CanvasDal } from "./modules/canvas/dal.js";
 import type { PresenceDal } from "./modules/presence/dal.js";
 import type { PolicySnapshotDal } from "./modules/policy/snapshot-dal.js";
 import type { PolicyOverrideDal } from "./modules/policy/override-dal.js";
-import type { PolicyService } from "./modules/policy/service.js";
+import type { PolicyService } from "@tyrum/runtime-policy";
 import type { NodePairingDal } from "./modules/node/pairing-dal.js";
 import type { ContextReportDal } from "./modules/context/report-dal.js";
 import type { SecretResolutionAuditDal } from "./modules/secret/resolution-audit-dal.js";
@@ -34,6 +34,7 @@ import {
   DeploymentConfig,
   type DeploymentConfig as DeploymentConfigT,
 } from "@tyrum/contracts";
+import { PolicyService as PolicyServiceImpl } from "@tyrum/runtime-policy";
 
 import { createEventBus } from "./event-bus.js";
 import { MemoryDal as MemoryDalImpl } from "./modules/memory/memory-dal.js";
@@ -54,7 +55,6 @@ import { CanvasDal as CanvasDalImpl } from "./modules/canvas/dal.js";
 import { PresenceDal as PresenceDalImpl } from "./modules/presence/dal.js";
 import { PolicySnapshotDal as PolicySnapshotDalImpl } from "./modules/policy/snapshot-dal.js";
 import { PolicyOverrideDal as PolicyOverrideDalImpl } from "./modules/policy/override-dal.js";
-import { PolicyService as PolicyServiceImpl } from "./modules/policy/service.js";
 import { NodePairingDal as NodePairingDalImpl } from "./modules/node/pairing-dal.js";
 import { ContextReportDal as ContextReportDalImpl } from "./modules/context/report-dal.js";
 import { SecretResolutionAuditDal as SecretResolutionAuditDalImpl } from "./modules/secret/resolution-audit-dal.js";
@@ -76,7 +76,6 @@ import { OauthRefreshLeaseDal as OauthRefreshLeaseDalImpl } from "./modules/oaut
 import { OAuthProviderRegistry as OAuthProviderRegistryImpl } from "./modules/oauth/provider-registry.js";
 import { IdentityScopeDal as IdentityScopeDalImpl } from "./modules/identity/scope.js";
 import { ChannelThreadDal as ChannelThreadDalImpl } from "./modules/channels/thread-dal.js";
-import { isSharedStateMode } from "./modules/runtime-state/mode.js";
 import {
   createGatewayConfigStore,
   type GatewayConfigStore,
@@ -218,20 +217,11 @@ export function wireContainer(
     redactionEngine,
     deploymentConfig.server.publicBaseUrl,
   );
-  const gatewayConfigStore = createGatewayConfigStore({
-    db,
-    home: tyrumHome,
-    logger,
-    deploymentConfig,
-    includeAgentHomeBundle: !isSharedStateMode(deploymentConfig),
-  });
+  const gatewayConfigStore = createGatewayConfigStore({ db });
   const policyService = new PolicyServiceImpl({
-    home: tyrumHome,
     snapshotDal: policySnapshotDal,
     overrideDal: policyOverrideDal,
-    logger,
     deploymentPolicy: deploymentConfig.policy,
-    includeAgentHomeBundle: !isSharedStateMode(deploymentConfig),
     configStore: gatewayConfigStore,
   });
 

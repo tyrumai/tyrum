@@ -5,7 +5,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 export function stableJsonStringify(value: unknown): string {
-  const json = JSON.stringify(sortValue(value)) as unknown as string | undefined;
+  const json = JSON.stringify(sortValue(value)) as string | undefined;
   return json ?? "null";
 }
 

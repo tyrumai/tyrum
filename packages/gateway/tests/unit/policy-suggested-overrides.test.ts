@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { suggestedOverridesForToolCall } from "../../src/modules/policy/suggested-overrides.js";
+import { suggestedOverridesForToolCall } from "@tyrum/runtime-policy";
 
 describe("suggestedOverridesForToolCall", () => {
   it("suggests exact heartbeat schedule creation overrides", () => {

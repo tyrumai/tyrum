@@ -6,7 +6,7 @@ import type { ActionPrimitive } from "@tyrum/contracts";
 import { ExecutionEngine } from "../../src/modules/execution/engine.js";
 import { PolicyOverrideDal } from "../../src/modules/policy/override-dal.js";
 import { PolicySnapshotDal } from "../../src/modules/policy/snapshot-dal.js";
-import { PolicyService } from "../../src/modules/policy/service.js";
+import { PolicyService } from "@tyrum/runtime-policy";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { LifecycleHooksRuntime } from "../../src/modules/hooks/runtime.js";
@@ -31,7 +31,6 @@ describe("LifecycleHooksRuntime", () => {
     const policySnapshotDal = new PolicySnapshotDal(db);
     const policyOverrideDal = new PolicyOverrideDal(db);
     const policyService = new PolicyService({
-      home: homeDir,
       snapshotDal: policySnapshotDal,
       overrideDal: policyOverrideDal,
     });
@@ -104,7 +103,6 @@ describe("LifecycleHooksRuntime", () => {
     const policySnapshotDal = new PolicySnapshotDal(db);
     const policyOverrideDal = new PolicyOverrideDal(db);
     const policyService = new PolicyService({
-      home: homeDir,
       snapshotDal: policySnapshotDal,
       overrideDal: policyOverrideDal,
     });
@@ -146,7 +144,6 @@ describe("LifecycleHooksRuntime", () => {
     const policySnapshotDal = new PolicySnapshotDal(db);
     const policyOverrideDal = new PolicyOverrideDal(db);
     const policyService = new PolicyService({
-      home: homeDir,
       snapshotDal: policySnapshotDal,
       overrideDal: policyOverrideDal,
     });

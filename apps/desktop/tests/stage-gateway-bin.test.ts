@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const stageGatewayBinPath = join(__dirname, "..", "scripts", "stage-gateway-bin.mjs");
+const desktopPackageJsonPath = join(__dirname, "..", "package.json");
 
 describe("stage-gateway-bin script", () => {
   it("uses the sanitized Electron native build env for prebuild-install and node-gyp", () => {
@@ -56,5 +57,19 @@ describe("stage-gateway-bin script", () => {
     );
     expect(script).toContain("process.execPath");
     expect(script).not.toContain("node_modules/.bin/prebuild-install");
+  });
+
+  it("builds runtime-policy before staging the embedded gateway", () => {
+    const packageJson = JSON.parse(readFileSync(desktopPackageJsonPath, "utf8")) as {
+      scripts?: Record<string, string>;
+    };
+    const buildGateway = packageJson.scripts?.["build:gateway"] ?? "";
+    const pretest = packageJson.scripts?.["pretest"] ?? "";
+
+    expect(buildGateway).toContain("pnpm --filter @tyrum/runtime-policy build");
+    expect(buildGateway.indexOf("pnpm --filter @tyrum/runtime-policy build")).toBeLessThan(
+      buildGateway.indexOf("pnpm --filter @tyrum/gateway build"),
+    );
+    expect(pretest).toContain("pnpm --filter @tyrum/runtime-policy build");
   });
 });

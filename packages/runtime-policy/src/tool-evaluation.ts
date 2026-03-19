@@ -1,10 +1,9 @@
 import type {
-  PolicyBundle as PolicyBundleT,
   Decision,
+  PolicyBundle as PolicyBundleT,
   PolicyDecision as PolicyDecisionT,
   RuleDecision as RuleDecisionT,
 } from "@tyrum/contracts";
-import { wildcardMatch } from "./wildcard.js";
 import {
   evaluateDomain,
   mostRestrictiveDecision,
@@ -12,8 +11,8 @@ import {
   normalizeUrlForPolicy,
 } from "./domain.js";
 import { expandLegacyNodeDispatchOverridePatterns } from "./node-dispatch-override-patterns.js";
-import type { PolicyOverrideDal } from "./override-dal.js";
-import type { PolicySnapshotRow } from "./snapshot-dal.js";
+import type { PolicyOverrideStore, PolicySnapshotRow } from "./ports.js";
+import { wildcardMatch } from "./wildcard.js";
 
 export type ToolEffect = "read_only" | "state_changing";
 
@@ -30,7 +29,7 @@ export async function evaluateToolCallAgainstBundle(params: {
   inputProvenance?: { source: string; trusted: boolean };
   toolEffect?: ToolEffect;
   roleAllowed?: boolean;
-  overrideDal: PolicyOverrideDal;
+  overrideStore: Pick<PolicyOverrideStore, "listActiveForTool">;
 }): Promise<{
   decision: Decision;
   policy_snapshot?: PolicySnapshotRow;
@@ -78,7 +77,7 @@ export async function evaluateToolCallAgainstBundle(params: {
     rules.push({
       rule: "provenance",
       outcome: "require_approval",
-      detail: `untrusted_shell_requires_approval=true (source=${params.inputProvenance?.source ?? "unknown"})`,
+      detail: `untrusted_shell_requires_approval=true (source=${params.inputProvenance.source})`,
     });
   }
 
@@ -120,7 +119,7 @@ export async function evaluateToolCallAgainstBundle(params: {
     decision === "require_approval" &&
     toolDecision === "require_approval"
   ) {
-    const overrides = await params.overrideDal.listActiveForTool({
+    const overrides = await params.overrideStore.listActiveForTool({
       tenantId: params.tenantId,
       agentId: params.agentId,
       workspaceId: params.workspaceId,
@@ -165,14 +164,14 @@ function evaluateToolDecisionOverride(
 ): Decision | undefined {
   const target = matchTarget.trim();
 
-  for (const pat of domain.deny) {
-    if (wildcardMatch(pat, target)) return "deny";
+  for (const pattern of domain.deny) {
+    if (wildcardMatch(pattern, target)) return "deny";
   }
-  for (const pat of domain.require_approval) {
-    if (wildcardMatch(pat, target)) return "require_approval";
+  for (const pattern of domain.require_approval) {
+    if (wildcardMatch(pattern, target)) return "require_approval";
   }
-  for (const pat of domain.allow) {
-    if (wildcardMatch(pat, target)) return "allow";
+  for (const pattern of domain.allow) {
+    if (wildcardMatch(pattern, target)) return "allow";
   }
 
   return undefined;

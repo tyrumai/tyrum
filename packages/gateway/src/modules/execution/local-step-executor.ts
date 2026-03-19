@@ -5,7 +5,7 @@ import { McpManager } from "../agent/mcp-manager.js";
 import { isBlockedUrl, resolvesToBlockedAddress, sanitizeEnv } from "../agent/tool-executor.js";
 import type { ArtifactStore } from "../artifact/store.js";
 import type { Logger } from "../observability/logger.js";
-import type { PolicyService } from "../policy/service.js";
+import type { PolicyService } from "@tyrum/runtime-policy";
 import type { RedactionEngine } from "../redaction/engine.js";
 import type { SecretProvider } from "../secret/provider.js";
 import type { StepExecutionContext, StepExecutor, StepResult } from "./engine.js";

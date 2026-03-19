@@ -6,7 +6,7 @@ import type {
 import { randomUUID } from "node:crypto";
 import type { SqlDb } from "../../statestore/types.js";
 import type { ExecutionEngine } from "../execution/engine.js";
-import type { PolicyService } from "../policy/service.js";
+import type { PolicyService } from "@tyrum/runtime-policy";
 import { DEFAULT_TENANT_ID } from "../identity/scope.js";
 import type { GatewayConfigStore } from "../runtime-state/gateway-config-store.js";
 

@@ -1,6 +1,6 @@
 import type { ActionPrimitive as ActionPrimitiveT } from "@tyrum/contracts";
 import { requireTenantIdValue } from "../identity/scope.js";
-import type { PolicyService } from "../policy/service.js";
+import type { PolicyService } from "@tyrum/runtime-policy";
 import type { SecretProvider } from "../secret/provider.js";
 import { resolveBuiltinToolEffect } from "../agent/tools.js";
 import type { StepExecutionContext, StepResult } from "./engine.js";

@@ -10,7 +10,7 @@ import type { SqlDb } from "../../../statestore/types.js";
 import { APPROVAL_WS_AUDIENCE } from "../../../ws/audience.js";
 import { ApprovalDal } from "../../approval/dal.js";
 import { toApprovalContract } from "../../approval/to-contract.js";
-import type { PolicyService } from "../../policy/service.js";
+import type { PolicyService } from "@tyrum/runtime-policy";
 import { createReviewedApproval } from "../../review/review-init.js";
 import { releaseLaneAndWorkspaceLeasesTx } from "./concurrency-manager.js";
 import { parsePlanIdFromTriggerJson } from "./db.js";

@@ -36,7 +36,7 @@ import { LaneQueueSignalDal } from "../../lanes/queue-signal-dal.js";
 import { resolveGatewayStateMode } from "../../runtime-state/mode.js";
 import type { SecretProvider } from "../../secret/provider.js";
 import type { PluginRegistry } from "../../plugins/registry.js";
-import type { PolicyService } from "../../policy/service.js";
+import type { PolicyService } from "@tyrum/runtime-policy";
 import type { ApprovalDal } from "../../approval/dal.js";
 import { buildContextReport } from "./turn-context-report.js";
 import {

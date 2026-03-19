@@ -113,6 +113,7 @@ export default defineConfig({
       "@tyrum/transport-sdk/browser": resolve(__dirname, "packages/transport-sdk/src/browser.ts"),
       "@tyrum/transport-sdk/node": resolve(__dirname, "packages/transport-sdk/src/node.ts"),
       "@tyrum/transport-sdk": resolve(__dirname, "packages/transport-sdk/src/index.ts"),
+      "@tyrum/runtime-policy": resolve(__dirname, "packages/runtime-policy/src/index.ts"),
       "@tyrum/client/browser": resolve(__dirname, "packages/client/src/browser.ts"),
       "@tyrum/client/node": resolve(__dirname, "packages/client/src/node.ts"),
       "@tyrum/client": resolve(__dirname, "packages/client/src/index.ts"),

@@ -39,14 +39,14 @@ export function normalizeDomain(
 export function evaluateDomain(domain: PolicyDomainConfig, matchTarget: string): Decision {
   const target = matchTarget.trim();
 
-  for (const pat of domain.deny) {
-    if (wildcardMatch(pat, target)) return "deny";
+  for (const pattern of domain.deny) {
+    if (wildcardMatch(pattern, target)) return "deny";
   }
-  for (const pat of domain.require_approval) {
-    if (wildcardMatch(pat, target)) return "require_approval";
+  for (const pattern of domain.require_approval) {
+    if (wildcardMatch(pattern, target)) return "require_approval";
   }
-  for (const pat of domain.allow) {
-    if (wildcardMatch(pat, target)) return "allow";
+  for (const pattern of domain.allow) {
+    if (wildcardMatch(pattern, target)) return "allow";
   }
 
   return domain.default;
@@ -60,8 +60,7 @@ export function normalizeUrlForPolicy(raw: string): string {
     const pathname = url.pathname || "/";
     return `${url.protocol}//${url.host}${pathname}`;
   } catch {
-    // Intentional: avoid leaking query params (may contain secrets) by truncating at '?'.
-    const q = trimmed.indexOf("?");
-    return q === -1 ? trimmed : trimmed.slice(0, q);
+    const queryIndex = trimmed.indexOf("?");
+    return queryIndex === -1 ? trimmed : trimmed.slice(0, queryIndex);
   }
 }

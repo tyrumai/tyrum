@@ -2,7 +2,7 @@ import type { WorkItem, WorkScope } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import type { ApprovalDal } from "../approval/dal.js";
 import { broadcastApprovalUpdated } from "../approval/update-broadcast.js";
-import type { PolicyService } from "../policy/service.js";
+import type { PolicyService } from "@tyrum/runtime-policy";
 import { ChannelOutboxDal } from "../channels/outbox-dal.js";
 import { DEFAULT_CHANNEL_ACCOUNT_ID, parseChannelSourceKey } from "../channels/interface.js";
 import { SessionSendPolicyOverrideDal } from "../channels/send-policy-override-dal.js";

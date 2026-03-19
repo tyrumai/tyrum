@@ -14,7 +14,7 @@ import { createApp } from "../../src/app.js";
 import { ExecutionEngine } from "../../src/modules/execution/engine.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
 import type { AgentRegistry } from "../../src/modules/agent/registry.js";
-import type { PolicyService } from "../../src/modules/policy/service.js";
+import type { PolicyService } from "@tyrum/runtime-policy";
 import { createStubLanguageModel } from "../unit/stub-language-model.js";
 import { AuthTokenService } from "../../src/modules/auth/auth-token-service.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";

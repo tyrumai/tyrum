@@ -4,7 +4,7 @@ import { isBuiltinToolAvailableInStateMode, isToolAllowedWithDenylist } from "..
 import { collectSecretHandleIds } from "../../secret/collect-secret-handle-ids.js";
 import { createSecretHandleResolver } from "../../secret/handle-resolver.js";
 import { canonicalizeToolMatchTarget } from "../../policy/match-target.js";
-import { suggestedOverridesForToolCall } from "../../policy/suggested-overrides.js";
+import { suggestedOverridesForToolCall } from "@tyrum/runtime-policy";
 import { hasToolResult } from "../../ai-sdk/message-utils.js";
 import { coerceRecord } from "../../util/coerce.js";
 import { LaneQueueInterruptError } from "../../lanes/queue-signal-dal.js";

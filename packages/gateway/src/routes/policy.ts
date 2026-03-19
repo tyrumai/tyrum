@@ -4,7 +4,7 @@
 
 import { Hono } from "hono";
 import { PolicyCheckRequest } from "@tyrum/contracts";
-import { evaluatePolicy } from "../modules/policy/engine.js";
+import { evaluatePolicy } from "@tyrum/runtime-policy";
 
 const policy = new Hono();
 

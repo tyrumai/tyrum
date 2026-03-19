@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Hono } from "hono";
 import type { ExecutionEngine } from "../../src/modules/execution/engine.js";
-import type { PolicyService } from "../../src/modules/policy/service.js";
+import type { PolicyService } from "@tyrum/runtime-policy";
 import { loadAllPlaybooks } from "../../src/modules/playbook/loader.js";
 import { PlaybookRunner } from "../../src/modules/playbook/runner.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";

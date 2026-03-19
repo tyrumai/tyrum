@@ -10,7 +10,7 @@ import { SessionSendPolicyOverrideDal } from "../../channels/send-policy-overrid
 import { coerceRecord } from "../../util/coerce.js";
 import type { ApprovalDal } from "../../approval/dal.js";
 import { broadcastApprovalUpdated } from "../../approval/update-broadcast.js";
-import type { PolicyService } from "../../policy/service.js";
+import type { PolicyService } from "@tyrum/runtime-policy";
 import { createReviewedApproval } from "../../review/review-init.js";
 import type { GatewayContainer } from "../../../container.js";
 import type { ProtocolDeps } from "../../../ws/protocol.js";

@@ -43,7 +43,7 @@ describe("/status policy consistency", () => {
         sha256: "bundle-sha",
         sources: { deployment: "default", agent: null, playbook: null },
       }),
-    } as unknown as import("../../src/modules/policy/service.js").PolicyService;
+    } as unknown as import("@tyrum/runtime-policy").PolicyService;
 
     const result = await executeCommand("/status", {
       runtime: {

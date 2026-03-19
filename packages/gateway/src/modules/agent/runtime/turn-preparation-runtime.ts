@@ -44,7 +44,7 @@ import { ToolSetBuilder } from "./tool-set-builder.js";
 import type { ToolSetBuilderDeps } from "./tool-set-builder.js";
 import type { McpManager } from "../mcp-manager.js";
 import type { PluginRegistry } from "../../plugins/registry.js";
-import type { PolicyService } from "../../policy/service.js";
+import type { PolicyService } from "@tyrum/runtime-policy";
 import { ToolExecutor } from "../tool-executor.js";
 import { createToolExecutorForTurnPreparation } from "./turn-preparation-runtime-tooling.js";
 

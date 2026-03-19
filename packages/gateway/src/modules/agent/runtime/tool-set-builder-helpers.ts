@@ -1,13 +1,13 @@
 import type { Decision, SecretHandle as SecretHandleT } from "@tyrum/contracts";
 import type { ToolDescriptor } from "../tools.js";
-import type { SuggestedOverride } from "../../policy/suggested-overrides.js";
+import type { SuggestedOverride } from "@tyrum/runtime-policy";
 import { coerceRecord } from "../../util/coerce.js";
 import type { GatewayStateMode } from "../../runtime-state/mode.js";
 import type { SecretProvider } from "../../secret/provider.js";
 import type { ApprovalDal, ApprovalStatus } from "../../approval/dal.js";
 import { broadcastApprovalUpdated } from "../../approval/update-broadcast.js";
 import type { PluginRegistry } from "../../plugins/registry.js";
-import type { PolicyService } from "../../policy/service.js";
+import type { PolicyService } from "@tyrum/runtime-policy";
 import { createReviewedApproval } from "../../review/review-init.js";
 import type { SqlDb } from "../../../statestore/types.js";
 import type { SessionDal } from "../session-dal.js";

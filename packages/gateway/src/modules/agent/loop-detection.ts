@@ -1,4 +1,4 @@
-import { sha256HexFromString, stableJsonStringify } from "../policy/canonical-json.js";
+import { sha256HexFromString, stableJsonStringify } from "@tyrum/runtime-policy";
 import { Logger } from "../observability/logger.js";
 
 export const LOOP_WARNING_PREFIX = "Loop warning:";

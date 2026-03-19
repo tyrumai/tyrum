@@ -8,7 +8,7 @@ import type { PolicyOverrideDal } from "../../modules/policy/override-dal.js";
 import type { NodePairingDal } from "../../modules/node/pairing-dal.js";
 import type { AgentRegistry } from "../../modules/agent/registry.js";
 import type { ExecutionEngine } from "../../modules/execution/engine.js";
-import type { PolicyService } from "../../modules/policy/service.js";
+import type { PolicyService } from "@tyrum/runtime-policy";
 import type { PluginRegistry } from "../../modules/plugins/registry.js";
 import type { PluginCatalogProvider } from "../../modules/plugins/catalog-provider.js";
 import type { LifecycleHooksRuntime } from "../../modules/hooks/runtime.js";

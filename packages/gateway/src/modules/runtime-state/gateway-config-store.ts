@@ -46,19 +46,6 @@ class DbGatewayConfigStore implements GatewayConfigStore {
   }
 }
 
-export function createGatewayConfigStore(params: {
-  db: SqlDb;
-  home: string;
-  logger?: unknown;
-  deploymentConfig: {
-    policy?: {
-      bundlePath?: string;
-    };
-    state?: {
-      mode?: string;
-    };
-  };
-  includeAgentHomeBundle?: boolean;
-}): GatewayConfigStore {
+export function createGatewayConfigStore(params: { db: SqlDb }): GatewayConfigStore {
   return new DbGatewayConfigStore(params.db);
 }

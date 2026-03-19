@@ -13,7 +13,7 @@ import {
 import type { IdentityScopeDal } from "../identity/scope.js";
 import type { MemoryDal } from "../memory/memory-dal.js";
 import type { ExecutionEngine } from "../execution/engine.js";
-import type { PolicyService } from "../policy/service.js";
+import type { PolicyService } from "@tyrum/runtime-policy";
 import { PlaybookRunner } from "../playbook/runner.js";
 import { Logger } from "../observability/logger.js";
 import { createPoiProvider, type PoiProvider } from "./poi-provider.js";

@@ -8,7 +8,7 @@
 import { Hono } from "hono";
 import type { SqlDb, StateStoreKind } from "../statestore/types.js";
 import type { ConnectionManager } from "../ws/connection-manager.js";
-import type { PolicyService } from "../modules/policy/service.js";
+import type { PolicyService } from "@tyrum/runtime-policy";
 import type { ModelsDevService } from "../modules/models/models-dev-service.js";
 import type { AgentRegistry } from "../modules/agent/registry.js";
 import { buildStatusDetails } from "../modules/observability/status-details.js";

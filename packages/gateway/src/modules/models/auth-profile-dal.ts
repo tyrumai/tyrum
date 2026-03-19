@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { stableJsonStringify } from "../policy/canonical-json.js";
+import { stableJsonStringify } from "@tyrum/runtime-policy";
 import type { SqlDb } from "../../statestore/types.js";
 import { buildUpdatedAtMutation } from "../../statestore/updated-at.js";
 

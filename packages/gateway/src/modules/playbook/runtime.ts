@@ -7,7 +7,7 @@ import { randomUUID } from "node:crypto";
 import { isAbsolute, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
 import type { ExecutionEngine } from "../execution/engine.js";
-import type { PolicyService } from "../policy/service.js";
+import type { PolicyService } from "@tyrum/runtime-policy";
 import type { ApprovalDal, ApprovalRow } from "../approval/dal.js";
 import type { SqlDb } from "../../statestore/types.js";
 import type { PlaybookRunner } from "./runner.js";

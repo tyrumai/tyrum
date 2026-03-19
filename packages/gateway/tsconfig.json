@@ -5,5 +5,9 @@
     "outDir": "dist"
   },
   "include": ["src"],
-  "references": [{ "path": "../cli-utils" }, { "path": "../contracts" }]
+  "references": [
+    { "path": "../cli-utils" },
+    { "path": "../contracts" },
+    { "path": "../runtime-policy" }
+  ]
 }

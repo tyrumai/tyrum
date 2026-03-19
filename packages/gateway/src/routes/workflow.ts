@@ -12,7 +12,7 @@ import { randomUUID } from "node:crypto";
 import type { ExecutionEngine } from "../modules/execution/engine.js";
 import type { ActionPrimitive as ActionPrimitiveT } from "@tyrum/contracts";
 import type { ExecutionBudgets as ExecutionBudgetsT } from "@tyrum/contracts";
-import type { PolicyService } from "../modules/policy/service.js";
+import type { PolicyService } from "@tyrum/runtime-policy";
 import type { AgentRegistry } from "../modules/agent/registry.js";
 import type { IdentityScopeDal } from "../modules/identity/scope.js";
 import { requireTenantId } from "../modules/auth/claims.js";

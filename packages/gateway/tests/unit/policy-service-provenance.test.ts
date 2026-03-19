@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { seedDeploymentPolicyBundle } from "../helpers/runtime-config.js";
-import { PolicyService } from "../../src/modules/policy/service.js";
+import { PolicyService } from "@tyrum/runtime-policy";
 import { PolicySnapshotDal } from "../../src/modules/policy/snapshot-dal.js";
 import { PolicyOverrideDal } from "../../src/modules/policy/override-dal.js";
 import { createGatewayConfigStore } from "../../src/modules/runtime-state/gateway-config-store.js";
@@ -26,14 +26,9 @@ describe("PolicyService provenance rules", () => {
       });
 
       const policy = new PolicyService({
-        home: "/tmp/unused",
         snapshotDal: new PolicySnapshotDal(db),
         overrideDal: new PolicyOverrideDal(db),
-        configStore: createGatewayConfigStore({
-          db,
-          home: "/tmp/unused",
-          deploymentConfig: {},
-        }),
+        configStore: createGatewayConfigStore({ db }),
       });
 
       const untrusted = await policy.evaluateToolCall({
@@ -67,14 +62,9 @@ describe("PolicyService provenance rules", () => {
       });
 
       const policy = new PolicyService({
-        home: "/tmp/unused",
         snapshotDal: new PolicySnapshotDal(db),
         overrideDal: new PolicyOverrideDal(db),
-        configStore: createGatewayConfigStore({
-          db,
-          home: "/tmp/unused",
-          deploymentConfig: {},
-        }),
+        configStore: createGatewayConfigStore({ db }),
       });
 
       const trusted = await policy.evaluateToolCall({
@@ -119,14 +109,9 @@ describe("PolicyService provenance rules", () => {
 
       const overrideDal = new PolicyOverrideDal(db);
       const policy = new PolicyService({
-        home: "/tmp/unused",
         snapshotDal: new PolicySnapshotDal(db),
         overrideDal,
-        configStore: createGatewayConfigStore({
-          db,
-          home: "/tmp/unused",
-          deploymentConfig: {},
-        }),
+        configStore: createGatewayConfigStore({ db }),
       });
 
       const override = await overrideDal.create({

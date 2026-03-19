@@ -1,4 +1,4 @@
-import type { PolicyService } from "../policy/service.js";
+import type { PolicyService } from "@tyrum/runtime-policy";
 import type { SandboxHardeningProfile } from "../sandbox/hardening.js";
 import { deriveElevatedExecutionAvailableFromPolicyBundle } from "../sandbox/elevated-execution.js";
 import type { SandboxStatus } from "./status-details.js";

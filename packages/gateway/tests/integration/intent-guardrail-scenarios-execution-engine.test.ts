@@ -15,10 +15,7 @@ import {
   DEFAULT_TENANT_ID,
   DEFAULT_WORKSPACE_ID,
 } from "../../src/modules/identity/scope.js";
-import {
-  sha256HexFromString,
-  stableJsonStringify,
-} from "../../src/modules/policy/canonical-json.js";
+import { sha256HexFromString, stableJsonStringify } from "@tyrum/runtime-policy";
 import { PolicySnapshotDal } from "../../src/modules/policy/snapshot-dal.js";
 import { WorkboardDal } from "../../src/modules/workboard/dal.js";
 

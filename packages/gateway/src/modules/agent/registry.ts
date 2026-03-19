@@ -1,7 +1,6 @@
+import { PolicyService as PolicyServiceImpl, type PolicyService } from "@tyrum/runtime-policy";
 import { AgentKey } from "@tyrum/contracts";
 import { readdir } from "node:fs/promises";
-import type { PolicyService } from "../policy/service.js";
-import { PolicyService as PolicyServiceImpl } from "../policy/service.js";
 import type { GatewayContainer } from "../../container.js";
 import type { SecretProvider } from "../secret/provider.js";
 import { join } from "node:path";
@@ -106,14 +105,10 @@ export class AgentRegistry {
     const existing = this.policyServiceByAgentId.get(id);
     if (existing) return existing;
 
-    const home = this.resolveAgentHome(id);
     const service = new PolicyServiceImpl({
-      home,
       snapshotDal: this.opts.container.policySnapshotDal,
       overrideDal: this.opts.container.policyOverrideDal,
-      logger: this.opts.logger,
       deploymentPolicy: this.opts.container.deploymentConfig.policy,
-      includeAgentHomeBundle: !isSharedStateMode(this.opts.container.deploymentConfig),
       configStore: this.opts.container.gatewayConfigStore,
     });
     this.policyServiceByAgentId.set(id, service);

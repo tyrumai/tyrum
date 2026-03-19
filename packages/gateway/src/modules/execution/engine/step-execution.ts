@@ -1,6 +1,6 @@
 import type { ActionPrimitive as ActionPrimitiveT } from "@tyrum/contracts";
 import type { Logger } from "../../observability/logger.js";
-import type { PolicyService } from "../../policy/service.js";
+import type { PolicyService } from "@tyrum/runtime-policy";
 import type { SqlDb } from "../../../statestore/types.js";
 import { releaseLaneAndWorkspaceLeasesTx } from "./concurrency-manager.js";
 import { claimQueuedStepExecutionTx } from "./step-execution-queued-claim.js";

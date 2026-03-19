@@ -9,7 +9,7 @@ import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { TelegramBot } from "../../src/modules/ingress/telegram-bot.js";
 import { normalizeUpdate } from "../../src/modules/ingress/telegram.js";
 import { PolicyOverrideDal } from "../../src/modules/policy/override-dal.js";
-import { PolicyService } from "../../src/modules/policy/service.js";
+import { PolicyService } from "@tyrum/runtime-policy";
 import { PolicySnapshotDal } from "../../src/modules/policy/snapshot-dal.js";
 import { PolicyBundleConfigDal } from "../../src/modules/policy/config-dal.js";
 import { createGatewayConfigStore } from "../../src/modules/runtime-state/gateway-config-store.js";
@@ -43,14 +43,9 @@ async function createApprovalPolicyService(db: NonNullable<TelegramQueueTestStat
   });
 
   return new PolicyService({
-    home: "/tmp/unused",
     snapshotDal: new PolicySnapshotDal(db),
     overrideDal: new PolicyOverrideDal(db),
-    configStore: createGatewayConfigStore({
-      db,
-      home: "/tmp/unused",
-      deploymentConfig: {},
-    }),
+    configStore: createGatewayConfigStore({ db }),
   });
 }
 
@@ -207,14 +202,9 @@ export function registerTelegramQueuePolicyTests(state: TelegramQueueTestState):
         await createApprovalPolicyService(db);
         policyOverrideDal = new PolicyOverrideDal(db);
         return new PolicyService({
-          home: "/tmp/unused",
           snapshotDal: new PolicySnapshotDal(db),
           overrideDal: policyOverrideDal,
-          configStore: createGatewayConfigStore({
-            db,
-            home: "/tmp/unused",
-            deploymentConfig: {},
-          }),
+          configStore: createGatewayConfigStore({ db }),
         });
       },
       queueOptions: { agentId: "agent-1" },

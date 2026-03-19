@@ -1,6 +1,6 @@
 import { readFile, readdir, stat } from "node:fs/promises";
 import { join, relative } from "node:path";
-import { wildcardMatch } from "../policy/wildcard.js";
+import { wildcardMatch } from "@tyrum/runtime-policy";
 import { makeToolResult, parseStringArg } from "./tool-executor-local-utils.js";
 import type { ToolResult } from "./tool-executor-shared.js";
 

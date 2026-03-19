@@ -1,5 +1,5 @@
 import type { SqlDb } from "../../../statestore/types.js";
-import type { PolicyService } from "../../policy/service.js";
+import type { PolicyService } from "@tyrum/runtime-policy";
 import type { Logger } from "../../observability/logger.js";
 import { resolveBuiltinToolEffect } from "../../agent/tools.js";
 import { toolCallFromAction } from "./tool-call.js";

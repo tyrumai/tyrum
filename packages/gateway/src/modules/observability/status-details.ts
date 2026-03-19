@@ -1,4 +1,4 @@
-import type { PolicyService } from "../policy/service.js";
+import type { PolicyService } from "@tyrum/runtime-policy";
 import type { AgentRegistry } from "../agent/registry.js";
 import type { SqlDb } from "../../statestore/types.js";
 import type { SandboxHardeningProfile } from "../sandbox/hardening.js";

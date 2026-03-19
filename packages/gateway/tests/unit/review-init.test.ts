@@ -109,4 +109,67 @@ describe("resolveAutoReviewMode", () => {
     expect(transitionWithReview).toHaveBeenCalledOnce();
     expect(emitUpdate).toHaveBeenCalledWith(transitionedApproval);
   });
+
+  it("returns the created approval unchanged when review is already initialized", async () => {
+    const approval = {
+      tenant_id: "00000000-0000-4000-8000-000000000001",
+      approval_id: "00000000-0000-4000-8000-000000000002",
+      approval_key: "approval:test",
+      agent_id: "00000000-0000-4000-8000-000000000003",
+      workspace_id: "00000000-0000-4000-8000-000000000004",
+      kind: "policy",
+      status: "queued",
+      prompt: "Approve?",
+      motivation: "Motivation",
+      context: {},
+      created_at: "2026-01-01T00:00:00.000Z",
+      expires_at: null,
+      latest_review: {
+        review_id: "review-1",
+        target_type: "approval",
+        target_id: "00000000-0000-4000-8000-000000000002",
+        reviewer_kind: "guardian",
+        reviewer_id: null,
+        state: "queued",
+        reason: "Queued for guardian review.",
+        risk_level: null,
+        risk_score: null,
+        evidence: null,
+        decision_payload: null,
+        created_at: "2026-01-01T00:00:01.000Z",
+        started_at: null,
+        completed_at: null,
+      },
+      session_id: null,
+      plan_id: null,
+      run_id: null,
+      step_id: null,
+      attempt_id: null,
+      work_item_id: null,
+      work_item_task_id: null,
+      resume_token: null,
+    } as const;
+    const create = vi.fn().mockResolvedValue(approval);
+    const transitionWithReview = vi.fn();
+
+    await expect(
+      createReviewedApproval({
+        approvalDal: {
+          create,
+          transitionWithReview,
+        },
+        params: {
+          tenantId: approval.tenant_id,
+          agentId: approval.agent_id,
+          workspaceId: approval.workspace_id,
+          approvalKey: approval.approval_key,
+          prompt: approval.prompt,
+          motivation: approval.motivation,
+          kind: approval.kind,
+        },
+      }),
+    ).resolves.toEqual(approval);
+
+    expect(transitionWithReview).not.toHaveBeenCalled();
+  });
 });

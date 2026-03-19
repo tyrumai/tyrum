@@ -3,14 +3,14 @@ import type {
   Decision as DecisionT,
   PolicyBundle as PolicyBundleT,
 } from "@tyrum/contracts";
-import { PolicyBundle } from "@tyrum/contracts";
-import { randomUUID } from "node:crypto";
 import {
   evaluateDomain,
   mostRestrictiveDecision,
   normalizeDomain,
   normalizeUrlForPolicy,
-} from "../../policy/domain.js";
+} from "@tyrum/runtime-policy";
+import { PolicyBundle } from "@tyrum/contracts";
+import { randomUUID } from "node:crypto";
 import { resolveBuiltinToolEffect } from "../../agent/tools.js";
 import { normalizeDbDateTime } from "../../../utils/db-time.js";
 import { safeJsonParse } from "../../../utils/json.js";

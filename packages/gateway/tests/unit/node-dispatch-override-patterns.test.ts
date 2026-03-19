@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   expandLegacyNodeDispatchOverridePatterns,
   hasLegacyUmbrellaNodeDispatchPattern,
-} from "../../src/modules/policy/node-dispatch-override-patterns.js";
+} from "@tyrum/runtime-policy";
 
 describe("node dispatch override pattern compatibility", () => {
   it("detects legacy umbrella capability patterns", () => {

@@ -3,6 +3,8 @@
   "references": [
     { "path": "packages/cli-utils" },
     { "path": "packages/contracts" },
+    { "path": "packages/runtime-policy" },
+    { "path": "packages/transport-sdk" },
     { "path": "packages/gateway" },
     { "path": "packages/node-sdk" },
     { "path": "packages/client" },
