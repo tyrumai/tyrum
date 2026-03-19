@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { ArtifactRef, type TyrumUIMessage } from "@tyrum/schemas";
 import {
+  extractArtifactIdFromUrl,
   insertArtifactRecordTx,
   replaceSessionArtifactLinksTx,
 } from "../../src/modules/artifact/dal.js";
@@ -173,5 +174,24 @@ describe("insertArtifactRecordTx", () => {
         parent_id: "session-1",
       },
     ]);
+  });
+});
+
+describe("extractArtifactIdFromUrl", () => {
+  it("extracts artifact ids from canonical artifact URLs", () => {
+    const artifactId = "55555555-5555-4555-8555-555555555555";
+
+    expect(extractArtifactIdFromUrl(`artifact://${artifactId}`)).toBe(artifactId);
+    expect(extractArtifactIdFromUrl(`https://gateway.example.test/a/${artifactId}`)).toBe(
+      artifactId,
+    );
+  });
+
+  it("rejects relative artifact-like paths", () => {
+    expect(extractArtifactIdFromUrl("/a/55555555-5555-4555-8555-555555555555")).toBeUndefined();
+  });
+
+  it("rejects non-uuid path segments", () => {
+    expect(extractArtifactIdFromUrl("https://gateway.example.test/a/not-a-uuid")).toBeUndefined();
   });
 });

@@ -1,4 +1,5 @@
 import {
+  ArtifactId,
   artifactFilenameFromMetadata,
   ArtifactKind,
   ArtifactMediaClass,
@@ -266,7 +267,10 @@ export function extractArtifactIdFromUrl(url: string): string | undefined {
   }
 
   try {
-    const parsed = new URL(trimmed, "http://artifact.local");
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return undefined;
+    }
     const segments = parsed.pathname
       .split("/")
       .map((segment) => segment.trim())
@@ -274,7 +278,8 @@ export function extractArtifactIdFromUrl(url: string): string | undefined {
     if (segments.length !== 2 || segments[0] !== "a") {
       return undefined;
     }
-    return segments[1];
+    const artifactId = ArtifactId.safeParse(segments[1]);
+    return artifactId.success ? artifactId.data : undefined;
   } catch {
     // Intentional: invalid URLs should simply fail artifact extraction.
     return undefined;
