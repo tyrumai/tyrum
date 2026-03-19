@@ -163,7 +163,7 @@ export function resolveAgentTurnInput(input: AgentTurnRequestT): ResolvedAgentTu
   });
   const message = renderTurnPartsText(parts);
 
-  if (parts.length === 0 && message.length === 0) {
+  if (message.length === 0) {
     throw new Error("turn input is required (parts or envelope content)");
   }
 

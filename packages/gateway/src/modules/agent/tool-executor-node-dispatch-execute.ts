@@ -50,20 +50,17 @@ export type DispatchExecutionContext = {
 
 type DevicePlatform = NonNullable<NonNullable<NodeInventoryEntryT["device"]>["platform"]>;
 
-function primitiveKindForPlatform(platform: unknown): ActionPrimitiveKind | undefined {
-  switch (platform as DevicePlatform | undefined) {
-    case "ios":
-      return "IOS";
-    case "android":
-      return "Android";
-    case "web":
-    case "macos":
-    case "windows":
-    case "linux":
-      return "Browser";
-    default:
-      return undefined;
-  }
+const ACTION_PRIMITIVE_KIND_BY_PLATFORM = {
+  ios: "IOS",
+  android: "Android",
+  web: "Browser",
+  macos: "Browser",
+  windows: "Browser",
+  linux: "Browser",
+} satisfies Record<DevicePlatform, ActionPrimitiveKind>;
+
+function primitiveKindForPlatform(platform: DevicePlatform): ActionPrimitiveKind {
+  return ACTION_PRIMITIVE_KIND_BY_PLATFORM[platform];
 }
 
 async function resolvePrimitiveKindFromNode(
