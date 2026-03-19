@@ -1,4 +1,10 @@
 import type { Decision as DecisionT, PolicyBundle as PolicyBundleT } from "@tyrum/contracts";
+import {
+  evaluateDomain,
+  mostRestrictiveDecision,
+  normalizeDomain,
+  normalizeUrlForPolicy,
+} from "@tyrum/runtime-policy";
 import { PolicyBundle } from "@tyrum/contracts";
 import type { GatewayContainer } from "../../container.js";
 import type { LanguageModel } from "ai";
@@ -10,12 +16,6 @@ import {
   resolveProfileSecrets,
   resolveProviderBaseURL,
 } from "../agent/runtime/provider-resolution.js";
-import {
-  evaluateDomain,
-  mostRestrictiveDecision,
-  normalizeDomain,
-  normalizeUrlForPolicy,
-} from "../policy/domain.js";
 import { resolveBuiltinToolEffect } from "../agent/tools.js";
 import { collectSecretHandleIds } from "../secret/collect-secret-handle-ids.js";
 import { createSecretHandleResolver } from "../secret/handle-resolver.js";

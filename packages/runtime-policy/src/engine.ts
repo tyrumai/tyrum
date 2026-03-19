@@ -1,26 +1,15 @@
-/**
- * Policy engine — port of services/policy/src/lib.rs
- *
- * Pure functions implementing the four policy rules: spend limit,
- * PII guardrail, legal compliance, and connector scope.
- */
-
 import type {
-  Decision,
-  RuleDecision,
-  PolicyDecision,
-  PiiCategory,
-  LegalFlag,
-  PolicySpendContext,
-  PiiContext,
-  LegalContext,
   ConnectorScopeContext,
+  Decision,
+  LegalContext,
+  LegalFlag,
+  PiiCategory,
+  PiiContext,
   PolicyCheckRequest,
+  PolicyDecision,
+  PolicySpendContext,
+  RuleDecision,
 } from "@tyrum/contracts";
-
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
 
 const AUTO_APPROVE_LIMIT_MINOR = 10_000;
 const HARD_DENY_LIMIT_MINOR = 50_000;
@@ -77,10 +66,6 @@ function describeLegalFlags(flags: readonly LegalFlag[]): string {
   return flags.join(", ");
 }
 
-// ---------------------------------------------------------------------------
-// Rule evaluators
-// ---------------------------------------------------------------------------
-
 export function evaluateSpend(ctx?: PolicySpendContext): RuleDecision {
   if (ctx == null) {
     return {
@@ -134,7 +119,7 @@ export function evaluatePii(ctx?: PiiContext): RuleDecision {
   }
 
   const hasBiometricOrGovId = ctx.categories.some(
-    (cat) => cat === "biometric" || cat === "government_id",
+    (category) => category === "biometric" || category === "government_id",
   );
   if (hasBiometricOrGovId) {
     return {
@@ -145,7 +130,7 @@ export function evaluatePii(ctx?: PiiContext): RuleDecision {
   }
 
   const hasFinancialOrHealth = ctx.categories.some(
-    (cat) => cat === "financial" || cat === "health",
+    (category) => category === "financial" || category === "health",
   );
   if (hasFinancialOrHealth) {
     return {
@@ -179,8 +164,7 @@ export function evaluateLegal(ctx?: LegalContext): RuleDecision {
     };
   }
 
-  const hasProhibited = ctx.flags.some((flag) => flag === "prohibited_content");
-  if (hasProhibited) {
+  if (ctx.flags.some((flag) => flag === "prohibited_content")) {
     return {
       rule: "legal_compliance",
       outcome: "deny",
@@ -244,23 +228,15 @@ export function evaluateConnectorScope(ctx?: ConnectorScopeContext): RuleDecisio
   };
 }
 
-// ---------------------------------------------------------------------------
-// Overall decision
-// ---------------------------------------------------------------------------
-
 export function overallDecision(rules: readonly RuleDecision[]): Decision {
-  if (rules.some((r) => r.outcome === "deny")) {
+  if (rules.some((rule) => rule.outcome === "deny")) {
     return "deny";
   }
-  if (rules.some((r) => r.outcome === "require_approval")) {
+  if (rules.some((rule) => rule.outcome === "require_approval")) {
     return "require_approval";
   }
   return "allow";
 }
-
-// ---------------------------------------------------------------------------
-// Combined evaluation
-// ---------------------------------------------------------------------------
 
 export function evaluatePolicy(request: PolicyCheckRequest): PolicyDecision {
   const spendDecision = evaluateSpend(request.spend ?? undefined);
@@ -273,7 +249,8 @@ export function evaluatePolicy(request: PolicyCheckRequest): PolicyDecision {
     rules.push(connectorDecision);
   }
 
-  const decision = overallDecision(rules);
-
-  return { decision, rules };
+  return {
+    decision: overallDecision(rules),
+    rules,
+  };
 }

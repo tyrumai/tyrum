@@ -9,7 +9,7 @@ import {
   evaluateLegal,
   evaluateConnectorScope,
   formatMoney,
-} from "../../src/modules/policy/engine.js";
+} from "@tyrum/runtime-policy";
 
 describe("Policy engine", () => {
   describe("spend rule", () => {

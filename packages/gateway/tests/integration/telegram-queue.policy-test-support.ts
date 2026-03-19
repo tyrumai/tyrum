@@ -9,7 +9,7 @@ import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { TelegramBot } from "../../src/modules/ingress/telegram-bot.js";
 import { normalizeUpdate } from "../../src/modules/ingress/telegram.js";
 import { PolicyOverrideDal } from "../../src/modules/policy/override-dal.js";
-import { PolicyService } from "../../src/modules/policy/service.js";
+import { PolicyService } from "@tyrum/runtime-policy";
 import { PolicySnapshotDal } from "../../src/modules/policy/snapshot-dal.js";
 import { PolicyBundleConfigDal } from "../../src/modules/policy/config-dal.js";
 import { createGatewayConfigStore } from "../../src/modules/runtime-state/gateway-config-store.js";

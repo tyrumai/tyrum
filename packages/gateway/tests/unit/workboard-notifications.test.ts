@@ -6,7 +6,7 @@ import { ChannelInboxDal } from "../../src/modules/channels/inbox-dal.js";
 import { ChannelOutboxDal } from "../../src/modules/channels/outbox-dal.js";
 import { enqueueWorkItemStateChangeNotification } from "../../src/modules/workboard/notifications.js";
 import { ApprovalDal } from "../../src/modules/approval/dal.js";
-import type { PolicyService } from "../../src/modules/policy/service.js";
+import type { PolicyService } from "@tyrum/runtime-policy";
 import {
   DEFAULT_AGENT_ID,
   DEFAULT_TENANT_ID,

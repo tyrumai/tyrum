@@ -1,21 +1,6 @@
-import { readFile } from "node:fs/promises";
 import { PolicyBundle } from "@tyrum/contracts";
 import type { PolicyBundle as PolicyBundleT } from "@tyrum/contracts";
-import { isRecord, parseJsonOrYaml } from "../../utils/parse-json-or-yaml.js";
 
-export async function loadPolicyBundleFromFile(path: string): Promise<PolicyBundleT> {
-  const raw = await readFile(path, "utf-8");
-  const parsed = parseJsonOrYaml(raw, path);
-  if (!isRecord(parsed)) {
-    return PolicyBundle.parse({ v: 1 });
-  }
-  return PolicyBundle.parse(parsed);
-}
-
-/**
- * Conservative local-first default bundle that preserves existing runtime
- * behavior (tool allowlist still applies separately).
- */
 export function defaultPolicyBundle(): PolicyBundleT {
   return PolicyBundle.parse({
     v: 1,
@@ -38,8 +23,6 @@ export function defaultPolicyBundle(): PolicyBundleT {
     },
     connectors: {
       default: "require_approval",
-      // Default: allow Telegram sends to preserve existing single-user behavior.
-      // Operators can tighten this by setting deployment config `policy.bundlePath`.
       allow: ["telegram:*"],
       require_approval: [],
       deny: [],

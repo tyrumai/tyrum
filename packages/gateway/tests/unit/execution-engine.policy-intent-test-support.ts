@@ -7,8 +7,7 @@ import type { StepExecutor, StepResult } from "../../src/modules/execution/engin
 import { ExecutionEngine } from "../../src/modules/execution/engine.js";
 import { PolicySnapshotDal } from "../../src/modules/policy/snapshot-dal.js";
 import { PolicyOverrideDal } from "../../src/modules/policy/override-dal.js";
-import { defaultPolicyBundle } from "../../src/modules/policy/bundle-loader.js";
-import { PolicyService } from "../../src/modules/policy/service.js";
+import { defaultPolicyBundle, PolicyService } from "@tyrum/runtime-policy";
 import { ApprovalDal } from "../../src/modules/approval/dal.js";
 import type { SecretProvider } from "../../src/modules/secret/provider.js";
 import {

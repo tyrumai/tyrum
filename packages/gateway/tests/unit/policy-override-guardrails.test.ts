@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isSafeSuggestedOverridePattern } from "../../src/modules/policy/override-guardrails.js";
+import { isSafeSuggestedOverridePattern } from "@tyrum/runtime-policy";
 
 describe("isSafeSuggestedOverridePattern", () => {
   it("allows exact-match patterns", () => {

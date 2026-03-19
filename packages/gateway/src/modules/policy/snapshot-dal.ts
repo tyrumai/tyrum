@@ -1,8 +1,8 @@
 import type { PolicyBundle as PolicyBundleT } from "@tyrum/contracts";
 import { PolicyBundle } from "@tyrum/contracts";
+import { sha256HexFromString, stableJsonStringify } from "@tyrum/runtime-policy";
 import { randomUUID } from "node:crypto";
 import type { SqlDb } from "../../statestore/types.js";
-import { sha256HexFromString, stableJsonStringify } from "./canonical-json.js";
 
 export interface PolicySnapshotRow {
   policy_snapshot_id: string;

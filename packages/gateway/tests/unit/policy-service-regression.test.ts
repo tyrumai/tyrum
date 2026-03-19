@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { PolicyBundle } from "@tyrum/contracts";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
-import { PolicyService } from "../../src/modules/policy/service.js";
+import { PolicyService } from "@tyrum/runtime-policy";
 import { PolicySnapshotDal } from "../../src/modules/policy/snapshot-dal.js";
 import { PolicyOverrideDal } from "../../src/modules/policy/override-dal.js";
 import { createGatewayConfigStore } from "../../src/modules/runtime-state/gateway-config-store.js";

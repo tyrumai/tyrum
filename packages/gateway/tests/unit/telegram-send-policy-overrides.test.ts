@@ -7,7 +7,7 @@ import type { AgentRegistry } from "../../src/modules/agent/registry.js";
 import type { TelegramBot } from "../../src/modules/ingress/telegram-bot.js";
 import type { NormalizedThreadMessage } from "@tyrum/contracts";
 import type { ApprovalDal } from "../../src/modules/approval/dal.js";
-import type { PolicyService } from "../../src/modules/policy/service.js";
+import type { PolicyService } from "@tyrum/runtime-policy";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { ChannelOutboxDal } from "../../src/modules/channels/outbox-dal.js";
 

@@ -6,10 +6,7 @@ import {
   type StepResult,
 } from "../../src/modules/execution/engine.js";
 import { maybePauseForToolIntentGuardrailTx } from "../../src/modules/execution/engine/execution-engine-intent-guardrail.js";
-import {
-  sha256HexFromString,
-  stableJsonStringify,
-} from "../../src/modules/policy/canonical-json.js";
+import { sha256HexFromString, stableJsonStringify } from "@tyrum/runtime-policy";
 import { WorkboardDal } from "../../src/modules/workboard/dal.js";
 import { PolicySnapshotDal } from "../../src/modules/policy/snapshot-dal.js";
 import { ApprovalDal } from "../../src/modules/approval/dal.js";

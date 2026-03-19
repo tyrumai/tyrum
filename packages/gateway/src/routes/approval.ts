@@ -5,13 +5,13 @@
  * human approval requests.
  */
 
+import type { PolicyOverrideStore } from "@tyrum/runtime-policy";
 import { Hono } from "hono";
 import {
   isApprovalTerminalStatus,
   type ApprovalDal,
   type ApprovalStatus,
 } from "../modules/approval/dal.js";
-import type { PolicyOverrideDal } from "../modules/policy/override-dal.js";
 import type { Logger } from "../modules/observability/logger.js";
 import type { WsEventDal } from "../modules/ws-event/dal.js";
 import type { ConnectionManager } from "../ws/connection-manager.js";
@@ -38,7 +38,7 @@ const VALID_STATUSES = new Set<ApprovalStatus>([
 export interface ApprovalRouteDeps {
   approvalDal: ApprovalDal;
   logger?: Logger;
-  policyOverrideDal?: PolicyOverrideDal;
+  policyOverrideDal?: PolicyOverrideStore;
   wsEventDal?: WsEventDal;
   ws?: {
     connectionManager: ConnectionManager;

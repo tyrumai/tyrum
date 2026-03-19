@@ -10,7 +10,7 @@ import {
   DEFAULT_WORKSPACE_ID,
 } from "../../src/modules/identity/scope.js";
 import { MemoryDal } from "../../src/modules/memory/memory-dal.js";
-import type { PolicyService } from "../../src/modules/policy/service.js";
+import type { PolicyService } from "@tyrum/runtime-policy";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { WatcherProcessor } from "../../src/modules/watcher/processor.js";
 import { WatcherScheduler } from "../../src/modules/watcher/scheduler.js";

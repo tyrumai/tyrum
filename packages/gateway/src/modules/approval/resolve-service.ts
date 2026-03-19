@@ -1,8 +1,8 @@
 import type { WsEventEnvelope } from "@tyrum/contracts";
 import { UuidSchema, canonicalizeToolId } from "@tyrum/contracts";
+import { isSafeSuggestedOverridePattern, type PolicyOverrideStore } from "@tyrum/runtime-policy";
 import type { ApprovalDal, ApprovalRow, ApprovalStatus } from "./dal.js";
-import type { PolicyOverrideDal, PolicyOverrideRow } from "../policy/override-dal.js";
-import { isSafeSuggestedOverridePattern } from "../policy/override-guardrails.js";
+import type { PolicyOverrideRow } from "../policy/override-dal.js";
 import type { WsEventDal } from "../ws-event/dal.js";
 import { toApprovalContract } from "./to-contract.js";
 import {
@@ -27,7 +27,7 @@ type ApprovalResolveErrorCode = "invalid_request" | "not_found" | "unsupported";
 
 export interface ResolveApprovalDeps {
   approvalDal: Pick<ApprovalDal, "resolveWithEngineAction"> & Partial<Pick<ApprovalDal, "getById">>;
-  policyOverrideDal?: Pick<PolicyOverrideDal, "create">;
+  policyOverrideDal?: Pick<PolicyOverrideStore, "create">;
   wsEventDal?: WsEventDal;
   emitEvent?: (input: {
     tenantId: string;

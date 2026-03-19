@@ -13,7 +13,7 @@ import {
 import { ChannelThreadDal } from "../../src/modules/channels/thread-dal.js";
 import { DEFAULT_TENANT_ID, IdentityScopeDal } from "../../src/modules/identity/scope.js";
 import { TelegramBot } from "../../src/modules/ingress/telegram-bot.js";
-import { PolicyService } from "../../src/modules/policy/service.js";
+import { PolicyService } from "@tyrum/runtime-policy";
 import { createApprovalRoutes } from "../../src/routes/approval.js";
 import { createIngressRoutes } from "../../src/routes/ingress.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";

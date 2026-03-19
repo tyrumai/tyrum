@@ -1,4 +1,4 @@
-import type { PolicyBundle as PolicyBundleT, Decision } from "@tyrum/contracts";
+import type { Decision, PolicyBundle as PolicyBundleT } from "@tyrum/contracts";
 import { PolicyBundle } from "@tyrum/contracts";
 import { mostRestrictiveDecision, normalizeDomain, type PolicyDomainConfig } from "./domain.js";
 

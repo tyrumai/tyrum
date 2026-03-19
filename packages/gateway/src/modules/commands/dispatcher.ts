@@ -3,7 +3,7 @@ import type { ConnectionManager } from "../../ws/connection-manager.js";
 import type { ApprovalDal } from "../approval/dal.js";
 import type { PresenceDal } from "../presence/dal.js";
 import type { NodePairingDal } from "../node/pairing-dal.js";
-import type { PolicyService } from "../policy/service.js";
+import type { PolicyService } from "@tyrum/runtime-policy";
 import type { PolicyOverrideDal } from "../policy/override-dal.js";
 import type { ContextReportDal } from "../context/report-dal.js";
 import type { PluginRegistry } from "../plugins/registry.js";

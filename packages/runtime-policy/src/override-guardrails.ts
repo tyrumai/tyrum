@@ -1,10 +1,4 @@
 export function isSafeSuggestedOverridePattern(pattern: string): boolean {
-  // Guardrail: override patterns are interpreted as wildcards (glob-like).
-  //
-  // Keep suggested patterns conservative:
-  // - disallow `?` (too easy to broaden accidentally)
-  // - allow at most one trailing `*` (prefix match)
-  // - disallow leading `*` and ` *` to prevent "match anything" / argument-glob patterns
   const trimmed = pattern.trim();
   if (trimmed.length === 0) return false;
   if (trimmed.includes("?")) return false;

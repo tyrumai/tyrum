@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { stableJsonStringify } from "../../src/modules/policy/canonical-json.js";
+import { stableJsonStringify } from "@tyrum/runtime-policy";
 import { PolicySnapshotDal } from "../../src/modules/policy/snapshot-dal.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";

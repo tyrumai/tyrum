@@ -13,7 +13,7 @@ import {
 } from "../modules/playbook/runtime.js";
 import { randomUUID } from "node:crypto";
 import type { ExecutionEngine } from "../modules/execution/engine.js";
-import type { PolicyService } from "../modules/policy/service.js";
+import type { PolicyService } from "@tyrum/runtime-policy";
 import type { ApprovalDal } from "../modules/approval/dal.js";
 import type { SqlDb } from "../statestore/types.js";
 import { requireTenantId } from "../modules/auth/claims.js";

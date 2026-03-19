@@ -7,7 +7,7 @@ import type { MemoryDal } from "../memory/memory-dal.js";
 import { recordMemorySystemEpisode } from "../memory/memory-episode-recorder.js";
 import type { Logger } from "../observability/logger.js";
 import type { ExecutionEngine } from "../execution/engine.js";
-import type { PolicyService } from "../policy/service.js";
+import type { PolicyService } from "@tyrum/runtime-policy";
 import { loadScopedPolicySnapshot } from "../policy/scoped-snapshot.js";
 import type { PlaybookRunner } from "../playbook/runner.js";
 import { WatcherFiringDal, type WatcherFiringRow } from "./firing-dal.js";

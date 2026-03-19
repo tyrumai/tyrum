@@ -11,7 +11,7 @@ import type { MemoryDal } from "../memory/memory-dal.js";
 import { recordMemorySystemEpisode } from "../memory/memory-episode-recorder.js";
 import { Logger } from "../observability/logger.js";
 import { PlaybookRunner } from "../playbook/runner.js";
-import type { PolicyService } from "../policy/service.js";
+import type { PolicyService } from "@tyrum/runtime-policy";
 import { loadScopedPolicySnapshot } from "../policy/scoped-snapshot.js";
 import type { LocationDal } from "./dal.js";
 import type { LocationAutomationTriggerRecord } from "./types.js";

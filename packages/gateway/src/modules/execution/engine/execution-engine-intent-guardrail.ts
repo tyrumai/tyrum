@@ -3,7 +3,7 @@ import { requiresPostcondition } from "@tyrum/contracts";
 import type { Logger } from "../../observability/logger.js";
 import type { SqlDb } from "../../../statestore/types.js";
 import { WorkboardDal } from "../../workboard/dal.js";
-import { sha256HexFromString, stableJsonStringify } from "../../policy/canonical-json.js";
+import { sha256HexFromString, stableJsonStringify } from "@tyrum/runtime-policy";
 import type {
   ExecutionEngineApprovalManager,
   PauseRunForApprovalOpts,

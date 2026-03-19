@@ -11,7 +11,7 @@ import type { LoadedSkillManifest } from "../workspace.js";
 import type { AgentContextStore } from "../context-store.js";
 import type { ApprovalDal } from "../../approval/dal.js";
 import type { PluginRegistry } from "../../plugins/registry.js";
-import type { PolicyService } from "../../policy/service.js";
+import type { PolicyService } from "@tyrum/runtime-policy";
 import type { SecretProvider } from "../../secret/provider.js";
 import type { ProtocolDeps } from "../../../ws/protocol.js";
 

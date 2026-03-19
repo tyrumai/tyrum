@@ -2,6 +2,7 @@ import {
   NormalizedThreadMessage as NormalizedThreadMessageSchema,
   parseTyrumKey,
 } from "@tyrum/contracts";
+import { isSafeSuggestedOverridePattern, type PolicyService } from "@tyrum/runtime-policy";
 import type { NormalizedMessageEnvelope } from "@tyrum/contracts";
 import type { ChannelInboxRow } from "./inbox-dal.js";
 import type { SqlDb } from "../../statestore/types.js";
@@ -16,8 +17,6 @@ import {
 import type { AgentRegistry } from "../agent/registry.js";
 import type { ApprovalDal } from "../approval/dal.js";
 import { broadcastApprovalUpdated } from "../approval/update-broadcast.js";
-import type { PolicyService } from "../policy/service.js";
-import { isSafeSuggestedOverridePattern } from "../policy/override-guardrails.js";
 import { createReviewedApproval } from "../review/review-init.js";
 import type { MemoryDal } from "../memory/memory-dal.js";
 import { recordMemorySystemEpisode } from "../memory/memory-episode-recorder.js";

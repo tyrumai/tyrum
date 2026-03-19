@@ -4,7 +4,7 @@ import type {
 } from "@tyrum/contracts";
 import type { RedactionEngine } from "../../redaction/engine.js";
 import type { Logger } from "../../observability/logger.js";
-import type { PolicyService } from "../../policy/service.js";
+import type { PolicyService } from "@tyrum/runtime-policy";
 import type { SecretProvider } from "../../secret/provider.js";
 import { collectSecretHandleIds } from "../../secret/collect-secret-handle-ids.js";
 import { createSecretHandleResolver } from "../../secret/handle-resolver.js";

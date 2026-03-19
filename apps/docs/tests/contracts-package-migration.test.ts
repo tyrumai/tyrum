@@ -25,6 +25,7 @@ const scanRoots = [
 const scannedExtensions = new Set([".json", ".md", ".mjs", ".ts", ".tsx", ".yaml", ".yml"]);
 const scannedBasenames = new Set(["Dockerfile"]);
 const ignoredScanFiles = new Set(["apps/docs/tests/contracts-package-migration.test.ts"]);
+const ignoredScanPrefixes = ["apps/docs/build/"] as const;
 
 function listTrackedFiles(): string[] {
   const output = execFileSync("git", ["-C", repoRoot, "ls-files", "--", ...scanRoots], {
@@ -35,6 +36,7 @@ function listTrackedFiles(): string[] {
 
 function shouldScanFile(path: string): boolean {
   if (ignoredScanFiles.has(path)) return false;
+  if (ignoredScanPrefixes.some((prefix) => path.startsWith(prefix))) return false;
   return scannedBasenames.has(basename(path)) || scannedExtensions.has(extname(path));
 }
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { seedDeploymentPolicyBundle } from "../helpers/runtime-config.js";
-import { PolicyService } from "../../src/modules/policy/service.js";
+import { PolicyService } from "@tyrum/runtime-policy";
 import { PolicySnapshotDal } from "../../src/modules/policy/snapshot-dal.js";
 import { PolicyOverrideDal } from "../../src/modules/policy/override-dal.js";
 import { createGatewayConfigStore } from "../../src/modules/runtime-state/gateway-config-store.js";

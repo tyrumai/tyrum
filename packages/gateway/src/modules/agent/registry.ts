@@ -1,7 +1,6 @@
+import { PolicyService as PolicyServiceImpl, type PolicyService } from "@tyrum/runtime-policy";
 import { AgentKey } from "@tyrum/contracts";
 import { readdir } from "node:fs/promises";
-import type { PolicyService } from "../policy/service.js";
-import { PolicyService as PolicyServiceImpl } from "../policy/service.js";
 import type { GatewayContainer } from "../../container.js";
 import type { SecretProvider } from "../secret/provider.js";
 import { join } from "node:path";

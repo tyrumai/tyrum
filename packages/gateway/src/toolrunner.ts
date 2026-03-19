@@ -10,7 +10,7 @@ import { requireTenantIdValue } from "./modules/identity/scope.js";
 import { RedactionEngine } from "./modules/redaction/engine.js";
 import { createArtifactStore } from "./modules/artifact/create-artifact-store.js";
 import { Logger } from "./modules/observability/logger.js";
-import { PolicyService } from "./modules/policy/service.js";
+import { PolicyService } from "@tyrum/runtime-policy";
 import { PolicyOverrideDal } from "./modules/policy/override-dal.js";
 import { PolicySnapshotDal } from "./modules/policy/snapshot-dal.js";
 import { SqliteDb } from "./statestore/sqlite.js";

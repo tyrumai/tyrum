@@ -27,7 +27,7 @@ import { SessionDal } from "../session-dal.js";
 import { McpManager } from "../mcp-manager.js";
 import type { ApprovalDal } from "../../approval/dal.js";
 import type { PluginRegistry } from "../../plugins/registry.js";
-import type { PolicyService } from "../../policy/service.js";
+import type { PolicyService } from "@tyrum/runtime-policy";
 import { ExecutionEngine } from "../../execution/engine.js";
 import { resolveWorkspaceKey } from "../../workspace/id.js";
 import { DEFAULT_TENANT_ID } from "../../identity/scope.js";

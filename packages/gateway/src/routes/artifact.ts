@@ -21,7 +21,7 @@ import type {
 import type { ArtifactStore } from "../modules/artifact/store.js";
 import type { Logger } from "../modules/observability/logger.js";
 import type { PolicySnapshotDal } from "../modules/policy/snapshot-dal.js";
-import type { PolicyService } from "../modules/policy/service.js";
+import type { PolicyService } from "@tyrum/runtime-policy";
 import type { SqlDb } from "../statestore/types.js";
 import { normalizeDbDateTime } from "../utils/db-time.js";
 import { safeJsonParse } from "../utils/json.js";
