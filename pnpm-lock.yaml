@@ -558,6 +558,9 @@ importers:
       '@tyrum/runtime-policy':
         specifier: workspace:*
         version: link:../runtime-policy
+      '@tyrum/runtime-workboard':
+        specifier: workspace:*
+        version: link:../runtime-workboard
       '@tyrum/transport-sdk':
         specifier: workspace:*
         version: link:../transport-sdk
@@ -800,6 +803,16 @@ importers:
         version: 24.12.0
 
   packages/runtime-policy:
+    dependencies:
+      '@tyrum/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+    devDependencies:
+      '@types/node':
+        specifier: ^24.12.0
+        version: 24.12.0
+
+  packages/runtime-workboard:
     dependencies:
       '@tyrum/contracts':
         specifier: workspace:*

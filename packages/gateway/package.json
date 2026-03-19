@@ -60,6 +60,7 @@
     "@tyrum/contracts": "workspace:*",
     "@tyrum/runtime-agent": "workspace:*",
     "@tyrum/runtime-execution": "workspace:*",
+    "@tyrum/runtime-workboard": "workspace:*",
     "@tyrum/runtime-node-control": "workspace:*",
     "@tyrum/transport-sdk": "workspace:*",
     "@tyrum/runtime-policy": "workspace:*",

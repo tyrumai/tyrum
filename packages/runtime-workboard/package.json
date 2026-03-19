@@ -1,0 +1,25 @@
+{
+  "name": "@tyrum/runtime-workboard",
+  "version": "0.1.0",
+  "author": "Ron Hernaus <ron@virtunet.nl>",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown src/index.ts --format esm --dts"
+  },
+  "dependencies": {
+    "@tyrum/contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.12.0"
+  }
+}

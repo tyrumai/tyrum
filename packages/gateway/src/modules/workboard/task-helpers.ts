@@ -1,4 +1,5 @@
-import type { WorkItemTaskState, WorkScope } from "@tyrum/contracts";
+import { isTerminalTaskState } from "@tyrum/runtime-workboard";
+import type { WorkScope } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 
 import * as dalHelpers from "./dal-helpers.js";
@@ -84,8 +85,4 @@ export async function assertNoTaskDependencyCycle(
   }
 }
 
-export function isTerminalTaskState(status: WorkItemTaskState | undefined): boolean {
-  return (
-    status === "completed" || status === "skipped" || status === "cancelled" || status === "failed"
-  );
-}
+export { isTerminalTaskState };
