@@ -8,7 +8,6 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const PACKAGE_ROOT = resolve(__dirname, "../..");
 const REPO_ROOT = resolve(PACKAGE_ROOT, "../..");
 
-const WORKSPACE_MARKER = resolve(REPO_ROOT, "pnpm-workspace.yaml");
 const DIST_ENTRYPOINT = resolve(PACKAGE_ROOT, "dist/index.mjs");
 const SRC_ROOT = resolve(PACKAGE_ROOT, "src");
 const SCHEMAS_DIST_ENTRYPOINT = resolve(REPO_ROOT, "packages/contracts/dist/index.mjs");
@@ -131,48 +130,46 @@ function tryGatewayBuild(cmd: string, args: string[]): ReturnType<typeof spawnSy
   });
 }
 
-async function ensureGatewayBuild(): Promise<void> {
-  if (!existsSync(WORKSPACE_MARKER)) return;
-  if (!existsSync(SRC_ROOT)) return;
+async function buildGatewayDistIfStale(): Promise<void> {
+  if (!gatewayBuildIsStale()) return;
 
-  const shouldBuildSchemas = !existsSync(SCHEMAS_DIST_ENTRYPOINT);
-  const shouldBuildGateway = gatewayBuildIsStale();
-  if (!shouldBuildSchemas && !shouldBuildGateway) return;
+  const commands = [
+    ...(!existsSync(SCHEMAS_DIST_ENTRYPOINT) || !existsSync(SCHEMAS_JSONSCHEMA_CATALOG)
+      ? ([["--filter", "@tyrum/contracts", "build"]] as const)
+      : ([] as const)),
+    ["--filter", "@tyrum/gateway", "build"],
+  ] as const;
 
-  const release = await acquireGatewayBuildLock();
-  try {
-    if (!gatewayBuildIsStale()) return;
+  for (const args of commands) {
+    const result = tryGatewayBuild("pnpm", args);
+    if (result.status === 0) continue;
 
-    const commands = [
-      ...(!existsSync(SCHEMAS_DIST_ENTRYPOINT) || !existsSync(SCHEMAS_JSONSCHEMA_CATALOG)
-        ? ([["--filter", "@tyrum/contracts", "build"]] as const)
-        : ([] as const)),
-      ["--filter", "@tyrum/gateway", "build"],
-    ] as const;
-
-    for (const args of commands) {
-      const result = tryGatewayBuild("pnpm", args);
-      if (result.status === 0) continue;
-
-      if (result.error?.message.includes("ENOENT")) {
-        const corepackResult = tryGatewayBuild("corepack", ["pnpm", ...args]);
-        if (corepackResult.status === 0) continue;
-        throw new Error(
-          formatBuildFailure(
-            "Failed to build gateway dist before dist-heartbeat test via corepack.",
-            corepackResult,
-          ),
-        );
-      }
-
+    if (result.error?.message.includes("ENOENT")) {
+      const corepackResult = tryGatewayBuild("corepack", ["pnpm", ...args]);
+      if (corepackResult.status === 0) continue;
       throw new Error(
-        formatBuildFailure("Failed to build gateway dist before dist-heartbeat test.", result),
+        formatBuildFailure(
+          "Failed to build gateway dist before dist-heartbeat test via corepack.",
+          corepackResult,
+        ),
       );
     }
 
-    if (!existsSync(DIST_ENTRYPOINT)) {
-      throw new Error(`Gateway dist entrypoint not found after build: ${DIST_ENTRYPOINT}`);
-    }
+    throw new Error(
+      formatBuildFailure("Failed to build gateway dist before dist-heartbeat test.", result),
+    );
+  }
+
+  if (!existsSync(DIST_ENTRYPOINT)) {
+    throw new Error(`Gateway dist entrypoint not found after build: ${DIST_ENTRYPOINT}`);
+  }
+}
+
+async function withGatewayBuild<T>(action: () => Promise<T>): Promise<T> {
+  const release = await acquireGatewayBuildLock();
+  try {
+    await buildGatewayDistIfStale();
+    return await action();
   } finally {
     release();
   }
@@ -183,24 +180,24 @@ describe("gateway dist bundle", () => {
     "uses WS ping/pong control frames for heartbeats (regression for /app/live disconnects)",
     { timeout: 180_000 },
     async () => {
-      await ensureGatewayBuild();
-
-      const mod = await import(pathToFileURL(DIST_ENTRYPOINT).href);
-      const ConnectionManager = mod.ConnectionManager as {
-        new (): {
-          addClient: (ws: unknown, capabilities: unknown[]) => string;
-          heartbeat: () => void;
+      await withGatewayBuild(async () => {
+        const mod = await import(pathToFileURL(DIST_ENTRYPOINT).href);
+        const ConnectionManager = mod.ConnectionManager as {
+          new (): {
+            addClient: (ws: unknown, capabilities: unknown[]) => string;
+            heartbeat: () => void;
+          };
         };
-      };
 
-      const cm = new ConnectionManager();
-      const ws = createMockWs();
-      cm.addClient(ws as never, []);
+        const cm = new ConnectionManager();
+        const ws = createMockWs();
+        cm.addClient(ws as never, []);
 
-      cm.heartbeat();
+        cm.heartbeat();
 
-      expect(ws.ping).toHaveBeenCalledOnce();
-      expect(ws.send).not.toHaveBeenCalled();
+        expect(ws.ping).toHaveBeenCalledOnce();
+        expect(ws.send).not.toHaveBeenCalled();
+      });
     },
   );
 });
