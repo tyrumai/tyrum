@@ -30,6 +30,8 @@ const AUTH_UNAVAILABLE_BODY = {
 const AUTH_SESSION_ROUTE_PATH = "/auth/session";
 const AUTH_LOGOUT_ROUTE_PATH = "/auth/logout";
 const UI_PATH_PREFIX = "/ui";
+const TELEGRAM_INGRESS_ROUTE_PATH = "/ingress/telegram";
+const GOOGLECHAT_INGRESS_ROUTE_PATH = "/ingress/googlechat";
 const OAUTH_CALLBACK_ROUTE_PATH_SUFFIX = "/providers/:provider/oauth/callback";
 const OAUTH_CALLBACK_REQUEST_PATH_PATTERN = /(?:^|\/)providers\/[^/]+\/oauth\/callback$/;
 
@@ -67,6 +69,14 @@ export const PUBLIC_PATHS: readonly PublicPathExemption[] = [
   {
     label: AUTH_LOGOUT_ROUTE_PATH,
     matches: (c) => c.req.path === AUTH_LOGOUT_ROUTE_PATH,
+  },
+  {
+    label: TELEGRAM_INGRESS_ROUTE_PATH,
+    matches: (c) => c.req.method === "POST" && c.req.path === TELEGRAM_INGRESS_ROUTE_PATH,
+  },
+  {
+    label: GOOGLECHAT_INGRESS_ROUTE_PATH,
+    matches: (c) => c.req.method === "POST" && c.req.path === GOOGLECHAT_INGRESS_ROUTE_PATH,
   },
   {
     label: OAUTH_CALLBACK_ROUTE_PATH_SUFFIX,

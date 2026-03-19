@@ -19,12 +19,24 @@ describe("Ingress routes", () => {
     } as any;
     const telegramBot = { sendMessage: vi.fn(async () => {}) } as any;
     const agents = {} as any;
+    const telegramRuntime = {
+      listTelegramAccounts: vi.fn(async () => [
+        {
+          account_key: "default",
+          ingress_mode: "webhook",
+          bot_token: "bot-token",
+          webhook_secret: "test-secret",
+          allowed_user_ids: [],
+          pipeline_enabled: true,
+        },
+      ]),
+      getBotForTelegramAccount: vi.fn(() => telegramBot),
+    } as any;
 
     const app = new Hono().route(
       "/",
       createIngressRoutes({
-        telegramBot,
-        telegramWebhookSecret: "test-secret",
+        telegramRuntime,
         agents,
         telegramQueue,
         routingConfigDal,
@@ -64,23 +76,18 @@ describe("Ingress routes", () => {
       deduped: false,
       message_text: "hi",
     }));
-    const getTelegramAccountByWebhookSecret = vi.fn(async () => undefined);
-    const getTelegramAccountByAccountKey = vi.fn(async () => undefined);
-    const getBotForAccount = vi.fn(async () => undefined);
     const telegramRuntime = {
       listTelegramAccounts: vi.fn(async () => [
         {
           account_key: "work",
+          ingress_mode: "webhook",
           bot_token: "bot-token",
           webhook_secret: "secret-work",
           allowed_user_ids: [],
           pipeline_enabled: true,
         },
       ]),
-      getTelegramAccountByWebhookSecret,
-      getBotForAccount,
       getBotForTelegramAccount: vi.fn(() => ({ sendMessage: vi.fn(async () => undefined) })),
-      getTelegramAccountByAccountKey,
     } as any;
 
     const app = new Hono().route(
@@ -114,17 +121,13 @@ describe("Ingress routes", () => {
 
     expect(res.status).toBe(200);
     expect(enqueue).toHaveBeenCalledOnce();
-    expect(getTelegramAccountByWebhookSecret).not.toHaveBeenCalled();
-    expect(getTelegramAccountByAccountKey).toHaveBeenCalledOnce();
-    expect(getTelegramAccountByAccountKey).toHaveBeenCalledWith({
-      tenantId: "00000000-0000-4000-8000-000000000001",
-      accountKey: "work",
-    });
-    expect(getBotForAccount).not.toHaveBeenCalled();
+    expect(telegramRuntime.listTelegramAccounts).toHaveBeenCalledWith(
+      "00000000-0000-4000-8000-000000000001",
+    );
+    expect(telegramRuntime.getBotForTelegramAccount).toHaveBeenCalledOnce();
   });
 
   it("rejects runtime ingress when no bot-backed telegram accounts are configured", async () => {
-    const getTelegramAccountByWebhookSecret = vi.fn(async () => undefined);
     const app = new Hono().route(
       "/",
       createIngressRoutes({
@@ -132,13 +135,12 @@ describe("Ingress routes", () => {
           listTelegramAccounts: vi.fn(async () => [
             {
               account_key: "work",
+              ingress_mode: "webhook",
               webhook_secret: "secret-work",
               allowed_user_ids: [],
               pipeline_enabled: true,
             },
           ]),
-          getTelegramAccountByWebhookSecret,
-          getBotForAccount: vi.fn(async () => undefined),
         } as any,
       }),
     );
@@ -165,6 +167,5 @@ describe("Ingress routes", () => {
       error: "misconfigured",
       message: "Telegram bot token must be configured when Telegram ingress is enabled.",
     });
-    expect(getTelegramAccountByWebhookSecret).not.toHaveBeenCalled();
   });
 });

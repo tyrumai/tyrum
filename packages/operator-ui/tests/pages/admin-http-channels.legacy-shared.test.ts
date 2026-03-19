@@ -28,6 +28,7 @@ describe("legacy channel helper compatibility", () => {
     expect(
       buildTelegramChannelCreateInput({
         accountKey: " alerts ",
+        ingressMode: "polling",
         botTokenRaw: " bot-token ",
         webhookSecretRaw: " webhook-secret ",
         allowedUserIds: ["123"],
@@ -36,14 +37,15 @@ describe("legacy channel helper compatibility", () => {
     ).toEqual({
       channel: "telegram",
       account_key: "alerts",
+      ingress_mode: "polling",
       bot_token: "bot-token",
-      webhook_secret: "webhook-secret",
       allowed_user_ids: ["123"],
       pipeline_enabled: true,
     });
 
     expect(
       buildTelegramChannelUpdateInput({
+        ingressMode: "webhook",
         botTokenRaw: " refreshed-token ",
         clearBotToken: false,
         webhookSecretRaw: " ",
@@ -52,10 +54,27 @@ describe("legacy channel helper compatibility", () => {
         pipelineEnabled: false,
       }),
     ).toEqual({
+      ingress_mode: "webhook",
       bot_token: "refreshed-token",
       clear_webhook_secret: true,
       allowed_user_ids: ["456"],
       pipeline_enabled: false,
+    });
+
+    expect(
+      buildTelegramChannelUpdateInput({
+        ingressMode: "polling",
+        botTokenRaw: " ",
+        clearBotToken: false,
+        webhookSecretRaw: " ",
+        clearWebhookSecret: true,
+        allowedUserIds: [],
+        pipelineEnabled: true,
+      }),
+    ).toEqual({
+      ingress_mode: "polling",
+      allowed_user_ids: [],
+      pipeline_enabled: true,
     });
   });
 
@@ -109,18 +128,26 @@ describe("legacy channel helper compatibility", () => {
     const alpha = {
       channel: "telegram" as const,
       account_key: "alpha",
+      ingress_mode: "polling" as const,
       bot_token_configured: true,
       webhook_secret_configured: true,
       allowed_user_ids: ["123"],
       pipeline_enabled: true,
+      polling_status: "idle" as const,
+      polling_last_error_at: null,
+      polling_last_error_message: null,
     };
     const beta = {
       channel: "telegram" as const,
       account_key: "beta",
+      ingress_mode: "webhook" as const,
       bot_token_configured: false,
       webhook_secret_configured: true,
       allowed_user_ids: [],
       pipeline_enabled: false,
+      polling_status: "error" as const,
+      polling_last_error_at: "2026-03-19T00:00:00.000Z",
+      polling_last_error_message: "poll failed",
     };
 
     expect(isTelegramChannelConfig(alpha)).toBe(true);

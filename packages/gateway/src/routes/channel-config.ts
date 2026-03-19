@@ -18,6 +18,7 @@ import {
   ChannelConfigDal,
   type StoredChannelConfig,
 } from "../modules/channels/channel-config-dal.js";
+import { TelegramPollingStateDal } from "../modules/channels/telegram-polling-state-dal.js";
 import {
   ChannelValidationError,
   getChannelRegistrySpec,
@@ -130,11 +131,17 @@ async function listConfiguredChannelGroups(
   tenantId: string,
   dal: ChannelConfigDal,
 ) {
+  const telegramPollingStateDal = new TelegramPollingStateDal(deps.db);
   const [entries, legacyRouting] = await Promise.all([
     dal.listEntries(tenantId),
     deps.routingConfigDal?.getLatest(tenantId),
   ]);
   const routing = legacyRouting?.config;
+  const pollingStateByAccount = new Map(
+    (await telegramPollingStateDal.listByTenant(tenantId)).map(
+      (row) => [row.account_key, row] as const,
+    ),
+  );
   const registry = new Map(
     listChannelRegistryEntries().map((entry) => [entry.channel, entry] as const),
   );
@@ -165,14 +172,23 @@ async function listConfiguredChannelGroups(
       configurable: registryEntry.configurable,
       accounts: [] as ConfiguredChannelAccount[],
     };
-    current.accounts.push(
-      spec.toConfiguredAccount({
-        config: entry.config as never,
-        effectiveAgentKey: resolveEffectiveTelegramAgentKey(entry.config, routing),
-        createdAt: entry.createdAt,
-        updatedAt: entry.updatedAt,
-      }),
-    );
+    const account = spec.toConfiguredAccount({
+      config: entry.config as never,
+      effectiveAgentKey: resolveEffectiveTelegramAgentKey(entry.config, routing),
+      createdAt: entry.createdAt,
+      updatedAt: entry.updatedAt,
+    });
+    if (entry.config.channel === "telegram") {
+      const pollingState = pollingStateByAccount.get(entry.config.account_key);
+      account.config = {
+        ...account.config,
+        ingress_mode: entry.config.ingress_mode,
+        polling_status: pollingState?.status ?? "idle",
+        polling_last_error_at: pollingState?.last_error_at ?? null,
+        polling_last_error_message: pollingState?.last_error_message ?? null,
+      };
+    }
+    current.accounts.push(account);
     grouped.set(entry.config.channel, current);
   }
 

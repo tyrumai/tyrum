@@ -161,6 +161,69 @@ describe("TelegramBot", () => {
     );
   });
 
+  it("deleteWebhook includes drop_pending_updates when requested", async () => {
+    const fetchFn = mockJsonFetch(200, { ok: true, result: true });
+    const bot = new TelegramBot(token, fetchFn);
+
+    await bot.deleteWebhook({ drop_pending_updates: true });
+
+    const [url, opts] = (fetchFn as ReturnType<typeof vi.fn>).mock.calls[0] as [
+      string,
+      RequestInit,
+    ];
+    expect(url).toBe("https://api.telegram.org/bot123:ABC/deleteWebhook");
+    expect(JSON.parse(opts.body as string)).toEqual({ drop_pending_updates: true });
+  });
+
+  it("getMe returns the bot identity result payload", async () => {
+    const fetchFn = mockJsonFetch(200, {
+      ok: true,
+      result: {
+        id: 123,
+        is_bot: true,
+        first_name: "Tyrum",
+        username: "tyrum_bot",
+      },
+    });
+    const bot = new TelegramBot(token, fetchFn);
+
+    await expect(bot.getMe()).resolves.toEqual({
+      id: 123,
+      is_bot: true,
+      first_name: "Tyrum",
+      username: "tyrum_bot",
+    });
+  });
+
+  it("getUpdates forwards polling options and signal", async () => {
+    const fetchFn = mockJsonFetch(200, { ok: true, result: [{ update_id: 99 }] });
+    const bot = new TelegramBot(token, fetchFn);
+    const controller = new AbortController();
+
+    await expect(
+      bot.getUpdates({
+        offset: 100,
+        limit: 10,
+        timeout: 30,
+        allowed_updates: ["message", "edited_message"],
+        signal: controller.signal,
+      }),
+    ).resolves.toEqual([{ update_id: 99 }]);
+
+    const [url, opts] = (fetchFn as ReturnType<typeof vi.fn>).mock.calls[0] as [
+      string,
+      RequestInit,
+    ];
+    expect(url).toBe("https://api.telegram.org/bot123:ABC/getUpdates");
+    expect(opts.signal).toBe(controller.signal);
+    expect(JSON.parse(opts.body as string)).toEqual({
+      offset: 100,
+      limit: 10,
+      timeout: 30,
+      allowed_updates: ["message", "edited_message"],
+    });
+  });
+
   it("throws on non-OK response", async () => {
     const fetchFn = mockJsonFetch(403, { ok: false, description: "Forbidden" });
     const bot = new TelegramBot(token, fetchFn);
@@ -168,5 +231,24 @@ describe("TelegramBot", () => {
     await expect(bot.sendMessage("42", "test")).rejects.toThrow(
       /Telegram Bot API sendMessage failed \(403\)/,
     );
+  });
+  it("throws when Telegram returns ok=false in a successful HTTP response", async () => {
+    const fetchFn = mockJsonFetch(200, { ok: false, description: "Forbidden by Telegram" });
+    const bot = new TelegramBot(token, fetchFn);
+
+    await expect(bot.sendMessage("42", "test")).rejects.toThrow(
+      /Telegram Bot API sendMessage failed: Forbidden by Telegram/,
+    );
+  });
+
+  it("sendMessage passes reply_to_message_id", async () => {
+    const fetchFn = mockJsonFetch(200, { ok: true });
+    const bot = new TelegramBot(token, fetchFn);
+
+    await bot.sendMessage("42", "reply", { reply_to_message_id: 99 });
+
+    const [, opts] = (fetchFn as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit];
+    const parsedBody = JSON.parse(opts.body as string) as Record<string, unknown>;
+    expect(parsedBody["reply_to_message_id"]).toBe(99);
   });
 });

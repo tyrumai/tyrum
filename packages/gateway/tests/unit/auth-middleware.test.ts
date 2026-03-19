@@ -42,6 +42,8 @@ describe("Auth middleware", () => {
     app.get("/healthz", (c) => c.json({ status: "ok" }));
     app.post("/auth/session", (c) => c.json({ ok: true }));
     app.post("/auth/logout", (c) => c.json({ ok: true }));
+    app.post("/ingress/telegram", (c) => c.json({ ok: true }));
+    app.post("/ingress/googlechat", (c) => c.json({ ok: true }));
     app.get("/app/auth", (c) => c.json({ ok: true }));
     app.get("/ui/index.html", (c) => c.json({ ok: true }));
     app.get("/providers/:provider/oauth/callback", (c) => c.json({ ok: true }));
@@ -85,6 +87,18 @@ describe("Auth middleware", () => {
   it("allows /auth/logout without token", async () => {
     const app = buildApp();
     const res = await app.request("/auth/logout", { method: "POST" });
+    expect(res.status).toBe(200);
+  });
+
+  it("allows Telegram ingress without token", async () => {
+    const app = buildApp();
+    const res = await app.request("/ingress/telegram", { method: "POST" });
+    expect(res.status).toBe(200);
+  });
+
+  it("allows Google Chat ingress without token", async () => {
+    const app = buildApp();
+    const res = await app.request("/ingress/googlechat", { method: "POST" });
     expect(res.status).toBe(200);
   });
 

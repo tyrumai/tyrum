@@ -23,20 +23,14 @@ describe("createContainer", () => {
     await container.db.close();
   });
 
-  it("wires TelegramBot only when configured", async () => {
-    const noTelegram = createContainer(
+  it("does not expose a deployment-level Telegram bot singleton", async () => {
+    const container = createContainer(
       { dbPath: ":memory:", migrationsDir },
       { deploymentConfig: DeploymentConfig.parse({}) },
     );
-    expect(noTelegram.telegramBot).toBeUndefined();
-    await noTelegram.db.close();
 
-    const withTelegram = createContainer(
-      { dbPath: ":memory:", migrationsDir },
-      { deploymentConfig: DeploymentConfig.parse({ channels: { telegramBotToken: "bot-token" } }) },
-    );
-    expect(withTelegram.telegramBot).toBeTruthy();
-    await withTelegram.db.close();
+    expect("telegramBot" in container).toBe(false);
+    await container.db.close();
   });
 
   it("uses deployment config artifacts settings", async () => {

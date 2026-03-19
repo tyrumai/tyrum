@@ -358,6 +358,7 @@ export async function startEdgeRuntime(
     wsHandler,
     outboxPoller,
     telegramProcessor: channelRuntimeBundle.telegramProcessor,
+    telegramPollingMonitor: channelRuntimeBundle.telegramPollingMonitor,
     discordMonitor: channelRuntimeBundle.discordMonitor,
     server: serverResult?.server,
     tlsFingerprint256: serverResult?.tlsFingerprint256,

@@ -67,6 +67,8 @@ function createArtifactStore(): {
   };
 }
 
+const TEST_TELEGRAM_SECRET = "test-telegram-secret";
+
 function makeTelegramUpdate(text: string, chatId = 123) {
   return {
     update_id: 100,
@@ -93,6 +95,28 @@ function makeAgents(runtime: unknown): AgentRegistry {
   return { getRuntime: async () => runtime } as unknown as AgentRegistry;
 }
 
+function makeTelegramRuntime(
+  bot: TelegramBot,
+  options?: {
+    secret?: string;
+    hasBotToken?: boolean;
+  },
+) {
+  return {
+    listTelegramAccounts: vi.fn(async () => [
+      {
+        account_key: "default",
+        ingress_mode: "webhook" as const,
+        ...(options?.hasBotToken === false ? {} : { bot_token: "test-token" }),
+        webhook_secret: options?.secret ?? TEST_TELEGRAM_SECRET,
+        allowed_user_ids: [],
+        pipeline_enabled: true,
+      },
+    ]),
+    getBotForTelegramAccount: vi.fn(() => bot),
+  };
+}
+
 describe("Telegram E2E: webhook -> agent -> reply", () => {
   it("normalizes, calls agent turn, and replies via bot", async () => {
     const fetchFn = mockFetch();
@@ -111,8 +135,7 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
     app.route(
       "/",
       createIngressRoutes({
-        telegramBot: bot,
-        telegramWebhookSecret: "test-telegram-secret",
+        telegramRuntime: makeTelegramRuntime(bot),
         agents: makeAgents(mockRuntime),
       }),
     );
@@ -121,7 +144,7 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-telegram-bot-api-secret-token": "test-telegram-secret",
+        "x-telegram-bot-api-secret-token": TEST_TELEGRAM_SECRET,
       },
       body: JSON.stringify(makeTelegramUpdate("Help me")),
     });
@@ -167,8 +190,7 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
     app.route(
       "/",
       createIngressRoutes({
-        telegramBot: bot,
-        telegramWebhookSecret: "test-telegram-secret",
+        telegramRuntime: makeTelegramRuntime(bot),
         agents: makeAgents(mockRuntime),
       }),
     );
@@ -177,7 +199,7 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-telegram-bot-api-secret-token": "test-telegram-secret",
+        "x-telegram-bot-api-secret-token": TEST_TELEGRAM_SECRET,
       },
       body: JSON.stringify(makeTelegramUpdate("Hello")),
     });
@@ -236,8 +258,7 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
     app.route(
       "/",
       createIngressRoutes({
-        telegramBot: mediaBot,
-        telegramWebhookSecret: "test-telegram-secret",
+        telegramRuntime: makeTelegramRuntime(mediaBot),
         agents: makeAgents(mockRuntime),
         artifactStore: store,
       }),
@@ -257,7 +278,7 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-telegram-bot-api-secret-token": "test-telegram-secret",
+        "x-telegram-bot-api-secret-token": TEST_TELEGRAM_SECRET,
       },
       body: JSON.stringify(update),
     });
@@ -366,8 +387,7 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
     app.route(
       "/",
       createIngressRoutes({
-        telegramBot: bot,
-        telegramWebhookSecret: "test-telegram-secret",
+        telegramRuntime: makeTelegramRuntime(bot),
         agents: makeAgents(mockRuntime),
       }),
     );
@@ -394,8 +414,7 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
     app.route(
       "/",
       createIngressRoutes({
-        telegramBot: bot,
-        telegramWebhookSecret: "test-telegram-secret",
+        telegramRuntime: makeTelegramRuntime(bot),
         agents: makeAgents(mockRuntime),
       }),
     );
@@ -422,13 +441,19 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
     };
 
     const app = new Hono();
-    app.route("/", createIngressRoutes({ telegramBot: bot, agents: makeAgents(mockRuntime) }));
+    app.route(
+      "/",
+      createIngressRoutes({
+        telegramRuntime: makeTelegramRuntime(bot, { secret: "", hasBotToken: true }),
+        agents: makeAgents(mockRuntime),
+      }),
+    );
 
     const res = await app.request("/ingress/telegram", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-telegram-bot-api-secret-token": "test-telegram-secret",
+        "x-telegram-bot-api-secret-token": TEST_TELEGRAM_SECRET,
       },
       body: JSON.stringify(makeTelegramUpdate("Hello")),
     });

@@ -20,12 +20,31 @@ import {
   waitForTestId,
 } from "./admin-page.http.test-support.js";
 
+function setSelectValue(element: HTMLSelectElement, value: string): void {
+  element.value = value;
+  element.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
 describe("ConfigurePage (HTTP) Telegram channels", () => {
+  it("shows polling error details on configured Telegram accounts", async () => {
+    const { core } = createAdminHttpTestCore();
+    stubAdminHttpFetch(core);
+    const page = renderAdminHttpConfigurePage(core);
+
+    await switchHttpTab(page.container, "admin-http-tab-routing-config");
+
+    expect(page.container.textContent).toContain("Telegram polling issue");
+    expect(page.container.textContent).toContain("poll failed");
+    expect(page.container.textContent).toContain(`Last error at ${TEST_TIMESTAMP}`);
+
+    cleanupAdminHttpPage(page);
+  });
+
   it("shows Telegram setup guidance in the unified edit dialog", async () => {
     const { core } = createAdminHttpTestCore();
     stubAdminHttpFetch(core);
@@ -42,6 +61,7 @@ describe("ConfigurePage (HTTP) Telegram channels", () => {
     const dialog = await waitForTestId<HTMLElement>(document.body, "channels-account-dialog");
     expect(dialog.textContent).toContain("@BotFather");
     expect(dialog.textContent).toContain("message.from.id");
+    expect(dialog.textContent).toContain("Long polling is the default");
     expect(dialog.textContent).toContain("Add yourself to the allowlist first");
 
     cleanupAdminHttpPage(page);
@@ -64,8 +84,12 @@ describe("ConfigurePage (HTTP) Telegram channels", () => {
               account_key: "alerts",
               config: {
                 agent_key: "default",
+                ingress_mode: "webhook",
                 allowed_user_ids: ["9001", "9002"],
                 pipeline_enabled: true,
+                polling_status: "idle",
+                polling_last_error_at: null,
+                polling_last_error_message: null,
               },
               configured_secret_keys: ["bot_token", "webhook_secret"],
               created_at: TEST_TIMESTAMP,
@@ -86,6 +110,7 @@ describe("ConfigurePage (HTTP) Telegram channels", () => {
           config: {
             allowed_user_ids: "9001\n9002",
             agent_key: "default",
+            ingress_mode: "webhook",
             pipeline_enabled: true,
           },
           secrets: {
@@ -112,6 +137,11 @@ describe("ConfigurePage (HTTP) Telegram channels", () => {
 
     const dialog = await waitForTestId<HTMLElement>(document.body, "channels-account-dialog");
     setNativeValue(getByTestId<HTMLInputElement>(dialog, "channels-account-account-key"), "alerts");
+    setSelectValue(
+      getByTestId<HTMLSelectElement>(dialog, "channels-account-field-ingress_mode"),
+      "webhook",
+    );
+    await flush();
     setNativeValue(
       getByTestId<HTMLInputElement>(dialog, "channels-account-field-bot_token"),
       "alerts-bot-token",
@@ -135,6 +165,75 @@ describe("ConfigurePage (HTTP) Telegram channels", () => {
     cleanupAdminHttpPage(page);
   });
 
+  it("defaults new Telegram accounts to polling and does not send a webhook secret", async () => {
+    const { core } = createAdminHttpTestCore();
+    const { writeSpy } = stubAdminHttpFetch(core, async (input: RequestInfo | URL, init) => {
+      expectAuthorizedJsonRequest(input, init, {
+        url: "http://example.test/config/channels/accounts",
+        method: "POST",
+        body: {
+          channel: "telegram",
+          account_key: "alerts",
+          config: {
+            agent_key: "default",
+            ingress_mode: "polling",
+            pipeline_enabled: true,
+          },
+          secrets: {
+            bot_token: "alerts-bot-token",
+          },
+        },
+      });
+      return jsonResponse(
+        {
+          status: "ok",
+          account: {
+            channel: "telegram",
+            account_key: "alerts",
+            config: {
+              agent_key: "default",
+              ingress_mode: "polling",
+              allowed_user_ids: [],
+              pipeline_enabled: true,
+              polling_status: "idle",
+              polling_last_error_at: null,
+              polling_last_error_message: null,
+            },
+            configured_secret_keys: ["bot_token"],
+            created_at: TEST_TIMESTAMP,
+            updated_at: TEST_TIMESTAMP,
+          },
+        },
+        201,
+      );
+    });
+
+    const page = renderAdminHttpConfigurePage(core);
+    await switchHttpTab(page.container, "admin-http-tab-routing-config");
+    await clickAndFlush(
+      await waitForEnabledTestId<HTMLButtonElement>(page.container, "channels-add-open"),
+    );
+
+    const dialog = await waitForTestId<HTMLElement>(document.body, "channels-account-dialog");
+    setNativeValue(getByTestId<HTMLInputElement>(dialog, "channels-account-account-key"), "alerts");
+    setNativeValue(
+      getByTestId<HTMLInputElement>(dialog, "channels-account-field-bot_token"),
+      "alerts-bot-token",
+    );
+    await flush();
+
+    expect(
+      dialog.querySelector("[data-testid='channels-account-field-webhook_secret']"),
+    ).toBeNull();
+
+    await clickAndFlush(
+      await waitForEnabledTestId<HTMLButtonElement>(dialog, "channels-account-save"),
+    );
+
+    expect(writeSpy).toHaveBeenCalledOnce();
+    cleanupAdminHttpPage(page);
+  });
+
   it("updates a Telegram account while preserving required saved secrets", async () => {
     const { core } = createAdminHttpTestCore();
     const { writeSpy } = stubAdminHttpFetch(core, async (input: RequestInfo | URL, init) => {
@@ -145,6 +244,7 @@ describe("ConfigurePage (HTTP) Telegram channels", () => {
           config: {
             allowed_user_ids: "123\n456",
             agent_key: "default",
+            ingress_mode: "webhook",
             pipeline_enabled: false,
           },
           secrets: {
@@ -161,8 +261,12 @@ describe("ConfigurePage (HTTP) Telegram channels", () => {
           account_key: "default",
           config: {
             agent_key: "default",
+            ingress_mode: "webhook",
             allowed_user_ids: ["123", "456"],
             pipeline_enabled: false,
+            polling_status: "idle",
+            polling_last_error_at: null,
+            polling_last_error_message: null,
           },
           configured_secret_keys: ["bot_token", "webhook_secret"],
           created_at: TEST_TIMESTAMP,
@@ -181,6 +285,11 @@ describe("ConfigurePage (HTTP) Telegram channels", () => {
     );
 
     const dialog = await waitForTestId<HTMLElement>(document.body, "channels-account-dialog");
+    setSelectValue(
+      getByTestId<HTMLSelectElement>(dialog, "channels-account-field-ingress_mode"),
+      "webhook",
+    );
+    await flush();
     setNativeValue(
       getByTestId<HTMLInputElement>(dialog, "channels-account-field-bot_token"),
       "typed-then-cleared-bot-token",
@@ -203,6 +312,75 @@ describe("ConfigurePage (HTTP) Telegram channels", () => {
     );
 
     expect(writeSpy).toHaveBeenCalledTimes(1);
+    cleanupAdminHttpPage(page);
+  });
+
+  it("preserves the saved webhook secret when switching a Telegram account to polling", async () => {
+    const { core } = createAdminHttpTestCore();
+    const { writeSpy } = stubAdminHttpFetch(core, async (input: RequestInfo | URL, init) => {
+      expectAuthorizedJsonRequest(input, init, {
+        url: "http://example.test/config/channels/accounts/telegram/default",
+        method: "PATCH",
+        body: {
+          config: {
+            agent_key: "default",
+            ingress_mode: "polling",
+            pipeline_enabled: true,
+          },
+          clear_secret_keys: [],
+        },
+      });
+      return jsonResponse({
+        status: "ok",
+        account: {
+          channel: "telegram",
+          account_key: "default",
+          config: {
+            agent_key: "default",
+            ingress_mode: "polling",
+            allowed_user_ids: ["123"],
+            pipeline_enabled: true,
+            polling_status: "running",
+            polling_last_error_at: null,
+            polling_last_error_message: null,
+          },
+          configured_secret_keys: ["bot_token", "webhook_secret"],
+          created_at: TEST_TIMESTAMP,
+          updated_at: TEST_TIMESTAMP,
+        },
+      });
+    });
+
+    const page = renderAdminHttpConfigurePage(core);
+    await switchHttpTab(page.container, "admin-http-tab-routing-config");
+    await clickAndFlush(
+      await waitForQuerySelector<HTMLButtonElement>(
+        page.container,
+        '[aria-label="Edit telegram default"]',
+      ),
+    );
+
+    const dialog = await waitForTestId<HTMLElement>(document.body, "channels-account-dialog");
+    setSelectValue(
+      getByTestId<HTMLSelectElement>(dialog, "channels-account-field-ingress_mode"),
+      "webhook",
+    );
+    await flush();
+    setSelectValue(
+      getByTestId<HTMLSelectElement>(dialog, "channels-account-field-ingress_mode"),
+      "polling",
+    );
+    await flush();
+
+    expect(
+      dialog.querySelector("[data-testid='channels-account-field-webhook_secret']"),
+    ).toBeNull();
+
+    await clickAndFlush(
+      await waitForEnabledTestId<HTMLButtonElement>(dialog, "channels-account-save"),
+    );
+
+    expect(writeSpy).toHaveBeenCalledOnce();
     cleanupAdminHttpPage(page);
   });
 

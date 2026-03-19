@@ -382,6 +382,7 @@ describe("channel config routes", () => {
       body: JSON.stringify({
         config: {
           agent_key: "default",
+          ingress_mode: "webhook",
           allowed_user_ids: "123",
           pipeline_enabled: true,
         },

@@ -2,8 +2,14 @@ import type { AgentRegistry } from "../modules/agent/registry.js";
 import { ChannelConfigDal } from "../modules/channels/channel-config-dal.js";
 import { DiscordChannelMonitor } from "../modules/channels/discord-monitor.js";
 import { GoogleChatChannelRuntime } from "../modules/channels/googlechat-runtime.js";
-import { TelegramChannelProcessor } from "../modules/channels/telegram.js";
+import {
+  TelegramChannelProcessor,
+  TelegramChannelQueue,
+  TelegramPollingMonitor,
+} from "../modules/channels/telegram.js";
+import { TelegramPollingStateDal } from "../modules/channels/telegram-polling-state-dal.js";
 import { TelegramChannelRuntime } from "../modules/channels/telegram-runtime.js";
+import { RoutingConfigDal } from "../modules/channels/routing-config-dal.js";
 import type { GatewayBootContext, ProtocolRuntime } from "./runtime-shared.js";
 
 export type ChannelRuntimeBundle = {
@@ -11,6 +17,7 @@ export type ChannelRuntimeBundle = {
   telegramRuntime: TelegramChannelRuntime;
   googleChatRuntime: GoogleChatChannelRuntime;
   telegramProcessor?: TelegramChannelProcessor;
+  telegramPollingMonitor?: TelegramPollingMonitor;
   discordMonitor?: DiscordChannelMonitor;
 };
 
@@ -26,6 +33,14 @@ export function startChannelRuntimeBundle(input: {
     context.container.artifactStore,
   );
   const googleChatRuntime = new GoogleChatChannelRuntime(channelConfigDal);
+  const routingConfigDal = new RoutingConfigDal(context.container.db);
+  const telegramPollingStateDal = new TelegramPollingStateDal(context.container.db);
+  const telegramQueue = agents
+    ? new TelegramChannelQueue(context.container.db, {
+        sessionDal: context.container.sessionDal,
+        logger: context.logger,
+      })
+    : undefined;
 
   const telegramProcessor = agents
     ? new TelegramChannelProcessor({
@@ -46,6 +61,21 @@ export function startChannelRuntimeBundle(input: {
       })
     : undefined;
   telegramProcessor?.start();
+  const telegramPollingMonitor =
+    agents && telegramQueue
+      ? new TelegramPollingMonitor({
+          owner: context.instanceId,
+          channelConfigDal,
+          runtime: telegramRuntime,
+          queue: telegramQueue,
+          agents,
+          stateDal: telegramPollingStateDal,
+          routingConfigDal,
+          memoryDal: context.container.memoryDal,
+          logger: context.logger,
+        })
+      : undefined;
+  telegramPollingMonitor?.start();
 
   const discordMonitor = agents
     ? new DiscordChannelMonitor({
@@ -61,6 +91,7 @@ export function startChannelRuntimeBundle(input: {
     telegramRuntime,
     googleChatRuntime,
     telegramProcessor,
+    telegramPollingMonitor,
     discordMonitor,
   };
 }

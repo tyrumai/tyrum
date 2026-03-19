@@ -47,10 +47,10 @@ describe("createApp channel pipeline wiring", () => {
     telegramRuntimeCtor.mockClear();
   });
 
-  it("constructs TelegramChannelQueue even when the legacy deployment pipeline flag is false", async () => {
+  it("constructs TelegramChannelQueue without relying on deployment config pipeline flags", async () => {
     container = createContainer(
       { dbPath: ":memory:", migrationsDir },
-      { deploymentConfig: DeploymentConfig.parse({ channels: { pipelineEnabled: false } }) },
+      { deploymentConfig: DeploymentConfig.parse({}) },
     );
 
     const agents = {

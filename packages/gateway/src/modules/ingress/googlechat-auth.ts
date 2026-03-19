@@ -1,4 +1,3 @@
-import { OAuth2Client } from "google-auth-library";
 import type { GoogleChatAudienceType } from "../channels/channel-config-model.js";
 
 const CHAT_ISSUER = "chat@system.gserviceaccount.com";
@@ -6,7 +5,38 @@ const ADDON_ISSUER_PATTERN = /^service-\d+@gcp-sa-gsuiteaddons\.iam\.gserviceacc
 const CHAT_CERTS_URL =
   "https://www.googleapis.com/service_accounts/v1/metadata/x509/chat@system.gserviceaccount.com";
 
-const verifyClient = new OAuth2Client();
+type GoogleAuthTicketPayload = {
+  email?: string;
+  email_verified?: boolean;
+};
+
+type GoogleAuthTicket = {
+  getPayload(): GoogleAuthTicketPayload | undefined;
+};
+
+type GoogleOAuth2Client = {
+  verifyIdToken(input: { idToken: string; audience: string }): Promise<GoogleAuthTicket>;
+  verifySignedJwtWithCertsAsync(
+    bearer: string,
+    certs: Record<string, string>,
+    audience: string,
+    issuers: string[],
+  ): Promise<unknown>;
+};
+
+let verifyClientPromise: Promise<GoogleOAuth2Client> | null = null;
+async function getVerifyClient(): Promise<GoogleOAuth2Client> {
+  if (!verifyClientPromise) {
+    verifyClientPromise = import("google-auth-library")
+      .then((module) => new module.OAuth2Client())
+      .catch((err: unknown) => {
+        verifyClientPromise = null;
+        const detail = err instanceof Error ? err.message : String(err);
+        throw new Error(`google-auth-library is required for Google Chat auth: ${detail}`);
+      });
+  }
+  return await verifyClientPromise;
+}
 
 let cachedCerts: { fetchedAt: number; certs: Record<string, string> } | null = null;
 
@@ -40,6 +70,7 @@ export async function verifyGoogleChatRequest(params: {
 
   if (params.audienceType === "app-url") {
     try {
+      const verifyClient = await getVerifyClient();
       const ticket = await verifyClient.verifyIdToken({
         idToken: bearer,
         audience,
@@ -65,6 +96,7 @@ export async function verifyGoogleChatRequest(params: {
 
   if (params.audienceType === "project-number") {
     try {
+      const verifyClient = await getVerifyClient();
       const certs = await fetchChatCerts();
       await verifyClient.verifySignedJwtWithCertsAsync(bearer, certs, audience, [CHAT_ISSUER]);
       return { ok: true };

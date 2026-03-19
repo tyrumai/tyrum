@@ -9,10 +9,17 @@ const StringRecord = z.record(z.string().trim().min(1), z.string().trim().min(1)
 export const ChannelType = z.enum(["telegram", "discord", "googlechat"]);
 export type ChannelType = z.infer<typeof ChannelType>;
 
+export const TelegramIngressMode = z.enum(["webhook", "polling"]);
+export type TelegramIngressMode = z.infer<typeof TelegramIngressMode>;
+
+export const TelegramPollingStatus = z.enum(["idle", "running", "error"]);
+export type TelegramPollingStatus = z.infer<typeof TelegramPollingStatus>;
+
 export const TelegramChannelConfigView = z
   .object({
     channel: z.literal("telegram"),
     account_key: AccountId,
+    ingress_mode: TelegramIngressMode.default("webhook"),
     bot_token_configured: z.boolean(),
     webhook_secret_configured: z.boolean(),
     allowed_user_ids: z
@@ -25,6 +32,9 @@ export const TelegramChannelConfigView = z
       .default([])
       .overwrite(canonicalizeTelegramAllowedUserIds),
     pipeline_enabled: z.boolean().default(true),
+    polling_status: TelegramPollingStatus.default("idle"),
+    polling_last_error_at: DateTimeSchema.nullable().default(null),
+    polling_last_error_message: z.string().trim().min(1).nullable().default(null),
   })
   .strict();
 export type TelegramChannelConfigView = z.infer<typeof TelegramChannelConfigView>;
@@ -43,6 +53,7 @@ export const TelegramChannelConfigCreateRequest = z
   .object({
     channel: z.literal("telegram"),
     account_key: AccountId,
+    ingress_mode: TelegramIngressMode.default("polling"),
     bot_token: z.string().trim().min(1).optional(),
     webhook_secret: z.string().trim().min(1).optional(),
     allowed_user_ids: z
@@ -66,6 +77,7 @@ export type ChannelConfigCreateRequest = z.infer<typeof ChannelConfigCreateReque
 
 export const TelegramChannelConfigUpdateRequest = z
   .object({
+    ingress_mode: TelegramIngressMode.optional(),
     bot_token: z.string().trim().min(1).optional(),
     clear_bot_token: z.boolean().optional(),
     webhook_secret: z.string().trim().min(1).optional(),

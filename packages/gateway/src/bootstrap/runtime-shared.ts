@@ -11,6 +11,7 @@ import type { OutboxPoller } from "../modules/backplane/outbox-poller.js";
 import type { GuardianReviewProcessor } from "../modules/review/guardian-review-processor.js";
 import type { DiscordChannelMonitor } from "../modules/channels/discord-monitor.js";
 import type { TelegramChannelProcessor } from "../modules/channels/telegram.js";
+import type { TelegramPollingMonitor } from "../modules/channels/telegram-polling-monitor.js";
 import type { ExecutionEngine } from "../modules/execution/engine.js";
 import type { ExecutionWorkerLoop } from "../modules/execution/worker-loop.js";
 import type { LifecycleHookDefinition as LifecycleHookDefinitionT } from "@tyrum/contracts";
@@ -95,6 +96,7 @@ export interface EdgeRuntime {
   wsHandler?: ReturnType<typeof createWsHandler>;
   outboxPoller?: OutboxPoller;
   telegramProcessor?: TelegramChannelProcessor;
+  telegramPollingMonitor?: TelegramPollingMonitor;
   discordMonitor?: DiscordChannelMonitor;
   server?: GatewayServer;
   tlsFingerprint256?: string;

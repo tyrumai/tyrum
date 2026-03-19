@@ -202,6 +202,26 @@ export function AdminHttpChannelsPanel({ core }: { core: OperatorCore }): React.
                               </div>
                             </div>
 
+                            {account.channel === "telegram" &&
+                            account.config["polling_status"] === "error" &&
+                            (typeof account.config["polling_last_error_message"] === "string" ||
+                              typeof account.config["polling_last_error_at"] === "string") ? (
+                              <Alert
+                                variant="warning"
+                                title="Telegram polling issue"
+                                description={[
+                                  typeof account.config["polling_last_error_message"] === "string"
+                                    ? String(account.config["polling_last_error_message"])
+                                    : null,
+                                  typeof account.config["polling_last_error_at"] === "string"
+                                    ? `Last error at ${String(account.config["polling_last_error_at"])}`
+                                    : null,
+                                ]
+                                  .filter((value): value is string => Boolean(value))
+                                  .join(" · ")}
+                              />
+                            ) : null}
+
                             <div className="flex flex-wrap justify-end gap-2">
                               <ElevatedModeTooltip
                                 canMutate={canMutate}

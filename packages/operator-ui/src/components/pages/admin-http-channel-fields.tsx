@@ -2,6 +2,7 @@ import * as React from "react";
 import { Checkbox } from "../ui/checkbox.js";
 import { Input } from "../ui/input.js";
 import { Label } from "../ui/label.js";
+import { Select } from "../ui/select.js";
 import { Switch } from "../ui/switch.js";
 import { Textarea } from "../ui/textarea.js";
 
@@ -62,6 +63,7 @@ export function TelegramChannelFields({
   testIdPrefix,
   allowSecretClears,
   validationError,
+  ingressMode,
   botTokenRaw,
   clearBotToken,
   webhookSecretRaw,
@@ -74,10 +76,12 @@ export function TelegramChannelFields({
   onClearWebhookSecretChange,
   onAllowedUserIdsChange,
   onPipelineEnabledChange,
+  onIngressModeChange,
 }: {
   testIdPrefix: string;
   allowSecretClears: boolean;
   validationError: string | null;
+  ingressMode: "webhook" | "polling";
   botTokenRaw: string;
   clearBotToken: boolean;
   webhookSecretRaw: string;
@@ -90,9 +94,23 @@ export function TelegramChannelFields({
   onClearWebhookSecretChange: (value: boolean) => void;
   onAllowedUserIdsChange: (value: string) => void;
   onPipelineEnabledChange: (value: boolean) => void;
+  onIngressModeChange: (value: "webhook" | "polling") => void;
 }): React.ReactElement {
   return (
     <>
+      <Select
+        label="Ingress mode"
+        data-testid={`${testIdPrefix}-ingress-mode`}
+        value={ingressMode}
+        helperText="Use long polling for local/private setups. Use webhook mode when Telegram can reach Tyrum over HTTPS."
+        onChange={(event) => {
+          onIngressModeChange(event.currentTarget.value as "webhook" | "polling");
+        }}
+      >
+        <option value="polling">Long polling</option>
+        <option value="webhook">Webhook</option>
+      </Select>
+
       <TelegramSecretField
         label="Bot token"
         inputTestId={`${testIdPrefix}-bot-token`}
@@ -110,22 +128,24 @@ export function TelegramChannelFields({
         onClearChange={onClearBotTokenChange}
       />
 
-      <TelegramSecretField
-        label="Webhook secret"
-        inputTestId={`${testIdPrefix}-webhook-secret`}
-        clearTestId={`${testIdPrefix}-clear-webhook-secret`}
-        showClear={allowSecretClears}
-        value={webhookSecretRaw}
-        clearValue={clearWebhookSecret}
-        helperText={
-          allowSecretClears
-            ? "Leave blank to keep the saved secret. Tyrum requires this secret for Telegram webhook validation."
-            : "Optional. When set, Tyrum validates incoming Telegram webhooks with this secret."
-        }
-        clearLabel="Remove saved webhook secret"
-        onValueChange={onWebhookSecretChange}
-        onClearChange={onClearWebhookSecretChange}
-      />
+      {ingressMode === "webhook" ? (
+        <TelegramSecretField
+          label="Webhook secret"
+          inputTestId={`${testIdPrefix}-webhook-secret`}
+          clearTestId={`${testIdPrefix}-clear-webhook-secret`}
+          showClear={allowSecretClears}
+          value={webhookSecretRaw}
+          clearValue={clearWebhookSecret}
+          helperText={
+            allowSecretClears
+              ? "Leave blank to keep the saved secret. Tyrum requires this secret for Telegram webhook validation."
+              : "Required in webhook mode. Tyrum validates incoming Telegram webhooks with this secret."
+          }
+          clearLabel="Remove saved webhook secret"
+          onValueChange={onWebhookSecretChange}
+          onClearChange={onClearWebhookSecretChange}
+        />
+      ) : null}
 
       <Textarea
         label="Allowed Telegram user IDs"
