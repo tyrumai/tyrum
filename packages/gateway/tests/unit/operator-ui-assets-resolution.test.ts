@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -20,17 +20,19 @@ describe("resolveOperatorUiAssets", () => {
   it("prefers an explicit assetsDir override", async () => {
     const assetsDir = await createTempDir("tyrum-ui-assets-explicit-");
     await writeFile(join(assetsDir, "index.html"), "<!doctype html>");
+    const assetsDirReal = await realpath(assetsDir);
 
     const resolved = resolveOperatorUiAssets({ assetsDir, env: {} });
 
     expect(resolved.source).toBe("explicit");
     expect(resolved.assetsDir).toBe(assetsDir);
-    expect(resolved.assetsDirReal).toBe(assetsDir);
+    expect(resolved.assetsDirReal).toBe(assetsDirReal);
   });
 
   it("prefers the environment override before filesystem discovery", async () => {
     const assetsDir = await createTempDir("tyrum-ui-assets-env-");
     await writeFile(join(assetsDir, "index.html"), "<!doctype html>");
+    const assetsDirReal = await realpath(assetsDir);
 
     const resolved = resolveOperatorUiAssets({
       env: { TYRUM_OPERATOR_UI_ASSETS_DIR: assetsDir },
@@ -39,7 +41,7 @@ describe("resolveOperatorUiAssets", () => {
 
     expect(resolved.source).toBe("env");
     expect(resolved.assetsDir).toBe(assetsDir);
-    expect(resolved.assetsDirReal).toBe(assetsDir);
+    expect(resolved.assetsDirReal).toBe(assetsDirReal);
   });
 
   it("discovers the workspace web build before bundled assets", async () => {
@@ -54,12 +56,13 @@ describe("resolveOperatorUiAssets", () => {
     await writeFile(join(repoRoot, "pnpm-workspace.yaml"), "packages:\n  - packages/*\n");
     await writeFile(join(workspaceDistDir, "index.html"), "<!doctype html>");
     await writeFile(join(bundledUiDir, "index.html"), "<!doctype html>");
+    const workspaceDistDirReal = await realpath(workspaceDistDir);
 
     const resolved = resolveOperatorUiAssets({ env: {}, moduleDir });
 
     expect(resolved.source).toBe("workspace-dev");
     expect(resolved.assetsDir).toBe(workspaceDistDir);
-    expect(resolved.assetsDirReal).toBe(workspaceDistDir);
+    expect(resolved.assetsDirReal).toBe(workspaceDistDirReal);
   });
 
   it("falls back to bundled ui assets when no workspace build is available", async () => {
@@ -70,11 +73,12 @@ describe("resolveOperatorUiAssets", () => {
     await mkdir(moduleDir, { recursive: true });
     await mkdir(bundledUiDir, { recursive: true });
     await writeFile(join(bundledUiDir, "index.html"), "<!doctype html>");
+    const bundledUiDirReal = await realpath(bundledUiDir);
 
     const resolved = resolveOperatorUiAssets({ env: {}, moduleDir });
 
     expect(resolved.source).toBe("bundled-ui");
     expect(resolved.assetsDir).toBe(bundledUiDir);
-    expect(resolved.assetsDirReal).toBe(bundledUiDir);
+    expect(resolved.assetsDirReal).toBe(bundledUiDirReal);
   });
 });
