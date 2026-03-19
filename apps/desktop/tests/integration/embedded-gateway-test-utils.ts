@@ -29,6 +29,10 @@ const CONTRACTS_PACKAGE_JSON = resolve(REPO_ROOT, "packages/contracts/package.js
 const CONTRACTS_TSCONFIG = resolve(REPO_ROOT, "packages/contracts/tsconfig.json");
 const CONTRACTS_SRC_DIR = resolve(REPO_ROOT, "packages/contracts/src");
 const CONTRACTS_SCRIPTS_DIR = resolve(REPO_ROOT, "packages/contracts/scripts");
+const RUNTIME_POLICY_DIST = resolve(REPO_ROOT, "packages/runtime-policy/dist/index.mjs");
+const RUNTIME_POLICY_PACKAGE_JSON = resolve(REPO_ROOT, "packages/runtime-policy/package.json");
+const RUNTIME_POLICY_TSCONFIG = resolve(REPO_ROOT, "packages/runtime-policy/tsconfig.json");
+const RUNTIME_POLICY_SRC_DIR = resolve(REPO_ROOT, "packages/runtime-policy/src");
 const GATEWAY_SRC_DIR = resolve(REPO_ROOT, "packages/gateway/src");
 const GATEWAY_BUILD_LOCK = resolve(REPO_ROOT, ".tyrum-gateway-build.lock");
 export const OPERATOR_UI_DIR_ENV = "TYRUM_OPERATOR_UI_ASSETS_DIR";
@@ -107,6 +111,7 @@ function gatewayBuildIsStale(): boolean {
   if (!existsSync(GATEWAY_BIN)) return true;
   if (!existsSync(CLI_UTILS_DIST)) return true;
   if (!existsSync(CONTRACTS_DIST)) return true;
+  if (!existsSync(RUNTIME_POLICY_DIST)) return true;
   if (!existsSync(BUNDLED_OPERATOR_UI_INDEX)) return true;
 
   const gatewayMtime = statSync(GATEWAY_BIN).mtimeMs;
@@ -125,7 +130,22 @@ function gatewayBuildIsStale(): boolean {
     return true;
   if (existsSync(CONTRACTS_SCRIPTS_DIR) && gatewayMtime < latestMtimeInDir(CONTRACTS_SCRIPTS_DIR))
     return true;
+  if (
+    existsSync(RUNTIME_POLICY_PACKAGE_JSON) &&
+    gatewayMtime < statSync(RUNTIME_POLICY_PACKAGE_JSON).mtimeMs
+  ) {
+    return true;
+  }
+  if (
+    existsSync(RUNTIME_POLICY_TSCONFIG) &&
+    gatewayMtime < statSync(RUNTIME_POLICY_TSCONFIG).mtimeMs
+  ) {
+    return true;
+  }
+  if (existsSync(RUNTIME_POLICY_SRC_DIR) && gatewayMtime < latestMtimeInDir(RUNTIME_POLICY_SRC_DIR))
+    return true;
   if (gatewayMtime < statSync(CONTRACTS_DIST).mtimeMs) return true;
+  if (gatewayMtime < statSync(RUNTIME_POLICY_DIST).mtimeMs) return true;
   return gatewayMtime < statSync(CLI_UTILS_DIST).mtimeMs;
 }
 
@@ -199,6 +219,11 @@ export function ensureGatewayBuild(): void {
     "@tyrum/contracts",
     CONTRACTS_DIST,
     "Failed to build @tyrum/contracts before desktop integration test.",
+  );
+  ensureWorkspaceBuild(
+    "@tyrum/runtime-policy",
+    RUNTIME_POLICY_DIST,
+    "Failed to build @tyrum/runtime-policy before desktop integration test.",
   );
   ensureWorkspaceBuild(
     "@tyrum/cli-utils",
