@@ -108,7 +108,8 @@ function addInto(target, delta) {
 const COMPONENT_META = {
   "packages/contracts": { type: "contracts/validation" },
   "packages/gateway": { type: "gateway runtime (HTTP/WS + persistence)" },
-  "packages/client": { type: "SDK/protocol client" },
+  "packages/transport-sdk": { type: "transport SDK" },
+  "packages/node-sdk": { type: "node SDK" },
   "packages/operator-app": { type: "UI state/store logic" },
   "packages/operator-ui": { type: "React UI library" },
   "packages/tui": { type: "terminal UI" },

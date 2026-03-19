@@ -2,11 +2,11 @@ import type {
   TyrumAiSdkChatSession,
   TyrumAiSdkChatSessionSummary,
   UIMessage,
-} from "@tyrum/client/browser";
+} from "@tyrum/transport-sdk";
 import {
   createTyrumAiSdkChatSessionClient,
   supportsTyrumAiSdkChatSocket,
-} from "@tyrum/client/browser";
+} from "@tyrum/transport-sdk";
 import { toOperatorCoreError } from "../operator-error.js";
 import type { ChatState, ChatStoreContext } from "./chat-store.types.js";
 

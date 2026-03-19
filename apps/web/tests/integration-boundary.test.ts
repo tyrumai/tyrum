@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 const APP_ROOT = join(process.cwd(), "apps/web");
 const APP_SRC = join(APP_ROOT, "src");
-const BANNED_PACKAGES = ["@tyrum/client", "@tyrum/contracts", "@tyrum/transport-sdk"] as const;
+const BANNED_PACKAGES = ["@tyrum/contracts", "@tyrum/transport-sdk"] as const;
 const BANNED_SOURCE_PATHS = [
   "packages/operator-app/src/",
   "packages/operator-ui/src/",

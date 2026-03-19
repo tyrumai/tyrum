@@ -10,7 +10,7 @@ export {
   createTyrumAiSdkChatSessionClient,
   createTyrumAiSdkChatTransport,
   supportsTyrumAiSdkChatSocket,
-} from "@tyrum/client/browser";
+} from "@tyrum/transport-sdk";
 
 export { createGatewayAuthSession, clearGatewayAuthSession } from "./auth-session.js";
 export {
@@ -61,7 +61,7 @@ export type {
   TyrumAiSdkChatSessionClient,
   TyrumAiSdkChatSessionSummary,
   TyrumAiSdkChatSocket,
-} from "@tyrum/client/browser";
+} from "@tyrum/transport-sdk";
 
 export type { ExternalStore, Unsubscribe } from "./store.js";
 export { createStore } from "./store.js";

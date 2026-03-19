@@ -14,10 +14,6 @@ function pnpmCommand(): string {
 }
 
 beforeAll(() => {
-  execFileSync(pnpmCommand(), ["--filter", "@tyrum/client", "build"], {
-    cwd: repoRoot,
-    stdio: "pipe",
-  });
   if (!existsSync(distEntry)) {
     execFileSync(pnpmCommand(), ["--filter", "@tyrum/desktop-node", "build"], {
       cwd: repoRoot,

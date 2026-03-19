@@ -1,4 +1,4 @@
-import type { Approval, ExecutionRun } from "@tyrum/client";
+import type { Approval, ExecutionRun } from "@tyrum/contracts";
 import type { ActivityState, ActivityWorkstream } from "./activity-store.js";
 import type { ActivityStoreDeps } from "./activity-store.js";
 import type { RunsState } from "./runs-store.js";

@@ -1,5 +1,12 @@
 import { createContext, useContext, type ReactNode } from "react";
-import type { BrowserActionArgs, TaskResult } from "@tyrum/operator-app/browser";
+import type { BrowserActionArgs } from "@tyrum/contracts";
+
+export interface BrowserNodeTaskResult {
+  success: boolean;
+  result?: unknown;
+  evidence?: unknown;
+  error?: string;
+}
 
 export type BrowserCapabilityName = "get" | "capture_photo" | "record";
 
@@ -24,7 +31,7 @@ export interface BrowserNodeState {
 export interface BrowserNodeApi extends BrowserNodeState {
   setEnabled: (enabled: boolean) => void;
   setCapabilityEnabled: (capability: BrowserCapabilityName, enabled: boolean) => void;
-  executeLocal: (args: BrowserActionArgs) => Promise<TaskResult>;
+  executeLocal: (args: BrowserActionArgs) => Promise<BrowserNodeTaskResult>;
 }
 
 const BrowserNodeContext = createContext<BrowserNodeApi | null>(null);

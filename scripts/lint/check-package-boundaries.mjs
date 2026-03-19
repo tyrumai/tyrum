@@ -399,10 +399,10 @@ export function formatViolation(violation) {
 
   const replacements = violation.replacementPackages?.join(", ") ?? "<unknown replacement>";
   if (violation.kind === "legacy-import-edge") {
-    return `${location} imports legacy package ${violation.toPackage} after replacement package(s) ${replacements} exist. Move the code or add a temporary coexistence allowlist entry with a linked issue.`;
+    return `${location} imports legacy package ${violation.toPackage} after replacement package(s) ${replacements} exist. Move the code or update the boundary rules deliberately if the live graph changed.`;
   }
 
-  return `${location} declares a legacy edge ${violation.fromPackage} -> ${violation.toPackage} after replacement package(s) ${replacements} exist. Move the dependency or add a temporary coexistence allowlist entry with a linked issue.`;
+  return `${location} declares a legacy edge ${violation.fromPackage} -> ${violation.toPackage} after replacement package(s) ${replacements} exist. Move the dependency or update the boundary rules deliberately if the live graph changed.`;
 }
 
 export function parseArgs(argv) {
@@ -451,7 +451,7 @@ export function runBoundaryCheck(argv = process.argv.slice(2)) {
   }
   console.error("");
   console.error(
-    "Update docs/architecture/target-state.md, scripts/lint/package-boundaries.config.mjs, and scripts/lint/package-boundaries-baseline.json together when the target graph changes or temporary coexistence is required.",
+    "Update docs/architecture/target-state.md, scripts/lint/package-boundaries.config.mjs, and scripts/lint/package-boundaries-baseline.json together when the live graph changes.",
   );
   return 1;
 }

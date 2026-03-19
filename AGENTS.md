@@ -4,7 +4,7 @@
 
 - Tyrum is a self-hosted autonomous worker agent platform built around a single “gateway” runtime (HTTP + WebSocket).
 - Monorepo: TypeScript (strict, ESM) on Node.js 24; pnpm workspace (`packages/*`, `apps/*`).
-- Runtime surfaces include `@tyrum/gateway` (server + bundled operator UI), `@tyrum/cli`, `@tyrum/tui`, `@tyrum/client`, and `@tyrum/contracts`.
+- Runtime surfaces include `@tyrum/gateway` (server + bundled operator UI), `@tyrum/cli`, `@tyrum/tui`, `@tyrum/transport-sdk`, `@tyrum/node-sdk`, and `@tyrum/contracts`.
 - Operator experiences are split across `@tyrum/operator-app`, `@tyrum/operator-ui`, `apps/web` (Vite web app), and `apps/desktop` (Electron app backed by `@tyrum/desktop-node`).
 - Gateway persists to SQLite by default, supports Postgres for split roles, and serves the bundled operator UI at `/ui`.
 - Public docs live in `docs/` and are built as a Docusaurus site in `apps/docs`.
@@ -13,9 +13,7 @@
 
 - Canonical contributor contract: `docs/architecture/target-state.md`
 - Long-lived decision record: `docs/architecture/reference/arch-01-clean-break-target-state.md`
-- New work should land in the target package or layer from that doc, not by reinforcing the current migration-state package graph.
-- Do not add new code to `@tyrum/client` or `@tyrum/operator-app` unless the linked migration issue requires temporary coexistence.
-- Temporary coexistence is allowed only for the migration window needed to land the linked issue safely.
+- New work should land in the target package or layer from that doc.
 
 ## Repo map
 
@@ -28,7 +26,8 @@
 - `docker/` container and sandbox assets
 - `docs/` architecture + user docs
 - `packages/cli/` operator CLI commands
-- `packages/client/` WebSocket client SDK
+- `packages/transport-sdk/` typed HTTP + WebSocket SDK
+- `packages/node-sdk/` node lifecycle + capability SDK
 - `packages/desktop-node/` desktop-local node/runtime helpers
 - `packages/gateway/` gateway runtime + CLI
 - `packages/operator-app/` shared operator state/actions

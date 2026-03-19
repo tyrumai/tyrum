@@ -1,5 +1,12 @@
-import type { Approval, ExecutionAttempt, ExecutionRun, ExecutionStep } from "@tyrum/client";
-import { parseTyrumKey, type AgentPersona, type ExecutionRunStatus } from "@tyrum/contracts";
+import type {
+  AgentPersona,
+  Approval,
+  ExecutionAttempt,
+  ExecutionRun,
+  ExecutionRunStatus,
+  ExecutionStep,
+} from "@tyrum/contracts";
+import { parseTyrumKey } from "@tyrum/contracts";
 import type {
   ActivityAttentionLevel,
   ActivityEvent,

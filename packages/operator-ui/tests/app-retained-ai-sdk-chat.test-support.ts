@@ -22,7 +22,7 @@ vi.mock("@tyrum/operator-app", () => ({
   createTyrumAiSdkChatTransport: createTransportMock,
 }));
 
-vi.mock("@tyrum/client/browser", () => ({
+vi.mock("@tyrum/transport-sdk", () => ({
   supportsTyrumAiSdkChatSocket: supportsSocketMock,
   createTyrumAiSdkChatSessionClient: createSessionClientMock,
 }));

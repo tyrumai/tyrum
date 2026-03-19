@@ -361,43 +361,6 @@ importers:
         specifier: ^24.12.0
         version: 24.12.0
 
-  packages/client:
-    dependencies:
-      '@tyrum/contracts':
-        specifier: workspace:*
-        version: link:../contracts
-      '@tyrum/node-sdk':
-        specifier: workspace:*
-        version: link:../node-sdk
-      '@tyrum/transport-sdk':
-        specifier: workspace:*
-        version: link:../transport-sdk
-      ai:
-        specifier: ^6.0.116
-        version: 6.0.116(zod@4.3.6)
-      mitt:
-        specifier: ^3.0.1
-        version: 3.0.1
-      undici:
-        specifier: ^7.24.4
-        version: 7.24.4
-      zod:
-        specifier: ^4.3.6
-        version: 4.3.6
-    devDependencies:
-      '@hono/node-server':
-        specifier: ^1.19.11
-        version: 1.19.11(hono@4.12.8)
-      '@types/ws':
-        specifier: ^8.18.1
-        version: 8.18.1
-      hono:
-        specifier: ^4.12.8
-        version: 4.12.8
-      ws:
-        specifier: ^8.19.0
-        version: 8.19.0
-
   packages/contracts:
     dependencies:
       zod:
@@ -650,15 +613,9 @@ importers:
 
   packages/operator-app:
     dependencies:
-      '@tyrum/client':
-        specifier: workspace:*
-        version: link:../client
       '@tyrum/contracts':
         specifier: workspace:*
         version: link:../contracts
-      '@tyrum/node-sdk':
-        specifier: workspace:*
-        version: link:../node-sdk
       '@tyrum/transport-sdk':
         specifier: workspace:*
         version: link:../transport-sdk
@@ -824,6 +781,9 @@ importers:
       '@tyrum/contracts':
         specifier: workspace:*
         version: link:../contracts
+      ai:
+        specifier: ^6.0.116
+        version: 6.0.116(zod@4.3.6)
       mitt:
         specifier: ^3.0.1
         version: 3.0.1

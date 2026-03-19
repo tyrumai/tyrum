@@ -59,12 +59,6 @@ const coverageThresholds = {
     functions: 84,
     branches: 65,
   },
-  "packages/client/src/**": {
-    lines: 82,
-    statements: 81,
-    functions: 86,
-    branches: 68,
-  },
   "packages/operator-app/src/**": {
     lines: 89,
     statements: 84,
@@ -115,9 +109,6 @@ export default defineConfig({
       "@tyrum/transport-sdk": resolve(__dirname, "packages/transport-sdk/src/index.ts"),
       "@tyrum/runtime-policy": resolve(__dirname, "packages/runtime-policy/src/index.ts"),
       "@tyrum/runtime-agent": resolve(__dirname, "packages/runtime-agent/src/index.ts"),
-      "@tyrum/client/browser": resolve(__dirname, "packages/client/src/browser.ts"),
-      "@tyrum/client/node": resolve(__dirname, "packages/client/src/node.ts"),
-      "@tyrum/client": resolve(__dirname, "packages/client/src/index.ts"),
       "@tyrum/cli-utils": resolve(__dirname, "packages/cli-utils/src/index.ts"),
       "@tyrum/runtime-node-control": resolve(
         __dirname,

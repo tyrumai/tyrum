@@ -1,4 +1,4 @@
-import type { Approval, NodePairingRequest } from "@tyrum/client";
+import type { Approval, NodePairingRequest } from "@tyrum/contracts";
 
 export type ApprovalStatus = Approval["status"];
 export type PairingStatus = NodePairingRequest["status"];

@@ -187,113 +187,12 @@ describe("package boundary lint", () => {
     expect(violations).toEqual([]);
   });
 
-  it("rejects new legacy-package edges once the replacement package exists", async () => {
-    const repoRoot = await createWorkspaceFixture([
-      {
-        name: "@tyrum/contracts",
-        relativeDir: "packages/contracts",
-      },
-      {
-        name: "@tyrum/transport-sdk",
-        relativeDir: "packages/transport-sdk",
-      },
-      {
-        name: "@tyrum/node-sdk",
-        relativeDir: "packages/node-sdk",
-      },
-      {
-        name: "@tyrum/client",
-        relativeDir: "packages/client",
-        files: {
-          "src/index.ts": 'export const schema = "schema";\n',
-        },
-      },
-      {
-        name: "@tyrum/web-fixture",
-        relativeDir: "apps/web-fixture",
-        dependencies: {
-          "@tyrum/client": "workspace:*",
-        },
-        files: {
-          "src/main.ts": 'export { schema } from "@tyrum/client";\n',
-        },
-      },
-    ]);
+  it("keeps the repo-wide boundary baseline empty once the live graph is encoded directly", async () => {
+    const baseline = JSON.parse(
+      await readFile(resolve(REPO_ROOT, "scripts/lint/package-boundaries-baseline.json"), "utf8"),
+    ) as BoundaryBaseline;
 
-    const violations = await collectBoundaryViolations({
-      baseline: emptyBaseline,
-      repoRoot,
-    });
-
-    expect(violations).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          fromPackage: "@tyrum/web-fixture",
-          kind: "legacy-manifest-edge",
-          replacementPackages: ["@tyrum/transport-sdk", "@tyrum/node-sdk"],
-          toPackage: "@tyrum/client",
-        }),
-        expect.objectContaining({
-          fromFile: "apps/web-fixture/src/main.ts",
-          kind: "legacy-import-edge",
-          replacementPackages: ["@tyrum/transport-sdk", "@tyrum/node-sdk"],
-          toPackage: "@tyrum/client",
-        }),
-      ]),
-    );
-  });
-
-  it("respects exact temporary coexistence allowlists", async () => {
-    const repoRoot = await createWorkspaceFixture([
-      {
-        name: "@tyrum/contracts",
-        relativeDir: "packages/contracts",
-      },
-      {
-        name: "@tyrum/transport-sdk",
-        relativeDir: "packages/transport-sdk",
-      },
-      {
-        name: "@tyrum/node-sdk",
-        relativeDir: "packages/node-sdk",
-      },
-      {
-        name: "@tyrum/client",
-        relativeDir: "packages/client",
-      },
-      {
-        name: "@tyrum/web-fixture",
-        relativeDir: "apps/web-fixture",
-        dependencies: {
-          "@tyrum/client": "workspace:*",
-        },
-        files: {
-          "src/main.ts": 'export { schema } from "@tyrum/client";\n',
-        },
-      },
-    ]);
-
-    const violations = await collectBoundaryViolations({
-      baseline: {
-        allowedImportEdges: [
-          {
-            fromFile: "apps/web-fixture/src/main.ts",
-            reason: "#1532 temporary coexistence during transport-sdk migration",
-            toPackage: "@tyrum/client",
-          },
-        ],
-        allowedManifestEdges: [
-          {
-            fromPackage: "@tyrum/web-fixture",
-            reason: "#1532 temporary coexistence during transport-sdk migration",
-            toPackage: "@tyrum/client",
-          },
-        ],
-      },
-      repoRoot,
-    });
-
-    expect(violations).toEqual([]);
+    expect(baseline).toEqual(emptyBaseline);
   });
 
   it("wires the boundary check into lint, CI, and contributor docs", async () => {
@@ -321,6 +220,5 @@ describe("package boundary lint", () => {
     expect(archDecisionDoc).toContain("scripts/lint/package-boundaries.config.mjs");
     expect(targetStateDoc).toContain("pnpm lint:boundaries");
     expect(targetStateDoc).toContain("scripts/lint/package-boundaries.config.mjs");
-    expect(targetStateDoc).toContain("scripts/lint/package-boundaries-baseline.json");
   });
 });

@@ -24,32 +24,26 @@ describe("createPackageBuilds", () => {
       ]),
     );
 
-    expect(buildsByName.get("@tyrum/client")?.inputs).toEqual(
-      expect.arrayContaining([
-        resolve(repoRoot, "packages/node-sdk/dist/index.mjs"),
-        resolve(repoRoot, "packages/transport-sdk/dist/index.mjs"),
-        resolve(repoRoot, "packages/contracts/dist/index.mjs"),
-        resolve(repoRoot, "packages/contracts/dist/index.d.ts"),
-        resolve(repoRoot, "packages/contracts/dist/jsonschema/catalog.json"),
-      ]),
-    );
+    expect(buildsByName.has("@tyrum/client")).toBe(false);
 
     expect(buildsByName.get("@tyrum/operator-app")?.inputs).toEqual(
       expect.arrayContaining([
-        resolve(repoRoot, "packages/node-sdk/dist/index.mjs"),
         resolve(repoRoot, "packages/transport-sdk/dist/index.mjs"),
-        resolve(repoRoot, "packages/client/dist/index.mjs"),
         resolve(repoRoot, "packages/contracts/dist/index.mjs"),
       ]),
     );
 
     expect(buildsByName.get("@tyrum/operator-ui")?.inputs).toEqual(
       expect.arrayContaining([
-        resolve(repoRoot, "packages/node-sdk/dist/index.mjs"),
-        resolve(repoRoot, "packages/transport-sdk/dist/index.mjs"),
-        resolve(repoRoot, "packages/client/dist/index.mjs"),
         resolve(repoRoot, "packages/operator-app/dist/index.mjs"),
         resolve(repoRoot, "packages/contracts/dist/index.mjs"),
+      ]),
+    );
+
+    expect(buildsByName.get("@tyrum/operator-ui")?.inputs).not.toEqual(
+      expect.arrayContaining([
+        resolve(repoRoot, "packages/node-sdk/dist/index.mjs"),
+        resolve(repoRoot, "packages/transport-sdk/dist/index.mjs"),
       ]),
     );
   });

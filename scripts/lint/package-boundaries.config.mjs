@@ -3,9 +3,8 @@
  * - docs/architecture/target-state.md
  * - docs/architecture/reference/arch-01-clean-break-target-state.md
  *
- * Keep this file in sync with those docs and update the temporary coexistence
- * baseline in package-boundaries-baseline.json in the same PR when a new target
- * package lands.
+ * Keep this file in sync with those docs and update
+ * package-boundaries-baseline.json in the same PR when the live graph changes.
  */
 
 export const PACKAGE_BOUNDARY_RULES = Object.freeze({
@@ -14,7 +13,7 @@ export const PACKAGE_BOUNDARY_RULES = Object.freeze({
     "@tyrum/transport-sdk": ["@tyrum/contracts"],
     "@tyrum/node-sdk": ["@tyrum/contracts", "@tyrum/transport-sdk"],
     "@tyrum/operator-app": ["@tyrum/contracts", "@tyrum/transport-sdk"],
-    "@tyrum/operator-ui": ["@tyrum/operator-app"],
+    "@tyrum/operator-ui": ["@tyrum/contracts", "@tyrum/operator-app"],
     "@tyrum/runtime-policy": ["@tyrum/contracts"],
     "@tyrum/runtime-node-control": ["@tyrum/contracts", "@tyrum/runtime-policy"],
     "@tyrum/runtime-execution": [
@@ -41,14 +40,5 @@ export const PACKAGE_BOUNDARY_RULES = Object.freeze({
       "@tyrum/runtime-workboard",
     ],
   }),
-  legacyPackages: Object.freeze({
-    "@tyrum/client": {
-      activation: "all",
-      replacementPackages: ["@tyrum/transport-sdk", "@tyrum/node-sdk"],
-    },
-    "@tyrum/operator-core": {
-      activation: "all",
-      replacementPackages: ["@tyrum/operator-app"],
-    },
-  }),
+  legacyPackages: Object.freeze({}),
 });

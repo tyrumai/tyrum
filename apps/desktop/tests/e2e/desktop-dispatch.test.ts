@@ -25,7 +25,7 @@ import { ConnectionManager } from "../../../../packages/gateway/src/ws/connectio
 import { dispatchTask } from "../../../../packages/gateway/src/ws/protocol.js";
 import type { ProtocolDeps } from "../../../../packages/gateway/src/ws/protocol.js";
 import { TyrumClient } from "../../../../packages/transport-sdk/src/index.js";
-import { autoExecute } from "../../../../packages/client/src/index.js";
+import { autoExecute } from "@tyrum/node-sdk";
 import { DesktopProvider, MockDesktopBackend } from "@tyrum/desktop-node";
 import { resolvePermissions } from "../../src/main/config/permissions.js";
 import {

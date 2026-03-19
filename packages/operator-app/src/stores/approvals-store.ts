@@ -1,5 +1,4 @@
-import type { Approval } from "@tyrum/client";
-import type { PolicyOverride } from "@tyrum/contracts";
+import type { Approval, PolicyOverride } from "@tyrum/contracts";
 import type { OperatorWsClient } from "../deps.js";
 import { ElevatedModeRequiredError } from "../elevated-mode.js";
 import { createStore, type ExternalStore } from "../store.js";

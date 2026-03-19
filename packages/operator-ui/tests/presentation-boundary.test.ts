@@ -5,7 +5,6 @@ import { describe, expect, it } from "vitest";
 const OPERATOR_UI_ROOT = join(process.cwd(), "packages/operator-ui");
 const OPERATOR_UI_SRC = join(OPERATOR_UI_ROOT, "src");
 const BANNED_PACKAGES = [
-  "@tyrum/client",
   "@tyrum/desktop-node",
   "@tyrum/gateway",
   "@tyrum/node-sdk",

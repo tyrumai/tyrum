@@ -1,5 +1,5 @@
 import { vi } from "vitest";
-import type { TyrumHttpClient } from "@tyrum/client";
+import type { TyrumHttpClient } from "@tyrum/transport-sdk";
 import {
   WsChatSessionCreateResult,
   WsChatSessionDeleteResult,

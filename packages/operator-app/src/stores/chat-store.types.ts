@@ -2,7 +2,7 @@ import type {
   TyrumAiSdkChatSession,
   TyrumAiSdkChatSessionSummary,
   UIMessage,
-} from "@tyrum/client/browser";
+} from "@tyrum/transport-sdk";
 import type { AgentPersona } from "@tyrum/contracts";
 import type { OperatorHttpClient, OperatorWsClient } from "../deps.js";
 import type { OperatorCoreError } from "../operator-error.js";

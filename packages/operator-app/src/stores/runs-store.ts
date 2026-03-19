@@ -1,4 +1,4 @@
-import type { ExecutionAttempt, ExecutionRun, ExecutionStep } from "@tyrum/client";
+import type { ExecutionAttempt, ExecutionRun, ExecutionStep } from "@tyrum/contracts";
 import type { OperatorWsClient } from "../deps.js";
 import { createStore, type ExternalStore } from "../store.js";
 
