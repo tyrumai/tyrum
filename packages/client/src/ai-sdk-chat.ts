@@ -1,4 +1,5 @@
 import type { ChatRequestOptions, ChatTransport, UIMessage, UIMessageChunk } from "ai";
+import type { TyrumClientDynamicSchema } from "@tyrum/transport-sdk";
 import {
   WsAiSdkChatStreamEvent,
   WsAiSdkChatStreamEventPayload,
@@ -21,7 +22,6 @@ import {
   type WsChatSessionSendTrigger,
   type WsChatSessionSummary,
 } from "@tyrum/contracts";
-import type { TyrumClientDynamicSchema } from "./ws-client.js";
 
 export interface TyrumAiSdkChatSocket {
   connected: boolean;

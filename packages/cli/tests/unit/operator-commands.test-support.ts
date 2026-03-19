@@ -10,7 +10,7 @@ const DEFAULT_DEVICE = {
   privateKey: "priv",
 };
 
-type MockableClientModule = "@tyrum/client" | "@tyrum/client/node";
+type MockableClientModule = "@tyrum/client" | "@tyrum/transport-sdk/node";
 type WsConnectMode = "success" | "transport_error" | "disconnected";
 type OperatorCliContext = {
   errSpy: unknown;
@@ -69,7 +69,7 @@ const resettableSpies = [
 // Keep the client mocks active for the file and clean them up once the suite ends.
 afterAll(() => {
   vi.doUnmock("@tyrum/client");
-  vi.doUnmock("@tyrum/client/node");
+  vi.doUnmock("@tyrum/transport-sdk/node");
   vi.resetModules();
 });
 
@@ -197,7 +197,10 @@ async function setupOperatorHome({
 async function importRunCli(): Promise<(argv: string[]) => Promise<number>> {
   vi.resetModules();
   vi.doMock("@tyrum/client", async () => await createMockClientModule("@tyrum/client"));
-  vi.doMock("@tyrum/client/node", async () => await createMockClientModule("@tyrum/client/node"));
+  vi.doMock(
+    "@tyrum/transport-sdk/node",
+    async () => await createMockClientModule("@tyrum/transport-sdk/node"),
+  );
   const { runCli } = (await import("../../src/index.js")) as {
     runCli: (argv: string[]) => Promise<number>;
   };

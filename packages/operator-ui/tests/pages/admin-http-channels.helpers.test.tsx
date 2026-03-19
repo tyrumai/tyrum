@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import React from "react";
-import { TyrumHttpClientError } from "@tyrum/client/browser";
+import { TyrumHttpClientError } from "@tyrum/operator-core/browser";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ChannelFieldSections } from "../../src/components/pages/admin-http-channels-dialog-fields.js";
 import {

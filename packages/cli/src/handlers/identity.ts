@@ -2,7 +2,7 @@ import {
   createNodeFileDeviceIdentityStorage,
   formatDeviceIdentityError,
   loadOrCreateDeviceIdentity,
-} from "@tyrum/client/node";
+} from "@tyrum/transport-sdk/node";
 
 import type { CliCommand } from "../cli-command.js";
 import { resolveOperatorDeviceIdentityPath } from "../operator-paths.js";

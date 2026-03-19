@@ -1,6 +1,6 @@
 import { configureCommander } from "@tyrum/cli-utils";
 import { Command } from "commander";
-import { normalizeFingerprint256 } from "@tyrum/client/node";
+import { normalizeFingerprint256 } from "@tyrum/transport-sdk/node";
 import type { ActionPrimitive } from "@tyrum/client";
 import type { CliCommand, WorkflowLane } from "../cli-command.js";
 import { WORKFLOW_LANES, isWorkflowLane } from "../cli-command.js";

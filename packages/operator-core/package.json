@@ -26,6 +26,7 @@
   },
   "dependencies": {
     "@tyrum/client": "workspace:*",
-    "@tyrum/contracts": "workspace:*"
+    "@tyrum/contracts": "workspace:*",
+    "@tyrum/transport-sdk": "workspace:*"
   }
 }

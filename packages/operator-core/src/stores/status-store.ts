@@ -1,4 +1,4 @@
-import type { PresenceResponse, StatusResponse, UsageResponse } from "@tyrum/client";
+import type { PresenceResponse, StatusResponse, UsageResponse } from "@tyrum/transport-sdk";
 import type { OperatorHttpClient } from "../deps.js";
 import { createStore, type ExternalStore } from "../store.js";
 import { toErrorMessage } from "../to-error-message.js";

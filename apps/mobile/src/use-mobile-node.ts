@@ -1,10 +1,12 @@
 import {
   createManagedNodeClientLifecycle,
+  type ManagedNodeClientLifecycle,
+} from "@tyrum/client/browser";
+import {
   formatDeviceIdentityError,
   loadOrCreateDeviceIdentity,
   TyrumClient,
-  type ManagedNodeClientLifecycle,
-} from "@tyrum/client/browser";
+} from "@tyrum/transport-sdk/browser";
 import { Capacitor } from "@capacitor/core";
 import { Clipboard } from "@capacitor/clipboard";
 import { Device, type DeviceInfo } from "@capacitor/device";

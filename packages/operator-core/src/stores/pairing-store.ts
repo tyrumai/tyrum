@@ -1,4 +1,4 @@
-import type { PairingListResponse, PairingMutateResponse } from "@tyrum/client";
+import type { PairingListResponse, PairingMutateResponse } from "@tyrum/transport-sdk";
 import type { OperatorHttpClient } from "../deps.js";
 import { ElevatedModeRequiredError } from "../elevated-mode.js";
 import { createStore, type ExternalStore } from "../store.js";

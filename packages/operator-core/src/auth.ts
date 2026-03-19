@@ -1,4 +1,4 @@
-import type { TyrumHttpAuthStrategy } from "@tyrum/client";
+import type { TyrumHttpAuthStrategy } from "@tyrum/transport-sdk";
 import { isElevatedModeActive } from "./elevated-mode.js";
 import type { ElevatedModeState } from "./stores/elevated-mode-store.js";
 

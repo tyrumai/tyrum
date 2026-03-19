@@ -1,4 +1,4 @@
-import type { DesktopEnvironmentHostListResult } from "@tyrum/client/browser";
+import type { DesktopEnvironmentHostListResult } from "@tyrum/transport-sdk";
 import type { OperatorHttpClient } from "../deps.js";
 import { createStore, type ExternalStore } from "../store.js";
 import { toErrorMessage } from "../to-error-message.js";

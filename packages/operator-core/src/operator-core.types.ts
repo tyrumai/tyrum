@@ -1,4 +1,5 @@
-import type { ClientCapability, DeviceIdentity } from "@tyrum/client/browser";
+import type { ClientCapability } from "@tyrum/contracts";
+import type { DeviceIdentity } from "@tyrum/transport-sdk/browser";
 import type { OperatorAuthStrategy } from "./auth.js";
 import type { OperatorHttpClient, OperatorWsClient } from "./deps.js";
 import type { AutoSyncState } from "./auto-sync.js";

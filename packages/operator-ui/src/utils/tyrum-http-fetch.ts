@@ -1,4 +1,4 @@
-import type { TyrumHttpFetch } from "@tyrum/client";
+import type { TyrumHttpFetch } from "@tyrum/operator-core/browser";
 import { getDesktopApi } from "../desktop-api.js";
 
 function headersToRecord(headers: HeadersInit | undefined): Record<string, string> | undefined {

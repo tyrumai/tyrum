@@ -9,7 +9,10 @@ import {
   type OperatorCoreManager,
 } from "@tyrum/operator-core/browser";
 import { createAdminAccessController, type AdminAccessController } from "@tyrum/operator-ui";
-import { formatDeviceIdentityError, loadOrCreateDeviceIdentity } from "@tyrum/client/browser";
+import {
+  formatDeviceIdentityError,
+  loadOrCreateDeviceIdentity,
+} from "@tyrum/transport-sdk/browser";
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 import type { ElevatedModeStore } from "@tyrum/operator-core/browser";
 import type { MobileBootstrapConfig, MobileConnectionConfig } from "./mobile-config.js";

@@ -7,12 +7,12 @@
  */
 
 import type { ActionPrimitive, ClientCapability } from "@tyrum/contracts";
+import type { TyrumClient } from "@tyrum/transport-sdk";
 import {
   requiredCapabilityDescriptorForAction,
   descriptorIdsForClientCapability,
   migrateCapabilityDescriptorId,
 } from "@tyrum/contracts";
-import type { TyrumClient } from "./ws-client.js";
 
 // ---------------------------------------------------------------------------
 // Types

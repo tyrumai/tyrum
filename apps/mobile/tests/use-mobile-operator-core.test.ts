@@ -69,7 +69,7 @@ vi.mock("@tyrum/operator-ui", () => ({
   createAdminAccessController: vi.fn(() => controller),
 }));
 
-vi.mock("@tyrum/client/browser", () => ({
+vi.mock("@tyrum/transport-sdk/browser", () => ({
   formatDeviceIdentityError: vi.fn((error: unknown) =>
     error instanceof Error ? error.message : String(error),
   ),

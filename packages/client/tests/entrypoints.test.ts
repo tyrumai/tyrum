@@ -6,16 +6,18 @@ import { describe, expect, it } from "vitest";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 describe("@tyrum/client entrypoints", () => {
-  it("keeps browser-only storage helpers off the node entrypoint", async () => {
+  it("keeps managed node lifecycle helpers off the root entrypoint", async () => {
     const browserEntry = (await import("../src/browser.js")) as Record<string, unknown>;
     const nodeEntry = (await import("../src/node.js")) as Record<string, unknown>;
     const rootEntry = (await import("../src/index.js")) as Record<string, unknown>;
 
-    expect(typeof browserEntry["createBrowserLocalStorageDeviceIdentityStorage"]).toBe("function");
     expect(typeof browserEntry["createManagedNodeClientLifecycle"]).toBe("function");
     expect(typeof nodeEntry["createManagedNodeClientLifecycle"]).toBe("function");
-    expect("createBrowserLocalStorageDeviceIdentityStorage" in nodeEntry).toBe(false);
     expect("createManagedNodeClientLifecycle" in rootEntry).toBe(false);
+    expect("TyrumClient" in rootEntry).toBe(false);
+    expect("createTyrumHttpClient" in rootEntry).toBe(false);
+    expect("TyrumClient" in browserEntry).toBe(false);
+    expect("TyrumClient" in nodeEntry).toBe(false);
   });
 
   it("re-exports the shared SDK version across public entrypoints", async () => {
@@ -29,25 +31,15 @@ describe("@tyrum/client entrypoints", () => {
   });
 
   it("avoids static entrypoint cycles and browser-facing node transport imports", async () => {
-    const [
-      indexSource,
-      browserSource,
-      nodeSource,
-      sharedSource,
-      publicTypesSource,
-      typesSource,
-      httpSharedSource,
-      wsTransportSource,
-    ] = await Promise.all([
-      readFile(resolve(__dirname, "../src/index.ts"), "utf8"),
-      readFile(resolve(__dirname, "../src/browser.ts"), "utf8"),
-      readFile(resolve(__dirname, "../src/node.ts"), "utf8"),
-      readFile(resolve(__dirname, "../src/public-shared.ts"), "utf8"),
-      readFile(resolve(__dirname, "../src/public-types.ts"), "utf8"),
-      readFile(resolve(__dirname, "../src/types.ts"), "utf8"),
-      readFile(resolve(__dirname, "../src/http/shared.ts"), "utf8"),
-      readFile(resolve(__dirname, "../src/ws-client.transport.ts"), "utf8"),
-    ]);
+    const [indexSource, browserSource, nodeSource, sharedSource, publicTypesSource, typesSource] =
+      await Promise.all([
+        readFile(resolve(__dirname, "../src/index.ts"), "utf8"),
+        readFile(resolve(__dirname, "../src/browser.ts"), "utf8"),
+        readFile(resolve(__dirname, "../src/node.ts"), "utf8"),
+        readFile(resolve(__dirname, "../src/public-shared.ts"), "utf8"),
+        readFile(resolve(__dirname, "../src/public-types.ts"), "utf8"),
+        readFile(resolve(__dirname, "../src/types.ts"), "utf8"),
+      ]);
 
     expect(indexSource).not.toContain("SessionTranscript");
     expect(browserSource).not.toContain('export { VERSION } from "./index.js";');
@@ -62,7 +54,8 @@ describe("@tyrum/client entrypoints", () => {
     expect(nodeSource).toContain('export * from "./public-shared.js";');
     expect(publicTypesSource).toContain('export type * from "./types.js";');
     expect(typesSource).toContain("SessionContextState");
-    expect(httpSharedSource).not.toContain('from "../node/load-pinned-transport.js"');
-    expect(wsTransportSource).not.toContain('from "./node/load-pinned-transport.js"');
+    expect(indexSource).not.toContain("createTyrumHttpClient");
+    expect(browserSource).not.toContain("TyrumClient");
+    expect(nodeSource).not.toContain("TyrumClient");
   });
 });

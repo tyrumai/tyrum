@@ -16,7 +16,7 @@ import { Hono } from "hono";
 import { BROWSER_AUTOMATION_CAPABILITY_IDS } from "@tyrum/contracts";
 import { createWsHandler } from "../../src/routes/ws.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
-import { TyrumClient } from "../../../client/src/ws-client.js";
+import { TyrumClient } from "../../../transport-sdk/src/ws-client.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { AuthTokenService } from "../../src/modules/auth/auth-token-service.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";

@@ -20,7 +20,7 @@ import { createTestApp, minimalPlanRequest } from "../integration/helpers.js";
 import { createWsHandler } from "../../src/routes/ws.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { dispatchTask, type ProtocolDeps } from "../../src/ws/protocol.js";
-import { TyrumClient } from "../../../client/src/ws-client.js";
+import { TyrumClient } from "@tyrum/transport-sdk";
 import { generateKeyPairSync } from "node:crypto";
 import { CAPABILITY_DESCRIPTOR_DEFAULT_VERSION } from "@tyrum/contracts";
 import { waitForCondition } from "../helpers/wait-for.js";

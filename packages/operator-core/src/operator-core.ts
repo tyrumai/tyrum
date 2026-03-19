@@ -1,11 +1,6 @@
-import {
-  TyrumClient,
-  createTyrumHttpClient,
-  type ExecutionAttempt,
-  type ExecutionRun,
-  type ExecutionStep,
-  type TyrumClientEvents,
-} from "@tyrum/client/browser";
+import { TyrumClient, createTyrumHttpClient } from "@tyrum/transport-sdk/browser";
+import type { ExecutionAttempt, ExecutionRun, ExecutionStep } from "@tyrum/client";
+import type { TyrumClientEvents } from "@tyrum/transport-sdk/browser";
 import { httpAuthForAuth, wsTokenForAuth } from "./auth.js";
 import type { OperatorHttpClient, OperatorWsClient } from "./deps.js";
 import {
@@ -224,7 +219,10 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
   });
 
   const unsubscribes: Unsubscribe[] = [];
-  const on = (event: keyof TyrumClientEvents, handler: (data: unknown) => void): void => {
+  const on = <K extends keyof TyrumClientEvents>(
+    event: K,
+    handler: (data: TyrumClientEvents[K]) => void,
+  ): void => {
     ws.on(event, handler);
     unsubscribes.push(() => {
       ws.off(event, handler);

@@ -65,6 +65,11 @@ vi.mock("@tyrum/client/browser", () => {
       autoExecute,
       requireConnectedObject: true,
     }),
+  };
+});
+
+vi.mock("@tyrum/operator-core/browser", () => {
+  return {
     createBrowserLocalStorageDeviceIdentityStorage: vi.fn((_key: string) => ({})),
     formatDeviceIdentityError: vi.fn((err: unknown) => String(err)),
     loadOrCreateDeviceIdentity: vi.fn(async () => ({

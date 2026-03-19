@@ -1,4 +1,4 @@
-import type { TyrumClient, TyrumHttpClientOperator } from "@tyrum/client/browser";
+import type { TyrumClient, TyrumHttpClientOperator } from "@tyrum/transport-sdk/browser";
 
 export type OperatorWsClient = Pick<
   TyrumClient,

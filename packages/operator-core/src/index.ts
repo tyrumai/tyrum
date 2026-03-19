@@ -149,7 +149,6 @@ export {
 } from "@tyrum/contracts";
 export type { WsCapabilityReadyPayload } from "@tyrum/contracts";
 export type {
-  DeviceIdentity,
   CapabilityProvider,
   ExecutionAttempt,
   ExecutionRun,
@@ -157,3 +156,4 @@ export type {
   MemoryItem,
   TaskResult,
 } from "@tyrum/client";
+export type { DeviceIdentity } from "@tyrum/transport-sdk";

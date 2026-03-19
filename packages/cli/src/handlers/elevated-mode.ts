@@ -1,4 +1,4 @@
-import { TyrumHttpClientError, createTyrumHttpClient } from "@tyrum/client/node";
+import { TyrumHttpClientError, createTyrumHttpClient } from "@tyrum/transport-sdk/node";
 
 import type { CliCommand } from "../cli-command.js";
 import { resolveOperatorElevatedModePath } from "../operator-paths.js";

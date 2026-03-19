@@ -2,7 +2,7 @@ import type {
   DesktopEnvironmentCreateInput,
   DesktopEnvironmentGetResult,
   DesktopEnvironmentUpdateInput,
-} from "@tyrum/client/browser";
+} from "@tyrum/transport-sdk";
 import type { OperatorHttpClient } from "../deps.js";
 import { createStore, type ExternalStore } from "../store.js";
 import { toErrorMessage } from "../to-error-message.js";

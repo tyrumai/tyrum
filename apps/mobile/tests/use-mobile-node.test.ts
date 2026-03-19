@@ -124,6 +124,9 @@ vi.mock("@tyrum/client/browser", () => ({
   createManagedNodeClientLifecycle: createManagedNodeClientLifecycleMock({
     autoExecute: autoExecuteMock,
   }),
+}));
+
+vi.mock("@tyrum/transport-sdk/browser", () => ({
   formatDeviceIdentityError: vi.fn((error: unknown) =>
     error instanceof Error ? error.message : String(error),
   ),

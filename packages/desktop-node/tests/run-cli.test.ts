@@ -46,7 +46,7 @@ const FILESYSTEM_CAPABILITY_IDS_WITHOUT_BASH = FILESYSTEM_CAPABILITY_IDS.filter(
   (id) => id !== "tyrum.fs.bash",
 );
 
-vi.mock("@tyrum/client/node", () => {
+vi.mock("@tyrum/transport-sdk/node", () => {
   class TyrumClient {
     private readonly handlers = new Map<string, Set<(data: unknown) => void>>();
 
@@ -95,6 +95,10 @@ vi.mock("@tyrum/client/node", () => {
     formatDeviceIdentityError: (...args: unknown[]) => formatDeviceIdentityErrorSpy(...args),
   };
 });
+
+vi.mock("@tyrum/client", () => ({
+  autoExecute: (...args: unknown[]) => autoExecuteSpy(...args),
+}));
 
 vi.mock("../src/providers/desktop-provider.js", () => ({
   DesktopProvider: function DesktopProvider(...args: unknown[]) {

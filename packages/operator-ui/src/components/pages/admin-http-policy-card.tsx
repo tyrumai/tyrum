@@ -1,4 +1,4 @@
-import { TyrumHttpClientError } from "@tyrum/client/browser";
+import { TyrumHttpClientError } from "@tyrum/operator-core/browser";
 import type { OperatorCore } from "@tyrum/operator-core";
 import * as React from "react";
 import { toast } from "sonner";

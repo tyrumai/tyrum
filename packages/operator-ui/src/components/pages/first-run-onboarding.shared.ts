@@ -1,4 +1,4 @@
-import type { StatusResponse } from "@tyrum/client";
+import type { StatusResponse } from "@tyrum/operator-core/browser";
 
 const STORAGE_KEY_PREFIX = "tyrum.first-run-onboarding";
 

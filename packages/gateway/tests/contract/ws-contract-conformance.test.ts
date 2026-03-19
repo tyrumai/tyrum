@@ -15,7 +15,7 @@ import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { createWsHandler } from "../../src/routes/ws.js";
 import { dispatchTask } from "../../src/ws/protocol.js";
 import type { ProtocolDeps } from "../../src/ws/protocol.js";
-import { TyrumClient } from "../../../client/src/ws-client.js";
+import { TyrumClient } from "@tyrum/transport-sdk";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { WorkSignalScheduler } from "../../src/modules/workboard/signal-scheduler.js";
 import { AuthTokenService } from "../../src/modules/auth/auth-token-service.js";

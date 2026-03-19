@@ -1,4 +1,4 @@
-import type { PairingGetResponse } from "@tyrum/client";
+import type { PairingGetResponse } from "@tyrum/operator-core/browser";
 import {
   ElevatedModeRequiredError,
   isElevatedModeActive,
