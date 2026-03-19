@@ -3,7 +3,11 @@ import {
   type ElevatedModeState,
   type OperatorCore,
 } from "@tyrum/operator-app";
-import { createOperatorAdminClient, executeOperatorCommand } from "@tyrum/operator-app/browser";
+import {
+  createOperatorAdminClient,
+  executeOperatorCommand,
+  TyrumHttpClientError,
+} from "@tyrum/operator-app/browser";
 import { useMemo, type ReactNode } from "react";
 import { useOperatorStore } from "../../use-operator-store.js";
 import { resolveTyrumHttpFetch } from "../../utils/tyrum-http-fetch.js";
@@ -15,19 +19,12 @@ import { Alert } from "../ui/alert.js";
 export type AdminHttpClient = OperatorCore["admin"];
 
 export function isAdminAccessHttpError(error: unknown): boolean {
-  if (!(error instanceof Error)) {
-    return false;
-  }
-  const candidate = error as Partial<{
-    status: number;
-    error: string;
-    message: string;
-  }>;
   return (
-    candidate.status === 403 &&
-    candidate.error === "forbidden" &&
-    (candidate.message === "insufficient scope" ||
-      candidate.message === "route is not scope-authorized for scoped tokens")
+    error instanceof TyrumHttpClientError &&
+    error.status === 403 &&
+    error.error === "forbidden" &&
+    (error.message === "insufficient scope" ||
+      error.message === "route is not scope-authorized for scoped tokens")
   );
 }
 
