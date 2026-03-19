@@ -241,6 +241,11 @@
       "toPackage": "@tyrum/client"
     },
     {
+      "fromFile": "packages/operator-core/src/node.ts",
+      "reason": "#1537 temporary coexistence while operator surfaces still move off @tyrum/client during the operator-app migration",
+      "toPackage": "@tyrum/client"
+    },
+    {
       "fromFile": "packages/operator-core/src/index.ts",
       "reason": "#1537 temporary coexistence while operator surfaces still move off @tyrum/client during the operator-app migration",
       "toPackage": "@tyrum/client"
