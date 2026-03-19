@@ -14,6 +14,7 @@ describe("channel-config-model", () => {
         channel: "telegram",
         account_key: "default",
         agent_key: "default",
+        ingress_mode: "polling",
         bot_token: "bot-token",
         webhook_secret: "secret",
         allowed_user_ids: ["123", "123", "456"],
@@ -31,10 +32,39 @@ describe("channel-config-model", () => {
       account_key: "default",
     });
     expect(toChannelConfigView(asStoredTelegramConfig(parsed)!)).toMatchObject({
+      ingress_mode: "polling",
       bot_token_configured: true,
       webhook_secret_configured: true,
       allowed_user_ids: ["123", "456"],
       pipeline_enabled: true,
+      polling_status: "idle",
+      polling_last_error_at: null,
+      polling_last_error_message: null,
+    });
+  });
+
+  it("defaults stored telegram configs to polling when ingress_mode is omitted", () => {
+    const parsed = parseStoredChannelConfigOrThrow({
+      connector_key: "telegram",
+      account_key: "default",
+      config_json: JSON.stringify({
+        channel: "telegram",
+        account_key: "default",
+        agent_key: "default",
+        bot_token: "bot-token",
+        webhook_secret: "secret",
+        allowed_user_ids: ["123"],
+        pipeline_enabled: true,
+      }),
+    });
+
+    expect(asStoredTelegramConfig(parsed)).toMatchObject({
+      channel: "telegram",
+      account_key: "default",
+      ingress_mode: "polling",
+    });
+    expect(toChannelConfigView(asStoredTelegramConfig(parsed)!)).toMatchObject({
+      ingress_mode: "polling",
     });
   });
 

@@ -168,6 +168,15 @@ export function buildSecretPayload(
   return payload;
 }
 
+export function buildClearSecretKeys(
+  entry: ChannelRegistryEntry,
+  state: ChannelFormState,
+): string[] {
+  return entry.fields
+    .filter((field) => field.kind === "secret" && shouldShowField(field, state))
+    .flatMap((field) => (state.clearSecretKeys[field.key] === true ? [field.key] : []));
+}
+
 export function renderFieldHelper(field: ChannelRegistryEntry["fields"][number]): React.ReactNode {
   if (!field.description && field.help_lines.length === 0) {
     return undefined;
@@ -219,6 +228,16 @@ export function renderConfiguredBadges(
       </Badge>,
     );
   }
+  if (typeof account.config["ingress_mode"] === "string" && account.config["ingress_mode"].trim()) {
+    badges.push(
+      <Badge
+        key="ingress_mode"
+        variant={account.config["ingress_mode"] === "polling" ? "success" : "outline"}
+      >
+        {account.config["ingress_mode"] === "polling" ? "Polling" : "Webhook"}
+      </Badge>,
+    );
+  }
   if (typeof account.config["pipeline_enabled"] === "boolean") {
     badges.push(
       <Badge
@@ -226,6 +245,20 @@ export function renderConfiguredBadges(
         variant={account.config["pipeline_enabled"] === true ? "success" : "outline"}
       >
         Pipeline {account.config["pipeline_enabled"] === true ? "enabled" : "disabled"}
+      </Badge>,
+    );
+  }
+  if (
+    typeof account.config["polling_status"] === "string" &&
+    account.config["polling_status"].trim()
+  ) {
+    const status = String(account.config["polling_status"]);
+    badges.push(
+      <Badge
+        key="polling_status"
+        variant={status === "running" ? "success" : status === "error" ? "danger" : "outline"}
+      >
+        Poller {status}
       </Badge>,
     );
   }

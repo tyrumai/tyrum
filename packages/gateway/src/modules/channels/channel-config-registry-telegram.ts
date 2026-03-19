@@ -5,6 +5,7 @@ import {
   configuredSecretKeysForConfig,
   field,
   fieldError,
+  readEnumValue,
   parseStringList,
   readBoolean,
   readRequiredSecret,
@@ -81,10 +82,26 @@ export const telegramSpec: ChannelRegistrySpec<StoredTelegramChannelConfig> = {
     configurable: true,
     intro_title: "Telegram setup",
     intro_lines: [
-      "Telegram accounts need a bot token, a webhook secret, and a target agent.",
+      "Telegram accounts need a bot token and a target agent.",
+      "Long polling is the default and works for local or private deployments. Webhook mode requires a webhook secret and a reachable HTTPS URL.",
       "Usernames can be resolved to numeric sender IDs when a bot token is present.",
     ],
     fields: [
+      field({
+        key: "ingress_mode",
+        label: "Ingress mode",
+        description:
+          "Choose whether Telegram sends updates by webhook or Tyrum reads them by long polling.",
+        kind: "config",
+        input: "select",
+        section: "credentials",
+        required: true,
+        default_value: "polling",
+        options: [
+          { value: "polling", label: "Long polling" },
+          { value: "webhook", label: "Webhook" },
+        ],
+      }),
       field({
         key: "bot_token",
         label: "Bot token",
@@ -104,6 +121,10 @@ export const telegramSpec: ChannelRegistrySpec<StoredTelegramChannelConfig> = {
         input: "password",
         section: "credentials",
         required: true,
+        visible_when: {
+          field_key: "ingress_mode",
+          equals: "webhook",
+        },
       }),
       field({
         key: "allowed_user_ids",
@@ -140,14 +161,22 @@ export const telegramSpec: ChannelRegistrySpec<StoredTelegramChannelConfig> = {
     ],
   }),
   async create(input) {
+    const ingressMode = readEnumValue(input.config, "ingress_mode", "Ingress mode", [
+      "polling",
+      "webhook",
+    ] as const);
     const botToken = readRequiredSecret(input.secrets, "bot_token", "Bot token");
-    const webhookSecret = readRequiredSecret(input.secrets, "webhook_secret", "Webhook secret");
     return {
       channel: "telegram",
       account_key: input.accountKey,
       agent_key: readRequiredString(input.config, "agent_key", "Target agent"),
+      ingress_mode: ingressMode,
       bot_token: botToken,
-      webhook_secret: webhookSecret,
+      ...(ingressMode === "webhook"
+        ? {
+            webhook_secret: readRequiredSecret(input.secrets, "webhook_secret", "Webhook secret"),
+          }
+        : {}),
       allowed_user_ids: await resolveTelegramAllowedUsers({
         entries: parseStringList(input.config["allowed_user_ids"]),
         token: botToken,
@@ -157,6 +186,9 @@ export const telegramSpec: ChannelRegistrySpec<StoredTelegramChannelConfig> = {
     };
   },
   async update(input) {
+    const ingressMode = Object.prototype.hasOwnProperty.call(input.config, "ingress_mode")
+      ? readEnumValue(input.config, "ingress_mode", "Ingress mode", ["polling", "webhook"] as const)
+      : input.current.ingress_mode;
     const botToken = resolveSecretUpdate({
       key: "bot_token",
       label: "Bot token",
@@ -173,6 +205,7 @@ export const telegramSpec: ChannelRegistrySpec<StoredTelegramChannelConfig> = {
       channel: "telegram",
       account_key: input.current.account_key,
       agent_key: readRequiredString(input.config, "agent_key", "Target agent"),
+      ingress_mode: ingressMode,
       ...(botToken ? { bot_token: botToken } : {}),
       ...(() => {
         const webhookSecret = resolveSecretUpdate({
@@ -181,7 +214,7 @@ export const telegramSpec: ChannelRegistrySpec<StoredTelegramChannelConfig> = {
           current: input.current.webhook_secret,
           secrets: input.secrets,
           clearSecretKeys: input.clearSecretKeys,
-          required: true,
+          required: ingressMode === "webhook",
         });
         return webhookSecret ? { webhook_secret: webhookSecret } : {};
       })(),
@@ -205,6 +238,7 @@ export const telegramSpec: ChannelRegistrySpec<StoredTelegramChannelConfig> = {
       accountKey: input.config.account_key,
       config: {
         agent_key: input.effectiveAgentKey ?? input.config.agent_key ?? "default",
+        ingress_mode: input.config.ingress_mode,
         allowed_user_ids: input.config.allowed_user_ids,
         pipeline_enabled: input.config.pipeline_enabled,
       },

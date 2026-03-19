@@ -3,10 +3,14 @@ import type { OperatorCore } from "@tyrum/operator-core";
 export type TelegramChannelConfig = {
   channel: "telegram";
   account_key: string;
+  ingress_mode: "webhook" | "polling";
   bot_token_configured: boolean;
   webhook_secret_configured: boolean;
   allowed_user_ids: string[];
   pipeline_enabled: boolean;
+  polling_status: "idle" | "running" | "error";
+  polling_last_error_at: string | null;
+  polling_last_error_message: string | null;
 };
 
 export type ChannelConfigListResult = {
@@ -16,6 +20,7 @@ export type ChannelConfigListResult = {
 export type ChannelConfigCreateInput = {
   channel: "telegram";
   account_key: string;
+  ingress_mode: "webhook" | "polling";
   bot_token?: string;
   webhook_secret?: string;
   allowed_user_ids: string[];
@@ -23,6 +28,7 @@ export type ChannelConfigCreateInput = {
 };
 
 export type ChannelConfigUpdateInput = {
+  ingress_mode?: "webhook" | "polling";
   bot_token?: string;
   clear_bot_token?: true;
   webhook_secret?: string;
@@ -153,6 +159,7 @@ export function sortChannelConfigs(configs: TelegramChannelConfig[]): TelegramCh
 
 export function buildTelegramChannelCreateInput(input: {
   accountKey: string;
+  ingressMode: "webhook" | "polling";
   botTokenRaw: string;
   webhookSecretRaw: string;
   allowedUserIds: string[];
@@ -164,14 +171,16 @@ export function buildTelegramChannelCreateInput(input: {
   return {
     channel: "telegram",
     account_key: input.accountKey.trim(),
+    ingress_mode: input.ingressMode,
     ...(botToken ? { bot_token: botToken } : {}),
-    ...(webhookSecret ? { webhook_secret: webhookSecret } : {}),
+    ...(input.ingressMode === "webhook" && webhookSecret ? { webhook_secret: webhookSecret } : {}),
     allowed_user_ids: input.allowedUserIds,
     pipeline_enabled: input.pipelineEnabled,
   };
 }
 
 export function buildTelegramChannelUpdateInput(input: {
+  ingressMode: "webhook" | "polling";
   botTokenRaw: string;
   clearBotToken: boolean;
   webhookSecretRaw: string;
@@ -183,10 +192,15 @@ export function buildTelegramChannelUpdateInput(input: {
   const webhookSecret = input.webhookSecretRaw.trim();
 
   return {
+    ingress_mode: input.ingressMode,
     ...(input.clearBotToken ? { clear_bot_token: true as const } : {}),
     ...(!input.clearBotToken && botToken ? { bot_token: botToken } : {}),
-    ...(input.clearWebhookSecret ? { clear_webhook_secret: true as const } : {}),
-    ...(!input.clearWebhookSecret && webhookSecret ? { webhook_secret: webhookSecret } : {}),
+    ...(input.ingressMode === "webhook" && input.clearWebhookSecret
+      ? { clear_webhook_secret: true as const }
+      : {}),
+    ...(!input.clearWebhookSecret && input.ingressMode === "webhook" && webhookSecret
+      ? { webhook_secret: webhookSecret }
+      : {}),
     allowed_user_ids: input.allowedUserIds,
     pipeline_enabled: input.pipelineEnabled,
   };

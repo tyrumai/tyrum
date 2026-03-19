@@ -2,6 +2,7 @@ import {
   AccountId,
   AgentKey,
   ChannelConfigView as ChannelConfigViewSchema,
+  TelegramIngressMode,
   type ChannelConfigView as ChannelConfigViewT,
 } from "@tyrum/contracts";
 import { z } from "zod";
@@ -39,6 +40,7 @@ export const StoredTelegramChannelConfigSchema = z
     channel: z.literal("telegram"),
     account_key: AccountId,
     agent_key: AgentKey.optional(),
+    ingress_mode: TelegramIngressMode.default("polling"),
     bot_token: z.string().trim().min(1).optional(),
     webhook_secret: z.string().trim().min(1).optional(),
     allowed_user_ids: z
@@ -54,6 +56,12 @@ export const StoredTelegramChannelConfigSchema = z
   })
   .strict();
 export type StoredTelegramChannelConfig = z.infer<typeof StoredTelegramChannelConfigSchema>;
+
+export type TelegramPollingStatusView = {
+  status: "idle" | "running" | "error";
+  lastErrorAt?: string;
+  lastErrorMessage?: string;
+};
 
 export const StoredDiscordChannelConfigSchema = z
   .object({
@@ -142,13 +150,20 @@ export function asStoredTelegramConfig(
   return config.channel === "telegram" ? config : undefined;
 }
 
-export function toChannelConfigView(config: StoredTelegramChannelConfig): ChannelConfigViewT {
+export function toChannelConfigView(
+  config: StoredTelegramChannelConfig,
+  polling?: TelegramPollingStatusView,
+): ChannelConfigViewT {
   return ChannelConfigViewSchema.parse({
     channel: config.channel,
     account_key: config.account_key,
+    ingress_mode: config.ingress_mode,
     bot_token_configured: Boolean(config.bot_token?.trim()),
     webhook_secret_configured: Boolean(config.webhook_secret?.trim()),
     allowed_user_ids: config.allowed_user_ids,
     pipeline_enabled: config.pipeline_enabled,
+    polling_status: polling?.status ?? "idle",
+    polling_last_error_at: polling?.lastErrorAt ?? null,
+    polling_last_error_message: polling?.lastErrorMessage ?? null,
   });
 }

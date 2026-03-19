@@ -69,6 +69,7 @@ describe("channel config route partial updates", () => {
       tenantId: DEFAULT_TENANT_ID,
       accountKey: "default",
       agentKey: "agent-b",
+      ingressMode: "webhook",
       botToken: "telegram-bot-token",
       webhookSecret: "telegram-webhook-secret",
       allowedUserIds: ["123"],
@@ -96,6 +97,7 @@ describe("channel config route partial updates", () => {
         account_key: "default",
         config: {
           agent_key: "default",
+          ingress_mode: "webhook",
           allowed_user_ids: ["123"],
           pipeline_enabled: false,
         },
@@ -109,6 +111,7 @@ describe("channel config route partial updates", () => {
     expect(stored).toMatchObject({
       channel: "telegram",
       agent_key: "default",
+      ingress_mode: "webhook",
       allowed_user_ids: ["123"],
       pipeline_enabled: false,
     });

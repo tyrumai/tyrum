@@ -38,6 +38,7 @@ describe("ChannelConfigDal", () => {
     const created = await dal.createTelegram({
       tenantId: DEFAULT_TENANT_ID,
       accountKey: "work",
+      ingressMode: "polling",
       botToken: "bot-token",
       webhookSecret: "webhook-secret",
       allowedUserIds: ["123", "456"],
@@ -46,10 +47,14 @@ describe("ChannelConfigDal", () => {
     expect(toChannelConfigView(created)).toMatchObject({
       channel: "telegram",
       account_key: "work",
+      ingress_mode: "polling",
       bot_token_configured: true,
       webhook_secret_configured: true,
       allowed_user_ids: ["123", "456"],
       pipeline_enabled: false,
+      polling_status: "idle",
+      polling_last_error_at: null,
+      polling_last_error_message: null,
     });
 
     const listed = await dal.listTelegram(DEFAULT_TENANT_ID);
@@ -60,12 +65,14 @@ describe("ChannelConfigDal", () => {
       tenantId: DEFAULT_TENANT_ID,
       accountKey: "work",
       clearBotToken: true,
+      ingressMode: "webhook",
       allowedUserIds: ["123"],
       pipelineEnabled: true,
     });
     expect(updated).toMatchObject({
       channel: "telegram",
       account_key: "work",
+      ingress_mode: "webhook",
       webhook_secret: "webhook-secret",
       allowed_user_ids: ["123"],
       pipeline_enabled: true,
@@ -173,6 +180,25 @@ describe("ChannelConfigDal", () => {
     ).rejects.toThrow(/already used/);
   });
 
+  it("defaults new telegram configs to polling when ingress mode is omitted", async () => {
+    const created = await dal.createTelegram({
+      tenantId: DEFAULT_TENANT_ID,
+      accountKey: "default",
+      botToken: "bot-token",
+      webhookSecret: "webhook-secret",
+    });
+
+    expect(created).toMatchObject({
+      channel: "telegram",
+      account_key: "default",
+      ingress_mode: "polling",
+      bot_token: "bot-token",
+      webhook_secret: "webhook-secret",
+      allowed_user_ids: [],
+      pipeline_enabled: true,
+    });
+  });
+
   it("uses secure string comparison when resolving telegram webhook secrets", async () => {
     await dal.createTelegram({
       tenantId: DEFAULT_TENANT_ID,
@@ -216,7 +242,7 @@ describe("ChannelConfigDal", () => {
     expect(secureStringEqual).toHaveBeenCalledTimes(2);
   });
 
-  it("imports the legacy singleton telegram deployment config into the default account once", async () => {
+  it("does not import legacy telegram deployment config rows", async () => {
     await db.run(
       `INSERT INTO deployment_configs (config_json, created_by_json, reason)
        VALUES (?, ?, ?)`,
@@ -235,29 +261,10 @@ describe("ChannelConfigDal", () => {
       ],
     );
 
-    const firstList = await dal.listTelegram(DEFAULT_TENANT_ID);
-    expect(firstList).toEqual([
-      {
-        channel: "telegram",
-        account_key: "default",
-        bot_token: "legacy-bot-token",
-        webhook_secret: "legacy-webhook-secret",
-        allowed_user_ids: ["123"],
-        pipeline_enabled: false,
-      },
-    ]);
-
-    const secondList = await dal.listTelegram(DEFAULT_TENANT_ID);
-    expect(secondList).toEqual(firstList);
-
-    const rowCount = await db.get<{ count: number }>(
-      "SELECT COUNT(*) AS count FROM channel_configs WHERE tenant_id = ? AND connector_key = 'telegram'",
-      [DEFAULT_TENANT_ID],
-    );
-    expect(rowCount?.count).toBe(1);
+    await expect(dal.listTelegram(DEFAULT_TENANT_ID)).resolves.toEqual([]);
   });
 
-  it("does not re-import the legacy singleton after the imported config is deleted", async () => {
+  it("lists manually created telegram configs without consulting legacy deployment rows", async () => {
     await db.run(
       `INSERT INTO deployment_configs (config_json, created_by_json, reason)
        VALUES (?, ?, ?)`,
@@ -274,15 +281,24 @@ describe("ChannelConfigDal", () => {
       ],
     );
 
-    await expect(dal.listTelegram(DEFAULT_TENANT_ID)).resolves.toHaveLength(1);
-    await expect(
-      dal.delete({
-        tenantId: DEFAULT_TENANT_ID,
-        connectorKey: "telegram",
-        accountKey: "default",
-      }),
-    ).resolves.toBe(true);
-    await expect(dal.listTelegram(DEFAULT_TENANT_ID)).resolves.toEqual([]);
+    await dal.createTelegram({
+      tenantId: DEFAULT_TENANT_ID,
+      accountKey: "default",
+      botToken: "manual-bot-token",
+      webhookSecret: "manual-webhook-secret",
+    });
+
+    await expect(dal.listTelegram(DEFAULT_TENANT_ID)).resolves.toEqual([
+      {
+        channel: "telegram",
+        account_key: "default",
+        ingress_mode: "polling",
+        bot_token: "manual-bot-token",
+        webhook_secret: "manual-webhook-secret",
+        allowed_user_ids: [],
+        pipeline_enabled: true,
+      },
+    ]);
   });
 
   it("preserves timezone-offset timestamps returned from storage", async () => {

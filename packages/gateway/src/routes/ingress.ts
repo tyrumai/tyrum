@@ -3,11 +3,7 @@
  */
 
 import { Hono } from "hono";
-import {
-  normalizeUpdate,
-  normalizeUpdateWithMedia,
-  TelegramNormalizationError,
-} from "../modules/ingress/telegram.js";
+import { TelegramNormalizationError } from "../modules/ingress/telegram.js";
 import {
   buildGoogleChatEnvelope,
   extractGoogleChatText,
@@ -20,21 +16,19 @@ import type { TelegramBot } from "../modules/ingress/telegram-bot.js";
 import type { AgentRegistry } from "../modules/agent/registry.js";
 import type { TelegramChannelQueue } from "../modules/channels/telegram.js";
 import type { StoredTelegramChannelConfig } from "../modules/channels/channel-config-dal.js";
-import {
-  renderMarkdownForTelegram,
-  type TelegramFormattingFallbackEvent,
-} from "../modules/markdown/telegram.js";
-import { resolveTelegramAgentId } from "../modules/channels/routing.js";
-import { createTelegramEgressConnector } from "../modules/channels/telegram-shared.js";
 import type { RoutingConfigDal } from "../modules/channels/routing-config-dal.js";
 import type { TelegramChannelRuntime } from "../modules/channels/telegram-runtime.js";
 import type { GoogleChatChannelRuntime } from "../modules/channels/googlechat-runtime.js";
 import type { MemoryDal } from "../modules/memory/memory-dal.js";
-import { recordMemorySystemEpisode } from "../modules/memory/memory-episode-recorder.js";
 import type { Logger } from "../modules/observability/logger.js";
 import { DEFAULT_TENANT_ID } from "../modules/identity/scope.js";
 import { safeDetail } from "../utils/safe-detail.js";
 import type { ArtifactStore } from "../modules/artifact/store.js";
+import {
+  processTelegramInboundUpdate,
+  TelegramInboundTemporaryFailure,
+  type TelegramInboundAccount,
+} from "../modules/channels/telegram-inbound.js";
 
 export interface IngressDeps {
   telegramRuntime?: TelegramChannelRuntime;
@@ -52,6 +46,10 @@ export interface IngressDeps {
 }
 
 const TELEGRAM_SECRET_HEADER = "x-telegram-bot-api-secret-token";
+
+function hasConfiguredTelegramProcessing(deps: IngressDeps): boolean {
+  return Boolean(deps.agents || deps.telegramQueue);
+}
 
 function extractBearerToken(headerValue: string | undefined): string | undefined {
   const raw = headerValue?.trim();
@@ -83,16 +81,32 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
 
   ingressRouter.post("/ingress/telegram", async (c) => {
     let telegramBot = deps.telegramBot;
-    let telegramAllowedUserIds = deps.telegramAllowedUserIds ?? [];
-    let telegramAccountKey = "default";
-    let telegramPipelineEnabled = true;
+    let telegramAccount: TelegramInboundAccount = {
+      accountKey: "default",
+      allowedUserIds: deps.telegramAllowedUserIds ?? [],
+      pipelineEnabled: true,
+    };
 
     if (deps.telegramRuntime) {
       const accounts = await deps.telegramRuntime.listTelegramAccounts(DEFAULT_TENANT_ID);
-      const botBackedAccounts = accounts.filter((account) => Boolean(account.bot_token?.trim()));
+      const webhookAccounts = accounts.filter((account) => account.ingress_mode === "webhook");
+      const botBackedAccounts = webhookAccounts.filter((account) =>
+        Boolean(account.bot_token?.trim()),
+      );
       const botBackedAccountsWithSecret = botBackedAccounts.filter((account) =>
         Boolean(account.webhook_secret?.trim()),
       );
+
+      if (webhookAccounts.length === 0) {
+        return c.json(
+          {
+            error: "misconfigured",
+            message:
+              "Telegram webhook ingress requires at least one webhook-mode account when Telegram ingress is enabled.",
+          },
+          503,
+        );
+      }
 
       if (botBackedAccounts.length === 0) {
         return c.json(
@@ -119,7 +133,10 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
         return c.json({ error: "unauthorized", message: "invalid telegram webhook secret" }, 401);
       }
 
-      const matchedAccount = matchTelegramAccountByWebhookSecret(accounts, providedSecret);
+      const matchedAccount = matchTelegramAccountByWebhookSecret(
+        botBackedAccountsWithSecret,
+        providedSecret,
+      );
       if (!matchedAccount || !matchedAccount.webhook_secret) {
         return c.json({ error: "unauthorized", message: "invalid telegram webhook secret" }, 401);
       }
@@ -139,11 +156,13 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
       }
 
       telegramBot = matchedBot;
-      telegramAllowedUserIds = matchedAccount.allowed_user_ids;
-      telegramAccountKey = matchedAccount.account_key;
-      telegramPipelineEnabled = matchedAccount.pipeline_enabled ?? true;
+      telegramAccount = {
+        accountKey: matchedAccount.account_key,
+        agentKey: matchedAccount.agent_key,
+        allowedUserIds: matchedAccount.allowed_user_ids,
+        pipelineEnabled: matchedAccount.pipeline_enabled ?? true,
+      };
     } else if (deps.telegramBot) {
-      // When Telegram integration is enabled, require Telegram webhook secret validation.
       const expectedSecret = deps.telegramWebhookSecret?.trim();
       if (!expectedSecret) {
         return c.json(
@@ -159,215 +178,70 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
       if (!providedSecret || !secureStringEqual(providedSecret, expectedSecret)) {
         return c.json({ error: "unauthorized", message: "invalid telegram webhook secret" }, 401);
       }
+    } else if (hasConfiguredTelegramProcessing(deps)) {
+      return c.json(
+        {
+          error: "misconfigured",
+          message: "Telegram runtime must be configured when Telegram ingress is enabled.",
+        },
+        503,
+      );
     }
 
     const rawBody = await c.req.text();
-
     if (!rawBody) {
       return c.json({ error: "invalid_request", message: "request body is empty" }, 400);
     }
 
-    let normalized;
     try {
-      normalized =
-        telegramBot && deps.artifactStore
-          ? await normalizeUpdateWithMedia(rawBody, {
-              telegramBot,
-              artifactStore: deps.artifactStore,
-              maxUploadBytes: deps.artifactMaxUploadBytes,
-            })
-          : normalizeUpdate(rawBody);
+      const result = await processTelegramInboundUpdate({
+        rawBody,
+        tenantId: DEFAULT_TENANT_ID,
+        account: telegramAccount,
+        telegramBot,
+        agents: deps.agents,
+        telegramQueue: deps.telegramQueue,
+        routingConfigDal: deps.routingConfigDal,
+        memoryDal: deps.memoryDal,
+        artifactStore: deps.artifactStore,
+        maxUploadBytes: deps.artifactMaxUploadBytes,
+        logger: deps.logger,
+      });
+      switch (result.kind) {
+        case "normalized":
+          return c.json(result.normalized);
+        case "ignored":
+          return c.json({ ok: true, ignored: true, reason: result.reason }, 200);
+        case "queued":
+          return c.json(
+            {
+              ok: true,
+              queued: result.queued,
+              inbox_id: result.inbox_id,
+              deduped: result.deduped,
+              status: result.status,
+            },
+            200,
+          );
+        case "replied":
+          return c.json({ ok: true, session_id: result.session_id });
+        case "agent_error":
+          return c.json({ ok: true, error: "agent_error" });
+      }
     } catch (err) {
       if (err instanceof TelegramNormalizationError) {
         return c.json({ error: "normalization_error", message: err.message }, 400);
       }
-      throw err;
-    }
-
-    if (telegramAllowedUserIds.length > 0) {
-      const senderId = normalized.message.sender?.id?.trim();
-      if (!senderId || !telegramAllowedUserIds.includes(senderId)) {
-        deps.logger?.info("ingress.telegram.sender_blocked", {
-          sender_id: senderId ?? "unknown",
-          reason: "telegram_user_not_allowlisted",
-          account_key: telegramAccountKey,
-        });
-        return c.json({ ok: true, ignored: true, reason: "sender_not_allowlisted" }, 200);
-      }
-    }
-
-    // If no agent runtime, return normalized message (legacy behavior)
-    if (!deps.agents || !telegramBot) {
-      return c.json(normalized);
-    }
-
-    const chatId = normalized.thread.id;
-    const envelope = normalized.message.envelope;
-    if (!envelope) {
-      // Envelope omitted when connector content is empty (e.g., whitespace-only text).
-      return c.json({ ok: true });
-    }
-
-    let durable;
-    if (deps.routingConfigDal && (!deps.telegramRuntime || telegramBot)) {
-      try {
-        durable = await deps.routingConfigDal.getLatest(DEFAULT_TENANT_ID);
-      } catch (err) {
-        deps.logger?.warn("ingress.telegram.routing_config_load_failed", {
-          error: safeDetail(err) ?? "unknown_error",
-        });
-        durable = undefined;
-      }
-    }
-    const routing = durable?.config ?? { v: 1 };
-    const storedTelegramAccount = deps.telegramRuntime
-      ? await deps.telegramRuntime.getTelegramAccountByAccountKey({
-          tenantId: DEFAULT_TENANT_ID,
-          accountKey: telegramAccountKey,
-        })
-      : undefined;
-    const storedAgentKey = storedTelegramAccount?.agent_key?.trim();
-    const routedFromLegacy = resolveTelegramAgentId(routing, telegramAccountKey, chatId);
-    const routedAgentId = storedAgentKey || routedFromLegacy;
-
-    if (deps.telegramQueue && telegramPipelineEnabled) {
-      try {
-        const enqueued = await deps.telegramQueue.enqueue(normalized, {
-          agentId: routedAgentId,
-          accountId: telegramAccountKey,
-        });
-        return c.json({
-          ok: true,
-          queued: enqueued.inbox.status === "queued" || enqueued.inbox.status === "processing",
-          inbox_id: enqueued.inbox.inbox_id,
-          deduped: enqueued.deduped,
-          status: enqueued.inbox.status,
-        });
-      } catch (err) {
-        void err;
+      if (err instanceof TelegramInboundTemporaryFailure) {
         return c.json(
           {
             error: "temporary_failure",
-            message: "failed to queue telegram update; please retry",
+            message: err.message,
           },
           503,
         );
       }
-    }
-
-    try {
-      const runtime = await deps.agents.getRuntime({
-        tenantId: DEFAULT_TENANT_ID,
-        agentKey: routedAgentId,
-      });
-      const patchedEnvelope = {
-        ...envelope,
-        delivery: {
-          ...envelope.delivery,
-          channel: "telegram",
-          account: telegramAccountKey,
-        },
-      };
-      const result = await runtime.turn({
-        channel: "telegram",
-        thread_id: chatId,
-        envelope: patchedEnvelope,
-      });
-
-      const formattingFallbacks: TelegramFormattingFallbackEvent[] = [];
-      const chunks = renderMarkdownForTelegram(result.reply, {
-        onFormattingFallback: (event) => {
-          formattingFallbacks.push(event);
-        },
-      });
-
-      if (deps.memoryDal && formattingFallbacks.length > 0) {
-        const occurredAt = new Date().toISOString();
-        const settled = await Promise.allSettled(
-          formattingFallbacks.map(async (fallback) => {
-            await recordMemorySystemEpisode(
-              deps.memoryDal!,
-              {
-                occurred_at: occurredAt,
-                channel: "telegram",
-                event_type: "channel_formatting_fallback",
-                summary_md: `Telegram formatting fallback: ${fallback.reason}`,
-                tags: ["channel", "telegram", "formatting_fallback"],
-                metadata: {
-                  mode: "direct",
-                  agent_id: routedAgentId,
-                  session_id: result.session_id,
-                  reason: fallback.reason,
-                  chunk_index: fallback.chunk_index,
-                  ...(fallback.detail ? { detail: fallback.detail } : {}),
-                },
-              },
-              routedAgentId,
-            );
-          }),
-        );
-
-        for (let index = 0; index < settled.length; index++) {
-          const outcome = settled[index];
-          if (outcome?.status !== "rejected") continue;
-          const fallback = formattingFallbacks[index];
-          deps.logger?.warn("memory.system_episode_record_failed", {
-            agent_id: routedAgentId,
-            session_id: result.session_id,
-            event_type: "channel_formatting_fallback",
-            reason: fallback?.reason,
-            chunk_index: fallback?.chunk_index,
-            detail: fallback?.detail,
-            error: safeDetail(outcome.reason) ?? "unknown_error",
-          });
-        }
-      }
-
-      const connector = createTelegramEgressConnector(
-        telegramBot,
-        telegramAccountKey,
-        deps.artifactStore,
-      );
-      const attachments = result.attachments ?? [];
-      if (chunks.length === 0 && attachments.length === 0) {
-        return c.json({ ok: true, session_id: result.session_id });
-      }
-      const egressChunks = chunks.length > 0 ? chunks : [""];
-      for (let index = 0; index < egressChunks.length; index += 1) {
-        const chunk = egressChunks[index]!;
-        await connector.sendMessage({
-          accountId: telegramAccountKey,
-          containerId: chatId,
-          content: {
-            ...(chunk.length > 0 ? { text: chunk } : {}),
-            ...(index === 0 && attachments.length > 0 ? { attachments } : {}),
-          },
-          parseMode: "HTML",
-        });
-      }
-      return c.json({ ok: true, session_id: result.session_id });
-    } catch (err) {
-      deps.logger?.warn("ingress.telegram.agent_turn_failed", {
-        agent_id: routedAgentId,
-        thread_id: chatId,
-        account_key: telegramAccountKey,
-        error: safeDetail(err) ?? "unknown_error",
-      });
-      try {
-        await telegramBot.sendMessage(
-          chatId,
-          "Sorry, something went wrong. Please try again later.",
-          { parse_mode: "HTML" },
-        );
-      } catch (sendErr) {
-        deps.logger?.warn("ingress.telegram.error_message_send_failed", {
-          agent_id: routedAgentId,
-          thread_id: chatId,
-          account_key: telegramAccountKey,
-          error: safeDetail(sendErr) ?? "unknown_error",
-        });
-      }
-      return c.json({ ok: true, error: "agent_error" });
+      throw err;
     }
   });
 

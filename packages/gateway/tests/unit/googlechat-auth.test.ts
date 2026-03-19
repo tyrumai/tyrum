@@ -1,14 +1,29 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { verifyIdTokenMock, verifySignedJwtWithCertsAsyncMock } = vi.hoisted(() => ({
-  verifyIdTokenMock: vi.fn(),
-  verifySignedJwtWithCertsAsyncMock: vi.fn(),
-}));
+const { oauth2ClientCtorMock, verifyIdTokenMock, verifySignedJwtWithCertsAsyncMock } = vi.hoisted(
+  () => {
+    const verifyIdTokenFn = vi.fn();
+    const verifySignedJwtWithCertsAsyncFn = vi.fn();
+    const oauth2ClientCtorFn = vi.fn(() => ({
+      verifyIdToken: verifyIdTokenFn,
+      verifySignedJwtWithCertsAsync: verifySignedJwtWithCertsAsyncFn,
+    }));
+    return {
+      oauth2ClientCtorMock: oauth2ClientCtorFn,
+      verifyIdTokenMock: verifyIdTokenFn,
+      verifySignedJwtWithCertsAsyncMock: verifySignedJwtWithCertsAsyncFn,
+    };
+  },
+);
 
 vi.mock("google-auth-library", () => ({
   OAuth2Client: class OAuth2Client {
     verifyIdToken = verifyIdTokenMock;
     verifySignedJwtWithCertsAsync = verifySignedJwtWithCertsAsyncMock;
+
+    constructor() {
+      oauth2ClientCtorMock();
+    }
   },
 }));
 
@@ -23,6 +38,7 @@ async function loadVerifyGoogleChatRequest(): Promise<VerifyGoogleChatRequest> {
 describe("verifyGoogleChatRequest", () => {
   beforeEach(() => {
     vi.resetModules();
+    oauth2ClientCtorMock.mockReset();
     verifyIdTokenMock.mockReset();
     verifySignedJwtWithCertsAsyncMock.mockReset();
   });
@@ -206,5 +222,40 @@ describe("verifyGoogleChatRequest", () => {
       ok: false,
       reason: "invalid signature",
     });
+  });
+
+  it("retries client creation after a transient initialization failure", async () => {
+    oauth2ClientCtorMock
+      .mockImplementationOnce(() => {
+        throw new Error("transient init failure");
+      })
+      .mockImplementation(() => {});
+    verifyIdTokenMock.mockResolvedValue({
+      getPayload: () => ({
+        email_verified: true,
+        email: "chat@system.gserviceaccount.com",
+      }),
+    });
+
+    const verifyGoogleChatRequest = await loadVerifyGoogleChatRequest();
+
+    const first = await verifyGoogleChatRequest({
+      bearer: "chat-token-a",
+      audienceType: "app-url",
+      audience: "https://example.test/googlechat",
+    });
+    const second = await verifyGoogleChatRequest({
+      bearer: "chat-token-b",
+      audienceType: "app-url",
+      audience: "https://example.test/googlechat",
+    });
+
+    expect(first).toEqual({
+      ok: false,
+      reason: "google-auth-library is required for Google Chat auth: transient init failure",
+    });
+    expect(second).toEqual({ ok: true });
+    expect(oauth2ClientCtorMock).toHaveBeenCalledTimes(2);
+    expect(verifyIdTokenMock).toHaveBeenCalledOnce();
   });
 });

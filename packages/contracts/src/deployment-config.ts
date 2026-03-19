@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { DateTimeSchema } from "./common.js";
 import { DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF } from "./desktop-environment.js";
-import { canonicalizeTelegramAllowedUserIds } from "./telegram.js";
 import { AgentModelConfig } from "./agent-core.js";
 
 export const DEFAULT_PUBLIC_BASE_URL = "http://127.0.0.1:8788" as const;
@@ -109,18 +108,6 @@ export type DeploymentConfigExecution = z.infer<typeof DeploymentConfigExecution
 
 export const DeploymentConfigChannels = z
   .object({
-    telegramBotToken: z.string().trim().min(1).optional(),
-    telegramWebhookSecret: z.string().trim().min(1).optional(),
-    telegramAllowedUserIds: z
-      .array(
-        z
-          .string()
-          .trim()
-          .regex(/^[0-9]+$/),
-      )
-      .default([])
-      .overwrite(canonicalizeTelegramAllowedUserIds),
-    pipelineEnabled: z.boolean().default(true),
     typingAutomationEnabled: z.boolean().default(false),
     typingMode: z.enum(["never", "message", "thinking", "instant"]).default("never"),
     typingRefreshMs: z.number().int().min(0).max(10_000).default(4000),

@@ -13,6 +13,7 @@ import {
   type TelegramChannelConfig,
 } from "./admin-http-channels.shared.js";
 import { ElevatedModeTooltip } from "../elevated-mode/elevated-mode-tooltip.js";
+import { Alert } from "../ui/alert.js";
 import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
@@ -52,22 +53,29 @@ export function TelegramChannelCard({
 }): React.ReactElement {
   const [botTokenRaw, setBotTokenRaw] = React.useState("");
   const [webhookSecretRaw, setWebhookSecretRaw] = React.useState("");
+  const [ingressMode, setIngressMode] = React.useState<"webhook" | "polling">(config.ingress_mode);
   const [clearBotToken, setClearBotToken] = React.useState(false);
   const [clearWebhookSecret, setClearWebhookSecret] = React.useState(false);
-  const [allowedUserIdsRaw, setAllowedUserIdsRaw] = React.useState("");
-  const [pipelineEnabled, setPipelineEnabled] = React.useState(true);
+  const [allowedUserIdsRaw, setAllowedUserIdsRaw] = React.useState(() =>
+    formatAllowedUserIds(config.allowed_user_ids),
+  );
+  const [pipelineEnabled, setPipelineEnabled] = React.useState(config.pipeline_enabled);
   const [saving, setSaving] = React.useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
+  const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     setBotTokenRaw("");
     setWebhookSecretRaw("");
+    setIngressMode(config.ingress_mode);
     setClearBotToken(false);
     setClearWebhookSecret(false);
     setAllowedUserIdsRaw(formatAllowedUserIds(config.allowed_user_ids));
     setPipelineEnabled(config.pipeline_enabled);
   }, [
     config.account_key,
+    config.ingress_mode,
     config.allowed_user_ids,
     config.pipeline_enabled,
     config.bot_token_configured,
@@ -83,6 +91,7 @@ export function TelegramChannelCard({
       ? `User IDs must be numeric. Invalid: ${parsedAllowedUserIds.invalid.join(", ")}`
       : null;
   const isDirty =
+    ingressMode !== config.ingress_mode ||
     !sameStringList(parsedAllowedUserIds.ids, config.allowed_user_ids) ||
     pipelineEnabled !== config.pipeline_enabled ||
     botTokenRaw.trim().length > 0 ||
@@ -103,11 +112,14 @@ export function TelegramChannelCard({
     }
 
     setSaving(true);
+    setErrorMessage(null);
+    setStatusMessage(null);
     try {
       const result = await mutationApi.updateChannelConfig(
         "telegram",
         config.account_key,
         buildTelegramChannelUpdateInput({
+          ingressMode,
           botTokenRaw,
           clearBotToken,
           webhookSecretRaw,
@@ -121,9 +133,9 @@ export function TelegramChannelCard({
       }
       onUpdated(result.config);
       onChannelConfigsChanged?.();
-      toast.success("Channel updated");
+      setStatusMessage(`Saved Telegram account ${result.config.account_key}.`);
     } catch (error) {
-      toast.error("Unable to update channel", { description: formatErrorMessage(error) });
+      setErrorMessage(formatErrorMessage(error));
     } finally {
       setSaving(false);
     }
@@ -170,11 +182,25 @@ export function TelegramChannelCard({
             <Badge variant={config.bot_token_configured ? "success" : "outline"}>
               Bot token {config.bot_token_configured ? "configured" : "missing"}
             </Badge>
+            <Badge variant={config.ingress_mode === "polling" ? "success" : "outline"}>
+              {config.ingress_mode === "polling" ? "Polling" : "Webhook"}
+            </Badge>
             <Badge variant={config.webhook_secret_configured ? "success" : "outline"}>
               Webhook secret {config.webhook_secret_configured ? "configured" : "missing"}
             </Badge>
             <Badge variant={config.pipeline_enabled ? "success" : "outline"}>
               Pipeline {config.pipeline_enabled ? "enabled" : "disabled"}
+            </Badge>
+            <Badge
+              variant={
+                config.polling_status === "running"
+                  ? "success"
+                  : config.polling_status === "error"
+                    ? "danger"
+                    : "outline"
+              }
+            >
+              Poller {config.polling_status}
             </Badge>
           </div>
         </div>
@@ -182,10 +208,32 @@ export function TelegramChannelCard({
 
       {expanded ? (
         <CardContent className="grid gap-4">
+          {statusMessage ? (
+            <Alert variant="success" title="Channel updated" description={statusMessage} />
+          ) : null}
+          {errorMessage ? (
+            <Alert variant="error" title="Unable to update channel" description={errorMessage} />
+          ) : null}
+          {config.polling_status === "error" &&
+          (config.polling_last_error_message || config.polling_last_error_at) ? (
+            <Alert
+              variant="warning"
+              title="Telegram polling issue"
+              description={[
+                config.polling_last_error_message,
+                config.polling_last_error_at
+                  ? `Last error at ${config.polling_last_error_at}`
+                  : null,
+              ]
+                .filter((value): value is string => Boolean(value))
+                .join(" · ")}
+            />
+          ) : null}
           <TelegramChannelFields
             testIdPrefix={`channels-instance-${config.account_key}`}
             allowSecretClears={true}
             validationError={validationError}
+            ingressMode={ingressMode}
             botTokenRaw={botTokenRaw}
             clearBotToken={clearBotToken}
             webhookSecretRaw={webhookSecretRaw}
@@ -198,6 +246,7 @@ export function TelegramChannelCard({
             onClearWebhookSecretChange={setClearWebhookSecret}
             onAllowedUserIdsChange={setAllowedUserIdsRaw}
             onPipelineEnabledChange={setPipelineEnabled}
+            onIngressModeChange={setIngressMode}
           />
 
           <div className="flex flex-wrap justify-end gap-2">
@@ -263,6 +312,7 @@ export function CreateChannelDialog({
 }): React.ReactElement {
   const [channelType, setChannelType] = React.useState<"telegram">("telegram");
   const [accountKey, setAccountKey] = React.useState("");
+  const [ingressMode, setIngressMode] = React.useState<"webhook" | "polling">("polling");
   const [botTokenRaw, setBotTokenRaw] = React.useState("");
   const [webhookSecretRaw, setWebhookSecretRaw] = React.useState("");
   const [allowedUserIdsRaw, setAllowedUserIdsRaw] = React.useState("");
@@ -273,6 +323,7 @@ export function CreateChannelDialog({
     if (open) return;
     setChannelType("telegram");
     setAccountKey("");
+    setIngressMode("polling");
     setBotTokenRaw("");
     setWebhookSecretRaw("");
     setAllowedUserIdsRaw("");
@@ -308,6 +359,7 @@ export function CreateChannelDialog({
       const result = await mutationApi.createChannelConfig(
         buildTelegramChannelCreateInput({
           accountKey,
+          ingressMode,
           botTokenRaw,
           webhookSecretRaw,
           allowedUserIds: parsedAllowedUserIds.ids,
@@ -363,6 +415,7 @@ export function CreateChannelDialog({
             testIdPrefix="channels-instance-create"
             allowSecretClears={false}
             validationError={validationError}
+            ingressMode={ingressMode}
             botTokenRaw={botTokenRaw}
             clearBotToken={false}
             webhookSecretRaw={webhookSecretRaw}
@@ -375,6 +428,7 @@ export function CreateChannelDialog({
             onClearWebhookSecretChange={() => {}}
             onAllowedUserIdsChange={setAllowedUserIdsRaw}
             onPipelineEnabledChange={setPipelineEnabled}
+            onIngressModeChange={setIngressMode}
           />
         </div>
 

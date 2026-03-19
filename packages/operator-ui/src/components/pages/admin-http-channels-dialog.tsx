@@ -16,6 +16,7 @@ import { Input } from "../ui/input.js";
 import { Select } from "../ui/select.js";
 import { ChannelFieldSections } from "./admin-http-channels-dialog-fields.js";
 import {
+  buildClearSecretKeys,
   buildConfigPayload,
   buildInitialFormState,
   buildSecretPayload,
@@ -107,9 +108,7 @@ export function ChannelAccountDialog({
         await api.updateAccount(account.channel, account.account_key, {
           config,
           ...(Object.keys(secrets).length > 0 ? { secrets } : {}),
-          clear_secret_keys: Object.entries(state.clearSecretKeys)
-            .filter(([, checked]) => checked)
-            .map(([key]) => key),
+          clear_secret_keys: buildClearSecretKeys(entry, state),
         });
       } else {
         await api.createAccount({

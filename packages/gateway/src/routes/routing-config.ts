@@ -8,6 +8,7 @@ import type { SqlDb } from "../statestore/types.js";
 import type { ConnectionManager } from "../ws/connection-manager.js";
 import type { OutboxDal } from "../modules/backplane/outbox-dal.js";
 import { ChannelConfigDal, toChannelConfigView } from "../modules/channels/channel-config-dal.js";
+import { TelegramPollingStateDal } from "../modules/channels/telegram-polling-state-dal.js";
 import type { RoutingConfigDal } from "../modules/channels/routing-config-dal.js";
 import type { ChannelThreadDal } from "../modules/channels/thread-dal.js";
 import type { Logger } from "../modules/observability/logger.js";
@@ -45,6 +46,7 @@ function readOnlyCompatibilityResponse() {
 export function createRoutingConfigRoutes(deps: RoutingConfigRouteDeps): Hono {
   const app = new Hono();
   const channelConfigDal = new ChannelConfigDal(deps.db);
+  const telegramPollingStateDal = new TelegramPollingStateDal(deps.db);
 
   app.get("/routing/config", async (c) => {
     try {
@@ -124,10 +126,21 @@ export function createRoutingConfigRoutes(deps: RoutingConfigRouteDeps): Hono {
 
   app.get("/routing/channels/configs", async (c) => {
     const tenantId = requireTenantId(c);
-    const channels = await channelConfigDal.listTelegram(tenantId);
+    const [channels, pollingState] = await Promise.all([
+      channelConfigDal.listTelegram(tenantId),
+      telegramPollingStateDal.listByTenant(tenantId),
+    ]);
+    const pollingByAccount = new Map(pollingState.map((row) => [row.account_key, row] as const));
     return c.json(
       ChannelConfigListResponse.parse({
-        channels: channels.map((config) => toChannelConfigView(config)),
+        channels: channels.map((config) =>
+          toChannelConfigView(config, {
+            status: pollingByAccount.get(config.account_key)?.status ?? "idle",
+            lastErrorAt: pollingByAccount.get(config.account_key)?.last_error_at ?? undefined,
+            lastErrorMessage:
+              pollingByAccount.get(config.account_key)?.last_error_message ?? undefined,
+          }),
+        ),
       }),
       200,
     );

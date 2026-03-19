@@ -320,7 +320,7 @@ describe("routing config routes", () => {
     });
   });
 
-  it("imports the legacy singleton telegram deployment config into the default account on first list", async () => {
+  it("ignores legacy singleton telegram deployment config rows on list", async () => {
     await db.run(
       `INSERT INTO deployment_configs (config_json, created_by_json, reason)
        VALUES (?, ?, ?)`,
@@ -342,18 +342,7 @@ describe("routing config routes", () => {
     const app = createAuthedApp();
     const fetchRes = await app.request("/routing/channels/configs", { method: "GET" });
     expect(fetchRes.status).toBe(200);
-    await expect(fetchRes.json()).resolves.toMatchObject({
-      channels: [
-        {
-          channel: "telegram",
-          account_key: "default",
-          bot_token_configured: true,
-          webhook_secret_configured: true,
-          allowed_user_ids: ["123", "456"],
-          pipeline_enabled: false,
-        },
-      ],
-    });
+    await expect(fetchRes.json()).resolves.toMatchObject({ channels: [] });
   });
 
   it("requires tenant-scoped claims for channel config endpoints", async () => {

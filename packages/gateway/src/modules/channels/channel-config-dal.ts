@@ -1,5 +1,4 @@
 import type { SqlDb } from "../../statestore/types.js";
-import { DeploymentConfigDal } from "../config/deployment-config-dal.js";
 import { secureStringEqual } from "../../utils/secure-string-equal.js";
 import { isUniqueViolation } from "../../utils/sql-errors.js";
 import {
@@ -18,11 +17,6 @@ export type {
   StoredChannelConfig,
   StoredTelegramChannelConfig,
 } from "./channel-config-model.js";
-
-// Hidden sentinel row so a tenant that deleted every live channel config does not
-// re-import the legacy singleton deployment config on the next read.
-const LEGACY_IMPORT_MARKER_CONNECTOR_KEY = "__legacy_import__";
-const LEGACY_IMPORT_MARKER_ACCOUNT_KEY = "telegram";
 
 type RawChannelConfigRow = {
   tenant_id: string;
@@ -66,42 +60,18 @@ function webhookSecretsEqual(left: string | undefined, right: string | undefined
   return secureStringEqual(normalizedLeft, normalizedRight);
 }
 
-function hasLegacyTelegramConfig(config: {
-  channels?: {
-    telegramBotToken?: string;
-    telegramWebhookSecret?: string;
-    telegramAllowedUserIds?: string[];
-    pipelineEnabled?: boolean;
-  };
-}): boolean {
-  const channels = config.channels;
-  return Boolean(
-    channels?.telegramBotToken?.trim() ||
-    channels?.telegramWebhookSecret?.trim() ||
-    (channels?.telegramAllowedUserIds?.length ?? 0) > 0 ||
-    channels?.pipelineEnabled === false,
-  );
-}
-
 export class ChannelConfigDal {
-  private readonly deploymentConfigDal: DeploymentConfigDal;
-
-  constructor(private readonly db: SqlDb) {
-    this.deploymentConfigDal = new DeploymentConfigDal(db);
-  }
+  constructor(private readonly db: SqlDb) {}
 
   async list(tenantId: string): Promise<StoredChannelConfig[]> {
-    await this.ensureLegacyImported(tenantId);
     return await this.listRaw({ tenantId });
   }
 
   async listEntries(tenantId: string): Promise<StoredChannelConfigEntry[]> {
-    await this.ensureLegacyImported(tenantId);
     return await this.listEntryRows({ tenantId });
   }
 
   async listTelegram(tenantId: string): Promise<StoredTelegramChannelConfig[]> {
-    await this.ensureLegacyImported(tenantId);
     const rows = await this.listRaw({ tenantId, connectorKey: "telegram" });
     return rows.flatMap((config) => {
       const telegram = asStoredTelegramConfig(config);
@@ -123,7 +93,6 @@ export class ChannelConfigDal {
     connectorKey: StoredChannelConfig["channel"];
     accountKey: string;
   }): Promise<StoredChannelConfigEntry | undefined> {
-    await this.ensureLegacyImported(input.tenantId);
     const row = await this.db.get<RawChannelConfigRow>(
       `SELECT tenant_id, connector_key, account_key, config_json, created_at, updated_at
        FROM channel_configs
@@ -174,7 +143,6 @@ export class ChannelConfigDal {
     tenantId: string;
     config: StoredChannelConfig;
   }): Promise<StoredChannelConfig> {
-    await this.ensureLegacyImported(input.tenantId);
     if (input.config.channel === "telegram") {
       await this.assertUniqueTelegramWebhookSecret({
         tenantId: input.tenantId,
@@ -227,7 +195,6 @@ export class ChannelConfigDal {
     tenantId: string;
     config: StoredChannelConfig;
   }): Promise<StoredChannelConfig | undefined> {
-    await this.ensureLegacyImported(input.tenantId);
     const existing = await this.getByChannelAndAccountKey({
       tenantId: input.tenantId,
       connectorKey: input.config.channel,
@@ -281,6 +248,7 @@ export class ChannelConfigDal {
     tenantId: string;
     accountKey: string;
     agentKey?: string;
+    ingressMode?: StoredTelegramChannelConfig["ingress_mode"];
     botToken?: string;
     webhookSecret?: string;
     allowedUserIds?: string[];
@@ -290,6 +258,7 @@ export class ChannelConfigDal {
       channel: "telegram",
       account_key: input.accountKey,
       ...(input.agentKey?.trim() ? { agent_key: input.agentKey } : {}),
+      ingress_mode: input.ingressMode ?? "polling",
       ...(input.botToken?.trim() ? { bot_token: input.botToken } : {}),
       ...(input.webhookSecret?.trim() ? { webhook_secret: input.webhookSecret } : {}),
       allowed_user_ids: canonicalizeNumericIds(input.allowedUserIds ?? []),
@@ -304,6 +273,7 @@ export class ChannelConfigDal {
     accountKey: string;
     agentKey?: string;
     clearAgentKey?: boolean;
+    ingressMode?: StoredTelegramChannelConfig["ingress_mode"];
     botToken?: string;
     clearBotToken?: boolean;
     webhookSecret?: string;
@@ -337,6 +307,7 @@ export class ChannelConfigDal {
       channel: "telegram",
       account_key: current.account_key,
       ...(nextAgentKey ? { agent_key: nextAgentKey } : {}),
+      ingress_mode: input.ingressMode ?? current.ingress_mode,
       ...(nextBotToken ? { bot_token: nextBotToken } : {}),
       ...(nextWebhookSecret ? { webhook_secret: nextWebhookSecret } : {}),
       allowed_user_ids: canonicalizeNumericIds(input.allowedUserIds ?? current.allowed_user_ids),
@@ -351,7 +322,6 @@ export class ChannelConfigDal {
     connectorKey: string;
     accountKey: string;
   }): Promise<boolean> {
-    await this.ensureLegacyImported(input.tenantId);
     const result = await this.db.run(
       `DELETE FROM channel_configs
        WHERE tenant_id = ?
@@ -360,62 +330,6 @@ export class ChannelConfigDal {
       [input.tenantId, input.connectorKey, input.accountKey],
     );
     return result.changes === 1;
-  }
-
-  async ensureLegacyImported(tenantId: string): Promise<void> {
-    const existing = await this.db.get<{ account_key: string }>(
-      `SELECT account_key
-       FROM channel_configs
-       WHERE tenant_id = ?
-       LIMIT 1`,
-      [tenantId],
-    );
-    if (existing?.account_key) return;
-
-    const latest = await this.deploymentConfigDal.getLatest();
-    if (!latest || !hasLegacyTelegramConfig(latest.config)) {
-      return;
-    }
-
-    const channels = latest.config.channels;
-    const legacy = StoredTelegramChannelConfigSchema.parse({
-      channel: "telegram",
-      account_key: "default",
-      ...(channels.telegramBotToken?.trim() ? { bot_token: channels.telegramBotToken } : {}),
-      ...(channels.telegramWebhookSecret?.trim()
-        ? { webhook_secret: channels.telegramWebhookSecret }
-        : {}),
-      allowed_user_ids: canonicalizeNumericIds(channels.telegramAllowedUserIds ?? []),
-      pipeline_enabled: channels.pipelineEnabled ?? true,
-    });
-
-    await this.db.run(
-      `INSERT INTO channel_configs (
-         tenant_id,
-         connector_key,
-         account_key,
-         config_json
-       )
-       VALUES (?, 'telegram', ?, ?)
-       ON CONFLICT (tenant_id, connector_key, account_key) DO NOTHING`,
-      [tenantId, legacy.account_key, JSON.stringify(legacy)],
-    );
-    await this.db.run(
-      `INSERT INTO channel_configs (
-         tenant_id,
-         connector_key,
-         account_key,
-         config_json
-       )
-       VALUES (?, ?, ?, ?)
-       ON CONFLICT (tenant_id, connector_key, account_key) DO NOTHING`,
-      [
-        tenantId,
-        LEGACY_IMPORT_MARKER_CONNECTOR_KEY,
-        LEGACY_IMPORT_MARKER_ACCOUNT_KEY,
-        JSON.stringify({ imported_from_legacy: true }),
-      ],
-    );
   }
 
   private async listRaw(input: {
@@ -434,12 +348,9 @@ export class ChannelConfigDal {
       `SELECT tenant_id, connector_key, account_key, config_json, created_at, updated_at
        FROM channel_configs
        WHERE tenant_id = ?
-         AND connector_key != ?
          ${input.connectorKey ? "AND connector_key = ?" : ""}
        ORDER BY connector_key ASC, account_key ASC`,
-      input.connectorKey
-        ? [input.tenantId, LEGACY_IMPORT_MARKER_CONNECTOR_KEY, input.connectorKey]
-        : [input.tenantId, LEGACY_IMPORT_MARKER_CONNECTOR_KEY],
+      input.connectorKey ? [input.tenantId, input.connectorKey] : [input.tenantId],
     );
     return rows.map((row) => ({
       config: parseStoredChannelConfigOrThrow(row),

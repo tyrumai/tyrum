@@ -69,6 +69,7 @@ describe("channel config routes", () => {
     await dal.createTelegram({
       tenantId: DEFAULT_TENANT_ID,
       accountKey: "default",
+      ingressMode: "webhook",
       botToken: "telegram-bot-token",
       webhookSecret: "telegram-webhook-secret",
       allowedUserIds: ["123"],
@@ -113,8 +114,12 @@ describe("channel config routes", () => {
               account_key: "default",
               config: {
                 agent_key: "agent-b",
+                ingress_mode: "webhook",
                 allowed_user_ids: ["123"],
                 pipeline_enabled: true,
+                polling_status: "idle",
+                polling_last_error_at: null,
+                polling_last_error_message: null,
               },
               configured_secret_keys: ["bot_token", "webhook_secret"],
             },
@@ -370,6 +375,7 @@ describe("channel config routes", () => {
     await new ChannelConfigDal(db).createTelegram({
       tenantId: DEFAULT_TENANT_ID,
       accountKey: "default",
+      ingressMode: "webhook",
       botToken: "telegram-bot-token",
       webhookSecret: "telegram-webhook-secret",
       allowedUserIds: ["123"],
@@ -382,6 +388,7 @@ describe("channel config routes", () => {
       body: JSON.stringify({
         config: {
           agent_key: "default",
+          ingress_mode: "webhook",
           allowed_user_ids: "123",
           pipeline_enabled: true,
         },

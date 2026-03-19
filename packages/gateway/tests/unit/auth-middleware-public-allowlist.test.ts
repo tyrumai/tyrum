@@ -9,6 +9,8 @@ describe("auth middleware public allowlist", () => {
       "/ui/*",
       "/auth/session",
       "/auth/logout",
+      "/ingress/telegram",
+      "/ingress/googlechat",
       "/providers/:provider/oauth/callback",
     ]);
   });

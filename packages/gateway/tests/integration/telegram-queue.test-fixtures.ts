@@ -59,6 +59,23 @@ export type ApprovalPolicyFixture = {
 
 export const TEST_TELEGRAM_WEBHOOK_SECRET = "test-telegram-secret";
 
+export function makeTelegramWebhookRuntime(bot: TelegramBot, accountKey = "default") {
+  return {
+    listTelegramAccounts: vi.fn(async () => [
+      {
+        channel: "telegram" as const,
+        account_key: accountKey,
+        ingress_mode: "webhook" as const,
+        bot_token: "test-token",
+        webhook_secret: TEST_TELEGRAM_WEBHOOK_SECRET,
+        allowed_user_ids: [],
+        pipeline_enabled: true,
+      },
+    ]),
+    getBotForTelegramAccount: vi.fn(() => bot),
+  };
+}
+
 function makeTurnResult(reply: string) {
   return {
     reply,
@@ -247,8 +264,7 @@ export function createIngressApp({
   app.route(
     "/",
     createIngressRoutes({
-      telegramBot: bot,
-      telegramWebhookSecret: TEST_TELEGRAM_WEBHOOK_SECRET,
+      telegramRuntime: makeTelegramWebhookRuntime(bot),
       agents: agents ?? makeAgents(runtime ?? {}),
       telegramQueue: queue,
       artifactStore,

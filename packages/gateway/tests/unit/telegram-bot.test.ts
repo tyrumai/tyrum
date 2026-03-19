@@ -22,11 +22,14 @@ function mockJsonFetch(status: number, body: unknown): typeof fetch {
 describe("TelegramBot", () => {
   const token = "123:ABC";
 
-  it("sendMessage calls the correct API endpoint", async () => {
-    const fetchFn = mockJsonFetch(200, { ok: true, result: {} });
+  it("sendMessage calls the correct API endpoint and returns the Telegram envelope", async () => {
+    const fetchFn = mockJsonFetch(200, { ok: true, result: { message_id: 1 } });
     const bot = new TelegramBot(token, fetchFn);
 
-    await bot.sendMessage("42", "Hello");
+    await expect(bot.sendMessage("42", "Hello")).resolves.toEqual({
+      ok: true,
+      result: { message_id: 1 },
+    });
 
     expect(fetchFn).toHaveBeenCalledOnce();
     const [url, opts] = (fetchFn as ReturnType<typeof vi.fn>).mock.calls[0] as [
@@ -41,7 +44,7 @@ describe("TelegramBot", () => {
   });
 
   it("sendMessage passes parse_mode and reply_to_message_id", async () => {
-    const fetchFn = mockJsonFetch(200, { ok: true });
+    const fetchFn = mockJsonFetch(200, { ok: true, result: { message_id: 2 } });
     const bot = new TelegramBot(token, fetchFn);
 
     await bot.sendMessage("42", "<b>bold</b>", {
@@ -55,9 +58,23 @@ describe("TelegramBot", () => {
     expect(parsedBody["reply_to_message_id"]).toBe(99);
   });
 
+  it("sendInlineKeyboard includes reply_markup", async () => {
+    const fetchFn = mockJsonFetch(200, { ok: true, result: { message_id: 3 } });
+    const bot = new TelegramBot(token, fetchFn);
+
+    const buttons = [[{ text: "Approve", callback_data: "approve" }]];
+    await bot.sendInlineKeyboard("42", "Confirm?", buttons);
+
+    const [, opts] = (fetchFn as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit];
+    const parsedBody = JSON.parse(opts.body as string) as Record<string, unknown>;
+    expect(parsedBody["reply_markup"]).toEqual({
+      inline_keyboard: buttons,
+    });
+  });
+
   it("sendPhoto uploads a multipart file with caption metadata", async () => {
     const fetchFn = vi.fn(async () =>
-      jsonResponse(200, { ok: true, result: {} }),
+      jsonResponse(200, { ok: true, result: { message_id: 4 } }),
     ) as unknown as typeof fetch;
     const bot = new TelegramBot(token, fetchFn);
 
@@ -87,7 +104,7 @@ describe("TelegramBot", () => {
 
   it("sendDocument, sendAudio, sendVideo, and sendVoice use multipart upload endpoints", async () => {
     const fetchFn = vi.fn(async () =>
-      jsonResponse(200, { ok: true, result: {} }),
+      jsonResponse(200, { ok: true, result: { message_id: 5 } }),
     ) as unknown as typeof fetch;
     const bot = new TelegramBot(token, fetchFn);
 
@@ -161,6 +178,90 @@ describe("TelegramBot", () => {
     );
   });
 
+  it("setWebhook returns the Telegram envelope", async () => {
+    const fetchFn = mockJsonFetch(200, { ok: true, result: true });
+    const bot = new TelegramBot(token, fetchFn);
+
+    await expect(bot.setWebhook("https://example.com/webhook")).resolves.toEqual({
+      ok: true,
+      result: true,
+    });
+
+    const [url, opts] = (fetchFn as ReturnType<typeof vi.fn>).mock.calls[0] as [
+      string,
+      RequestInit,
+    ];
+    expect(url).toBe("https://api.telegram.org/bot123:ABC/setWebhook");
+    const parsedBody = JSON.parse(opts.body as string) as Record<string, unknown>;
+    expect(parsedBody["url"]).toBe("https://example.com/webhook");
+  });
+
+  it("deleteWebhook includes drop_pending_updates when requested", async () => {
+    const fetchFn = mockJsonFetch(200, { ok: true, result: true });
+    const bot = new TelegramBot(token, fetchFn);
+
+    await expect(bot.deleteWebhook({ drop_pending_updates: true })).resolves.toEqual({
+      ok: true,
+      result: true,
+    });
+
+    const [url, opts] = (fetchFn as ReturnType<typeof vi.fn>).mock.calls[0] as [
+      string,
+      RequestInit,
+    ];
+    expect(url).toBe("https://api.telegram.org/bot123:ABC/deleteWebhook");
+    expect(JSON.parse(opts.body as string)).toEqual({ drop_pending_updates: true });
+  });
+
+  it("getMe returns the bot identity result payload", async () => {
+    const fetchFn = mockJsonFetch(200, {
+      ok: true,
+      result: {
+        id: 123,
+        is_bot: true,
+        first_name: "Tyrum",
+        username: "tyrum_bot",
+      },
+    });
+    const bot = new TelegramBot(token, fetchFn);
+
+    await expect(bot.getMe()).resolves.toEqual({
+      id: 123,
+      is_bot: true,
+      first_name: "Tyrum",
+      username: "tyrum_bot",
+    });
+  });
+
+  it("getUpdates forwards polling options and signal", async () => {
+    const fetchFn = mockJsonFetch(200, { ok: true, result: [{ update_id: 99 }] });
+    const bot = new TelegramBot(token, fetchFn);
+    const controller = new AbortController();
+
+    await expect(
+      bot.getUpdates({
+        offset: 100,
+        limit: 10,
+        timeout: 30,
+        allowed_updates: ["message", "edited_message"],
+        signal: controller.signal,
+      }),
+    ).resolves.toEqual([{ update_id: 99 }]);
+
+    const [url, opts] = (fetchFn as ReturnType<typeof vi.fn>).mock.calls[0] as [
+      string,
+      RequestInit,
+    ];
+    expect(url).toBe("https://api.telegram.org/bot123:ABC/getUpdates");
+    expect(opts.signal).toBe(controller.signal);
+    expect(JSON.parse(opts.body as string)).toEqual({
+      offset: 100,
+      limit: 10,
+      timeout: 30,
+      allowed_updates: ["message", "edited_message"],
+    });
+  });
+
   it("throws on non-OK response", async () => {
     const fetchFn = mockJsonFetch(403, { ok: false, description: "Forbidden" });
     const bot = new TelegramBot(token, fetchFn);
@@ -168,5 +269,24 @@ describe("TelegramBot", () => {
     await expect(bot.sendMessage("42", "test")).rejects.toThrow(
       /Telegram Bot API sendMessage failed \(403\)/,
     );
+  });
+
+  it("throws when Telegram returns ok=false in a successful HTTP response", async () => {
+    const fetchFn = mockJsonFetch(200, { ok: false, description: "Forbidden by Telegram" });
+    const bot = new TelegramBot(token, fetchFn);
+
+    await expect(bot.sendMessage("42", "test")).rejects.toThrow(
+      /Telegram Bot API sendMessage failed: Forbidden by Telegram/,
+    );
+  });
+
+  it("sendChatAction returns the full Telegram API envelope", async () => {
+    const fetchFn = mockJsonFetch(200, { ok: true, result: true });
+    const bot = new TelegramBot(token, fetchFn);
+
+    await expect(bot.sendChatAction("42", "typing")).resolves.toEqual({
+      ok: true,
+      result: true,
+    });
   });
 });

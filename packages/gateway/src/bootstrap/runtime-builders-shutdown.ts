@@ -144,6 +144,8 @@ export function createShutdownHandler(
         await runtime.workerLoop.done;
       }
     })();
+    const stopTelegramPollingMonitor =
+      runtime.edge.telegramPollingMonitor?.stop() ?? Promise.resolve();
 
     const closeWss = closeCallbackTarget(runtime.edge.wsHandler?.wss);
 
@@ -172,6 +174,7 @@ export function createShutdownHandler(
         runtime.edge.pluginCatalogProvider?.shutdown() ?? Promise.resolve(),
         runtime.edge.agents?.shutdown() ?? Promise.resolve(),
         runtime.desktopHostRuntime?.stop() ?? Promise.resolve(),
+        stopTelegramPollingMonitor,
         runtime.otel.shutdown(),
         stopWorker,
       ],

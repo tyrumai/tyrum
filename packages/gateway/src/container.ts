@@ -11,7 +11,6 @@ import type { DiscoveryPipeline } from "./modules/discovery/pipeline.js";
 import type { RiskClassifier } from "./modules/risk/classifier.js";
 import type { SessionDal } from "./modules/agent/session-dal.js";
 import type { SessionLaneNodeAttachmentDal } from "./modules/agent/session-lane-node-attachment-dal.js";
-import type { TelegramBot } from "./modules/ingress/telegram-bot.js";
 import type { ApprovalDal } from "./modules/approval/dal.js";
 import type { WatcherProcessor } from "./modules/watcher/processor.js";
 import type { CanvasDal } from "./modules/canvas/dal.js";
@@ -50,7 +49,6 @@ import {
 } from "./modules/risk/classifier.js";
 import { SessionDal as SessionDalImpl } from "./modules/agent/session-dal.js";
 import { SessionLaneNodeAttachmentDal as SessionLaneNodeAttachmentDalImpl } from "./modules/agent/session-lane-node-attachment-dal.js";
-import { TelegramBot as TelegramBotImpl } from "./modules/ingress/telegram-bot.js";
 import { WatcherProcessor as WatcherProcessorImpl } from "./modules/watcher/processor.js";
 import { CanvasDal as CanvasDalImpl } from "./modules/canvas/dal.js";
 import { PresenceDal as PresenceDalImpl } from "./modules/presence/dal.js";
@@ -105,7 +103,6 @@ export interface GatewayContainer {
   sessionDal: SessionDal;
   sessionLaneNodeAttachmentDal: SessionLaneNodeAttachmentDal;
   eventBus: EventBus;
-  telegramBot?: TelegramBot;
   approvalDal: ApprovalDal;
   presenceDal: PresenceDal;
   policySnapshotDal: PolicySnapshotDal;
@@ -195,9 +192,6 @@ export function wireContainer(
   const sessionDal = new SessionDalImpl(db, identityScopeDal, channelThreadDal);
   const sessionLaneNodeAttachmentDal = new SessionLaneNodeAttachmentDalImpl(db);
   const eventBus = createEventBus();
-
-  const telegramToken = deploymentConfig.channels.telegramBotToken;
-  const telegramBot = telegramToken ? new TelegramBotImpl(telegramToken) : undefined;
   const approvalDal = new ApprovalDalImpl(db);
   const presenceDal = new PresenceDalImpl(db);
   const policySnapshotDal = new PolicySnapshotDalImpl(db);
@@ -268,7 +262,6 @@ export function wireContainer(
     sessionDal,
     sessionLaneNodeAttachmentDal,
     eventBus,
-    telegramBot,
     approvalDal,
     presenceDal,
     policySnapshotDal,
