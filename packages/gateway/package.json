@@ -58,6 +58,7 @@
     "@types/yauzl": "^2.10.3",
     "@tyrum/cli-utils": "workspace:*",
     "@tyrum/contracts": "workspace:*",
+    "@tyrum/runtime-execution": "workspace:*",
     "@tyrum/runtime-node-control": "workspace:*",
     "@tyrum/transport-sdk": "workspace:*",
     "@tyrum/runtime-policy": "workspace:*",

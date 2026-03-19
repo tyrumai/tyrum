@@ -17,6 +17,10 @@ export const STAGED_RUNTIME_NODE_CONTROL_DIST = resolve(
   STAGED_GATEWAY_DIR,
   "node_modules/@tyrum/runtime-node-control/dist/index.mjs",
 );
+export const STAGED_RUNTIME_EXECUTION_DIST = resolve(
+  STAGED_GATEWAY_DIR,
+  "node_modules/@tyrum/runtime-execution/dist/index.mjs",
+);
 export const STAGED_BUNDLED_OPERATOR_UI_INDEX = resolve(STAGED_GATEWAY_DIR, "dist/ui/index.html");
 const STAGE_GATEWAY_BIN_SCRIPT = resolve(REPO_ROOT, "apps/desktop/scripts/stage-gateway-bin.mjs");
 const electronPackageExport = require("electron");
@@ -52,6 +56,13 @@ const RUNTIME_NODE_CONTROL_TSCONFIG = resolve(
   "packages/runtime-node-control/tsconfig.json",
 );
 const RUNTIME_NODE_CONTROL_SRC_DIR = resolve(REPO_ROOT, "packages/runtime-node-control/src");
+const RUNTIME_EXECUTION_DIST = resolve(REPO_ROOT, "packages/runtime-execution/dist/index.mjs");
+const RUNTIME_EXECUTION_PACKAGE_JSON = resolve(
+  REPO_ROOT,
+  "packages/runtime-execution/package.json",
+);
+const RUNTIME_EXECUTION_TSCONFIG = resolve(REPO_ROOT, "packages/runtime-execution/tsconfig.json");
+const RUNTIME_EXECUTION_SRC_DIR = resolve(REPO_ROOT, "packages/runtime-execution/src");
 export const OPERATOR_UI_DIR_ENV = "TYRUM_OPERATOR_UI_ASSETS_DIR";
 export const EMBEDDED_GATEWAY_BUNDLE_SOURCE_ENV = "TYRUM_EMBEDDED_GATEWAY_BUNDLE_SOURCE";
 const DEFAULT_TENANT_ADMIN_TOKEN_PATTERN =
@@ -130,11 +141,13 @@ function gatewayBuildIsStale(): boolean {
   if (!existsSync(CONTRACTS_DIST)) return true;
   if (!existsSync(RUNTIME_POLICY_DIST)) return true;
   if (!existsSync(RUNTIME_NODE_CONTROL_DIST)) return true;
+  if (!existsSync(RUNTIME_EXECUTION_DIST)) return true;
   if (!existsSync(BUNDLED_OPERATOR_UI_INDEX)) return true;
 
   const gatewayMtime = statSync(GATEWAY_BIN).mtimeMs;
   const runtimePolicyMtime = statSync(RUNTIME_POLICY_DIST).mtimeMs;
   const runtimeNodeControlMtime = statSync(RUNTIME_NODE_CONTROL_DIST).mtimeMs;
+  const runtimeExecutionMtime = statSync(RUNTIME_EXECUTION_DIST).mtimeMs;
   if (existsSync(GATEWAY_SRC_DIR) && gatewayMtime < latestMtimeInDir(GATEWAY_SRC_DIR)) return true;
   if (existsSync(CLI_UTILS_PACKAGE_JSON) && gatewayMtime < statSync(CLI_UTILS_PACKAGE_JSON).mtimeMs)
     return true;
@@ -186,21 +199,43 @@ function gatewayBuildIsStale(): boolean {
   ) {
     return true;
   }
+  if (
+    existsSync(RUNTIME_EXECUTION_PACKAGE_JSON) &&
+    runtimeExecutionMtime < statSync(RUNTIME_EXECUTION_PACKAGE_JSON).mtimeMs
+  ) {
+    return true;
+  }
+  if (
+    existsSync(RUNTIME_EXECUTION_TSCONFIG) &&
+    runtimeExecutionMtime < statSync(RUNTIME_EXECUTION_TSCONFIG).mtimeMs
+  ) {
+    return true;
+  }
+  if (
+    existsSync(RUNTIME_EXECUTION_SRC_DIR) &&
+    runtimeExecutionMtime < latestMtimeInDir(RUNTIME_EXECUTION_SRC_DIR)
+  ) {
+    return true;
+  }
   if (gatewayMtime < statSync(CONTRACTS_DIST).mtimeMs) return true;
   if (gatewayMtime < statSync(RUNTIME_POLICY_DIST).mtimeMs) return true;
+  if (gatewayMtime < statSync(RUNTIME_EXECUTION_DIST).mtimeMs) return true;
   return gatewayMtime < statSync(CLI_UTILS_DIST).mtimeMs;
 }
 
 function stagedGatewayBuildIsStale(): boolean {
   if (!existsSync(STAGED_GATEWAY_BIN)) return true;
   if (!existsSync(STAGED_RUNTIME_NODE_CONTROL_DIST)) return true;
+  if (!existsSync(STAGED_RUNTIME_EXECUTION_DIST)) return true;
   if (!existsSync(STAGED_BUNDLED_OPERATOR_UI_INDEX)) return true;
 
   const stagedGatewayMtime = statSync(STAGED_GATEWAY_BIN).mtimeMs;
   const stagedRuntimeNodeControlMtime = statSync(STAGED_RUNTIME_NODE_CONTROL_DIST).mtimeMs;
+  const stagedRuntimeExecutionMtime = statSync(STAGED_RUNTIME_EXECUTION_DIST).mtimeMs;
   const stagedOperatorUiMtime = statSync(STAGED_BUNDLED_OPERATOR_UI_INDEX).mtimeMs;
   if (stagedGatewayMtime < statSync(GATEWAY_BIN).mtimeMs) return true;
   if (stagedRuntimeNodeControlMtime < statSync(RUNTIME_NODE_CONTROL_DIST).mtimeMs) return true;
+  if (stagedRuntimeExecutionMtime < statSync(RUNTIME_EXECUTION_DIST).mtimeMs) return true;
   if (stagedOperatorUiMtime < statSync(BUNDLED_OPERATOR_UI_INDEX).mtimeMs) return true;
   return existsSync(STAGE_GATEWAY_BIN_SCRIPT)
     ? stagedGatewayMtime < statSync(STAGE_GATEWAY_BIN_SCRIPT).mtimeMs
@@ -279,6 +314,11 @@ export function ensureGatewayBuild(): void {
     "@tyrum/runtime-node-control",
     RUNTIME_NODE_CONTROL_DIST,
     "Failed to build @tyrum/runtime-node-control before desktop integration test.",
+  );
+  ensureWorkspaceBuild(
+    "@tyrum/runtime-execution",
+    RUNTIME_EXECUTION_DIST,
+    "Failed to build @tyrum/runtime-execution before desktop integration test.",
   );
   ensureWorkspaceBuild(
     "@tyrum/gateway",

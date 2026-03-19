@@ -35,6 +35,7 @@ if (typeof electronPackageExport !== "string") {
 const ELECTRON_BIN = electronPackageExport;
 const GATEWAY_BUILD_LOCK = resolve(REPO_ROOT, ".tyrum-gateway-build.lock");
 const PACKAGED_SMOKE_ENABLED = process.env["TYRUM_RUN_PACKAGED_SMOKE"] === "1";
+const DESKTOP_NODE_DIST_ENTRY = resolve(REPO_ROOT, "packages/desktop-node/dist/index.mjs");
 
 interface ElectronProbeResult {
   available: boolean;
@@ -161,10 +162,12 @@ function findCommandPath(command: string): string | undefined {
 }
 
 function ensureBuildArtifacts(): void {
-  runBuildStep(
-    ["--filter", "@tyrum/desktop-node", "build"],
-    "Failed to build @tyrum/desktop-node for Electron smoke test.",
-  );
+  if (!existsSync(DESKTOP_NODE_DIST_ENTRY)) {
+    runBuildStep(
+      ["--filter", "@tyrum/desktop-node", "build"],
+      "Failed to build @tyrum/desktop-node for Electron smoke test.",
+    );
+  }
   runBuildStep(
     ["--filter", "tyrum-desktop", "build:gateway"],
     "Failed to stage gateway for Electron smoke test.",

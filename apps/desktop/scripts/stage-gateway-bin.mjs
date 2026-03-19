@@ -30,6 +30,10 @@ const runtimeNodeControlDist = join(
   targetDir,
   "node_modules/@tyrum/runtime-node-control/dist/index.mjs",
 );
+const runtimeExecutionDist = join(
+  targetDir,
+  "node_modules/@tyrum/runtime-execution/dist/index.mjs",
+);
 const isWindows = process.platform === "win32";
 
 if (!existsSync(sourcePath)) {
@@ -106,6 +110,12 @@ if (deploy.status !== 0) {
 if (!existsSync(runtimeNodeControlDist)) {
   throw new Error(
     `Staged gateway dependency missing at ${runtimeNodeControlDist}. Run "pnpm --filter @tyrum/runtime-node-control build" before staging the desktop gateway bundle.`,
+  );
+}
+
+if (!existsSync(runtimeExecutionDist)) {
+  throw new Error(
+    `Staged gateway dependency missing at ${runtimeExecutionDist}. Run "pnpm --filter @tyrum/runtime-execution build" before staging the desktop gateway bundle.`,
   );
 }
 

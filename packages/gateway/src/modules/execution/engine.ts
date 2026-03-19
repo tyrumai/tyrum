@@ -8,5 +8,5 @@ export type {
   EnqueuePlanResult,
   WorkerTickInput,
   ExecutionConcurrencyLimits,
-} from "./engine/types.js";
+} from "@tyrum/runtime-execution";
 export { ExecutionEngine } from "./engine/execution-engine.js";

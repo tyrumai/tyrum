@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "include": [
+    "src/index.ts",
+    "src/worker-loop.ts",
+    "src/task-result-registry.ts",
+    "src/engine/types.ts"
+  ],
+  "references": [{ "path": "../contracts" }]
+}
