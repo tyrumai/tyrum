@@ -2,8 +2,8 @@ import type {
   ActionPrimitive as ActionPrimitiveT,
   AgentTurnRequest as AgentTurnRequestT,
   AttemptCost as AttemptCostT,
-} from "@tyrum/schemas";
-import { AgentTurnRequest } from "@tyrum/schemas";
+} from "@tyrum/contracts";
+import { AgentTurnRequest } from "@tyrum/contracts";
 import type { GatewayContainer } from "../../container.js";
 import type { StepExecutionContext, StepExecutor, StepResult } from "./engine.js";
 import {

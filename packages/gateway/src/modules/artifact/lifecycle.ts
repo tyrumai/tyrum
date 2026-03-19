@@ -4,8 +4,8 @@
  * StateStore metadata.
  */
 
-import type { PolicyBundle as PolicyBundleT } from "@tyrum/schemas";
-import { PolicyBundle } from "@tyrum/schemas";
+import type { PolicyBundle as PolicyBundleT } from "@tyrum/contracts";
+import { PolicyBundle } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import { normalizeDbDateTime } from "../../utils/db-time.js";
 import type { Logger } from "../observability/logger.js";

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { RoutingConfigDal } from "../../src/modules/channels/routing-config-dal.js";
-import { DateTimeSchema } from "@tyrum/schemas";
+import { DateTimeSchema } from "@tyrum/contracts";
 import { DEFAULT_TENANT_ID, IdentityScopeDal } from "../../src/modules/identity/scope.js";
 
 describe("RoutingConfigDal", () => {

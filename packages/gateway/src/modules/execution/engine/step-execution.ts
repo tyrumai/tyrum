@@ -1,4 +1,4 @@
-import type { ActionPrimitive as ActionPrimitiveT } from "@tyrum/schemas";
+import type { ActionPrimitive as ActionPrimitiveT } from "@tyrum/contracts";
 import type { Logger } from "../../observability/logger.js";
 import type { PolicyService } from "../../policy/service.js";
 import type { SqlDb } from "../../../statestore/types.js";

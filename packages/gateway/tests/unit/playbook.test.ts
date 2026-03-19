@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { PlaybookManifest } from "@tyrum/schemas";
+import { PlaybookManifest } from "@tyrum/contracts";
 import { loadPlaybook, loadAllPlaybooks } from "../../src/modules/playbook/loader.js";
 import { PlaybookRunner } from "../../src/modules/playbook/runner.js";
 

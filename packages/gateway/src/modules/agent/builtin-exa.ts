@@ -1,4 +1,4 @@
-import type { McpServerSpec } from "@tyrum/schemas";
+import type { McpServerSpec } from "@tyrum/contracts";
 import type { SecretProvider } from "../secret/provider.js";
 
 export const BUILTIN_EXA_SERVER_ID = "exa";

@@ -2,7 +2,7 @@ import {
   inferGatewayWsUrl,
   normalizeGatewayHttpBaseUrl,
   type MobileBootstrapPayload,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import { SecureStorage } from "@aparajita/capacitor-secure-storage";
 import { Preferences } from "@capacitor/preferences";
 import {

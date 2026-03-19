@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { setTimeout as delay } from "node:timers/promises";
-import { AgentConfig, AgentConfigGetResponse } from "@tyrum/schemas";
+import { AgentConfig, AgentConfigGetResponse } from "@tyrum/contracts";
 import { createTestApp } from "./helpers.js";
 
 describe("Agent config routes integration", () => {

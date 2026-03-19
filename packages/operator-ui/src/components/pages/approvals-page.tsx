@@ -4,7 +4,7 @@ import {
   type OperatorCore,
   type ResolveApprovalInput,
 } from "@tyrum/operator-core";
-import { clientCapabilityFromDescriptorId, type CapabilityDescriptor } from "@tyrum/schemas";
+import { clientCapabilityFromDescriptorId, type CapabilityDescriptor } from "@tyrum/contracts";
 import { CircleCheck } from "lucide-react";
 import { type ComponentProps, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";

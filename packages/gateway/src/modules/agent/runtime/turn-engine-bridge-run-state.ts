@@ -1,5 +1,5 @@
-import type { AgentTurnResponse as AgentTurnResponseT } from "@tyrum/schemas";
-import { AgentTurnResponse } from "@tyrum/schemas";
+import type { AgentTurnResponse as AgentTurnResponseT } from "@tyrum/contracts";
+import { AgentTurnResponse } from "@tyrum/contracts";
 import { coerceRecord } from "../../util/coerce.js";
 import type { TurnEngineBridgeDeps } from "./turn-engine-bridge.js";
 

@@ -4,7 +4,7 @@
  * Converts raw Telegram update payloads into the NormalizedThreadMessage schema.
  */
 
-import { normalizedContainerKindFromThreadKind } from "@tyrum/schemas";
+import { normalizedContainerKindFromThreadKind } from "@tyrum/contracts";
 import type {
   MediaKind,
   MessageContent,
@@ -15,7 +15,7 @@ import type {
   PiiField,
   SenderMetadata,
   ThreadKind,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import { telegramAccountIdFromEnv } from "../channels/telegram-account.js";
 
 // ---------------------------------------------------------------------------

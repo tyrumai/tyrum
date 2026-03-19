@@ -10,7 +10,7 @@ import {
   SessionProviderPin,
   SessionProviderPinListResponse,
   SessionProviderPinSetRequest,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import { z } from "zod";
 import {
   HttpTransport,

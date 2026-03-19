@@ -1,10 +1,10 @@
-import { IdentityPack, ManagedAgentDetail, ManagedAgentSummary } from "@tyrum/schemas";
+import { IdentityPack, ManagedAgentDetail, ManagedAgentSummary } from "@tyrum/contracts";
 import type {
   AgentConfig as AgentConfigT,
   IdentityPack as IdentityPackT,
   ManagedAgentDetail as ManagedAgentDetailT,
   ManagedAgentSummary as ManagedAgentSummaryT,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type { GatewayStateMode } from "../runtime-state/mode.js";
 import type { SqlDb } from "../../statestore/types.js";
 import { DEFAULT_AGENT_KEY } from "../identity/scope.js";

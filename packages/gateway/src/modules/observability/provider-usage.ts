@@ -1,4 +1,4 @@
-import type { SecretHandle } from "@tyrum/schemas";
+import type { SecretHandle } from "@tyrum/contracts";
 import { DEFAULT_TENANT_ID } from "../identity/scope.js";
 import { isAuthProfilesEnabled } from "../models/auth-profiles-enabled.js";
 import type { AuthProfileDal, AuthProfileRow } from "../models/auth-profile-dal.js";

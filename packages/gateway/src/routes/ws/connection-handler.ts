@@ -8,7 +8,7 @@ import {
   type WsConnectInitRequest,
   type WsConnectProofRequest,
   type WsResponseEnvelope,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type { WebSocket, WebSocketServer } from "ws";
 import type { AuthTokenService } from "../../modules/auth/auth-token-service.js";
 import {

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import type { ExecutionTrigger as ExecutionTriggerT } from "@tyrum/schemas";
-import { parseTyrumKey, WorkspaceKey } from "@tyrum/schemas";
+import type { ExecutionTrigger as ExecutionTriggerT } from "@tyrum/contracts";
+import { parseTyrumKey, WorkspaceKey } from "@tyrum/contracts";
 import { IdentityScopeDal } from "../../identity/scope.js";
 import type { SqlDb } from "../../../statestore/types.js";
 import { normalizeWorkspaceKey } from "./db.js";

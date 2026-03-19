@@ -1,4 +1,4 @@
-import type { ArtifactKind, ArtifactRef as ArtifactRefT } from "@tyrum/schemas";
+import type { ArtifactKind, ArtifactRef as ArtifactRefT } from "@tyrum/contracts";
 import { randomUUID, createHash } from "node:crypto";
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";

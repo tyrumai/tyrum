@@ -6,7 +6,7 @@ import {
   normalizeCapabilityDescriptors,
   type WsEventEnvelope,
   type WsPeerRole,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type { PresenceRow } from "../../modules/presence/dal.js";
 import { PAIRING_WS_AUDIENCE } from "../../ws/audience.js";
 import type { ConnectionManager } from "../../ws/connection-manager.js";

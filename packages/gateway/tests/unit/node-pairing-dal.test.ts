@@ -6,7 +6,7 @@ import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   descriptorIdsForClientCapability,
   migrateCapabilityDescriptorId,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 
 describe("NodePairingDal.upsertOnConnect", () => {

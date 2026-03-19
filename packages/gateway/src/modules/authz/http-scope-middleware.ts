@@ -9,7 +9,7 @@
  */
 
 import type { Context, Next } from "hono";
-import type { AuthTokenClaims } from "@tyrum/schemas";
+import type { AuthTokenClaims } from "@tyrum/contracts";
 import { hasAnyRequiredScope } from "../auth/scopes.js";
 import { matchesPathPrefixSegment } from "../../app-path.js";
 import type { AuthAudit } from "../auth/audit.js";

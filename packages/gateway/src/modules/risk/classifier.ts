@@ -5,7 +5,13 @@
  * Pure risk scoring engine using configurable spend thresholds and tag weights.
  */
 
-import type { RiskConfig, RiskInput, RiskVerdict, RiskLevel, SpendThreshold } from "@tyrum/schemas";
+import type {
+  RiskConfig,
+  RiskInput,
+  RiskVerdict,
+  RiskLevel,
+  SpendThreshold,
+} from "@tyrum/contracts";
 
 // ---------------------------------------------------------------------------
 // Config helpers

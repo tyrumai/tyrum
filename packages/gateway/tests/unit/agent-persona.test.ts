@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { IdentityPack } from "@tyrum/schemas";
-import { AgentConfig } from "@tyrum/schemas";
+import type { IdentityPack } from "@tyrum/contracts";
+import { AgentConfig } from "@tyrum/contracts";
 import {
   applyPersonaToIdentity,
   pickSeededPersonaName,

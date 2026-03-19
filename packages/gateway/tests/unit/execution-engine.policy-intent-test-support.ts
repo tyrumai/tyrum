@@ -1,5 +1,5 @@
 import { expect, it, vi } from "vitest";
-import { PolicyBundle } from "@tyrum/schemas";
+import { PolicyBundle } from "@tyrum/contracts";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

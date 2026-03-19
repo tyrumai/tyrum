@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import type { WorkScope } from "@tyrum/schemas";
-import { SubagentSessionKey } from "@tyrum/schemas";
-import type { AgentTurnRequest as AgentTurnRequestT } from "@tyrum/schemas";
+import type { WorkScope } from "@tyrum/contracts";
+import { SubagentSessionKey } from "@tyrum/contracts";
+import type { AgentTurnRequest as AgentTurnRequestT } from "@tyrum/contracts";
 import type { LaneQueueScope } from "./turn-engine-bridge.js";
 import {
   deriveWorkItemTitle,

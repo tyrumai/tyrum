@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import type {
   AgentTurnRequest as AgentTurnRequestT,
   NormalizedContainerKind,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import {
   DATA_TAG_SAFETY_PROMPT,
   PROMPT_CONTRACT_PROMPT,

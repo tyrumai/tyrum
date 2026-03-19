@@ -5,7 +5,7 @@ import type {
   DesktopSnapshotArgs,
   DesktopUiTree,
   DesktopWindow,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 
 export type DesktopA11ySnapshot = {
   windows: DesktopWindow[];

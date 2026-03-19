@@ -1,4 +1,4 @@
-import { PluginManifest, type PluginManifest as PluginManifestT } from "@tyrum/schemas";
+import { PluginManifest, type PluginManifest as PluginManifestT } from "@tyrum/contracts";
 import { z } from "zod";
 import { HttpTransport, validateOrThrow, type TyrumRequestOptions } from "./shared.js";
 

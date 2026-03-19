@@ -1,4 +1,4 @@
-import { WsDeliveryReceiptEvent } from "@tyrum/schemas";
+import { WsDeliveryReceiptEvent } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import type { Logger } from "../observability/logger.js";
 import { ChannelInboxDal, type ChannelInboxConfig, type ChannelInboxRow } from "./inbox-dal.js";

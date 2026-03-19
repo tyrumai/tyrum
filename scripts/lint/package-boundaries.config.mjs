@@ -42,10 +42,6 @@ export const PACKAGE_BOUNDARY_RULES = Object.freeze({
     ],
   }),
   legacyPackages: Object.freeze({
-    "@tyrum/schemas": {
-      activation: "all",
-      replacementPackages: ["@tyrum/contracts"],
-    },
     "@tyrum/client": {
       activation: "all",
       replacementPackages: ["@tyrum/transport-sdk", "@tyrum/node-sdk"],

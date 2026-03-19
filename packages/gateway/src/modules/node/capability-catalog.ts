@@ -86,7 +86,7 @@ import {
   type NodeActionConsentMetadata,
   type NodeActionPermissionMetadata,
   type NodeActionTransportMetadata,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type { ZodType } from "zod";
 import { z } from "zod";
 

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { TaskResultRegistry } from "../../src/ws/protocol/task-result-registry.js";
 import type { ProtocolDeps } from "../../src/ws/protocol.js";
-import { CAPABILITY_DESCRIPTOR_DEFAULT_VERSION } from "@tyrum/schemas";
+import { CAPABILITY_DESCRIPTOR_DEFAULT_VERSION } from "@tyrum/contracts";
 
 interface MockWebSocket {
   send: ReturnType<typeof vi.fn>;

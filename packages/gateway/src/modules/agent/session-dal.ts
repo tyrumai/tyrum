@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { TyrumUIMessage, NormalizedContainerKind } from "@tyrum/schemas";
+import type { TyrumUIMessage, NormalizedContainerKind } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import {
   DEFAULT_CHANNEL_ACCOUNT_ID,

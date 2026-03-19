@@ -1,5 +1,5 @@
-import { PluginManifest } from "@tyrum/schemas";
-import type { PluginManifest as PluginManifestT } from "@tyrum/schemas";
+import { PluginManifest } from "@tyrum/contracts";
+import type { PluginManifest as PluginManifestT } from "@tyrum/contracts";
 import { cp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { isRecord, parseJsonOrYaml } from "../../utils/parse-json-or-yaml.js";

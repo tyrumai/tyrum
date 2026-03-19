@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { readdir, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { PluginManifest } from "@tyrum/schemas";
+import { PluginManifest } from "@tyrum/contracts";
 import { createContainer } from "../../src/container.js";
 import { RuntimePackageDal } from "../../src/modules/agent/runtime-package-dal.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";

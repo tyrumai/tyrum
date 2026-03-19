@@ -5,8 +5,8 @@ import type {
   AgentStatusResponse as AgentStatusResponseT,
   AgentTurnRequest as AgentTurnRequestT,
   AgentTurnResponse as AgentTurnResponseT,
-} from "@tyrum/schemas";
-import { AgentKey, WorkspaceKey } from "@tyrum/schemas";
+} from "@tyrum/contracts";
+import { AgentKey, WorkspaceKey } from "@tyrum/contracts";
 import {
   type LaneQueueScope,
   type TurnEngineBridgeDeps,

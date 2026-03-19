@@ -2,13 +2,13 @@ import {
   DevicePlatform as DevicePlatformSchema,
   DeviceType as DeviceTypeSchema,
   NodeCapabilityState as NodeCapabilityStateSchema,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type {
   CapabilityDescriptor,
   DevicePlatform,
   DeviceType,
   NodeCapabilityState,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import { DEFAULT_TENANT_ID } from "../identity/scope.js";
 import { parseStoredCapabilityDescriptors } from "../node/stored-capability-descriptors.js";

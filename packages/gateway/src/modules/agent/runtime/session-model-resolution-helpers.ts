@@ -1,5 +1,5 @@
 import type { LanguageModel } from "ai";
-import type { AgentConfig as AgentConfigT } from "@tyrum/schemas";
+import type { AgentConfig as AgentConfigT } from "@tyrum/contracts";
 import type { GatewayContainer } from "../../../container.js";
 import { ConfiguredModelPresetDal } from "../../models/configured-model-preset-dal.js";
 import { ExecutionProfileModelAssignmentDal } from "../../models/execution-profile-model-assignment-dal.js";

@@ -11,7 +11,7 @@ import {
   type ManagedSkillPackage as ManagedSkillPackageT,
   type McpServerSpec as McpServerSpecT,
   type SkillManifest as SkillManifestT,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import { parseFrontmatterDocument } from "../agent/frontmatter.js";
 import type { RuntimePackageKind, RuntimePackageRevision } from "../agent/runtime-package-dal.js";

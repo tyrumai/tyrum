@@ -3,7 +3,7 @@ export {
   type ChannelRegistrySpec,
 } from "./channel-config-registry-shared.js";
 
-import type { ChannelRegistryEntry as ChannelRegistryEntryT } from "@tyrum/schemas";
+import type { ChannelRegistryEntry as ChannelRegistryEntryT } from "@tyrum/contracts";
 import { discordSpec } from "./channel-config-registry-discord.js";
 import { googleChatSpec } from "./channel-config-registry-googlechat.js";
 import { telegramSpec } from "./channel-config-registry-telegram.js";

@@ -12,7 +12,7 @@ import {
   ModelConfigDeleteConflictResponse,
   ModelConfigDeleteRequest,
   ModelConfigDeleteResponse,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type { SqlDb } from "../statestore/types.js";
 import { requireTenantId } from "../modules/auth/claims.js";
 import type { ModelCatalogService } from "../modules/models/model-catalog-service.js";

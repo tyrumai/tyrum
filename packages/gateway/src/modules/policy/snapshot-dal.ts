@@ -1,5 +1,5 @@
-import type { PolicyBundle as PolicyBundleT } from "@tyrum/schemas";
-import { PolicyBundle } from "@tyrum/schemas";
+import type { PolicyBundle as PolicyBundleT } from "@tyrum/contracts";
+import { PolicyBundle } from "@tyrum/contracts";
 import { randomUUID } from "node:crypto";
 import type { SqlDb } from "../../statestore/types.js";
 import { sha256HexFromString, stableJsonStringify } from "./canonical-json.js";

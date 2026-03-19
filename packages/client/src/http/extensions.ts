@@ -6,7 +6,7 @@ import {
   type ExtensionsDetailResponse as ExtensionsDetailResponseT,
   type ExtensionsListResponse as ExtensionsListResponseT,
   type ExtensionsMutateResponse as ExtensionsMutateResponseT,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import { z } from "zod";
 import { HttpTransport, validateOrThrow, type TyrumRequestOptions } from "./shared.js";
 

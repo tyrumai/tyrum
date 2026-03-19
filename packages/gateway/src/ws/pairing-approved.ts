@@ -1,4 +1,4 @@
-import type { WsEventEnvelope } from "@tyrum/schemas";
+import type { WsEventEnvelope } from "@tyrum/contracts";
 import type { ConnectionDirectoryDal } from "../modules/backplane/connection-directory.js";
 import type { OutboxDal } from "../modules/backplane/outbox-dal.js";
 import type { Logger } from "../modules/observability/logger.js";

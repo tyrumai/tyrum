@@ -1,4 +1,4 @@
-import type { SecretHandle } from "@tyrum/schemas";
+import type { SecretHandle } from "@tyrum/contracts";
 import type { OperatorCore } from "@tyrum/operator-core";
 import { KeyRound, Plus, RefreshCw, RotateCcw, Trash2 } from "lucide-react";
 import * as React from "react";

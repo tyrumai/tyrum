@@ -1,7 +1,7 @@
 import { readFile, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 
-import type { DesktopDisplayTarget } from "@tyrum/schemas";
+import type { DesktopDisplayTarget } from "@tyrum/contracts";
 
 import type { DesktopBackend, ScreenCapture } from "./desktop-backend.js";
 

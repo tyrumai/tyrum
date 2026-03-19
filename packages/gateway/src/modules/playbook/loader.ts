@@ -8,7 +8,7 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
-import { PlaybookManifest, type Playbook } from "@tyrum/schemas";
+import { PlaybookManifest, type Playbook } from "@tyrum/contracts";
 
 interface LoadAllPlaybooksOptions {
   onInvalidPlaybook?: (manifestPath: string, error: unknown) => void;

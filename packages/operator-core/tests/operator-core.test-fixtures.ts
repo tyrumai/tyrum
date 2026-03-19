@@ -8,7 +8,7 @@ import type {
   NodePairingRequest,
   PresenceEntry,
   ReviewEntry,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type {
   PairingListResponse,
   PresenceResponse,

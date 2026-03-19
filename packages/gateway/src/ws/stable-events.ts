@@ -1,4 +1,9 @@
-import type { Approval, NodePairingRequest, PolicyOverride, WsEventEnvelope } from "@tyrum/schemas";
+import type {
+  Approval,
+  NodePairingRequest,
+  PolicyOverride,
+  WsEventEnvelope,
+} from "@tyrum/contracts";
 import { randomUUID } from "node:crypto";
 import type { PersistedWsEvent, WsEventDal } from "../modules/ws-event/dal.js";
 import type { WsBroadcastAudience } from "./audience.js";

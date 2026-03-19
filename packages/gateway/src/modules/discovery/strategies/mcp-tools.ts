@@ -4,7 +4,7 @@
  * Performs fuzzy matching of the query against tool id, description, and keywords.
  */
 
-import type { DiscoveryRequest, DiscoveryResolution } from "@tyrum/schemas";
+import type { DiscoveryRequest, DiscoveryResolution } from "@tyrum/contracts";
 
 export interface McpToolDescriptor {
   id: string;

@@ -4,8 +4,8 @@ import {
   WsLocationBeaconResult,
   WsPresenceBeaconRequest,
   WsPresenceBeaconResult,
-} from "@tyrum/schemas";
-import type { WsEventEnvelope, WsResponseEnvelope } from "@tyrum/schemas";
+} from "@tyrum/contracts";
+import type { WsEventEnvelope, WsResponseEnvelope } from "@tyrum/contracts";
 import type { ConnectedClient } from "../connection-manager.js";
 import { ScopeNotFoundError } from "../../modules/identity/scope.js";
 import { broadcastEvent, errorResponse } from "./helpers.js";

@@ -1,4 +1,4 @@
-import type { WsEventEnvelope } from "@tyrum/schemas";
+import type { WsEventEnvelope } from "@tyrum/contracts";
 import { randomUUID } from "node:crypto";
 import type { WsBroadcastAudience } from "../../ws/audience.js";
 import type { SqlDb } from "../../statestore/types.js";

@@ -1,8 +1,8 @@
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { dirname, relative, resolve } from "node:path";
 import type { CapabilityProvider, TaskResult, TaskExecuteContext } from "@tyrum/client";
-import type { ActionPrimitive } from "@tyrum/schemas";
-import { FilesystemActionArgs, FILESYSTEM_CAPABILITY_IDS } from "@tyrum/schemas";
+import type { ActionPrimitive } from "@tyrum/contracts";
+import { FilesystemActionArgs, FILESYSTEM_CAPABILITY_IDS } from "@tyrum/contracts";
 import {
   assertSandboxed,
   truncateOutput,
@@ -21,7 +21,7 @@ import type {
   FsBashArgs,
   FsGlobArgs,
   FsGrepArgs,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 
 const FILESYSTEM_BASH_CAPABILITY_ID = "tyrum.fs.bash";
 const FILESYSTEM_CAPABILITY_IDS_WITHOUT_BASH = FILESYSTEM_CAPABILITY_IDS.filter(

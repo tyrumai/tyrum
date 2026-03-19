@@ -1,4 +1,4 @@
-import type { DesktopQueryMatch, DesktopUiRect } from "@tyrum/schemas";
+import type { DesktopQueryMatch, DesktopUiRect } from "@tyrum/contracts";
 import type { OcrMatch } from "./ocr/types.js";
 
 export type PixelPoint = { x: number; y: number };

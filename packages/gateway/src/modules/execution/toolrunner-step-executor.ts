@@ -1,4 +1,4 @@
-import type { ActionPrimitive as ActionPrimitiveT } from "@tyrum/schemas";
+import type { ActionPrimitive as ActionPrimitiveT } from "@tyrum/contracts";
 import { spawn } from "node:child_process";
 import type { Logger } from "../observability/logger.js";
 import type { StepExecutionContext, StepExecutor, StepResult } from "./engine.js";

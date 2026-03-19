@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { LanguageModel, ToolSet } from "ai";
-import type { AgentTurnRequest as AgentTurnRequestT } from "@tyrum/schemas";
+import type { AgentTurnRequest as AgentTurnRequestT } from "@tyrum/contracts";
 import type { LaneQueueState } from "./turn-engine-bridge.js";
 import type { ToolCallPolicyState } from "./tool-set-builder.js";
 import {

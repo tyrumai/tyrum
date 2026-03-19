@@ -20,7 +20,7 @@ WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig*.json ./
 COPY patches ./patches
 COPY scripts ./scripts
-COPY packages/schemas ./packages/schemas
+COPY packages/contracts ./packages/contracts
 COPY packages/cli-utils ./packages/cli-utils
 COPY packages/client ./packages/client
 COPY packages/desktop-node ./packages/desktop-node
@@ -28,7 +28,7 @@ COPY packages/desktop-node ./packages/desktop-node
 RUN pnpm install --frozen-lockfile
 RUN node ./scripts/check-desktop-sandbox-native.mjs
 
-RUN pnpm --filter @tyrum/schemas build \
+RUN pnpm --filter @tyrum/contracts build \
   && pnpm --filter @tyrum/cli-utils build \
   && pnpm --filter @tyrum/client build \
   && pnpm --filter @tyrum/desktop-node build
@@ -67,9 +67,9 @@ RUN npx playwright install --with-deps chromium
 
 COPY --from=builder /app/scripts ./scripts
 
-COPY --from=builder /app/packages/schemas/package.json ./packages/schemas/package.json
-COPY --from=builder /app/packages/schemas/dist ./packages/schemas/dist
-COPY --from=builder /app/packages/schemas/node_modules ./packages/schemas/node_modules
+COPY --from=builder /app/packages/contracts/package.json ./packages/contracts/package.json
+COPY --from=builder /app/packages/contracts/dist ./packages/contracts/dist
+COPY --from=builder /app/packages/contracts/node_modules ./packages/contracts/node_modules
 
 COPY --from=builder /app/packages/cli-utils/package.json ./packages/cli-utils/package.json
 COPY --from=builder /app/packages/cli-utils/dist ./packages/cli-utils/dist

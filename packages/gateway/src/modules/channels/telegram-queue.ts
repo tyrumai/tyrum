@@ -4,9 +4,9 @@ import {
   buildAgentSessionKey,
   parseTyrumKey,
   resolveDmScope,
-} from "@tyrum/schemas";
-import type { NormalizedThreadMessage, WsEventEnvelope } from "@tyrum/schemas";
-import type { DmScope } from "@tyrum/schemas";
+} from "@tyrum/contracts";
+import type { NormalizedThreadMessage, WsEventEnvelope } from "@tyrum/contracts";
+import type { DmScope } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import type { Logger } from "../observability/logger.js";
 import { ChannelInboxDal, type ChannelInboxConfig, type ChannelInboxRow } from "./inbox-dal.js";

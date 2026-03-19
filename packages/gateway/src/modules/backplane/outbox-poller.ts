@@ -1,4 +1,4 @@
-import type { WsEventEnvelope, WsRequestEnvelope } from "@tyrum/schemas";
+import type { WsEventEnvelope, WsRequestEnvelope } from "@tyrum/contracts";
 import type { ConnectedClient, ConnectionManager } from "../../ws/connection-manager.js";
 import type { OutboxDal, OutboxRow } from "./outbox-dal.js";
 import type { Logger } from "../observability/logger.js";

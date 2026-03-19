@@ -9,8 +9,8 @@ import type {
   ManagedExtensionSourceDescriptor as ManagedExtensionSourceDescriptorT,
   McpServerSpec as McpServerSpecT,
   SkillManifest as SkillManifestT,
-} from "@tyrum/schemas";
-import { type ExtensionKind } from "@tyrum/schemas";
+} from "@tyrum/contracts";
+import { type ExtensionKind } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import { listMcpServersFromDir, listSkillsFromDir } from "../agent/workspace.js";
 import { resolveBundledSkillsDir, resolveMcpDir, resolveUserSkillsDir } from "../agent/home.js";

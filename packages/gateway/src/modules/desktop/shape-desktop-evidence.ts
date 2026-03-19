@@ -1,4 +1,4 @@
-import type { ArtifactRef as ArtifactRefT } from "@tyrum/schemas";
+import type { ArtifactRef as ArtifactRefT } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import type { ArtifactStore } from "../artifact/store.js";
 import {

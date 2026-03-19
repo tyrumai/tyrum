@@ -5,7 +5,7 @@
  */
 
 import { Hono } from "hono";
-import { AgentListResponse, AgentTurnRequest } from "@tyrum/schemas";
+import { AgentListResponse, AgentTurnRequest } from "@tyrum/contracts";
 import type { AgentRegistry } from "../modules/agent/registry.js";
 import type { SqlDb } from "../statestore/types.js";
 import { requireTenantId } from "../modules/auth/claims.js";

@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { IdentityPack, McpServerSpec, PluginManifest, SkillManifest } from "@tyrum/schemas";
+import { IdentityPack, McpServerSpec, PluginManifest, SkillManifest } from "@tyrum/contracts";
 import type { SqlDb } from "../statestore/types.js";
 import type { IdentityScopeDal } from "../modules/identity/scope.js";
 import { requireAuthClaims, requireTenantId } from "../modules/auth/claims.js";

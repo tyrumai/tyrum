@@ -1,4 +1,4 @@
-import type { McpServerSpec as McpServerSpecT } from "@tyrum/schemas";
+import type { McpServerSpec as McpServerSpecT } from "@tyrum/contracts";
 import type { SecretProvider } from "../secret/provider.js";
 import { buildBuiltinExaServerSpec } from "./builtin-exa.js";
 import type { McpManager } from "./mcp-manager.js";

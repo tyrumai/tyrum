@@ -1,4 +1,4 @@
-import type { ManagedExtensionDetail, ManagedExtensionSummary } from "@tyrum/schemas";
+import type { ManagedExtensionDetail, ManagedExtensionSummary } from "@tyrum/contracts";
 import { ChevronDown, ChevronRight, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import {

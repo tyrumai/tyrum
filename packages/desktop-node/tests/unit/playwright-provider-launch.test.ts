@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BROWSER_AUTOMATION_CAPABILITY_IDS, type ActionPrimitive } from "@tyrum/schemas";
+import { BROWSER_AUTOMATION_CAPABILITY_IDS, type ActionPrimitive } from "@tyrum/contracts";
 import {
   PlaywrightProvider,
   type PlaywrightProviderConfig,

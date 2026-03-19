@@ -4,7 +4,7 @@ import type {
   PendingApprovalState,
   PendingToolState,
   SessionContextState,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 
 const TOOL_STATE_FINAL = new Set(["input-available", "output-available", "output-error"]);
 const IDENTIFIER_REGEXES = [

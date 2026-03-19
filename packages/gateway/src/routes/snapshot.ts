@@ -12,7 +12,7 @@ import {
   SnapshotBundle,
   SnapshotImportRequest,
   type SnapshotTable as SnapshotTableT,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import { Hono } from "hono";
 import { parseScheduleConfig } from "../modules/automation/schedule-service.js";
 import type { SqlDb } from "../statestore/types.js";

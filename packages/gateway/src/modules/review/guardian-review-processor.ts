@@ -1,4 +1,4 @@
-import type { NodePairingRequest } from "@tyrum/schemas";
+import type { NodePairingRequest } from "@tyrum/contracts";
 import { IntervalScheduler, resolvePositiveInt } from "../lifecycle/scheduler.js";
 import type { Logger } from "../observability/logger.js";
 import type { ApprovalRow } from "../approval/dal.js";

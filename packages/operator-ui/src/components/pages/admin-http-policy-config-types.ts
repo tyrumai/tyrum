@@ -2,7 +2,7 @@ import type {
   DeploymentPolicyConfigGetResponse as PolicyConfigDeployment,
   DeploymentPolicyConfigRevision as PolicyConfigRevision,
   PolicyBundle as PolicyBundleT,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 
 export type { PolicyConfigDeployment, PolicyConfigRevision };
 

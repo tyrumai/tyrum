@@ -12,7 +12,7 @@ import {
   type NodeActionDispatchRequest as NodeActionDispatchRequestT,
   type NodeActionDispatchResponse as NodeActionDispatchResponseT,
   type NodeCapabilityInspectionResponse as NodeCapabilityInspectionResponseT,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type { ArtifactStore } from "../artifact/store.js";
 import type { NodeCapabilityInspectionService } from "../node/capability-inspection-service.js";
 import type { ConnectionManager } from "../../ws/connection-manager.js";

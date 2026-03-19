@@ -26,6 +26,6 @@
   },
   "dependencies": {
     "@tyrum/client": "workspace:*",
-    "@tyrum/schemas": "workspace:*"
+    "@tyrum/contracts": "workspace:*"
   }
 }

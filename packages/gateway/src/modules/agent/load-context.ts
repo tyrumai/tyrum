@@ -1,4 +1,4 @@
-import type { AgentConfig as AgentConfigT } from "@tyrum/schemas";
+import type { AgentConfig as AgentConfigT } from "@tyrum/contracts";
 import type { AgentContextScope, AgentContextStore } from "./context-store.js";
 import type { AgentLoadedContext } from "./runtime/types.js";
 

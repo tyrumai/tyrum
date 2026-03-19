@@ -1,4 +1,4 @@
-import type { MemoryProvenance } from "@tyrum/schemas";
+import type { MemoryProvenance } from "@tyrum/contracts";
 import type { MemoryCreateInput } from "../../src/modules/memory/types.js";
 import { MemoryDal } from "../../src/modules/memory/memory-dal.js";
 import { IdentityScopeDal } from "../../src/modules/identity/scope.js";

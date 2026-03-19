@@ -1,4 +1,4 @@
-import { ConfiguredExecutionProfileId } from "@tyrum/schemas";
+import { ConfiguredExecutionProfileId } from "@tyrum/contracts";
 
 export const PUBLIC_EXECUTION_PROFILE_IDS = ConfiguredExecutionProfileId.options;
 

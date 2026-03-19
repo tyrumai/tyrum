@@ -2,7 +2,7 @@ import { expect, it } from "vitest";
 import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   descriptorIdForClientCapability,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import { TyrumClient } from "../src/ws-client.js";
 import {
   type TestServer,

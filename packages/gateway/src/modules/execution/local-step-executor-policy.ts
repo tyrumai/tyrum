@@ -1,4 +1,4 @@
-import type { ActionPrimitive as ActionPrimitiveT } from "@tyrum/schemas";
+import type { ActionPrimitive as ActionPrimitiveT } from "@tyrum/contracts";
 import { requireTenantIdValue } from "../identity/scope.js";
 import type { PolicyService } from "../policy/service.js";
 import type { SecretProvider } from "../secret/provider.js";

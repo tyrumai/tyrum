@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { parseMobileBootstrapUrl } from "@tyrum/schemas";
+import { parseMobileBootstrapUrl } from "@tyrum/contracts";
 import React, { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { IssuedTokenNotice } from "../../src/components/pages/admin-http-tokens-display.js";

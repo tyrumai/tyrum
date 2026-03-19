@@ -7,7 +7,7 @@ import { cors } from "hono/cors";
 import { HTTPException } from "hono/http-exception";
 import type { GatewayContainer } from "./container.js";
 import { ExecutionEngine } from "./modules/execution/engine.js";
-import type { Playbook } from "@tyrum/schemas";
+import type { Playbook } from "@tyrum/contracts";
 import type { AgentRegistry } from "./modules/agent/registry.js";
 import type { AuthTokenService } from "./modules/auth/auth-token-service.js";
 import type { SecretProvider } from "./modules/secret/provider.js";

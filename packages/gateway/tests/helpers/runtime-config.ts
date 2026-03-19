@@ -1,7 +1,7 @@
 import type {
   LifecycleHookDefinition as LifecycleHookDefinitionT,
   PolicyBundle as PolicyBundleT,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { LifecycleHookConfigDal } from "../../src/modules/hooks/config-dal.js";
 import { PolicyBundleConfigDal } from "../../src/modules/policy/config-dal.js";

@@ -4,7 +4,7 @@ import {
   capabilityDescriptorsForClientCapability,
   type CapabilityDescriptor,
   type CapabilityKind,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import type { ProtocolDeps } from "../../src/ws/protocol.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";

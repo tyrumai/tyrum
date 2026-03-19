@@ -2,7 +2,7 @@
 
 import React, { act } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF } from "@tyrum/schemas";
+import { DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF } from "@tyrum/contracts";
 import { TyrumHttpClientError } from "@tyrum/client/browser";
 import { createBearerTokenAuth, createOperatorCore } from "../../../operator-core/src/index.js";
 import { DesktopEnvironmentsPage } from "../../src/components/pages/desktop-environments-page.js";

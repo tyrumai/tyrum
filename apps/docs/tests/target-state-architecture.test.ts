@@ -83,7 +83,8 @@ describe("Target-state architecture docs", () => {
     expect(prTemplate).toMatch(/Closes #<issue>/);
     expect(prTemplate).toMatch(/target package\/layer/i);
     expect(prTemplate).toMatch(/legacy package/i);
-    expect(prTemplate).toMatch(/@tyrum\/schemas/);
+    expect(prTemplate).toMatch(/@tyrum\/contracts/);
+    expect(prTemplate).not.toMatch(/@tyrum\/schemas/);
     expect(prTemplate).toMatch(/@tyrum\/client/);
     expect(prTemplate).toMatch(/@tyrum\/operator-core/);
     expect(prTemplate).toMatch(/target-state architecture/i);

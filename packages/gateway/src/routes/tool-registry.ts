@@ -1,5 +1,5 @@
-import { McpServerSpec, type McpServerSpec as McpServerSpecT } from "@tyrum/schemas";
-import type { PluginManifest as PluginManifestT } from "@tyrum/schemas";
+import { McpServerSpec, type McpServerSpec as McpServerSpecT } from "@tyrum/contracts";
+import type { PluginManifest as PluginManifestT } from "@tyrum/contracts";
 import { Hono } from "hono";
 import { BUILTIN_EXA_SERVER_ID } from "../modules/agent/builtin-exa.js";
 import { McpManager } from "../modules/agent/mcp-manager.js";

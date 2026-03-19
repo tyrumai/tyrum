@@ -4,8 +4,8 @@ import {
   ClientCapability,
   capabilityDescriptorsForClientCapability,
   normalizeCapabilityDescriptors,
-} from "@tyrum/schemas";
-import type { CapabilityDescriptor } from "@tyrum/schemas";
+} from "@tyrum/contracts";
+import type { CapabilityDescriptor } from "@tyrum/contracts";
 
 function parseStoredCapabilityString(value: string): CapabilityDescriptor[] {
   const legacyCapability = ClientCapability.safeParse(value);

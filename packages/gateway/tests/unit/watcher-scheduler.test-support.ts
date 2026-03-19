@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, vi } from "vitest";
-import { PolicyBundle } from "@tyrum/schemas";
+import { PolicyBundle } from "@tyrum/contracts";
 import mitt from "mitt";
 import type { GatewayEvents } from "../../src/event-bus.js";
 import type { ExecutionEngine } from "../../src/modules/execution/engine.js";

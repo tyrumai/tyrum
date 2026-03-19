@@ -1,4 +1,4 @@
-import type { WsResponseEnvelope } from "@tyrum/schemas";
+import type { WsResponseEnvelope } from "@tyrum/contracts";
 import { SessionDal } from "../../modules/agent/session-dal.js";
 import { ChannelThreadDal } from "../../modules/channels/thread-dal.js";
 import { IdentityScopeDal } from "../../modules/identity/scope.js";

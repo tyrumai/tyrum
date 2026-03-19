@@ -53,6 +53,27 @@ describe("release workflow parity gate", () => {
     expect(runScript).toMatch(/\n\s*done\s*(\n|$)/);
   });
 
+  it("publishes the packed npm tarballs that match the renamed workspace packages", () => {
+    const workflow = readReleaseWorkflow();
+    const jobs = workflow["jobs"] as Record<string, unknown> | undefined;
+    const releaseJob = jobs?.["publish-release"] as Record<string, unknown> | undefined;
+    const steps = releaseJob?.["steps"] as Array<Record<string, unknown>> | undefined;
+
+    const publishStep = (steps ?? []).find((step) => step["name"] === "Publish npm packages");
+    expect(typeof publishStep?.["run"]).toBe("string");
+    const runScript = String(publishStep?.["run"] ?? "");
+
+    expect(runScript).toContain(
+      '["@tyrum/contracts"]="release-assets/tyrum-contracts-${RELEASE_VERSION}.tgz"',
+    );
+    expect(runScript).toContain(
+      '["@tyrum/client"]="release-assets/tyrum-client-${RELEASE_VERSION}.tgz"',
+    );
+    expect(runScript).toContain(
+      '["@tyrum/gateway"]="release-assets/tyrum-gateway-${RELEASE_VERSION}.tgz"',
+    );
+  });
+
   it("does not leak macOS code-signing secrets into Windows desktop builds", () => {
     const workflow = readReleaseWorkflow();
     const jobs = workflow["jobs"] as Record<string, unknown> | undefined;

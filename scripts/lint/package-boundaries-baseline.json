@@ -1,4 +1,241 @@
 {
-  "allowedImportEdges": [],
-  "allowedManifestEdges": []
+  "allowedImportEdges": [
+    {
+      "fromFile": "packages/operator-ui/src/browser-node/browser-capability-provider.ts",
+      "reason": "#1535 temporary coexistence while @tyrum/operator-ui still carries mixed app/contract responsibilities",
+      "toPackage": "@tyrum/contracts"
+    },
+    {
+      "fromFile": "packages/operator-ui/src/browser-node/browser-node-capability-state.ts",
+      "reason": "#1535 temporary coexistence while @tyrum/operator-ui still carries mixed app/contract responsibilities",
+      "toPackage": "@tyrum/contracts"
+    },
+    {
+      "fromFile": "packages/operator-ui/src/browser-node/browser-node-provider.tsx",
+      "reason": "#1535 temporary coexistence while @tyrum/operator-ui still carries mixed app/contract responsibilities",
+      "toPackage": "@tyrum/contracts"
+    },
+    {
+      "fromFile": "packages/operator-ui/src/components/artifacts/artifact-inline-preview.tsx",
+      "reason": "#1535 temporary coexistence while @tyrum/operator-ui still carries mixed app/contract responsibilities",
+      "toPackage": "@tyrum/contracts"
+    },
+    {
+      "fromFile": "packages/operator-ui/src/components/pages/admin-http-location-sections.tsx",
+      "reason": "#1535 temporary coexistence while @tyrum/operator-ui still carries mixed app/contract responsibilities",
+      "toPackage": "@tyrum/contracts"
+    },
+    {
+      "fromFile": "packages/operator-ui/src/components/pages/admin-http-location.tsx",
+      "reason": "#1535 temporary coexistence while @tyrum/operator-ui still carries mixed app/contract responsibilities",
+      "toPackage": "@tyrum/contracts"
+    },
+    {
+      "fromFile": "packages/operator-ui/src/components/pages/admin-http-policy-config-types.ts",
+      "reason": "#1535 temporary coexistence while @tyrum/operator-ui still carries mixed app/contract responsibilities",
+      "toPackage": "@tyrum/contracts"
+    },
+    {
+      "fromFile": "packages/operator-ui/src/components/pages/admin-http-policy-config.tsx",
+      "reason": "#1535 temporary coexistence while @tyrum/operator-ui still carries mixed app/contract responsibilities",
+      "toPackage": "@tyrum/contracts"
+    },
+    {
+      "fromFile": "packages/operator-ui/src/components/pages/admin-http-policy-shared.ts",
+      "reason": "#1535 temporary coexistence while @tyrum/operator-ui still carries mixed app/contract responsibilities",
+      "toPackage": "@tyrum/contracts"
+    },
+    {
+      "fromFile": "packages/operator-ui/src/components/pages/admin-http-routing-config-dialog.tsx",
+      "reason": "#1535 temporary coexistence while @tyrum/operator-ui still carries mixed app/contract responsibilities",
+      "toPackage": "@tyrum/contracts"
+    },
+    {
+      "fromFile": "packages/operator-ui/src/components/pages/admin-http-routing-config.shared.ts",
+      "reason": "#1535 temporary coexistence while @tyrum/operator-ui still carries mixed app/contract responsibilities",
+      "toPackage": "@tyrum/contracts"
+    },
+    {
+      "fromFile": "packages/operator-ui/src/components/pages/admin-http-secrets.tsx",
+      "reason": "#1535 temporary coexistence while @tyrum/operator-ui still carries mixed app/contract responsibilities",
+      "toPackage": "@tyrum/contracts"
+    },
+    {
+      "fromFile": "packages/operator-ui/src/components/pages/admin-http-tokens-display.tsx",
+      "reason": "#1535 temporary coexistence while @tyrum/operator-ui still carries mixed app/contract responsibilities",
+      "toPackage": "@tyrum/contracts"
+    },
+    {
+      "fromFile": "packages/operator-ui/src/components/pages/agents-page-editor-form.ts",
+      "reason": "#1535 temporary coexistence while @tyrum/operator-ui still carries mixed app/contract responsibilities",
+      "toPackage": "@tyrum/contracts"
+    },
+    {
+      "fromFile": "packages/operator-ui/src/components/pages/agents-page-editor-mcp-overrides.tsx",
+      "reason": "#1535 temporary coexistence while @tyrum/operator-ui still carries mixed app/contract responsibilities",
+      "toPackage": "@tyrum/contracts"
+    },
+    {
+      "fromFile": "packages/operator-ui/src/components/pages/agents-page-editor-sections.tsx",
+      "reason": "#1535 temporary coexistence while @tyrum/operator-ui still carries mixed app/contract responsibilities",
+      "toPackage": "@tyrum/contracts"
+    },
+    {
+      "fromFile": "packages/operator-ui/src/components/pages/agents-page-editor.tsx",
+      "reason": "#1535 temporary coexistence while @tyrum/operator-ui still carries mixed app/contract responsibilities",
+      "toPackage": "@tyrum/contracts"
+    },
+    {
+      "fromFile": "packages/operator-ui/src/components/pages/agents-page-identity.tsx",
+      "reason": "#1535 temporary coexistence while @tyrum/operator-ui still carries mixed app/contract responsibilities",
+      "toPackage": "@tyrum/contracts"
+    },
+    {
+      "fromFile": "packages/operator-ui/src/components/pages/agents-page.tsx",
+      "reason": "#1535 temporary coexistence while @tyrum/operator-ui still carries mixed app/contract responsibilities",
+      "toPackage": "@tyrum/contracts"
+    },
+    {
+      "fromFile": "packages/operator-ui/src/components/pages/approvals-page.helpers.ts",
+      "reason": "#1535 temporary coexistence while @tyrum/operator-ui still carries mixed app/contract responsibilities",
+      "toPackage": "@tyrum/contracts"
+    },
+    {
+      "fromFile": "packages/operator-ui/src/components/pages/approvals-page.tsx",
+      "reason": "#1535 temporary coexistence while @tyrum/operator-ui still carries mixed app/contract responsibilities",
+      "toPackage": "@tyrum/contracts"
+    },
+    {
+      "fromFile": "packages/operator-ui/src/components/pages/chat-page-ai-sdk-message-card-helpers.ts",
+      "reason": "#1535 temporary coexistence while @tyrum/operator-ui still carries mixed app/contract responsibilities",
+      "toPackage": "@tyrum/contracts"
+    },
+    {
+      "fromFile": "packages/operator-ui/src/components/pages/desktop-environments-page.shared.ts",
+      "reason": "#1535 temporary coexistence while @tyrum/operator-ui still carries mixed app/contract responsibilities",
+      "toPackage": "@tyrum/contracts"
+    },
+    {
+      "fromFile": "packages/operator-ui/src/components/pages/extensions-page.lib.ts",
+      "reason": "#1535 temporary coexistence while @tyrum/operator-ui still carries mixed app/contract responsibilities",
+      "toPackage": "@tyrum/contracts"
+    },
+    {
+      "fromFile": "packages/operator-ui/src/components/pages/extensions-page.sections.tsx",
+      "reason": "#1535 temporary coexistence while @tyrum/operator-ui still carries mixed app/contract responsibilities",
+      "toPackage": "@tyrum/contracts"
+    },
+    {
+      "fromFile": "packages/operator-ui/src/components/pages/extensions-page.tsx",
+      "reason": "#1535 temporary coexistence while @tyrum/operator-ui still carries mixed app/contract responsibilities",
+      "toPackage": "@tyrum/contracts"
+    },
+    {
+      "fromFile": "packages/operator-ui/src/components/pages/first-run-onboarding.logic.ts",
+      "reason": "#1535 temporary coexistence while @tyrum/operator-ui still carries mixed app/contract responsibilities",
+      "toPackage": "@tyrum/contracts"
+    },
+    {
+      "fromFile": "packages/operator-ui/src/components/pages/pairing-page.cards.tsx",
+      "reason": "#1535 temporary coexistence while @tyrum/operator-ui still carries mixed app/contract responsibilities",
+      "toPackage": "@tyrum/contracts"
+    },
+    {
+      "fromFile": "packages/operator-ui/src/components/pages/pairing-page.inventory.ts",
+      "reason": "#1535 temporary coexistence while @tyrum/operator-ui still carries mixed app/contract responsibilities",
+      "toPackage": "@tyrum/contracts"
+    },
+    {
+      "fromFile": "packages/operator-ui/src/components/pages/pairing-page.rows.tsx",
+      "reason": "#1535 temporary coexistence while @tyrum/operator-ui still carries mixed app/contract responsibilities",
+      "toPackage": "@tyrum/contracts"
+    },
+    {
+      "fromFile": "packages/operator-ui/src/components/pages/pairing-page.shared.tsx",
+      "reason": "#1535 temporary coexistence while @tyrum/operator-ui still carries mixed app/contract responsibilities",
+      "toPackage": "@tyrum/contracts"
+    },
+    {
+      "fromFile": "packages/operator-ui/src/components/pages/pairing-page.tsx",
+      "reason": "#1535 temporary coexistence while @tyrum/operator-ui still carries mixed app/contract responsibilities",
+      "toPackage": "@tyrum/contracts"
+    },
+    {
+      "fromFile": "packages/operator-ui/tests/operator-ui.a11y.test.ts",
+      "reason": "#1535 temporary coexistence while @tyrum/operator-ui still carries mixed app/contract responsibilities",
+      "toPackage": "@tyrum/contracts"
+    },
+    {
+      "fromFile": "packages/operator-ui/tests/operator-ui.first-run-onboarding.helpers.ts",
+      "reason": "#1535 temporary coexistence while @tyrum/operator-ui still carries mixed app/contract responsibilities",
+      "toPackage": "@tyrum/contracts"
+    },
+    {
+      "fromFile": "packages/operator-ui/tests/operator-ui.reconnect-ui-state-test-support.tsx",
+      "reason": "#1535 temporary coexistence while @tyrum/operator-ui still carries mixed app/contract responsibilities",
+      "toPackage": "@tyrum/contracts"
+    },
+    {
+      "fromFile": "packages/operator-ui/tests/operator-ui.test-fixtures.ts",
+      "reason": "#1535 temporary coexistence while @tyrum/operator-ui still carries mixed app/contract responsibilities",
+      "toPackage": "@tyrum/contracts"
+    },
+    {
+      "fromFile": "packages/operator-ui/tests/operator-ui.ws-test-fixtures.ts",
+      "reason": "#1535 temporary coexistence while @tyrum/operator-ui still carries mixed app/contract responsibilities",
+      "toPackage": "@tyrum/contracts"
+    },
+    {
+      "fromFile": "packages/operator-ui/tests/pages/admin-http-tokens-display.test.ts",
+      "reason": "#1535 temporary coexistence while @tyrum/operator-ui still carries mixed app/contract responsibilities",
+      "toPackage": "@tyrum/contracts"
+    },
+    {
+      "fromFile": "packages/operator-ui/tests/pages/agents-page-editor-sections.test.ts",
+      "reason": "#1535 temporary coexistence while @tyrum/operator-ui still carries mixed app/contract responsibilities",
+      "toPackage": "@tyrum/contracts"
+    },
+    {
+      "fromFile": "packages/operator-ui/tests/pages/agents-page-editor.test-helpers.tsx",
+      "reason": "#1535 temporary coexistence while @tyrum/operator-ui still carries mixed app/contract responsibilities",
+      "toPackage": "@tyrum/contracts"
+    },
+    {
+      "fromFile": "packages/operator-ui/tests/pages/agents-page-editor.test.ts",
+      "reason": "#1535 temporary coexistence while @tyrum/operator-ui still carries mixed app/contract responsibilities",
+      "toPackage": "@tyrum/contracts"
+    },
+    {
+      "fromFile": "packages/operator-ui/tests/pages/agents-page-layout.test.ts",
+      "reason": "#1535 temporary coexistence while @tyrum/operator-ui still carries mixed app/contract responsibilities",
+      "toPackage": "@tyrum/contracts"
+    },
+    {
+      "fromFile": "packages/operator-ui/tests/pages/agents-page.test.ts",
+      "reason": "#1535 temporary coexistence while @tyrum/operator-ui still carries mixed app/contract responsibilities",
+      "toPackage": "@tyrum/contracts"
+    },
+    {
+      "fromFile": "packages/operator-ui/tests/pages/desktop-environments-page.defaults.test.ts",
+      "reason": "#1535 temporary coexistence while @tyrum/operator-ui still carries mixed app/contract responsibilities",
+      "toPackage": "@tyrum/contracts"
+    },
+    {
+      "fromFile": "packages/operator-ui/tests/pages/extensions-page.test-helpers.tsx",
+      "reason": "#1535 temporary coexistence while @tyrum/operator-ui still carries mixed app/contract responsibilities",
+      "toPackage": "@tyrum/contracts"
+    },
+    {
+      "fromFile": "packages/operator-ui/tests/pages/extensions-page.test.ts",
+      "reason": "#1535 temporary coexistence while @tyrum/operator-ui still carries mixed app/contract responsibilities",
+      "toPackage": "@tyrum/contracts"
+    }
+  ],
+  "allowedManifestEdges": [
+    {
+      "fromPackage": "@tyrum/operator-ui",
+      "reason": "#1535 temporary coexistence while @tyrum/operator-ui still carries mixed app/contract responsibilities",
+      "toPackage": "@tyrum/contracts"
+    }
+  ]
 }

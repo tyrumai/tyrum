@@ -8,7 +8,7 @@ import {
   WsChatSessionCreateResult,
   WsChatSessionGetResult,
   WsChatSessionStreamStart,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 
 describe("gateway e2e smoke: login-to-turn", () => {
   let stopGateway: (() => Promise<void>) | undefined;

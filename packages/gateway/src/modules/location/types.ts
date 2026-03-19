@@ -4,7 +4,7 @@ import {
   LocationEventTransition,
   LocationPlaceId,
   WorkspaceKey,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 
 export const LocationTriggerCondition = z.discriminatedUnion("type", [
   z

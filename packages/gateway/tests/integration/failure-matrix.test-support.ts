@@ -1,7 +1,10 @@
 import { createServer, type Server } from "node:http";
 import { createHash, generateKeyPairSync, sign } from "node:crypto";
 import { WebSocket } from "ws";
-import { capabilityDescriptorsForClientCapability, deviceIdFromSha256Digest } from "@tyrum/schemas";
+import {
+  capabilityDescriptorsForClientCapability,
+  deviceIdFromSha256Digest,
+} from "@tyrum/contracts";
 import { expect } from "vitest";
 
 import { createWsHandler } from "../../src/routes/ws.js";

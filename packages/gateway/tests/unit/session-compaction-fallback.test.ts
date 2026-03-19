@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { CheckpointSummary } from "@tyrum/schemas";
+import type { CheckpointSummary } from "@tyrum/contracts";
 import { buildDeterministicFallbackCheckpoint } from "../../src/modules/agent/runtime/session-compaction-fallback.js";
 
 function createCheckpointSummary(goal: string): CheckpointSummary {

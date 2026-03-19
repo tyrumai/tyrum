@@ -1,5 +1,5 @@
 import type { OperatorCore } from "@tyrum/operator-core";
-import type { AgentStatusResponse } from "@tyrum/schemas";
+import type { AgentStatusResponse } from "@tyrum/contracts";
 import { Bot, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useApiAction } from "../../hooks/use-api-action.js";

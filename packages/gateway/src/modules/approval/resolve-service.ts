@@ -1,5 +1,5 @@
-import type { WsEventEnvelope } from "@tyrum/schemas";
-import { UuidSchema, canonicalizeToolId } from "@tyrum/schemas";
+import type { WsEventEnvelope } from "@tyrum/contracts";
+import { UuidSchema, canonicalizeToolId } from "@tyrum/contracts";
 import type { ApprovalDal, ApprovalRow, ApprovalStatus } from "./dal.js";
 import type { PolicyOverrideDal, PolicyOverrideRow } from "../policy/override-dal.js";
 import { isSafeSuggestedOverridePattern } from "../policy/override-guardrails.js";

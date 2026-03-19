@@ -14,7 +14,7 @@ interface ContractCatalogPayload {
 
 async function readCatalogArtifact(): Promise<ContractCatalogPayload | undefined> {
   const catalogPath = fileURLToPath(
-    new URL("../../../schemas/dist/jsonschema/catalog.json", import.meta.url),
+    new URL("../../../contracts/dist/jsonschema/catalog.json", import.meta.url),
   );
 
   try {
@@ -40,7 +40,7 @@ function normalizeCatalogSchemas(
 }
 
 describe("Gateway JSON Schema publishing", () => {
-  it("serves the @tyrum/schemas catalog artifact (with file names normalized)", async () => {
+  it("serves the @tyrum/contracts catalog artifact (with file names normalized)", async () => {
     const { app } = await createTestApp();
 
     const res = await app.request("/contracts/jsonschema/catalog.json");
@@ -48,7 +48,7 @@ describe("Gateway JSON Schema publishing", () => {
     const served = (await res.json()) as ContractCatalogPayload;
 
     expect(served.format).toBe("tyrum.contracts.jsonschema.catalog.v1");
-    expect(served.package.name).toBe("@tyrum/schemas");
+    expect(served.package.name).toBe("@tyrum/contracts");
     expect(served.schemas.every((schema) => schema.file === basename(schema.file))).toBe(true);
 
     const expected = await readCatalogArtifact();

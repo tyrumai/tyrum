@@ -1,4 +1,4 @@
-import type { WorkItem, WorkScope, WsEventEnvelope } from "@tyrum/schemas";
+import type { WorkItem, WorkScope, WsEventEnvelope } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 
 export type GetItemFn = (params: {

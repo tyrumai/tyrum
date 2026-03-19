@@ -1,5 +1,5 @@
 import type { OperatorCore } from "@tyrum/operator-core";
-import { buildAgentSessionKey, type NodeInventoryEntry } from "@tyrum/schemas";
+import { buildAgentSessionKey, type NodeInventoryEntry } from "@tyrum/contracts";
 import { useEffect, useMemo, useState } from "react";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 

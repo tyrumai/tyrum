@@ -1,4 +1,4 @@
-import type { TyrumUIMessage } from "@tyrum/schemas";
+import type { TyrumUIMessage } from "@tyrum/contracts";
 import { stringifyPersistedJson } from "../observability/persisted-json.js";
 import {
   createEmptySessionContextState,

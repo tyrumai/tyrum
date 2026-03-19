@@ -2,7 +2,7 @@
 
 Read this if you want the control-plane mental model for how clients and nodes talk to the gateway. Skip this if you need exact field-level contracts first; use the drill-down links for that.
 
-The Tyrum protocol is the typed interaction contract between gateway, clients, and nodes. It exists so long-lived control, request/reply actions, and server-push events all use one validated model. For wire-level behavior, exported schemas in `packages/schemas` are the source of truth.
+The Tyrum protocol is the typed interaction contract between gateway, clients, and nodes. It exists so long-lived control, request/reply actions, and server-push events all use one validated model. For wire-level behavior, exported schemas in `packages/contracts` are the source of truth.
 
 ```mermaid
 flowchart TB

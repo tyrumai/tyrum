@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { ActionPrimitive } from "@tyrum/schemas";
+import type { ActionPrimitive } from "@tyrum/contracts";
 import { DesktopProvider, MockDesktopBackend, type ConfirmationFn } from "@tyrum/desktop-node";
 import type { DesktopA11yBackend } from "../src/providers/backends/desktop-a11y-backend.js";
 

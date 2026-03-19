@@ -11,8 +11,8 @@ import {
   WsWorkflowRunRequest,
   WsWorkflowRunResult,
   parseTyrumKey,
-} from "@tyrum/schemas";
-import type { WsResponseEnvelope } from "@tyrum/schemas";
+} from "@tyrum/contracts";
+import type { WsResponseEnvelope } from "@tyrum/contracts";
 import { executeCommand } from "../../modules/commands/dispatcher.js";
 import { IdentityScopeDal } from "../../modules/identity/scope.js";
 import { normalizeDbDateTime } from "../../utils/db-time.js";

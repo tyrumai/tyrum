@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createTestApp } from "./helpers.js";
-import { AuthProfile } from "@tyrum/schemas";
+import { AuthProfile } from "@tyrum/contracts";
 
 function parseStructuredLogRecords(logSpy: {
   mock: { calls: unknown[][] };

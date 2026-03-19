@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { DesktopQueryResult } from "@tyrum/schemas";
+import { DesktopQueryResult } from "@tyrum/contracts";
 import { AtSpiDesktopA11yBackend } from "../src/providers/backends/atspi-a11y-backend.js";
 import { DEFAULT_A11Y_MAX_DEPTH } from "../src/providers/a11y/prune-ui-tree.js";
 

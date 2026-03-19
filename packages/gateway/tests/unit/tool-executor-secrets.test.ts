@@ -7,7 +7,7 @@ import { ToolExecutor } from "../../src/modules/agent/tool-executor.js";
 import type { McpManager } from "../../src/modules/agent/mcp-manager.js";
 import type { SecretProvider } from "../../src/modules/secret/provider.js";
 import type { SecretResolutionAuditDal } from "../../src/modules/secret/resolution-audit-dal.js";
-import type { McpServerSpec, SecretHandle } from "@tyrum/schemas";
+import type { McpServerSpec, SecretHandle } from "@tyrum/contracts";
 import { DEFAULT_TENANT_ID, DEFAULT_WORKSPACE_ID } from "../../src/modules/identity/scope.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";

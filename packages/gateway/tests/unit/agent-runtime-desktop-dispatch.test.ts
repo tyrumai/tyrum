@@ -15,7 +15,7 @@ import { AgentRuntime } from "../../src/modules/agent/runtime.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { TaskResultRegistry } from "../../src/ws/protocol/task-result-registry.js";
 import { MockLanguageModelV3 } from "ai/test";
-import { CAPABILITY_DESCRIPTOR_DEFAULT_VERSION } from "@tyrum/schemas";
+import { CAPABILITY_DESCRIPTOR_DEFAULT_VERSION } from "@tyrum/contracts";
 
 describe("AgentRuntime - desktop dispatch", () => {
   const desktopSnapshotDescriptor = {

@@ -1,5 +1,5 @@
 import type { IncomingMessage } from "node:http";
-import type { AuthTokenClaims } from "@tyrum/schemas";
+import type { AuthTokenClaims } from "@tyrum/contracts";
 import type { AuthTokenService } from "../../modules/auth/auth-token-service.js";
 import { toSingleHeaderValue } from "../../modules/auth/client-ip.js";
 import { AUTH_COOKIE_NAME, extractBearerToken } from "../../modules/auth/http.js";

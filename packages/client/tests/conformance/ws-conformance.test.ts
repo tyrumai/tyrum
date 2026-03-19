@@ -15,7 +15,7 @@ import {
   BROWSER_AUTOMATION_CAPABILITY_IDS,
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   WsTaskExecuteRequest,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import { TyrumClient } from "../../src/ws-client.js";
 import {
   startGateway,

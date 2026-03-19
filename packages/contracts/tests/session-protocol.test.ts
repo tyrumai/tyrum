@@ -5,7 +5,7 @@ import { WsRequest, WsResponse } from "../src/protocol.js";
 import { expectRejects } from "./test-helpers.js";
 
 describe("Session v1 WS protocol", () => {
-  it("exports chat.session.* WS schemas from @tyrum/schemas", () => {
+  it("exports chat.session.* WS schemas from @tyrum/contracts", () => {
     expect("WsChatSessionListRequest" in Schemas).toBe(true);
     expect("WsChatSessionGetRequest" in Schemas).toBe(true);
     expect("WsChatSessionCreateRequest" in Schemas).toBe(true);
@@ -46,7 +46,7 @@ describe("Session v1 WS protocol", () => {
         pending_work: ["switch gateway compaction to shared schema"],
         unresolved_questions: ["whether chat.session.get should expose context_state"],
         critical_identifiers: ["session-1", "stream-1"],
-        relevant_files: ["packages/schemas/src/session-context.ts"],
+        relevant_files: ["packages/contracts/src/session-context.ts"],
         handoff_md: "Continue from the shared session context state.",
       },
       pending_approvals: [

@@ -6,7 +6,7 @@ import type {
   WorkItemStateKVEntry,
   WorkSignal,
   WorkStateKVScope,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 
 export const WORK_ITEM_STATUSES = [
   "backlog",

@@ -1,7 +1,7 @@
 import type {
   ActionPrimitive as ActionPrimitiveT,
   ClientCapability as ClientCapabilityT,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type { SqlDb } from "../../../statestore/types.js";
 import { releaseWorkspaceLeaseTx } from "../../workspace/lease.js";
 import type {

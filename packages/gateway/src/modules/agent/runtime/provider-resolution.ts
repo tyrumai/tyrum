@@ -5,7 +5,7 @@ import { AuthProfileDal, type AuthProfileRow } from "../../models/auth-profile-d
 import { isAuthProfilesEnabled } from "../../models/auth-profiles-enabled.js";
 import { SessionProviderPinDal } from "../../models/session-pin-dal.js";
 import type { SecretProvider } from "../../secret/provider.js";
-import type { SecretHandle } from "@tyrum/schemas";
+import type { SecretHandle } from "@tyrum/contracts";
 
 export const OAUTH_REFRESH_LEASE_UNAVAILABLE = "__oauth_refresh_lease_unavailable__";
 

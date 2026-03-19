@@ -2,7 +2,7 @@ import type {
   AgentConfig as AgentConfigT,
   AgentPersona as AgentPersonaT,
   IdentityPack as IdentityPackT,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import {
   AgentConfig,
   AgentPersona,
@@ -10,7 +10,7 @@ import {
   PERSONA_CHARACTERS,
   PERSONA_PALETTES,
   PERSONA_TONES,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import { safeJsonParse } from "../../utils/json.js";
 

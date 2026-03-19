@@ -2,7 +2,7 @@
 
 Tyrum is an autonomous worker platform built around a gateway, an agent runtime, and safety boundaries for execution, approvals, and audit evidence. It is self-hosted, serves an operator UI at `/ui`, and exposes authenticated HTTP and WebSocket access.
 
-The repository contains the gateway runtime, the client SDK, shared schemas, the desktop app, and the public docs site. Detailed architecture, deployment, and feature documentation lives under [`docs/`](docs/index.md).
+The repository contains the gateway runtime, the client SDK, the shared contracts package, the desktop app, and the public docs site. Detailed architecture, deployment, and feature documentation lives under [`docs/`](docs/index.md).
 
 For new package work, treat the [target-state architecture](docs/architecture/target-state.md) as the contributor contract rather than reinforcing the current migration-state package graph.
 
@@ -60,7 +60,7 @@ The main packages in the current tree are:
 
 - `packages/gateway`: gateway runtime and `tyrum` CLI
 - `packages/client`: client SDK
-- `packages/schemas`: shared schemas and types
+- `packages/contracts`: shared contracts, schemas, and generated artifacts
 - `apps/desktop`: Electron desktop app
 - `apps/docs`: public documentation site
 

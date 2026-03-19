@@ -15,7 +15,7 @@ import {
   capabilityDescriptorsForClientCapability,
   BROWSER_AUTOMATION_CAPABILITY_IDS,
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 
 import { DesktopProvider } from "../providers/desktop-provider.js";
 import {

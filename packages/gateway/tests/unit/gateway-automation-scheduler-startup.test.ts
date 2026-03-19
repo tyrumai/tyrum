@@ -1,4 +1,4 @@
-import { DeploymentConfig } from "@tyrum/schemas";
+import { DeploymentConfig } from "@tyrum/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 describe("gateway automation scheduler startup", () => {

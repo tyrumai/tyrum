@@ -5,8 +5,8 @@ import {
   WsPairingResolveResult,
   WsPairingRevokeRequest,
   normalizeCapabilityDescriptors,
-} from "@tyrum/schemas";
-import type { CapabilityDescriptor, WsResponseEnvelope } from "@tyrum/schemas";
+} from "@tyrum/contracts";
+import type { CapabilityDescriptor, WsResponseEnvelope } from "@tyrum/contracts";
 import { resolveNodePairing } from "../../modules/node/pairing-resolve-service.js";
 import { PAIRING_WS_AUDIENCE } from "../audience.js";
 import { emitPairingApprovedEvent } from "../pairing-approved.js";

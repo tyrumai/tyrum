@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { Approval, PolicyBundle, SnapshotBundle, WsMessageEnvelope } from "@tyrum/schemas";
+import { Approval, PolicyBundle, SnapshotBundle, WsMessageEnvelope } from "@tyrum/contracts";
 
-describe("@tyrum/schemas JSON Schema export", () => {
+describe("@tyrum/contracts JSON Schema export", () => {
   it("can export key contracts to JSON Schema", () => {
     const schemas = [
       WsMessageEnvelope.toJSONSchema(),

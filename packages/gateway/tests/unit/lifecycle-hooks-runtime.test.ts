@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ActionPrimitive } from "@tyrum/schemas";
+import type { ActionPrimitive } from "@tyrum/contracts";
 import { ExecutionEngine } from "../../src/modules/execution/engine.js";
 import { PolicyOverrideDal } from "../../src/modules/policy/override-dal.js";
 import { PolicySnapshotDal } from "../../src/modules/policy/snapshot-dal.js";

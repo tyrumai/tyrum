@@ -1,5 +1,5 @@
-import { PluginLockFile } from "@tyrum/schemas";
-import type { PluginLockFile as PluginLockFileT } from "@tyrum/schemas";
+import { PluginLockFile } from "@tyrum/contracts";
+import type { PluginLockFile as PluginLockFileT } from "@tyrum/contracts";
 import { createHash } from "node:crypto";
 
 export const PLUGIN_LOCK_FORMAT = "tyrum.plugin.lock.v1" as const;

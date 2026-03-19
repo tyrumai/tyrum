@@ -1,5 +1,5 @@
-import type { AgentCapabilitiesResponse, ManagedExtensionDetail } from "@tyrum/schemas";
-import { PERSONA_CHARACTERS, PERSONA_PALETTES, PERSONA_TONES } from "@tyrum/schemas";
+import type { AgentCapabilitiesResponse, ManagedExtensionDetail } from "@tyrum/contracts";
+import { PERSONA_CHARACTERS, PERSONA_PALETTES, PERSONA_TONES } from "@tyrum/contracts";
 import type { AgentEditorFormState, AgentEditorSetField } from "./agents-page-editor-form.js";
 import { AccessTransferField } from "./agents-page-editor-access-transfer.js";
 import type { ModelPreset } from "./admin-http-models.shared.js";

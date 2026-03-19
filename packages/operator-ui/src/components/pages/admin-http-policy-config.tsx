@@ -1,4 +1,4 @@
-import type { PolicyBundle as PolicyBundleT } from "@tyrum/schemas";
+import type { PolicyBundle as PolicyBundleT } from "@tyrum/contracts";
 import * as React from "react";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { ElevatedModeTooltip } from "../elevated-mode/elevated-mode-tooltip.js";

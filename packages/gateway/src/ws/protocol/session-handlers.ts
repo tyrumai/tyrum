@@ -1,4 +1,4 @@
-import type { WsResponseEnvelope } from "@tyrum/schemas";
+import type { WsResponseEnvelope } from "@tyrum/contracts";
 import type { ConnectedClient } from "../connection-manager.js";
 import { handleAiSdkChatMessage } from "./ai-sdk-chat-ops.js";
 import type { ProtocolDeps, ProtocolRequestEnvelope } from "./types.js";

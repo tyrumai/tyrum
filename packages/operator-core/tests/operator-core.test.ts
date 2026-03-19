@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { Approval } from "@tyrum/schemas";
+import type { Approval } from "@tyrum/contracts";
 import type {
   PairingListResponse,
   PresenceResponse,

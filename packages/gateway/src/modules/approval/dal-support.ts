@@ -1,4 +1,4 @@
-import type { ReviewEntry } from "@tyrum/schemas";
+import type { ReviewEntry } from "@tyrum/contracts";
 import { randomUUID } from "node:crypto";
 import type { SqlDb } from "../../statestore/types.js";
 import { normalizeDbDateTime } from "../../utils/db-time.js";

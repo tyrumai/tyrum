@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { NormalizedThreadMessage as NormalizedThreadMessageSchema } from "@tyrum/schemas";
+import { NormalizedThreadMessage as NormalizedThreadMessageSchema } from "@tyrum/contracts";
 import { normalizeUpdate, TelegramNormalizationError } from "../../src/modules/ingress/telegram.js";
 import { telegramThreadKey } from "../../src/modules/channels/telegram.js";
 import { DEFAULT_CHANNEL_ACCOUNT_ID } from "../../src/modules/channels/interface.js";

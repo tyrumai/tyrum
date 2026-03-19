@@ -6,12 +6,12 @@
  * plan runner while the execution engine is integrated incrementally.
  */
 
-import { ActionPrimitive, ExecutionBudgets, parseTyrumKey } from "@tyrum/schemas";
+import { ActionPrimitive, ExecutionBudgets, parseTyrumKey } from "@tyrum/contracts";
 import { Hono } from "hono";
 import { randomUUID } from "node:crypto";
 import type { ExecutionEngine } from "../modules/execution/engine.js";
-import type { ActionPrimitive as ActionPrimitiveT } from "@tyrum/schemas";
-import type { ExecutionBudgets as ExecutionBudgetsT } from "@tyrum/schemas";
+import type { ActionPrimitive as ActionPrimitiveT } from "@tyrum/contracts";
+import type { ExecutionBudgets as ExecutionBudgetsT } from "@tyrum/contracts";
 import type { PolicyService } from "../modules/policy/service.js";
 import type { AgentRegistry } from "../modules/agent/registry.js";
 import type { IdentityScopeDal } from "../modules/identity/scope.js";

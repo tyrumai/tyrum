@@ -3,7 +3,7 @@ import type {
   Decision,
   PolicyDecision as PolicyDecisionT,
   RuleDecision as RuleDecisionT,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import { wildcardMatch } from "./wildcard.js";
 import {
   evaluateDomain,

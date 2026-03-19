@@ -1,4 +1,4 @@
-import type { WorkItemTaskState, WorkScope } from "@tyrum/schemas";
+import type { WorkItemTaskState, WorkScope } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 
 import * as dalHelpers from "./dal-helpers.js";

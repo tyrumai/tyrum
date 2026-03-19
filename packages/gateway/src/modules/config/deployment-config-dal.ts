@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { DeploymentConfig as DeploymentConfigSchema } from "@tyrum/schemas";
-import type { DeploymentConfig as DeploymentConfigT } from "@tyrum/schemas";
+import { DeploymentConfig as DeploymentConfigSchema } from "@tyrum/contracts";
+import type { DeploymentConfig as DeploymentConfigT } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import { normalizeDbDateTime } from "../../utils/db-time.js";
 import { safeJsonParse } from "../../utils/json.js";

@@ -1,4 +1,4 @@
-import type { AgentConfig as AgentConfigT } from "@tyrum/schemas";
+import type { AgentConfig as AgentConfigT } from "@tyrum/contracts";
 import { resolveEmbeddingPipeline } from "./embedding-pipeline-resolution.js";
 import type { AgentRuntimeOptions } from "./types.js";
 import { ensureAgentConfigSeeded } from "../default-config.js";

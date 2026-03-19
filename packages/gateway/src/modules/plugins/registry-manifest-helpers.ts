@@ -1,4 +1,4 @@
-import { PluginManifest, type PluginManifest as PluginManifestT } from "@tyrum/schemas";
+import { PluginManifest, type PluginManifest as PluginManifestT } from "@tyrum/contracts";
 import { readFile, realpath, stat } from "node:fs/promises";
 import { isAbsolute, join, relative } from "node:path";
 import { isRecord, parseJsonOrYaml } from "../../utils/parse-json-or-yaml.js";

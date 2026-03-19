@@ -1,4 +1,4 @@
-import { AgentConfig, IdentityPack } from "@tyrum/schemas";
+import { AgentConfig, IdentityPack } from "@tyrum/contracts";
 import { describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";

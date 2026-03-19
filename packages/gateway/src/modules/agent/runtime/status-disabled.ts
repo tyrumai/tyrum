@@ -1,4 +1,4 @@
-import { AgentStatusResponse } from "@tyrum/schemas";
+import { AgentStatusResponse } from "@tyrum/contracts";
 import { resolveAgentPersona } from "../persona.js";
 
 export function createDisabledAgentStatus(input: { home: string; agentKey: string }) {

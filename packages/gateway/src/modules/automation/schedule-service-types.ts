@@ -1,4 +1,4 @@
-import type { ActionPrimitive, Lane as LaneT } from "@tyrum/schemas";
+import type { ActionPrimitive, Lane as LaneT } from "@tyrum/contracts";
 
 export type ScheduleKind = "heartbeat" | "cron";
 export type ScheduleDeliveryMode = "quiet" | "notify";

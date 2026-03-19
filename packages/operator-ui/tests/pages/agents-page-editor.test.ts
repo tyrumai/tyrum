@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { AgentConfig } from "@tyrum/schemas";
+import { AgentConfig } from "@tyrum/contracts";
 import { describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
 import { AgentsPageEditor } from "../../src/components/pages/agents-page-editor.js";

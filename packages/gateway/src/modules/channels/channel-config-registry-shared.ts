@@ -4,7 +4,7 @@ import {
   type ChannelFieldErrors,
   type ChannelRegistryEntry as ChannelRegistryEntryT,
   type ConfiguredChannelAccount as ConfiguredChannelAccountT,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import { z } from "zod";
 import type { StoredChannelConfig } from "./channel-config-dal.js";
 import { normalizeUniqueStringList } from "./channel-config-model.js";

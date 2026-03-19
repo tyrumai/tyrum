@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { AgentConfig as AgentConfigSchema } from "@tyrum/schemas";
-import type { AgentConfig as AgentConfigT } from "@tyrum/schemas";
+import { AgentConfig as AgentConfigSchema } from "@tyrum/contracts";
+import type { AgentConfig as AgentConfigT } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import { normalizeDbDateTime } from "../../utils/db-time.js";
 import { safeJsonParse } from "../../utils/json.js";

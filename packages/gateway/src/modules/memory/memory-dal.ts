@@ -4,7 +4,7 @@ import type {
   MemoryItem,
   MemoryProvenance,
   MemoryTombstone,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import { DEFAULT_AGENT_ID, DEFAULT_TENANT_ID } from "../identity/scope.js";
 import type {

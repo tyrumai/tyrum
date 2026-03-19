@@ -1,4 +1,4 @@
-import type { WsEventEnvelope } from "@tyrum/schemas";
+import type { WsEventEnvelope } from "@tyrum/contracts";
 import { describe, expect, it, vi } from "vitest";
 import { MetricsRegistry } from "../../src/modules/observability/metrics.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";

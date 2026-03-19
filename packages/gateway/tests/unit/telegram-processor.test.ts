@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { NormalizedThreadMessage } from "@tyrum/schemas";
+import type { NormalizedThreadMessage } from "@tyrum/contracts";
 import { SessionDal } from "../../src/modules/agent/session-dal.js";
 import type { AgentRegistry } from "../../src/modules/agent/registry.js";
 import { ChannelInboxDal } from "../../src/modules/channels/inbox-dal.js";

@@ -1,5 +1,5 @@
 /**
- * Convenience re-exports from @tyrum/schemas so consumers of @tyrum/client
+ * Convenience re-exports from @tyrum/contracts so consumers of @tyrum/client
  * don't need a direct dependency on the schemas package for common types.
  */
 
@@ -42,4 +42,4 @@ export type {
   ExecutionAttempt,
   NodePairingRequest,
   PresenceEntry,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";

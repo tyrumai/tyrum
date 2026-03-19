@@ -3,7 +3,7 @@ import {
   DesktopEnvironmentHost,
   type DesktopEnvironment as DesktopEnvironmentT,
   type DesktopEnvironmentHost as DesktopEnvironmentHostT,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import { sqlBoolParam } from "../../statestore/sql.js";
 import { requireTenantIdValue } from "../identity/scope.js";

@@ -3,7 +3,7 @@
  */
 
 import { Hono } from "hono";
-import { PolicyCheckRequest } from "@tyrum/schemas";
+import { PolicyCheckRequest } from "@tyrum/contracts";
 import { evaluatePolicy } from "../modules/policy/engine.js";
 
 const policy = new Hono();

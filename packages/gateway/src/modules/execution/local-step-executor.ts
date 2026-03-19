@@ -1,4 +1,4 @@
-import type { ActionPrimitive as ActionPrimitiveT, EvaluationContext } from "@tyrum/schemas";
+import type { ActionPrimitive as ActionPrimitiveT, EvaluationContext } from "@tyrum/contracts";
 import { spawn } from "node:child_process";
 import { buildBuiltinExaServerSpec } from "../agent/builtin-exa.js";
 import { McpManager } from "../agent/mcp-manager.js";

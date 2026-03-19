@@ -1,10 +1,10 @@
-import type { WsPeerRole, WsRequestEnvelope, WsResponseEnvelope } from "@tyrum/schemas";
+import type { WsPeerRole, WsRequestEnvelope, WsResponseEnvelope } from "@tyrum/contracts";
 import {
   capabilityDescriptorsForClientCapability,
   normalizeCapabilityDescriptors,
   WsConnectInitResult,
   WsConnectProofResult,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 
 import {
   buildConnectProofTranscript,

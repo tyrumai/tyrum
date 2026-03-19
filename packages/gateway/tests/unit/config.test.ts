@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createContainer } from "../../src/container.js";
-import { DeploymentConfig } from "@tyrum/schemas";
+import { DeploymentConfig } from "@tyrum/contracts";
 import { DeploymentConfigDal } from "../../src/modules/config/deployment-config-dal.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));

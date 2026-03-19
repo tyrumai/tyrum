@@ -132,7 +132,7 @@ jobs:
           }
 
           const manifestPaths = [
-            "packages/schemas/package.json",
+            "packages/contracts/package.json",
             "packages/client/package.json",
             "packages/gateway/package.json",
           ];
@@ -177,7 +177,7 @@ jobs:
       - name: Pack npm tarballs
         run: |
           mkdir -p artifacts/npm
-          (cd packages/schemas && pnpm pack --pack-destination ../../artifacts/npm)
+          (cd packages/contracts && pnpm pack --pack-destination ../../artifacts/npm)
           (cd packages/client && pnpm pack --pack-destination ../../artifacts/npm)
           (cd packages/gateway && pnpm pack --pack-destination ../../artifacts/npm)
           ls -lah artifacts/npm
@@ -473,7 +473,7 @@ jobs:
           set -euo pipefail
 
           declare -A packages=(
-            ["@tyrum/schemas"]="release-assets/tyrum-schemas-${RELEASE_VERSION}.tgz"
+            ["@tyrum/contracts"]="release-assets/tyrum-contracts-${RELEASE_VERSION}.tgz"
             ["@tyrum/client"]="release-assets/tyrum-client-${RELEASE_VERSION}.tgz"
             ["@tyrum/gateway"]="release-assets/tyrum-gateway-${RELEASE_VERSION}.tgz"
           )

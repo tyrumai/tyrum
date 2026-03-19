@@ -1,4 +1,4 @@
-import { ActionPrimitive as ActionPrimitiveSchema, type ActionPrimitive } from "@tyrum/schemas";
+import { ActionPrimitive as ActionPrimitiveSchema, type ActionPrimitive } from "@tyrum/contracts";
 import { requireTenantIdValue, type IdentityScopeDal } from "../identity/scope.js";
 import {
   ScheduleService,

@@ -1,4 +1,4 @@
-import { DEFAULT_WORKSPACE_KEY, WorkspaceKey } from "@tyrum/schemas";
+import { DEFAULT_WORKSPACE_KEY, WorkspaceKey } from "@tyrum/contracts";
 
 export type { WorkspaceKey };
 export { DEFAULT_WORKSPACE_KEY };

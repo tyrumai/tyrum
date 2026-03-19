@@ -1,4 +1,4 @@
-import type { AuthTokenClaims } from "@tyrum/schemas";
+import type { AuthTokenClaims } from "@tyrum/contracts";
 import { hasAnyRequiredScope } from "../modules/auth/scopes.js";
 
 export type WsBroadcastRole = "client" | "node";

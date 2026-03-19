@@ -14,7 +14,7 @@ import {
   SessionProviderPin,
   SessionProviderPinListResponse,
   SessionProviderPinSetRequest,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type { AuthProfileDal, AuthProfileRow } from "../modules/models/auth-profile-dal.js";
 import type {
   SessionProviderPinDal,

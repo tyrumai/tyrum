@@ -7,7 +7,7 @@ import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
 import type { ApprovalRow } from "../../src/modules/approval/dal.js";
 import type { SecretProvider } from "../../src/modules/secret/provider.js";
-import { AgentConfig, type SecretHandle } from "@tyrum/schemas";
+import { AgentConfig, type SecretHandle } from "@tyrum/contracts";
 import { simulateReadableStream } from "ai";
 import { MockLanguageModelV3 } from "ai/test";
 import { ExecutionEngine } from "../../src/modules/execution/engine.js";

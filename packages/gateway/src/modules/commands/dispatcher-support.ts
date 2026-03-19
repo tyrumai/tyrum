@@ -1,4 +1,4 @@
-import { AttemptCost, parseTyrumKey } from "@tyrum/schemas";
+import { AttemptCost, parseTyrumKey } from "@tyrum/contracts";
 import { buildStatusDetails } from "../observability/status-details.js";
 import { AuthProfileDal } from "../models/auth-profile-dal.js";
 import { SessionProviderPinDal } from "../models/session-pin-dal.js";

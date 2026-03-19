@@ -1,4 +1,4 @@
-import { NodeInventoryResponse, type NodeCapabilityInspectionResponse } from "@tyrum/schemas";
+import { NodeInventoryResponse, type NodeCapabilityInspectionResponse } from "@tyrum/contracts";
 import type { ArtifactStore } from "../artifact/store.js";
 import type { WorkspaceLeaseConfig } from "./tool-executor-shared.js";
 

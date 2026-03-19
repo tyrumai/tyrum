@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DiscoveryPipeline, InMemoryConnectorCache } from "../../src/modules/discovery/pipeline.js";
 import type { CapabilityMemoryRow } from "../../src/modules/discovery/strategies/capability-memory.js";
-import type { DiscoveryRequest } from "@tyrum/schemas";
+import type { DiscoveryRequest } from "@tyrum/contracts";
 
 function makeRow(overrides: Partial<CapabilityMemoryRow> = {}): CapabilityMemoryRow {
   return {

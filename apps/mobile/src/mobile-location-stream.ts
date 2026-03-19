@@ -1,7 +1,7 @@
 import { Capacitor } from "@capacitor/core";
 import { Geolocation, type Position } from "@capacitor/geolocation";
 import type { TyrumClient } from "@tyrum/client/browser";
-import type { LocationCoords, WsLocationBeaconPayload } from "@tyrum/schemas";
+import type { LocationCoords, WsLocationBeaconPayload } from "@tyrum/contracts";
 import type { MobileLocationStreamingConfig } from "./mobile-config.js";
 import {
   calculateDistanceMeters,

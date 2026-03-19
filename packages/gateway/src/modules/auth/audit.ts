@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { WsEventEnvelope } from "@tyrum/schemas";
+import type { WsEventEnvelope } from "@tyrum/contracts";
 import type { Logger } from "../observability/logger.js";
 import type { EventLog } from "../planner/event-log.js";
 import { enqueueWsBroadcastMessage } from "../../ws/outbox.js";

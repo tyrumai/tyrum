@@ -6,7 +6,7 @@ import {
   type NodeCapabilityState,
   type NodeCapabilitySummary,
   type NodeInventoryEntry,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type {
   ConnectionDirectoryDal,
   ConnectionDirectoryRow,

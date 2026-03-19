@@ -4,7 +4,7 @@ import type {
   WorkSignal,
   WorkSignalStatus,
   WorkSignalTriggerKind,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 
 import * as dalHelpers from "./dal-helpers.js";

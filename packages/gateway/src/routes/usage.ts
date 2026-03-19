@@ -6,7 +6,7 @@
  * non-fatal status fields.
  */
 
-import { AttemptCost } from "@tyrum/schemas";
+import { AttemptCost } from "@tyrum/contracts";
 import { Hono } from "hono";
 import { isAuthProfilesEnabled } from "../modules/models/auth-profiles-enabled.js";
 import type { AuthProfileDal } from "../modules/models/auth-profile-dal.js";

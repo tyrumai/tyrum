@@ -47,7 +47,7 @@ const coverageThresholds = {
   functions: 75,
   branches: 62,
   statements: 75,
-  "packages/schemas/src/**": {
+  "packages/contracts/src/**": {
     lines: 97,
     statements: 97,
     functions: 99,
@@ -106,7 +106,7 @@ const coverageThresholds = {
 export default defineConfig({
   resolve: {
     alias: {
-      "@tyrum/schemas": resolve(__dirname, "packages/schemas/src/index.ts"),
+      "@tyrum/contracts": resolve(__dirname, "packages/contracts/src/index.ts"),
       "@tyrum/client/browser": resolve(__dirname, "packages/client/src/browser.ts"),
       "@tyrum/client/node": resolve(__dirname, "packages/client/src/node.ts"),
       "@tyrum/client": resolve(__dirname, "packages/client/src/index.ts"),

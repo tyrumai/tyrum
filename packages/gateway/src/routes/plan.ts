@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { randomUUID } from "node:crypto";
-import { PlanRequest as PlanRequestSchema } from "@tyrum/schemas";
+import { PlanRequest as PlanRequestSchema } from "@tyrum/contracts";
 import type {
   PlanRequest,
   PlanOutcome,
@@ -10,7 +10,7 @@ import type {
   ActionPrimitive,
   PolicyDecision,
   RiskSpendContext,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type { GatewayContainer } from "../container.js";
 import { evaluatePolicy } from "../modules/policy/engine.js";
 import { authorizeWithThresholds, defaultThresholds } from "../modules/wallet/authorization.js";

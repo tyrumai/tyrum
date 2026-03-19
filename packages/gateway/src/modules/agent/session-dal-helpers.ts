@@ -3,11 +3,11 @@ import type {
   TyrumUIMessagePreview,
   NormalizedContainerKind,
   SessionContextState,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import {
   TyrumUIMessage as ChatMessageSchema,
   SessionContextState as SessionContextStateSchema,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import {
   parsePersistedJson,
   reportPersistedJsonReadFailure,

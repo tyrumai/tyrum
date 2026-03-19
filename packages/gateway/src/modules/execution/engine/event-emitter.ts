@@ -2,7 +2,7 @@ import type {
   ArtifactRef as ArtifactRefT,
   WsEventEnvelope as WsEventEnvelopeT,
   WsRequestEnvelope as WsRequestEnvelopeT,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import { randomUUID } from "node:crypto";
 import type { WsBroadcastAudience } from "../../../ws/audience.js";
 import { enqueueWsBroadcastMessage } from "../../../ws/outbox.js";

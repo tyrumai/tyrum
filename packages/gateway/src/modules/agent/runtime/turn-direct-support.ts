@@ -1,5 +1,8 @@
 import { stepCountIs, streamText } from "ai";
-import type { AgentTurnResponse as AgentTurnResponseT, SessionContextState } from "@tyrum/schemas";
+import type {
+  AgentTurnResponse as AgentTurnResponseT,
+  SessionContextState,
+} from "@tyrum/contracts";
 import type { AgentContextReport } from "./types.js";
 import type { prepareTurn } from "./turn-preparation.js";
 import { GUARDIAN_REVIEW_DECISION_TOOL_ID } from "./tool-set-builder-internal-tools.js";

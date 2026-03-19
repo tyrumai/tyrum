@@ -4,7 +4,7 @@ import {
   WsChatSessionCreateResult,
   WsChatSessionDeleteResult,
   WsChatSessionGetResult,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import { createBearerTokenAuth, createOperatorCore } from "../src/index.js";
 import {
   sampleApprovalApproved,

@@ -4,7 +4,7 @@ import type {
   AgentConfig as AgentConfigT,
   CheckpointSummary,
   TyrumUIMessage,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type { GatewayContainer } from "../../../container.js";
 import { ensureAgentConfigSeeded } from "../default-config.js";
 import { loadCurrentAgentContext } from "../load-context.js";

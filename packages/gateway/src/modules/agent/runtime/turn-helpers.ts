@@ -11,7 +11,7 @@ import type {
   ApprovalKind as ApprovalKindT,
   NormalizedContainerKind,
   NormalizedMessageEnvelope as NormalizedMessageEnvelopeT,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type { ModelMessage } from "ai";
 import { coerceModelMessages } from "../../ai-sdk/message-utils.js";
 import { coerceRecord } from "../../util/coerce.js";

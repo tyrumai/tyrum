@@ -7,7 +7,7 @@ import type {
   DesktopSnapshotArgs,
   DesktopUiNodeSummary,
   DesktopUiTree,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 
 import { DEFAULT_A11Y_MAX_DEPTH } from "../a11y/prune-ui-tree.js";
 import {
@@ -158,7 +158,7 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
     elementRef: string;
     role: string;
     name: string;
-    bounds: import("@tyrum/schemas").DesktopUiRect;
+    bounds: import("@tyrum/contracts").DesktopUiRect;
     actions: string[];
     states: string[];
   }> {

@@ -1,4 +1,4 @@
-import type { ApprovalKind as ApprovalKindT } from "@tyrum/schemas";
+import type { ApprovalKind as ApprovalKindT } from "@tyrum/contracts";
 
 export type ApprovalStatus =
   | "queued"

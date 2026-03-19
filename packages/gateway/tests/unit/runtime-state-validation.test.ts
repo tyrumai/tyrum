@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DeploymentConfig } from "@tyrum/schemas";
+import { DeploymentConfig } from "@tyrum/contracts";
 import { assertSharedStateModeGuardrails } from "../../src/modules/runtime-state/validation.js";
 
 describe("shared state mode guardrails", () => {

@@ -2,7 +2,7 @@ import { describe, expect, it, beforeEach } from "vitest";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Hono } from "hono";
-import type { Playbook, ActionPrimitive } from "@tyrum/schemas";
+import type { Playbook, ActionPrimitive } from "@tyrum/contracts";
 import { loadAllPlaybooks } from "../../src/modules/playbook/loader.js";
 import { PlaybookRunner } from "../../src/modules/playbook/runner.js";
 import { createPlaybookRoutes } from "../../src/routes/playbook.js";

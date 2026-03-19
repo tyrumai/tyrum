@@ -9,16 +9,16 @@ describe("createPackageBuilds", () => {
 
     expect(buildsByName.get("@tyrum/client")?.inputs).toEqual(
       expect.arrayContaining([
-        resolve(repoRoot, "packages/schemas/dist/index.mjs"),
-        resolve(repoRoot, "packages/schemas/dist/index.d.ts"),
-        resolve(repoRoot, "packages/schemas/dist/jsonschema/catalog.json"),
+        resolve(repoRoot, "packages/contracts/dist/index.mjs"),
+        resolve(repoRoot, "packages/contracts/dist/index.d.ts"),
+        resolve(repoRoot, "packages/contracts/dist/jsonschema/catalog.json"),
       ]),
     );
 
     expect(buildsByName.get("@tyrum/operator-core")?.inputs).toEqual(
       expect.arrayContaining([
         resolve(repoRoot, "packages/client/dist/index.mjs"),
-        resolve(repoRoot, "packages/schemas/dist/index.mjs"),
+        resolve(repoRoot, "packages/contracts/dist/index.mjs"),
       ]),
     );
 
@@ -26,7 +26,7 @@ describe("createPackageBuilds", () => {
       expect.arrayContaining([
         resolve(repoRoot, "packages/client/dist/index.mjs"),
         resolve(repoRoot, "packages/operator-core/dist/index.mjs"),
-        resolve(repoRoot, "packages/schemas/dist/index.mjs"),
+        resolve(repoRoot, "packages/contracts/dist/index.mjs"),
       ]),
     );
   });

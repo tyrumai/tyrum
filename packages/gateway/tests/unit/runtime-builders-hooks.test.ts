@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DeploymentConfig } from "@tyrum/schemas";
+import { DeploymentConfig } from "@tyrum/contracts";
 import { createContainer } from "../../src/container.js";
 import { createProtocolRuntime } from "../../src/bootstrap/runtime-builders.js";
 import type { GatewayBootContext } from "../../src/bootstrap/runtime-shared.js";

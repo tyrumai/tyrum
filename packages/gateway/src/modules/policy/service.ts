@@ -2,8 +2,8 @@ import type {
   PolicyBundle as PolicyBundleT,
   Decision,
   PolicyDecision as PolicyDecisionT,
-} from "@tyrum/schemas";
-import { canonicalizeToolId } from "@tyrum/schemas";
+} from "@tyrum/contracts";
+import { canonicalizeToolId } from "@tyrum/contracts";
 import { wildcardMatch } from "./wildcard.js";
 import type { Logger } from "../observability/logger.js";
 import { evaluateDomain, mostRestrictiveDecision, normalizeDomain } from "./domain.js";

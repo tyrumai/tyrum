@@ -2,8 +2,8 @@ import type {
   ActionPrimitive as ActionPrimitiveT,
   ApprovalKind as ApprovalKindT,
   WsEventEnvelope as WsEventEnvelopeT,
-} from "@tyrum/schemas";
-import { requiresPostcondition } from "@tyrum/schemas";
+} from "@tyrum/contracts";
+import { requiresPostcondition } from "@tyrum/contracts";
 import { randomUUID } from "node:crypto";
 import type { Logger } from "../../observability/logger.js";
 import type { SqlDb } from "../../../statestore/types.js";

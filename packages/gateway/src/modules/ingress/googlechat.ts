@@ -1,4 +1,4 @@
-import type { NormalizedMessageEnvelope } from "@tyrum/schemas";
+import type { NormalizedMessageEnvelope } from "@tyrum/contracts";
 
 export class GoogleChatNormalizationError extends Error {
   constructor(message: string) {

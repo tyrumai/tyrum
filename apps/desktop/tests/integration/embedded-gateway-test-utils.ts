@@ -24,11 +24,11 @@ const CLI_UTILS_DIST = resolve(REPO_ROOT, "packages/cli-utils/dist/index.mjs");
 const CLI_UTILS_PACKAGE_JSON = resolve(REPO_ROOT, "packages/cli-utils/package.json");
 const CLI_UTILS_TSCONFIG = resolve(REPO_ROOT, "packages/cli-utils/tsconfig.json");
 const CLI_UTILS_SRC_DIR = resolve(REPO_ROOT, "packages/cli-utils/src");
-const SCHEMAS_DIST = resolve(REPO_ROOT, "packages/schemas/dist/index.mjs");
-const SCHEMAS_PACKAGE_JSON = resolve(REPO_ROOT, "packages/schemas/package.json");
-const SCHEMAS_TSCONFIG = resolve(REPO_ROOT, "packages/schemas/tsconfig.json");
-const SCHEMAS_SRC_DIR = resolve(REPO_ROOT, "packages/schemas/src");
-const SCHEMAS_SCRIPTS_DIR = resolve(REPO_ROOT, "packages/schemas/scripts");
+const CONTRACTS_DIST = resolve(REPO_ROOT, "packages/contracts/dist/index.mjs");
+const CONTRACTS_PACKAGE_JSON = resolve(REPO_ROOT, "packages/contracts/package.json");
+const CONTRACTS_TSCONFIG = resolve(REPO_ROOT, "packages/contracts/tsconfig.json");
+const CONTRACTS_SRC_DIR = resolve(REPO_ROOT, "packages/contracts/src");
+const CONTRACTS_SCRIPTS_DIR = resolve(REPO_ROOT, "packages/contracts/scripts");
 const GATEWAY_SRC_DIR = resolve(REPO_ROOT, "packages/gateway/src");
 const GATEWAY_BUILD_LOCK = resolve(REPO_ROOT, ".tyrum-gateway-build.lock");
 export const OPERATOR_UI_DIR_ENV = "TYRUM_OPERATOR_UI_ASSETS_DIR";
@@ -106,7 +106,7 @@ function latestMtimeInDir(rootDir: string): number {
 function gatewayBuildIsStale(): boolean {
   if (!existsSync(GATEWAY_BIN)) return true;
   if (!existsSync(CLI_UTILS_DIST)) return true;
-  if (!existsSync(SCHEMAS_DIST)) return true;
+  if (!existsSync(CONTRACTS_DIST)) return true;
   if (!existsSync(BUNDLED_OPERATOR_UI_INDEX)) return true;
 
   const gatewayMtime = statSync(GATEWAY_BIN).mtimeMs;
@@ -117,14 +117,15 @@ function gatewayBuildIsStale(): boolean {
     return true;
   if (existsSync(CLI_UTILS_SRC_DIR) && gatewayMtime < latestMtimeInDir(CLI_UTILS_SRC_DIR))
     return true;
-  if (existsSync(SCHEMAS_PACKAGE_JSON) && gatewayMtime < statSync(SCHEMAS_PACKAGE_JSON).mtimeMs)
+  if (existsSync(CONTRACTS_PACKAGE_JSON) && gatewayMtime < statSync(CONTRACTS_PACKAGE_JSON).mtimeMs)
     return true;
-  if (existsSync(SCHEMAS_TSCONFIG) && gatewayMtime < statSync(SCHEMAS_TSCONFIG).mtimeMs)
+  if (existsSync(CONTRACTS_TSCONFIG) && gatewayMtime < statSync(CONTRACTS_TSCONFIG).mtimeMs)
     return true;
-  if (existsSync(SCHEMAS_SRC_DIR) && gatewayMtime < latestMtimeInDir(SCHEMAS_SRC_DIR)) return true;
-  if (existsSync(SCHEMAS_SCRIPTS_DIR) && gatewayMtime < latestMtimeInDir(SCHEMAS_SCRIPTS_DIR))
+  if (existsSync(CONTRACTS_SRC_DIR) && gatewayMtime < latestMtimeInDir(CONTRACTS_SRC_DIR))
     return true;
-  if (gatewayMtime < statSync(SCHEMAS_DIST).mtimeMs) return true;
+  if (existsSync(CONTRACTS_SCRIPTS_DIR) && gatewayMtime < latestMtimeInDir(CONTRACTS_SCRIPTS_DIR))
+    return true;
+  if (gatewayMtime < statSync(CONTRACTS_DIST).mtimeMs) return true;
   return gatewayMtime < statSync(CLI_UTILS_DIST).mtimeMs;
 }
 
@@ -195,9 +196,9 @@ export function acquireGatewayBuildLock(timeoutMs = 180_000): () => void {
 export function ensureGatewayBuild(): void {
   if (!gatewayBuildIsStale()) return;
   ensureWorkspaceBuild(
-    "@tyrum/schemas",
-    SCHEMAS_DIST,
-    "Failed to build @tyrum/schemas before desktop integration test.",
+    "@tyrum/contracts",
+    CONTRACTS_DIST,
+    "Failed to build @tyrum/contracts before desktop integration test.",
   );
   ensureWorkspaceBuild(
     "@tyrum/cli-utils",

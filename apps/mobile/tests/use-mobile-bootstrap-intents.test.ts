@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import * as schemas from "@tyrum/schemas";
+import * as schemas from "@tyrum/contracts";
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";

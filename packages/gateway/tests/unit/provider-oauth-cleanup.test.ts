@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Hono } from "hono";
-import type { SecretHandle } from "@tyrum/schemas";
+import type { SecretHandle } from "@tyrum/contracts";
 import type { SecretProvider } from "../../src/modules/secret/provider.js";
 import { createProviderOAuthRoutes } from "../../src/routes/provider-oauth.js";
 import type { OAuthProviderSpec } from "../../src/modules/oauth/provider-registry.js";

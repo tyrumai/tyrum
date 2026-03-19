@@ -1,6 +1,9 @@
 import { createHash, generateKeyPairSync, sign, type KeyObject } from "node:crypto";
 import type { WebSocket } from "ws";
-import { capabilityDescriptorsForClientCapability, deviceIdFromSha256Digest } from "@tyrum/schemas";
+import {
+  capabilityDescriptorsForClientCapability,
+  deviceIdFromSha256Digest,
+} from "@tyrum/contracts";
 import { expect } from "vitest";
 
 function waitForJsonMessageMatching(

@@ -13,7 +13,8 @@ Thanks for helping build the Tyrum assistant platform.
 Before changing packages, imports, or contributor-facing docs, read the [target-state architecture](docs/architecture/target-state.md).
 
 - Place each change in the target package or layer named there.
-- Do not add new usage of `@tyrum/schemas`, `@tyrum/client`, or `@tyrum/operator-core` unless the linked migration issue explicitly requires temporary coexistence.
+- Shared contract work belongs in `@tyrum/contracts`.
+- Do not add new usage of `@tyrum/client` or `@tyrum/operator-core` unless the linked migration issue explicitly requires temporary coexistence.
 - If you must touch a legacy package during the migration window, explain why in the PR and keep the change scoped to the next migration step.
 - Use the [ARCH-01 clean-break target-state decision record](docs/architecture/reference/arch-01-clean-break-target-state.md) when you need the long-lived rationale behind the contributor contract.
 
@@ -21,16 +22,16 @@ Before changing packages, imports, or contributor-facing docs, read the [target-
 
 This table describes the current tree, not the target package graph for new work.
 
-| Directory          | Purpose                                               |
-| ------------------ | ----------------------------------------------------- |
-| `packages/schemas` | Shared Zod types (`@tyrum/schemas`)                   |
-| `packages/gateway` | Main gateway process — Hono HTTP + WebSocket + SQLite |
-| `packages/client`  | Client SDK for connecting to the gateway              |
-| `apps/web`         | Operator web app (Vite + React)                       |
-| `apps/desktop`     | Electron desktop app                                  |
-| `apps/docs`        | Docs site (Docusaurus)                                |
-| `config/`          | Runtime configuration (model gateway YAML)            |
-| `docs/`            | Architecture and design documentation                 |
+| Directory            | Purpose                                               |
+| -------------------- | ----------------------------------------------------- |
+| `packages/contracts` | Shared contracts and schemas (`@tyrum/contracts`)     |
+| `packages/gateway`   | Main gateway process — Hono HTTP + WebSocket + SQLite |
+| `packages/client`    | Client SDK for connecting to the gateway              |
+| `apps/web`           | Operator web app (Vite + React)                       |
+| `apps/desktop`       | Electron desktop app                                  |
+| `apps/docs`          | Docs site (Docusaurus)                                |
+| `config/`            | Runtime configuration (model gateway YAML)            |
+| `docs/`              | Architecture and design documentation                 |
 
 ## 4. Local Development
 

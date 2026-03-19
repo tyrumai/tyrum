@@ -18,19 +18,21 @@ Tyrum will move from the current mixed gateway, client, and operator package gra
 
 ```mermaid
 flowchart LR
-  Schemas["@tyrum/schemas"]
+  Contracts["@tyrum/contracts<br/>shared contracts landed"]
   Client["@tyrum/client"]
   OperatorCore["@tyrum/operator-core"]
   GatewayNow["@tyrum/gateway<br/>mixed runtime + transport"]
-  Contracts["@tyrum/contracts"]
   Transport["@tyrum/transport-sdk"]
+  Node["@tyrum/node-sdk"]
   OperatorApp["@tyrum/operator-app"]
   RuntimeSplit["@tyrum/runtime-*"]
   GatewayTarget["@tyrum/gateway<br/>composition root"]
 
-  Schemas --> Contracts
+  Transport --> Contracts
+  Node --> Contracts
+  OperatorApp --> Contracts
   Client --> Transport
-  Client --> OperatorApp
+  Client --> Node
   OperatorCore --> OperatorApp
   GatewayNow --> RuntimeSplit
   RuntimeSplit --> GatewayTarget

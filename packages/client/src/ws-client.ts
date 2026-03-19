@@ -113,7 +113,7 @@ import {
   WsWorkflowCancelResult,
   WsWorkflowResumeResult,
   WsWorkflowRunResult,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import { TyrumClientTransportCore } from "./ws-client.transport.js";
 
 export type TyrumClientDynamicSchema<T> = {

@@ -3,7 +3,7 @@ import {
   type ActionPrimitive,
   type LocationEvent,
   type Playbook,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import type { ExecutionEngine } from "../execution/engine.js";
 import type { IdentityScopeDal } from "../identity/scope.js";

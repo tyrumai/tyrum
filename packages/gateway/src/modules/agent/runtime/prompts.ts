@@ -1,7 +1,7 @@
 import type {
   IdentityPack as IdentityPackT,
   SkillManifest as SkillManifestT,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type { ToolDescriptor } from "../tools.js";
 import type { SessionContextState } from "../session-dal.js";
 

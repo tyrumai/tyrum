@@ -1,4 +1,4 @@
-import type { WorkScope } from "@tyrum/schemas";
+import type { WorkScope } from "@tyrum/contracts";
 import type { GatewayContainer } from "../../../container.js";
 import { WorkboardDal } from "../../workboard/dal.js";
 

@@ -1,4 +1,4 @@
-import type { ManagedExtensionSummary } from "@tyrum/schemas";
+import type { ManagedExtensionSummary } from "@tyrum/contracts";
 
 export type ExtensionKind = "skill" | "mcp";
 export type ExtensionsTab = "skills" | "mcp";

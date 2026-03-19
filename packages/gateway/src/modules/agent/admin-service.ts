@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { AgentCapabilitiesResponse, ManagedAgentDeleteResponse } from "@tyrum/schemas";
+import { AgentCapabilitiesResponse, ManagedAgentDeleteResponse } from "@tyrum/contracts";
 import type {
   AgentCapabilitiesResponse as AgentCapabilitiesResponseT,
   AgentConfig as AgentConfigT,
   ManagedAgentDeleteResponse as ManagedAgentDeleteResponseT,
   ManagedAgentDetail as ManagedAgentDetailT,
   ManagedAgentSummary as ManagedAgentSummaryT,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type { GatewayStateMode } from "../runtime-state/mode.js";
 import type { SqlDb } from "../../statestore/types.js";
 import type { IdentityScopeDal } from "../identity/scope.js";

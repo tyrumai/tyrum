@@ -1,4 +1,4 @@
-import { AgentListResponse } from "@tyrum/schemas";
+import { AgentListResponse } from "@tyrum/contracts";
 import { z } from "zod";
 import { HttpTransport, validateOrThrow, type TyrumRequestOptions } from "./shared.js";
 

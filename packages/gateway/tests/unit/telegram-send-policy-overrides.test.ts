@@ -5,7 +5,7 @@ import { ChannelInboxDal } from "../../src/modules/channels/inbox-dal.js";
 import { TelegramChannelProcessor } from "../../src/modules/channels/telegram.js";
 import type { AgentRegistry } from "../../src/modules/agent/registry.js";
 import type { TelegramBot } from "../../src/modules/ingress/telegram-bot.js";
-import type { NormalizedThreadMessage } from "@tyrum/schemas";
+import type { NormalizedThreadMessage } from "@tyrum/contracts";
 import type { ApprovalDal } from "../../src/modules/approval/dal.js";
 import type { PolicyService } from "../../src/modules/policy/service.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";

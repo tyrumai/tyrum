@@ -3,7 +3,7 @@ import type {
   AgentSkillCapability as AgentSkillCapabilityT,
   AgentToolCapability as AgentToolCapabilityT,
   AgentConfig as AgentConfigT,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type { GatewayStateMode } from "../runtime-state/mode.js";
 import { RuntimePackageDal } from "./runtime-package-dal.js";
 import { parseManagedMcpPackage, parseManagedSkillPackage } from "../extensions/managed.js";

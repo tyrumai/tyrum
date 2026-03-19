@@ -3,8 +3,8 @@ import type {
   Lane as LaneT,
   Playbook,
   PolicyBundle as PolicyBundleT,
-} from "@tyrum/schemas";
-import { ActionPrimitive as ActionPrimitiveSchema, PolicyBundle } from "@tyrum/schemas";
+} from "@tyrum/contracts";
+import { ActionPrimitive as ActionPrimitiveSchema, PolicyBundle } from "@tyrum/contracts";
 import {
   defaultHeartbeatInstruction,
   parseScheduleConfig,

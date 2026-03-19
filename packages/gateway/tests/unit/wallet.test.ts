@@ -7,7 +7,7 @@ import {
   authorizeWithThresholds,
   defaultThresholds,
 } from "../../src/modules/wallet/authorization.js";
-import type { Thresholds, SpendAuthorizeRequest } from "@tyrum/schemas";
+import type { Thresholds, SpendAuthorizeRequest } from "@tyrum/contracts";
 
 describe("Wallet authorization", () => {
   const thresholds = defaultThresholds();

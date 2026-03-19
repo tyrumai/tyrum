@@ -3,9 +3,9 @@
  */
 
 import { Hono } from "hono";
-import { ExecutionBudgets, PlaybookRuntimeRequest } from "@tyrum/schemas";
-import type { Playbook } from "@tyrum/schemas";
-import type { ExecutionBudgets as ExecutionBudgetsT } from "@tyrum/schemas";
+import { ExecutionBudgets, PlaybookRuntimeRequest } from "@tyrum/contracts";
+import type { Playbook } from "@tyrum/contracts";
+import type { ExecutionBudgets as ExecutionBudgetsT } from "@tyrum/contracts";
 import { PlaybookRunner } from "../modules/playbook/runner.js";
 import {
   resolvePlaybookPolicyBundle,

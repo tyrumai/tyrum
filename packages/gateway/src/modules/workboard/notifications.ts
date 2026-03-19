@@ -1,4 +1,4 @@
-import type { WorkItem, WorkScope } from "@tyrum/schemas";
+import type { WorkItem, WorkScope } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import type { ApprovalDal } from "../approval/dal.js";
 import { broadcastApprovalUpdated } from "../approval/update-broadcast.js";

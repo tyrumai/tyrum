@@ -1,4 +1,4 @@
-import type { Decision, SecretHandle as SecretHandleT } from "@tyrum/schemas";
+import type { Decision, SecretHandle as SecretHandleT } from "@tyrum/contracts";
 import type { ToolDescriptor } from "../tools.js";
 import type { SuggestedOverride } from "../../policy/suggested-overrides.js";
 import { coerceRecord } from "../../util/coerce.js";

@@ -3,7 +3,7 @@ import {
   type OperatorCore,
   type Pairing,
 } from "@tyrum/operator-core";
-import type { CapabilityDescriptor, NodeInventoryEntry } from "@tyrum/schemas";
+import type { CapabilityDescriptor, NodeInventoryEntry } from "@tyrum/contracts";
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Badge } from "../ui/badge.js";

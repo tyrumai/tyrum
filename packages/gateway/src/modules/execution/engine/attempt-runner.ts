@@ -1,5 +1,5 @@
-import type { ArtifactRef as ArtifactRefT, EvaluationContext } from "@tyrum/schemas";
-import { evaluatePostcondition, PostconditionError } from "@tyrum/schemas";
+import type { ArtifactRef as ArtifactRefT, EvaluationContext } from "@tyrum/contracts";
+import { evaluatePostcondition, PostconditionError } from "@tyrum/contracts";
 import type { SqlDb } from "../../../statestore/types.js";
 import { safeJsonParse } from "../../../utils/json.js";
 import { releaseWorkspaceLease } from "../../workspace/lease.js";

@@ -1,4 +1,4 @@
-import { AgentConfig } from "@tyrum/schemas";
+import { AgentConfig } from "@tyrum/contracts";
 import { expect, vi } from "vitest";
 import { act, type Root } from "react";
 import type { MobileHostApi } from "../src/index.js";

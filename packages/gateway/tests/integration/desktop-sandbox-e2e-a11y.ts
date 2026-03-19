@@ -1,4 +1,4 @@
-import type { DesktopQueryMatch } from "@tyrum/schemas";
+import type { DesktopQueryMatch } from "@tyrum/contracts";
 
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { delay, type ExecutionScopeIds } from "./desktop-sandbox-e2e-support.js";

@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { ManagedAgentCreateRequest, ManagedAgentUpdateRequest } from "@tyrum/schemas";
+import { ManagedAgentCreateRequest, ManagedAgentUpdateRequest } from "@tyrum/contracts";
 import type { SqlDb } from "../statestore/types.js";
 import type { IdentityScopeDal } from "../modules/identity/scope.js";
 import { requireAuthClaims, requireTenantId } from "../modules/auth/claims.js";

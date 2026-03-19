@@ -2,7 +2,7 @@ import {
   NodeCapabilityInspectionResponse,
   type NodeCapabilityActionDefinition,
   type NodeCapabilityInspectionResponse as NodeCapabilityInspectionResponseT,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type { ConnectionDirectoryDal } from "../backplane/connection-directory.js";
 import type { ConnectionManager } from "../../ws/connection-manager.js";
 import type { NodeInventoryService } from "./inventory-service.js";

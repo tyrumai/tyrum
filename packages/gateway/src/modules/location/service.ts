@@ -9,7 +9,7 @@ import {
   type LocationProfile,
   type LocationProfileUpdateRequest,
   type Playbook,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type { IdentityScopeDal } from "../identity/scope.js";
 import type { MemoryDal } from "../memory/memory-dal.js";
 import type { ExecutionEngine } from "../execution/engine.js";

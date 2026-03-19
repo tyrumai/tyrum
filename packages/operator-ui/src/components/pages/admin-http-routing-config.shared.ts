@@ -1,4 +1,4 @@
-import type { ObservedTelegramThread } from "@tyrum/schemas";
+import type { ObservedTelegramThread } from "@tyrum/contracts";
 import type {
   ChannelRoutingConfig,
   TelegramAccountRoutingConfig,

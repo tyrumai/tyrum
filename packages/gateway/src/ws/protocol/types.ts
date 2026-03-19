@@ -20,7 +20,7 @@ import type { AuthAudit } from "../../modules/auth/audit.js";
 import type { RedactionEngine } from "../../modules/redaction/engine.js";
 import type { WsEventDal } from "../../modules/ws-event/dal.js";
 import type { TaskResultRegistry } from "./task-result-registry.js";
-import type { WsMessageEnvelope } from "@tyrum/schemas";
+import type { WsMessageEnvelope } from "@tyrum/contracts";
 import type { IdentityScopeDal } from "../../modules/identity/scope.js";
 import type { LocationService } from "../../modules/location/service.js";
 

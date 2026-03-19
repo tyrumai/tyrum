@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import React, { act } from "react";
-import { AgentConfig, IdentityPack } from "@tyrum/schemas";
+import { AgentConfig, IdentityPack } from "@tyrum/contracts";
 import { describe, expect, it, vi } from "vitest";
 import type { OperatorCore } from "../../../operator-core/src/index.js";
 import { createStore } from "../../../operator-core/src/store.js";

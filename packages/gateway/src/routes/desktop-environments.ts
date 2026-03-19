@@ -14,7 +14,7 @@ import {
   isDesktopEnvironmentHostAvailable,
   type DeploymentConfig as DeploymentConfigT,
   DesktopEnvironmentUpdateRequest,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type { SqlDb } from "../statestore/types.js";
 import {
   requireAuthClaims,

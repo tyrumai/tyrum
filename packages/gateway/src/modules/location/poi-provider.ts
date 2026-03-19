@@ -1,4 +1,4 @@
-import type { LocationCoords } from "@tyrum/schemas";
+import type { LocationCoords } from "@tyrum/contracts";
 import { haversineDistanceMeters } from "./geo.js";
 
 export interface PoiMatch {

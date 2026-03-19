@@ -1,4 +1,4 @@
-import type { ActionPrimitive } from "@tyrum/schemas";
+import type { ActionPrimitive } from "@tyrum/contracts";
 import { dispatchTask } from "../../ws/protocol.js";
 import type { ProtocolDeps } from "../../ws/protocol.js";
 import type { TaskResult } from "../../ws/protocol/task-result-registry.js";

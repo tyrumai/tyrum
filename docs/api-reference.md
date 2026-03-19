@@ -2,7 +2,7 @@
 
 This document is a hand-maintained API reference for the Tyrum Gateway HTTP and WebSocket APIs.
 
-This is a manually written first version; **future automation** may generate this document (or an OpenAPI/JSON Schema equivalent) from `packages/gateway/src/routes/*` and `@tyrum/schemas`.
+This is a manually written first version; **future automation** may generate this document (or an OpenAPI/JSON Schema equivalent) from `packages/gateway/src/routes/*` and `@tyrum/contracts`.
 
 ## Table of Contents
 
@@ -225,9 +225,9 @@ These routes require a **system admin token** (`tenant_id === null`). Deployment
 
 - Auth: Required (unless gateway auth is disabled)
 - Device scope: `operator.admin`
-- Request: JSON `PolicyCheckRequest` (`@tyrum/schemas`)
+- Request: JSON `PolicyCheckRequest` (`@tyrum/contracts`)
 - Response:
-  - `200` JSON `PolicyDecision` (`@tyrum/schemas`)
+  - `200` JSON `PolicyDecision` (`@tyrum/contracts`)
   - `400` invalid request
   - `401`, `403`
 
@@ -779,9 +779,9 @@ Additional plugin-defined routers may be mounted under:
 
 - Auth: Required (unless gateway auth is disabled)
 - Device scope: `operator.write`
-- Request: JSON `PlanRequest` (`@tyrum/schemas`)
+- Request: JSON `PlanRequest` (`@tyrum/contracts`)
 - Response:
-  - `200` JSON `PlanResponse` (`@tyrum/schemas`)
+  - `200` JSON `PlanResponse` (`@tyrum/contracts`)
   - `400` invalid request
   - `401`, `403`
 
@@ -1264,14 +1264,14 @@ Client-sent events are rejected.
 #### `connect.init`
 
 - Direction: client → gateway (request), gateway → client (response)
-- Schema: `WsConnectInitRequest` (`@tyrum/schemas`)
+- Schema: `WsConnectInitRequest` (`@tyrum/contracts`)
 - Result: `{ connection_id: string, challenge: string }`
 - Notes: `protocol_rev` must match the gateway protocol rev; device proof is validated.
 
 #### `connect.proof`
 
 - Direction: client → gateway (request), gateway → client (response)
-- Schema: `WsConnectProofRequest` (`@tyrum/schemas`)
+- Schema: `WsConnectProofRequest` (`@tyrum/contracts`)
 - Result: `{ client_id: string, device_id: string, role: WsPeerRole }`
 
 #### `connect`

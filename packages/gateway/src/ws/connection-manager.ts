@@ -6,8 +6,8 @@ import type {
   NodeCapabilityState,
   WsEventEnvelope,
   WsRequestEnvelope,
-} from "@tyrum/schemas";
-import type { AuthTokenClaims } from "@tyrum/schemas";
+} from "@tyrum/contracts";
+import type { AuthTokenClaims } from "@tyrum/contracts";
 import { gatewayMetrics, type MetricsRegistry } from "../modules/observability/metrics.js";
 
 export interface ConnectedClient {

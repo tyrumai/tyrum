@@ -11,7 +11,7 @@ import type {
   LocationPlace,
   LocationPlacePatchRequest,
   LocationProfile,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type {
   LocationAutomationTriggerCreateRequest,
   LocationAutomationTriggerPatchRequest,

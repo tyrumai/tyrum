@@ -5,7 +5,7 @@ import type {
   WsPeerRole,
   WsPlanUpdateEvent,
   WsTaskExecuteRequest,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 
 type TyrumProtocolEvents = {
   [EventType in WsEventT["type"]]: Extract<WsEventT, { type: EventType }>;

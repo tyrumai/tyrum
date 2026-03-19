@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF } from "@tyrum/schemas";
+import { DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF } from "@tyrum/contracts";
 const { removeEnvironmentContainerMock } = vi.hoisted(() => ({
   removeEnvironmentContainerMock: vi.fn(async () => {}),
 }));

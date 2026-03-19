@@ -1,5 +1,5 @@
 import type { OperatorCore } from "@tyrum/operator-core";
-import type { NodeInventoryEntry } from "@tyrum/schemas";
+import type { NodeInventoryEntry } from "@tyrum/contracts";
 import * as React from "react";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { Alert } from "../ui/alert.js";

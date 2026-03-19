@@ -1,4 +1,4 @@
-import type { NormalizedContainerKind } from "@tyrum/schemas";
+import type { NormalizedContainerKind } from "@tyrum/contracts";
 
 export function encodeTurnKeyPart(value: string): string {
   const prefix = "~";

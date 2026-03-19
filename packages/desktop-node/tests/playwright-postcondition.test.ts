@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ActionPrimitive } from "@tyrum/schemas";
+import type { ActionPrimitive } from "@tyrum/contracts";
 import { PlaywrightProvider } from "../src/providers/playwright-provider.js";
 import type { PageSnapshot } from "../src/providers/backends/playwright-backend.js";
 import { MockPlaywrightBackend } from "./test-utils/mock-playwright-backend.js";

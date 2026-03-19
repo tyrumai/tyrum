@@ -8,7 +8,7 @@ import type {
 } from "@ai-sdk/provider";
 import { APICallError } from "ai";
 import type { LanguageModel } from "ai";
-import type { AgentConfig as AgentConfigT } from "@tyrum/schemas";
+import type { AgentConfig as AgentConfigT } from "@tyrum/contracts";
 import type { AuthProfileRow } from "../../models/auth-profile-dal.js";
 import { createProviderFromNpm } from "../../models/provider-factory.js";
 import { coerceRecord, coerceStringRecord } from "../../util/coerce.js";

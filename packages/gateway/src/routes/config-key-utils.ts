@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { AgentKey } from "@tyrum/schemas";
+import { AgentKey } from "@tyrum/contracts";
 
 export function slugifyKey(raw: string, fallback: string): string {
   const normalized = raw

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import type { ManagedExtensionDetail } from "@tyrum/schemas";
+import type { ManagedExtensionDetail } from "@tyrum/contracts";
 import { describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
 import { AgentEditorSections } from "../../src/components/pages/agents-page-editor-sections.js";

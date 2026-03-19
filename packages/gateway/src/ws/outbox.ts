@@ -1,4 +1,4 @@
-import type { WsEventEnvelope, WsRequestEnvelope } from "@tyrum/schemas";
+import type { WsEventEnvelope, WsRequestEnvelope } from "@tyrum/contracts";
 import type { SqlDb } from "../statestore/types.js";
 import type { WsBroadcastAudience } from "./audience.js";
 

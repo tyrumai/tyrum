@@ -5,7 +5,7 @@ import type {
   WorkArtifact,
   WorkArtifactKind,
   WorkScope,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import type { GetItemFn } from "./dal-deps.js";
 import * as dalHelpers from "./dal-helpers.js";

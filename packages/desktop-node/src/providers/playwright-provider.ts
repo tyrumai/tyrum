@@ -3,7 +3,7 @@ import {
   checkPostcondition,
   type ActionPrimitive,
   type EvaluationContext,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type { CapabilityProvider, TaskResult } from "@tyrum/client";
 import type { PlaywrightBackend } from "./backends/playwright-backend.js";
 

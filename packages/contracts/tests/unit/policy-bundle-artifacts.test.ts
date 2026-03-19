@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PolicyBundle } from "@tyrum/schemas";
+import { PolicyBundle } from "@tyrum/contracts";
 
 describe("PolicyBundle.artifacts retention/quota", () => {
   it("accepts retention and quota policies by label and sensitivity class", () => {

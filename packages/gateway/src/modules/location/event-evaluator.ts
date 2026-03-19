@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { LocationBeacon, LocationEvent, LocationPlace } from "@tyrum/schemas";
+import type { LocationBeacon, LocationEvent, LocationPlace } from "@tyrum/contracts";
 import { LOCATION_DWELL_MS, LOCATION_EXIT_HYSTERESIS_M } from "./geo.js";
 
 export const DEFAULT_CATEGORY_ENTER_M = 100;

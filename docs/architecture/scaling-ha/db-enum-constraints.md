@@ -18,8 +18,8 @@ This is a compact reference card for columns that are intentionally constrained 
 | ------------------ | ------------------------------------------ | ----------------------------------------------- |
 | `plans.kind`       | `audit`, `planner`                         | SQLite + Postgres `102_enum_constraints_v2.sql` |
 | `plans.status`     | `active`, `success`, `escalate`, `failure` | SQLite + Postgres `102_enum_constraints_v2.sql` |
-| `approvals.kind`   | `ApprovalKind` from `@tyrum/schemas`       | SQLite + Postgres `102_enum_constraints_v2.sql` |
-| `approvals.status` | `ApprovalStatus` from `@tyrum/schemas`     | SQLite + Postgres `102_enum_constraints_v2.sql` |
+| `approvals.kind`   | `ApprovalKind` from `@tyrum/contracts`     | SQLite + Postgres `102_enum_constraints_v2.sql` |
+| `approvals.status` | `ApprovalStatus` from `@tyrum/contracts`   | SQLite + Postgres `102_enum_constraints_v2.sql` |
 
 ## Rules
 

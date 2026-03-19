@@ -1,4 +1,4 @@
-import { parseMobileBootstrapUrl } from "@tyrum/schemas";
+import { parseMobileBootstrapUrl } from "@tyrum/contracts";
 import { App } from "@capacitor/app";
 import {
   CapacitorBarcodeScanner,

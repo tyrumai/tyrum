@@ -10,7 +10,7 @@ import type { GatewayEvents } from "../../src/event-bus.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import type { SecretProvider } from "../../src/modules/secret/provider.js";
-import type { SecretHandle } from "@tyrum/schemas";
+import type { SecretHandle } from "@tyrum/contracts";
 
 const WEBHOOK_SIGNATURE_HEADER = "x-tyrum-webhook-signature";
 const WEBHOOK_TIMESTAMP_HEADER = "x-tyrum-webhook-timestamp";

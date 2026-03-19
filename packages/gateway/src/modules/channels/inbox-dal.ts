@@ -2,7 +2,7 @@ import {
   NormalizedThreadMessage as NormalizedThreadMessageSchema,
   normalizedContainerKindFromThreadKind,
   parseTyrumKey,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import { WorkboardDal } from "../workboard/dal.js";
 import { resolveWorkspaceKey } from "../workspace/id.js";

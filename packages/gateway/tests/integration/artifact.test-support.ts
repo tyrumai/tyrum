@@ -1,4 +1,4 @@
-import type { ArtifactRef } from "@tyrum/schemas";
+import type { ArtifactRef } from "@tyrum/contracts";
 import { createApp } from "../../src/app.js";
 import type { GatewayContainer } from "../../src/container.js";
 import {

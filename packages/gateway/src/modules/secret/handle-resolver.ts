@@ -1,4 +1,4 @@
-import type { SecretHandle } from "@tyrum/schemas";
+import type { SecretHandle } from "@tyrum/contracts";
 import type { SecretProvider } from "./provider.js";
 
 export interface SecretHandleResolver {

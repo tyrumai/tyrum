@@ -1,5 +1,5 @@
-import type { ActionPrimitive, Lane as LaneT } from "@tyrum/schemas";
-import { ActionPrimitive as ActionPrimitiveSchema, Lane } from "@tyrum/schemas";
+import type { ActionPrimitive, Lane as LaneT } from "@tyrum/contracts";
+import { ActionPrimitive as ActionPrimitiveSchema, Lane } from "@tyrum/contracts";
 import type {
   NormalizedScheduleConfig,
   RawScheduleRow,

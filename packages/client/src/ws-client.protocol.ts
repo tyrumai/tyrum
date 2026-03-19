@@ -1,14 +1,14 @@
 import type { Emitter } from "mitt";
 import * as mittNs from "mitt";
 
-import type { WsEvent as WsEventT, WsRequestEnvelope, WsResponseEnvelope } from "@tyrum/schemas";
+import type { WsEvent as WsEventT, WsRequestEnvelope, WsResponseEnvelope } from "@tyrum/contracts";
 import {
   WsError,
   WsEvent,
   WsMessageEnvelope,
   WsTaskExecuteRequest,
   WsTaskExecuteResult,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 
 import type {
   ResolvedTyrumClientOptions,

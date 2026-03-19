@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { AgentKey, WorkspaceKey } from "@tyrum/schemas";
+import { AgentKey, WorkspaceKey } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import { sqlActiveWhereClause, sqlBoolParam } from "../../statestore/sql.js";
 import type { IdentityScopeDal } from "../identity/scope.js";

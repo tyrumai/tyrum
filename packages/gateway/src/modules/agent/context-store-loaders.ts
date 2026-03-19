@@ -4,7 +4,7 @@ import {
   type AgentConfig as AgentConfigT,
   type IdentityPack as IdentityPackT,
   type McpServerSpec as McpServerSpecT,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 import { DEFAULT_IDENTITY_MD, resolveMcpDir } from "./home.js";
 import { isAgentAccessAllowed } from "./access-config.js";
 import { listMcpServersFromDir } from "./workspace.js";

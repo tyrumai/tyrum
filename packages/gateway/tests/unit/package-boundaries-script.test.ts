@@ -194,8 +194,16 @@ describe("package boundary lint", () => {
         relativeDir: "packages/contracts",
       },
       {
-        name: "@tyrum/schemas",
-        relativeDir: "packages/schemas",
+        name: "@tyrum/transport-sdk",
+        relativeDir: "packages/transport-sdk",
+      },
+      {
+        name: "@tyrum/node-sdk",
+        relativeDir: "packages/node-sdk",
+      },
+      {
+        name: "@tyrum/client",
+        relativeDir: "packages/client",
         files: {
           "src/index.ts": 'export const schema = "schema";\n',
         },
@@ -204,10 +212,10 @@ describe("package boundary lint", () => {
         name: "@tyrum/web-fixture",
         relativeDir: "apps/web-fixture",
         dependencies: {
-          "@tyrum/schemas": "workspace:*",
+          "@tyrum/client": "workspace:*",
         },
         files: {
-          "src/main.ts": 'export { schema } from "@tyrum/schemas";\n',
+          "src/main.ts": 'export { schema } from "@tyrum/client";\n',
         },
       },
     ]);
@@ -222,14 +230,14 @@ describe("package boundary lint", () => {
         expect.objectContaining({
           fromPackage: "@tyrum/web-fixture",
           kind: "legacy-manifest-edge",
-          replacementPackages: ["@tyrum/contracts"],
-          toPackage: "@tyrum/schemas",
+          replacementPackages: ["@tyrum/transport-sdk", "@tyrum/node-sdk"],
+          toPackage: "@tyrum/client",
         }),
         expect.objectContaining({
           fromFile: "apps/web-fixture/src/main.ts",
           kind: "legacy-import-edge",
-          replacementPackages: ["@tyrum/contracts"],
-          toPackage: "@tyrum/schemas",
+          replacementPackages: ["@tyrum/transport-sdk", "@tyrum/node-sdk"],
+          toPackage: "@tyrum/client",
         }),
       ]),
     );
@@ -242,17 +250,25 @@ describe("package boundary lint", () => {
         relativeDir: "packages/contracts",
       },
       {
-        name: "@tyrum/schemas",
-        relativeDir: "packages/schemas",
+        name: "@tyrum/transport-sdk",
+        relativeDir: "packages/transport-sdk",
+      },
+      {
+        name: "@tyrum/node-sdk",
+        relativeDir: "packages/node-sdk",
+      },
+      {
+        name: "@tyrum/client",
+        relativeDir: "packages/client",
       },
       {
         name: "@tyrum/web-fixture",
         relativeDir: "apps/web-fixture",
         dependencies: {
-          "@tyrum/schemas": "workspace:*",
+          "@tyrum/client": "workspace:*",
         },
         files: {
-          "src/main.ts": 'export { schema } from "@tyrum/schemas";\n',
+          "src/main.ts": 'export { schema } from "@tyrum/client";\n',
         },
       },
     ]);
@@ -262,15 +278,15 @@ describe("package boundary lint", () => {
         allowedImportEdges: [
           {
             fromFile: "apps/web-fixture/src/main.ts",
-            reason: "#1535 temporary coexistence during contracts migration",
-            toPackage: "@tyrum/schemas",
+            reason: "#1532 temporary coexistence during transport-sdk migration",
+            toPackage: "@tyrum/client",
           },
         ],
         allowedManifestEdges: [
           {
             fromPackage: "@tyrum/web-fixture",
-            reason: "#1535 temporary coexistence during contracts migration",
-            toPackage: "@tyrum/schemas",
+            reason: "#1532 temporary coexistence during transport-sdk migration",
+            toPackage: "@tyrum/client",
           },
         ],
       },

@@ -1,4 +1,4 @@
-import type { PluginManifest as PluginManifestT } from "@tyrum/schemas";
+import type { PluginManifest as PluginManifestT } from "@tyrum/contracts";
 import type { Hono } from "hono";
 import type { GatewayContainer } from "../../container.js";
 import type { ToolDescriptor } from "../agent/tools.js";

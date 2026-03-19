@@ -1,4 +1,4 @@
-import type { ModelsDevCatalog } from "@tyrum/schemas";
+import type { ModelsDevCatalog } from "@tyrum/contracts";
 
 /**
  * Bundled Models.dev snapshot (minimal).

@@ -2,7 +2,7 @@ import type {
   NormalizedAttachment as NormalizedAttachmentT,
   NormalizedMessageEnvelope as NormalizedMessageEnvelopeT,
   NormalizedThreadMessage as NormalizedThreadMessageT,
-} from "@tyrum/schemas";
+} from "@tyrum/contracts";
 
 function formatNormalizedAttachment(attachment: NormalizedAttachmentT): string {
   const fields = [`kind=${attachment.kind}`];

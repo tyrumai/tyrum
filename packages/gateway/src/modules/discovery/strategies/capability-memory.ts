@@ -4,7 +4,7 @@
  * Ranks results by success_count weighted by recency.
  */
 
-import type { DiscoveryRequest, DiscoveryResolution } from "@tyrum/schemas";
+import type { DiscoveryRequest, DiscoveryResolution } from "@tyrum/contracts";
 
 export type CapabilityMemoryRow = {
   id: number;

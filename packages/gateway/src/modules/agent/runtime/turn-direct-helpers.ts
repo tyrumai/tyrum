@@ -1,6 +1,6 @@
 import { generateText } from "ai";
 import type { ModelMessage } from "ai";
-import type { SecretHandle as SecretHandleT, WorkScope } from "@tyrum/schemas";
+import type { SecretHandle as SecretHandleT, WorkScope } from "@tyrum/contracts";
 import type { ToolCallPolicyState } from "./tool-set-builder.js";
 import { ToolExecutionApprovalRequiredError, type ResolvedAgentTurnInput } from "./turn-helpers.js";
 import type { SessionRow } from "../session-dal.js";

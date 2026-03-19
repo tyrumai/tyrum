@@ -1,5 +1,8 @@
-import type { Playbook, PlaybookRuntimeEnvelope as PlaybookRuntimeEnvelopeT } from "@tyrum/schemas";
-import { PlaybookManifest, PolicyBundle } from "@tyrum/schemas";
+import type {
+  Playbook,
+  PlaybookRuntimeEnvelope as PlaybookRuntimeEnvelopeT,
+} from "@tyrum/contracts";
+import { PlaybookManifest, PolicyBundle } from "@tyrum/contracts";
 import { randomUUID } from "node:crypto";
 import { isAbsolute, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";

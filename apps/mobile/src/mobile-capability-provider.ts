@@ -2,7 +2,7 @@ import type { CapabilityProvider, TaskExecuteContext, TaskResult } from "@tyrum/
 import { Camera, CameraDirection, CameraResultType, CameraSource } from "@capacitor/camera";
 import { Capacitor } from "@capacitor/core";
 import { Geolocation } from "@capacitor/geolocation";
-import { AndroidActionArgs, IosActionArgs, type ActionPrimitive } from "@tyrum/schemas";
+import { AndroidActionArgs, IosActionArgs, type ActionPrimitive } from "@tyrum/contracts";
 import type { MobileHostPlatform } from "@tyrum/operator-ui";
 import { formatUnknownError, mapLocationCoords } from "./mobile-location-utils.js";
 

@@ -1,4 +1,4 @@
-import type { WsMessageRole } from "@tyrum/schemas";
+import type { WsMessageRole } from "@tyrum/contracts";
 import type { ExternalStore, Unsubscribe } from "../store.js";
 import { createStore } from "../store.js";
 import {
@@ -53,9 +53,9 @@ export interface ActivityWorkstream {
   key: string;
   lane: string;
   agentId: string;
-  persona: import("@tyrum/schemas").AgentPersona;
+  persona: import("@tyrum/contracts").AgentPersona;
   latestRunId: string | null;
-  runStatus: import("@tyrum/schemas").ExecutionRunStatus | null;
+  runStatus: import("@tyrum/contracts").ExecutionRunStatus | null;
   queuedRunCount: number;
   lease: ActivityLeaseState;
   attentionLevel: ActivityAttentionLevel;
@@ -67,7 +67,7 @@ export interface ActivityWorkstream {
 
 export interface ActivityAgent {
   agentId: string;
-  persona: import("@tyrum/schemas").AgentPersona;
+  persona: import("@tyrum/contracts").AgentPersona;
   workstreamIds: string[];
   selectedWorkstreamId: string | null;
 }
