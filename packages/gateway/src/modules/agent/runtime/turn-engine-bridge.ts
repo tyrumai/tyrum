@@ -5,8 +5,6 @@ import type {
   ApprovalKind as ApprovalKindT,
   AgentTurnResponse as AgentTurnResponseT,
   NormalizedContainerKind,
-  NormalizedMessageEnvelope as NormalizedMessageEnvelopeT,
-  TyrumUIMessagePart,
   WorkScope,
 } from "@tyrum/contracts";
 import { AgentTurnRequest, SubagentSessionKey } from "@tyrum/contracts";
@@ -34,6 +32,7 @@ import {
   normalizeInternalTurnRequestIfNeeded,
   normalizeInternalTurnRequestUnknown,
 } from "./turn-request-normalization.js";
+import type { ResolvedAgentTurnInput } from "./turn-helpers.js";
 
 export {
   loadTurnFailureFromRun,
@@ -69,15 +68,6 @@ type TurnExecutionContext = {
   stepIndex: number;
   stepId: string;
   stepApprovalId?: string;
-};
-
-type ResolvedAgentTurnInput = {
-  channel: string;
-  thread_id: string;
-  message: string;
-  parts: TyrumUIMessagePart[];
-  envelope?: NormalizedMessageEnvelopeT;
-  metadata?: Record<string, unknown>;
 };
 
 export type TurnEngineBridgeDeps = {
@@ -212,7 +202,6 @@ export async function turnViaExecutionEngine(
     channel: resolvedInput.channel,
     thread_id: resolvedInput.thread_id,
     container_kind: containerKind,
-    message: resolvedInput.message,
     parts: resolvedInput.parts,
     envelope: resolvedInput.envelope,
     ...(tenantKey ? { tenant_key: tenantKey } : {}),

@@ -1,4 +1,5 @@
 import type { AgentTurnRequest as AgentTurnRequestT, TyrumUIMessagePart } from "@tyrum/schemas";
+import { createArtifactFilePart } from "../../ai-sdk/attachment-parts.js";
 
 type MaybeLegacyTurnRequest = AgentTurnRequestT & {
   message?: unknown;
@@ -8,6 +9,25 @@ function cloneParts(
   parts: readonly TyrumUIMessagePart[] | undefined,
 ): TyrumUIMessagePart[] | undefined {
   return parts?.map((part) => ({ ...part }));
+}
+
+function buildLegacyMessageParts(input: MaybeLegacyTurnRequest): TyrumUIMessagePart[] | undefined {
+  const legacyMessage = input.message;
+  if (typeof legacyMessage !== "string") {
+    return undefined;
+  }
+
+  const text = legacyMessage.trim();
+  if (text.length === 0) {
+    return undefined;
+  }
+
+  const attachmentParts =
+    input.envelope?.content.attachments
+      .map((attachment) => createArtifactFilePart(attachment))
+      .filter((part) => part !== undefined) ?? [];
+
+  return [{ type: "text", text }, ...attachmentParts];
 }
 
 function shouldNormalizeLegacyMessage(input: MaybeLegacyTurnRequest): boolean {
@@ -25,19 +45,14 @@ export function normalizeInternalTurnRequest(input: AgentTurnRequestT): AgentTur
     return { ...input, parts };
   }
 
-  const legacyMessage = (input as MaybeLegacyTurnRequest).message;
-  if (typeof legacyMessage !== "string") {
-    return { ...input };
-  }
-
-  const text = legacyMessage.trim();
-  if (text.length === 0) {
+  const normalizedParts = buildLegacyMessageParts(input as MaybeLegacyTurnRequest);
+  if (!normalizedParts) {
     return { ...input };
   }
 
   return {
     ...input,
-    parts: [{ type: "text", text }],
+    parts: normalizedParts,
   };
 }
 

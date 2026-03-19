@@ -30,4 +30,79 @@ describe("turn request normalization", () => {
       parts: [{ type: "text", text: "hello" }],
     });
   });
+
+  it("preserves envelope attachment parts for legacy message requests", () => {
+    const normalized = normalizeInternalTurnRequestUnknown({
+      envelope: {
+        message_id: "msg-1",
+        received_at: "2026-03-19T09:00:00.000Z",
+        delivery: {
+          channel: "telegram",
+          account: "default",
+        },
+        container: {
+          kind: "dm",
+          id: "thread-1",
+        },
+        sender: {
+          id: "user-1",
+        },
+        content: {
+          text: "envelope text",
+          attachments: [
+            {
+              artifact_id: "artifact-1",
+              kind: "file",
+              mime_type: "text/plain",
+              external_url: "https://example.test/artifact-1",
+              filename: "note.txt",
+            },
+          ],
+        },
+        provenance: ["user"],
+      },
+      message: "legacy text",
+    });
+
+    expect(normalized).toEqual({
+      envelope: {
+        message_id: "msg-1",
+        received_at: "2026-03-19T09:00:00.000Z",
+        delivery: {
+          channel: "telegram",
+          account: "default",
+        },
+        container: {
+          kind: "dm",
+          id: "thread-1",
+        },
+        sender: {
+          id: "user-1",
+        },
+        content: {
+          text: "envelope text",
+          attachments: [
+            {
+              artifact_id: "artifact-1",
+              kind: "file",
+              mime_type: "text/plain",
+              external_url: "https://example.test/artifact-1",
+              filename: "note.txt",
+            },
+          ],
+        },
+        provenance: ["user"],
+      },
+      message: "legacy text",
+      parts: [
+        { type: "text", text: "legacy text" },
+        {
+          type: "file",
+          url: "https://example.test/artifact-1",
+          mediaType: "text/plain",
+          filename: "note.txt",
+        },
+      ],
+    });
+  });
 });

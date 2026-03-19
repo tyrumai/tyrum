@@ -135,10 +135,10 @@ describe("AgentRuntime - context reports and identity keys", () => {
     expect(step).toBeTruthy();
     const action = JSON.parse(step!.action_json) as {
       type: string;
-      args: { message?: string; parts?: Array<{ type: string; text?: string }> };
+      args: { parts?: Array<{ type: string; text?: string }> };
     };
     expect(action.type).toBe("Decide");
-    expect(action.args.message).toBe("hello from test");
+    expect(action.args).not.toHaveProperty("message");
     expect(action.args.parts).toEqual([{ type: "text", text: "hello from test" }]);
 
     const attempt = await container.db.get<{ result_json: string | null }>(
@@ -204,10 +204,10 @@ describe("AgentRuntime - context reports and identity keys", () => {
 
     const action = JSON.parse(step!.action_json) as {
       type: string;
-      args: { message?: string; parts?: Array<{ type: string; text?: string }> };
+      args: { parts?: Array<{ type: string; text?: string }> };
     };
     expect(action.type).toBe("Decide");
-    expect(action.args.message).toBe("hello from envelope");
+    expect(action.args).not.toHaveProperty("message");
     expect(action.args.parts).toEqual([{ type: "text", text: "hello from envelope" }]);
   });
 
