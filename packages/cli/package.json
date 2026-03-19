@@ -24,6 +24,7 @@
   "dependencies": {
     "@tyrum/cli-utils": "workspace:*",
     "@tyrum/contracts": "workspace:*",
+    "@tyrum/operator-app": "workspace:*",
     "@tyrum/transport-sdk": "workspace:*",
     "commander": "^14.0.3"
   },

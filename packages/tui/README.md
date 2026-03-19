@@ -20,7 +20,8 @@ app.
 The TUI:
 
 - resolves gateway URLs, auth token, and device identity from CLI args and environment
-- creates a shared operator-core-backed runtime
+- keeps CLI arg parsing, gateway URL resolution, and device identity persistence local to the host
+- creates a shared `@tyrum/operator-app` runtime for operator workflows and state
 - renders the Ink app defined in `packages/tui/src/app.tsx`
 
 ## Commands

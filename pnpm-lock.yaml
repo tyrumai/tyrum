@@ -343,6 +343,9 @@ importers:
       '@tyrum/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@tyrum/operator-app':
+        specifier: workspace:*
+        version: link:../operator-app
       '@tyrum/transport-sdk':
         specifier: workspace:*
         version: link:../transport-sdk
@@ -819,9 +822,6 @@ importers:
       '@tyrum/cli-utils':
         specifier: workspace:*
         version: link:../cli-utils
-      '@tyrum/client':
-        specifier: workspace:*
-        version: link:../client
       '@tyrum/operator-app':
         specifier: workspace:*
         version: link:../operator-app

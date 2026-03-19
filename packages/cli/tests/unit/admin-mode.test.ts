@@ -51,7 +51,7 @@ async function createClientMock() {
   };
 }
 
-vi.mock("@tyrum/client", async () => await createClientMock());
+vi.mock("@tyrum/operator-app/node", async () => await createClientMock());
 vi.mock("@tyrum/transport-sdk/node", async () => await createClientMock());
 
 describe("@tyrum/cli elevated-mode", () => {
@@ -156,6 +156,45 @@ describe("@tyrum/cli elevated-mode", () => {
         expiresAt: "2099-01-01T00:00:00.000Z",
       });
       expect(logSpy).toHaveBeenCalled();
+    } finally {
+      logSpy.mockRestore();
+      errSpy.mockRestore();
+      await rm(home, { recursive: true, force: true });
+    }
+  });
+
+  it("does not label non-http coded elevated-mode failures as status=unknown", async () => {
+    const home = await mkdtemp(join(tmpdir(), "tyrum-cli-"));
+    process.env["TYRUM_HOME"] = home;
+
+    const operatorDir = join(home, "operator");
+    await mkdir(operatorDir, { recursive: true, mode: 0o700 });
+    await writeFile(
+      join(operatorDir, "config.json"),
+      JSON.stringify({ gateway_url: "http://127.0.0.1:8788", auth_token: "base" }, null, 2),
+      { mode: 0o600 },
+    );
+
+    httpDeviceTokensIssueSpy.mockRejectedValue(
+      Object.assign(new Error("connect ECONNREFUSED 127.0.0.1:8788"), {
+        code: "ECONNREFUSED",
+      }),
+    );
+
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    try {
+      vi.resetModules();
+      const { runCli } = await import("../../src/index.js");
+
+      const code = await runCli(["elevated-mode", "enter"]);
+
+      expect(code).toBe(1);
+      expect(logSpy).not.toHaveBeenCalled();
+      expect(errSpy).toHaveBeenCalledWith(
+        "elevated-mode.enter: failed: connect ECONNREFUSED 127.0.0.1:8788",
+      );
     } finally {
       logSpy.mockRestore();
       errSpy.mockRestore();

@@ -1,9 +1,6 @@
-import {
-  TyrumClient,
-  TyrumHttpClientError,
-  createTyrumHttpClient,
-} from "@tyrum/transport-sdk/node";
+import { TyrumClient, createTyrumHttpClient } from "@tyrum/operator-app/node";
 
+import { isTyrumHttpClientError } from "./http-client-error.js";
 import { resolveGatewayWsUrl } from "./operator-paths.js";
 import { requireOperatorConfig, requireOperatorDeviceIdentity } from "./operator-state.js";
 
@@ -110,7 +107,7 @@ export async function runOperatorHttpCommand<T>(
     console.log(JSON.stringify(result, null, 2));
     return 0;
   } catch (error) {
-    if (error instanceof TyrumHttpClientError) {
+    if (isTyrumHttpClientError(error)) {
       const status = error.status ? `status=${String(error.status)}` : "status=unknown";
       console.error(`${label}: failed: ${status} message=${error.message}`);
       return 1;

@@ -30,5 +30,6 @@ running the full desktop or web UI.
 
 ## Notes
 
-- The CLI uses the shared client stack from `@tyrum/client` and `@tyrum/cli-utils`.
+- Shared operator workflows go through `@tyrum/operator-app`.
+- Config persistence and device-identity file management stay local to the CLI host.
 - It is an operator client, not a capability node. Device automation stays behind paired nodes.

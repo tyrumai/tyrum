@@ -84,7 +84,7 @@ function failureCase(
 
 const wsSuccessCases = [
   wsSuccessCase(
-    "runs `approvals list` via @tyrum/client WS",
+    "runs `approvals list` via @tyrum/operator-app/node WS",
     wsApprovalListSpy,
     { approvals: [] },
     ["approvals", "list", "--limit", "10"],
@@ -92,7 +92,7 @@ const wsSuccessCases = [
     "tkn",
   ),
   wsSuccessCase(
-    "runs `approvals resolve` via @tyrum/client WS",
+    "runs `approvals resolve` via @tyrum/operator-app/node WS",
     wsApprovalResolveSpy,
     { approval: { approval_id: APPROVAL_ID } },
     [
@@ -108,7 +108,7 @@ const wsSuccessCases = [
     [{ approval_id: APPROVAL_ID, decision: "approved", reason: "ok" }],
   ),
   wsSuccessCase(
-    "runs `workflow run` via @tyrum/client WS",
+    "runs `workflow run` via @tyrum/operator-app/node WS",
     wsWorkflowRunSpy,
     { run_id: "run-1" },
     ["workflow", "run", "--key", "agent:default:main", "--steps", WORKFLOW_STEPS],
@@ -128,14 +128,14 @@ const wsSuccessCases = [
     [{ key: "agent:default:main", lane: "main", steps: [{ type: "Message", args: {} }] }],
   ),
   wsSuccessCase(
-    "runs `workflow resume` via @tyrum/client WS",
+    "runs `workflow resume` via @tyrum/operator-app/node WS",
     wsWorkflowResumeSpy,
     { run_id: "run-1" },
     ["workflow", "resume", "--token", "resume-token"],
     [{ token: "resume-token" }],
   ),
   wsSuccessCase(
-    "runs `workflow cancel` via @tyrum/client WS",
+    "runs `workflow cancel` via @tyrum/operator-app/node WS",
     wsWorkflowCancelSpy,
     { run_id: "run-1", cancelled: true },
     ["workflow", "cancel", "--run-id", "run-1", "--reason", "oops"],
@@ -155,7 +155,7 @@ const wsFailureCases = [
 
 const httpSuccessCases = [
   httpSuccessCase(
-    "runs `pairing approve` via @tyrum/client HTTP",
+    "runs `pairing approve` via @tyrum/operator-app/node HTTP",
     httpPairingsApproveSpy,
     { status: "ok" },
     [
@@ -180,21 +180,21 @@ const httpSuccessCases = [
     ],
   ),
   httpSuccessCase(
-    "runs `pairing deny` via @tyrum/client HTTP",
+    "runs `pairing deny` via @tyrum/operator-app/node HTTP",
     httpPairingsDenySpy,
     { status: "ok" },
     ["pairing", "deny", "--pairing-id", "42", "--reason", "no"],
     [42, { reason: "no" }],
   ),
   httpSuccessCase(
-    "runs `pairing revoke` via @tyrum/client HTTP",
+    "runs `pairing revoke` via @tyrum/operator-app/node HTTP",
     httpPairingsRevokeSpy,
     { status: "ok" },
     ["pairing", "revoke", "--pairing-id", "42", "--reason", "bye"],
     [42, { reason: "bye" }],
   ),
   httpSuccessCase(
-    "runs `secrets list` via @tyrum/client HTTP",
+    "runs `secrets list` via @tyrum/operator-app/node HTTP",
     httpSecretsListSpy,
     { handles: [] },
     ["secrets", "list", "--elevated-token", "admin"],
@@ -203,7 +203,7 @@ const httpSuccessCases = [
     "admin",
   ),
   httpSuccessCase(
-    "runs `secrets store` via @tyrum/client HTTP",
+    "runs `secrets store` via @tyrum/operator-app/node HTTP",
     httpSecretsStoreSpy,
     { handle: { handle_id: "h1" } },
     ["secrets", "store", "--secret-key", "demo", "--value", "secret", "--elevated-token", "admin"],
@@ -212,7 +212,7 @@ const httpSuccessCases = [
     "admin",
   ),
   httpSuccessCase(
-    "runs `secrets revoke` via @tyrum/client HTTP",
+    "runs `secrets revoke` via @tyrum/operator-app/node HTTP",
     httpSecretsRevokeSpy,
     { revoked: true },
     ["secrets", "revoke", "--handle-id", "h1", "--elevated-token", "admin"],
@@ -221,7 +221,7 @@ const httpSuccessCases = [
     "admin",
   ),
   httpSuccessCase(
-    "runs `secrets rotate` via @tyrum/client HTTP",
+    "runs `secrets rotate` via @tyrum/operator-app/node HTTP",
     httpSecretsRotateSpy,
     { revoked: true, handle: { handle_id: "h2" } },
     ["secrets", "rotate", "--handle-id", "h1", "--value", "new", "--elevated-token", "admin"],
@@ -230,7 +230,7 @@ const httpSuccessCases = [
     "admin",
   ),
   httpSuccessCase(
-    "runs `policy bundle` via @tyrum/client HTTP",
+    "runs `policy bundle` via @tyrum/operator-app/node HTTP",
     httpPolicyGetBundleSpy,
     { status: "ok" },
     ["policy", "bundle", "--elevated-token", "admin"],
@@ -239,7 +239,7 @@ const httpSuccessCases = [
     "admin",
   ),
   httpSuccessCase(
-    "runs `policy overrides list` via @tyrum/client HTTP",
+    "runs `policy overrides list` via @tyrum/operator-app/node HTTP",
     httpPolicyListOverridesSpy,
     { overrides: [] },
     ["policy", "overrides", "list", "--elevated-token", "admin"],
@@ -248,7 +248,7 @@ const httpSuccessCases = [
     "admin",
   ),
   httpSuccessCase(
-    "runs `policy overrides create` via @tyrum/client HTTP",
+    "runs `policy overrides create` via @tyrum/operator-app/node HTTP",
     httpPolicyCreateOverrideSpy,
     { override: { policy_override_id: "p1" } },
     [
@@ -269,7 +269,7 @@ const httpSuccessCases = [
     "admin",
   ),
   httpSuccessCase(
-    "runs `policy overrides revoke` via @tyrum/client HTTP",
+    "runs `policy overrides revoke` via @tyrum/operator-app/node HTTP",
     httpPolicyRevokeOverrideSpy,
     { override: { policy_override_id: "p1" } },
     [
@@ -386,6 +386,25 @@ describe("@tyrum/cli operator commands", () => {
         expect(code).toBe(1);
         expect(httpSecretsRevokeSpy).not.toHaveBeenCalled();
         expect(errSpy).toHaveBeenCalledWith(expect.stringContaining("--value"));
+      },
+    );
+  });
+
+  it("does not label non-http coded errors as status=unknown", { timeout: 15_000 }, async () => {
+    httpSecretsListSpy.mockRejectedValue(
+      Object.assign(new Error("connect ECONNREFUSED 127.0.0.1:8788"), {
+        code: "ECONNREFUSED",
+      }),
+    );
+
+    await withOperatorCli(
+      { authToken: "base", includeDeviceIdentity: false },
+      async ({ runCli, errSpy, logSpy }) => {
+        const code = await runCli(["secrets", "list", "--elevated-token", "admin"]);
+
+        expect(code).toBe(1);
+        expect(logSpy).not.toHaveBeenCalled();
+        expect(errSpy).toHaveBeenCalledWith("secrets: failed: connect ECONNREFUSED 127.0.0.1:8788");
       },
     );
   });
