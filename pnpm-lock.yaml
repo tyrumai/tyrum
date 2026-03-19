@@ -676,9 +676,6 @@ importers:
       '@tyrum/operator-core':
         specifier: workspace:*
         version: link:../operator-core
-      '@tyrum/transport-sdk':
-        specifier: workspace:*
-        version: link:../transport-sdk
       ai:
         specifier: ^6.0.116
         version: 6.0.116(zod@4.3.6)
