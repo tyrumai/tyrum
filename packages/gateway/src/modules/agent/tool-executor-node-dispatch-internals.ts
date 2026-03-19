@@ -149,8 +149,16 @@ export async function ensureSyntheticExecutionScope(
     );
 
     await tx.run(
-      `INSERT INTO execution_steps (tenant_id, step_id, run_id, step_index, status, action_json)
-       VALUES (?, ?, ?, 0, 'running', ?)`,
+      `INSERT INTO execution_steps (
+         tenant_id,
+         step_id,
+         run_id,
+         step_index,
+         status,
+         action_json,
+         max_attempts
+       )
+       VALUES (?, ?, ?, 0, 'running', ?, 1)`,
       [
         lease.tenantId,
         input.stepId,

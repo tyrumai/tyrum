@@ -561,7 +561,7 @@ CREATE TABLE execution_steps (
   idempotency_key  TEXT,
   postcondition_json TEXT,
   approval_id      UUID,
-  max_attempts     INTEGER NOT NULL DEFAULT 3,
+  max_attempts     INTEGER NOT NULL DEFAULT 1,
   timeout_ms       INTEGER NOT NULL DEFAULT 60000,
   PRIMARY KEY (tenant_id, step_id),
   UNIQUE (tenant_id, run_id, step_index),
