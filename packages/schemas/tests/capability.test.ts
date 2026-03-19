@@ -3,6 +3,7 @@ import { CapabilityKind } from "../src/index.js";
 import {
   CANONICAL_CAPABILITY_IDS,
   BROWSER_AUTOMATION_CAPABILITY_IDS,
+  FILESYSTEM_CAPABILITY_IDS,
   LEGACY_ID_MIGRATION_MAP,
   isLegacyCapabilityDescriptorId,
   migrateCapabilityDescriptorId,
@@ -167,6 +168,11 @@ describe("canonical capability IDs", () => {
 
   it("has 22 browser automation capabilities", () => {
     expect(BROWSER_AUTOMATION_CAPABILITY_IDS).toHaveLength(22);
+  });
+
+  it("exports frozen derived capability arrays", () => {
+    expect(Object.isFrozen(BROWSER_AUTOMATION_CAPABILITY_IDS)).toBe(true);
+    expect(Object.isFrozen(FILESYSTEM_CAPABILITY_IDS)).toBe(true);
   });
 });
 

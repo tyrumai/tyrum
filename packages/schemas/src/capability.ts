@@ -57,15 +57,21 @@ export const CANONICAL_CAPABILITY_IDS = [
 
 export type CanonicalCapabilityId = (typeof CANONICAL_CAPABILITY_IDS)[number];
 
+function filterCapabilityIdsByPrefix<Prefix extends string>(
+  prefix: Prefix,
+): readonly Extract<CanonicalCapabilityId, `${Prefix}${string}`>[] {
+  return Object.freeze(
+    CANONICAL_CAPABILITY_IDS.filter(
+      (id): id is Extract<CanonicalCapabilityId, `${Prefix}${string}`> => id.startsWith(prefix),
+    ),
+  );
+}
+
 /** All canonical browser automation capability IDs. */
-export const BROWSER_AUTOMATION_CAPABILITY_IDS = CANONICAL_CAPABILITY_IDS.filter((id) =>
-  id.startsWith("tyrum.browser."),
-);
+export const BROWSER_AUTOMATION_CAPABILITY_IDS = filterCapabilityIdsByPrefix("tyrum.browser.");
 
 /** All canonical filesystem capability IDs. */
-export const FILESYSTEM_CAPABILITY_IDS = CANONICAL_CAPABILITY_IDS.filter((id) =>
-  id.startsWith("tyrum.fs."),
-);
+export const FILESYSTEM_CAPABILITY_IDS = filterCapabilityIdsByPrefix("tyrum.fs.");
 
 // ---------------------------------------------------------------------------
 // Legacy → canonical migration map

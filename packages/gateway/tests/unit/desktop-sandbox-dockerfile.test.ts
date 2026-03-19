@@ -28,4 +28,15 @@ describe("desktop-sandbox Dockerfile", () => {
     expect(nativeCheck).toContain("@nut-tree-fork/nut-js");
     expect(dockerfile).toContain("RUN node ./scripts/check-desktop-sandbox-native.mjs");
   });
+
+  test("installs Playwright before copying frequently changing build outputs", () => {
+    const dockerfile = readFileSync(fileURLToPath(dockerfileUrl), "utf8");
+
+    expect(dockerfile.indexOf("COPY --from=builder /app/node_modules ./node_modules")).toBeLessThan(
+      dockerfile.indexOf("RUN npx playwright install --with-deps chromium"),
+    );
+    expect(dockerfile.indexOf("RUN npx playwright install --with-deps chromium")).toBeLessThan(
+      dockerfile.indexOf("COPY --from=builder /app/scripts ./scripts"),
+    );
+  });
 });

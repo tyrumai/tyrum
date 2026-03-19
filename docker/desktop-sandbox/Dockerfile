@@ -61,6 +61,10 @@ RUN apt-get update \
 WORKDIR /app
 
 COPY --from=builder /app/node_modules ./node_modules
+
+# Install browser binaries before copying frequently changing build outputs.
+RUN npx playwright install --with-deps chromium
+
 COPY --from=builder /app/scripts ./scripts
 
 COPY --from=builder /app/packages/schemas/package.json ./packages/schemas/package.json
@@ -82,8 +86,6 @@ COPY --from=builder /app/packages/desktop-node/node_modules ./packages/desktop-n
 
 COPY docker/desktop-sandbox/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
-
-RUN npx playwright install --with-deps chromium
 
 EXPOSE 5900
 EXPOSE 6080
