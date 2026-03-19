@@ -129,4 +129,9 @@ export class MockPlaywrightBackend implements PlaywrightBackend {
     this.calls.push({ method: "runCode", args: [code] });
     return null;
   }
+
+  async launch(options?: { headless?: boolean }): Promise<{ headless: boolean; browser: string }> {
+    this.calls.push({ method: "launch", args: [options] });
+    return { headless: options?.headless ?? true, browser: "chromium" };
+  }
 }
