@@ -1,6 +1,5 @@
 import { expect, it, vi } from "vitest";
 import { generateKeyPairSync } from "node:crypto";
-import { CAPABILITY_DESCRIPTOR_DEFAULT_VERSION } from "@tyrum/schemas";
 import { TyrumClient } from "../src/ws-client.js";
 import {
   type TestServer,
@@ -78,7 +77,7 @@ function registerReconnectBasicTests(fixture: ReconnectFixture): void {
     const client = new TyrumClient({
       url: server.url,
       token: "t",
-      capabilities: ["cli"],
+      capabilities: ["desktop"],
       reconnect: true,
       maxReconnectDelay: 500,
     });
@@ -88,18 +87,19 @@ function registerReconnectBasicTests(fixture: ReconnectFixture): void {
     const ws1 = await server.waitForClient();
     const connect1 = (await waitForMessage(ws1)) as Record<string, unknown>;
     expect(connect1["type"]).toBe("connect.init");
-    expect(connect1["payload"]).toEqual(
+    const payload1 = connect1["payload"] as Record<string, unknown>;
+    expect(payload1).toEqual(
       expect.objectContaining({
         protocol_rev: 2,
         role: "client",
-        capabilities: [
-          {
-            id: "tyrum.cli.execute",
-            version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-          },
-        ],
       }),
     );
+    expect(Array.isArray(payload1["capabilities"])).toBe(true);
+    expect(
+      (payload1["capabilities"] as Array<{ id: string }>).some(
+        (c) => c.id === "tyrum.desktop.screenshot",
+      ),
+    ).toBe(true);
     ws1.send(
       JSON.stringify({
         request_id: String(connect1["request_id"]),
@@ -126,18 +126,19 @@ function registerReconnectBasicTests(fixture: ReconnectFixture): void {
     const ws2 = await server.waitForClient();
     const connect2 = (await waitForMessage(ws2)) as Record<string, unknown>;
     expect(connect2["type"]).toBe("connect.init");
-    expect(connect2["payload"]).toEqual(
+    const payload2 = connect2["payload"] as Record<string, unknown>;
+    expect(payload2).toEqual(
       expect.objectContaining({
         protocol_rev: 2,
         role: "client",
-        capabilities: [
-          {
-            id: "tyrum.cli.execute",
-            version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-          },
-        ],
       }),
     );
+    expect(Array.isArray(payload2["capabilities"])).toBe(true);
+    expect(
+      (payload2["capabilities"] as Array<{ id: string }>).some(
+        (c) => c.id === "tyrum.desktop.screenshot",
+      ),
+    ).toBe(true);
     ws2.send(
       JSON.stringify({
         request_id: String(connect2["request_id"]),

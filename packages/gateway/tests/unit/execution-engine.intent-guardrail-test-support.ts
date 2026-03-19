@@ -44,7 +44,7 @@ export function registerIntentGuardrailTests(fixture: { db: () => SqliteDb }): v
       lane: "subagent",
       planId: "plan-intent-missing-1",
       requestId: "req-intent-missing-1",
-      steps: [action("Http", { url: "https://example.com/" })],
+      steps: [action("Web", { op: "navigate", url: "https://example.com/" })],
       trigger: {
         kind: "manual",
         key: "agent:default:main",
@@ -105,7 +105,7 @@ export function registerIntentGuardrailTests(fixture: { db: () => SqliteDb }): v
       lane: "subagent",
       planId: "plan-intent-approved-1",
       requestId: "req-intent-approved-1",
-      steps: [action("Http", { url: "https://example.com/" })],
+      steps: [action("Web", { op: "navigate", url: "https://example.com/" })],
       trigger: {
         kind: "manual",
         key: "agent:default:main",
@@ -160,7 +160,7 @@ export function registerIntentGuardrailTests(fixture: { db: () => SqliteDb }): v
       lane: "subagent",
       planId: "plan-intent-evidence-failure-1",
       requestId: "req-intent-evidence-failure-1",
-      steps: [action("Http", { url: "https://example.com/" })],
+      steps: [action("Web", { op: "navigate", url: "https://example.com/" })],
       trigger: {
         kind: "manual",
         key: "agent:default:main",
@@ -188,7 +188,7 @@ export function registerIntentGuardrailTests(fixture: { db: () => SqliteDb }): v
         {
           run,
           step,
-          actionType: "Http",
+          actionType: "Web",
           action: undefined,
           clock: { nowMs: Date.now(), nowIso: new Date().toISOString() },
           workerId: "w1",
@@ -229,7 +229,7 @@ export function registerIntentGuardrailTests(fixture: { db: () => SqliteDb }): v
       lane: "subagent",
       planId: "plan-intent-stale-1",
       requestId: "req-intent-stale-1",
-      steps: [action("Http", { url: "https://example.com/" })],
+      steps: [action("Web", { op: "navigate", url: "https://example.com/" })],
       trigger: {
         kind: "manual",
         key: "agent:default:main",
@@ -305,7 +305,7 @@ export function registerIntentGuardrailTests(fixture: { db: () => SqliteDb }): v
       lane: "subagent",
       planId: "plan-intent-ok-1",
       requestId: "req-intent-ok-1",
-      steps: [action("Http", { url: "https://example.com/" })],
+      steps: [action("Web", { op: "navigate", url: "https://example.com/" })],
       trigger: {
         kind: "manual",
         key: "agent:default:main",
@@ -398,7 +398,7 @@ export function registerIntentGuardrailTests(fixture: { db: () => SqliteDb }): v
       lane: "subagent",
       planId: "plan-intent-policy-bypass-1",
       requestId: "req-intent-policy-bypass-1",
-      steps: [action("Http", { url: "https://example.com/" })],
+      steps: [action("Web", { op: "navigate", url: "https://example.com/" })],
       trigger: {
         kind: "manual",
         key: "agent:default:main",

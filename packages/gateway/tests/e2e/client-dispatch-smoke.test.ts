@@ -133,7 +133,7 @@ describe("E2E smoke test", () => {
     client = new TyrumClient({
       url: `ws://127.0.0.1:${srv.port}/ws`,
       token: srv.adminToken,
-      capabilities: ["playwright", "http"],
+      capabilities: ["playwright", "desktop"],
       reconnect: false,
       role: "node",
       protocolRev: 2,
@@ -178,7 +178,7 @@ describe("E2E smoke test", () => {
 
     const runId = "550e8400-e29b-41d4-a716-446655440000";
     const taskId = await dispatchTask(
-      { type: "Http", args: { url: "https://example.com" } },
+      { type: "Desktop", args: { op: "screenshot" } },
       {
         tenantId: auth.tenantId,
         runId,
@@ -193,7 +193,7 @@ describe("E2E smoke test", () => {
               status: "approved",
               capability_allowlist: [
                 {
-                  id: "tyrum.http.request",
+                  id: "tyrum.desktop.screenshot",
                   version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
                 },
               ],

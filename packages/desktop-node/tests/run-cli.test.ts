@@ -2,6 +2,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
+import {
+  BROWSER_AUTOMATION_CAPABILITY_IDS,
+  CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+  FILESYSTEM_CAPABILITY_IDS,
+} from "@tyrum/schemas";
 
 const {
   clientCtorSpy,
@@ -12,7 +17,11 @@ const {
   loadOrCreateSpy,
   formatDeviceIdentityErrorSpy,
   providerCtorSpy,
+  filesystemProviderCtorSpy,
   backendCtorSpy,
+  playwrightProviderCtorSpy,
+  playwrightBackendCtorSpy,
+  playwrightBackendCloseSpy,
 } = vi.hoisted(() => ({
   clientCtorSpy: vi.fn(),
   clientConnectSpy: vi.fn(),
@@ -26,8 +35,16 @@ const {
   })),
   formatDeviceIdentityErrorSpy: vi.fn(() => "mock identity error"),
   providerCtorSpy: vi.fn(),
+  filesystemProviderCtorSpy: vi.fn(),
   backendCtorSpy: vi.fn(),
+  playwrightProviderCtorSpy: vi.fn(),
+  playwrightBackendCtorSpy: vi.fn(),
+  playwrightBackendCloseSpy: vi.fn(async () => {}),
 }));
+
+const FILESYSTEM_CAPABILITY_IDS_WITHOUT_BASH = FILESYSTEM_CAPABILITY_IDS.filter(
+  (id) => id !== "tyrum.fs.bash",
+);
 
 vi.mock("@tyrum/client/node", () => {
   class TyrumClient {
@@ -85,9 +102,32 @@ vi.mock("../src/providers/desktop-provider.js", () => ({
   },
 }));
 
+vi.mock("../src/providers/filesystem-provider.js", () => ({
+  FilesystemProvider: function FilesystemProvider(...args: unknown[]) {
+    filesystemProviderCtorSpy(...args);
+  },
+  resolveFilesystemCapabilityIds: ({ allowBash }: { allowBash?: boolean }) =>
+    allowBash ? FILESYSTEM_CAPABILITY_IDS : FILESYSTEM_CAPABILITY_IDS_WITHOUT_BASH,
+}));
+
+vi.mock("../src/providers/playwright-provider.js", () => ({
+  PlaywrightProvider: function PlaywrightProvider(...args: unknown[]) {
+    playwrightProviderCtorSpy(...args);
+  },
+}));
+
 vi.mock("../src/providers/backends/nutjs-desktop-backend.js", () => ({
   NutJsDesktopBackend: function NutJsDesktopBackend() {
     backendCtorSpy();
+  },
+}));
+
+vi.mock("../src/providers/backends/real-playwright-backend.js", () => ({
+  RealPlaywrightBackend: function RealPlaywrightBackend(...args: unknown[]) {
+    playwrightBackendCtorSpy(...args);
+    this.close = async () => {
+      await playwrightBackendCloseSpy();
+    };
   },
 }));
 
@@ -112,6 +152,12 @@ describe("runCli", () => {
     TYRUM_NODE_MODE: process.env["TYRUM_NODE_MODE"],
     TYRUM_TAKEOVER_URL: process.env["TYRUM_TAKEOVER_URL"],
     TYRUM_DESKTOP_SANDBOX_TAKEOVER_URL: process.env["TYRUM_DESKTOP_SANDBOX_TAKEOVER_URL"],
+    TYRUM_BROWSER_ENABLED: process.env["TYRUM_BROWSER_ENABLED"],
+    TYRUM_BROWSER_HEADLESS: process.env["TYRUM_BROWSER_HEADLESS"],
+    TYRUM_FS_SANDBOX_ROOT: process.env["TYRUM_FS_SANDBOX_ROOT"],
+    TYRUM_FS_BASH_ENABLED: process.env["TYRUM_FS_BASH_ENABLED"],
+    DISPLAY: process.env["DISPLAY"],
+    WAYLAND_DISPLAY: process.env["WAYLAND_DISPLAY"],
   };
 
   afterEach(() => {
@@ -252,6 +298,143 @@ describe("runCli", () => {
     } finally {
       await rm(tempHome, { recursive: true, force: true });
     }
+  });
+
+  it("registers filesystem capabilities when TYRUM_FS_SANDBOX_ROOT is set", async () => {
+    vi.resetModules();
+    process.env["TYRUM_GATEWAY_TOKEN"] = "test-token";
+    process.env["TYRUM_FS_SANDBOX_ROOT"] = "/sandbox/root";
+
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const { runCli } = await import("../src/cli/run-cli.js");
+    const code = await runWithSigterm(runCli([]));
+
+    expect(code).toBe(0);
+    expect(filesystemProviderCtorSpy).toHaveBeenCalledWith({
+      sandboxRoot: "/sandbox/root",
+      allowBash: false,
+    });
+
+    const opts = clientCtorSpy.mock.calls[0]?.[0] as {
+      advertisedCapabilities: Array<{ id: string; version: string }>;
+    };
+    expect(opts.advertisedCapabilities).toEqual(
+      expect.arrayContaining(
+        FILESYSTEM_CAPABILITY_IDS_WITHOUT_BASH.map((id) => ({
+          id,
+          version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+        })),
+      ),
+    );
+    expect(opts.advertisedCapabilities).not.toContainEqual({
+      id: "tyrum.fs.bash",
+      version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+    });
+
+    const providers = autoExecuteSpy.mock.calls[0]?.[1] as unknown[];
+    expect(providers).toHaveLength(2);
+  });
+
+  it("advertises filesystem bash only when TYRUM_FS_BASH_ENABLED is set", async () => {
+    vi.resetModules();
+    process.env["TYRUM_GATEWAY_TOKEN"] = "test-token";
+    process.env["TYRUM_FS_SANDBOX_ROOT"] = "/sandbox/root";
+    process.env["TYRUM_FS_BASH_ENABLED"] = "1";
+
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const { runCli } = await import("../src/cli/run-cli.js");
+    const code = await runWithSigterm(runCli([]));
+
+    expect(code).toBe(0);
+    expect(filesystemProviderCtorSpy).toHaveBeenCalledWith({
+      sandboxRoot: "/sandbox/root",
+      allowBash: true,
+    });
+
+    const opts = clientCtorSpy.mock.calls[0]?.[0] as {
+      advertisedCapabilities: Array<{ id: string; version: string }>;
+    };
+    expect(opts.advertisedCapabilities).toContainEqual({
+      id: "tyrum.fs.bash",
+      version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+    });
+  });
+
+  it("advertises browser capabilities from the schema list when browser mode is enabled", async () => {
+    vi.resetModules();
+    process.env["TYRUM_GATEWAY_TOKEN"] = "test-token";
+
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const { runCli } = await import("../src/cli/run-cli.js");
+    const code = await runWithSigterm(runCli(["--browser"]));
+
+    expect(code).toBe(0);
+    const opts = clientCtorSpy.mock.calls[0]?.[0] as {
+      advertisedCapabilities: Array<{ id: string; version: string }>;
+    };
+    expect(opts.advertisedCapabilities).toEqual(
+      expect.arrayContaining(
+        BROWSER_AUTOMATION_CAPABILITY_IDS.map((id) => ({
+          id,
+          version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+        })),
+      ),
+    );
+    expect(playwrightProviderCtorSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("enables browser mode from TYRUM_BROWSER_ENABLED", async () => {
+    vi.resetModules();
+    process.env["TYRUM_GATEWAY_TOKEN"] = "test-token";
+    process.env["TYRUM_BROWSER_ENABLED"] = "1";
+
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const { runCli } = await import("../src/cli/run-cli.js");
+    const code = await runWithSigterm(runCli([]));
+
+    expect(code).toBe(0);
+    expect(playwrightProviderCtorSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("treats Wayland as a display server for browser headless auto-detection", async () => {
+    vi.resetModules();
+    process.env["TYRUM_GATEWAY_TOKEN"] = "test-token";
+    delete process.env["TYRUM_BROWSER_HEADLESS"];
+    delete process.env["DISPLAY"];
+    process.env["WAYLAND_DISPLAY"] = "wayland-0";
+
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const { runCli } = await import("../src/cli/run-cli.js");
+    const code = await runWithSigterm(runCli(["--browser"]));
+
+    expect(code).toBe(0);
+    expect(playwrightBackendCtorSpy).toHaveBeenCalledWith({ headless: false });
+  });
+
+  it("closes the Playwright backend on shutdown when browser mode is enabled", async () => {
+    vi.resetModules();
+    process.env["TYRUM_GATEWAY_TOKEN"] = "test-token";
+
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const { runCli } = await import("../src/cli/run-cli.js");
+    const code = await runWithSigterm(runCli(["--browser", "--browser-headless"]));
+
+    expect(code).toBe(0);
+    expect(playwrightBackendCtorSpy).toHaveBeenCalledWith({ headless: true });
+    expect(playwrightProviderCtorSpy).toHaveBeenCalledTimes(1);
+    expect(playwrightBackendCloseSpy).toHaveBeenCalledTimes(1);
   });
 
   it("loads gateway token from env token path file", async () => {

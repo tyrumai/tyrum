@@ -106,7 +106,7 @@ describe("WebSocket upgrade", () => {
     client = new TyrumClient({
       url: `ws://127.0.0.1:${srv.port}/ws`,
       token: srv.adminToken,
-      capabilities: ["playwright", "http"],
+      capabilities: ["playwright", "desktop"],
       reconnect: false,
     });
 
@@ -124,11 +124,11 @@ describe("WebSocket upgrade", () => {
 
     const stats = srv.connectionManager.getStats();
     expect(stats.totalClients).toBe(1);
-    // "playwright" expands to all browser automation IDs; "http" migrates to tyrum.http.request
+    // "playwright" expands to all browser automation IDs; "desktop" expands to tyrum.desktop.* IDs
     for (const browserId of BROWSER_AUTOMATION_CAPABILITY_IDS) {
       expect(stats.capabilityCounts[browserId]).toBe(1);
     }
-    expect(stats.capabilityCounts["tyrum.http.request"]).toBe(1);
+    expect(stats.capabilityCounts["tyrum.desktop.mouse"]).toBe(1);
   });
 
   it("registers client capabilities correctly in ConnectionManager", async () => {
@@ -141,7 +141,7 @@ describe("WebSocket upgrade", () => {
     client = new TyrumClient({
       url: `ws://127.0.0.1:${srv.port}/ws`,
       token: srv.adminToken,
-      capabilities: ["cli"],
+      capabilities: ["desktop"],
       reconnect: false,
     });
 
@@ -154,10 +154,10 @@ describe("WebSocket upgrade", () => {
     await delay(50);
 
     // Verify capability-based lookup works (cli migrates to tyrum.cli.execute)
-    const cliClient = srv.connectionManager.getClientForCapability("tyrum.cli.execute");
+    const cliClient = srv.connectionManager.getClientForCapability("tyrum.desktop.screenshot");
     expect(cliClient).toBeDefined();
     expect(cliClient!.capabilities).toContainEqual({
-      id: "tyrum.cli.execute",
+      id: "tyrum.desktop.screenshot",
       version: "1.0.0",
     });
 
@@ -205,7 +205,7 @@ describe("WebSocket upgrade", () => {
     client = new TyrumClient({
       url: `ws://127.0.0.1:${srv.port}/ws`,
       token: srv.adminToken,
-      capabilities: ["http"],
+      capabilities: ["desktop"],
       reconnect: false,
     });
 

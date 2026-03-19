@@ -4,11 +4,6 @@ import {
   type Profile,
 } from "../../utils/permission-profile.js";
 
-export interface CliConfig {
-  allowedCommands: string[];
-  allowedWorkingDirs: string[];
-}
-
 export interface WebConfig {
   allowedDomains: string[];
   headless: boolean;
@@ -16,15 +11,12 @@ export interface WebConfig {
 
 export interface AllowlistDraftState {
   browserDomains: string;
-  cliCommands: string;
-  cliWorkingDirs: string;
 }
 
 export interface SecurityState {
   profile: Profile;
   overrides: Record<string, boolean>;
   capabilities: CapFlags;
-  cli: CliConfig;
   web: WebConfig;
 }
 
@@ -47,20 +39,7 @@ export interface MacPermissionSnapshot {
 export const DEFAULT_PROFILE: Profile = "balanced";
 // Preserve the historical restrictive fallback until the stored config provides capabilities.
 export const DEFAULT_CAPABILITIES = capabilitiesForProfile("safe");
-export const DEFAULT_CLI_CONFIG: CliConfig = { allowedCommands: [], allowedWorkingDirs: [] };
 export const DEFAULT_WEB_CONFIG: WebConfig = { allowedDomains: [], headless: true };
-
-export const SHELL_COMMAND_NOTES = [
-  "- Use one rule per line.",
-  "- `*` allows all commands.",
-  "- Subcommand rules are prefix matches. `git status` allows `git status -sb`, but not `git push`.",
-  "- A bare command such as `git` allows all its subcommands.",
-];
-
-export const SHELL_DIRECTORY_NOTES = [
-  "- Use one directory per line.",
-  "- `*` allows any working directory when the allowlist is active.",
-];
 
 export const BROWSER_DOMAIN_NOTES = [
   "- Use one domain per line.",
@@ -86,14 +65,12 @@ export function readSecurityState(config: unknown): SecurityState {
         )
       : {};
   const capabilities = parsed["capabilities"] as CapFlags | undefined;
-  const cli = parsed["cli"] as CliConfig | undefined;
   const web = parsed["web"] as WebConfig | undefined;
 
   return {
     profile,
     overrides,
     capabilities: capabilities ?? DEFAULT_CAPABILITIES,
-    cli: cli ? cloneCliConfig(cli) : cloneCliConfig(DEFAULT_CLI_CONFIG),
     web: web ? cloneWebConfig(web) : cloneWebConfig(DEFAULT_WEB_CONFIG),
   };
 }
@@ -204,13 +181,6 @@ export function cloneConnectionState(state: ConnectionState): ConnectionState {
   return { ...state };
 }
 
-export function cloneCliConfig(config: CliConfig): CliConfig {
-  return {
-    allowedCommands: [...config.allowedCommands],
-    allowedWorkingDirs: [...config.allowedWorkingDirs],
-  };
-}
-
 export function cloneWebConfig(config: WebConfig): WebConfig {
   return {
     allowedDomains: [...config.allowedDomains],
@@ -221,8 +191,6 @@ export function cloneWebConfig(config: WebConfig): WebConfig {
 export function createAllowlistDraftState(security: SecurityState): AllowlistDraftState {
   return {
     browserDomains: joinAllowlistLines(security.web.allowedDomains),
-    cliCommands: joinAllowlistLines(security.cli.allowedCommands),
-    cliWorkingDirs: joinAllowlistLines(security.cli.allowedWorkingDirs),
   };
 }
 

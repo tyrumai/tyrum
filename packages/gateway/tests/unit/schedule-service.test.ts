@@ -254,7 +254,7 @@ describe("ScheduleService", () => {
       cadence: { type: "interval", interval_ms: 60_000 },
       execution: {
         kind: "steps",
-        steps: [{ type: "CLI", args: { command: "echo hi" } }],
+        steps: [{ type: "Desktop", args: { op: "screenshot" } }],
       },
     });
 

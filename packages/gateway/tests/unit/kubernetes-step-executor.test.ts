@@ -101,7 +101,7 @@ describe("Kubernetes toolrunner step executor", () => {
     });
 
     const result = await executor.execute(
-      { type: "CLI", args: { cmd: "echo", args: ["hi"] } },
+      { type: "Desktop", args: { op: "screenshot" } },
       "plan-1",
       0,
       1_000,
@@ -143,7 +143,7 @@ describe("Kubernetes toolrunner step executor", () => {
     expect(payload["plan_id"]).toBe("plan-1");
     expect(payload["step_index"]).toBe(0);
     expect(payload["timeout_ms"]).toBe(1_000);
-    expect(payload["action"]).toEqual({ type: "CLI", args: { cmd: "echo", args: ["hi"] } });
+    expect(payload["action"]).toEqual({ type: "Desktop", args: { op: "screenshot" } });
 
     const podSpec = createdJobBody.spec.template.spec;
     expect(podSpec.volumes).toHaveLength(1);
@@ -191,7 +191,7 @@ describe("Kubernetes toolrunner step executor", () => {
     });
 
     const result = await executor.execute(
-      { type: "CLI", args: { cmd: "echo", args: ["hi"] } },
+      { type: "Desktop", args: { op: "screenshot" } },
       "plan-1",
       0,
       1_000,
@@ -238,7 +238,7 @@ describe("Kubernetes toolrunner step executor", () => {
     });
 
     const result = await executor.execute(
-      { type: "CLI", args: { cmd: "echo", args: ["hi"] } },
+      { type: "Desktop", args: { op: "screenshot" } },
       "plan-1",
       0,
       1_000,
@@ -291,7 +291,7 @@ describe("Kubernetes toolrunner step executor", () => {
     });
 
     const result = await executor.execute(
-      { type: "CLI", args: { cmd: "echo", args: ["hi"] } },
+      { type: "Desktop", args: { op: "screenshot" } },
       "plan-1",
       0,
       1_000,

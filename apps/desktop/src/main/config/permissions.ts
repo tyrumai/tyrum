@@ -6,10 +6,6 @@ export interface ResolvedPermissions {
   desktopInputRequiresConfirmation: boolean;
   playwright: boolean;
   playwrightDomainRestricted: boolean;
-  cli: boolean;
-  cliAllowlistEnforced: boolean;
-  http: boolean;
-  httpAllowlistEnforced: boolean;
 }
 
 const PROFILES: Record<PermissionProfile, ResolvedPermissions> = {
@@ -19,10 +15,6 @@ const PROFILES: Record<PermissionProfile, ResolvedPermissions> = {
     desktopInputRequiresConfirmation: true,
     playwright: false,
     playwrightDomainRestricted: true,
-    cli: false,
-    cliAllowlistEnforced: true,
-    http: false,
-    httpAllowlistEnforced: true,
   },
   balanced: {
     desktopScreenshot: true,
@@ -30,10 +22,6 @@ const PROFILES: Record<PermissionProfile, ResolvedPermissions> = {
     desktopInputRequiresConfirmation: true,
     playwright: true,
     playwrightDomainRestricted: true,
-    cli: true,
-    cliAllowlistEnforced: true,
-    http: true,
-    httpAllowlistEnforced: true,
   },
   poweruser: {
     desktopScreenshot: true,
@@ -41,10 +29,6 @@ const PROFILES: Record<PermissionProfile, ResolvedPermissions> = {
     desktopInputRequiresConfirmation: false,
     playwright: true,
     playwrightDomainRestricted: false,
-    cli: true,
-    cliAllowlistEnforced: false,
-    http: true,
-    httpAllowlistEnforced: false,
   },
 };
 

@@ -1,4 +1,4 @@
-import { Camera, Globe, Link2, MapPin, Mic, Monitor, Terminal } from "lucide-react";
+import { Camera, Globe, MapPin, Mic, Monitor } from "lucide-react";
 import type { CapabilityCatalogEntry } from "./node-config-page.types.js";
 
 /**
@@ -17,18 +17,6 @@ export const CAPABILITY_CATALOG: readonly CapabilityCatalogEntry[] = [
     label: "Browser Automation",
     description: "Automated browser navigation, interaction, and page inspection via Playwright.",
     icon: Globe,
-  },
-  {
-    key: "cli",
-    label: "Shell",
-    description: "Local command-line execution through the desktop node runtime.",
-    icon: Terminal,
-  },
-  {
-    key: "http",
-    label: "Web (HTTP)",
-    description: "Outbound HTTP access from the local node runtime.",
-    icon: Link2,
   },
   {
     key: "location",
@@ -82,20 +70,6 @@ export const TEST_ACTION_DEFINITIONS: Readonly<Record<string, readonly TestActio
       label: "Capture page snapshot",
       actionName: "snapshot",
       defaultInput: {},
-    },
-  ],
-  cli: [
-    {
-      label: "Run echo test",
-      actionName: "execute",
-      defaultInput: { command: "echo", args: ["hello from tyrum"] },
-    },
-  ],
-  http: [
-    {
-      label: "GET httpbin",
-      actionName: "fetch",
-      defaultInput: { url: "https://httpbin.org/get", method: "GET" },
     },
   ],
   location: [

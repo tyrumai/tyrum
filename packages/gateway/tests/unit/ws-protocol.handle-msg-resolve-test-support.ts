@@ -126,7 +126,7 @@ function registerApprovalListAndResolveTests(): void {
 
   it("rejects approval.list when peer role is node", async () => {
     const cm = new ConnectionManager();
-    const { id } = makeClient(cm, ["cli"], { role: "node" });
+    const { id } = makeClient(cm, ["desktop"], { role: "node" });
     const client = cm.getClient(id)!;
 
     const approvalDal = {

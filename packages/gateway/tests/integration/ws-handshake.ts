@@ -1,10 +1,6 @@
 import { createHash, generateKeyPairSync, sign, type KeyObject } from "node:crypto";
 import type { WebSocket } from "ws";
-import {
-  CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-  descriptorIdForClientCapability,
-  deviceIdFromSha256Digest,
-} from "@tyrum/schemas";
+import { capabilityDescriptorsForClientCapability, deviceIdFromSha256Digest } from "@tyrum/schemas";
 import { expect } from "vitest";
 
 function waitForJsonMessageMatching(
@@ -78,7 +74,7 @@ export async function completeHandshake(
   input: {
     requestIdPrefix: string;
     role: "client" | "node";
-    capabilities: Parameters<typeof descriptorIdForClientCapability>[0][];
+    capabilities: Parameters<typeof capabilityDescriptorsForClientCapability>[0][];
     label?: string;
     protocolRev?: number;
     identity?: HandshakeIdentity;
@@ -99,10 +95,9 @@ export async function completeHandshake(
           pubkey: identity.pubkey,
           label: input.label ?? "test",
         },
-        capabilities: input.capabilities.map((capability) => ({
-          id: descriptorIdForClientCapability(capability),
-          version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-        })),
+        capabilities: input.capabilities.flatMap((capability) =>
+          capabilityDescriptorsForClientCapability(capability),
+        ),
       },
     }),
   );

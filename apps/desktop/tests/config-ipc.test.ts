@@ -18,10 +18,6 @@ describe("filterMutableKeys", () => {
     "permissions.profile",
     "capabilities.desktop",
     "capabilities.playwright",
-    "capabilities.cli",
-    "capabilities.http",
-    "cli.allowedCommands",
-    "cli.allowedWorkingDirs",
     "web.allowedDomains",
     "web.headless",
     "permissions.overrides",
@@ -45,16 +41,6 @@ describe("filterMutableKeys", () => {
   it("allows permissions.profile", () => {
     const result = filterMutableKeys({ permissions: { profile: "poweruser" } }, ALLOWED);
     expect(result).toEqual({ permissions: { profile: "poweruser" } });
-  });
-
-  it("allows cli.allowedCommands", () => {
-    const result = filterMutableKeys({ cli: { allowedCommands: ["rm", "curl"] } }, ALLOWED);
-    expect(result).toEqual({ cli: { allowedCommands: ["rm", "curl"] } });
-  });
-
-  it("allows cli.allowedWorkingDirs", () => {
-    const result = filterMutableKeys({ cli: { allowedWorkingDirs: ["/"] } }, ALLOWED);
-    expect(result).toEqual({ cli: { allowedWorkingDirs: ["/"] } });
   });
 
   it("allows web.allowedDomains", () => {
@@ -119,8 +105,11 @@ describe("filterMutableKeys", () => {
   });
 
   it("treats arrays as leaf values (not recursed into)", () => {
-    const result = filterMutableKeys({ cli: { allowedCommands: ["git", "ls", "cat"] } }, ALLOWED);
-    expect(result).toEqual({ cli: { allowedCommands: ["git", "ls", "cat"] } });
+    const result = filterMutableKeys(
+      { web: { allowedDomains: ["example.com", "test.org"] } },
+      ALLOWED,
+    );
+    expect(result).toEqual({ web: { allowedDomains: ["example.com", "test.org"] } });
   });
 
   it("treats null as a leaf value", () => {

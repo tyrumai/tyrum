@@ -26,10 +26,10 @@ describe("WS envelopes", () => {
     const msg = WsConnectRequest.parse({
       request_id: "r-1",
       type: "connect",
-      payload: { capabilities: ["playwright", "http"] },
+      payload: { capabilities: ["playwright", "desktop"] },
     });
     expect(msg.type).toBe("connect");
-    expect(msg.payload.capabilities).toEqual(["playwright", "http"]);
+    expect(msg.payload.capabilities).toEqual(["playwright", "desktop"]);
   });
 
   it("rejects connect request missing payload", () => {
@@ -311,8 +311,8 @@ describe("requiredCapability", () => {
     expect(requiredCapability("Browser")).toBe("browser");
   });
 
-  it("maps Http to http", () => {
-    expect(requiredCapability("Http")).toBe("http");
+  it("maps Http to undefined (no longer a node capability)", () => {
+    expect(requiredCapability("Http")).toBeUndefined();
   });
 
   it("maps Desktop to desktop", () => {
@@ -389,12 +389,40 @@ describe("requiredCapabilityDescriptor", () => {
       "tyrum.browser.screenshot",
     );
     expect(requiredCapabilityDescriptor("Web", { op: "evaluate" })).toBe("tyrum.browser.evaluate");
+    expect(requiredCapabilityDescriptor("Web", { op: "launch" })).toBe("tyrum.browser.launch");
+    expect(requiredCapabilityDescriptor("Web")).toBeUndefined();
     expect(requiredCapabilityDescriptor("Web", { op: "unknown" })).toBeUndefined();
   });
 
-  it("maps CLI and Http to canonical descriptors", () => {
-    expect(requiredCapabilityDescriptor("Http", { op: "anything" })).toBe("tyrum.http.request");
-    expect(requiredCapabilityDescriptor("CLI", { op: "anything" })).toBe("tyrum.cli.execute");
+  it("maps Filesystem ops to canonical filesystem descriptors", () => {
+    expect(requiredCapabilityDescriptor("Filesystem", { op: "read" })).toBe("tyrum.fs.read");
+    expect(requiredCapabilityDescriptor("Filesystem", { op: "write" })).toBe("tyrum.fs.write");
+    expect(requiredCapabilityDescriptor("Filesystem", { op: "edit" })).toBe("tyrum.fs.edit");
+    expect(requiredCapabilityDescriptor("Filesystem", { op: "apply_patch" })).toBe(
+      "tyrum.fs.apply-patch",
+    );
+    expect(requiredCapabilityDescriptor("Filesystem", { op: "bash" })).toBe("tyrum.fs.bash");
+    expect(requiredCapabilityDescriptor("Filesystem", { op: "glob" })).toBe("tyrum.fs.glob");
+    expect(requiredCapabilityDescriptor("Filesystem", { op: "grep" })).toBe("tyrum.fs.grep");
+    expect(requiredCapabilityDescriptor("Filesystem")).toBeUndefined();
+    expect(requiredCapabilityDescriptor("Filesystem", { op: "unknown" })).toBeUndefined();
+  });
+
+  it("maps sensor capture_video op to canonical descriptor", () => {
+    expect(requiredCapabilityDescriptor("Browser", { op: "capture_video" })).toBe(
+      "tyrum.camera.capture-video",
+    );
+    expect(requiredCapabilityDescriptor("IOS", { op: "capture_video" })).toBe(
+      "tyrum.camera.capture-video",
+    );
+    expect(requiredCapabilityDescriptor("Android", { op: "capture_video" })).toBe(
+      "tyrum.camera.capture-video",
+    );
+  });
+
+  it("maps CLI and Http to undefined (no longer node capabilities)", () => {
+    expect(requiredCapabilityDescriptor("Http", { op: "anything" })).toBeUndefined();
+    expect(requiredCapabilityDescriptor("CLI", { op: "anything" })).toBeUndefined();
     expect(requiredCapabilityDescriptor("Research", { op: "anything" })).toBeUndefined();
     expect(
       requiredCapabilityDescriptorForAction({

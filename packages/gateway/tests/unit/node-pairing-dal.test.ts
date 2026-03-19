@@ -23,7 +23,7 @@ describe("NodePairingDal.upsertOnConnect", () => {
 
     const nodeId = "node-1";
     const cliDescriptor = {
-      id: "tyrum.cli.execute",
+      id: "tyrum.desktop.screenshot",
       version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
     };
 
@@ -32,7 +32,7 @@ describe("NodePairingDal.upsertOnConnect", () => {
       nodeId,
       pubkey: "pubkey-1",
       label: "node-1",
-      capabilities: ["cli"],
+      capabilities: ["desktop"],
       motivation: "Human review is required before this node can be paired.",
       initialStatus: "awaiting_human",
       nowIso: "2026-02-23T00:00:00.000Z",
@@ -70,7 +70,7 @@ describe("NodePairingDal.upsertOnConnect", () => {
       nodeId,
       pubkey: "pubkey-1",
       label: "node-1",
-      capabilities: ["cli"],
+      capabilities: ["desktop"],
       nowIso: "2026-02-23T00:00:03.000Z",
     });
     expect(reopened.status).toBe("queued");
@@ -84,7 +84,7 @@ describe("NodePairingDal.upsertOnConnect", () => {
 
     const nodeId = "node-2";
     const cliDescriptor = {
-      id: "tyrum.cli.execute",
+      id: "tyrum.desktop.screenshot",
       version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
     };
 
@@ -93,7 +93,7 @@ describe("NodePairingDal.upsertOnConnect", () => {
       nodeId,
       pubkey: "pubkey-2",
       label: "node-2",
-      capabilities: ["cli"],
+      capabilities: ["desktop"],
       motivation: "Human review is required before this node can be paired.",
       initialStatus: "awaiting_human",
       nowIso: "2026-02-23T00:00:00.000Z",
@@ -113,7 +113,7 @@ describe("NodePairingDal.upsertOnConnect", () => {
       nodeId,
       pubkey: "pubkey-2",
       label: "node-2",
-      capabilities: ["cli"],
+      capabilities: ["desktop"],
       nowIso: "2026-02-23T00:00:02.000Z",
     });
     expect(reopened.status).toBe("queued");
@@ -131,7 +131,7 @@ describe("NodePairingDal.upsertOnConnect", () => {
       nodeId,
       pubkey: "pubkey-3",
       label: "node-3",
-      capabilities: ["cli"],
+      capabilities: ["desktop"],
       motivation: "Human review is required before this node can be paired.",
       initialStatus: "awaiting_human",
       nowIso: "2026-02-23T00:00:00.000Z",
@@ -168,7 +168,7 @@ describe("NodePairingDal.upsertOnConnect", () => {
       nodeId: "node-queued",
       pubkey: "pubkey-queued",
       label: "node-queued",
-      capabilities: ["cli"],
+      capabilities: ["desktop"],
       nowIso: "2026-02-23T00:00:00.000Z",
     });
     expect(pending.status).toBe("queued");
@@ -196,7 +196,7 @@ describe("NodePairingDal.upsertOnConnect", () => {
       dal.upsertOnConnect({
         tenantId: "   ",
         nodeId: "node-missing-tenant",
-        capabilities: ["cli"],
+        capabilities: ["desktop"],
       }),
     ).rejects.toThrow("tenantId is required");
   });
@@ -215,7 +215,7 @@ describe("NodePairingDal.upsertOnConnect", () => {
       nodeId: "node-shared",
       pubkey: "pubkey-primary",
       label: "primary",
-      capabilities: ["cli"],
+      capabilities: ["desktop"],
       nowIso: "2026-02-23T00:00:00.000Z",
     });
     const secondary = await dal.upsertOnConnect({
@@ -223,7 +223,7 @@ describe("NodePairingDal.upsertOnConnect", () => {
       nodeId: "node-shared",
       pubkey: "pubkey-secondary",
       label: "secondary",
-      capabilities: ["cli"],
+      capabilities: ["desktop"],
       nowIso: "2026-02-23T00:00:01.000Z",
     });
 
@@ -249,7 +249,7 @@ describe("NodePairingDal.upsertOnConnect", () => {
       label: "legacy",
       capabilities: [
         {
-          id: "tyrum.cli.execute",
+          id: "tyrum.desktop.screenshot",
           version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
         },
       ],
@@ -265,7 +265,7 @@ describe("NodePairingDal.upsertOnConnect", () => {
         JSON.stringify([
           "desktop",
           {
-            id: "tyrum.cli",
+            id: "tyrum.playwright",
             version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
           },
           "not-a-capability",
@@ -280,7 +280,7 @@ describe("NodePairingDal.upsertOnConnect", () => {
     expect(pairing!.node.capabilities.map((capability) => capability.id).toSorted()).toEqual(
       [
         ...descriptorIdsForClientCapability("desktop"),
-        ...migrateCapabilityDescriptorId("tyrum.cli"),
+        ...migrateCapabilityDescriptorId("tyrum.playwright"),
       ].toSorted(),
     );
   });

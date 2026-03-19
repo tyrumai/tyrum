@@ -80,7 +80,7 @@ describe("WS SDK conformance (client <-> gateway)", () => {
     client = new TyrumClient({
       url: gw.wsUrl,
       token: "invalid-token-that-should-fail",
-      capabilities: ["http"],
+      capabilities: ["desktop"],
       reconnect: false,
       role: "client",
       protocolRev: 2,
@@ -112,7 +112,7 @@ describe("WS SDK conformance (client <-> gateway)", () => {
     expect(clients.length).toBe(1);
     const registered = clients[0];
     expect(registered.protocol_rev).toBe(2);
-    expect(capabilityIds(registered!.capabilities)).toContain("tyrum.http.request");
+    expect(capabilityIds(registered!.capabilities)).toContain("tyrum.desktop.screenshot");
     expect(registered.role).toBe("client");
     expect(registered.device_id).toBeTruthy();
   });
@@ -164,7 +164,7 @@ describe("WS SDK conformance (client <-> gateway)", () => {
             status: "approved",
             capability_allowlist: [
               {
-                id: "tyrum.http.request",
+                id: "tyrum.desktop.screenshot",
                 version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
               },
             ],
@@ -176,7 +176,7 @@ describe("WS SDK conformance (client <-> gateway)", () => {
     }));
 
     const result = createConnectedClient(gw, {
-      capabilities: ["http"],
+      capabilities: ["desktop"],
       role: "node",
     });
     client = result.client;
@@ -187,7 +187,7 @@ describe("WS SDK conformance (client <-> gateway)", () => {
 
     // Gateway dispatches a task to the connected node
     const taskId = await gw.dispatchTask(
-      { type: "Http", args: { url: "https://example.com" } },
+      { type: "Desktop", args: { op: "screenshot" } },
       {
         tenantId: gw.tenantId,
         runId: "550e8400-e29b-41d4-a716-446655440000",
@@ -217,7 +217,7 @@ describe("WS SDK conformance (client <-> gateway)", () => {
 
   it("registers multiple capabilities and gateway can observe them", async () => {
     gw = await startGateway();
-    const result = createConnectedClient(gw, { capabilities: ["http", "playwright"] });
+    const result = createConnectedClient(gw, { capabilities: ["desktop", "playwright"] });
     client = result.client;
 
     await withTimeout(result.connectedP, TIMEOUT, "connected");
@@ -225,10 +225,10 @@ describe("WS SDK conformance (client <-> gateway)", () => {
     const clients = [...gw.connectionManager.allClients()];
     expect(clients.length).toBe(1);
     const registered = clients[0];
-    // After normalization, "http" → "tyrum.http.request",
+    // After normalization, "desktop" → all tyrum.desktop.* IDs,
     // "playwright" → all tyrum.browser.* IDs.
     const capIds = capabilityIds(registered!.capabilities);
-    expect(capIds).toContain("tyrum.http.request");
+    expect(capIds).toContain("tyrum.desktop.screenshot");
     for (const browserId of BROWSER_AUTOMATION_CAPABILITY_IDS) {
       expect(capIds).toContain(browserId);
     }
@@ -263,7 +263,7 @@ describe("WS SDK conformance (client <-> gateway)", () => {
   it("supports multiple concurrent client connections", async () => {
     gw = await startGateway();
 
-    const c1 = createConnectedClient(gw, { capabilities: ["http"] });
+    const c1 = createConnectedClient(gw, { capabilities: ["desktop"] });
     const c2 = createConnectedClient(gw, { capabilities: ["playwright"] });
     extraClients.push(c1.client, c2.client);
 
@@ -274,7 +274,7 @@ describe("WS SDK conformance (client <-> gateway)", () => {
     expect(clients.length).toBe(2);
 
     const caps = clients.flatMap((c) => capabilityIds(c.capabilities));
-    expect(caps).toContain("tyrum.http.request");
+    expect(caps).toContain("tyrum.desktop.screenshot");
     expect(caps).toContain(BROWSER_AUTOMATION_CAPABILITY_IDS[0]);
   });
 });

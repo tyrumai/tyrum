@@ -1,7 +1,4 @@
-import type {
-  PageSnapshot,
-  PlaywrightBackend,
-} from "../../src/main/providers/backends/playwright-backend.js";
+import type { PageSnapshot, PlaywrightBackend } from "@tyrum/desktop-node";
 
 export class MockPlaywrightBackend implements PlaywrightBackend {
   readonly calls: Array<{ method: string; args: unknown[] }> = [];
@@ -131,5 +128,10 @@ export class MockPlaywrightBackend implements PlaywrightBackend {
   async runCode(code: string): Promise<unknown> {
     this.calls.push({ method: "runCode", args: [code] });
     return null;
+  }
+
+  async launch(options?: { headless?: boolean }): Promise<{ headless: boolean; browser: string }> {
+    this.calls.push({ method: "launch", args: [options] });
+    return { headless: options?.headless ?? true, browser: "chromium" };
   }
 }

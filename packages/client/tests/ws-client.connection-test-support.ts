@@ -27,7 +27,7 @@ function registerConnectionHandshakeTests(fixture: ConnectionFixture): void {
     const client = new TyrumClient({
       url: server.url,
       token: "test-token",
-      capabilities: ["playwright", "http"],
+      capabilities: ["playwright", "desktop"],
     });
     fixture.setClient(client);
 
@@ -48,14 +48,13 @@ function registerConnectionHandshakeTests(fixture: ConnectionFixture): void {
     );
 
     // After normalization, "playwright" expands to all tyrum.browser.* IDs
-    // and "http" migrates to "tyrum.http.request".
+    // and "desktop" expands to all tyrum.desktop.* IDs.
     const capabilities = payload["capabilities"] as Array<{ id: string; version: string }>;
     const capIds = capabilities.map((c) => c.id);
     for (const browserId of BROWSER_AUTOMATION_CAPABILITY_IDS) {
       expect(capIds).toContain(browserId);
     }
-    expect(capIds).toContain("tyrum.http.request");
-    expect(capabilities.length).toBe(BROWSER_AUTOMATION_CAPABILITY_IDS.length + 1);
+    expect(capIds).toContain("tyrum.desktop.screenshot");
   });
 
   it("reuses one auto-generated device identity across concurrent resolution", async () => {
@@ -283,7 +282,7 @@ function registerConnectionProtocolErrorTests(fixture: ConnectionFixture): void 
     const client = new TyrumClient({
       url: server.url,
       token: "t",
-      capabilities: ["cli", "http"],
+      capabilities: ["desktop", "playwright"],
       reconnect: false,
       role: "node",
       device: { publicKey: "AQID", privateKey: "BAUG" },
@@ -296,17 +295,40 @@ function registerConnectionProtocolErrorTests(fixture: ConnectionFixture): void 
     expect(init["type"]).toBe("connect.init");
 
     const payload = init["payload"] as Record<string, unknown>;
-    // After normalization, "cli" → "tyrum.cli.execute", "http" → "tyrum.http.request"
-    expect(payload["capabilities"]).toEqual([
-      {
-        id: "tyrum.cli.execute",
-        version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-      },
-      {
-        id: "tyrum.http.request",
-        version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-      },
-    ]);
+    // After normalization, "desktop" expands to tyrum.desktop.* IDs,
+    // "playwright" expands to tyrum.browser.* IDs via legacy migration
+    const capabilities = payload["capabilities"] as Array<{ id: string; version: string }>;
+    const capIds = capabilities.map((c) => c.id);
+    expect(capIds).toContain("tyrum.desktop.screenshot");
+    expect(capIds).toContain("tyrum.desktop.mouse");
+  });
+
+  it("uses advertisedCapabilities for connect.init when provided", async () => {
+    const server = createTestServer();
+    fixture.setServer(server);
+    const client = new TyrumClient({
+      url: server.url,
+      token: "t",
+      capabilities: ["desktop"],
+      advertisedCapabilities: [
+        { id: "tyrum.desktop.screenshot", version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION },
+        { id: "tyrum.fs.read", version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION },
+      ],
+      reconnect: false,
+      role: "node",
+      device: { publicKey: "AQID", privateKey: "BAUG" },
+    });
+    fixture.setClient(client);
+
+    client.connect();
+    const ws = await server.waitForClient();
+    const init = (await waitForMessage(ws)) as Record<string, unknown>;
+    expect(init["type"]).toBe("connect.init");
+
+    const payload = init["payload"] as Record<string, unknown>;
+    const capabilities = payload["capabilities"] as Array<{ id: string; version: string }>;
+    const capIds = capabilities.map((c) => c.id);
+    expect(capIds).toEqual(["tyrum.desktop.screenshot", "tyrum.fs.read"]);
   });
 }
 

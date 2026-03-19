@@ -16,7 +16,7 @@ describe("/presence", () => {
       ip: "127.0.0.1",
       version: "0.0.0-test",
       mode: "cli",
-      metadata: { capabilities: ["cli"], edge_id: "test-instance" },
+      metadata: { capabilities: ["desktop"], edge_id: "test-instance" },
       nowMs,
       ttlMs: 30_000,
     });

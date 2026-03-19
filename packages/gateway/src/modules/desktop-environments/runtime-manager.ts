@@ -3,7 +3,7 @@ import { join } from "node:path";
 import type { AuthTokenService } from "../auth/auth-token-service.js";
 import { isPairingBlockedStatus, type NodePairingDal } from "../node/pairing-dal.js";
 import type { Logger } from "../observability/logger.js";
-import { DESKTOP_CAPABILITY_ALLOWLIST } from "./allowlist.js";
+import { SANDBOX_CAPABILITY_ALLOWLIST } from "./allowlist.js";
 import { DesktopEnvironmentDal, type DesktopEnvironment } from "./dal.js";
 import { loadOrCreateDesktopEnvironmentIdentity } from "./device-identity.js";
 import {
@@ -189,6 +189,12 @@ export class DesktopEnvironmentRuntimeManager {
         `TYRUM_NODE_LABEL=${environment.label ?? `desktop-environment:${environment.environment_id}`}`,
         "--env",
         "TYRUM_NODE_MODE=desktop-sandbox",
+        "--env",
+        "TYRUM_BROWSER_ENABLED=1",
+        "--env",
+        `TYRUM_FS_SANDBOX_ROOT=${CONTAINER_NODE_HOME}`,
+        "--env",
+        "TYRUM_FS_BASH_ENABLED=1",
       );
       if (this.options.tlsSelfSigned && this.options.tlsFingerprint256) {
         runArgs.push(
@@ -319,7 +325,7 @@ export class DesktopEnvironmentRuntimeManager {
       pairingId: pairing.pairing_id,
       decision: "approved",
       trustLevel: "local",
-      capabilityAllowlist: DESKTOP_CAPABILITY_ALLOWLIST,
+      capabilityAllowlist: SANDBOX_CAPABILITY_ALLOWLIST,
       reason: "gateway-managed desktop environment",
       resolvedBy: { kind: "desktop_environment_runtime", host_id: this.options.hostId },
       allowedCurrentStatuses: ["queued", "reviewing", "awaiting_human"],

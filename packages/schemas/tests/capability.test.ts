@@ -3,6 +3,7 @@ import { CapabilityKind } from "../src/index.js";
 import {
   CANONICAL_CAPABILITY_IDS,
   BROWSER_AUTOMATION_CAPABILITY_IDS,
+  FILESYSTEM_CAPABILITY_IDS,
   LEGACY_ID_MIGRATION_MAP,
   isLegacyCapabilityDescriptorId,
   migrateCapabilityDescriptorId,
@@ -58,20 +59,14 @@ describe("CapabilityDescriptor", () => {
 describe("descriptor legacy mappings", () => {
   it("exports CapabilityKind as the legacy compatibility alias", () => {
     expect(CapabilityKind).toBe(ClientCapability);
-    expect(CapabilityKind.parse("http")).toBe("http");
+    expect(CapabilityKind.parse("desktop")).toBe("desktop");
   });
 
   it("maps core client capability to namespaced ID", () => {
-    expect(descriptorIdForClientCapability("cli")).toBe("tyrum.cli");
+    expect(descriptorIdForClientCapability("playwright")).toBe("tyrum.playwright");
   });
 
   it("builds capability descriptors with default and explicit versions", () => {
-    expect(capabilityDescriptorsForClientCapability("http")).toEqual([
-      {
-        id: "tyrum.http",
-        version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-      },
-    ]);
     expect(capabilityDescriptorsForClientCapability("desktop", "2.1.0")).toEqual([
       { id: "tyrum.desktop.screenshot", version: "2.1.0" },
       { id: "tyrum.desktop.snapshot", version: "2.1.0" },
@@ -96,7 +91,7 @@ describe("descriptor legacy mappings", () => {
   });
 
   it("maps namespaced core descriptor ID back to client capability", () => {
-    expect(clientCapabilityFromDescriptorId("tyrum.http")).toBe("http");
+    expect(clientCapabilityFromDescriptorId("tyrum.desktop.screenshot")).toBe("desktop");
   });
 
   it("maps exact browser descriptor IDs back to client capability", () => {
@@ -116,9 +111,6 @@ describe("descriptor legacy mappings", () => {
       "tyrum.camera.capture-photo",
       "tyrum.audio.record",
     ]);
-    // Legacy monolithic IDs migrate to canonical form
-    expect(expandCapabilityDescriptorId("tyrum.http")).toEqual(["tyrum.http.request"]);
-    expect(expandCapabilityDescriptorId("tyrum.cli")).toEqual(["tyrum.cli.execute"]);
     // Already-canonical IDs pass through unchanged
     expect(expandCapabilityDescriptorId("tyrum.desktop.screenshot")).toEqual([
       "tyrum.desktop.screenshot",
@@ -164,8 +156,7 @@ describe("canonical capability IDs", () => {
     expect(types).toContain("location");
     expect(types).toContain("desktop");
     expect(types).toContain("browser");
-    expect(types).toContain("cli");
-    expect(types).toContain("http");
+    expect(types).toContain("fs");
   });
 
   it("browser automation IDs are a subset of canonical IDs", () => {
@@ -175,8 +166,13 @@ describe("canonical capability IDs", () => {
     }
   });
 
-  it("has 21 browser automation capabilities", () => {
-    expect(BROWSER_AUTOMATION_CAPABILITY_IDS).toHaveLength(21);
+  it("has 22 browser automation capabilities", () => {
+    expect(BROWSER_AUTOMATION_CAPABILITY_IDS).toHaveLength(22);
+  });
+
+  it("exports frozen derived capability arrays", () => {
+    expect(Object.isFrozen(BROWSER_AUTOMATION_CAPABILITY_IDS)).toBe(true);
+    expect(Object.isFrozen(FILESYSTEM_CAPABILITY_IDS)).toBe(true);
   });
 });
 
@@ -186,8 +182,8 @@ describe("legacy ID migration", () => {
     expect(isLegacyCapabilityDescriptorId("tyrum.android.location.get-current")).toBe(true);
     expect(isLegacyCapabilityDescriptorId("tyrum.browser.geolocation.get")).toBe(true);
     expect(isLegacyCapabilityDescriptorId("tyrum.playwright")).toBe(true);
-    expect(isLegacyCapabilityDescriptorId("tyrum.cli")).toBe(true);
-    expect(isLegacyCapabilityDescriptorId("tyrum.http")).toBe(true);
+    expect(isLegacyCapabilityDescriptorId("tyrum.cli")).toBe(false);
+    expect(isLegacyCapabilityDescriptorId("tyrum.http")).toBe(false);
   });
 
   it("does not flag canonical IDs as legacy", () => {
@@ -195,6 +191,7 @@ describe("legacy ID migration", () => {
     expect(isLegacyCapabilityDescriptorId("tyrum.desktop.screenshot")).toBe(false);
     expect(isLegacyCapabilityDescriptorId("tyrum.browser.navigate")).toBe(false);
     expect(isLegacyCapabilityDescriptorId("tyrum.cli.execute")).toBe(false);
+    expect(isLegacyCapabilityDescriptorId("tyrum.http.request")).toBe(false);
   });
 
   it("migrates platform-specific sensor IDs to canonical cross-platform IDs", () => {
@@ -214,9 +211,9 @@ describe("legacy ID migration", () => {
     expect(migrated).toEqual(BROWSER_AUTOMATION_CAPABILITY_IDS);
   });
 
-  it("migrates monolithic CLI/HTTP to explicit action IDs", () => {
-    expect(migrateCapabilityDescriptorId("tyrum.cli")).toEqual(["tyrum.cli.execute"]);
-    expect(migrateCapabilityDescriptorId("tyrum.http")).toEqual(["tyrum.http.request"]);
+  it("passes through CLI/HTTP IDs unchanged (no longer in migration map)", () => {
+    expect(migrateCapabilityDescriptorId("tyrum.cli")).toEqual(["tyrum.cli"]);
+    expect(migrateCapabilityDescriptorId("tyrum.http")).toEqual(["tyrum.http"]);
   });
 
   it("passes through already-canonical IDs unchanged", () => {

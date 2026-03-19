@@ -45,4 +45,5 @@ export interface PlaywrightBackend {
     promptText?: string,
   ): Promise<{ dialogType?: string; message?: string }>;
   runCode(code: string): Promise<unknown>;
+  launch(options?: { headless?: boolean }): Promise<{ headless: boolean; browser: string }>;
 }

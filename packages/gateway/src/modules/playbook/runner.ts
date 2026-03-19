@@ -110,43 +110,10 @@ function stepToPrimitive(playbookId: string, step: PlaybookStep, _index: number)
   const { ns, rest } = splitNamespace(step.command);
   const idempotency_key = `playbook:${playbookId}:${step.id}`;
 
-  if (ns === "http") {
-    const parts = tokenizeArgs(rest).map(unquote).filter(Boolean);
-    const maybeMethod = parts[0]?.toUpperCase();
-    const isMethod =
-      maybeMethod !== undefined &&
-      ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"].includes(maybeMethod);
-    const method = isMethod ? maybeMethod : "GET";
-    const url = isMethod ? parts[1] : parts[0];
-    if (!url) throw new PlaybookCompileError("http command requires a URL");
-    return {
-      type: "Http",
-      args: withPlaybookMeta(
-        {
-          method: method ?? "GET",
-          url,
-        },
-        playbookId,
-        step,
-      ),
-      postcondition: step.postcondition,
-      idempotency_key,
-    };
-  }
-
-  if (ns === "cli") {
-    const parts = tokenizeArgs(rest).map(unquote).filter(Boolean);
-    const cmd = parts[0];
-    const cmdArgs = parts.slice(1);
-    if (!cmd) {
-      throw new PlaybookCompileError("cli command requires at least one token");
-    }
-    return {
-      type: "CLI",
-      args: withPlaybookMeta({ cmd, args: cmdArgs }, playbookId, step),
-      postcondition: step.postcondition,
-      idempotency_key,
-    };
+  if (ns === "http" || ns === "cli") {
+    throw new PlaybookCompileError(
+      `The '${ns}' playbook command namespace has been removed. Use 'node' dispatch instead.`,
+    );
   }
 
   if (ns === "web") {

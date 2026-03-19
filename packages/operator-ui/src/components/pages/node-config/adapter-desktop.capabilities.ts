@@ -7,8 +7,6 @@ import {
   BROWSER_DOMAIN_NOTES,
   type MacPermissionSnapshot,
   type SecurityState,
-  SHELL_COMMAND_NOTES,
-  SHELL_DIRECTORY_NOTES,
   describeMacPermissionSummary,
   splitAllowlistLines,
 } from "../node-configure-page.shared.js";
@@ -32,8 +30,6 @@ import type {
 
 export interface AllowlistDrafts {
   browserDomains: string;
-  cliCommands: string;
-  cliWorkingDirs: string;
 }
 
 // ─── Input parameters ───────────────────────────────────────────────────────
@@ -49,8 +45,6 @@ export interface UseDesktopCapabilitiesInput {
   setCapability: (key: keyof CapFlags, enabled: boolean) => void;
   setBrowserHeadless: (headless: boolean) => void;
   updateBrowserDomains: (value: string) => void;
-  updateCliCommands: (value: string) => void;
-  updateCliWorkingDirs: (value: string) => void;
 }
 
 export type DesktopTestDispatch = (
@@ -74,8 +68,6 @@ export function useDesktopCapabilities(input: UseDesktopCapabilitiesInput): Norm
     setCapability,
     setBrowserHeadless,
     updateBrowserDomains,
-    updateCliCommands,
-    updateCliWorkingDirs,
   } = input;
 
   // ── macOS permissions state ─────────────────────────────────────────────
@@ -168,8 +160,6 @@ export function useDesktopCapabilities(input: UseDesktopCapabilitiesInput): Norm
   return useMemo<NormalizedCapability[]>(() => {
     const desktopCatalog = getCatalogEntry("desktop");
     const playwrightCatalog = getCatalogEntry("playwright");
-    const cliCatalog = getCatalogEntry("cli");
-    const httpCatalog = getCatalogEntry("http");
 
     // 1. Desktop Automation
     const desktopEnabled = security.capabilities.desktop;
@@ -272,83 +262,7 @@ export function useDesktopCapabilities(input: UseDesktopCapabilitiesInput): Norm
       testActions: buildTestActions("playwright"),
     };
 
-    // 3. CLI (Shell)
-    const cliEnabled = security.capabilities.cli;
-    const cliAllowlistActive = cliEnabled;
-    const cliCommandsEmpty = splitAllowlistLines(allowlistDrafts.cliCommands).length === 0;
-    const cliWorkingDirsEmpty = splitAllowlistLines(allowlistDrafts.cliWorkingDirs).length === 0;
-
-    const cliAllowlists: CapabilityAllowlist[] = [
-      {
-        key: "cliCommands",
-        label: "Allowed commands",
-        active: cliAllowlistActive,
-        value: allowlistDrafts.cliCommands,
-        placeholder: "git status",
-        notes: SHELL_COMMAND_NOTES,
-        warningTitle: "No commands configured",
-        warningDescription:
-          "The command allowlist is active but no commands are configured. All commands will be blocked.",
-        showWarning: cliAllowlistActive && cliCommandsEmpty,
-        saveStatus,
-        saveError,
-        onChange: updateCliCommands,
-      },
-      {
-        key: "cliWorkingDirs",
-        label: "Allowed working directories",
-        active: cliAllowlistActive,
-        value: allowlistDrafts.cliWorkingDirs,
-        placeholder: "/home/user/projects",
-        notes: SHELL_DIRECTORY_NOTES,
-        warningTitle: "No directories configured",
-        warningDescription:
-          "The directory allowlist is active but no directories are configured. All working directories will be blocked.",
-        showWarning: cliAllowlistActive && cliWorkingDirsEmpty,
-        saveStatus,
-        saveError,
-        onChange: updateCliWorkingDirs,
-      },
-    ];
-
-    const cliCapability: NormalizedCapability = {
-      key: "cli",
-      label: cliCatalog?.label ?? "Shell",
-      description: cliCatalog?.description ?? "",
-      icon: cliCatalog!.icon,
-      enabled: cliEnabled,
-      onToggle: (enabled) => setCapability("cli", enabled),
-      statusSummary: cliEnabled
-        ? `enabled${cliAllowlistActive ? " \u00b7 allowlist active" : ""}`
-        : "disabled",
-      saveStatus,
-      saveError,
-      actions: [],
-      allowlists: cliAllowlists,
-      toggles: [],
-      testActions: buildTestActions("cli"),
-    };
-
-    // 4. HTTP (Web)
-    const httpEnabled = security.capabilities.http;
-
-    const httpCapability: NormalizedCapability = {
-      key: "http",
-      label: httpCatalog?.label ?? "Web (HTTP)",
-      description: httpCatalog?.description ?? "",
-      icon: httpCatalog!.icon,
-      enabled: httpEnabled,
-      onToggle: (enabled) => setCapability("http", enabled),
-      statusSummary: httpEnabled ? "enabled" : "disabled",
-      saveStatus,
-      saveError,
-      actions: [],
-      allowlists: [],
-      toggles: [],
-      testActions: buildTestActions("http"),
-    };
-
-    return [desktopCapability, playwrightCapability, cliCapability, httpCapability];
+    return [desktopCapability, playwrightCapability];
   }, [
     allowlistDrafts,
     api.checkMacPermissions,
@@ -365,7 +279,5 @@ export function useDesktopCapabilities(input: UseDesktopCapabilitiesInput): Norm
     setCapability,
     setBrowserHeadless,
     updateBrowserDomains,
-    updateCliCommands,
-    updateCliWorkingDirs,
   ]);
 }

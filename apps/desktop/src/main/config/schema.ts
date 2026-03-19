@@ -73,16 +73,8 @@ export const DesktopNodeConfig = z.object({
     .object({
       desktop: z.boolean().default(true),
       playwright: z.boolean().default(false),
-      cli: z.boolean().default(false),
-      http: z.boolean().default(false),
     })
-    .default({ desktop: true, playwright: false, cli: false, http: false }),
-  cli: z
-    .object({
-      allowedCommands: z.array(z.string()).default([]),
-      allowedWorkingDirs: z.array(z.string()).default([]),
-    })
-    .default({ allowedCommands: [], allowedWorkingDirs: [] }),
+    .default({ desktop: true, playwright: false }),
   web: z
     .object({
       allowedDomains: z.array(z.string()).default([]),

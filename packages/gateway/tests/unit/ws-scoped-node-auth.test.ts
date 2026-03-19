@@ -32,7 +32,7 @@ function addScopedNodeClient(
   const ws = createMockWs();
   const id = cm.addClient(
     ws as never,
-    ["cli"] as never,
+    ["desktop"] as never,
     {
       role: "node",
       deviceId,
@@ -54,7 +54,7 @@ function addOperatorClient(cm: ConnectionManager): { id: string; ws: MockWebSock
   const ws = createMockWs();
   const id = cm.addClient(
     ws as never,
-    ["cli"] as never,
+    ["desktop"] as never,
     {
       role: "client",
       protocolRev: 2,
@@ -84,7 +84,7 @@ describe("scoped node WS authorization", () => {
         payload: {
           capabilities: [
             {
-              id: descriptorIdForClientCapability("cli"),
+              id: descriptorIdForClientCapability("playwright"),
               version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
             },
           ],

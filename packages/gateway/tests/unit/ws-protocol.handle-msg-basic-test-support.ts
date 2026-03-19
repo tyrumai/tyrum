@@ -119,8 +119,11 @@ function registerTaskAndCommandTests(): void {
 
   it("rejects task.execute results from an unexpected connection", async () => {
     const cm = new ConnectionManager();
-    const { id: expectedConnectionId } = makeClient(cm, ["cli"], { id: "conn-1", role: "node" });
-    const { id: otherConnectionId } = makeClient(cm, ["cli"], { id: "conn-2", role: "node" });
+    const { id: expectedConnectionId } = makeClient(cm, ["desktop"], {
+      id: "conn-1",
+      role: "node",
+    });
+    const { id: otherConnectionId } = makeClient(cm, ["desktop"], { id: "conn-2", role: "node" });
     const expected = cm.getClient(expectedConnectionId)!;
     const other = cm.getClient(otherConnectionId)!;
 
@@ -164,7 +167,7 @@ function registerTaskAndCommandTests(): void {
 
   it("fires command.execute lifecycle hooks after executing a command", async () => {
     const cm = new ConnectionManager();
-    const { id } = makeClient(cm, ["cli"]);
+    const { id } = makeClient(cm, ["desktop"]);
     const client = cm.getClient(id)!;
 
     const hooks = {
@@ -194,7 +197,7 @@ function registerTaskAndCommandTests(): void {
 
   it("passes command context to command.execute handlers", async () => {
     const cm = new ConnectionManager();
-    const { id } = makeClient(cm, ["cli"]);
+    const { id } = makeClient(cm, ["desktop"]);
     const client = cm.getClient(id)!;
 
     const db = openTestSqliteDb();
@@ -230,7 +233,7 @@ function registerTaskAndCommandTests(): void {
 
   it("dispatches task.execute error response", async () => {
     const cm = new ConnectionManager();
-    const { id } = makeClient(cm, ["cli"], { role: "node" });
+    const { id } = makeClient(cm, ["desktop"], { role: "node" });
     const client = cm.getClient(id)!;
     const onTaskResult = vi.fn();
     const deps = makeDeps(cm, { onTaskResult });
@@ -251,7 +254,7 @@ function registerTaskAndCommandTests(): void {
 
   it("dispatches task.execute error response evidence from error details", async () => {
     const cm = new ConnectionManager();
-    const { id } = makeClient(cm, ["cli"], { role: "node" });
+    const { id } = makeClient(cm, ["desktop"], { role: "node" });
     const client = cm.getClient(id)!;
     const onTaskResult = vi.fn();
     const deps = makeDeps(cm, { onTaskResult });

@@ -10,12 +10,23 @@ import {
   loadOrCreateDeviceIdentity,
   normalizeFingerprint256,
 } from "@tyrum/client/node";
-import { capabilityDescriptorsForClientCapability } from "@tyrum/schemas";
+import type { CapabilityProvider } from "@tyrum/client/node";
+import {
+  capabilityDescriptorsForClientCapability,
+  BROWSER_AUTOMATION_CAPABILITY_IDS,
+  CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+} from "@tyrum/schemas";
 
 import { DesktopProvider } from "../providers/desktop-provider.js";
+import {
+  FilesystemProvider,
+  resolveFilesystemCapabilityIds,
+} from "../providers/filesystem-provider.js";
 import { NutJsDesktopBackend } from "../providers/backends/nutjs-desktop-backend.js";
 import { AtSpiDesktopA11yBackend } from "../providers/backends/atspi-a11y-backend.js";
 import { getTesseractOcrEngine } from "../providers/ocr/tesseract-engine.js";
+import { PlaywrightProvider } from "../providers/playwright-provider.js";
+import { RealPlaywrightBackend } from "../providers/backends/real-playwright-backend.js";
 import { parseDesktopNodeArgs } from "./args.js";
 
 export const VERSION = "0.1.0";
@@ -97,6 +108,36 @@ function resolveNodeMode(override?: string): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
+function resolveBrowserEnabled(cliFlag?: boolean): boolean {
+  if (cliFlag !== undefined) return cliFlag;
+  const env = process.env["TYRUM_BROWSER_ENABLED"]?.trim().toLowerCase();
+  return Boolean(env && ["1", "true", "yes", "on"].includes(env));
+}
+
+function resolveBrowserHeadless(cliFlag?: boolean): boolean {
+  if (cliFlag !== undefined) return cliFlag;
+  const env = process.env["TYRUM_BROWSER_HEADLESS"]?.trim().toLowerCase();
+  if (env && ["1", "true", "yes", "on"].includes(env)) return true;
+  if (env && ["0", "false", "no", "off"].includes(env)) return false;
+  return !hasDisplayServer();
+}
+
+function resolveFilesystemSandboxRoot(): string | undefined {
+  const raw = process.env["TYRUM_FS_SANDBOX_ROOT"];
+  const trimmed = raw?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function resolveFilesystemBashEnabled(): boolean {
+  const raw = process.env["TYRUM_FS_BASH_ENABLED"]?.trim().toLowerCase();
+  return Boolean(raw && ["1", "true", "yes", "on"].includes(raw));
+}
+
+function hasDisplayServer(): boolean {
+  if (process.platform === "darwin" || process.platform === "win32") return true;
+  return Boolean(process.env["DISPLAY"]?.trim() || process.env["WAYLAND_DISPLAY"]?.trim());
+}
+
 function printHelp(): void {
   console.log(
     [
@@ -108,6 +149,7 @@ function printHelp(): void {
       "  tyrum-desktop-node [--ws-url <ws://.../ws>] [--token <token> | --token-path <path>]",
       "                    [--tls-fingerprint256 <hex>] [--tls-allow-self-signed]",
       "                    [--home <dir>] [--label <label>] [--mode <mode>] [--takeover-url <url>]",
+      "                    [--browser] [--browser-headless]",
       "",
       "Environment:",
       "  TYRUM_HOME                Defaults to ~/.tyrum",
@@ -119,9 +161,16 @@ function printHelp(): void {
       "  TYRUM_NODE_LABEL          Optional node label (shown in pairing UI)",
       "  TYRUM_NODE_MODE           Optional node mode string (e.g. desktop-sandbox)",
       "  TYRUM_TAKEOVER_URL        Optional noVNC takeover URL to embed in label",
+      "  TYRUM_BROWSER_ENABLED     Enable browser automation (1/true/yes/on)",
+      "  TYRUM_BROWSER_HEADLESS    Force headless browser mode (1/true/yes/on or 0/false/no/off)",
+      "  TYRUM_FS_SANDBOX_ROOT     Enable filesystem capabilities rooted at this directory",
+      "  TYRUM_FS_BASH_ENABLED    Also advertise tyrum.fs.bash (only in a real OS/container sandbox)",
       "",
       "Notes:",
       "  - This node advertises the 'desktop' capability and executes tasks via @nut-tree-fork/nut-js.",
+      "  - When --browser is set, also advertises browser automation capabilities via Playwright.",
+      "  - TYRUM_FS_SANDBOX_ROOT roots file operations, but does not confine shell commands by itself.",
+      "  - TYRUM_FS_BASH_ENABLED should only be set when the runtime already has OS/container sandboxing.",
       "  - Use Docker desktop-sandbox profile (issue #786) for a full GUI + noVNC environment.",
     ].join("\n"),
   );
@@ -174,13 +223,33 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
     return 1;
   }
 
+  const browserEnabled = resolveBrowserEnabled(args.browser);
+  const filesystemSandboxRoot = resolveFilesystemSandboxRoot();
+  const filesystemBashEnabled = resolveFilesystemBashEnabled();
+  const browserDescriptors = browserEnabled
+    ? BROWSER_AUTOMATION_CAPABILITY_IDS.map((id) => ({
+        id,
+        version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+      }))
+    : [];
+  const filesystemDescriptors = filesystemSandboxRoot
+    ? resolveFilesystemCapabilityIds({ allowBash: filesystemBashEnabled }).map((id) => ({
+        id,
+        version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+      }))
+    : [];
+
   const client = new TyrumClient({
     url: wsUrl,
     token,
     tlsCertFingerprint256,
     tlsAllowSelfSigned,
     capabilities: ["desktop"],
-    advertisedCapabilities: capabilityDescriptorsForClientCapability("desktop"),
+    advertisedCapabilities: [
+      ...capabilityDescriptorsForClientCapability("desktop"),
+      ...browserDescriptors,
+      ...filesystemDescriptors,
+    ],
     role: "node",
     device: {
       publicKey: identity.publicKey,
@@ -226,16 +295,42 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
     desktopInputRequiresConfirmation: false,
   };
 
-  const backend = new NutJsDesktopBackend();
+  const desktopBackend = new NutJsDesktopBackend();
   const a11yBackend = new AtSpiDesktopA11yBackend();
-  const provider = new DesktopProvider(
-    backend,
+  const desktopProvider = new DesktopProvider(
+    desktopBackend,
     permissions,
     async () => true,
     getTesseractOcrEngine(),
     a11yBackend,
   );
-  autoExecute(client, [provider]);
+
+  const providers: CapabilityProvider[] = [desktopProvider];
+  if (filesystemSandboxRoot) {
+    providers.push(
+      new FilesystemProvider({
+        sandboxRoot: filesystemSandboxRoot,
+        allowBash: filesystemBashEnabled,
+      }),
+    );
+  }
+
+  let playwrightBackend: RealPlaywrightBackend | null = null;
+  if (browserEnabled) {
+    const headless = resolveBrowserHeadless(args.browserHeadless);
+    playwrightBackend = new RealPlaywrightBackend({ headless });
+    const playwrightProvider = new PlaywrightProvider(
+      {
+        allowedDomains: ["*"],
+        headless,
+        domainRestricted: false,
+      },
+      playwrightBackend,
+    );
+    providers.push(playwrightProvider);
+  }
+
+  autoExecute(client, providers);
 
   const stop = new Promise<void>((resolve) => {
     process.once("SIGINT", resolve);
@@ -243,7 +338,11 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
   });
 
   client.connect();
-  await stop;
-  client.disconnect();
+  try {
+    await stop;
+  } finally {
+    client.disconnect();
+    await playwrightBackend?.close();
+  }
   return 0;
 }

@@ -9,10 +9,8 @@ import {
   getTesseractOcrEngine,
   NutJsDesktopBackend,
 } from "@tyrum/desktop-node";
-import { PlaywrightProvider } from "../providers/playwright-provider.js";
-import { CliProvider } from "../providers/cli-provider.js";
+import { PlaywrightProvider, RealPlaywrightBackend } from "@tyrum/desktop-node";
 import { IsolatedDesktopBackend } from "../providers/backends/isolated-desktop-backend.js";
-import { RealPlaywrightBackend } from "../providers/backends/real-playwright-backend.js";
 import { createWindowSender } from "./window-sender.js";
 import { ensureEmbeddedGatewayToken, startEmbeddedGatewayFromConfig } from "./gateway-ipc.js";
 import type { DesktopNodeConfig } from "../config/schema.js";
@@ -109,15 +107,6 @@ function registerProviders(
           domainRestricted: permissions.playwrightDomainRestricted,
         },
         playwrightBackend,
-      ),
-    );
-  }
-  if (config.capabilities.cli && permissions.cli) {
-    nodeRuntime.registerProvider(
-      new CliProvider(
-        config.cli.allowedCommands,
-        config.cli.allowedWorkingDirs,
-        permissions.cliAllowlistEnforced,
       ),
     );
   }

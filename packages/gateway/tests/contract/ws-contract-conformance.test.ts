@@ -196,7 +196,7 @@ describe("WS contract conformance (gateway <-> client <-> schemas)", () => {
               status: "approved",
               capability_allowlist: [
                 {
-                  id: "tyrum.http.request",
+                  id: "tyrum.desktop.mouse",
                   version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
                 },
               ],
@@ -215,7 +215,7 @@ describe("WS contract conformance (gateway <-> client <-> schemas)", () => {
     client = new TyrumClient({
       url: `ws://127.0.0.1:${server.port}/ws`,
       token: server.adminToken,
-      capabilities: ["http"],
+      capabilities: ["desktop"],
       reconnect: false,
       role: "node",
       protocolRev: 2,
@@ -266,7 +266,7 @@ describe("WS contract conformance (gateway <-> client <-> schemas)", () => {
     WsConnectProofResponseEnvelope.parse(proofRes);
 
     const taskId = await dispatchTask(
-      { type: "Http", args: { url: "https://example.com" } },
+      { type: "Desktop", args: { op: "mouse" } },
       {
         tenantId: DEFAULT_TENANT_ID,
         runId: "550e8400-e29b-41d4-a716-446655440000",
@@ -308,7 +308,7 @@ describe("WS contract conformance (gateway <-> client <-> schemas)", () => {
     client = new TyrumClient({
       url: `ws://127.0.0.1:${server.port}/ws`,
       token: server.adminToken,
-      capabilities: ["http"],
+      capabilities: ["desktop"],
       reconnect: false,
     });
 
@@ -356,7 +356,7 @@ describe("WS contract conformance (gateway <-> client <-> schemas)", () => {
     client = new TyrumClient({
       url: `ws://127.0.0.1:${server.port}/ws`,
       token: server.adminToken,
-      capabilities: ["http"],
+      capabilities: ["desktop"],
       reconnect: false,
     });
 

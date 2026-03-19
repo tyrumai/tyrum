@@ -12,7 +12,7 @@ import {
 import { createMockWs, makeDeps, makeClient } from "./ws-protocol.test-support.js";
 
 const cliDescriptor = {
-  id: "tyrum.cli.execute",
+  id: "tyrum.desktop.screenshot",
   version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
 } as const;
 const browserNavigateDescriptor = {
@@ -30,8 +30,8 @@ const defaultDispatchScope = {
   attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
 } as const;
 const cliCommandAction: ActionPrimitive = {
-  type: "CLI",
-  args: { command: "echo hi" },
+  type: "Desktop",
+  args: { op: "screenshot" },
 };
 
 /**
@@ -185,7 +185,7 @@ function registerMetadataPersistenceTests(): void {
           "550e8400-e29b-41d4-a716-446655440000",
           0,
           "running",
-          JSON.stringify({ type: "CLI", args: { command: "echo hi" } }),
+          JSON.stringify({ type: "Desktop", args: { op: "screenshot" } }),
         ],
       );
       await db.run(
@@ -372,7 +372,7 @@ function registerReadinessAndClusterTests(): void {
       },
     });
 
-    await dispatchTask({ type: "CLI", args: {} }, defaultDispatchScope, deps);
+    await dispatchTask({ type: "Desktop", args: { op: "screenshot" } }, defaultDispatchScope, deps);
 
     expect(outboxDal.enqueue).toHaveBeenCalledOnce();
     const payload = outboxDal.enqueue.mock.calls[0]![2] as {

@@ -90,7 +90,7 @@ describe("ExecutionEngine intent guardrail scenarios (issues #632 / #599)", () =
       DEFAULT_TENANT_ID,
       PolicyBundle.parse({
         v: 1,
-        tools: { default: "allow", allow: [], require_approval: [], deny: [] },
+        tools: { allow: ["action.Web"], require_approval: [], deny: [] },
         network_egress: { default: "allow", allow: [], require_approval: [], deny: [] },
       }),
     );
@@ -110,7 +110,7 @@ describe("ExecutionEngine intent guardrail scenarios (issues #632 / #599)", () =
       planId: "plan-intent-missing-1",
       requestId: "req-intent-missing-1",
       policySnapshotId: snapshot.policy_snapshot_id,
-      steps: [action("Http", { url: "https://example.com/" })],
+      steps: [action("Web", { op: "navigate", url: "https://example.com/" })],
       trigger: {
         kind: "manual",
         key: sessionKey,
@@ -200,7 +200,7 @@ describe("ExecutionEngine intent guardrail scenarios (issues #632 / #599)", () =
       planId: "plan-intent-policy-1",
       requestId: "req-intent-policy-1",
       policySnapshotId: snapshot.policy_snapshot_id,
-      steps: [action("Http", { url: "https://example.com/" })],
+      steps: [action("Web", { op: "navigate", url: "https://example.com/" })],
       trigger: {
         kind: "manual",
         key: sessionKey,

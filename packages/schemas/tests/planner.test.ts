@@ -42,13 +42,16 @@ describe("requiresPostcondition", () => {
       "Web",
       "Browser",
       "Android",
+      "Desktop",
+      "Filesystem",
       "CLI",
       "Http",
+      "Mcp",
+      "Node",
       "Message",
       "Pay",
       "Store",
       "Watch",
-      "Desktop",
     ];
     for (const kind of mutating) {
       expect(requiresPostcondition(kind)).toBe(true);

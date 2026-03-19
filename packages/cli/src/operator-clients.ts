@@ -61,7 +61,7 @@ export async function runOperatorWsCommand<T>(
         url: wsUrl,
         token: config.auth_token,
         reconnect: false,
-        capabilities: ["cli"],
+        capabilities: [],
         ...(config.tls_cert_fingerprint256
           ? { tlsCertFingerprint256: config.tls_cert_fingerprint256 }
           : {}),

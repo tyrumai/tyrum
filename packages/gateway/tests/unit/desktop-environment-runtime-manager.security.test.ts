@@ -128,6 +128,8 @@ describe("DesktopEnvironmentRuntimeManager security hardening", () => {
         `${join(tyrumHome, "desktop-environments", "env-1", "secrets", "gateway-token")}:/run/tyrum/gateway-token:ro`,
         "--env",
         "TYRUM_GATEWAY_TOKEN_PATH=/run/tyrum/gateway-token",
+        "--env",
+        "TYRUM_FS_BASH_ENABLED=1",
       ]),
     );
     expect(runArgs?.some((arg) => arg.startsWith("TYRUM_GATEWAY_TOKEN="))).toBe(false);

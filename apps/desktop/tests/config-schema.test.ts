@@ -24,12 +24,10 @@ describe("DesktopNodeConfig schema", () => {
     expect(parsed.permissions.profile).toBe("balanced");
   });
 
-  it("defaults capabilities: desktop true, playwright/cli/http false", () => {
+  it("defaults capabilities: desktop true, playwright false", () => {
     const parsed = DesktopNodeConfig.parse({});
     expect(parsed.capabilities.desktop).toBe(true);
     expect(parsed.capabilities.playwright).toBe(false);
-    expect(parsed.capabilities.cli).toBe(false);
-    expect(parsed.capabilities.http).toBe(false);
   });
 
   it("defaults remote.tlsCertFingerprint256 to empty string", () => {
@@ -157,8 +155,7 @@ describe("Config store", () => {
     const custom = DesktopNodeConfig.parse({
       mode: "remote",
       remote: { wsUrl: "ws://10.0.0.1:3000/ws", tokenRef: "env:MY_TOKEN" },
-      capabilities: { cli: true, http: true },
-      cli: { allowedCommands: ["ls", "cat"] },
+      capabilities: { playwright: true },
     });
 
     saveConfig(custom);

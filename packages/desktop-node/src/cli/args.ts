@@ -11,6 +11,8 @@ export interface DesktopNodeArgs {
   label?: string;
   mode?: string;
   home?: string;
+  browser?: boolean;
+  browserHeadless?: boolean;
   help: boolean;
   version: boolean;
 }
@@ -37,7 +39,9 @@ export function parseDesktopNodeArgs(argv: readonly string[]): DesktopNodeArgs {
     .option("--takeover-url <url>")
     .option("--label <label>")
     .option("--mode <mode>")
-    .option("--home <dir>");
+    .option("--home <dir>")
+    .option("--browser")
+    .option("--browser-headless");
 
   try {
     program.parse(argv, { from: "user" });
@@ -55,6 +59,8 @@ export function parseDesktopNodeArgs(argv: readonly string[]): DesktopNodeArgs {
     label?: string;
     mode?: string;
     home?: string;
+    browser?: boolean;
+    browserHeadless?: boolean;
   }>();
 
   return {
@@ -68,5 +74,7 @@ export function parseDesktopNodeArgs(argv: readonly string[]): DesktopNodeArgs {
     label: options.label,
     mode: options.mode,
     home: options.home,
+    browser: options.browser,
+    browserHeadless: options.browserHeadless,
   };
 }

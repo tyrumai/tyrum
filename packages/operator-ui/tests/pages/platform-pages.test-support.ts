@@ -24,8 +24,7 @@ const DEFAULT_NODE_CONFIG = {
   mode: "embedded",
   embedded: { port: 8788 },
   permissions: { profile: "balanced", overrides: {} },
-  capabilities: { desktop: true, playwright: true, cli: true, http: true },
-  cli: { allowedCommands: [], allowedWorkingDirs: [] },
+  capabilities: { desktop: true, playwright: true },
   web: { allowedDomains: [], headless: true },
 } as const;
 
