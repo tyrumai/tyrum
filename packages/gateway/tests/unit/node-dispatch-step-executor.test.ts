@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
+import type { NodeDispatchService } from "@tyrum/runtime-node-control";
 import { createNodeDispatchStepExecutor } from "../../src/modules/execution/node-dispatch-step-executor.js";
 import type { ArtifactStore } from "../../src/modules/artifact/store.js";
-import type { NodeDispatchService } from "../../src/modules/agent/node-dispatch-service.js";
 import type { SqlDb } from "../../src/statestore/types.js";
 
 describe("NodeDispatchStepExecutor", () => {

@@ -43,6 +43,13 @@ describe("stage-gateway-bin script", () => {
     expect(script).not.toContain("ERR_PNPM_DEPLOY_NONINJECTED_WORKSPACE");
   });
 
+  it("fails staging early when the runtime-node-control bundle was not built", () => {
+    const script = readFileSync(stageGatewayBinPath, "utf8");
+
+    expect(script).toContain("node_modules/@tyrum/runtime-node-control/dist/index.mjs");
+    expect(script).toContain("pnpm --filter @tyrum/runtime-node-control build");
+  });
+
   it("invokes prebuild-install from its resolved JS entrypoint", () => {
     const script = readFileSync(stageGatewayBinPath, "utf8");
 
@@ -71,5 +78,14 @@ describe("stage-gateway-bin script", () => {
       buildGateway.indexOf("pnpm --filter @tyrum/gateway build"),
     );
     expect(pretest).toContain("pnpm --filter @tyrum/runtime-policy build");
+  });
+
+  it("builds runtime-node-control before desktop gateway staging and tests", () => {
+    const packageJson = JSON.parse(readFileSync(desktopPackageJsonPath, "utf8")) as {
+      scripts?: Record<string, string>;
+    };
+
+    expect(packageJson.scripts?.pretest).toContain("@tyrum/runtime-node-control build");
+    expect(packageJson.scripts?.["build:gateway"]).toContain("@tyrum/runtime-node-control build");
   });
 });

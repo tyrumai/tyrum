@@ -118,6 +118,10 @@ export default defineConfig({
       "@tyrum/client/node": resolve(__dirname, "packages/client/src/node.ts"),
       "@tyrum/client": resolve(__dirname, "packages/client/src/index.ts"),
       "@tyrum/cli-utils": resolve(__dirname, "packages/cli-utils/src/index.ts"),
+      "@tyrum/runtime-node-control": resolve(
+        __dirname,
+        "packages/runtime-node-control/src/index.ts",
+      ),
       "@tyrum/gateway": resolve(__dirname, "packages/gateway/src/index.ts"),
       "@tyrum/desktop-node": resolve(__dirname, "packages/desktop-node/src/index.ts"),
       "@tyrum/operator-app/browser": resolve(__dirname, "packages/operator-app/src/browser.ts"),

@@ -1,5 +1,4 @@
 import { createApp } from "../app.js";
-import { NodeDispatchService } from "../modules/agent/node-dispatch-service.js";
 import { AgentRegistry } from "../modules/agent/registry.js";
 import { AuthAudit } from "../modules/auth/audit.js";
 import { SlidingWindowRateLimiter } from "../modules/auth/rate-limiter.js";
@@ -31,6 +30,7 @@ import { WorkboardOrchestrator } from "../modules/workboard/orchestrator.js";
 import { WorkboardReconciler } from "../modules/workboard/reconciler.js";
 import { WorkSignalScheduler } from "../modules/workboard/signal-scheduler.js";
 import { SubagentJanitor } from "../modules/workboard/subagent-janitor.js";
+import { createNodeDispatchServiceFromProtocolDeps } from "../modules/node/runtime-node-control-adapters.js";
 import { createWsHandler } from "../routes/ws.js";
 import { isPostgresDbUri } from "../statestore/db-uri.js";
 import { VERSION } from "../version.js";
@@ -404,7 +404,7 @@ export function createWorkerLoop(
   const nodeDispatchExecutor = createNodeDispatchStepExecutor({
     db: context.container.db,
     artifactStore: context.container.artifactStore,
-    nodeDispatchService: new NodeDispatchService(protocol.protocolDeps),
+    nodeDispatchService: createNodeDispatchServiceFromProtocolDeps(protocol.protocolDeps),
     fallback: toolExecutor,
   }) satisfies ExecutionStepExecutor;
   const agents = protocol.protocolDeps.agents;

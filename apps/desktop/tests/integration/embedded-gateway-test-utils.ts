@@ -13,6 +13,10 @@ export const BUNDLED_OPERATOR_UI_DIR = resolve(REPO_ROOT, "packages/gateway/dist
 export const BUNDLED_OPERATOR_UI_INDEX = resolve(BUNDLED_OPERATOR_UI_DIR, "index.html");
 export const STAGED_GATEWAY_DIR = resolve(REPO_ROOT, "apps/desktop/dist/gateway");
 export const STAGED_GATEWAY_BIN = resolve(STAGED_GATEWAY_DIR, "index.mjs");
+export const STAGED_RUNTIME_NODE_CONTROL_DIST = resolve(
+  STAGED_GATEWAY_DIR,
+  "node_modules/@tyrum/runtime-node-control/dist/index.mjs",
+);
 export const STAGED_BUNDLED_OPERATOR_UI_INDEX = resolve(STAGED_GATEWAY_DIR, "dist/ui/index.html");
 const STAGE_GATEWAY_BIN_SCRIPT = resolve(REPO_ROOT, "apps/desktop/scripts/stage-gateway-bin.mjs");
 const electronPackageExport = require("electron");
@@ -35,6 +39,19 @@ const RUNTIME_POLICY_TSCONFIG = resolve(REPO_ROOT, "packages/runtime-policy/tsco
 const RUNTIME_POLICY_SRC_DIR = resolve(REPO_ROOT, "packages/runtime-policy/src");
 const GATEWAY_SRC_DIR = resolve(REPO_ROOT, "packages/gateway/src");
 const GATEWAY_BUILD_LOCK = resolve(REPO_ROOT, ".tyrum-gateway-build.lock");
+const RUNTIME_NODE_CONTROL_DIST = resolve(
+  REPO_ROOT,
+  "packages/runtime-node-control/dist/index.mjs",
+);
+const RUNTIME_NODE_CONTROL_PACKAGE_JSON = resolve(
+  REPO_ROOT,
+  "packages/runtime-node-control/package.json",
+);
+const RUNTIME_NODE_CONTROL_TSCONFIG = resolve(
+  REPO_ROOT,
+  "packages/runtime-node-control/tsconfig.json",
+);
+const RUNTIME_NODE_CONTROL_SRC_DIR = resolve(REPO_ROOT, "packages/runtime-node-control/src");
 export const OPERATOR_UI_DIR_ENV = "TYRUM_OPERATOR_UI_ASSETS_DIR";
 export const EMBEDDED_GATEWAY_BUNDLE_SOURCE_ENV = "TYRUM_EMBEDDED_GATEWAY_BUNDLE_SOURCE";
 const DEFAULT_TENANT_ADMIN_TOKEN_PATTERN =
@@ -112,9 +129,12 @@ function gatewayBuildIsStale(): boolean {
   if (!existsSync(CLI_UTILS_DIST)) return true;
   if (!existsSync(CONTRACTS_DIST)) return true;
   if (!existsSync(RUNTIME_POLICY_DIST)) return true;
+  if (!existsSync(RUNTIME_NODE_CONTROL_DIST)) return true;
   if (!existsSync(BUNDLED_OPERATOR_UI_INDEX)) return true;
 
   const gatewayMtime = statSync(GATEWAY_BIN).mtimeMs;
+  const runtimePolicyMtime = statSync(RUNTIME_POLICY_DIST).mtimeMs;
+  const runtimeNodeControlMtime = statSync(RUNTIME_NODE_CONTROL_DIST).mtimeMs;
   if (existsSync(GATEWAY_SRC_DIR) && gatewayMtime < latestMtimeInDir(GATEWAY_SRC_DIR)) return true;
   if (existsSync(CLI_UTILS_PACKAGE_JSON) && gatewayMtime < statSync(CLI_UTILS_PACKAGE_JSON).mtimeMs)
     return true;
@@ -132,18 +152,40 @@ function gatewayBuildIsStale(): boolean {
     return true;
   if (
     existsSync(RUNTIME_POLICY_PACKAGE_JSON) &&
-    gatewayMtime < statSync(RUNTIME_POLICY_PACKAGE_JSON).mtimeMs
+    runtimePolicyMtime < statSync(RUNTIME_POLICY_PACKAGE_JSON).mtimeMs
   ) {
     return true;
   }
   if (
     existsSync(RUNTIME_POLICY_TSCONFIG) &&
-    gatewayMtime < statSync(RUNTIME_POLICY_TSCONFIG).mtimeMs
+    runtimePolicyMtime < statSync(RUNTIME_POLICY_TSCONFIG).mtimeMs
   ) {
     return true;
   }
-  if (existsSync(RUNTIME_POLICY_SRC_DIR) && gatewayMtime < latestMtimeInDir(RUNTIME_POLICY_SRC_DIR))
+  if (
+    existsSync(RUNTIME_POLICY_SRC_DIR) &&
+    runtimePolicyMtime < latestMtimeInDir(RUNTIME_POLICY_SRC_DIR)
+  ) {
     return true;
+  }
+  if (
+    existsSync(RUNTIME_NODE_CONTROL_PACKAGE_JSON) &&
+    runtimeNodeControlMtime < statSync(RUNTIME_NODE_CONTROL_PACKAGE_JSON).mtimeMs
+  ) {
+    return true;
+  }
+  if (
+    existsSync(RUNTIME_NODE_CONTROL_TSCONFIG) &&
+    runtimeNodeControlMtime < statSync(RUNTIME_NODE_CONTROL_TSCONFIG).mtimeMs
+  ) {
+    return true;
+  }
+  if (
+    existsSync(RUNTIME_NODE_CONTROL_SRC_DIR) &&
+    runtimeNodeControlMtime < latestMtimeInDir(RUNTIME_NODE_CONTROL_SRC_DIR)
+  ) {
+    return true;
+  }
   if (gatewayMtime < statSync(CONTRACTS_DIST).mtimeMs) return true;
   if (gatewayMtime < statSync(RUNTIME_POLICY_DIST).mtimeMs) return true;
   return gatewayMtime < statSync(CLI_UTILS_DIST).mtimeMs;
@@ -151,11 +193,14 @@ function gatewayBuildIsStale(): boolean {
 
 function stagedGatewayBuildIsStale(): boolean {
   if (!existsSync(STAGED_GATEWAY_BIN)) return true;
+  if (!existsSync(STAGED_RUNTIME_NODE_CONTROL_DIST)) return true;
   if (!existsSync(STAGED_BUNDLED_OPERATOR_UI_INDEX)) return true;
 
   const stagedGatewayMtime = statSync(STAGED_GATEWAY_BIN).mtimeMs;
+  const stagedRuntimeNodeControlMtime = statSync(STAGED_RUNTIME_NODE_CONTROL_DIST).mtimeMs;
   const stagedOperatorUiMtime = statSync(STAGED_BUNDLED_OPERATOR_UI_INDEX).mtimeMs;
   if (stagedGatewayMtime < statSync(GATEWAY_BIN).mtimeMs) return true;
+  if (stagedRuntimeNodeControlMtime < statSync(RUNTIME_NODE_CONTROL_DIST).mtimeMs) return true;
   if (stagedOperatorUiMtime < statSync(BUNDLED_OPERATOR_UI_INDEX).mtimeMs) return true;
   return existsSync(STAGE_GATEWAY_BIN_SCRIPT)
     ? stagedGatewayMtime < statSync(STAGE_GATEWAY_BIN_SCRIPT).mtimeMs
@@ -229,6 +274,11 @@ export function ensureGatewayBuild(): void {
     "@tyrum/cli-utils",
     CLI_UTILS_DIST,
     "Failed to build @tyrum/cli-utils before desktop integration test.",
+  );
+  ensureWorkspaceBuild(
+    "@tyrum/runtime-node-control",
+    RUNTIME_NODE_CONTROL_DIST,
+    "Failed to build @tyrum/runtime-node-control before desktop integration test.",
   );
   ensureWorkspaceBuild(
     "@tyrum/gateway",

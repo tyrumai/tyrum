@@ -1,7 +1,7 @@
 import { descriptorIdForClientCapability } from "@tyrum/contracts";
+import { NodeInventoryService } from "@tyrum/runtime-node-control";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
-import { NodeInventoryService } from "../../src/modules/node/inventory-service.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { createTestContainer } from "../integration/helpers.js";
 
@@ -27,7 +27,7 @@ describe("NodeInventoryService", () => {
       nodeId: "node-1",
       label: "Node One",
       capabilities: ["desktop"],
-      metadata: { mode: "desktop", version: "1.2.3" },
+      metadata: { mode: "  desktop  ", version: "  1.2.3  " },
       nowIso: "2026-03-08T00:00:00.000Z",
     });
 

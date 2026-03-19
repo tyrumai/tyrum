@@ -4,10 +4,10 @@ import {
   WsPairingDenyRequest,
   WsPairingResolveResult,
   WsPairingRevokeRequest,
-  normalizeCapabilityDescriptors,
 } from "@tyrum/contracts";
 import type { CapabilityDescriptor, WsResponseEnvelope } from "@tyrum/contracts";
-import { resolveNodePairing } from "../../modules/node/pairing-resolve-service.js";
+import { recordNodeCapabilityReady, resolveNodePairing } from "@tyrum/runtime-node-control";
+import { createResolveNodePairingDeps } from "../../modules/node/runtime-node-control-adapters.js";
 import { PAIRING_WS_AUDIENCE } from "../audience.js";
 import { emitPairingApprovedEvent } from "../pairing-approved.js";
 import type { ConnectedClient } from "../connection-manager.js";
@@ -89,9 +89,8 @@ async function handlePairingMessage(
   }
 
   const result = await resolveNodePairing(
-    {
+    createResolveNodePairingDeps({
       nodePairingDal: deps.nodePairingDal,
-      wsEventDal: deps.wsEventDal,
       emitEvent: ({ tenantId: eventTenantId, event }) => {
         broadcastEvent(eventTenantId, event, deps, PAIRING_WS_AUDIENCE);
       },
@@ -102,7 +101,8 @@ async function handlePairingMessage(
           scopedToken,
         });
       },
-    },
+      wsEventDal: deps.wsEventDal,
+    }),
     {
       tenantId,
       ...parsed.input,
@@ -217,67 +217,59 @@ function handleCapabilityReadyMessage(
     });
   }
 
-  const advertisedIds = new Set(client.capabilities.map((capability) => capability.id));
-  const readyCapabilities = normalizeCapabilityDescriptors(
-    parsedReq.data.payload.capabilities,
-  ).filter((capability) => advertisedIds.has(capability.id));
-  const capabilityStates = parsedReq.data.payload.capability_states.filter((state) => {
-    return advertisedIds.has(state.capability.id);
-  });
-
-  deps.connectionManager.setReadyCapabilities(client.id, readyCapabilities);
-  deps.connectionManager.setCapabilityStates(client.id, capabilityStates);
-
-  if (deps.cluster) {
-    void deps.cluster.connectionDirectory
-      .setReadyCapabilities({
-        tenantId,
-        connectionId: client.id,
-        readyCapabilities: [...client.readyCapabilities].toSorted((a, b) =>
-          a.id.localeCompare(b.id),
-        ),
-      })
-      .catch((err) => {
-        const message = err instanceof Error ? err.message : String(err);
-        deps.logger?.warn("ws.capability_ready.persistence_failed", {
-          request_id: msg.request_id,
-          client_id: client.id,
-          request_type: msg.type,
-          error: message,
-        });
-      });
-    void deps.cluster.connectionDirectory
-      .setCapabilityStates({
-        tenantId,
-        connectionId: client.id,
-        capabilityStates,
-      })
-      .catch((err) => {
-        const message = err instanceof Error ? err.message : String(err);
-        deps.logger?.warn("ws.capability_state.persistence_failed", {
-          request_id: msg.request_id,
-          client_id: client.id,
-          request_type: msg.type,
-          error: message,
-        });
-      });
-  }
-
-  const nodeId = client.device_id ?? client.id;
-  broadcastEvent(
-    tenantId,
+  recordNodeCapabilityReady(
     {
-      event_id: crypto.randomUUID(),
-      type: "capability.ready",
-      occurred_at: new Date().toISOString(),
-      scope: { kind: "node", node_id: nodeId },
-      payload: {
-        node_id: nodeId,
-        capabilities: readyCapabilities,
-        capability_states: capabilityStates,
+      readiness: deps.connectionManager,
+      readinessStore: deps.cluster
+        ? {
+            setReadyCapabilities: async ({
+              tenantId: storeTenantId,
+              connectionId,
+              readyCapabilities,
+            }) =>
+              await deps.cluster!.connectionDirectory.setReadyCapabilities({
+                tenantId: storeTenantId,
+                connectionId,
+                readyCapabilities,
+              }),
+            setCapabilityStates: async ({
+              tenantId: storeTenantId,
+              connectionId,
+              capabilityStates,
+            }) =>
+              await deps.cluster!.connectionDirectory.setCapabilityStates({
+                tenantId: storeTenantId,
+                connectionId,
+                capabilityStates,
+              }),
+          }
+        : undefined,
+      emitEvent: ({ tenantId: eventTenantId, event }) => {
+        broadcastEvent(eventTenantId, event, deps);
+      },
+      onPersistenceFailure: ({ kind, error }) => {
+        const message = error instanceof Error ? error.message : String(error);
+        deps.logger?.warn(
+          kind === "ready_capabilities"
+            ? "ws.capability_ready.persistence_failed"
+            : "ws.capability_state.persistence_failed",
+          {
+            request_id: msg.request_id,
+            client_id: client.id,
+            request_type: msg.type,
+            error: message,
+          },
+        );
       },
     },
-    deps,
+    {
+      tenantId,
+      connectionId: client.id,
+      nodeId: client.device_id ?? client.id,
+      advertisedCapabilities: client.capabilities,
+      reportedCapabilities: parsedReq.data.payload.capabilities,
+      reportedCapabilityStates: parsedReq.data.payload.capability_states,
+    },
   );
 
   return { request_id: msg.request_id, type: msg.type, ok: true };

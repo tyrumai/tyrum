@@ -1,26 +1,50 @@
-import type {
-  CapabilityDescriptor,
-  NodePairingRequest as NodePairingRequestT,
-  NodePairingTrustLevel,
-  WsEventEnvelope,
+import {
+  isLegacyUmbrellaCapabilityDescriptorId,
+  type CapabilityDescriptor,
+  type NodePairingRequest,
+  type NodePairingTrustLevel,
+  type WsEventEnvelope,
 } from "@tyrum/contracts";
-import { isLegacyUmbrellaCapabilityDescriptorId } from "@tyrum/contracts";
-import type { WsEventDal } from "../ws-event/dal.js";
-import type { NodePairingDal } from "./pairing-dal.js";
-import type { WsBroadcastAudience } from "../../ws/audience.js";
-import { ensurePairingResolvedEvent } from "../../ws/stable-events.js";
+import { randomUUID } from "node:crypto";
+
+export interface ResolveNodePairingStore {
+  resolve(input: {
+    tenantId: string;
+    pairingId: number;
+    decision: "approved" | "denied";
+    reason?: string;
+    resolvedBy?: unknown;
+    decisionPayload: Record<string, unknown>;
+    trustLevel?: NodePairingTrustLevel;
+    capabilityAllowlist?: readonly CapabilityDescriptor[];
+  }): Promise<
+    | {
+        pairing: NodePairingRequest;
+        scopedToken?: string;
+        transitioned?: boolean;
+      }
+    | undefined
+  >;
+  revoke(input: {
+    tenantId: string;
+    pairingId: number;
+    reason?: string;
+    resolvedBy?: unknown;
+    decisionPayload: Record<string, unknown>;
+  }): Promise<NodePairingRequest | undefined>;
+}
 
 export interface ResolveNodePairingDeps {
-  nodePairingDal: Pick<NodePairingDal, "resolve" | "revoke">;
-  wsEventDal?: WsEventDal;
-  emitEvent?: (input: {
+  nodePairingDal: Pick<ResolveNodePairingStore, "resolve" | "revoke">;
+  createResolvedEvent?: (input: {
     tenantId: string;
-    event: WsEventEnvelope;
-    audience?: WsBroadcastAudience;
-  }) => void;
+    pairing: NodePairingRequest;
+    scopedToken?: string;
+  }) => Promise<WsEventEnvelope>;
+  emitEvent?: (input: { tenantId: string; event: WsEventEnvelope }) => void;
   emitPairingApproved?: (input: {
     tenantId: string;
-    pairing: NodePairingRequestT;
+    pairing: NodePairingRequest;
     nodeId: string;
     scopedToken: string;
   }) => void;
@@ -47,7 +71,7 @@ export type ResolveNodePairingInput =
 export type ResolveNodePairingResult =
   | {
       ok: true;
-      pairing: NodePairingRequestT;
+      pairing: NodePairingRequest;
       scopedToken?: string;
     }
   | {
@@ -62,6 +86,28 @@ function notFound(pairingId: number): ResolveNodePairingResult {
     code: "not_found",
     message: `pairing ${String(pairingId)} not found or not resolvable`,
   };
+}
+
+async function emitResolvedEvent(
+  deps: ResolveNodePairingDeps,
+  input: { tenantId: string; pairing: NodePairingRequest; scopedToken?: string },
+): Promise<void> {
+  if (!deps.emitEvent) {
+    return;
+  }
+
+  const event = deps.createResolvedEvent
+    ? await deps.createResolvedEvent(input)
+    : ({
+        event_id: randomUUID(),
+        type: "pairing.updated",
+        occurred_at: input.pairing.latest_review?.completed_at ?? input.pairing.requested_at,
+        payload: {
+          pairing: input.pairing,
+          ...(input.scopedToken ? { scoped_token: input.scopedToken } : {}),
+        },
+      } satisfies WsEventEnvelope);
+  deps.emitEvent({ tenantId: input.tenantId, event });
 }
 
 export async function resolveNodePairing(
@@ -84,15 +130,7 @@ export async function resolveNodePairing(
       return notFound(input.pairingId);
     }
 
-    if (deps.emitEvent) {
-      const persistedEvent = await ensurePairingResolvedEvent({
-        tenantId: input.tenantId,
-        pairing,
-        wsEventDal: deps.wsEventDal,
-      });
-      deps.emitEvent({ tenantId: input.tenantId, event: persistedEvent.event });
-    }
-
+    await emitResolvedEvent(deps, { tenantId: input.tenantId, pairing });
     return { ok: true, pairing };
   }
 
@@ -107,6 +145,7 @@ export async function resolveNodePairing(
         message: `legacy umbrella capability '${legacyCapability.id}' is not supported; approve exact split descriptors instead`,
       };
     }
+
     const resolved = await deps.nodePairingDal.resolve({
       tenantId: input.tenantId,
       pairingId: input.pairingId,
@@ -137,14 +176,12 @@ export async function resolveNodePairing(
       });
     }
 
-    if (transitioned && deps.emitEvent) {
-      const persistedEvent = await ensurePairingResolvedEvent({
+    if (transitioned) {
+      await emitResolvedEvent(deps, {
         tenantId: input.tenantId,
         pairing,
-        wsEventDal: deps.wsEventDal,
         scopedToken,
       });
-      deps.emitEvent({ tenantId: input.tenantId, event: persistedEvent.event });
     }
 
     return { ok: true, pairing, scopedToken };
@@ -166,15 +203,9 @@ export async function resolveNodePairing(
     return notFound(input.pairingId);
   }
 
-  const { pairing } = resolved;
-  if (deps.emitEvent) {
-    const persistedEvent = await ensurePairingResolvedEvent({
-      tenantId: input.tenantId,
-      pairing,
-      wsEventDal: deps.wsEventDal,
-    });
-    deps.emitEvent({ tenantId: input.tenantId, event: persistedEvent.event });
-  }
-
-  return { ok: true, pairing };
+  await emitResolvedEvent(deps, {
+    tenantId: input.tenantId,
+    pairing: resolved.pairing,
+  });
+  return { ok: true, pairing: resolved.pairing };
 }

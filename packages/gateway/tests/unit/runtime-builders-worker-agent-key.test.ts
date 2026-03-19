@@ -50,7 +50,7 @@ describe("createWorkerLoop runtime selection", () => {
         createNodeDispatchStepExecutor: vi.fn(({ fallback }: { fallback: unknown }) => fallback),
       }));
 
-      vi.doMock("../../src/modules/agent/node-dispatch-service.js", () => ({
+      vi.doMock("@tyrum/runtime-node-control", () => ({
         NodeDispatchService: function NodeDispatchService() {},
       }));
 

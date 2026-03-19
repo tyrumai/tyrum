@@ -26,6 +26,10 @@ const migrationsSourceDir = join(desktopRoot, "../../packages/gateway/migrations
 
 const targetDir = join(desktopRoot, "dist/gateway");
 const migrationsTargetDir = join(targetDir, "migrations");
+const runtimeNodeControlDist = join(
+  targetDir,
+  "node_modules/@tyrum/runtime-node-control/dist/index.mjs",
+);
 const isWindows = process.platform === "win32";
 
 if (!existsSync(sourcePath)) {
@@ -97,6 +101,12 @@ const deploy = spawnSync(pnpmCmd, deployArgs, {
 
 if (deploy.status !== 0) {
   throw new Error(formatDeployFailure(deploy));
+}
+
+if (!existsSync(runtimeNodeControlDist)) {
+  throw new Error(
+    `Staged gateway dependency missing at ${runtimeNodeControlDist}. Run "pnpm --filter @tyrum/runtime-node-control build" before staging the desktop gateway bundle.`,
+  );
 }
 
 // pnpm deploy may create workspace symlinks that are valid in-repo but broken

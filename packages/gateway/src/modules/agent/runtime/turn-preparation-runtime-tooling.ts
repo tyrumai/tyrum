@@ -3,14 +3,15 @@ import type { AgentLoadedContext } from "./types.js";
 import type { ResolvedExecutionProfile } from "./intake-delegation.js";
 import type { TurnPreparationRuntimeDeps } from "./turn-preparation-runtime.js";
 import { ToolExecutor } from "../tool-executor.js";
-import { NodeDispatchService } from "../node-dispatch-service.js";
 import { NodeCapabilityInspectionService } from "../../node/capability-inspection-service.js";
-import { NodeInventoryService } from "../../node/inventory-service.js";
+import { listCapabilityCatalogEntries } from "../../node/capability-catalog.js";
+import { createNodeDispatchServiceFromProtocolDeps } from "../../node/runtime-node-control-adapters.js";
 import { AgentMemoryToolRuntime } from "../../memory/agent-tool-runtime.js";
 import { resolveBuiltinMemoryConfig } from "../../memory/builtin-mcp.js";
 import { resolveEmbeddingPipeline } from "./embedding-pipeline-resolution.js";
 import { describeArtifactsForPrompt } from "./attachment-analysis.js";
 import { resolveSessionModelDetailed } from "./session-model-resolution.js";
+import { NodeInventoryService } from "@tyrum/runtime-node-control";
 
 export async function createToolExecutorForTurnPreparation(input: {
   deps: TurnPreparationRuntimeDeps;
@@ -29,7 +30,7 @@ export async function createToolExecutorForTurnPreparation(input: {
     ]),
   );
   const nodeDispatchService = input.deps.opts.protocolDeps
-    ? new NodeDispatchService(input.deps.opts.protocolDeps)
+    ? createNodeDispatchServiceFromProtocolDeps(input.deps.opts.protocolDeps)
     : undefined;
   const nodeInventoryService = input.deps.opts.protocolDeps
     ? new NodeInventoryService({
@@ -38,6 +39,7 @@ export async function createToolExecutorForTurnPreparation(input: {
         nodePairingDal: input.deps.opts.container.nodePairingDal,
         presenceDal: input.deps.opts.container.presenceDal,
         attachmentDal: input.deps.opts.container.sessionLaneNodeAttachmentDal,
+        capabilityCatalogEntries: listCapabilityCatalogEntries(),
       })
     : undefined;
   const nodeCapabilityInspectionService =
