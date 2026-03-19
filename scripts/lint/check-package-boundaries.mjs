@@ -105,7 +105,6 @@ function loadWorkspacePackages(rootDir) {
       manifestPath: path.relative(rootDir, packageJsonPath).replaceAll("\\", "/"),
       name: manifest.name,
       packageDir,
-      packageDirRelative: path.relative(rootDir, packageDir).replaceAll("\\", "/"),
     };
   });
 }
@@ -262,6 +261,7 @@ function isTargetPackage(rules, packageName) {
 }
 
 function isForbiddenTargetEdge(rules, fromPackage, toPackage) {
+  if (fromPackage === toPackage) return false;
   if (!isTargetPackage(rules, fromPackage)) return false;
   if (!isTargetPackage(rules, toPackage)) return false;
 

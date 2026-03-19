@@ -160,6 +160,33 @@ describe("package boundary lint", () => {
     );
   });
 
+  it("allows self-referencing target-package imports", async () => {
+    const repoRoot = await createWorkspaceFixture([
+      {
+        name: "@tyrum/contracts",
+        relativeDir: "packages/contracts",
+      },
+      {
+        name: "@tyrum/operator-app",
+        relativeDir: "packages/operator-app",
+        dependencies: {
+          "@tyrum/contracts": "workspace:*",
+        },
+        files: {
+          "src/index.ts": 'export { feature } from "@tyrum/operator-app/internal";\n',
+          "src/internal.ts": 'export const feature = "ok";\n',
+        },
+      },
+    ]);
+
+    const violations = await collectBoundaryViolations({
+      baseline: emptyBaseline,
+      repoRoot,
+    });
+
+    expect(violations).toEqual([]);
+  });
+
   it("rejects new legacy-package edges once the replacement package exists", async () => {
     const repoRoot = await createWorkspaceFixture([
       {
