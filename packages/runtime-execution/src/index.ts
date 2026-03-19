@@ -12,6 +12,7 @@ export type {
 export type { TaskResult } from "./task-result-registry.js";
 export { TaskResultRegistry } from "./task-result-registry.js";
 export type {
+  ExecutionWorkerLogger,
   ExecutionWorkerEngine,
   ExecutionWorkerLoop,
   ExecutionWorkerLoopOptions,
