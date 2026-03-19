@@ -40,7 +40,7 @@ export const StoredTelegramChannelConfigSchema = z
     channel: z.literal("telegram"),
     account_key: AccountId,
     agent_key: AgentKey.optional(),
-    ingress_mode: TelegramIngressMode.default("webhook"),
+    ingress_mode: TelegramIngressMode.default("polling"),
     bot_token: z.string().trim().min(1).optional(),
     webhook_secret: z.string().trim().min(1).optional(),
     allowed_user_ids: z
