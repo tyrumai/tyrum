@@ -25,6 +25,12 @@ function waitForAbort(signal?: AbortSignal): Promise<[]> {
   });
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
 async function waitUntil(
   predicate: () => boolean | Promise<boolean>,
   timeoutMs = 1_000,
@@ -160,5 +166,83 @@ describe("TelegramPollingMonitor regressions", () => {
         sender_id: "999",
       }),
     );
+  });
+
+  it("renews the lease during slow update processing so a second worker cannot steal and duplicate work", async () => {
+    await dal.createTelegram({
+      tenantId: DEFAULT_TENANT_ID,
+      accountKey: "alerts",
+      ingressMode: "polling",
+      botToken: "bot-token",
+      webhookSecret: "saved-webhook-secret",
+    });
+
+    const update = makeTelegramUpdate(100);
+    const workerAQueue = {
+      enqueue: vi.fn(async () => {
+        await sleep(120);
+        return {
+          inbox: { status: "queued", inbox_id: 1 },
+          deduped: false,
+          message_text: "Hello from polling",
+        };
+      }),
+    };
+    const workerBQueue = {
+      enqueue: vi.fn(async () => ({
+        inbox: { status: "queued", inbox_id: 2 },
+        deduped: false,
+        message_text: "Hello from polling",
+      })),
+    };
+    const makeBot = () => ({
+      getMe: vi.fn(async () => ({ id: 555, is_bot: true, first_name: "Tyrum" })),
+      deleteWebhook: vi.fn(async () => true),
+      getUpdates: vi.fn(async (opts?: { offset?: number; signal?: AbortSignal }) => {
+        if (opts?.offset === 101) {
+          return await waitForAbort(opts.signal);
+        }
+        return [update];
+      }),
+    });
+
+    const monitorA = new TelegramPollingMonitor({
+      owner: "worker-a",
+      channelConfigDal: dal,
+      runtime: { getBotForTelegramAccount: vi.fn(() => makeBot()) } as never,
+      queue: workerAQueue as never,
+      agents: {} as never,
+      stateDal,
+      reconcileIntervalMs: 20,
+      leaseTtlMs: 40,
+      idleDelayMs: 5,
+      errorBackoffMs: 5,
+    });
+    const monitorB = new TelegramPollingMonitor({
+      owner: "worker-b",
+      channelConfigDal: dal,
+      runtime: { getBotForTelegramAccount: vi.fn(() => makeBot()) } as never,
+      queue: workerBQueue as never,
+      agents: {} as never,
+      stateDal,
+      reconcileIntervalMs: 20,
+      leaseTtlMs: 40,
+      idleDelayMs: 5,
+      errorBackoffMs: 5,
+    });
+
+    monitorA.start();
+    await waitUntil(() => workerAQueue.enqueue.mock.calls.length > 0);
+
+    monitorB.start();
+    await waitUntil(async () => {
+      const row = await stateDal.get({ tenantId: DEFAULT_TENANT_ID, accountKey: "alerts" });
+      return row?.next_update_id === 101;
+    }, 2_000);
+
+    await Promise.all([monitorA.stop(), monitorB.stop()]);
+
+    expect(workerAQueue.enqueue).toHaveBeenCalledOnce();
+    expect(workerBQueue.enqueue).not.toHaveBeenCalled();
   });
 });

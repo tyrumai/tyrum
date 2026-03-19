@@ -128,6 +128,27 @@ export class TelegramPollingStateDal {
     );
   }
 
+  async renewLease(input: {
+    tenantId: string;
+    accountKey: string;
+    owner: string;
+    nowMs: number;
+    leaseTtlMs: number;
+  }): Promise<boolean> {
+    const leaseExpiresAt = input.nowMs + Math.max(1, input.leaseTtlMs);
+    const updatedAt = new Date(input.nowMs).toISOString();
+    const updated = await this.db.run(
+      `UPDATE telegram_polling_state
+       SET lease_expires_at_ms = ?,
+           updated_at = ?
+       WHERE tenant_id = ?
+         AND account_key = ?
+         AND lease_owner = ?`,
+      [leaseExpiresAt, updatedAt, input.tenantId, input.accountKey, input.owner],
+    );
+    return updated.changes > 0;
+  }
+
   async updateCursor(input: {
     tenantId: string;
     accountKey: string;

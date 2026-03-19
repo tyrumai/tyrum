@@ -24,18 +24,20 @@ type GoogleOAuth2Client = {
   ): Promise<unknown>;
 };
 
-let verifyClientPromise: Promise<GoogleOAuth2Client> | null = null;
+let verifyClient: GoogleOAuth2Client | null = null;
+
 async function getVerifyClient(): Promise<GoogleOAuth2Client> {
-  if (!verifyClientPromise) {
-    verifyClientPromise = import("google-auth-library")
-      .then((module) => new module.OAuth2Client())
-      .catch((err: unknown) => {
-        verifyClientPromise = null;
-        const detail = err instanceof Error ? err.message : String(err);
-        throw new Error(`google-auth-library is required for Google Chat auth: ${detail}`);
-      });
+  if (verifyClient) {
+    return verifyClient;
   }
-  return await verifyClientPromise;
+  try {
+    const client = await import("google-auth-library").then((module) => new module.OAuth2Client());
+    verifyClient = client;
+    return client;
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new Error(`google-auth-library is required for Google Chat auth: ${detail}`);
+  }
 }
 
 let cachedCerts: { fetchedAt: number; certs: Record<string, string> } | null = null;
@@ -70,8 +72,8 @@ export async function verifyGoogleChatRequest(params: {
 
   if (params.audienceType === "app-url") {
     try {
-      const verifyClient = await getVerifyClient();
-      const ticket = await verifyClient.verifyIdToken({
+      const client = await getVerifyClient();
+      const ticket = await client.verifyIdToken({
         idToken: bearer,
         audience,
       });
@@ -96,9 +98,9 @@ export async function verifyGoogleChatRequest(params: {
 
   if (params.audienceType === "project-number") {
     try {
-      const verifyClient = await getVerifyClient();
+      const client = await getVerifyClient();
       const certs = await fetchChatCerts();
-      await verifyClient.verifySignedJwtWithCertsAsync(bearer, certs, audience, [CHAT_ISSUER]);
+      await client.verifySignedJwtWithCertsAsync(bearer, certs, audience, [CHAT_ISSUER]);
       return { ok: true };
     } catch (err) {
       return { ok: false, reason: err instanceof Error ? err.message : "invalid token" };

@@ -13,6 +13,10 @@ import { TelegramNormalizationError } from "../ingress/telegram.js";
 import type { TelegramBot } from "../ingress/telegram-bot.js";
 import type { RoutingConfigDal } from "./routing-config-dal.js";
 import type { MemoryDal } from "../memory/memory-dal.js";
+import {
+  startTelegramPollingLeaseHeartbeat,
+  TelegramPollingWorkerLeaseLostError,
+} from "./telegram-polling-lease-heartbeat.js";
 
 const DEFAULT_RECONCILE_INTERVAL_MS = 30_000;
 const DEFAULT_POLL_TIMEOUT_SECONDS = 30;
@@ -108,14 +112,7 @@ class TelegramPollingWorker {
         leaseTtlMs: this.deps.leaseTtlMs,
       });
       if (!acquired) {
-        if (this.hasLease) {
-          this.hasLease = false;
-          this.clearedWebhookForLease = false;
-          this.deps.logger?.warn("channel.telegram.polling.lease_lost", {
-            account_key: this.deps.accountKey,
-            owner: this.deps.owner,
-          });
-        }
+        this.markLeaseLost();
         await sleep(this.deps.idleDelayMs);
         continue;
       }
@@ -141,6 +138,10 @@ class TelegramPollingWorker {
             owner: this.deps.owner,
           });
           break;
+        }
+        if (err instanceof TelegramPollingWorkerLeaseLostError) {
+          this.markLeaseLost();
+          continue;
         }
         const message = err instanceof Error ? err.message : String(err);
         const occurredAt = new Date().toISOString();
@@ -179,152 +180,187 @@ class TelegramPollingWorker {
   }
 
   private async pollOnce(): Promise<void> {
-    const pollingAccount = await this.loadPollingAccount();
-    const bot = this.deps.runtime.getBotForTelegramAccount({
-      tenantId: this.deps.tenantId,
-      account: pollingAccount,
-    });
-    if (!bot) {
-      throw new Error("Telegram bot token is required for polling mode");
-    }
-
-    const botUserId = await this.getBotUserId(bot);
-    const state = await this.deps.stateDal.get({
+    const leaseHeartbeat = startTelegramPollingLeaseHeartbeat({
       tenantId: this.deps.tenantId,
       accountKey: this.deps.accountKey,
+      owner: this.deps.owner,
+      stateDal: this.deps.stateDal,
+      leaseTtlMs: this.deps.leaseTtlMs,
+      abort: () => {
+        this.abortController?.abort();
+      },
     });
-    const polledAt = new Date().toISOString();
-    let nextOffset = state?.next_update_id ?? undefined;
-    if (state?.bot_user_id && state.bot_user_id !== botUserId) {
-      await this.deps.stateDal.resetCursorForBot({
+    try {
+      const pollingAccount = await this.loadPollingAccount();
+      const bot = this.deps.runtime.getBotForTelegramAccount({
         tenantId: this.deps.tenantId,
-        accountKey: this.deps.accountKey,
-        owner: this.deps.owner,
-        botUserId,
-        polledAt,
+        account: pollingAccount,
       });
-      nextOffset = undefined;
-      this.deps.logger?.info?.("channel.telegram.polling.bot_identity_changed", {
-        account_key: this.deps.accountKey,
-        previous_bot_user_id: state.bot_user_id,
-        next_bot_user_id: botUserId,
-      });
-    } else {
-      await this.deps.stateDal.markRunning({
-        tenantId: this.deps.tenantId,
-        accountKey: this.deps.accountKey,
-        owner: this.deps.owner,
-        botUserId,
-        polledAt,
-      });
-    }
-
-    if (!this.clearedWebhookForLease) {
-      await bot.deleteWebhook({ drop_pending_updates: false });
-      this.clearedWebhookForLease = true;
-      this.deps.logger?.info?.("channel.telegram.polling.webhook_deleted", {
-        account_key: this.deps.accountKey,
-        owner: this.deps.owner,
-      });
-    }
-
-    this.abortController?.abort();
-    this.abortController = new AbortController();
-    const updates = await bot.getUpdates({
-      offset: nextOffset,
-      limit: this.deps.pollLimit,
-      timeout: this.deps.pollTimeoutSeconds,
-      allowed_updates: ALLOWED_UPDATES,
-      signal: this.abortController.signal,
-    });
-    const batchPolledAt = new Date().toISOString();
-    if (updates.length === 0) {
-      await this.deps.stateDal.markRunning({
-        tenantId: this.deps.tenantId,
-        accountKey: this.deps.accountKey,
-        owner: this.deps.owner,
-        botUserId,
-        polledAt: batchPolledAt,
-      });
-      return;
-    }
-
-    for (const update of updates) {
-      const currentAccount = await this.loadPollingAccount();
-      const currentBot = this.deps.runtime.getBotForTelegramAccount({
-        tenantId: this.deps.tenantId,
-        account: currentAccount,
-      });
-      if (!currentBot) {
+      if (!bot) {
         throw new Error("Telegram bot token is required for polling mode");
       }
-      const nextUpdateId = update.update_id + 1;
-      try {
-        await processTelegramInboundUpdate({
-          rawBody: JSON.stringify(update),
-          tenantId: this.deps.tenantId,
-          account: {
-            accountKey: currentAccount.account_key,
-            agentKey: currentAccount.agent_key,
-            allowedUserIds: currentAccount.allowed_user_ids,
-            pipelineEnabled: currentAccount.pipeline_enabled,
-          },
-          telegramBot: currentBot,
-          agents: this.deps.agents,
-          telegramQueue: this.deps.queue,
-          routingConfigDal: this.deps.routingConfigDal,
-          memoryDal: this.deps.memoryDal,
-          logger: this.deps.logger,
-        });
-      } catch (err) {
-        if (err instanceof TelegramNormalizationError) {
-          this.deps.logger?.warn("channel.telegram.polling.update_skipped", {
-            account_key: this.deps.accountKey,
-            update_id: update.update_id,
-            error: err.message,
-          });
-          await this.deps.stateDal.updateCursor({
-            tenantId: this.deps.tenantId,
-            accountKey: this.deps.accountKey,
-            owner: this.deps.owner,
-            botUserId,
-            nextUpdateId,
-            polledAt: new Date().toISOString(),
-          });
-          this.deps.logger?.info?.("channel.telegram.polling.offset_advanced", {
-            account_key: this.deps.accountKey,
-            update_id: update.update_id,
-            next_update_id: nextUpdateId,
-            reason: "normalization_skipped",
-          });
-          continue;
-        }
-        if (err instanceof TelegramInboundTemporaryFailure) {
-          this.deps.logger?.warn("channel.telegram.polling.retrying_update", {
-            account_key: this.deps.accountKey,
-            update_id: update.update_id,
-            error: err.message,
-          });
-          throw err;
-        }
-        throw err;
-      }
 
-      await this.deps.stateDal.updateCursor({
+      const botUserId = await this.getBotUserId(bot);
+      const state = await this.deps.stateDal.get({
         tenantId: this.deps.tenantId,
         accountKey: this.deps.accountKey,
-        owner: this.deps.owner,
-        botUserId,
-        nextUpdateId,
-        polledAt: new Date().toISOString(),
       });
-      this.deps.logger?.info?.("channel.telegram.polling.offset_advanced", {
-        account_key: this.deps.accountKey,
-        update_id: update.update_id,
-        next_update_id: nextUpdateId,
-        reason: "processed",
+      const polledAt = new Date().toISOString();
+      let nextOffset = state?.next_update_id ?? undefined;
+      if (state?.bot_user_id && state.bot_user_id !== botUserId) {
+        await this.deps.stateDal.resetCursorForBot({
+          tenantId: this.deps.tenantId,
+          accountKey: this.deps.accountKey,
+          owner: this.deps.owner,
+          botUserId,
+          polledAt,
+        });
+        nextOffset = undefined;
+        this.deps.logger?.info?.("channel.telegram.polling.bot_identity_changed", {
+          account_key: this.deps.accountKey,
+          previous_bot_user_id: state.bot_user_id,
+          next_bot_user_id: botUserId,
+        });
+      } else {
+        await this.deps.stateDal.markRunning({
+          tenantId: this.deps.tenantId,
+          accountKey: this.deps.accountKey,
+          owner: this.deps.owner,
+          botUserId,
+          polledAt,
+        });
+      }
+      leaseHeartbeat.throwIfLeaseLost();
+
+      if (!this.clearedWebhookForLease) {
+        await bot.deleteWebhook({ drop_pending_updates: false });
+        this.clearedWebhookForLease = true;
+        this.deps.logger?.info?.("channel.telegram.polling.webhook_deleted", {
+          account_key: this.deps.accountKey,
+          owner: this.deps.owner,
+        });
+      }
+
+      this.abortController?.abort();
+      this.abortController = new AbortController();
+      const updates = await bot.getUpdates({
+        offset: nextOffset,
+        limit: this.deps.pollLimit,
+        timeout: this.deps.pollTimeoutSeconds,
+        allowed_updates: ALLOWED_UPDATES,
+        signal: this.abortController.signal,
       });
+      leaseHeartbeat.throwIfLeaseLost();
+
+      const batchPolledAt = new Date().toISOString();
+      if (updates.length === 0) {
+        await this.deps.stateDal.markRunning({
+          tenantId: this.deps.tenantId,
+          accountKey: this.deps.accountKey,
+          owner: this.deps.owner,
+          botUserId,
+          polledAt: batchPolledAt,
+        });
+        leaseHeartbeat.throwIfLeaseLost();
+        return;
+      }
+
+      for (const update of updates) {
+        leaseHeartbeat.throwIfLeaseLost();
+        const currentAccount = await this.loadPollingAccount();
+        const currentBot = this.deps.runtime.getBotForTelegramAccount({
+          tenantId: this.deps.tenantId,
+          account: currentAccount,
+        });
+        if (!currentBot) {
+          throw new Error("Telegram bot token is required for polling mode");
+        }
+        const nextUpdateId = update.update_id + 1;
+        try {
+          await processTelegramInboundUpdate({
+            rawBody: JSON.stringify(update),
+            tenantId: this.deps.tenantId,
+            account: {
+              accountKey: currentAccount.account_key,
+              agentKey: currentAccount.agent_key,
+              allowedUserIds: currentAccount.allowed_user_ids,
+              pipelineEnabled: currentAccount.pipeline_enabled,
+            },
+            telegramBot: currentBot,
+            agents: this.deps.agents,
+            telegramQueue: this.deps.queue,
+            routingConfigDal: this.deps.routingConfigDal,
+            memoryDal: this.deps.memoryDal,
+            logger: this.deps.logger,
+          });
+        } catch (err) {
+          if (err instanceof TelegramNormalizationError) {
+            this.deps.logger?.warn("channel.telegram.polling.update_skipped", {
+              account_key: this.deps.accountKey,
+              update_id: update.update_id,
+              error: err.message,
+            });
+            leaseHeartbeat.throwIfLeaseLost();
+            await this.deps.stateDal.updateCursor({
+              tenantId: this.deps.tenantId,
+              accountKey: this.deps.accountKey,
+              owner: this.deps.owner,
+              botUserId,
+              nextUpdateId,
+              polledAt: new Date().toISOString(),
+            });
+            leaseHeartbeat.throwIfLeaseLost();
+            this.deps.logger?.info?.("channel.telegram.polling.offset_advanced", {
+              account_key: this.deps.accountKey,
+              update_id: update.update_id,
+              next_update_id: nextUpdateId,
+              reason: "normalization_skipped",
+            });
+            continue;
+          }
+          if (err instanceof TelegramInboundTemporaryFailure) {
+            this.deps.logger?.warn("channel.telegram.polling.retrying_update", {
+              account_key: this.deps.accountKey,
+              update_id: update.update_id,
+              error: err.message,
+            });
+            throw err;
+          }
+          throw err;
+        }
+
+        leaseHeartbeat.throwIfLeaseLost();
+        await this.deps.stateDal.updateCursor({
+          tenantId: this.deps.tenantId,
+          accountKey: this.deps.accountKey,
+          owner: this.deps.owner,
+          botUserId,
+          nextUpdateId,
+          polledAt: new Date().toISOString(),
+        });
+        leaseHeartbeat.throwIfLeaseLost();
+        this.deps.logger?.info?.("channel.telegram.polling.offset_advanced", {
+          account_key: this.deps.accountKey,
+          update_id: update.update_id,
+          next_update_id: nextUpdateId,
+          reason: "processed",
+        });
+      }
+    } finally {
+      await leaseHeartbeat.stop();
     }
+  }
+
+  private markLeaseLost(): void {
+    if (!this.hasLease) {
+      return;
+    }
+    this.hasLease = false;
+    this.clearedWebhookForLease = false;
+    this.deps.logger?.warn("channel.telegram.polling.lease_lost", {
+      account_key: this.deps.accountKey,
+      owner: this.deps.owner,
+    });
   }
 
   private async loadPollingAccount(): Promise<StoredTelegramChannelConfig> {
