@@ -86,6 +86,7 @@ export async function createToolExecutorForTurnPreparation(input: {
           db: input.deps.opts.container.db,
           tenantId: input.session.tenant_id,
           fetchImpl: input.deps.fetchImpl,
+          artifactStore: input.deps.opts.container.artifactStore,
           logger: input.deps.opts.container.logger,
           resolveModel: async () =>
             (
