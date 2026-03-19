@@ -9,7 +9,6 @@ import {
   OperatorUiApp,
   OperatorUiHostProvider,
   ThemeProvider,
-  getDesktopApi,
 } from "@tyrum/operator-ui";
 import "@tyrum/operator-ui/globals.css";
 import { useState } from "react";
@@ -199,7 +198,7 @@ function DesktopSetupWizard({ onConfigured }: { onConfigured: () => void }) {
 
 function DesktopBootstrap() {
   const operatorCore = useDesktopOperatorCore();
-  const hostApi = { kind: "desktop" as const, api: getDesktopApi() };
+  const hostApi = { kind: "desktop" as const, api: window.tyrumDesktop ?? null };
 
   if (operatorCore.needsConfiguration) {
     return <DesktopSetupWizard onConfigured={operatorCore.retry} />;

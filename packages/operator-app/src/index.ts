@@ -6,6 +6,11 @@ export {
   wsTokenForAuth,
 } from "./auth.js";
 export type { OperatorAuthStrategy } from "./auth.js";
+export {
+  createTyrumAiSdkChatSessionClient,
+  createTyrumAiSdkChatTransport,
+  supportsTyrumAiSdkChatSocket,
+} from "@tyrum/client/browser";
 
 export { createGatewayAuthSession, clearGatewayAuthSession } from "./auth-session.js";
 export {
@@ -51,6 +56,12 @@ export type {
   OperatorChatSocket,
   OperatorWorkboardClient,
 } from "./operator-core.types.js";
+export type {
+  TyrumAiSdkChatSession,
+  TyrumAiSdkChatSessionClient,
+  TyrumAiSdkChatSessionSummary,
+  TyrumAiSdkChatSocket,
+} from "@tyrum/client/browser";
 
 export type { ExternalStore, Unsubscribe } from "./store.js";
 
@@ -131,6 +142,10 @@ export type {
 } from "./workboard/workboard-utils.js";
 
 export type {
+  Approval,
+  ExecutionAttempt,
+  ExecutionRun,
+  ExecutionStep,
   DecisionRecord,
   WorkArtifact,
   WorkItem,

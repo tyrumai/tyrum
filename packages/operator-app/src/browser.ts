@@ -21,6 +21,7 @@ export {
 } from "@tyrum/transport-sdk/browser";
 export type { ManagedNodeClientLifecycle } from "@tyrum/client/browser";
 export type { CapabilityProvider, TaskExecuteContext, TaskResult } from "@tyrum/node-sdk/browser";
+export { BrowserActionArgs } from "@tyrum/contracts";
 export type {
   AgentListResult,
   AuditExportResult,
@@ -38,6 +39,7 @@ export type {
   BrowserTyrumHttpClientOptions,
   DeviceIdentity,
 } from "@tyrum/transport-sdk/browser";
+export type { ActionPrimitive } from "@tyrum/contracts";
 export type {
   ExecutionAttempt,
   ExecutionRun,

@@ -59,11 +59,3 @@ export type DesktopApi = {
   };
   onUpdateStateChange?: (cb: (state: unknown) => void) => () => void;
 };
-
-export function getDesktopApi(): DesktopApi | null {
-  const api = (globalThis as unknown as { window?: unknown }).window as
-    | { tyrumDesktop?: unknown }
-    | undefined;
-  if (!api?.tyrumDesktop) return null;
-  return api.tyrumDesktop as DesktopApi;
-}

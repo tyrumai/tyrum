@@ -5,6 +5,19 @@ export { OperatorUiApp } from "./app.js";
 export type { WebAuthPersistence } from "./web-auth.js";
 
 export type {
+  BrowserCapabilityName,
+  BrowserCapabilityState,
+  BrowserNodeApi,
+  BrowserNodeState,
+  BrowserNodeStatus,
+} from "./browser-node/browser-node-provider.js";
+export {
+  BrowserNodeProvider,
+  useBrowserNode,
+  useBrowserNodeOptional,
+} from "./browser-node/browser-node-provider.js";
+
+export type {
   HostKind,
   MobileHostActionName,
   MobileHostActionState,
@@ -17,7 +30,6 @@ export type {
 export { OperatorUiHostProvider, useHostApi, useHostApiOptional } from "./host/host-api.js";
 
 export type { DesktopApi } from "./desktop-api.js";
-export { getDesktopApi } from "./desktop-api.js";
 
 export type { AdminAccessController, AdminAccessProviderProps } from "./elevated-mode.js";
 export { ADMIN_ACCESS_SCOPES, createAdminAccessController } from "./elevated-mode.js";

@@ -18,6 +18,7 @@ import {
   type WebAuthPersistence,
 } from "@tyrum/operator-ui";
 import "@tyrum/operator-ui/globals.css";
+import { BrowserNodeProvider } from "./browser-node/browser-node-provider.js";
 import { reloadPage } from "./reload-page.js";
 import { readAuthTokenFromUrl, stripAuthTokenFromUrl } from "./url-auth.js";
 
@@ -307,22 +308,24 @@ async function bootstrap(): Promise<void> {
   const render = (): void => {
     root.render(
       <React.StrictMode>
-        <OperatorUiHostProvider value={{ kind: "web" }}>
-          <OperatorUiApp
-            core={manager.getCore()}
-            mode="web"
-            adminAccessController={adminAccessController}
-            onReloadPage={reloadPage}
-            onReconfigureGateway={(httpUrl, wsUrl) => {
-              try {
-                localStorage.setItem(GATEWAY_HTTP_STORAGE_KEY, httpUrl);
-                localStorage.setItem(GATEWAY_WS_STORAGE_KEY, wsUrl);
-              } catch {}
-              reloadPage();
-            }}
-            webAuthPersistence={webAuthPersistence}
-          />
-        </OperatorUiHostProvider>
+        <BrowserNodeProvider wsUrl={resolveGatewayWsUrl()}>
+          <OperatorUiHostProvider value={{ kind: "web" }}>
+            <OperatorUiApp
+              core={manager.getCore()}
+              mode="web"
+              adminAccessController={adminAccessController}
+              onReloadPage={reloadPage}
+              onReconfigureGateway={(httpUrl, wsUrl) => {
+                try {
+                  localStorage.setItem(GATEWAY_HTTP_STORAGE_KEY, httpUrl);
+                  localStorage.setItem(GATEWAY_WS_STORAGE_KEY, wsUrl);
+                } catch {}
+                reloadPage();
+              }}
+              webAuthPersistence={webAuthPersistence}
+            />
+          </OperatorUiHostProvider>
+        </BrowserNodeProvider>
       </React.StrictMode>,
     );
   };

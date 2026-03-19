@@ -10,8 +10,7 @@ import { Spinner } from "./components/ui/spinner.js";
 import { ToastProvider } from "./components/toast/toast-provider.js";
 import { AdminAccessModeProvider } from "./hooks/use-admin-access-mode.js";
 import { ThemeProvider, useThemeOptional } from "./hooks/use-theme.js";
-import { BrowserNodeProvider } from "./browser-node/browser-node-provider.js";
-import { getDesktopApi } from "./desktop-api.js";
+import type { DesktopApi } from "./desktop-api.js";
 import { OperatorUiHostProvider, useHostApiOptional, type HostKind } from "./host/host-api.js";
 import { LocalNodeAutoApprovalBridge } from "./local-node-auto-approval.js";
 import { CONNECT_PAGE_RENDER, getOperatorRouteDefinition } from "./operator-routes.js";
@@ -83,9 +82,7 @@ function OperatorUiAppHostBoundary({
   const existing = useHostApiOptional();
   if (existing) return children;
   const value =
-    mode === "desktop"
-      ? { kind: "desktop" as const, api: getDesktopApi() }
-      : { kind: "web" as const };
+    mode === "desktop" ? { kind: "desktop" as const, api: null } : { kind: "web" as const };
   return <OperatorUiHostProvider value={value}>{children}</OperatorUiHostProvider>;
 }
 
@@ -265,15 +262,7 @@ function OperatorUiAppRoot({
     </AppShell>
   );
 
-  const app = (
-    <ToastProvider>
-      {hostKind === "web" ? (
-        <BrowserNodeProvider wsUrl={core.wsUrl}>{shell}</BrowserNodeProvider>
-      ) : (
-        shell
-      )}
-    </ToastProvider>
-  );
+  const app = <ToastProvider>{shell}</ToastProvider>;
 
   return existingTheme ? app : <ThemeProvider>{app}</ThemeProvider>;
 }
@@ -293,7 +282,7 @@ function useDesktopNodeAutoConnection({
 }: {
   connection: { status: "disconnected" | "connecting" | "connected"; recovering: boolean };
   hostKind: HostKind;
-  hostApi: ReturnType<typeof getDesktopApi> | null;
+  hostApi: DesktopApi | null;
 }) {
   const nodeLinkedRef = useRef(false);
 

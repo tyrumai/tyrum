@@ -14,7 +14,7 @@ const createSessionClientMock = vi.hoisted(() => vi.fn());
 const createTransportMock = vi.hoisted(() => vi.fn(() => ({ transport: true })));
 const toastErrorMock = vi.hoisted(() => vi.fn());
 
-vi.mock("@tyrum/client", () => ({
+vi.mock("@tyrum/operator-app", () => ({
   supportsTyrumAiSdkChatSocket: supportsSocketMock,
   createTyrumAiSdkChatSessionClient: createSessionClientMock,
   createTyrumAiSdkChatTransport: createTransportMock,

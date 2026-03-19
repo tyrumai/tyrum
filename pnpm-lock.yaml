@@ -297,6 +297,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@tyrum/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@tyrum/operator-app':
         specifier: workspace:*
         version: link:../../packages/operator-app
@@ -701,9 +704,6 @@ importers:
       '@tailwindcss/typography':
         specifier: ^0.5.16
         version: 0.5.19(tailwindcss@4.2.2)
-      '@tyrum/client':
-        specifier: workspace:*
-        version: link:../client
       '@tyrum/contracts':
         specifier: workspace:*
         version: link:../contracts

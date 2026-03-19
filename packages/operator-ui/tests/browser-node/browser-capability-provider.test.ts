@@ -1,7 +1,26 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createBrowserCapabilityProvider } from "../../src/browser-node/browser-capability-provider.js";
+
+vi.mock("@tyrum/contracts", () => ({
+  BrowserActionArgs: {
+    safeParse(input: unknown) {
+      if (!input || typeof input !== "object" || Array.isArray(input)) {
+        return { success: false, error: { message: "invalid browser args" } };
+      }
+      const op = (input as { op?: unknown }).op;
+      if (op !== "get" && op !== "capture_photo" && op !== "record") {
+        return { success: false, error: { message: "invalid browser args" } };
+      }
+      return { success: true, data: input };
+    },
+  },
+}));
+
+async function loadCreateBrowserCapabilityProvider() {
+  const mod = await import("../../../../apps/web/src/browser-node/browser-capability-provider.js");
+  return mod.createBrowserCapabilityProvider;
+}
 
 function stubLocalStorage(): void {
   const store = new Map<string, string>();
@@ -25,6 +44,7 @@ afterEach(() => {
 describe("createBrowserCapabilityProvider", () => {
   it("rejects unsupported action types", async () => {
     stubLocalStorage();
+    const createBrowserCapabilityProvider = await loadCreateBrowserCapabilityProvider();
     const provider = createBrowserCapabilityProvider({
       requestConsent: async () => true,
     });
@@ -36,6 +56,7 @@ describe("createBrowserCapabilityProvider", () => {
 
   it("returns geolocation coords when allowed", async () => {
     stubLocalStorage();
+    const createBrowserCapabilityProvider = await loadCreateBrowserCapabilityProvider();
     vi.stubGlobal("navigator", {
       geolocation: {
         getCurrentPosition: (
@@ -78,6 +99,7 @@ describe("createBrowserCapabilityProvider", () => {
 
   it("returns a descriptive error when camera APIs are unavailable", async () => {
     stubLocalStorage();
+    const createBrowserCapabilityProvider = await loadCreateBrowserCapabilityProvider();
     vi.stubGlobal("navigator", {});
 
     const provider = createBrowserCapabilityProvider({
@@ -95,6 +117,7 @@ describe("createBrowserCapabilityProvider", () => {
 
   it("records audio and returns base64 evidence", async () => {
     stubLocalStorage();
+    const createBrowserCapabilityProvider = await loadCreateBrowserCapabilityProvider();
     vi.useFakeTimers();
 
     class FakeFileReader {

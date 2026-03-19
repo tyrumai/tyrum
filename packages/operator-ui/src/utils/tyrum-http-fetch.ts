@@ -1,4 +1,4 @@
-import { getDesktopApi } from "../desktop-api.js";
+import type { DesktopApi } from "../desktop-api.js";
 
 type TyrumHttpFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
@@ -11,11 +11,13 @@ function headersToRecord(headers: HeadersInit | undefined): Record<string, strin
   return record;
 }
 
-export function resolveTyrumHttpFetch(mode: "web" | "desktop"): TyrumHttpFetch | undefined {
+export function resolveTyrumHttpFetch(
+  desktopApi: DesktopApi | null,
+  mode: "web" | "desktop",
+): TyrumHttpFetch | undefined {
   if (mode !== "desktop") return undefined;
 
-  const api = getDesktopApi();
-  const httpFetch = api?.gateway.httpFetch;
+  const httpFetch = desktopApi?.gateway.httpFetch;
   if (!httpFetch) return undefined;
 
   return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {

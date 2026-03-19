@@ -16,7 +16,7 @@ const toastErrorMock = vi.hoisted(() => vi.fn());
 const appShellMinWidthState = vi.hoisted(() => vi.fn(() => true));
 const conversationLifecycleState = vi.hoisted(() => ({ mounts: 0, unmounts: 0 }));
 
-vi.mock("@tyrum/client", () => ({
+vi.mock("@tyrum/operator-app", () => ({
   supportsTyrumAiSdkChatSocket: supportsSocketMock,
   createTyrumAiSdkChatSessionClient: createSessionClientMock,
   createTyrumAiSdkChatTransport: createTransportMock,
@@ -106,7 +106,6 @@ vi.mock("../src/host/host-api.js", () => ({
     e(React.Fragment, null, children),
   useHostApiOptional: vi.fn(() => null),
 }));
-vi.mock("../src/desktop-api.js", () => ({ getDesktopApi: vi.fn(() => null) }));
 vi.mock("../src/components/error/error-boundary.js", () => ({
   ErrorBoundary: ({ children }: { children: React.ReactNode }) => e(React.Fragment, null, children),
 }));

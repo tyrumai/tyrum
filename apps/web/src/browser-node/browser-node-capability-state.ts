@@ -1,9 +1,3 @@
-import {
-  CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-  type NodeCapabilityActionState,
-  type NodeCapabilityState,
-} from "@tyrum/contracts";
-
 export type BrowserCapabilityName = "get" | "capture_photo" | "record";
 
 export type BrowserCapabilityState = {
@@ -16,7 +10,6 @@ export type BrowserCapabilityState = {
 export type BrowserCapabilitySettings = Record<BrowserCapabilityName, boolean>;
 
 export const BROWSER_CAPABILITY_NAMES: BrowserCapabilityName[] = ["get", "capture_photo", "record"];
-
 const BROWSER_CAPABILITY_DESCRIPTOR_IDS: Record<BrowserCapabilityName, string> = {
   get: "tyrum.location.get",
   capture_photo: "tyrum.camera.capture-photo",
@@ -135,28 +128,22 @@ export function resolveBrowserCapabilityStates(
   };
 }
 
-function toNodeCapabilityActionState(
-  name: BrowserCapabilityName,
-  state: BrowserCapabilityState,
-): NodeCapabilityActionState {
-  const actionState: NodeCapabilityActionState = {
+function toNodeCapabilityActionState(name: BrowserCapabilityName, state: BrowserCapabilityState) {
+  return {
     name,
     enabled: state.enabled,
     availability_status: state.availability_status,
+    ...(state.unavailable_reason ? { unavailable_reason: state.unavailable_reason } : {}),
   };
-  if (state.unavailable_reason) {
-    actionState.unavailable_reason = state.unavailable_reason;
-  }
-  return actionState;
 }
 
 export function toNodeCapabilityStates(
   capabilityStates: Record<BrowserCapabilityName, BrowserCapabilityState>,
-): NodeCapabilityState[] {
+) {
   return BROWSER_CAPABILITY_NAMES.map((name) => ({
     capability: {
       id: BROWSER_CAPABILITY_DESCRIPTOR_IDS[name],
-      version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+      version: "1.0.0",
     },
     actions: [toNodeCapabilityActionState(name, capabilityStates[name])],
   }));

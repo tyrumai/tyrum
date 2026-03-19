@@ -70,6 +70,49 @@ export type OperatorUiAppProps = {
   webAuthPersistence: WebAuthPersistence;
 };
 
+type ReactElementLike = {
+  props?: {
+    children?: unknown;
+    webAuthPersistence?: WebAuthPersistence;
+    onReloadPage?: () => void;
+    onReconfigureGateway?: (httpUrl: string, wsUrl: string) => void;
+  };
+};
+
+function isOperatorUiAppProps(value: unknown): value is OperatorUiAppProps {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate["onReloadPage"] === "function" &&
+    typeof candidate["onReconfigureGateway"] === "function" &&
+    typeof candidate["webAuthPersistence"] === "object" &&
+    candidate["webAuthPersistence"] !== null
+  );
+}
+
+function findOperatorUiProps(node: unknown): OperatorUiAppProps | null {
+  if (!node || typeof node !== "object") {
+    return null;
+  }
+  const element = node as ReactElementLike;
+  if (isOperatorUiAppProps(element.props)) {
+    return element.props;
+  }
+  const children = element.props?.children;
+  if (Array.isArray(children)) {
+    for (const child of children) {
+      const found = findOperatorUiProps(child);
+      if (found) {
+        return found;
+      }
+    }
+    return null;
+  }
+  return findOperatorUiProps(children);
+}
+
 function setupDom(url: string): ReturnType<typeof vi.spyOn> {
   document.body.innerHTML = '<div id="root"></div>';
   window.history.replaceState({}, "", url);
@@ -184,12 +227,10 @@ export const jsonResponse = (status: number, body: unknown): Response =>
   });
 
 export function getRenderedOperatorUiProps(root: RootMock): OperatorUiAppProps {
-  const strictModeElement = root.render.mock.calls.at(-1)?.[0] as {
-    props?: { children?: { props?: { children?: { props?: OperatorUiAppProps } } } };
-  };
-  const props = strictModeElement?.props?.children?.props?.children?.props;
+  const strictModeElement = root.render.mock.calls.at(-1)?.[0];
+  const props = findOperatorUiProps(strictModeElement);
   expect(props).toBeDefined();
-  return props as OperatorUiAppProps;
+  return props;
 }
 
 export function useNoUrlToken(urlAuth: UrlAuthModuleT): void {

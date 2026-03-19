@@ -1,5 +1,5 @@
 import { isFileUIPart, isTextUIPart, type UIMessage } from "ai";
-import type { TyrumAiSdkChatSession, TyrumAiSdkChatSessionSummary } from "@tyrum/client";
+import type { TyrumAiSdkChatSession, TyrumAiSdkChatSessionSummary } from "@tyrum/operator-app";
 import type { ChatThreadSummary } from "./chat-page-threads.js";
 
 export const DEFAULT_CHAT_TITLE = "New chat";

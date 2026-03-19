@@ -1,5 +1,4 @@
-import type { OperatorCore } from "@tyrum/operator-app";
-import type { ExecutionRun } from "@tyrum/client";
+import type { ExecutionRun, OperatorCore } from "@tyrum/operator-app";
 import { Play } from "lucide-react";
 import { useMemo, useState } from "react";
 import { AppPage } from "../layout/app-page.js";

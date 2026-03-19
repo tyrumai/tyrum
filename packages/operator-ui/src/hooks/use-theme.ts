@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { getDesktopApi } from "../desktop-api.js";
+import { useHostApiOptional } from "../host/host-api.js";
 
 export type ThemeMode = "system" | "light" | "dark";
 
@@ -57,7 +57,8 @@ function resolveSystemColorScheme(): "dark" | "light" {
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const desktopApi = getDesktopApi();
+  const host = useHostApiOptional();
+  const desktopApi = host?.kind === "desktop" ? host.api : null;
   const [mode, setMode] = useState<ThemeMode>(() => resolveWebStoredMode() ?? "dark");
   const [systemColorScheme, setSystemColorScheme] = useState<"dark" | "light">(() =>
     resolveSystemColorScheme(),

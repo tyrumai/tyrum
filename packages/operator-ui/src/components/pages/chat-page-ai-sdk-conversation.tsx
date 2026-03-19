@@ -1,6 +1,11 @@
-import type { Approval } from "@tyrum/client";
-import type { ResolveApprovalInput } from "@tyrum/operator-app";
-import type { OperatorCore } from "@tyrum/operator-app";
+import type {
+  Approval,
+  OperatorCore,
+  ResolveApprovalInput,
+  TyrumAiSdkChatSession,
+  createTyrumAiSdkChatSessionClient,
+  createTyrumAiSdkChatTransport,
+} from "@tyrum/operator-app";
 import { useChat } from "@ai-sdk/react";
 import type { FileUIPart, UIMessage } from "ai";
 import { ChevronLeft, Paperclip, Send, Trash2, X } from "lucide-react";
@@ -12,11 +17,6 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import { toast } from "sonner";
-import type {
-  createTyrumAiSdkChatSessionClient,
-  createTyrumAiSdkChatTransport,
-  TyrumAiSdkChatSession,
-} from "@tyrum/client";
 import { AiSdkChatMessageList } from "./chat-page-ai-sdk-messages.js";
 import { getSessionDisplayTitle } from "./chat-page-ai-sdk-shared.js";
 import { Alert } from "../ui/alert.js";

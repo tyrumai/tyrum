@@ -74,7 +74,6 @@ const {
   ThemeProviderMock,
   createRootMock,
   desktopApi,
-  getDesktopApiMock,
   renderMock,
   setDesktopOperatorCoreState,
   useDesktopOperatorCoreMock,
@@ -83,7 +82,6 @@ const {
   const createRootMockInner = vi.fn(() => ({ render: renderMockInner }));
 
   const desktopApiInner = { kind: "desktop-api" as const };
-  const getDesktopApiMockInner = vi.fn(() => desktopApiInner);
 
   let operatorCoreState: DesktopOperatorCoreState = {
     core: null,
@@ -124,7 +122,6 @@ const {
     ThemeProviderMock: ThemeProviderMockInner,
     createRootMock: createRootMockInner,
     desktopApi: desktopApiInner,
-    getDesktopApiMock: getDesktopApiMockInner,
     renderMock: renderMockInner,
     setDesktopOperatorCoreState: setDesktopOperatorCoreStateInner,
     useDesktopOperatorCoreMock: useDesktopOperatorCoreMockInner,
@@ -145,7 +142,6 @@ vi.mock("@tyrum/operator-ui", () => ({
   OperatorUiApp: OperatorUiAppMock,
   OperatorUiHostProvider: OperatorUiHostProviderMock,
   ThemeProvider: ThemeProviderMock,
-  getDesktopApi: getDesktopApiMock,
 }));
 
 vi.mock("../src/renderer/lib/desktop-operator-core.js", () => ({
@@ -157,6 +153,7 @@ describe("desktop renderer main bootstrap", () => {
     vi.resetModules();
     vi.clearAllMocks();
     document.body.innerHTML = '<div id="root"></div>';
+    (window as typeof window & { tyrumDesktop?: unknown }).tyrumDesktop = desktopApi;
   });
 
   function loadDesktopBootstrap(): () => unknown {
@@ -199,8 +196,6 @@ describe("desktop renderer main bootstrap", () => {
 
     const DesktopBootstrap = loadDesktopBootstrap();
     const tree = DesktopBootstrap();
-
-    expect(getDesktopApiMock).toHaveBeenCalledTimes(1);
 
     expect(isReactElementLike(tree)).toBe(true);
     expect((tree as ReactElementLike).type).toBe(OperatorUiHostProviderMock);
