@@ -1,14 +1,8 @@
 import {
-  buildExecutorInstruction,
-  buildPlannerInstruction,
-  maybeFinalizeWorkItem as maybeFinalizeRuntimeWorkItem,
-} from "@tyrum/runtime-workboard";
-import {
   DEFAULT_PUBLIC_BASE_URL,
   DeploymentConfig,
   isDesktopEnvironmentHostAvailable,
   type DeploymentConfig as DeploymentConfigT,
-  type WorkScope,
 } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import { DeploymentConfigDal } from "../config/deployment-config-dal.js";
@@ -16,12 +10,6 @@ import { DesktopEnvironmentDal, DesktopEnvironmentHostDal } from "../desktop-env
 import { readDesktopEnvironmentDefaultImageRef } from "../desktop-environments/default-image.js";
 import { DesktopEnvironmentLifecycleService } from "../desktop-environments/lifecycle-service.js";
 import type { SessionLaneNodeAttachmentDal } from "../agent/session-lane-node-attachment-dal.js";
-import { WorkboardDal } from "./dal.js";
-export { buildExecutorInstruction, buildPlannerInstruction };
-export {
-  resolveAgentKeyById,
-  runSubagentTurn as runManagedSubagentTurn,
-} from "./subagent-runtime-support.js";
 
 export async function provisionManagedDesktop(params: {
   db: SqlDb;
@@ -95,17 +83,5 @@ export async function cleanupManagedDesktop(params: {
   await lifecycle.deleteEnvironment({
     tenantId: params.tenantId,
     environmentId: params.environmentId,
-  });
-}
-
-export async function maybeFinalizeWorkItem(params: {
-  workboard: WorkboardDal;
-  scope: WorkScope;
-  workItemId: string;
-}): Promise<void> {
-  await maybeFinalizeRuntimeWorkItem({
-    repository: params.workboard,
-    scope: params.scope,
-    workItemId: params.workItemId,
   });
 }
