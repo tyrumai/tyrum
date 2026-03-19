@@ -72,6 +72,7 @@ export function startChannelRuntimeBundle(input: {
           stateDal: telegramPollingStateDal,
           routingConfigDal,
           memoryDal: context.container.memoryDal,
+          artifactStore: context.container.artifactStore,
           logger: context.logger,
         })
       : undefined;

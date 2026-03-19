@@ -8,6 +8,8 @@ import { TelegramPollingMonitor } from "../../src/modules/channels/telegram-poll
 import { TelegramPollingStateDal } from "../../src/modules/channels/telegram-polling-state-dal.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import {
+  createTelegramMediaFetch,
+  createTestArtifactStore,
   makeAgents,
   makeResolvedRuntime,
   makeTelegramUpdate,
@@ -206,6 +208,90 @@ describe("Telegram polling end-to-end", () => {
       expect(sendBody["chat_id"]).toBe("123");
       expect(sendBody["text"]).toBe("I can help with that!");
       expect(sendBody["parse_mode"]).toBe("HTML");
+    } finally {
+      await monitor.stop();
+      await db.close();
+      state.db = undefined;
+    }
+  });
+
+  it("materializes media attachments for polled updates before queueing them", async () => {
+    const state: TelegramQueueTestState = { db: undefined };
+    const runtime = makeResolvedRuntime("Got it.");
+    const { db, processor, queue } = setupTelegramProcessorHarness(state, { runtime });
+    const channelConfigDal = new ChannelConfigDal(db);
+    const stateDal = new TelegramPollingStateDal(db);
+    const artifactStore = createTestArtifactStore();
+
+    await channelConfigDal.createTelegram({
+      tenantId: DEFAULT_TENANT_ID,
+      accountKey: "default",
+      agentKey: "default",
+      ingressMode: "polling",
+      botToken: "poll-token",
+      webhookSecret: TEST_TELEGRAM_WEBHOOK_SECRET,
+    });
+
+    const mediaFetch = createTelegramMediaFetch();
+    const pollingBot = {
+      getMe: vi.fn(async () => ({ id: 555, is_bot: true, first_name: "Tyrum" })),
+      deleteWebhook: vi.fn(async () => true),
+      getUpdates: vi.fn(async (opts?: { offset?: number; signal?: AbortSignal }) =>
+        opts?.offset === 101
+          ? await waitForAbort(opts.signal)
+          : [
+              {
+                update_id: 100,
+                message: {
+                  message_id: 42,
+                  date: 1700000000,
+                  chat: { id: 123, type: "private" },
+                  photo: [{ file_id: "file-1", width: 800, height: 600 }],
+                },
+              },
+            ],
+      ),
+      downloadFileById: vi.fn(async (fileId: string) => {
+        const bot = new TelegramBot("poll-token", mediaFetch);
+        return await bot.downloadFileById(fileId);
+      }),
+    };
+
+    const monitor = new TelegramPollingMonitor({
+      owner: "poller-a",
+      channelConfigDal,
+      runtime: {
+        getBotForTelegramAccount: vi.fn(() => pollingBot),
+      } as never,
+      queue,
+      agents: makeAgents(runtime),
+      stateDal,
+      artifactStore,
+      reconcileIntervalMs: 20,
+      idleDelayMs: 10,
+      errorBackoffMs: 10,
+    });
+
+    try {
+      monitor.start();
+      await waitUntil(async () => {
+        const row = await stateDal.get({ tenantId: DEFAULT_TENANT_ID, accountKey: "default" });
+        return row?.next_update_id === 101;
+      });
+
+      await processor.tick();
+
+      expect(runtime.turn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          envelope: expect.objectContaining({
+            content: expect.objectContaining({
+              attachments: [expect.objectContaining({ media_class: "image" })],
+            }),
+          }),
+        }),
+      );
+      expect(artifactStore.put).toHaveBeenCalledOnce();
+      expect(mediaFetch).toHaveBeenCalledTimes(2);
     } finally {
       await monitor.stop();
       await db.close();

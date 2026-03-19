@@ -13,6 +13,7 @@ import { TelegramNormalizationError } from "../ingress/telegram.js";
 import type { TelegramBot } from "../ingress/telegram-bot.js";
 import type { RoutingConfigDal } from "./routing-config-dal.js";
 import type { MemoryDal } from "../memory/memory-dal.js";
+import type { ArtifactStore } from "../artifact/store.js";
 import {
   startTelegramPollingLeaseHeartbeat,
   TelegramPollingWorkerLeaseLostError,
@@ -71,6 +72,7 @@ class TelegramPollingWorker {
       stateDal: TelegramPollingStateDal;
       routingConfigDal?: RoutingConfigDal;
       memoryDal?: MemoryDal;
+      artifactStore?: ArtifactStore;
       logger?: Logger;
       pollTimeoutSeconds: number;
       pollLimit: number;
@@ -81,9 +83,7 @@ class TelegramPollingWorker {
   ) {}
 
   start(): void {
-    if (this.loopPromise) {
-      return;
-    }
+    if (this.loopPromise) return;
     this.stopped = false;
     this.deps.logger?.info?.("channel.telegram.polling.worker_started", {
       account_key: this.deps.accountKey,
@@ -288,6 +288,7 @@ class TelegramPollingWorker {
             telegramQueue: this.deps.queue,
             routingConfigDal: this.deps.routingConfigDal,
             memoryDal: this.deps.memoryDal,
+            artifactStore: this.deps.artifactStore,
             logger: this.deps.logger,
           });
         } catch (err) {
@@ -352,9 +353,7 @@ class TelegramPollingWorker {
   }
 
   private markLeaseLost(): void {
-    if (!this.hasLease) {
-      return;
-    }
+    if (!this.hasLease) return;
     this.hasLease = false;
     this.clearedWebhookForLease = false;
     this.deps.logger?.warn("channel.telegram.polling.lease_lost", {
@@ -407,6 +406,7 @@ export class TelegramPollingMonitor {
       stateDal: TelegramPollingStateDal;
       routingConfigDal?: RoutingConfigDal;
       memoryDal?: MemoryDal;
+      artifactStore?: ArtifactStore;
       logger?: Logger;
       reconcileIntervalMs?: number;
       pollTimeoutSeconds?: number;
@@ -418,9 +418,7 @@ export class TelegramPollingMonitor {
   ) {}
 
   start(): void {
-    if (this.running) {
-      return;
-    }
+    if (this.running) return;
     this.running = true;
     this.scheduleReconcile();
     this.reconcileTimer = setInterval(
@@ -446,9 +444,7 @@ export class TelegramPollingMonitor {
   }
 
   private scheduleReconcile(): void {
-    if (!this.running || this.reconcilePromise) {
-      return;
-    }
+    if (!this.running || this.reconcilePromise) return;
     const reconcilePromise = this.reconcile().finally(() => {
       if (this.reconcilePromise === reconcilePromise) {
         this.reconcilePromise = null;
@@ -458,16 +454,12 @@ export class TelegramPollingMonitor {
   }
 
   private async reconcile(): Promise<void> {
-    if (!this.running) {
-      return;
-    }
+    if (!this.running) return;
     const tenantId = this.deps.tenantId ?? DEFAULT_TENANT_ID;
     const configs = (await this.deps.channelConfigDal.listTelegram(tenantId)).flatMap((config) =>
       config.ingress_mode === "polling" && config.bot_token?.trim() ? [config] : [],
     );
-    if (!this.running) {
-      return;
-    }
+    if (!this.running) return;
     const desiredKeys = new Set(configs.map((config) => config.account_key));
 
     for (const [accountKey, managed] of this.workers.entries()) {
@@ -482,9 +474,7 @@ export class TelegramPollingMonitor {
     }
 
     for (const config of configs) {
-      if (!this.running) {
-        return;
-      }
+      if (!this.running) return;
       const fingerprint = accountFingerprint(config);
       const existing = this.workers.get(config.account_key);
       if (existing && existing.fingerprint === fingerprint) {
@@ -508,6 +498,7 @@ export class TelegramPollingMonitor {
         stateDal: this.deps.stateDal,
         routingConfigDal: this.deps.routingConfigDal,
         memoryDal: this.deps.memoryDal,
+        artifactStore: this.deps.artifactStore,
         logger: this.deps.logger,
         pollTimeoutSeconds: this.deps.pollTimeoutSeconds ?? DEFAULT_POLL_TIMEOUT_SECONDS,
         pollLimit: this.deps.pollLimit ?? DEFAULT_POLL_LIMIT,
