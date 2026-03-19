@@ -129,6 +129,24 @@ function mergeAutomationContextSections(
   return `Automation context:\n${sections.join("\n\n")}`;
 }
 
+function buildCurrentTurnUserContent(
+  resolvedMessage: string,
+  currentTurnParts: readonly AttachmentUserContentPart[],
+): AttachmentUserContentPart[] {
+  if (currentTurnParts.length === 0) {
+    return [{ type: "text", text: resolvedMessage }];
+  }
+
+  const hasNonEmptyTextPart = currentTurnParts.some(
+    (part) => part.type === "text" && part.text.trim().length > 0,
+  );
+  if (hasNonEmptyTextPart) {
+    return [...currentTurnParts];
+  }
+
+  return [{ type: "text", text: resolvedMessage }, ...currentTurnParts];
+}
+
 export async function prepareTurn(
   deps: PrepareTurnDeps,
   input: AgentTurnRequestT,
@@ -475,9 +493,7 @@ export async function prepareTurn(
           ? [{ type: "text" as const, text: promptParts.automationDirectiveText }]
           : []),
         ...(automationContextText ? [{ type: "text" as const, text: automationContextText }] : []),
-        ...(attachmentInput.currentTurnParts.length > 0
-          ? attachmentInput.currentTurnParts
-          : [{ type: "text" as const, text: resolved.message }]),
+        ...buildCurrentTurnUserContent(resolved.message, attachmentInput.currentTurnParts),
       ];
 
   return {
