@@ -7,6 +7,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "../../..");
 const distDir = resolve(repoRoot, "packages/client/dist");
+const legacySchemasPackageName = ["@tyrum", "schemas"].join("/");
 
 function pnpmCommand(): string {
   return process.platform === "win32" ? "pnpm.cmd" : "pnpm";
@@ -29,7 +30,7 @@ beforeAll(() => {
 describe("@tyrum/client built artifacts", () => {
   it("do not reference the legacy schemas package", () => {
     const offenders = builtArtifactPaths().filter((file) =>
-      readFileSync(file, "utf8").includes("@tyrum/schemas"),
+      readFileSync(file, "utf8").includes(legacySchemasPackageName),
     );
 
     expect(offenders).toEqual([]);
