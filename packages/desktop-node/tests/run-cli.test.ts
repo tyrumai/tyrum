@@ -146,7 +146,10 @@ describe("runCli", () => {
     TYRUM_NODE_MODE: process.env["TYRUM_NODE_MODE"],
     TYRUM_TAKEOVER_URL: process.env["TYRUM_TAKEOVER_URL"],
     TYRUM_DESKTOP_SANDBOX_TAKEOVER_URL: process.env["TYRUM_DESKTOP_SANDBOX_TAKEOVER_URL"],
+    TYRUM_BROWSER_HEADLESS: process.env["TYRUM_BROWSER_HEADLESS"],
     TYRUM_FS_SANDBOX_ROOT: process.env["TYRUM_FS_SANDBOX_ROOT"],
+    DISPLAY: process.env["DISPLAY"],
+    WAYLAND_DISPLAY: process.env["WAYLAND_DISPLAY"],
   };
 
   afterEach(() => {
@@ -342,6 +345,23 @@ describe("runCli", () => {
       ),
     );
     expect(playwrightProviderCtorSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("treats Wayland as a display server for browser headless auto-detection", async () => {
+    vi.resetModules();
+    process.env["TYRUM_GATEWAY_TOKEN"] = "test-token";
+    delete process.env["TYRUM_BROWSER_HEADLESS"];
+    delete process.env["DISPLAY"];
+    process.env["WAYLAND_DISPLAY"] = "wayland-0";
+
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const { runCli } = await import("../src/cli/run-cli.js");
+    const code = await runWithSigterm(runCli(["--browser"]));
+
+    expect(code).toBe(0);
+    expect(playwrightBackendCtorSpy).toHaveBeenCalledWith({ headless: false });
   });
 
   it("closes the Playwright backend on shutdown when browser mode is enabled", async () => {

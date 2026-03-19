@@ -1,4 +1,7 @@
-import { describe, expect, it, vi, afterEach } from "vitest";
+import { mkdtemp, mkdir, rm, symlink } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   assertSandboxed,
   truncateOutput,
@@ -10,18 +13,29 @@ import {
 // ---------------------------------------------------------------------------
 
 describe("assertSandboxed", () => {
-  const root = "/sandbox";
+  let root = "";
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), "assert-sandboxed-"));
+  });
+
+  afterEach(async () => {
+    if (root) {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
 
   it("resolves a relative path within sandbox", () => {
-    expect(assertSandboxed(root, "foo/bar.txt")).toBe("/sandbox/foo/bar.txt");
+    expect(assertSandboxed(root, "foo/bar.txt")).toBe(join(root, "foo/bar.txt"));
   });
 
   it("accepts the sandbox root itself", () => {
-    expect(assertSandboxed(root, ".")).toBe("/sandbox");
+    expect(assertSandboxed(root, ".")).toBe(root);
   });
 
   it("accepts an absolute path within sandbox", () => {
-    expect(assertSandboxed(root, "/sandbox/deep/file.ts")).toBe("/sandbox/deep/file.ts");
+    const path = join(root, "deep/file.ts");
+    expect(assertSandboxed(root, path)).toBe(path);
   });
 
   it("blocks traversal via ../", () => {
@@ -34,6 +48,21 @@ describe("assertSandboxed", () => {
 
   it("blocks sneaky traversal with nested ../", () => {
     expect(() => assertSandboxed(root, "foo/../../etc/passwd")).toThrow("Path escapes sandbox");
+  });
+
+  it("blocks symlinks that resolve outside the sandbox", async () => {
+    const outsideRoot = await mkdtemp(join(tmpdir(), "assert-sandboxed-outside-"));
+
+    try {
+      await mkdir(join(outsideRoot, "secrets"), { recursive: true });
+      await symlink(outsideRoot, join(root, "escape"));
+
+      expect(() => assertSandboxed(root, "escape/secrets/top-secret.txt")).toThrow(
+        "Path escapes sandbox",
+      );
+    } finally {
+      await rm(outsideRoot, { recursive: true, force: true });
+    }
   });
 });
 

@@ -128,7 +128,7 @@ function resolveFilesystemSandboxRoot(): string | undefined {
 
 function hasDisplayServer(): boolean {
   if (process.platform === "darwin" || process.platform === "win32") return true;
-  return Boolean(process.env["DISPLAY"]?.trim());
+  return Boolean(process.env["DISPLAY"]?.trim() || process.env["WAYLAND_DISPLAY"]?.trim());
 }
 
 function printHelp(): void {

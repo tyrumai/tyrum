@@ -1,6 +1,7 @@
+import { realpathSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { readdir, readFile, rm, stat, writeFile, mkdir } from "node:fs/promises";
-import { dirname, join, relative, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 
 // ---------------------------------------------------------------------------
 // Sandbox enforcement
@@ -8,15 +9,45 @@ import { dirname, join, relative, resolve } from "node:path";
 
 /**
  * Resolves `filePath` relative to `sandboxRoot` and ensures the result does
- * not escape the sandbox boundary. Returns the resolved absolute path.
+ * not escape the sandbox boundary, including via existing symlinks.
+ * Returns the resolved absolute path.
  */
 export function assertSandboxed(sandboxRoot: string, filePath: string): string {
+  const canonicalRoot = resolveCanonicalPath(sandboxRoot);
   const resolved = resolve(sandboxRoot, filePath);
-  const normalizedRoot = sandboxRoot.endsWith("/") ? sandboxRoot : `${sandboxRoot}/`;
-  if (resolved !== sandboxRoot && !resolved.startsWith(normalizedRoot)) {
+  const canonicalTarget = resolveCanonicalPath(resolved);
+  const relativeToRoot = relative(canonicalRoot, canonicalTarget);
+  const staysWithinRoot =
+    relativeToRoot === "" || (!relativeToRoot.startsWith("..") && !isAbsolute(relativeToRoot));
+  if (!staysWithinRoot) {
     throw new Error(`Path escapes sandbox: ${filePath}`);
   }
   return resolved;
+}
+
+function resolveCanonicalPath(targetPath: string): string {
+  const suffixSegments: string[] = [];
+  let current = resolve(targetPath);
+
+  while (true) {
+    try {
+      const canonicalExistingPath = realpathSync.native(current);
+      return suffixSegments.length === 0
+        ? canonicalExistingPath
+        : resolve(canonicalExistingPath, ...suffixSegments);
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== "ENOENT" && code !== "ENOTDIR") {
+        throw error;
+      }
+      const parent = dirname(current);
+      if (parent === current) {
+        throw error;
+      }
+      suffixSegments.unshift(basename(current));
+      current = parent;
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
