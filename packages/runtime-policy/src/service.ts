@@ -7,7 +7,7 @@ import { canonicalizeToolId } from "@tyrum/contracts";
 import { defaultPolicyBundle } from "./bundle-loader.js";
 import { mergePolicyBundles } from "./bundle-merge.js";
 import { sha256HexFromString, stableJsonStringify } from "./canonical-json.js";
-import { evaluateDomain, normalizeDomain } from "./domain.js";
+import { evaluateDomain, mostRestrictiveDecision, normalizeDomain } from "./domain.js";
 import type {
   PolicyBundleStore,
   PolicyOverrideStore,
@@ -368,10 +368,4 @@ export class PolicyService {
     this.agentBundleCache.set(cacheKey, empty);
     return empty;
   }
-}
-
-function mostRestrictiveDecision(a: Decision, b: Decision): Decision {
-  if (a === "deny" || b === "deny") return "deny";
-  if (a === "require_approval" || b === "require_approval") return "require_approval";
-  return "allow";
 }
