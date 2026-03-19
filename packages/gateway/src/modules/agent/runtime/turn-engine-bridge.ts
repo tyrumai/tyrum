@@ -29,6 +29,7 @@ import {
   maybeResolvePausedRun,
 } from "./turn-engine-bridge-run-state.js";
 import { resolveAutomationMetadata } from "./automation-delivery.js";
+import { normalizeInternalTurnRequestUnknown } from "./turn-request-normalization.js";
 
 export {
   loadTurnFailureFromRun,
@@ -245,7 +246,9 @@ export async function turnViaExecutionEngine(
         return { success: false, error: `unsupported action type: ${action.type}` };
       }
 
-      const parsed = AgentTurnRequest.safeParse(action.args ?? {});
+      const parsed = AgentTurnRequest.safeParse(
+        normalizeInternalTurnRequestUnknown(action.args ?? {}),
+      );
       if (!parsed.success) {
         return { success: false, error: `invalid agent turn request: ${parsed.error.message}` };
       }

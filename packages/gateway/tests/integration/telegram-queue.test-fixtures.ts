@@ -3,6 +3,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { vi } from "vitest";
+import { artifactFilenameFromMetadata } from "@tyrum/schemas";
 import type { AgentRegistry } from "../../src/modules/agent/registry.js";
 import { SessionDal } from "../../src/modules/agent/session-dal.js";
 import {
@@ -178,7 +179,12 @@ export function createTestArtifactStore(): ArtifactStore {
       kind: "file" as const,
       media_class: "image" as const,
       created_at: "2024-03-09T16:00:00.000Z",
-      filename: input.filename,
+      filename: artifactFilenameFromMetadata({
+        artifactId: "11111111-1111-4111-8111-111111111111",
+        kind: "file",
+        filename: input.filename,
+        mimeType: input.mime_type,
+      }),
       mime_type: input.mime_type,
       size_bytes: input.body.byteLength,
       sha256: "a".repeat(64),

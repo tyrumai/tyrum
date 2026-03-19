@@ -59,6 +59,7 @@ describe("StateStore JSON column specs", () => {
       try {
         rawSpecs = readFileSync(specsPath, "utf8");
       } catch {
+        // Intentionally ignored here so the expectation below can produce the assertion message.
         // assertion below
       }
 

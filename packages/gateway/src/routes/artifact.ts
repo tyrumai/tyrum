@@ -106,7 +106,9 @@ function authClaimsForAudit(c: { get?: (key: string) => unknown }): AuthTokenCla
     const raw = rawGet.call(c, "authClaims") as unknown;
     const parsed = AuthTokenClaims.safeParse(raw);
     return parsed.success ? parsed.data : undefined;
-  } catch {
+  } catch (err) {
+    void err;
+    // Intentional: audit enrichment must never block artifact responses.
     return undefined;
   }
 }

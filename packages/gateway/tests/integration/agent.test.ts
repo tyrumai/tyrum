@@ -13,6 +13,7 @@ import { buildAgentTurnKey } from "../../src/modules/agent/turn-key.js";
 import { AgentConfig } from "@tyrum/contracts";
 import { AgentConfigDal } from "../../src/modules/config/agent-config-dal.js";
 import { AgentIdentityDal } from "../../src/modules/agent/identity-dal.js";
+import { insertArtifactRecordTx } from "../../src/modules/artifact/dal.js";
 
 async function writeWorkspace(home: string): Promise<void> {
   await mkdir(home, { recursive: true });
@@ -276,7 +277,7 @@ describe("agent routes", () => {
       body: JSON.stringify({
         channel: "telegram",
         thread_id: "dm-1",
-        message: "remember that I prefer tea",
+        parts: [{ type: "text", text: "remember that I prefer tea" }],
       }),
     });
     expect(first.status).toBe(200);
@@ -287,7 +288,7 @@ describe("agent routes", () => {
       body: JSON.stringify({
         channel: "discord",
         thread_id: "dm-1",
-        message: "what did I just say?",
+        parts: [{ type: "text", text: "what did I just say?" }],
       }),
     });
     expect(second.status).toBe(200);
@@ -298,7 +299,7 @@ describe("agent routes", () => {
       body: JSON.stringify({
         channel: "telegram",
         thread_id: "dm-1",
-        message: "what do I prefer?",
+        parts: [{ type: "text", text: "what do I prefer?" }],
       }),
     });
     expect(third.status).toBe(200);
@@ -355,6 +356,27 @@ describe("agent routes", () => {
       tyrumHome: homeDir,
       languageModel: createStubLanguageModel("ok"),
     });
+    const storedAttachment = await container.artifactStore!.put({
+      kind: "file",
+      body: Buffer.from("photo-bytes"),
+      mime_type: "image/jpeg",
+      filename: "photo.jpg",
+    });
+    const agentId = await container.identityScopeDal.ensureAgentId(DEFAULT_TENANT_ID, "default");
+    const workspaceId = await container.identityScopeDal.ensureWorkspaceId(
+      DEFAULT_TENANT_ID,
+      "default",
+    );
+    await container.db.transaction(async (tx) => {
+      await insertArtifactRecordTx(tx, {
+        artifact: storedAttachment,
+        tenantId: DEFAULT_TENANT_ID,
+        workspaceId,
+        agentId,
+        sensitivity: "normal",
+        policySnapshotId: null,
+      });
+    });
 
     const res = await app.request("/agent/turn", {
       method: "POST",
@@ -375,7 +397,7 @@ describe("agent routes", () => {
             id: "user-42",
           },
           content: {
-            attachments: [{ kind: "photo" }],
+            attachments: [storedAttachment],
           },
           provenance: ["user"],
         },

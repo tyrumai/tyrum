@@ -176,6 +176,13 @@
   },
   {
     "table": "channel_outbox",
+    "column": "attachments_json",
+    "shape": "array",
+    "nullable": true,
+    "default": null
+  },
+  {
+    "table": "channel_outbox",
     "column": "response_json",
     "shape": "any",
     "nullable": true,

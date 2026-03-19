@@ -56,6 +56,7 @@ import {
   loadResolvedRuntimeContext,
 } from "./agent-runtime-status.js";
 import { resolveExistingRuntimeScopeIds } from "./scope-resolution.js";
+import { normalizeInternalTurnRequest } from "./turn-request-normalization.js";
 
 const DEFAULT_MAX_STEPS = 20;
 const DEFAULT_APPROVAL_WAIT_MS = 120_000;
@@ -288,7 +289,8 @@ export class AgentRuntime {
     guardianReviewDecisionCollector?: GuardianReviewDecisionCollectorResult;
     finalize: () => Promise<AgentTurnResponseT>;
   }> {
-    const result = await turnStreamDirect(this.turnDirectDeps, input);
+    const normalizedInput = normalizeInternalTurnRequest(input);
+    const result = await turnStreamDirect(this.turnDirectDeps, normalizedInput);
     this.lastContextReport = result.contextReport;
     return {
       streamResult: result.streamResult,
@@ -296,7 +298,7 @@ export class AgentRuntime {
       guardianReviewDecisionCollector: result.guardianReviewDecisionCollector,
       finalize: async () =>
         await this.finalizeTurnLifecycle({
-          turnInput: input,
+          turnInput: normalizedInput,
           response: await result.finalize(),
           contextReport: result.contextReport,
         }),
@@ -304,7 +306,7 @@ export class AgentRuntime {
   }
 
   async turn(input: AgentTurnRequestT): Promise<AgentTurnResponseT> {
-    return await this.turnViaExecutionEngine(input);
+    return await this.turnViaExecutionEngine(normalizeInternalTurnRequest(input));
   }
 
   async compactSession(input: {
@@ -348,9 +350,14 @@ export class AgentRuntime {
     input: AgentTurnRequestT,
     opts?: { abortSignal?: AbortSignal; timeoutMs?: number; execution?: TurnExecutionContext },
   ): Promise<AgentTurnResponseT> {
-    const { response, contextReport } = await turnDirect(this.turnDirectDeps, input, opts);
+    const normalizedInput = normalizeInternalTurnRequest(input);
+    const { response, contextReport } = await turnDirect(
+      this.turnDirectDeps,
+      normalizedInput,
+      opts,
+    );
     return await this.finalizeTurnLifecycle({
-      turnInput: input,
+      turnInput: normalizedInput,
       response,
       contextReport,
     });
@@ -366,9 +373,10 @@ export class AgentRuntime {
     invalidCalls: number;
     error?: string;
   }> {
-    const result = await turnDirect(this.turnDirectDeps, input, opts);
+    const normalizedInput = normalizeInternalTurnRequest(input);
+    const result = await turnDirect(this.turnDirectDeps, normalizedInput, opts);
     const response = await this.finalizeTurnLifecycle({
-      turnInput: input,
+      turnInput: normalizedInput,
       response: result.response,
       contextReport: result.contextReport,
     });

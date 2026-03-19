@@ -240,6 +240,7 @@ export function extractArtifactIdFromUrl(url: string): string | undefined {
     }
     return segments[1];
   } catch {
+    // Intentional: invalid URLs should simply fail artifact extraction.
     return undefined;
   }
 }

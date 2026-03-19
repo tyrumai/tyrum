@@ -139,7 +139,7 @@ describe("/context", () => {
       body: JSON.stringify({
         channel: "telegram",
         thread_id: "dm-1",
-        message: "hello",
+        parts: [{ type: "text", text: "hello" }],
       }),
     });
     expect(turnRes.status).toBe(200);

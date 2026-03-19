@@ -52,8 +52,12 @@ export function registerPersistenceTests(fixture: { db: () => SqliteDb }): void 
     const artifactRef = {
       artifact_id: "550e8400-e29b-41d4-a716-446655440000",
       uri: "artifact://550e8400-e29b-41d4-a716-446655440000",
+      external_url: "https://gateway.example.test/a/550e8400-e29b-41d4-a716-446655440000",
       kind: "log",
+      media_class: "document",
       created_at: new Date().toISOString(),
+      filename: "artifact-log.txt",
+      mime_type: "text/plain",
       labels: [],
     } as const;
     const mockExecutor: StepExecutor = {
@@ -139,8 +143,12 @@ export function registerPersistenceTests(fixture: { db: () => SqliteDb }): void 
     const artifactRef = {
       artifact_id: "550e8400-e29b-41d4-a716-446655440000",
       uri: "artifact://550e8400-e29b-41d4-a716-446655440000",
+      external_url: "https://gateway.example.test/a/550e8400-e29b-41d4-a716-446655440000",
       kind: "log",
+      media_class: "document",
       created_at: new Date().toISOString(),
+      filename: "artifact-log.txt",
+      mime_type: "text/plain",
       labels: [],
     } as const;
     const mockExecutor: StepExecutor = {

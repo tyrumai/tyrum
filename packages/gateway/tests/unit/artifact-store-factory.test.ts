@@ -6,6 +6,8 @@ import { createArtifactStore } from "../../src/modules/artifact/create-artifact-
 import { FsArtifactStore, S3ArtifactStore } from "../../src/modules/artifact/store.js";
 import { RedactionEngine } from "../../src/modules/redaction/engine.js";
 
+const PUBLIC_BASE_URL = "https://gateway.example.test";
+
 describe("createArtifactStore", () => {
   let homeDir: string;
 
@@ -27,6 +29,7 @@ describe("createArtifactStore", () => {
         s3: {},
       },
       new RedactionEngine(),
+      PUBLIC_BASE_URL,
     );
     expect(store).toBeInstanceOf(FsArtifactStore);
 
@@ -48,6 +51,7 @@ describe("createArtifactStore", () => {
           s3: {},
         },
         new RedactionEngine(),
+        PUBLIC_BASE_URL,
       ),
     ).toThrow(/artifacts\.dir is required/i);
   });
@@ -62,6 +66,7 @@ describe("createArtifactStore", () => {
         },
       },
       new RedactionEngine(),
+      PUBLIC_BASE_URL,
     );
     expect(store).toBeInstanceOf(S3ArtifactStore);
   });

@@ -233,9 +233,15 @@ describe("handleClientMessage (subagent.*)", () => {
     const { id, ws } = makeClient(cm);
     const client = cm.getClient(id)!;
 
-    const runtimeTurn = vi.fn(async (input: any) => {
-      return { session_id: "s-1", reply: `echo:${input.message}` };
-    });
+    const runtimeTurn = vi.fn(async (input: any) => ({
+      session_id: "s-1",
+      reply: `echo:${
+        input.parts
+          ?.filter((part: { type?: string; text?: string }) => part.type === "text")
+          .map((part: { text?: string }) => part.text ?? "")
+          .join("\n\n") ?? ""
+      }`,
+    }));
     const agents = {
       getRuntime: vi.fn(async () => ({ turn: runtimeTurn })),
     };
@@ -290,6 +296,7 @@ describe("handleClientMessage (subagent.*)", () => {
         tyrum_key: `agent:default:subagent:${subagentId}`,
         lane: "subagent",
       });
+      expect(turnInput.parts).toEqual([{ type: "text", text: "hello" }]);
 
       expect(ws.send).toHaveBeenCalled();
       const payloads = ws.send.mock.calls.map((call) => JSON.parse(call[0] ?? "{}"));

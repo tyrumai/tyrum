@@ -308,6 +308,8 @@ describe("gateway log-level resolution", () => {
 });
 
 describe("startup deployment-config overrides", () => {
+  const publicBaseUrl = "https://gateway.example.test";
+
   it("seeds remote bootstrap flags into the initial deployment config", () => {
     const config = buildStartupDefaultDeploymentConfig({
       trustedProxies: "10.0.0.0/8,192.168.0.0/16",
@@ -327,7 +329,7 @@ describe("startup deployment-config overrides", () => {
   it("does not overwrite persisted trusted proxies on restart", () => {
     const persisted = applyStartCommandDeploymentOverrides(
       DeploymentConfig.parse({
-        server: { trustedProxies: "203.0.113.0/24" },
+        server: { publicBaseUrl, trustedProxies: "203.0.113.0/24" },
       }),
       { trustedProxies: "10.0.0.0/8" },
     );
@@ -345,6 +347,7 @@ describe("startup deployment-config overrides", () => {
     const persisted = applyStartCommandDeploymentOverrides(
       DeploymentConfig.parse({
         server: {
+          publicBaseUrl,
           tlsReady: false,
           tlsSelfSigned: false,
           allowInsecureHttp: false,
