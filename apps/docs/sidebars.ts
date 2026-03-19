@@ -34,7 +34,7 @@ const sidebars: SidebarsConfig = {
         {
           type: "category",
           label: "Overview",
-          items: ["architecture/index"],
+          items: ["architecture/index", "architecture/target-state"],
         },
         {
           type: "category",
@@ -222,7 +222,11 @@ const sidebars: SidebarsConfig = {
         {
           type: "category",
           label: "Reference",
-          items: ["architecture/reference/doc-templates", "architecture/reference/glossary"],
+          items: [
+            "architecture/reference/doc-templates",
+            "architecture/reference/arch-01-clean-break-target-state",
+            "architecture/reference/glossary",
+          ],
         },
       ],
     },

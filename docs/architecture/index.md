@@ -6,7 +6,7 @@ Tyrum is an autonomous worker platform built around one control plane, durable r
 
 - **Read this if:** you are new to Tyrum and want the 5-minute system map.
 - **Skip this if:** you already know the major boundaries and need mechanics details.
-- **Go deeper:** start with [Gateway](/architecture/gateway) and [Agent](/architecture/agent), then use the other architecture sections for protocol, client/node, and deployment behavior.
+- **Go deeper:** start with [Target-state package graph](/architecture/target-state), [Gateway](/architecture/gateway), and [Agent](/architecture/agent), then use the other architecture sections for protocol, client/node, and deployment behavior.
 
 ## System map
 
@@ -69,8 +69,13 @@ flowchart LR
 - **Explicit policy boundaries:** risky actions are approval- and policy-gated by runtime controls.
 - **One logical model across deployment sizes:** local and clustered installs preserve the same runtime semantics.
 
+## Contributor contract
+
+New package work should follow the [Target-state package graph](/architecture/target-state) and the [ARCH-01 clean-break target-state decision record](/architecture/arch-01-clean-break-target-state). The current repo still contains legacy packages during the migration window, but contributors should treat those as transitional surfaces rather than destinations for fresh code.
+
 ## Go deeper
 
+- [Target-state package graph](/architecture/target-state)
 - [Gateway](/architecture/gateway)
 - [Agent](/architecture/agent)
 - [Protocol](/architecture/protocol)
