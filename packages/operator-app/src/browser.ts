@@ -20,11 +20,7 @@ export {
   TyrumHttpClientError,
 } from "@tyrum/transport-sdk/browser";
 export type { ManagedNodeClientLifecycle } from "@tyrum/client/browser";
-export type {
-  CapabilityProvider,
-  TaskExecuteContext,
-  TaskResult,
-} from "@tyrum/node-sdk/browser";
+export type { CapabilityProvider, TaskExecuteContext, TaskResult } from "@tyrum/node-sdk/browser";
 export type {
   AgentListResult,
   AuditExportResult,
@@ -42,7 +38,12 @@ export type {
   BrowserTyrumHttpClientOptions,
   DeviceIdentity,
 } from "@tyrum/transport-sdk/browser";
-export type { ExecutionAttempt, ExecutionRun, ExecutionStep, MemoryItem } from "@tyrum/client/browser";
+export type {
+  ExecutionAttempt,
+  ExecutionRun,
+  ExecutionStep,
+  MemoryItem,
+} from "@tyrum/client/browser";
 export type * from "@tyrum/transport-sdk";
 
 export type OperatorAdminClientOptions = BrowserTyrumHttpClientOptions;

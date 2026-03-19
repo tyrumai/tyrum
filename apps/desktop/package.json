@@ -21,7 +21,6 @@
     "dist": "pnpm build:gateway && pnpm build && electron-builder --publish never"
   },
   "dependencies": {
-    "@tyrum/client": "workspace:*",
     "@tyrum/contracts": "workspace:*",
     "@tyrum/desktop-node": "workspace:*",
     "@tyrum/node-sdk": "workspace:*",

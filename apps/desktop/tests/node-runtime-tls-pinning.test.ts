@@ -20,7 +20,7 @@ vi.mock("@tyrum/transport-sdk/node", () => {
   };
 });
 
-vi.mock("@tyrum/client/node", () => ({
+vi.mock("@tyrum/node-sdk/node", () => ({
   createManagedNodeClientLifecycle: vi.fn((input: { client: unknown; providers?: unknown[] }) => ({
     client: input.client,
     connect: vi.fn(),

@@ -56,7 +56,7 @@ class FakeTyrumClient {
   }
 }
 
-vi.mock("@tyrum/client/browser", () => {
+vi.mock("@tyrum/operator-app/browser", () => {
   const autoExecute = vi.fn();
 
   return {
@@ -64,11 +64,6 @@ vi.mock("@tyrum/client/browser", () => {
       autoExecute,
       requireConnectedObject: true,
     }),
-  };
-});
-
-vi.mock("@tyrum/operator-app/browser", () => {
-  return {
     createBrowserLocalStorageDeviceIdentityStorage: vi.fn((_key: string) => ({})),
     formatDeviceIdentityError: vi.fn((err: unknown) => String(err)),
     loadOrCreateDeviceIdentity: vi.fn(async () => ({

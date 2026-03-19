@@ -88,9 +88,6 @@ importers:
 
   apps/desktop:
     dependencies:
-      '@tyrum/client':
-        specifier: workspace:*
-        version: link:../../packages/client
       '@tyrum/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
