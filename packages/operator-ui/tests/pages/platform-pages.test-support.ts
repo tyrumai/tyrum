@@ -1,7 +1,10 @@
 import React, { act } from "react";
 import { expect, vi } from "vitest";
 import type { DesktopApi } from "../../src/desktop-api.js";
-import { BrowserNodeProvider } from "../../src/browser-node/browser-node-provider.js";
+import {
+  BrowserNodeProvider,
+  type BrowserNodeApi,
+} from "../../src/browser-node/browser-node-provider.js";
 import { NodeConfigPage } from "../../src/components/pages/node-config/node-config-page.js";
 import { OperatorUiHostProvider } from "../../src/host/host-api.js";
 import type { MobileHostApi } from "../../src/host/host-api.js";
@@ -19,6 +22,44 @@ type HostValue =
       kind: "mobile";
       api: MobileHostApi;
     };
+
+function HarnessBrowserNodeProvider({ children }: { children: React.ReactNode }) {
+  const [enabled, setEnabled] = React.useState(false);
+  const [capabilityStates, setCapabilityStates] = React.useState<
+    BrowserNodeApi["capabilityStates"]
+  >({
+    get: { supported: true, enabled: true, availability_status: "available" },
+    capture_photo: { supported: true, enabled: true, availability_status: "unknown" },
+    record: { supported: true, enabled: true, availability_status: "unknown" },
+  });
+
+  const value = React.useMemo<BrowserNodeApi>(
+    () => ({
+      enabled,
+      status: enabled ? "connected" : "disabled",
+      deviceId: enabled ? "browser-node-1" : null,
+      clientId: enabled ? "browser-client-1" : null,
+      error: null,
+      capabilityStates,
+      setEnabled,
+      setCapabilityEnabled(capability, nextEnabled) {
+        setCapabilityStates((current) => ({
+          ...current,
+          [capability]: {
+            ...current[capability],
+            enabled: nextEnabled,
+          },
+        }));
+      },
+      async executeLocal() {
+        return { success: false, error: "not implemented in platform page harness" };
+      },
+    }),
+    [capabilityStates, enabled],
+  );
+
+  return React.createElement(BrowserNodeProvider, { value }, children);
+}
 
 const DEFAULT_NODE_CONFIG = {
   mode: "embedded",
@@ -225,8 +266,8 @@ export async function withBrowserCapabilitiesPage(
 ): Promise<void> {
   await withRenderedElement(
     React.createElement(
-      BrowserNodeProvider,
-      { wsUrl: "ws://example.test/ws" },
+      HarnessBrowserNodeProvider,
+      undefined,
       React.createElement(
         OperatorUiHostProvider,
         { value: { kind: "web" as const } },

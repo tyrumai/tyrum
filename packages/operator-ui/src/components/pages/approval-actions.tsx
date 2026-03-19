@@ -1,5 +1,4 @@
-import type { Approval } from "@tyrum/client";
-import type { ResolveApprovalInput } from "@tyrum/operator-app";
+import type { Approval, ResolveApprovalInput } from "@tyrum/operator-app";
 import { useEffect, useMemo, useState, type ReactElement } from "react";
 import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";

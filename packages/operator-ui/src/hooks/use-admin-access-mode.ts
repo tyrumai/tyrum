@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { getDesktopApi } from "../desktop-api.js";
+import { useHostApiOptional } from "../host/host-api.js";
 
 export type AdminAccessMode = "on-demand" | "always-on";
 
@@ -46,7 +46,8 @@ function persistWebMode(mode: AdminAccessMode): void {
 }
 
 export function AdminAccessModeProvider({ children }: { children: ReactNode }) {
-  const desktopApi = getDesktopApi();
+  const host = useHostApiOptional();
+  const desktopApi = host?.kind === "desktop" ? host.api : null;
   const [mode, setMode] = useState<AdminAccessMode>(() => resolveWebStoredMode() ?? "on-demand");
 
   useEffect(() => {

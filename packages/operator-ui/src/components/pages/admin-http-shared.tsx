@@ -9,6 +9,8 @@ import {
   TyrumHttpClientError,
 } from "@tyrum/operator-app/browser";
 import { useMemo, type ReactNode } from "react";
+import type { DesktopApi } from "../../desktop-api.js";
+import { useHostApiOptional } from "../../host/host-api.js";
 import { useOperatorStore } from "../../use-operator-store.js";
 import { resolveTyrumHttpFetch } from "../../utils/tyrum-http-fetch.js";
 import { useElevatedModeUiContext } from "../elevated-mode/elevated-mode-provider.js";
@@ -30,6 +32,7 @@ export function isAdminAccessHttpError(error: unknown): boolean {
 
 function createElevatedAdminHttpClient(input: {
   core: OperatorCore;
+  desktopApi: DesktopApi | null;
   mode: ReturnType<typeof useElevatedModeUiContext>["mode"];
   elevatedStatus: ElevatedModeState["status"];
   elevatedToken: ElevatedModeState["elevatedToken"];
@@ -39,7 +42,7 @@ function createElevatedAdminHttpClient(input: {
   return createOperatorAdminClient({
     baseUrl: input.core.httpBaseUrl,
     auth: { type: "bearer", token: input.elevatedToken },
-    fetch: resolveTyrumHttpFetch(input.mode),
+    fetch: resolveTyrumHttpFetch(input.desktopApi, input.mode),
   });
 }
 
@@ -62,6 +65,8 @@ export function useAdminHttpClient(options?: {
   access?: "read" | "strict";
 }): AdminHttpClient | null {
   const { core, mode } = useElevatedModeUiContext();
+  const host = useHostApiOptional();
+  const desktopApi = host?.kind === "desktop" ? host.api : null;
   const access = options?.access ?? "read";
   const elevatedMode = useOperatorStore(core.elevatedModeStore);
   const elevatedStatus = elevatedMode.status;
@@ -70,11 +75,12 @@ export function useAdminHttpClient(options?: {
     () =>
       createElevatedAdminHttpClient({
         core,
+        desktopApi,
         mode,
         elevatedStatus,
         elevatedToken,
       }),
-    [core.httpBaseUrl, elevatedStatus, elevatedToken, mode],
+    [core.httpBaseUrl, desktopApi, elevatedStatus, elevatedToken, mode],
   );
 
   if (access === "strict") {
@@ -86,6 +92,8 @@ export function useAdminHttpClient(options?: {
 
 export function useAdminMutationHttpClient(): AdminHttpClient | null {
   const { core, mode } = useElevatedModeUiContext();
+  const host = useHostApiOptional();
+  const desktopApi = host?.kind === "desktop" ? host.api : null;
   const elevatedMode = useOperatorStore(core.elevatedModeStore);
   const elevatedStatus = elevatedMode.status;
   const elevatedToken = elevatedMode.elevatedToken;
@@ -94,11 +102,12 @@ export function useAdminMutationHttpClient(): AdminHttpClient | null {
     () =>
       createElevatedAdminHttpClient({
         core,
+        desktopApi,
         mode,
         elevatedStatus,
         elevatedToken,
       }),
-    [core.httpBaseUrl, elevatedStatus, elevatedToken, mode],
+    [core.httpBaseUrl, desktopApi, elevatedStatus, elevatedToken, mode],
   );
 }
 

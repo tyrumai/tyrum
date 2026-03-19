@@ -3,6 +3,7 @@ import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { createBearerTokenAuth, createOperatorCore } from "../../operator-app/src/index.js";
 import { OperatorUiApp } from "../src/index.js";
+import { OperatorUiHostProvider } from "../src/host/host-api.js";
 import { clickButtonByTestId } from "./operator-ui.test-support.js";
 import { FakeWsClient, createFakeHttpClient } from "./operator-ui.test-fixtures.js";
 
@@ -29,6 +30,22 @@ function findExpandButtonForCapability(
     if (expandBtn) return expandBtn;
   }
   return null;
+}
+
+function renderDesktopOperatorUi(
+  container: HTMLElement,
+  core: ReturnType<typeof createOperatorCore>,
+  desktopApi: unknown,
+): Root {
+  const root = createRoot(container);
+  root.render(
+    React.createElement(
+      OperatorUiHostProvider,
+      { value: { kind: "desktop", api: desktopApi } },
+      React.createElement(OperatorUiApp, { core, mode: "desktop" }),
+    ),
+  );
+  return root;
 }
 
 function registerConnectDesktopBasicTests(): void {
@@ -127,8 +144,7 @@ function registerConnectDesktopBasicTests(): void {
 
     let root: Root | null = null;
     act(() => {
-      root = createRoot(container);
-      root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
+      root = renderDesktopOperatorUi(container, core, desktopApi);
     });
 
     await act(async () => {
@@ -200,8 +216,7 @@ function registerConnectDesktopBasicTests(): void {
 
     let root: Root | null = null;
     act(() => {
-      root = createRoot(container);
-      root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
+      root = renderDesktopOperatorUi(container, core, desktopApi);
     });
 
     await act(async () => {
@@ -274,8 +289,7 @@ function registerConnectDesktopSettingsTests(): void {
 
     let root: Root | null = null;
     act(() => {
-      root = createRoot(container);
-      root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
+      root = renderDesktopOperatorUi(container, core, desktopApi);
     });
 
     await act(async () => {
@@ -357,8 +371,7 @@ function registerConnectDesktopSettingsTests(): void {
 
     let root: Root | null = null;
     act(() => {
-      root = createRoot(container);
-      root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
+      root = renderDesktopOperatorUi(container, core, desktopApi);
     });
 
     await act(async () => {
@@ -447,8 +460,7 @@ function registerConnectDesktopSettingsTests(): void {
 
     let root: Root | null = null;
     act(() => {
-      root = createRoot(container);
-      root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
+      root = renderDesktopOperatorUi(container, core, desktopApi);
     });
 
     await act(async () => {

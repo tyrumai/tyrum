@@ -14,6 +14,21 @@ vi.mock("sonner", () => ({
   },
 }));
 
+vi.mock("@tyrum/contracts", () => ({
+  BrowserActionArgs: {
+    safeParse(input: unknown) {
+      if (!input || typeof input !== "object" || Array.isArray(input)) {
+        return { success: false, error: { message: "invalid browser args" } };
+      }
+      const op = (input as { op?: unknown }).op;
+      if (op !== "get" && op !== "capture_photo" && op !== "record") {
+        return { success: false, error: { message: "invalid browser args" } };
+      }
+      return { success: true, data: input };
+    },
+  },
+}));
+
 type TyrumClientHandler = (evt?: unknown) => void;
 
 class FakeTyrumClient {
@@ -56,7 +71,7 @@ class FakeTyrumClient {
   }
 }
 
-vi.mock("@tyrum/operator-app/browser", () => {
+vi.mock("../../../../apps/web/src/browser-node/browser-runtime.js", () => {
   const autoExecute = vi.fn();
 
   return {
@@ -118,8 +133,9 @@ afterEach(() => {
 
 describe("BrowserNodeProvider", () => {
   it("routes local execution through the provider capability guard", async () => {
-    const { BrowserNodeProvider, useBrowserNode } =
-      await import("../../src/browser-node/browser-node-provider.js");
+    const { BrowserNodeProvider } =
+      await import("../../../../apps/web/src/browser-node/browser-node-provider.js");
+    const { useBrowserNode } = await import("../../src/browser-node/browser-node-provider.js");
 
     stubLocalStorage({ "tyrum.operator-ui.browserNode.enabled": "1" });
     stubBrowserApis();
@@ -171,8 +187,9 @@ describe("BrowserNodeProvider", () => {
   });
 
   it("returns a clean error for unknown browser operations", async () => {
-    const { BrowserNodeProvider, useBrowserNode } =
-      await import("../../src/browser-node/browser-node-provider.js");
+    const { BrowserNodeProvider } =
+      await import("../../../../apps/web/src/browser-node/browser-node-provider.js");
+    const { useBrowserNode } = await import("../../src/browser-node/browser-node-provider.js");
 
     stubLocalStorage({ "tyrum.operator-ui.browserNode.enabled": "1" });
     stubBrowserApis();
@@ -212,8 +229,9 @@ describe("BrowserNodeProvider", () => {
   });
 
   it("cancels pending consent and persists disabled state", async () => {
-    const { BrowserNodeProvider, useBrowserNode } =
-      await import("../../src/browser-node/browser-node-provider.js");
+    const { BrowserNodeProvider } =
+      await import("../../../../apps/web/src/browser-node/browser-node-provider.js");
+    const { useBrowserNode } = await import("../../src/browser-node/browser-node-provider.js");
 
     stubLocalStorage({ "tyrum.operator-ui.browserNode.enabled": "1" });
     stubBrowserApis();
@@ -270,8 +288,9 @@ describe("BrowserNodeProvider", () => {
   });
 
   it("shows a distinct effective capability description when the executor is active", async () => {
-    const { BrowserNodeProvider, useBrowserNode } =
-      await import("../../src/browser-node/browser-node-provider.js");
+    const { BrowserNodeProvider } =
+      await import("../../../../apps/web/src/browser-node/browser-node-provider.js");
+    const { useBrowserNode } = await import("../../src/browser-node/browser-node-provider.js");
 
     stubLocalStorage({ "tyrum.operator-ui.browserNode.enabled": "1" });
     stubBrowserApis();
@@ -315,8 +334,9 @@ describe("BrowserNodeProvider", () => {
   });
 
   it("clears the consent dialog when wsUrl changes", async () => {
-    const { BrowserNodeProvider, useBrowserNode } =
-      await import("../../src/browser-node/browser-node-provider.js");
+    const { BrowserNodeProvider } =
+      await import("../../../../apps/web/src/browser-node/browser-node-provider.js");
+    const { useBrowserNode } = await import("../../src/browser-node/browser-node-provider.js");
 
     stubLocalStorage({ "tyrum.operator-ui.browserNode.enabled": "1" });
     stubBrowserApis();
@@ -379,8 +399,9 @@ describe("BrowserNodeProvider", () => {
   });
 
   it("surfaces disconnect and transport errors through browser node state", async () => {
-    const { BrowserNodeProvider, useBrowserNode } =
-      await import("../../src/browser-node/browser-node-provider.js");
+    const { BrowserNodeProvider } =
+      await import("../../../../apps/web/src/browser-node/browser-node-provider.js");
+    const { useBrowserNode } = await import("../../src/browser-node/browser-node-provider.js");
 
     stubLocalStorage({ "tyrum.operator-ui.browserNode.enabled": "1" });
     stubBrowserApis();

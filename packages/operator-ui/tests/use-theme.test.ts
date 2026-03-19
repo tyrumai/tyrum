@@ -3,6 +3,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
+import { OperatorUiHostProvider } from "../src/host/host-api.js";
 import { ThemeProvider, useTheme, useThemeOptional } from "../src/hooks/use-theme.js";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -173,7 +174,7 @@ describe("ThemeProvider/useTheme", () => {
     localStorage.setItem("tyrum.themeMode", "light");
 
     const setConfig = vi.fn(async () => ({}));
-    (window as unknown as { tyrumDesktop?: unknown }).tyrumDesktop = {
+    const desktopApi = {
       getConfig: async () => ({ theme: { source: "dark" } }),
       setConfig,
       gateway: {
@@ -187,6 +188,7 @@ describe("ThemeProvider/useTheme", () => {
       },
       onStatusChange: () => () => {},
     };
+    (window as unknown as { tyrumDesktop?: unknown }).tyrumDesktop = desktopApi;
 
     let api: ReturnType<typeof useTheme> | null = null;
     const Probe = () => {
@@ -195,7 +197,13 @@ describe("ThemeProvider/useTheme", () => {
     };
 
     await act(async () => {
-      root.render(React.createElement(ThemeProvider, null, React.createElement(Probe, null)));
+      root.render(
+        React.createElement(
+          OperatorUiHostProvider,
+          { value: { kind: "desktop", api: desktopApi } },
+          React.createElement(ThemeProvider, null, React.createElement(Probe, null)),
+        ),
+      );
       await Promise.resolve();
     });
 

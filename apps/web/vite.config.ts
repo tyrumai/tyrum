@@ -1,3 +1,4 @@
+import { readdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
@@ -7,6 +8,16 @@ import { createTyrumManualChunk } from "../../scripts/vite/manual-chunks.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "../..");
+const pnpmStoreDir = resolve(repoRoot, "node_modules/.pnpm");
+
+function resolvePnpmPackageDir(packageName: string): string {
+  const packagePrefix = `${packageName.replaceAll("/", "+")}@`;
+  const entry = readdirSync(pnpmStoreDir).find((candidate) => candidate.startsWith(packagePrefix));
+  if (!entry) {
+    throw new Error(`Unable to resolve pnpm package dir for ${packageName}`);
+  }
+  return resolve(pnpmStoreDir, entry, "node_modules", packageName);
+}
 
 export default defineConfig({
   root: "src",
@@ -32,6 +43,7 @@ export default defineConfig({
       "@tyrum/operator-app": resolve(repoRoot, "packages/operator-app/src/index.ts"),
       "@tyrum/operator-ui/globals.css": resolve(repoRoot, "packages/operator-ui/src/globals.css"),
       "@tyrum/operator-ui": resolve(repoRoot, "packages/operator-ui/src/index.ts"),
+      mitt: resolvePnpmPackageDir("mitt"),
     },
     dedupe: ["react", "react-dom"],
   },

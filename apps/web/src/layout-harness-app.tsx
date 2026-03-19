@@ -11,9 +11,9 @@ import { FirstRunOnboardingPage } from "../../../packages/operator-ui/src/compon
 import { NodeConfigPage } from "../../../packages/operator-ui/src/components/pages/node-config/node-config-page.js";
 import { PairingPage } from "../../../packages/operator-ui/src/components/pages/pairing-page.js";
 import { WorkBoardPage } from "../../../packages/operator-ui/src/components/pages/workboard-page.js";
-import { BrowserNodeProvider } from "../../../packages/operator-ui/src/browser-node/browser-node-provider.js";
 import { AdminAccessProvider } from "../../../packages/operator-ui/src/elevated-mode.js";
 import { OperatorUiHostProvider } from "../../../packages/operator-ui/src/host/host-api.js";
+import { BrowserNodeProvider } from "./browser-node/browser-node-provider.js";
 import {
   createAgentsCore,
   createApprovalsCore,

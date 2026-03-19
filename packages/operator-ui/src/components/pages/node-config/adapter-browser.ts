@@ -1,6 +1,8 @@
 import { useCallback, useMemo } from "react";
-import { useBrowserNode } from "../../../browser-node/browser-node-provider.js";
-import type { BrowserCapabilityName } from "../../../browser-node/browser-node-capability-state.js";
+import {
+  type BrowserCapabilityName,
+  useBrowserNode,
+} from "../../../browser-node/browser-node-provider.js";
 import { getCatalogEntry, TEST_ACTION_DEFINITIONS } from "./node-config-page.capability-catalog.js";
 import type {
   CapabilityAction,

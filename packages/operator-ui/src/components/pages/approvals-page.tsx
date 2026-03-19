@@ -1,5 +1,5 @@
-import type { Approval } from "@tyrum/client";
 import {
+  type Approval,
   isApprovalHumanActionableStatus,
   type OperatorCore,
   type ResolveApprovalInput,

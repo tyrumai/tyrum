@@ -92,10 +92,6 @@ vi.mock("../src/host/host-api.js", () => ({
   useHostApiOptional: vi.fn(() => null),
 }));
 
-vi.mock("../src/desktop-api.js", () => ({
-  getDesktopApi: vi.fn(() => null),
-}));
-
 vi.mock("../src/components/error/error-boundary.js", () => ({
   ErrorBoundary: ({ children }: { children: React.ReactNode }) => e(React.Fragment, null, children),
 }));

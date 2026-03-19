@@ -13,6 +13,7 @@
     "typecheck": "pnpm exec tsc --noEmit --project tsconfig.json"
   },
   "dependencies": {
+    "@tyrum/contracts": "workspace:*",
     "@tyrum/operator-app": "workspace:*",
     "@tyrum/operator-ui": "workspace:*",
     "@tyrum/transport-sdk": "workspace:*",

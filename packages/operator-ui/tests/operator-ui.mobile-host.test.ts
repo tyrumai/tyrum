@@ -187,7 +187,7 @@ describe("operator-ui mobile host", () => {
       try {
         expect(container.querySelector('[data-testid="nav-browser"]')).not.toBeNull();
         expect(container.querySelector('[data-testid="nav-mobile"]')).toBeNull();
-        expect(browserNodeProviderSpy.mock.calls.length).toBeGreaterThan(0);
+        expect(browserNodeProviderSpy).not.toHaveBeenCalled();
       } finally {
         act(() => {
           root.unmount();

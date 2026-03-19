@@ -1,5 +1,4 @@
-import type { Approval } from "@tyrum/client";
-import type { OperatorCore, ResolveApprovalInput } from "@tyrum/operator-app";
+import type { Approval, OperatorCore, ResolveApprovalInput } from "@tyrum/operator-app";
 import {
   getToolName,
   isDataUIPart,

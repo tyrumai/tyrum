@@ -2,6 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { resolveTyrumHttpFetch } from "../../src/utils/tyrum-http-fetch.js";
+import type { DesktopApi } from "../../src/desktop-api.js";
 
 describe("resolveTyrumHttpFetch", () => {
   afterEach(() => {
@@ -9,16 +10,15 @@ describe("resolveTyrumHttpFetch", () => {
   });
 
   it("returns undefined outside desktop mode", () => {
-    expect(resolveTyrumHttpFetch("web")).toBeUndefined();
+    expect(resolveTyrumHttpFetch(null, "web")).toBeUndefined();
   });
 
   it("returns undefined when the desktop api is unavailable", () => {
-    expect(resolveTyrumHttpFetch("desktop")).toBeUndefined();
+    expect(resolveTyrumHttpFetch(null, "desktop")).toBeUndefined();
   });
 
   it("returns undefined when the desktop api has no gateway httpFetch", () => {
-    (window as unknown as { tyrumDesktop?: unknown }).tyrumDesktop = { gateway: {} };
-    expect(resolveTyrumHttpFetch("desktop")).toBeUndefined();
+    expect(resolveTyrumHttpFetch({ gateway: {} } as DesktopApi, "desktop")).toBeUndefined();
   });
 
   it("adapts desktop gateway httpFetch and rejects non-string request bodies", async () => {
@@ -27,10 +27,7 @@ describe("resolveTyrumHttpFetch", () => {
       headers: { "x-test": "1" },
       bodyText: "ok",
     });
-
-    (window as unknown as { tyrumDesktop?: unknown }).tyrumDesktop = { gateway: { httpFetch } };
-
-    const fetch = resolveTyrumHttpFetch("desktop");
+    const fetch = resolveTyrumHttpFetch({ gateway: { httpFetch } } as DesktopApi, "desktop");
     expect(fetch).toBeDefined();
 
     const res = await fetch?.("https://example.com/test", {
