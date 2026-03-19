@@ -291,7 +291,7 @@ export async function execBash(
   timeoutMs: number,
   maxBytes: number,
 ): Promise<{ output: string; exitCode: number | null }> {
-  return new Promise((resolvePromise) => {
+  return new Promise((resolvePromise, rejectPromise) => {
     const child = spawn("sh", ["-c", command], {
       cwd,
       env: sanitizeEnv(),
@@ -337,6 +337,7 @@ export async function execBash(
     forceKillTimer.unref();
 
     child.once("close", (code) => {
+      if (finished) return;
       finished = true;
       clearTimeout(timer);
       clearTimeout(forceKillTimer);
@@ -344,10 +345,11 @@ export async function execBash(
     });
 
     child.once("error", (err) => {
+      if (finished) return;
       finished = true;
       clearTimeout(timer);
       clearTimeout(forceKillTimer);
-      resolvePromise({ output: `Error spawning command: ${err.message}`, exitCode: null });
+      rejectPromise(new Error(`Error spawning command: ${err.message}`));
     });
   });
 }

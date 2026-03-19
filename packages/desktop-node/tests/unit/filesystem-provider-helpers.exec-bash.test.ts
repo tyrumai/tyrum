@@ -66,4 +66,18 @@ describe("execBash", () => {
       }),
     );
   });
+
+  it("rejects when the shell fails to spawn", async () => {
+    const child = createMockChild();
+    spawnMock.mockReturnValueOnce(child);
+
+    const { execBash } = await import("../../src/providers/filesystem-provider-helpers.js");
+    const resultPromise = execBash("echo hello", "/missing", 100, 1_024);
+
+    queueMicrotask(() => {
+      child.emit("error", new Error("spawn sh ENOENT"));
+    });
+
+    await expect(resultPromise).rejects.toThrow("Error spawning command: spawn sh ENOENT");
+  });
 });

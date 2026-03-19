@@ -207,6 +207,14 @@ describe("bash", () => {
     expect((result.result as ResultPayload).exit_code).toBe(42);
   });
 
+  it("returns failure when bash cannot spawn", async () => {
+    const result = await provider.execute(
+      makeAction({ op: "bash", command: "echo hello", cwd: "missing-dir" }),
+    );
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("Error spawning command");
+  });
+
   it("respects timeout", async () => {
     const fast = makeProvider({ defaultExecTimeoutMs: 500, maxExecTimeoutMs: 1000 });
     const result = await fast.execute(
