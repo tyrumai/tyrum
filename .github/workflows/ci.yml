@@ -59,6 +59,7 @@ jobs:
               - "apps/mobile/**"
               - "apps/web/**"
               - "apps/docs/**"
+              - "scripts/lint/**"
               - "config/**"
               - "docker/**"
               - "web/**"
