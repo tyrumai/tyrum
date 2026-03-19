@@ -69,6 +69,7 @@ describe("channel config routes", () => {
     await dal.createTelegram({
       tenantId: DEFAULT_TENANT_ID,
       accountKey: "default",
+      ingressMode: "webhook",
       botToken: "telegram-bot-token",
       webhookSecret: "telegram-webhook-secret",
       allowedUserIds: ["123"],
@@ -374,6 +375,7 @@ describe("channel config routes", () => {
     await new ChannelConfigDal(db).createTelegram({
       tenantId: DEFAULT_TENANT_ID,
       accountKey: "default",
+      ingressMode: "webhook",
       botToken: "telegram-bot-token",
       webhookSecret: "telegram-webhook-secret",
       allowedUserIds: ["123"],

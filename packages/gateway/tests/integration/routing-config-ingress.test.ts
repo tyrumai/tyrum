@@ -41,6 +41,7 @@ describe("routing config (durable) + ingress", () => {
       tenantId: DEFAULT_TENANT_ID,
       accountKey: input.accountKey,
       agentKey: input.agentKey,
+      ingressMode: "webhook",
       botToken: input.botToken,
       webhookSecret: input.webhookSecret,
       allowedUserIds: input.allowedUserIds,

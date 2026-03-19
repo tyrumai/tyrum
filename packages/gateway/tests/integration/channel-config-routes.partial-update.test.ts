@@ -69,6 +69,7 @@ describe("channel config route partial updates", () => {
       tenantId: DEFAULT_TENANT_ID,
       accountKey: "default",
       agentKey: "agent-b",
+      ingressMode: "webhook",
       botToken: "telegram-bot-token",
       webhookSecret: "telegram-webhook-secret",
       allowedUserIds: ["123"],
