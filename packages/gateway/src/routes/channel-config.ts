@@ -182,7 +182,6 @@ async function listConfiguredChannelGroups(
       const pollingState = pollingStateByAccount.get(entry.config.account_key);
       account.config = {
         ...account.config,
-        ingress_mode: entry.config.ingress_mode,
         polling_status: pollingState?.status ?? "idle",
         polling_last_error_at: pollingState?.last_error_at ?? null,
         polling_last_error_message: pollingState?.last_error_message ?? null,

@@ -113,8 +113,12 @@ describe("channel config routes", () => {
               account_key: "default",
               config: {
                 agent_key: "agent-b",
+                ingress_mode: "webhook",
                 allowed_user_ids: ["123"],
                 pipeline_enabled: true,
+                polling_status: "idle",
+                polling_last_error_at: null,
+                polling_last_error_message: null,
               },
               configured_secret_keys: ["bot_token", "webhook_secret"],
             },
