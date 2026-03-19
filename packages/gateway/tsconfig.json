@@ -8,6 +8,7 @@
   "references": [
     { "path": "../cli-utils" },
     { "path": "../contracts" },
+    { "path": "../runtime-agent" },
     { "path": "../runtime-execution" },
     { "path": "../runtime-node-control" },
     { "path": "../runtime-policy" }

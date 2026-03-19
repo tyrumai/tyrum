@@ -6,6 +6,7 @@
     { "path": "packages/runtime-policy" },
     { "path": "packages/runtime-node-control" },
     { "path": "packages/runtime-execution" },
+    { "path": "packages/runtime-agent" },
     { "path": "packages/transport-sdk" },
     { "path": "packages/gateway" },
     { "path": "packages/node-sdk" },
