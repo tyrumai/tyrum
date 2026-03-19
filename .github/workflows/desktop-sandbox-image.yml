@@ -30,7 +30,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  IMAGE_NAME: ghcr.io/rhernaus/tyrum-desktop-sandbox
+  IMAGE_NAME: ghcr.io/tyrumai/tyrum-desktop-sandbox
 
 jobs:
   build:

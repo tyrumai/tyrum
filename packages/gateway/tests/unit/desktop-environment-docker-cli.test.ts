@@ -49,7 +49,7 @@ describe("desktop environment docker cli", () => {
     resolveExec('[{"Os":"linux","Architecture":"amd64"}]\n');
 
     await expect(
-      ensureImageAvailable("ghcr.io/rhernaus/tyrum-desktop-sandbox:main", {
+      ensureImageAvailable("ghcr.io/tyrumai/tyrum-desktop-sandbox:main", {
         platform: "linux/amd64",
       }),
     ).resolves.toBeUndefined();
@@ -57,7 +57,7 @@ describe("desktop environment docker cli", () => {
     expect(execFileAsyncMock).toHaveBeenCalledTimes(1);
     expect(execFileAsyncMock).toHaveBeenCalledWith(
       "docker",
-      ["image", "inspect", "ghcr.io/rhernaus/tyrum-desktop-sandbox:main"],
+      ["image", "inspect", "ghcr.io/tyrumai/tyrum-desktop-sandbox:main"],
       expect.objectContaining({ encoding: "utf8", timeout: 15_000 }),
     );
   });
@@ -67,7 +67,7 @@ describe("desktop environment docker cli", () => {
     resolveExec("pulled\n");
 
     await expect(
-      ensureImageAvailable("ghcr.io/rhernaus/tyrum-desktop-sandbox:main", {
+      ensureImageAvailable("ghcr.io/tyrumai/tyrum-desktop-sandbox:main", {
         platform: "linux/amd64",
       }),
     ).resolves.toBeUndefined();
@@ -76,13 +76,13 @@ describe("desktop environment docker cli", () => {
     expect(execFileAsyncMock).toHaveBeenNthCalledWith(
       1,
       "docker",
-      ["image", "inspect", "ghcr.io/rhernaus/tyrum-desktop-sandbox:main"],
+      ["image", "inspect", "ghcr.io/tyrumai/tyrum-desktop-sandbox:main"],
       expect.objectContaining({ encoding: "utf8", timeout: 15_000 }),
     );
     expect(execFileAsyncMock).toHaveBeenNthCalledWith(
       2,
       "docker",
-      ["pull", "--platform", "linux/amd64", "ghcr.io/rhernaus/tyrum-desktop-sandbox:main"],
+      ["pull", "--platform", "linux/amd64", "ghcr.io/tyrumai/tyrum-desktop-sandbox:main"],
       expect.objectContaining({ encoding: "utf8", timeout: 600_000, maxBuffer: 33_554_432 }),
     );
   });
@@ -92,7 +92,7 @@ describe("desktop environment docker cli", () => {
     resolveExec("pulled\n");
 
     await expect(
-      ensureImageAvailable("ghcr.io/rhernaus/tyrum-desktop-sandbox:main", {
+      ensureImageAvailable("ghcr.io/tyrumai/tyrum-desktop-sandbox:main", {
         platform: "linux/amd64",
       }),
     ).resolves.toBeUndefined();
@@ -101,7 +101,7 @@ describe("desktop environment docker cli", () => {
     expect(execFileAsyncMock).toHaveBeenNthCalledWith(
       2,
       "docker",
-      ["pull", "--platform", "linux/amd64", "ghcr.io/rhernaus/tyrum-desktop-sandbox:main"],
+      ["pull", "--platform", "linux/amd64", "ghcr.io/tyrumai/tyrum-desktop-sandbox:main"],
       expect.objectContaining({ encoding: "utf8", timeout: 600_000, maxBuffer: 33_554_432 }),
     );
   });

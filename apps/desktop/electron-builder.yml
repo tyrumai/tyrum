@@ -9,7 +9,7 @@ directories:
 npmRebuild: false
 publish:
   - provider: github
-    owner: rhernaus
+    owner: tyrumai
     repo: tyrum
 files:
   - dist/**/*

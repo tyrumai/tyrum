@@ -14,7 +14,7 @@ const navbarItems = [
   { to: "/getting-started", label: "Quick Start", position: "left" },
   { to: "/architecture", label: "Architecture", position: "left" },
   {
-    href: "https://github.com/rhernaus/tyrum",
+    href: "https://github.com/tyrumai/tyrum",
     label: "GitHub",
     position: "right",
   },

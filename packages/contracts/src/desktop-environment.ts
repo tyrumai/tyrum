@@ -2,7 +2,7 @@ import { z } from "zod";
 import { DateTimeSchema } from "./common.js";
 import { NodeId } from "./keys.js";
 
-export const DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF = "ghcr.io/rhernaus/tyrum-desktop-sandbox:main";
+export const DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF = "ghcr.io/tyrumai/tyrum-desktop-sandbox:main";
 
 export const DesktopEnvironmentId = z.string().trim().min(1);
 export const DesktopEnvironmentHostId = z.string().trim().min(1);

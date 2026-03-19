@@ -67,7 +67,7 @@ describe("desktop environment HTTP client", () => {
       if (url.endsWith("/config/desktop-environments/defaults") && init?.method === "GET") {
         return jsonResponse({
           status: "ok",
-          default_image_ref: "ghcr.io/rhernaus/tyrum-desktop-sandbox:stable",
+          default_image_ref: "ghcr.io/tyrumai/tyrum-desktop-sandbox:stable",
           revision: 1,
           created_at: "2026-01-01T00:00:00.000Z",
           created_by: { kind: "tenant.token", token_id: "token-1" },
@@ -78,7 +78,7 @@ describe("desktop environment HTTP client", () => {
       if (url.endsWith("/config/desktop-environments/defaults") && init?.method === "PUT") {
         return jsonResponse({
           status: "ok",
-          default_image_ref: "ghcr.io/rhernaus/tyrum-desktop-sandbox:sha-1234",
+          default_image_ref: "ghcr.io/tyrumai/tyrum-desktop-sandbox:sha-1234",
           revision: 2,
           created_at: "2026-01-01T00:00:02.000Z",
           created_by: { kind: "tenant.token", token_id: "token-1" },
@@ -142,7 +142,7 @@ describe("desktop environment HTTP client", () => {
 
     const defaults = await client.desktopEnvironments.getDefaults();
     const updatedDefaults = await client.desktopEnvironments.updateDefaults({
-      default_image_ref: "ghcr.io/rhernaus/tyrum-desktop-sandbox:sha-1234",
+      default_image_ref: "ghcr.io/tyrumai/tyrum-desktop-sandbox:sha-1234",
       reason: "roll forward",
     });
     const created = await client.desktopEnvironments.create({
@@ -154,9 +154,9 @@ describe("desktop environment HTTP client", () => {
     const started = await client.desktopEnvironments.start("env-1");
     const logs = await client.desktopEnvironments.logs("env-1");
 
-    expect(defaults.default_image_ref).toBe("ghcr.io/rhernaus/tyrum-desktop-sandbox:stable");
+    expect(defaults.default_image_ref).toBe("ghcr.io/tyrumai/tyrum-desktop-sandbox:stable");
     expect(updatedDefaults.default_image_ref).toBe(
-      "ghcr.io/rhernaus/tyrum-desktop-sandbox:sha-1234",
+      "ghcr.io/tyrumai/tyrum-desktop-sandbox:sha-1234",
     );
     expect(created.environment.environment_id).toBe("env-1");
     expect(started.environment.status).toBe("starting");

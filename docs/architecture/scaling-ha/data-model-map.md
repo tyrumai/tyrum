@@ -16,8 +16,8 @@ This page is a lightweight, human-readable map of the Gateway StateStore schema:
 
 The v2 rebuild migrations are the current source of truth:
 
-- SQLite: [`packages/gateway/migrations/sqlite/100_rebuild_v2.sql`](https://github.com/rhernaus/tyrum/blob/main/packages/gateway/migrations/sqlite/100_rebuild_v2.sql#L1)
-- Postgres: [`packages/gateway/migrations/postgres/100_rebuild_v2.sql`](https://github.com/rhernaus/tyrum/blob/main/packages/gateway/migrations/postgres/100_rebuild_v2.sql#L1)
+- SQLite: [`packages/gateway/migrations/sqlite/100_rebuild_v2.sql`](https://github.com/tyrumai/tyrum/blob/main/packages/gateway/migrations/sqlite/100_rebuild_v2.sql#L1)
+- Postgres: [`packages/gateway/migrations/postgres/100_rebuild_v2.sql`](https://github.com/tyrumai/tyrum/blob/main/packages/gateway/migrations/postgres/100_rebuild_v2.sql#L1)
 
 For the audited foreign-key vs soft-reference decisions on approval/policy linkage columns, see [Gateway FK audit](./data-model-fk-audit.md).
 

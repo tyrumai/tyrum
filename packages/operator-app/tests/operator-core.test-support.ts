@@ -242,7 +242,7 @@ export function createFakeHttpClient(): FakeHttpClient {
         async () =>
           ({
             status: "ok",
-            default_image_ref: "ghcr.io/rhernaus/tyrum-desktop-sandbox:stable",
+            default_image_ref: "ghcr.io/tyrumai/tyrum-desktop-sandbox:stable",
             revision: 1,
             created_at: "2026-03-10T12:00:00.000Z",
             created_by: { kind: "tenant.token", token_id: "token-1" },

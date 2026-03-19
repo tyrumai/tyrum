@@ -35,7 +35,7 @@ curl -fsSL https://get.tyrum.ai/install.sh | bash -s -- 2026.2.18
 
 Advanced overrides:
 
-- `TYRUM_REPO` (default: `rhernaus/tyrum`)
+- `TYRUM_REPO` (default: `tyrumai/tyrum`)
 - `TYRUM_VERSION` (for non-`latest` installs)
 - `TYRUM_CHANNEL` (`stable` | `beta` | `dev`)
 
