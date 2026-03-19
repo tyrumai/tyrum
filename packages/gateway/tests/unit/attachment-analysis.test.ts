@@ -175,6 +175,38 @@ describe("attachment analysis runtime", () => {
     ).rejects.toThrow(/maxAnalysisBytes/);
   });
 
+  it("loads artifact-backed downloads directly from the artifact store", async () => {
+    extractArtifactIdFromUrlMock.mockReturnValue("artifact-1");
+    const artifactStore = {
+      get: vi.fn(async () => ({
+        ref: {
+          mime_type: "text/plain",
+        },
+        body: Buffer.from("stored-bytes", "utf8"),
+      })),
+    };
+    const fetchImpl = vi.fn();
+    const download = createAttachmentDownloadFunction({
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      artifactStore: artifactStore as never,
+      maxBytes: 1024,
+    });
+
+    const result = await download([
+      { url: new URL("https://example.com/a/artifact-1"), isUrlSupportedByModel: false },
+    ]);
+
+    expect(artifactStore.get).toHaveBeenCalledWith("artifact-1");
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(result).toEqual([
+      {
+        data: expect.any(Uint8Array),
+        mediaType: "text/plain",
+      },
+    ]);
+    expect(Buffer.from(result[0]!.data)).toEqual(Buffer.from("stored-bytes", "utf8"));
+  });
+
   it("enforces maxUploadBytes for inline attachment payloads", async () => {
     const result = prepareAttachmentInputForPrompt({
       deps: makeDeps({

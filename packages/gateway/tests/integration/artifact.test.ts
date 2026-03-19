@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { S3ArtifactStore } from "../../src/modules/artifact/store.js";
+import { AuthTokenService } from "../../src/modules/auth/auth-token-service.js";
 import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { GetObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
 import { createTestContainer } from "./helpers.js";
@@ -109,6 +110,75 @@ describe("artifact routes", () => {
     await container.db.close();
   });
 
+  it("GET /a/:id requires authentication when auth middleware is enabled", async () => {
+    const { container, requestUnauthenticated } = await setupArtifactRouteTest(homeDir);
+    const scope: ExecutionScopeIds = {
+      jobId: "job-artifacts-auth-required",
+      runId: "run-artifacts-auth-required",
+      stepId: "step-artifacts-auth-required",
+      attemptId: "attempt-artifacts-auth-required",
+    };
+    await seedExecutionScope(container.db, scope);
+    const ref = await putTextArtifact(container);
+
+    await linkArtifactToExecution(container.db, ref, {
+      runId: scope.runId,
+      stepId: scope.stepId,
+      attemptId: scope.attemptId,
+    });
+
+    const res = await requestUnauthenticated(`/a/${ref.artifact_id}`);
+    expect(res.status).toBe(401);
+    expect(await res.json()).toEqual({
+      error: "unauthorized",
+      message: "Provide a valid token via Authorization: Bearer <token> header",
+    });
+
+    await container.db.close();
+  });
+
+  it("GET /a/:id is scoped to the authenticated tenant", async () => {
+    const { container, requestUnauthenticated } = await setupArtifactRouteTest(homeDir);
+    const otherTenantId = "11111111-1111-4111-8111-111111111111";
+    const scope: ExecutionScopeIds = {
+      jobId: "job-artifacts-tenant-scope",
+      runId: "run-artifacts-tenant-scope",
+      stepId: "step-artifacts-tenant-scope",
+      attemptId: "attempt-artifacts-tenant-scope",
+    };
+    await seedExecutionScope(container.db, scope);
+    const ref = await putTextArtifact(container);
+
+    await linkArtifactToExecution(container.db, ref, {
+      runId: scope.runId,
+      stepId: scope.stepId,
+      attemptId: scope.attemptId,
+    });
+
+    await container.db.run("INSERT INTO tenants (tenant_id, tenant_key) VALUES (?, ?)", [
+      otherTenantId,
+      "tenant-other",
+    ]);
+    const otherTenantToken = await new AuthTokenService(container.db).issueToken({
+      tenantId: otherTenantId,
+      role: "admin",
+      scopes: ["*"],
+    });
+    const res = await requestUnauthenticated(`/a/${ref.artifact_id}`, {
+      headers: {
+        authorization: `Bearer ${otherTenantToken.token}`,
+      },
+    });
+
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({
+      error: "not_found",
+      message: "artifact not found",
+    });
+
+    await container.db.close();
+  });
+
   it("GET /a/:id emits artifact.fetched with requester identity and policy snapshot refs", async () => {
     const { container, requestUnauthenticated, tenantAdminToken } =
       await setupArtifactRouteTest(homeDir);
@@ -157,7 +227,7 @@ describe("artifact routes", () => {
     expect(fetched?.payload).toMatchObject({
       policy_snapshot_id: "ps-artifacts-request-id",
       fetched_by: {
-        kind: "capability",
+        kind: "http",
         request_id: requestId,
       },
     });

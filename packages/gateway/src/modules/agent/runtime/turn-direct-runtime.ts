@@ -24,6 +24,7 @@ type ContextPruningConfig = Parameters<typeof applyDeterministicContextCompactio
 export function createDirectTurnDownloadFunction(deps: TurnDirectDeps) {
   return createAttachmentDownloadFunction({
     fetchImpl: deps.prepareTurnDeps.fetchImpl,
+    artifactStore: deps.opts.container.artifactStore,
     maxBytes: deps.opts.container.deploymentConfig.attachments.maxAnalysisBytes,
   });
 }

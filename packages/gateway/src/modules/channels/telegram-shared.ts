@@ -8,6 +8,7 @@ import {
 import type { NormalizedMessageEnvelope, NormalizedThreadMessage } from "@tyrum/contracts";
 import type { DmScope } from "@tyrum/contracts";
 import type { TelegramBot } from "../ingress/telegram-bot.js";
+import type { ArtifactStore } from "../artifact/store.js";
 import type { SqlDb } from "../../statestore/types.js";
 import {
   type ChannelEgressConnector,
@@ -78,7 +79,23 @@ function toTelegramParseMode(
 
 async function downloadAttachmentBytes(
   attachment: NormalizedAttachment,
+  artifactStore?: ArtifactStore,
 ): Promise<{ bytes: Uint8Array; filename?: string; mimeType?: string }> {
+  if (artifactStore) {
+    const stored = await artifactStore.get(attachment.artifact_id);
+    if (stored) {
+      return {
+        bytes: new Uint8Array(
+          stored.body.buffer as ArrayBuffer,
+          stored.body.byteOffset,
+          stored.body.byteLength,
+        ),
+        filename: stored.ref.filename ?? attachment.filename,
+        mimeType: stored.ref.mime_type ?? attachment.mime_type,
+      };
+    }
+  }
+
   const url = attachment.external_url?.trim();
   if (!url) {
     throw new Error(`attachment '${attachment.artifact_id}' is missing external_url`);
@@ -103,10 +120,11 @@ async function sendTelegramAttachment(input: {
   telegramBot: TelegramBot;
   chatId: string;
   attachment: NormalizedAttachment;
+  artifactStore?: ArtifactStore;
   caption?: string;
   parseMode?: "HTML" | "Markdown" | "MarkdownV2";
 }): Promise<unknown> {
-  const uploaded = await downloadAttachmentBytes(input.attachment);
+  const uploaded = await downloadAttachmentBytes(input.attachment, input.artifactStore);
   const options = input.caption
     ? {
         caption: input.caption,
@@ -244,6 +262,7 @@ export function telegramThreadKey(
 export function createTelegramEgressConnector(
   telegramBot: TelegramBot,
   accountId?: string,
+  artifactStore?: ArtifactStore,
 ): ChannelEgressConnector {
   return {
     connector: "telegram",
@@ -269,6 +288,7 @@ export function createTelegramEgressConnector(
           telegramBot,
           chatId: input.containerId,
           attachment: attachments[index]!,
+          artifactStore,
           ...(index === 0 && caption ? { caption } : {}),
           parseMode,
         });

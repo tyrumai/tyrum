@@ -323,7 +323,11 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
         }
       }
 
-      const connector = createTelegramEgressConnector(telegramBot, telegramAccountKey);
+      const connector = createTelegramEgressConnector(
+        telegramBot,
+        telegramAccountKey,
+        deps.artifactStore,
+      );
       const attachments = result.attachments ?? [];
       if (chunks.length === 0 && attachments.length === 0) {
         return c.json({ ok: true, session_id: result.session_id });

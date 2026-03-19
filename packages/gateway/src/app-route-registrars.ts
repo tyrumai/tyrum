@@ -392,7 +392,10 @@ export function registerExecutionAndWorkflowRoutes(context: AppRouteContext): vo
 export function registerAgentsAndWorkspaceRoutes(context: AppRouteContext): void {
   const telegramRuntime =
     context.opts.telegramRuntime ??
-    new TelegramChannelRuntime(new ChannelConfigDal(context.container.db));
+    new TelegramChannelRuntime(
+      new ChannelConfigDal(context.container.db),
+      context.container.artifactStore,
+    );
   const googleChatRuntime =
     context.opts.googleChatRuntime ??
     new GoogleChatChannelRuntime(new ChannelConfigDal(context.container.db));

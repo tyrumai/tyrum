@@ -8,6 +8,7 @@ import type { AgentRegistry } from "../agent/registry.js";
 import type { ApprovalDal } from "../approval/dal.js";
 import type { MemoryDal } from "../memory/memory-dal.js";
 import type { TelegramBot } from "../ingress/telegram-bot.js";
+import type { ArtifactStore } from "../artifact/store.js";
 import {
   type ChannelEgressConnector,
   buildChannelSourceKey,
@@ -63,6 +64,7 @@ export class TelegramChannelProcessor {
     memoryDal?: MemoryDal;
     approvalDal?: ApprovalDal;
     protocolDeps?: ProtocolDeps;
+    artifactStore?: ArtifactStore;
     typingMode?: ChannelTypingMode;
     typingRefreshMs?: number;
     typingAutomationEnabled?: boolean;
@@ -82,7 +84,9 @@ export class TelegramChannelProcessor {
     this.staticEgressConnectors = new Map(
       (
         opts.egressConnectors ??
-        (opts.telegramBot ? [createTelegramEgressConnector(opts.telegramBot)] : [])
+        (opts.telegramBot
+          ? [createTelegramEgressConnector(opts.telegramBot, undefined, opts.artifactStore)]
+          : [])
       ).map((connector) => [connectorBindingKey(connector), connector]),
     );
     this.listEgressConnectors = opts.listEgressConnectors;

@@ -127,7 +127,15 @@ async function getArtifactRowById(
 async function getArtifactRowByAccessId(
   deps: ArtifactRouteDeps,
   accessId: string,
+  tenantId?: string,
 ): Promise<ArtifactRow | undefined> {
+  if (tenantId) {
+    return await deps.db.get<ArtifactRow>(
+      "SELECT * FROM artifacts WHERE tenant_id = ? AND access_id = ?",
+      [tenantId, accessId],
+    );
+  }
+
   return await deps.db.get<ArtifactRow>("SELECT * FROM artifacts WHERE access_id = ?", [accessId]);
 }
 
@@ -221,7 +229,12 @@ export function createArtifactRoutes(deps: ArtifactRouteDeps): Hono {
       return c.json({ error: "invalid_request", message: "invalid artifact id" }, 400);
     }
 
-    const row = await getArtifactRowByAccessId(deps, parsedId.data);
+    const auth = authClaimsForAudit(c);
+    const tenantId =
+      auth && typeof auth.tenant_id === "string" && auth.tenant_id.trim().length > 0
+        ? auth.tenant_id
+        : undefined;
+    const row = await getArtifactRowByAccessId(deps, parsedId.data, tenantId);
     if (!row) {
       return c.json(ARTIFACT_NOT_FOUND_BODY, 404);
     }
@@ -231,7 +244,6 @@ export function createArtifactRoutes(deps: ArtifactRouteDeps): Hono {
       return c.json({ error: "invalid_state", message: "artifact metadata is invalid" }, 500);
     }
     const requestId = requestIdForAudit(c);
-    const auth = authClaimsForAudit(c);
 
     const getSignedUrl = deps.artifactStore.getSignedUrl;
     if (typeof getSignedUrl === "function") {

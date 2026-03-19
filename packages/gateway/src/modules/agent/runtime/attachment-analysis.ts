@@ -21,6 +21,7 @@ import {
 import { resolveSessionModelDetailed } from "./session-model-resolution.js";
 import type { ResolveSessionModelDeps } from "./session-model-resolution.js";
 import type { SecretProvider } from "../../secret/provider.js";
+import type { ArtifactStore } from "../../artifact/store.js";
 
 type AttachmentFileInput = {
   artifactId?: string;
@@ -41,6 +42,7 @@ type AttachmentAnalysisDeps = {
   db: SqlDb;
   tenantId: string;
   fetchImpl?: typeof fetch;
+  artifactStore?: ArtifactStore;
   logger?: Logger;
   resolveModel: () => Promise<LanguageModel>;
   maxAnalysisBytes: number;
@@ -52,6 +54,7 @@ export type AttachmentUserContentPart =
 
 type PrepareAttachmentInputDeps = {
   container: ResolveSessionModelDeps["container"] & {
+    artifactStore: ArtifactStore;
     db: SqlDb;
     deploymentConfig: DeploymentConfigT;
     logger: Logger;
@@ -94,6 +97,7 @@ function renderSkippedSummary(skipped: AttachmentAnalysisResult["skipped"]): str
 
 export function createAttachmentDownloadFunction(input: {
   fetchImpl: typeof fetch | undefined;
+  artifactStore?: ArtifactStore;
   maxBytes: number;
 }) {
   const downloadFetch = input.fetchImpl ?? fetch;
@@ -104,6 +108,25 @@ export function createAttachmentDownloadFunction(input: {
       downloads.map(async (download) => {
         if (download.isUrlSupportedByModel) {
           return null;
+        }
+        const artifactId = extractArtifactIdFromUrl(download.url.toString());
+        if (artifactId && input.artifactStore) {
+          const stored = await input.artifactStore.get(artifactId);
+          if (stored) {
+            if (stored.body.byteLength > input.maxBytes) {
+              throw new Error(
+                `attachment exceeds maxAnalysisBytes (${String(stored.body.byteLength)} > ${String(input.maxBytes)}) for ${download.url.toString()}`,
+              );
+            }
+            return {
+              data: new Uint8Array(
+                stored.body.buffer as ArrayBuffer,
+                stored.body.byteOffset,
+                stored.body.byteLength,
+              ),
+              mediaType: stored.ref.mime_type ?? undefined,
+            };
+          }
         }
         const response = await downloadFetch(download.url, { method: "GET" });
         if (!response.ok) {
@@ -303,6 +326,7 @@ export async function analyzeAttachments(
     ],
     experimental_download: createAttachmentDownloadFunction({
       fetchImpl: deps.fetchImpl,
+      artifactStore: deps.artifactStore,
       maxBytes: deps.maxAnalysisBytes,
     }),
   });
@@ -430,6 +454,7 @@ export async function prepareAttachmentInputForPrompt(input: {
         db: input.deps.container.db,
         tenantId: input.deps.tenantId,
         fetchImpl: input.deps.fetchImpl,
+        artifactStore: input.deps.container.artifactStore,
         logger: input.deps.container.logger,
         resolveModel: async () => await resolveHelperModel(input.deps),
         maxAnalysisBytes: input.deps.deploymentConfig.attachments.maxAnalysisBytes,

@@ -21,7 +21,10 @@ export function startChannelRuntimeBundle(input: {
 }): ChannelRuntimeBundle {
   const { context, protocol, agents } = input;
   const channelConfigDal = new ChannelConfigDal(context.container.db);
-  const telegramRuntime = new TelegramChannelRuntime(channelConfigDal);
+  const telegramRuntime = new TelegramChannelRuntime(
+    channelConfigDal,
+    context.container.artifactStore,
+  );
   const googleChatRuntime = new GoogleChatChannelRuntime(channelConfigDal);
 
   const telegramProcessor = agents
@@ -37,6 +40,7 @@ export function startChannelRuntimeBundle(input: {
         memoryDal: context.container.memoryDal,
         approvalDal: context.container.approvalDal,
         protocolDeps: protocol.protocolDeps,
+        artifactStore: context.container.artifactStore,
         listEgressConnectors: async (tenantId) =>
           await telegramRuntime.listEgressConnectors(tenantId),
       })
