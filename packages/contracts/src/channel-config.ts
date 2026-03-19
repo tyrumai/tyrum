@@ -19,7 +19,7 @@ export const TelegramChannelConfigView = z
   .object({
     channel: z.literal("telegram"),
     account_key: AccountId,
-    ingress_mode: TelegramIngressMode.default("webhook"),
+    ingress_mode: TelegramIngressMode.default("polling"),
     bot_token_configured: z.boolean(),
     webhook_secret_configured: z.boolean(),
     allowed_user_ids: z

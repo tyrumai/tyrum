@@ -180,6 +180,25 @@ describe("ChannelConfigDal", () => {
     ).rejects.toThrow(/already used/);
   });
 
+  it("defaults new telegram configs to polling when ingress mode is omitted", async () => {
+    const created = await dal.createTelegram({
+      tenantId: DEFAULT_TENANT_ID,
+      accountKey: "default",
+      botToken: "bot-token",
+      webhookSecret: "webhook-secret",
+    });
+
+    expect(created).toMatchObject({
+      channel: "telegram",
+      account_key: "default",
+      ingress_mode: "polling",
+      bot_token: "bot-token",
+      webhook_secret: "webhook-secret",
+      allowed_user_ids: [],
+      pipeline_enabled: true,
+    });
+  });
+
   it("uses secure string comparison when resolving telegram webhook secrets", async () => {
     await dal.createTelegram({
       tenantId: DEFAULT_TENANT_ID,
@@ -273,7 +292,7 @@ describe("ChannelConfigDal", () => {
       {
         channel: "telegram",
         account_key: "default",
-        ingress_mode: "webhook",
+        ingress_mode: "polling",
         bot_token: "manual-bot-token",
         webhook_secret: "manual-webhook-secret",
         allowed_user_ids: [],

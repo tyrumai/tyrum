@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { DateTimeSchema } from "./common.js";
 import { DEFAULT_DESKTOP_ENVIRONMENT_IMAGE_REF } from "./desktop-environment.js";
-import { canonicalizeTelegramAllowedUserIds } from "./telegram.js";
 import { AgentModelConfig } from "./agent-core.js";
 
 export const DEFAULT_PUBLIC_BASE_URL = "http://127.0.0.1:8788" as const;

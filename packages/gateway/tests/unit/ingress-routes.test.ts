@@ -169,6 +169,50 @@ describe("Ingress routes", () => {
     });
   });
 
+  it("reports webhook-mode misconfiguration when all telegram accounts use polling", async () => {
+    const app = new Hono().route(
+      "/",
+      createIngressRoutes({
+        telegramRuntime: {
+          listTelegramAccounts: vi.fn(async () => [
+            {
+              account_key: "polling",
+              ingress_mode: "polling",
+              bot_token: "polling-token",
+              webhook_secret: "polling-secret",
+              allowed_user_ids: [],
+              pipeline_enabled: true,
+            },
+          ]),
+        } as any,
+      }),
+    );
+
+    const res = await app.request("/ingress/telegram", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-telegram-bot-api-secret-token": "polling-secret",
+      },
+      body: JSON.stringify({
+        update_id: 1,
+        message: {
+          message_id: 1,
+          date: 1_700_000_000,
+          chat: { id: 123, type: "private" },
+          text: "hi",
+        },
+      }),
+    });
+
+    expect(res.status).toBe(503);
+    await expect(res.json()).resolves.toMatchObject({
+      error: "misconfigured",
+      message:
+        "Telegram webhook ingress requires at least one webhook-mode account when Telegram ingress is enabled.",
+    });
+  });
+
   it("rejects webhook secrets that only belong to polling accounts", async () => {
     const telegramRuntime = {
       listTelegramAccounts: vi.fn(async () => [
