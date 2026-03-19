@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { cleanupTestRoot } from "../../../packages/operator-ui/tests/test-utils.js";
 import {
   cleanupBrowserNodeProviderHarness,
-  clickByTestId,
   flushEffects,
   getBrowserNodeRuntimeState,
   renderProvider,
@@ -23,6 +22,16 @@ afterEach(() => {
 });
 
 describe("BrowserNodeProvider consent flow", () => {
+  function clickDialogButton(label: string): void {
+    const button = Array.from(document.querySelectorAll("button")).find(
+      (candidate) => candidate.textContent === label,
+    );
+    expect(button).not.toBeUndefined();
+    act(() => {
+      button?.click();
+    });
+  }
+
   it("returns a disabled error before the browser node is enabled", async () => {
     stubLocalStorage();
     stubBrowserApis();
@@ -63,18 +72,26 @@ describe("BrowserNodeProvider consent flow", () => {
 
       expect(api.status).toBe("connected");
 
-      const firstRequest = api.executeLocal({
-        op: "get",
-        enable_high_accuracy: false,
-        timeout_ms: 30_000,
-        maximum_age_ms: 0,
+      let firstRequest!: ReturnType<typeof api.executeLocal>;
+      await act(async () => {
+        firstRequest = api.executeLocal({
+          op: "get",
+          enable_high_accuracy: false,
+          timeout_ms: 30_000,
+          maximum_age_ms: 0,
+        });
+        await Promise.resolve();
       });
       await flushEffects();
 
-      const secondRequest = api.executeLocal({
-        op: "capture_photo",
-        format: "jpeg",
-        quality: 0.8,
+      let secondRequest!: ReturnType<typeof api.executeLocal>;
+      await act(async () => {
+        secondRequest = api.executeLocal({
+          op: "capture_photo",
+          format: "jpeg",
+          quality: 0.8,
+        });
+        await Promise.resolve();
       });
       await flushEffects();
 
@@ -82,43 +99,47 @@ describe("BrowserNodeProvider consent flow", () => {
       expect(document.body.textContent).toContain("Attempt");
       expect(document.body.textContent).toContain("local");
 
-      clickByTestId("browser-node-dialog-close");
+      clickDialogButton("Deny");
       await flushEffects();
       await expect(firstRequest).resolves.toMatchObject({
         success: false,
         error: "location access denied",
       });
 
-      clickByTestId("browser-node-dialog-escape");
+      clickDialogButton("Deny");
       await flushEffects();
       await expect(secondRequest).resolves.toMatchObject({
         success: false,
         error: "camera access denied",
       });
 
-      const thirdRequest = api.executeLocal({
-        op: "record",
-        duration_ms: 25,
+      let thirdRequest!: ReturnType<typeof api.executeLocal>;
+      await act(async () => {
+        thirdRequest = api.executeLocal({
+          op: "record",
+          duration_ms: 25,
+        });
+        await Promise.resolve();
       });
       await flushEffects();
-      clickByTestId("browser-node-dialog-pointer-outside");
+      clickDialogButton("Deny");
       await flushEffects();
       await expect(thirdRequest).resolves.toMatchObject({
         success: false,
         error: "microphone access denied",
       });
 
-      const fourthRequest = api.executeLocal({
-        op: "record",
-        duration_ms: 25,
+      let fourthRequest!: ReturnType<typeof api.executeLocal>;
+      await act(async () => {
+        fourthRequest = api.executeLocal({
+          op: "record",
+          duration_ms: 25,
+        });
+        await Promise.resolve();
       });
       await flushEffects();
 
-      const allowButton = Array.from(document.querySelectorAll("button")).find(
-        (button) => button.textContent === "Allow",
-      );
-      expect(allowButton).not.toBeUndefined();
-      allowButton?.click();
+      clickDialogButton("Allow");
       await flushEffects();
 
       await expect(fourthRequest).resolves.toMatchObject({

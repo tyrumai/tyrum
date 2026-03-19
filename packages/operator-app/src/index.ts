@@ -64,8 +64,10 @@ export type {
 } from "@tyrum/client/browser";
 
 export type { ExternalStore, Unsubscribe } from "./store.js";
+export { createStore } from "./store.js";
 
 export type { OperatorCoreError, OperatorCoreErrorKind } from "./operator-error.js";
+export { AgentConfig, IdentityPack } from "@tyrum/contracts";
 
 export {
   createElevatedModeStore,

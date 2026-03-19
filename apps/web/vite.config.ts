@@ -42,6 +42,7 @@ export default defineConfig({
       "@tyrum/operator-app/node": resolve(repoRoot, "packages/operator-app/src/node.ts"),
       "@tyrum/operator-app": resolve(repoRoot, "packages/operator-app/src/index.ts"),
       "@tyrum/operator-ui/globals.css": resolve(repoRoot, "packages/operator-ui/src/globals.css"),
+      "@tyrum/operator-ui/pages": resolve(repoRoot, "packages/operator-ui/src/pages.ts"),
       "@tyrum/operator-ui": resolve(repoRoot, "packages/operator-ui/src/index.ts"),
       mitt: resolvePnpmPackageDir("mitt"),
     },

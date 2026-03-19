@@ -1,18 +1,17 @@
 import React from "react";
-import { AppShell } from "../../../packages/operator-ui/src/components/layout/app-shell.js";
-import { Sidebar } from "../../../packages/operator-ui/src/components/layout/sidebar.js";
-import { AgentsPage } from "../../../packages/operator-ui/src/components/pages/agents-page.js";
-import { ApprovalsPage } from "../../../packages/operator-ui/src/components/pages/approvals-page.js";
-import { AiSdkChatPage } from "../../../packages/operator-ui/src/components/pages/chat-page-ai-sdk.js";
-import { ConfigurePage } from "../../../packages/operator-ui/src/components/pages/configure-page.js";
-import { DashboardPage } from "../../../packages/operator-ui/src/components/pages/dashboard-page.js";
-import { ExtensionsPage } from "../../../packages/operator-ui/src/components/pages/extensions-page.js";
-import { FirstRunOnboardingPage } from "../../../packages/operator-ui/src/components/pages/first-run-onboarding.js";
-import { NodeConfigPage } from "../../../packages/operator-ui/src/components/pages/node-config/node-config-page.js";
-import { PairingPage } from "../../../packages/operator-ui/src/components/pages/pairing-page.js";
-import { WorkBoardPage } from "../../../packages/operator-ui/src/components/pages/workboard-page.js";
-import { AdminAccessProvider } from "../../../packages/operator-ui/src/elevated-mode.js";
-import { OperatorUiHostProvider } from "../../../packages/operator-ui/src/host/host-api.js";
+import { AdminAccessProvider, AppShell, OperatorUiHostProvider, Sidebar } from "@tyrum/operator-ui";
+import {
+  AgentsPage,
+  ApprovalsPage,
+  AiSdkChatPage,
+  ConfigurePage,
+  DashboardPage,
+  ExtensionsPage,
+  FirstRunOnboardingPage,
+  NodeConfigPage,
+  PairingPage,
+  WorkBoardPage,
+} from "@tyrum/operator-ui/pages";
 import { BrowserNodeProvider } from "./browser-node/browser-node-provider.js";
 import {
   createAgentsCore,

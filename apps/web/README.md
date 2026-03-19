@@ -16,6 +16,8 @@ development and browser-focused iteration.
 
 The app:
 
+- imports shared state/actions through `@tyrum/operator-app` and presentation components through
+  `@tyrum/operator-ui` public entrypoints only
 - resolves gateway HTTP/WS URLs from local storage, Vite env vars, or the current origin
 - persists the operator bearer token in browser local storage and supports `?token=` bootstrap
 - creates the shared operator core manager and admin access controller
@@ -34,3 +36,5 @@ The app:
 - Gateway reconfiguration is stored in browser local storage (`tyrum-gateway-http`,
   `tyrum-gateway-ws`).
 - Browser auth is stored in browser local storage (`tyrum-operator-token`).
+- Browser-host concerns stay in `apps/web`: gateway URL persistence, token bootstrap, reload
+  handling, and browser node consent/runtime wiring.

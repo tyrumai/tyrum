@@ -1,4 +1,4 @@
-import { createStore } from "../../../packages/operator-app/src/store.js";
+import { createStore } from "@tyrum/operator-app";
 
 export function createChatStore() {
   const assistantMarkdown = [

@@ -1,9 +1,5 @@
-import {
-  createElevatedModeStore,
-  type OperatorCore,
-} from "../../../packages/operator-app/src/index.js";
-import { createStore } from "../../../packages/operator-app/src/store.js";
-import type { DesktopApi } from "../../../packages/operator-ui/src/desktop-api.js";
+import { createElevatedModeStore, createStore, type OperatorCore } from "@tyrum/operator-app";
+import type { DesktopApi } from "@tyrum/operator-ui";
 import {
   createActivityStore,
   createAgentStatusStore,

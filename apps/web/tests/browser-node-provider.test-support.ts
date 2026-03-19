@@ -2,7 +2,7 @@
 
 import React, { act, useEffect } from "react";
 import { expect, vi } from "vitest";
-import type { BrowserNodeApi } from "../../../packages/operator-ui/src/browser-node/browser-node-provider.js";
+import type { BrowserNodeApi } from "@tyrum/operator-ui";
 import { createTestRoot } from "../../../packages/operator-ui/tests/test-utils.js";
 
 type BrowserNodeLifecycleInput = {
@@ -81,21 +81,6 @@ const capabilityStateMocks = vi.hoisted(() => ({
   toNodeCapabilityStates: vi.fn(),
 }));
 
-vi.mock("@tyrum/contracts", () => ({
-  BrowserActionArgs: {
-    safeParse(input: unknown) {
-      if (!input || typeof input !== "object" || Array.isArray(input)) {
-        return { success: false, error: { message: "invalid browser args" } };
-      }
-      const op = (input as { op?: unknown }).op;
-      if (op !== "get" && op !== "capture_photo" && op !== "record") {
-        return { success: false, error: { message: "invalid browser args" } };
-      }
-      return { success: true, data: input };
-    },
-  },
-}));
-
 vi.mock("../src/browser-node/browser-node-capability-state.js", async () => {
   const actual = await vi.importActual<
     typeof import("../src/browser-node/browser-node-capability-state.js")
@@ -107,107 +92,109 @@ vi.mock("../src/browser-node/browser-node-capability-state.js", async () => {
   };
 });
 
-vi.mock("../../../packages/operator-ui/src/components/ui/alert.js", () => ({
-  Alert: ({ description, title }: { description: string; title: string }) =>
-    React.createElement("div", { "data-testid": "browser-node-alert" }, `${title}:${description}`),
-}));
-
-vi.mock("../../../packages/operator-ui/src/components/ui/button.js", () => ({
-  Button: ({
-    children,
-    onClick,
-    type = "button",
-    variant,
-  }: {
-    children: React.ReactNode;
-    onClick?: () => void;
-    type?: "button" | "submit" | "reset";
-    variant?: string;
-  }) =>
-    React.createElement(
-      "button",
-      {
-        "data-variant": variant,
-        onClick,
-        type,
-      },
+vi.mock("@tyrum/operator-ui", async () => {
+  const actual = await vi.importActual<typeof import("@tyrum/operator-ui")>("@tyrum/operator-ui");
+  return {
+    ...actual,
+    Alert: ({ description, title }: { description: string; title: string }) =>
+      React.createElement(
+        "div",
+        { "data-testid": "browser-node-alert" },
+        `${title}:${description}`,
+      ),
+    Button: ({
       children,
-    ),
-}));
-
-vi.mock("../../../packages/operator-ui/src/components/ui/dialog.js", () => ({
-  Dialog: ({
-    children,
-    onOpenChange,
-    open,
-  }: {
-    children: React.ReactNode;
-    onOpenChange: (open: boolean) => void;
-    open: boolean;
-  }) =>
-    open
-      ? React.createElement(
-          "div",
-          { "data-testid": "browser-node-dialog-root" },
-          React.createElement(
-            "button",
-            {
-              "data-testid": "browser-node-dialog-close",
-              onClick: () => {
-                onOpenChange(false);
+      onClick,
+      type = "button",
+      variant,
+    }: {
+      children: React.ReactNode;
+      onClick?: () => void;
+      type?: "button" | "submit" | "reset";
+      variant?: string;
+    }) =>
+      React.createElement(
+        "button",
+        {
+          "data-variant": variant,
+          onClick,
+          type,
+        },
+        children,
+      ),
+    Dialog: ({
+      children,
+      onOpenChange,
+      open,
+    }: {
+      children: React.ReactNode;
+      onOpenChange: (open: boolean) => void;
+      open: boolean;
+    }) =>
+      open
+        ? React.createElement(
+            "div",
+            { "data-testid": "browser-node-dialog-root" },
+            React.createElement(
+              "button",
+              {
+                "data-testid": "browser-node-dialog-close",
+                onClick: () => {
+                  onOpenChange(false);
+                },
+                type: "button",
               },
-              type: "button",
-            },
-            "close",
-          ),
-          children,
-        )
-      : null,
-  DialogContent: ({
-    children,
-    onEscapeKeyDown,
-    onPointerDownOutside,
-    ...props
-  }: React.HTMLAttributes<HTMLDivElement> & {
-    onEscapeKeyDown: (event: { preventDefault: () => void }) => void;
-    onPointerDownOutside: (event: { preventDefault: () => void }) => void;
-  }) =>
-    React.createElement(
-      "div",
-      props,
-      React.createElement(
-        "button",
-        {
-          "data-testid": "browser-node-dialog-escape",
-          onClick: () => {
-            onEscapeKeyDown({ preventDefault: () => undefined });
-          },
-          type: "button",
-        },
-        "escape",
-      ),
-      React.createElement(
-        "button",
-        {
-          "data-testid": "browser-node-dialog-pointer-outside",
-          onClick: () => {
-            onPointerDownOutside({ preventDefault: () => undefined });
-          },
-          type: "button",
-        },
-        "outside",
-      ),
+              "close",
+            ),
+            children,
+          )
+        : null,
+    DialogContent: ({
       children,
-    ),
-  DialogDescription: ({ children }: { children: React.ReactNode }) =>
-    React.createElement("div", { "data-testid": "browser-node-dialog-description" }, children),
-  DialogFooter: ({ children }: { children: React.ReactNode }) =>
-    React.createElement("div", { "data-testid": "browser-node-dialog-footer" }, children),
-  DialogHeader: ({ children }: { children: React.ReactNode }) =>
-    React.createElement("div", { "data-testid": "browser-node-dialog-header" }, children),
-  DialogTitle: ({ children }: { children: React.ReactNode }) =>
-    React.createElement("div", { "data-testid": "browser-node-dialog-title" }, children),
-}));
+      onEscapeKeyDown,
+      onPointerDownOutside,
+      ...props
+    }: React.HTMLAttributes<HTMLDivElement> & {
+      onEscapeKeyDown: (event: { preventDefault: () => void }) => void;
+      onPointerDownOutside: (event: { preventDefault: () => void }) => void;
+    }) =>
+      React.createElement(
+        "div",
+        props,
+        React.createElement(
+          "button",
+          {
+            "data-testid": "browser-node-dialog-escape",
+            onClick: () => {
+              onEscapeKeyDown({ preventDefault: () => undefined });
+            },
+            type: "button",
+          },
+          "escape",
+        ),
+        React.createElement(
+          "button",
+          {
+            "data-testid": "browser-node-dialog-pointer-outside",
+            onClick: () => {
+              onPointerDownOutside({ preventDefault: () => undefined });
+            },
+            type: "button",
+          },
+          "outside",
+        ),
+        children,
+      ),
+    DialogDescription: ({ children }: { children: React.ReactNode }) =>
+      React.createElement("div", { "data-testid": "browser-node-dialog-description" }, children),
+    DialogFooter: ({ children }: { children: React.ReactNode }) =>
+      React.createElement("div", { "data-testid": "browser-node-dialog-footer" }, children),
+    DialogHeader: ({ children }: { children: React.ReactNode }) =>
+      React.createElement("div", { "data-testid": "browser-node-dialog-header" }, children),
+    DialogTitle: ({ children }: { children: React.ReactNode }) =>
+      React.createElement("div", { "data-testid": "browser-node-dialog-title" }, children),
+  };
+});
 
 vi.mock("../src/browser-node/browser-capability-provider.js", () => {
   const toConsentRequest = (op: unknown, ctx: unknown) => {
@@ -289,6 +276,18 @@ vi.mock("../src/browser-node/browser-runtime.js", () => {
   }
 
   return {
+    BrowserActionArgs: {
+      safeParse(input: unknown) {
+        if (!input || typeof input !== "object" || Array.isArray(input)) {
+          return { success: false, error: { message: "invalid browser args" } };
+        }
+        const op = (input as { op?: unknown }).op;
+        if (op !== "get" && op !== "capture_photo" && op !== "record") {
+          return { success: false, error: { message: "invalid browser args" } };
+        }
+        return { success: true, data: input };
+      },
+    },
     TyrumClient: FakeTyrumClient,
     createBrowserLocalStorageDeviceIdentityStorage: vi.fn((key: string) => ({ key })),
     createManagedNodeClientLifecycle: vi.fn((input: BrowserNodeLifecycleInput) => {
@@ -391,7 +390,7 @@ export async function flushEffects(): Promise<void> {
 export async function renderProvider(wsUrl = "ws://example.test/ws") {
   const [{ BrowserNodeProvider }, { useBrowserNode }] = await Promise.all([
     import("../src/browser-node/browser-node-provider.js"),
-    import("../../../packages/operator-ui/src/browser-node/browser-node-provider.js"),
+    import("@tyrum/operator-ui"),
   ]);
   let api: BrowserNodeApi | null = null;
 
@@ -430,7 +429,9 @@ export async function renderProvider(wsUrl = "ws://example.test/ws") {
 export function clickByTestId(testId: string): void {
   const element = document.querySelector<HTMLElement>(`[data-testid="${testId}"]`);
   expect(element).not.toBeNull();
-  element?.click();
+  act(() => {
+    element?.click();
+  });
 }
 
 export function resetBrowserNodeProviderHarness(): void {

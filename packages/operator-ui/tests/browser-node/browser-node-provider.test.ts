@@ -14,21 +14,6 @@ vi.mock("sonner", () => ({
   },
 }));
 
-vi.mock("@tyrum/contracts", () => ({
-  BrowserActionArgs: {
-    safeParse(input: unknown) {
-      if (!input || typeof input !== "object" || Array.isArray(input)) {
-        return { success: false, error: { message: "invalid browser args" } };
-      }
-      const op = (input as { op?: unknown }).op;
-      if (op !== "get" && op !== "capture_photo" && op !== "record") {
-        return { success: false, error: { message: "invalid browser args" } };
-      }
-      return { success: true, data: input };
-    },
-  },
-}));
-
 type TyrumClientHandler = (evt?: unknown) => void;
 
 class FakeTyrumClient {
@@ -75,6 +60,18 @@ vi.mock("../../../../apps/web/src/browser-node/browser-runtime.js", () => {
   const autoExecute = vi.fn();
 
   return {
+    BrowserActionArgs: {
+      safeParse(input: unknown) {
+        if (!input || typeof input !== "object" || Array.isArray(input)) {
+          return { success: false, error: { message: "invalid browser args" } };
+        }
+        const op = (input as { op?: unknown }).op;
+        if (op !== "get" && op !== "capture_photo" && op !== "record") {
+          return { success: false, error: { message: "invalid browser args" } };
+        }
+        return { success: true, data: input };
+      },
+    },
     createManagedNodeClientLifecycle: createManagedNodeClientLifecycleMock({
       autoExecute,
       requireConnectedObject: true,
