@@ -473,7 +473,7 @@ jobs:
           set -euo pipefail
 
           declare -A packages=(
-            ["@tyrum/contracts"]="release-assets/tyrum-schemas-${RELEASE_VERSION}.tgz"
+            ["@tyrum/contracts"]="release-assets/tyrum-contracts-${RELEASE_VERSION}.tgz"
             ["@tyrum/client"]="release-assets/tyrum-client-${RELEASE_VERSION}.tgz"
             ["@tyrum/gateway"]="release-assets/tyrum-gateway-${RELEASE_VERSION}.tgz"
           )
