@@ -1,6 +1,6 @@
 import { realpathSync } from "node:fs";
 import { spawn } from "node:child_process";
-import { readdir, readFile, rm, stat, writeFile, mkdir } from "node:fs/promises";
+import { readdir, readFile, realpath, rm, stat, writeFile, mkdir } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 
 // ---------------------------------------------------------------------------
@@ -16,10 +16,7 @@ export function assertSandboxed(sandboxRoot: string, filePath: string): string {
   const canonicalRoot = resolveCanonicalPath(sandboxRoot);
   const resolved = resolve(sandboxRoot, filePath);
   const canonicalTarget = resolveCanonicalPath(resolved);
-  const relativeToRoot = relative(canonicalRoot, canonicalTarget);
-  const staysWithinRoot =
-    relativeToRoot === "" || (!relativeToRoot.startsWith("..") && !isAbsolute(relativeToRoot));
-  if (!staysWithinRoot) {
+  if (!isPathWithinRoot(canonicalRoot, canonicalTarget)) {
     throw new Error(`Path escapes sandbox: ${filePath}`);
   }
   return resolved;
@@ -48,6 +45,11 @@ function resolveCanonicalPath(targetPath: string): string {
       current = parent;
     }
   }
+}
+
+function isPathWithinRoot(canonicalRoot: string, canonicalTarget: string): boolean {
+  const relativeToRoot = relative(canonicalRoot, canonicalTarget);
+  return relativeToRoot === "" || (!relativeToRoot.startsWith("..") && !isAbsolute(relativeToRoot));
 }
 
 // ---------------------------------------------------------------------------
@@ -363,9 +365,24 @@ const IGNORED_WALK_DIRS = new Set([".git", "node_modules", "dist", "coverage", "
 async function walkFiles(root: string): Promise<string[]> {
   const files: string[] = [];
   const stack = [root];
+  const canonicalRoot = resolveCanonicalPath(root);
+  const visitedDirectories = new Set<string>();
   while (stack.length > 0) {
     const current = stack.pop();
     if (!current) continue;
+    let canonicalCurrent;
+    try {
+      canonicalCurrent = await realpath(current);
+    } catch {
+      continue;
+    }
+    if (
+      !isPathWithinRoot(canonicalRoot, canonicalCurrent) ||
+      visitedDirectories.has(canonicalCurrent)
+    ) {
+      continue;
+    }
+    visitedDirectories.add(canonicalCurrent);
     let entries;
     try {
       entries = await readdir(current, { withFileTypes: true });

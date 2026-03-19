@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile, readFile, mkdir } from "node:fs/promises";
+import { mkdtemp, rm, writeFile, readFile, mkdir, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -288,6 +288,31 @@ describe("glob", () => {
     expect(matches).toContain("c.ts");
     expect(matches).not.toContain("d.ts");
   });
+
+  it("does not traverse directory symlinks that resolve outside the sandbox", async () => {
+    const outsideRoot = await mkdtemp(join(tmpdir(), "fs-provider-glob-outside-"));
+
+    try {
+      await writeFile(join(outsideRoot, "secret.ts"), "", "utf-8");
+      await symlink(outsideRoot, join(sandboxRoot, "escape"));
+
+      const result = await provider.execute(makeAction({ op: "glob", pattern: "*.ts" }));
+      expect(result.success).toBe(true);
+      expect((result.result as ResultPayload).matches).toEqual([]);
+    } finally {
+      await rm(outsideRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("does not loop on directory symlink cycles", async () => {
+    await mkdir(join(sandboxRoot, "nested"), { recursive: true });
+    await writeFile(join(sandboxRoot, "nested/file.ts"), "", "utf-8");
+    await symlink(".", join(sandboxRoot, "loop"));
+
+    const result = await provider.execute(makeAction({ op: "glob", pattern: "*.ts" }));
+    expect(result.success).toBe(true);
+    expect((result.result as ResultPayload).matches).toEqual(["nested/file.ts"]);
+  }, 2_000);
 });
 
 // ---------------------------------------------------------------------------
@@ -342,6 +367,21 @@ describe("grep", () => {
     const matches = (result.result as ResultPayload).matches as string[];
     expect(matches.length).toBe(1);
     expect(matches[0]).toContain("a.ts");
+  });
+
+  it("does not read files through directory symlinks outside the sandbox", async () => {
+    const outsideRoot = await mkdtemp(join(tmpdir(), "fs-provider-grep-outside-"));
+
+    try {
+      await writeFile(join(outsideRoot, "secret.txt"), "needle\n", "utf-8");
+      await symlink(outsideRoot, join(sandboxRoot, "escape"));
+
+      const result = await provider.execute(makeAction({ op: "grep", pattern: "needle" }));
+      expect(result.success).toBe(true);
+      expect((result.result as ResultPayload).matches).toEqual([]);
+    } finally {
+      await rm(outsideRoot, { recursive: true, force: true });
+    }
   });
 });
 
