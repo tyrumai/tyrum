@@ -55,7 +55,7 @@ describe("turn preparation attachments", () => {
     }
   });
 
-  it("keeps resolved attachment summary text for file-only native turns", async () => {
+  it("does not inject synthetic attachment summary text for file-only native turns", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-turn-prep-attachments-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
 
@@ -95,18 +95,18 @@ describe("turn preparation attachments", () => {
       ],
     });
 
-    expect(prepared.userContent.slice(-2)).toEqual([
-      {
-        type: "text",
-        text: prepared.resolved.message,
-      },
-      {
-        type: "file",
-        data: "https://example.com/screenshot.png",
-        mediaType: "image/png",
-        filename: "screenshot.png",
-      },
-    ]);
-    expect(prepared.resolved.message).toContain("Attachments:");
+    expect(prepared.userContent.at(-1)).toEqual({
+      type: "file",
+      data: "https://example.com/screenshot.png",
+      mediaType: "image/png",
+      filename: "screenshot.png",
+    });
+    expect(prepared.userContent).not.toContainEqual({
+      type: "text",
+      text: prepared.resolved.message,
+    });
+    expect(prepared.resolved.message).toEqual(
+      "Attachments:\n- mime_type=image/png filename=screenshot.png",
+    );
   });
 });

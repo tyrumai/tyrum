@@ -137,6 +137,11 @@ function buildCurrentTurnUserContent(
     return [{ type: "text", text: resolvedMessage }];
   }
 
+  const hasFilePart = currentTurnParts.some((part) => part.type === "file");
+  if (hasFilePart) {
+    return [...currentTurnParts];
+  }
+
   const hasNonEmptyTextPart = currentTurnParts.some(
     (part) => part.type === "text" && part.text.trim().length > 0,
   );
