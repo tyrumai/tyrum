@@ -13,6 +13,7 @@ describe("@tyrum/operator-app entrypoints", () => {
     expect(typeof browserEntry["autoExecute"]).toBe("function");
     expect(typeof browserEntry["createOperatorHttpClient"]).toBe("function");
     expect(typeof browserEntry["createManagedNodeClientLifecycle"]).toBe("function");
+    expect(typeof browserEntry["createTyrumHttpClient"]).toBe("function");
     expect(typeof browserEntry["TyrumClient"]).toBe("function");
     expect(typeof browserEntry["createBrowserLocalStorageDeviceIdentityStorage"]).toBe("function");
     expect(typeof browserEntry["TyrumHttpClientError"]).toBe("function");
