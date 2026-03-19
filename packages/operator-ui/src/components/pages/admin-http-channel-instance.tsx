@@ -53,11 +53,13 @@ export function TelegramChannelCard({
 }): React.ReactElement {
   const [botTokenRaw, setBotTokenRaw] = React.useState("");
   const [webhookSecretRaw, setWebhookSecretRaw] = React.useState("");
-  const [ingressMode, setIngressMode] = React.useState<"webhook" | "polling">("polling");
+  const [ingressMode, setIngressMode] = React.useState<"webhook" | "polling">(config.ingress_mode);
   const [clearBotToken, setClearBotToken] = React.useState(false);
   const [clearWebhookSecret, setClearWebhookSecret] = React.useState(false);
-  const [allowedUserIdsRaw, setAllowedUserIdsRaw] = React.useState("");
-  const [pipelineEnabled, setPipelineEnabled] = React.useState(true);
+  const [allowedUserIdsRaw, setAllowedUserIdsRaw] = React.useState(() =>
+    formatAllowedUserIds(config.allowed_user_ids),
+  );
+  const [pipelineEnabled, setPipelineEnabled] = React.useState(config.pipeline_enabled);
   const [saving, setSaving] = React.useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
