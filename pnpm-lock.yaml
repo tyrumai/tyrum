@@ -698,9 +698,6 @@ importers:
       '@tyrum/contracts':
         specifier: workspace:*
         version: link:../contracts
-      '@tyrum/node-sdk':
-        specifier: workspace:*
-        version: link:../node-sdk
       '@tyrum/operator-core':
         specifier: workspace:*
         version: link:../operator-core
