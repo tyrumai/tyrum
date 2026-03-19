@@ -4,8 +4,8 @@ import {
   AgentCapabilitiesResponse,
   BuiltinMemoryServerSettings,
   IdentityPack,
-  SkillManifest,
   McpServerSpec,
+  SkillManifest,
   AgentTurnRequest,
 } from "../src/index.js";
 import { expectRejects } from "./test-helpers.js";
