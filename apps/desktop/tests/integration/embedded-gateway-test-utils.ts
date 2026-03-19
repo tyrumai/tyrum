@@ -150,10 +150,16 @@ function gatewayBuildIsStale(): boolean {
     return true;
   if (existsSync(CONTRACTS_SCRIPTS_DIR) && gatewayMtime < latestMtimeInDir(CONTRACTS_SCRIPTS_DIR))
     return true;
-  if (existsSync(RUNTIME_POLICY_PACKAGE_JSON) && runtimePolicyMtime < statSync(RUNTIME_POLICY_PACKAGE_JSON).mtimeMs) {
+  if (
+    existsSync(RUNTIME_POLICY_PACKAGE_JSON) &&
+    runtimePolicyMtime < statSync(RUNTIME_POLICY_PACKAGE_JSON).mtimeMs
+  ) {
     return true;
   }
-  if (existsSync(RUNTIME_POLICY_TSCONFIG) && runtimePolicyMtime < statSync(RUNTIME_POLICY_TSCONFIG).mtimeMs) {
+  if (
+    existsSync(RUNTIME_POLICY_TSCONFIG) &&
+    runtimePolicyMtime < statSync(RUNTIME_POLICY_TSCONFIG).mtimeMs
+  ) {
     return true;
   }
   if (
