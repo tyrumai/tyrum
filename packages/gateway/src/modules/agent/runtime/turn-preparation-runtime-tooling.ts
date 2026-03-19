@@ -9,6 +9,8 @@ import { NodeInventoryService } from "../../node/inventory-service.js";
 import { AgentMemoryToolRuntime } from "../../memory/agent-tool-runtime.js";
 import { resolveBuiltinMemoryConfig } from "../../memory/builtin-mcp.js";
 import { resolveEmbeddingPipeline } from "./embedding-pipeline-resolution.js";
+import { describeArtifactsForPrompt } from "./attachment-analysis.js";
+import { resolveSessionModelDetailed } from "./session-model-resolution.js";
 
 export async function createToolExecutorForTurnPreparation(input: {
   deps: TurnPreparationRuntimeDeps;
@@ -72,6 +74,53 @@ export async function createToolExecutorForTurnPreparation(input: {
           }),
       })
     : undefined;
+  const artifactDescribeRuntime = {
+    describe: async (toolInput: {
+      artifactIds: string[];
+      prompt?: string;
+      toolCallId: string;
+    }): Promise<string> => {
+      const helperModelConfig = input.deps.opts.container.deploymentConfig.attachments.helperModel;
+      const { summary } = await describeArtifactsForPrompt({
+        deps: {
+          db: input.deps.opts.container.db,
+          tenantId: input.session.tenant_id,
+          fetchImpl: input.deps.fetchImpl,
+          artifactStore: input.deps.opts.container.artifactStore,
+          logger: input.deps.opts.container.logger,
+          resolveModel: async () =>
+            (
+              await resolveSessionModelDetailed(
+                {
+                  container: input.deps.opts.container,
+                  secretProvider: input.deps.secretProvider,
+                  oauthLeaseOwner: input.deps.instanceOwner,
+                  fetchImpl: input.deps.fetchImpl,
+                },
+                {
+                  config:
+                    helperModelConfig.model !== null
+                      ? {
+                          ...input.ctx.config,
+                          model: helperModelConfig,
+                        }
+                      : input.ctx.config,
+                  tenantId: input.session.tenant_id,
+                  sessionId: input.session.session_id,
+                  fetchImpl: input.deps.fetchImpl,
+                },
+              )
+            ).model,
+          maxAnalysisBytes: input.deps.opts.container.deploymentConfig.attachments.maxAnalysisBytes,
+        },
+        args: {
+          artifact_ids: toolInput.artifactIds,
+          ...(toolInput.prompt ? { prompt: toolInput.prompt } : {}),
+        },
+      });
+      return summary;
+    },
+  };
 
   return new ToolExecutor(
     input.deps.home,
@@ -99,5 +148,6 @@ export async function createToolExecutorForTurnPreparation(input: {
     memoryToolRuntime,
     input.deps.opts.protocolDeps?.agents,
     input.deps.opts.protocolDeps,
+    artifactDescribeRuntime,
   );
 }

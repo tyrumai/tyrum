@@ -10,11 +10,22 @@ import { executeSubagentTool } from "../../src/modules/agent/tool-executor-subag
 import { WorkboardDal } from "../../src/modules/workboard/dal.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 
+function extractTextFromParts(input: { parts?: Array<{ type: string; text?: string }> }): string {
+  return (
+    input.parts
+      ?.filter((part) => part.type === "text" && typeof part.text === "string")
+      .map((part) => part.text)
+      .join("\n\n") ?? ""
+  );
+}
+
 function createFakeAgents(): AgentRegistry {
   return {
     getRuntime: async () =>
       ({
-        turn: async ({ message }: { message: string }) => ({ reply: `echo:${message}` }),
+        turn: async (input: { parts?: Array<{ type: string; text?: string }> }) => ({
+          reply: `echo:${extractTextFromParts(input)}`,
+        }),
       }) as Awaited<ReturnType<AgentRegistry["getRuntime"]>>,
   } as AgentRegistry;
 }

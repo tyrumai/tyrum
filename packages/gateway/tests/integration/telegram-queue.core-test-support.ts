@@ -1,5 +1,7 @@
 import { expect, it, vi } from "vitest";
 import {
+  createTelegramMediaFetch,
+  createTestArtifactStore,
   createIngressApp,
   makeResolvedRuntime,
   makeTelegramUpdate,
@@ -57,10 +59,12 @@ export function registerTelegramQueueCoreTests(state: TelegramQueueTestState): v
   });
 
   it("processes attachment-only messages by passing the normalized envelope through", async () => {
+    const artifactStore = createTestArtifactStore();
     const { bot, processor, queue, runtime } = setupTelegramProcessorHarness(state, {
+      fetchFn: createTelegramMediaFetch(),
       runtime: makeResolvedRuntime("Got it."),
     });
-    const app = createIngressApp({ bot, queue, runtime });
+    const app = createIngressApp({ bot, queue, runtime, artifactStore });
 
     const res = await postTelegramUpdate(app, {
       update_id: 100,
@@ -84,7 +88,12 @@ export function registerTelegramQueueCoreTests(state: TelegramQueueTestState): v
           container: { kind: "dm", id: "123" },
           content: expect.objectContaining({
             text: undefined,
-            attachments: [{ kind: "photo" }],
+            attachments: [
+              expect.objectContaining({
+                media_class: "image",
+                external_url: "https://gateway.example/a/11111111-1111-4111-8111-111111111111",
+              }),
+            ],
           }),
           provenance: ["user"],
         }),

@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { FsArtifactStore, S3ArtifactStore } from "../../src/modules/artifact/store.js";
@@ -7,6 +7,7 @@ import { RedactionEngine } from "../../src/modules/redaction/engine.js";
 import { GetObjectCommand, HeadObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 
 describe("ArtifactStore", () => {
+  const publicBaseUrl = "https://gateway.example.test";
   let baseDir: string;
 
   beforeEach(() => {
@@ -18,7 +19,7 @@ describe("ArtifactStore", () => {
   });
 
   it("filesystem store: put -> get round-trip", async () => {
-    const store = new FsArtifactStore(baseDir);
+    const store = new FsArtifactStore(baseDir, undefined, publicBaseUrl);
     const ref = await store.put({
       kind: "log",
       body: Buffer.from("hello world", "utf8"),
@@ -27,6 +28,9 @@ describe("ArtifactStore", () => {
     });
 
     expect(ref.uri).toBe(`artifact://${ref.artifact_id}`);
+    expect(ref.external_url).toBe(`${publicBaseUrl}/a/${ref.artifact_id}`);
+    expect(ref.media_class).toBe("document");
+    expect(ref.filename).toBe(`artifact-${ref.artifact_id}.txt`);
     expect(ref.size_bytes).toBeGreaterThan(0);
     expect(ref.sha256).toMatch(/^[0-9a-f]{64}$/i);
 
@@ -39,7 +43,7 @@ describe("ArtifactStore", () => {
   it("filesystem store: redacts secrets for text-like artifacts when configured", async () => {
     const redaction = new RedactionEngine();
     redaction.registerSecrets(["secret-123"]);
-    const store = new FsArtifactStore(baseDir, redaction);
+    const store = new FsArtifactStore(baseDir, redaction, publicBaseUrl);
 
     const ref = await store.put({
       kind: "log",
@@ -54,9 +58,38 @@ describe("ArtifactStore", () => {
   });
 
   it("filesystem store: returns null for missing artifact", async () => {
-    const store = new FsArtifactStore(baseDir);
+    const store = new FsArtifactStore(baseDir, undefined, publicBaseUrl);
     const got = await store.get("550e8400-e29b-41d4-a716-446655440000");
     expect(got).toBeNull();
+  });
+
+  it("filesystem store: reads legacy metadata missing derived fields", async () => {
+    const store = new FsArtifactStore(baseDir, undefined, publicBaseUrl);
+    const artifactId = "550e8400-e29b-41d4-a716-446655440000";
+    const shardDir = join(baseDir, artifactId.slice(0, 2));
+    mkdirSync(shardDir, { recursive: true });
+    writeFileSync(join(shardDir, `${artifactId}.bin`), "hello");
+    writeFileSync(
+      join(shardDir, `${artifactId}.json`),
+      JSON.stringify({
+        artifact_id: artifactId,
+        uri: `artifact://${artifactId}`,
+        kind: "log",
+        created_at: "2026-02-19T12:00:00.000Z",
+        mime_type: "text/plain",
+        size_bytes: 5,
+        sha256: "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
+        labels: ["legacy"],
+      }),
+    );
+
+    const got = await store.get(artifactId);
+    expect(got).not.toBeNull();
+    expect(got!.ref.external_url).toBe(`${publicBaseUrl}/a/${artifactId}`);
+    expect(got!.ref.media_class).toBe("document");
+    expect(got!.ref.filename).toBe(`artifact-${artifactId}.txt`);
+    expect(got!.ref.labels).toEqual(["legacy"]);
+    expect(got!.body.toString("utf8")).toBe("hello");
   });
 
   it("s3 store: put -> get uses deterministic keys", async () => {
@@ -72,8 +105,11 @@ describe("ArtifactStore", () => {
             ref: {
               artifact_id: "550e8400-e29b-41d4-a716-446655440000",
               uri: "artifact://550e8400-e29b-41d4-a716-446655440000",
+              external_url: `${publicBaseUrl}/a/550e8400-e29b-41d4-a716-446655440000`,
               kind: "log",
+              media_class: "document",
               created_at: "2026-02-19T12:00:00.000Z",
+              filename: "artifact-550e8400-e29b-41d4-a716-446655440000.txt",
               labels: [],
               sha256: "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
               size_bytes: 5,
@@ -101,6 +137,8 @@ describe("ArtifactStore", () => {
       { send } as unknown as import("@aws-sdk/client-s3").S3Client,
       "bucket",
       "artifacts",
+      undefined,
+      publicBaseUrl,
     );
 
     const ref = await store.put({
@@ -134,6 +172,61 @@ describe("ArtifactStore", () => {
     expect(got!.ref.kind).toBe("log");
   });
 
+  it("s3 store: reads legacy manifests missing derived ref fields", async () => {
+    const artifactId = "550e8400-e29b-41d4-a716-446655440000";
+    const manifestKey = `artifacts/manifests/55/${artifactId}.json`;
+    const blobKey = `artifacts/blobs/55/${artifactId}/2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824.bin`;
+    const send = vi.fn(async (cmd: unknown) => {
+      if (cmd instanceof GetObjectCommand) {
+        const key = cmd.input.Key ?? "";
+        if (key === manifestKey) {
+          const meta = JSON.stringify({
+            v: 1,
+            ref: {
+              artifact_id: artifactId,
+              uri: `artifact://${artifactId}`,
+              kind: "log",
+              created_at: "2026-02-19T12:00:00.000Z",
+              labels: [],
+              sha256: "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
+              size_bytes: 5,
+              mime_type: "text/plain",
+            },
+            blob_key: blobKey,
+          });
+          return {
+            Body: {
+              transformToByteArray: async () => Buffer.from(meta, "utf8"),
+            },
+          };
+        }
+        if (key === blobKey) {
+          return {
+            Body: {
+              transformToByteArray: async () => Buffer.from("hello", "utf8"),
+            },
+          };
+        }
+      }
+      throw new Error("unexpected command");
+    });
+
+    const store = new S3ArtifactStore(
+      { send } as unknown as import("@aws-sdk/client-s3").S3Client,
+      "bucket",
+      "artifacts",
+      undefined,
+      publicBaseUrl,
+    );
+
+    const got = await store.get(artifactId);
+    expect(got).not.toBeNull();
+    expect(got!.ref.external_url).toBe(`${publicBaseUrl}/a/${artifactId}`);
+    expect(got!.ref.media_class).toBe("document");
+    expect(got!.ref.filename).toBe(`artifact-${artifactId}.txt`);
+    expect(got!.body.toString("utf8")).toBe("hello");
+  });
+
   it("s3 store: get returns null when manifest is missing", async () => {
     const send = vi.fn(async (cmd: unknown) => {
       if (cmd instanceof GetObjectCommand) {
@@ -150,6 +243,8 @@ describe("ArtifactStore", () => {
       { send } as unknown as import("@aws-sdk/client-s3").S3Client,
       "bucket",
       "artifacts",
+      undefined,
+      publicBaseUrl,
     );
 
     const got = await store.get("550e8400-e29b-41d4-a716-446655440000");
@@ -175,8 +270,11 @@ describe("ArtifactStore", () => {
             ref: {
               artifact_id: "550e8400-e29b-41d4-a716-446655440000",
               uri: "artifact://550e8400-e29b-41d4-a716-446655440000",
+              external_url: `${publicBaseUrl}/a/550e8400-e29b-41d4-a716-446655440000`,
               kind: "log",
+              media_class: "document",
               created_at: "2026-02-19T12:00:00.000Z",
+              filename: "artifact-550e8400-e29b-41d4-a716-446655440000.txt",
               labels: [],
               sha256: "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
               size_bytes: 5,
@@ -207,6 +305,7 @@ describe("ArtifactStore", () => {
       "bucket",
       "artifacts",
       undefined,
+      publicBaseUrl,
       presignGetObject,
     );
 
@@ -238,8 +337,11 @@ describe("ArtifactStore", () => {
             ref: {
               artifact_id: artifactId,
               uri: `artifact://${artifactId}`,
+              external_url: `${publicBaseUrl}/a/${artifactId}`,
               kind: "log",
+              media_class: "document",
               created_at: "2026-02-19T12:00:00.000Z",
+              filename: `artifact-${artifactId}.txt`,
               labels: [],
               sha256: "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
               size_bytes: 5,
@@ -276,6 +378,7 @@ describe("ArtifactStore", () => {
       "bucket",
       "artifacts",
       undefined,
+      publicBaseUrl,
       presignGetObject,
     );
 
@@ -306,8 +409,11 @@ describe("ArtifactStore", () => {
             ref: {
               artifact_id: artifactId,
               uri: `artifact://${artifactId}`,
+              external_url: `${publicBaseUrl}/a/${artifactId}`,
               kind: "log",
+              media_class: "document",
               created_at: "2026-02-19T12:00:00.000Z",
+              filename: `artifact-${artifactId}.txt`,
               labels: [],
               sha256: "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
               size_bytes: 5,
@@ -341,6 +447,7 @@ describe("ArtifactStore", () => {
       "bucket",
       "artifacts",
       undefined,
+      publicBaseUrl,
       presignGetObject,
     );
 
@@ -377,6 +484,7 @@ describe("ArtifactStore", () => {
       "bucket",
       "artifacts",
       undefined,
+      publicBaseUrl,
     );
 
     await expect(store.getSignedUrl(artifactId, { expiresInSeconds: 42 })).rejects.toThrow(
@@ -407,6 +515,7 @@ describe("ArtifactStore", () => {
       "bucket",
       "artifacts",
       undefined,
+      publicBaseUrl,
       presignGetObject,
     );
 

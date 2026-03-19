@@ -9,6 +9,44 @@ function MetaPartCard({ children, title }: { children: React.ReactNode; title: s
   );
 }
 
+function FilePreviewCard({
+  index,
+  messageId,
+  part,
+}: {
+  index: number;
+  messageId: string;
+  part: Extract<UIMessage["parts"][number], { type: "file" }>;
+}) {
+  const isImage = part.mediaType.startsWith("image/");
+  const downloadName = part.filename?.trim() || "attachment";
+
+  return (
+    <MetaPartCard key={`${messageId}:file:${index}`} title="File">
+      {part.filename ? <div className="font-medium">{part.filename}</div> : null}
+      <div className="text-xs text-fg-muted">{part.mediaType}</div>
+      {isImage ? (
+        <img
+          alt={part.filename?.trim() || "Uploaded image"}
+          className="max-h-[320px] w-full rounded-md border border-border object-contain"
+          data-testid={`message-file-preview-${messageId}-${index}`}
+          src={part.url}
+        />
+      ) : null}
+      <a
+        className="break-all text-sm text-primary-700 underline underline-offset-2 [overflow-wrap:anywhere]"
+        data-testid={`message-file-download-${messageId}-${index}`}
+        download={downloadName}
+        href={part.url}
+        rel="noreferrer noopener"
+        target="_blank"
+      >
+        Download
+      </a>
+    </MetaPartCard>
+  );
+}
+
 export function renderMetaMessagePart(input: {
   index: number;
   messageId: string;
@@ -40,20 +78,7 @@ export function renderMetaMessagePart(input: {
     );
   }
   if (isFileUIPart(part)) {
-    return (
-      <MetaPartCard key={`${messageId}:file:${index}`} title="File">
-        {part.filename ? <div className="font-medium">{part.filename}</div> : null}
-        <div className="text-xs text-fg-muted">{part.mediaType}</div>
-        <a
-          className="break-all text-sm text-primary-700 underline underline-offset-2 [overflow-wrap:anywhere]"
-          href={part.url}
-          rel="noreferrer"
-          target="_blank"
-        >
-          {part.url}
-        </a>
-      </MetaPartCard>
-    );
+    return <FilePreviewCard index={index} messageId={messageId} part={part} />;
   }
   return null;
 }

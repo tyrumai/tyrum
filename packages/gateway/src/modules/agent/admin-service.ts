@@ -57,7 +57,7 @@ async function detachExecutionArtifactsForAgent(
   agentId: string,
 ): Promise<void> {
   await db.run(
-    `UPDATE execution_artifacts
+    `UPDATE artifacts
      SET agent_id = NULL
      WHERE tenant_id = ? AND agent_id = ?`,
     [tenantId, agentId],
@@ -303,9 +303,9 @@ export class AgentAdminService {
 
     await this.deps.db.transaction(async (tx) => {
       await assertNoActiveRuns(tx, params.tenantId, params.agentKey);
-      // execution_artifacts stores a composite (tenant_id, agent_id) FK with
-      // ON DELETE SET NULL, but tenant_id is non-nullable. Clear agent_id
-      // explicitly so artifact history survives agent deletion.
+      // Artifact history keeps a composite (tenant_id, agent_id) relationship,
+      // but tenant_id remains non-nullable. Clear agent_id explicitly so
+      // artifact history survives agent deletion.
       await detachExecutionArtifactsForAgent(tx, params.tenantId, row.agent_id);
       const result = await tx.run(
         `DELETE FROM agents

@@ -221,7 +221,7 @@ function textTranscript(
   fallbackCreatedAt: string,
 ): SessionRow["transcript"] {
   return messages.flatMap((message) =>
-    message.parts.flatMap((part) =>
+    message.parts.flatMap((part: TyrumUIMessage["parts"][number]) =>
       part.type === "text" && typeof part.text === "string" && part.text.length > 0
         ? [
             {

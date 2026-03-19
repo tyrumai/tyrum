@@ -3,6 +3,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { vi } from "vitest";
+import { artifactFilenameFromMetadata } from "@tyrum/contracts";
 import type { AgentRegistry } from "../../src/modules/agent/registry.js";
 import { SessionDal } from "../../src/modules/agent/session-dal.js";
 import {
@@ -17,6 +18,7 @@ import { createApprovalRoutes } from "../../src/routes/approval.js";
 import { createIngressRoutes } from "../../src/routes/ingress.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import type { ApprovalDal } from "../../src/modules/approval/dal.js";
+import type { ArtifactStore } from "../../src/modules/artifact/store.js";
 import type { PolicyOverrideDal } from "../../src/modules/policy/override-dal.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 
@@ -131,6 +133,69 @@ export function mockFetch(): typeof fetch {
   }) as unknown as typeof fetch;
 }
 
+export function createTelegramMediaFetch(
+  filePath = "photos/file-1.jpg",
+  bytes = Buffer.from("photo-bytes"),
+  mediaType = "image/jpeg",
+): typeof fetch {
+  return vi.fn(async (url: string) => {
+    if (url.endsWith("/getFile")) {
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          result: {
+            file_id: "file-1",
+            file_path: filePath,
+            file_size: bytes.byteLength,
+          },
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      );
+    }
+
+    if (url.includes("/file/bot")) {
+      return new Response(bytes, {
+        status: 200,
+        headers: { "content-type": mediaType },
+      });
+    }
+
+    return new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as unknown as typeof fetch;
+}
+
+export function createTestArtifactStore(): ArtifactStore {
+  return {
+    put: vi.fn(async (input: Parameters<ArtifactStore["put"]>[0]) => ({
+      artifact_id: "11111111-1111-4111-8111-111111111111",
+      uri: "artifact://11111111-1111-4111-8111-111111111111",
+      external_url: "https://gateway.example/a/11111111-1111-4111-8111-111111111111",
+      kind: "file" as const,
+      media_class: "image" as const,
+      created_at: "2024-03-09T16:00:00.000Z",
+      filename: artifactFilenameFromMetadata({
+        artifactId: "11111111-1111-4111-8111-111111111111",
+        kind: "file",
+        filename: input.filename,
+        mimeType: input.mime_type,
+      }),
+      mime_type: input.mime_type,
+      size_bytes: input.body.byteLength,
+      sha256: "a".repeat(64),
+      labels: [],
+      metadata: input.metadata,
+    })),
+    get: vi.fn(),
+    delete: vi.fn(),
+  };
+}
+
 export function makeAgents(runtime: unknown, policyService?: PolicyService): AgentRegistry {
   return {
     getRuntime: async () => runtime,
@@ -166,11 +231,13 @@ export function makeRejectedRuntime(message = "boom") {
 
 export function createIngressApp({
   agents,
+  artifactStore,
   bot,
   queue,
   runtime,
 }: {
   agents?: AgentRegistry;
+  artifactStore?: ArtifactStore;
   bot: TelegramBot;
   queue: TelegramChannelQueue;
   runtime?: unknown;
@@ -184,6 +251,7 @@ export function createIngressApp({
       telegramWebhookSecret: TEST_TELEGRAM_WEBHOOK_SECRET,
       agents: agents ?? makeAgents(runtime ?? {}),
       telegramQueue: queue,
+      artifactStore,
     }),
   );
 
@@ -274,6 +342,7 @@ export function setupTelegramProcessorHarness(
   state: TelegramQueueTestState,
   options?: {
     agents?: AgentRegistry;
+    fetchFn?: typeof fetch;
     processorOptions?: TelegramProcessorOptions;
     queueOptions?: TelegramQueueOptions;
     runtime?: unknown;
@@ -281,7 +350,7 @@ export function setupTelegramProcessorHarness(
 ) {
   const db = openTelegramQueueTestDb(state);
   const sessionDal = makeSessionDal(db);
-  const fetchFn = mockFetch();
+  const fetchFn = options?.fetchFn ?? mockFetch();
   const bot = new TelegramBot("test-token", fetchFn);
   const runtime = options?.runtime ?? makeResolvedRuntime();
   const queue = new TelegramChannelQueue(db, {

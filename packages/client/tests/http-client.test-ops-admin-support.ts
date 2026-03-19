@@ -219,10 +219,7 @@ export function registerHttpClientOpsAdminTests(): void {
 
     const client = createTestClient({ fetch });
     const admin = client as unknown as Record<string, any>;
-    const result = await admin.artifacts.getBytes(
-      "550e8400-e29b-41d4-a716-446655440001",
-      "550e8400-e29b-41d4-a716-446655440000",
-    );
+    const result = await admin.artifacts.getBytes("550e8400-e29b-41d4-a716-446655440000");
     expect(result).toEqual({ kind: "redirect", url: "https://signed.example/artifact.bin" });
   });
 
@@ -238,10 +235,7 @@ export function registerHttpClientOpsAdminTests(): void {
 
     const client = createTestClient({ fetch });
     const admin = client as unknown as Record<string, any>;
-    const result = await admin.artifacts.getBytes(
-      "550e8400-e29b-41d4-a716-446655440001",
-      "550e8400-e29b-41d4-a716-446655440000",
-    );
+    const result = await admin.artifacts.getBytes("550e8400-e29b-41d4-a716-446655440000");
 
     expect(result.kind).toBe("bytes");
     expect(Array.from(result.bytes)).toEqual([1, 2, 3]);
@@ -249,13 +243,12 @@ export function registerHttpClientOpsAdminTests(): void {
   });
 
   it("artifacts.getBytes returns gateway URL for opaque redirects (browser-safe)", async () => {
-    const runId = "550e8400-e29b-41d4-a716-446655440001";
     const artifactId = "550e8400-e29b-41d4-a716-446655440000";
 
     const fetch = makeFetchMock(async (input, init) => {
       expect(init?.method).toBe("GET");
       expect(init?.redirect).toBe("manual");
-      expect(String(input)).toBe(`https://gateway.example/runs/${runId}/artifacts/${artifactId}`);
+      expect(String(input)).toBe(`https://gateway.example/a/${artifactId}`);
 
       const response = new Response(null, { status: 302 });
       Object.defineProperty(response, "type", { value: "opaqueredirect" });
@@ -264,10 +257,10 @@ export function registerHttpClientOpsAdminTests(): void {
 
     const client = createTestClient({ fetch });
     const admin = client as unknown as Record<string, any>;
-    const result = await admin.artifacts.getBytes(runId, artifactId);
+    const result = await admin.artifacts.getBytes(artifactId);
     expect(result).toEqual({
       kind: "redirect",
-      url: `https://gateway.example/runs/${runId}/artifacts/${artifactId}`,
+      url: `https://gateway.example/a/${artifactId}`,
     });
   });
 

@@ -5,7 +5,6 @@ import type {
   ApprovalKind as ApprovalKindT,
   AgentTurnResponse as AgentTurnResponseT,
   NormalizedContainerKind,
-  NormalizedMessageEnvelope as NormalizedMessageEnvelopeT,
   WorkScope,
 } from "@tyrum/contracts";
 import { AgentTurnRequest, SubagentSessionKey } from "@tyrum/contracts";
@@ -29,6 +28,11 @@ import {
   maybeResolvePausedRun,
 } from "./turn-engine-bridge-run-state.js";
 import { resolveAutomationMetadata } from "./automation-delivery.js";
+import {
+  normalizeInternalTurnRequestIfNeeded,
+  normalizeInternalTurnRequestUnknown,
+} from "./turn-request-normalization.js";
+import type { ResolvedAgentTurnInput } from "./turn-helpers.js";
 
 export {
   loadTurnFailureFromRun,
@@ -64,14 +68,6 @@ type TurnExecutionContext = {
   stepIndex: number;
   stepId: string;
   stepApprovalId?: string;
-};
-
-type ResolvedAgentTurnInput = {
-  channel: string;
-  thread_id: string;
-  message: string;
-  envelope?: NormalizedMessageEnvelopeT;
-  metadata?: Record<string, unknown>;
 };
 
 export type TurnEngineBridgeDeps = {
@@ -138,12 +134,13 @@ export async function turnViaExecutionEngine(
   deps: TurnEngineBridgeDeps,
   input: AgentTurnRequestT,
 ): Promise<AgentTurnResponseT> {
-  const resolvedInput = deps.resolveAgentTurnInput(input);
-  const tenantKey = input.tenant_key?.trim();
-  const agentKey = input.agent_key?.trim() || deps.agentKey;
-  const workspaceKey = input.workspace_key?.trim() || deps.workspaceKey;
+  const normalizedInput = normalizeInternalTurnRequestIfNeeded(input);
+  const resolvedInput = deps.resolveAgentTurnInput(normalizedInput);
+  const tenantKey = normalizedInput.tenant_key?.trim();
+  const agentKey = normalizedInput.agent_key?.trim() || deps.agentKey;
+  const workspaceKey = normalizedInput.workspace_key?.trim() || deps.workspaceKey;
   const containerKind: NormalizedContainerKind =
-    input.container_kind ?? resolvedInput.envelope?.container.kind ?? "channel";
+    normalizedInput.container_kind ?? resolvedInput.envelope?.container.kind ?? "channel";
   const defaultKey = buildAgentTurnKey({
     agentId: agentKey,
     workspaceId: workspaceKey,
@@ -162,7 +159,7 @@ export async function turnViaExecutionEngine(
   const key = canOverride ? laneQueueScope.key : defaultKey;
   const lane = canOverride ? "subagent" : "main";
   const planId = `agent-turn-${agentKey}-${randomUUID()}`;
-  const requestId = deps.resolveTurnRequestId(input);
+  const requestId = deps.resolveTurnRequestId(normalizedInput);
 
   if (lane === "main") {
     try {
@@ -205,17 +202,17 @@ export async function turnViaExecutionEngine(
     channel: resolvedInput.channel,
     thread_id: resolvedInput.thread_id,
     container_kind: containerKind,
-    message: input.message,
+    parts: resolvedInput.parts,
     envelope: resolvedInput.envelope,
     ...(tenantKey ? { tenant_key: tenantKey } : {}),
     agent_key: agentKey,
     workspace_key: workspaceKey,
   };
-  if (input.intake_mode) {
-    stepArgs["intake_mode"] = input.intake_mode;
+  if (normalizedInput.intake_mode) {
+    stepArgs["intake_mode"] = normalizedInput.intake_mode;
   }
   stepArgs["metadata"] = {
-    ...(input.metadata as Record<string, unknown>),
+    ...(normalizedInput.metadata as Record<string, unknown> | undefined),
     work_session_key: key,
     work_lane: lane,
   };
@@ -245,7 +242,9 @@ export async function turnViaExecutionEngine(
         return { success: false, error: `unsupported action type: ${action.type}` };
       }
 
-      const parsed = AgentTurnRequest.safeParse(action.args ?? {});
+      const parsed = AgentTurnRequest.safeParse(
+        normalizeInternalTurnRequestUnknown(action.args ?? {}),
+      );
       if (!parsed.success) {
         return { success: false, error: `invalid agent turn request: ${parsed.error.message}` };
       }

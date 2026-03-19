@@ -1,5 +1,6 @@
 import {
   type MessageProvenance,
+  type NormalizedAttachment,
   buildAgentSessionKey,
   normalizedContainerKindFromThreadKind,
   resolveDmScope,
@@ -7,6 +8,7 @@ import {
 import type { NormalizedMessageEnvelope, NormalizedThreadMessage } from "@tyrum/contracts";
 import type { DmScope } from "@tyrum/contracts";
 import type { TelegramBot } from "../ingress/telegram-bot.js";
+import type { ArtifactStore } from "../artifact/store.js";
 import type { SqlDb } from "../../statestore/types.js";
 import {
   type ChannelEgressConnector,
@@ -31,11 +33,10 @@ export const CHANNEL_TYPING_REFRESH_DEFAULT_MS = 4000;
 export const CHANNEL_TYPING_REFRESH_MIN_MS = 1000;
 export const CHANNEL_TYPING_REFRESH_MAX_MS = 10_000;
 export const CHANNEL_TYPING_MESSAGE_START_DELAY_MS = 250;
+export const TELEGRAM_CAPTION_MAX_LENGTH = 1024;
 
 export function extractMessageText(normalized: NormalizedThreadMessage): string {
-  const content = normalized.message.content;
-  if (content.kind === "text") return content.text;
-  return content.caption ?? "";
+  return normalized.message.content.text ?? "";
 }
 
 export function mergeInboundEnvelopes(
@@ -74,6 +75,76 @@ function toTelegramParseMode(
     return value;
   }
   return undefined;
+}
+
+async function downloadAttachmentBytes(
+  attachment: NormalizedAttachment,
+  artifactStore?: ArtifactStore,
+): Promise<{ bytes: Uint8Array; filename?: string; mimeType?: string }> {
+  if (artifactStore) {
+    const stored = await artifactStore.get(attachment.artifact_id);
+    if (stored) {
+      return {
+        bytes: new Uint8Array(
+          stored.body.buffer as ArrayBuffer,
+          stored.body.byteOffset,
+          stored.body.byteLength,
+        ),
+        filename: stored.ref.filename ?? attachment.filename,
+        mimeType: stored.ref.mime_type ?? attachment.mime_type,
+      };
+    }
+  }
+
+  const url = attachment.external_url?.trim();
+  if (!url) {
+    throw new Error(`attachment '${attachment.artifact_id}' is missing external_url`);
+  }
+
+  const response = await fetch(url, { method: "GET" });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(
+      `attachment download failed for '${attachment.artifact_id}' (${String(response.status)}): ${text}`,
+    );
+  }
+
+  return {
+    bytes: new Uint8Array(await response.arrayBuffer()),
+    filename: attachment.filename,
+    mimeType: attachment.mime_type ?? response.headers.get("content-type") ?? undefined,
+  };
+}
+
+async function sendTelegramAttachment(input: {
+  telegramBot: TelegramBot;
+  chatId: string;
+  attachment: NormalizedAttachment;
+  artifactStore?: ArtifactStore;
+  caption?: string;
+  parseMode?: "HTML" | "Markdown" | "MarkdownV2";
+}): Promise<unknown> {
+  const uploaded = await downloadAttachmentBytes(input.attachment, input.artifactStore);
+  const options = input.caption
+    ? {
+        caption: input.caption,
+        ...(input.parseMode ? { parse_mode: input.parseMode } : {}),
+      }
+    : undefined;
+
+  if (input.attachment.media_class === "image") {
+    return await input.telegramBot.sendPhoto(input.chatId, uploaded, options);
+  }
+  if (input.attachment.media_class === "video") {
+    return await input.telegramBot.sendVideo(input.chatId, uploaded, options);
+  }
+  if (input.attachment.media_class === "audio") {
+    if ((input.attachment.mime_type ?? "").toLowerCase() === "audio/ogg") {
+      return await input.telegramBot.sendVoice(input.chatId, uploaded, options);
+    }
+    return await input.telegramBot.sendAudio(input.chatId, uploaded, options);
+  }
+  return await input.telegramBot.sendDocument(input.chatId, uploaded, options);
 }
 
 export function connectorBindingKey(connector: ChannelEgressConnector): string {
@@ -191,17 +262,46 @@ export function telegramThreadKey(
 export function createTelegramEgressConnector(
   telegramBot: TelegramBot,
   accountId?: string,
+  artifactStore?: ArtifactStore,
 ): ChannelEgressConnector {
   return {
     connector: "telegram",
     ...(accountId?.trim() ? { accountId } : {}),
     sendMessage: async (input) => {
       const parseMode = toTelegramParseMode(input.parseMode);
-      return await telegramBot.sendMessage(
-        input.containerId,
-        input.text,
-        parseMode ? { parse_mode: parseMode } : undefined,
-      );
+      const text = input.content.text?.trim() ?? "";
+      const attachments = input.content.attachments ?? [];
+
+      if (attachments.length === 0) {
+        return await telegramBot.sendMessage(
+          input.containerId,
+          text,
+          parseMode ? { parse_mode: parseMode } : undefined,
+        );
+      }
+
+      const caption =
+        text.length > 0 && text.length <= TELEGRAM_CAPTION_MAX_LENGTH ? text : undefined;
+      let lastResponse: unknown;
+      for (let index = 0; index < attachments.length; index += 1) {
+        lastResponse = await sendTelegramAttachment({
+          telegramBot,
+          chatId: input.containerId,
+          attachment: attachments[index]!,
+          artifactStore,
+          ...(index === 0 && caption ? { caption } : {}),
+          parseMode,
+        });
+      }
+
+      if (text.length > 0 && !caption) {
+        lastResponse = await telegramBot.sendMessage(
+          input.containerId,
+          text,
+          parseMode ? { parse_mode: parseMode } : undefined,
+        );
+      }
+      return lastResponse;
     },
     sendTyping: async (input) => {
       await telegramBot.sendChatAction(input.containerId, "typing");

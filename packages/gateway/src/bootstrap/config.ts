@@ -2,7 +2,7 @@ import { existsSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { DeploymentConfig } from "@tyrum/contracts";
+import { DEFAULT_PUBLIC_BASE_URL, DeploymentConfig } from "@tyrum/contracts";
 import type { GatewayContainer } from "../container.js";
 import type { LogLevel } from "../modules/observability/logger.js";
 import type { SqlDb } from "../statestore/types.js";
@@ -203,6 +203,7 @@ export function buildStartupDefaultDeploymentConfig(
 ): DeploymentConfig {
   return DeploymentConfig.parse({
     server: {
+      publicBaseUrl: DEFAULT_PUBLIC_BASE_URL,
       trustedProxies: resolveOptionalCliString(overrides.trustedProxies),
       tlsReady: Boolean(overrides.tlsReady),
       tlsSelfSigned: Boolean(overrides.tlsSelfSigned),

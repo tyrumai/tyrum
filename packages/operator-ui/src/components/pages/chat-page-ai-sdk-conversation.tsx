@@ -2,8 +2,8 @@ import type { Approval } from "@tyrum/client";
 import type { ResolveApprovalInput } from "@tyrum/operator-core";
 import type { OperatorCore } from "@tyrum/operator-core";
 import { useChat } from "@ai-sdk/react";
-import type { UIMessage } from "ai";
-import { ChevronLeft, Send, Trash2 } from "lucide-react";
+import type { FileUIPart, UIMessage } from "ai";
+import { ChevronLeft, Paperclip, Send, Trash2, X } from "lucide-react";
 import {
   useEffect,
   useLayoutEffect,
@@ -48,6 +48,33 @@ function syncDraftHeight(textarea: HTMLTextAreaElement): void {
   const nextHeight = Math.min(Math.max(scrollHeight, minHeight), maxHeight);
   textarea.style.height = `${nextHeight}px`;
   textarea.style.overflowY = scrollHeight > maxHeight ? "auto" : "hidden";
+}
+
+function fileToUiPart(file: File): Promise<FileUIPart> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => {
+      const url = typeof reader.result === "string" ? reader.result : "";
+      if (!url) {
+        reject(new Error(`Failed to read file ${file.name}`));
+        return;
+      }
+      resolve({
+        type: "file",
+        mediaType: file.type || "application/octet-stream",
+        ...(file.name ? { filename: file.name } : {}),
+        url,
+      });
+    });
+    reader.addEventListener("error", () => {
+      reject(reader.error ?? new Error(`Failed to read file ${file.name}`));
+    });
+    reader.readAsDataURL(file);
+  });
+}
+
+async function filesToUiParts(files: File[]): Promise<FileUIPart[]> {
+  return await Promise.all(files.map((file) => fileToUiPart(file)));
 }
 
 function MarkdownToggle({
@@ -109,9 +136,11 @@ export function AiSdkConversation({
   transport: ReturnType<typeof createTyrumAiSdkChatTransport>;
 }) {
   const [draft, setDraft] = useState("");
+  const [draftFiles, setDraftFiles] = useState<File[]>([]);
   const [followRequestId, setFollowRequestId] = useState(0);
   const [sendErrorDismissed, setSendErrorDismissed] = useState(false);
   const draftRef = useRef<HTMLTextAreaElement | null>(null);
+  const draftFilesRef = useRef<HTMLInputElement | null>(null);
   const previousStatusRef = useRef<ReturnType<typeof useChat<UIMessage>>["status"]>("ready");
   const chat = useChat<UIMessage>({
     id: session.session_id,
@@ -173,24 +202,38 @@ export function AiSdkConversation({
     draftRef.current?.focus();
   }, []);
 
+  const clearDraftFiles = (): void => {
+    setDraftFiles([]);
+    if (draftFilesRef.current) {
+      draftFilesRef.current.value = "";
+    }
+  };
+
   const send = async (): Promise<void> => {
     const text = draft.trim();
-    if (!text) {
+    if (!text && draftFiles.length === 0) {
       return;
     }
     const attachedNodeId = await resolveAttachedNodeId();
+    const files = draftFiles.length > 0 ? await filesToUiParts(draftFiles) : undefined;
     setDraft("");
+    clearDraftFiles();
     setFollowRequestId((value) => value + 1);
     await chat.sendMessage(
-      {
-        text,
-      },
+      text
+        ? {
+            ...(files ? { files } : {}),
+            text,
+          }
+        : files
+          ? { files }
+          : undefined,
       attachedNodeId ? { body: { attached_node_id: attachedNodeId } } : undefined,
     );
   };
 
   const working = chat.status === "submitted" || chat.status === "streaming";
-  const canSend = draft.trim().length > 0 && chat.status !== "submitted";
+  const canSend = (draft.trim().length > 0 || draftFiles.length > 0) && chat.status !== "submitted";
 
   const handleDraftKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>): void => {
     if (
@@ -271,6 +314,56 @@ export function AiSdkConversation({
       ) : null}
 
       <div className="border-t border-border p-3">
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            className="h-8 gap-2"
+            data-testid="ai-sdk-chat-attach"
+            disabled={chat.status === "submitted"}
+            onClick={() => {
+              draftFilesRef.current?.click();
+            }}
+          >
+            <Paperclip className="h-4 w-4" />
+            Attach files
+          </Button>
+          {draftFiles.length > 0 ? (
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 rounded-md border border-border bg-bg-subtle/40 px-2 py-1 text-xs text-fg-muted">
+              <span className="font-medium text-fg">Attachments</span>
+              <div className="flex min-w-0 flex-1 flex-wrap gap-1">
+                {draftFiles.map((file) => (
+                  <span
+                    key={`${file.name}:${file.size}:${file.lastModified}`}
+                    className="rounded-full border border-border bg-bg px-2 py-0.5 text-[11px] text-fg"
+                  >
+                    {file.name || "Unnamed file"}
+                  </span>
+                ))}
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                className="h-6 px-2 text-xs text-fg-muted hover:text-fg"
+                data-testid="ai-sdk-chat-clear-attachments"
+                onClick={clearDraftFiles}
+              >
+                <X className="mr-1 h-3.5 w-3.5" />
+                Clear
+              </Button>
+            </div>
+          ) : null}
+          <input
+            ref={draftFilesRef}
+            className="hidden"
+            data-testid="ai-sdk-chat-files"
+            multiple
+            type="file"
+            onChange={(event) => {
+              setDraftFiles(Array.from(event.currentTarget.files ?? []));
+            }}
+          />
+        </div>
         <div className="flex items-end gap-2">
           <textarea
             ref={draftRef}

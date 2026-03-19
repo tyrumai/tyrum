@@ -1,4 +1,4 @@
-import { DeploymentConfig } from "@tyrum/contracts";
+import { DEFAULT_PUBLIC_BASE_URL, DeploymentConfig } from "@tyrum/contracts";
 import type { SqlDb } from "../statestore/types.js";
 import { AuthTokenService } from "../modules/auth/auth-token-service.js";
 import { DeploymentConfigDal } from "../modules/config/deployment-config-dal.js";
@@ -36,7 +36,9 @@ export async function runGatewayCheck(cmd: DbCommand): Promise<number> {
 
     const deploymentConfigDal = new DeploymentConfigDal(db);
     const deployment = await deploymentConfigDal.ensureSeeded({
-      defaultConfig: DeploymentConfig.parse({}),
+      defaultConfig: DeploymentConfig.parse({
+        server: { publicBaseUrl: DEFAULT_PUBLIC_BASE_URL },
+      }),
       createdBy: { kind: "bootstrap.check" },
       reason: "seed",
     });

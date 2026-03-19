@@ -8,6 +8,7 @@ import { normalizedContainerKindFromThreadKind } from "@tyrum/contracts";
 import type {
   MediaKind,
   MessageContent,
+  NormalizedAttachment,
   NormalizedMessage,
   NormalizedMessageEnvelope,
   NormalizedThread,
@@ -17,10 +18,8 @@ import type {
   ThreadKind,
 } from "@tyrum/contracts";
 import { telegramAccountIdFromEnv } from "../channels/telegram-account.js";
-
-// ---------------------------------------------------------------------------
-// Error
-// ---------------------------------------------------------------------------
+import type { ArtifactStore } from "../artifact/store.js";
+import type { TelegramBot } from "./telegram-bot.js";
 
 export class TelegramNormalizationError extends Error {
   constructor(message: string) {
@@ -28,10 +27,6 @@ export class TelegramNormalizationError extends Error {
     this.name = "TelegramNormalizationError";
   }
 }
-
-// ---------------------------------------------------------------------------
-// Internal Telegram types (for JSON deserialization)
-// ---------------------------------------------------------------------------
 
 interface TelegramUpdate {
   update_id: number;
@@ -47,14 +42,33 @@ interface TelegramMessage {
   chat: TelegramChat;
   text?: string;
   caption?: string;
-  photo?: unknown[];
-  animation?: unknown;
-  audio?: unknown;
-  document?: unknown;
-  video?: unknown;
-  voice?: unknown;
-  video_note?: unknown;
-  sticker?: unknown;
+  photo?: TelegramPhotoSize[];
+  animation?: TelegramFileLike;
+  audio?: TelegramFileLike;
+  document?: TelegramFileLike;
+  video?: TelegramFileLike;
+  voice?: TelegramFileLike;
+  video_note?: TelegramFileLike;
+  sticker?: TelegramFileLike;
+}
+
+interface TelegramPhotoSize {
+  file_id: string;
+  file_unique_id?: string;
+  file_size?: number;
+  width?: number;
+  height?: number;
+}
+
+interface TelegramFileLike {
+  file_id: string;
+  file_unique_id?: string;
+  file_name?: string;
+  mime_type?: string;
+  file_size?: number;
+  width?: number;
+  height?: number;
+  duration?: number;
 }
 
 interface TelegramUser {
@@ -73,9 +87,23 @@ interface TelegramChat {
   username?: string;
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+type TelegramMediaCandidate = {
+  kind: MediaKind;
+  fileId: string;
+  fileUniqueId?: string;
+  filename?: string;
+  mimeType?: string;
+  sizeBytes?: number;
+  width?: number;
+  height?: number;
+  duration?: number;
+};
+
+export type TelegramMediaNormalizationDeps = {
+  telegramBot: TelegramBot;
+  artifactStore: ArtifactStore;
+  maxUploadBytes?: number;
+};
 
 function mapChatType(type: string): ThreadKind {
   switch (type) {
@@ -94,7 +122,7 @@ function mapChatType(type: string): ThreadKind {
 
 function toDatetime(timestamp: number): string {
   const date = new Date(timestamp * 1000);
-  if (isNaN(date.getTime())) {
+  if (Number.isNaN(date.getTime())) {
     throw new TelegramNormalizationError(`encountered invalid unix timestamp: ${timestamp}`);
   }
   return date.toISOString();
@@ -118,164 +146,291 @@ function toNormalizedThread(chat: TelegramChat): NormalizedThread {
   };
 }
 
-function inferMediaKind(message: TelegramMessage): MediaKind | undefined {
-  if (message.photo != null && message.photo.length > 0) return "photo";
-  if (message.video != null) return "video";
-  if (message.animation != null) return "animation";
-  if (message.document != null) return "document";
-  if (message.audio != null) return "audio";
-  if (message.voice != null) return "voice";
-  if (message.video_note != null) return "video_note";
-  if (message.sticker != null) return "sticker";
-  return undefined;
-}
-
-function extractContent(message: TelegramMessage): MessageContent {
-  if (message.text != null) {
-    return { kind: "text", text: message.text };
-  }
-
-  const mediaKind = inferMediaKind(message);
-  if (mediaKind != null) {
-    return {
-      kind: "media_placeholder",
-      media_kind: mediaKind,
-      caption: message.caption,
-    };
-  }
-
-  return {
-    kind: "media_placeholder",
-    media_kind: "unknown",
-    caption: message.caption,
-  };
-}
-
-function piiFromContent(content: MessageContent): PiiField[] {
-  if (content.kind === "text") {
-    return ["message_text"];
-  }
-  const fields: PiiField[] = [];
-  if (content.caption != null) {
-    fields.push("message_caption");
-  }
-  return fields;
-}
-
 function trimNonEmpty(value: string | undefined): string | undefined {
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
-function toEnvelopeContent(
-  content: MessageContent,
-): NormalizedMessageEnvelope["content"] | undefined {
-  if (content.kind === "text") {
-    const text = trimNonEmpty(content.text);
-    if (!text) return undefined;
-    return { text, attachments: [] };
-  }
-
-  const caption = trimNonEmpty(content.caption);
-  return {
-    ...(caption ? { text: caption } : {}),
-    attachments: [{ kind: content.media_kind }],
-  };
-}
-
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
-
-export function normalizeUpdate(payload: string | Uint8Array): NormalizedThreadMessage {
-  let update: TelegramUpdate;
+function deserializeUpdate(payload: string | Uint8Array): TelegramUpdate {
   try {
     const raw = typeof payload === "string" ? payload : new TextDecoder().decode(payload);
-    update = JSON.parse(raw) as TelegramUpdate;
+    return JSON.parse(raw) as TelegramUpdate;
   } catch (err) {
     throw new TelegramNormalizationError(
       `failed to deserialize telegram update: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
+}
 
-  // edited_message takes precedence over message when both are present.
+function selectMessage(update: TelegramUpdate): TelegramMessage {
   const message = update.edited_message ?? update.message;
   if (message == null) {
     throw new TelegramNormalizationError(
       "telegram update did not include a message or edited_message payload",
     );
   }
+  return message;
+}
 
-  const thread = toNormalizedThread(message.chat);
-  const timestamp = toDatetime(message.date);
-  const editedTimestamp = message.edit_date != null ? toDatetime(message.edit_date) : undefined;
-
-  const content = extractContent(message);
-  const messagePii = piiFromContent(content);
-
-  let sender: SenderMetadata | undefined;
-  if (message.from != null) {
-    const user = message.from;
-    if (user.first_name != null) {
-      messagePii.push("sender_first_name");
-    }
-    if (user.last_name != null) {
-      messagePii.push("sender_last_name");
-    }
-    if (user.username != null) {
-      messagePii.push("sender_username");
-    }
-    if (user.language_code != null) {
-      messagePii.push("sender_language_code");
-    }
-
-    sender = {
-      id: String(user.id),
-      is_bot: user.is_bot,
-      first_name: user.first_name,
-      last_name: user.last_name,
-      username: user.username,
-      language_code: user.language_code,
+function inferMediaCandidate(message: TelegramMessage): TelegramMediaCandidate | undefined {
+  const photo = message.photo?.at(-1);
+  if (photo?.file_id) {
+    return {
+      kind: "photo",
+      fileId: photo.file_id,
+      fileUniqueId: photo.file_unique_id,
+      mimeType: "image/jpeg",
+      sizeBytes: photo.file_size,
+      width: photo.width,
+      height: photo.height,
     };
   }
 
-  const normalizedMessage: NormalizedMessage = {
-    id: String(message.message_id),
-    thread_id: thread.id,
+  const pickFile = (
+    kind: MediaKind,
+    file: TelegramFileLike | undefined,
+    fallbackMimeType?: string,
+  ): TelegramMediaCandidate | undefined => {
+    if (!file?.file_id) {
+      return undefined;
+    }
+    return {
+      kind,
+      fileId: file.file_id,
+      fileUniqueId: file.file_unique_id,
+      filename: file.file_name,
+      mimeType: file.mime_type ?? fallbackMimeType,
+      sizeBytes: file.file_size,
+      width: file.width,
+      height: file.height,
+      duration: file.duration,
+    };
+  };
+
+  return (
+    pickFile("video", message.video) ??
+    pickFile("animation", message.animation, "video/mp4") ??
+    pickFile("document", message.document) ??
+    pickFile("audio", message.audio) ??
+    pickFile("voice", message.voice, "audio/ogg") ??
+    pickFile("video_note", message.video_note, "video/mp4") ??
+    pickFile("sticker", message.sticker, "image/webp")
+  );
+}
+
+function toContent(text: string | undefined, attachments: NormalizedAttachment[]): MessageContent {
+  if (typeof text !== "string" && attachments.length === 0) {
+    throw new TelegramNormalizationError(
+      "telegram update did not include text or a recognized attachment",
+    );
+  }
+  return {
+    ...(text ? { text } : {}),
+    attachments,
+  };
+}
+
+function piiFromContent(content: MessageContent): PiiField[] {
+  return typeof content.text === "string" ? ["message_text"] : [];
+}
+
+function toEnvelopeContent(
+  content: MessageContent,
+): NormalizedMessageEnvelope["content"] | undefined {
+  if (typeof content.text !== "string" && content.attachments.length === 0) {
+    return undefined;
+  }
+  return content;
+}
+
+async function materializeTelegramAttachment(
+  deps: TelegramMediaNormalizationDeps,
+  message: TelegramMessage,
+  candidate: TelegramMediaCandidate,
+): Promise<NormalizedAttachment> {
+  if (
+    typeof deps.maxUploadBytes === "number" &&
+    typeof candidate.sizeBytes === "number" &&
+    candidate.sizeBytes > deps.maxUploadBytes
+  ) {
+    throw new TelegramNormalizationError(
+      `telegram attachment exceeds maxUploadBytes (${String(candidate.sizeBytes)} > ${String(deps.maxUploadBytes)})`,
+    );
+  }
+  const downloaded = await deps.telegramBot.downloadFileById(candidate.fileId);
+  if (typeof deps.maxUploadBytes === "number" && downloaded.body.byteLength > deps.maxUploadBytes) {
+    throw new TelegramNormalizationError(
+      `telegram attachment exceeds maxUploadBytes (${String(downloaded.body.byteLength)} > ${String(deps.maxUploadBytes)})`,
+    );
+  }
+  const artifact = await deps.artifactStore.put({
+    kind: "file",
+    body: downloaded.body,
+    mime_type: candidate.mimeType ?? downloaded.mediaType,
+    filename: candidate.filename,
+    metadata: {
+      source: "telegram-ingress",
+      telegram: {
+        channel_kind: candidate.kind,
+        chat_id: String(message.chat.id),
+        file_id: candidate.fileId,
+        file_unique_id: candidate.fileUniqueId,
+        height: candidate.height,
+        message_id: String(message.message_id),
+        size_bytes: candidate.sizeBytes,
+        width: candidate.width,
+        duration: candidate.duration,
+      },
+    },
+  });
+  return {
+    ...artifact,
+    channel_kind: candidate.kind,
+  };
+}
+
+function buildNormalizedMessage(input: {
+  message: TelegramMessage;
+  thread: NormalizedThread;
+  sender?: SenderMetadata;
+  timestamp: string;
+  editedTimestamp?: string;
+  content: MessageContent;
+  messagePii: PiiField[];
+}): NormalizedMessage {
+  return {
+    id: String(input.message.message_id),
+    thread_id: input.thread.id,
     source: "telegram",
-    content,
-    sender,
-    timestamp,
-    edited_timestamp: editedTimestamp,
-    pii_fields: messagePii,
+    content: input.content,
+    sender: input.sender,
+    timestamp: input.timestamp,
+    edited_timestamp: input.editedTimestamp,
+    pii_fields: input.messagePii,
     envelope: (() => {
-      const envelopeContent = toEnvelopeContent(content);
-      if (!envelopeContent) return undefined;
+      const envelopeContent = toEnvelopeContent(input.content);
+      if (!envelopeContent) {
+        return undefined;
+      }
 
       return {
-        message_id: String(message.message_id),
-        received_at: timestamp,
+        message_id: String(input.message.message_id),
+        received_at: input.timestamp,
         delivery: {
           channel: "telegram",
           account: telegramAccountIdFromEnv(),
         },
         container: {
-          kind: normalizedContainerKindFromThreadKind(thread.kind),
-          id: thread.id,
+          kind: normalizedContainerKindFromThreadKind(input.thread.kind),
+          id: input.thread.id,
         },
         sender: {
-          id: sender?.id ?? `chat:${thread.id}`,
-          ...(sender?.username != null ? { display: sender.username } : {}),
+          id: input.sender?.id ?? `chat:${input.thread.id}`,
+          ...(input.sender?.username != null ? { display: input.sender.username } : {}),
         },
         content: envelopeContent,
         provenance: ["user"],
       };
     })(),
   };
+}
+
+function buildSender(input: {
+  message: TelegramMessage;
+  messagePii: PiiField[];
+}): SenderMetadata | undefined {
+  if (!input.message.from) {
+    return undefined;
+  }
+
+  const user = input.message.from;
+  if (user.first_name != null) {
+    input.messagePii.push("sender_first_name");
+  }
+  if (user.last_name != null) {
+    input.messagePii.push("sender_last_name");
+  }
+  if (user.username != null) {
+    input.messagePii.push("sender_username");
+  }
+  if (user.language_code != null) {
+    input.messagePii.push("sender_language_code");
+  }
+
+  return {
+    id: String(user.id),
+    is_bot: user.is_bot,
+    first_name: user.first_name,
+    last_name: user.last_name,
+    username: user.username,
+    language_code: user.language_code,
+  };
+}
+
+function normalizeMessageCore(payload: string | Uint8Array): {
+  message: TelegramMessage;
+  thread: NormalizedThread;
+  timestamp: string;
+  editedTimestamp?: string;
+} {
+  const update = deserializeUpdate(payload);
+  const message = selectMessage(update);
+  return {
+    message,
+    thread: toNormalizedThread(message.chat),
+    timestamp: toDatetime(message.date),
+    editedTimestamp: message.edit_date != null ? toDatetime(message.edit_date) : undefined,
+  };
+}
+
+export function normalizeUpdate(payload: string | Uint8Array): NormalizedThreadMessage {
+  const { message, thread, timestamp, editedTimestamp } = normalizeMessageCore(payload);
+  const text = trimNonEmpty(message.text ?? message.caption);
+  const content = toContent(text, []);
+  const messagePii = piiFromContent(content);
+  const sender = buildSender({ message, messagePii });
 
   return {
     thread,
-    message: normalizedMessage,
+    message: buildNormalizedMessage({
+      message,
+      thread,
+      sender,
+      timestamp,
+      editedTimestamp,
+      content,
+      messagePii,
+    }),
+  };
+}
+
+export async function normalizeUpdateWithMedia(
+  payload: string | Uint8Array,
+  deps: TelegramMediaNormalizationDeps,
+): Promise<NormalizedThreadMessage> {
+  const { message, thread, timestamp, editedTimestamp } = normalizeMessageCore(payload);
+  const text = trimNonEmpty(message.text ?? message.caption);
+  const attachments: NormalizedAttachment[] = [];
+  const candidate = inferMediaCandidate(message);
+  if (candidate) {
+    attachments.push(await materializeTelegramAttachment(deps, message, candidate));
+  }
+
+  const content = toContent(text, attachments);
+  const messagePii = piiFromContent(content);
+  const sender = buildSender({ message, messagePii });
+
+  return {
+    thread,
+    message: buildNormalizedMessage({
+      message,
+      thread,
+      sender,
+      timestamp,
+      editedTimestamp,
+      content,
+      messagePii,
+    }),
   };
 }

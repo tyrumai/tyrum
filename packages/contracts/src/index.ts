@@ -19,7 +19,7 @@ export { TelegramAccountRoutingConfig, TelegramRoutingConfig, RoutingConfig, Rou
 // prettier-ignore
 export { ChannelType, TelegramChannelConfigView, ChannelConfigView, ChannelConfigListResponse, TelegramChannelConfigCreateRequest, ChannelConfigCreateRequest, TelegramChannelConfigUpdateRequest, ChannelConfigUpdateResponse, ChannelConfigCreateResponse, ChannelConfigDeleteResponse, ChannelRegistryFieldKind, ChannelRegistryFieldInput, ChannelRegistryFieldSection, ChannelRegistryFieldOptionSource, ChannelRegistryFieldOption, ChannelRegistryFieldVisibility, ChannelRegistryField, ChannelRegistryEntry, ChannelRegistryResponse, ConfiguredChannelAccount, ConfiguredChannelGroup, ConfiguredChannelListResponse, ChannelAccountCreateRequest, ChannelAccountUpdateRequest, ChannelAccountMutateResponse, ChannelAccountDeleteResponse, ChannelFieldErrors, ChannelInvalidRequestResponse } from "./channel-config.js";
 // prettier-ignore
-export { DeploymentConfigServer, DeploymentConfigAuthRateLimit, DeploymentConfigAuth, DeploymentConfigOtel, DeploymentConfigArtifactsS3, DeploymentConfigArtifacts, DeploymentConfigState, DeploymentConfigToolRunner, DeploymentConfigExecutionToolRunner, DeploymentConfigExecution, DeploymentConfigChannels, DeploymentConfigWebsocket, DeploymentConfigModelsDev, DeploymentConfigPolicy, DeploymentConfigAgent, DeploymentConfigAutomation, DeploymentConfigSnapshots, DeploymentConfigContext, DeploymentConfigLifecycleSessions, DeploymentConfigLifecycleChannels, DeploymentConfigLifecycle, DeploymentConfigLogging, DeploymentConfigDesktopEnvironments, DeploymentConfig, DeploymentConfigRevisionNumber, DeploymentConfigGetResponse, DeploymentConfigUpdateRequest, DeploymentConfigUpdateResponse, DeploymentConfigRevertRequest, DeploymentConfigRevertResponse } from "./deployment-config.js";
+export { DEFAULT_PUBLIC_BASE_URL, DeploymentConfigServer, DeploymentConfigAuthRateLimit, DeploymentConfigAuth, DeploymentConfigOtel, DeploymentConfigArtifactsS3, DeploymentConfigArtifacts, DeploymentConfigState, DeploymentConfigToolRunner, DeploymentConfigExecutionToolRunner, DeploymentConfigExecution, DeploymentConfigChannels, DeploymentConfigWebsocket, DeploymentConfigModelsDev, DeploymentConfigPolicy, DeploymentConfigAgent, DeploymentConfigAutomation, DeploymentConfigSnapshots, DeploymentConfigContext, DeploymentConfigAttachments, DeploymentConfigLifecycleSessions, DeploymentConfigLifecycleChannels, DeploymentConfigLifecycle, DeploymentConfigLogging, DeploymentConfigDesktopEnvironments, DeploymentConfig, DeploymentConfigRevisionNumber, DeploymentConfigGetResponse, DeploymentConfigUpdateRequest, DeploymentConfigUpdateResponse, DeploymentConfigRevertRequest, DeploymentConfigRevertResponse } from "./deployment-config.js";
 // prettier-ignore
 export { SnapshotFormatV2, SnapshotFormat, SnapshotTable, SnapshotBundle, SnapshotImportRequest } from "./snapshot.js";
 // prettier-ignore
@@ -41,6 +41,12 @@ export type { HttpContext, DomContext, EvaluationContext, PostconditionCheckResu
 // prettier-ignore
 export { CANONICAL_CAPABILITY_IDS, BROWSER_AUTOMATION_CAPABILITY_IDS, FILESYSTEM_CAPABILITY_IDS, LEGACY_ID_MIGRATION_MAP, isLegacyCapabilityDescriptorId, migrateCapabilityDescriptorId, CAPABILITY_DESCRIPTOR_DEFAULT_VERSION, CAPABILITY_DESCRIPTOR_IDS, LEGACY_UMBRELLA_PLATFORM_DESCRIPTOR_IDS, CapabilityDescriptor, CapabilityDescriptorId, CapabilityDescriptorVersion, CapabilityKind, ClientCapability, capabilityDescriptorsForClientCapability, clientCapabilityFromDescriptorId, descriptorIdForClientCapability, descriptorIdsForClientCapability, expandCapabilityDescriptorId, isLegacyUmbrellaCapabilityDescriptorId, normalizeCapabilityDescriptors } from "./capability.js";
 export type { CanonicalCapabilityId } from "./capability.js";
+// prettier-ignore
+export { WsError, WsRequestEnvelope, WsResponseOkEnvelope, WsResponseErrEnvelope, WsResponseEnvelope, WsEventEnvelope, WsMessageEnvelope } from "./protocol/envelopes.js";
+// prettier-ignore
+export { WsDeliveryReceiptEventPayload, WsDeliveryReceiptEvent } from "./protocol/chat-events.js";
+// prettier-ignore
+export { WsChannelQueueOverflowEventPayload, WsChannelQueueOverflowEvent } from "./protocol/execution-events.js";
 export * from "./protocol.js";
 // prettier-ignore
 export { DesktopDisplayTarget, DesktopElementRef, DesktopWindowRef, DesktopBackendMode, DesktopBackendPermissions, DesktopUiRect, DesktopUiNode, DesktopUiNodeSummary, DesktopUiTree, DesktopWindow, DesktopSelector, DesktopScreenshotArgs, DesktopMouseArgs, DesktopKeyboardArgs, DesktopSnapshotArgs, DesktopQueryArgs, DesktopActAction, DesktopActArgs, DesktopWaitForState, DesktopWaitForArgs, DesktopActionArgs, DesktopScreenshotResult, DesktopSnapshotResult, DesktopQueryMatch, DesktopQueryResult, DesktopActResult, DesktopWaitForResult, DesktopAutomationResult } from "./desktop.js";
@@ -67,7 +73,7 @@ export { IosLocationGetCurrentArgs, IosCameraTarget, IosCameraCapturePhotoFormat
 // prettier-ignore
 export { AndroidLocationGetCurrentArgs, AndroidCameraTarget, AndroidCameraCapturePhotoFormat, AndroidCameraCapturePhotoArgs, AndroidAudioRecordClipArgs, AndroidActionArgs, AndroidLocationCoords, AndroidLocationGetCurrentResult, AndroidCameraCapturePhotoResult, AndroidAudioRecordClipResult, AndroidActionResult } from "./android.js";
 // prettier-ignore
-export { AgentAccessDefaultMode, AgentModelConfig, AgentSkillConfig, AgentMcpConfig, AgentToolConfig, AgentSessionConfig, BuiltinMemoryServerSettings, AgentPersona, AgentConfig, IdentityStyle, IdentityFrontmatter, IdentityPack, SkillRequires, SkillFrontmatter, SkillManifest, SkillProvenanceSource, SkillStatus, McpServerSpec, AgentTurnRequest, AgentTurnResponse, AgentListItem, AgentListResponse, AgentConfigListItem, AgentConfigListResponse, AgentConfigGetResponse, AgentConfigUpdateRequest, AgentConfigUpdateResponse, ManagedAgentSummary, ManagedAgentListResponse, ManagedAgentDetail, ManagedAgentGetResponse, ManagedAgentCreateRequest, ManagedAgentUpdateRequest, ManagedAgentDeleteResponse, AgentStatusResponse, AgentSkillCapability, AgentMcpCapabilitySource, AgentMcpCapability, AgentToolCapability, AgentCapabilitiesResponse } from "./agent.js";
+export { AgentAccessDefaultMode, AgentModelConfig, AgentSkillConfig, AgentMcpConfig, AgentToolConfig, AgentSessionConfig, AgentAttachmentInputMode, AgentAttachmentConfig, BuiltinMemoryServerSettings, AgentPersona, AgentConfig, IdentityStyle, IdentityFrontmatter, IdentityPack, SkillRequires, SkillFrontmatter, SkillManifest, SkillProvenanceSource, SkillStatus, McpServerSpec, AgentTurnRequest, AgentTurnResponse, AgentListItem, AgentListResponse, AgentConfigListItem, AgentConfigListResponse, AgentConfigGetResponse, AgentConfigUpdateRequest, AgentConfigUpdateResponse, ManagedAgentSummary, ManagedAgentListResponse, ManagedAgentDetail, ManagedAgentGetResponse, ManagedAgentCreateRequest, ManagedAgentUpdateRequest, ManagedAgentDeleteResponse, AgentStatusResponse, AgentSkillCapability, AgentMcpCapabilitySource, AgentMcpCapability, AgentToolCapability, AgentCapabilitiesResponse } from "./agent.js";
 export {
   CODEX_AGENT_NAMES,
   PERSONA_CHARACTERS,
@@ -118,7 +124,7 @@ export { TenantKey, AgentKey, TenantId, AgentId, ChannelKey, AccountId, PeerId, 
 // prettier-ignore
 export { ScopeKeys, ScopeIds } from "./scope.js";
 // prettier-ignore
-export { ArtifactId, ArtifactKind, Sha256Hex, ArtifactUri, ArtifactRef } from "./artifact.js";
+export { ArtifactId, ArtifactKind, ArtifactMediaClass, Sha256Hex, ArtifactUri, ArtifactRef, artifactMediaClassFromMimeType, artifactFilenameFromMetadata } from "./artifact.js";
 // prettier-ignore
 export { ApprovalStatus, ApprovalKind, ApprovalScope, ApprovalDecision, Approval, ApprovalListRequest, ApprovalListResponse, ApprovalResolveRequest, ApprovalResolveResponse } from "./approval.js";
 // prettier-ignore

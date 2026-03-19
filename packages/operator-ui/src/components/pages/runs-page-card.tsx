@@ -177,35 +177,19 @@ export function RunsPageCard({ core, run, isExpanded, onToggleRun, timeline }: R
         </Button>
       </div>
 
-      {isExpanded ? <RunTimeline core={core} runId={run.run_id} timeline={timeline} /> : null}
+      {isExpanded ? <RunTimeline core={core} timeline={timeline} /> : null}
     </Card>
   );
 }
 
-function RunTimeline({
-  core,
-  runId,
-  timeline,
-}: {
-  core: OperatorCore;
-  runId: string;
-  timeline: RunTimelineEntry[];
-}) {
+function RunTimeline({ core, timeline }: { core: OperatorCore; timeline: RunTimelineEntry[] }) {
   return (
     <div className="grid gap-4 border-t border-border p-4">
       {timeline.length === 0 ? (
         <div className="text-sm text-fg-muted">No steps yet.</div>
       ) : (
         timeline.map(({ step, attempts }) => {
-          return (
-            <RunTimelineStep
-              key={step.step_id}
-              core={core}
-              runId={runId}
-              step={step}
-              attempts={attempts}
-            />
-          );
+          return <RunTimelineStep key={step.step_id} core={core} step={step} attempts={attempts} />;
         })
       )}
     </div>
@@ -214,12 +198,10 @@ function RunTimeline({
 
 function RunTimelineStep({
   core,
-  runId,
   step,
   attempts,
 }: {
   core: OperatorCore;
-  runId: string;
   step: ExecutionStep;
   attempts: ExecutionAttempt[];
 }) {
@@ -252,9 +234,7 @@ function RunTimelineStep({
       {attemptCount > 0 ? (
         <div className="ml-4 grid gap-1">
           {attempts.map((attempt) => {
-            return (
-              <RunAttemptRow key={attempt.attempt_id} core={core} runId={runId} attempt={attempt} />
-            );
+            return <RunAttemptRow key={attempt.attempt_id} core={core} attempt={attempt} />;
           })}
         </div>
       ) : null}
@@ -262,15 +242,7 @@ function RunTimelineStep({
   );
 }
 
-function RunAttemptRow({
-  core,
-  runId,
-  attempt,
-}: {
-  core: OperatorCore;
-  runId: string;
-  attempt: ExecutionAttempt;
-}) {
+function RunAttemptRow({ core, attempt }: { core: OperatorCore; attempt: ExecutionAttempt }) {
   const timing =
     attempt.finished_at && attempt.started_at
       ? formatDurationMs(Date.parse(attempt.finished_at) - Date.parse(attempt.started_at))
@@ -299,7 +271,6 @@ function RunAttemptRow({
       <div className="flex max-w-full flex-wrap items-center gap-2">
         <AttemptArtifactsDialog
           core={core}
-          runId={runId}
           attemptId={attempt.attempt_id}
           artifacts={attempt.artifacts}
         />

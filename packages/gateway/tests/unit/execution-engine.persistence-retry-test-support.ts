@@ -52,8 +52,12 @@ export function registerPersistenceTests(fixture: { db: () => SqliteDb }): void 
     const artifactRef = {
       artifact_id: "550e8400-e29b-41d4-a716-446655440000",
       uri: "artifact://550e8400-e29b-41d4-a716-446655440000",
+      external_url: "https://gateway.example.test/a/550e8400-e29b-41d4-a716-446655440000",
       kind: "log",
+      media_class: "document",
       created_at: new Date().toISOString(),
+      filename: "artifact-log.txt",
+      mime_type: "text/plain",
       labels: [],
     } as const;
     const mockExecutor: StepExecutor = {
@@ -80,15 +84,21 @@ export function registerPersistenceTests(fixture: { db: () => SqliteDb }): void 
       "SELECT attempt_id, step_id FROM execution_attempts LIMIT 1",
     );
     const metadata = await db.get<{
+      tenant_id: string;
       workspace_id: string;
       agent_id: string | null;
-      run_id: string;
-      step_id: string;
-      attempt_id: string;
       kind: string;
-    }>(
-      "SELECT workspace_id, agent_id, run_id, step_id, attempt_id, kind FROM execution_artifacts WHERE artifact_id = ?",
-      [artifactRef.artifact_id],
+    }>("SELECT tenant_id, workspace_id, agent_id, kind FROM artifacts WHERE artifact_id = ?", [
+      artifactRef.artifact_id,
+    ]);
+    expect(metadata).toBeTruthy();
+    const links = await db.all<{ parent_kind: string; parent_id: string }>(
+      `SELECT parent_kind, parent_id
+       FROM artifact_links
+       WHERE tenant_id = ?
+         AND artifact_id = ?
+       ORDER BY parent_kind, parent_id`,
+      [metadata!.tenant_id, artifactRef.artifact_id],
     );
     const job = await db.get<{ agent_id: string; workspace_id: string }>(
       "SELECT agent_id, workspace_id FROM execution_jobs WHERE latest_run_id = ? LIMIT 1",
@@ -97,10 +107,17 @@ export function registerPersistenceTests(fixture: { db: () => SqliteDb }): void 
     expect(job).toBeTruthy();
     expect(metadata?.workspace_id).toBe(job!.workspace_id);
     expect(metadata?.agent_id).toBe(job!.agent_id);
-    expect(metadata?.run_id).toBe(runId);
-    expect(metadata?.step_id).toBe(attempt!.step_id);
-    expect(metadata?.attempt_id).toBe(attempt!.attempt_id);
     expect(metadata?.kind).toBe(artifactRef.kind);
+    expect(links).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ parent_kind: "execution_run", parent_id: runId }),
+        expect.objectContaining({ parent_kind: "execution_step", parent_id: attempt!.step_id }),
+        expect.objectContaining({
+          parent_kind: "execution_attempt",
+          parent_id: attempt!.attempt_id,
+        }),
+      ]),
+    );
     const outbox = await db.all<{ payload_json: string }>(
       "SELECT payload_json FROM outbox WHERE topic = ?",
       ["ws.broadcast"],
@@ -126,8 +143,12 @@ export function registerPersistenceTests(fixture: { db: () => SqliteDb }): void 
     const artifactRef = {
       artifact_id: "550e8400-e29b-41d4-a716-446655440000",
       uri: "artifact://550e8400-e29b-41d4-a716-446655440000",
+      external_url: "https://gateway.example.test/a/550e8400-e29b-41d4-a716-446655440000",
       kind: "log",
+      media_class: "document",
       created_at: new Date().toISOString(),
+      filename: "artifact-log.txt",
+      mime_type: "text/plain",
       labels: [],
     } as const;
     const mockExecutor: StepExecutor = {

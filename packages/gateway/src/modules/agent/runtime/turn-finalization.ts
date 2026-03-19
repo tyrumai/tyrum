@@ -3,6 +3,7 @@ import type { AgentTurnResponse as AgentTurnResponseT, TyrumUIMessage } from "@t
 import { AgentTurnResponse } from "@tyrum/contracts";
 import type { GatewayContainer } from "../../../container.js";
 import type { ModelMessage } from "ai";
+import type { ArtifactRecordInsertInput } from "../../artifact/dal.js";
 import { decideCrossTurnLoopWarning, LOOP_WARNING_PREFIX } from "../loop-detection.js";
 import type { SessionDal, SessionRow } from "../session-dal.js";
 import type { ResolvedAgentTurnInput } from "./turn-helpers.js";
@@ -12,9 +13,15 @@ import {
   createTextChatMessage,
   modelMessagesToChatMessages,
 } from "../../ai-sdk/message-utils.js";
+import {
+  buildUserTurnMessage,
+  collectArtifactRefsFromMessages,
+  createArtifactFilePart,
+  materializeStoredMessageFiles,
+} from "../../ai-sdk/attachment-parts.js";
 import { normalizeSessionTitle } from "../session-dal-helpers.js";
 
-type FinalizeContainer = Pick<GatewayContainer, "contextReportDal" | "logger">;
+type FinalizeContainer = Pick<GatewayContainer, "artifactStore" | "contextReportDal" | "logger">;
 
 function messagesEqualIgnoringId(left: TyrumUIMessage, right: TyrumUIMessage): boolean {
   return left.role === right.role && JSON.stringify(left.parts) === JSON.stringify(right.parts);
@@ -45,13 +52,16 @@ function appendWithoutDuplicateOverlap(
 function isAssistantTextMessage(message: TyrumUIMessage): boolean {
   return (
     message.role === "assistant" &&
-    message.parts.some((part) => part.type === "text" && typeof part["text"] === "string")
+    message.parts.some(
+      (part: TyrumUIMessage["parts"][number]) =>
+        part.type === "text" && typeof part["text"] === "string",
+    )
   );
 }
 
 function textFromChatMessage(message: TyrumUIMessage): string {
   return message.parts
-    .flatMap((part) =>
+    .flatMap((part: TyrumUIMessage["parts"][number]) =>
       part.type === "text" && typeof part["text"] === "string" ? [part["text"]] : [],
     )
     .join("\n\n")
@@ -193,26 +203,56 @@ export async function finalizeTurn(input: {
   const nowIso = new Date().toISOString();
   const finalizedReply = applyCrossTurnLoopWarning(input);
   const memoryWritten = input.turnKind !== "skip" && input.memoryWritten;
+  let responseAttachments: AgentTurnResponseT["attachments"] = [];
+  const artifactRecordScope = {
+    tenantId: input.session.tenant_id,
+    workspaceId: input.session.workspace_id,
+    agentId: input.session.agent_id,
+  };
 
   await persistContextReport(input);
   let updatedSession: SessionRow;
   if (input.responseMessages) {
-    const currentUserMessage = createTextChatMessage({
-      role: "user",
-      text: input.resolved.message,
+    const currentUserMessage = buildUserTurnMessage({
+      parts: input.resolved.parts,
+      fallbackText: input.resolved.message,
     });
     const appendedMessages = applyFinalAssistantReply(
       modelMessagesToChatMessages(input.responseMessages),
       finalizedReply,
     );
-    const nextMessages = appendWithoutDuplicateOverlap(
+    const assistantArtifacts = collectArtifactRefsFromMessages(appendedMessages);
+    responseAttachments = assistantArtifacts;
+    const assistantAttachmentParts = assistantArtifacts
+      .map((artifact) => createArtifactFilePart(artifact))
+      .filter((part): part is NonNullable<typeof part> => part !== undefined);
+    const appendedWithAttachments =
+      assistantAttachmentParts.length > 0
+        ? [
+            ...appendedMessages,
+            {
+              id: `assistant-attachments-${nowIso}`,
+              role: "assistant" as const,
+              parts: assistantAttachmentParts,
+            },
+          ]
+        : appendedMessages;
+    const mergedMessages = appendWithoutDuplicateOverlap(
       [...input.session.messages, currentUserMessage],
-      appendedMessages,
+      appendedWithAttachments,
     );
+    const artifactRecords: ArtifactRecordInsertInput[] = [];
     await input.sessionDal.replaceMessages({
       tenantId: input.session.tenant_id,
       sessionId: input.session.session_id,
-      messages: nextMessages,
+      messages: await materializeStoredMessageFiles(
+        mergedMessages,
+        input.container.artifactStore,
+        undefined,
+        artifactRecordScope,
+        artifactRecords,
+      ),
+      artifactRecords,
       updatedAt: nowIso,
     });
     updatedSession =
@@ -221,15 +261,26 @@ export async function finalizeTurn(input: {
         sessionId: input.session.session_id,
       })) ?? input.session;
   } else {
-    const nextMessages = [
-      ...input.session.messages,
-      createTextChatMessage({ role: "user", text: input.resolved.message }),
-      createTextChatMessage({ role: "assistant", text: finalizedReply }),
-    ];
+    const artifactRecords: ArtifactRecordInsertInput[] = [];
+    const nextMessages = await materializeStoredMessageFiles(
+      [
+        ...input.session.messages,
+        buildUserTurnMessage({
+          parts: input.resolved.parts,
+          fallbackText: input.resolved.message,
+        }),
+        createTextChatMessage({ role: "assistant", text: finalizedReply }),
+      ],
+      input.container.artifactStore,
+      undefined,
+      artifactRecordScope,
+      artifactRecords,
+    );
     await input.sessionDal.replaceMessages({
       tenantId: input.session.tenant_id,
       sessionId: input.session.session_id,
       messages: nextMessages,
+      artifactRecords,
       updatedAt: nowIso,
     });
     updatedSession =
@@ -251,6 +302,7 @@ export async function finalizeTurn(input: {
     reply: finalizedReply,
     session_id: input.session.session_id,
     session_key: input.session.session_key,
+    attachments: responseAttachments,
     used_tools: Array.from(input.usedTools),
     memory_written: memoryWritten,
   });

@@ -1,4 +1,5 @@
 import {
+  DEFAULT_PUBLIC_BASE_URL,
   DeploymentConfig,
   isDesktopEnvironmentHostAvailable,
   type DeploymentConfig as DeploymentConfigT,
@@ -62,7 +63,11 @@ export async function provisionManagedDesktop(params: {
 
   const { defaultImageRef } = await readDesktopEnvironmentDefaultImageRef({
     deploymentConfigDal: new DeploymentConfigDal(params.db),
-    defaultConfig: params.defaultDeploymentConfig ?? DeploymentConfig.parse({}),
+    defaultConfig:
+      params.defaultDeploymentConfig ??
+      DeploymentConfig.parse({
+        server: { publicBaseUrl: DEFAULT_PUBLIC_BASE_URL },
+      }),
   });
   const environmentDal = new DesktopEnvironmentDal(params.db);
   const environment = await environmentDal.create({

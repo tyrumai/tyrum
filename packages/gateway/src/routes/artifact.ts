@@ -1,10 +1,18 @@
 /**
- * Execution artifact routes — fetch metadata and bytes for ArtifactStore-backed artifacts.
+ * Generic artifact routes — capability bytes fetch plus authenticated metadata lookup.
  */
 
 import { Hono } from "hono";
 import { randomUUID } from "node:crypto";
-import { ArtifactId, ArtifactKind, ArtifactRef, AuthTokenClaims } from "@tyrum/contracts";
+import {
+  ArtifactId,
+  artifactFilenameFromMetadata,
+  ArtifactKind,
+  ArtifactMediaClass,
+  ArtifactRef,
+  AuthTokenClaims,
+  artifactMediaClassFromMimeType,
+} from "@tyrum/contracts";
 import type {
   ArtifactRef as ArtifactRefT,
   AuthTokenClaims as AuthTokenClaimsT,
@@ -19,53 +27,56 @@ import { normalizeDbDateTime } from "../utils/db-time.js";
 import { safeJsonParse } from "../utils/json.js";
 import { enqueueWsBroadcastMessage } from "../ws/outbox.js";
 import { requireTenantId } from "../modules/auth/claims.js";
+import type { ArtifactRow } from "../modules/artifact/dal.js";
 
 export interface ArtifactRouteDeps {
   db: SqlDb;
   artifactStore: ArtifactStore;
+  publicBaseUrl: string;
   logger?: Logger;
   policySnapshotDal?: PolicySnapshotDal;
   policyService?: PolicyService;
 }
 
-type ExecutionArtifactRow = {
-  tenant_id: string;
-  artifact_id: string;
-  workspace_id: string;
-  agent_id: string | null;
-  run_id: string | null;
-  step_id: string | null;
-  attempt_id: string | null;
-  kind: string;
-  uri: string;
-  created_at: string | Date;
-  mime_type: string | null;
-  size_bytes: number | null;
-  sha256: string | null;
-  labels_json: string;
-  metadata_json: string;
-  sensitivity: string;
-  policy_snapshot_id: string | null;
-};
-
-type DurableExecutionScope = {
-  run_id: string;
-  step_id: string | null;
-  attempt_id: string | null;
+type ArtifactLinkRow = {
+  parent_kind: string;
+  parent_id: string;
 };
 
 const ARTIFACT_NOT_FOUND_BODY = { error: "not_found", message: "artifact not found" } as const;
 const DEFAULT_SIGNED_URL_TTL_SECONDS = 60;
 
-function rowToArtifactRef(row: ExecutionArtifactRow): ArtifactRefT | undefined {
+function artifactMediaClassFromRow(
+  row: Pick<ArtifactRow, "media_class" | "mime_type" | "filename">,
+): ArtifactRefT["media_class"] {
+  const parsed = ArtifactMediaClass.safeParse(row.media_class?.trim());
+  return parsed.success
+    ? parsed.data
+    : artifactMediaClassFromMimeType(row.mime_type ?? undefined, row.filename ?? undefined);
+}
+
+function rowToArtifactRef(row: ArtifactRow): ArtifactRefT | undefined {
   const labels = safeJsonParse(row.labels_json, [] as unknown[]);
   const metadata = safeJsonParse(row.metadata_json, undefined as unknown);
+  const kindCandidate = ArtifactKind.safeParse(row.kind);
+  if (!kindCandidate.success) {
+    return undefined;
+  }
+  const filename = artifactFilenameFromMetadata({
+    artifactId: row.artifact_id,
+    kind: kindCandidate.data,
+    filename: row.filename ?? undefined,
+    mimeType: row.mime_type ?? undefined,
+  });
 
   const candidate = {
     artifact_id: row.artifact_id,
     uri: row.uri,
-    kind: row.kind,
+    external_url: row.external_url,
+    kind: kindCandidate.data,
+    media_class: artifactMediaClassFromRow(row),
     created_at: normalizeDbDateTime(row.created_at) ?? new Date().toISOString(),
+    filename,
     mime_type: row.mime_type ?? undefined,
     size_bytes: row.size_bytes ?? undefined,
     sha256: row.sha256 ?? undefined,
@@ -75,47 +86,6 @@ function rowToArtifactRef(row: ExecutionArtifactRow): ArtifactRefT | undefined {
 
   const parsed = ArtifactRef.safeParse(candidate);
   return parsed.success ? parsed.data : undefined;
-}
-
-function synthArtifactRefFromRow(row: ExecutionArtifactRow): ArtifactRefT {
-  const labels = safeJsonParse(row.labels_json, [] as unknown[]);
-  const metadata = safeJsonParse(row.metadata_json, undefined as unknown);
-
-  const kindCandidate = ArtifactKind.safeParse(row.kind);
-  const kind: ArtifactRefT["kind"] = kindCandidate.success ? kindCandidate.data : "other";
-
-  const mimeType = row.mime_type?.trim() || undefined;
-  const sizeBytes =
-    typeof row.size_bytes === "number" && Number.isInteger(row.size_bytes) && row.size_bytes >= 0
-      ? row.size_bytes
-      : undefined;
-  const sha256 =
-    typeof row.sha256 === "string" && /^[0-9a-f]{64}$/i.test(row.sha256) ? row.sha256 : undefined;
-  const canonicalUri = `artifact://${row.artifact_id}`;
-
-  const candidate = {
-    artifact_id: row.artifact_id,
-    uri: canonicalUri,
-    kind,
-    created_at: normalizeDbDateTime(row.created_at) ?? new Date().toISOString(),
-    mime_type: mimeType,
-    size_bytes: sizeBytes,
-    sha256,
-    labels: Array.isArray(labels)
-      ? labels.filter((l): l is string => typeof l === "string" && l.trim() !== "")
-      : [],
-    metadata,
-  };
-
-  const parsed = ArtifactRef.safeParse(candidate);
-  if (parsed.success) return parsed.data;
-  return {
-    artifact_id: row.artifact_id,
-    uri: canonicalUri,
-    kind,
-    created_at: new Date().toISOString(),
-    labels: [],
-  };
 }
 
 function requestIdForAudit(c: {
@@ -138,151 +108,103 @@ function authClaimsForAudit(c: { get?: (key: string) => unknown }): AuthTokenCla
     return parsed.success ? parsed.data : undefined;
   } catch (err) {
     void err;
+    // Intentional: audit enrichment must never block artifact responses.
     return undefined;
   }
 }
 
-async function evaluateAccessDecision(
+async function getArtifactRowById(
   deps: ArtifactRouteDeps,
-  row: ExecutionArtifactRow,
-): Promise<"allow" | "require_approval" | "deny"> {
-  const snapshotId = row.policy_snapshot_id;
-  if (!snapshotId || !deps.policySnapshotDal) return "allow";
-
-  const snapshot = await deps.policySnapshotDal.getById(row.tenant_id, snapshotId);
-  if (!snapshot) return "allow";
-
-  const decision = snapshot.bundle.artifacts?.default ?? "allow";
-  return decision;
+  tenantId: string,
+  artifactId: string,
+): Promise<ArtifactRow | undefined> {
+  return await deps.db.get<ArtifactRow>(
+    "SELECT * FROM artifacts WHERE tenant_id = ? AND artifact_id = ?",
+    [tenantId, artifactId],
+  );
 }
 
-async function resolveDurableExecutionScope(
+async function getArtifactRowByAccessId(
   deps: ArtifactRouteDeps,
-  row: ExecutionArtifactRow,
-): Promise<DurableExecutionScope | null> {
-  if (row.attempt_id) {
-    const attemptScope = await deps.db.get<{ run_id: string; step_id: string }>(
-      `SELECT s.run_id AS run_id, a.step_id AS step_id
-       FROM execution_attempts a
-       JOIN execution_steps s ON s.tenant_id = a.tenant_id AND s.step_id = a.step_id
-       WHERE a.tenant_id = ?
-         AND a.attempt_id = ?`,
-      [row.tenant_id, row.attempt_id],
+  accessId: string,
+  tenantId?: string,
+): Promise<ArtifactRow | undefined> {
+  if (tenantId) {
+    return await deps.db.get<ArtifactRow>(
+      "SELECT * FROM artifacts WHERE tenant_id = ? AND access_id = ?",
+      [tenantId, accessId],
     );
-    if (!attemptScope) return null;
-    if (row.step_id && row.step_id !== attemptScope.step_id) return null;
-    if (row.run_id && row.run_id !== attemptScope.run_id) return null;
-    return {
-      run_id: attemptScope.run_id,
-      step_id: attemptScope.step_id,
-      attempt_id: row.attempt_id,
-    };
   }
 
-  if (row.step_id) {
-    const stepScope = await deps.db.get<{ run_id: string }>(
-      "SELECT run_id FROM execution_steps WHERE tenant_id = ? AND step_id = ?",
-      [row.tenant_id, row.step_id],
-    );
-    if (!stepScope) return null;
-    if (row.run_id && row.run_id !== stepScope.run_id) return null;
-    return {
-      run_id: stepScope.run_id,
-      step_id: row.step_id,
-      attempt_id: null,
-    };
-  }
+  return await deps.db.get<ArtifactRow>("SELECT * FROM artifacts WHERE access_id = ?", [accessId]);
+}
 
-  if (row.run_id) {
-    const runScope = await deps.db.get<{ run_id: string }>(
-      "SELECT run_id FROM execution_runs WHERE tenant_id = ? AND run_id = ?",
-      [row.tenant_id, row.run_id],
-    );
-    if (!runScope) return null;
-    return {
-      run_id: runScope.run_id,
-      step_id: null,
-      attempt_id: null,
-    };
-  }
+async function listArtifactLinks(
+  deps: ArtifactRouteDeps,
+  tenantId: string,
+  artifactId: string,
+): Promise<ArtifactLinkRow[]> {
+  return await deps.db.all<ArtifactLinkRow>(
+    `SELECT parent_kind, parent_id
+     FROM artifact_links
+     WHERE tenant_id = ?
+       AND artifact_id = ?
+     ORDER BY parent_kind ASC, parent_id ASC`,
+    [tenantId, artifactId],
+  );
+}
 
-  return null;
+async function emitArtifactFetched(input: {
+  deps: ArtifactRouteDeps;
+  tenantId: string;
+  row: ArtifactRow;
+  artifact: ArtifactRefT;
+  requestId: string | undefined;
+  auth: AuthTokenClaimsT | undefined;
+}): Promise<void> {
+  try {
+    const evt: WsEventEnvelope = {
+      event_id: randomUUID(),
+      type: "artifact.fetched",
+      occurred_at: new Date().toISOString(),
+      scope: input.row.agent_id
+        ? { kind: "agent", agent_id: input.row.agent_id }
+        : { kind: "global" },
+      payload: {
+        artifact: input.artifact,
+        policy_snapshot_id: input.row.policy_snapshot_id ?? null,
+        fetched_by: {
+          kind: input.auth ? "http" : "capability",
+          request_id: input.requestId,
+          access_id: input.row.access_id,
+          ...(input.auth ? { auth: input.auth } : {}),
+        },
+      },
+    };
+    await enqueueWsBroadcastMessage(input.deps.db, input.tenantId, evt);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    input.deps.logger?.warn("artifact.fetched_emit_failed", {
+      artifact_id: input.row.artifact_id,
+      error: message,
+    });
+  }
 }
 
 export function createArtifactRoutes(deps: ArtifactRouteDeps): Hono {
   const app = new Hono();
 
   app.get("/artifacts/:id/metadata", async (c) => {
-    return c.json(
-      {
-        error: "invalid_request",
-        message:
-          "artifact fetch APIs must be scope-bound; use GET /runs/:runId/artifacts/:id/metadata",
-      },
-      400,
-    );
-  });
-
-  app.get("/artifacts/:id", async (c) => {
-    return c.json(
-      {
-        error: "invalid_request",
-        message: "artifact fetch APIs must be scope-bound; use GET /runs/:runId/artifacts/:id",
-      },
-      400,
-    );
-  });
-
-  app.get("/runs/:runId/artifacts/:id/metadata", async (c) => {
-    const runId = c.req.param("runId")?.trim();
-    if (!runId) {
-      return c.json({ error: "invalid_request", message: "invalid run id" }, 400);
-    }
     const tenantId = requireTenantId(c);
-
     const artifactId = c.req.param("id");
     const parsedId = ArtifactId.safeParse(artifactId);
     if (!parsedId.success) {
       return c.json({ error: "invalid_request", message: "invalid artifact id" }, 400);
     }
 
-    const row = await deps.db.get<ExecutionArtifactRow>(
-      "SELECT * FROM execution_artifacts WHERE tenant_id = ? AND artifact_id = ?",
-      [tenantId, parsedId.data],
-    );
+    const row = await getArtifactRowById(deps, tenantId, parsedId.data);
     if (!row) {
       return c.json(ARTIFACT_NOT_FOUND_BODY, 404);
-    }
-
-    const durableScope = await resolveDurableExecutionScope(deps, row);
-    if (!durableScope) {
-      return c.json(
-        {
-          error: "forbidden",
-          message: "artifact access denied: durable execution scope linkage is required",
-        },
-        403,
-      );
-    }
-    if (durableScope.run_id !== runId) {
-      return c.json(ARTIFACT_NOT_FOUND_BODY, 404);
-    }
-
-    if (deps.policyService && !deps.policyService.isObserveOnly()) {
-      const decision = await evaluateAccessDecision(deps, row);
-      if (decision !== "allow") {
-        const code = decision === "deny" ? "forbidden" : "require_approval";
-        return c.json(
-          {
-            error: code,
-            message:
-              decision === "deny"
-                ? "artifact access denied by policy"
-                : "artifact access requires approval",
-          },
-          403,
-        );
-      }
     }
 
     const ref = rowToArtifactRef(row);
@@ -293,151 +215,76 @@ export function createArtifactRoutes(deps: ArtifactRouteDeps): Hono {
     return c.json(
       {
         artifact: ref,
-        scope: {
-          workspace_id: row.workspace_id,
-          agent_id: row.agent_id,
-          run_id: durableScope.run_id,
-          step_id: durableScope.step_id,
-          attempt_id: durableScope.attempt_id,
-          sensitivity: row.sensitivity,
-          policy_snapshot_id: row.policy_snapshot_id,
-        },
+        sensitivity: row.sensitivity,
+        links: await listArtifactLinks(deps, tenantId, row.artifact_id),
       },
       200,
     );
   });
 
-  app.get("/runs/:runId/artifacts/:id", async (c) => {
-    const runId = c.req.param("runId")?.trim();
-    if (!runId) {
-      return c.json({ error: "invalid_request", message: "invalid run id" }, 400);
-    }
-    const tenantId = requireTenantId(c);
-
-    const artifactId = c.req.param("id");
-    const parsedId = ArtifactId.safeParse(artifactId);
+  app.get("/a/:id", async (c) => {
+    const accessId = c.req.param("id");
+    const parsedId = ArtifactId.safeParse(accessId);
     if (!parsedId.success) {
       return c.json({ error: "invalid_request", message: "invalid artifact id" }, 400);
     }
 
-    const row = await deps.db.get<ExecutionArtifactRow>(
-      "SELECT * FROM execution_artifacts WHERE tenant_id = ? AND artifact_id = ?",
-      [tenantId, parsedId.data],
-    );
+    const auth = authClaimsForAudit(c);
+    const tenantId =
+      auth && typeof auth.tenant_id === "string" && auth.tenant_id.trim().length > 0
+        ? auth.tenant_id
+        : undefined;
+    const row = await getArtifactRowByAccessId(deps, parsedId.data, tenantId);
     if (!row) {
       return c.json(ARTIFACT_NOT_FOUND_BODY, 404);
     }
 
-    const durableScope = await resolveDurableExecutionScope(deps, row);
-    if (!durableScope) {
-      return c.json(
-        {
-          error: "forbidden",
-          message: "artifact access denied: durable execution scope linkage is required",
-        },
-        403,
-      );
+    const ref = rowToArtifactRef(row);
+    if (!ref) {
+      return c.json({ error: "invalid_state", message: "artifact metadata is invalid" }, 500);
     }
-    if (durableScope.run_id !== runId) {
-      return c.json(ARTIFACT_NOT_FOUND_BODY, 404);
-    }
-
-    if (deps.policyService && !deps.policyService.isObserveOnly()) {
-      const decision = await evaluateAccessDecision(deps, row);
-      if (decision !== "allow") {
-        const code = decision === "deny" ? "forbidden" : "require_approval";
-        return c.json(
-          {
-            error: code,
-            message:
-              decision === "deny"
-                ? "artifact access denied by policy"
-                : "artifact access requires approval",
-          },
-          403,
-        );
-      }
-    }
+    const requestId = requestIdForAudit(c);
 
     const getSignedUrl = deps.artifactStore.getSignedUrl;
     if (typeof getSignedUrl === "function") {
-      const signedUrl = await getSignedUrl.call(deps.artifactStore, parsedId.data, {
+      const signedUrl = await getSignedUrl.call(deps.artifactStore, row.artifact_id, {
         expiresInSeconds: DEFAULT_SIGNED_URL_TTL_SECONDS,
       });
       if (!signedUrl) {
         return c.json({ error: "not_found", message: "artifact bytes not found" }, 404);
       }
-
-      // Conservative: prevent caches from persisting potentially sensitive artifacts.
       c.header("Cache-Control", "no-store");
-
-      // Best-effort: emit an audit-style event.
-      const ref = rowToArtifactRef(row) ?? synthArtifactRefFromRow(row);
-      try {
-        const evt: WsEventEnvelope = {
-          event_id: randomUUID(),
-          type: "artifact.fetched",
-          occurred_at: new Date().toISOString(),
-          scope: { kind: "run", run_id: durableScope.run_id },
-          payload: {
-            artifact: ref,
-            policy_snapshot_id: row.policy_snapshot_id ?? null,
-            fetched_by: {
-              kind: "http",
-              request_id: requestIdForAudit(c),
-              auth: authClaimsForAudit(c),
-            },
-          },
-        };
-        await enqueueWsBroadcastMessage(deps.db, tenantId, evt);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        deps.logger?.warn("artifact.fetched_emit_failed", {
-          artifact_id: parsedId.data,
-          error: message,
-        });
-      }
-
+      await emitArtifactFetched({
+        deps,
+        tenantId: row.tenant_id,
+        row,
+        artifact: ref,
+        requestId,
+        auth,
+      });
       return c.redirect(signedUrl, 302);
     }
 
-    const stored = await deps.artifactStore.get(parsedId.data);
+    const stored = await deps.artifactStore.get(row.artifact_id);
     if (!stored) {
       return c.json({ error: "not_found", message: "artifact bytes not found" }, 404);
     }
 
-    const ref = rowToArtifactRef(row) ?? stored.ref;
-
-    // Conservative: prevent caches from persisting potentially sensitive artifacts.
     c.header("Cache-Control", "no-store");
     c.header("Content-Type", ref.mime_type ?? "application/octet-stream");
     c.header("Content-Length", String(stored.body.byteLength));
-
-    // Best-effort: emit an audit-style event.
-    try {
-      const evt: WsEventEnvelope = {
-        event_id: randomUUID(),
-        type: "artifact.fetched",
-        occurred_at: new Date().toISOString(),
-        scope: { kind: "run", run_id: durableScope.run_id },
-        payload: {
-          artifact: ref,
-          policy_snapshot_id: row.policy_snapshot_id ?? null,
-          fetched_by: {
-            kind: "http",
-            request_id: requestIdForAudit(c),
-            auth: authClaimsForAudit(c),
-          },
-        },
-      };
-      await enqueueWsBroadcastMessage(deps.db, tenantId, evt);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      deps.logger?.warn("artifact.fetched_emit_failed", {
-        artifact_id: parsedId.data,
-        error: message,
-      });
+    if (ref.filename) {
+      c.header("Content-Disposition", `inline; filename="${ref.filename.replaceAll('"', "")}"`);
     }
+
+    await emitArtifactFetched({
+      deps,
+      tenantId: row.tenant_id,
+      row,
+      artifact: ref,
+      requestId,
+      auth,
+    });
 
     const bytes = new Uint8Array(
       stored.body.buffer as ArrayBuffer,

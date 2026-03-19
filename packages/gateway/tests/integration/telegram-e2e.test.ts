@@ -3,6 +3,69 @@ import { Hono } from "hono";
 import { createIngressRoutes } from "../../src/routes/ingress.js";
 import { TelegramBot } from "../../src/modules/ingress/telegram-bot.js";
 import type { AgentRegistry } from "../../src/modules/agent/registry.js";
+import type { ArtifactStore } from "../../src/modules/artifact/store.js";
+
+function createMediaFetch(filePath: string, bytes: Uint8Array, mediaType: string): typeof fetch {
+  return vi.fn(async (url: string) => {
+    if (url.endsWith("/getFile")) {
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          result: {
+            file_id: "file-1",
+            file_path: filePath,
+            file_size: bytes.byteLength,
+          },
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      );
+    }
+
+    if (url.includes("/file/bot")) {
+      return new Response(bytes, {
+        status: 200,
+        headers: { "content-type": mediaType },
+      });
+    }
+
+    return new Response(JSON.stringify({ ok: true, result: {} }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as unknown as typeof fetch;
+}
+
+function createArtifactStore(): {
+  store: ArtifactStore;
+  put: ReturnType<typeof vi.fn>;
+} {
+  const put = vi.fn(async (input: Parameters<ArtifactStore["put"]>[0]) => ({
+    artifact_id: "11111111-1111-4111-8111-111111111111",
+    uri: "artifact://11111111-1111-4111-8111-111111111111",
+    external_url: "https://gateway.example/a/11111111-1111-4111-8111-111111111111",
+    kind: "file" as const,
+    media_class: "image" as const,
+    created_at: "2024-03-09T16:00:00.000Z",
+    filename: input.filename,
+    mime_type: input.mime_type,
+    size_bytes: input.body.byteLength,
+    sha256: "a".repeat(64),
+    labels: [],
+    metadata: input.metadata,
+  }));
+
+  return {
+    put,
+    store: {
+      put,
+      get: vi.fn(),
+      delete: vi.fn(),
+    } satisfies ArtifactStore,
+  };
+}
 
 function makeTelegramUpdate(text: string, chatId = 123) {
   return {
@@ -64,9 +127,8 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
     });
 
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { ok: boolean; session_id: string };
+    const body = (await res.json()) as { ok: boolean };
     expect(body.ok).toBe(true);
-    expect(body.session_id).toBe("session-abc");
 
     expect(mockRuntime.turn).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -152,9 +214,14 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
     expect(body.message.content.text).toBe("Hello bot");
   });
 
-  it("processes non-text messages without captions by passing the normalized envelope through", async () => {
-    const fetchFn = mockFetch();
-    const bot = new TelegramBot("test-token", fetchFn);
+  it("processes media-only messages by materializing attachments and passing the envelope through", async () => {
+    const mediaFetch = createMediaFetch(
+      "photos/file-1.jpg",
+      Buffer.from("photo-bytes"),
+      "image/jpeg",
+    );
+    const mediaBot = new TelegramBot("test-token", mediaFetch);
+    const { store } = createArtifactStore();
 
     const mockRuntime = {
       turn: vi.fn().mockResolvedValue({
@@ -169,9 +236,10 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
     app.route(
       "/",
       createIngressRoutes({
-        telegramBot: bot,
+        telegramBot: mediaBot,
         telegramWebhookSecret: "test-telegram-secret",
         agents: makeAgents(mockRuntime),
+        artifactStore: store,
       }),
     );
 
@@ -195,9 +263,8 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
     });
 
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { ok: boolean; session_id?: string };
+    const body = (await res.json()) as { ok: boolean };
     expect(body.ok).toBe(true);
-    expect(body.session_id).toBe("session-abc");
     expect(mockRuntime.turn).toHaveBeenCalledWith(
       expect.objectContaining({
         envelope: expect.objectContaining({
@@ -205,13 +272,86 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
           container: { kind: "dm", id: "123" },
           sender: { id: "chat:123" },
           content: expect.objectContaining({
-            attachments: [{ kind: "photo" }],
+            attachments: [expect.objectContaining({ media_class: "image" })],
           }),
           provenance: ["user"],
         }),
       }),
     );
-    expect(fetchFn).toHaveBeenCalledOnce();
+    expect(mediaFetch).toHaveBeenCalledTimes(3);
+  });
+
+  it("sends artifact-backed attachments through Telegram multipart endpoints on direct reply", async () => {
+    const fetchFn = mockFetch();
+    const bot = new TelegramBot("test-token", fetchFn);
+    const downloadFetch = vi.fn(async (url: string) => {
+      expect(url).toBe("https://cdn.example/artifact-1.png");
+      return new Response(Buffer.from("artifact-bytes"), {
+        status: 200,
+        headers: { "content-type": "image/png" },
+      });
+    }) as unknown as typeof fetch;
+
+    vi.stubGlobal("fetch", downloadFetch);
+    try {
+      const mockRuntime = {
+        turn: vi.fn().mockResolvedValue({
+          reply: "Here is the screenshot.",
+          session_id: "session-abc",
+          used_tools: [],
+          memory_written: false,
+          attachments: [
+            {
+              artifact_id: "artifact-1",
+              uri: "artifact://artifact-1",
+              external_url: "https://cdn.example/artifact-1.png",
+              kind: "file",
+              media_class: "image",
+              created_at: "2024-03-09T16:00:00.000Z",
+              filename: "artifact-1.png",
+              mime_type: "image/png",
+              size_bytes: 14,
+              labels: [],
+            },
+          ],
+        }),
+      };
+
+      const app = new Hono();
+      app.route(
+        "/",
+        createIngressRoutes({
+          telegramBot: bot,
+          telegramWebhookSecret: "test-telegram-secret",
+          agents: makeAgents(mockRuntime),
+        }),
+      );
+
+      const res = await app.request("/ingress/telegram", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-telegram-bot-api-secret-token": "test-telegram-secret",
+        },
+        body: JSON.stringify(makeTelegramUpdate("Show me the screenshot")),
+      });
+
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { ok: boolean };
+      expect(body.ok).toBe(true);
+      expect(downloadFetch).toHaveBeenCalledOnce();
+      expect(fetchFn).toHaveBeenCalledOnce();
+      const [url, opts] = (fetchFn as ReturnType<typeof vi.fn>).mock.calls[0] as [
+        string,
+        RequestInit,
+      ];
+      expect(url).toContain("/sendPhoto");
+      const form = opts.body as FormData;
+      expect(form.get("caption")).toBe("Here is the screenshot.");
+      expect(form.get("photo")).toBeInstanceOf(Blob);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("rejects webhook when secret header is missing", async () => {

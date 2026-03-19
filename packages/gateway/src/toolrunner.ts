@@ -16,7 +16,7 @@ import { PolicySnapshotDal } from "./modules/policy/snapshot-dal.js";
 import { SqliteDb } from "./statestore/sqlite.js";
 import { PostgresDb } from "./statestore/postgres.js";
 import { isPostgresDbUri } from "./statestore/db-uri.js";
-import { DeploymentConfig } from "@tyrum/contracts";
+import { DEFAULT_PUBLIC_BASE_URL, DeploymentConfig } from "@tyrum/contracts";
 import { DeploymentConfigDal } from "./modules/config/deployment-config-dal.js";
 
 interface ToolRunnerStdioRequest {
@@ -191,7 +191,9 @@ export async function runToolRunnerFromStdio(params?: {
 
     const deploymentConfigDal = new DeploymentConfigDal(db);
     const deployment = await deploymentConfigDal.ensureSeeded({
-      defaultConfig: DeploymentConfig.parse({}),
+      defaultConfig: DeploymentConfig.parse({
+        server: { publicBaseUrl: DEFAULT_PUBLIC_BASE_URL },
+      }),
       createdBy: { kind: "bootstrap.toolrunner" },
       reason: "seed",
     });
@@ -223,6 +225,7 @@ export async function runToolRunnerFromStdio(params?: {
         },
       },
       redactionEngine,
+      deployment.config.server.publicBaseUrl,
     );
 
     executor = createLocalStepExecutor({

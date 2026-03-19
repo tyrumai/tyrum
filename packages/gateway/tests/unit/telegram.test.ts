@@ -5,9 +5,15 @@
 import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
 import { NormalizedThreadMessage as NormalizedThreadMessageSchema } from "@tyrum/contracts";
-import { normalizeUpdate, TelegramNormalizationError } from "../../src/modules/ingress/telegram.js";
+import { describe, expect, it, vi } from "vitest";
+import type { ArtifactStore } from "../../src/modules/artifact/store.js";
+import {
+  normalizeUpdate,
+  normalizeUpdateWithMedia,
+  TelegramNormalizationError,
+} from "../../src/modules/ingress/telegram.js";
+import { TelegramBot } from "../../src/modules/ingress/telegram-bot.js";
 import { telegramThreadKey } from "../../src/modules/channels/telegram.js";
 import { DEFAULT_CHANNEL_ACCOUNT_ID } from "../../src/modules/channels/interface.js";
 
@@ -16,6 +22,65 @@ const fixturesDir = resolve(__dirname, "../fixtures/telegram");
 
 function loadFixture(name: string): string {
   return readFileSync(resolve(fixturesDir, name), "utf-8");
+}
+
+function createTelegramMediaFetch(
+  filePath: string,
+  bytes: Uint8Array,
+  mediaType: string,
+): typeof fetch {
+  return vi.fn(async (url: string) => {
+    if (url.endsWith("/getFile")) {
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          result: {
+            file_id: "ABC123",
+            file_path: filePath,
+            file_size: bytes.byteLength,
+          },
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      );
+    }
+
+    return new Response(bytes, {
+      status: 200,
+      headers: { "content-type": mediaType },
+    });
+  }) as unknown as typeof fetch;
+}
+
+function createArtifactStore(): {
+  store: ArtifactStore;
+  put: ReturnType<typeof vi.fn>;
+} {
+  const put = vi.fn(async (input: Parameters<ArtifactStore["put"]>[0]) => ({
+    artifact_id: "11111111-1111-4111-8111-111111111111",
+    uri: "artifact://11111111-1111-4111-8111-111111111111",
+    external_url: "https://gateway.example/a/11111111-1111-4111-8111-111111111111",
+    kind: "file" as const,
+    media_class: "image" as const,
+    created_at: "2024-03-09T16:00:00.000Z",
+    filename: input.filename ?? "artifact-11111111-1111-4111-8111-111111111111.jpg",
+    mime_type: input.mime_type,
+    size_bytes: input.body.byteLength,
+    sha256: "a".repeat(64),
+    labels: [],
+    metadata: input.metadata,
+  }));
+
+  return {
+    put,
+    store: {
+      put,
+      get: vi.fn(),
+      delete: vi.fn(),
+    } satisfies ArtifactStore,
+  };
 }
 
 describe("Telegram normalization", () => {
@@ -34,8 +99,8 @@ describe("Telegram normalization", () => {
     expect(update.message.thread_id).toBe("987654321");
     expect(update.message.source).toBe("telegram");
     expect(update.message.content).toEqual({
-      kind: "text",
       text: "Hello planner",
+      attachments: [],
     });
     expect(update.message.sender).toEqual({
       id: "555555",
@@ -112,43 +177,73 @@ describe("Telegram normalization", () => {
 
     expect(update.message.edited_timestamp).toBe("2024-03-09T16:10:00.000Z");
     expect(update.message.content).toEqual({
-      kind: "text",
       text: "Hello planner edited",
+      attachments: [],
     });
     expect(update.message.pii_fields).toContain("message_text");
   });
 
-  it("normalizes media message", () => {
-    const update = normalizeUpdate(loadFixture("media_message.json"));
+  it("materializes media messages as artifact-backed attachments", async () => {
+    const fetchFn = createTelegramMediaFetch(
+      "photos/file-1.jpg",
+      Buffer.from("photo-bytes"),
+      "image/jpeg",
+    );
+    const bot = new TelegramBot("123:ABC", fetchFn);
+    const { store, put } = createArtifactStore();
+    const update = await normalizeUpdateWithMedia(loadFixture("media_message.json"), {
+      telegramBot: bot,
+      artifactStore: store,
+    });
 
     expect(update.thread.kind).toBe("supergroup");
     expect(update.thread.pii_fields).toContain("thread_title");
-
-    expect(update.message.content.kind).toBe("media_placeholder");
-    if (update.message.content.kind === "media_placeholder") {
-      expect(update.message.content.media_kind).toBe("photo");
-      expect(update.message.content.caption).toBe("Check this out");
-    }
-
-    expect(update.message.envelope?.container.kind).toBe("group");
-    expect(update.message.envelope?.content).toEqual({
+    expect(update.message.content).toMatchObject({
       text: "Check this out",
-      attachments: [{ kind: "photo" }],
+    });
+    expect(update.message.content.attachments).toHaveLength(1);
+    expect(update.message.content.attachments[0]).toMatchObject({
+      artifact_id: "11111111-1111-4111-8111-111111111111",
+      external_url: "https://gateway.example/a/11111111-1111-4111-8111-111111111111",
+      media_class: "image",
+      channel_kind: "photo",
+      mime_type: "image/jpeg",
+      filename: "artifact-11111111-1111-4111-8111-111111111111.jpg",
+    });
+    expect(put).toHaveBeenCalledOnce();
+    expect(put.mock.calls[0]?.[0]).toMatchObject({
+      kind: "file",
+      mime_type: "image/jpeg",
+      metadata: {
+        source: "telegram-ingress",
+        telegram: expect.objectContaining({
+          channel_kind: "photo",
+          message_id: "113",
+        }),
+      },
+    });
+    expect(update.message.envelope?.container.kind).toBe("group");
+    expect(update.message.envelope?.content).toMatchObject({
+      text: "Check this out",
+    });
+    expect(update.message.envelope?.content.attachments).toHaveLength(1);
+    expect(update.message.envelope?.content.attachments[0]).toMatchObject({
+      media_class: "image",
+      channel_kind: "photo",
     });
 
-    expect(update.message.pii_fields).toContain("message_caption");
+    expect(update.message.pii_fields).toContain("message_text");
   });
 
   it("normalizes unknown media with caption", () => {
     const update = normalizeUpdate(loadFixture("unknown_media_caption.json"));
 
-    expect(update.message.content.kind).toBe("media_placeholder");
-    if (update.message.content.kind === "media_placeholder") {
-      expect(update.message.content.media_kind).toBe("unknown");
-      expect(update.message.content.caption).toBe("Future media caption");
-    }
+    expect(update.message.content).toEqual({
+      text: "Future media caption",
+      attachments: [],
+    });
 
-    expect(update.message.pii_fields).toContain("message_caption");
+    expect(update.message.pii_fields).toContain("message_text");
   });
 
   it("rejects unknown payload", () => {
@@ -157,7 +252,7 @@ describe("Telegram normalization", () => {
     }).toThrow(TelegramNormalizationError);
   });
 
-  it("omits envelope for whitespace-only text messages (envelope contract requires non-empty text)", () => {
+  it("rejects whitespace-only text messages", () => {
     const raw = JSON.stringify({
       update_id: 100,
       message: {
@@ -168,12 +263,17 @@ describe("Telegram normalization", () => {
       },
     });
 
-    const update = normalizeUpdate(raw);
-    expect(update.message.envelope).toBeUndefined();
-    expect(() => NormalizedThreadMessageSchema.parse(update)).not.toThrow();
+    expect(() => normalizeUpdate(raw)).toThrow(TelegramNormalizationError);
   });
 
-  it("drops whitespace-only captions from the envelope while preserving attachments", () => {
+  it("drops whitespace-only captions from the envelope while preserving attachments", async () => {
+    const fetchFn = createTelegramMediaFetch(
+      "photos/file-2.jpg",
+      Buffer.from("photo-bytes"),
+      "image/jpeg",
+    );
+    const bot = new TelegramBot("123:ABC", fetchFn);
+    const { store } = createArtifactStore();
     const raw = JSON.stringify({
       update_id: 100,
       message: {
@@ -185,9 +285,13 @@ describe("Telegram normalization", () => {
       },
     });
 
-    const update = normalizeUpdate(raw);
+    const update = await normalizeUpdateWithMedia(raw, {
+      telegramBot: bot,
+      artifactStore: store,
+    });
     expect(update.message.envelope?.content.text).toBeUndefined();
-    expect(update.message.envelope?.content.attachments).toEqual([{ kind: "photo" }]);
+    expect(update.message.content.attachments).toHaveLength(1);
+    expect(update.message.envelope?.content.attachments).toHaveLength(1);
     expect(() => NormalizedThreadMessageSchema.parse(update)).not.toThrow();
   });
 });
@@ -241,7 +345,7 @@ describe("telegramThreadKey", () => {
         id: "111",
         thread_id: "",
         source: "telegram",
-        content: { kind: "text", text: "Hello" },
+        content: { text: "Hello", attachments: [] },
         sender: undefined,
         timestamp: "2024-03-09T16:00:00.000Z",
         edited_timestamp: undefined,

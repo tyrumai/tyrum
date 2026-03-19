@@ -10,8 +10,11 @@ import { afterEach } from "vitest";
 import { createContainer } from "../../src/container.js";
 import { createApp } from "../../src/app.js";
 import type { GatewayContainer } from "../../src/container.js";
-import { DeploymentConfig } from "@tyrum/contracts";
-import type { DeploymentConfig as DeploymentConfigT } from "@tyrum/contracts";
+import {
+  DEFAULT_PUBLIC_BASE_URL,
+  DeploymentConfig,
+  type DeploymentConfig as DeploymentConfigT,
+} from "@tyrum/contracts";
 import type { AgentRegistry } from "../../src/modules/agent/registry.js";
 import { AgentRegistry as AgentRegistryImpl } from "../../src/modules/agent/registry.js";
 import { ApprovalEngineActionProcessor } from "../../src/modules/approval/engine-action-processor.js";
@@ -29,7 +32,13 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
 
 function resolveDeploymentConfig(overrides?: Partial<DeploymentConfigT>): DeploymentConfigT {
-  return DeploymentConfig.parse(overrides ?? {});
+  return DeploymentConfig.parse({
+    ...overrides,
+    server: {
+      publicBaseUrl: overrides?.server?.publicBaseUrl ?? DEFAULT_PUBLIC_BASE_URL,
+      ...overrides?.server,
+    },
+  });
 }
 
 const tempHomesToCleanup: string[] = [];
@@ -291,7 +300,7 @@ export function minimalPlanRequest(overrides?: Record<string, unknown>): Record<
         id: "msg-1",
         thread_id: "thread-1",
         source: "telegram",
-        content: { kind: "text", text: "help me" },
+        content: { text: "help me", attachments: [] },
         timestamp: new Date().toISOString(),
         pii_fields: [],
       },

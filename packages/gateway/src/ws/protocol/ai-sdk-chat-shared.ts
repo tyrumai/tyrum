@@ -1,5 +1,5 @@
 import { getToolName, isTextUIPart, isToolUIPart, type UIMessage, validateUIMessages } from "ai";
-import type { TyrumUIMessage, WsResponseEnvelope } from "@tyrum/contracts";
+import type { TyrumUIMessage, TyrumUIMessagePart, WsResponseEnvelope } from "@tyrum/contracts";
 export {
   WsChatSessionArchiveRequest as ChatSessionArchiveRequest,
   WsChatSessionCreateRequest as ChatSessionCreateRequest,
@@ -13,7 +13,6 @@ import type { ConnectedClient } from "../connection-manager.js";
 import { errorResponse } from "./helpers.js";
 import type { ProtocolRequestEnvelope } from "./types.js";
 import { coerceRecord } from "../../modules/util/coerce.js";
-
 export function toStoredChatMessages(messages: readonly UIMessage[]): TyrumUIMessage[] {
   const storedMessages: TyrumUIMessage[] = [];
   for (const message of canonicalizeUiMessages(messages)) {
@@ -194,7 +193,7 @@ export function toSessionSummary(input: {
   let lastMessage: { role: string; content: string } | null = null;
   for (const message of input.messages) {
     const textPart = message.parts.find(
-      (part) =>
+      (part: TyrumUIMessagePart) =>
         part.type === "text" && typeof part["text"] === "string" && part["text"].trim().length > 0,
     );
     if (!textPart) continue;
@@ -227,6 +226,29 @@ function extractUserText(message: UIMessage): string {
     .trim();
 }
 
+function cloneUserParts(message: UIMessage): TyrumUIMessagePart[] {
+  return structuredClone(message.parts) as TyrumUIMessagePart[];
+}
+
+function hasUserTurnContent(message: UIMessage): boolean {
+  if (extractUserText(message).length > 0) {
+    return true;
+  }
+
+  return message.parts.some(
+    (part) =>
+      part.type === "file" && typeof part["url"] === "string" && part["url"].trim().length > 0,
+  );
+}
+
+export async function validateSubmittedTurnMessages(
+  messages: unknown[] | undefined,
+): Promise<UIMessage[]> {
+  return await validateUIMessages({
+    messages: messages ?? [],
+  });
+}
+
 export function splitMessagesForTurn(
   messages: UIMessage[],
   trigger: "submit-message" | "regenerate-message",
@@ -234,6 +256,7 @@ export function splitMessagesForTurn(
   originalMessages: UIMessage[];
   previousMessages: UIMessage[];
   userMessage: UIMessage;
+  userParts: TyrumUIMessagePart[];
   userText: string;
 } {
   if (messages.length === 0) {
@@ -246,13 +269,14 @@ export function splitMessagesForTurn(
       throw new Error("submit-message requires the last message to have role 'user'");
     }
     const userText = extractUserText(userMessage);
-    if (!userText) {
-      throw new Error("submit-message requires a text user message");
+    if (!hasUserTurnContent(userMessage)) {
+      throw new Error("submit-message requires a user message with text or files");
     }
     return {
       originalMessages: messages,
       previousMessages: messages.slice(0, -1),
       userMessage,
+      userParts: cloneUserParts(userMessage),
       userText,
     };
   }
@@ -263,13 +287,14 @@ export function splitMessagesForTurn(
       continue;
     }
     const userText = extractUserText(userMessage);
-    if (!userText) {
-      throw new Error("regenerate-message requires the latest user message to contain text");
+    if (!hasUserTurnContent(userMessage)) {
+      throw new Error("regenerate-message requires the latest user message to contain content");
     }
     return {
       originalMessages: messages.slice(0, index + 1),
       previousMessages: messages.slice(0, index),
       userMessage,
+      userParts: cloneUserParts(userMessage),
       userText,
     };
   }
@@ -279,21 +304,20 @@ export function splitMessagesForTurn(
 
 export async function resolveAuthoritativeTurnMessages(input: {
   persistedMessages: UIMessage[];
-  submittedMessages: unknown[] | undefined;
+  submittedMessages: UIMessage[] | undefined;
   trigger: "submit-message" | "regenerate-message";
 }): Promise<{
   originalMessages: UIMessage[];
   previousMessages: UIMessage[];
   userMessage: UIMessage;
+  userParts: TyrumUIMessagePart[];
   userText: string;
 }> {
   if (input.trigger === "regenerate-message") {
     return splitMessagesForTurn(input.persistedMessages, "regenerate-message");
   }
 
-  const validatedMessages = await validateUIMessages({
-    messages: input.submittedMessages ?? [],
-  });
+  const validatedMessages = input.submittedMessages ?? [];
   if (validatedMessages.length !== 1) {
     throw new Error("submit-message requires exactly one user UI message");
   }

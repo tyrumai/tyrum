@@ -1,3 +1,5 @@
+import type { NormalizedAttachment } from "@tyrum/contracts";
+
 export const DEFAULT_CHANNEL_ACCOUNT_ID = "default" as const;
 
 export interface ChannelAddress {
@@ -5,10 +7,15 @@ export interface ChannelAddress {
   accountId: string;
 }
 
+export interface ChannelEgressContent {
+  text?: string;
+  attachments?: NormalizedAttachment[];
+}
+
 export interface ChannelEgressRequest {
   accountId: string;
   containerId: string;
-  text: string;
+  content: ChannelEgressContent;
   parseMode?: string;
 }
 

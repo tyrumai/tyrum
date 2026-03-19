@@ -238,6 +238,63 @@ describe("MessageCard", () => {
     cleanupTestRoot(testRoot);
   });
 
+  it("keeps finished tool calls with artifact output collapsed by default", () => {
+    const message = {
+      id: "assistant-tool-artifact-finished",
+      role: "assistant",
+      parts: [
+        {
+          type: "dynamic-tool",
+          toolName: "tool.node.dispatch",
+          toolCallId: "tool-call-artifact",
+          state: "input-available",
+          input: { action_name: "capture_photo" },
+        },
+      ],
+    } as unknown as UIMessage;
+    const testRoot = renderMessageCard(message);
+
+    act(() => {
+      testRoot.root.render(
+        e(MessageCard, {
+          approvalsById: {},
+          message: {
+            ...message,
+            parts: [
+              {
+                type: "dynamic-tool",
+                toolName: "tool.node.dispatch",
+                toolCallId: "tool-call-artifact",
+                state: "output-available",
+                input: { action_name: "capture_photo" },
+                output: {
+                  run_id: "11111111-1111-1111-1111-111111111111",
+                  payload: {
+                    artifact: {
+                      artifact_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                      uri: "artifact://aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                      kind: "file",
+                      created_at: "2026-01-01T00:00:00.000Z",
+                    },
+                  },
+                },
+              },
+            ],
+          },
+          onResolveApproval: vi.fn(),
+          renderMode: "text",
+          resolvingApproval: null,
+        }),
+      );
+    });
+
+    const toggle = findToggle(testRoot.container, "tool.node.dispatch");
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(testRoot.container.textContent).not.toContain("artifact_id");
+
+    cleanupTestRoot(testRoot);
+  });
+
   it("hides step-start parts instead of rendering an unsupported fallback", () => {
     const testRoot = renderMessageCard({
       id: "assistant-step-start",
@@ -323,7 +380,46 @@ describe("MessageCard", () => {
     expect(testRoot.container.textContent).toContain("diagram.png");
     expect(testRoot.container.textContent).toContain("image/png");
     expect(testRoot.container.textContent).not.toContain("Unsupported part");
-    expect(link?.textContent).toBe("https://example.com/files/diagram.png");
+    expect(link?.textContent).toBe("Download");
+
+    cleanupTestRoot(testRoot);
+  });
+
+  it("renders image file previews inline and keeps download links for file parts", () => {
+    const testRoot = renderMessageCard({
+      id: "assistant-file-preview",
+      role: "assistant",
+      parts: [
+        {
+          type: "file",
+          mediaType: "image/png",
+          filename: "diagram.png",
+          url: "data:image/png;base64,AAAA",
+        },
+        {
+          type: "file",
+          mediaType: "application/pdf",
+          filename: "notes.pdf",
+          url: "data:application/pdf;base64,BBBB",
+        },
+      ],
+    } as unknown as UIMessage);
+
+    const preview = testRoot.container.querySelector(
+      "[data-testid='message-file-preview-assistant-file-preview-0']",
+    ) as HTMLImageElement | null;
+    const imageDownload = testRoot.container.querySelector(
+      "[data-testid='message-file-download-assistant-file-preview-0']",
+    ) as HTMLAnchorElement | null;
+    const documentDownload = testRoot.container.querySelector(
+      "[data-testid='message-file-download-assistant-file-preview-1']",
+    ) as HTMLAnchorElement | null;
+
+    expect(preview?.getAttribute("src")).toBe("data:image/png;base64,AAAA");
+    expect(preview?.getAttribute("alt")).toBe("diagram.png");
+    expect(imageDownload?.getAttribute("download")).toBe("diagram.png");
+    expect(documentDownload?.getAttribute("download")).toBe("notes.pdf");
+    expect(documentDownload?.textContent).toBe("Download");
 
     cleanupTestRoot(testRoot);
   });

@@ -156,6 +156,7 @@ export async function processTelegramBatch(
   };
 
   let reply: string;
+  let replyAttachments: import("@tyrum/contracts").ArtifactRef[] = [];
   let agentId = "default";
   try {
     try {
@@ -177,16 +178,18 @@ export async function processTelegramBatch(
       typingTimeout = setTimeout(startTyping, CHANNEL_TYPING_MESSAGE_START_DELAY_MS);
     }
     const result = await runtime.turn({
-      ...(combined.length > 0 ? { message: combined } : {}),
+      ...(mergedEnvelope
+        ? { envelope: mergedEnvelope }
+        : { parts: [{ type: "text" as const, text: combined }] }),
       metadata: {
         tyrum_key: leader.key,
         lane: leader.lane,
       },
-      envelope: mergedEnvelope,
       channel: connectorId,
       thread_id: leader.thread_id,
     });
     reply = result.reply ?? "";
+    replyAttachments = result.attachments ?? [];
   } catch (err) {
     if (err instanceof LaneQueueInterruptError) {
       deps.logger?.info("channels.ingress.agent_interrupted", {
@@ -220,7 +223,10 @@ export async function processTelegramBatch(
         .sendMessage({
           accountId,
           containerId: leader.thread_id,
-          text: "Sorry, something went wrong. Please try again later.",
+          content: {
+            text: "Sorry, something went wrong. Please try again later.",
+            attachments: [],
+          },
           parseMode: "HTML",
         })
         .catch((sendErr) => {
@@ -255,6 +261,12 @@ export async function processTelegramBatch(
       formattingFallbacks.push(event);
     },
   });
+  if (chunks.length === 0 && replyAttachments.length === 0) {
+    for (const row of rows) {
+      await deps.inbox.markCompleted(row.inbox_id, deps.owner, reply);
+    }
+    return;
+  }
 
   const memoryDal = deps.memoryDal;
   if (memoryDal && formattingFallbacks.length > 0) {
@@ -365,7 +377,7 @@ export async function processTelegramBatch(
   }
 
   let approvalId: string | undefined;
-  if (decision === "require_approval" && chunks.length > 0) {
+  if (decision === "require_approval" && (chunks.length > 0 || replyAttachments.length > 0)) {
     if (!deps.approvalDal) {
       for (const row of rows) {
         await deps.inbox.markFailed(
@@ -422,7 +434,8 @@ export async function processTelegramBatch(
                 applied_override_ids: appliedOverrideIds,
               }
             : undefined,
-          chunks: chunks.length,
+          chunks: Math.max(chunks.length, 1),
+          attachments: replyAttachments.length,
           preview: chunks[0] ?? "",
         },
         expiresAt,
@@ -431,8 +444,9 @@ export async function processTelegramBatch(
     approvalId = approval.approval_id;
   }
 
-  for (let i = 0; i < chunks.length; i += 1) {
-    const text = chunks[i]!;
+  const egressChunks = chunks.length > 0 ? chunks : [""];
+  for (let i = 0; i < egressChunks.length; i += 1) {
+    const text = egressChunks[i]!;
     const dedupeKey = `${leader.source}:${leader.thread_id}:${leader.message_id}:reply:${String(i)}`;
     await deps.outbox.enqueue({
       tenant_id: leader.tenant_id,
@@ -442,6 +456,7 @@ export async function processTelegramBatch(
       dedupe_key: dedupeKey,
       chunk_index: i,
       text,
+      attachments: i === 0 ? replyAttachments : [],
       parse_mode: "HTML",
       workspace_id: leader.workspace_id,
       session_id: leader.session_id,

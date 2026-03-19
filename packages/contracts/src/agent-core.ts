@@ -114,6 +114,16 @@ export const AgentSessionConfig = z.object({
 });
 export type AgentSessionConfig = z.infer<typeof AgentSessionConfig>;
 
+export const AgentAttachmentInputMode = z.enum(["helper", "native"]);
+export type AgentAttachmentInputMode = z.infer<typeof AgentAttachmentInputMode>;
+
+export const AgentAttachmentConfig = z
+  .object({
+    input_mode: AgentAttachmentInputMode.default("helper"),
+  })
+  .strict();
+export type AgentAttachmentConfig = z.infer<typeof AgentAttachmentConfig>;
+
 export const BuiltinMemoryServerSettings = z
   .object({
     enabled: z.boolean().default(true),
@@ -200,6 +210,7 @@ export const AgentConfig = z
     mcp: AgentMcpConfig.prefault({}),
     tools: AgentToolConfig.prefault({}),
     sessions: AgentSessionConfig.prefault({}),
+    attachments: AgentAttachmentConfig.prefault({}),
   })
   .strict();
 export type AgentConfig = z.infer<typeof AgentConfig>;

@@ -42,10 +42,10 @@ function extractTextFromNormalizedMessage(normalized: NormalizedThreadMessage): 
   }
 
   const content = normalized.message.content;
-  if (content.kind === "text") {
-    return { text: content.text.trim(), attachments: 0 };
-  }
-  return { text: (content.caption ?? "").trim(), attachments: 1 };
+  return {
+    text: content.text?.trim() ?? "",
+    attachments: content.attachments.length,
+  };
 }
 
 function summarizeText(value: string): string {
@@ -370,7 +370,7 @@ export async function applyInboundQueueOverflowPolicy(
           id: syntheticMessageId,
           thread_id: thread.id,
           source: parsedBase.success ? parsedBase.data.message.source : "telegram",
-          content: { kind: "text", text: summaryText },
+          content: { text: summaryText, attachments: [] },
           sender: {
             id: "system",
             is_bot: true,

@@ -43,13 +43,11 @@ describe("NormalizedMessage", () => {
       id: "msg-1",
       thread_id: "chat-123",
       source: "telegram",
-      content: { kind: "text", text: "Hello, world!" },
+      content: { text: "Hello, world!", attachments: [] },
       timestamp: "2025-10-05T16:31:09Z",
     });
-    expect(msg.content.kind).toBe("text");
-    if (msg.content.kind === "text") {
-      expect(msg.content.text).toBe("Hello, world!");
-    }
+    expect(msg.content.text).toBe("Hello, world!");
+    expect(msg.content.attachments).toEqual([]);
   });
 
   it("rejects a message with missing timestamp", () => {
@@ -57,7 +55,7 @@ describe("NormalizedMessage", () => {
       id: "msg-1",
       thread_id: "chat-123",
       source: "telegram",
-      content: { kind: "text", text: "Hello" },
+      content: { text: "Hello", attachments: [] },
     } as const;
     expectRejects(NormalizedMessage, bad);
   });
@@ -67,21 +65,36 @@ describe("NormalizedMessage", () => {
       id: "msg-1",
       thread_id: "chat-123",
       source: "telegram",
-      content: { kind: "text" },
+      content: { attachments: [] },
       timestamp: "2025-10-05T16:31:09Z",
     } as const;
     expectRejects(NormalizedMessage, bad);
   });
 
-  it("parses media placeholder content", () => {
+  it("parses attachment content", () => {
     const msg = NormalizedMessage.parse({
       id: "msg-2",
       thread_id: "chat-123",
       source: "telegram",
-      content: { kind: "media_placeholder", media_kind: "photo", caption: "A sunset" },
+      content: {
+        attachments: [
+          {
+            artifact_id: "550e8400-e29b-41d4-a716-446655440000",
+            uri: "artifact://550e8400-e29b-41d4-a716-446655440000",
+            external_url: "https://example.test/a/550e8400-e29b-41d4-a716-446655440000",
+            kind: "file",
+            media_class: "image",
+            created_at: "2025-10-05T16:31:09Z",
+            mime_type: "image/jpeg",
+            filename: "sunset.jpg",
+            channel_kind: "photo",
+          },
+        ],
+      },
       timestamp: "2025-10-05T16:31:09Z",
     });
-    expect(msg.content.kind).toBe("media_placeholder");
+    expect(msg.content.attachments).toHaveLength(1);
+    expect(msg.content.attachments[0]?.channel_kind).toBe("photo");
   });
 });
 
@@ -96,7 +109,7 @@ describe("NormalizedThreadMessage", () => {
       id: "msg-1",
       thread_id: "chat-123",
       source: "telegram" as const,
-      content: { kind: "text" as const, text: "Test" },
+      content: { text: "Test", attachments: [] },
       timestamp: "2025-10-05T16:31:09Z",
       pii_fields: [],
     },

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ArtifactRef } from "./artifact.js";
 
 /** Source channel for a normalized message. */
 export const MessageSource = z.enum(["telegram"]);
@@ -75,20 +76,6 @@ export const SenderMetadata = z.object({
 });
 export type SenderMetadata = z.infer<typeof SenderMetadata>;
 
-/** Ingress message content — discriminated union on `kind`. */
-export const MessageContent = z.discriminatedUnion("kind", [
-  z.object({
-    kind: z.literal("text"),
-    text: z.string(),
-  }),
-  z.object({
-    kind: z.literal("media_placeholder"),
-    media_kind: MediaKind,
-    caption: z.string().optional(),
-  }),
-]);
-export type MessageContent = z.infer<typeof MessageContent>;
-
 /** Delivery identity for v2 normalized envelopes. */
 export const NormalizedDeliveryIdentity = z
   .object({
@@ -117,18 +104,13 @@ export const NormalizedEnvelopeSender = z
 export type NormalizedEnvelopeSender = z.infer<typeof NormalizedEnvelopeSender>;
 
 /** Attachment metadata preserved by normalization. */
-export const NormalizedAttachment = z
-  .object({
-    kind: z.string().trim().min(1),
-    mime_type: z.string().trim().min(1).optional(),
-    size_bytes: z.number().int().nonnegative().optional(),
-    sha256: z.string().trim().min(1).optional(),
-  })
-  .strict();
+export const NormalizedAttachment = ArtifactRef.extend({
+  channel_kind: z.string().trim().min(1).optional(),
+});
 export type NormalizedAttachment = z.infer<typeof NormalizedAttachment>;
 
-/** Content payload for v2 normalized envelopes. */
-export const NormalizedEnvelopeContent = z
+/** Canonical normalized message content. */
+export const MessageContent = z
   .object({
     text: z.string().trim().min(1).optional(),
     attachments: z.array(NormalizedAttachment).default([]),
@@ -137,6 +119,10 @@ export const NormalizedEnvelopeContent = z
   .refine((value) => typeof value.text === "string" || value.attachments.length > 0, {
     message: "content must include text or at least one attachment",
   });
+export type MessageContent = z.infer<typeof MessageContent>;
+
+/** Content payload for v2 normalized envelopes. */
+export const NormalizedEnvelopeContent = MessageContent;
 export type NormalizedEnvelopeContent = z.infer<typeof NormalizedEnvelopeContent>;
 
 /** Baseline v2 normalized message envelope contract. */

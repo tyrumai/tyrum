@@ -11,6 +11,7 @@ import {
   AuthTokenIssueResponse,
   AuthTokenRevokeRequest,
   AuthTokenRevokeResponse,
+  DEFAULT_PUBLIC_BASE_URL,
   DeploymentConfig,
   DeploymentConfigGetResponse,
   DeploymentConfigRevertRequest,
@@ -226,7 +227,9 @@ export function createSystemRoutes(deps: SystemRouteDeps): Hono {
 
   app.get("/system/deployment-config", async (c) => {
     const revision = await new DeploymentConfigDal(deps.db).ensureSeeded({
-      defaultConfig: DeploymentConfig.parse({}),
+      defaultConfig: DeploymentConfig.parse({
+        server: { publicBaseUrl: DEFAULT_PUBLIC_BASE_URL },
+      }),
       createdBy: { kind: "bootstrap" },
       reason: "seed",
     });

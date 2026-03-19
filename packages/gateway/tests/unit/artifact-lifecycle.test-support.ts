@@ -13,13 +13,19 @@ import { PolicySnapshotDal } from "../../src/modules/policy/snapshot-dal.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 
-const INSERT_WITH_SENSITIVITY = `INSERT INTO execution_artifacts (
+const TEST_PUBLIC_BASE_URL = "https://gateway.example.test";
+
+const INSERT_WITH_SENSITIVITY = `INSERT INTO artifacts (
   tenant_id,
   artifact_id,
+  access_id,
   workspace_id,
   agent_id,
   kind,
   uri,
+  external_url,
+  media_class,
+  filename,
   created_at,
   mime_type,
   size_bytes,
@@ -28,15 +34,19 @@ const INSERT_WITH_SENSITIVITY = `INSERT INTO execution_artifacts (
   metadata_json,
   sensitivity,
   policy_snapshot_id
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
-const INSERT_WITHOUT_SENSITIVITY = `INSERT INTO execution_artifacts (
+const INSERT_WITHOUT_SENSITIVITY = `INSERT INTO artifacts (
   tenant_id,
   artifact_id,
+  access_id,
   workspace_id,
   agent_id,
   kind,
   uri,
+  external_url,
+  media_class,
+  filename,
   created_at,
   mime_type,
   size_bytes,
@@ -44,7 +54,15 @@ const INSERT_WITHOUT_SENSITIVITY = `INSERT INTO execution_artifacts (
   labels_json,
   metadata_json,
   policy_snapshot_id
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+
+const INSERT_ARTIFACT_ACCESS_SQL = `INSERT INTO artifact_access (
+  access_id,
+  tenant_id,
+  artifact_id,
+  created_at
+) VALUES (?, ?, ?, ?)
+ON CONFLICT (tenant_id, artifact_id) DO NOTHING`;
 
 type SeedExecutionArtifactInput = {
   snapshotId: string;
@@ -79,10 +97,14 @@ async function insertExecutionArtifact(
   const baseParams = [
     DEFAULT_TENANT_ID,
     ref.artifact_id,
+    ref.artifact_id,
     DEFAULT_WORKSPACE_ID,
     DEFAULT_AGENT_ID,
     ref.kind,
     ref.uri,
+    ref.external_url,
+    ref.media_class,
+    ref.filename,
     ref.created_at,
     ref.mime_type ?? null,
     ref.size_bytes ?? null,
@@ -93,19 +115,25 @@ async function insertExecutionArtifact(
 
   if (input.omitSensitivity) {
     await db.run(INSERT_WITHOUT_SENSITIVITY, [...baseParams, input.snapshotId]);
-    return;
+  } else {
+    await db.run(INSERT_WITH_SENSITIVITY, [
+      ...baseParams,
+      input.sensitivity ?? "normal",
+      input.snapshotId,
+    ]);
   }
 
-  await db.run(INSERT_WITH_SENSITIVITY, [
-    ...baseParams,
-    input.sensitivity ?? "normal",
-    input.snapshotId,
+  await db.run(INSERT_ARTIFACT_ACCESS_SQL, [
+    ref.artifact_id,
+    DEFAULT_TENANT_ID,
+    ref.artifact_id,
+    ref.created_at,
   ]);
 }
 
 export async function createArtifactLifecycleHarness(): Promise<ArtifactLifecycleHarness> {
   const baseDir = await mkdtemp(join(tmpdir(), "tyrum-artifacts-gc-"));
-  const artifactStore = new FsArtifactStore(baseDir);
+  const artifactStore = new FsArtifactStore(baseDir, undefined, TEST_PUBLIC_BASE_URL);
   const db = openTestSqliteDb();
   const snapshotDal = new PolicySnapshotDal(db);
 

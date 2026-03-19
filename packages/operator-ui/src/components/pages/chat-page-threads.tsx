@@ -15,6 +15,7 @@ export interface ChatThreadSummary {
   title: string;
   created_at: string;
   updated_at: string;
+  message_count: number;
   preview: string;
   archived: boolean;
 }
@@ -233,7 +234,9 @@ function ThreadItem({
       <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
         <div className="min-w-0">
           <div className="truncate text-sm font-medium">{session.title}</div>
-          <div className="mt-0.5 truncate text-xs opacity-80">{session.preview || "\u2014"}</div>
+          <div className="mt-0.5 truncate text-xs opacity-80">
+            {session.preview || (session.message_count > 0 ? "Attachment" : "\u2014")}
+          </div>
         </div>
         <div className="flex shrink-0 items-center">
           <span className="text-[10px] opacity-60 group-hover:hidden">

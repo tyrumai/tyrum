@@ -4,6 +4,7 @@ import type {
   AttemptCost as AttemptCostT,
 } from "@tyrum/contracts";
 import { AgentTurnRequest } from "@tyrum/contracts";
+import { normalizeInternalTurnRequestUnknown } from "../agent/runtime/turn-request-normalization.js";
 import type { GatewayContainer } from "../../container.js";
 import type { StepExecutionContext, StepExecutor, StepResult } from "./engine.js";
 import {
@@ -438,7 +439,9 @@ export function createGatewayStepExecutor(input: {
           return { success: false, error: "decide execution is not configured" };
         }
 
-        const parsed = AgentTurnRequest.safeParse(action.args ?? {});
+        const parsed = AgentTurnRequest.safeParse(
+          normalizeInternalTurnRequestUnknown(action.args ?? {}),
+        );
         if (!parsed.success) {
           return { success: false, error: `invalid agent turn request: ${parsed.error.message}` };
         }

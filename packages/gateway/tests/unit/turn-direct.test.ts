@@ -7,6 +7,12 @@ const finalizeTurnMock = vi.hoisted(() => vi.fn());
 const compactForOverflowMock = vi.hoisted(() => vi.fn());
 const maybeAutoCompactSessionMock = vi.hoisted(() => vi.fn());
 const extractToolApprovalResumeStateMock = vi.hoisted(() => vi.fn(() => undefined));
+const appendToolApprovalResponseMessageMock = vi.hoisted(() =>
+  vi.fn((messages: unknown) => messages),
+);
+const applyDeterministicContextCompactionAndToolPruningMock = vi.hoisted(() =>
+  vi.fn((messages: unknown) => messages),
+);
 const sessionMessagesToModelMessagesMock = vi.hoisted(() => vi.fn(async () => []));
 const buildPromptVisibleMessagesMock = vi.hoisted(() => vi.fn((messages: unknown) => messages));
 
@@ -61,13 +67,14 @@ vi.mock("../../src/modules/agent/runtime/automation-delivery.js", () => ({
 }));
 
 vi.mock("../../src/modules/ai-sdk/message-utils.js", () => ({
-  appendToolApprovalResponseMessage: vi.fn((messages: unknown) => messages),
+  appendToolApprovalResponseMessage: appendToolApprovalResponseMessageMock,
   countAssistantMessages: vi.fn(() => 0),
   sessionMessagesToModelMessages: sessionMessagesToModelMessagesMock,
 }));
 
 vi.mock("../../src/modules/agent/runtime/context-pruning.js", () => ({
-  applyDeterministicContextCompactionAndToolPruning: vi.fn((messages: unknown) => messages),
+  applyDeterministicContextCompactionAndToolPruning:
+    applyDeterministicContextCompactionAndToolPruningMock,
 }));
 
 vi.mock("../../src/modules/agent/runtime/session-context-state.js", () => ({
@@ -121,6 +128,7 @@ function samplePreparedTurn(usedTools: Set<string>) {
     usedTools,
     memoryWriteState: { wrote: false },
     userContent: [{ type: "text", text: "hello" }],
+    rewriteHistoryAttachmentsForModel: false,
     contextReport: {
       session_id: "session-1",
       thread_id: "thread-1",
@@ -141,7 +149,19 @@ function samplePreparedTurn(usedTools: Set<string>) {
 
 function sampleDeps() {
   return {
-    opts: { container: { logger: { warn: vi.fn() } } },
+    opts: {
+      container: {
+        logger: { warn: vi.fn() },
+        deploymentConfig: {
+          attachments: {
+            maxAnalysisBytes: 20 * 1024 * 1024,
+          },
+        },
+      },
+    },
+    prepareTurnDeps: {
+      fetchImpl: fetch,
+    },
     sessionDal: {
       getById: vi.fn(async () => ({
         tenant_id: "tenant-1",
@@ -288,6 +308,77 @@ describe("turnDirect overflow retry", () => {
     });
     expect(JSON.stringify(call?.messages ?? [])).not.toContain("stale checkpoint text");
   });
+
+  it("rewrites persisted attachment history when helper mode strips raw file parts", async () => {
+    prepareTurnMock.mockResolvedValue({
+      ...samplePreparedTurn(new Set()),
+      rewriteHistoryAttachmentsForModel: true,
+    });
+    generateTextMock.mockResolvedValue({
+      text: "ok",
+      steps: [],
+      totalUsage: undefined,
+      response: { messages: [] },
+    });
+    finalizeTurnMock.mockResolvedValue({ reply: "ok" });
+
+    const deps = sampleDeps();
+    const persistedMessages = [
+      {
+        id: "user-1",
+        role: "user",
+        parts: [
+          { type: "text", text: "Please inspect this." },
+          {
+            type: "file",
+            url: "https://example.com/screenshot.png",
+            mediaType: "image/png",
+            filename: "screenshot.png",
+          },
+        ],
+      },
+    ];
+    deps.sessionDal.getById = vi.fn(async () => ({
+      tenant_id: "tenant-1",
+      session_id: "session-1",
+      agent_id: "agent-1",
+      workspace_id: "workspace-1",
+      messages: persistedMessages,
+      context_state: {
+        version: 1,
+        recent_message_ids: [],
+        checkpoint: null,
+        pending_approvals: [],
+        pending_tool_state: [],
+        updated_at: "2026-03-13T00:00:00.000Z",
+      },
+    }));
+
+    const { turnDirect } = await import("../../src/modules/agent/runtime/turn-direct.js");
+
+    await turnDirect(deps, {
+      channel: "ui",
+      thread_id: "thread-1",
+      message: "hello",
+    } as never);
+
+    expect(sessionMessagesToModelMessagesMock).toHaveBeenCalledWith([
+      {
+        id: "user-1",
+        role: "user",
+        parts: [
+          {
+            type: "text",
+            text: "Please inspect this.",
+          },
+          {
+            type: "text",
+            text: "Attachments:\n- filename=screenshot.png mime_type=image/png",
+          },
+        ],
+      },
+    ]);
+  });
 });
 
 describe("turnDirect approval resume state", () => {
@@ -297,6 +388,14 @@ describe("turnDirect approval resume state", () => {
     finalizeTurnMock.mockReset();
     maybeAutoCompactSessionMock.mockReset();
     extractToolApprovalResumeStateMock.mockReset();
+    appendToolApprovalResponseMessageMock.mockReset();
+    appendToolApprovalResponseMessageMock.mockImplementation((messages: unknown) => messages);
+    applyDeterministicContextCompactionAndToolPruningMock.mockReset();
+    applyDeterministicContextCompactionAndToolPruningMock.mockImplementation(
+      (messages: unknown) => messages,
+    );
+    sessionMessagesToModelMessagesMock.mockReset();
+    sessionMessagesToModelMessagesMock.mockResolvedValue([]);
   });
 
   it("restores memory_written from approval resume state", async () => {
@@ -332,6 +431,70 @@ describe("turnDirect approval resume state", () => {
     });
 
     expect(finalizeTurnMock).toHaveBeenCalledWith(expect.objectContaining({ memoryWritten: true }));
+  });
+
+  it("prunes approval resume messages after appending the approval response", async () => {
+    prepareTurnMock.mockResolvedValue(samplePreparedTurn(new Set()));
+    const resumeMessages = [
+      {
+        role: "assistant" as const,
+        content: [{ type: "text", text: "resume assistant" }],
+      },
+    ];
+    const resumedWithApproval = [
+      ...resumeMessages,
+      {
+        role: "tool" as const,
+        content: [{ type: "tool-approval-response", approvalId: "approval-1", approved: true }],
+      },
+    ];
+    extractToolApprovalResumeStateMock.mockReturnValue({
+      approval_id: "approval-1",
+      messages: resumeMessages,
+      memory_written: false,
+      used_tools: [],
+      steps_used: 0,
+    });
+    appendToolApprovalResponseMessageMock.mockReturnValue(resumedWithApproval);
+    applyDeterministicContextCompactionAndToolPruningMock.mockReturnValue(resumedWithApproval);
+    generateTextMock.mockResolvedValue({
+      text: "ok",
+      steps: [],
+      totalUsage: undefined,
+      response: { messages: [] },
+    });
+    finalizeTurnMock.mockResolvedValue({ reply: "ok" });
+
+    const deps = sampleDeps();
+    deps.approvalDal = {
+      getById: vi.fn(async () => ({
+        status: "approved",
+        context: {},
+        resolution: null,
+      })),
+    } as never;
+
+    const { turnDirect } = await import("../../src/modules/agent/runtime/turn-direct.js");
+
+    await turnDirect(deps, { channel: "ui", thread_id: "thread-1", message: "hello" } as never, {
+      execution: { stepApprovalId: "approval-1" } as never,
+    });
+
+    expect(appendToolApprovalResponseMessageMock).toHaveBeenCalledWith(resumeMessages, {
+      approvalId: "approval-1",
+      approved: true,
+      reason: undefined,
+    });
+    expect(applyDeterministicContextCompactionAndToolPruningMock).toHaveBeenCalledWith(
+      resumedWithApproval,
+      {},
+    );
+    expect(sessionMessagesToModelMessagesMock).not.toHaveBeenCalled();
+    expect(generateTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messages: resumedWithApproval,
+      }),
+    );
   });
 });
 

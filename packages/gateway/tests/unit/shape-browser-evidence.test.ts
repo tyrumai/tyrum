@@ -19,6 +19,8 @@ type ExecutionScopeIds = {
   attemptId: string;
 };
 
+const PUBLIC_BASE_URL = "https://gateway.example.test";
+
 async function seedExecutionScope(
   db: { run(sql: string, params?: unknown[]): Promise<unknown> },
   ids: ExecutionScopeIds,
@@ -86,14 +88,14 @@ describe("shapeBrowserEvidenceForArtifacts", () => {
   let db: SqliteDb;
   let didOpenDb = false;
   let artifactsDir = "";
-  let artifactStore = new FsArtifactStore(".");
+  let artifactStore = new FsArtifactStore(".", undefined, PUBLIC_BASE_URL);
 
   beforeEach(async () => {
     didOpenDb = false;
     db = openTestSqliteDb();
     didOpenDb = true;
     artifactsDir = await mkdtemp(join(tmpdir(), "tyrum-browser-evidence-"));
-    artifactStore = new FsArtifactStore(artifactsDir);
+    artifactStore = new FsArtifactStore(artifactsDir, undefined, PUBLIC_BASE_URL);
     await seedExecutionScope(db, scope);
   });
 

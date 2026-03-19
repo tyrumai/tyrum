@@ -176,6 +176,13 @@
   },
   {
     "table": "channel_outbox",
+    "column": "attachments_json",
+    "shape": "array",
+    "nullable": false,
+    "default": "[]"
+  },
+  {
+    "table": "channel_outbox",
     "column": "response_json",
     "shape": "any",
     "nullable": true,
@@ -245,14 +252,14 @@
     "default": "[]"
   },
   {
-    "table": "execution_artifacts",
+    "table": "artifacts",
     "column": "labels_json",
     "shape": "array",
     "nullable": false,
     "default": "[]"
   },
   {
-    "table": "execution_artifacts",
+    "table": "artifacts",
     "column": "metadata_json",
     "shape": "object",
     "nullable": false,

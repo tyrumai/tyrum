@@ -60,8 +60,11 @@ describe("Execution engine contracts", () => {
       {
         artifact_id: "550e8400-e29b-41d4-a716-446655440000",
         uri: "artifact://550e8400-e29b-41d4-a716-446655440000",
+        external_url: "https://gateway.example.test/a/550e8400-e29b-41d4-a716-446655440000",
         kind: "http_trace",
+        media_class: "document",
         created_at: "2026-02-19T12:00:02Z",
+        filename: "550e8400-e29b-41d4-a716-446655440000.json",
       },
     ],
   } as const;

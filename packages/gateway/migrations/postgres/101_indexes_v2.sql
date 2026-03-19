@@ -100,24 +100,20 @@ ON execution_attempts (tenant_id, status, lease_expires_at_ms);
 CREATE INDEX IF NOT EXISTS execution_attempts_policy_snapshot_id_idx
 ON execution_attempts (tenant_id, policy_snapshot_id);
 
-CREATE INDEX IF NOT EXISTS execution_artifacts_retention_expires_at_idx
-ON execution_artifacts (tenant_id, retention_expires_at);
-CREATE INDEX IF NOT EXISTS execution_artifacts_bytes_deleted_at_idx
-ON execution_artifacts (tenant_id, bytes_deleted_at);
-CREATE INDEX IF NOT EXISTS execution_artifacts_workspace_id_idx
-ON execution_artifacts (tenant_id, workspace_id);
-CREATE INDEX IF NOT EXISTS execution_artifacts_agent_id_idx
-ON execution_artifacts (tenant_id, agent_id);
-CREATE INDEX IF NOT EXISTS execution_artifacts_run_id_idx
-ON execution_artifacts (tenant_id, run_id);
-CREATE INDEX IF NOT EXISTS execution_artifacts_step_id_idx
-ON execution_artifacts (tenant_id, step_id);
-CREATE INDEX IF NOT EXISTS execution_artifacts_attempt_id_idx
-ON execution_artifacts (tenant_id, attempt_id);
-CREATE INDEX IF NOT EXISTS execution_artifacts_kind_idx
-ON execution_artifacts (tenant_id, kind);
-CREATE INDEX IF NOT EXISTS execution_artifacts_created_at_idx
-ON execution_artifacts (tenant_id, created_at);
+CREATE INDEX IF NOT EXISTS artifacts_retention_expires_at_idx
+ON artifacts (tenant_id, retention_expires_at);
+CREATE INDEX IF NOT EXISTS artifacts_bytes_deleted_at_idx
+ON artifacts (tenant_id, bytes_deleted_at);
+CREATE INDEX IF NOT EXISTS artifacts_workspace_id_idx
+ON artifacts (tenant_id, workspace_id);
+CREATE INDEX IF NOT EXISTS artifacts_agent_id_idx
+ON artifacts (tenant_id, agent_id);
+CREATE INDEX IF NOT EXISTS artifacts_kind_idx
+ON artifacts (tenant_id, kind);
+CREATE INDEX IF NOT EXISTS artifacts_created_at_idx
+ON artifacts (tenant_id, created_at);
+CREATE INDEX IF NOT EXISTS artifact_links_parent_idx
+ON artifact_links (tenant_id, parent_kind, parent_id);
 
 CREATE INDEX IF NOT EXISTS resume_tokens_run_id_idx ON resume_tokens (tenant_id, run_id);
 CREATE INDEX IF NOT EXISTS resume_tokens_expires_at_idx ON resume_tokens (tenant_id, expires_at);

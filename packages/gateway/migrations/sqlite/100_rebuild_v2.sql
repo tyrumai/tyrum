@@ -24,7 +24,9 @@ DROP TABLE IF EXISTS channel_outbox;
 DROP TABLE IF EXISTS concurrency_slots;
 DROP TABLE IF EXISTS connection_directory;
 DROP TABLE IF EXISTS context_reports;
-DROP TABLE IF EXISTS execution_artifacts;
+DROP TABLE IF EXISTS artifact_links;
+DROP TABLE IF EXISTS artifact_access;
+DROP TABLE IF EXISTS artifacts;
 DROP TABLE IF EXISTS execution_attempts;
 DROP TABLE IF EXISTS execution_steps;
 DROP TABLE IF EXISTS resume_tokens;
@@ -285,6 +287,7 @@ CREATE TABLE channel_outbox (
   dedupe_key         TEXT NOT NULL,
   chunk_index        INTEGER NOT NULL DEFAULT 0,
   text               TEXT NOT NULL,
+  attachments_json   TEXT NOT NULL DEFAULT '[]',
   parse_mode         TEXT,
   status             TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued','sending','sent','failed')),
   attempt            INTEGER NOT NULL DEFAULT 0,
@@ -572,16 +575,17 @@ CREATE TABLE execution_attempts (
     REFERENCES policy_snapshots(tenant_id, policy_snapshot_id) ON DELETE SET NULL
 );
 
-CREATE TABLE execution_artifacts (
+CREATE TABLE artifacts (
   tenant_id            TEXT NOT NULL,
   artifact_id          TEXT NOT NULL,
+  access_id            TEXT NOT NULL,
   workspace_id         TEXT NOT NULL,
   agent_id             TEXT,
-  run_id               TEXT,
-  step_id              TEXT,
-  attempt_id           TEXT,
   kind                 TEXT NOT NULL,
   uri                  TEXT NOT NULL,
+  external_url         TEXT NOT NULL,
+  media_class          TEXT,
+  filename             TEXT,
   created_at           TEXT NOT NULL,
   mime_type            TEXT,
   size_bytes           INTEGER,
@@ -594,12 +598,39 @@ CREATE TABLE execution_artifacts (
   bytes_deleted_at     TEXT,
   bytes_deleted_reason TEXT,
   PRIMARY KEY (tenant_id, artifact_id),
+  UNIQUE (access_id),
   FOREIGN KEY (tenant_id, workspace_id) REFERENCES workspaces(tenant_id, workspace_id) ON DELETE CASCADE,
   FOREIGN KEY (tenant_id, agent_id) REFERENCES agents(tenant_id, agent_id) ON DELETE SET NULL,
-  FOREIGN KEY (tenant_id, run_id) REFERENCES execution_runs(tenant_id, run_id) ON DELETE SET NULL,
-  FOREIGN KEY (tenant_id, step_id) REFERENCES execution_steps(tenant_id, step_id) ON DELETE SET NULL,
-  FOREIGN KEY (tenant_id, attempt_id) REFERENCES execution_attempts(tenant_id, attempt_id) ON DELETE SET NULL,
   FOREIGN KEY (tenant_id, policy_snapshot_id) REFERENCES policy_snapshots(tenant_id, policy_snapshot_id) ON DELETE SET NULL
+);
+
+CREATE TABLE artifact_access (
+  access_id   TEXT PRIMARY KEY,
+  tenant_id   TEXT NOT NULL,
+  artifact_id TEXT NOT NULL,
+  created_at  TEXT NOT NULL,
+  UNIQUE (tenant_id, artifact_id),
+  FOREIGN KEY (tenant_id, artifact_id)
+    REFERENCES artifacts(tenant_id, artifact_id) ON DELETE CASCADE
+);
+
+CREATE TABLE artifact_links (
+  tenant_id    TEXT NOT NULL,
+  artifact_id  TEXT NOT NULL,
+  parent_kind  TEXT NOT NULL CHECK (
+    parent_kind IN (
+      'execution_run',
+      'execution_step',
+      'execution_attempt',
+      'chat_session',
+      'chat_message'
+    )
+  ),
+  parent_id    TEXT NOT NULL,
+  created_at   TEXT NOT NULL,
+  PRIMARY KEY (tenant_id, artifact_id, parent_kind, parent_id),
+  FOREIGN KEY (tenant_id, artifact_id)
+    REFERENCES artifacts(tenant_id, artifact_id) ON DELETE CASCADE
 );
 
 CREATE TABLE resume_tokens (

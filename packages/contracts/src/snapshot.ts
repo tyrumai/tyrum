@@ -36,7 +36,7 @@ export type SnapshotArtifactBytesInclusionPolicy = z.infer<
 
 export const SnapshotArtifactRetentionMetadata = z
   .object({
-    execution_artifacts: z
+    artifacts: z
       .object({
         included: z.boolean(),
         has_retention_expires_at: z.boolean(),

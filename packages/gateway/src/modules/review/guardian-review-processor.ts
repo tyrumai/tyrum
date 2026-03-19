@@ -449,7 +449,7 @@ export class GuardianReviewProcessor {
     const result = await runtime.executeGuardianReview({
       channel: "subagent",
       thread_id: subagentId,
-      message: buildApprovalReviewMessage(approval, session),
+      parts: [{ type: "text", text: buildApprovalReviewMessage(approval, session) }],
       metadata: reviewerTurnMetadata({
         subagentId,
         subjectType: "approval",
@@ -476,7 +476,7 @@ export class GuardianReviewProcessor {
     const result = await runtime.executeGuardianReview({
       channel: "subagent",
       thread_id: subagentId,
-      message: buildPairingReviewMessage(pairing),
+      parts: [{ type: "text", text: buildPairingReviewMessage(pairing) }],
       metadata: reviewerTurnMetadata({
         subagentId,
         subjectType: "pairing",

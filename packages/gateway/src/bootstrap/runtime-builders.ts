@@ -115,6 +115,8 @@ export async function createProtocolRuntime(
     logger: context.logger,
     db: context.container.db,
     wsEventDal,
+    artifactStore: context.container.artifactStore,
+    artifactMaxUploadBytes: context.container.deploymentConfig.attachments.maxUploadBytes,
     redactionEngine: context.container.redactionEngine,
     authAudit: new AuthAudit({ eventLog: context.container.eventLog, logger: context.logger }),
     contextReportDal: context.container.contextReportDal,

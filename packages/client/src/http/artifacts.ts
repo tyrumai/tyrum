@@ -1,13 +1,4 @@
-import {
-  AgentId,
-  ArtifactId,
-  ArtifactRef,
-  ExecutionAttemptId,
-  ExecutionRunId,
-  ExecutionStepId,
-  PolicySnapshotId,
-  WorkspaceId,
-} from "@tyrum/contracts";
+import { ArtifactId, ArtifactRef } from "@tyrum/contracts";
 import { z } from "zod";
 import {
   HttpTransport,
@@ -20,17 +11,17 @@ import {
 const ArtifactMetadataResponse = z
   .object({
     artifact: ArtifactRef,
-    scope: z
-      .object({
-        workspace_id: WorkspaceId,
-        agent_id: AgentId.nullable(),
-        run_id: ExecutionRunId,
-        step_id: ExecutionStepId.nullable(),
-        attempt_id: ExecutionAttemptId.nullable(),
-        sensitivity: NonEmptyString,
-        policy_snapshot_id: PolicySnapshotId.nullable(),
-      })
-      .strict(),
+    sensitivity: NonEmptyString,
+    links: z
+      .array(
+        z
+          .object({
+            parent_kind: NonEmptyString,
+            parent_id: NonEmptyString,
+          })
+          .strict(),
+      )
+      .default([]),
   })
   .strict();
 
@@ -55,36 +46,26 @@ export type ArtifactBytesResult =
     };
 
 export interface ArtifactsApi {
-  getMetadata(
-    runId: string,
-    artifactId: string,
-    options?: TyrumRequestOptions,
-  ): Promise<ArtifactMetadataResponse>;
-  getBytes(
-    runId: string,
-    artifactId: string,
-    options?: TyrumRequestOptions,
-  ): Promise<ArtifactBytesResult>;
+  getMetadata(artifactId: string, options?: TyrumRequestOptions): Promise<ArtifactMetadataResponse>;
+  getBytes(artifactId: string, options?: TyrumRequestOptions): Promise<ArtifactBytesResult>;
 }
 
 export function createArtifactsApi(transport: HttpTransport): ArtifactsApi {
   return {
-    async getMetadata(runId, artifactId, options) {
-      const parsedRunId = validateOrThrow(ExecutionRunId, runId, "run id");
+    async getMetadata(artifactId, options) {
       const parsedArtifactId = validateOrThrow(ArtifactId, artifactId, "artifact id");
 
       return await transport.request({
         method: "GET",
-        path: `/runs/${encodeURIComponent(parsedRunId)}/artifacts/${encodeURIComponent(parsedArtifactId)}/metadata`,
+        path: `/artifacts/${encodeURIComponent(parsedArtifactId)}/metadata`,
         response: ArtifactMetadataResponse,
         signal: options?.signal,
       });
     },
 
-    async getBytes(runId, artifactId, options) {
-      const parsedRunId = validateOrThrow(ExecutionRunId, runId, "run id");
+    async getBytes(artifactId, options) {
       const parsedArtifactId = validateOrThrow(ArtifactId, artifactId, "artifact id");
-      const path = `/runs/${encodeURIComponent(parsedRunId)}/artifacts/${encodeURIComponent(parsedArtifactId)}`;
+      const path = `/a/${encodeURIComponent(parsedArtifactId)}`;
 
       const response = await transport.requestRaw({
         method: "GET",

@@ -1,11 +1,13 @@
 import type { ArtifactRef } from "@tyrum/contracts";
 import type { OperatorCore } from "@tyrum/operator-core";
 import { useEffect, useState, type ReactNode } from "react";
+import { Download } from "lucide-react";
 import { Badge } from "../ui/badge.js";
 import { JsonViewer } from "../ui/json-viewer.js";
 import { Spinner } from "../ui/spinner.js";
 import { toArrayBufferBytes } from "../../utils/blob-bytes.js";
 import { buildGatewayArtifactUrl } from "../../utils/gateway-artifact-url.js";
+import { isRecord } from "../../utils/is-record.js";
 import { normalizeHttpUrl } from "../../utils/normalize-http-url.js";
 
 type ArtifactBytesState =
@@ -21,24 +23,80 @@ type ArtifactMetadataState =
   | { status: "error"; message: string }
   | { status: "ready"; sensitivity?: string };
 
+function extensionForContentType(contentType: string | undefined): string {
+  switch ((contentType ?? "").toLowerCase()) {
+    case "image/png":
+      return ".png";
+    case "image/jpeg":
+      return ".jpg";
+    case "image/webp":
+      return ".webp";
+    case "application/json":
+      return ".json";
+    case "text/plain":
+      return ".txt";
+    case "audio/webm":
+      return ".webm";
+    default:
+      return "";
+  }
+}
+
+function defaultArtifactDownloadName(
+  artifact: ArtifactRef,
+  contentType: string | undefined,
+): string {
+  const metadata = artifact.metadata;
+  if (isRecord(metadata) && typeof metadata["filename"] === "string") {
+    const filename = metadata["filename"].trim();
+    if (filename.length > 0) return filename;
+  }
+
+  return `${artifact.artifact_id}${extensionForContentType(contentType)}`;
+}
+
+function ArtifactDownloadLink({
+  artifact,
+  downloadUrl,
+  contentType,
+}: {
+  artifact: ArtifactRef;
+  downloadUrl: string;
+  contentType?: string;
+}) {
+  return (
+    <a
+      data-testid={`artifact-download-${artifact.artifact_id}`}
+      className="inline-flex items-center gap-1 underline underline-offset-2"
+      href={downloadUrl}
+      download={defaultArtifactDownloadName(artifact, contentType)}
+      target="_blank"
+      rel="noreferrer noopener"
+    >
+      <Download className="h-3 w-3" />
+      Download
+    </a>
+  );
+}
+
 function useArtifactInlinePreviewState({
   core,
-  runId,
   artifact,
 }: {
   core: OperatorCore;
-  runId: string;
   artifact: ArtifactRef;
 }): {
   artifactsApi: OperatorCore["http"]["artifacts"] | undefined;
   metadata: ArtifactMetadataState;
   bytes: ArtifactBytesState;
   blobUrl: string | null;
+  downloadUrl: string | null;
 } {
   const artifactsApi = core.http.artifacts;
   const [metadata, setMetadata] = useState<ArtifactMetadataState>({ status: "idle" });
   const [bytes, setBytes] = useState<ArtifactBytesState>({ status: "idle" });
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (!artifactsApi) return;
@@ -48,9 +106,9 @@ function useArtifactInlinePreviewState({
     setBytes({ status: "loading" });
 
     void artifactsApi
-      .getMetadata(runId, artifact.artifact_id, { signal: controller.signal })
+      .getMetadata(artifact.artifact_id, { signal: controller.signal })
       .then((res) => {
-        setMetadata({ status: "ready", sensitivity: res.scope.sensitivity });
+        setMetadata({ status: "ready", sensitivity: res.sensitivity });
       })
       .catch((err) => {
         const message = err instanceof Error ? err.message : String(err);
@@ -58,7 +116,7 @@ function useArtifactInlinePreviewState({
       });
 
     void artifactsApi
-      .getBytes(runId, artifact.artifact_id, { signal: controller.signal })
+      .getBytes(artifact.artifact_id, { signal: controller.signal })
       .then((res) => {
         if (res.kind === "redirect") {
           setBytes({ status: "redirect", url: res.url });
@@ -74,24 +132,24 @@ function useArtifactInlinePreviewState({
     return () => {
       controller.abort();
     };
-  }, [artifactsApi, artifact.artifact_id, runId]);
+  }, [artifactsApi, artifact.artifact_id]);
 
   useEffect(() => {
     if (bytes.status !== "bytes") return;
     const contentType = bytes.contentType ?? artifact.mime_type ?? "application/octet-stream";
-    if (!contentType.startsWith("image/")) return;
-
     const blobBytes = toArrayBufferBytes(bytes.bytes);
     const url = URL.createObjectURL(new Blob([blobBytes], { type: contentType }));
-    setBlobUrl(url);
+    setDownloadUrl(url);
+    setBlobUrl(contentType.startsWith("image/") ? url : null);
 
     return () => {
       URL.revokeObjectURL(url);
+      setDownloadUrl((prev) => (prev === url ? null : prev));
       setBlobUrl((prev) => (prev === url ? null : prev));
     };
   }, [artifact.mime_type, bytes]);
 
-  return { artifactsApi, metadata, bytes, blobUrl };
+  return { artifactsApi, metadata, bytes, blobUrl, downloadUrl };
 }
 
 function ArtifactSensitivityBadge({ metadata }: { metadata: ArtifactMetadataState }) {
@@ -136,18 +194,18 @@ function ArtifactInlinePreviewError({ badge, message }: { badge: ReactNode; mess
 function ArtifactInlinePreviewRedirect({
   badge,
   core,
-  runId,
   artifactId,
+  artifact,
   url,
 }: {
   badge: ReactNode;
   core: OperatorCore;
-  runId: string;
   artifactId: string;
+  artifact: ArtifactRef;
   url: string;
 }) {
   const safeUrl = normalizeHttpUrl(url, core.httpBaseUrl);
-  const href = safeUrl ?? buildGatewayArtifactUrl(core.httpBaseUrl, runId, artifactId);
+  const href = safeUrl ?? buildGatewayArtifactUrl(core.httpBaseUrl, artifactId);
 
   return (
     <div className="flex flex-wrap items-center gap-2 text-xs text-fg-muted">
@@ -155,18 +213,25 @@ function ArtifactInlinePreviewRedirect({
       <a className="underline" href={href} target="_blank" rel="noreferrer noopener">
         Open artifact
       </a>
+      <ArtifactDownloadLink
+        artifact={artifact}
+        downloadUrl={href}
+        contentType={artifact.mime_type}
+      />
     </div>
   );
 }
 
 function ArtifactInlinePreviewImage({
   badge,
-  artifactId,
+  artifact,
   blobUrl,
+  downloadUrl,
 }: {
   badge: ReactNode;
-  artifactId: string;
+  artifact: ArtifactRef;
   blobUrl: string | null;
+  downloadUrl: string | null;
 }) {
   if (!blobUrl) {
     return (
@@ -180,9 +245,18 @@ function ArtifactInlinePreviewImage({
 
   return (
     <div className="grid gap-2">
-      <div className="flex flex-wrap items-center gap-2 text-xs text-fg-muted">{badge}</div>
+      <div className="flex flex-wrap items-center gap-2 text-xs text-fg-muted">
+        {badge}
+        {downloadUrl ? (
+          <ArtifactDownloadLink
+            artifact={artifact}
+            downloadUrl={downloadUrl}
+            contentType={artifact.mime_type}
+          />
+        ) : null}
+      </div>
       <img
-        data-testid={`artifact-preview-image-${artifactId}`}
+        data-testid={`artifact-preview-image-${artifact.artifact_id}`}
         src={blobUrl}
         alt="Artifact preview"
         className="max-h-[420px] w-full rounded-md border border-border object-contain"
@@ -193,12 +267,14 @@ function ArtifactInlinePreviewImage({
 
 function ArtifactInlinePreviewJson({
   badge,
-  artifactId,
+  artifact,
   bytes,
+  downloadUrl,
 }: {
   badge: ReactNode;
-  artifactId: string;
+  artifact: ArtifactRef;
   bytes: Uint8Array;
+  downloadUrl: string | null;
 }) {
   let text = "";
   try {
@@ -215,8 +291,17 @@ function ArtifactInlinePreviewJson({
   }
 
   return (
-    <div className="grid gap-2" data-testid={`artifact-preview-json-${artifactId}`}>
-      <div className="flex flex-wrap items-center gap-2 text-xs text-fg-muted">{badge}</div>
+    <div className="grid gap-2" data-testid={`artifact-preview-json-${artifact.artifact_id}`}>
+      <div className="flex flex-wrap items-center gap-2 text-xs text-fg-muted">
+        {badge}
+        {downloadUrl ? (
+          <ArtifactDownloadLink
+            artifact={artifact}
+            downloadUrl={downloadUrl}
+            contentType={artifact.mime_type}
+          />
+        ) : null}
+      </div>
       {parsed === null ? (
         <pre className="max-h-[420px] overflow-auto rounded-md border border-border bg-bg-card/40 px-3 py-2 text-xs text-fg">
           {text}
@@ -232,15 +317,26 @@ function ArtifactInlinePreviewUnsupported({
   badge,
   contentType,
   kind,
+  artifact,
+  downloadUrl,
 }: {
   badge: ReactNode;
   contentType: string;
   kind: string;
+  artifact: ArtifactRef;
+  downloadUrl: string | null;
 }) {
   return (
     <div className="flex flex-wrap items-center gap-2 text-xs text-fg-muted">
       {badge}
       <span>Unsupported preview ({contentType || kind}).</span>
+      {downloadUrl ? (
+        <ArtifactDownloadLink
+          artifact={artifact}
+          downloadUrl={downloadUrl}
+          contentType={contentType}
+        />
+      ) : null}
     </div>
   );
 }
@@ -251,26 +347,34 @@ function ArtifactInlinePreviewBytes({
   contentType,
   bytes,
   blobUrl,
+  downloadUrl,
 }: {
   badge: ReactNode;
   artifact: ArtifactRef;
   contentType: string;
   bytes: Uint8Array;
   blobUrl: string | null;
+  downloadUrl: string | null;
 }) {
   if (contentType.startsWith("image/")) {
     return (
       <ArtifactInlinePreviewImage
         badge={badge}
-        artifactId={artifact.artifact_id}
+        artifact={artifact}
         blobUrl={blobUrl}
+        downloadUrl={downloadUrl}
       />
     );
   }
 
   if (contentType.includes("json")) {
     return (
-      <ArtifactInlinePreviewJson badge={badge} artifactId={artifact.artifact_id} bytes={bytes} />
+      <ArtifactInlinePreviewJson
+        badge={badge}
+        artifact={artifact}
+        bytes={bytes}
+        downloadUrl={downloadUrl}
+      />
     );
   }
 
@@ -279,22 +383,21 @@ function ArtifactInlinePreviewBytes({
       badge={badge}
       contentType={contentType}
       kind={artifact.kind}
+      artifact={artifact}
+      downloadUrl={downloadUrl}
     />
   );
 }
 
 export function ArtifactInlinePreview({
   core,
-  runId,
   artifact,
 }: {
   core: OperatorCore;
-  runId: string;
   artifact: ArtifactRef;
 }) {
-  const { artifactsApi, metadata, bytes, blobUrl } = useArtifactInlinePreviewState({
+  const { artifactsApi, metadata, bytes, blobUrl, downloadUrl } = useArtifactInlinePreviewState({
     core,
-    runId,
     artifact,
   });
   const badge = <ArtifactSensitivityBadge metadata={metadata} />;
@@ -316,8 +419,8 @@ export function ArtifactInlinePreview({
       <ArtifactInlinePreviewRedirect
         badge={badge}
         core={core}
-        runId={runId}
         artifactId={artifact.artifact_id}
+        artifact={artifact}
         url={bytes.url}
       />
     );
@@ -330,6 +433,7 @@ export function ArtifactInlinePreview({
       contentType={bytes.contentType ?? artifact.mime_type ?? ""}
       bytes={bytes.bytes}
       blobUrl={blobUrl}
+      downloadUrl={downloadUrl}
     />
   );
 }

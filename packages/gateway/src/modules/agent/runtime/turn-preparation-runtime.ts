@@ -209,7 +209,7 @@ function canDiscoverMcpTools(toolConfig: AgentLoadedContext["config"]["tools"]):
     return true;
   }
 
-  return toolConfig.allow.some((entry) => {
+  return toolConfig.allow.some((entry: string) => {
     const normalized = entry.trim();
     return (
       normalized === "*" || normalized.startsWith("mcp.") || canPatternMatchMcpToolId(normalized)

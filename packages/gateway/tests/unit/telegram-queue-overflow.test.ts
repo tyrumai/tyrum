@@ -28,7 +28,7 @@ function makeNormalizedTextMessage(input: {
       id: input.messageId,
       thread_id: input.threadId,
       source: "telegram",
-      content: { kind: "text", text: input.text },
+      content: { text: input.text, attachments: [] },
       sender: {
         id: "peer-1",
         is_bot: false,
@@ -50,12 +50,26 @@ function makeNormalizedTextMessage(input: {
   };
 }
 
-function makeLegacyMediaPlaceholderMessage(input: {
+function makeAttachmentOnlyMessage(input: {
   threadId: string;
   messageId: string;
   caption?: string;
 }): NormalizedThreadMessage {
   const nowIso = new Date().toISOString();
+  const attachment = {
+    artifact_id: "11111111-1111-4111-8111-111111111111",
+    uri: "artifact://11111111-1111-4111-8111-111111111111",
+    external_url: "https://gateway.example/a/11111111-1111-4111-8111-111111111111",
+    kind: "file" as const,
+    media_class: "image" as const,
+    created_at: nowIso,
+    filename: "photo.jpg",
+    mime_type: "image/jpeg",
+    size_bytes: 4,
+    sha256: "a".repeat(64),
+    labels: [],
+    channel_kind: "photo",
+  };
   return {
     thread: {
       id: input.threadId,
@@ -68,9 +82,12 @@ function makeLegacyMediaPlaceholderMessage(input: {
       id: input.messageId,
       thread_id: input.threadId,
       source: "telegram",
-      content: { kind: "media_placeholder", media_kind: "photo", caption: input.caption },
+      content: {
+        text: input.caption,
+        attachments: [attachment],
+      },
       timestamp: nowIso,
-      pii_fields: input.caption ? ["message_caption"] : [],
+      pii_fields: input.caption ? ["message_text"] : [],
     },
   };
 }
@@ -221,7 +238,7 @@ describe("Channel inbox queue overflow policies", () => {
     });
   }
 
-  async function enqueueLegacyMessage(input: {
+  async function enqueueAttachmentMessage(input: {
     messageId: string;
     receivedAtMs: number;
     caption?: string;
@@ -238,7 +255,7 @@ describe("Channel inbox queue overflow policies", () => {
       key: input.key ?? queueKey(),
       lane: input.lane ?? defaultLane,
       received_at_ms: input.receivedAtMs,
-      payload: makeLegacyMediaPlaceholderMessage({
+      payload: makeAttachmentOnlyMessage({
         threadId,
         messageId: input.messageId,
         caption: input.caption,
@@ -357,20 +374,20 @@ describe("Channel inbox queue overflow policies", () => {
     expect(queued.map((row) => row.message_id)).toEqual(["msg-2"]);
   });
 
-  it("summarize_dropped includes attachment counts for legacy media placeholders without envelopes", async () => {
+  it("summarize_dropped includes attachment counts for attachment-only messages without envelopes", async () => {
     inbox = new ChannelInboxDal(db, undefined, {
       inboundQueueCap: 1,
       inboundQueueOverflowPolicy: "summarize_dropped",
     });
 
     const key = queueKey();
-    await enqueueLegacyMessage({
+    await enqueueAttachmentMessage({
       messageId: "media-1",
       caption: "first photo",
       receivedAtMs: 1_000,
       key,
     });
-    await enqueueLegacyMessage({
+    await enqueueAttachmentMessage({
       messageId: "media-2",
       caption: "second photo",
       receivedAtMs: 2_000,

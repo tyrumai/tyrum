@@ -1,4 +1,4 @@
-import { generateText, stepCountIs, streamText } from "ai";
+import { generateText, streamText } from "ai";
 import type { ModelMessage } from "ai";
 import type {
   AgentTurnRequest as AgentTurnRequestT,
@@ -7,16 +7,11 @@ import type {
 } from "@tyrum/contracts";
 import {
   createGuardianReviewTurnControl,
-  stripEmbeddedSessionContext,
   type TurnDirectResult,
   type TurnInvocationOptions,
   type TurnStreamDirectResult,
 } from "./turn-direct-support.js";
-import {
-  createStaticLanguageModelV3,
-  extractToolApprovalResumeState,
-  isStatusQuery,
-} from "./turn-helpers.js";
+import { extractToolApprovalResumeState, isStatusQuery } from "./turn-helpers.js";
 import { isApprovalBlockedStatus } from "../../approval/dal.js";
 import { coerceRecord } from "../../util/coerce.js";
 import { finalizeTurn } from "./turn-finalization.js";
@@ -38,13 +33,17 @@ import {
 import {
   appendToolApprovalResponseMessage,
   countAssistantMessages,
-  sessionMessagesToModelMessages,
 } from "../../ai-sdk/message-utils.js";
 import { prepareTurn } from "./turn-preparation.js";
 import { handleStatusQuery, throwToolApprovalError } from "./turn-direct-helpers.js";
-import { applyDeterministicContextCompactionAndToolPruning } from "./context-pruning.js";
-import { buildPromptVisibleMessages } from "./session-context-state.js";
 import { isContextOverflowError } from "./session-compaction-service.js";
+import {
+  buildDelegationStreamResult,
+  buildDirectPromptMessages,
+  createDirectTurnDownloadFunction,
+  pruneDirectPromptMessages,
+  reloadActiveSession,
+} from "./turn-direct-runtime.js";
 export {
   handleStatusQuery,
   throwToolApprovalError,
@@ -72,6 +71,7 @@ export async function turnDirect(
     usedTools,
     memoryWriteState,
     userContent,
+    rewriteHistoryAttachmentsForModel,
     contextReport,
     systemPrompt,
     resolved,
@@ -106,6 +106,8 @@ export async function turnDirect(
       responseMessages: params.responseMessages,
     });
   };
+
+  const downloadPartUrl = createDirectTurnDownloadFunction(deps);
 
   if (isStatusQuery(resolved.message)) {
     const reply = await handleStatusQuery(deps.opts.container, workScope);
@@ -163,19 +165,8 @@ export async function turnDirect(
     channel: resolved.channel,
     threadId: resolved.thread_id,
   });
-  activeSession =
-    (await deps.sessionDal.getById({
-      tenantId: activeSession.tenant_id,
-      sessionId: activeSession.session_id,
-    })) ?? activeSession;
-  const promptUserContent = stripEmbeddedSessionContext(userContent, activeSession.context_state);
-
-  let messages: ModelMessage[] = [
-    ...(await sessionMessagesToModelMessages(
-      buildPromptVisibleMessages(activeSession.messages, activeSession.context_state),
-    )),
-    { role: "user" as const, content: promptUserContent },
-  ];
+  activeSession = await reloadActiveSession(deps, activeSession);
+  let messages: ModelMessage[] | undefined;
   let stepsUsedSoFar = 0;
 
   const stepApprovalId = turnOpts?.execution?.stepApprovalId;
@@ -194,20 +185,31 @@ export async function turnDirect(
           memoryWriteState.wrote = true;
         }
         stepsUsedSoFar = resumeState.steps_used ?? countAssistantMessages(resumeState.messages);
-        messages = appendToolApprovalResponseMessage(resumeState.messages, {
-          approvalId: resumeState.approval_id,
-          approved: approval.status === "approved",
-          reason:
-            approval.latest_review?.reason ??
-            (approval.status === "expired"
-              ? "approval expired"
-              : approval.status === "cancelled"
-                ? "approval cancelled"
-                : undefined),
-        });
+        messages = pruneDirectPromptMessages(
+          appendToolApprovalResponseMessage(resumeState.messages, {
+            approvalId: resumeState.approval_id,
+            approved: approval.status === "approved",
+            reason:
+              approval.latest_review?.reason ??
+              (approval.status === "expired"
+                ? "approval expired"
+                : approval.status === "cancelled"
+                  ? "approval cancelled"
+                  : undefined),
+          }),
+          ctx.config.sessions.context_pruning,
+        );
       }
     }
   }
+  const promptMessages =
+    messages ??
+    (await buildDirectPromptMessages({
+      activeSession,
+      contextPruning: ctx.config.sessions.context_pruning,
+      rewriteHistoryAttachmentsForModel,
+      userContent,
+    }));
 
   const remainingSteps = deps.maxSteps - stepsUsedSoFar;
   if (remainingSteps <= 0) {
@@ -216,11 +218,6 @@ export async function turnDirect(
     const response = await finalizeAndPersist({ reply, turnKind: "skip" });
     return { response, contextReport };
   }
-
-  messages = applyDeterministicContextCompactionAndToolPruning(
-    messages,
-    ctx.config.sessions.context_pruning,
-  );
 
   const withinTurnCfg = ctx.config.sessions.loop_detection.within_turn;
   const guardianReviewTurnControl = guardianReviewDecisionCollector
@@ -241,11 +238,12 @@ export async function turnDirect(
     result = await generateText({
       model,
       system: systemPrompt,
-      messages,
+      messages: promptMessages,
+      experimental_download: downloadPartUrl,
       tools: toolSet,
       toolChoice: guardianReviewTurnControl?.toolChoice,
       stopWhen: withinTurn.stopWhen,
-      prepareStep: ({ messages: stepMessages }) =>
+      prepareStep: ({ messages: stepMessages }: { messages: ModelMessage[] }) =>
         prepareLaneQueueStep(laneQueue, stepMessages, ctx.config.sessions.context_pruning),
       abortSignal,
       timeout: turnOpts?.timeoutMs,
@@ -291,7 +289,7 @@ export async function turnDirect(
       usedTools,
       memoryWriteState,
       stepsUsedAfterCall,
-      messages,
+      promptMessages,
       result,
     );
   }
@@ -330,12 +328,14 @@ export async function turnStreamDirect(
     usedTools,
     memoryWriteState,
     userContent,
+    rewriteHistoryAttachmentsForModel,
     contextReport,
     systemPrompt,
     resolved,
     guardianReviewDecisionCollector,
   } = prepared;
   let activeSession = session;
+  const downloadPartUrl = createDirectTurnDownloadFunction(deps);
 
   const intake = await resolveIntakeDecision(
     { container: deps.opts.container },
@@ -371,12 +371,7 @@ export async function turnStreamDirect(
       turnKind: "skip",
     });
 
-    const streamResult = streamText({
-      model: createStaticLanguageModelV3(delegation.reply),
-      system: "",
-      messages: [{ role: "user" as const, content: [{ type: "text", text: "" }] }],
-      stopWhen: [stepCountIs(1)],
-    });
+    const streamResult = buildDelegationStreamResult(delegation.reply);
 
     return {
       streamResult,
@@ -400,12 +395,7 @@ export async function turnStreamDirect(
     channel: resolved.channel,
     threadId: resolved.thread_id,
   });
-  activeSession =
-    (await deps.sessionDal.getById({
-      tenantId: activeSession.tenant_id,
-      sessionId: activeSession.session_id,
-    })) ?? activeSession;
-  const promptUserContent = stripEmbeddedSessionContext(userContent, activeSession.context_state);
+  activeSession = await reloadActiveSession(deps, activeSession);
 
   const withinTurnCfg = ctx.config.sessions.loop_detection.within_turn;
   const guardianReviewTurnControl = guardianReviewDecisionCollector
@@ -426,19 +416,17 @@ export async function turnStreamDirect(
     streamResult = streamText({
       model,
       system: systemPrompt,
-      messages: applyDeterministicContextCompactionAndToolPruning(
-        [
-          ...(await sessionMessagesToModelMessages(
-            buildPromptVisibleMessages(activeSession.messages, activeSession.context_state),
-          )),
-          { role: "user" as const, content: promptUserContent },
-        ],
-        ctx.config.sessions.context_pruning,
-      ),
+      messages: await buildDirectPromptMessages({
+        activeSession,
+        contextPruning: ctx.config.sessions.context_pruning,
+        rewriteHistoryAttachmentsForModel,
+        userContent,
+      }),
+      experimental_download: downloadPartUrl,
       tools: toolSet,
       toolChoice: guardianReviewTurnControl?.toolChoice,
       stopWhen: withinTurn.stopWhen,
-      prepareStep: ({ messages: stepMessages }) =>
+      prepareStep: ({ messages: stepMessages }: { messages: ModelMessage[] }) =>
         prepareLaneQueueStep(laneQueue, stepMessages, ctx.config.sessions.context_pruning),
     });
   } catch (error) {

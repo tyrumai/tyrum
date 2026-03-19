@@ -28,6 +28,25 @@ describe("chat-page-ai-sdk-shared", () => {
     expect(buildPreview(messages)).toEqual({ role: "assistant", text: "Latest answer" });
   });
 
+  it("builds previews from file-only messages when no text is available", () => {
+    const messages = [
+      {
+        id: "m1",
+        role: "user",
+        parts: [
+          {
+            type: "file",
+            mediaType: "image/png",
+            filename: "screenshot.png",
+            url: "data:image/png;base64,AAAA",
+          },
+        ],
+      },
+    ] as unknown as UIMessage[];
+
+    expect(buildPreview(messages)).toEqual({ role: "user", text: "screenshot.png" });
+  });
+
   it("applies message updates and refreshes preview metadata", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-03-14T06:00:00.000Z"));
@@ -119,6 +138,7 @@ describe("chat-page-ai-sdk-shared", () => {
       title: "Session title",
       created_at: "2026-03-13T00:00:00.000Z",
       updated_at: "2026-03-14T00:00:00.000Z",
+      message_count: 2,
       preview: "Preview line",
       archived: false,
     });
@@ -138,5 +158,21 @@ describe("chat-page-ai-sdk-shared", () => {
     });
 
     expect(summary.title).toBe("New chat");
+  });
+
+  it("uses an attachment label when a session has messages but no text preview", () => {
+    const summary = toThreadSummary({
+      session_id: "session-2",
+      agent_id: "default",
+      channel: "ui",
+      thread_id: "thread-2",
+      title: "",
+      created_at: "2026-03-13T00:00:00.000Z",
+      updated_at: "2026-03-14T00:00:00.000Z",
+      message_count: 1,
+      last_message: null,
+    });
+
+    expect(summary.preview).toBe("Attachment");
   });
 });

@@ -2,6 +2,7 @@ import type { ChannelEgressConnector } from "./interface.js";
 import { ChannelConfigDal, type StoredTelegramChannelConfig } from "./channel-config-dal.js";
 import { TelegramBot } from "../ingress/telegram-bot.js";
 import { createTelegramEgressConnector } from "./telegram-shared.js";
+import type { ArtifactStore } from "../artifact/store.js";
 
 type CachedTelegramBot = {
   token: string;
@@ -11,7 +12,10 @@ type CachedTelegramBot = {
 export class TelegramChannelRuntime {
   private readonly botCache = new Map<string, Map<string, CachedTelegramBot>>();
 
-  constructor(private readonly channelConfigDal: ChannelConfigDal) {}
+  constructor(
+    private readonly channelConfigDal: ChannelConfigDal,
+    private readonly artifactStore?: ArtifactStore,
+  ) {}
 
   async listTelegramAccounts(tenantId: string): Promise<StoredTelegramChannelConfig[]> {
     return await this.channelConfigDal.listTelegram(tenantId);
@@ -58,7 +62,9 @@ export class TelegramChannelRuntime {
     );
     return configs.flatMap((config) => {
       const bot = this.getBot(config, tenantId);
-      return bot ? [createTelegramEgressConnector(bot, config.account_key)] : [];
+      return bot
+        ? [createTelegramEgressConnector(bot, config.account_key, this.artifactStore)]
+        : [];
     });
   }
 

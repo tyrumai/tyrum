@@ -99,7 +99,7 @@ function resolveExecutionSteps(
         channel: "automation:location",
         thread_id: `location-${trigger.trigger_id}`,
         container_kind: "channel",
-        message,
+        parts: [{ type: "text", text: message }],
         metadata: {
           location_trigger: {
             trigger_id: trigger.trigger_id,

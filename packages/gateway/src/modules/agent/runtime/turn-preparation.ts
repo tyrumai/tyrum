@@ -45,6 +45,11 @@ import {
   resolveGuardianReviewRequest,
   type GuardianReviewDecisionCollector,
 } from "../../review/guardian-review-mode.js";
+import {
+  prepareAttachmentInputForPrompt,
+  type AttachmentUserContentPart,
+} from "./attachment-analysis.js";
+import { normalizeInternalTurnRequestIfNeeded } from "./turn-request-normalization.js";
 
 export type TurnExecutionContext = {
   planId: string;
@@ -66,7 +71,8 @@ export type PreparedTurn = {
   laneQueue?: LaneQueueState;
   usedTools: Set<string>;
   memoryWriteState: { wrote: boolean };
-  userContent: Array<{ type: "text"; text: string }>;
+  userContent: AttachmentUserContentPart[];
+  rewriteHistoryAttachmentsForModel: boolean;
   contextReport: AgentContextReport;
   systemPrompt: string;
   resolved: ResolvedAgentTurnInput;
@@ -123,17 +129,41 @@ function mergeAutomationContextSections(
   return `Automation context:\n${sections.join("\n\n")}`;
 }
 
+function buildCurrentTurnUserContent(
+  resolvedMessage: string,
+  currentTurnParts: readonly AttachmentUserContentPart[],
+): AttachmentUserContentPart[] {
+  if (currentTurnParts.length === 0) {
+    return [{ type: "text", text: resolvedMessage }];
+  }
+
+  const hasFilePart = currentTurnParts.some((part) => part.type === "file");
+  if (hasFilePart) {
+    return [...currentTurnParts];
+  }
+
+  const hasNonEmptyTextPart = currentTurnParts.some(
+    (part) => part.type === "text" && part.text.trim().length > 0,
+  );
+  if (hasNonEmptyTextPart) {
+    return [...currentTurnParts];
+  }
+
+  return [{ type: "text", text: resolvedMessage }, ...currentTurnParts];
+}
+
 export async function prepareTurn(
   deps: PrepareTurnDeps,
   input: AgentTurnRequestT,
   exec?: TurnExecutionContext,
 ): Promise<PreparedTurn> {
-  const resolvedInput = resolveAgentTurnInput(input);
+  const normalizedInput = normalizeInternalTurnRequestIfNeeded(input);
+  const resolvedInput = resolveAgentTurnInput(normalizedInput);
   const automation = resolveAutomationMetadata(resolvedInput.metadata);
   const laneQueueScope = resolveLaneQueueScope(resolvedInput.metadata);
 
   const { agentKey, workspaceKey, ctx, containerKind, connectorKey, accountKey } =
-    await resolveIdentityAndContext(deps, input, resolvedInput);
+    await resolveIdentityAndContext(deps, normalizedInput, resolvedInput);
 
   const session = await deps.sessionDal.getOrCreate({
     tenantId: deps.tenantId,
@@ -389,6 +419,31 @@ export async function prepareTurn(
   const automationContextText = guardianReviewRequest
     ? undefined
     : mergeAutomationContextSections(promptParts.automationContextText, automationDigestBody);
+  const attachmentInput = guardianReviewRequest
+    ? {
+        inputMode: ctx.config.attachments.input_mode,
+        currentTurnParts: [{ type: "text", text: resolved.message }] as AttachmentUserContentPart[],
+        shouldRewriteHistoryForModel: false,
+        helperSummaryText: undefined,
+      }
+    : await prepareAttachmentInputForPrompt({
+        deps: {
+          container: deps.opts.container,
+          fetchImpl: deps.fetchImpl,
+          secretProvider: deps.secretProvider,
+          languageModelOverride: deps.languageModelOverride,
+          instanceOwner: deps.instanceOwner,
+          tenantId: session.tenant_id,
+          sessionId: session.session_id,
+          agentConfig: ctx.config,
+          deploymentConfig: deps.opts.container.deploymentConfig,
+          primaryModel: model,
+        },
+        parts: resolved.parts,
+      });
+  const promptPreTurnTexts = attachmentInput.helperSummaryText
+    ? [...promptParts.preTurnTexts, `Attachment analysis:\n${attachmentInput.helperSummaryText}`]
+    : [...promptParts.preTurnTexts];
 
   const validatedReport = buildContextReport({
     session,
@@ -408,7 +463,7 @@ export async function prepareTurn(
     memoryGuidanceText: promptParts.memoryGuidanceText,
     sessionText: promptParts.sessionText,
     workFocusText,
-    preTurnTexts: [...promptParts.preTurnTexts],
+    preTurnTexts: promptPreTurnTexts,
     preTurnReports: preTurnHydration.reports,
     automationDirectiveText: promptParts.automationDirectiveText,
     automationContextText,
@@ -433,17 +488,17 @@ export async function prepareTurn(
     guardianReviewDecisionCollector,
   );
 
-  const userContent: Array<{ type: "text"; text: string }> = guardianReviewRequest
+  const userContent: AttachmentUserContentPart[] = guardianReviewRequest
     ? [{ type: "text", text: resolved.message }]
     : [
         { type: "text", text: promptParts.sessionText },
         { type: "text", text: workFocusText },
-        ...promptParts.preTurnTexts.map((text) => ({ type: "text" as const, text })),
+        ...promptPreTurnTexts.map((text) => ({ type: "text" as const, text })),
         ...(promptParts.automationDirectiveText
           ? [{ type: "text" as const, text: promptParts.automationDirectiveText }]
           : []),
         ...(automationContextText ? [{ type: "text" as const, text: automationContextText }] : []),
-        { type: "text", text: resolved.message },
+        ...buildCurrentTurnUserContent(resolved.message, attachmentInput.currentTurnParts),
       ];
 
   return {
@@ -459,6 +514,7 @@ export async function prepareTurn(
     usedTools,
     memoryWriteState,
     userContent,
+    rewriteHistoryAttachmentsForModel: attachmentInput.shouldRewriteHistoryForModel,
     contextReport: validatedReport,
     systemPrompt,
     resolved,

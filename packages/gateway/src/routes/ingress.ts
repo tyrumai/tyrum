@@ -3,7 +3,11 @@
  */
 
 import { Hono } from "hono";
-import { normalizeUpdate, TelegramNormalizationError } from "../modules/ingress/telegram.js";
+import {
+  normalizeUpdate,
+  normalizeUpdateWithMedia,
+  TelegramNormalizationError,
+} from "../modules/ingress/telegram.js";
 import {
   buildGoogleChatEnvelope,
   extractGoogleChatText,
@@ -21,6 +25,7 @@ import {
   type TelegramFormattingFallbackEvent,
 } from "../modules/markdown/telegram.js";
 import { resolveTelegramAgentId } from "../modules/channels/routing.js";
+import { createTelegramEgressConnector } from "../modules/channels/telegram-shared.js";
 import type { RoutingConfigDal } from "../modules/channels/routing-config-dal.js";
 import type { TelegramChannelRuntime } from "../modules/channels/telegram-runtime.js";
 import type { GoogleChatChannelRuntime } from "../modules/channels/googlechat-runtime.js";
@@ -29,6 +34,7 @@ import { recordMemorySystemEpisode } from "../modules/memory/memory-episode-reco
 import type { Logger } from "../modules/observability/logger.js";
 import { DEFAULT_TENANT_ID } from "../modules/identity/scope.js";
 import { safeDetail } from "../utils/safe-detail.js";
+import type { ArtifactStore } from "../modules/artifact/store.js";
 
 export interface IngressDeps {
   telegramRuntime?: TelegramChannelRuntime;
@@ -40,6 +46,8 @@ export interface IngressDeps {
   telegramQueue?: TelegramChannelQueue;
   routingConfigDal?: RoutingConfigDal;
   memoryDal?: MemoryDal;
+  artifactStore?: ArtifactStore;
+  artifactMaxUploadBytes?: number;
   logger?: Logger;
 }
 
@@ -161,7 +169,14 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
 
     let normalized;
     try {
-      normalized = normalizeUpdate(rawBody);
+      normalized =
+        telegramBot && deps.artifactStore
+          ? await normalizeUpdateWithMedia(rawBody, {
+              telegramBot,
+              artifactStore: deps.artifactStore,
+              maxUploadBytes: deps.artifactMaxUploadBytes,
+            })
+          : normalizeUpdate(rawBody);
     } catch (err) {
       if (err instanceof TelegramNormalizationError) {
         return c.json({ error: "normalization_error", message: err.message }, 400);
@@ -308,8 +323,27 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
         }
       }
 
-      for (const chunk of chunks) {
-        await telegramBot.sendMessage(chatId, chunk, { parse_mode: "HTML" });
+      const connector = createTelegramEgressConnector(
+        telegramBot,
+        telegramAccountKey,
+        deps.artifactStore,
+      );
+      const attachments = result.attachments ?? [];
+      if (chunks.length === 0 && attachments.length === 0) {
+        return c.json({ ok: true, session_id: result.session_id });
+      }
+      const egressChunks = chunks.length > 0 ? chunks : [""];
+      for (let index = 0; index < egressChunks.length; index += 1) {
+        const chunk = egressChunks[index]!;
+        await connector.sendMessage({
+          accountId: telegramAccountKey,
+          containerId: chatId,
+          content: {
+            ...(chunk.length > 0 ? { text: chunk } : {}),
+            ...(index === 0 && attachments.length > 0 ? { attachments } : {}),
+          },
+          parseMode: "HTML",
+        });
       }
       return c.json({ ok: true, session_id: result.session_id });
     } catch (err) {

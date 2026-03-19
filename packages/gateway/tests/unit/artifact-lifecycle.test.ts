@@ -18,10 +18,8 @@ describe("Artifact lifecycle (retention + quotas)", () => {
     await harness.close();
   });
 
-  it("adds durable lifecycle tracking columns to execution_artifacts", async () => {
-    const columns = await harness.db.all<{ name: string }>(
-      "PRAGMA table_info(execution_artifacts)",
-    );
+  it("adds durable lifecycle tracking columns to artifacts", async () => {
+    const columns = await harness.db.all<{ name: string }>("PRAGMA table_info(artifacts)");
     const names = columns.map((c) => c.name);
 
     expect(names).toContain("retention_expires_at");
@@ -65,7 +63,7 @@ describe("Artifact lifecycle (retention + quotas)", () => {
       bytes_deleted_reason: string | null;
     }>(
       `SELECT artifact_id, retention_expires_at, bytes_deleted_at, bytes_deleted_reason
-       FROM execution_artifacts
+       FROM artifacts
        WHERE artifact_id IN (?, ?)
        ORDER BY artifact_id`,
       [expiredRef.artifact_id, keptRef.artifact_id],
@@ -109,7 +107,7 @@ describe("Artifact lifecycle (retention + quotas)", () => {
       await tickArtifactLifecycle(harness, { nowMs, nowIso });
 
       const row = await harness.db.get<{ retention_expires_at: string | null }>(
-        "SELECT retention_expires_at FROM execution_artifacts WHERE artifact_id = ?",
+        "SELECT retention_expires_at FROM artifacts WHERE artifact_id = ?",
         [ref.artifact_id],
       );
 
@@ -157,7 +155,7 @@ describe("Artifact lifecycle (retention + quotas)", () => {
     await tickArtifactLifecycle(harness, { nowMs, batchSize: 2, count: 2 });
 
     const row = await harness.db.get<{ retention_expires_at: string | null }>(
-      "SELECT retention_expires_at FROM execution_artifacts WHERE artifact_id = ?",
+      "SELECT retention_expires_at FROM artifacts WHERE artifact_id = ?",
       [withPolicy.artifact_id],
     );
     expect(row?.retention_expires_at).toBeTruthy();
@@ -199,7 +197,7 @@ describe("Artifact lifecycle (retention + quotas)", () => {
       bytes_deleted_reason: string | null;
     }>(
       `SELECT artifact_id, bytes_deleted_at, bytes_deleted_reason
-       FROM execution_artifacts
+       FROM artifacts
        WHERE artifact_id IN (?, ?)
        ORDER BY artifact_id`,
       [oldRef.artifact_id, newRef.artifact_id],

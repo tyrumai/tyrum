@@ -233,7 +233,7 @@ export class ArtifactLifecycleScheduler {
          sensitivity,
          policy_snapshot_id,
          retention_expires_at
-	       FROM execution_artifacts
+	       FROM artifacts
 	       WHERE bytes_deleted_at IS NULL AND retention_expires_at IS NULL
 	       ORDER BY created_at ASC
 	       LIMIT ?`,
@@ -255,7 +255,7 @@ export class ArtifactLifecycleScheduler {
         // Mark as evaluated so old rows without retention policy don't
         // permanently starve the backfill batch.
         await this.db.run(
-          `UPDATE execution_artifacts
+          `UPDATE artifacts
 	           SET retention_expires_at = ?
 	           WHERE tenant_id = ? AND artifact_id = ? AND retention_expires_at IS NULL`,
           [NO_RETENTION_EXPIRES_AT, row.tenant_id, row.artifact_id],
@@ -270,7 +270,7 @@ export class ArtifactLifecycleScheduler {
 
       const expiresAt = new Date(createdMs + retentionDays * 24 * 60 * 60 * 1000).toISOString();
       await this.db.run(
-        `UPDATE execution_artifacts
+        `UPDATE artifacts
 	         SET retention_expires_at = ?
 	         WHERE tenant_id = ? AND artifact_id = ? AND retention_expires_at IS NULL`,
         [expiresAt, row.tenant_id, row.artifact_id],
@@ -283,7 +283,7 @@ export class ArtifactLifecycleScheduler {
 
     const rows = await this.db.all<Pick<ArtifactRow, "tenant_id" | "artifact_id">>(
       `SELECT tenant_id, artifact_id
-       FROM execution_artifacts
+       FROM artifacts
        WHERE bytes_deleted_at IS NULL
          AND retention_expires_at IS NOT NULL
 	         AND retention_expires_at <= ?
@@ -306,7 +306,7 @@ export class ArtifactLifecycleScheduler {
       sensitivity: string;
     }>(
       `SELECT DISTINCT tenant_id, workspace_id, agent_id, kind, ${normalizedSensitivitySql("sensitivity")} AS sensitivity
-	       FROM execution_artifacts
+	       FROM artifacts
 	       WHERE bytes_deleted_at IS NULL`,
     );
 
@@ -344,7 +344,7 @@ export class ArtifactLifecycleScheduler {
 
     const row = await this.db.get<{ policy_snapshot_id: string }>(
       `SELECT policy_snapshot_id
-	       FROM execution_artifacts
+	       FROM artifacts
 	       WHERE tenant_id = ?
 	         AND bytes_deleted_at IS NULL
 	         AND workspace_id = ?
@@ -370,7 +370,7 @@ export class ArtifactLifecycleScheduler {
     const agent = whereNullableEquals("agent_id", bucket.agent_id);
     const row = await this.db.get<{ total_bytes: number | null }>(
       `SELECT SUM(COALESCE(size_bytes, 0)) AS total_bytes
-	       FROM execution_artifacts
+	       FROM artifacts
 	       WHERE tenant_id = ?
 	         AND bytes_deleted_at IS NULL
 	         AND workspace_id = ?
@@ -388,7 +388,7 @@ export class ArtifactLifecycleScheduler {
     const agent = whereNullableEquals("agent_id", bucket.agent_id);
     return await this.db.all<{ artifact_id: string; size_bytes: number | null }>(
       `SELECT artifact_id, size_bytes
-	       FROM execution_artifacts
+	       FROM artifacts
 	       WHERE tenant_id = ?
 	         AND bytes_deleted_at IS NULL
 	         AND workspace_id = ?
@@ -420,7 +420,7 @@ export class ArtifactLifecycleScheduler {
     }
 
     await this.db.run(
-      `UPDATE execution_artifacts
+      `UPDATE artifacts
 	       SET bytes_deleted_at = ?, bytes_deleted_reason = ?
 	       WHERE tenant_id = ? AND artifact_id = ? AND bytes_deleted_at IS NULL`,
       [nowIso, reason, tenantId, artifactId],

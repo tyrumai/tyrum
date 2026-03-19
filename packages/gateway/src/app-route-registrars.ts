@@ -392,7 +392,10 @@ export function registerExecutionAndWorkflowRoutes(context: AppRouteContext): vo
 export function registerAgentsAndWorkspaceRoutes(context: AppRouteContext): void {
   const telegramRuntime =
     context.opts.telegramRuntime ??
-    new TelegramChannelRuntime(new ChannelConfigDal(context.container.db));
+    new TelegramChannelRuntime(
+      new ChannelConfigDal(context.container.db),
+      context.container.artifactStore,
+    );
   const googleChatRuntime =
     context.opts.googleChatRuntime ??
     new GoogleChatChannelRuntime(new ChannelConfigDal(context.container.db));
@@ -420,6 +423,8 @@ export function registerAgentsAndWorkspaceRoutes(context: AppRouteContext): void
             })
           : undefined,
       agents: context.opts.agents,
+      artifactStore: context.container.artifactStore,
+      artifactMaxUploadBytes: context.container.deploymentConfig.attachments.maxUploadBytes,
       memoryDal: context.container.memoryDal,
       routingConfigDal: context.routeDeps.routingConfigDal,
       logger: context.container.logger,

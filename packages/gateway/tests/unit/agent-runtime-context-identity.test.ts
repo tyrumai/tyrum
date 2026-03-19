@@ -135,10 +135,11 @@ describe("AgentRuntime - context reports and identity keys", () => {
     expect(step).toBeTruthy();
     const action = JSON.parse(step!.action_json) as {
       type: string;
-      args: { message?: string };
+      args: { parts?: Array<{ type: string; text?: string }> };
     };
     expect(action.type).toBe("Decide");
-    expect(action.args.message).toBe("hello from test");
+    expect(action.args).not.toHaveProperty("message");
+    expect(action.args.parts).toEqual([{ type: "text", text: "hello from test" }]);
 
     const attempt = await container.db.get<{ result_json: string | null }>(
       `SELECT a.result_json
@@ -152,6 +153,62 @@ describe("AgentRuntime - context reports and identity keys", () => {
     expect(attempt).toBeTruthy();
     const attemptResult = JSON.parse(attempt!.result_json ?? "{}") as { reply?: string };
     expect(attemptResult.reply).toBe("hello");
+  });
+
+  it("persists resolved parts for envelope-only turns in execution steps", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
+    container = await createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+    });
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: createStubLanguageModel("hello"),
+      fetchImpl: fetch404,
+    });
+
+    const result = await runtime.turn({
+      envelope: {
+        message_id: "msg-1",
+        received_at: "2026-03-19T09:00:00.000Z",
+        delivery: {
+          channel: "telegram",
+          account: "default",
+        },
+        container: {
+          kind: "dm",
+          id: "dm-1",
+        },
+        sender: {
+          id: "user-42",
+        },
+        content: {
+          text: "hello from envelope",
+          attachments: [],
+        },
+        provenance: ["user"],
+      },
+    });
+
+    expect(result.reply).toBe("hello");
+
+    const step = await container.db.get<{ action_json: string }>(
+      `SELECT action_json
+       FROM execution_steps
+       ORDER BY step_index ASC
+       LIMIT 1`,
+    );
+    expect(step).toBeTruthy();
+
+    const action = JSON.parse(step!.action_json) as {
+      type: string;
+      args: { parts?: Array<{ type: string; text?: string }> };
+    };
+    expect(action.type).toBe("Decide");
+    expect(action.args).not.toHaveProperty("message");
+    expect(action.args.parts).toEqual([{ type: "text", text: "hello from envelope" }]);
   });
 
   it("persists workspace_id on execution jobs for agent turns", async () => {

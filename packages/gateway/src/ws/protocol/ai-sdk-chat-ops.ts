@@ -28,11 +28,14 @@ import {
   normalizeRequestMetadata,
   requireTenantClient,
   resolveAuthoritativeTurnMessages,
+  validateSubmittedTurnMessages,
   toPreview,
   toSessionSummary,
   toStoredChatMessages,
 } from "./ai-sdk-chat-shared.js";
 import { createAiSdkChatLiveState } from "./ai-sdk-chat-live-state.js";
+import { materializeUiMessagesUploadedFiles } from "../../modules/ai-sdk/attachment-parts.js";
+import type { ArtifactRecordInsertInput } from "../../modules/artifact/dal.js";
 
 export async function handleAiSdkChatMessage(
   client: ConnectedClient,
@@ -347,9 +350,26 @@ async function handleChatSessionSendMessage(
     }
 
     const persistedMessages = looked.session.messages as unknown as UIMessage[];
+    const artifactRecords: ArtifactRecordInsertInput[] = [];
+    const submittedMessages =
+      parsed.data.payload.trigger === "submit-message"
+        ? deps.artifactStore
+          ? await materializeUiMessagesUploadedFiles(
+              await validateSubmittedTurnMessages(parsed.data.payload.messages),
+              deps.artifactStore,
+              deps.artifactMaxUploadBytes,
+              {
+                tenantId: auth.tenantId,
+                workspaceId: looked.session.workspace_id,
+                agentId: looked.session.agent_id,
+              },
+              artifactRecords,
+            )
+          : await validateSubmittedTurnMessages(parsed.data.payload.messages)
+        : undefined;
     const split = await resolveAuthoritativeTurnMessages({
       persistedMessages,
-      submittedMessages: parsed.data.payload.messages,
+      submittedMessages,
       trigger: parsed.data.payload.trigger,
     });
 
@@ -357,6 +377,7 @@ async function handleChatSessionSendMessage(
       tenantId: auth.tenantId,
       sessionId: looked.session.session_id,
       messages: toStoredChatMessages(split.originalMessages),
+      artifactRecords,
       updatedAt: new Date().toISOString(),
     });
 
@@ -373,7 +394,7 @@ async function handleChatSessionSendMessage(
     const turn = await runtime.turnStream({
       channel: looked.connector_key,
       thread_id: looked.provider_thread_id,
-      message: split.userText,
+      parts: split.userParts,
       metadata: requestMetadata,
     });
 

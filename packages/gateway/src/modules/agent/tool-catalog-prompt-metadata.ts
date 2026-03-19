@@ -102,3 +102,13 @@ export const AUTOMATION_SCHEDULE_UPDATE_PROMPT_METADATA = {
     '{"schedule_id":"schedule_123","cadence":{"type":"cron","expression":"0 9 * * 1-5","timezone":"Europe/Amsterdam"},"delivery":{"mode":"quiet"}}',
   ],
 } as const;
+
+export const ARTIFACT_DESCRIBE_TOOL_PROMPT_METADATA = {
+  promptGuidance: [
+    "Use artifact.describe when a prior tool call or message produced an artifact id and you need to inspect that file in the same turn.",
+    "Pass prompt when you need focused extraction instead of a general description.",
+  ],
+  promptExamples: [
+    '{"artifact_id":"123e4567-e89b-12d3-a456-426614174000","prompt":"Extract the visible error message."}',
+  ],
+} as const;

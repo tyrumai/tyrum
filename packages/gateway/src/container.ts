@@ -30,7 +30,11 @@ import type { OauthRefreshLeaseDal } from "./modules/oauth/refresh-lease-dal.js"
 import type { OAuthProviderRegistry } from "./modules/oauth/provider-registry.js";
 import type { IdentityScopeDal } from "./modules/identity/scope.js";
 import type { ChannelThreadDal } from "./modules/channels/thread-dal.js";
-import { DeploymentConfig, type DeploymentConfig as DeploymentConfigT } from "@tyrum/contracts";
+import {
+  DEFAULT_PUBLIC_BASE_URL,
+  DeploymentConfig,
+  type DeploymentConfig as DeploymentConfigT,
+} from "@tyrum/contracts";
 
 import { createEventBus } from "./event-bus.js";
 import { MemoryDal as MemoryDalImpl } from "./modules/memory/memory-dal.js";
@@ -154,7 +158,25 @@ export function wireContainer(
   config: GatewayContainerConfig,
   opts?: { redactionEngine?: RedactionEngine; deploymentConfig?: unknown },
 ): GatewayContainer {
-  const deploymentConfig = DeploymentConfig.parse(opts?.deploymentConfig ?? {});
+  const providedDeploymentConfig =
+    opts?.deploymentConfig &&
+    typeof opts.deploymentConfig === "object" &&
+    !Array.isArray(opts.deploymentConfig)
+      ? (opts.deploymentConfig as Record<string, unknown>)
+      : {};
+  const providedServer =
+    providedDeploymentConfig["server"] &&
+    typeof providedDeploymentConfig["server"] === "object" &&
+    !Array.isArray(providedDeploymentConfig["server"])
+      ? (providedDeploymentConfig["server"] as Record<string, unknown>)
+      : {};
+  const deploymentConfig = DeploymentConfig.parse({
+    ...providedDeploymentConfig,
+    server: {
+      publicBaseUrl: DEFAULT_PUBLIC_BASE_URL,
+      ...providedServer,
+    },
+  });
   const identityScopeDal = new IdentityScopeDalImpl(db);
   const channelThreadDal = new ChannelThreadDalImpl(db);
   const memoryDal = new MemoryDalImpl(db);
@@ -200,6 +222,7 @@ export function wireContainer(
       },
     },
     redactionEngine,
+    deploymentConfig.server.publicBaseUrl,
   );
   const gatewayConfigStore = createGatewayConfigStore({
     db,

@@ -176,7 +176,7 @@ export function buildAutomationTurnRequest(input: {
     channel: "automation:default",
     thread_id: `schedule-${input.watcher.watcher_id}`,
     container_kind: "channel",
-    message: messageLines.join("\n"),
+    parts: [{ type: "text", text: messageLines.join("\n") }],
     metadata: {
       automation: {
         schedule_id: input.watcher.watcher_id,

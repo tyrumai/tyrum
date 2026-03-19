@@ -5,6 +5,7 @@ import type { ArtifactKind } from "@tyrum/contracts";
 import type { ArtifactStore } from "./store.js";
 import type { WsEventEnvelope as WsEventEnvelopeT } from "@tyrum/contracts";
 import { enqueueWsBroadcastMessage } from "../../ws/outbox.js";
+import { insertArtifactRecordTx, linkArtifactTx } from "./dal.js";
 
 export type ExecutionArtifactSensitivity = "normal" | "sensitive";
 
@@ -102,53 +103,46 @@ export async function insertExecutionArtifactRowTx(
     };
   },
 ): Promise<{ inserted: boolean }> {
-  const labelsJson = input.labelsJson ?? JSON.stringify(input.artifact.labels ?? []);
-  const metadataJson = input.metadataJson ?? JSON.stringify(input.artifact.metadata ?? {});
+  const { inserted } = await insertArtifactRecordTx(tx, {
+    artifact: input.artifact,
+    tenantId: input.scope.tenantId,
+    workspaceId: input.scope.workspaceId,
+    agentId: input.scope.agentId,
+    sensitivity: input.scope.sensitivity,
+    policySnapshotId: input.scope.policySnapshotId,
+    labelsJson: input.labelsJson,
+    metadataJson: input.metadataJson,
+  });
 
-  const insertResult = await tx.run(
-    `INSERT INTO execution_artifacts (
-       tenant_id,
-       artifact_id,
-       workspace_id,
-       agent_id,
-       run_id,
-       step_id,
-       attempt_id,
-       kind,
-       uri,
-       created_at,
-       mime_type,
-       size_bytes,
-       sha256,
-       labels_json,
-       metadata_json,
-     sensitivity,
-     policy_snapshot_id
-     )
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT (tenant_id, artifact_id) DO NOTHING`,
-    [
-      input.scope.tenantId,
-      input.artifact.artifact_id,
-      input.scope.workspaceId,
-      input.scope.agentId,
-      input.scope.runId,
-      input.scope.stepId,
-      input.scope.attemptId,
-      input.artifact.kind,
-      input.artifact.uri,
-      input.artifact.created_at,
-      input.artifact.mime_type ?? null,
-      input.artifact.size_bytes ?? null,
-      input.artifact.sha256 ?? null,
-      labelsJson,
-      metadataJson,
-      input.scope.sensitivity,
-      input.scope.policySnapshotId,
-    ],
-  );
+  if (input.scope.runId) {
+    await linkArtifactTx(tx, {
+      tenantId: input.scope.tenantId,
+      artifactId: input.artifact.artifact_id,
+      parentKind: "execution_run",
+      parentId: input.scope.runId,
+      createdAt: input.artifact.created_at,
+    });
+  }
+  if (input.scope.stepId) {
+    await linkArtifactTx(tx, {
+      tenantId: input.scope.tenantId,
+      artifactId: input.artifact.artifact_id,
+      parentKind: "execution_step",
+      parentId: input.scope.stepId,
+      createdAt: input.artifact.created_at,
+    });
+  }
+  if (input.scope.attemptId) {
+    await linkArtifactTx(tx, {
+      tenantId: input.scope.tenantId,
+      artifactId: input.artifact.artifact_id,
+      parentKind: "execution_attempt",
+      parentId: input.scope.attemptId,
+      createdAt: input.artifact.created_at,
+    });
+  }
 
-  return { inserted: insertResult.changes > 0 };
+  return { inserted };
 }
 
 export async function emitArtifactCreatedTx(
