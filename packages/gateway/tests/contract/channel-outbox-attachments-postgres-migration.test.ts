@@ -6,7 +6,7 @@ import { newDb } from "pg-mem";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationSql = readFileSync(
-  join(__dirname, "../../migrations/postgres/145_channel_outbox_attachments_constraints.sql"),
+  join(__dirname, "../../migrations/postgres/146_channel_outbox_attachments_constraints.sql"),
   "utf8",
 );
 

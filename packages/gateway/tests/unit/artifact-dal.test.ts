@@ -13,11 +13,11 @@ import {
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 
-function makeArtifactRef(artifactId: string) {
+function makeArtifactRef(artifactId: string, publicBaseUrl = "https://gateway.example.test") {
   return ArtifactRef.parse({
     artifact_id: artifactId,
     uri: `artifact://${artifactId}`,
-    external_url: `https://gateway.example.test/a/${artifactId}`,
+    external_url: `${publicBaseUrl}/a/${artifactId}`,
     kind: "file",
     media_class: "other",
     created_at: "2026-03-19T09:00:00.000Z",
@@ -175,6 +175,71 @@ describe("insertArtifactRecordTx", () => {
       },
     ]);
   });
+
+  it("tracks session links for artifact URLs under a public base path prefix", async () => {
+    db = openTestSqliteDb();
+    const storedArtifact = makeArtifactRef(
+      "66666666-6666-4666-8666-666666666666",
+      "https://gateway.example.test/gateway",
+    );
+    const nextMessages: TyrumUIMessage[] = [
+      {
+        id: "message-prefixed",
+        role: "user",
+        parts: [
+          {
+            type: "file",
+            url: storedArtifact.external_url,
+            mediaType: "text/plain",
+            filename: storedArtifact.filename,
+          },
+        ],
+      },
+    ];
+
+    await db.transaction(async (tx) => {
+      await insertArtifactRecordTx(tx, {
+        artifact: storedArtifact,
+        tenantId: DEFAULT_TENANT_ID,
+        workspaceId: DEFAULT_WORKSPACE_ID,
+        agentId: null,
+        sensitivity: "normal",
+        policySnapshotId: null,
+      });
+    });
+
+    await db.transaction(async (tx) => {
+      await replaceSessionArtifactLinksTx(tx, {
+        tenantId: DEFAULT_TENANT_ID,
+        sessionId: "session-prefixed",
+        previousMessages: [],
+        nextMessages,
+      });
+    });
+
+    const links = await db.all<{
+      artifact_id: string;
+      parent_kind: string;
+      parent_id: string;
+    }>(
+      `SELECT artifact_id, parent_kind, parent_id
+       FROM artifact_links
+       ORDER BY parent_kind ASC, parent_id ASC`,
+    );
+
+    expect(links).toEqual([
+      {
+        artifact_id: storedArtifact.artifact_id,
+        parent_kind: "chat_message",
+        parent_id: "message-prefixed",
+      },
+      {
+        artifact_id: storedArtifact.artifact_id,
+        parent_kind: "chat_session",
+        parent_id: "session-prefixed",
+      },
+    ]);
+  });
 });
 
 describe("extractArtifactIdFromUrl", () => {
@@ -183,6 +248,14 @@ describe("extractArtifactIdFromUrl", () => {
 
     expect(extractArtifactIdFromUrl(`artifact://${artifactId}`)).toBe(artifactId);
     expect(extractArtifactIdFromUrl(`https://gateway.example.test/a/${artifactId}`)).toBe(
+      artifactId,
+    );
+  });
+
+  it("extracts artifact ids from canonical artifact URLs under a public base path", () => {
+    const artifactId = "77777777-7777-4777-8777-777777777777";
+
+    expect(extractArtifactIdFromUrl(`https://gateway.example.test/gateway/a/${artifactId}`)).toBe(
       artifactId,
     );
   });

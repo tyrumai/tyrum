@@ -275,10 +275,12 @@ export function extractArtifactIdFromUrl(url: string): string | undefined {
       .split("/")
       .map((segment) => segment.trim())
       .filter((segment) => segment.length > 0);
-    if (segments.length !== 2 || segments[0] !== "a") {
+    const accessIdIndex = segments.length - 1;
+    const artifactRouteIndex = accessIdIndex - 1;
+    if (artifactRouteIndex < 0 || segments[artifactRouteIndex] !== "a") {
       return undefined;
     }
-    const artifactId = ArtifactId.safeParse(segments[1]);
+    const artifactId = ArtifactId.safeParse(segments[accessIdIndex]);
     return artifactId.success ? artifactId.data : undefined;
   } catch {
     // Intentional: invalid URLs should simply fail artifact extraction.
