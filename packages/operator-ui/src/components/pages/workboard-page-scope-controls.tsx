@@ -1,4 +1,4 @@
-import type { OperatorCore, WorkboardScopeKeys } from "@tyrum/operator-core";
+import type { OperatorCore, WorkboardScopeKeys } from "@tyrum/operator-app";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "../ui/button.js";
 import { Select } from "../ui/select.js";
@@ -73,7 +73,7 @@ export function WorkboardScopeControls({
 
     const loadAgentOptions = async (): Promise<void> => {
       try {
-        const response = await core.http.agents.list();
+        const response = await core.admin.agents.list();
         if (cancelled) return;
         setAgentOptions(normalizeAgentOptions((response as { agents?: unknown })?.agents));
       } catch {
@@ -88,7 +88,7 @@ export function WorkboardScopeControls({
     return () => {
       cancelled = true;
     };
-  }, [core.http]);
+  }, [core.admin]);
 
   const visibleAgentOptions = useMemo(() => {
     if (agentOptions.some((option) => option.agentKey === agentKeyDraft)) {

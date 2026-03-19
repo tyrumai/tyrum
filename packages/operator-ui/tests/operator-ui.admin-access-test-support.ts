@@ -2,8 +2,8 @@ import {
   createBearerTokenAuth,
   createElevatedModeStore,
   createOperatorCore,
-} from "../../operator-core/src/index.js";
-import type { OperatorHttpClient, OperatorWsClient } from "../../operator-core/src/deps.js";
+} from "../../operator-app/src/index.js";
+import type { OperatorHttpClient, OperatorWsClient } from "../../operator-app/src/deps.js";
 
 const TEST_ELEVATED_MODE_ENTERED_AT = "2026-01-01T00:00:00.000Z";
 const TEST_ELEVATED_MODE_EXPIRES_AT = "2026-01-01T00:10:00.000Z";

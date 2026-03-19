@@ -236,84 +236,99 @@
       "toPackage": "@tyrum/client"
     },
     {
-      "fromFile": "packages/operator-core/src/browser.ts",
-      "reason": "#1537 temporary coexistence while operator surfaces still move off @tyrum/client during the operator-app migration",
+      "fromFile": "packages/operator-app/src/browser.ts",
+      "reason": "#1538 temporary coexistence while the initial operator-app extraction still depends on @tyrum/client helper entrypoints",
       "toPackage": "@tyrum/client"
     },
     {
-      "fromFile": "packages/operator-core/src/node.ts",
-      "reason": "#1537 temporary coexistence while operator surfaces still move off @tyrum/client during the operator-app migration",
+      "fromFile": "packages/operator-app/src/node.ts",
+      "reason": "#1538 temporary coexistence while the initial operator-app extraction still depends on @tyrum/client helper entrypoints",
       "toPackage": "@tyrum/client"
     },
     {
-      "fromFile": "packages/operator-core/src/index.ts",
-      "reason": "#1537 temporary coexistence while operator surfaces still move off @tyrum/client during the operator-app migration",
+      "fromFile": "packages/operator-app/src/index.ts",
+      "reason": "#1538 temporary coexistence while operator surfaces still move off @tyrum/client during the operator-app extraction",
       "toPackage": "@tyrum/client"
     },
     {
-      "fromFile": "packages/operator-core/src/operator-core.ts",
-      "reason": "#1537 temporary coexistence while operator surfaces still move off @tyrum/client during the operator-app migration",
+      "fromFile": "packages/operator-app/src/operator-core.ts",
+      "reason": "#1538 temporary coexistence while operator surfaces still move off @tyrum/client during the operator-app extraction",
       "toPackage": "@tyrum/client"
     },
     {
-      "fromFile": "packages/operator-core/src/review-status.ts",
-      "reason": "#1537 temporary coexistence while operator surfaces still move off @tyrum/client during the operator-app migration",
+      "fromFile": "packages/operator-app/src/review-status.ts",
+      "reason": "#1538 temporary coexistence while operator surfaces still move off @tyrum/client during the operator-app extraction",
       "toPackage": "@tyrum/client"
     },
     {
-      "fromFile": "packages/operator-core/src/stores/activity-store.derive.ts",
-      "reason": "#1537 temporary coexistence while operator surfaces still move off @tyrum/client during the operator-app migration",
+      "fromFile": "packages/operator-app/src/stores/activity-store.derive.ts",
+      "reason": "#1538 temporary coexistence while operator surfaces still move off @tyrum/client during the operator-app extraction",
       "toPackage": "@tyrum/client"
     },
     {
-      "fromFile": "packages/operator-core/src/stores/activity-store.helpers.ts",
-      "reason": "#1537 temporary coexistence while operator surfaces still move off @tyrum/client during the operator-app migration",
+      "fromFile": "packages/operator-app/src/stores/activity-store.helpers.ts",
+      "reason": "#1538 temporary coexistence while operator surfaces still move off @tyrum/client during the operator-app extraction",
       "toPackage": "@tyrum/client"
     },
     {
-      "fromFile": "packages/operator-core/src/stores/approvals-store.ts",
-      "reason": "#1537 temporary coexistence while operator surfaces still move off @tyrum/client during the operator-app migration",
+      "fromFile": "packages/operator-app/src/stores/approvals-store.ts",
+      "reason": "#1538 temporary coexistence while operator surfaces still move off @tyrum/client during the operator-app extraction",
       "toPackage": "@tyrum/client"
     },
     {
-      "fromFile": "packages/operator-core/src/stores/chat-store.actions.ts",
-      "reason": "#1537 temporary coexistence while operator surfaces still move off @tyrum/client during the operator-app migration",
+      "fromFile": "packages/operator-app/src/stores/chat-store.actions.ts",
+      "reason": "#1538 temporary coexistence while operator surfaces still move off @tyrum/client during the operator-app extraction",
       "toPackage": "@tyrum/client"
     },
     {
-      "fromFile": "packages/operator-core/src/stores/chat-store.types.ts",
-      "reason": "#1537 temporary coexistence while operator surfaces still move off @tyrum/client during the operator-app migration",
+      "fromFile": "packages/operator-app/src/stores/chat-store.types.ts",
+      "reason": "#1538 temporary coexistence while operator surfaces still move off @tyrum/client during the operator-app extraction",
       "toPackage": "@tyrum/client"
     },
     {
-      "fromFile": "packages/operator-core/src/stores/runs-store.ts",
-      "reason": "#1537 temporary coexistence while operator surfaces still move off @tyrum/client during the operator-app migration",
+      "fromFile": "packages/operator-app/src/stores/runs-store.ts",
+      "reason": "#1538 temporary coexistence while operator surfaces still move off @tyrum/client during the operator-app extraction",
       "toPackage": "@tyrum/client"
     },
     {
-      "fromFile": "packages/operator-core/tests/activity-store.test.ts",
-      "reason": "#1537 temporary coexistence while operator surfaces still move off @tyrum/client during the operator-app migration",
+      "fromFile": "packages/operator-app/tests/activity-store.test.ts",
+      "reason": "#1538 temporary coexistence while operator surfaces still move off @tyrum/client during the operator-app extraction",
       "toPackage": "@tyrum/client"
     },
     {
-      "fromFile": "packages/operator-core/tests/operator-core.test-fixtures.ts",
-      "reason": "#1537 temporary coexistence while operator surfaces still move off @tyrum/client during the operator-app migration",
+      "fromFile": "packages/operator-app/tests/operator-core.test-fixtures.ts",
+      "reason": "#1538 temporary coexistence while operator surfaces still move off @tyrum/client during the operator-app extraction",
       "toPackage": "@tyrum/client"
     },
     {
-      "fromFile": "packages/operator-core/tests/operator-core.test-support.ts",
-      "reason": "#1537 temporary coexistence while operator surfaces still move off @tyrum/client during the operator-app migration",
+      "fromFile": "packages/operator-app/tests/operator-core.test-support.ts",
+      "reason": "#1538 temporary coexistence while operator surfaces still move off @tyrum/client during the operator-app extraction",
       "toPackage": "@tyrum/client"
     },
     {
-      "fromFile": "packages/operator-core/tests/operator-core.test.ts",
-      "reason": "#1537 temporary coexistence while operator surfaces still move off @tyrum/client during the operator-app migration",
+      "fromFile": "packages/operator-app/tests/operator-core.test.ts",
+      "reason": "#1538 temporary coexistence while operator surfaces still move off @tyrum/client during the operator-app extraction",
       "toPackage": "@tyrum/client"
     },
     {
-      "fromFile": "packages/operator-core/tests/runs-store.test.ts",
-      "reason": "#1537 temporary coexistence while operator surfaces still move off @tyrum/client during the operator-app migration",
+      "fromFile": "packages/operator-app/tests/runs-store.test.ts",
+      "reason": "#1538 temporary coexistence while operator surfaces still move off @tyrum/client during the operator-app extraction",
       "toPackage": "@tyrum/client"
+    },
+    {
+      "fromFile": "packages/operator-app/src/browser.ts",
+      "reason": "#1538 temporary coexistence while the initial operator-app extraction preserves helper entrypoints from @tyrum/node-sdk",
+      "toPackage": "@tyrum/node-sdk"
+    },
+    {
+      "fromFile": "packages/operator-app/src/node.ts",
+      "reason": "#1538 temporary coexistence while the initial operator-app extraction preserves helper entrypoints from @tyrum/node-sdk",
+      "toPackage": "@tyrum/node-sdk"
+    },
+    {
+      "fromFile": "packages/operator-app/tests/entrypoints.test.ts",
+      "reason": "#1538 temporary coexistence while the initial operator-app extraction verifies the narrowed @tyrum/node-sdk helper surface",
+      "toPackage": "@tyrum/node-sdk"
     },
     {
       "fromFile": "packages/operator-ui/src/components/artifacts/attempt-artifacts-dialog.tsx",
@@ -384,6 +399,11 @@
       "fromFile": "packages/operator-ui/src/operator-routes.tsx",
       "reason": "#1537 temporary coexistence while operator surfaces still move off @tyrum/client during the operator-app migration",
       "toPackage": "@tyrum/client"
+    },
+    {
+      "fromFile": "packages/tui/src/runs-view.ts",
+      "reason": "#1538 temporary coexistence while TUI still reads execution types from @tyrum/client during the operator-app extraction",
+      "toPackage": "@tyrum/client"
     }
   ],
   "allowedManifestEdges": [
@@ -393,13 +413,23 @@
       "toPackage": "@tyrum/contracts"
     },
     {
-      "fromPackage": "@tyrum/operator-core",
-      "reason": "#1537 temporary coexistence while operator surfaces still move off @tyrum/client during the operator-app migration",
+      "fromPackage": "@tyrum/operator-app",
+      "reason": "#1538 temporary coexistence while operator surfaces still move off @tyrum/client during the operator-app extraction",
       "toPackage": "@tyrum/client"
+    },
+    {
+      "fromPackage": "@tyrum/operator-app",
+      "reason": "#1538 temporary coexistence while the initial operator-app extraction still preserves helper entrypoints from @tyrum/node-sdk",
+      "toPackage": "@tyrum/node-sdk"
     },
     {
       "fromPackage": "@tyrum/operator-ui",
       "reason": "#1537 temporary coexistence while operator surfaces still move off @tyrum/client during the operator-app migration",
+      "toPackage": "@tyrum/client"
+    },
+    {
+      "fromPackage": "@tyrum/tui",
+      "reason": "#1538 temporary coexistence while TUI still reads execution types from @tyrum/client during the operator-app extraction",
       "toPackage": "@tyrum/client"
     }
   ]

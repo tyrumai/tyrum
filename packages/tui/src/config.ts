@@ -1,6 +1,6 @@
 import { join } from "node:path";
 
-import { normalizeFingerprint256 } from "@tyrum/operator-core/node";
+import { normalizeFingerprint256 } from "@tyrum/transport-sdk/node";
 
 export type GatewayUrls = {
   wsUrl: string;

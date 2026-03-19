@@ -29,7 +29,7 @@ afterEach(() => {
 describe("ConfigurePage (HTTP) tools", () => {
   it("renders the grouped tool registry", async () => {
     const { core } = createAdminHttpTestCore();
-    vi.mocked(core.http.toolRegistry.list).mockResolvedValue(
+    vi.mocked(core.admin.toolRegistry.list).mockResolvedValue(
       DETAILED_TOOL_REGISTRY_FIXTURE as never,
     );
 
@@ -59,7 +59,7 @@ describe("ConfigurePage (HTTP) tools", () => {
 
   it("filters tools and renders structured schema details", async () => {
     const { core } = createAdminHttpTestCore();
-    vi.mocked(core.http.toolRegistry.list).mockResolvedValue(
+    vi.mocked(core.admin.toolRegistry.list).mockResolvedValue(
       DETAILED_TOOL_REGISTRY_FIXTURE as never,
     );
 

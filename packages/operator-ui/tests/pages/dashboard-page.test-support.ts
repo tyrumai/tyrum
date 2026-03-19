@@ -1,7 +1,7 @@
 import { vi } from "vitest";
-import type { OperatorCore } from "../../../operator-core/src/index.js";
-import { createStore } from "../../../operator-core/src/store.js";
-import type { ActivityState } from "../../../operator-core/src/stores/activity-store.js";
+import type { OperatorCore } from "../../../operator-app/src/index.js";
+import { createStore } from "../../../operator-app/src/store.js";
+import type { ActivityState } from "../../../operator-app/src/stores/activity-store.js";
 
 const emptyActivityState: ActivityState = {
   agentsById: {},
@@ -106,7 +106,13 @@ export function createMockCore(overrides?: Partial<Record<string, unknown>>) {
       },
     },
     ...overrides,
-  } as unknown as OperatorCore;
+  } as unknown as OperatorCore & {
+    http?: OperatorCore["admin"];
+    admin?: OperatorCore["admin"];
+  };
+  if (core.http) {
+    core.admin = core.http;
+  }
 
   return { core, setConnectionState, setStatusState, nodesList };
 }

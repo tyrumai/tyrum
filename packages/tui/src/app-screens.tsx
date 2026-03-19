@@ -3,7 +3,7 @@ import {
   isElevatedModeActive,
   type ElevatedModeState,
   type OperatorCore,
-} from "@tyrum/operator-core";
+} from "@tyrum/operator-app";
 import { Box, Text } from "ink";
 import { useMemo } from "react";
 import type { ResolvedTuiConfig } from "./config.js";

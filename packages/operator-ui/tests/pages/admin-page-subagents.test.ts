@@ -2,8 +2,8 @@
 
 import { describe, expect, it, vi } from "vitest";
 import React from "react";
-import type { OperatorCore } from "../../../operator-core/src/index.js";
-import { createStore } from "../../../operator-core/src/store.js";
+import type { OperatorCore } from "../../../operator-app/src/index.js";
+import { createStore } from "../../../operator-app/src/store.js";
 import { ElevatedModeProvider } from "../../src/elevated-mode.js";
 import { ConfigurePage } from "../../src/components/pages/configure-page.js";
 import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";

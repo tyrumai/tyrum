@@ -2,7 +2,7 @@
 
 import React, { act } from "react";
 import type { UIMessage } from "ai";
-import type { OperatorCore } from "../../../operator-core/src/index.js";
+import type { OperatorCore } from "../../../operator-app/src/index.js";
 import { vi } from "vitest";
 import { renderIntoDocument, setNativeValue } from "../test-utils.js";
 
@@ -13,6 +13,7 @@ const toastErrorMock = vi.hoisted(() => vi.fn());
 const hydrateActiveSessionMock = vi.hoisted(() => vi.fn());
 export { hydrateActiveSessionMock, toastErrorMock, useChatMock };
 export const testCore = {
+  admin: {},
   http: {},
   chatStore: {
     hydrateActiveSession: hydrateActiveSessionMock,

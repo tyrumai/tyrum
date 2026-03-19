@@ -2,7 +2,7 @@ import type {
   CapabilityProvider,
   TaskExecuteContext,
   TaskResult,
-} from "@tyrum/operator-core/browser";
+} from "@tyrum/operator-app/browser";
 import { BrowserActionArgs, type ActionPrimitive } from "@tyrum/contracts";
 
 export type BrowserConsentScope = "geolocation" | "camera" | "microphone";

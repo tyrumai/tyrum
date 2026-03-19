@@ -10,7 +10,7 @@
     { "path": "packages/client" },
     { "path": "packages/desktop-node" },
     { "path": "packages/cli" },
-    { "path": "packages/operator-core" },
+    { "path": "packages/operator-app" },
     { "path": "packages/operator-ui" },
     { "path": "packages/tui" }
   ]

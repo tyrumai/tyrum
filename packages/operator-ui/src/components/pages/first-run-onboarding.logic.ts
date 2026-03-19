@@ -1,5 +1,5 @@
 import { AgentConfig, type AgentConfig as AgentConfigT } from "@tyrum/contracts";
-import type { OperatorCore } from "@tyrum/operator-core";
+import type { OperatorCore } from "@tyrum/operator-app";
 import * as React from "react";
 import { useOperatorStore } from "../../use-operator-store.js";
 import { formatErrorMessage } from "../../utils/format-error-message.js";

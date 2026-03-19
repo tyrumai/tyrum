@@ -3,7 +3,7 @@
 import React, { act } from "react";
 import { describe, expect, it, vi } from "vitest";
 import type { UIMessage } from "ai";
-import type { OperatorCore } from "../../../operator-core/src/index.js";
+import type { OperatorCore } from "../../../operator-app/src/index.js";
 import { MessageCard } from "../../src/components/pages/chat-page-ai-sdk-message-card.js";
 import { click, cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
 
@@ -163,7 +163,10 @@ describe("MessageCard tool output rendering", () => {
           getMetadata,
         },
       },
-    } as unknown as OperatorCore;
+    } as unknown as OperatorCore & {
+      http: OperatorCore["admin"];
+    };
+    core.admin = core.http;
     const outputJson = JSON.stringify({
       run_id: "11111111-1111-1111-1111-111111111111",
       payload: {

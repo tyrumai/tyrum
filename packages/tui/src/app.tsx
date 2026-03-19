@@ -1,4 +1,4 @@
-import { isElevatedModeActive } from "@tyrum/operator-core";
+import { isElevatedModeActive } from "@tyrum/operator-app";
 import { Box, Text, useApp, useInput } from "ink";
 import { useEffect, useRef, useState } from "react";
 import type { ResolvedTuiConfig } from "./config.js";

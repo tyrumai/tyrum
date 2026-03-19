@@ -1,5 +1,5 @@
 import type { StatusResponse } from "@tyrum/transport-sdk";
-import { createStore } from "../../../packages/operator-core/src/store.js";
+import { createStore } from "../../../packages/operator-app/src/store.js";
 import { AgentConfig, IdentityPack } from "../../../packages/contracts/src/index.js";
 
 export function createConnectionStore() {

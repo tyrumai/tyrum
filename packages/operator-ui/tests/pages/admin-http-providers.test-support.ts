@@ -1,11 +1,11 @@
 import React, { act } from "react";
 import { expect, vi } from "vitest";
-import { createElevatedModeStore, type OperatorCore } from "../../../operator-core/src/index.js";
+import { createElevatedModeStore, type OperatorCore } from "../../../operator-app/src/index.js";
 import { ElevatedModeProvider } from "../../src/elevated-mode.js";
 import { AdminHttpProvidersPanel } from "../../src/components/pages/admin-http-providers.js";
 import { cleanupTestRoot, renderIntoDocument, type TestRoot } from "../test-utils.js";
 
-let adminHttpClient: OperatorCore["http"] | null = null;
+let adminHttpClient: OperatorCore["admin"] | null = null;
 
 vi.mock("../../src/components/pages/admin-http-shared.js", async () => {
   const actual = await import("../../src/components/pages/admin-http-shared.js");
@@ -122,12 +122,12 @@ async function readJsonResponse(response: Response): Promise<unknown> {
   return (await response.json()) as unknown;
 }
 
-function createFetchBackedAdminHttp(core: OperatorCore): OperatorCore["http"] {
+function createFetchBackedAdminHttp(core: OperatorCore): OperatorCore["admin"] {
   const token = core.elevatedModeStore.getSnapshot().elevatedToken ?? "";
-  const providerConfig = core.http.providerConfig;
+  const providerConfig = core.admin.providerConfig;
 
   return {
-    ...core.http,
+    ...core.admin,
     providerConfig: {
       ...providerConfig,
       async createAccount(body) {
@@ -174,7 +174,7 @@ function createFetchBackedAdminHttp(core: OperatorCore): OperatorCore["http"] {
         return (await response.json()) as Awaited<ReturnType<typeof providerConfig.deleteProvider>>;
       },
     },
-  } as OperatorCore["http"];
+  } as OperatorCore["admin"];
 }
 
 function expectPresent<T>(value: T | null | undefined): T {
@@ -353,7 +353,10 @@ export function createAdminHttpProvidersTestCore(input?: {
         listPresets: vi.fn(async () => ({ status: "ok", presets }) as unknown),
       },
     },
-  } as unknown as OperatorCore;
+  } as unknown as OperatorCore & {
+    http: OperatorCore["admin"];
+  };
+  core.admin = core.http;
 
   return {
     core,

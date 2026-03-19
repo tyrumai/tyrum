@@ -5,12 +5,11 @@ import {
   createBearerTokenAuth,
   createGatewayAuthSession,
   clearGatewayAuthSession,
-  createDeviceIdentity,
   createOperatorCore,
   createOperatorCoreManager,
-  createTyrumHttpClient,
   httpAuthForAuth,
-} from "@tyrum/operator-core/browser";
+} from "@tyrum/operator-app";
+import { createDeviceIdentity, createTyrumHttpClient } from "@tyrum/transport-sdk/browser";
 import {
   createAdminAccessController,
   OperatorUiApp,

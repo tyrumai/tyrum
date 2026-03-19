@@ -1,5 +1,5 @@
-import type { OperatorCore } from "@tyrum/operator-core";
-import type { AuthTokenListEntry } from "@tyrum/operator-core/browser";
+import type { OperatorCore } from "@tyrum/operator-app";
+import type { AuthTokenListEntry } from "@tyrum/operator-app/browser";
 import * as React from "react";
 import { toast } from "sonner";
 import { ElevatedModeTooltip } from "../elevated-mode/elevated-mode-tooltip.js";

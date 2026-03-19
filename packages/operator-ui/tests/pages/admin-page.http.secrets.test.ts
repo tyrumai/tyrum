@@ -61,7 +61,7 @@ describe("ConfigurePage (HTTP) secrets", () => {
         }),
       ],
     }));
-    core.http.secrets.list = listSecrets as typeof core.http.secrets.list;
+    core.admin.secrets.list = listSecrets as typeof core.admin.secrets.list;
     stubAdminHttpFetch(core);
 
     const page = renderAdminHttpConfigurePage(core);
@@ -108,7 +108,7 @@ describe("ConfigurePage (HTTP) secrets", () => {
               ],
       };
     });
-    core.http.secrets.list = listSecrets as typeof core.http.secrets.list;
+    core.admin.secrets.list = listSecrets as typeof core.admin.secrets.list;
 
     const { writeSpy } = stubAdminHttpFetch(core, async (input: RequestInfo | URL, init) => {
       expectAuthorizedJsonRequest(input, init, {
@@ -158,9 +158,9 @@ describe("ConfigurePage (HTTP) secrets", () => {
 
   it("preserves whitespace when rotating secrets", async () => {
     const { core, secretsRotate } = createAdminHttpTestCore();
-    core.http.secrets.list = vi.fn(async () => ({
+    core.admin.secrets.list = vi.fn(async () => ({
       handles: [createSecretHandle({ handle_id: "h-1" })],
-    })) as typeof core.http.secrets.list;
+    })) as typeof core.admin.secrets.list;
 
     const { writeSpy } = stubAdminHttpFetch(core, async (input: RequestInfo | URL, init) => {
       expectAuthorizedJsonRequest(input, init, {
@@ -229,7 +229,7 @@ describe("ConfigurePage (HTTP) secrets", () => {
               ],
       };
     });
-    core.http.secrets.list = listSecrets as typeof core.http.secrets.list;
+    core.admin.secrets.list = listSecrets as typeof core.admin.secrets.list;
 
     const { writeSpy } = stubAdminHttpFetch(core, async (input: RequestInfo | URL, init) => {
       expectAuthorizedJsonRequest(input, init, {

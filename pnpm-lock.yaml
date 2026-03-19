@@ -88,18 +88,24 @@ importers:
 
   apps/desktop:
     dependencies:
+      '@tyrum/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@tyrum/desktop-node':
         specifier: workspace:*
         version: link:../../packages/desktop-node
       '@tyrum/node-sdk':
         specifier: workspace:*
         version: link:../../packages/node-sdk
-      '@tyrum/operator-core':
+      '@tyrum/operator-app':
         specifier: workspace:*
-        version: link:../../packages/operator-core
+        version: link:../../packages/operator-app
       '@tyrum/operator-ui':
         specifier: workspace:*
         version: link:../../packages/operator-ui
+      '@tyrum/transport-sdk':
+        specifier: workspace:*
+        version: link:../../packages/transport-sdk
       electron-store:
         specifier: ^11.0.2
         version: 11.0.2
@@ -242,9 +248,9 @@ importers:
       '@tyrum/node-sdk':
         specifier: workspace:*
         version: link:../../packages/node-sdk
-      '@tyrum/operator-core':
+      '@tyrum/operator-app':
         specifier: workspace:*
-        version: link:../../packages/operator-core
+        version: link:../../packages/operator-app
       '@tyrum/operator-ui':
         specifier: workspace:*
         version: link:../../packages/operator-ui
@@ -291,9 +297,9 @@ importers:
 
   apps/web:
     dependencies:
-      '@tyrum/operator-core':
+      '@tyrum/operator-app':
         specifier: workspace:*
-        version: link:../../packages/operator-core
+        version: link:../../packages/operator-app
       '@tyrum/operator-ui':
         specifier: workspace:*
         version: link:../../packages/operator-ui
@@ -636,7 +642,7 @@ importers:
         specifier: ^8.19.0
         version: 8.19.0
 
-  packages/operator-core:
+  packages/operator-app:
     dependencies:
       '@tyrum/client':
         specifier: workspace:*
@@ -701,9 +707,9 @@ importers:
       '@tyrum/contracts':
         specifier: workspace:*
         version: link:../contracts
-      '@tyrum/operator-core':
+      '@tyrum/operator-app':
         specifier: workspace:*
-        version: link:../operator-core
+        version: link:../operator-app
       ai:
         specifier: ^6.0.116
         version: 6.0.116(zod@4.3.6)
@@ -800,9 +806,12 @@ importers:
       '@tyrum/cli-utils':
         specifier: workspace:*
         version: link:../cli-utils
-      '@tyrum/operator-core':
+      '@tyrum/client':
         specifier: workspace:*
-        version: link:../operator-core
+        version: link:../client
+      '@tyrum/operator-app':
+        specifier: workspace:*
+        version: link:../operator-app
       '@tyrum/transport-sdk':
         specifier: workspace:*
         version: link:../transport-sdk

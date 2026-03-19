@@ -5,7 +5,7 @@ import {
   createBearerTokenAuth,
   createOperatorCore,
   ElevatedModeRequiredError,
-} from "../../operator-core/src/index.js";
+} from "../../operator-app/src/index.js";
 import { AdminAccessProvider, OperatorUiApp } from "../src/index.js";
 import * as operatorUi from "../src/index.js";
 import { PairingPage } from "../src/components/pages/pairing-page.js";

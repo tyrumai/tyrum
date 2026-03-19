@@ -22,8 +22,9 @@
     "start": "node bin/tyrum-tui.mjs"
   },
   "dependencies": {
+    "@tyrum/client": "workspace:*",
     "@tyrum/cli-utils": "workspace:*",
-    "@tyrum/operator-core": "workspace:*",
+    "@tyrum/operator-app": "workspace:*",
     "@tyrum/transport-sdk": "workspace:*",
     "commander": "^14.0.3",
     "ink": "^6.8.0",

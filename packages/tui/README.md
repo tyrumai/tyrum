@@ -4,7 +4,7 @@ Ink-based terminal UI client for Tyrum.
 
 ## Purpose
 
-This package provides a live terminal operator surface backed by `@tyrum/operator-core`.
+This package provides a live terminal operator surface backed by `@tyrum/operator-app`.
 
 It is aimed at operators who want a persistent terminal workflow rather than the browser or desktop
 app.

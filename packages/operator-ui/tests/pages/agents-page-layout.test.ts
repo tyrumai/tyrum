@@ -3,8 +3,8 @@
 import React, { act } from "react";
 import { AgentConfig, IdentityPack } from "@tyrum/contracts";
 import { describe, expect, it, vi } from "vitest";
-import type { OperatorCore } from "../../../operator-core/src/index.js";
-import { createStore } from "../../../operator-core/src/store.js";
+import type { OperatorCore } from "../../../operator-app/src/index.js";
+import { createStore } from "../../../operator-app/src/store.js";
 import { AgentsPage } from "../../src/components/pages/agents-page.js";
 import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
 
@@ -147,7 +147,7 @@ function createCore(): OperatorCore {
     attemptIdsByStepId: {},
   });
 
-  return {
+  const core = {
     connectionStore,
     statusStore,
     agentStatusStore: {
@@ -190,7 +190,11 @@ function createCore(): OperatorCore {
         listPresets: vi.fn().mockResolvedValue(samplePresets()),
       },
     },
-  } as unknown as OperatorCore;
+  } as unknown as OperatorCore & {
+    http: OperatorCore["admin"];
+  };
+  core.admin = core.http;
+  return core;
 }
 
 describe("AgentsPage layout", () => {

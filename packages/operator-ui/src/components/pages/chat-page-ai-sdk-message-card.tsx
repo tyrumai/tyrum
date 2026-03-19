@@ -1,5 +1,5 @@
 import type { Approval } from "@tyrum/client";
-import type { ResolveApprovalInput, OperatorCore } from "@tyrum/operator-core";
+import type { ResolveApprovalInput, OperatorCore } from "@tyrum/operator-app";
 import type { UIMessage } from "ai";
 import { Copy } from "lucide-react";
 import { cn } from "../../lib/cn.js";

@@ -3,8 +3,8 @@
 import { AgentConfig, IdentityPack } from "@tyrum/contracts";
 import { describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
-import type { OperatorCore } from "../../../operator-core/src/index.js";
-import { createStore } from "../../../operator-core/src/store.js";
+import type { OperatorCore } from "../../../operator-app/src/index.js";
+import { createStore } from "../../../operator-app/src/store.js";
 import { AgentsPage } from "../../src/components/pages/agents-page.js";
 import { cleanupTestRoot, click, renderIntoDocument, setNativeValue } from "../test-utils.js";
 
@@ -209,7 +209,10 @@ function createCore(options?: {
       },
     },
     runsStore,
-  } as unknown as OperatorCore;
+  } as unknown as OperatorCore & {
+    http: OperatorCore["admin"];
+  };
+  core.admin = core.http;
 
   return { core, setAgentKey, refresh };
 }

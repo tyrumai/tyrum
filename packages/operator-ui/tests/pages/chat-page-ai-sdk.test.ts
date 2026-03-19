@@ -2,8 +2,8 @@
 
 import React from "react";
 import { describe, expect, it, vi } from "vitest";
-import type { OperatorCore } from "../../../operator-core/src/index.js";
-import { createStore } from "../../../operator-core/src/store.js";
+import type { OperatorCore } from "../../../operator-app/src/index.js";
+import { createStore } from "../../../operator-app/src/store.js";
 import { AiSdkChatPage } from "../../src/components/pages/chat-page-ai-sdk.js";
 import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
 
@@ -87,7 +87,13 @@ describe("AiSdkChatPage", () => {
         off: vi.fn(),
         on: vi.fn(),
       },
-    } as unknown as OperatorCore;
+    } as unknown as OperatorCore & {
+      http: OperatorCore["admin"];
+      ws: unknown;
+    };
+    core.admin = core.http;
+    core.workboard = core.ws as OperatorCore["workboard"];
+    core.chatSocket = core.ws as OperatorCore["chatSocket"];
 
     const testRoot = renderIntoDocument(React.createElement(AiSdkChatPage, { core }));
 

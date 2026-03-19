@@ -3,7 +3,7 @@
 import React, { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createRoot, type Root } from "react-dom/client";
-import type { PairingGetResponse } from "@tyrum/operator-core/browser";
+import type { PairingGetResponse } from "@tyrum/operator-app/browser";
 import {
   createBearerTokenAuth,
   createElevatedModeStore,
@@ -11,7 +11,7 @@ import {
   isElevatedModeActive,
   type ElevatedModeStore,
   type OperatorCore,
-} from "../../operator-core/src/index.js";
+} from "../../operator-app/src/index.js";
 import {
   AdminAccessProvider,
   OperatorUiHostProvider,

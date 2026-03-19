@@ -1,8 +1,8 @@
 import {
   createElevatedModeStore,
   type OperatorCore,
-} from "../../../packages/operator-core/src/index.js";
-import { createStore } from "../../../packages/operator-core/src/store.js";
+} from "../../../packages/operator-app/src/index.js";
+import { createStore } from "../../../packages/operator-app/src/store.js";
 import type { DesktopApi } from "../../../packages/operator-ui/src/desktop-api.js";
 import {
   createActivityStore,
@@ -249,7 +249,7 @@ export function createOnboardingDesktopApi(): DesktopApi {
 }
 
 export function createAgentsCore(): OperatorCore {
-  return {
+  const core = {
     httpBaseUrl: "http://127.0.0.1:8788/",
     elevatedModeStore: createElevatedModeStore(),
     connectionStore: createConnectionStore(),
@@ -257,11 +257,15 @@ export function createAgentsCore(): OperatorCore {
     agentStatusStore: createAgentStatusStore(),
     runsStore: createRunsStore(),
     http: createHarnessAgentHttpFixtures(createManagedAgentDetail),
-  } as unknown as OperatorCore;
+  } as unknown as OperatorCore & {
+    http: OperatorCore["admin"];
+  };
+  core.admin = core.http;
+  return core;
 }
 
 export function createDashboardCore(): OperatorCore {
-  return {
+  const core = {
     connectionStore: createConnectionStore(),
     statusStore: createStatusStore(),
     approvalsStore: createApprovalsStore(),
@@ -278,11 +282,15 @@ export function createDashboardCore(): OperatorCore {
         }),
       },
     },
-  } as unknown as OperatorCore;
+  } as unknown as OperatorCore & {
+    http: OperatorCore["admin"];
+  };
+  core.admin = core.http;
+  return core;
 }
 
 export function createChatCore(): OperatorCore {
-  return {
+  const core = {
     connectionStore: createConnectionStore(),
     approvalsStore: createApprovalsStore(),
     chatStore: createChatStore(),
@@ -294,7 +302,14 @@ export function createChatCore(): OperatorCore {
         }),
       },
     },
-  } as unknown as OperatorCore;
+  } as unknown as OperatorCore & {
+    http: OperatorCore["admin"];
+    ws: OperatorCore["chatSocket"] & OperatorCore["workboard"];
+  };
+  core.admin = core.http;
+  core.chatSocket = core.ws;
+  core.workboard = core.ws;
+  return core;
 }
 
 export function createApprovalsCore(): OperatorCore {
@@ -307,7 +322,7 @@ export function createApprovalsCore(): OperatorCore {
 }
 
 export function createPairingCore(): OperatorCore {
-  return {
+  const core = {
     elevatedModeStore: createElevatedModeStore(),
     connectionStore: createConnectionStore(),
     chatStore: createChatStore(),
@@ -321,11 +336,15 @@ export function createPairingCore(): OperatorCore {
         }),
       },
     },
-  } as unknown as OperatorCore;
+  } as unknown as OperatorCore & {
+    http: OperatorCore["admin"];
+  };
+  core.admin = core.http;
+  return core;
 }
 
 export function createWorkboardCore(): OperatorCore {
-  return {
+  const core = {
     connectionStore: createConnectionStore(),
     workboardStore: createWorkboardStore(),
     ws: {
@@ -340,14 +359,25 @@ export function createWorkboardCore(): OperatorCore {
     },
     connect() {},
     disconnect() {},
-  } as unknown as OperatorCore;
+  } as unknown as OperatorCore & {
+    http: OperatorCore["admin"];
+    ws: OperatorCore["chatSocket"] & OperatorCore["workboard"];
+  };
+  core.admin = core.http;
+  core.chatSocket = core.ws;
+  core.workboard = core.ws;
+  return core;
 }
 
 export function createConfigureCore(): OperatorCore {
-  return {
+  const core = {
     elevatedModeStore: createElevatedModeStore(),
     http: createHarnessConfigureHttpFixtures(),
-  } as unknown as OperatorCore;
+  } as unknown as OperatorCore & {
+    http: OperatorCore["admin"];
+  };
+  core.admin = core.http;
+  return core;
 }
 
 export function createOnboardingCore(): OperatorCore {
@@ -358,11 +388,15 @@ export function createOnboardingCore(): OperatorCore {
   });
   const fixtures = createOnboardingHttpFixtures();
 
-  return {
+  const core = {
     httpBaseUrl: "http://127.0.0.1:8788/",
     elevatedModeStore,
     statusStore: createOnboardingStatusStore(),
     http: fixtures,
     syncAllNow: async () => {},
-  } as unknown as OperatorCore;
+  } as unknown as OperatorCore & {
+    http: OperatorCore["admin"];
+  };
+  core.admin = core.http;
+  return core;
 }

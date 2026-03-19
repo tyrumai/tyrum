@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-describe("@tyrum/operator-core entrypoints", () => {
+describe("@tyrum/operator-app entrypoints", () => {
   it("keeps browser and node helper entrypoints on the intended public surface", async () => {
     const browserEntry = (await import("../src/browser.js")) as Record<string, unknown>;
     const nodeEntry = (await import("../src/node.js")) as Record<string, unknown>;

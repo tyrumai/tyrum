@@ -1,4 +1,4 @@
-import type { OperatorCore } from "@tyrum/operator-core";
+import type { OperatorCore } from "@tyrum/operator-app";
 import type { OperatorUiMode } from "../../app.js";
 import { AuditPanel } from "../admin-http/audit-panel.js";
 import { AppPage } from "../layout/app-page.js";

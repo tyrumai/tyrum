@@ -3,7 +3,7 @@
 import React, { act } from "react";
 import { describe, expect, it, vi } from "vitest";
 import type { UIMessage } from "ai";
-import type { OperatorCore } from "../../../operator-core/src/index.js";
+import type { OperatorCore } from "../../../operator-app/src/index.js";
 import { MessageCard } from "../../src/components/pages/chat-page-ai-sdk-message-card.js";
 import { click, cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
 

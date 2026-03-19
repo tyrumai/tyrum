@@ -51,20 +51,20 @@ export const PACKAGE_BUILD_SPECS = [
     outputPaths: ["packages/client/dist/index.mjs"],
   },
   {
-    key: "operator-core",
-    name: "@tyrum/operator-core",
+    key: "operator-app",
+    name: "@tyrum/operator-app",
     dependencies: ["contracts", "transport-sdk", "node-sdk", "client"],
     inputPaths: [
-      "packages/operator-core/package.json",
-      "packages/operator-core/tsconfig.json",
-      "packages/operator-core/src",
+      "packages/operator-app/package.json",
+      "packages/operator-app/tsconfig.json",
+      "packages/operator-app/src",
     ],
-    outputPaths: ["packages/operator-core/dist/index.mjs"],
+    outputPaths: ["packages/operator-app/dist/index.mjs"],
   },
   {
     key: "operator-ui",
     name: "@tyrum/operator-ui",
-    dependencies: ["contracts", "transport-sdk", "node-sdk", "client", "operator-core"],
+    dependencies: ["contracts", "transport-sdk", "node-sdk", "client", "operator-app"],
     inputPaths: [
       "packages/operator-ui/package.json",
       "packages/operator-ui/tsconfig.json",

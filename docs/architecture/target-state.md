@@ -91,7 +91,7 @@ flowchart LR
 | Current package                           | Target replacement                                                     | Contributor rule                                                                                                     |
 | ----------------------------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | `@tyrum/client`                           | `@tyrum/transport-sdk` and `@tyrum/node-sdk`                           | Do not add new transport or generic node APIs here unless the active migration step requires temporary coexistence.  |
-| `@tyrum/operator-core`                    | `@tyrum/operator-app`                                                  | Do not add new app-facing operator state or actions here after the replacement track is open.                        |
+| `@tyrum/operator-core`                    | `@tyrum/operator-app`                                                  | Do not add new app-facing operator state or actions to the legacy package after the replacement track is open.       |
 | `@tyrum/operator-ui` (current mixed role) | `@tyrum/operator-ui` presentation-only on top of `@tyrum/operator-app` | New UI behavior must arrive through `@tyrum/operator-app`, not by reaching through to transport or runtime packages. |
 | `@tyrum/gateway` (current monolith)       | `@tyrum/gateway` composition root plus `@tyrum/runtime-*` packages     | Keep new business logic out of gateway handlers and services.                                                        |
 
@@ -110,6 +110,7 @@ flowchart LR
 - Keep `scripts/lint/package-boundaries.config.mjs` in sync with this page and [ARCH-01 clean-break target-state decision record](./reference/arch-01-clean-break-target-state.md). Update the doc and the executable rule set together in the same PR.
 - Use `scripts/lint/package-boundaries-baseline.json` only for temporary coexistence entries that are still required to land the linked migration issue safely. Every allowlist entry should carry a linked issue in the `reason`, and it should be removed as soon as the migration step lands.
 - `#1535` temporarily allowlists the current `@tyrum/operator-ui -> @tyrum/contracts` edges so the contracts-package rename can land before the separate `@tyrum/operator-app` extraction removes direct contract usage from presentation code.
+- `#1538` temporarily allowlists the initial `@tyrum/operator-app` extraction where helper entrypoints and a small set of downstream consumers still depend on `@tyrum/client` or `@tyrum/node-sdk` during the package move.
 - When a replacement package first appears, add only the minimum coexistence allowlist entries needed to keep the repo green. The boundary gate should then block any new legacy-package edges outside that explicit baseline.
 
 ## Related docs

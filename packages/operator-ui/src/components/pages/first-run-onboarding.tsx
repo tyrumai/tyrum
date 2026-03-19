@@ -1,4 +1,4 @@
-import type { OperatorCore } from "@tyrum/operator-core";
+import type { OperatorCore } from "@tyrum/operator-app";
 import * as React from "react";
 import { CheckCircle2 } from "lucide-react";
 import { useOperatorStore } from "../../use-operator-store.js";

@@ -1,9 +1,5 @@
-import type { PairingGetResponse } from "@tyrum/operator-core/browser";
-import {
-  ElevatedModeRequiredError,
-  isElevatedModeActive,
-  type Pairing,
-} from "@tyrum/operator-core";
+import type { PairingGetResponse } from "@tyrum/operator-app/browser";
+import { ElevatedModeRequiredError, isElevatedModeActive, type Pairing } from "@tyrum/operator-app";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useBrowserNodeOptional } from "./browser-node/browser-node-provider.js";
@@ -319,7 +315,7 @@ export function LocalNodeAutoApprovalBridge(): null {
 
       void (async () => {
         try {
-          const detailed = await core.http.pairings.get(candidate.pairing_id);
+          const detailed = await core.admin.pairings.get(candidate.pairing_id);
           const current = detailed.pairing;
           if (buildPairingKey(current) !== pairingKey) {
             attemptsRef.current.delete(pairingKey);

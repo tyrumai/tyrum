@@ -2,8 +2,8 @@
 
 import { describe, expect, it } from "vitest";
 import React from "react";
-import { createElevatedModeStore, type OperatorCore } from "../../../operator-core/src/index.js";
-import { createStore } from "../../../operator-core/src/store.js";
+import { createElevatedModeStore, type OperatorCore } from "../../../operator-app/src/index.js";
+import { createStore } from "../../../operator-app/src/store.js";
 import { AdminAccessProvider } from "../../src/index.js";
 import { ApprovalsPage } from "../../src/components/pages/approvals-page.js";
 import {

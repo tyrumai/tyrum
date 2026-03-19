@@ -1,7 +1,5 @@
-import { createTyrumHttpClient } from "@tyrum/operator-core/browser";
 import {
   createBearerTokenAuth,
-  createDeviceIdentity,
   createElevatedModeStore,
   createOperatorCore,
   createOperatorCoreManager,
@@ -10,8 +8,9 @@ import {
   type ElevatedModeStore,
   type OperatorCore,
   type OperatorCoreManager,
-} from "@tyrum/operator-core/browser";
+} from "@tyrum/operator-app";
 import { createAdminAccessController, type AdminAccessController } from "@tyrum/operator-ui";
+import { createDeviceIdentity, createTyrumHttpClient } from "@tyrum/transport-sdk/browser";
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
 import { toErrorMessage } from "./errors.js";
 

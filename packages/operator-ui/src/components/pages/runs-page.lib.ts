@@ -1,5 +1,5 @@
 import type { ExecutionAttempt, ExecutionRun, ExecutionStep } from "@tyrum/client";
-import type { RunsState } from "@tyrum/operator-core";
+import type { RunsState } from "@tyrum/operator-app";
 
 export interface RunTimelineEntry {
   step: ExecutionStep;

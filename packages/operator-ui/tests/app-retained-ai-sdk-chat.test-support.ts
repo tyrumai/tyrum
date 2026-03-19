@@ -3,8 +3,8 @@
 import React, { act } from "react";
 import { afterEach, beforeEach, vi } from "vitest";
 import type { UIMessage } from "ai";
-import { createChatStore } from "../../operator-core/src/stores/chat-store.js";
-import { createStore } from "../../operator-core/src/store.js";
+import { createChatStore } from "../../operator-app/src/stores/chat-store.js";
+import { createStore } from "../../operator-app/src/store.js";
 import { OperatorUiApp } from "../src/app.js";
 import { renderIntoDocument, type TestRoot } from "./test-utils.js";
 
@@ -398,10 +398,13 @@ export function createCoreStub(input?: {
     chatStore: createChatStore(ws as never, http as never),
     connectionStore,
     deviceId: null,
+    admin: http,
     http,
     httpBaseUrl: "http://localhost:8788",
     sessionClient,
     syncAllNow: vi.fn(async () => undefined),
+    chatSocket: ws,
+    workboard: ws,
     ws,
     wsUrl: "ws://localhost:8788/ws",
   };

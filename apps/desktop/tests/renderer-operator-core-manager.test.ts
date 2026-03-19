@@ -3,7 +3,7 @@ import {
   createElevatedModeStore,
   createOperatorCoreManager,
   type OperatorAuthStrategy,
-} from "@tyrum/operator-core";
+} from "@tyrum/operator-app";
 import { describe, expect, it, vi } from "vitest";
 
 function createFakeCore() {

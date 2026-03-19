@@ -56,11 +56,10 @@ class FakeTyrumClient {
   }
 }
 
-vi.mock("@tyrum/operator-core/browser", () => {
+vi.mock("@tyrum/operator-app/browser", () => {
   const autoExecute = vi.fn();
 
   return {
-    autoExecute,
     createManagedNodeClientLifecycle: createManagedNodeClientLifecycleMock({
       autoExecute,
       requireConnectedObject: true,

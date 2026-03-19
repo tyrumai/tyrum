@@ -1,4 +1,4 @@
-import type { OperatorCore } from "@tyrum/operator-core";
+import type { OperatorCore } from "@tyrum/operator-app";
 import type { AgentStatusResponse } from "@tyrum/contracts";
 import { Bot, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -119,7 +119,7 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
     setAgentsLoading(true);
     setAgentsError(null);
     try {
-      const response = await core.http.agents.list();
+      const response = await core.admin.agents.list();
       const nextAgents = normalizeAgentOptions(response.agents);
       const nextKeys = nextAgents.map((agent) => agent.agentKey);
       setAgentOptions(nextAgents);
@@ -232,7 +232,7 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
         onConfirm={async () => {
           if (!selectedAgentOption) return;
           await deleteAction.runAndThrow(async () => {
-            await core.http.agents.delete(selectedAgentOption.agentKey);
+            await core.admin.agents.delete(selectedAgentOption.agentKey);
           });
           setCreateMode(false);
           setActiveTab("identity");

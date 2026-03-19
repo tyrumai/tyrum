@@ -1,5 +1,5 @@
-import type { StatusResponse } from "@tyrum/operator-core/browser";
-import type { ActivityEvent, ActivityWorkstream, OperatorCore } from "@tyrum/operator-core";
+import type { StatusResponse } from "@tyrum/operator-app/browser";
+import type { ActivityEvent, ActivityWorkstream, OperatorCore } from "@tyrum/operator-app";
 import * as React from "react";
 import { Bot, Inbox, Play, ShieldCheck, SquareKanban } from "lucide-react";
 import { AppPage } from "../layout/app-page.js";

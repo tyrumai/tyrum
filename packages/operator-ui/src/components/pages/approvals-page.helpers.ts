@@ -1,6 +1,6 @@
 import type { Approval, ExecutionAttempt } from "@tyrum/client";
 import { clientCapabilityFromDescriptorId } from "@tyrum/contracts";
-import type { RunsState } from "@tyrum/operator-core";
+import type { RunsState } from "@tyrum/operator-app";
 import { parseAgentIdFromKey } from "../../lib/status-session-lanes.js";
 import { isRecord } from "../../utils/is-record.js";
 

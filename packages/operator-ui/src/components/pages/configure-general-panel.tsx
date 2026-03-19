@@ -1,4 +1,4 @@
-import type { OperatorCore } from "@tyrum/operator-core";
+import type { OperatorCore } from "@tyrum/operator-app";
 import { Monitor, Moon, Shield, ShieldCheck, Sun } from "lucide-react";
 import { useState } from "react";
 import type { OperatorUiMode } from "../../app.js";

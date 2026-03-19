@@ -1,4 +1,4 @@
-import type { OperatorCore } from "@tyrum/operator-core";
+import type { OperatorCore } from "@tyrum/operator-app";
 import { useCallback, type ReactNode } from "react";
 import type { DesktopApi } from "../../../desktop-api.js";
 import { useHostApi } from "../../../host/host-api.js";
@@ -87,7 +87,7 @@ function BrowserNodeConfigPage({ core }: { core?: OperatorCore }) {
 function MobileNodeConfigPage({ core }: { core?: OperatorCore }) {
   const dispatchTest = useCallback(
     async (_actionName: string, _input: Record<string, unknown>): Promise<unknown> => {
-      // Mobile test dispatch placeholder — will delegate through core.http when wired.
+      // Mobile test dispatch placeholder — will delegate through core.admin when wired.
       return undefined;
     },
     [],

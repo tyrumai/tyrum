@@ -1,5 +1,5 @@
-import type { ActivityEvent } from "@tyrum/operator-core";
-import type { StatusResponse } from "@tyrum/operator-core/browser";
+import type { ActivityEvent } from "@tyrum/operator-app";
+import type { StatusResponse } from "@tyrum/operator-app/browser";
 import type { StatusDotVariant } from "../ui/status-dot.js";
 import * as React from "react";
 import { Badge } from "../ui/badge.js";

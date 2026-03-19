@@ -1,4 +1,4 @@
-import type { AuthTokenListEntry } from "@tyrum/operator-core/browser";
+import type { AuthTokenListEntry } from "@tyrum/operator-app/browser";
 import { KeyRound } from "lucide-react";
 import * as React from "react";
 import { ElevatedModeTooltip } from "../elevated-mode/elevated-mode-tooltip.js";

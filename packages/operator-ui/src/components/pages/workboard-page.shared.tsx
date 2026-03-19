@@ -1,4 +1,4 @@
-import type { WorkItem } from "@tyrum/operator-core";
+import type { WorkItem } from "@tyrum/operator-app";
 import type { ReactNode } from "react";
 import { Badge } from "../ui/badge.js";
 import { Card, CardContent } from "../ui/card.js";

@@ -1,4 +1,4 @@
-import { ElevatedModeRequiredError } from "@tyrum/operator-core";
+import { ElevatedModeRequiredError } from "@tyrum/operator-app";
 import { isRecord } from "../../utils/is-record.js";
 
 export function isAdminAccessRequiredError(error: unknown): boolean {

@@ -1,4 +1,4 @@
-import { isElevatedModeActive } from "@tyrum/operator-core";
+import { isElevatedModeActive } from "@tyrum/operator-app";
 import type { ReactNode } from "react";
 import { Button } from "../ui/button.js";
 import { Alert } from "../ui/alert.js";

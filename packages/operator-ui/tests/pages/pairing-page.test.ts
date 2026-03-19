@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from "vitest";
 import React, { act } from "react";
-import { createBearerTokenAuth, createOperatorCore } from "../../../operator-core/src/index.js";
+import { createBearerTokenAuth, createOperatorCore } from "../../../operator-app/src/index.js";
 import { createOperatorUiTestCoreWithAdminAccess } from "../operator-ui.admin-access-test-support.js";
 import { AdminAccessProvider } from "../../src/index.js";
 import { PairingPage } from "../../src/components/pages/pairing-page.js";

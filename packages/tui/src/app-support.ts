@@ -1,4 +1,4 @@
-import type { OperatorCore, OperatorCoreManager } from "@tyrum/operator-core";
+import type { OperatorCore, OperatorCoreManager } from "@tyrum/operator-app";
 import { useSyncExternalStore } from "react";
 import type { TuiKey } from "./tui-input.js";
 

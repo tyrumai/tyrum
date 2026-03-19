@@ -3,8 +3,8 @@
 import { describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
 import { readFileSync } from "node:fs";
-import type { OperatorCore } from "../../../operator-core/src/index.js";
-import { createStore } from "../../../operator-core/src/store.js";
+import type { OperatorCore } from "../../../operator-app/src/index.js";
+import { createStore } from "../../../operator-app/src/store.js";
 import { ConnectPage } from "../../src/components/pages/connect-page.js";
 import { cleanupTestRoot, renderIntoDocument, setNativeValue } from "../test-utils.js";
 

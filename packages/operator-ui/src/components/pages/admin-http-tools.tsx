@@ -1,4 +1,4 @@
-import type { OperatorCore } from "@tyrum/operator-core";
+import type { OperatorCore } from "@tyrum/operator-app";
 import * as React from "react";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 import {
@@ -100,7 +100,7 @@ function buildGroups(tools: readonly ToolRegistryEntry[]): Array<{
 }
 
 export function ToolRegistryCard({ core }: { core: OperatorCore }): React.ReactElement {
-  const toolRegistryApi = core.http.toolRegistry;
+  const toolRegistryApi = core.admin.toolRegistry;
   const [tools, setTools] = React.useState<ToolRegistryEntry[]>([]);
   const [expandedIds, setExpandedIds] = React.useState<Set<string>>(() => new Set());
   const [filter, setFilter] = React.useState("");

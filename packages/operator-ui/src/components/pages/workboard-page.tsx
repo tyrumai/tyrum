@@ -5,7 +5,7 @@ import type {
   WorkSignal,
   WorkStateKVScope,
   OperatorCore,
-} from "@tyrum/operator-core";
+} from "@tyrum/operator-app";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOperatorStore } from "../../use-operator-store.js";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
@@ -133,7 +133,7 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
       setTransitionTarget(status);
       setDrilldownError(null);
       try {
-        const res = await core.ws.workTransition({
+        const res = await core.workboard.workTransition({
           ...effectiveScopeKeys,
           work_item_id: selectedWorkItemId,
           status,
@@ -151,7 +151,7 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
         setTransitionTarget(null);
       }
     },
-    [core.ws, core.workboardStore, effectiveScopeKeys, isConnected, selectedWorkItemId],
+    [core.workboard, core.workboardStore, effectiveScopeKeys, isConnected, selectedWorkItemId],
   );
 
   useEffect(() => {
@@ -187,7 +187,7 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
       if (disposed) return;
       const selectedId = selectedIdRef.current;
       if (!selectedId) return;
-      void core.ws
+      void core.workboard
         .workSignalGet({ ...effectiveScopeKeys, signal_id: event.payload.signal_id })
         .then((res) => {
           if (disposed) return;
@@ -202,7 +202,7 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
       const selectedId = selectedIdRef.current;
       const scope = event.payload.scope;
       if (!shouldProcessWorkStateKvUpdate(scope, selectedId)) return;
-      void core.ws
+      void core.workboard
         .workStateKvGet({ scope, key: event.payload.key })
         .then((res) => {
           if (disposed) return;
@@ -218,23 +218,23 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
         .catch(() => {});
     };
 
-    core.ws.on("work.artifact.created", onWorkArtifactCreated);
-    core.ws.on("work.decision.created", onWorkDecisionCreated);
-    core.ws.on("work.signal.created", onWorkSignalUpsert);
-    core.ws.on("work.signal.updated", onWorkSignalUpsert);
-    core.ws.on("work.signal.fired", onWorkSignalFired);
-    core.ws.on("work.state_kv.updated", onWorkStateKvUpdated);
+    core.workboard.on("work.artifact.created", onWorkArtifactCreated);
+    core.workboard.on("work.decision.created", onWorkDecisionCreated);
+    core.workboard.on("work.signal.created", onWorkSignalUpsert);
+    core.workboard.on("work.signal.updated", onWorkSignalUpsert);
+    core.workboard.on("work.signal.fired", onWorkSignalFired);
+    core.workboard.on("work.state_kv.updated", onWorkStateKvUpdated);
 
     return () => {
       disposed = true;
-      core.ws.off("work.artifact.created", onWorkArtifactCreated);
-      core.ws.off("work.decision.created", onWorkDecisionCreated);
-      core.ws.off("work.signal.created", onWorkSignalUpsert);
-      core.ws.off("work.signal.updated", onWorkSignalUpsert);
-      core.ws.off("work.signal.fired", onWorkSignalFired);
-      core.ws.off("work.state_kv.updated", onWorkStateKvUpdated);
+      core.workboard.off("work.artifact.created", onWorkArtifactCreated);
+      core.workboard.off("work.decision.created", onWorkDecisionCreated);
+      core.workboard.off("work.signal.created", onWorkSignalUpsert);
+      core.workboard.off("work.signal.updated", onWorkSignalUpsert);
+      core.workboard.off("work.signal.fired", onWorkSignalFired);
+      core.workboard.off("work.state_kv.updated", onWorkStateKvUpdated);
     };
-  }, [core.ws, effectiveScopeKeys, isConnected]);
+  }, [core.workboard, effectiveScopeKeys, isConnected]);
 
   useEffect(() => {
     if (!isConnected || !selectedWorkItemId) {
@@ -257,24 +257,24 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
       try {
         const [workItemRes, artifactsRes, decisionsRes, signalsRes, agentKvRes, workItemKvRes] =
           await Promise.all([
-            core.ws.workGet({ ...effectiveScopeKeys, work_item_id: selectedWorkItemId }),
-            core.ws.workArtifactList({
+            core.workboard.workGet({ ...effectiveScopeKeys, work_item_id: selectedWorkItemId }),
+            core.workboard.workArtifactList({
               ...effectiveScopeKeys,
               work_item_id: selectedWorkItemId,
               limit: 200,
             }),
-            core.ws.workDecisionList({
+            core.workboard.workDecisionList({
               ...effectiveScopeKeys,
               work_item_id: selectedWorkItemId,
               limit: 200,
             }),
-            core.ws.workSignalList({
+            core.workboard.workSignalList({
               ...effectiveScopeKeys,
               work_item_id: selectedWorkItemId,
               limit: 200,
             }),
-            core.ws.workStateKvList({ scope: makeAgentScope(effectiveScopeKeys) }),
-            core.ws.workStateKvList({
+            core.workboard.workStateKvList({ scope: makeAgentScope(effectiveScopeKeys) }),
+            core.workboard.workStateKvList({
               scope: makeWorkItemScope(effectiveScopeKeys, selectedWorkItemId),
             }),
           ]);
@@ -301,7 +301,7 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
     return () => {
       cancelled = true;
     };
-  }, [core.ws, effectiveScopeKeys, isConnected, selectedWorkItemId]);
+  }, [core.workboard, effectiveScopeKeys, isConnected, selectedWorkItemId]);
 
   const tasksForSelected = selectTasksForSelectedWorkItem(
     workboard.tasksByWorkItemId,

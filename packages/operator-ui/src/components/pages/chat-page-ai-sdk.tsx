@@ -3,7 +3,7 @@ import {
   createTyrumAiSdkChatTransport,
   supportsTyrumAiSdkChatSocket,
 } from "@tyrum/client";
-import type { OperatorCore, ResolveApprovalInput } from "@tyrum/operator-core";
+import type { OperatorCore, ResolveApprovalInput } from "@tyrum/operator-app";
 import type { UIMessage } from "ai";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -68,7 +68,10 @@ export function AiSdkChatPage({ core }: { core: OperatorCore }) {
   const browserNode = useBrowserNodeOptional();
   const host = useHostApiOptional();
 
-  const socket = useMemo(() => (supportsTyrumAiSdkChatSocket(core.ws) ? core.ws : null), [core.ws]);
+  const socket = useMemo(
+    () => (supportsTyrumAiSdkChatSocket(core.chatSocket) ? core.chatSocket : null),
+    [core.chatSocket],
+  );
   const sessionClient = useMemo(
     () => (socket ? createTyrumAiSdkChatSessionClient({ client: socket }) : null),
     [socket],

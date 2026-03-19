@@ -1,7 +1,7 @@
 import { AgentConfig, IdentityPack } from "@tyrum/contracts";
-import { TyrumHttpClientError } from "@tyrum/operator-core/browser";
+import { TyrumHttpClientError } from "@tyrum/operator-app/browser";
 import { vi } from "vitest";
-import type { OperatorHttpClient } from "../../operator-core/src/deps.js";
+import type { OperatorHttpClient } from "../../operator-app/src/deps.js";
 import {
   createAuthTokenHttpFixtures,
   createDeviceTokenHttpFixtures,

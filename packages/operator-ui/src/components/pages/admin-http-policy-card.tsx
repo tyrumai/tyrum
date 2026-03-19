@@ -1,5 +1,5 @@
-import { TyrumHttpClientError } from "@tyrum/operator-core/browser";
-import type { OperatorCore } from "@tyrum/operator-core";
+import { TyrumHttpClientError } from "@tyrum/operator-app/browser";
+import type { OperatorCore } from "@tyrum/operator-app";
 import * as React from "react";
 import { toast } from "sonner";
 import { formatErrorMessage } from "../../utils/format-error-message.js";

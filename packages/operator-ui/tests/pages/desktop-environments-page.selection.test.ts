@@ -2,8 +2,8 @@
 
 import React, { act } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { TyrumHttpClientError } from "@tyrum/operator-core/browser";
-import { createBearerTokenAuth, createOperatorCore } from "../../../operator-core/src/index.js";
+import { TyrumHttpClientError } from "@tyrum/operator-app/browser";
+import { createBearerTokenAuth, createOperatorCore } from "../../../operator-app/src/index.js";
 import { DesktopEnvironmentsPage } from "../../src/components/pages/desktop-environments-page.js";
 import { cleanupTestRoot, click, renderIntoDocument } from "../test-utils.js";
 import { FakeWsClient, createFakeHttpClient } from "../operator-ui.test-fixtures.js";

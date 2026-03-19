@@ -1,4 +1,4 @@
-import type { OperatorCore } from "@tyrum/operator-core";
+import type { OperatorCore } from "@tyrum/operator-app";
 import { Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import { AdminAccessProvider } from "./elevated-mode.js";
 import { ErrorBoundary } from "./components/error/error-boundary.js";

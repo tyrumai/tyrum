@@ -10,7 +10,7 @@
   "main": "dist/main/index.mjs",
   "scripts": {
     "dev": "electron dist/main/index.mjs",
-    "pretest": "pnpm --filter @tyrum/contracts build && pnpm --filter @tyrum/runtime-policy build && pnpm --filter @tyrum/transport-sdk build && pnpm --filter @tyrum/node-sdk build && pnpm --filter @tyrum/client build && pnpm --filter @tyrum/cli-utils build && pnpm --filter @tyrum/operator-core build && pnpm --filter @tyrum/operator-ui build && pnpm --filter @tyrum/desktop-node build",
+    "pretest": "pnpm --filter @tyrum/contracts build && pnpm --filter @tyrum/runtime-policy build && pnpm --filter @tyrum/transport-sdk build && pnpm --filter @tyrum/node-sdk build && pnpm --filter @tyrum/client build && pnpm --filter @tyrum/cli-utils build && pnpm --filter @tyrum/operator-app build && pnpm --filter @tyrum/operator-ui build && pnpm --filter @tyrum/desktop-node build",
     "test": "pnpm -w vitest run apps/desktop/tests",
     "build:main": "tsdown --config tsdown.config.ts --filter desktop-main",
     "build:preload": "tsdown --config tsdown.config.ts --filter desktop-preload",
@@ -21,10 +21,12 @@
     "dist": "pnpm build:gateway && pnpm build && electron-builder --publish never"
   },
   "dependencies": {
+    "@tyrum/contracts": "workspace:*",
     "@tyrum/desktop-node": "workspace:*",
     "@tyrum/node-sdk": "workspace:*",
-    "@tyrum/operator-core": "workspace:*",
+    "@tyrum/operator-app": "workspace:*",
     "@tyrum/operator-ui": "workspace:*",
+    "@tyrum/transport-sdk": "workspace:*",
     "electron-store": "^11.0.2",
     "electron-updater": "^6.6.2",
     "execa": "^9.6.1",

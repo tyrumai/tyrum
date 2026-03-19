@@ -1,4 +1,4 @@
-import type { OperatorCore } from "@tyrum/operator-core";
+import type { OperatorCore } from "@tyrum/operator-app";
 import * as React from "react";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { ConfirmDangerDialog } from "../ui/confirm-danger-dialog.js";

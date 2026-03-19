@@ -236,7 +236,7 @@ describe("ConfigurePage (HTTP) policy + config", () => {
   it("retries policy loading when elevated mode enables the admin client after mount", async () => {
     const { core } = createAdminHttpTestCore();
     core.elevatedModeStore.exit();
-    delete (core.http as { policyConfig?: unknown }).policyConfig;
+    delete (core.admin as { policyConfig?: unknown }).policyConfig;
 
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const response = policyPageGetResponse(input, init);

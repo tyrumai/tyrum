@@ -2,8 +2,8 @@
 
 import { describe, expect, it } from "vitest";
 import React, { act } from "react";
-import { createElevatedModeStore, type OperatorCore } from "../../../operator-core/src/index.js";
-import { createStore } from "../../../operator-core/src/store.js";
+import { createElevatedModeStore, type OperatorCore } from "../../../operator-app/src/index.js";
+import { createStore } from "../../../operator-app/src/store.js";
 import { AdminAccessProvider } from "../../src/index.js";
 import { ApprovalsPage } from "../../src/components/pages/approvals-page.js";
 import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
@@ -226,7 +226,10 @@ describe("ApprovalsPage history and filters", () => {
           }),
         },
       },
-    } as unknown as OperatorCore;
+    } as unknown as OperatorCore & {
+      http: OperatorCore["admin"];
+    };
+    core.admin = core.http;
 
     const { container, root } = renderApprovalsPage(core);
 
@@ -431,7 +434,10 @@ describe("ApprovalsPage history and filters", () => {
           }),
         },
       },
-    } as unknown as OperatorCore;
+    } as unknown as OperatorCore & {
+      http: OperatorCore["admin"];
+    };
+    core.admin = core.http;
 
     const { container, root } = renderApprovalsPage(core);
 

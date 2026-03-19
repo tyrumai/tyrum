@@ -17,6 +17,51 @@ import type { StatusStore } from "./stores/status-store.js";
 import type { WorkboardStore } from "./stores/workboard-store.js";
 import type { ExternalStore } from "./store.js";
 
+export type OperatorAdminClient = Pick<
+  OperatorHttpClient,
+  | "agentConfig"
+  | "agentList"
+  | "agents"
+  | "artifacts"
+  | "audit"
+  | "authTokens"
+  | "channelConfig"
+  | "context"
+  | "desktopEnvironmentHosts"
+  | "desktopEnvironments"
+  | "deviceTokens"
+  | "extensions"
+  | "location"
+  | "modelConfig"
+  | "nodes"
+  | "pairings"
+  | "policy"
+  | "policyConfig"
+  | "providerConfig"
+  | "routingConfig"
+  | "secrets"
+  | "toolRegistry"
+>;
+
+export type OperatorChatSocket = Pick<
+  OperatorWsClient,
+  "connected" | "requestDynamic" | "onDynamicEvent" | "offDynamicEvent"
+>;
+
+export type OperatorWorkboardClient = Pick<
+  OperatorWsClient,
+  | "off"
+  | "on"
+  | "workArtifactList"
+  | "workDecisionList"
+  | "workGet"
+  | "workSignalGet"
+  | "workSignalList"
+  | "workStateKvGet"
+  | "workStateKvList"
+  | "workTransition"
+>;
+
 export interface OperatorCoreOptions {
   wsUrl: string;
   httpBaseUrl: string;
@@ -36,8 +81,9 @@ export interface OperatorCore {
   wsUrl: string;
   httpBaseUrl: string;
   deviceId?: string | null;
-  ws: OperatorWsClient;
-  http: OperatorHttpClient;
+  admin: OperatorAdminClient;
+  chatSocket: OperatorChatSocket;
+  workboard: OperatorWorkboardClient;
   elevatedModeStore: ElevatedModeStore;
   connectionStore: ConnectionStore;
   autoSyncStore: ExternalStore<AutoSyncState>;

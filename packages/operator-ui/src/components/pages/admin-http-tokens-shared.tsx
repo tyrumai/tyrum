@@ -1,5 +1,5 @@
-import type { OperatorCore } from "@tyrum/operator-core";
-import type { AuthTokenListEntry, AuthTokenUpdateInput } from "@tyrum/operator-core/browser";
+import type { OperatorCore } from "@tyrum/operator-app";
+import type { AuthTokenListEntry, AuthTokenUpdateInput } from "@tyrum/operator-app/browser";
 import * as React from "react";
 import { Alert } from "../ui/alert.js";
 import { type BadgeVariant } from "../ui/badge.js";
@@ -27,7 +27,9 @@ export type ScopePresetKey =
   | "custom";
 export type ExpirationPresetKey = "never" | "1h" | "24h" | "7d" | "30d" | "90d" | "custom";
 export type DialogMode = "create" | "edit";
-export type AuthTokenIssueResult = Awaited<ReturnType<OperatorCore["http"]["authTokens"]["issue"]>>;
+export type AuthTokenIssueResult = Awaited<
+  ReturnType<OperatorCore["admin"]["authTokens"]["issue"]>
+>;
 
 export const SCOPE_OPTIONS = [
   { value: "operator.read", label: "Read" },
@@ -266,7 +268,7 @@ export function validateForm(
 }
 
 export function buildIssueInput(state: TokenFormState) {
-  const input: Parameters<OperatorCore["http"]["authTokens"]["issue"]>[0] = {
+  const input: Parameters<OperatorCore["admin"]["authTokens"]["issue"]>[0] = {
     display_name: state.displayName.trim(),
     role: state.role,
     scopes: state.role === "admin" ? [] : uniqueScopes(state.selectedScopes),

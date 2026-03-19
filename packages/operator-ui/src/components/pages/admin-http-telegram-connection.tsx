@@ -1,4 +1,4 @@
-import type { OperatorCore } from "@tyrum/operator-core";
+import type { OperatorCore } from "@tyrum/operator-app";
 import { Plus, RefreshCw } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";

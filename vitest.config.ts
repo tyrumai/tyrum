@@ -65,7 +65,7 @@ const coverageThresholds = {
     functions: 86,
     branches: 68,
   },
-  "packages/operator-core/src/**": {
+  "packages/operator-app/src/**": {
     lines: 89,
     statements: 84,
     functions: 88,
@@ -120,9 +120,9 @@ export default defineConfig({
       "@tyrum/cli-utils": resolve(__dirname, "packages/cli-utils/src/index.ts"),
       "@tyrum/gateway": resolve(__dirname, "packages/gateway/src/index.ts"),
       "@tyrum/desktop-node": resolve(__dirname, "packages/desktop-node/src/index.ts"),
-      "@tyrum/operator-core/browser": resolve(__dirname, "packages/operator-core/src/browser.ts"),
-      "@tyrum/operator-core/node": resolve(__dirname, "packages/operator-core/src/node.ts"),
-      "@tyrum/operator-core": resolve(__dirname, "packages/operator-core/src/index.ts"),
+      "@tyrum/operator-app/browser": resolve(__dirname, "packages/operator-app/src/browser.ts"),
+      "@tyrum/operator-app/node": resolve(__dirname, "packages/operator-app/src/node.ts"),
+      "@tyrum/operator-app": resolve(__dirname, "packages/operator-app/src/index.ts"),
       "@tyrum/operator-ui/globals.css": resolve(__dirname, "packages/operator-ui/src/globals.css"),
       "@tyrum/operator-ui": resolve(__dirname, "packages/operator-ui/src/index.ts"),
       "@tyrum/cli": resolve(__dirname, "packages/cli/src/index.ts"),

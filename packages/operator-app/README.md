@@ -1,4 +1,4 @@
-# `@tyrum/operator-core`
+# `@tyrum/operator-app`
 
 Shared, renderer-agnostic operator state + actions built on top of `@tyrum/client` (WS + HTTP).
 This package is the client-side foundation used by the web app, desktop app, mobile app, and TUI.
@@ -6,7 +6,7 @@ This package is the client-side foundation used by the web app, desktop app, mob
 ## Usage
 
 ```ts
-import { createOperatorCore, createBearerTokenAuth } from "@tyrum/operator-core";
+import { createOperatorCore, createBearerTokenAuth } from "@tyrum/operator-app";
 
 const core = createOperatorCore({
   wsUrl: "ws://127.0.0.1:8788/ws",

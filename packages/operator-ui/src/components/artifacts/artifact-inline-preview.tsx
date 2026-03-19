@@ -1,5 +1,5 @@
 import type { ArtifactRef } from "@tyrum/contracts";
-import type { OperatorCore } from "@tyrum/operator-core";
+import type { OperatorCore } from "@tyrum/operator-app";
 import { useEffect, useState, type ReactNode } from "react";
 import { Download } from "lucide-react";
 import { Badge } from "../ui/badge.js";
@@ -86,13 +86,13 @@ function useArtifactInlinePreviewState({
   core: OperatorCore;
   artifact: ArtifactRef;
 }): {
-  artifactsApi: OperatorCore["http"]["artifacts"] | undefined;
+  artifactsApi: OperatorCore["admin"]["artifacts"] | undefined;
   metadata: ArtifactMetadataState;
   bytes: ArtifactBytesState;
   blobUrl: string | null;
   downloadUrl: string | null;
 } {
-  const artifactsApi = core.http.artifacts;
+  const artifactsApi = core.admin.artifacts;
   const [metadata, setMetadata] = useState<ArtifactMetadataState>({ status: "idle" });
   const [bytes, setBytes] = useState<ArtifactBytesState>({ status: "idle" });
   const [blobUrl, setBlobUrl] = useState<string | null>(null);

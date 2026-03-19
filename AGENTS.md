@@ -5,7 +5,7 @@
 - Tyrum is a self-hosted autonomous worker agent platform built around a single “gateway” runtime (HTTP + WebSocket).
 - Monorepo: TypeScript (strict, ESM) on Node.js 24; pnpm workspace (`packages/*`, `apps/*`).
 - Runtime surfaces include `@tyrum/gateway` (server + bundled operator UI), `@tyrum/cli`, `@tyrum/tui`, `@tyrum/client`, and `@tyrum/contracts`.
-- Operator experiences are split across `@tyrum/operator-core`, `@tyrum/operator-ui`, `apps/web` (Vite web app), and `apps/desktop` (Electron app backed by `@tyrum/desktop-node`).
+- Operator experiences are split across `@tyrum/operator-app`, `@tyrum/operator-ui`, `apps/web` (Vite web app), and `apps/desktop` (Electron app backed by `@tyrum/desktop-node`).
 - Gateway persists to SQLite by default, supports Postgres for split roles, and serves the bundled operator UI at `/ui`.
 - Public docs live in `docs/` and are built as a Docusaurus site in `apps/docs`.
 
@@ -14,7 +14,7 @@
 - Canonical contributor contract: `docs/architecture/target-state.md`
 - Long-lived decision record: `docs/architecture/reference/arch-01-clean-break-target-state.md`
 - New work should land in the target package or layer from that doc, not by reinforcing the current migration-state package graph.
-- Do not add new code to `@tyrum/client` or `@tyrum/operator-core` unless the linked migration issue requires temporary coexistence.
+- Do not add new code to `@tyrum/client` or `@tyrum/operator-app` unless the linked migration issue requires temporary coexistence.
 - Temporary coexistence is allowed only for the migration window needed to land the linked issue safely.
 
 ## Repo map
@@ -31,7 +31,7 @@
 - `packages/client/` WebSocket client SDK
 - `packages/desktop-node/` desktop-local node/runtime helpers
 - `packages/gateway/` gateway runtime + CLI
-- `packages/operator-core/` shared operator state/actions
+- `packages/operator-app/` shared operator state/actions
 - `packages/operator-ui/` reusable operator UI components/pages
 - `packages/contracts/` shared contracts, schemas, and generated artifacts
 - `packages/tui/` terminal UI client

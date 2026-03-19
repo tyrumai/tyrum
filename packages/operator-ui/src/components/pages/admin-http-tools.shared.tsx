@@ -1,4 +1,4 @@
-import type { ToolRegistryListResult } from "@tyrum/operator-core/browser";
+import type { ToolRegistryListResult } from "@tyrum/operator-app/browser";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import * as React from "react";
 import { cn } from "../../lib/cn.js";

@@ -1,6 +1,6 @@
 import { vi } from "vitest";
-import { TyrumHttpClientError } from "@tyrum/operator-core/browser";
-import { createElevatedModeStore, type OperatorCore } from "../../../operator-core/src/index.js";
+import { TyrumHttpClientError } from "@tyrum/operator-app/browser";
+import { createElevatedModeStore, type OperatorCore } from "../../../operator-app/src/index.js";
 import { stubAdminHttpFetch } from "../admin-http-fetch-test-support.js";
 import { createChannelAndRoutingFixtures } from "./admin-page.http-channel-fixture-support.js";
 import { createLocationFixture } from "./admin-page.http-location-fixture-support.js";
@@ -347,7 +347,10 @@ export function createAdminHttpTestCore(): {
       },
       location: locationApi,
     },
-  } as unknown as OperatorCore;
+  } as unknown as OperatorCore & {
+    http: OperatorCore["admin"];
+  };
+  core.admin = core.http;
 
   stubAdminHttpFetch(core);
 

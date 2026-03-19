@@ -3,7 +3,7 @@ import {
   type ConnectionState,
   type ExternalStore,
   type OperatorCore,
-} from "@tyrum/operator-core";
+} from "@tyrum/operator-app";
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { OperatorUiMode } from "../../app.js";
 import { useAdminAccessModeOptional } from "../../hooks/use-admin-access-mode.js";
@@ -111,7 +111,7 @@ export function ElevatedModeProvider({
       throw new Error("Current client device identity is unavailable.");
     }
 
-    const issued = await core.http.deviceTokens.issue({
+    const issued = await core.admin.deviceTokens.issue({
       device_id: deviceId,
       role: "client",
       scopes: [...ELEVATED_MODE_SCOPES],

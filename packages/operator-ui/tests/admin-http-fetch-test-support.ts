@@ -1,4 +1,4 @@
-import type { OperatorCore } from "../../operator-core/src/index.js";
+import type { OperatorCore } from "../../operator-app/src/index.js";
 import { vi } from "vitest";
 
 type AdminHttpReadCore = Pick<OperatorCore, "http" | "httpBaseUrl">;
@@ -37,7 +37,7 @@ async function routeAdminReadRequest(
   switch (requestUrl.pathname) {
     case "/agent/list":
       return jsonResponse(
-        await core.http.agentList.get({
+        await core.admin.agentList.get({
           include_default:
             requestUrl.searchParams.get("include_default") === null
               ? undefined
@@ -45,68 +45,68 @@ async function routeAdminReadRequest(
         }),
       );
     case "/config/agents/default":
-      return jsonResponse(await core.http.agentConfig.get("default"));
+      return jsonResponse(await core.admin.agentConfig.get("default"));
     case "/config/models/assignments":
-      return jsonResponse(await core.http.modelConfig.listAssignments());
+      return jsonResponse(await core.admin.modelConfig.listAssignments());
     case "/config/models/presets":
-      return jsonResponse(await core.http.modelConfig.listPresets());
+      return jsonResponse(await core.admin.modelConfig.listPresets());
     case "/config/models/presets/available":
-      return jsonResponse(await core.http.modelConfig.listAvailable());
+      return jsonResponse(await core.admin.modelConfig.listAvailable());
     case "/config/policy/deployment":
-      return jsonResponse(await core.http.policyConfig.getDeployment());
+      return jsonResponse(await core.admin.policyConfig.getDeployment());
     case "/config/policy/deployment/revisions":
-      return jsonResponse(await core.http.policyConfig.listDeploymentRevisions());
+      return jsonResponse(await core.admin.policyConfig.listDeploymentRevisions());
     case "/config/providers":
-      return jsonResponse(await core.http.providerConfig.listProviders());
+      return jsonResponse(await core.admin.providerConfig.listProviders());
     case "/config/providers/registry":
-      return jsonResponse(await core.http.providerConfig.listRegistry());
+      return jsonResponse(await core.admin.providerConfig.listRegistry());
     case "/config/channels":
-      return core.http.channelConfig
-        ? jsonResponse(await core.http.channelConfig.listChannels())
+      return core.admin.channelConfig
+        ? jsonResponse(await core.admin.channelConfig.listChannels())
         : undefined;
     case "/config/channels/registry":
-      return core.http.channelConfig
-        ? jsonResponse(await core.http.channelConfig.listRegistry())
+      return core.admin.channelConfig
+        ? jsonResponse(await core.admin.channelConfig.listRegistry())
         : undefined;
     case "/config/tools":
-      return jsonResponse(await core.http.toolRegistry.list());
+      return jsonResponse(await core.admin.toolRegistry.list());
     case "/policy/bundle":
-      return jsonResponse(await core.http.policy.getBundle());
+      return jsonResponse(await core.admin.policy.getBundle());
     case "/policy/overrides":
       return jsonResponse(
-        await core.http.policy.listOverrides({
+        await core.admin.policy.listOverrides({
           limit: parseOptionalInt(requestUrl.searchParams.get("limit")),
         }),
       );
     case "/routing/channels/configs":
-      return jsonResponse(await core.http.routingConfig.listChannelConfigs());
+      return jsonResponse(await core.admin.routingConfig.listChannelConfigs());
     case "/routing/channels/telegram/threads":
       return jsonResponse(
-        await core.http.routingConfig.listObservedTelegramThreads({
+        await core.admin.routingConfig.listObservedTelegramThreads({
           limit: parseOptionalInt(requestUrl.searchParams.get("limit")),
         }),
       );
     case "/routing/config":
-      return jsonResponse(await core.http.routingConfig.get());
+      return jsonResponse(await core.admin.routingConfig.get());
     case "/routing/config/revisions":
       return jsonResponse(
-        await core.http.routingConfig.listRevisions({
+        await core.admin.routingConfig.listRevisions({
           limit: parseOptionalInt(requestUrl.searchParams.get("limit")),
         }),
       );
     case "/secrets":
       return jsonResponse(
-        await core.http.secrets.list({
+        await core.admin.secrets.list({
           agent_key: requestUrl.searchParams.get("agent_key") ?? undefined,
         }),
       );
     default:
       if (requestUrl.pathname === "/agents") {
-        return jsonResponse(await core.http.agents.list());
+        return jsonResponse(await core.admin.agents.list());
       }
       if (requestUrl.pathname.startsWith("/config/agents/")) {
         const agentKey = decodeURIComponent(requestUrl.pathname.slice("/config/agents/".length));
-        return jsonResponse(await core.http.agentConfig.get(agentKey));
+        return jsonResponse(await core.admin.agentConfig.get(agentKey));
       }
       return undefined;
   }

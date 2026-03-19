@@ -1,22 +1,20 @@
 export * from "./index.js";
-export { autoExecute, createManagedNodeClientLifecycle } from "@tyrum/node-sdk/node";
+export { autoExecute } from "@tyrum/node-sdk/node";
+export { createManagedNodeClientLifecycle } from "@tyrum/client/node";
 export {
   TyrumClient,
-  normalizeFingerprint256,
   createDeviceIdentity,
   createNodeFileDeviceIdentityStorage,
   createPinnedNodeTransportState,
   createPinnedNodeWebSocket,
-  destroyPinnedNodeDispatcher,
   createTyrumHttpClient,
+  destroyPinnedNodeDispatcher,
   loadOrCreateDeviceIdentity,
+  normalizeFingerprint256,
 } from "@tyrum/transport-sdk/node";
-export type {
-  CapabilityProvider,
-  ManagedNodeClientLifecycle,
-  TaskResult,
-} from "@tyrum/node-sdk/node";
+export type { ManagedNodeClientLifecycle } from "@tyrum/client/node";
 export type { ExecutionAttempt, ExecutionRun, ExecutionStep, MemoryItem } from "@tyrum/client/node";
+export type { CapabilityProvider, TaskResult } from "@tyrum/node-sdk/node";
 export type {
   DeviceIdentity,
   NodePinnedTlsOptions,
