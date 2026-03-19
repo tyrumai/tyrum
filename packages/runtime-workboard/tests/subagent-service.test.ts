@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   SubagentService,
   type WorkboardRepository,
+  type WorkboardSessionKeyBuilder,
   type WorkboardSubagentRuntime,
 } from "../src/index.js";
 
@@ -27,7 +28,7 @@ function createRepository() {
 }
 
 describe("SubagentService", () => {
-  it("builds a session key through the injected runtime port when one is not provided", async () => {
+  it("builds a session key through the injected session-key builder when one is not provided", async () => {
     const repository = createRepository();
     repository.createSubagent.mockResolvedValue({
       subagent_id: "123e4567-e89b-12d3-a456-426614174111",
@@ -41,14 +42,13 @@ describe("SubagentService", () => {
       created_at: "2026-03-19T00:00:00.000Z",
     });
 
-    const runtime: WorkboardSubagentRuntime = {
+    const sessionKeyBuilder: WorkboardSessionKeyBuilder = {
       buildSessionKey: vi
         .fn()
         .mockResolvedValue("agent:default:subagent:123e4567-e89b-12d3-a456-426614174111"),
-      runTurn: vi.fn(),
     };
 
-    const service = new SubagentService({ repository, runtime });
+    const service = new SubagentService({ repository, sessionKeyBuilder });
     await service.createSubagent({
       scope: {
         tenant_id: "default",
@@ -63,7 +63,7 @@ describe("SubagentService", () => {
       },
     });
 
-    expect(runtime.buildSessionKey).toHaveBeenCalledWith(
+    expect(sessionKeyBuilder.buildSessionKey).toHaveBeenCalledWith(
       {
         tenant_id: "default",
         agent_id: "123e4567-e89b-12d3-a456-426614174000",

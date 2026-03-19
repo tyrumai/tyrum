@@ -1,6 +1,10 @@
 import { randomUUID } from "node:crypto";
 import type { SubagentDescriptor, WorkScope } from "@tyrum/contracts";
-import type { SubagentRepository, WorkboardSubagentRuntime } from "./types.js";
+import type {
+  SubagentRepository,
+  WorkboardSessionKeyBuilder,
+  WorkboardSubagentRuntime,
+} from "./types.js";
 
 const TERMINAL_OR_CLOSING_SUBAGENT_STATUSES = new Set(["closing", "closed", "failed"]);
 
@@ -30,6 +34,7 @@ export class SubagentService {
   constructor(
     private readonly opts: {
       repository: SubagentRepository;
+      sessionKeyBuilder?: WorkboardSessionKeyBuilder;
       runtime?: WorkboardSubagentRuntime;
     },
   ) {}
@@ -179,8 +184,11 @@ export class SubagentService {
   }
 
   private async buildSessionKey(scope: WorkScope, subagentId: string): Promise<string> {
-    const runtime = this.requireRuntime("createSubagent");
-    return await runtime.buildSessionKey(scope, subagentId);
+    const sessionKeyBuilder = this.opts.sessionKeyBuilder ?? this.opts.runtime;
+    if (!sessionKeyBuilder) {
+      throw new Error("createSubagent requires session key builder");
+    }
+    return await sessionKeyBuilder.buildSessionKey(scope, subagentId);
   }
 
   private requireRuntime(method: string): WorkboardSubagentRuntime {

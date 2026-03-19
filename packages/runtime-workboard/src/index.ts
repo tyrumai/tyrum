@@ -11,6 +11,7 @@ export type {
   WorkboardRepository,
   WorkboardStateEntry,
   WorkboardStateScope,
+  WorkboardSessionKeyBuilder,
   WorkboardSubagentRuntime,
   WorkboardSubagentTurnTarget,
 } from "./types.js";

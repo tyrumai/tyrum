@@ -2,6 +2,7 @@ import type { DeploymentConfig as DeploymentConfigT } from "@tyrum/contracts";
 import type {
   ManagedDesktopProvisioner,
   WorkboardRepository,
+  WorkboardSessionKeyBuilder,
   WorkboardSubagentRuntime,
 } from "@tyrum/runtime-workboard";
 import type { SqlDb } from "../../statestore/types.js";
@@ -173,10 +174,7 @@ export function createGatewayWorkboardRepository(db: SqlDb): WorkboardRepository
   return new GatewayWorkboardRepository(db);
 }
 
-export function createGatewaySubagentRuntime(opts: {
-  db: SqlDb;
-  agents: AgentRegistry;
-}): WorkboardSubagentRuntime {
+export function createGatewaySessionKeyBuilder(opts: { db: SqlDb }): WorkboardSessionKeyBuilder {
   return {
     buildSessionKey: async (scope, subagentId) => {
       const agentKey = await resolveAgentKeyById({
@@ -186,6 +184,15 @@ export function createGatewaySubagentRuntime(opts: {
       });
       return `agent:${agentKey}:subagent:${subagentId}`;
     },
+  };
+}
+
+export function createGatewaySubagentRuntime(opts: {
+  db: SqlDb;
+  agents: AgentRegistry;
+}): WorkboardSubagentRuntime {
+  return {
+    ...createGatewaySessionKeyBuilder(opts),
     runTurn: ({ scope, subagent, message }) =>
       runSubagentTurn({
         agents: opts.agents,

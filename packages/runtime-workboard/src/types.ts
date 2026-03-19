@@ -222,8 +222,11 @@ export type WorkboardSubagentTurnTarget = Pick<
   | "attached_node_id"
 >;
 
-export interface WorkboardSubagentRuntime {
+export interface WorkboardSessionKeyBuilder {
   buildSessionKey(scope: WorkScope, subagentId: string): Promise<string>;
+}
+
+export interface WorkboardSubagentRuntime extends WorkboardSessionKeyBuilder {
   runTurn(input: {
     scope: WorkScope;
     subagent: WorkboardSubagentTurnTarget;

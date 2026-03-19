@@ -5,6 +5,7 @@ import {
 import type { SqlDb } from "../../statestore/types.js";
 import type { AgentRegistry } from "../agent/registry.js";
 import {
+  createGatewaySessionKeyBuilder,
   createGatewaySubagentRuntime,
   createGatewayWorkboardRepository,
 } from "./runtime-workboard-adapters.js";
@@ -15,6 +16,7 @@ export class SubagentService {
   constructor(opts: { db: SqlDb; agents?: AgentRegistry }) {
     this.service = new RuntimeSubagentService({
       repository: createGatewayWorkboardRepository(opts.db),
+      sessionKeyBuilder: createGatewaySessionKeyBuilder({ db: opts.db }),
       runtime: opts.agents
         ? createGatewaySubagentRuntime({ db: opts.db, agents: opts.agents })
         : undefined,
