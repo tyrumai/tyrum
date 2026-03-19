@@ -10,6 +10,15 @@ function cloneParts(
   return parts?.map((part) => ({ ...part }));
 }
 
+function shouldNormalizeLegacyMessage(input: MaybeLegacyTurnRequest): boolean {
+  if (input.parts && input.parts.length > 0) {
+    return false;
+  }
+
+  const legacyMessage = input.message;
+  return typeof legacyMessage === "string" && legacyMessage.trim().length > 0;
+}
+
 export function normalizeInternalTurnRequest(input: AgentTurnRequestT): AgentTurnRequestT {
   const parts = cloneParts(input.parts);
   if (parts && parts.length > 0) {
@@ -32,9 +41,15 @@ export function normalizeInternalTurnRequest(input: AgentTurnRequestT): AgentTur
   };
 }
 
+export function normalizeInternalTurnRequestIfNeeded(input: AgentTurnRequestT): AgentTurnRequestT {
+  return shouldNormalizeLegacyMessage(input as MaybeLegacyTurnRequest)
+    ? normalizeInternalTurnRequest(input)
+    : input;
+}
+
 export function normalizeInternalTurnRequestUnknown(value: unknown): unknown {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return value;
   }
-  return normalizeInternalTurnRequest(value as AgentTurnRequestT);
+  return normalizeInternalTurnRequestIfNeeded(value as AgentTurnRequestT);
 }

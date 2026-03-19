@@ -49,7 +49,7 @@ import {
   prepareAttachmentInputForPrompt,
   type AttachmentUserContentPart,
 } from "./attachment-analysis.js";
-import { normalizeInternalTurnRequest } from "./turn-request-normalization.js";
+import { normalizeInternalTurnRequestIfNeeded } from "./turn-request-normalization.js";
 
 export type TurnExecutionContext = {
   planId: string;
@@ -134,7 +134,7 @@ export async function prepareTurn(
   input: AgentTurnRequestT,
   exec?: TurnExecutionContext,
 ): Promise<PreparedTurn> {
-  const normalizedInput = normalizeInternalTurnRequest(input);
+  const normalizedInput = normalizeInternalTurnRequestIfNeeded(input);
   const resolvedInput = resolveAgentTurnInput(normalizedInput);
   const automation = resolveAutomationMetadata(resolvedInput.metadata);
   const laneQueueScope = resolveLaneQueueScope(resolvedInput.metadata);

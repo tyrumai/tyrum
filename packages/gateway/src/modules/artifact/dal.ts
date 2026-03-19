@@ -128,6 +128,10 @@ export async function insertArtifactRecordTx(
   const accessId = artifactAccessIdForRef(input.artifact);
   const labelsJson = input.labelsJson ?? JSON.stringify(input.artifact.labels ?? []);
   const metadataJson = input.metadataJson ?? JSON.stringify(input.artifact.metadata ?? {});
+  const expectedOwner = {
+    tenant_id: input.tenantId,
+    artifact_id: input.artifact.artifact_id,
+  };
 
   const insertResult = await tx.run(
     `INSERT INTO artifacts (
@@ -151,7 +155,7 @@ export async function insertArtifactRecordTx(
        policy_snapshot_id
      )
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT (tenant_id, artifact_id) DO NOTHING`,
+     ON CONFLICT DO NOTHING`,
     [
       input.tenantId,
       input.artifact.artifact_id,
@@ -173,6 +177,22 @@ export async function insertArtifactRecordTx(
       input.policySnapshotId,
     ],
   );
+  const artifactOwner = await tx.get<{ tenant_id: string; artifact_id: string }>(
+    `SELECT tenant_id, artifact_id
+     FROM artifacts
+     WHERE access_id = ?
+     LIMIT 1`,
+    [accessId],
+  );
+  if (
+    !artifactOwner ||
+    artifactOwner.tenant_id !== expectedOwner.tenant_id ||
+    artifactOwner.artifact_id !== expectedOwner.artifact_id
+  ) {
+    throw new Error(
+      `artifact access_id '${accessId}' already exists for tenant '${artifactOwner?.tenant_id ?? "unknown"}' artifact '${artifactOwner?.artifact_id ?? "unknown"}'`,
+    );
+  }
 
   await tx.run(
     `INSERT INTO artifact_access (
@@ -182,9 +202,25 @@ export async function insertArtifactRecordTx(
        created_at
      )
      VALUES (?, ?, ?, ?)
-     ON CONFLICT (tenant_id, artifact_id) DO NOTHING`,
+     ON CONFLICT DO NOTHING`,
     [input.tenantId, accessId, input.artifact.artifact_id, input.artifact.created_at],
   );
+  const accessOwner = await tx.get<{ tenant_id: string; artifact_id: string }>(
+    `SELECT tenant_id, artifact_id
+     FROM artifact_access
+     WHERE access_id = ?
+     LIMIT 1`,
+    [accessId],
+  );
+  if (
+    !accessOwner ||
+    accessOwner.tenant_id !== expectedOwner.tenant_id ||
+    accessOwner.artifact_id !== expectedOwner.artifact_id
+  ) {
+    throw new Error(
+      `artifact access_id '${accessId}' already exists for tenant '${accessOwner?.tenant_id ?? "unknown"}' artifact '${accessOwner?.artifact_id ?? "unknown"}'`,
+    );
+  }
 
   return {
     inserted: insertResult.changes > 0,
