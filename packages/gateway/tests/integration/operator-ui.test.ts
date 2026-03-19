@@ -177,7 +177,10 @@ describe("operator UI static hosting (/ui)", () => {
   });
 
   it("is publicly fetchable even when auth middleware is enabled", async () => {
-    const created = await createTestApp({ isLocalOnly: false });
+    const created = await createTestApp({
+      isLocalOnly: false,
+      operatorUiAssetsDir: operatorUiDistDir,
+    });
     try {
       const res = await created.requestUnauthenticated("/ui");
       expect(res.status).toBe(200);

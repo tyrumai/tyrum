@@ -1,4 +1,4 @@
-import type { TyrumClientEvents } from "@tyrum/client/browser";
+import type { TyrumClientEvents } from "@tyrum/transport-sdk/browser";
 import type { OperatorWsClient } from "./deps.js";
 import { readOccurredAt, readPayload } from "./operator-core.event-helpers.js";
 import type { Unsubscribe } from "./store.js";

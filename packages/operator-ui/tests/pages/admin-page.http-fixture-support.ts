@@ -1,5 +1,5 @@
 import { vi } from "vitest";
-import { TyrumHttpClientError } from "@tyrum/client/browser";
+import { TyrumHttpClientError } from "@tyrum/operator-core/browser";
 import { createElevatedModeStore, type OperatorCore } from "../../../operator-core/src/index.js";
 import { stubAdminHttpFetch } from "../admin-http-fetch-test-support.js";
 import { createChannelAndRoutingFixtures } from "./admin-page.http-channel-fixture-support.js";

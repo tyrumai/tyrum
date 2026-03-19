@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { startSmokeGateway } from "./smoke-turn-harness.js";
-import { TyrumClient } from "@tyrum/client";
+import { TyrumClient } from "@tyrum/transport-sdk";
 import { simulateReadableStream } from "ai";
 import { MockLanguageModelV3 } from "ai/test";
 import {

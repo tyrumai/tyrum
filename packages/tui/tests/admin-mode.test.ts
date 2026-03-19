@@ -2,14 +2,14 @@ import { describe, expect, it } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { delay, startGateway, withTimeout } from "../../client/tests/conformance/harness.js";
+import { delay, startGateway, withTimeout } from "../../transport-sdk/tests/conformance/harness.js";
 import { createTuiCore } from "../src/core.js";
 import { ElevatedModeRequiredError, isElevatedModeActive } from "@tyrum/operator-core";
 import {
   createNodeFileDeviceIdentityStorage,
   createTyrumHttpClient,
   loadOrCreateDeviceIdentity,
-} from "@tyrum/client/node";
+} from "@tyrum/transport-sdk/node";
 import {
   DEFAULT_AGENT_ID,
   DEFAULT_WORKSPACE_ID,

@@ -1,5 +1,5 @@
 import { AgentConfig, IdentityPack } from "@tyrum/contracts";
-import { TyrumHttpClientError } from "@tyrum/client/browser";
+import { TyrumHttpClientError } from "@tyrum/operator-core/browser";
 import { vi } from "vitest";
 import type { OperatorHttpClient } from "../../operator-core/src/deps.js";
 import {

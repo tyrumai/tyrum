@@ -1,4 +1,4 @@
-import { TyrumHttpClientError, type AgentListResult } from "@tyrum/client";
+import { TyrumHttpClientError, type AgentListResult } from "@tyrum/operator-core/browser";
 import type { OperatorCore } from "@tyrum/operator-core";
 import * as React from "react";
 import { Badge } from "../ui/badge.js";

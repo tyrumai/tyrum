@@ -109,6 +109,9 @@ vi.mock("@capacitor/clipboard", () => ({
 
 vi.mock("@tyrum/client/browser", () => ({
   createManagedNodeClientLifecycle: createManagedNodeClientLifecycleMock(),
+}));
+
+vi.mock("@tyrum/transport-sdk/browser", () => ({
   formatDeviceIdentityError: vi.fn((error: unknown) =>
     error instanceof Error ? error.message : String(error),
   ),

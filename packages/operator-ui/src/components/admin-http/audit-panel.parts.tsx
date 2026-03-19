@@ -2,7 +2,7 @@ import type {
   AuditExportResult,
   AuditForgetResult,
   AuditPlansListResult,
-} from "@tyrum/client/browser";
+} from "@tyrum/operator-core/browser";
 import { FileSearch, RefreshCw } from "lucide-react";
 import * as React from "react";
 import { cn } from "../../lib/cn.js";

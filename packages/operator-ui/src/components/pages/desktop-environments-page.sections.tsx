@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import type {
   DesktopEnvironmentGetResult,
   DesktopEnvironmentHostListResult,
-} from "@tyrum/client/browser";
+} from "@tyrum/operator-core/browser";
 import { Boxes, Play, RefreshCw, RotateCcw, Square, Trash2 } from "lucide-react";
 import {
   buildTakeoverHref,

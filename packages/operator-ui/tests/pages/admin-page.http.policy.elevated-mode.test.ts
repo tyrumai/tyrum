@@ -2,7 +2,7 @@
 
 import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { TyrumHttpClientError } from "@tyrum/client/browser";
+import { TyrumHttpClientError } from "@tyrum/operator-core/browser";
 import { setNativeValue } from "../test-utils.js";
 import {
   cleanupAdminHttpPage,

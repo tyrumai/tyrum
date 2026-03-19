@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { delay, startGateway, withTimeout } from "../../client/tests/conformance/harness.js";
+import { delay, startGateway, withTimeout } from "../../transport-sdk/tests/conformance/harness.js";
 import { createTuiCore } from "../src/core.js";
 
 function waitForConnectionStatus(

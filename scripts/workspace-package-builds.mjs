@@ -17,9 +17,21 @@ export const PACKAGE_BUILD_SPECS = [
     ],
   },
   {
+    key: "transport-sdk",
+    name: "@tyrum/transport-sdk",
+    dependencies: ["contracts"],
+    inputPaths: [
+      "packages/transport-sdk/package.json",
+      "packages/transport-sdk/tsconfig.json",
+      "packages/transport-sdk/src",
+      "packages/transport-sdk/scripts",
+    ],
+    outputPaths: ["packages/transport-sdk/dist/index.mjs"],
+  },
+  {
     key: "client",
     name: "@tyrum/client",
-    dependencies: ["contracts"],
+    dependencies: ["contracts", "transport-sdk"],
     inputPaths: [
       "packages/client/package.json",
       "packages/client/tsconfig.json",
@@ -30,7 +42,7 @@ export const PACKAGE_BUILD_SPECS = [
   {
     key: "operator-core",
     name: "@tyrum/operator-core",
-    dependencies: ["contracts", "client"],
+    dependencies: ["contracts", "transport-sdk", "client"],
     inputPaths: [
       "packages/operator-core/package.json",
       "packages/operator-core/tsconfig.json",
@@ -41,7 +53,7 @@ export const PACKAGE_BUILD_SPECS = [
   {
     key: "operator-ui",
     name: "@tyrum/operator-ui",
-    dependencies: ["contracts", "client", "operator-core"],
+    dependencies: ["contracts", "transport-sdk", "client", "operator-core"],
     inputPaths: [
       "packages/operator-ui/package.json",
       "packages/operator-ui/tsconfig.json",

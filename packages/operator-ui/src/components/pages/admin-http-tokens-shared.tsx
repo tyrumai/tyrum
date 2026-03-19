@@ -1,5 +1,5 @@
 import type { OperatorCore } from "@tyrum/operator-core";
-import type { AuthTokenListEntry, AuthTokenUpdateInput } from "@tyrum/client/browser";
+import type { AuthTokenListEntry, AuthTokenUpdateInput } from "@tyrum/operator-core/browser";
 import * as React from "react";
 import { Alert } from "../ui/alert.js";
 import { type BadgeVariant } from "../ui/badge.js";

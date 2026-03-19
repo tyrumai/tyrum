@@ -3,7 +3,7 @@
 import React, { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createRoot, type Root } from "react-dom/client";
-import type { PairingGetResponse } from "@tyrum/client/browser";
+import type { PairingGetResponse } from "@tyrum/operator-core/browser";
 import {
   createBearerTokenAuth,
   createElevatedModeStore,

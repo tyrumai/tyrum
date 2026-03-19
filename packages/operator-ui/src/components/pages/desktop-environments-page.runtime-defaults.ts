@@ -1,4 +1,4 @@
-import { TyrumHttpClientError } from "@tyrum/client/browser";
+import { TyrumHttpClientError } from "@tyrum/operator-core/browser";
 import { useRef, useState } from "react";
 import { DEFAULT_IMAGE_REF } from "./desktop-environments-page.shared.js";
 import { isAdminAccessHttpError, type AdminHttpClient } from "./admin-http-shared.js";

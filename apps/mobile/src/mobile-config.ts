@@ -9,7 +9,7 @@ import {
   parseStoredDeviceIdentity,
   type DeviceIdentity,
   type DeviceIdentityStorage,
-} from "@tyrum/client";
+} from "@tyrum/transport-sdk";
 import type { MobileHostActionName } from "@tyrum/operator-ui";
 
 export type MobileActionSettings = Record<MobileHostActionName, boolean>;

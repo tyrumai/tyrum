@@ -1,4 +1,8 @@
-import { TyrumClient, createTyrumHttpClient, type DeviceIdentity } from "@tyrum/client/browser";
+import {
+  TyrumClient,
+  createTyrumHttpClient,
+  type DeviceIdentity,
+} from "@tyrum/transport-sdk/browser";
 import type { OperatorHttpClient, OperatorWsClient } from "./deps.js";
 import { isElevatedModeActive } from "./elevated-mode.js";
 import type { ElevatedModeStore } from "./stores/elevated-mode-store.js";

@@ -1,7 +1,10 @@
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
-import { createNodeFileDeviceIdentityStorage, normalizeFingerprint256 } from "@tyrum/client/node";
+import {
+  createNodeFileDeviceIdentityStorage,
+  normalizeFingerprint256,
+} from "@tyrum/transport-sdk/node";
 
 import {
   resolveOperatorConfigPath,

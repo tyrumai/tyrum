@@ -52,7 +52,7 @@ async function createClientMock() {
 }
 
 vi.mock("@tyrum/client", async () => await createClientMock());
-vi.mock("@tyrum/client/node", async () => await createClientMock());
+vi.mock("@tyrum/transport-sdk/node", async () => await createClientMock());
 
 describe("@tyrum/cli elevated-mode", () => {
   const prevHome = process.env["TYRUM_HOME"];

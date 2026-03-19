@@ -245,6 +245,9 @@ importers:
       '@tyrum/operator-ui':
         specifier: workspace:*
         version: link:../../packages/operator-ui
+      '@tyrum/transport-sdk':
+        specifier: workspace:*
+        version: link:../../packages/transport-sdk
       react:
         specifier: ^19.2.4
         version: 19.2.4
@@ -291,6 +294,9 @@ importers:
       '@tyrum/operator-ui':
         specifier: workspace:*
         version: link:../../packages/operator-ui
+      '@tyrum/transport-sdk':
+        specifier: workspace:*
+        version: link:../../packages/transport-sdk
       react:
         specifier: ^19.2.4
         version: 19.2.4
@@ -328,6 +334,9 @@ importers:
       '@tyrum/client':
         specifier: workspace:*
         version: link:../client
+      '@tyrum/transport-sdk':
+        specifier: workspace:*
+        version: link:../transport-sdk
       commander:
         specifier: ^14.0.3
         version: 14.0.3
@@ -351,6 +360,9 @@ importers:
       '@tyrum/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@tyrum/transport-sdk':
+        specifier: workspace:*
+        version: link:../transport-sdk
       ai:
         specifier: ^6.0.116
         version: 6.0.116(zod@4.3.6)
@@ -397,6 +409,9 @@ importers:
       '@tyrum/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@tyrum/transport-sdk':
+        specifier: workspace:*
+        version: link:../transport-sdk
       commander:
         specifier: ^14.0.3
         version: 14.0.3
@@ -522,6 +537,9 @@ importers:
       '@tyrum/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@tyrum/transport-sdk':
+        specifier: workspace:*
+        version: link:../transport-sdk
       ai:
         specifier: ^6.0.112
         version: 6.0.116(zod@4.3.6)
@@ -601,6 +619,9 @@ importers:
       '@tyrum/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@tyrum/transport-sdk':
+        specifier: workspace:*
+        version: link:../transport-sdk
 
   packages/operator-ui:
     dependencies:
@@ -708,6 +729,34 @@ importers:
         specifier: ^8.0.0
         version: 8.0.0(@types/node@24.12.0)(esbuild@0.27.3)(jiti@2.6.1)(terser@5.46.0)(yaml@2.8.2)
 
+  packages/transport-sdk:
+    dependencies:
+      '@tyrum/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      mitt:
+        specifier: ^3.0.1
+        version: 3.0.1
+      undici:
+        specifier: ^7.24.4
+        version: 7.24.4
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
+    devDependencies:
+      '@hono/node-server':
+        specifier: ^1.19.11
+        version: 1.19.11(hono@4.12.8)
+      '@types/ws':
+        specifier: ^8.18.1
+        version: 8.18.1
+      hono:
+        specifier: ^4.12.8
+        version: 4.12.8
+      ws:
+        specifier: ^8.19.0
+        version: 8.19.0
+
   packages/tui:
     dependencies:
       '@tyrum/cli-utils':
@@ -716,6 +765,9 @@ importers:
       '@tyrum/operator-core':
         specifier: workspace:*
         version: link:../operator-core
+      '@tyrum/transport-sdk':
+        specifier: workspace:*
+        version: link:../transport-sdk
       commander:
         specifier: ^14.0.3
         version: 14.0.3

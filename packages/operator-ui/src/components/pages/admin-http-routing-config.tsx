@@ -1,4 +1,7 @@
-import type { AgentListResult, ObservedTelegramThreadListResult } from "@tyrum/client";
+import type {
+  AgentListResult,
+  ObservedTelegramThreadListResult,
+} from "@tyrum/operator-core/browser";
 import type { OperatorCore } from "@tyrum/operator-core";
 import { History, Pencil, Plus, RefreshCw, Search, Trash2, Undo2, Waypoints } from "lucide-react";
 import * as React from "react";

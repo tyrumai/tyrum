@@ -183,4 +183,23 @@ describe("createManagedNodeClientLifecycle", () => {
     expect(onConnected).not.toHaveBeenCalled();
     expect(client.capabilityReady).not.toHaveBeenCalled();
   });
+
+  it("forwards disconnection events and stops republishing after disconnect", async () => {
+    const client = new FakeManagedNodeClient();
+    const onDisconnected = vi.fn();
+    const lifecycle = createManagedNodeClientLifecycle({
+      client,
+      getCapabilityReadyPayload: () => ({ capabilities: [], capability_states: [] }),
+      onDisconnected,
+    });
+
+    client.emit("connected", { clientId: "client-1" });
+    await Promise.resolve();
+    client.emit("disconnected", { code: 1001, reason: "network" });
+
+    await lifecycle.publishCapabilityState();
+
+    expect(onDisconnected).toHaveBeenCalledWith({ code: 1001, reason: "network" });
+    expect(client.capabilityReady).toHaveBeenCalledTimes(1);
+  });
 });

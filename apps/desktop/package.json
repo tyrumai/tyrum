@@ -10,7 +10,7 @@
   "main": "dist/main/index.mjs",
   "scripts": {
     "dev": "electron dist/main/index.mjs",
-    "pretest": "pnpm --filter @tyrum/contracts build && pnpm --filter @tyrum/client build && pnpm --filter @tyrum/cli-utils build && pnpm --filter @tyrum/operator-core build && pnpm --filter @tyrum/operator-ui build && pnpm --filter @tyrum/desktop-node build",
+    "pretest": "pnpm --filter @tyrum/contracts build && pnpm --filter @tyrum/transport-sdk build && pnpm --filter @tyrum/client build && pnpm --filter @tyrum/cli-utils build && pnpm --filter @tyrum/operator-core build && pnpm --filter @tyrum/operator-ui build && pnpm --filter @tyrum/desktop-node build",
     "test": "pnpm -w vitest run apps/desktop/tests",
     "build:main": "tsdown --config tsdown.config.ts --filter desktop-main",
     "build:preload": "tsdown --config tsdown.config.ts --filter desktop-preload",

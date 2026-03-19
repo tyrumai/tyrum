@@ -1,8 +1,7 @@
 import type { WsCapabilityReadyPayload } from "@tyrum/contracts";
+import type { TyrumClient, TyrumClientEvents } from "@tyrum/transport-sdk";
 import type { CapabilityProvider } from "./capability.js";
 import { autoExecute } from "./capability.js";
-import type { TyrumClient } from "./ws-client.js";
-import type { TyrumClientEvents } from "./ws-client.types.js";
 
 export type ManagedNodeClient = Pick<
   TyrumClient,

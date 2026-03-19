@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { WebSocketServer } from "ws";
 import type { WebSocket as WsWebSocket } from "ws";
-import { TyrumClient } from "../src/ws-client.js";
+import { TyrumClient } from "@tyrum/transport-sdk";
 import { autoExecute } from "../src/capability.js";
 import type { CapabilityProvider, TaskExecuteContext } from "../src/capability.js";
 

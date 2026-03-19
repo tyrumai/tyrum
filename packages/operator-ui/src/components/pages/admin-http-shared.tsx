@@ -3,7 +3,11 @@ import {
   type ElevatedModeState,
   type OperatorCore,
 } from "@tyrum/operator-core";
-import { TyrumClient, TyrumHttpClientError, createTyrumHttpClient } from "@tyrum/client/browser";
+import {
+  TyrumClient,
+  TyrumHttpClientError,
+  createTyrumHttpClient,
+} from "@tyrum/operator-core/browser";
 import { useMemo, type ReactNode } from "react";
 import { useOperatorStore } from "../../use-operator-store.js";
 import { resolveTyrumHttpFetch } from "../../utils/tyrum-http-fetch.js";

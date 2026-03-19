@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { AuthTokenListEntry } from "@tyrum/client/browser";
+import type { AuthTokenListEntry } from "@tyrum/operator-core/browser";
 import {
   buildUpdateInput,
   formStateFromToken,

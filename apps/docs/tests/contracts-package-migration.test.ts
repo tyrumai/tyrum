@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import { basename, dirname, extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -38,6 +38,22 @@ function shouldScanFile(path: string): boolean {
   return scannedBasenames.has(basename(path)) || scannedExtensions.has(extname(path));
 }
 
+async function listScannableTrackedFiles(): Promise<string[]> {
+  const trackedFiles = listTrackedFiles().filter(shouldScanFile);
+  const results = await Promise.all(
+    trackedFiles.map(async (path) => {
+      try {
+        await access(resolve(repoRoot, path));
+        return path;
+      } catch {
+        return undefined;
+      }
+    }),
+  );
+
+  return results.filter((path): path is string => path !== undefined);
+}
+
 describe("contracts package migration", () => {
   it("removes the legacy schemas workspace package from tracked files", () => {
     const trackedFiles = listTrackedFiles();
@@ -63,7 +79,7 @@ describe("contracts package migration", () => {
   it("uses @tyrum/contracts as the canonical contract package across tracked source and docs", async () => {
     const offenders: string[] = [];
 
-    for (const path of listTrackedFiles().filter(shouldScanFile)) {
+    for (const path of await listScannableTrackedFiles()) {
       const content = await readFile(resolve(repoRoot, path), "utf8");
       if (content.includes("@tyrum/schemas") || content.includes("packages/schemas")) {
         offenders.push(path);
