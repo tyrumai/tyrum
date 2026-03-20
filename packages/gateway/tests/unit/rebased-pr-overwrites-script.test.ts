@@ -80,8 +80,11 @@ describe("rebased PR overwrite analyzer", () => {
     ).toContain("#1124 Refine operator UI navigation");
   });
 
-  it("wires the CI workflow to analyze the current pull request and upload JSON findings", () => {
-    const workflowUrl = new URL("../../../../.github/workflows/ci.yml", import.meta.url);
+  it("wires the PR overwrite analyzer workflow to analyze the current pull request and upload JSON findings", () => {
+    const workflowUrl = new URL(
+      "../../../../.github/workflows/pr-overwrite-analyzer.yml",
+      import.meta.url,
+    );
     const workflowPath = fileURLToPath(workflowUrl);
     const workflow = readFileSync(workflowPath, "utf8");
 
