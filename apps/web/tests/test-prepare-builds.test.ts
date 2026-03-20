@@ -1,8 +1,27 @@
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { createWorkspaceTestBuilds } from "../../../scripts/workspace-test-builds.mjs";
+import { PACKAGE_BUILD_SPECS } from "../../../scripts/workspace-package-builds.mjs";
+import {
+  createWorkspaceTestBuilds,
+  WORKSPACE_TEST_BUILD_SPECS,
+} from "../../../scripts/workspace-test-builds.mjs";
 
 describe("workspace test build graph", () => {
+  it("reuses shared package metadata for overlapping freshness specs", () => {
+    for (const key of ["contracts", "transport-sdk", "node-sdk", "operator-app", "operator-ui"]) {
+      const packageSpec = PACKAGE_BUILD_SPECS.find((spec) => spec.key === key);
+      const testSpec = WORKSPACE_TEST_BUILD_SPECS.find((spec) => spec.key === key);
+      if (!packageSpec || !testSpec) {
+        throw new Error(`Missing shared build spec: ${key}`);
+      }
+
+      expect(testSpec.key).toBe(packageSpec.key);
+      expect(testSpec.name).toBe(packageSpec.name);
+      expect(testSpec.inputPaths).toEqual(packageSpec.inputPaths);
+      expect(testSpec.dependencies).toEqual(packageSpec.dependencies);
+    }
+  });
+
   it("refreshes gateway and web test artifacts from a single gateway build", () => {
     const repoRoot = resolve(process.cwd(), "fixture-repo");
     const buildsByName = new Map(

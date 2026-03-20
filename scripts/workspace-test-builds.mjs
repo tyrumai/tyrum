@@ -1,21 +1,22 @@
 import { createBuildsFromSpecs } from "./workspace-build-specs.mjs";
+import { PACKAGE_BUILD_SPECS } from "./workspace-package-builds.mjs";
+
+function createPackageDerivedSpec(key, outputPaths) {
+  const spec = PACKAGE_BUILD_SPECS.find((candidate) => candidate.key === key);
+  if (!spec) {
+    throw new Error(`Unknown package build spec: ${key}`);
+  }
+
+  return {
+    ...spec,
+    inputPaths: [...spec.inputPaths],
+    ...(spec.dependencies ? { dependencies: [...spec.dependencies] } : {}),
+    outputPaths: [...(outputPaths ?? spec.outputPaths)],
+  };
+}
 
 export const WORKSPACE_TEST_BUILD_SPECS = [
-  {
-    key: "contracts",
-    name: "@tyrum/contracts",
-    inputPaths: [
-      "packages/contracts/package.json",
-      "packages/contracts/tsconfig.json",
-      "packages/contracts/src",
-      "packages/contracts/scripts",
-    ],
-    outputPaths: [
-      "packages/contracts/dist/index.mjs",
-      "packages/contracts/dist/index.d.ts",
-      "packages/contracts/dist/jsonschema/catalog.json",
-    ],
-  },
+  createPackageDerivedSpec("contracts"),
   {
     key: "runtime-policy",
     name: "@tyrum/runtime-policy",
@@ -27,38 +28,17 @@ export const WORKSPACE_TEST_BUILD_SPECS = [
     ],
     outputPaths: ["packages/runtime-policy/dist/index.mjs"],
   },
-  {
-    key: "transport-sdk",
-    name: "@tyrum/transport-sdk",
-    dependencies: ["contracts"],
-    inputPaths: [
-      "packages/transport-sdk/package.json",
-      "packages/transport-sdk/tsconfig.json",
-      "packages/transport-sdk/src",
-      "packages/transport-sdk/scripts",
-    ],
-    outputPaths: [
-      "packages/transport-sdk/dist/index.mjs",
-      "packages/transport-sdk/dist/browser.mjs",
-      "packages/transport-sdk/dist/node.mjs",
-      "packages/transport-sdk/dist/node/pinned-transport.js",
-    ],
-  },
-  {
-    key: "node-sdk",
-    name: "@tyrum/node-sdk",
-    dependencies: ["contracts", "transport-sdk"],
-    inputPaths: [
-      "packages/node-sdk/package.json",
-      "packages/node-sdk/tsconfig.json",
-      "packages/node-sdk/src",
-    ],
-    outputPaths: [
-      "packages/node-sdk/dist/index.mjs",
-      "packages/node-sdk/dist/browser.mjs",
-      "packages/node-sdk/dist/node.mjs",
-    ],
-  },
+  createPackageDerivedSpec("transport-sdk", [
+    "packages/transport-sdk/dist/index.mjs",
+    "packages/transport-sdk/dist/browser.mjs",
+    "packages/transport-sdk/dist/node.mjs",
+    "packages/transport-sdk/dist/node/pinned-transport.js",
+  ]),
+  createPackageDerivedSpec("node-sdk", [
+    "packages/node-sdk/dist/index.mjs",
+    "packages/node-sdk/dist/browser.mjs",
+    "packages/node-sdk/dist/node.mjs",
+  ]),
   {
     key: "runtime-node-control",
     name: "@tyrum/runtime-node-control",
@@ -125,37 +105,17 @@ export const WORKSPACE_TEST_BUILD_SPECS = [
     ],
     outputPaths: ["packages/desktop-node/dist/index.mjs"],
   },
-  {
-    key: "operator-app",
-    name: "@tyrum/operator-app",
-    dependencies: ["contracts", "transport-sdk"],
-    inputPaths: [
-      "packages/operator-app/package.json",
-      "packages/operator-app/tsconfig.json",
-      "packages/operator-app/src",
-    ],
-    outputPaths: [
-      "packages/operator-app/dist/index.mjs",
-      "packages/operator-app/dist/browser.mjs",
-      "packages/operator-app/dist/node.mjs",
-    ],
-  },
-  {
-    key: "operator-ui",
-    name: "@tyrum/operator-ui",
-    dependencies: ["contracts", "operator-app"],
-    inputPaths: [
-      "packages/operator-ui/package.json",
-      "packages/operator-ui/tsconfig.json",
-      "packages/operator-ui/src",
-    ],
-    outputPaths: [
-      "packages/operator-ui/dist/index.mjs",
-      "packages/operator-ui/dist/index.d.mts",
-      "packages/operator-ui/dist/pages.mjs",
-      "packages/operator-ui/dist/pages.d.mts",
-    ],
-  },
+  createPackageDerivedSpec("operator-app", [
+    "packages/operator-app/dist/index.mjs",
+    "packages/operator-app/dist/browser.mjs",
+    "packages/operator-app/dist/node.mjs",
+  ]),
+  createPackageDerivedSpec("operator-ui", [
+    "packages/operator-ui/dist/index.mjs",
+    "packages/operator-ui/dist/index.d.mts",
+    "packages/operator-ui/dist/pages.mjs",
+    "packages/operator-ui/dist/pages.d.mts",
+  ]),
   {
     key: "gateway",
     name: "@tyrum/gateway",
