@@ -76,6 +76,9 @@ export function SchedulesPage({ core }: { core: OperatorCore }) {
   }, [readApi, refreshNonce]);
 
   function handlePauseResume(schedule: ScheduleRecord) {
+    if (toggleAction.isLoading) {
+      return;
+    }
     setToggleTargetId(schedule.schedule_id);
     void toggleAction
       .run(async () => {
@@ -146,13 +149,14 @@ export function SchedulesPage({ core }: { core: OperatorCore }) {
         canMutate={canMutate}
         requestEnter={requestEnter}
         isLoading={createAction.isLoading}
-        onCreate={(input) => {
-          void createAction.run(async () => {
+        onCreate={async (input) => {
+          const schedule = await createAction.run(async () => {
             const response = await requireMutationApi().create(input);
             setSchedules((current) => [...current, response.schedule]);
             setCreateOpen(false);
             return response.schedule;
           });
+          return schedule !== undefined;
         }}
       />
 
@@ -205,7 +209,9 @@ export function SchedulesPage({ core }: { core: OperatorCore }) {
               key={schedule.schedule_id}
               schedule={schedule}
               isExpanded={expandedId === schedule.schedule_id}
-              isLoading={
+              isToggleLoading={toggleAction.isLoading && toggleTargetId === schedule.schedule_id}
+              isToggleDisabled={toggleAction.isLoading}
+              isDeleteDisabled={
                 (toggleAction.isLoading && toggleTargetId === schedule.schedule_id) ||
                 (deleteAction.isLoading && deleteTarget?.schedule_id === schedule.schedule_id)
               }

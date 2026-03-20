@@ -32,7 +32,9 @@ import {
 export function ScheduleCard({
   schedule,
   isExpanded,
-  isLoading,
+  isToggleLoading,
+  isToggleDisabled,
+  isDeleteDisabled,
   canMutate,
   requestEnter,
   onToggleExpand,
@@ -41,7 +43,9 @@ export function ScheduleCard({
 }: {
   schedule: ScheduleRecord;
   isExpanded: boolean;
-  isLoading: boolean;
+  isToggleLoading: boolean;
+  isToggleDisabled: boolean;
+  isDeleteDisabled: boolean;
   canMutate: boolean;
   requestEnter: () => void;
   onToggleExpand: () => void;
@@ -97,7 +101,8 @@ export function ScheduleCard({
               <Switch
                 data-testid={`schedule-toggle-${scheduleTestId}`}
                 checked={schedule.enabled}
-                disabled={isLoading}
+                aria-busy={isToggleLoading || undefined}
+                disabled={isToggleDisabled}
                 onCheckedChange={() => {
                   if (!canMutate) {
                     requestEnter();
@@ -125,7 +130,7 @@ export function ScheduleCard({
               variant="danger"
               size="sm"
               data-testid={`schedule-delete-${scheduleTestId}`}
-              disabled={isLoading}
+              disabled={isDeleteDisabled}
               onClick={() => {
                 if (!canMutate) {
                   requestEnter();
@@ -275,7 +280,7 @@ export function CreateSchedulePanel({
     delivery: { mode: ScheduleDeliveryMode };
     agent_key?: string;
     workspace_key?: string;
-  }) => void;
+  }) => Promise<boolean>;
 }) {
   const [form, setForm] = useState<CreateFormState>(INITIAL_FORM);
 
@@ -312,7 +317,7 @@ export function CreateSchedulePanel({
     }
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (!canMutate) {
       requestEnter();
       return;
@@ -321,7 +326,7 @@ export function CreateSchedulePanel({
     const execution = buildExecution();
     if (!cadence || !execution) return;
 
-    onCreate({
+    const created = await onCreate({
       kind: form.kind,
       enabled: form.enabled,
       cadence,
@@ -330,7 +335,10 @@ export function CreateSchedulePanel({
       agent_key: form.agentKey.trim() || undefined,
       workspace_key: form.workspaceKey.trim() || undefined,
     });
-    setForm(INITIAL_FORM);
+
+    if (created) {
+      setForm(INITIAL_FORM);
+    }
   }
 
   const cadenceValid = buildCadence() !== null;

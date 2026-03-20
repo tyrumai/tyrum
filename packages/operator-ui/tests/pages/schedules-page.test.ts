@@ -5,7 +5,7 @@ import type { ScheduleRecord } from "@tyrum/contracts";
 import React, { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SchedulesPage } from "../../src/components/pages/schedules-page.js";
-import { click, cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
+import { click, cleanupTestRoot, renderIntoDocument, setNativeValue } from "../test-utils.js";
 
 const mutationAccess = {
   canMutate: true,
@@ -76,6 +76,16 @@ function getByTestId<T extends HTMLElement>(root: ParentNode, testId: string): T
   return element!;
 }
 
+function getButtonByText(root: ParentNode, text: string): HTMLButtonElement {
+  const button = Array.from(root.querySelectorAll<HTMLButtonElement>("button")).find((element) =>
+    element.textContent?.includes(text),
+  );
+  if (!button) {
+    throw new Error(`Expected button containing "${text}"`);
+  }
+  return button;
+}
+
 describe("SchedulesPage", () => {
   beforeEach(() => {
     mutationAccess.canMutate = true;
@@ -94,7 +104,7 @@ describe("SchedulesPage", () => {
     });
   });
 
-  it("shows loading only on the schedule being paused even when another card is expanded", async () => {
+  it("keeps the active schedule busy while another toggle is blocked", async () => {
     let resolvePause: ((value: { schedule: ScheduleRecord }) => void) | null = null;
 
     schedulesApi.pause.mockImplementation(
@@ -119,11 +129,16 @@ describe("SchedulesPage", () => {
         getByTestId<HTMLButtonElement>(testRoot.container, "schedule-toggle-alpha").disabled,
       ).toBe(true);
       expect(
+        getByTestId<HTMLButtonElement>(testRoot.container, "schedule-toggle-alpha").getAttribute(
+          "aria-busy",
+        ),
+      ).toBe("true");
+      expect(
         getByTestId<HTMLButtonElement>(testRoot.container, "schedule-delete-alpha").disabled,
       ).toBe(true);
       expect(
         getByTestId<HTMLButtonElement>(testRoot.container, "schedule-toggle-beta").disabled,
-      ).toBe(false);
+      ).toBe(true);
       expect(
         getByTestId<HTMLButtonElement>(testRoot.container, "schedule-delete-beta").disabled,
       ).toBe(false);
@@ -141,6 +156,39 @@ describe("SchedulesPage", () => {
       expect(
         getByTestId<HTMLButtonElement>(testRoot.container, "schedule-toggle-alpha").disabled,
       ).toBe(false);
+    } finally {
+      cleanupTestRoot(testRoot);
+    }
+  });
+
+  it("preserves the create form values when schedule creation fails", async () => {
+    schedulesApi.create.mockRejectedValueOnce(new Error("create failed"));
+
+    const testRoot = renderIntoDocument(React.createElement(SchedulesPage, { core: createCore() }));
+    try {
+      await flushPage();
+
+      await clickAndFlush(getButtonByText(testRoot.container, "Create Schedule"));
+
+      const agentKeyInput = testRoot.container.querySelector<HTMLInputElement>(
+        'input[placeholder="agent-key"]',
+      );
+      expect(agentKeyInput).not.toBeNull();
+      if (!agentKeyInput) {
+        throw new Error('Expected the "Agent key" input to be rendered');
+      }
+
+      act(() => {
+        setNativeValue(agentKeyInput, "agent-new");
+      });
+
+      await clickAndFlush(getButtonByText(testRoot.container, "Create schedule"));
+      await flushPage();
+
+      expect(schedulesApi.create).toHaveBeenCalledTimes(1);
+      expect(testRoot.container.textContent).toContain("Failed to create schedule");
+      expect(testRoot.container.textContent).toContain("create failed");
+      expect(agentKeyInput.value).toBe("agent-new");
     } finally {
       cleanupTestRoot(testRoot);
     }
