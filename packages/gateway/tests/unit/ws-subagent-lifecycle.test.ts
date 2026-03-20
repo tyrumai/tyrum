@@ -64,7 +64,7 @@ describe("handleClientMessage (subagent lifecycle)", () => {
       expect((sendRes as any).type).toBe("subagent.send");
       expect((sendRes as any).result.accepted).toBe(true);
 
-      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 0));
 
       expect(runtimeTurn).toHaveBeenCalledTimes(1);
       const turnInput = runtimeTurn.mock.calls[0]?.[0] ?? {};
