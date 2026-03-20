@@ -182,3 +182,48 @@ export const BuiltinMemoryWriteArgs = z.discriminatedUnion("kind", [
     .strict(),
 ]);
 export type BuiltinMemoryWriteArgs = z.infer<typeof BuiltinMemoryWriteArgs>;
+
+// ---------------------------------------------------------------------------
+// HTTP response schemas
+// ---------------------------------------------------------------------------
+
+export const MemorySearchHit = z
+  .object({
+    memory_item_id: MemoryItemId,
+    kind: MemoryItemKind,
+    score: z.number(),
+    snippet: z.string().optional(),
+  })
+  .strict();
+export type MemorySearchHit = z.infer<typeof MemorySearchHit>;
+
+export const MemoryItemListResponse = z
+  .object({
+    items: z.array(MemoryItem),
+    next_cursor: z.string().trim().min(1).optional(),
+  })
+  .strict();
+export type MemoryItemListResponse = z.infer<typeof MemoryItemListResponse>;
+
+export const MemoryItemGetResponse = z.object({ item: MemoryItem }).strict();
+export type MemoryItemGetResponse = z.infer<typeof MemoryItemGetResponse>;
+
+export const MemorySearchResponse = z
+  .object({
+    v: z.literal(1),
+    hits: z.array(MemorySearchHit),
+    next_cursor: z.string().trim().min(1).optional(),
+  })
+  .strict();
+export type MemorySearchResponse = z.infer<typeof MemorySearchResponse>;
+
+export const MemoryDeleteResponse = z.object({ tombstone: MemoryTombstone }).strict();
+export type MemoryDeleteResponse = z.infer<typeof MemoryDeleteResponse>;
+
+export const MemoryTombstoneListResponse = z
+  .object({
+    tombstones: z.array(MemoryTombstone),
+    next_cursor: z.string().trim().min(1).optional(),
+  })
+  .strict();
+export type MemoryTombstoneListResponse = z.infer<typeof MemoryTombstoneListResponse>;

@@ -32,6 +32,7 @@ export type OperatorAdminClient = Pick<
   | "deviceTokens"
   | "extensions"
   | "location"
+  | "memory"
   | "modelConfig"
   | "nodes"
   | "pairings"

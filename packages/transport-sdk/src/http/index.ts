@@ -142,6 +142,17 @@ export type {
   ExtensionsParseMcpSettingsResult,
 } from "./extensions.js";
 export type {
+  MemoryListInput,
+  MemoryListResult,
+  MemoryGetResult,
+  MemorySearchInput,
+  MemorySearchResult,
+  MemoryDeleteInput,
+  MemoryDeleteResult,
+  MemoryTombstoneListInput,
+  MemoryTombstoneListResult,
+} from "./memory.js";
+export type {
   LocationPlace,
   LocationProfile,
   LocationPlaceListResult,

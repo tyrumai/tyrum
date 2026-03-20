@@ -24,6 +24,7 @@ import { createDeviceTokensApi, type DeviceTokensApi } from "./device-tokens.js"
 import { createExtensionsApi, type ExtensionsApi } from "./extensions.js";
 import { createHealthApi, type HealthApi } from "./health.js";
 import { createLocationApi, type LocationApi } from "./location.js";
+import { createMemoryApi, type MemoryApi } from "./memory.js";
 import { createModelsApi, type ModelsApi } from "./models.js";
 import { createModelConfigApi, type ModelConfigApi } from "./model-config.js";
 import {
@@ -84,6 +85,7 @@ export interface TyrumHttpClient {
   health?: HealthApi;
   toolRegistry?: ToolRegistryApi;
   extensions?: ExtensionsApi;
+  memory?: MemoryApi;
   policyConfig?: PolicyConfigApi;
   location?: LocationApi;
 }
@@ -101,6 +103,7 @@ export type TyrumHttpClientOperator = TyrumHttpClient & {
   health: HealthApi;
   toolRegistry: ToolRegistryApi;
   extensions: ExtensionsApi;
+  memory: MemoryApi;
   policyConfig: PolicyConfigApi;
   location: LocationApi;
   desktopEnvironmentHosts: DesktopEnvironmentHostsApi;
@@ -141,6 +144,7 @@ export function createTyrumHttpClient(options: TyrumHttpClientOptions): TyrumHtt
     health: createHealthApi(transport),
     toolRegistry: createToolRegistryApi(transport),
     extensions: createExtensionsApi(transport),
+    memory: createMemoryApi(transport),
     policyConfig: createPolicyConfigApi(transport),
     location: createLocationApi(transport),
   };

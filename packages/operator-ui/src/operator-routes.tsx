@@ -4,6 +4,7 @@ import {
   Bot,
   Blocks,
   Boxes,
+  Brain,
   Globe,
   LayoutGrid,
   Link2,
@@ -58,6 +59,10 @@ const ExtensionsPage = lazyNamed<{ core: OperatorCore }>(
   () => import("./components/pages/extensions-page.js"),
   "ExtensionsPage",
 );
+const MemoryPage = lazyNamed<{ core: OperatorCore }>(
+  () => import("./components/pages/memory-page.js"),
+  "MemoryPage",
+);
 const RunsPage = lazyNamed<{
   core: OperatorCore;
   statuses?: ExecutionRun["status"][];
@@ -89,6 +94,7 @@ export type OperatorUiRouteId =
   | "workboard"
   | "agents"
   | "extensions"
+  | "memory"
   | "runs"
   | "pairing"
   | "desktop-environments"
@@ -181,6 +187,15 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
     shortcut: true,
     hostKinds: SHARED_HOST_KINDS,
     render: ({ core }) => <ExtensionsPage core={core} />,
+  },
+  {
+    id: "memory",
+    label: "Memory",
+    icon: Brain,
+    navGroup: "sidebar",
+    shortcut: true,
+    hostKinds: SHARED_HOST_KINDS,
+    render: ({ core }) => <MemoryPage core={core} />,
   },
   {
     id: "runs",
