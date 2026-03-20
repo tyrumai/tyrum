@@ -35,6 +35,8 @@ import {
   MemoryItemExpandedDetail,
 } from "./memory-page.sections.js";
 
+type SearchItemCache = Record<string, MemoryItem | null>;
+
 export function MemoryPage({ core }: { core: OperatorCore }) {
   const [tab, setTab] = useReconnectTabState<MemoryTab>("memory.tab", "items");
   const scrollAreaRef = useReconnectScrollArea("memory:page");
@@ -65,7 +67,7 @@ export function MemoryPage({ core }: { core: OperatorCore }) {
 
   // Search state
   const [searchHits, setSearchHits] = useState<MemorySearchHit[]>([]);
-  const [searchItemCache, setSearchItemCache] = useState<Record<string, MemoryItem>>({});
+  const [searchItemCache, setSearchItemCache] = useState<SearchItemCache>({});
 
   // Expand / delete state
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
@@ -183,19 +185,21 @@ export function MemoryPage({ core }: { core: OperatorCore }) {
   }, [readClient, agentId, tombstonesCursor, loadingMore]);
 
   function handleExpandItem(key: string | null) {
-    if (!searchMode) {
-      setExpandedItemId(key);
-      return;
-    }
-    // In search mode, fetch full item if not cached
-    if (key && !searchItemCache[key]) {
-      setExpandedItemId(key);
-      void readClient.memory?.getById(key).then((r) => {
-        setSearchItemCache((prev) => ({ ...prev, [key]: r.item }));
+    setExpandedItemId(key);
+    if (!searchMode || !key || key in searchItemCache) return;
+
+    const memoryClient = readClient.memory;
+    if (!memoryClient) return;
+
+    // Cache misses and failures so a broken item fetch is not retried on every render.
+    void memoryClient
+      .getById(key)
+      .then((response) => {
+        setSearchItemCache((prev) => ({ ...prev, [key]: response.item }));
+      })
+      .catch(() => {
+        setSearchItemCache((prev) => (key in prev ? prev : { ...prev, [key]: null }));
       });
-    } else {
-      setExpandedItemId(key);
-    }
   }
 
   function handleDelete(item: MemoryItem) {
@@ -225,35 +229,48 @@ export function MemoryPage({ core }: { core: OperatorCore }) {
   const searchDisplayItems: MemoryItem[] = useMemo(() => {
     return searchHits
       .map((hit) => searchItemCache[hit.memory_item_id])
-      .filter((item): item is MemoryItem => item !== undefined);
+      .filter((item): item is MemoryItem => item !== undefined && item !== null);
   }, [searchHits, searchItemCache]);
+
+  const pendingSearchItemCount = useMemo(
+    () => searchHits.filter((hit) => !(hit.memory_item_id in searchItemCache)).length,
+    [searchHits, searchItemCache],
+  );
 
   // Fetch full items for all search hits for the table
   useEffect(() => {
-    if (!searchMode || searchHits.length === 0) return;
+    const memoryClient = readClient.memory;
+    if (!searchMode || searchHits.length === 0 || !memoryClient) return;
     let cancelled = false;
 
     const fetchMissing = async () => {
       const missingIds = searchHits
         .map((h) => h.memory_item_id)
-        .filter((id) => !searchItemCache[id]);
+        .filter((id) => !(id in searchItemCache));
       if (missingIds.length === 0) return;
 
       const results = await Promise.all(
         missingIds.map((id) =>
-          readClient.memory
-            ?.getById(id)
+          memoryClient
+            .getById(id)
             .then((r) => r.item)
             .catch(() => null),
         ),
       );
 
       if (cancelled) return;
-      const newCache: Record<string, MemoryItem> = {};
-      for (const item of results) {
-        if (item) newCache[item.memory_item_id] = item;
-      }
-      setSearchItemCache((prev) => ({ ...prev, ...newCache }));
+      setSearchItemCache((prev) => {
+        const nextEntries: SearchItemCache = {};
+        let hasUpdates = false;
+
+        for (const [index, id] of missingIds.entries()) {
+          if (id in prev) continue;
+          nextEntries[id] = results[index] ?? null;
+          hasUpdates = true;
+        }
+
+        return hasUpdates ? { ...prev, ...nextEntries } : prev;
+      });
     };
 
     void fetchMissing();
@@ -333,7 +350,7 @@ export function MemoryPage({ core }: { core: OperatorCore }) {
         </CardContent>
       </Card>
 
-      {searchMode && searchHits.length > 0 && searchDisplayItems.length < searchHits.length ? (
+      {searchMode && pendingSearchItemCount > 0 ? (
         <div className="flex items-center gap-2 text-sm text-fg-muted">
           <Spinner className="h-4 w-4" />
           Loading search results…

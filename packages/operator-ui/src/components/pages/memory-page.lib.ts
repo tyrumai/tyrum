@@ -5,6 +5,7 @@ import type {
   MemorySensitivity,
 } from "@tyrum/contracts";
 import type { BadgeVariant } from "../ui/badge.js";
+export { formatRelativeTime } from "../../utils/format-relative-time.js";
 
 export type MemoryTab = "items" | "tombstones";
 
@@ -87,21 +88,4 @@ export function memoryItemSummary(item: MemoryItem): string {
     case "episode":
       return truncate(item.summary_md.split("\n")[0] ?? "", 100);
   }
-}
-
-export function formatRelativeTime(isoDate: string): string {
-  const date = new Date(isoDate);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffSec = Math.floor(diffMs / 1000);
-
-  if (diffSec < 60) return "just now";
-  const diffMin = Math.floor(diffSec / 60);
-  if (diffMin < 60) return `${diffMin}m ago`;
-  const diffHour = Math.floor(diffMin / 60);
-  if (diffHour < 24) return `${diffHour}h ago`;
-  const diffDay = Math.floor(diffHour / 24);
-  if (diffDay < 30) return `${diffDay}d ago`;
-
-  return date.toLocaleDateString();
 }

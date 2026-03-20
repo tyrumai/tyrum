@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   formatRelativeTime,
   memoryDeletedByLabel,
@@ -146,6 +146,20 @@ describe("memory-page.lib", () => {
     it("returns days for dates within a month", () => {
       const date = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
       expect(formatRelativeTime(date)).toBe("7d ago");
+    });
+
+    it("returns future timestamps using the shared formatter behavior", () => {
+      vi.useFakeTimers();
+      try {
+        vi.setSystemTime(new Date("2026-01-15T12:00:00.000Z"));
+        expect(formatRelativeTime("2026-01-15T12:05:00.000Z")).toBe("in 5m");
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("returns an empty string for invalid timestamps", () => {
+      expect(formatRelativeTime("not-a-date")).toBe("");
     });
   });
 
