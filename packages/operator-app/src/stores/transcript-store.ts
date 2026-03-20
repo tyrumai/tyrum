@@ -259,12 +259,12 @@ export function createTranscriptStore(ws: OperatorWsClient): TranscriptStore {
     ...store,
     setAgentId(agentId) {
       const nextAgentId = normalizeOptionalString(agentId);
+      let shouldInvalidate = false;
       setState((prev) => {
         if (prev.agentId === nextAgentId) {
           return prev;
         }
-        invalidateListLoad();
-        invalidateDetailLoad();
+        shouldInvalidate = true;
         return {
           ...prev,
           agentId: nextAgentId,
@@ -278,15 +278,19 @@ export function createTranscriptStore(ws: OperatorWsClient): TranscriptStore {
           errorDetail: null,
         };
       });
+      if (shouldInvalidate) {
+        invalidateListLoad();
+        invalidateDetailLoad();
+      }
     },
     setChannel(channel) {
       const nextChannel = normalizeOptionalString(channel);
+      let shouldInvalidate = false;
       setState((prev) => {
         if (prev.channel === nextChannel) {
           return prev;
         }
-        invalidateListLoad();
-        invalidateDetailLoad();
+        shouldInvalidate = true;
         return {
           ...prev,
           channel: nextChannel,
@@ -300,14 +304,18 @@ export function createTranscriptStore(ws: OperatorWsClient): TranscriptStore {
           errorDetail: null,
         };
       });
+      if (shouldInvalidate) {
+        invalidateListLoad();
+        invalidateDetailLoad();
+      }
     },
     setActiveOnly(activeOnly) {
+      let shouldInvalidate = false;
       setState((prev) => {
         if (prev.activeOnly === activeOnly) {
           return prev;
         }
-        invalidateListLoad();
-        invalidateDetailLoad();
+        shouldInvalidate = true;
         return {
           ...prev,
           activeOnly,
@@ -321,14 +329,18 @@ export function createTranscriptStore(ws: OperatorWsClient): TranscriptStore {
           errorDetail: null,
         };
       });
+      if (shouldInvalidate) {
+        invalidateListLoad();
+        invalidateDetailLoad();
+      }
     },
     setArchived(archived) {
+      let shouldInvalidate = false;
       setState((prev) => {
         if (prev.archived === archived) {
           return prev;
         }
-        invalidateListLoad();
-        invalidateDetailLoad();
+        shouldInvalidate = true;
         return {
           ...prev,
           archived,
@@ -342,6 +354,10 @@ export function createTranscriptStore(ws: OperatorWsClient): TranscriptStore {
           errorDetail: null,
         };
       });
+      if (shouldInvalidate) {
+        invalidateListLoad();
+        invalidateDetailLoad();
+      }
     },
     refresh,
     loadMore,
