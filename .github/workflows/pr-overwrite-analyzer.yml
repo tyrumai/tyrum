@@ -1,0 +1,144 @@
+name: pr-overwrite-analyzer
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+concurrency:
+  group: pr-overwrite-analyzer-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  pr-overwrite-analyzer:
+    name: PR Overwrite Analyzer
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Analyze current PR for overwritten merged changes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          node scripts/report-rebased-pr-overwrites.mjs
+          --pr "${{ github.event.pull_request.number }}"
+          --json
+          > pr-overwrite-analysis.json
+
+      - name: Append analyzer summary
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f pr-overwrite-analysis.json ]; then
+            {
+              echo "## PR Overwrite Analyzer"
+              echo ""
+              echo "Analyzer output was not produced. Check the job logs."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          node --input-type=module <<'EOF_SCRIPT' >> "$GITHUB_STEP_SUMMARY"
+          import { readFileSync } from "node:fs";
+          import { toMarkdownReport } from "./scripts/report-rebased-pr-overwrites.mjs";
+
+          const report = JSON.parse(readFileSync("pr-overwrite-analysis.json", "utf8"));
+          process.stdout.write(toMarkdownReport(report));
+          EOF_SCRIPT
+
+      - name: Sync PR analyzer comment
+        if: always()
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const { readFileSync, existsSync } = require('node:fs');
+            const { pathToFileURL } = require('node:url');
+            const isPermissionError = (error) =>
+              error?.status === 403 &&
+              /Resource not accessible by integration/i.test(String(error.message ?? ''));
+
+            try {
+              if (!existsSync('pr-overwrite-analysis.json')) {
+                core.info('Analyzer output was not produced; leaving existing PR comment unchanged.');
+                return;
+              }
+
+              const marker = '<!-- pr-overwrite-analyzer -->';
+              const reportModule = await import(pathToFileURL(`${process.env.GITHUB_WORKSPACE}/scripts/report-rebased-pr-overwrites.mjs`).href);
+              const report = JSON.parse(readFileSync('pr-overwrite-analysis.json', 'utf8'));
+              const { owner, repo } = context.repo;
+              const issue_number = context.payload.pull_request.number;
+              const comments = await github.paginate(github.rest.issues.listComments, {
+                owner,
+                repo,
+                issue_number,
+                per_page: 100,
+              });
+              const existing = comments.find((comment) => comment.user?.type === 'Bot' && comment.body?.includes(marker));
+
+              if (report.pairCount === 0) {
+                if (existing) {
+                  await github.rest.issues.deleteComment({
+                    owner,
+                    repo,
+                    comment_id: existing.id,
+                  });
+                  core.info(`Deleted stale PR overwrite analyzer comment ${existing.id}.`);
+                } else {
+                  core.info('No analyzer findings and no existing sticky comment to delete.');
+                }
+                return;
+              }
+
+              const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+              const body = [
+                marker,
+                reportModule.toMarkdownReport(report).trimEnd(),
+                '',
+                `Run: ${runUrl}`,
+              ].join('\n');
+
+              if (existing) {
+                await github.rest.issues.updateComment({
+                  owner,
+                  repo,
+                  comment_id: existing.id,
+                  body,
+                });
+                core.info(`Updated PR overwrite analyzer comment ${existing.id}.`);
+                return;
+              }
+
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number,
+                body,
+              });
+              core.info('Created PR overwrite analyzer comment.');
+            } catch (error) {
+              if (isPermissionError(error)) {
+                core.warning(`Skipping PR analyzer comment sync: ${error.message}`);
+                return;
+              }
+              throw error;
+            }
+
+      - name: Upload analyzer artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pr-overwrite-analysis
+          path: pr-overwrite-analysis.json
+          if-no-files-found: ignore
+          retention-days: 7
