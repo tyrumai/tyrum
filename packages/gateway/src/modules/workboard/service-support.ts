@@ -277,6 +277,13 @@ export async function maybeEnqueueStateChangeNotification(params: {
   policyService?: PolicyService;
   protocolDeps?: ProtocolDeps;
 }): Promise<void> {
+  if (
+    params.item.status !== "done" &&
+    params.item.status !== "blocked" &&
+    params.item.status !== "failed"
+  ) {
+    return;
+  }
   await enqueueWorkItemStateChangeNotification({
     db: params.db,
     scope: params.scope,

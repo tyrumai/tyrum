@@ -6,9 +6,11 @@ import {
   DEFAULT_WORKSPACE_ID,
 } from "../../src/modules/identity/scope.js";
 import { executeWorkboardTool } from "../../src/modules/agent/tool-executor-workboard-tools.js";
+import { ChannelInboxDal } from "../../src/modules/channels/inbox-dal.js";
 import { WorkboardDispatcher } from "../../src/modules/workboard/dispatcher.js";
 import { WorkboardReconciler } from "../../src/modules/workboard/reconciler.js";
 import { WorkboardDal } from "../../src/modules/workboard/dal.js";
+import { createGatewayWorkboardService } from "../../src/modules/workboard/service.js";
 import type { AgentRegistry } from "../../src/modules/agent/registry.js";
 import { SessionLaneNodeAttachmentDal } from "../../src/modules/agent/session-lane-node-attachment-dal.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
@@ -340,5 +342,73 @@ describe("WorkBoard regressions", () => {
         key: "work.refinement.phase",
       }),
     ).toMatchObject({ value_json: "done" });
+  });
+
+  it("does not auto-enqueue notifications for ready and doing transitions", async () => {
+    db = openTestSqliteDb();
+    const workboard = new WorkboardDal(db);
+    const service = createGatewayWorkboardService({ db });
+    const inbox = new ChannelInboxDal(db);
+    const scope = {
+      tenant_id: DEFAULT_TENANT_ID,
+      agent_id: DEFAULT_AGENT_ID,
+      workspace_id: DEFAULT_WORKSPACE_ID,
+    } as const;
+    const sessionKey = "agent:default:telegram:default:dm:chat-regression";
+
+    await inbox.enqueue({
+      source: "telegram:default",
+      thread_id: "chat-regression",
+      message_id: "msg-1",
+      key: sessionKey,
+      lane: "main",
+      received_at_ms: 1_000,
+      payload: { kind: "test" },
+    });
+    await workboard.upsertScopeActivity({
+      scope,
+      last_active_session_key: sessionKey,
+      updated_at_ms: 1_000,
+    });
+
+    const item = await workboard.createItem({
+      scope,
+      item: {
+        kind: "action",
+        title: "Notification filter",
+        created_from_session_key: sessionKey,
+      },
+      createdAtIso: "2026-02-27T00:00:00.000Z",
+    });
+
+    await service.transitionItem({
+      scope,
+      work_item_id: item.work_item_id,
+      status: "ready",
+      reason: "triaged",
+    });
+    await service.transitionItem({
+      scope,
+      work_item_id: item.work_item_id,
+      status: "doing",
+      reason: "started",
+    });
+
+    const intermediateCount = await db.get<{ count: number }>(
+      "SELECT COUNT(*) AS count FROM channel_outbox",
+    );
+    expect(intermediateCount?.count).toBe(0);
+
+    await service.transitionItem({
+      scope,
+      work_item_id: item.work_item_id,
+      status: "blocked",
+      reason: "waiting on input",
+    });
+
+    const blockedCount = await db.get<{ count: number }>(
+      "SELECT COUNT(*) AS count FROM channel_outbox",
+    );
+    expect(blockedCount?.count).toBe(1);
   });
 });

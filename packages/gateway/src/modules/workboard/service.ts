@@ -387,7 +387,7 @@ export class GatewayWorkboardService {
       return undefined;
     }
     if (item.status === "blocked" || item.status === "ready" || item.status === "doing") {
-      return await this.transitionItem({
+      return await this.transitionItemSystem({
         scope,
         work_item_id: params.work_item_id,
         status: "cancelled",
