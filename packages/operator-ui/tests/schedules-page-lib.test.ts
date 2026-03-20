@@ -34,6 +34,8 @@ describe("schedules-page.lib", () => {
     it("falls back to smaller unit when not evenly divisible", () => {
       expect(formatInterval(90_000)).toBe("90 seconds");
       expect(formatInterval(5_400_000)).toBe("90 minutes");
+      expect(formatInterval(3_601_000)).toBe("3601 seconds");
+      expect(formatInterval(86_401_000)).toBe("86401 seconds");
     });
 
     it("handles zero and negative", () => {

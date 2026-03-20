@@ -8,8 +8,8 @@ export function formatInterval(ms: number): string {
   const hours = Math.floor(minutes / 60);
   const days = Math.floor(hours / 24);
 
-  if (days > 0 && hours % 24 === 0) return days === 1 ? "1 day" : `${String(days)} days`;
-  if (hours > 0 && minutes % 60 === 0) return hours === 1 ? "1 hour" : `${String(hours)} hours`;
+  if (days > 0 && seconds % 86_400 === 0) return days === 1 ? "1 day" : `${String(days)} days`;
+  if (hours > 0 && seconds % 3_600 === 0) return hours === 1 ? "1 hour" : `${String(hours)} hours`;
   if (minutes > 0 && seconds % 60 === 0)
     return minutes === 1 ? "1 minute" : `${String(minutes)} minutes`;
   return seconds === 1 ? "1 second" : `${String(seconds)} seconds`;
