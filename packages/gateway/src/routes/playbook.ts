@@ -147,7 +147,8 @@ export function createPlaybookRoutes(deps: PlaybookRouteDeps): Hono {
           return c.json({ error: "invalid_request", message: "key must target an agent" }, 400);
         }
         agentKey = parsedKey.agent_key;
-      } catch {
+      } catch (error) {
+        void error;
         return c.json({ error: "invalid_request", message: "key must be a valid agent key" }, 400);
       }
     } else {

@@ -233,23 +233,29 @@ describe("ConfigurePage (HTTP) policy elevated mode prompts", () => {
     await flush();
     await flush();
 
-    setSelectValue(
-      getByTestId<HTMLSelectElement>(page.container, "admin-policy-override-agent"),
-      "00000000-0000-4000-8000-000000000002",
-    );
-    setSelectValue(
-      getByTestId<HTMLSelectElement>(page.container, "admin-policy-override-tool"),
-      "read",
-    );
     await act(async () => {
+      setSelectValue(
+        getByTestId<HTMLSelectElement>(page.container, "admin-policy-override-agent"),
+        "00000000-0000-4000-8000-000000000002",
+      );
+      setSelectValue(
+        getByTestId<HTMLSelectElement>(page.container, "admin-policy-override-tool"),
+        "read",
+      );
       setNativeValue(
         getByTestId<HTMLInputElement>(page.container, "admin-policy-override-pattern"),
         "docs/*",
       );
       await Promise.resolve();
     });
+    await flush();
 
-    click(getByTestId<HTMLButtonElement>(page.container, "admin-policy-override-create"));
+    const createButton = getByTestId<HTMLButtonElement>(
+      page.container,
+      "admin-policy-override-create",
+    );
+    expect(createButton.disabled).toBe(false);
+    await clickAndFlush(createButton);
 
     act(() => {
       core.elevatedModeStore.exit();

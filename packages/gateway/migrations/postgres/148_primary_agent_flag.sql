@@ -1,12 +1,12 @@
 ALTER TABLE agents ADD COLUMN IF NOT EXISTS is_primary BOOLEAN NOT NULL DEFAULT FALSE;
 
-UPDATE agents AS target
+UPDATE agents
 SET is_primary = TRUE
-WHERE target.agent_key = 'default'
+WHERE agent_key = 'default'
   AND NOT EXISTS (
     SELECT 1
     FROM agents AS existing
-    WHERE existing.tenant_id = target.tenant_id
+    WHERE existing.tenant_id = agents.tenant_id
       AND existing.is_primary = TRUE
   );
 

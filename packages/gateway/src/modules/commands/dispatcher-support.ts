@@ -124,7 +124,8 @@ export async function resolveAgentId(
     try {
       const parsed = parseTyrumKey(key as never);
       if (parsed.kind === "agent") return parsed.agent_key;
-    } catch {
+    } catch (error) {
+      void error;
       throw new CommandContextError("Invalid session key in command context.");
     }
   }
@@ -132,7 +133,8 @@ export async function resolveAgentId(
   if (options?.tenantId && options.identityScopeDal) {
     try {
       return await requirePrimaryAgentKey(options.identityScopeDal, options.tenantId);
-    } catch {
+    } catch (error) {
+      void error;
       throw new CommandContextError("No primary agent is configured for this tenant.");
     }
   }

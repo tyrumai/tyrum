@@ -5,8 +5,12 @@ import { createAgentRoutes } from "../../src/routes/agent.js";
 describe("createAgentRoutes", () => {
   it("lists tenant-scoped agents from the db dependency", async () => {
     const all = vi.fn(async () => [
-      { agent_key: "default", agent_id: "11111111-1111-4111-8111-111111111111" },
-      { agent_key: "helper", agent_id: "22222222-2222-4222-8222-222222222222" },
+      {
+        agent_key: "default",
+        agent_id: "11111111-1111-4111-8111-111111111111",
+        is_primary: 1,
+      },
+      { agent_key: "helper", agent_id: "22222222-2222-4222-8222-222222222222", is_primary: 0 },
     ]);
     const app = new Hono();
     app.use("*", async (c, next) => {
@@ -41,6 +45,7 @@ describe("createAgentRoutes", () => {
           agent_key: "helper",
           agent_id: "22222222-2222-4222-8222-222222222222",
           has_config: false,
+          is_primary: false,
           persona: {
             name: "Helper",
             tone: "direct",

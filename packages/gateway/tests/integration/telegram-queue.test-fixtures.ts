@@ -65,6 +65,7 @@ export function makeTelegramWebhookRuntime(bot: TelegramBot, accountKey = "defau
       {
         channel: "telegram" as const,
         account_key: accountKey,
+        agent_key: "default",
         ingress_mode: "webhook" as const,
         bot_token: "test-token",
         webhook_secret: TEST_TELEGRAM_WEBHOOK_SECRET,

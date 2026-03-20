@@ -193,6 +193,7 @@ export function createAdminHttpTestCore(): {
                   updated_at: TEST_TIMESTAMP,
                   has_config: true,
                   has_identity: true,
+                  is_primary: true,
                   can_delete: false,
                   persona: {
                     name: "Default Agent",

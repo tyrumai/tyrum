@@ -467,7 +467,7 @@ export function FirstRunOnboardingPage({
           <Card
             className="flex min-h-0 flex-col overflow-hidden"
             data-testid="first-run-onboarding-card"
-            style={{ maxHeight: "calc(100vh - 14rem - 4px)" }}
+            style={{ maxHeight: "calc(100vh - 18rem)" }}
           >
             <CardContent
               className="grid min-h-0 flex-1 gap-4 overflow-auto pt-6"

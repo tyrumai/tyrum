@@ -106,6 +106,7 @@ function makeTelegramRuntime(
     listTelegramAccounts: vi.fn(async () => [
       {
         account_key: "default",
+        agent_key: "default",
         ingress_mode: "webhook" as const,
         ...(options?.hasBotToken === false ? {} : { bot_token: "test-token" }),
         webhook_secret: options?.secret ?? TEST_TELEGRAM_SECRET,
@@ -345,6 +346,9 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
           telegramBot: bot,
           telegramWebhookSecret: "test-telegram-secret",
           agents: makeAgents(mockRuntime),
+          identityScopeDal: {
+            resolvePrimaryAgentKey: vi.fn(async () => "default"),
+          } as never,
         }),
       );
 

@@ -103,16 +103,14 @@ export class ChannelInboxDal {
       ? normalizedContainerKindFromThreadKind(payloadParsed.data.thread.kind)
       : "channel";
 
-    let agentKey: string;
+    let agentKey = "default";
     try {
       const parsedKey = parseTyrumKey(input.key as never);
       if (parsedKey.kind === "agent") {
         agentKey = parsedKey.agent_key;
-      } else {
-        throw new Error("channel inbox key must target an agent");
       }
-    } catch (error) {
-      throw new Error("channel inbox key must be a valid agent key", { cause: error });
+    } catch {
+      // Legacy inbox keys are still supported during the migration to explicit agent-scoped keys.
     }
 
     const session = await this.sessionDal.getOrCreate({

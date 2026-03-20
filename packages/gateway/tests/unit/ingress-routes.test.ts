@@ -23,6 +23,7 @@ describe("Ingress routes", () => {
       listTelegramAccounts: vi.fn(async () => [
         {
           account_key: "default",
+          agent_key: "default",
           ingress_mode: "webhook",
           bot_token: "bot-token",
           webhook_secret: "test-secret",
@@ -80,6 +81,7 @@ describe("Ingress routes", () => {
       listTelegramAccounts: vi.fn(async () => [
         {
           account_key: "work",
+          agent_key: "default",
           ingress_mode: "webhook",
           bot_token: "bot-token",
           webhook_secret: "secret-work",
@@ -135,6 +137,7 @@ describe("Ingress routes", () => {
           listTelegramAccounts: vi.fn(async () => [
             {
               account_key: "work",
+              agent_key: "default",
               ingress_mode: "webhook",
               webhook_secret: "secret-work",
               allowed_user_ids: [],
@@ -177,6 +180,7 @@ describe("Ingress routes", () => {
           listTelegramAccounts: vi.fn(async () => [
             {
               account_key: "polling",
+              agent_key: "default",
               ingress_mode: "polling",
               bot_token: "polling-token",
               webhook_secret: "polling-secret",
@@ -218,6 +222,7 @@ describe("Ingress routes", () => {
       listTelegramAccounts: vi.fn(async () => [
         {
           account_key: "webhook",
+          agent_key: "default",
           ingress_mode: "webhook",
           bot_token: "webhook-token",
           webhook_secret: "webhook-secret",
@@ -226,6 +231,7 @@ describe("Ingress routes", () => {
         },
         {
           account_key: "polling",
+          agent_key: "default",
           ingress_mode: "polling",
           bot_token: "polling-token",
           webhook_secret: "polling-secret",

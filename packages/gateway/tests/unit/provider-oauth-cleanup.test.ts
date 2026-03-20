@@ -94,6 +94,12 @@ class MemoryProviderRegistry {
   }
 }
 
+function createIdentityScopeDalStub() {
+  return {
+    resolvePrimaryAgentKey: vi.fn(async () => "default"),
+  };
+}
+
 describe("provider OAuth callback cleanup", () => {
   beforeEach(() => {
     const fetchMock = vi.fn(async (url: string | URL | Request) => {
@@ -160,6 +166,7 @@ describe("provider OAuth callback cleanup", () => {
       oauthPendingDal: pendingDal as any,
       oauthProviderRegistry: registry as any,
       authProfileDal,
+      identityScopeDal: createIdentityScopeDalStub() as any,
       secretProviderForTenant: () => secretProvider,
     });
 
@@ -206,6 +213,7 @@ describe("provider OAuth callback cleanup", () => {
       oauthPendingDal: pendingDal as any,
       oauthProviderRegistry: registry as any,
       authProfileDal: {} as any,
+      identityScopeDal: createIdentityScopeDalStub() as any,
       secretProviderForTenant: () => secretProvider,
     });
 
@@ -247,6 +255,7 @@ describe("provider OAuth callback cleanup", () => {
       oauthPendingDal,
       oauthProviderRegistry: registry as any,
       authProfileDal: {} as any,
+      identityScopeDal: createIdentityScopeDalStub() as any,
       secretProviderForTenant: () => new MemorySecretProvider(),
       logger,
     });
@@ -301,6 +310,7 @@ describe("provider OAuth callback cleanup", () => {
         oauthPendingDal,
         oauthProviderRegistry: registry as any,
         authProfileDal: {} as any,
+        identityScopeDal: createIdentityScopeDalStub() as any,
         secretProviderForTenant: () => secretProvider,
       }),
     );
@@ -360,6 +370,7 @@ describe("provider OAuth callback cleanup", () => {
         oauthPendingDal,
         oauthProviderRegistry: registry as any,
         authProfileDal: {} as any,
+        identityScopeDal: createIdentityScopeDalStub() as any,
         secretProviderForTenant: () => secretProvider,
         logger,
       }),

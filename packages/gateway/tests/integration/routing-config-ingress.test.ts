@@ -4,7 +4,7 @@ import { createIngressRoutes } from "../../src/routes/ingress.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { RoutingConfigDal } from "../../src/modules/channels/routing-config-dal.js";
-import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
+import { DEFAULT_TENANT_ID, IdentityScopeDal } from "../../src/modules/identity/scope.js";
 import { ChannelConfigDal } from "../../src/modules/channels/channel-config-dal.js";
 import { TelegramChannelRuntime } from "../../src/modules/channels/telegram-runtime.js";
 
@@ -27,6 +27,10 @@ describe("routing config (durable) + ingress", () => {
 
   function createTelegramRuntime(): TelegramChannelRuntime {
     return new TelegramChannelRuntime(new ChannelConfigDal(db));
+  }
+
+  function createIdentityScopeDal(): IdentityScopeDal {
+    return new IdentityScopeDal(db);
   }
 
   async function seedTelegramAccount(input: {
@@ -98,6 +102,7 @@ describe("routing config (durable) + ingress", () => {
           },
         } as never,
         routingConfigDal: routing,
+        identityScopeDal: createIdentityScopeDal(),
       }),
     );
 
@@ -171,6 +176,7 @@ describe("routing config (durable) + ingress", () => {
           },
         } as never,
         routingConfigDal: new RoutingConfigDal(db),
+        identityScopeDal: createIdentityScopeDal(),
       }),
     );
 
@@ -233,6 +239,7 @@ describe("routing config (durable) + ingress", () => {
             };
           },
         } as never,
+        identityScopeDal: createIdentityScopeDal(),
       }),
     );
 
@@ -295,6 +302,7 @@ describe("routing config (durable) + ingress", () => {
             };
           },
         } as never,
+        identityScopeDal: createIdentityScopeDal(),
       }),
     );
 
@@ -393,6 +401,7 @@ describe("routing config (durable) + ingress", () => {
           },
         } as never,
         routingConfigDal: routing,
+        identityScopeDal: createIdentityScopeDal(),
       }),
     );
 

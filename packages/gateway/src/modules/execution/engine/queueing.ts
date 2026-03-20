@@ -18,16 +18,15 @@ export async function enqueuePlanInTx(
   if (!tenantId) {
     throw new Error("tenantId is required to enqueue execution plans");
   }
-  let agentKey: string;
+  let agentKey = "default";
   try {
     const parsedKey = parseTyrumKey(input.key as never);
     if (parsedKey.kind === "agent") {
       agentKey = parsedKey.agent_key;
-    } else {
-      throw new Error("execution key must target an agent");
     }
-  } catch (error) {
-    throw new Error("execution key must be a valid agent key", { cause: error });
+  } catch {
+    // Execution keys are broader than agent-scoped session keys; fall back to the
+    // primary seeded agent for internal workflow lanes that do not encode an agent key.
   }
 
   const identityScopeDal = new IdentityScopeDal(tx);

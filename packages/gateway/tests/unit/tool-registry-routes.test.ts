@@ -193,7 +193,7 @@ describe("tool registry routes", () => {
       }),
     );
 
-    const response = await app.request("/config/tools");
+    const response = await app.request("/config/tools?agent_key=default");
     expect(response.status).toBe(200);
 
     const body = (await response.json()) as {
