@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { SubagentDescriptor, WorkItem, WorkScope, WsEventEnvelope } from "@tyrum/contracts";
 import type { PolicyService } from "@tyrum/runtime-policy";
 import type { SqlDb } from "../../statestore/types.js";
+import { broadcastWsEvent } from "../../ws/broadcast.js";
 import type { ProtocolDeps } from "../../ws/protocol/types.js";
 import { WORKBOARD_WS_AUDIENCE } from "../../ws/workboard-audience.js";
 import type { ApprovalDal } from "../approval/dal.js";
@@ -229,6 +230,7 @@ export async function completePendingInterventionApprovals(params: {
 export async function emitItemEvent(params: {
   db: SqlDb;
   redactionEngine?: RedactionEngine;
+  protocolDeps?: ProtocolDeps;
   type: WorkItemEventType;
   item: WorkItem;
 }): Promise<void> {
@@ -239,6 +241,20 @@ export async function emitItemEvent(params: {
     scope: { kind: "agent", agent_id: params.item.agent_id },
     payload: { item: params.item },
   } satisfies WsEventEnvelope;
+  if (params.protocolDeps) {
+    broadcastWsEvent(
+      params.item.tenant_id,
+      message,
+      {
+        connectionManager: params.protocolDeps.connectionManager,
+        cluster: params.protocolDeps.cluster,
+        logger: params.protocolDeps.logger,
+        maxBufferedBytes: params.protocolDeps.maxBufferedBytes,
+      },
+      WORKBOARD_WS_AUDIENCE,
+    );
+    return;
+  }
   const payload = {
     message,
     audience: WORKBOARD_WS_AUDIENCE,
@@ -275,6 +291,7 @@ export async function createCapturedWorkItem(params: {
   workboard: WorkboardDal;
   db: SqlDb;
   redactionEngine?: RedactionEngine;
+  protocolDeps?: ProtocolDeps;
   scope: WorkScope;
   item: Parameters<WorkboardDal["createItem"]>[0]["item"];
   createdFromSessionKey?: string;
@@ -323,6 +340,7 @@ export async function createCapturedWorkItem(params: {
   await emitItemEvent({
     db: params.db,
     redactionEngine: params.redactionEngine,
+    protocolDeps: params.protocolDeps,
     type: "work.item.created",
     item,
   });

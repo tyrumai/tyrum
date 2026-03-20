@@ -3,7 +3,7 @@ import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { handleClientMessage } from "../../src/ws/protocol.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { ChannelInboxDal } from "../../src/modules/channels/inbox-dal.js";
-import { makeDeps, makeClient } from "./ws-workboard.test-support.js";
+import { makeDeps, makeClient, markWorkItemDispatchReady } from "./ws-workboard.test-support.js";
 
 function registerCompletionNotificationTests(): void {
   it("enqueues a channel completion notification when last_active_session_key is a channel session", async () => {
@@ -44,6 +44,7 @@ function registerCompletionNotificationTests(): void {
       expect((createRes as unknown as { ok: boolean }).ok).toBe(true);
       const createdId = (createRes as unknown as { result: { item: { work_item_id: string } } })
         .result.item.work_item_id;
+      await markWorkItemDispatchReady(db, createdId);
 
       await handleClientMessage(
         client,
@@ -108,7 +109,7 @@ function registerCompletionNotificationTests(): void {
 }
 
 function registerWipAndArtifactTests(): void {
-  it("enforces WIP limit across transition requests", async () => {
+  it("allows operator transition requests without an item-level WIP cap", async () => {
     const cm = new ConnectionManager();
     const { id, ws } = makeClient(cm);
     const client = cm.getClient(id)!;
@@ -134,8 +135,10 @@ function registerWipAndArtifactTests(): void {
             deps,
           );
           expect((res as unknown as { ok: boolean }).ok).toBe(true);
-          return (res as unknown as { result: { item: { work_item_id: string } } }).result.item
-            .work_item_id;
+          const workItemId = (res as unknown as { result: { item: { work_item_id: string } } })
+            .result.item.work_item_id;
+          await markWorkItemDispatchReady(db, workItemId);
+          return workItemId;
         }),
       );
 
@@ -210,16 +213,8 @@ function registerWipAndArtifactTests(): void {
         ),
       ];
 
-      const ok = transitions.filter((res) => (res as { ok: boolean }).ok);
-      const errCount = transitions.filter((res) => !(res as { ok: boolean }).ok).length;
-      expect(ok.length).toBe(2);
-      expect(errCount).toBe(1);
-      const err = transitions
-        .map((res) => (res as { error?: { code: string } }).error)
-        .find((error) => error);
-      expect(err?.code).toBe("wip_limit_exceeded");
-      expect((err as { details?: { limit?: number } } | undefined)?.details?.limit).toBe(2);
-      expect(ws.send).toHaveBeenCalledTimes(2);
+      expect(transitions.every((res) => (res as { ok: boolean }).ok)).toBe(true);
+      expect(ws.send).toHaveBeenCalledTimes(3);
     } finally {
       await db.close();
     }

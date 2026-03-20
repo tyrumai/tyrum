@@ -28,6 +28,38 @@ import type { AgentRegistry } from "../../../gateway/src/modules/agent/registry.
 const TIMEOUT = CONFORMANCE_TIMEOUT_MS;
 const scope = { tenant_key: "default", agent_key: "default", workspace_key: "default" } as const;
 
+async function markWorkItemDispatchReady(gw: GatewayHarness, workItemId: string): Promise<void> {
+  const identityScopeDal = new IdentityScopeDal(gw.protocolDeps.db!);
+  const resolvedScope = await identityScopeDal.resolveScopeIds({
+    tenantKey: scope.tenant_key,
+    agentKey: scope.agent_key,
+    workspaceKey: scope.workspace_key,
+  });
+  const workboard = new WorkboardDal(gw.protocolDeps.db!);
+  const scopeIds = {
+    tenant_id: resolvedScope.tenantId,
+    agent_id: resolvedScope.agentId,
+    workspace_id: resolvedScope.workspaceId,
+  } as const;
+  await workboard.updateItem({
+    scope: scopeIds,
+    work_item_id: workItemId,
+    patch: { acceptance: { done: true } },
+  });
+  await workboard.setStateKv({
+    scope: { kind: "work_item", ...scopeIds, work_item_id: workItemId },
+    key: "work.refinement.phase",
+    value_json: "done",
+    provenance_json: { source: "test" },
+  });
+  await workboard.setStateKv({
+    scope: { kind: "work_item", ...scopeIds, work_item_id: workItemId },
+    key: "work.size.class",
+    value_json: "small",
+    provenance_json: { source: "test" },
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -72,7 +104,7 @@ describe("WS WorkBoard conformance (client <-> gateway)", () => {
     expect(fetched.item.work_item_id).toBe(created.item.work_item_id);
   });
 
-  it("enforces a doing WIP limit on work.transition", async () => {
+  it("allows operator work.transition requests without an item-level WIP cap", async () => {
     gw = await startGateway();
     const result = createConnectedClient(gw);
     client = result.client;
@@ -82,6 +114,9 @@ describe("WS WorkBoard conformance (client <-> gateway)", () => {
     const item1 = await client.workCreate({ ...scope, item: { kind: "action", title: "Item 1" } });
     const item2 = await client.workCreate({ ...scope, item: { kind: "action", title: "Item 2" } });
     const item3 = await client.workCreate({ ...scope, item: { kind: "action", title: "Item 3" } });
+    await markWorkItemDispatchReady(gw, item1.item.work_item_id);
+    await markWorkItemDispatchReady(gw, item2.item.work_item_id);
+    await markWorkItemDispatchReady(gw, item3.item.work_item_id);
 
     await client.workTransition({
       ...scope,
@@ -112,7 +147,9 @@ describe("WS WorkBoard conformance (client <-> gateway)", () => {
 
     await expect(
       client.workTransition({ ...scope, work_item_id: item3.item.work_item_id, status: "doing" }),
-    ).rejects.toThrow(/wip_limit_exceeded/);
+    ).resolves.toMatchObject({
+      item: { work_item_id: item3.item.work_item_id, status: "doing" },
+    });
   });
 
   it("supports drilldown artifacts + decisions create/list/get and broadcasts create events", async () => {
@@ -205,6 +242,7 @@ describe("WS WorkBoard conformance (client <-> gateway)", () => {
       ...scope,
       item: { kind: "action", title: "Signal item" },
     });
+    await markWorkItemDispatchReady(gw, item.item.work_item_id);
 
     const signalCreatedP = waitForEvent<{ payload: { signal: { signal_id: string } } }>(
       client,
@@ -379,6 +417,7 @@ describe("WS WorkBoard conformance (client <-> gateway)", () => {
         created_from_session_key: createdFromKey,
       },
     });
+    await markWorkItemDispatchReady(gw, item1.item.work_item_id);
 
     const completed1P = waitForEventMatching<{
       payload: { item: { work_item_id: string; status: string } };
@@ -430,6 +469,7 @@ describe("WS WorkBoard conformance (client <-> gateway)", () => {
         created_from_session_key: createdFromKey,
       },
     });
+    await markWorkItemDispatchReady(gw, item2.item.work_item_id);
 
     const createdBefore = await outbox.listForInbox(createdRoute.row.inbox_id);
     const activeBefore = await outbox.listForInbox(activeRoute.row.inbox_id);

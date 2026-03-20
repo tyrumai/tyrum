@@ -46,7 +46,7 @@ describe("resolveApproval", () => {
     db = undefined;
   });
 
-  it("skips eager approval lookup for once resolutions", async () => {
+  it("allows eager approval lookup for once resolutions without bypassing engine resolution", async () => {
     let getByIdCalls = 0;
     let resolveCalls = 0;
     const approval = makeApprovalRow({ status: "approved" });
@@ -76,7 +76,7 @@ describe("resolveApproval", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error(result.message);
     expect(result.transitioned).toBe(true);
-    expect(getByIdCalls).toBe(0);
+    expect(getByIdCalls).toBe(1);
     expect(resolveCalls).toBe(1);
   });
 

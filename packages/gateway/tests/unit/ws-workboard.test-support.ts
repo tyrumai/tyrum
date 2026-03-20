@@ -1,7 +1,13 @@
 import { vi } from "vitest";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import type { ProtocolDeps } from "../../src/ws/protocol.js";
-import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
+import {
+  DEFAULT_AGENT_ID,
+  DEFAULT_TENANT_ID,
+  DEFAULT_WORKSPACE_ID,
+} from "../../src/modules/identity/scope.js";
+import { WorkboardDal } from "../../src/modules/workboard/dal.js";
+import type { SqliteDb } from "../../src/statestore/sqlite.js";
 
 export interface MockWebSocket {
   send: ReturnType<typeof vi.fn>;
@@ -21,6 +27,32 @@ export function createMockWs(): MockWebSocket {
 
 export function makeDeps(cm: ConnectionManager, overrides?: Partial<ProtocolDeps>): ProtocolDeps {
   return { connectionManager: cm, ...overrides };
+}
+
+export async function markWorkItemDispatchReady(db: SqliteDb, workItemId: string): Promise<void> {
+  const workboard = new WorkboardDal(db);
+  const scope = {
+    tenant_id: DEFAULT_TENANT_ID,
+    agent_id: DEFAULT_AGENT_ID,
+    workspace_id: DEFAULT_WORKSPACE_ID,
+  } as const;
+  await workboard.updateItem({
+    scope,
+    work_item_id: workItemId,
+    patch: { acceptance: { done: true } },
+  });
+  await workboard.setStateKv({
+    scope: { kind: "work_item", ...scope, work_item_id: workItemId },
+    key: "work.refinement.phase",
+    value_json: "done",
+    provenance_json: { source: "test" },
+  });
+  await workboard.setStateKv({
+    scope: { kind: "work_item", ...scope, work_item_id: workItemId },
+    key: "work.size.class",
+    value_json: "small",
+    provenance_json: { source: "test" },
+  });
 }
 
 export function makeClient(

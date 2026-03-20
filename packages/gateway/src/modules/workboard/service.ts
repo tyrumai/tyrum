@@ -47,6 +47,7 @@ export class GatewayWorkboardService {
       workboard: this.workboard,
       db: this.opts.db,
       redactionEngine: this.opts.redactionEngine,
+      protocolDeps: this.opts.protocolDeps,
       scope: params.scope,
       item: params.item,
       createdFromSessionKey: params.createdFromSessionKey,
@@ -69,6 +70,7 @@ export class GatewayWorkboardService {
       await emitItemEvent({
         db: this.opts.db,
         redactionEngine: this.opts.redactionEngine,
+        protocolDeps: this.opts.protocolDeps,
         type: "work.item.updated",
         item,
       });
@@ -106,6 +108,7 @@ export class GatewayWorkboardService {
       await emitItemEvent({
         db: this.opts.db,
         redactionEngine: this.opts.redactionEngine,
+        protocolDeps: this.opts.protocolDeps,
         type: "work.item.deleted",
         item,
       });
@@ -407,6 +410,7 @@ export class GatewayWorkboardService {
     await emitItemEvent({
       db: this.opts.db,
       redactionEngine: this.opts.redactionEngine,
+      protocolDeps: this.opts.protocolDeps,
       type: getTransitionEventType(params.status),
       item,
     });
