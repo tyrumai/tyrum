@@ -5,55 +5,16 @@ import { tmpdir } from "node:os";
 import { afterEach } from "vitest";
 import { ToolExecutor } from "../../src/modules/agent/tool-executor.js";
 import type { McpManager } from "../../src/modules/agent/mcp-manager.js";
-import type { SecretProvider } from "../../src/modules/secret/provider.js";
 import type { SecretResolutionAuditDal } from "../../src/modules/secret/resolution-audit-dal.js";
-import type { McpServerSpec, SecretHandle } from "@tyrum/contracts";
 import { DEFAULT_TENANT_ID, DEFAULT_WORKSPACE_ID } from "../../src/modules/identity/scope.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
-
-function stubMcpManager(overrides?: Partial<McpManager>): McpManager {
-  return {
-    listToolDescriptors: vi.fn(async () => []),
-    shutdown: vi.fn(async () => {}),
-    callTool: vi.fn(async () => ({ content: [{ type: "text", text: "mcp-result" }] })),
-    ...overrides,
-  } as unknown as McpManager;
-}
-
-function createMcpSpec(id: string): McpServerSpec {
-  return {
-    id,
-    name: `Server ${id}`,
-    enabled: true,
-    transport: "stdio",
-    command: "node",
-  };
-}
-
-function stubSecretProvider(secrets: Map<string, string>): SecretProvider {
-  const handles: SecretHandle[] = [...secrets.keys()].map((id) => ({
-    handle_id: id,
-    provider: "db" as const,
-    scope: id,
-    created_at: "",
-  }));
-  return {
-    resolve: vi.fn(async (handle: SecretHandle) => secrets.get(handle.handle_id) ?? null),
-    store: vi.fn(async () => ({
-      handle_id: "h1",
-      provider: "db" as const,
-      scope: "test",
-      created_at: "",
-    })),
-    revoke: vi.fn(async () => true),
-    list: vi.fn(async () => handles),
-  };
-}
-
-async function allowPublicDnsLookup() {
-  return [{ address: "93.184.216.34", family: 4 }] as const;
-}
+import {
+  allowPublicDnsLookup,
+  createMcpSpec,
+  stubMcpManager,
+  stubSecretProvider,
+} from "./tool-executor.secret-test-support.js";
 
 describe("ToolExecutor secret resolution", () => {
   let homeDir: string | undefined;

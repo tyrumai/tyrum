@@ -1,4 +1,8 @@
-import type { Decision, SecretHandle as SecretHandleT } from "@tyrum/contracts";
+import type {
+  AgentSecretReference as AgentSecretReferenceT,
+  Decision,
+  SecretHandle as SecretHandleT,
+} from "@tyrum/contracts";
 import type { ToolDescriptor } from "../tools.js";
 import type { SuggestedOverride } from "@tyrum/runtime-policy";
 import { coerceRecord } from "../../util/coerce.js";
@@ -68,6 +72,7 @@ export interface ToolSetBuilderDeps {
   approvalPollMs: number;
   logger: ToolSetBuilderLogger;
   secretProvider?: SecretProvider;
+  secretRefs?: readonly AgentSecretReferenceT[];
   plugins?: PluginRegistry;
   redactionEngine?: ToolSetBuilderRedactionEngine;
 }

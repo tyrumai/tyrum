@@ -1,6 +1,8 @@
 import {
   DesktopActArgs,
   DesktopActResult,
+  DesktopClipboardWriteArgs,
+  DesktopClipboardWriteResult,
   DesktopKeyboardArgs,
   DesktopMouseArgs,
   DesktopQueryArgs,
@@ -27,6 +29,16 @@ export const DESKTOP_CAPABILITY_CATALOG_ENTRIES: readonly CapabilityCatalogEntry
       "Capture a desktop screenshot.",
       DesktopScreenshotArgs,
       DesktopScreenshotResult,
+    ),
+  ),
+  createEntry(
+    "tyrum.desktop.clipboard-write",
+    desktopAction(
+      "clipboard_write",
+      "Write text to the desktop clipboard.",
+      DesktopClipboardWriteArgs,
+      DesktopClipboardWriteResult,
+      "result",
     ),
   ),
   createEntry(

@@ -22,6 +22,7 @@ import type { Logger } from "../observability/logger.js";
 import type { PluginCatalogProvider } from "../plugins/catalog-provider.js";
 import type { PluginRegistry } from "../plugins/registry.js";
 import { buildBuiltinMemoryServerSpec } from "../memory/builtin-mcp.js";
+import { buildSecretClipboardToolDescriptor } from "./tool-secret-definitions.js";
 
 function upsertCapability<T extends { id: string }>(itemsById: Map<string, T>, item: T): void {
   if (!itemsById.has(item.id)) {
@@ -207,6 +208,7 @@ export async function listAgentMcpCapabilities(params: {
 }
 
 export async function listAgentToolCapabilities(params: {
+  config: AgentConfigT;
   db: SqlDb;
   tenantId: string;
   agentKey: string;
@@ -217,7 +219,12 @@ export async function listAgentToolCapabilities(params: {
 }): Promise<AgentToolCapabilityT[]> {
   const itemsById = new Map<string, AgentToolCapabilityT>();
 
-  for (const tool of listBuiltinToolDescriptors()) {
+  const builtinTools = [
+    ...listBuiltinToolDescriptors(),
+    buildSecretClipboardToolDescriptor(params.config.secret_refs),
+  ].filter((tool): tool is NonNullable<typeof tool> => tool !== undefined);
+
+  for (const tool of builtinTools) {
     if (!isBuiltinToolAvailableInStateMode(tool.id, params.stateMode)) continue;
     upsertCapability(itemsById, {
       id: tool.id,
