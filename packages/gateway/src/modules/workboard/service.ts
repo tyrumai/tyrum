@@ -249,6 +249,8 @@ export class GatewayWorkboardService {
         patch: {
           status: "queued",
           approval_id: null,
+          pause_reason: null,
+          pause_detail: null,
           result_summary: resumeDetail,
         },
       });

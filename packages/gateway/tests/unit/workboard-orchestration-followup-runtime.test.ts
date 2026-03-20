@@ -288,6 +288,71 @@ describe("WorkBoard orchestration follow-up runtime behavior", () => {
     ).toMatchObject({ value_json: "cancelled" });
   });
 
+  it("clears pause metadata when paused tasks are resumed", async () => {
+    db = openTestSqliteDb();
+    const workboard = new WorkboardDal(db);
+    const service = createGatewayWorkboardService({ db });
+    const scope = {
+      tenant_id: DEFAULT_TENANT_ID,
+      agent_id: DEFAULT_AGENT_ID,
+      workspace_id: DEFAULT_WORKSPACE_ID,
+    } as const;
+    const item = await workboard.createItem({
+      scope,
+      createdFromSessionKey: "agent:default:test:default:channel:thread-resume-cleanup",
+      item: { kind: "action", title: "Resume cleanup", acceptance: { done: true } },
+    });
+    await workboard.setStateKv({
+      scope: { kind: "work_item", ...scope, work_item_id: item.work_item_id },
+      key: "work.refinement.phase",
+      value_json: "done",
+      provenance_json: { source: "test" },
+    });
+    await workboard.setStateKv({
+      scope: { kind: "work_item", ...scope, work_item_id: item.work_item_id },
+      key: "work.dispatch.phase",
+      value_json: "awaiting_human",
+      provenance_json: { source: "test" },
+    });
+    await workboard.setStateKv({
+      scope: { kind: "work_item", ...scope, work_item_id: item.work_item_id },
+      key: "work.size.class",
+      value_json: "small",
+      provenance_json: { source: "test" },
+    });
+    await workboard.transitionItem({ scope, work_item_id: item.work_item_id, status: "ready" });
+    await workboard.transitionItem({ scope, work_item_id: item.work_item_id, status: "doing" });
+    await workboard.transitionItem({ scope, work_item_id: item.work_item_id, status: "blocked" });
+
+    const pausedTask = await workboard.createTask({
+      scope,
+      task: {
+        work_item_id: item.work_item_id,
+        status: "paused",
+        execution_profile: "executor_rw",
+        side_effect_class: "workspace",
+        pause_reason: "manual",
+        pause_detail: "Paused for operator review.",
+      },
+    });
+
+    await expect(
+      service.resumeItem({
+        scope,
+        work_item_id: item.work_item_id,
+        reason: "Resume after review",
+      }),
+    ).resolves.toMatchObject({ status: "ready" });
+
+    const resumedTask = await workboard.getTask({ scope, task_id: pausedTask.task_id });
+    expect(resumedTask).toMatchObject({
+      status: "queued",
+      result_summary: "Resume after review",
+    });
+    expect(resumedTask?.pause_reason).toBeUndefined();
+    expect(resumedTask?.pause_detail).toBeUndefined();
+  });
+
   it("includes refinement and ownership details in the work focus digest", async () => {
     db = openTestSqliteDb();
     const _attachmentDal = new SessionLaneNodeAttachmentDal(db);
