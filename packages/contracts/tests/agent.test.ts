@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   AgentConfig,
   AgentCapabilitiesResponse,
+  AgentSecretReference,
   BuiltinMemoryServerSettings,
   IdentityPack,
   McpServerSpec,
@@ -45,6 +46,7 @@ describe("AgentConfig", () => {
     expect(parsed.sessions.loop_detection.cross_turn.min_chars).toBe(120);
     expect(parsed.sessions.loop_detection.cross_turn.cooldown_assistant_messages).toBe(6);
     expect(parsed.persona).toBeUndefined();
+    expect(parsed.secret_refs).toEqual([]);
   });
 
   it("parses MCP-native built-in memory settings", () => {
@@ -156,6 +158,69 @@ describe("AgentConfig", () => {
     expect(parsed.tools.default_mode).toBe("allow");
     expect(parsed.tools.allow).toEqual([]);
     expect(parsed.tools.deny).toEqual([]);
+  });
+
+  it("parses agent-scoped secret references as metadata only", () => {
+    const parsed = AgentConfig.parse({
+      model: { model: "openai/gpt-5.4" },
+      secret_refs: [
+        {
+          secret_ref_id: "sec_ref_prod_db",
+          secret_alias: "prod-db-password",
+          allowed_tool_ids: ["tool.secret.copy-to-node-clipboard"],
+          display_name: "Production DB password",
+        },
+      ],
+    });
+
+    expect(parsed.secret_refs).toEqual([
+      {
+        secret_ref_id: "sec_ref_prod_db",
+        secret_alias: "prod-db-password",
+        allowed_tool_ids: ["tool.secret.copy-to-node-clipboard"],
+        display_name: "Production DB password",
+      },
+    ]);
+  });
+
+  it("rejects generic node helpers in allowed secret tool ids", () => {
+    expectRejects(AgentConfig, {
+      model: { model: "openai/gpt-5.4" },
+      secret_refs: [
+        {
+          secret_ref_id: "sec_ref_prod_db",
+          allowed_tool_ids: ["tool.node.dispatch"],
+        },
+      ],
+    });
+  });
+
+  it("rejects duplicate secret aliases within an agent config", () => {
+    expectRejects(AgentConfig, {
+      model: { model: "openai/gpt-5.4" },
+      secret_refs: [
+        {
+          secret_ref_id: "sec_ref_prod_db",
+          secret_alias: "shared-alias",
+          allowed_tool_ids: ["tool.secret.copy-to-node-clipboard"],
+        },
+        {
+          secret_ref_id: "sec_ref_prod_api",
+          secret_alias: "shared-alias",
+          allowed_tool_ids: ["tool.secret.copy-to-node-clipboard"],
+        },
+      ],
+    });
+  });
+});
+
+describe("AgentSecretReference", () => {
+  it("rejects unexpected raw secret fields", () => {
+    expectRejects(AgentSecretReference, {
+      secret_ref_id: "sec_ref_prod_db",
+      allowed_tool_ids: ["tool.secret.copy-to-node-clipboard"],
+      value: "plaintext-should-not-appear-here",
+    });
   });
 });
 

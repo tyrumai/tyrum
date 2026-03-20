@@ -166,6 +166,15 @@ describe("canonical capability IDs", () => {
     }
   });
 
+  it("includes the desktop clipboard-write capability without changing the default desktop advertisement set", () => {
+    expect(CANONICAL_CAPABILITY_IDS).toContain("tyrum.desktop.clipboard-write");
+    expect(clientCapabilityFromDescriptorId("tyrum.desktop.clipboard-write")).toBe("desktop");
+    expect(capabilityDescriptorsForClientCapability("desktop")).not.toContainEqual({
+      id: "tyrum.desktop.clipboard-write",
+      version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+    });
+  });
+
   it("has 22 browser automation capabilities", () => {
     expect(BROWSER_AUTOMATION_CAPABILITY_IDS).toHaveLength(22);
   });

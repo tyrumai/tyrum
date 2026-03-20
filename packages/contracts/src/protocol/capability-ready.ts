@@ -164,6 +164,8 @@ export function requiredCapabilityDescriptor(
           return "tyrum.desktop.keyboard";
         case "wait_for":
           return "tyrum.desktop.wait-for";
+        case "clipboard_write":
+          return "tyrum.desktop.clipboard-write";
         default:
           return undefined;
       }
