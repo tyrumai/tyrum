@@ -192,11 +192,11 @@ function jsonSchemaOf(value: unknown, io: "input" | "output"): Record<string, un
 }
 
 async function buildGeneratedContractState(): Promise<GeneratedContractState> {
-  const [contractsImport, contractsPackageRaw] = await Promise.all([
+  const [contractsModuleRaw, contractsPackageRaw] = await Promise.all([
     import("@tyrum/contracts"),
     readFile(resolveContractsPackageJsonPath(), "utf-8").catch(() => undefined),
   ]);
-  const contractsModule: Record<string, unknown> = contractsImport;
+  const contractsModule = contractsModuleRaw as Record<string, unknown>;
   const contractEntries = contractModuleEntries(contractsModule);
 
   const generatedAt = new Date().toISOString();
