@@ -3,6 +3,7 @@ import { DESKTOP_TOOL_REGISTRY } from "./tool-catalog-desktop.js";
 import { LOCATION_TOOL_REGISTRY } from "./tool-catalog-location.js";
 import type { ToolDescriptor } from "./tools.js";
 import { SUBAGENT_TOOL_REGISTRY } from "./tool-catalog-subagent.js";
+import { listDedicatedCapabilityToolDescriptors } from "./dedicated-capability-tools.js";
 import {
   ARTIFACT_DESCRIBE_TOOL_PROMPT_METADATA,
   APPLY_PATCH_TOOL_PROMPT_METADATA,
@@ -369,6 +370,7 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
   },
   ...DESKTOP_TOOL_REGISTRY,
   ...LOCATION_TOOL_REGISTRY,
+  ...listDedicatedCapabilityToolDescriptors(),
   ...AUTOMATION_TOOL_REGISTRY,
   ...SUBAGENT_TOOL_REGISTRY,
   ...WORKBOARD_TOOL_REGISTRY,

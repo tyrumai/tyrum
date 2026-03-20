@@ -13,6 +13,7 @@ import { executeBuiltinMemoryMcpTool } from "../memory/builtin-mcp.js";
 import type { LocationService } from "../location/service.js";
 import { executeCoreTool, executeMcpTool } from "./tool-executor-core-tools.js";
 import { executeLocationPlaceTool } from "./tool-executor-location-tools.js";
+import { executeDedicatedNodeTool } from "./tool-executor-dedicated-node-tools.js";
 import {
   executeDedicatedDesktopTool,
   executeNodeDispatchTool,
@@ -181,6 +182,24 @@ export class ToolExecutor {
         return builtinMemoryResult;
       }
       return await executeMcpTool(coreContext, toolId, toolCallId, args);
+    }
+    const dedicatedNodeResult = await executeDedicatedNodeTool(
+      {
+        workspaceLease: this.workspaceLease,
+        nodeDispatchService: this.nodeDispatchService,
+        nodeInventoryService: this.nodeInventoryService,
+        inspectionService: this.nodeCapabilityInspectionService,
+        connectionManager: this.connectionManager,
+        connectionDirectory: this.connectionDirectory,
+        artifactStore: this.artifactStore,
+      },
+      toolId,
+      toolCallId,
+      args,
+      audit,
+    );
+    if (dedicatedNodeResult) {
+      return dedicatedNodeResult;
     }
     if (toolId === "tool.node.dispatch") {
       if (!this.nodeDispatchService) {

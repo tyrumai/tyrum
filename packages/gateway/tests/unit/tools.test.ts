@@ -244,6 +244,47 @@ describe("model tool naming", () => {
     expect(builtinIds.filter((id) => id === "tool.node.inspect")).toHaveLength(1);
   });
 
+  it("includes dedicated browser and sensor node-backed tools with action-shaped schemas", () => {
+    const builtinIds = listBuiltinToolDescriptors().map((tool) => tool.id);
+    const browserNavigate = listBuiltinToolDescriptors().find(
+      (tool) => tool.id === "tool.browser.navigate",
+    );
+    const locationGet = listBuiltinToolDescriptors().find(
+      (tool) => tool.id === "tool.location.get",
+    );
+
+    expect(builtinIds).toContain("tool.browser.navigate");
+    expect(builtinIds).toContain("tool.browser.screenshot");
+    expect(builtinIds).toContain("tool.location.get");
+    expect(builtinIds).toContain("tool.camera.capture-photo");
+    expect(builtinIds).toContain("tool.camera.capture-video");
+    expect(builtinIds).toContain("tool.audio.record");
+    expect(browserNavigate?.inputSchema).toMatchObject({
+      type: "object",
+      properties: {
+        url: { type: "string" },
+        node_id: { type: "string" },
+        timeout_ms: { type: "number" },
+      },
+    });
+    expect(browserNavigate?.inputSchema).not.toMatchObject({
+      properties: {
+        capability: expect.anything(),
+        action_name: expect.anything(),
+        input: expect.anything(),
+        op: expect.anything(),
+      },
+    });
+    expect(locationGet?.inputSchema).toMatchObject({
+      type: "object",
+      properties: {
+        enable_high_accuracy: { type: "boolean" },
+        timeout_ms: { type: "integer" },
+        node_id: { type: "string" },
+      },
+    });
+  });
+
   it("includes the location place tool family", () => {
     const builtinIds = listBuiltinToolDescriptors().map((tool) => tool.id);
 

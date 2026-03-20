@@ -24,6 +24,8 @@ type ToolExecutorFactoryOptions = {
   identityScopeDal?: ToolExecutorCtor[11];
   nodeInventoryService?: ToolExecutorCtor[12];
   nodeCapabilityInspectionService?: ToolExecutorCtor[13];
+  connectionManager?: ToolExecutorCtor[14];
+  connectionDirectory?: ToolExecutorCtor[15];
   memoryToolRuntime?: ToolExecutorCtor[16];
   artifactDescribeRuntime?: ToolExecutorCtor[19];
   locationService?: ToolExecutorCtor[20];
@@ -80,6 +82,8 @@ export function createToolExecutor({
   identityScopeDal,
   nodeInventoryService,
   nodeCapabilityInspectionService,
+  connectionManager,
+  connectionDirectory,
   memoryToolRuntime,
   artifactDescribeRuntime,
   locationService,
@@ -99,8 +103,8 @@ export function createToolExecutor({
     identityScopeDal,
     nodeInventoryService,
     nodeCapabilityInspectionService,
-    undefined,
-    undefined,
+    connectionManager,
+    connectionDirectory,
     memoryToolRuntime,
     undefined,
     undefined,
