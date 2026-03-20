@@ -207,6 +207,12 @@ describe("WorkBoard orchestration follow-up runtime behavior", () => {
       value_json: "awaiting_human",
       provenance_json: { source: "test" },
     });
+    await workboard.setStateKv({
+      scope: { kind: "work_item", ...scope, work_item_id: item.work_item_id },
+      key: "work.size.class",
+      value_json: "small",
+      provenance_json: { source: "test" },
+    });
     await workboard.transitionItem({ scope, work_item_id: item.work_item_id, status: "ready" });
     await workboard.transitionItem({ scope, work_item_id: item.work_item_id, status: "doing" });
     await workboard.transitionItem({ scope, work_item_id: item.work_item_id, status: "blocked" });
