@@ -225,12 +225,13 @@ export function buildAgentSetupStepMeta(input: {
       totalSteps: FIRST_RUN_ONBOARDING_STEPS.length,
     };
   }
+  const totalSteps = Number(input.hasProviderStep) + Number(input.hasPresetStep) + 1;
   if (input.step === "provider") {
     return {
       title: "Add a provider account",
       description: "Connect a model provider so the wizard can discover available models.",
       stepIndex: 1,
-      totalSteps: input.hasPresetStep ? 3 : 2,
+      totalSteps,
     };
   }
   if (input.step === "preset") {
@@ -238,14 +239,14 @@ export function buildAgentSetupStepMeta(input: {
       title: "Choose or create a model preset",
       description: "Pick an existing preset or create a new one for this agent.",
       stepIndex: input.hasProviderStep ? 2 : 1,
-      totalSteps: input.hasProviderStep ? 3 : 2,
+      totalSteps,
     };
   }
   return {
     title: "Configure the agent",
     description: "Name the agent, choose its tone, and apply an agent policy preset.",
-    stepIndex: input.hasProviderStep ? 3 : input.hasPresetStep ? 2 : 1,
-    totalSteps: input.hasProviderStep ? 3 : input.hasPresetStep ? 2 : 1,
+    stepIndex: totalSteps,
+    totalSteps,
   };
 }
 
@@ -332,8 +333,17 @@ export function pickRandomAgentName(input: {
       .map((name) => name.trim().toLowerCase())
       .filter((name) => name.length > 0 && name !== normalizedCurrent),
   );
-  const availableNames = CODEX_AGENT_NAMES.filter((name) => !usedNames.has(name.toLowerCase()));
-  const pool = availableNames.length > 0 ? availableNames : CODEX_AGENT_NAMES;
+  const selectableNames = CODEX_AGENT_NAMES.filter((name) => {
+    const normalizedName = name.toLowerCase();
+    return normalizedName !== normalizedCurrent && !usedNames.has(normalizedName);
+  });
+  const fallbackNames = CODEX_AGENT_NAMES.filter((name) => !usedNames.has(name.toLowerCase()));
+  const pool =
+    selectableNames.length > 0
+      ? selectableNames
+      : fallbackNames.length > 0
+        ? fallbackNames
+        : CODEX_AGENT_NAMES;
   const index = Math.min(pool.length - 1, Math.floor(random() * pool.length));
   return pool[index] ?? CODEX_AGENT_NAMES[0];
 }
