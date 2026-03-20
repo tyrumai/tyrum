@@ -1,15 +1,11 @@
 import { TyrumHttpClientError } from "@tyrum/operator-app/browser";
 import { useRef, useState } from "react";
+import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { DEFAULT_IMAGE_REF } from "./desktop-environments-page.shared.js";
 import { isAdminAccessHttpError, type AdminHttpClient } from "./admin-http-shared.js";
 import { useApiAction } from "../../hooks/use-api-action.js";
 
 export type RefreshResult = "admin-access-required" | "error" | "ok" | "stale" | "unsupported";
-
-export function toErrorMessage(error: unknown): string {
-  if (error instanceof Error && error.message.length > 0) return error.message;
-  return String(error);
-}
 
 function isNotFoundHttpError(error: unknown): error is TyrumHttpClientError {
   return error instanceof TyrumHttpClientError && error.status === 404;
@@ -71,7 +67,7 @@ export function useDesktopEnvironmentRuntimeDefaults(params: {
         syncCreateImageRef(DEFAULT_IMAGE_REF);
         return "unsupported";
       }
-      setRuntimeDefaultsError(toErrorMessage(error));
+      setRuntimeDefaultsError(formatErrorMessage(error));
       return "error";
     } finally {
       if (params.isCurrentHttpClient(httpClient)) {

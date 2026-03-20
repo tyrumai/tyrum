@@ -4,6 +4,7 @@ import { Blocks, RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useApiAction } from "../../hooks/use-api-action.js";
 import { useReconnectScrollArea, useReconnectTabState } from "../../reconnect-ui-state.js";
+import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { AppPage } from "../layout/app-page.js";
 import { Alert } from "../ui/alert.js";
 import { Badge } from "../ui/badge.js";
@@ -26,7 +27,6 @@ import {
   encodeFileToBase64,
   kindToTab,
   sortExtensions,
-  toErrorMessage,
   type ExtensionKind,
   type ExtensionsTab,
 } from "./extensions-page.lib.js";
@@ -147,7 +147,7 @@ export function ExtensionsPage({ core }: { core: OperatorCore }) {
         });
       } catch (nextError) {
         if (!cancelled) {
-          setError(toErrorMessage(nextError));
+          setError(formatErrorMessage(nextError));
         }
       } finally {
         if (!cancelled) {
@@ -408,7 +408,7 @@ export function ExtensionsPage({ core }: { core: OperatorCore }) {
         <Alert
           variant="error"
           title="Extension action failed"
-          description={toErrorMessage(mutation.state.error)}
+          description={formatErrorMessage(mutation.state.error)}
           onDismiss={() => mutation.reset()}
         />
       ) : null}

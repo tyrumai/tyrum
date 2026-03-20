@@ -1,7 +1,7 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import { useApiAction } from "../../hooks/use-api-action.js";
 import type { OperatorUiMode } from "../../app.js";
-import { toErrorMessage } from "./desktop-environments-page.runtime-defaults.js";
+import { formatErrorMessage } from "../../utils/format-error-message.js";
 import type { DesktopEnvironmentLogsState } from "./desktop-environments-page.sections.js";
 import type { AdminHttpClient } from "./admin-http-shared.js";
 
@@ -161,7 +161,7 @@ export function useDesktopEnvironmentPageActions(params: {
           [environmentId]: {
             lines: current[environmentId]?.lines ?? [],
             loading: false,
-            error: toErrorMessage(error),
+            error: formatErrorMessage(error),
             lastSyncedAt: current[environmentId]?.lastSyncedAt ?? null,
           },
         }));

@@ -9,10 +9,6 @@ export const EMPTY_EXTENSIONS_BY_TAB: ExtensionsByTab = {
   mcp: [],
 };
 
-export function toErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 export async function encodeFileToBase64(file: File): Promise<string> {
   const bytes = new Uint8Array(await file.arrayBuffer());
   let binary = "";

@@ -42,6 +42,7 @@ export type OperatorAdminClient = Pick<
   | "routingConfig"
   | "secrets"
   | "toolRegistry"
+  | "schedules"
 >;
 
 export type OperatorChatSocket = Pick<
