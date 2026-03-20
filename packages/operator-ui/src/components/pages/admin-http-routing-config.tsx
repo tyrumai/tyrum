@@ -3,19 +3,9 @@ import type {
   ObservedTelegramThreadListResult,
 } from "@tyrum/operator-app/browser";
 import type { OperatorCore } from "@tyrum/operator-app";
-import { History, Pencil, Plus, RefreshCw, Search, Trash2, Undo2, Waypoints } from "lucide-react";
 import * as React from "react";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
-import { ElevatedModeTooltip } from "../elevated-mode/elevated-mode-tooltip.js";
-import { Alert } from "../ui/alert.js";
-import { Badge } from "../ui/badge.js";
-import { Button } from "../ui/button.js";
-import { Card, CardContent, CardHeader } from "../ui/card.js";
-import { DataTable, type DataTableColumn } from "../ui/data-table.js";
 import { ConfirmDangerDialog } from "../ui/confirm-danger-dialog.js";
-import { EmptyState } from "../ui/empty-state.js";
-import { Input } from "../ui/input.js";
-import { LoadingState } from "../ui/loading-state.js";
 import {
   useAdminHttpClient,
   useAdminMutationAccess,
@@ -32,15 +22,17 @@ import {
 import { AdminHttpChannelConfigsPanel } from "./admin-http-telegram-connection.js";
 import { RoutingRuleDialog, type RoutingAgentOption } from "./admin-http-routing-config-dialog.js";
 import {
-  buildTelegramThreadKey,
   buildRoutingRuleRows,
-  countRoutingRules,
+  buildTelegramThreadKey,
+  describeRule,
   filterRoutingRuleRows,
   removeRoutingRule,
   upsertRoutingRule,
   type RoutingRuleDraft,
   type RoutingRuleRow,
 } from "./admin-http-routing-config.shared.js";
+import { AdminHttpRoutingHistoryCard } from "./admin-http-routing-history-card.js";
+import { AdminHttpRoutingRulesCard } from "./admin-http-routing-rules-card.js";
 
 type AgentHttpClient = Pick<OperatorCore["admin"], "agentList" | "agents">;
 
@@ -64,18 +56,6 @@ async function loadAgentOptions(http: AgentHttpClient): Promise<RoutingAgentOpti
     return buildAgentOptions(result.agents);
   }
   return [];
-}
-
-function formatTimestamp(value?: string): string {
-  if (!value) return "Not seen";
-  return value.replace("T", " ").replace(".000Z", "Z");
-}
-
-function describeRule(row: RoutingRuleRow): string {
-  if (row.kind === "default") {
-    return `All unmatched Telegram chats on ${row.accountKey}`;
-  }
-  return row.sessionTitle ?? row.threadId ?? "Unknown thread";
 }
 
 export function AdminHttpRoutingConfigPanel({ core }: { core: OperatorCore }): React.ReactElement {
@@ -229,177 +209,6 @@ export function AdminHttpRoutingConfigPanel({ core }: { core: OperatorCore }): R
     await loadPanelData("refreshing");
   };
 
-  const routingRuleColumns: DataTableColumn<RoutingRuleRow>[] = [
-    {
-      id: "channel",
-      header: "Channel",
-      cell: () => <Badge variant="outline">telegram</Badge>,
-      cellClassName: "align-top",
-    },
-    {
-      id: "account",
-      header: "Account",
-      cell: (row) => <span className="text-fg">{row.accountKey}</span>,
-      cellClassName: "align-top",
-    },
-    {
-      id: "rule",
-      header: "Rule",
-      cell: (row) => (
-        <div className="font-medium text-fg">
-          {row.kind === "default" ? "Default route" : "Thread override"}
-        </div>
-      ),
-      cellClassName: "align-top",
-    },
-    {
-      id: "thread",
-      header: "Thread",
-      cell: (row) => (
-        <>
-          <div className="font-medium text-fg">{describeRule(row)}</div>
-          {row.threadId ? (
-            <div className="text-xs text-fg-muted">Thread ID: {row.threadId}</div>
-          ) : null}
-        </>
-      ),
-      cellClassName: "align-top",
-    },
-    {
-      id: "container",
-      header: "Container",
-      cell: (row) => (
-        <span className="text-fg-muted">
-          {row.kind === "default" ? "Any" : (row.containerKind ?? "Unknown")}
-        </span>
-      ),
-      cellClassName: "align-top",
-    },
-    {
-      id: "agent",
-      header: "Agent",
-      cell: (row) => <span className="text-fg">{row.agentKey}</span>,
-      cellClassName: "align-top",
-    },
-    {
-      id: "lastActive",
-      header: "Last active",
-      cell: (row) => (
-        <span className="text-fg-muted" title={row.lastActiveAt}>
-          {formatTimestamp(row.lastActiveAt)}
-        </span>
-      ),
-      cellClassName: "align-top",
-    },
-    {
-      id: "actions",
-      header: "Actions",
-      headerClassName: "text-right",
-      cellClassName: "align-top text-right",
-      cell: (row) => (
-        <div className="flex justify-end gap-1">
-          <ElevatedModeTooltip canMutate={canMutate} requestEnter={requestEnter}>
-            <Button
-              variant="ghost"
-              size="sm"
-              aria-label={`Edit ${describeRule(row)}`}
-              onClick={() => {
-                openEditDialog(row);
-              }}
-            >
-              <Pencil className="h-4 w-4" />
-            </Button>
-          </ElevatedModeTooltip>
-          <ElevatedModeTooltip canMutate={canMutate} requestEnter={requestEnter}>
-            <Button
-              variant="ghost"
-              size="sm"
-              aria-label={`Remove ${describeRule(row)}`}
-              onClick={() => {
-                if (!canMutate) {
-                  requestEnter();
-                  return;
-                }
-                setDeletingRow(row);
-              }}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </ElevatedModeTooltip>
-        </div>
-      ),
-    },
-  ];
-
-  const revisionColumns: DataTableColumn<ChannelRoutingRevisionSummary>[] = [
-    {
-      id: "revision",
-      header: "Revision",
-      cell: (revision) => <span className="font-medium text-fg">#{revision.revision}</span>,
-      cellClassName: "align-top",
-    },
-    {
-      id: "when",
-      header: "When",
-      cell: (revision) => (
-        <span className="text-fg-muted" title={revision.created_at}>
-          {formatTimestamp(revision.created_at)}
-        </span>
-      ),
-      cellClassName: "align-top",
-    },
-    {
-      id: "reason",
-      header: "Reason",
-      cell: (revision) => (
-        <span className="text-fg-muted">{revision.reason ?? "No reason recorded"}</span>
-      ),
-      cellClassName: "align-top",
-    },
-    {
-      id: "rules",
-      header: "Rules",
-      cell: (revision) => (
-        <span className="text-fg-muted">{countRoutingRules(revision.config)}</span>
-      ),
-      cellClassName: "align-top",
-    },
-    {
-      id: "revertedFrom",
-      header: "Reverted from",
-      cell: (revision) => (
-        <span className="text-fg-muted">{revision.reverted_from_revision ?? "—"}</span>
-      ),
-      cellClassName: "align-top",
-    },
-    {
-      id: "actions",
-      header: "Actions",
-      headerClassName: "text-right",
-      cellClassName: "align-top text-right",
-      cell: (revision) => (
-        <div className="flex justify-end">
-          <ElevatedModeTooltip canMutate={canMutate} requestEnter={requestEnter}>
-            <Button
-              variant="ghost"
-              size="sm"
-              aria-label={`Revert to revision ${revision.revision}`}
-              onClick={() => {
-                if (!canMutate) {
-                  requestEnter();
-                  return;
-                }
-                setRevertingRevision(revision);
-              }}
-            >
-              <Undo2 className="h-4 w-4" />
-            </Button>
-          </ElevatedModeTooltip>
-        </div>
-      ),
-    },
-  ];
-
   return (
     <section className="grid gap-4" data-testid="admin-http-routing-config">
       <div className="text-sm font-medium text-fg">Channels</div>
@@ -409,119 +218,31 @@ export function AdminHttpRoutingConfigPanel({ core }: { core: OperatorCore }): R
         onChannelConfigsChanged={handleChannelConfigsChanged}
       />
 
-      <Card>
-        <CardHeader className="pb-2.5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="grid gap-1">
-              <div className="text-sm font-medium text-fg">Telegram routing rules</div>
-              <div className="text-sm text-fg-muted">
-                Configure which agent handles Telegram chats using account-aware structured routing
-                rules.
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant="secondary"
-                data-testid="channels-refresh"
-                isLoading={refreshing}
-                onClick={refresh}
-              >
-                <RefreshCw className="h-4 w-4" />
-                Refresh
-              </Button>
-              <ElevatedModeTooltip canMutate={canMutate} requestEnter={requestEnter}>
-                <Button
-                  data-testid="channels-add-open"
-                  disabled={!canCreateRules}
-                  onClick={openCreateDialog}
-                >
-                  <Plus className="h-4 w-4" />
-                  Add rule
-                </Button>
-              </ElevatedModeTooltip>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="grid gap-4">
-          {errorMessage ? (
-            <Alert
-              variant="error"
-              title="Channels routing failed"
-              description={errorMessage}
-              onDismiss={() => setErrorMessage(null)}
-            />
-          ) : null}
+      <AdminHttpRoutingRulesCard
+        loading={loading}
+        refreshing={refreshing}
+        errorMessage={errorMessage}
+        allRows={allRows}
+        rows={rows}
+        filterValue={filterValue}
+        canCreateRules={canCreateRules}
+        canMutate={canMutate}
+        requestEnter={requestEnter}
+        onFilterChange={setFilterValue}
+        onRefresh={refresh}
+        onCreate={openCreateDialog}
+        onEdit={openEditDialog}
+        onDelete={setDeletingRow}
+        onDismissError={() => setErrorMessage(null)}
+      />
 
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <Input
-              label="Filter rules"
-              data-testid="channels-filter"
-              value={filterValue}
-              onChange={(event) => {
-                setFilterValue(event.currentTarget.value);
-              }}
-              placeholder="Search by thread, agent, account, or rule type"
-              suffix={<Search className="h-4 w-4" aria-hidden="true" />}
-            />
-            <div className="text-sm text-fg-muted">
-              {allRows.length} configured rule{allRows.length === 1 ? "" : "s"}
-            </div>
-          </div>
-
-          {loading ? (
-            <LoadingState label="Loading channels routing…" />
-          ) : allRows.length === 0 ? (
-            <EmptyState
-              icon={Waypoints}
-              title="No Telegram routing rules configured"
-              description={
-                canCreateRules
-                  ? "Add a default route or a thread override to make Telegram routing explicit."
-                  : "Add a Telegram channel first, then create a default route or thread override."
-              }
-              action={canCreateRules ? { label: "Add rule", onClick: openCreateDialog } : undefined}
-            />
-          ) : rows.length === 0 ? (
-            <Alert
-              variant="info"
-              title="No routing rules match the current filter"
-              description="Clear or change the filter to see the configured Telegram rules."
-            />
-          ) : (
-            <DataTable<RoutingRuleRow>
-              columns={routingRuleColumns}
-              data={rows}
-              rowKey={(row) => row.id}
-            />
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="pb-2.5">
-          <div className="flex items-center gap-2">
-            <History className="h-4 w-4 text-fg-muted" />
-            <div className="text-sm font-medium text-fg">History</div>
-          </div>
-        </CardHeader>
-        <CardContent className="grid gap-4">
-          {loading ? (
-            <LoadingState label="Loading routing history…" />
-          ) : revisions.length === 0 ? (
-            <Alert
-              variant="info"
-              title="No routing revisions yet"
-              description="The revision browser will appear here after the first routing change."
-            />
-          ) : (
-            <DataTable<ChannelRoutingRevisionSummary>
-              columns={revisionColumns}
-              data={revisions}
-              rowKey={(revision) => String(revision.revision)}
-            />
-          )}
-        </CardContent>
-      </Card>
+      <AdminHttpRoutingHistoryCard
+        loading={loading}
+        revisions={revisions}
+        canMutate={canMutate}
+        requestEnter={requestEnter}
+        onRevert={setRevertingRevision}
+      />
 
       <RoutingRuleDialog
         open={dialogOpen}
