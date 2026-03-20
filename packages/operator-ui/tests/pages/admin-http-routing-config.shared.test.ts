@@ -8,7 +8,9 @@ import {
   buildRoutingRuleRows,
   buildTelegramThreadKey,
   countRoutingRules,
+  describeRule,
   filterRoutingRuleRows,
+  formatTimestamp,
   removeRoutingRule,
   upsertRoutingRule,
   type RoutingRuleRow,
@@ -150,6 +152,31 @@ describe("admin-http-routing-config.shared", () => {
     expect(filterRoutingRuleRows(rows, "support")).toEqual([rows[1]]);
     expect(filterRoutingRuleRows(rows, "thread override")).toEqual([rows[1]]);
     expect(filterRoutingRuleRows(rows, "missing")).toEqual([]);
+  });
+
+  it("formats timestamps and rule labels for table display", () => {
+    expect(formatTimestamp("2026-03-10T10:00:00.000Z")).toBe("2026-03-10 10:00:00Z");
+    expect(formatTimestamp()).toBe("Not seen");
+    expect(
+      describeRule({
+        id: "telegram:default:ops",
+        channel: "telegram",
+        kind: "default",
+        accountKey: "ops",
+        agentKey: "agent-a",
+      }),
+    ).toBe("All unmatched Telegram chats on ops");
+    expect(
+      describeRule({
+        id: "telegram:thread:ops:thread-1",
+        channel: "telegram",
+        kind: "thread",
+        accountKey: "ops",
+        agentKey: "agent-a",
+        threadId: "thread-1",
+        sessionTitle: "Ops room",
+      }),
+    ).toBe("Ops room");
   });
 
   it("upserts routing rules across accounts and preserves legacy default-account config", () => {

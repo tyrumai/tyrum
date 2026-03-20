@@ -40,6 +40,18 @@ export function buildTelegramThreadKey(accountKey: string, threadId: string): st
   return JSON.stringify([accountKey, threadId]);
 }
 
+export function formatTimestamp(value?: string): string {
+  if (!value) return "Not seen";
+  return value.replace("T", " ").replace(".000Z", "Z");
+}
+
+export function describeRule(row: RoutingRuleRow): string {
+  if (row.kind === "default") {
+    return `All unmatched Telegram chats on ${row.accountKey}`;
+  }
+  return row.sessionTitle ?? row.threadId ?? "Unknown thread";
+}
+
 function normalizeTelegramAccountConfig(
   value: TelegramAccountRoutingConfig | undefined,
 ): TelegramAccountRoutingConfig | undefined {
