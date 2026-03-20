@@ -10,6 +10,7 @@ import {
 import type { SqlDb } from "../../statestore/types.js";
 import type { AgentRegistry } from "../agent/registry.js";
 import type { SessionLaneNodeAttachmentDal } from "../agent/session-lane-node-attachment-dal.js";
+import { IdentityScopeDal } from "../identity/scope.js";
 import type { RedactionEngine } from "../redaction/engine.js";
 import { WorkboardDal } from "./dal.js";
 import { provisionManagedDesktop } from "./orchestration-support.js";
@@ -261,11 +262,15 @@ export function createGatewayWorkboardService(opts: {
   });
 }
 
-export function createGatewaySessionKeyBuilder(opts: { db: SqlDb }): WorkboardSessionKeyBuilder {
+export function createGatewaySessionKeyBuilder(opts: {
+  db: SqlDb;
+  identityScopeDal?: IdentityScopeDal;
+}): WorkboardSessionKeyBuilder {
+  const identityScopeDal = opts.identityScopeDal ?? new IdentityScopeDal(opts.db);
   return {
     buildSessionKey: async (scope, subagentId) => {
       const agentKey = await resolveAgentKeyById({
-        db: opts.db,
+        identityScopeDal,
         tenantId: scope.tenant_id,
         agentId: scope.agent_id,
       });
@@ -277,13 +282,15 @@ export function createGatewaySessionKeyBuilder(opts: { db: SqlDb }): WorkboardSe
 export function createGatewaySubagentRuntime(opts: {
   db: SqlDb;
   agents: AgentRegistry;
+  identityScopeDal?: IdentityScopeDal;
 }): WorkboardSubagentRuntime {
+  const identityScopeDal = opts.identityScopeDal ?? new IdentityScopeDal(opts.db);
   return {
-    ...createGatewaySessionKeyBuilder(opts),
+    ...createGatewaySessionKeyBuilder({ db: opts.db, identityScopeDal }),
     runTurn: ({ scope, subagent, message }) =>
       runSubagentTurn({
         agents: opts.agents,
-        db: opts.db,
+        identityScopeDal,
         scope,
         subagent,
         message,
