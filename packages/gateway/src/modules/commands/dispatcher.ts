@@ -14,7 +14,7 @@ import type { AgentRegistry } from "../agent/registry.js";
 import { tryExecuteAdminCommand } from "./dispatcher-admin-commands.js";
 import { tryExecuteSessionCommand } from "./dispatcher-session-commands.js";
 import { tryExecuteSystemCommand } from "./dispatcher-system-commands.js";
-import { tokensFromCommand } from "./dispatcher-support.js";
+import { CommandContextError, tokensFromCommand } from "./dispatcher-support.js";
 
 export type CommandExecuteResult = {
   output: string;
@@ -63,11 +63,18 @@ export async function executeCommand(
   const toks = tokensFromCommand(raw);
   const cmd = toks[0]?.toLowerCase() ?? "help";
 
-  const result =
-    (await tryExecuteSystemCommand({ cmd, deps, toks })) ??
-    (await tryExecuteAdminCommand({ cmd, deps, toks })) ??
-    (await tryExecuteSessionCommand({ cmd, deps, toks }));
-  if (result) return result;
+  try {
+    const result =
+      (await tryExecuteSystemCommand({ cmd, deps, toks })) ??
+      (await tryExecuteAdminCommand({ cmd, deps, toks })) ??
+      (await tryExecuteSessionCommand({ cmd, deps, toks }));
+    if (result) return result;
+  } catch (error) {
+    if (error instanceof CommandContextError) {
+      return { output: error.message, data: null };
+    }
+    throw error;
+  }
 
   const pluginRegistry =
     deps.tenantId && deps.pluginCatalogProvider

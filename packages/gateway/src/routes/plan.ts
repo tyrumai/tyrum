@@ -15,7 +15,7 @@ import type {
 import type { GatewayContainer } from "../container.js";
 import { authorizeWithThresholds, defaultThresholds } from "../modules/wallet/authorization.js";
 import { PlanDal } from "../modules/planner/plan-dal.js";
-import { DEFAULT_AGENT_KEY, DEFAULT_WORKSPACE_KEY } from "../modules/identity/scope.js";
+import { DEFAULT_WORKSPACE_KEY, requirePrimaryAgentId } from "../modules/identity/scope.js";
 import { requireTenantId } from "../modules/auth/claims.js";
 
 const DECISION_AUDIT_STEP_INDEX = 2147483647; // i32::MAX
@@ -382,7 +382,7 @@ export function createPlanRoutes(container: GatewayContainer): Hono {
     const tenantId = requireTenantId(c);
     const planKey = planId;
 
-    const agentId = await container.identityScopeDal.ensureAgentId(tenantId, DEFAULT_AGENT_KEY);
+    const agentId = await requirePrimaryAgentId(container.identityScopeDal, tenantId);
     const workspaceId = await container.identityScopeDal.ensureWorkspaceId(
       tenantId,
       DEFAULT_WORKSPACE_KEY,

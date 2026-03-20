@@ -1,4 +1,4 @@
-import { AgentConfig, type AgentConfig as AgentConfigT } from "@tyrum/contracts";
+import type { AgentConfig as AgentConfigT } from "@tyrum/contracts";
 import type { OperatorCore } from "@tyrum/operator-app";
 import * as React from "react";
 import { useOperatorStore } from "../../use-operator-store.js";
@@ -15,11 +15,9 @@ import {
   EXECUTION_PROFILE_IDS,
   emptyDialogState,
   filterAvailableModels,
-  normalizeAssignments,
   normalizeDialogState,
   reconcileModelDialogState,
   splitModelRef,
-  type Assignment,
   type AvailableModel,
   type ModelDialogState,
   type ModelPreset,
@@ -44,23 +42,25 @@ export type FirstRunOnboardingController = {
 };
 
 export type OnboardingDataState = {
-  assignments: Assignment[];
   availableModels: AvailableModel[];
-  defaultAgentConfig: AgentConfigT | null;
   errorMessage: string | null;
+  existingAgentKeys: string[];
   loading: boolean;
   presets: ModelPreset[];
+  primaryAgentConfig: AgentConfigT | null;
+  primaryAgentKey: string | null;
   providers: ConfiguredProviderGroup[];
   registry: ProviderRegistryEntry[];
 };
 
 export const EMPTY_DATA_STATE: OnboardingDataState = {
-  assignments: [],
   availableModels: [],
-  defaultAgentConfig: null,
   errorMessage: null,
+  existingAgentKeys: [],
   loading: true,
   presets: [],
+  primaryAgentConfig: null,
+  primaryAgentKey: null,
   providers: [],
   registry: [],
 };
@@ -76,21 +76,19 @@ export function isConnectedForOnboarding(
 
 export function countActiveProviders(providers: readonly ConfiguredProviderGroup[]): number {
   return providers.reduce((count, provider) => {
-    return count + provider.accounts.filter((account) => account.status === "active").length;
+    return (
+      count +
+      provider.accounts.filter((account: { status: string }) => account.status === "active").length
+    );
   }, 0);
 }
 
 export function resolvePreferredPresetKey(
   presets: readonly ModelPreset[],
-  assignments: readonly Assignment[],
   current: string,
 ): string {
   if (current && presets.some((preset) => preset.preset_key === current)) {
     return current;
-  }
-  const assignedPresetKey = assignments.find((assignment) => assignment.preset_key)?.preset_key;
-  if (assignedPresetKey && presets.some((preset) => preset.preset_key === assignedPresetKey)) {
-    return assignedPresetKey;
   }
   return presets[0]?.preset_key ?? "";
 }
@@ -99,30 +97,6 @@ export function buildDefaultAssignments(presetKey: string): Record<string, strin
   return Object.fromEntries(
     EXECUTION_PROFILE_IDS.map((profileId) => [profileId, presetKey || null]),
   );
-}
-
-export function buildDefaultAgentConfigUpdate(input: {
-  currentConfig: AgentConfigT;
-  nextModelRef: string;
-}): AgentConfigT {
-  const currentModel = input.currentConfig.model;
-  const preserveCurrentSelection = currentModel.model === input.nextModelRef;
-
-  return AgentConfig.parse({
-    ...input.currentConfig,
-    model: {
-      model: input.nextModelRef,
-      ...(preserveCurrentSelection && currentModel.variant
-        ? { variant: currentModel.variant }
-        : {}),
-      ...(preserveCurrentSelection && currentModel.options
-        ? { options: currentModel.options }
-        : {}),
-      ...(preserveCurrentSelection && currentModel.fallback?.length
-        ? { fallback: currentModel.fallback }
-        : {}),
-    },
-  });
 }
 
 export function useFirstRunOnboardingController(input: {
@@ -212,42 +186,51 @@ export function useOnboardingData(): {
 
   const refresh = React.useCallback(async (): Promise<void> => {
     setData((current) => ({ ...current, loading: true, errorMessage: null }));
-    const [
-      registryResult,
-      providersResult,
-      presetsResult,
-      availableModelsResult,
-      assignmentsResult,
-      agentResult,
-    ] = await Promise.allSettled([
-      readHttp.providerConfig.listRegistry(),
-      readHttp.providerConfig.listProviders(),
-      readHttp.modelConfig.listPresets(),
-      readHttp.modelConfig.listAvailable(),
-      readHttp.modelConfig.listAssignments(),
-      readHttp.agentConfig.get("default"),
-    ]);
+    const [registryResult, providersResult, presetsResult, availableModelsResult, agentsResult] =
+      await Promise.allSettled([
+        readHttp.providerConfig.listRegistry(),
+        readHttp.providerConfig.listProviders(),
+        readHttp.modelConfig.listPresets(),
+        readHttp.modelConfig.listAvailable(),
+        readHttp.agents.list(),
+      ]);
 
     const rejected = [
       registryResult,
       providersResult,
       presetsResult,
       availableModelsResult,
-      assignmentsResult,
-      agentResult,
+      agentsResult,
     ].find((result) => result.status === "rejected");
 
+    const primaryAgentKey =
+      agentsResult.status === "fulfilled"
+        ? ((
+            agentsResult.value.agents.find((agent: { is_primary?: boolean }) => agent.is_primary) ??
+            agentsResult.value.agents[0]
+          )?.agent_key ?? null)
+        : null;
+    const primaryAgentConfigResult =
+      primaryAgentKey === null
+        ? null
+        : await Promise.allSettled([readHttp.agentConfig.get(primaryAgentKey)]);
+    const primaryAgentConfig =
+      primaryAgentConfigResult?.[0]?.status === "fulfilled"
+        ? primaryAgentConfigResult[0].value.config
+        : null;
+
     setData({
-      assignments:
-        assignmentsResult.status === "fulfilled"
-          ? normalizeAssignments(assignmentsResult.value.assignments)
-          : [],
       availableModels:
         availableModelsResult.status === "fulfilled" ? availableModelsResult.value.models : [],
-      defaultAgentConfig: agentResult.status === "fulfilled" ? agentResult.value.config : null,
       errorMessage: rejected?.status === "rejected" ? formatErrorMessage(rejected.reason) : null,
+      existingAgentKeys:
+        agentsResult.status === "fulfilled"
+          ? agentsResult.value.agents.map((agent: { agent_key: string }) => agent.agent_key)
+          : [],
       loading: false,
       presets: presetsResult.status === "fulfilled" ? presetsResult.value.presets : [],
+      primaryAgentConfig,
+      primaryAgentKey,
       providers: providersResult.status === "fulfilled" ? providersResult.value.providers : [],
       registry: registryResult.status === "fulfilled" ? registryResult.value.providers : [],
     });
@@ -266,8 +249,11 @@ export function useOnboardingDrafts(data: OnboardingDataState) {
   const [modelState, setModelState] = React.useState<ModelDialogState>(emptyDialogState());
   const [modelFilter, setModelFilter] = React.useState("");
   const [selectedPresetKey, setSelectedPresetKey] = React.useState("");
-  const [assignmentDraft, setAssignmentDraft] = React.useState<Record<string, string | null>>({});
-  const [assignmentTouched, setAssignmentTouched] = React.useState(false);
+  const [agentName, setAgentName] = React.useState("");
+  const [agentTone, setAgentTone] = React.useState("");
+  const [agentPolicyPreset, setAgentPolicyPreset] = React.useState<
+    "safest" | "moderate" | "power_user"
+  >("moderate");
 
   const supportedProviders = React.useMemo(
     () => data.registry.filter((provider) => provider.supported && provider.methods.length > 0),
@@ -291,8 +277,10 @@ export function useOnboardingDrafts(data: OnboardingDataState) {
     (provider) => provider.provider_key === providerState.providerKey,
   );
   const selectedMethod =
-    selectedProvider?.methods.find((method) => method.method_key === providerState.methodKey) ??
-    selectedProvider?.methods[0];
+    selectedProvider?.methods.find(
+      (method: ProviderRegistryEntry["methods"][number]) =>
+        method.method_key === providerState.methodKey,
+    ) ?? selectedProvider?.methods[0];
 
   React.useEffect(() => {
     setProviderState((current) =>
@@ -328,29 +316,20 @@ export function useOnboardingDrafts(data: OnboardingDataState) {
   }, [data.availableModels, filteredAvailableModels, modelFilter]);
 
   React.useEffect(() => {
-    setSelectedPresetKey((current) =>
-      resolvePreferredPresetKey(data.presets, data.assignments, current),
-    );
-  }, [data.assignments, data.presets]);
+    setSelectedPresetKey((current) => resolvePreferredPresetKey(data.presets, current));
+  }, [data.presets]);
 
   React.useEffect(() => {
-    if (assignmentTouched) return;
-    if (!selectedPresetKey) {
-      setAssignmentDraft(
-        Object.fromEntries(
-          data.assignments.map((assignment) => [
-            assignment.execution_profile_id,
-            assignment.preset_key,
-          ]),
-        ),
-      );
-      return;
-    }
-    setAssignmentDraft(buildDefaultAssignments(selectedPresetKey));
-  }, [assignmentTouched, data.assignments, selectedPresetKey]);
+    const persona = data.primaryAgentConfig?.persona;
+    if (!persona) return;
+    setAgentName((current) => (current.trim().length > 0 ? current : persona.name));
+    setAgentTone((current) => (current.trim().length > 0 ? current : persona.tone));
+  }, [data.primaryAgentConfig]);
 
   return {
-    assignmentDraft,
+    agentName,
+    agentPolicyPreset,
+    agentTone,
     filteredAvailableModels,
     filteredProviders,
     modelFilter,
@@ -360,8 +339,9 @@ export function useOnboardingDrafts(data: OnboardingDataState) {
     selectedMethod,
     selectedPresetKey,
     selectedProvider,
-    setAssignmentDraft,
-    setAssignmentTouched,
+    setAgentName,
+    setAgentPolicyPreset,
+    setAgentTone,
     setModelFilter,
     setModelState,
     setProviderFilter,

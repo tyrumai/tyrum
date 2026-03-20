@@ -5,7 +5,7 @@ import {
 import type { PluginRegistry } from "../../plugins/registry.js";
 import { resolveGatewayStateMode } from "../../runtime-state/mode.js";
 import { materializeAllowedAgentIds } from "../access-config.js";
-import { ensureAgentConfigSeeded } from "../default-config.js";
+import { loadAgentConfigOrDefault } from "../default-config.js";
 import type { AgentContextStore } from "../context-store.js";
 import { loadCurrentAgentContext } from "../load-context.js";
 import { applyPersonaToIdentity, resolveAgentPersona } from "../persona.js";
@@ -26,17 +26,12 @@ export async function loadResolvedRuntimeContext(params: {
   agentKey: string;
   workspaceId: string;
 }) {
-  const config = await (
-    await ensureAgentConfigSeeded({
-      db: params.opts.container.db,
-      stateMode: resolveGatewayStateMode(params.opts.container.deploymentConfig),
-      tenantId: params.tenantId,
-      agentId: params.agentId,
-      agentKey: params.agentKey,
-      createdBy: { kind: "agent-runtime" },
-      reason: "seed",
-    })
-  ).config;
+  const config = await loadAgentConfigOrDefault({
+    db: params.opts.container.db,
+    stateMode: resolveGatewayStateMode(params.opts.container.deploymentConfig),
+    tenantId: params.tenantId,
+    agentId: params.agentId,
+  });
   const effectiveConfig = await resolveEffectiveAgentConfig({
     db: params.opts.container.db,
     tenantId: params.tenantId,

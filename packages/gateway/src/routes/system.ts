@@ -23,6 +23,7 @@ import {
   TenantListResponse,
 } from "@tyrum/contracts";
 import type { SqlDb } from "../statestore/types.js";
+import { sqlBoolParam } from "../statestore/sql.js";
 import type { AuthTokenService } from "../modules/auth/auth-token-service.js";
 import { DeploymentConfigDal } from "../modules/config/deployment-config-dal.js";
 import { requireAuthClaims } from "../modules/auth/claims.js";
@@ -120,10 +121,10 @@ export function createSystemRoutes(deps: SystemRouteDeps): Hono {
     const agentId = randomUUID();
     const workspaceId = randomUUID();
     await deps.db.run(
-      `INSERT INTO agents (tenant_id, agent_id, agent_key)
-       VALUES (?, ?, 'default')
+      `INSERT INTO agents (tenant_id, agent_id, agent_key, is_primary)
+       VALUES (?, ?, 'default', ?)
        ON CONFLICT (tenant_id, agent_key) DO NOTHING`,
-      [tenantId, agentId],
+      [tenantId, agentId, sqlBoolParam(deps.db, true)],
     );
     await deps.db.run(
       `INSERT INTO workspaces (tenant_id, workspace_id, workspace_key)

@@ -1,5 +1,5 @@
 import type { AgentCapabilitiesResponse, ManagedExtensionDetail } from "@tyrum/contracts";
-import { PERSONA_CHARACTERS, PERSONA_PALETTES, PERSONA_TONES } from "@tyrum/contracts";
+import { PERSONA_TONES } from "@tyrum/contracts";
 import type { AgentEditorFormState, AgentEditorSetField } from "./agents-page-editor-form.js";
 import { AccessTransferField } from "./agents-page-editor-access-transfer.js";
 import type { ModelPreset } from "./admin-http-models.shared.js";
@@ -62,7 +62,9 @@ export function AgentEditorSections({
 }) {
   const memoryDetail = mcpExtensionDetailsById["memory"];
   const memorySharedDefaultAvailable = Boolean(memoryDetail?.default_mcp_server_settings_json);
-  const mcpSettingsItems = (capabilities?.mcp.items ?? []).filter((item) => item.id !== "memory");
+  const mcpSettingsItems = (capabilities?.mcp.items ?? []).filter(
+    (item: { id: string }) => item.id !== "memory",
+  );
 
   return (
     <>
@@ -92,35 +94,9 @@ export function AgentEditorSections({
               setField("tone", event.currentTarget.value);
             }}
           >
-            {PERSONA_TONES.map((tone) => (
-              <option key={tone} value={tone}>
-                {tone}
-              </option>
-            ))}
-          </Select>
-          <Select
-            label="Palette"
-            value={form.palette}
-            onChange={(event) => {
-              setField("palette", event.currentTarget.value);
-            }}
-          >
-            {PERSONA_PALETTES.map((palette) => (
-              <option key={palette} value={palette}>
-                {palette}
-              </option>
-            ))}
-          </Select>
-          <Select
-            label="Character"
-            value={form.character}
-            onChange={(event) => {
-              setField("character", event.currentTarget.value);
-            }}
-          >
-            {PERSONA_CHARACTERS.map((character) => (
-              <option key={character} value={character}>
-                {character}
+            {PERSONA_TONES.map((toneOption: string) => (
+              <option key={toneOption} value={toneOption}>
+                {toneOption}
               </option>
             ))}
           </Select>
@@ -172,7 +148,7 @@ export function AgentEditorSections({
                 ? "Loading discoverable skills..."
                 : "New skills follow the selected default automatically."
           }
-          items={(capabilities?.skills.items ?? []).map((item) => ({
+          items={(capabilities?.skills.items ?? []).map((item: { id: string; name: string }) => ({
             id: item.id,
             label: `${item.name} (${item.id})`,
           }))}
@@ -213,7 +189,7 @@ export function AgentEditorSections({
                 ? "Loading discoverable MCP servers..."
                 : "New MCP servers follow the selected default automatically."
           }
-          items={(capabilities?.mcp.items ?? []).map((item) => ({
+          items={(capabilities?.mcp.items ?? []).map((item: { id: string; name: string }) => ({
             id: item.id,
             label: `${item.name} (${item.id})`,
           }))}
@@ -263,7 +239,7 @@ export function AgentEditorSections({
                 ? "Loading discoverable tools..."
                 : "New tools follow the selected default automatically."
           }
-          items={(capabilities?.tools.items ?? []).map((item) => ({
+          items={(capabilities?.tools.items ?? []).map((item: { id: string }) => ({
             id: item.id,
             label: item.id,
           }))}

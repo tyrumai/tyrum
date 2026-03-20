@@ -148,7 +148,7 @@ async function executeUsageCommand(
 ): Promise<CommandExecuteResult> {
   const sub = toks[1]?.toLowerCase();
   if (sub === "provider") {
-    const poller = getProviderUsagePoller(deps);
+    const poller = await getProviderUsagePoller(deps);
     if (!poller) {
       return {
         output: "Provider usage polling is not available on this gateway instance.",

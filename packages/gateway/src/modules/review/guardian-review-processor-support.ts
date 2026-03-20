@@ -6,7 +6,11 @@ import { resolveAgentHome } from "../agent/home.js";
 import type { ApprovalRow } from "../approval/dal.js";
 import { toApprovalContract } from "../approval/to-contract.js";
 import type { Logger } from "../observability/logger.js";
-import { DEFAULT_AGENT_KEY, DEFAULT_WORKSPACE_KEY } from "../identity/scope.js";
+import {
+  DEFAULT_WORKSPACE_KEY,
+  requirePrimaryAgentId,
+  requirePrimaryAgentKey,
+} from "../identity/scope.js";
 import type { WorkboardDal } from "../workboard/dal.js";
 import { SubagentService } from "../workboard/subagent-service.js";
 import { APPROVAL_WS_AUDIENCE, PAIRING_WS_AUDIENCE } from "../../ws/audience.js";
@@ -199,17 +203,18 @@ export function buildFailedDecisionPayload(
   };
 }
 
-function buildReviewerSessionKey(subagentId: string): string {
-  return `agent:${DEFAULT_AGENT_KEY}:subagent:${subagentId}`;
+function buildReviewerSessionKey(agentKey: string, subagentId: string): string {
+  return `agent:${agentKey}:subagent:${subagentId}`;
 }
 
 export function reviewerTurnMetadata(input: {
+  agentKey: string;
   subagentId: string;
   subjectType: "approval" | "pairing";
   targetId: string;
 }): Record<string, unknown> {
   return {
-    tyrum_key: buildReviewerSessionKey(input.subagentId),
+    tyrum_key: buildReviewerSessionKey(input.agentKey, input.subagentId),
     lane: "subagent",
     subagent_id: input.subagentId,
     guardian_review: {
@@ -219,20 +224,21 @@ export function reviewerTurnMetadata(input: {
   };
 }
 
-export function getOrCreateReviewerRuntime(input: {
+export async function getOrCreateReviewerRuntime(input: {
   cache: Map<string, AgentRuntime>;
   container: GatewayContainer;
   tenantId: string;
   secretProviderForTenant: (tenantId: string) => SecretProvider;
-}): AgentRuntime {
+}): Promise<AgentRuntime> {
   const cached = input.cache.get(input.tenantId);
   if (cached) return cached;
+  const agentKey = await requirePrimaryAgentKey(input.container.identityScopeDal, input.tenantId);
 
   const runtime = new AgentRuntime({
     container: input.container,
     tenantId: input.tenantId,
-    agentId: DEFAULT_AGENT_KEY,
-    home: resolveAgentHome(input.container.config.tyrumHome, DEFAULT_AGENT_KEY),
+    agentId: agentKey,
+    home: resolveAgentHome(input.container.config.tyrumHome, agentKey),
     fetchImpl: fetch,
     secretProvider: input.secretProviderForTenant(input.tenantId),
     policyService: input.container.policyService,
@@ -242,7 +248,7 @@ export function getOrCreateReviewerRuntime(input: {
 }
 
 async function resolveReviewerScope(container: GatewayContainer, tenantId: string) {
-  const agentId = await container.identityScopeDal.ensureAgentId(tenantId, DEFAULT_AGENT_KEY);
+  const agentId = await requirePrimaryAgentId(container.identityScopeDal, tenantId);
   const workspaceId = await container.identityScopeDal.ensureWorkspaceId(
     tenantId,
     DEFAULT_WORKSPACE_KEY,
@@ -261,13 +267,14 @@ export async function createReviewerSubagent(input: {
   tenantId: string;
 }) {
   const scope = await resolveReviewerScope(input.container, input.tenantId);
+  const agentKey = await requirePrimaryAgentKey(input.container.identityScopeDal, input.tenantId);
   const subagentId = randomUUID();
   return await new SubagentService({ db: input.container.db }).createSubagent({
     scope,
     subagentId,
     subagent: {
       execution_profile: "reviewer_ro",
-      session_key: buildReviewerSessionKey(subagentId),
+      session_key: buildReviewerSessionKey(agentKey, subagentId),
       lane: "subagent",
       status: "running",
     },

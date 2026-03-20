@@ -4,7 +4,7 @@ import { AuthProfileDal } from "../models/auth-profile-dal.js";
 import { SessionProviderPinDal } from "../models/session-pin-dal.js";
 import { ProviderUsagePoller } from "../observability/provider-usage.js";
 import { SessionDal } from "../agent/session-dal.js";
-import { DEFAULT_TENANT_ID, IdentityScopeDal } from "../identity/scope.js";
+import { DEFAULT_TENANT_ID, IdentityScopeDal, requirePrimaryAgentKey } from "../identity/scope.js";
 import { ChannelThreadDal } from "../channels/thread-dal.js";
 import { DEFAULT_CHANNEL_ACCOUNT_ID, parseChannelSourceKey } from "../channels/interface.js";
 import { resolveWorkspaceKey } from "../workspace/id.js";
@@ -88,10 +88,22 @@ export function resolveTenantId(deps: CommandDeps): string {
   return deps.tenantId?.trim() || DEFAULT_TENANT_ID;
 }
 
-export function getProviderUsagePoller(deps: CommandDeps): ProviderUsagePoller | undefined {
+export class CommandContextError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "CommandContextError";
+  }
+}
+
+export async function getProviderUsagePoller(
+  deps: CommandDeps,
+): Promise<ProviderUsagePoller | undefined> {
   if (!deps.db || !deps.agents) return undefined;
   const tenantId = resolveTenantId(deps);
-  const agentId = resolveAgentId(deps.commandContext);
+  const agentId = await resolveAgentId(deps.commandContext, {
+    tenantId,
+    identityScopeDal: new IdentityScopeDal(deps.db),
+  });
   return new ProviderUsagePoller({
     authProfileDal: new AuthProfileDal(deps.db),
     pinDal: new SessionProviderPinDal(deps.db),
@@ -100,7 +112,10 @@ export function getProviderUsagePoller(deps: CommandDeps): ProviderUsagePoller |
   });
 }
 
-export function resolveAgentId(ctx: CommandDeps["commandContext"] | undefined): string {
+export async function resolveAgentId(
+  ctx: CommandDeps["commandContext"] | undefined,
+  options?: { tenantId?: string; identityScopeDal?: IdentityScopeDal },
+): Promise<string> {
   const explicit = ctx?.agentId?.trim();
   if (explicit) return explicit;
 
@@ -109,12 +124,22 @@ export function resolveAgentId(ctx: CommandDeps["commandContext"] | undefined): 
     try {
       const parsed = parseTyrumKey(key as never);
       if (parsed.kind === "agent") return parsed.agent_key;
-    } catch {
-      // Intentional: ignore invalid keys; fall back to default agent.
+    } catch (error) {
+      void error;
+      throw new CommandContextError("Invalid session key in command context.");
     }
   }
 
-  return "default";
+  if (options?.tenantId && options.identityScopeDal) {
+    try {
+      return await requirePrimaryAgentKey(options.identityScopeDal, options.tenantId);
+    } catch (error) {
+      void error;
+      throw new CommandContextError("No primary agent is configured for this tenant.");
+    }
+  }
+
+  throw new CommandContextError("Agent context is required for this command.");
 }
 
 export function buildDefaultCommandKey(input: {

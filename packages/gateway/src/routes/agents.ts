@@ -1,5 +1,9 @@
 import { Hono } from "hono";
-import { ManagedAgentCreateRequest, ManagedAgentUpdateRequest } from "@tyrum/contracts";
+import {
+  ManagedAgentCreateRequest,
+  ManagedAgentRenameRequest,
+  ManagedAgentUpdateRequest,
+} from "@tyrum/contracts";
 import type { SqlDb } from "../statestore/types.js";
 import type { IdentityScopeDal } from "../modules/identity/scope.js";
 import { requireAuthClaims, requireTenantId } from "../modules/auth/claims.js";
@@ -7,6 +11,7 @@ import {
   AgentAdminService,
   AgentAlreadyExistsError,
   AgentDeleteConflictError,
+  AgentRenameConflictError,
 } from "../modules/agent/admin-service.js";
 import type { GatewayStateMode } from "../modules/runtime-state/mode.js";
 import { normalizeAgentKey } from "./config-key-utils.js";
@@ -127,6 +132,47 @@ export function createAgentsRoutes(deps: AgentsRouteDeps): Hono {
       return c.json({ error: "not_found", message: `agent '${agentKey}' not found` }, 404);
     }
     return c.json(updated, 200);
+  });
+
+  app.post("/agents/:key/rename", async (c) => {
+    const tenantId = requireTenantId(c);
+    let agentKey: string;
+    try {
+      agentKey = normalizeAgentKey(c.req.param("key"));
+    } catch (error) {
+      return c.json({ error: "invalid_request", message: toErrorMessage(error) }, 400);
+    }
+
+    let body: unknown;
+    try {
+      body = (await c.req.json()) as unknown;
+    } catch (error) {
+      void error;
+      return c.json({ error: "invalid_request", message: "invalid json" }, 400);
+    }
+
+    const parsed = ManagedAgentRenameRequest.safeParse(body);
+    if (!parsed.success) {
+      return c.json({ error: "invalid_request", message: parsed.error.message }, 400);
+    }
+
+    try {
+      const renamed = await service.rename({
+        tenantId,
+        agentKey,
+        nextAgentKey: parsed.data.agent_key,
+        reason: parsed.data.reason,
+      });
+      if (!renamed) {
+        return c.json({ error: "not_found", message: `agent '${agentKey}' not found` }, 404);
+      }
+      return c.json(renamed, 200);
+    } catch (error) {
+      if (error instanceof AgentRenameConflictError) {
+        return c.json({ error: "conflict", message: error.message }, 409);
+      }
+      throw error;
+    }
   });
 
   app.delete("/agents/:key", async (c) => {

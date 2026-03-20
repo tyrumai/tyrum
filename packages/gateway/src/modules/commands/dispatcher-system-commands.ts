@@ -18,6 +18,7 @@ import {
   resolveKeyLane,
   resolveTenantId,
 } from "./dispatcher-support.js";
+import { IdentityScopeDal } from "../identity/scope.js";
 
 type CommandInput = {
   cmd: string;
@@ -47,7 +48,10 @@ async function executeNewCommand(deps: CommandDeps): Promise<CommandExecuteResul
     return { output: "Sessions are not available on this gateway instance.", data: null };
 
   const ctx = deps.commandContext;
-  const agentId = resolveAgentId(ctx);
+  const agentId = await resolveAgentId(ctx, {
+    tenantId: resolveTenantId(deps),
+    identityScopeDal: new IdentityScopeDal(deps.db),
+  });
   const channelRaw = ctx?.channel?.trim();
   if (!channelRaw) return { output: "Usage: /new (requires channel context)", data: null };
 
@@ -90,7 +94,10 @@ async function executeCompactCommand(deps: CommandDeps): Promise<CommandExecuteR
   }
 
   const ctx = deps.commandContext;
-  const agentId = resolveAgentId(ctx);
+  const agentId = await resolveAgentId(ctx, {
+    tenantId: resolveTenantId(deps),
+    identityScopeDal: new IdentityScopeDal(deps.db),
+  });
   const resolved = await resolveChannelThread(deps.db, ctx);
   if (!resolved)
     return { output: "Usage: /compact (requires key or channel/thread context)", data: null };
@@ -121,7 +128,10 @@ async function executeCompactCommand(deps: CommandDeps): Promise<CommandExecuteR
 async function executeStopCommand(deps: CommandDeps): Promise<CommandExecuteResult> {
   if (!deps.db) return { output: "Stop is not available on this gateway instance.", data: null };
 
-  const agentId = resolveAgentId(deps.commandContext);
+  const agentId = await resolveAgentId(deps.commandContext, {
+    tenantId: resolveTenantId(deps),
+    identityScopeDal: new IdentityScopeDal(deps.db),
+  });
   const resolved =
     (await resolveKeyLane(deps.db, deps.commandContext)) ??
     (await resolveFallbackKeyLane(deps.db, deps.commandContext, agentId));
@@ -150,7 +160,10 @@ async function executeResetCommand(deps: CommandDeps): Promise<CommandExecuteRes
     return { output: "Sessions are not available on this gateway instance.", data: null };
 
   const ctx = deps.commandContext;
-  const agentId = resolveAgentId(ctx);
+  const agentId = await resolveAgentId(ctx, {
+    tenantId: resolveTenantId(deps),
+    identityScopeDal: new IdentityScopeDal(deps.db),
+  });
   const resolved = await resolveChannelThread(deps.db, ctx);
   if (!resolved)
     return { output: "Usage: /reset (requires key or channel/thread context)", data: null };

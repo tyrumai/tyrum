@@ -7,13 +7,13 @@ import type {
 } from "@tyrum/contracts";
 import type { GatewayStateMode } from "../runtime-state/mode.js";
 import type { SqlDb } from "../../statestore/types.js";
-import { DEFAULT_AGENT_KEY } from "../identity/scope.js";
 import { buildDefaultAgentConfig } from "./default-config.js";
 import { applyPersonaToIdentity, resolveAgentPersona } from "./persona.js";
 
 export type AgentRow = {
   agent_id: string;
   agent_key: string;
+  is_primary: boolean | number | null;
   created_at: string | Date | null;
   updated_at: string | Date | null;
 };
@@ -57,6 +57,10 @@ export async function waitForAgentRow(params: {
 function normalizeTime(value: string | Date | null | undefined): string | null {
   if (value == null) return null;
   return value instanceof Date ? value.toISOString() : value;
+}
+
+function normalizePrimaryFlag(value: boolean | number | null | undefined): boolean {
+  return value === true || value === 1;
 }
 
 export function synthesizeIdentity(agentKey: string, config?: AgentConfigT | null): IdentityPackT {
@@ -117,7 +121,7 @@ export async function getAgentRow(
   agentKey: string,
 ): Promise<AgentRow | undefined> {
   return await db.get<AgentRow>(
-    `SELECT agent_id, agent_key, created_at, updated_at
+    `SELECT agent_id, agent_key, is_primary, created_at, updated_at
      FROM agents
      WHERE tenant_id = ? AND agent_key = ?
      LIMIT 1`,
@@ -130,6 +134,7 @@ export function toSummary(input: {
   config?: AgentConfigT | null;
   identity?: IdentityPackT | null;
 }): ManagedAgentSummaryT {
+  const isPrimary = normalizePrimaryFlag(input.row.is_primary);
   return ManagedAgentSummary.parse({
     agent_id: input.row.agent_id,
     agent_key: input.row.agent_key,
@@ -137,7 +142,8 @@ export function toSummary(input: {
     updated_at: normalizeTime(input.row.updated_at),
     has_config: Boolean(input.config),
     has_identity: Boolean(input.identity),
-    can_delete: input.row.agent_key !== DEFAULT_AGENT_KEY,
+    is_primary: isPrimary,
+    can_delete: !isPrimary,
     persona: resolveAgentPersona({
       agentKey: input.row.agent_key,
       config: input.config,

@@ -17,6 +17,7 @@ import {
   resolveFallbackKeyLane,
   resolveKeyLane,
 } from "./dispatcher-support.js";
+import { IdentityScopeDal } from "../identity/scope.js";
 
 type CommandInput = {
   cmd: string;
@@ -43,7 +44,10 @@ async function executeModelCommand(
   }
 
   const ctx = deps.commandContext;
-  const agentId = resolveAgentId(ctx);
+  const agentId = await resolveAgentId(ctx, {
+    tenantId: deps.tenantId,
+    identityScopeDal: deps.db ? new IdentityScopeDal(deps.db) : undefined,
+  });
   const resolved = await resolveChannelThread(deps.db, ctx);
   if (!resolved) {
     return {
@@ -222,7 +226,10 @@ async function executeIntakeCommand(
       data: null,
     };
   }
-  const agentId = resolveAgentId(deps.commandContext);
+  const agentId = await resolveAgentId(deps.commandContext, {
+    tenantId: deps.tenantId,
+    identityScopeDal: deps.db ? new IdentityScopeDal(deps.db) : undefined,
+  });
   const resolved =
     (await resolveKeyLane(deps.db, deps.commandContext)) ??
     (await resolveFallbackKeyLane(deps.db, deps.commandContext, agentId));

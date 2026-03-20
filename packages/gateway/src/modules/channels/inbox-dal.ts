@@ -110,7 +110,7 @@ export class ChannelInboxDal {
         agentKey = parsedKey.agent_key;
       }
     } catch {
-      // Intentional: fall back to default agent when key parsing fails.
+      // Legacy inbox keys are still supported during the migration to explicit agent-scoped keys.
     }
 
     const session = await this.sessionDal.getOrCreate({

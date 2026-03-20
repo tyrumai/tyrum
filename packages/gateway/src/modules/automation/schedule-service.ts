@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { AgentKey, WorkspaceKey } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import { sqlActiveWhereClause, sqlBoolParam } from "../../statestore/sql.js";
-import type { IdentityScopeDal } from "../identity/scope.js";
+import { requirePrimaryAgentKey, type IdentityScopeDal } from "../identity/scope.js";
 import {
   defaultHeartbeatCadence,
   defaultStoredLastFiredAtMs,
@@ -196,12 +196,24 @@ export class ScheduleService {
 
   async createSchedule(input: CreateScheduleInput): Promise<ScheduleRecord> {
     const tenantId = input.tenantId.trim();
-    const agentKey = input.agentKey?.trim() || "default";
+    const agentKey =
+      input.agentKey === undefined || input.agentKey === null
+        ? await requirePrimaryAgentKey(this.identityScopeDal, tenantId)
+        : (() => {
+            const normalizedAgentKey = input.agentKey.trim();
+            if (!normalizedAgentKey) {
+              throw new Error("agentKey is required");
+            }
+            return normalizedAgentKey;
+          })();
     const workspaceKey = input.workspaceKey?.trim() || "default";
     AgentKey.parse(agentKey);
     WorkspaceKey.parse(workspaceKey);
 
-    const agentId = await this.identityScopeDal.ensureAgentId(tenantId, agentKey);
+    const agentId = await this.identityScopeDal.resolveAgentId(tenantId, agentKey);
+    if (!agentId) {
+      throw new Error(`agent '${agentKey}' not found`);
+    }
     const workspaceId = await this.identityScopeDal.ensureWorkspaceId(tenantId, workspaceKey);
     await this.identityScopeDal.ensureMembership(tenantId, agentId, workspaceId);
 

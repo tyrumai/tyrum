@@ -80,6 +80,7 @@ export function policyPageGetResponse(
           updated_at: "2026-03-01T00:00:00.000Z",
           has_config: true,
           has_identity: true,
+          is_primary: true,
           can_delete: false,
           persona: {
             name: "Default Agent",

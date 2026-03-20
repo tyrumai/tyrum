@@ -16,6 +16,7 @@ export function registerHttpClientManagedAgentTests(): void {
               updated_at: "2026-03-08T00:00:00.000Z",
               has_config: true,
               has_identity: true,
+              is_primary: true,
               can_delete: false,
               persona: {
                 name: "Default Agent",
@@ -35,6 +36,7 @@ export function registerHttpClientManagedAgentTests(): void {
         updated_at: "2026-03-08T00:00:00.000Z",
         has_config: true,
         has_identity: true,
+        is_primary: false,
         can_delete: true,
         persona: {
           name: "Agent One",
@@ -92,6 +94,7 @@ export function registerHttpClientManagedAgentTests(): void {
             updated_at: "2026-03-08T00:00:00.000Z",
             has_config: true,
             has_identity: true,
+            is_primary: false,
             can_delete: true,
             persona: {
               name: "Agent Two",
@@ -131,6 +134,7 @@ export function registerHttpClientManagedAgentTests(): void {
           updated_at: "2026-03-08T00:00:00.000Z",
           has_config: true,
           has_identity: true,
+          is_primary: false,
           can_delete: true,
           persona: {
             name: "Agent Two",

@@ -52,10 +52,20 @@ function toLocationRouteError(error: unknown): {
 export function createLocationRoutes(service: LocationService): Hono {
   const app = new Hono();
 
+  const resolveAgentKey = async (
+    tenantId: string,
+    rawAgentKey: string | undefined,
+  ): Promise<string> => {
+    if (rawAgentKey !== undefined && rawAgentKey.trim().length === 0) {
+      throw new Error("agent_key must be a non-empty string");
+    }
+    return await service.resolveAgentKey({ tenantId, agentKey: rawAgentKey });
+  };
+
   app.get("/location/profile", async (c) => {
     const tenantId = requireTenantId(c);
-    const agentKey = c.req.query("agent_key")?.trim() || "default";
     try {
+      const agentKey = await resolveAgentKey(tenantId, c.req.query("agent_key"));
       const profile = await service.getProfile({ tenantId, agentKey });
       return c.json({ status: "ok", profile: toHttpProfile(profile) });
     } catch (error) {
@@ -66,7 +76,6 @@ export function createLocationRoutes(service: LocationService): Hono {
 
   app.patch("/location/profile", async (c) => {
     const tenantId = requireTenantId(c);
-    const agentKey = c.req.query("agent_key")?.trim() || "default";
     const rawBody = (await c.req.json()) as Record<string, unknown>;
     const { poi_provider_key: _poiProviderKey, ...bodyWithoutAlias } = rawBody;
     const parsed = LocationProfileUpdateRequest.safeParse({
@@ -81,14 +90,20 @@ export function createLocationRoutes(service: LocationService): Hono {
     if (!parsed.success) {
       return c.json({ error: "invalid_request", message: parsed.error.message }, 400);
     }
-    const profile = await service.updateProfile({ tenantId, agentKey, patch: parsed.data });
-    return c.json({ status: "ok", profile: toHttpProfile(profile) });
+    try {
+      const agentKey = await resolveAgentKey(tenantId, c.req.query("agent_key"));
+      const profile = await service.updateProfile({ tenantId, agentKey, patch: parsed.data });
+      return c.json({ status: "ok", profile: toHttpProfile(profile) });
+    } catch (error) {
+      const response = toLocationRouteError(error);
+      return c.json(response.body, response.status);
+    }
   });
 
   app.get("/location/places", async (c) => {
     const tenantId = requireTenantId(c);
-    const agentKey = c.req.query("agent_key")?.trim() || "default";
     try {
+      const agentKey = await resolveAgentKey(tenantId, c.req.query("agent_key"));
       const places = await service.listPlaces({ tenantId, agentKey });
       return c.json({ status: "ok", places: places.map(toHttpPlace) });
     } catch (error) {
@@ -99,7 +114,6 @@ export function createLocationRoutes(service: LocationService): Hono {
 
   app.post("/location/places", async (c) => {
     const tenantId = requireTenantId(c);
-    const agentKey = c.req.query("agent_key")?.trim() || "default";
     const rawBody = (await c.req.json()) as Record<string, unknown>;
     const parsed = LocationPlaceCreateRequest.safeParse({
       ...rawBody,
@@ -112,13 +126,18 @@ export function createLocationRoutes(service: LocationService): Hono {
     if (!parsed.success) {
       return c.json({ error: "invalid_request", message: parsed.error.message }, 400);
     }
-    const place = await service.createPlace({ tenantId, agentKey, body: parsed.data });
-    return c.json({ status: "ok", place: toHttpPlace(place) }, 201);
+    try {
+      const agentKey = await resolveAgentKey(tenantId, c.req.query("agent_key"));
+      const place = await service.createPlace({ tenantId, agentKey, body: parsed.data });
+      return c.json({ status: "ok", place: toHttpPlace(place) }, 201);
+    } catch (error) {
+      const response = toLocationRouteError(error);
+      return c.json(response.body, response.status);
+    }
   });
 
   app.patch("/location/places/:id", async (c) => {
     const tenantId = requireTenantId(c);
-    const agentKey = c.req.query("agent_key")?.trim() || "default";
     const rawBody = (await c.req.json()) as Record<string, unknown>;
     const parsed = LocationPlacePatchRequest.safeParse({
       ...rawBody,
@@ -132,6 +151,7 @@ export function createLocationRoutes(service: LocationService): Hono {
       return c.json({ error: "invalid_request", message: parsed.error.message }, 400);
     }
     try {
+      const agentKey = await resolveAgentKey(tenantId, c.req.query("agent_key"));
       const place = await service.updatePlace({
         tenantId,
         agentKey,
@@ -147,8 +167,8 @@ export function createLocationRoutes(service: LocationService): Hono {
 
   app.delete("/location/places/:id", async (c) => {
     const tenantId = requireTenantId(c);
-    const agentKey = c.req.query("agent_key")?.trim() || "default";
     try {
+      const agentKey = await resolveAgentKey(tenantId, c.req.query("agent_key"));
       const deleted = await service.deletePlace({ tenantId, agentKey, placeId: c.req.param("id") });
       if (!deleted) {
         return c.json({ error: "not_found", message: "place not found" }, 404);
@@ -162,7 +182,6 @@ export function createLocationRoutes(service: LocationService): Hono {
 
   app.get("/location/events", async (c) => {
     const tenantId = requireTenantId(c);
-    const agentKey = c.req.query("agent_key")?.trim() || "default";
     const limitRaw = c.req.query("limit");
     const parsedLimit =
       typeof limitRaw === "string" && /^[0-9]+$/.test(limitRaw.trim()) ? Number(limitRaw) : null;
@@ -176,6 +195,7 @@ export function createLocationRoutes(service: LocationService): Hono {
       return c.json({ error: "invalid_request", message: "limit must be a positive integer" }, 400);
     }
     try {
+      const agentKey = await resolveAgentKey(tenantId, c.req.query("agent_key"));
       return c.json({
         status: "ok",
         events: await service.listEvents({ tenantId, agentKey, limit }),

@@ -31,13 +31,7 @@ export type FirstRunOnboardingIssueBadge = {
   label: string;
   variant: "danger" | "warning";
 };
-export type FirstRunOnboardingStepId =
-  | "admin"
-  | "provider"
-  | "preset"
-  | "assignments"
-  | "agent"
-  | "done";
+export type FirstRunOnboardingStepId = "admin" | "provider" | "preset" | "agent" | "done";
 export type FirstRunOnboardingRenderableStepId = Exclude<FirstRunOnboardingStepId, "done">;
 export type FirstRunOnboardingStoredState = {
   issueSignature?: string;
@@ -69,17 +63,12 @@ export const FIRST_RUN_ONBOARDING_STEPS: ReadonlyArray<{
   {
     id: "preset",
     title: "Create a model preset",
-    detail: "Save one reusable preset to use as the default setup target.",
-  },
-  {
-    id: "assignments",
-    title: "Assign execution profiles",
-    detail: "Apply a preset across the built-in execution profiles so runtime selection works.",
+    detail: "Choose or create the preset Tyrum should reuse across the default runtime profiles.",
   },
   {
     id: "agent",
-    title: "Set the default agent model",
-    detail: "Finish by giving the default agent a primary model so new sessions can run.",
+    title: "Configure the first agent",
+    detail: "Name the primary agent, pick its tone, and apply an agent policy preset.",
   },
 ] as const;
 const ISSUE_BADGE_COPY: Partial<
@@ -232,7 +221,7 @@ export function resolveFirstRunOnboardingStep(input: {
     return "preset";
   }
   if (input.issues.some((issue) => EXECUTION_CODES.has(issue.code))) {
-    return "assignments";
+    return "preset";
   }
   if (input.issues.some((issue) => AGENT_CODES.has(issue.code))) {
     return "agent";

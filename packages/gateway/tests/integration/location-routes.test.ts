@@ -110,6 +110,39 @@ describe("location routes", () => {
       message: "agent 'missing-agent' not found",
     });
 
+    const placeRes = await request("/location/places", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        agent_key: "missing-agent",
+        name: "Office",
+        latitude: 52.3676,
+        longitude: 4.9041,
+        radius_m: 150,
+        tags: ["work"],
+        source: "provider",
+      }),
+    });
+    expect(placeRes.status).toBe(404);
+    await expect(placeRes.json()).resolves.toMatchObject({
+      error: "not_found",
+      message: "agent 'missing-agent' not found",
+    });
+
+    const updateProfileRes = await request("/location/profile", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        agent_key: "missing-agent",
+        primary_node_id: "node-mobile-1",
+      }),
+    });
+    expect(updateProfileRes.status).toBe(404);
+    await expect(updateProfileRes.json()).resolves.toMatchObject({
+      error: "not_found",
+      message: "agent 'missing-agent' not found",
+    });
+
     const after = await container.db.get<{ count: number }>(
       "SELECT COUNT(1) AS count FROM agents WHERE tenant_id = ?",
       [tenantId],

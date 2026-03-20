@@ -6,7 +6,7 @@ import type {
   TyrumUIMessage,
 } from "@tyrum/contracts";
 import type { GatewayContainer } from "../../../container.js";
-import { ensureAgentConfigSeeded } from "../default-config.js";
+import { loadAgentConfigOrDefault } from "../default-config.js";
 import { loadCurrentAgentContext } from "../load-context.js";
 import { resolveEffectiveAgentConfig } from "../../extensions/defaults-dal.js";
 import type { AgentContextStore } from "../context-store.js";
@@ -450,19 +450,16 @@ export async function resolveRuntimeCompactionContext(input: {
   });
   if (!session) throw new Error(`session '${input.sessionId}' not found`);
 
-  const revision = await ensureAgentConfigSeeded({
+  const config = await loadAgentConfigOrDefault({
     db: input.container.db,
     stateMode: resolveGatewayStateMode(input.container.deploymentConfig),
     tenantId: input.tenantId,
     agentId: input.agentId,
-    agentKey: input.agentId,
-    createdBy: { kind: "agent-runtime" },
-    reason: "session compaction",
   });
   const effectiveConfig = await resolveEffectiveAgentConfig({
     db: input.container.db,
     tenantId: input.tenantId,
-    config: revision.config,
+    config,
   });
   const ctx = await loadCurrentAgentContext({
     contextStore: input.contextStore,

@@ -14,6 +14,7 @@ import type { Logger } from "../observability/logger.js";
 import { safeDetail } from "../../utils/safe-detail.js";
 import type { ArtifactStore } from "../artifact/store.js";
 import { createTelegramEgressConnector } from "./telegram-shared.js";
+import type { IdentityScopeDal } from "../identity/scope.js";
 
 export interface TelegramInboundAccount {
   accountKey: string;
@@ -50,6 +51,7 @@ export async function processTelegramInboundUpdate(input: {
   agents?: AgentRegistry;
   telegramQueue?: TelegramChannelQueue;
   routingConfigDal?: RoutingConfigDal;
+  identityScopeDal?: IdentityScopeDal;
   memoryDal?: MemoryDal;
   artifactStore?: ArtifactStore;
   maxUploadBytes?: number;
@@ -100,7 +102,13 @@ export async function processTelegramInboundUpdate(input: {
   const routing = durable?.config ?? { v: 1 };
   const routedAgentId =
     input.account.agentKey?.trim() ||
-    resolveTelegramAgentId(routing, input.account.accountKey, chatId);
+    (await resolveTelegramAgentId({
+      config: routing,
+      tenantId: input.tenantId,
+      accountKey: input.account.accountKey,
+      threadId: chatId,
+      identityScopeDal: input.identityScopeDal,
+    }));
 
   if (input.telegramQueue && input.account.pipelineEnabled) {
     try {

@@ -35,6 +35,24 @@ export interface PolicyConfigApi {
     input: DeploymentPolicyConfigRevertInput,
     options?: TyrumRequestOptions,
   ): Promise<DeploymentPolicyConfigRevertResult>;
+  getAgent(
+    agentKey: string,
+    options?: TyrumRequestOptions,
+  ): Promise<DeploymentPolicyConfigGetResult>;
+  listAgentRevisions(
+    agentKey: string,
+    options?: TyrumRequestOptions,
+  ): Promise<DeploymentPolicyConfigListRevisionsResult>;
+  updateAgent(
+    agentKey: string,
+    input: DeploymentPolicyConfigUpdateInput,
+    options?: TyrumRequestOptions,
+  ): Promise<DeploymentPolicyConfigUpdateResult>;
+  revertAgent(
+    agentKey: string,
+    input: DeploymentPolicyConfigRevertInput,
+    options?: TyrumRequestOptions,
+  ): Promise<DeploymentPolicyConfigRevertResult>;
 }
 
 export function createPolicyConfigApi(transport: HttpTransport): PolicyConfigApi {
@@ -81,6 +99,54 @@ export function createPolicyConfigApi(transport: HttpTransport): PolicyConfigApi
       return await transport.request({
         method: "POST",
         path: "/config/policy/deployment/revert",
+        body,
+        response: DeploymentPolicyConfigRevertResponse,
+        signal: options?.signal,
+      });
+    },
+
+    async getAgent(agentKey, options) {
+      return await transport.request({
+        method: "GET",
+        path: `/config/policy/agents/${encodeURIComponent(agentKey)}`,
+        response: DeploymentPolicyConfigGetResponse,
+        signal: options?.signal,
+      });
+    },
+
+    async listAgentRevisions(agentKey, options) {
+      return await transport.request({
+        method: "GET",
+        path: `/config/policy/agents/${encodeURIComponent(agentKey)}/revisions`,
+        response: DeploymentPolicyConfigListRevisionsResponse,
+        signal: options?.signal,
+      });
+    },
+
+    async updateAgent(agentKey, input, options) {
+      const body = validateOrThrow(
+        DeploymentPolicyConfigUpdateRequest,
+        input,
+        "agent policy config update request",
+      );
+      return await transport.request({
+        method: "PUT",
+        path: `/config/policy/agents/${encodeURIComponent(agentKey)}`,
+        body,
+        response: DeploymentPolicyConfigUpdateResponse,
+        signal: options?.signal,
+      });
+    },
+
+    async revertAgent(agentKey, input, options) {
+      const body = validateOrThrow(
+        DeploymentPolicyConfigRevertRequest,
+        input,
+        "agent policy config revert request",
+      );
+      return await transport.request({
+        method: "POST",
+        path: `/config/policy/agents/${encodeURIComponent(agentKey)}/revert`,
         body,
         response: DeploymentPolicyConfigRevertResponse,
         signal: options?.signal,

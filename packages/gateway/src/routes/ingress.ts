@@ -21,7 +21,7 @@ import type { TelegramChannelRuntime } from "../modules/channels/telegram-runtim
 import type { GoogleChatChannelRuntime } from "../modules/channels/googlechat-runtime.js";
 import type { MemoryDal } from "../modules/memory/memory-dal.js";
 import type { Logger } from "../modules/observability/logger.js";
-import { DEFAULT_TENANT_ID } from "../modules/identity/scope.js";
+import { DEFAULT_TENANT_ID, type IdentityScopeDal } from "../modules/identity/scope.js";
 import { safeDetail } from "../utils/safe-detail.js";
 import type { ArtifactStore } from "../modules/artifact/store.js";
 import {
@@ -39,6 +39,7 @@ export interface IngressDeps {
   agents?: AgentRegistry;
   telegramQueue?: TelegramChannelQueue;
   routingConfigDal?: RoutingConfigDal;
+  identityScopeDal?: IdentityScopeDal;
   memoryDal?: MemoryDal;
   artifactStore?: ArtifactStore;
   artifactMaxUploadBytes?: number;
@@ -202,6 +203,7 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
         agents: deps.agents,
         telegramQueue: deps.telegramQueue,
         routingConfigDal: deps.routingConfigDal,
+        identityScopeDal: deps.identityScopeDal,
         memoryDal: deps.memoryDal,
         artifactStore: deps.artifactStore,
         maxUploadBytes: deps.artifactMaxUploadBytes,

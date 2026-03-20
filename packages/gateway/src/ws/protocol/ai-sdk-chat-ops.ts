@@ -11,7 +11,6 @@ import {
   emitAiSdkChatChunk,
   failAiSdkChatStream,
   finishAiSdkChatStream,
-  reconnectAiSdkChatStream,
 } from "./ai-sdk-chat-streams.js";
 import { handleChatSessionArchiveMessage } from "./session-archive-ops.js";
 import { handleSessionDeleteMessage } from "./session-delete-ops.js";
@@ -22,7 +21,6 @@ import {
   ChatSessionCreateRequest,
   ChatSessionGetRequest,
   ChatSessionListRequest,
-  ChatSessionReconnectRequest,
   ChatSessionSendRequest,
   hasApprovalRequest,
   normalizeRequestMetadata,
@@ -36,6 +34,10 @@ import {
 import { createAiSdkChatLiveState } from "./ai-sdk-chat-live-state.js";
 import { materializeUiMessagesUploadedFiles } from "../../modules/ai-sdk/attachment-parts.js";
 import type { ArtifactRecordInsertInput } from "../../modules/artifact/dal.js";
+import {
+  handleChatSessionReconnectMessage,
+  resolveChatAgentKey,
+} from "./ai-sdk-chat-session-ops.js";
 
 export async function handleAiSdkChatMessage(
   client: ConnectedClient,
@@ -58,7 +60,7 @@ export async function handleAiSdkChatMessage(
     return await handleChatSessionArchiveMessage(client, msg, deps);
   }
   if (msg.type === "chat.session.reconnect") {
-    return await handleChatSessionReconnectMessage(client, msg, deps);
+    return await handleChatSessionReconnectMessage(client, msg);
   }
   if (msg.type === "chat.session.send") {
     return await handleChatSessionSendMessage(client, msg, deps);
@@ -89,10 +91,15 @@ async function handleChatSessionListMessage(
     });
   }
 
-  const agentKey = parsed.data.payload.agent_id ?? "default";
   const connectorKey = parsed.data.payload.channel ?? "ui";
+  let agentKey: string | undefined;
 
   try {
+    agentKey = await resolveChatAgentKey({
+      tenantId: auth.tenantId,
+      requestedAgentKey: parsed.data.payload.agent_id,
+      deps,
+    });
     const listed = await createSessionDal(deps).list({
       scopeKeys: { agentKey, workspaceKey: resolveWorkspaceKey() },
       connectorKey,
@@ -221,10 +228,15 @@ async function handleChatSessionCreateMessage(
     });
   }
 
-  const agentKey = parsed.data.payload.agent_id ?? "default";
   const connectorKey = parsed.data.payload.channel ?? "ui";
+  let agentKey: string | undefined;
 
   try {
+    agentKey = await resolveChatAgentKey({
+      tenantId: auth.tenantId,
+      requestedAgentKey: parsed.data.payload.agent_id,
+      deps,
+    });
     const providerThreadId = `${connectorKey}-${randomUUID()}`;
     const session = await createSessionDal(deps).getOrCreate({
       scopeKeys: { agentKey, workspaceKey: resolveWorkspaceKey() },
@@ -278,34 +290,6 @@ async function handleChatSessionDeleteMessage(
   deps: ProtocolDeps,
 ): Promise<WsResponseEnvelope> {
   return await handleSessionDeleteMessage(client, msg, deps);
-}
-
-async function handleChatSessionReconnectMessage(
-  client: ConnectedClient,
-  msg: ProtocolRequestEnvelope,
-  _deps: ProtocolDeps,
-): Promise<WsResponseEnvelope> {
-  const auth = requireTenantClient(client, msg);
-  if ("response" in auth) return auth.response;
-
-  const parsed = ChatSessionReconnectRequest.safeParse(msg);
-  if (!parsed.success) {
-    return errorResponse(msg.request_id, msg.type, "invalid_request", parsed.error.message, {
-      issues: parsed.error.issues,
-    });
-  }
-
-  const streamId = reconnectAiSdkChatStream({
-    clientId: client.id,
-    sessionId: parsed.data.payload.session_id,
-    tenantId: auth.tenantId,
-  });
-  return {
-    request_id: msg.request_id,
-    type: msg.type,
-    ok: true,
-    result: streamId ? { stream_id: streamId } : null,
-  };
 }
 
 async function handleChatSessionSendMessage(

@@ -56,7 +56,7 @@ export async function buildStatusDetails(deps: StatusDetailsDeps): Promise<Statu
   const tenantId = deps.tenantId.trim();
   const [activeModel, authProfiles, catalog, sessionLanes, queueDepth, sandbox, configHealth] =
     await Promise.all([
-      loadActiveModel(deps.agents, tenantId),
+      loadActiveModel(deps.agents, deps.db, tenantId),
       loadAuthProfileHealth(deps.db, tenantId),
       loadCatalogFreshness(deps.db, deps.modelsDev),
       loadSessionLanes(deps.db, tenantId),

@@ -455,9 +455,6 @@ export function registerFirstRunOnboardingStateTests(): void {
       container.querySelector('[data-testid="first-run-onboarding-progress-preset"]'),
     ).not.toBeNull();
     expect(
-      container.querySelector('[data-testid="first-run-onboarding-progress-assignments"]'),
-    ).not.toBeNull();
-    expect(
       container.querySelector('[data-testid="first-run-onboarding-progress-agent"]'),
     ).not.toBeNull();
     expect(

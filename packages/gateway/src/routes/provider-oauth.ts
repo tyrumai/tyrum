@@ -17,6 +17,11 @@ import type { Logger } from "../modules/observability/logger.js";
 import { coerceRecord, coerceString } from "../modules/util/coerce.js";
 import { safeDetail } from "../utils/safe-detail.js";
 import { requireTenantId } from "../modules/auth/claims.js";
+import {
+  requirePrimaryAgentKey,
+  ScopeNotFoundError,
+  type IdentityScopeDal,
+} from "../modules/identity/scope.js";
 
 const PENDING_TTL_MS = 10 * 60 * 1000;
 
@@ -95,6 +100,7 @@ export interface ProviderOAuthRouteDeps {
   oauthPendingDal: OauthPendingDal;
   oauthProviderRegistry: OAuthProviderRegistry;
   authProfileDal: AuthProfileDal;
+  identityScopeDal: IdentityScopeDal;
   secretProviderForTenant: (tenantId: string) => SecretProvider;
   logger?: Logger;
 }
@@ -107,10 +113,30 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
     const tenantId = requireTenantId(c);
     const body = await c.req.json().catch(() => ({}));
     const record = coerceRecord(body) ?? {};
-    const agentKey = coerceString(record["agent_key"]) ?? "default";
+    const rawAgentKey = coerceString(record["agent_key"]);
     const publicBaseUrl = coerceString(record["public_base_url"]);
     const requestedAuthProfileKey =
       coerceString(record["auth_profile_key"]) ?? `oauth:${providerId}`;
+    let agentKey: string;
+    try {
+      if (rawAgentKey === undefined) {
+        agentKey = await requirePrimaryAgentKey(deps.identityScopeDal, tenantId);
+      } else {
+        const normalizedAgentKey = rawAgentKey.trim();
+        if (!normalizedAgentKey) {
+          return c.json(
+            { error: "invalid_request", message: "agent_key must be a non-empty string" },
+            400,
+          );
+        }
+        agentKey = normalizedAgentKey;
+      }
+    } catch (err) {
+      if (err instanceof ScopeNotFoundError) {
+        return c.json({ error: err.code, message: err.message }, 404);
+      }
+      throw err;
+    }
 
     let authProfileKey: string;
     try {

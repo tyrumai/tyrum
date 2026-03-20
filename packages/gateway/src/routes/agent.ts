@@ -12,19 +12,67 @@ import { requireTenantId } from "../modules/auth/claims.js";
 import { listLatestAgentConfigsByAgentId, resolveAgentPersona } from "../modules/agent/persona.js";
 import { loadOptionalIdentity } from "../modules/agent/optional-identity.js";
 import { ScopeNotFoundError } from "../modules/identity/scope.js";
+import { sqlBoolParam } from "../statestore/sql.js";
 
 async function resolveAgentRecord(
   db: SqlDb,
   tenantId: string,
   agentKey: string,
-): Promise<{ agent_id: string; agent_key: string } | undefined> {
-  return await db.get<{ agent_id: string; agent_key: string }>(
-    `SELECT agent_id, agent_key
+): Promise<
+  { agent_id: string; agent_key: string; is_primary: boolean | number | null } | undefined
+> {
+  return await db.get<{ agent_id: string; agent_key: string; is_primary: boolean | number | null }>(
+    `SELECT agent_id, agent_key, is_primary
      FROM agents
      WHERE tenant_id = ? AND agent_key = ?
      LIMIT 1`,
     [tenantId, agentKey],
   );
+}
+
+async function resolvePrimaryAgentRecord(
+  db: SqlDb,
+  tenantId: string,
+): Promise<
+  { agent_id: string; agent_key: string; is_primary: boolean | number | null } | undefined
+> {
+  return await db.get<{ agent_id: string; agent_key: string; is_primary: boolean | number | null }>(
+    `SELECT agent_id, agent_key, is_primary
+     FROM agents
+     WHERE tenant_id = ? AND is_primary = ?
+     LIMIT 1`,
+    [tenantId, sqlBoolParam(db, true)],
+  );
+}
+
+async function resolveRequestedAgentRecord(
+  db: SqlDb,
+  tenantId: string,
+  agentKey: string | undefined,
+): Promise<{
+  requestedAgentKey: string | undefined;
+  record: { agent_id: string; agent_key: string; is_primary: boolean | number | null } | undefined;
+}> {
+  if (agentKey === undefined) {
+    return {
+      requestedAgentKey: undefined,
+      record: await resolvePrimaryAgentRecord(db, tenantId),
+    };
+  }
+  const normalized = agentKey.trim();
+  if (!normalized) {
+    throw new Error("agent_key must be a non-empty string");
+  }
+  return {
+    requestedAgentKey: normalized,
+    record: await resolveAgentRecord(db, tenantId, normalized),
+  };
+}
+
+function buildAgentNotFoundMessage(requestedAgentKey: string | undefined): string {
+  return requestedAgentKey === undefined
+    ? "primary agent not found"
+    : `agent '${requestedAgentKey}' not found`;
 }
 
 export function createAgentRoutes(opts: { agents: AgentRegistry; db: SqlDb }): Hono {
@@ -39,18 +87,21 @@ export function createAgentRoutes(opts: { agents: AgentRegistry; db: SqlDb }): H
     const discovered = await opts.db.all<{
       agent_key: string;
       agent_id: string;
+      is_primary: boolean | number | null;
     }>(
-      `SELECT agent_key, agent_id
+      `SELECT agent_key, agent_id, is_primary
        FROM agents
        WHERE tenant_id = ?
-       ORDER BY CASE WHEN agent_key = 'default' THEN 0 ELSE 1 END, agent_key ASC`,
+       ORDER BY is_primary DESC, agent_key ASC`,
       [tenantId],
     );
     const configsByAgentId = await listLatestAgentConfigsByAgentId(opts.db, tenantId);
 
     const agentRecords = await Promise.all(
       discovered
-        .filter((record) => includeDefault || record.agent_key !== "default")
+        .filter(
+          (record) => includeDefault || !(record.is_primary === true || record.is_primary === 1),
+        )
         .map(async (record) => {
           const config = configsByAgentId.get(record.agent_id);
           const identity = !config?.persona
@@ -70,6 +121,7 @@ export function createAgentRoutes(opts: { agents: AgentRegistry; db: SqlDb }): H
             agent_key: record.agent_key,
             agent_id: record.agent_id,
             has_config: Boolean(config),
+            is_primary: record.is_primary === true || record.is_primary === 1,
             persona,
           };
         }),
@@ -80,14 +132,22 @@ export function createAgentRoutes(opts: { agents: AgentRegistry; db: SqlDb }): H
 
   agent.get("/agent/status", async (c) => {
     const tenantId = requireTenantId(c);
-    const agentKey = c.req.query("agent_key")?.trim() || "default";
-    const record = await resolveAgentRecord(opts.db, tenantId, agentKey);
-    if (!record) {
-      return c.json({ error: "not_found", message: `agent '${agentKey}' not found` }, 404);
+    let resolved;
+    try {
+      resolved = await resolveRequestedAgentRecord(opts.db, tenantId, c.req.query("agent_key"));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ error: "invalid_request", message }, 400);
+    }
+    if (!resolved.record) {
+      return c.json(
+        { error: "not_found", message: buildAgentNotFoundMessage(resolved.requestedAgentKey) },
+        404,
+      );
     }
     let runtime;
     try {
-      runtime = await opts.agents.getRuntime({ tenantId, agentKey });
+      runtime = await opts.agents.getRuntime({ tenantId, agentKey: resolved.record.agent_key });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return c.json({ error: "invalid_request", message }, 400);
@@ -112,14 +172,16 @@ export function createAgentRoutes(opts: { agents: AgentRegistry; db: SqlDb }): H
     }
 
     try {
-      const agentId = parsed.data.agent_key ?? "default";
-      const record = await resolveAgentRecord(opts.db, tenantId, agentId);
-      if (!record) {
-        return c.json({ error: "not_found", message: `agent '${agentId}' not found` }, 404);
+      const resolved = await resolveRequestedAgentRecord(opts.db, tenantId, parsed.data.agent_key);
+      if (!resolved.record) {
+        return c.json(
+          { error: "not_found", message: buildAgentNotFoundMessage(resolved.requestedAgentKey) },
+          404,
+        );
       }
       let runtime;
       try {
-        runtime = await opts.agents.getRuntime({ tenantId, agentKey: agentId });
+        runtime = await opts.agents.getRuntime({ tenantId, agentKey: resolved.record.agent_key });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         return c.json({ error: "invalid_request", message }, 400);

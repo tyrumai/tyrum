@@ -1,7 +1,14 @@
+import { AgentConfig } from "@tyrum/contracts";
 import { expect, it, vi } from "vitest";
 import type { StepExecutor, StepResult } from "../../src/modules/execution/engine.js";
 import { ExecutionEngine } from "../../src/modules/execution/engine.js";
-import { DEFAULT_TENANT_ID, DEFAULT_WORKSPACE_ID } from "../../src/modules/identity/scope.js";
+import { AgentAdminService } from "../../src/modules/agent/admin-service.js";
+import {
+  DEFAULT_AGENT_KEY,
+  DEFAULT_TENANT_ID,
+  DEFAULT_WORKSPACE_ID,
+  IdentityScopeDal,
+} from "../../src/modules/identity/scope.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { action, enqueuePlan, drain, mockCallCount } from "./execution-engine.test-support.js";
 
@@ -175,6 +182,55 @@ function registerEnqueueTests(fixture: { db: () => SqliteDb }): void {
     expect(trigger.kind).toBe("webhook");
     expect(trigger.lane).toBe("cron");
   });
+
+  it("uses the existing primary agent for non-agent execution keys", async () => {
+    const db = fixture.db();
+    const scopeDal = new IdentityScopeDal(db);
+    const adminService = new AgentAdminService({
+      db,
+      identityScopeDal: scopeDal,
+      stateMode: "local",
+    });
+    const created = await adminService.create({
+      tenantId: DEFAULT_TENANT_ID,
+      agentKey: "ops-agent",
+      config: AgentConfig.parse({
+        model: { model: "openrouter/openai/gpt-5.4" },
+        persona: {
+          name: "Ops Agent",
+          tone: "direct",
+          palette: "graphite",
+          character: "architect",
+        },
+      }),
+      isPrimary: true,
+      reason: "test queue primary fallback",
+    });
+    await adminService.delete({
+      tenantId: DEFAULT_TENANT_ID,
+      agentKey: DEFAULT_AGENT_KEY,
+    });
+
+    const engine = new ExecutionEngine({ db });
+    await enqueuePlan(engine, {
+      key: "hook:550e8400-e29b-41d4-a716-446655440000",
+      lane: "cron",
+      planId: "plan-hook-primary-fallback",
+      requestId: "req-hook-primary-fallback",
+      steps: [action("Research")],
+    });
+
+    const job = await db.get<{ agent_id: string }>(
+      "SELECT agent_id FROM execution_jobs ORDER BY created_at DESC, job_id DESC LIMIT 1",
+    );
+    const recreatedDefault = await db.get<{ agent_id: string }>(
+      "SELECT agent_id FROM agents WHERE tenant_id = ? AND agent_key = ? LIMIT 1",
+      [DEFAULT_TENANT_ID, DEFAULT_AGENT_KEY],
+    );
+
+    expect(job?.agent_id).toBe(created.agent_id);
+    expect(recreatedDefault).toBeUndefined();
+  });
 }
 
 function registerLifecycleTests(fixture: { db: () => SqliteDb }): void {
@@ -317,7 +373,6 @@ function registerLifecycleTests(fixture: { db: () => SqliteDb }): void {
 
   it("accepts workspace ids via the legacy enqueuePlan workspaceId alias", async () => {
     const db = fixture.db();
-    const { IdentityScopeDal } = await import("../../src/modules/identity/scope.js");
     const scopeIds = await new IdentityScopeDal(db).resolveScopeIds({
       agentKey: "agent-legacy-workspace",
       workspaceKey: "work-legacy",

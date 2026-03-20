@@ -28,6 +28,7 @@ import type {
   LocationAutomationTriggerPatchRequest,
   LocationAutomationTriggerRecord,
 } from "./types.js";
+import { requirePrimaryAgentKey, resolveRequestedAgentKey } from "../identity/scope.js";
 
 const logger = new Logger({ base: { module: "location.service" } });
 
@@ -62,6 +63,13 @@ export class LocationService {
     );
   }
 
+  async resolveAgentKey(input: { tenantId: string; agentKey?: string | null }): Promise<string> {
+    return await resolveRequestedAgentKey({
+      identityScopeDal: this.opts.identityScopeDal,
+      ...input,
+    });
+  }
+
   async getProfile(input: { tenantId: string; agentKey: string }): Promise<LocationProfile> {
     const agentId = await resolveExistingAgentIdOrThrow({
       identityScopeDal: this.opts.identityScopeDal,
@@ -80,7 +88,11 @@ export class LocationService {
     patch: LocationProfileUpdateRequest;
   }): Promise<LocationProfile> {
     const agentKey = input.patch.agent_key?.trim() || input.agentKey;
-    const agentId = await this.opts.identityScopeDal.ensureAgentId(input.tenantId, agentKey);
+    const agentId = await resolveExistingAgentIdOrThrow({
+      identityScopeDal: this.opts.identityScopeDal,
+      tenantId: input.tenantId,
+      agentKey,
+    });
     const current = await this.dal.getProfile({ tenantId: input.tenantId, agentId, agentKey });
     const next: Omit<LocationProfile, "agent_key" | "updated_at"> = {
       primary_node_id:
@@ -116,7 +128,11 @@ export class LocationService {
     body: LocationPlaceCreateRequest;
   }): Promise<LocationPlace> {
     const agentKey = input.body.agent_key?.trim() || input.agentKey;
-    const agentId = await this.opts.identityScopeDal.ensureAgentId(input.tenantId, agentKey);
+    const agentId = await resolveExistingAgentIdOrThrow({
+      identityScopeDal: this.opts.identityScopeDal,
+      tenantId: input.tenantId,
+      agentKey,
+    });
     const nowIso = new Date().toISOString();
     const place: LocationPlace = {
       place_id: randomUUID(),
@@ -212,12 +228,23 @@ export class LocationService {
     body: LocationAutomationTriggerCreateRequest;
   }): Promise<LocationAutomationTriggerRecord> {
     const agentKey = input.body.agent_key?.trim() || input.agentKey;
-    const workspaceKey = input.body.workspace_key?.trim() || "default";
-    const agentId = await this.opts.identityScopeDal.ensureAgentId(input.tenantId, agentKey);
-    const workspaceId = await this.opts.identityScopeDal.ensureWorkspaceId(
-      input.tenantId,
-      workspaceKey,
-    );
+    const explicitWorkspaceKey = input.body.workspace_key?.trim();
+    const workspaceKey = explicitWorkspaceKey || "default";
+    const agentId = await resolveExistingAgentIdOrThrow({
+      identityScopeDal: this.opts.identityScopeDal,
+      tenantId: input.tenantId,
+      agentKey,
+    });
+    const resolvedWorkspace = explicitWorkspaceKey
+      ? await resolveExistingScopedIds({
+          identityScopeDal: this.opts.identityScopeDal,
+          tenantId: input.tenantId,
+          workspaceKey: explicitWorkspaceKey,
+        })
+      : undefined;
+    const workspaceId =
+      resolvedWorkspace?.workspaceId ??
+      (await this.opts.identityScopeDal.ensureWorkspaceId(input.tenantId, workspaceKey));
     await this.opts.identityScopeDal.ensureMembership(input.tenantId, agentId, workspaceId);
     const triggerId = randomUUID();
     await this.dal.createAutomationTrigger({
@@ -261,7 +288,9 @@ export class LocationService {
     nodeId: string;
     payload: LocationBeacon;
   }): Promise<LocationBeaconResult> {
-    const agentKey = input.payload.agent_key?.trim() || "default";
+    const agentKey =
+      input.payload.agent_key?.trim() ||
+      (await requirePrimaryAgentKey(this.opts.identityScopeDal, input.tenantId));
     const agentId = await resolveExistingAgentIdOrThrow({
       identityScopeDal: this.opts.identityScopeDal,
       tenantId: input.tenantId,

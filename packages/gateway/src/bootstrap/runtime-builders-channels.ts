@@ -71,6 +71,7 @@ export function startChannelRuntimeBundle(input: {
           agents,
           stateDal: telegramPollingStateDal,
           routingConfigDal,
+          identityScopeDal: context.container.identityScopeDal,
           memoryDal: context.container.memoryDal,
           artifactStore: context.container.artifactStore,
           logger: context.logger,
