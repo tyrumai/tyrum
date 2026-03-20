@@ -217,6 +217,24 @@ describe("model tool naming", () => {
     expect(builtinIds).toContain("tool.desktop.wait-for");
   });
 
+  it("keeps separate action and routing timeout fields for tool.desktop.wait-for", () => {
+    const waitForTool = listBuiltinToolDescriptors().find(
+      (tool) => tool.id === "tool.desktop.wait-for",
+    );
+
+    expect(waitForTool?.inputSchema).toMatchObject({
+      type: "object",
+      properties: {
+        timeout_ms: {
+          type: "integer",
+        },
+        dispatch_timeout_ms: {
+          type: "integer",
+        },
+      },
+    });
+  });
+
   it("includes distinct inspect and dispatch node tools", () => {
     const builtinIds = listBuiltinToolDescriptors().map((tool) => tool.id);
 

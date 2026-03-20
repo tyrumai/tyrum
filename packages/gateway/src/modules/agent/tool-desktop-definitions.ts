@@ -11,6 +11,7 @@ import {
 import { z } from "zod";
 
 type DedicatedDesktopToolEffect = "read_only" | "state_changing";
+type DedicatedDesktopDispatchTimeoutArg = "timeout_ms" | "dispatch_timeout_ms";
 
 type DesktopToolSchema = z.ZodObject<Record<string, z.ZodTypeAny>>;
 
@@ -23,6 +24,7 @@ export type DedicatedDesktopToolDefinition = {
   keywords: readonly string[];
   promptExamples: readonly string[];
   inputParser: DesktopToolSchema;
+  dispatchTimeoutArg: DedicatedDesktopDispatchTimeoutArg;
 };
 
 const ROUTING_FIELDS = {
@@ -30,13 +32,25 @@ const ROUTING_FIELDS = {
   timeout_ms: RoutedToolTargeting.shape.timeout_ms,
 } as const;
 
+const WAIT_FOR_ROUTING_FIELDS = {
+  node_id: RoutedToolTargeting.shape.node_id,
+  dispatch_timeout_ms: RoutedToolTargeting.shape.timeout_ms,
+} as const;
+
 const COMMON_PROMPT_GUIDANCE = [
   "Use node_id when you need to target a specific desktop node.",
   "Omit node_id only when the current lane has one attached eligible node or exactly one eligible node exists. Otherwise use tool.node.list first.",
+  "Use dispatch_timeout_ms when a desktop tool also has its own timeout_ms input, such as tool.desktop.wait-for.",
 ] as const;
 
-function withRoutingFields(schema: DesktopToolSchema): DesktopToolSchema {
-  return schema.omit({ op: true }).extend(ROUTING_FIELDS).strict();
+function withRoutingFields(
+  schema: DesktopToolSchema,
+  dispatchTimeoutArg: DedicatedDesktopDispatchTimeoutArg = "timeout_ms",
+): DesktopToolSchema {
+  return schema
+    .omit({ op: true })
+    .extend(dispatchTimeoutArg === "dispatch_timeout_ms" ? WAIT_FOR_ROUTING_FIELDS : ROUTING_FIELDS)
+    .strict();
 }
 
 function jsonSchemaOf(schema: unknown): Record<string, unknown> {
@@ -62,6 +76,7 @@ export const DEDICATED_DESKTOP_TOOL_DEFINITIONS = [
     keywords: ["desktop", "screen", "screenshot", "capture", "image"],
     promptExamples: ['{"display":"all","node_id":"node_123"}'],
     inputParser: withRoutingFields(DesktopScreenshotArgs),
+    dispatchTimeoutArg: "timeout_ms",
   },
   {
     toolId: "tool.desktop.snapshot",
@@ -72,6 +87,7 @@ export const DEDICATED_DESKTOP_TOOL_DEFINITIONS = [
     keywords: ["desktop", "snapshot", "accessibility", "tree", "ui"],
     promptExamples: ['{"include_tree":false}'],
     inputParser: withRoutingFields(DesktopSnapshotArgs),
+    dispatchTimeoutArg: "timeout_ms",
   },
   {
     toolId: "tool.desktop.query",
@@ -82,6 +98,7 @@ export const DEDICATED_DESKTOP_TOOL_DEFINITIONS = [
     keywords: ["desktop", "query", "ui", "find", "selector"],
     promptExamples: ['{"selector":{"kind":"a11y","role":"button","name":"Save"}}'],
     inputParser: withRoutingFields(DesktopQueryArgs),
+    dispatchTimeoutArg: "timeout_ms",
   },
   {
     toolId: "tool.desktop.act",
@@ -94,6 +111,7 @@ export const DEDICATED_DESKTOP_TOOL_DEFINITIONS = [
       '{"target":{"kind":"a11y","role":"button","name":"Save"},"action":{"kind":"click"}}',
     ],
     inputParser: withRoutingFields(DesktopActArgs),
+    dispatchTimeoutArg: "timeout_ms",
   },
   {
     toolId: "tool.desktop.mouse",
@@ -104,6 +122,7 @@ export const DEDICATED_DESKTOP_TOOL_DEFINITIONS = [
     keywords: ["desktop", "mouse", "click", "move", "drag"],
     promptExamples: ['{"action":"click","x":120,"y":240}'],
     inputParser: withRoutingFields(DesktopMouseArgs),
+    dispatchTimeoutArg: "timeout_ms",
   },
   {
     toolId: "tool.desktop.keyboard",
@@ -114,6 +133,7 @@ export const DEDICATED_DESKTOP_TOOL_DEFINITIONS = [
     keywords: ["desktop", "keyboard", "type", "press", "key"],
     promptExamples: ['{"action":"type","text":"hello"}'],
     inputParser: withRoutingFields(DesktopKeyboardArgs),
+    dispatchTimeoutArg: "timeout_ms",
   },
   {
     toolId: "tool.desktop.wait-for",
@@ -123,9 +143,10 @@ export const DEDICATED_DESKTOP_TOOL_DEFINITIONS = [
     effect: "read_only",
     keywords: ["desktop", "wait", "selector", "visible", "exists"],
     promptExamples: [
-      '{"selector":{"kind":"ocr","text":"Done"},"state":"visible","timeout_ms":30000}',
+      '{"selector":{"kind":"ocr","text":"Done"},"state":"visible","timeout_ms":30000,"dispatch_timeout_ms":45000}',
     ],
-    inputParser: withRoutingFields(DesktopWaitForArgs),
+    inputParser: withRoutingFields(DesktopWaitForArgs, "dispatch_timeout_ms"),
+    dispatchTimeoutArg: "dispatch_timeout_ms",
   },
 ] as const satisfies readonly DedicatedDesktopToolDefinition[];
 

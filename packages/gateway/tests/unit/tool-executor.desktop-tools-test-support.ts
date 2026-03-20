@@ -1,5 +1,6 @@
 import { CAPABILITY_DESCRIPTOR_DEFAULT_VERSION } from "@tyrum/contracts";
 import { expect, it, vi } from "vitest";
+import { getDedicatedDesktopToolDefinition } from "../../src/modules/agent/tool-desktop-definitions.js";
 import { DEFAULT_TENANT_ID, DEFAULT_WORKSPACE_ID } from "../../src/modules/identity/scope.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import {
@@ -25,6 +26,11 @@ async function executeDedicatedDesktopTool(
   nodeInventoryService?: object,
 ) {
   const db = openTestSqliteDb();
+  const definition = getDedicatedDesktopToolDefinition(toolId);
+
+  if (!definition) {
+    throw new Error(`missing dedicated desktop tool definition for ${toolId}`);
+  }
 
   try {
     return await createToolExecutor({
@@ -37,7 +43,7 @@ async function executeDedicatedDesktopTool(
           status: "ok",
           generated_at: new Date().toISOString(),
           node_id: "node-1",
-          capability: "tyrum.desktop.snapshot",
+          capability: definition.capabilityId,
           capability_version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
           connected: true,
           paired: true,
@@ -48,8 +54,8 @@ async function executeDedicatedDesktopTool(
           },
           actions: [
             {
-              name: "snapshot",
-              description: "Collect a desktop accessibility snapshot.",
+              name: definition.actionName,
+              description: definition.description,
               supported: true,
               enabled: true,
               availability_status: "unknown",
@@ -65,7 +71,7 @@ async function executeDedicatedDesktopTool(
               transport: {
                 primitive_kind: "Desktop",
                 op_field: "op",
-                op_value: "snapshot",
+                op_value: definition.actionName,
                 result_channel: "result_or_evidence",
                 artifactize_binary_fields: [],
               },
@@ -209,5 +215,80 @@ export function registerToolExecutorDesktopToolTests(home: HomeDirState): void {
 
     expect(result.output).toBe("");
     expect(result.error).toContain("ambiguous node selection");
+  });
+
+  it("tool.desktop.wait-for preserves the action timeout_ms in the node input", async () => {
+    const nodeDispatchService = {
+      dispatchAndWait: vi.fn(async () => ({
+        taskId: "task-wait-for-1",
+        result: { ok: true, result: { matched: true } },
+      })),
+    };
+
+    const result = await executeDedicatedDesktopTool(
+      home,
+      "tool.desktop.wait-for",
+      nodeDispatchService,
+      {
+        node_id: "node-1",
+        selector: { kind: "ocr", text: "Done" },
+        state: "visible",
+        timeout_ms: 45_000,
+      },
+    );
+
+    expect(result.error).toBeUndefined();
+    expect(nodeDispatchService.dispatchAndWait).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "Desktop",
+        args: expect.objectContaining({
+          op: "wait_for",
+          selector: expect.objectContaining({ kind: "ocr", text: "Done" }),
+          state: "visible",
+          timeout_ms: 45_000,
+          poll_ms: 250,
+        }),
+      }),
+      expect.any(Object),
+      { timeoutMs: 30_000, nodeId: "node-1" },
+    );
+  });
+
+  it("tool.desktop.wait-for uses dispatch_timeout_ms as the routing timeout", async () => {
+    const nodeDispatchService = {
+      dispatchAndWait: vi.fn(async () => ({
+        taskId: "task-wait-for-2",
+        result: { ok: true, result: { matched: true } },
+      })),
+    };
+
+    const result = await executeDedicatedDesktopTool(
+      home,
+      "tool.desktop.wait-for",
+      nodeDispatchService,
+      {
+        node_id: "node-1",
+        selector: { kind: "ocr", text: "Done" },
+        state: "visible",
+        timeout_ms: 45_000,
+        dispatch_timeout_ms: 90_000,
+      },
+    );
+
+    expect(result.error).toBeUndefined();
+    expect(nodeDispatchService.dispatchAndWait).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "Desktop",
+        args: expect.objectContaining({
+          op: "wait_for",
+          selector: expect.objectContaining({ kind: "ocr", text: "Done" }),
+          state: "visible",
+          timeout_ms: 45_000,
+          poll_ms: 250,
+        }),
+      }),
+      expect.any(Object),
+      { timeoutMs: 90_000, nodeId: "node-1" },
+    );
   });
 }

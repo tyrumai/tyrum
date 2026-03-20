@@ -277,10 +277,13 @@ function readOptionalNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
-function stripDedicatedRoutingFields(value: Record<string, unknown>): Record<string, unknown> {
+function stripDedicatedRoutingFields(
+  value: Record<string, unknown>,
+  dispatchTimeoutArg: string,
+): Record<string, unknown> {
   const cloned = { ...value };
   delete cloned["node_id"];
-  delete cloned["timeout_ms"];
+  delete cloned[dispatchTimeoutArg];
   return cloned;
 }
 
@@ -385,14 +388,14 @@ export async function executeDedicatedDesktopTool(
   }
 
   const validation = definition.inputParser.safeParse(args);
-  const timeoutMs = readOptionalNumber(parsed["timeout_ms"]);
+  const timeoutMs = readOptionalNumber(parsed[definition.dispatchTimeoutArg]);
   if (!validation.success) {
     const response = preflightFailure(
       {
         node_id: selection.nodeId,
         capability: definition.capabilityId,
         action_name: definition.actionName,
-        input: stripDedicatedRoutingFields(parsed),
+        input: stripDedicatedRoutingFields(parsed, definition.dispatchTimeoutArg),
         ...(timeoutMs !== undefined ? { timeout_ms: timeoutMs } : {}),
       },
       normalizeValidationFailure(validation.error),
@@ -413,6 +416,7 @@ export async function executeDedicatedDesktopTool(
       error: `invalid ${toolId} request: expected an object`,
     };
   }
+  const dispatchTimeoutMs = readOptionalNumber(validated[definition.dispatchTimeoutArg]);
 
   const response = await executeNodeDispatchRequest(
     {
@@ -428,10 +432,8 @@ export async function executeDedicatedDesktopTool(
       node_id: selection.nodeId,
       capability: definition.capabilityId,
       action_name: definition.actionName,
-      input: stripDedicatedRoutingFields(validated),
-      ...(typeof validated["timeout_ms"] === "number"
-        ? { timeout_ms: validated["timeout_ms"] }
-        : {}),
+      input: stripDedicatedRoutingFields(validated, definition.dispatchTimeoutArg),
+      ...(dispatchTimeoutMs !== undefined ? { timeout_ms: dispatchTimeoutMs } : {}),
     },
     audit,
   );
