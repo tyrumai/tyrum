@@ -353,7 +353,7 @@ jobs:
     if: needs.validation.result == 'success' && (needs.changes.outputs.ci == 'true' || needs.changes.outputs.deps == 'true')
     runs-on: ubuntu-latest
     env:
-      PLAYWRIGHT_BROWSERS_PATH: ~/.cache/ms-playwright
+      PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
     strategy:
       fail-fast: false
       matrix:
@@ -373,7 +373,7 @@ jobs:
         if: runner.os == 'Linux'
         uses: actions/cache@v5
         with:
-          path: ~/.cache/ms-playwright
+          path: ${{ runner.temp }}/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
             ${{ runner.os }}-playwright-${{ hashFiles('pnpm-lock.yaml') }}-
@@ -414,7 +414,7 @@ jobs:
     if: needs.validation.result == 'success' && (needs.changes.outputs.ci == 'true' || needs.changes.outputs.deps == 'true')
     runs-on: ubuntu-latest
     env:
-      PLAYWRIGHT_BROWSERS_PATH: ~/.cache/ms-playwright
+      PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
     steps:
       - uses: actions/checkout@v6
 
@@ -430,7 +430,7 @@ jobs:
         if: runner.os == 'Linux'
         uses: actions/cache@v5
         with:
-          path: ~/.cache/ms-playwright
+          path: ${{ runner.temp }}/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
             ${{ runner.os }}-playwright-${{ hashFiles('pnpm-lock.yaml') }}-
@@ -510,7 +510,7 @@ jobs:
     needs: [changes, validation, test-merge]
     if: needs.validation.result == 'success' && needs.test-merge.result == 'success' && needs.changes.outputs.desktop_ci == 'true'
     env:
-      PLAYWRIGHT_BROWSERS_PATH: ~/.cache/ms-playwright
+      PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
     strategy:
       fail-fast: false
       matrix:
@@ -530,7 +530,7 @@ jobs:
       - name: Cache Playwright browsers (Chromium)
         uses: actions/cache@v5
         with:
-          path: ~/.cache/ms-playwright
+          path: ${{ runner.temp }}/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
             ${{ runner.os }}-playwright-${{ hashFiles('pnpm-lock.yaml') }}-
