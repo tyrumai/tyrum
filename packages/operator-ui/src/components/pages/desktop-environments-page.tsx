@@ -2,6 +2,7 @@ import type { OperatorCore } from "@tyrum/operator-app";
 import { RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { OperatorUiMode } from "../../app.js";
+import { formatErrorMessage } from "../../utils/format-error-message.js";
 import {
   buildBlockingAvailabilityMessage,
   describeStartBlockedReason,
@@ -19,10 +20,7 @@ import {
   type DesktopEnvironmentHost,
   type DesktopEnvironmentLogsState,
 } from "./desktop-environments-page.sections.js";
-import {
-  toErrorMessage,
-  useDesktopEnvironmentRuntimeDefaults,
-} from "./desktop-environments-page.runtime-defaults.js";
+import { useDesktopEnvironmentRuntimeDefaults } from "./desktop-environments-page.runtime-defaults.js";
 import type { RefreshResult } from "./desktop-environments-page.runtime-defaults.js";
 import { AppPage } from "../layout/app-page.js";
 import {
@@ -153,7 +151,7 @@ export function DesktopEnvironmentsPage({
         setHostsError(null);
         return "admin-access-required";
       }
-      setHostsError(toErrorMessage(error));
+      setHostsError(formatErrorMessage(error));
       return "error";
     } finally {
       if (adminHttpRef.current === httpClient) {
@@ -196,7 +194,7 @@ export function DesktopEnvironmentsPage({
         setEnvironmentsError(null);
         return "admin-access-required";
       }
-      setEnvironmentsError(toErrorMessage(error));
+      setEnvironmentsError(formatErrorMessage(error));
       return "error";
     } finally {
       if (adminHttpRef.current === httpClient) {
@@ -251,7 +249,7 @@ export function DesktopEnvironmentsPage({
   const selectedHost = selectedEnvironment ? (hostById[selectedEnvironment.host_id] ?? null) : null;
   const blockingAvailabilityMessage = buildBlockingAvailabilityMessage(hosts);
   const runtimeDefaultsSaveError = runtimeDefaults.runtimeDefaultsMutation.error
-    ? toErrorMessage(runtimeDefaults.runtimeDefaultsMutation.error)
+    ? formatErrorMessage(runtimeDefaults.runtimeDefaultsMutation.error)
     : null;
   const selectedStartBlockedReason = !selectedEnvironment
     ? null
@@ -290,7 +288,7 @@ export function DesktopEnvironmentsPage({
     setCreateLabel,
     setLogsById,
   });
-  const takeoverError = takeoverAction.error ? toErrorMessage(takeoverAction.error) : null;
+  const takeoverError = takeoverAction.error ? formatErrorMessage(takeoverAction.error) : null;
 
   return (
     <AppPage
@@ -316,7 +314,7 @@ export function DesktopEnvironmentsPage({
         hostsError={hostsError}
         environmentsError={environmentsError}
         availabilityWarning={blockingAvailabilityMessage}
-        mutationError={mutation.error ? toErrorMessage(mutation.error) : null}
+        mutationError={mutation.error ? formatErrorMessage(mutation.error) : null}
       />
 
       {requiresAdminAccess ? (

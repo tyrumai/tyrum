@@ -6,7 +6,6 @@ import {
   formatCadence,
   formatInterval,
   sortSchedules,
-  toErrorMessage,
 } from "../src/components/pages/schedules-page.lib.js";
 import type { ScheduleCadence, ScheduleExecution, ScheduleRecord } from "@tyrum/contracts";
 
@@ -132,17 +131,6 @@ describe("schedules-page.lib", () => {
       const items = [base];
       const result = sortSchedules(items);
       expect(result).not.toBe(items);
-    });
-  });
-
-  describe("toErrorMessage", () => {
-    it("extracts message from Error", () => {
-      expect(toErrorMessage(new Error("boom"))).toBe("boom");
-    });
-
-    it("converts non-Error to string", () => {
-      expect(toErrorMessage("oops")).toBe("oops");
-      expect(toErrorMessage(42)).toBe("42");
     });
   });
 

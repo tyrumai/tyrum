@@ -3,6 +3,7 @@ import { CalendarClock, RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useApiAction } from "../../hooks/use-api-action.js";
 import { useReconnectScrollArea } from "../../reconnect-ui-state.js";
+import { formatErrorMessage } from "../../utils/format-error-message.js";
 import type { OperatorCore } from "@tyrum/operator-app";
 import { AppPage } from "../layout/app-page.js";
 import { Alert } from "../ui/alert.js";
@@ -16,7 +17,7 @@ import {
   useAdminMutationAccess,
   useAdminMutationHttpClient,
 } from "./admin-http-shared.js";
-import { sortSchedules, toErrorMessage } from "./schedules-page.lib.js";
+import { sortSchedules } from "./schedules-page.lib.js";
 import { CreateSchedulePanel, ScheduleCard } from "./schedules-page.sections.js";
 
 export function SchedulesPage({ core }: { core: OperatorCore }) {
@@ -27,11 +28,13 @@ export function SchedulesPage({ core }: { core: OperatorCore }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ScheduleRecord | null>(null);
+  const [toggleTargetId, setToggleTargetId] = useState<string | null>(null);
 
   const readApi = useAdminHttpClient().schedules;
   const mutationHttp = useAdminMutationHttpClient();
   const { canMutate, requestEnter } = useAdminMutationAccess(core);
-  const mutation = useApiAction<ScheduleRecord>();
+  const createAction = useApiAction<ScheduleRecord>();
+  const toggleAction = useApiAction<ScheduleRecord>();
   const deleteAction = useApiAction<void>();
   const scrollAreaRef = useReconnectScrollArea("schedules:page");
 
@@ -57,7 +60,7 @@ export function SchedulesPage({ core }: { core: OperatorCore }) {
         setSchedules(response.schedules);
       } catch (nextError) {
         if (!cancelled) {
-          setError(toErrorMessage(nextError));
+          setError(formatErrorMessage(nextError));
         }
       } finally {
         if (!cancelled) {
@@ -73,18 +76,23 @@ export function SchedulesPage({ core }: { core: OperatorCore }) {
   }, [readApi, refreshNonce]);
 
   function handlePauseResume(schedule: ScheduleRecord) {
-    void mutation.run(async () => {
-      const api = requireMutationApi();
-      const response = schedule.enabled
-        ? await api.pause(schedule.schedule_id)
-        : await api.resume(schedule.schedule_id);
-      setSchedules((current) =>
-        current.map((s) =>
-          s.schedule_id === response.schedule.schedule_id ? response.schedule : s,
-        ),
-      );
-      return response.schedule;
-    });
+    setToggleTargetId(schedule.schedule_id);
+    void toggleAction
+      .run(async () => {
+        const api = requireMutationApi();
+        const response = schedule.enabled
+          ? await api.pause(schedule.schedule_id)
+          : await api.resume(schedule.schedule_id);
+        setSchedules((current) =>
+          current.map((s) =>
+            s.schedule_id === response.schedule.schedule_id ? response.schedule : s,
+          ),
+        );
+        return response.schedule;
+      })
+      .finally(() => {
+        setToggleTargetId((current) => (current === schedule.schedule_id ? null : current));
+      });
   }
 
   return (
@@ -137,9 +145,9 @@ export function SchedulesPage({ core }: { core: OperatorCore }) {
         onToggle={() => setCreateOpen((o) => !o)}
         canMutate={canMutate}
         requestEnter={requestEnter}
-        isLoading={mutation.isLoading}
+        isLoading={createAction.isLoading}
         onCreate={(input) => {
-          void mutation.run(async () => {
+          void createAction.run(async () => {
             const response = await requireMutationApi().create(input);
             setSchedules((current) => [...current, response.schedule]);
             setCreateOpen(false);
@@ -148,13 +156,28 @@ export function SchedulesPage({ core }: { core: OperatorCore }) {
         }}
       />
 
-      {/* Mutation error */}
-      {mutation.state.status === "error" ? (
+      {createAction.state.status === "error" ? (
+        <Alert
+          variant="error"
+          title="Failed to create schedule"
+          description={formatErrorMessage(createAction.state.error)}
+          onDismiss={() => createAction.reset()}
+        />
+      ) : null}
+      {toggleAction.state.status === "error" ? (
         <Alert
           variant="error"
           title="Schedule action failed"
-          description={toErrorMessage(mutation.state.error)}
-          onDismiss={() => mutation.reset()}
+          description={formatErrorMessage(toggleAction.state.error)}
+          onDismiss={() => toggleAction.reset()}
+        />
+      ) : null}
+      {deleteAction.state.status === "error" ? (
+        <Alert
+          variant="error"
+          title="Schedule deletion failed"
+          description={formatErrorMessage(deleteAction.state.error)}
+          onDismiss={() => deleteAction.reset()}
         />
       ) : null}
 
@@ -183,9 +206,8 @@ export function SchedulesPage({ core }: { core: OperatorCore }) {
               schedule={schedule}
               isExpanded={expandedId === schedule.schedule_id}
               isLoading={
-                (mutation.isLoading || deleteAction.isLoading) &&
-                (deleteTarget?.schedule_id === schedule.schedule_id ||
-                  expandedId === schedule.schedule_id)
+                (toggleAction.isLoading && toggleTargetId === schedule.schedule_id) ||
+                (deleteAction.isLoading && deleteTarget?.schedule_id === schedule.schedule_id)
               }
               canMutate={canMutate}
               requestEnter={requestEnter}

@@ -50,9 +50,10 @@ export function ScheduleCard({
 }) {
   const kindIcon = schedule.kind === "cron" ? CalendarClock : Timer;
   const KindIcon = kindIcon;
+  const scheduleTestId = schedule.schedule_id;
 
   return (
-    <Card>
+    <Card data-testid={`schedule-card-${scheduleTestId}`}>
       <CardContent className="grid gap-4 pt-6">
         {/* Header row */}
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -94,6 +95,7 @@ export function ScheduleCard({
                 {schedule.enabled ? "Enabled" : "Paused"}
               </Label>
               <Switch
+                data-testid={`schedule-toggle-${scheduleTestId}`}
                 checked={schedule.enabled}
                 disabled={isLoading}
                 onCheckedChange={() => {
@@ -105,7 +107,13 @@ export function ScheduleCard({
                 }}
               />
             </div>
-            <Button variant="outline" size="sm" aria-expanded={isExpanded} onClick={onToggleExpand}>
+            <Button
+              variant="outline"
+              size="sm"
+              data-testid={`schedule-details-${scheduleTestId}`}
+              aria-expanded={isExpanded}
+              onClick={onToggleExpand}
+            >
               {isExpanded ? (
                 <ChevronDown className="h-4 w-4" />
               ) : (
@@ -116,6 +124,7 @@ export function ScheduleCard({
             <Button
               variant="danger"
               size="sm"
+              data-testid={`schedule-delete-${scheduleTestId}`}
               disabled={isLoading}
               onClick={() => {
                 if (!canMutate) {

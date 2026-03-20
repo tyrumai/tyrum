@@ -40,10 +40,6 @@ export function sortSchedules(items: readonly ScheduleRecord[]): ScheduleRecord[
   });
 }
 
-export function toErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 export function formatAbsoluteTime(iso: string): string {
   const date = new Date(iso);
   if (!Number.isFinite(date.getTime())) return iso;
