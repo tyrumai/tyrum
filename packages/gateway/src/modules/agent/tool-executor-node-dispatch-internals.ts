@@ -1,4 +1,4 @@
-import { NodeInventoryResponse, type NodeCapabilityInspectionResponse } from "@tyrum/contracts";
+import { NodeInventoryResponse } from "@tyrum/contracts";
 import type { ArtifactStore } from "../artifact/store.js";
 import { toolIdForCapabilityDescriptor } from "../node/capability-tool-id.js";
 import type { WorkspaceLeaseConfig } from "./tool-executor-shared.js";
@@ -52,19 +52,6 @@ export function stripNodeListControlState(
         unknown_action_count: capabilitySummary.unknown_action_count,
       })),
     })),
-  };
-}
-
-export function stripNodeInspectionControlState(payload: NodeCapabilityInspectionResponse) {
-  return {
-    status: payload.status,
-    generated_at: payload.generated_at,
-    node_id: payload.node_id,
-    capability: payload.capability,
-    capability_version: payload.capability_version,
-    connected: payload.connected,
-    source_of_truth: payload.source_of_truth,
-    actions: payload.actions,
   };
 }
 
