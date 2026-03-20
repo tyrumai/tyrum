@@ -245,10 +245,10 @@ describe("MessageCard", () => {
       parts: [
         {
           type: "dynamic-tool",
-          toolName: "tool.node.dispatch",
+          toolName: "tool.camera.capture-photo",
           toolCallId: "tool-call-artifact",
           state: "input-available",
-          input: { action_name: "capture_photo" },
+          input: { format: "jpeg" },
         },
       ],
     } as unknown as UIMessage;
@@ -263,10 +263,10 @@ describe("MessageCard", () => {
             parts: [
               {
                 type: "dynamic-tool",
-                toolName: "tool.node.dispatch",
+                toolName: "tool.camera.capture-photo",
                 toolCallId: "tool-call-artifact",
                 state: "output-available",
-                input: { action_name: "capture_photo" },
+                input: { format: "jpeg" },
                 output: {
                   run_id: "11111111-1111-1111-1111-111111111111",
                   payload: {
@@ -288,7 +288,7 @@ describe("MessageCard", () => {
       );
     });
 
-    const toggle = findToggle(testRoot.container, "tool.node.dispatch");
+    const toggle = findToggle(testRoot.container, "tool.camera.capture-photo");
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
     expect(testRoot.container.textContent).not.toContain("artifact_id");
 

@@ -47,6 +47,7 @@ describe("ConfigurePage (HTTP) tools", () => {
     expect(
       page.container.querySelector("[data-testid='admin-http-tools-group-extensions']"),
     ).not.toBeNull();
+    expect(page.container.textContent).toContain("tool.browser.navigate");
     expect(page.container.textContent).toContain("read");
     expect(page.container.textContent).toContain("websearch");
     expect(page.container.textContent).toContain("mcp.exa.web_search_exa");
@@ -81,25 +82,30 @@ describe("ConfigurePage (HTTP) tools", () => {
     act(() => {
       setNativeValue(
         getByTestId<HTMLInputElement>(page.container, "admin-http-tools-filter"),
-        "read",
+        "tool.browser.navigate",
       );
     });
     await flush();
 
-    expect(page.container.textContent).toContain("read");
+    expect(page.container.textContent).toContain("tool.browser.navigate");
     expect(page.container.textContent).not.toContain("plugin.echo.say");
 
     await clickAndFlush(
-      getByTestId<HTMLButtonElement>(page.container, "admin-http-tools-toggle-read"),
+      getByTestId<HTMLButtonElement>(
+        page.container,
+        "admin-http-tools-toggle-tool.browser.navigate",
+      ),
     );
 
-    const details = getByTestId<HTMLElement>(page.container, "admin-http-tools-details-read");
+    const details = getByTestId<HTMLElement>(
+      page.container,
+      "admin-http-tools-details-tool.browser.navigate",
+    );
     expect(details.textContent).toContain("Input fields");
-    expect(details.textContent).toContain("path");
-    expect(details.textContent).toContain("options");
-    expect(details.textContent).toContain("offset");
-    expect(details.textContent).toContain("boolean");
-    expect(details.textContent).not.toContain("root");
+    expect(details.textContent).toContain("url");
+    expect(details.textContent).toContain("node_id");
+    expect(details.textContent).toContain("timeout_ms");
+    expect(details.textContent).toContain("Optional dispatch timeout in milliseconds.");
 
     cleanupAdminHttpPage(page);
   });

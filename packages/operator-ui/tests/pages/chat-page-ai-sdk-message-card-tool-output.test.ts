@@ -103,24 +103,24 @@ describe("MessageCard tool output rendering", () => {
       parts: [
         {
           type: "dynamic-tool",
-          toolName: "tool.node.inspect",
+          toolName: "tool.browser.snapshot",
           toolCallId: "tool-call-object",
           state: "output-available",
           output: {
             status: "ok",
-            actions: [{ name: "screenshot" }],
+            snapshot: { title: "Example" },
           },
         },
       ],
     } as unknown as UIMessage);
 
     act(() => {
-      click(findToggle(testRoot.container, "tool.node.inspect"));
+      click(findToggle(testRoot.container, "tool.browser.snapshot"));
     });
 
     expectStructuredJsonViewer(testRoot.container, "root: {2}");
-    expect(testRoot.container.textContent).toContain("actions");
-    expect(testRoot.container.textContent).toContain("screenshot");
+    expect(testRoot.container.textContent).toContain("snapshot");
+    expect(testRoot.container.textContent).toContain("Example");
 
     cleanupTestRoot(testRoot);
   });
@@ -188,7 +188,7 @@ describe("MessageCard tool output rendering", () => {
         parts: [
           {
             type: "dynamic-tool",
-            toolName: "tool.node.dispatch",
+            toolName: "tool.camera.capture-photo",
             toolCallId: "tool-call-2",
             state: "output-available",
             output: `<data source="tool">\n${outputJson}\n</data>`,
@@ -198,7 +198,7 @@ describe("MessageCard tool output rendering", () => {
       core,
     );
 
-    const toggle = findToggle(testRoot.container, "tool.node.dispatch");
+    const toggle = findToggle(testRoot.container, "tool.camera.capture-photo");
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
 
     act(() => {
@@ -277,7 +277,7 @@ describe("MessageCard tool output rendering", () => {
       parts: [
         {
           type: "dynamic-tool",
-          toolName: "tool.node.dispatch",
+          toolName: "tool.camera.capture-photo",
           toolCallId: "tool-call-partial",
           state: "output-available",
           output: rawOutput,
@@ -286,7 +286,7 @@ describe("MessageCard tool output rendering", () => {
     } as unknown as UIMessage);
 
     act(() => {
-      click(findToggle(testRoot.container, "tool.node.dispatch"));
+      click(findToggle(testRoot.container, "tool.camera.capture-photo"));
     });
 
     const pre = testRoot.container.querySelector("pre") as HTMLPreElement | null;

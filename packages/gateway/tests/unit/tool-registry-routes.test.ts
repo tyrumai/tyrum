@@ -202,6 +202,16 @@ describe("tool registry routes", () => {
     };
     expect(body.status).toBe("ok");
     expect(body.tools.some((tool) => tool.source === "builtin")).toBe(true);
+    expect(body.tools).not.toContainEqual(
+      expect.objectContaining({
+        canonical_id: "tool.node.inspect",
+      }),
+    );
+    expect(body.tools).not.toContainEqual(
+      expect.objectContaining({
+        canonical_id: "tool.node.dispatch",
+      }),
+    );
     expect(body.tools).toContainEqual(
       expect.objectContaining({
         source: "builtin_mcp",
@@ -291,6 +301,29 @@ describe("tool registry routes", () => {
           enabled: false,
           reason: "disabled_invalid_schema",
           agent_key: "default",
+        }),
+      }),
+    );
+    expect(body.tools).toContainEqual(
+      expect.objectContaining({
+        source: "builtin",
+        canonical_id: "tool.browser.navigate",
+        family: "node",
+        input_schema: expect.objectContaining({
+          type: "object",
+          properties: expect.objectContaining({
+            url: expect.objectContaining({ type: "string" }),
+            node_id: expect.objectContaining({
+              type: "string",
+              description: "Optional node id to target explicitly.",
+            }),
+            timeout_ms: expect.objectContaining({
+              type: "number",
+              description: "Optional dispatch timeout in milliseconds.",
+            }),
+          }),
+          required: ["url"],
+          additionalProperties: false,
         }),
       }),
     );

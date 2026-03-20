@@ -235,16 +235,14 @@ describe("model tool naming", () => {
     });
   });
 
-  it("includes distinct inspect and dispatch node tools", () => {
+  it("does not expose legacy inspect and dispatch node tools once dedicated routed tools are available", () => {
     const builtinIds = listBuiltinToolDescriptors().map((tool) => tool.id);
 
-    expect(builtinIds).toContain("tool.node.inspect");
-    expect(builtinIds).toContain("tool.node.dispatch");
-    expect(builtinIds.filter((id) => id === "tool.node.dispatch")).toHaveLength(1);
-    expect(builtinIds.filter((id) => id === "tool.node.inspect")).toHaveLength(1);
+    expect(builtinIds).not.toContain("tool.node.inspect");
+    expect(builtinIds).not.toContain("tool.node.dispatch");
   });
 
-  it("includes dedicated browser and sensor node-backed tools with action-shaped schemas", () => {
+  it("includes dedicated browser and sensor node-backed tools with action-shaped schemas and direct-call guidance", () => {
     const builtinIds = listBuiltinToolDescriptors().map((tool) => tool.id);
     const browserNavigate = listBuiltinToolDescriptors().find(
       (tool) => tool.id === "tool.browser.navigate",
@@ -283,6 +281,15 @@ describe("model tool naming", () => {
         node_id: { type: "string" },
       },
     });
+    expect(browserNavigate?.promptGuidance).toContain(
+      "Pass action-specific fields directly and use node_id only when you need to target a specific node.",
+    );
+    expect(browserNavigate?.promptExamples).toContain(
+      '{"url":"https://example.com","node_id":"node_456","timeout_ms":30000}',
+    );
+    expect(locationGet?.promptGuidance).toContain(
+      "Omit node_id when any eligible attached node can satisfy the request.",
+    );
   });
 
   it("includes the location place tool family", () => {
