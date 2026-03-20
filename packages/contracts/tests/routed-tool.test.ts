@@ -95,6 +95,14 @@ describe("SecretCopyToNodeClipboardArgs", () => {
     });
   });
 
+  it("rejects missing or duplicate secret selectors", () => {
+    expectRejects(SecretCopyToNodeClipboardArgs, {});
+    expectRejects(SecretCopyToNodeClipboardArgs, {
+      secret_ref_id: "sec_ref_prod_db",
+      secret_alias: "prod-db-password",
+    });
+  });
+
   it("rejects plaintext clipboard payload fields", () => {
     expectRejects(SecretCopyToNodeClipboardArgs, {
       secret_ref_id: "sec_ref_prod_db",
