@@ -38,18 +38,13 @@ describe("ApprovalsPage always approve", () => {
       approval_key: "approval:1",
       kind: "workflow_step",
       status: "pending",
-      prompt: "Approve execution of 'tool.node.dispatch' (risk=high)",
+      prompt: "Approve execution of 'tool.desktop.act' on node 'node-1' (risk=high)",
       context: {
         policy: {
           suggested_overrides: [
             {
-              tool_id: "tool.node.dispatch",
-              pattern: "capability:tyrum.desktop.act;action:Desktop;op:act;act:ui",
-              workspace_id: "22222222-2222-4222-8222-222222222222",
-            },
-            {
-              tool_id: "tool.node.dispatch",
-              pattern: "capability:tyrum.desktop.act;action:Desktop;op:act*",
+              tool_id: "tool.desktop.act",
+              pattern: "tool.desktop.act",
               workspace_id: "22222222-2222-4222-8222-222222222222",
             },
           ],
@@ -68,8 +63,8 @@ describe("ApprovalsPage always approve", () => {
           created_at: "2026-01-01T00:00:01.000Z",
           agent_id: "44444444-4444-4444-8444-444444444444",
           workspace_id: "22222222-2222-4222-8222-222222222222",
-          tool_id: "tool.node.dispatch",
-          pattern: "capability:tyrum.desktop.act;action:Desktop;op:act;act:ui",
+          tool_id: "tool.desktop.act",
+          pattern: "tool.desktop.act",
           created_from_approval_id: approval.approval_id,
         },
       ],
@@ -158,8 +153,8 @@ describe("ApprovalsPage always approve", () => {
         mode: "always",
         overrides: [
           {
-            tool_id: "tool.node.dispatch",
-            pattern: "capability:tyrum.desktop.act;action:Desktop;op:act;act:ui",
+            tool_id: "tool.desktop.act",
+            pattern: "tool.desktop.act",
             workspace_id: "22222222-2222-4222-8222-222222222222",
           },
         ],
@@ -268,13 +263,13 @@ describe("ApprovalsPage always approve", () => {
       approval_key: "approval:3",
       kind: "workflow_step",
       status: "pending",
-      prompt: "Approve execution of 'tool.node.dispatch' (risk=high)",
+      prompt: "Approve execution of 'tool.desktop.act' on node 'node-1' (risk=high)",
       context: {
         policy: {
           suggested_overrides: [
             {
-              tool_id: "tool.node.dispatch",
-              pattern: "capability:tyrum.desktop.act;action:Desktop;op:act;act:ui",
+              tool_id: "tool.desktop.act",
+              pattern: "tool.desktop.act",
             },
           ],
         },
@@ -360,13 +355,13 @@ describe("ApprovalsPage always approve", () => {
       approval_key: "approval:4",
       kind: "workflow_step",
       status: "pending",
-      prompt: "Approve execution of 'tool.node.dispatch' (risk=high)",
+      prompt: "Approve execution of 'tool.desktop.act' on node 'node-1' (risk=high)",
       context: {
         policy: {
           suggested_overrides: [
             {
-              tool_id: "tool.node.dispatch",
-              pattern: "capability:tyrum.desktop.act;action:Desktop;op:act;act:ui",
+              tool_id: "tool.desktop.act",
+              pattern: "tool.desktop.act",
             },
           ],
         },

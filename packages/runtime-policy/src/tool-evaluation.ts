@@ -10,7 +10,6 @@ import {
   normalizeDomain,
   normalizeUrlForPolicy,
 } from "./domain.js";
-import { expandLegacyNodeDispatchOverridePatterns } from "./node-dispatch-override-patterns.js";
 import type { PolicyOverrideStore, PolicySnapshotRow } from "./ports.js";
 import { wildcardMatch } from "./wildcard.js";
 
@@ -126,11 +125,7 @@ export async function evaluateToolCallAgainstBundle(params: {
       toolId: params.toolId,
     });
     for (const override of overrides) {
-      if (
-        expandLegacyNodeDispatchOverridePatterns(override.pattern).some((pattern) =>
-          wildcardMatch(pattern, params.toolMatchTarget),
-        )
-      ) {
+      if (wildcardMatch(override.pattern, params.toolMatchTarget)) {
         appliedOverrides.push(override.policy_override_id);
       }
     }

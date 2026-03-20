@@ -90,7 +90,7 @@ describe("policy bundle routes", () => {
     await expect(res.json()).resolves.toMatchObject({ error: "invalid_request" });
   });
 
-  it("rejects legacy umbrella node dispatch override patterns", async () => {
+  it("creates dedicated routed tool overrides without generic node-dispatch validation", async () => {
     db = openTestSqliteDb();
     const app = createAuthedApp(
       createPolicyBundleRoutes({
@@ -107,15 +107,17 @@ describe("policy bundle routes", () => {
       body: JSON.stringify({
         agent_id: DEFAULT_AGENT_ID,
         workspace_id: DEFAULT_WORKSPACE_ID,
-        tool_id: "tool.node.dispatch",
-        pattern: "action:invoke;capability:tyrum.browser;mode:allow",
+        tool_id: "tool.desktop.act",
+        pattern: "tool.desktop.act",
       }),
     });
 
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(201);
     await expect(res.json()).resolves.toMatchObject({
-      error: "invalid_request",
-      message: expect.stringContaining("exact split descriptors"),
+      override: {
+        tool_id: "tool.desktop.act",
+        pattern: "tool.desktop.act",
+      },
     });
   });
 

@@ -13,6 +13,10 @@ import type { SqlDb } from "../../../statestore/types.js";
 import type { SessionDal } from "../session-dal.js";
 import type { ProtocolDeps } from "../../../ws/protocol.js";
 import type { IdentityScopeDal } from "../../identity/scope.js";
+import {
+  buildRoutedToolApprovalPromptSuffix,
+  buildRoutedToolExecutionMetadata,
+} from "../routed-tool-metadata.js";
 
 export interface ToolExecutionContext {
   tenantId: string;
@@ -151,6 +155,8 @@ export async function awaitApprovalForToolExecution(
 ): Promise<ApprovalDecisionResult> {
   const deadline = Date.now() + deps.approvalWaitMs;
   const approvalKey = `${context.planId}:step:${String(stepIndex)}:tool_call:${toolCallId}`;
+  const routing = buildRoutedToolExecutionMetadata(tool.id, args);
+  const promptSuffix = buildRoutedToolApprovalPromptSuffix(routing);
   const approval = await createReviewedApproval({
     approvalDal: deps.approvalDal,
     policyService: deps.policyService,
@@ -167,7 +173,7 @@ export async function awaitApprovalForToolExecution(
       agentId: deps.agentId,
       workspaceId: deps.workspaceId,
       approvalKey,
-      prompt: `Approve execution of '${tool.id}'`,
+      prompt: `Approve execution of '${tool.id}'${promptSuffix}`,
       motivation: `The agent requested permission to run '${tool.id}' for this turn.`,
       context: {
         source: "agent-tool-execution",
@@ -177,6 +183,7 @@ export async function awaitApprovalForToolExecution(
         session_id: context.sessionId,
         channel: context.channel,
         thread_id: context.threadId,
+        ...(routing ? { routing } : {}),
         policy: policyContext ?? undefined,
       },
       expiresAt: new Date(deadline).toISOString(),

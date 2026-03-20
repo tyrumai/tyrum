@@ -1,9 +1,5 @@
 import { posix as pathPosix, win32 as pathWin32 } from "node:path";
-import {
-  ActionPrimitiveKind,
-  canonicalizeToolId,
-  clientCapabilityFromDescriptorId,
-} from "@tyrum/contracts";
+import { ActionPrimitiveKind, canonicalizeToolId } from "@tyrum/contracts";
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
@@ -198,66 +194,6 @@ function canonicalizeMobileDispatchOp(parsed: Record<string, unknown> | null): M
   }
 }
 
-function inferPrimitiveFromCapabilityHint(capability: string): ActionPrimitiveKind | undefined {
-  const normalized = capability.trim().toLowerCase();
-  if (!normalized) return undefined;
-  const segments = new Set(normalized.split(/[^a-z0-9]+/).filter((segment) => segment.length > 0));
-  if (segments.has("android")) return "Android";
-  if (segments.has("ios") || segments.has("mobile")) return "IOS";
-  if (segments.has("browser")) return "Browser";
-  if (segments.has("desktop") || segments.has("electron")) return "Desktop";
-  return undefined;
-}
-
-function inferPrimitiveFromUnknownCapability(
-  capability: string,
-  actionName: string,
-  input: Record<string, unknown> | null,
-): ActionPrimitiveKind {
-  const capabilityHint = inferPrimitiveFromCapabilityHint(capability);
-  if (capabilityHint) return capabilityHint;
-
-  if (actionName === "get") {
-    // Ambiguous — "get" is the location op; use input shape to disambiguate
-    if (normalizeToken(input?.["facing_mode"]) || normalizeToken(input?.["device_id"])) {
-      return "Browser";
-    }
-    return "IOS";
-  }
-  if (actionName === "record") {
-    // Ambiguous — "record" is the audio op; use input shape to disambiguate
-    if (normalizeToken(input?.["device_id"])) return "Browser";
-    return "IOS";
-  }
-  if (actionName === "capture_photo") {
-    if (normalizeToken(input?.["camera"])) return "IOS";
-    if (normalizeToken(input?.["facing_mode"]) || normalizeToken(input?.["device_id"])) {
-      return "Browser";
-    }
-    return "Browser";
-  }
-  if (actionName === "capture_video") return "Browser";
-  return "Desktop";
-}
-
-function inferPrimitiveFromNodeDispatchCapability(
-  capability: string,
-): ActionPrimitiveKind | undefined {
-  const family = clientCapabilityFromDescriptorId(capability);
-  switch (family) {
-    case "android":
-      return "Android";
-    case "ios":
-      return "IOS";
-    case "browser":
-      return "Browser";
-    case "desktop":
-      return "Desktop";
-    default:
-      return undefined;
-  }
-}
-
 function normalizeScheduleExecutionKind(
   parsed: Record<string, unknown> | null,
 ): ScheduleExecutionKind {
@@ -417,26 +353,6 @@ export function canonicalizeToolMatchTarget(
     const canonicalPath = normalizeFsPath(rawPath, workspaceRoot);
     if (!canonicalOperation) return canonicalPath;
     return `${canonicalOperation}:${canonicalPath}`;
-  }
-
-  if (normalizedToolId === "tool.node.dispatch") {
-    const capability = normalizeToken(parsed?.["capability"]) ?? "";
-    const actionName = normalizeToken(parsed?.["action_name"]);
-    if (!actionName) return `capability:${capability};action:`;
-    const input = asRecord(parsed?.["input"]);
-
-    const inferredPrimitive =
-      inferPrimitiveFromNodeDispatchCapability(capability) ??
-      inferPrimitiveFromUnknownCapability(capability, actionName, input);
-    const parsedAction = ActionPrimitiveKind.safeParse(inferredPrimitive);
-
-    if (!parsedAction.success) return `capability:${capability};action:${actionName}`;
-
-    const actionArgs = input ? { ...input, op: actionName } : { op: actionName };
-    return `capability:${capability};${canonicalizeNodeDispatchMatchTarget(
-      parsedAction.data,
-      actionArgs,
-    )}`;
   }
 
   if (normalizedToolId === "tool.automation.schedule.create") {

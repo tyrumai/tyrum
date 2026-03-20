@@ -4,16 +4,18 @@ export const DESKTOP_TAKEOVER_URL = "http://localhost:6080/vnc.html?autoconnect=
 
 const DEFAULT_DESKTOP_APPROVAL_CONTEXT = {
   source: "agent-tool-execution",
-  tool_id: "tool.node.dispatch",
+  tool_id: "tool.desktop.act",
   tool_call_id: "tc-1",
-  tool_match_target: "tool.node.dispatch.desktop.act",
+  tool_match_target: "tool.desktop.act",
+  routing: {
+    requested_node_id: "node-1",
+    selected_node_id: "node-1",
+    selection_mode: "explicit",
+  },
   args: {
-    capability: "tyrum.desktop.act",
-    action_name: "act",
-    input: {
-      target: { kind: "a11y", role: "button", name: "Submit", states: [] },
-      action: { kind: "click" },
-    },
+    node_id: "node-1",
+    target: { kind: "a11y", role: "button", name: "Submit", states: [] },
+    action: { kind: "click" },
   },
 } as const;
 
@@ -78,7 +80,7 @@ export function createDesktopApprovalFixture({
     agent_id: agentId,
     kind: "workflow_step",
     status,
-    prompt: "Approve execution of 'tool.node.dispatch'",
+    prompt: "Approve execution of 'tool.desktop.act' on node 'node-1'",
     motivation: "The agent needs desktop interaction to submit the form.",
     context,
     ...(scope ? { scope } : {}),
