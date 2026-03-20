@@ -18,7 +18,8 @@ import { IdentityScopeDal, requirePrimaryAgentKey } from "../../modules/identity
 import { normalizeDbDateTime } from "../../utils/db-time.js";
 import { safeJsonParse } from "../../utils/json.js";
 import type { ConnectedClient } from "../connection-manager.js";
-import { buildSqlPlaceholders, errorResponse } from "./helpers.js";
+import { errorResponse } from "./helpers.js";
+import { buildSqlPlaceholders } from "../../utils/sql.js";
 import type { ProtocolDeps, ProtocolRequestEnvelope } from "./types.js";
 
 export async function handleControlPlaneMessage(

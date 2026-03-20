@@ -143,7 +143,6 @@ describe("transcript WS handlers", () => {
         next_cursor: string | null;
       };
     };
-
     expect(page1.ok).toBe(true);
     expect(page1.result.sessions.map((session) => session.session_key)).toEqual([
       root1.session_key,

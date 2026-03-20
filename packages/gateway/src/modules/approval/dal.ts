@@ -11,6 +11,7 @@ import type {
 } from "./dal-types.js";
 import { ApprovalEngineActionDal } from "./engine-action-dal.js";
 import { expireStaleApprovals, toApprovalRow } from "./dal-support.js";
+import { buildSqlPlaceholders } from "../../utils/sql.js";
 import {
   type ApprovalStatus,
   approvalNeedsHumanDecision,
@@ -26,10 +27,6 @@ export { approvalNeedsHumanDecision, isApprovalBlockedStatus, isApprovalTerminal
 function toReviewEntryContract(review: ReviewEntryRow): ReviewEntryT {
   const { tenant_id: _tenantId, ...contract } = review;
   return contract;
-}
-
-function buildSqlPlaceholders(count: number): string {
-  return Array.from({ length: count }, () => "?").join(", ");
 }
 
 export class ApprovalDal {

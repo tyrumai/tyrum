@@ -8,8 +8,8 @@ import { ExecutionPauseReason } from "@tyrum/contracts";
 import type { RawSubagentRow } from "../../modules/workboard/dal-helpers.js";
 import { normalizeDbDateTime } from "../../utils/db-time.js";
 import { safeJsonParse } from "../../utils/json.js";
+import { buildSqlPlaceholders } from "../../utils/sql.js";
 import type { ProtocolDeps } from "./types.js";
-import { buildSqlPlaceholders } from "./transcript-handlers.data.js";
 import type { LatestRunInfo, RunDetail, SessionRecord } from "./transcript-handlers.types.js";
 
 const FALLBACK_ACTION: ExecutionStep["action"] = {

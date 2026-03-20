@@ -8,11 +8,9 @@ import {
   decodeSessionCursor,
   encodeSessionCursor,
 } from "../../modules/agent/session-dal-runtime.js";
-import { buildSqlPlaceholders } from "./helpers.js";
+import { buildSqlPlaceholders } from "../../utils/sql.js";
 import type { ProtocolDeps } from "./types.js";
 import type { ListSessionRecordsResult, SessionRecord } from "./transcript-handlers.types.js";
-
-export { buildSqlPlaceholders };
 
 export async function resolveWorkspaceId(
   deps: ProtocolDeps,

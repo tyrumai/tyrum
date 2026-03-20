@@ -5,8 +5,8 @@ import type {
 } from "@tyrum/contracts";
 import { ApprovalDal } from "../../modules/approval/dal.js";
 import { toApprovalContract } from "../../modules/approval/to-contract.js";
+import { buildSqlPlaceholders } from "../../utils/sql.js";
 import type { ProtocolDeps } from "./types.js";
-import { buildSqlPlaceholders } from "./transcript-handlers.data.js";
 
 function normalizeOccurredAt(value: string | null | undefined, fallback: string): string {
   const trimmed = value?.trim();
