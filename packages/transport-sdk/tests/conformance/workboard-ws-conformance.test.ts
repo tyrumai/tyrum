@@ -104,7 +104,7 @@ describe("WS WorkBoard conformance (client <-> gateway)", () => {
     expect(fetched.item.work_item_id).toBe(created.item.work_item_id);
   });
 
-  it("allows operator work.transition requests without an item-level WIP cap", async () => {
+  it("enforces item-level WIP cap for operator work.transition requests", async () => {
     gw = await startGateway();
     const result = createConnectedClient(gw);
     client = result.client;
@@ -147,8 +147,8 @@ describe("WS WorkBoard conformance (client <-> gateway)", () => {
 
     await expect(
       client.workTransition({ ...scope, work_item_id: item3.item.work_item_id, status: "doing" }),
-    ).resolves.toMatchObject({
-      item: { work_item_id: item3.item.work_item_id, status: "doing" },
+    ).rejects.toMatchObject({
+      message: expect.stringContaining("wip_limit_exceeded"),
     });
   });
 

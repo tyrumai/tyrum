@@ -464,7 +464,7 @@ function registerPaginationAndWipTests(fixture: WorkboardDalFixture): void {
     expect(page2.next_cursor).toBeUndefined();
   });
 
-  it("allows operator item transitions without an item-level WIP limit", async () => {
+  it("enforces item-level WIP cap on operator transitions", async () => {
     const dal = fixture.createDal();
     const scope = await fixture.resolveScope();
 
@@ -538,13 +538,17 @@ function registerPaginationAndWipTests(fixture: WorkboardDalFixture): void {
       status: "doing",
       occurredAtIso: "2026-02-27T00:00:04.001Z",
     });
-    const thirdDoing = await dal.transitionItem({
-      scope,
-      work_item_id: third.work_item_id,
-      status: "doing",
-      occurredAtIso: "2026-02-27T00:00:04.002Z",
+    await expect(
+      dal.transitionItem({
+        scope,
+        work_item_id: third.work_item_id,
+        status: "doing",
+        occurredAtIso: "2026-02-27T00:00:04.002Z",
+      }),
+    ).rejects.toMatchObject({
+      code: "wip_limit_exceeded",
+      details: { from: "ready", to: "doing", limit: 2, current: 2 },
     });
-    expect(thirdDoing).toMatchObject({ work_item_id: third.work_item_id, status: "doing" });
   });
 }
 

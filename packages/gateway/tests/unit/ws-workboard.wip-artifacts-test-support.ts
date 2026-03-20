@@ -109,7 +109,7 @@ function registerCompletionNotificationTests(): void {
 }
 
 function registerWipAndArtifactTests(): void {
-  it("allows operator transition requests without an item-level WIP cap", async () => {
+  it("rejects operator transition requests above item-level WIP cap", async () => {
     const cm = new ConnectionManager();
     const { id, ws } = makeClient(cm);
     const client = cm.getClient(id)!;
@@ -162,59 +162,62 @@ function registerWipAndArtifactTests(): void {
       }
 
       ws.send.mockClear();
-      const transitions = [
-        await handleClientMessage(
-          client,
-          JSON.stringify({
-            request_id: "r-transition-0",
-            type: "work.transition",
-            payload: {
-              tenant_key: "default",
-              agent_key: "default",
-              workspace_key: "default",
-              work_item_id: created[0]!,
-              status: "doing",
-              reason: "claim",
-            },
-          }),
-          deps,
-        ),
-        await handleClientMessage(
-          client,
-          JSON.stringify({
-            request_id: "r-transition-1",
-            type: "work.transition",
-            payload: {
-              tenant_key: "default",
-              agent_key: "default",
-              workspace_key: "default",
-              work_item_id: created[1]!,
-              status: "doing",
-              reason: "claim",
-            },
-          }),
-          deps,
-        ),
-        await handleClientMessage(
-          client,
-          JSON.stringify({
-            request_id: "r-transition-2",
-            type: "work.transition",
-            payload: {
-              tenant_key: "default",
-              agent_key: "default",
-              workspace_key: "default",
-              work_item_id: created[2]!,
-              status: "doing",
-              reason: "claim",
-            },
-          }),
-          deps,
-        ),
-      ];
+      const transitionRes0 = await handleClientMessage(
+        client,
+        JSON.stringify({
+          request_id: "r-transition-0",
+          type: "work.transition",
+          payload: {
+            tenant_key: "default",
+            agent_key: "default",
+            workspace_key: "default",
+            work_item_id: created[0]!,
+            status: "doing",
+            reason: "claim",
+          },
+        }),
+        deps,
+      );
+      const transitionRes1 = await handleClientMessage(
+        client,
+        JSON.stringify({
+          request_id: "r-transition-1",
+          type: "work.transition",
+          payload: {
+            tenant_key: "default",
+            agent_key: "default",
+            workspace_key: "default",
+            work_item_id: created[1]!,
+            status: "doing",
+            reason: "claim",
+          },
+        }),
+        deps,
+      );
+      const transitionRes2 = await handleClientMessage(
+        client,
+        JSON.stringify({
+          request_id: "r-transition-2",
+          type: "work.transition",
+          payload: {
+            tenant_key: "default",
+            agent_key: "default",
+            workspace_key: "default",
+            work_item_id: created[2]!,
+            status: "doing",
+            reason: "claim",
+          },
+        }),
+        deps,
+      );
 
-      expect(transitions.every((res) => (res as { ok: boolean }).ok)).toBe(true);
-      expect(ws.send).toHaveBeenCalledTimes(3);
+      expect((transitionRes0 as { ok: boolean }).ok).toBe(true);
+      expect((transitionRes1 as { ok: boolean }).ok).toBe(true);
+      expect((transitionRes2 as { ok: boolean }).ok).toBe(false);
+      expect((transitionRes2 as { error: { code: string } }).error).toMatchObject({
+        code: "wip_limit_exceeded",
+      });
+      expect(ws.send).toHaveBeenCalledTimes(2);
     } finally {
       await db.close();
     }

@@ -8,7 +8,6 @@ import { WorkboardDal } from "./dal.js";
 import {
   assertItemMutable,
   cancelPausedTasks,
-  clearSubagentSignals,
   closePausedSubagents,
   completePendingInterventionApprovals,
   createCapturedWorkItem,
@@ -231,9 +230,14 @@ export class GatewayWorkboardService {
       return item;
     }
 
-    await clearSubagentSignals(this.opts.db, pausedSubagents);
-
     const resumeDetail = params.reason?.trim() || "Resumed by operator.";
+    await closePausedSubagents({
+      db: this.opts.db,
+      scope: params.scope,
+      workItemId: params.work_item_id,
+      reason: resumeDetail,
+      workboard: this.workboard,
+    });
     const hasPlannerOwnership =
       pausedTasks.some((task) => task.execution_profile === "planner") ||
       pausedSubagents.some((subagent) => subagent.execution_profile === "planner");

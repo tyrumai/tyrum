@@ -177,6 +177,15 @@ describe("approval respond engine actions", () => {
         side_effect_class: "workspace",
       },
     });
+    const pausedSubagent = await workboard.createSubagent({
+      scope,
+      subagent: {
+        work_item_id: item.work_item_id,
+        status: "paused",
+        execution_profile: "executor_rw",
+        session_key: `agent:default:subagent:${item.work_item_id}`,
+      },
+    });
     const created = await approvalDal.create({
       tenantId: DEFAULT_TENANT_ID,
       agentId: DEFAULT_AGENT_ID,
@@ -221,6 +230,11 @@ describe("approval respond engine actions", () => {
     expect(await workboard.getTask({ scope, task_id: task.task_id })).toMatchObject({
       status: "queued",
       result_summary: "resume now",
+    });
+    expect(
+      await workboard.getSubagent({ scope, subagent_id: pausedSubagent.subagent_id }),
+    ).toMatchObject({
+      status: "closed",
     });
     expect(
       await workboard.getStateKv({
