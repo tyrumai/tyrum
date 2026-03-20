@@ -154,6 +154,8 @@ export { PluginId, PluginContributions, PluginPermissions, PluginManifest, Plugi
 // prettier-ignore
 export { ExtensionKind, ExtensionSourceType, ExtensionAccessDefault, ManagedBundleFile, ManagedSkillSource, ManagedMcpSource, ManagedSkillPackage, ManagedMcpPackage, ManagedExtensionRevision, ManagedExtensionSourceDescriptor, ExtensionDiscoveredSource, ManagedExtensionSummary, ManagedExtensionDetail, ExtensionsListResponse, ExtensionsDetailResponse, ExtensionsMutateResponse } from "./extensions.js";
 // prettier-ignore
+export { ScheduleKind, ScheduleDeliveryMode, ScheduleCadence, ScheduleExecution, ScheduleRecord, ScheduleListResponse, ScheduleSingleResponse, ScheduleDeleteResponse } from "./schedule.js";
+// prettier-ignore
 export { TyrumUIMessageRole, TyrumUIMessagePart, TyrumUIMessageMetadata, TyrumUIMessage, TyrumUIMessagePreview } from "./ui-message.js";
 // prettier-ignore
 export { CheckpointSummary, PendingApprovalState, PendingToolState, SessionContextState } from "./session-context.js";

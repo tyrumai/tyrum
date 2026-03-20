@@ -5,6 +5,7 @@ import {
   Blocks,
   Boxes,
   Brain,
+  CalendarClock,
   Globe,
   LayoutGrid,
   Link2,
@@ -63,6 +64,10 @@ const MemoryPage = lazyNamed<{ core: OperatorCore }>(
   () => import("./components/pages/memory-page.js"),
   "MemoryPage",
 );
+const SchedulesPage = lazyNamed<{ core: OperatorCore }>(
+  () => import("./components/pages/schedules-page.js"),
+  "SchedulesPage",
+);
 const RunsPage = lazyNamed<{
   core: OperatorCore;
   statuses?: ExecutionRun["status"][];
@@ -95,6 +100,7 @@ export type OperatorUiRouteId =
   | "agents"
   | "extensions"
   | "memory"
+  | "schedules"
   | "runs"
   | "pairing"
   | "desktop-environments"
@@ -196,6 +202,15 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
     shortcut: true,
     hostKinds: SHARED_HOST_KINDS,
     render: ({ core }) => <MemoryPage core={core} />,
+  },
+  {
+    id: "schedules",
+    label: "Schedules",
+    icon: CalendarClock,
+    navGroup: "sidebar",
+    shortcut: true,
+    hostKinds: SHARED_HOST_KINDS,
+    render: ({ core }) => <SchedulesPage core={core} />,
   },
   {
     id: "runs",

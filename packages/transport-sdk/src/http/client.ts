@@ -45,6 +45,7 @@ import { createPolicyConfigApi, type PolicyConfigApi } from "./policy-config.js"
 import { createProviderConfigApi, type ProviderConfigApi } from "./provider-config.js";
 import { createRoutingConfigApi, type RoutingConfigApi } from "./routing-config.js";
 import { createSecretsApi, type SecretsApi } from "./secrets.js";
+import { createSchedulesApi, type SchedulesApi } from "./schedules.js";
 import { createToolRegistryApi, type ToolRegistryApi } from "./tool-registry.js";
 import { HttpTransport, type TyrumHttpClientOptions } from "./shared.js";
 
@@ -88,6 +89,7 @@ export interface TyrumHttpClient {
   memory?: MemoryApi;
   policyConfig?: PolicyConfigApi;
   location?: LocationApi;
+  schedules?: SchedulesApi;
 }
 
 export type TyrumHttpClientOperator = TyrumHttpClient & {
@@ -106,6 +108,7 @@ export type TyrumHttpClientOperator = TyrumHttpClient & {
   memory: MemoryApi;
   policyConfig: PolicyConfigApi;
   location: LocationApi;
+  schedules: SchedulesApi;
   desktopEnvironmentHosts: DesktopEnvironmentHostsApi;
   desktopEnvironments: DesktopEnvironmentsApi;
 };
@@ -147,6 +150,7 @@ export function createTyrumHttpClient(options: TyrumHttpClientOptions): TyrumHtt
     memory: createMemoryApi(transport),
     policyConfig: createPolicyConfigApi(transport),
     location: createLocationApi(transport),
+    schedules: createSchedulesApi(transport),
   };
 }
 

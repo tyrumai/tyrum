@@ -163,3 +163,11 @@ export type {
   LocationPlaceUpdateInput,
   LocationProfileUpdateInput,
 } from "./location.js";
+export type {
+  ScheduleListQuery,
+  ScheduleCreateInput,
+  ScheduleUpdateInput,
+  ScheduleListResult,
+  ScheduleSingleResult,
+  ScheduleDeleteResult,
+} from "./schedules.js";
