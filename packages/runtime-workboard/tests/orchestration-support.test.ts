@@ -31,6 +31,7 @@ describe("buildExecutorInstruction", () => {
     const instruction = buildExecutorInstruction({
       item: makeWorkItem({ work_item_id: "work-42" }),
       task: makeTask({ task_id: "task-42", execution_profile: "executor_rw" }),
+      tasks: [makeTask({ task_id: "task-42", execution_profile: "executor_rw" })],
     });
 
     expect(instruction).toContain("You own execution for WorkItem work-42: Ship runtime split");
@@ -42,10 +43,56 @@ describe("buildExecutorInstruction", () => {
     const instruction = buildExecutorInstruction({
       item: makeWorkItem(),
       task: makeTask(),
+      tasks: [makeTask()],
       attachedNodeId: "node-7",
     });
 
     expect(instruction).toContain("A managed desktop node is attached for this run: node-7");
+  });
+
+  it("includes the current item and task graph snapshot when resuming work", () => {
+    const instruction = buildExecutorInstruction({
+      item: makeWorkItem({
+        work_item_id: "work-1",
+        title: "Ship dependency-aware dispatch",
+        status: "blocked",
+        priority: 3,
+        acceptance: { done: true },
+      }),
+      task: makeTask({
+        task_id: "task-2",
+        status: "paused",
+        execution_profile: "executor_rw",
+        depends_on: ["task-1"],
+      }),
+      tasks: [
+        makeTask({
+          task_id: "task-1",
+          status: "completed",
+          execution_profile: "executor_ro",
+        }),
+        makeTask({
+          task_id: "task-2",
+          status: "paused",
+          execution_profile: "executor_rw",
+          depends_on: ["task-1"],
+        }),
+      ],
+      resumed: true,
+    });
+
+    expect(instruction).toContain("This task was paused and resumed.");
+    expect(instruction).toContain(
+      'Current work item snapshot: status=blocked priority=3 acceptance={"done":true}',
+    );
+    expect(instruction).toContain("Current task graph snapshot:");
+    expect(instruction).toContain("- task-1: status=completed profile=executor_ro depends_on=none");
+    expect(instruction).toContain(
+      "- task-2: status=paused profile=executor_rw depends_on=task-1 current_task=yes",
+    );
+    expect(instruction).toContain(
+      "Operator edits may have changed prior assumptions. Treat this snapshot as authoritative before continuing.",
+    );
   });
 });
 

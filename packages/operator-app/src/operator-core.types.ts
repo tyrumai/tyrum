@@ -55,13 +55,18 @@ export type OperatorWorkboardClient = Pick<
   | "off"
   | "on"
   | "workArtifactList"
+  | "workCreate"
   | "workDecisionList"
+  | "workDelete"
   | "workGet"
+  | "workPause"
+  | "workResume"
   | "workSignalGet"
   | "workSignalList"
   | "workStateKvGet"
   | "workStateKvList"
   | "workTransition"
+  | "workUpdate"
 >;
 
 export interface OperatorCoreOptions {

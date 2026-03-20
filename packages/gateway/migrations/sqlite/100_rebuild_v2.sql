@@ -33,7 +33,6 @@ DROP TABLE IF EXISTS resume_tokens;
 DROP TABLE IF EXISTS execution_runs;
 DROP TABLE IF EXISTS execution_jobs;
 DROP TABLE IF EXISTS idempotency_records;
-DROP TABLE IF EXISTS intake_mode_overrides;
 DROP TABLE IF EXISTS jobs;
 DROP TABLE IF EXISTS lane_leases;
 DROP TABLE IF EXISTS lane_queue_mode_overrides;
@@ -205,15 +204,6 @@ CREATE TABLE session_send_policy_overrides (
   send_policy   TEXT NOT NULL CHECK (send_policy IN ('on','off')),
   updated_at_ms INTEGER NOT NULL,
   PRIMARY KEY (tenant_id, key)
-);
-
-CREATE TABLE intake_mode_overrides (
-  tenant_id     TEXT NOT NULL,
-  key           TEXT NOT NULL,
-  lane          TEXT NOT NULL,
-  intake_mode   TEXT NOT NULL CHECK (intake_mode IN ('inline','delegate_execute','delegate_plan')),
-  updated_at_ms INTEGER NOT NULL,
-  PRIMARY KEY (tenant_id, key, lane)
 );
 
 CREATE TABLE lane_queue_mode_overrides (

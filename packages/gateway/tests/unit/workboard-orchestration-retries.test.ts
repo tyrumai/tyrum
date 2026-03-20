@@ -29,6 +29,21 @@ function createFlakyAgents(replies: Array<string | Error>): AgentRegistry {
   } as AgentRegistry;
 }
 
+async function waitForMatch<T>(
+  load: () => Promise<T>,
+  predicate: (value: T) => boolean,
+  attempts = 50,
+): Promise<T> {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const value = await load();
+    if (predicate(value)) {
+      return value;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  return await load();
+}
+
 describe("WorkBoard orchestration retries", () => {
   let db: SqliteDb | undefined;
   let attachmentDal: SessionLaneNodeAttachmentDal | undefined;
@@ -103,7 +118,7 @@ describe("WorkBoard orchestration retries", () => {
     await workboard.setStateKv({
       scope: { kind: "work_item", ...scope, work_item_id: item.work_item_id },
       key: "work.refinement.phase",
-      value_json: "complete",
+      value_json: "done",
       provenance_json: { source: "test" },
     });
     await workboard.setStateKv({
@@ -135,7 +150,10 @@ describe("WorkBoard orchestration retries", () => {
     expect(await workboard.getItem({ scope, work_item_id: item.work_item_id })).toMatchObject({
       status: "doing",
     });
-    const tasks = await workboard.listTasks({ scope, work_item_id: item.work_item_id });
+    const tasks = await waitForMatch(
+      async () => await workboard.listTasks({ scope, work_item_id: item.work_item_id }),
+      (value) => value.some((task) => task.status === "completed"),
+    );
     expect(tasks.filter((task) => task.execution_profile === "executor_rw")).toHaveLength(2);
     expect(tasks.some((task) => task.status === "failed")).toBe(true);
     expect(tasks.some((task) => task.status === "completed")).toBe(true);

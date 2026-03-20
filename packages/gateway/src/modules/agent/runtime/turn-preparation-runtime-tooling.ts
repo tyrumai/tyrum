@@ -1,6 +1,6 @@
 import type { SessionRow } from "../session-dal.js";
 import type { AgentLoadedContext } from "./types.js";
-import type { ResolvedExecutionProfile } from "./intake-delegation.js";
+import type { ResolvedExecutionProfile } from "./execution-profile-resolution.js";
 import type { TurnPreparationRuntimeDeps } from "./turn-preparation-runtime.js";
 import { ToolExecutor } from "../tool-executor.js";
 import { NodeCapabilityInspectionService } from "../../node/capability-inspection-service.js";

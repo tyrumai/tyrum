@@ -6,7 +6,6 @@ import type { ToolCallPolicyState } from "./tool-set-builder.js";
 import {
   buildSandboxPrompt,
   isStatusQuery,
-  parseIntakeModeDecision,
   resolveAgentTurnInput,
   resolveLaneQueueScope,
   resolveMainLaneSessionKey,
@@ -25,7 +24,10 @@ import { runPreTurnHydration } from "./preturn-hydration.js";
 import { buildWorkFocusDigest } from "./work-focus-digest.js";
 import type { AgentContextReport, AgentLoadedContext, AgentRuntimeOptions } from "./types.js";
 import { resolveAutomationMetadata, buildAutomationDigest } from "./automation-delivery.js";
-import { resolveExecutionProfile, type ResolvedExecutionProfile } from "./intake-delegation.js";
+import {
+  resolveExecutionProfile,
+  type ResolvedExecutionProfile,
+} from "./execution-profile-resolution.js";
 import { ToolSetBuilder } from "./tool-set-builder.js";
 import type { AgentContextStore } from "../context-store.js";
 import type { SessionRow } from "../session-dal.js";
@@ -250,7 +252,7 @@ export async function prepareTurn(
 
   const workFocusDigest = guardianReviewRequest
     ? "Skipped in guardian review mode."
-    : isStatusQuery(resolved.message) || parseIntakeModeDecision(resolved.message)
+    : isStatusQuery(resolved.message)
       ? "Skipped for command turns."
       : await buildWorkFocusDigest({
           container: deps.opts.container,
@@ -319,7 +321,6 @@ export async function prepareTurn(
   const preTurnHydration =
     guardianReviewRequest ||
     isStatusQuery(resolved.message) ||
-    parseIntakeModeDecision(resolved.message) ||
     ctx.config.mcp.pre_turn_tools.length === 0 ||
     !toolSetBuilderDeps
       ? {

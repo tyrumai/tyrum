@@ -1,4 +1,5 @@
 import { WorkboardDal } from "../workboard/dal.js";
+import { createGatewayWorkboardService } from "../workboard/service.js";
 import type { ToolExecutionAudit, ToolResult } from "./tool-executor-shared.js";
 import {
   asRecord,
@@ -45,6 +46,7 @@ export async function executeWorkboardCrudTool(params: {
   const db = requireDb(params.context);
   const scope = requireWorkScope(params.context);
   const workboard = new WorkboardDal(db);
+  const workboardService = createGatewayWorkboardService({ db });
   const record = asRecord(params.args);
 
   switch (params.toolId) {
@@ -69,16 +71,15 @@ export async function executeWorkboardCrudTool(params: {
       });
     case "workboard.item.delete":
       return jsonResult(params.toolCallId, {
-        item: await workboard.deleteItem({
+        item: await workboardService.deleteItem({
           scope,
           work_item_id: readString(record, "work_item_id") ?? "",
         }),
       });
     case "workboard.item.create":
       return jsonResult(params.toolCallId, {
-        item: await workboard.createItem({
+        item: await workboardService.createItem({
           scope,
-          createdFromSessionKey: params.audit?.work_session_key,
           item: {
             kind: readString(record, "kind") === "initiative" ? "initiative" : "action",
             title: readString(record, "title") ?? "Work item",
@@ -86,11 +87,19 @@ export async function executeWorkboardCrudTool(params: {
             acceptance: record?.["acceptance"],
             parent_work_item_id: readString(record, "parent_work_item_id"),
           },
+          createdFromSessionKey: params.audit?.work_session_key,
+          captureEvent: {
+            kind: "work.capture",
+            payload_json: {
+              source: "workboard.item.create",
+              source_session_key: params.audit?.work_session_key ?? null,
+            },
+          },
         }),
       });
     case "workboard.item.update":
       return jsonResult(params.toolCallId, {
-        item: await workboard.updateItem({
+        item: await workboardService.updateItem({
           scope,
           work_item_id: readString(record, "work_item_id") ?? "",
           patch: {
@@ -109,7 +118,7 @@ export async function executeWorkboardCrudTool(params: {
         );
       }
       return jsonResult(params.toolCallId, {
-        item: await workboard.transitionItem({
+        item: await workboardService.transitionItem({
           scope,
           work_item_id: readString(record, "work_item_id") ?? "",
           status: (readString(record, "status") ?? "backlog") as

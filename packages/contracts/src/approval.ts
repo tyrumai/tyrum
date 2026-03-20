@@ -30,6 +30,7 @@ export const ApprovalKind = z.enum([
   "budget",
   "takeover",
   "connector.send",
+  "work.intervention",
 ]);
 export type ApprovalKind = z.infer<typeof ApprovalKind>;
 

@@ -5,6 +5,10 @@ import type { Logger } from "../observability/logger.js";
 import type { SqlDb } from "../../statestore/types.js";
 import type { AgentRegistry } from "../agent/registry.js";
 import type { SessionLaneNodeAttachmentDal } from "../agent/session-lane-node-attachment-dal.js";
+import type { ApprovalDal } from "../approval/dal.js";
+import type { PolicyService } from "@tyrum/runtime-policy";
+import type { ProtocolDeps } from "../../ws/protocol/types.js";
+import type { RedactionEngine } from "../redaction/engine.js";
 import {
   createGatewayManagedDesktopProvisioner,
   createGatewaySubagentRuntime,
@@ -23,6 +27,10 @@ export class WorkboardDispatcher {
       agents: AgentRegistry;
       sessionLaneNodeAttachmentDal: SessionLaneNodeAttachmentDal;
       defaultDeploymentConfig: DeploymentConfigT;
+      redactionEngine?: RedactionEngine;
+      approvalDal?: ApprovalDal;
+      policyService?: PolicyService;
+      protocolDeps?: ProtocolDeps;
       owner?: string;
       logger?: Logger;
       tickMs?: number;
@@ -30,7 +38,13 @@ export class WorkboardDispatcher {
     },
   ) {
     this.dispatcher = new RuntimeWorkboardDispatcher({
-      repository: createGatewayWorkboardRepository(opts.db),
+      repository: createGatewayWorkboardRepository({
+        db: opts.db,
+        redactionEngine: opts.redactionEngine,
+        approvalDal: opts.approvalDal,
+        policyService: opts.policyService,
+        protocolDeps: opts.protocolDeps,
+      }),
       runtime: createGatewaySubagentRuntime({ db: opts.db, agents: opts.agents }),
       desktopProvisioner: createGatewayManagedDesktopProvisioner({
         db: opts.db,

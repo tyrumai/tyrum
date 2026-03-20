@@ -32,7 +32,8 @@ export function normalizeApprovalKind(raw: string): ApprovalKindT {
     raw === "policy" ||
     raw === "budget" ||
     raw === "takeover" ||
-    raw === "connector.send"
+    raw === "connector.send" ||
+    raw === "work.intervention"
   ) {
     return raw;
   }

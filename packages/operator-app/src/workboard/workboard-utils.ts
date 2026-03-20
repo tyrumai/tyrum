@@ -86,7 +86,7 @@ export function shouldProcessWorkStateKvUpdate(
   return true;
 }
 
-export type WorkTaskStatus = "leased" | "running" | "paused" | "completed";
+export type WorkTaskStatus = "leased" | "running" | "paused" | "completed" | "failed" | "cancelled";
 
 export type WorkTaskSummary = {
   task_id: string;
@@ -94,7 +94,10 @@ export type WorkTaskSummary = {
   last_event_at: string;
   lease_expires_at_ms?: number;
   run_id?: string;
+  subagent_id?: string;
   approval_id?: string;
+  pause_reason?: string;
+  pause_detail?: string;
   result_summary?: string;
 };
 
@@ -125,14 +128,26 @@ export type WorkTaskEvent =
     })
   | (BaseWorkTaskEvent & {
       type: "work.task.started";
-      payload: BaseWorkTaskEvent["payload"] & { run_id: string };
+      payload: BaseWorkTaskEvent["payload"] & { run_id?: string; subagent_id?: string };
     })
   | (BaseWorkTaskEvent & {
       type: "work.task.paused";
-      payload: BaseWorkTaskEvent["payload"] & { approval_id: string };
+      payload: BaseWorkTaskEvent["payload"] & {
+        approval_id?: string;
+        pause_reason?: string;
+        pause_detail?: string;
+      };
     })
   | (BaseWorkTaskEvent & {
       type: "work.task.completed";
+      payload: BaseWorkTaskEvent["payload"] & { result_summary?: string };
+    })
+  | (BaseWorkTaskEvent & {
+      type: "work.task.failed";
+      payload: BaseWorkTaskEvent["payload"] & { result_summary?: string };
+    })
+  | (BaseWorkTaskEvent & {
+      type: "work.task.cancelled";
       payload: BaseWorkTaskEvent["payload"] & { result_summary?: string };
     });
 
@@ -160,13 +175,54 @@ export function applyWorkTaskEvent(
       };
       break;
     case "work.task.started":
-      next = { ...base, status: "running", run_id: event.payload.run_id };
+      next = {
+        ...base,
+        status: "running",
+        run_id: event.payload.run_id,
+        subagent_id: event.payload.subagent_id,
+        approval_id: undefined,
+        pause_reason: undefined,
+        pause_detail: undefined,
+      };
       break;
     case "work.task.paused":
-      next = { ...base, status: "paused", approval_id: event.payload.approval_id };
+      next = {
+        ...base,
+        status: "paused",
+        approval_id: event.payload.approval_id,
+        pause_reason: event.payload.pause_reason,
+        pause_detail: event.payload.pause_detail,
+      };
       break;
     case "work.task.completed":
-      next = { ...base, status: "completed", result_summary: event.payload.result_summary };
+      next = {
+        ...base,
+        status: "completed",
+        approval_id: undefined,
+        pause_reason: undefined,
+        pause_detail: undefined,
+        result_summary: event.payload.result_summary,
+      };
+      break;
+    case "work.task.failed":
+      next = {
+        ...base,
+        status: "failed",
+        approval_id: undefined,
+        pause_reason: undefined,
+        pause_detail: undefined,
+        result_summary: event.payload.result_summary,
+      };
+      break;
+    case "work.task.cancelled":
+      next = {
+        ...base,
+        status: "cancelled",
+        approval_id: undefined,
+        pause_reason: undefined,
+        pause_detail: undefined,
+        result_summary: event.payload.result_summary,
+      };
       break;
   }
 

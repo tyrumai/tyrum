@@ -56,7 +56,10 @@ export function resolveWsRequestRequiredScopes(type: string): string[] | null {
     }
     case "work.create":
     case "work.update":
+    case "work.delete":
     case "work.transition":
+    case "work.pause":
+    case "work.resume":
     case "work.link.create":
     case "subagent.spawn":
     case "subagent.send":

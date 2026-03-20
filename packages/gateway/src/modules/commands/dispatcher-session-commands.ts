@@ -3,7 +3,6 @@ import { ConfiguredModelPresetDal } from "../models/configured-model-preset-dal.
 import { SessionModelOverrideDal } from "../models/session-model-override-dal.js";
 import { isAuthProfilesEnabled } from "../models/auth-profiles-enabled.js";
 import { SessionProviderPinDal } from "../models/session-pin-dal.js";
-import { IntakeModeOverrideDal } from "../agent/intake-mode-override-dal.js";
 import { LaneQueueModeOverrideDal } from "../lanes/queue-mode-override-dal.js";
 import { SessionSendPolicyOverrideDal } from "../channels/send-policy-override-dal.js";
 import { resolveWorkspaceKey } from "../workspace/id.js";
@@ -14,7 +13,6 @@ import {
   jsonBlock,
   resolveAgentId,
   resolveChannelThread,
-  resolveFallbackKeyLane,
   resolveKeyLane,
 } from "./dispatcher-support.js";
 import { IdentityScopeDal } from "../identity/scope.js";
@@ -29,7 +27,6 @@ export async function tryExecuteSessionCommand(
   input: CommandInput,
 ): Promise<CommandExecuteResult | undefined> {
   if (input.cmd === "model") return executeModelCommand(input.deps, input.toks);
-  if (input.cmd === "intake") return executeIntakeCommand(input.deps, input.toks);
   if (input.cmd === "queue") return executeQueueCommand(input.deps, input.toks);
   if (input.cmd === "send") return executeSendCommand(input.deps, input.toks);
   return undefined;
@@ -213,55 +210,6 @@ async function executeModelCommand(
     model_id: row.model_id,
     preset_key: row.preset_key,
   };
-  return { output: jsonBlock(payload), data: payload };
-}
-
-async function executeIntakeCommand(
-  deps: CommandDeps,
-  toks: string[],
-): Promise<CommandExecuteResult> {
-  if (!deps.db) {
-    return {
-      output: "Intake mode overrides are not available on this gateway instance.",
-      data: null,
-    };
-  }
-  const agentId = await resolveAgentId(deps.commandContext, {
-    tenantId: deps.tenantId,
-    identityScopeDal: deps.db ? new IdentityScopeDal(deps.db) : undefined,
-  });
-  const resolved =
-    (await resolveKeyLane(deps.db, deps.commandContext)) ??
-    (await resolveFallbackKeyLane(deps.db, deps.commandContext, agentId));
-  if (!resolved) {
-    return {
-      output:
-        "Usage: /intake <auto|inline|delegate_execute|delegate_plan> (requires key or channel/thread context)",
-      data: null,
-    };
-  }
-
-  const dal = new IntakeModeOverrideDal(deps.db);
-  const modeArg = toks[1]?.trim().toLowerCase();
-  const allowed = new Set(["auto", "inline", "delegate_execute", "delegate_plan"]);
-  if (!modeArg) {
-    const payload = {
-      key: resolved.key,
-      lane: "main",
-      intake_mode: (await dal.get({ key: resolved.key, lane: "main" }))?.intake_mode ?? "auto",
-    };
-    return { output: jsonBlock(payload), data: payload };
-  }
-  if (!allowed.has(modeArg)) {
-    return { output: "Usage: /intake <auto|inline|delegate_execute|delegate_plan>", data: null };
-  }
-  if (modeArg === "auto") {
-    await dal.clear({ key: resolved.key, lane: "main" });
-    const payload = { key: resolved.key, lane: "main", intake_mode: "auto" };
-    return { output: jsonBlock(payload), data: payload };
-  }
-  const row = await dal.upsert({ key: resolved.key, lane: "main", intakeMode: modeArg });
-  const payload = { key: row.key, lane: row.lane, intake_mode: row.intake_mode };
   return { output: jsonBlock(payload), data: payload };
 }
 

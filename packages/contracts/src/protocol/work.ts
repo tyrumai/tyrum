@@ -99,6 +99,14 @@ export type WsWorkUpdatePayload = z.infer<typeof WsWorkUpdatePayload>;
 export const WsWorkUpdateRequest = createRequest("work.update", WsWorkUpdatePayload);
 export type WsWorkUpdateRequest = z.infer<typeof WsWorkUpdateRequest>;
 
+export const WsWorkDeletePayload = ScopeKeys.extend({
+  work_item_id: WorkItemId,
+});
+export type WsWorkDeletePayload = z.infer<typeof WsWorkDeletePayload>;
+
+export const WsWorkDeleteRequest = createRequest("work.delete", WsWorkDeletePayload);
+export type WsWorkDeleteRequest = z.infer<typeof WsWorkDeleteRequest>;
+
 export const WsWorkTransitionPayload = ScopeKeys.extend({
   work_item_id: WorkItemId,
   status: WorkItemState,
@@ -108,6 +116,24 @@ export type WsWorkTransitionPayload = z.infer<typeof WsWorkTransitionPayload>;
 
 export const WsWorkTransitionRequest = createRequest("work.transition", WsWorkTransitionPayload);
 export type WsWorkTransitionRequest = z.infer<typeof WsWorkTransitionRequest>;
+
+export const WsWorkPausePayload = ScopeKeys.extend({
+  work_item_id: WorkItemId,
+  reason: NonEmptyString.optional(),
+});
+export type WsWorkPausePayload = z.infer<typeof WsWorkPausePayload>;
+
+export const WsWorkPauseRequest = createRequest("work.pause", WsWorkPausePayload);
+export type WsWorkPauseRequest = z.infer<typeof WsWorkPauseRequest>;
+
+export const WsWorkResumePayload = ScopeKeys.extend({
+  work_item_id: WorkItemId,
+  reason: NonEmptyString.optional(),
+});
+export type WsWorkResumePayload = z.infer<typeof WsWorkResumePayload>;
+
+export const WsWorkResumeRequest = createRequest("work.resume", WsWorkResumePayload);
+export type WsWorkResumeRequest = z.infer<typeof WsWorkResumeRequest>;
 
 export const WsWorkLinkCreatePayload = ScopeKeys.extend({
   work_item_id: WorkItemId,
@@ -178,6 +204,18 @@ export type WsWorkUpdateResponseOkEnvelope = z.infer<typeof WsWorkUpdateResponse
 export const WsWorkUpdateResponseErrEnvelope = createResponseErrEnvelope("work.update");
 export type WsWorkUpdateResponseErrEnvelope = z.infer<typeof WsWorkUpdateResponseErrEnvelope>;
 
+export const WsWorkDeleteResult = strictObject({ item: WorkItem });
+export type WsWorkDeleteResult = z.infer<typeof WsWorkDeleteResult>;
+
+export const WsWorkDeleteResponseOkEnvelope = createResponseOkEnvelope(
+  "work.delete",
+  WsWorkDeleteResult,
+);
+export type WsWorkDeleteResponseOkEnvelope = z.infer<typeof WsWorkDeleteResponseOkEnvelope>;
+
+export const WsWorkDeleteResponseErrEnvelope = createResponseErrEnvelope("work.delete");
+export type WsWorkDeleteResponseErrEnvelope = z.infer<typeof WsWorkDeleteResponseErrEnvelope>;
+
 export const WsWorkTransitionResult = strictObject({ item: WorkItem });
 export type WsWorkTransitionResult = z.infer<typeof WsWorkTransitionResult>;
 
@@ -191,6 +229,30 @@ export const WsWorkTransitionResponseErrEnvelope = createResponseErrEnvelope("wo
 export type WsWorkTransitionResponseErrEnvelope = z.infer<
   typeof WsWorkTransitionResponseErrEnvelope
 >;
+
+export const WsWorkPauseResult = strictObject({ item: WorkItem });
+export type WsWorkPauseResult = z.infer<typeof WsWorkPauseResult>;
+
+export const WsWorkPauseResponseOkEnvelope = createResponseOkEnvelope(
+  "work.pause",
+  WsWorkPauseResult,
+);
+export type WsWorkPauseResponseOkEnvelope = z.infer<typeof WsWorkPauseResponseOkEnvelope>;
+
+export const WsWorkPauseResponseErrEnvelope = createResponseErrEnvelope("work.pause");
+export type WsWorkPauseResponseErrEnvelope = z.infer<typeof WsWorkPauseResponseErrEnvelope>;
+
+export const WsWorkResumeResult = strictObject({ item: WorkItem });
+export type WsWorkResumeResult = z.infer<typeof WsWorkResumeResult>;
+
+export const WsWorkResumeResponseOkEnvelope = createResponseOkEnvelope(
+  "work.resume",
+  WsWorkResumeResult,
+);
+export type WsWorkResumeResponseOkEnvelope = z.infer<typeof WsWorkResumeResponseOkEnvelope>;
+
+export const WsWorkResumeResponseErrEnvelope = createResponseErrEnvelope("work.resume");
+export type WsWorkResumeResponseErrEnvelope = z.infer<typeof WsWorkResumeResponseErrEnvelope>;
 
 export const WsWorkLinkCreateResult = strictObject({ link: WorkItemLink });
 export type WsWorkLinkCreateResult = z.infer<typeof WsWorkLinkCreateResult>;
@@ -243,6 +305,9 @@ export type WsWorkItemFailedEvent = z.infer<typeof WsWorkItemFailedEvent>;
 export const WsWorkItemCancelledEvent = createEvent("work.item.cancelled", WsWorkItemEventPayload);
 export type WsWorkItemCancelledEvent = z.infer<typeof WsWorkItemCancelledEvent>;
 
+export const WsWorkItemDeletedEvent = createEvent("work.item.deleted", WsWorkItemEventPayload);
+export type WsWorkItemDeletedEvent = z.infer<typeof WsWorkItemDeletedEvent>;
+
 export const WsWorkLinkCreatedEventPayload = WorkScope.extend({ link: WorkItemLink }).strict();
 export type WsWorkLinkCreatedEventPayload = z.infer<typeof WsWorkLinkCreatedEventPayload>;
 
@@ -265,7 +330,8 @@ export type WsWorkTaskLeasedEvent = z.infer<typeof WsWorkTaskLeasedEvent>;
 export const WsWorkTaskStartedEventPayload = WorkScope.extend({
   work_item_id: WorkItemId,
   task_id: WorkItemTaskId,
-  run_id: ExecutionRunId,
+  run_id: ExecutionRunId.optional(),
+  subagent_id: UuidSchema.optional(),
 });
 export type WsWorkTaskStartedEventPayload = z.infer<typeof WsWorkTaskStartedEventPayload>;
 
@@ -278,7 +344,9 @@ export type WsWorkTaskStartedEvent = z.infer<typeof WsWorkTaskStartedEvent>;
 export const WsWorkTaskPausedEventPayload = WorkScope.extend({
   work_item_id: WorkItemId,
   task_id: WorkItemTaskId,
-  approval_id: UuidSchema,
+  approval_id: UuidSchema.optional(),
+  pause_reason: NonEmptyString.optional(),
+  pause_detail: NonEmptyString.optional(),
 });
 export type WsWorkTaskPausedEventPayload = z.infer<typeof WsWorkTaskPausedEventPayload>;
 
@@ -297,3 +365,26 @@ export const WsWorkTaskCompletedEvent = createEvent(
   WsWorkTaskCompletedEventPayload,
 );
 export type WsWorkTaskCompletedEvent = z.infer<typeof WsWorkTaskCompletedEvent>;
+
+export const WsWorkTaskFailedEventPayload = WorkScope.extend({
+  work_item_id: WorkItemId,
+  task_id: WorkItemTaskId,
+  result_summary: NonEmptyString.optional(),
+});
+export type WsWorkTaskFailedEventPayload = z.infer<typeof WsWorkTaskFailedEventPayload>;
+
+export const WsWorkTaskFailedEvent = createEvent("work.task.failed", WsWorkTaskFailedEventPayload);
+export type WsWorkTaskFailedEvent = z.infer<typeof WsWorkTaskFailedEvent>;
+
+export const WsWorkTaskCancelledEventPayload = WorkScope.extend({
+  work_item_id: WorkItemId,
+  task_id: WorkItemTaskId,
+  result_summary: NonEmptyString.optional(),
+});
+export type WsWorkTaskCancelledEventPayload = z.infer<typeof WsWorkTaskCancelledEventPayload>;
+
+export const WsWorkTaskCancelledEvent = createEvent(
+  "work.task.cancelled",
+  WsWorkTaskCancelledEventPayload,
+);
+export type WsWorkTaskCancelledEvent = z.infer<typeof WsWorkTaskCancelledEvent>;

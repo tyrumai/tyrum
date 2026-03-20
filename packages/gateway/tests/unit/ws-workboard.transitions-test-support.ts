@@ -310,7 +310,7 @@ function registerTransitionErrorTests(): void {
       await workboard.setStateKv({
         scope: { kind: "work_item", ...scope, work_item_id: item.work_item_id },
         key: "work.refinement.phase",
-        value_json: "complete",
+        value_json: "done",
         provenance_json: { source: "test" },
       });
       await workboard.setStateKv({

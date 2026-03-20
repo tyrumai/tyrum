@@ -54,7 +54,8 @@ CREATE TABLE approvals_next (
       'takeover',
       'intent',
       'retry',
-      'connector.send'
+      'connector.send',
+      'work.intervention'
     )
   ),
   status       TEXT NOT NULL CHECK (
@@ -132,7 +133,8 @@ SELECT
       'takeover',
       'intent',
       'retry',
-      'connector.send'
+      'connector.send',
+      'work.intervention'
     ) THEN kind
     ELSE 'policy'
   END AS kind,

@@ -26,7 +26,7 @@ import type { PolicyService } from "@tyrum/runtime-policy";
 import { ExecutionEngine } from "../../execution/engine.js";
 import { createDisabledAgentStatus } from "./status-disabled.js";
 import { resolveAutomationMetadata, maybeDeliverAutomationReply } from "./automation-delivery.js";
-import { resolveExecutionProfile } from "./intake-delegation.js";
+import { resolveExecutionProfile } from "./execution-profile-resolution.js";
 import type { PrepareTurnDeps } from "./turn-preparation.js";
 import type { TurnExecutionContext } from "./turn-preparation.js";
 import {

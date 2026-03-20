@@ -22,6 +22,21 @@ function createFakeAgents(reply: string): AgentRegistry {
   } as AgentRegistry;
 }
 
+async function waitForMatch<T>(
+  load: () => Promise<T>,
+  predicate: (value: T) => boolean,
+  attempts = 50,
+): Promise<T> {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const value = await load();
+    if (predicate(value)) {
+      return value;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  return await load();
+}
+
 describe("WorkBoard regressions", () => {
   let db: SqliteDb | undefined;
   let attachmentDal: SessionLaneNodeAttachmentDal | undefined;
@@ -58,7 +73,7 @@ describe("WorkBoard regressions", () => {
     await workboard.setStateKv({
       scope: { kind: "work_item", ...scope, work_item_id: item.work_item_id },
       key: "work.refinement.phase",
-      value_json: "complete",
+      value_json: "done",
       provenance_json: { source: "test" },
     });
     await workboard.setStateKv({
@@ -88,9 +103,12 @@ describe("WorkBoard regressions", () => {
     const reconciler = new WorkboardReconciler({ db });
     await reconciler.tick();
 
-    expect(await workboard.getItem({ scope, work_item_id: item.work_item_id })).toMatchObject({
-      status: "blocked",
-    });
+    expect(
+      await waitForMatch(
+        async () => await workboard.getItem({ scope, work_item_id: item.work_item_id }),
+        (value) => value?.status === "blocked",
+      ),
+    ).toMatchObject({ status: "blocked" });
     expect(await workboard.getTask({ scope, task_id: task.task_id })).toMatchObject({
       status: "cancelled",
     });
@@ -99,7 +117,7 @@ describe("WorkBoard regressions", () => {
         scope: { kind: "work_item", ...scope, work_item_id: item.work_item_id },
         key: "work.dispatch.phase",
       }),
-    ).toMatchObject({ value_json: "running" });
+    ).toMatchObject({ value_json: "blocked" });
   });
 
   it("returns doing items with no tasks to ready so they can be redispatched", async () => {
@@ -119,7 +137,7 @@ describe("WorkBoard regressions", () => {
     await workboard.setStateKv({
       scope: { kind: "work_item", ...scope, work_item_id: item.work_item_id },
       key: "work.refinement.phase",
-      value_json: "complete",
+      value_json: "done",
       provenance_json: { source: "test" },
     });
     await workboard.setStateKv({
@@ -140,9 +158,12 @@ describe("WorkBoard regressions", () => {
     const reconciler = new WorkboardReconciler({ db });
     await reconciler.tick();
 
-    expect(await workboard.getItem({ scope, work_item_id: item.work_item_id })).toMatchObject({
-      status: "ready",
-    });
+    expect(
+      await waitForMatch(
+        async () => await workboard.getItem({ scope, work_item_id: item.work_item_id }),
+        (value) => value?.status === "ready",
+      ),
+    ).toMatchObject({ status: "ready" });
     expect(
       await workboard.getStateKv({
         scope: { kind: "work_item", ...scope, work_item_id: item.work_item_id },
@@ -163,9 +184,12 @@ describe("WorkBoard regressions", () => {
     });
     await dispatcher.tick();
 
-    expect(await workboard.getItem({ scope, work_item_id: item.work_item_id })).toMatchObject({
-      status: "done",
-    });
+    expect(
+      await waitForMatch(
+        async () => await workboard.getItem({ scope, work_item_id: item.work_item_id }),
+        (value) => value?.status === "done",
+      ),
+    ).toMatchObject({ status: "done" });
   });
 
   it("clamps negative priority updates the same way create does", async () => {
@@ -292,7 +316,7 @@ describe("WorkBoard regressions", () => {
     await workboard.setStateKv({
       scope: { kind: "work_item", ...scope, work_item_id: item.work_item_id },
       key: "work.refinement.phase",
-      value_json: "complete",
+      value_json: "done",
       provenance_json: { source: "test" },
     });
 
@@ -315,6 +339,6 @@ describe("WorkBoard regressions", () => {
         scope: { kind: "work_item", ...scope, work_item_id: item.work_item_id },
         key: "work.refinement.phase",
       }),
-    ).toMatchObject({ value_json: "complete" });
+    ).toMatchObject({ value_json: "done" });
   });
 });

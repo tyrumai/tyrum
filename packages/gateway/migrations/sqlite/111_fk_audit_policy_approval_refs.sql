@@ -25,6 +25,7 @@ CREATE TABLE approvals_next (
       'intent',
       'retry',
       'connector.send',
+      'work.intervention',
       'other'
     )
   ),

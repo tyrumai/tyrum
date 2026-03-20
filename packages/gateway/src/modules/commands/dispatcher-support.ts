@@ -47,7 +47,6 @@ export function helpText(): string {
     "- /approvals [queued|reviewing|awaiting_human|approved|denied|expired|cancelled]",
     "- /pairings [queued|reviewing|awaiting_human|approved|denied|revoked]",
     "- /model [preset_key|provider/model[@profile]]",
-    "- /intake [auto|inline|delegate_execute|delegate_plan]",
     "- /queue [collect|followup|steer|steer_backlog|interrupt]",
     "- /send [on|off|inherit]",
     "- /policy bundle",

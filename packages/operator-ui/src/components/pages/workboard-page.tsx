@@ -1,53 +1,29 @@
-import type {
-  DecisionRecord,
-  WorkArtifact,
-  WorkItem,
-  WorkSignal,
-  WorkStateKVScope,
-  OperatorCore,
-} from "@tyrum/operator-app";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { WorkItem, OperatorCore } from "@tyrum/operator-app";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useOperatorStore } from "../../use-operator-store.js";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { useAppShellMinWidth } from "../layout/app-shell.js";
 import { AppPageToolbar } from "../layout/app-page.js";
-import { Alert } from "../ui/alert.js";
-import { ScrollArea } from "../ui/scroll-area.js";
+import { Button } from "../ui/button.js";
 import {
   WORK_ITEM_STATUSES,
   groupWorkItemsByStatus,
   selectTasksForSelectedWorkItem,
-  shouldProcessWorkStateKvUpdate,
-  upsertWorkArtifact,
-  upsertWorkDecision,
-  upsertWorkSignal,
-  upsertWorkStateKvEntry,
-  type WorkStateKvEntry,
 } from "../workboard/workboard-store.js";
-import { WorkBoardDrilldown } from "./workboard-page-drilldown.js";
-import { WorkboardToolbarActions } from "./workboard-page-scope-controls.js";
-import { STATUS_LABELS, WorkStatusList, WorkStatusPanel } from "./workboard-page.shared.js";
+import {
+  WorkboardItemEditorDialog,
+  type WorkboardEditorSubmitInput,
+} from "./workboard-page-editor-dialog.js";
+import { useWorkboardPageData } from "./workboard-page-data.js";
+import { WorkboardPageLayout } from "./workboard-page-layout.js";
+import { WorkboardScopeControls } from "./workboard-page-scope-controls.js";
 
 export type WorkBoardPageProps = { core: OperatorCore };
 
-const DESKTOP_BOARD_GRID_STYLE = {
-  gridTemplateColumns: `repeat(${WORK_ITEM_STATUSES.length}, minmax(0, 1fr))`,
-} as const;
-
 const WORKBOARD_DESKTOP_BOARD_MIN_WIDTH_PX = 1120;
 const WORKBOARD_DESKTOP_CONTENT_WIDTH_PX = WORKBOARD_DESKTOP_BOARD_MIN_WIDTH_PX + 40;
-const DESKTOP_BOARD_MIN_WIDTH_STYLE = { minWidth: WORKBOARD_DESKTOP_BOARD_MIN_WIDTH_PX } as const;
 
-function makeAgentScope(scopeKeys: { agent_key: string; workspace_key: string }): WorkStateKVScope {
-  return { kind: "agent", ...scopeKeys };
-}
-
-function makeWorkItemScope(
-  scopeKeys: { agent_key: string; workspace_key: string },
-  workItemId: string,
-): WorkStateKVScope {
-  return { kind: "work_item", ...scopeKeys, work_item_id: workItemId };
-}
+type PendingAction = WorkItem["status"] | "pause" | "resume" | "delete" | null;
 
 export function WorkBoardPage({ core }: WorkBoardPageProps) {
   const connection = useOperatorStore(core.connectionStore);
@@ -63,22 +39,16 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
   );
   const desktopBoard = useAppShellMinWidth(WORKBOARD_DESKTOP_CONTENT_WIDTH_PX);
 
-  const selectedIdRef = useRef<string | null>(null);
-
   const [selectedWorkItemId, setSelectedWorkItemId] = useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<(typeof WORK_ITEM_STATUSES)[number]>(
     WORK_ITEM_STATUSES[0],
   );
-  const [drilldownBusy, setDrilldownBusy] = useState(false);
-  const [drilldownError, setDrilldownError] = useState<string | null>(null);
   const [workboardErrorDismissed, setWorkboardErrorDismissed] = useState(false);
-  const [transitionTarget, setTransitionTarget] = useState<WorkItem["status"] | null>(null);
-  const [selectedItem, setSelectedItem] = useState<WorkItem | null>(null);
-  const [artifacts, setArtifacts] = useState<WorkArtifact[]>([]);
-  const [decisions, setDecisions] = useState<DecisionRecord[]>([]);
-  const [signals, setSignals] = useState<WorkSignal[]>([]);
-  const [agentKvEntries, setAgentKvEntries] = useState<WorkStateKvEntry[]>([]);
-  const [workItemKvEntries, setWorkItemKvEntries] = useState<WorkStateKvEntry[]>([]);
+  const [pendingAction, setPendingAction] = useState<PendingAction>(null);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editorBusy, setEditorBusy] = useState<"create" | "edit" | null>(null);
+  const [editorError, setEditorError] = useState<string | null>(null);
 
   useEffect(() => {
     setWorkboardErrorDismissed(false);
@@ -97,9 +67,29 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
     void core.workboardStore.refreshList();
   }, [core.workboardStore, currentScopeKeys.workspace_key, effectiveScopeKeys, isConnected]);
 
-  useEffect(() => {
-    selectedIdRef.current = selectedWorkItemId;
-  }, [selectedWorkItemId]);
+  const {
+    selectedItem,
+    setSelectedItem,
+    artifacts,
+    setArtifacts,
+    decisions,
+    setDecisions,
+    signals,
+    setSignals,
+    agentKvEntries,
+    setAgentKvEntries,
+    workItemKvEntries,
+    setWorkItemKvEntries,
+    drilldownBusy,
+    drilldownError,
+    setDrilldownError,
+  } = useWorkboardPageData({
+    core,
+    effectiveScopeKeys,
+    isConnected,
+    selectedWorkItemId,
+    workboardItems: workboard.items,
+  });
 
   const grouped = useMemo(() => groupWorkItemsByStatus(workboard.items), [workboard.items]);
 
@@ -115,22 +105,12 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
     }
   }, [grouped, selectedItem, selectedStatus]);
 
-  useEffect(() => {
-    if (!selectedWorkItemId) return;
-    const item = workboard.items.find((entry) => entry.work_item_id === selectedWorkItemId);
-    if (!item) return;
-    setSelectedItem((prev) => {
-      if (!prev) return prev;
-      return prev.work_item_id === item.work_item_id ? item : prev;
-    });
-  }, [selectedWorkItemId, workboard.items]);
-
   const transitionSelected = useCallback(
     async (status: WorkItem["status"], reason: string): Promise<void> => {
       if (!isConnected) return;
       if (!selectedWorkItemId) return;
 
-      setTransitionTarget(status);
+      setPendingAction(status);
       setDrilldownError(null);
       try {
         const res = await core.workboard.workTransition({
@@ -141,167 +121,136 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
         });
         core.workboardStore.upsertWorkItem(res.item);
 
-        setSelectedItem((prev: WorkItem | null) => {
-          if (selectedIdRef.current !== res.item.work_item_id) return prev;
-          return res.item;
-        });
+        setSelectedItem(res.item);
       } catch (error) {
         setDrilldownError(formatErrorMessage(error));
       } finally {
-        setTransitionTarget(null);
+        setPendingAction(null);
       }
     },
     [core.workboard, core.workboardStore, effectiveScopeKeys, isConnected, selectedWorkItemId],
   );
 
-  useEffect(() => {
-    if (!isConnected) return;
+  const pauseSelected = useCallback(
+    async (reason: string): Promise<void> => {
+      if (!isConnected || !selectedWorkItemId) {
+        return;
+      }
 
-    let disposed = false;
+      setPendingAction("pause");
+      setDrilldownError(null);
+      try {
+        const res = await core.workboard.workPause({
+          ...effectiveScopeKeys,
+          work_item_id: selectedWorkItemId,
+          reason,
+        });
+        core.workboardStore.upsertWorkItem(res.item);
+        setSelectedItem(res.item);
+      } catch (error) {
+        setDrilldownError(formatErrorMessage(error));
+      } finally {
+        setPendingAction(null);
+      }
+    },
+    [core.workboard, core.workboardStore, effectiveScopeKeys, isConnected, selectedWorkItemId],
+  );
 
-    const onWorkArtifactCreated = (event: { payload: { artifact: WorkArtifact } }) => {
-      if (disposed) return;
-      const selectedId = selectedIdRef.current;
-      if (!selectedId) return;
-      if (event.payload.artifact.work_item_id !== selectedId) return;
-      setArtifacts((prev) => upsertWorkArtifact(prev, event.payload.artifact));
-    };
+  const resumeSelected = useCallback(
+    async (reason: string): Promise<void> => {
+      if (!isConnected || !selectedWorkItemId) {
+        return;
+      }
 
-    const onWorkDecisionCreated = (event: { payload: { decision: DecisionRecord } }) => {
-      if (disposed) return;
-      const selectedId = selectedIdRef.current;
-      if (!selectedId) return;
-      if (event.payload.decision.work_item_id !== selectedId) return;
-      setDecisions((prev) => upsertWorkDecision(prev, event.payload.decision));
-    };
+      setPendingAction("resume");
+      setDrilldownError(null);
+      try {
+        const res = await core.workboard.workResume({
+          ...effectiveScopeKeys,
+          work_item_id: selectedWorkItemId,
+          reason,
+        });
+        core.workboardStore.upsertWorkItem(res.item);
+        setSelectedItem(res.item);
+      } catch (error) {
+        setDrilldownError(formatErrorMessage(error));
+      } finally {
+        setPendingAction(null);
+      }
+    },
+    [core.workboard, core.workboardStore, effectiveScopeKeys, isConnected, selectedWorkItemId],
+  );
 
-    const onWorkSignalUpsert = (event: { payload: { signal: WorkSignal } }) => {
-      if (disposed) return;
-      const selectedId = selectedIdRef.current;
-      if (!selectedId) return;
-      if (event.payload.signal.work_item_id !== selectedId) return;
-      setSignals((prev) => upsertWorkSignal(prev, event.payload.signal));
-    };
-
-    const onWorkSignalFired = (event: { payload: { signal_id: string } }) => {
-      if (disposed) return;
-      const selectedId = selectedIdRef.current;
-      if (!selectedId) return;
-      void core.workboard
-        .workSignalGet({ ...effectiveScopeKeys, signal_id: event.payload.signal_id })
-        .then((res) => {
-          if (disposed) return;
-          if (res.signal.work_item_id !== selectedIdRef.current) return;
-          setSignals((prev) => upsertWorkSignal(prev, res.signal));
-        })
-        .catch(() => {});
-    };
-
-    const onWorkStateKvUpdated = (event: { payload: { scope: WorkStateKVScope; key: string } }) => {
-      if (disposed) return;
-      const selectedId = selectedIdRef.current;
-      const scope = event.payload.scope;
-      if (!shouldProcessWorkStateKvUpdate(scope, selectedId)) return;
-      void core.workboard
-        .workStateKvGet({ scope, key: event.payload.key })
-        .then((res) => {
-          if (disposed) return;
-          if (!shouldProcessWorkStateKvUpdate(scope, selectedIdRef.current)) return;
-          const entry = res.entry;
-          if (!entry) return;
-          if (scope.kind === "agent") {
-            setAgentKvEntries((prev) => upsertWorkStateKvEntry(prev, entry));
-          } else {
-            setWorkItemKvEntries((prev) => upsertWorkStateKvEntry(prev, entry));
-          }
-        })
-        .catch(() => {});
-    };
-
-    core.workboard.on("work.artifact.created", onWorkArtifactCreated);
-    core.workboard.on("work.decision.created", onWorkDecisionCreated);
-    core.workboard.on("work.signal.created", onWorkSignalUpsert);
-    core.workboard.on("work.signal.updated", onWorkSignalUpsert);
-    core.workboard.on("work.signal.fired", onWorkSignalFired);
-    core.workboard.on("work.state_kv.updated", onWorkStateKvUpdated);
-
-    return () => {
-      disposed = true;
-      core.workboard.off("work.artifact.created", onWorkArtifactCreated);
-      core.workboard.off("work.decision.created", onWorkDecisionCreated);
-      core.workboard.off("work.signal.created", onWorkSignalUpsert);
-      core.workboard.off("work.signal.updated", onWorkSignalUpsert);
-      core.workboard.off("work.signal.fired", onWorkSignalFired);
-      core.workboard.off("work.state_kv.updated", onWorkStateKvUpdated);
-    };
-  }, [core.workboard, effectiveScopeKeys, isConnected]);
-
-  useEffect(() => {
+  const deleteSelected = useCallback(async (): Promise<void> => {
     if (!isConnected || !selectedWorkItemId) {
+      return;
+    }
+
+    setPendingAction("delete");
+    setDrilldownError(null);
+    try {
+      const res = await core.workboard.workDelete({
+        ...effectiveScopeKeys,
+        work_item_id: selectedWorkItemId,
+      });
+      core.workboardStore.removeWorkItem(res.item.work_item_id);
+      setSelectedWorkItemId(null);
       setSelectedItem(null);
       setArtifacts([]);
       setDecisions([]);
       setSignals([]);
       setAgentKvEntries([]);
       setWorkItemKvEntries([]);
-      setDrilldownBusy(false);
-      setDrilldownError(null);
-      return;
+    } catch (error) {
+      setDrilldownError(formatErrorMessage(error));
+    } finally {
+      setPendingAction(null);
     }
+  }, [core.workboard, core.workboardStore, effectiveScopeKeys, isConnected, selectedWorkItemId]);
 
-    let cancelled = false;
-    setDrilldownBusy(true);
-    setDrilldownError(null);
-
-    const load = async (): Promise<void> => {
-      try {
-        const [workItemRes, artifactsRes, decisionsRes, signalsRes, agentKvRes, workItemKvRes] =
-          await Promise.all([
-            core.workboard.workGet({ ...effectiveScopeKeys, work_item_id: selectedWorkItemId }),
-            core.workboard.workArtifactList({
-              ...effectiveScopeKeys,
-              work_item_id: selectedWorkItemId,
-              limit: 200,
-            }),
-            core.workboard.workDecisionList({
-              ...effectiveScopeKeys,
-              work_item_id: selectedWorkItemId,
-              limit: 200,
-            }),
-            core.workboard.workSignalList({
-              ...effectiveScopeKeys,
-              work_item_id: selectedWorkItemId,
-              limit: 200,
-            }),
-            core.workboard.workStateKvList({ scope: makeAgentScope(effectiveScopeKeys) }),
-            core.workboard.workStateKvList({
-              scope: makeWorkItemScope(effectiveScopeKeys, selectedWorkItemId),
-            }),
-          ]);
-
-        if (cancelled) return;
-        setSelectedItem(workItemRes.item);
-        setArtifacts(artifactsRes.artifacts);
-        setDecisions(decisionsRes.decisions);
-        setSignals(signalsRes.signals);
-        setAgentKvEntries(agentKvRes.entries);
-        setWorkItemKvEntries(workItemKvRes.entries);
-      } catch (error) {
-        if (cancelled) return;
-        setDrilldownError(formatErrorMessage(error));
-      } finally {
-        if (!cancelled) {
-          setDrilldownBusy(false);
-        }
+  const submitEditor = useCallback(
+    async (input: WorkboardEditorSubmitInput): Promise<void> => {
+      if (!isConnected) {
+        return;
       }
-    };
 
-    void load();
+      const mode = input.mode;
+      setEditorBusy(mode);
+      setEditorError(null);
 
-    return () => {
-      cancelled = true;
-    };
-  }, [core.workboard, effectiveScopeKeys, isConnected, selectedWorkItemId]);
+      try {
+        if (mode === "create") {
+          const res = await core.workboard.workCreate({
+            ...effectiveScopeKeys,
+            item: input.item,
+          });
+          core.workboardStore.upsertWorkItem(res.item);
+          setSelectedWorkItemId(res.item.work_item_id);
+          setSelectedItem(res.item);
+          setCreateDialogOpen(false);
+          return;
+        }
+
+        if (!selectedWorkItemId) {
+          throw new Error("Select a work item before saving changes.");
+        }
+
+        const res = await core.workboard.workUpdate({
+          ...effectiveScopeKeys,
+          work_item_id: selectedWorkItemId,
+          patch: input.patch,
+        });
+        core.workboardStore.upsertWorkItem(res.item);
+        setSelectedItem(res.item);
+        setEditDialogOpen(false);
+      } catch (error) {
+        setEditorError(formatErrorMessage(error));
+      } finally {
+        setEditorBusy(null);
+      }
+    },
+    [core.workboard, core.workboardStore, effectiveScopeKeys, isConnected, selectedWorkItemId],
+  );
 
   const tasksForSelected = selectTasksForSelectedWorkItem(
     workboard.tasksByWorkItemId,
@@ -310,7 +259,7 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
   const taskList = useMemo(() => Object.values(tasksForSelected), [tasksForSelected]);
 
   const taskCounts = useMemo(() => {
-    const counts = { leased: 0, running: 0, paused: 0, completed: 0 };
+    const counts = { leased: 0, running: 0, paused: 0, completed: 0, failed: 0, cancelled: 0 };
     for (const task of taskList) {
       counts[task.status] += 1;
     }
@@ -319,195 +268,114 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
 
   const approvalBlockers = useMemo(
     () =>
-      taskList.filter((task) => task.status === "paused" && typeof task.approval_id === "number"),
+      taskList.filter((task) => task.status === "paused" && typeof task.approval_id === "string"),
     [taskList],
   );
 
-  const canMarkReadySelected = selectedItem?.status === "backlog";
-  const canResumeSelected = selectedItem?.status === "blocked";
+  const hasActiveLease = taskList.some(
+    (task) => task.status === "leased" || task.status === "running",
+  );
+  const hasPausedTasks = taskList.some((task) => task.status === "paused");
+  const canMarkReadySelected = selectedItem?.status === "backlog" && !hasActiveLease;
+  const canPauseSelected = hasActiveLease;
+  const canResumeSelected = hasPausedTasks;
+  const canEditSelected = selectedItem !== null && !hasActiveLease;
+  const canDeleteSelected = selectedItem !== null && !hasActiveLease;
   const canCancelSelected =
-    selectedItem?.status === "ready" ||
-    selectedItem?.status === "doing" ||
-    selectedItem?.status === "blocked";
+    selectedItem !== null &&
+    !hasActiveLease &&
+    selectedItem.status !== "done" &&
+    selectedItem.status !== "failed" &&
+    selectedItem.status !== "cancelled";
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-bg">
       <AppPageToolbar
         actions={
-          <WorkboardToolbarActions
-            core={core}
-            isConnected={isConnected}
-            scopeKeys={effectiveScopeKeys}
-          />
+          <div className="flex flex-wrap items-center gap-3">
+            <WorkboardScopeControls
+              core={core}
+              isConnected={isConnected}
+              scopeKeys={effectiveScopeKeys}
+            />
+            <Button
+              size="sm"
+              onClick={() => {
+                setEditorError(null);
+                setCreateDialogOpen(true);
+              }}
+              disabled={!isConnected}
+            >
+              New work item
+            </Button>
+          </div>
         }
       />
-
-      {desktopBoard ? (
-        <div className="min-h-0 flex-1 overflow-hidden">
-          <ScrollArea className="h-full">
-            <div data-layout-content="" className="grid gap-4 px-4 py-4 md:px-5 md:py-5">
-              {workboard.error && !workboardErrorDismissed ? (
-                <Alert
-                  variant="error"
-                  title="WorkBoard error"
-                  description={workboard.error}
-                  onDismiss={() => setWorkboardErrorDismissed(true)}
-                />
-              ) : null}
-
-              <div
-                data-testid="workboard-board"
-                className="overflow-hidden rounded-lg border border-border bg-bg-card"
-              >
-                <div
-                  data-testid="workboard-board-header"
-                  className="grid border-b border-border bg-bg-subtle"
-                  style={{ ...DESKTOP_BOARD_GRID_STYLE, ...DESKTOP_BOARD_MIN_WIDTH_STYLE }}
-                >
-                  {WORK_ITEM_STATUSES.map((status) => (
-                    <div
-                      key={status}
-                      className="border-r border-border px-2.5 py-2.5 last:border-r-0"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm font-semibold text-fg">
-                          {STATUS_LABELS[status]}
-                        </span>
-                        <span className="text-xs text-fg-muted">{grouped[status].length}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <div
-                  className="grid"
-                  style={{ ...DESKTOP_BOARD_GRID_STYLE, ...DESKTOP_BOARD_MIN_WIDTH_STYLE }}
-                >
-                  {WORK_ITEM_STATUSES.map((status) => (
-                    <div
-                      key={status}
-                      data-testid={`workboard-column-${status}`}
-                      className="min-h-80 border-r border-border p-2.5 align-top last:border-r-0"
-                    >
-                      <WorkStatusList
-                        items={grouped[status]}
-                        selectedWorkItemId={selectedWorkItemId}
-                        onSelect={setSelectedWorkItemId}
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="rounded-lg border border-border bg-bg-subtle/20">
-                <div className="flex h-12 items-center border-b border-border px-4">
-                  <div className="text-sm font-medium text-fg">
-                    {selectedItem ? "Work item details" : "Select a work item"}
-                  </div>
-                </div>
-                <div className="p-4">
-                  <WorkBoardDrilldown
-                    selectedWorkItemId={selectedWorkItemId}
-                    drilldownBusy={drilldownBusy}
-                    drilldownError={drilldownError}
-                    selectedItem={selectedItem}
-                    transitionTarget={transitionTarget}
-                    canMarkReadySelected={canMarkReadySelected}
-                    canResumeSelected={canResumeSelected}
-                    canCancelSelected={canCancelSelected}
-                    onTransition={transitionSelected}
-                    taskCounts={taskCounts}
-                    taskList={taskList}
-                    approvalBlockers={approvalBlockers}
-                    decisions={decisions}
-                    artifacts={artifacts}
-                    signals={signals}
-                    agentKvEntries={agentKvEntries}
-                    workItemKvEntries={workItemKvEntries}
-                  />
-                </div>
-              </div>
-            </div>
-          </ScrollArea>
-        </div>
-      ) : null}
-      {!desktopBoard ? (
-        <div className="min-h-0 flex-1 overflow-hidden">
-          <ScrollArea className="h-full">
-            <div data-layout-content="" className="grid gap-4 px-4 py-4 md:px-5 md:py-5">
-              {workboard.error && !workboardErrorDismissed ? (
-                <Alert
-                  variant="error"
-                  title="WorkBoard error"
-                  description={workboard.error}
-                  onDismiss={() => setWorkboardErrorDismissed(true)}
-                />
-              ) : null}
-
-              <div className="grid gap-3">
-                <div
-                  className="grid gap-2 sm:grid-cols-2"
-                  data-testid="workboard-status-selector"
-                  role="tablist"
-                  aria-label="Work statuses"
-                >
-                  {WORK_ITEM_STATUSES.map((status) => {
-                    const active = status === selectedStatus;
-                    return (
-                      <button
-                        key={status}
-                        type="button"
-                        role="tab"
-                        aria-selected={active}
-                        data-testid={`workboard-status-${status}`}
-                        className={[
-                          "flex items-center justify-between rounded-md border px-2.5 py-1.5 text-sm transition-colors",
-                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-0",
-                          active
-                            ? "border-primary bg-bg text-fg"
-                            : "border-border bg-bg hover:bg-bg-subtle",
-                        ].join(" ")}
-                        onClick={() => {
-                          setSelectedStatus(status);
-                        }}
-                      >
-                        <span>{STATUS_LABELS[status]}</span>
-                        <span className="text-xs text-fg-muted">{grouped[status].length}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <WorkStatusPanel
-                  status={selectedStatus}
-                  items={grouped[selectedStatus]}
-                  selectedWorkItemId={selectedWorkItemId}
-                  onSelect={setSelectedWorkItemId}
-                />
-              </div>
-
-              <WorkBoardDrilldown
-                selectedWorkItemId={selectedWorkItemId}
-                drilldownBusy={drilldownBusy}
-                drilldownError={drilldownError}
-                selectedItem={selectedItem}
-                transitionTarget={transitionTarget}
-                canMarkReadySelected={canMarkReadySelected}
-                canResumeSelected={canResumeSelected}
-                canCancelSelected={canCancelSelected}
-                onTransition={transitionSelected}
-                taskCounts={taskCounts}
-                taskList={taskList}
-                approvalBlockers={approvalBlockers}
-                decisions={decisions}
-                artifacts={artifacts}
-                signals={signals}
-                agentKvEntries={agentKvEntries}
-                workItemKvEntries={workItemKvEntries}
-              />
-            </div>
-          </ScrollArea>
-        </div>
-      ) : null}
+      <WorkboardPageLayout
+        desktopBoard={desktopBoard}
+        grouped={grouped}
+        selectedStatus={selectedStatus}
+        onSelectedStatusChange={setSelectedStatus}
+        selectedWorkItemId={selectedWorkItemId}
+        onSelectedWorkItemIdChange={setSelectedWorkItemId}
+        workboardError={workboard.error}
+        workboardErrorDismissed={workboardErrorDismissed}
+        onDismissWorkboardError={() => setWorkboardErrorDismissed(true)}
+        selectedItem={selectedItem}
+        drilldownBusy={drilldownBusy}
+        drilldownError={drilldownError}
+        pendingAction={pendingAction}
+        canMarkReadySelected={canMarkReadySelected}
+        canPauseSelected={canPauseSelected}
+        canResumeSelected={canResumeSelected}
+        canEditSelected={canEditSelected}
+        canDeleteSelected={canDeleteSelected}
+        canCancelSelected={canCancelSelected}
+        isReadOnlyLocked={hasActiveLease}
+        onTransition={transitionSelected}
+        onPause={pauseSelected}
+        onResume={resumeSelected}
+        onDelete={deleteSelected}
+        onEdit={() => {
+          setEditorError(null);
+          setEditDialogOpen(true);
+        }}
+        taskCounts={taskCounts}
+        taskList={taskList}
+        approvalBlockers={approvalBlockers}
+        decisions={decisions}
+        artifacts={artifacts}
+        signals={signals}
+        agentKvEntries={agentKvEntries}
+        workItemKvEntries={workItemKvEntries}
+      />
+      <WorkboardItemEditorDialog
+        open={createDialogOpen}
+        mode="create"
+        busy={editorBusy === "create"}
+        error={editorError}
+        onOpenChange={(open) => {
+          setCreateDialogOpen(open);
+          if (!open) {
+            setEditorError(null);
+          }
+        }}
+        onSubmit={submitEditor}
+      />
+      <WorkboardItemEditorDialog
+        open={editDialogOpen}
+        mode="edit"
+        busy={editorBusy === "edit"}
+        error={editorError}
+        item={selectedItem}
+        onOpenChange={(open) => {
+          setEditDialogOpen(open);
+          if (!open) {
+            setEditorError(null);
+          }
+        }}
+        onSubmit={submitEditor}
+      />
     </div>
   );
 }

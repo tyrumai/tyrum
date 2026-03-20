@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { randomUUID } from "node:crypto";
 import { createApprovalRoutes } from "../../src/routes/approval.js";
 import { ApprovalDal } from "../../src/modules/approval/dal.js";
+import { WorkboardDal } from "../../src/modules/workboard/dal.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { seedPausedExecutionRun } from "../helpers/execution-fixtures.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
@@ -129,5 +130,103 @@ describe("approval respond engine actions", () => {
       [DEFAULT_TENANT_ID, created.approval_id],
     );
     expect(rows[0]?.n ?? 0).toBe(0);
+  });
+
+  it("resolves work intervention approvals through the workboard service", async () => {
+    db = openTestSqliteDb();
+    const approvalDal = new ApprovalDal(db);
+    const workboard = new WorkboardDal(db);
+    const scope = {
+      tenant_id: DEFAULT_TENANT_ID,
+      agent_id: DEFAULT_AGENT_ID,
+      workspace_id: DEFAULT_WORKSPACE_ID,
+    } as const;
+    const item = await workboard.createItem({
+      scope,
+      createdFromSessionKey: "agent:default:test:default:channel:thread-approval-route",
+      item: { kind: "action", title: "Resume intervention work", acceptance: { done: true } },
+    });
+    await workboard.setStateKv({
+      scope: { kind: "work_item", ...scope, work_item_id: item.work_item_id },
+      key: "work.refinement.phase",
+      value_json: "done",
+      provenance_json: { source: "test" },
+    });
+    await workboard.setStateKv({
+      scope: { kind: "work_item", ...scope, work_item_id: item.work_item_id },
+      key: "work.dispatch.phase",
+      value_json: "awaiting_human",
+      provenance_json: { source: "test" },
+    });
+    await workboard.setStateKv({
+      scope: { kind: "work_item", ...scope, work_item_id: item.work_item_id },
+      key: "work.size.class",
+      value_json: "small",
+      provenance_json: { source: "test" },
+    });
+    await workboard.transitionItem({ scope, work_item_id: item.work_item_id, status: "ready" });
+    await workboard.transitionItem({ scope, work_item_id: item.work_item_id, status: "doing" });
+    await workboard.transitionItem({ scope, work_item_id: item.work_item_id, status: "blocked" });
+
+    const task = await workboard.createTask({
+      scope,
+      task: {
+        work_item_id: item.work_item_id,
+        status: "paused",
+        execution_profile: "executor_rw",
+        side_effect_class: "workspace",
+      },
+    });
+    const created = await approvalDal.create({
+      tenantId: DEFAULT_TENANT_ID,
+      agentId: DEFAULT_AGENT_ID,
+      workspaceId: DEFAULT_WORKSPACE_ID,
+      approvalKey: `work-intervention:${randomUUID()}`,
+      prompt: "Resume intervention work?",
+      motivation: "Manual intervention is required to continue this work item.",
+      kind: "work.intervention",
+      status: "awaiting_human",
+      workItemId: item.work_item_id,
+      workItemTaskId: task.task_id,
+    });
+    await workboard.updateTask({
+      scope,
+      task_id: task.task_id,
+      patch: { approval_id: created.approval_id },
+    });
+
+    const app = new Hono();
+    app.use("*", async (c, next) => {
+      c.set("authClaims", {
+        token_kind: "admin",
+        token_id: "token-1",
+        tenant_id: DEFAULT_TENANT_ID,
+        role: "admin",
+        scopes: ["*"],
+      });
+      return await next();
+    });
+    app.route("/", createApprovalRoutes({ approvalDal, db }));
+
+    const res = await app.request(`/approvals/${String(created.approval_id)}/respond`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ decision: "approved", reason: "resume now" }),
+    });
+    expect(res.status).toBe(200);
+
+    expect(await workboard.getItem({ scope, work_item_id: item.work_item_id })).toMatchObject({
+      status: "ready",
+    });
+    expect(await workboard.getTask({ scope, task_id: task.task_id })).toMatchObject({
+      status: "queued",
+      result_summary: "resume now",
+    });
+    expect(
+      await workboard.getStateKv({
+        scope: { kind: "work_item", ...scope, work_item_id: item.work_item_id },
+        key: "work.dispatch.phase",
+      }),
+    ).toMatchObject({ value_json: "unassigned" });
   });
 });

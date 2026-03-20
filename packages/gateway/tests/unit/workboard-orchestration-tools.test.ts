@@ -26,6 +26,21 @@ function createFakeAgents(reply: string): AgentRegistry {
   } as AgentRegistry;
 }
 
+async function waitForMatch<T>(
+  load: () => Promise<T>,
+  predicate: (value: T) => boolean,
+  attempts = 50,
+): Promise<T> {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const value = await load();
+    if (predicate(value)) {
+      return value;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  return await load();
+}
+
 describe("WorkBoard tools and orchestration", () => {
   let db: SqliteDb | undefined;
   let attachmentDal: SessionLaneNodeAttachmentDal | undefined;
@@ -180,7 +195,7 @@ describe("WorkBoard tools and orchestration", () => {
   it("broadcasts work.item.created when workboard.capture adds backlog work", async () => {
     db = openTestSqliteDb();
     const cm = new ConnectionManager();
-    const { ws } = makeClient(cm);
+    makeClient(cm);
     const scope = {
       tenant_id: DEFAULT_TENANT_ID,
       agent_id: DEFAULT_AGENT_ID,
@@ -212,15 +227,28 @@ describe("WorkBoard tools and orchestration", () => {
     expect(output.work_item_id).toBeTruthy();
     expect(output.refinement_phase).toBe("new");
 
-    expect(ws.send).toHaveBeenCalledTimes(1);
-    const event = JSON.parse(String(ws.send.mock.calls[0]?.[0] ?? "{}")) as {
-      type?: string;
-      payload?: { item?: { work_item_id?: string; title?: string; status?: string } };
+    const outboxRow = await waitForMatch(
+      async () =>
+        await db.get<{ payload_json: string }>(
+          `SELECT payload_json
+           FROM outbox
+           WHERE tenant_id = ?
+           ORDER BY created_at DESC
+           LIMIT 1`,
+          [DEFAULT_TENANT_ID],
+        ),
+      (row) => typeof row?.payload_json === "string",
+    );
+    const event = JSON.parse(String(outboxRow?.payload_json ?? "{}")) as {
+      message?: {
+        type?: string;
+        payload?: { item?: { work_item_id?: string; title?: string; status?: string } };
+      };
     };
-    expect(event.type).toBe("work.item.created");
-    expect(event.payload?.item?.work_item_id).toBe(output.work_item_id);
-    expect(event.payload?.item?.title).toBe("Captured with broadcast");
-    expect(event.payload?.item?.status).toBe(output.status);
+    expect(event.message?.type).toBe("work.item.created");
+    expect(event.message?.payload?.item?.work_item_id).toBe(output.work_item_id);
+    expect(event.message?.payload?.item?.title).toBe("Captured with broadcast");
+    expect(event.message?.payload?.item?.status).toBe(output.status);
 
     const workboard = new WorkboardDal(db);
     const item = await workboard.getItem({
@@ -369,7 +397,7 @@ describe("WorkBoard tools and orchestration", () => {
     await workboard.setStateKv({
       scope: { kind: "work_item", ...scope, work_item_id: item.work_item_id },
       key: "work.refinement.phase",
-      value_json: "complete",
+      value_json: "done",
       provenance_json: { source: "test" },
     });
     await workboard.setStateKv({
@@ -413,7 +441,7 @@ describe("WorkBoard tools and orchestration", () => {
     await workboard.setStateKv({
       scope: { kind: "work_item", ...scope, work_item_id: item.work_item_id },
       key: "work.refinement.phase",
-      value_json: "complete",
+      value_json: "done",
       provenance_json: { source: "test" },
     });
     await workboard.setStateKv({
@@ -436,16 +464,24 @@ describe("WorkBoard tools and orchestration", () => {
 
     await dispatcher.tick();
 
-    const refreshed = await workboard.getItem({
-      scope,
-      work_item_id: item.work_item_id,
-    });
+    const refreshed = await waitForMatch(
+      async () =>
+        await workboard.getItem({
+          scope,
+          work_item_id: item.work_item_id,
+        }),
+      (value) => value?.status === "done",
+    );
     expect(refreshed?.status).toBe("done");
 
-    const tasks = await workboard.listTasks({
-      scope,
-      work_item_id: item.work_item_id,
-    });
+    const tasks = await waitForMatch(
+      async () =>
+        await workboard.listTasks({
+          scope,
+          work_item_id: item.work_item_id,
+        }),
+      (value) => value.some((task) => task.status === "completed"),
+    );
     expect(tasks[0]?.status).toBe("completed");
 
     const subagents = await workboard.listSubagents({

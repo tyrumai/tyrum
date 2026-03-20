@@ -13,6 +13,8 @@ type TaskCounts = {
   running: number;
   paused: number;
   completed: number;
+  failed: number;
+  cancelled: number;
 };
 
 export type WorkBoardDrilldownProps = {
@@ -20,11 +22,19 @@ export type WorkBoardDrilldownProps = {
   drilldownBusy: boolean;
   drilldownError: string | null;
   selectedItem: WorkItem | null;
-  transitionTarget: WorkItem["status"] | null;
+  pendingAction: WorkItem["status"] | "pause" | "resume" | "delete" | null;
   canMarkReadySelected: boolean;
+  canPauseSelected: boolean;
   canResumeSelected: boolean;
+  canEditSelected: boolean;
+  canDeleteSelected: boolean;
   canCancelSelected: boolean;
+  isReadOnlyLocked: boolean;
   onTransition: (status: WorkItem["status"], reason: string) => Promise<void>;
+  onPause: (reason: string) => Promise<void>;
+  onResume: (reason: string) => Promise<void>;
+  onDelete: () => Promise<void>;
+  onEdit: () => void;
   taskCounts: TaskCounts;
   taskList: readonly WorkTaskSummary[];
   approvalBlockers: readonly WorkTaskSummary[];
@@ -40,11 +50,19 @@ export function WorkBoardDrilldown({
   drilldownBusy,
   drilldownError,
   selectedItem,
-  transitionTarget,
+  pendingAction,
   canMarkReadySelected,
+  canPauseSelected,
   canResumeSelected,
+  canEditSelected,
+  canDeleteSelected,
   canCancelSelected,
+  isReadOnlyLocked,
   onTransition,
+  onPause,
+  onResume,
+  onDelete,
+  onEdit,
   taskCounts,
   taskList,
   approvalBlockers,
@@ -55,6 +73,7 @@ export function WorkBoardDrilldown({
   workItemKvEntries,
 }: WorkBoardDrilldownProps) {
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [drilldownErrorDismissed, setDrilldownErrorDismissed] = useState(false);
 
   useEffect(() => {
@@ -91,27 +110,71 @@ export function WorkBoardDrilldown({
                 <span>kind {selectedItem.kind}</span>
                 <span>priority {selectedItem.priority}</span>
               </div>
-              {canMarkReadySelected || canResumeSelected || canCancelSelected ? (
+              {isReadOnlyLocked ? (
+                <Alert
+                  variant="info"
+                  title="Read-only while leased"
+                  description="This item is currently leased to an agent. Pause it before editing, deleting, or cancelling it."
+                />
+              ) : null}
+              {canMarkReadySelected ||
+              canPauseSelected ||
+              canResumeSelected ||
+              canEditSelected ||
+              canDeleteSelected ||
+              canCancelSelected ? (
                 <div className="flex flex-wrap gap-2 pt-1">
                   {canMarkReadySelected ? (
                     <Button
                       variant="secondary"
                       size="sm"
                       onClick={() => void onTransition("ready", "operator triaged")}
-                      disabled={transitionTarget !== null}
-                      isLoading={transitionTarget === "ready"}
+                      disabled={pendingAction !== null}
+                      isLoading={pendingAction === "ready"}
                     >
-                      {transitionTarget === "ready" ? "Triaging…" : "Mark Ready"}
+                      {pendingAction === "ready" ? "Triaging…" : "Mark Ready"}
+                    </Button>
+                  ) : null}
+                  {canPauseSelected ? (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => void onPause("operator paused work item")}
+                      disabled={pendingAction !== null}
+                      isLoading={pendingAction === "pause"}
+                    >
+                      {pendingAction === "pause" ? "Pausing…" : "Pause"}
                     </Button>
                   ) : null}
                   {canResumeSelected ? (
                     <Button
                       size="sm"
-                      onClick={() => void onTransition("doing", "operator resumed")}
-                      disabled={transitionTarget !== null}
-                      isLoading={transitionTarget === "doing"}
+                      onClick={() => void onResume("operator resumed work item")}
+                      disabled={pendingAction !== null}
+                      isLoading={pendingAction === "resume"}
                     >
-                      {transitionTarget === "doing" ? "Resuming…" : "Resume"}
+                      {pendingAction === "resume" ? "Resuming…" : "Resume"}
+                    </Button>
+                  ) : null}
+                  {canEditSelected ? (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={onEdit}
+                      disabled={pendingAction !== null}
+                    >
+                      Edit
+                    </Button>
+                  ) : null}
+                  {canDeleteSelected ? (
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      onClick={() => setDeleteOpen(true)}
+                      disabled={pendingAction !== null}
+                      isLoading={pendingAction === "delete"}
+                    >
+                      {pendingAction === "delete" ? "Deleting…" : "Delete"}
                     </Button>
                   ) : null}
                   {canCancelSelected ? (
@@ -119,10 +182,10 @@ export function WorkBoardDrilldown({
                       variant="danger"
                       size="sm"
                       onClick={() => setCancelOpen(true)}
-                      disabled={transitionTarget !== null}
-                      isLoading={transitionTarget === "cancelled"}
+                      disabled={pendingAction !== null}
+                      isLoading={pendingAction === "cancelled"}
                     >
-                      {transitionTarget === "cancelled" ? "Cancelling…" : "Cancel"}
+                      {pendingAction === "cancelled" ? "Cancelling…" : "Cancel"}
                     </Button>
                   ) : null}
                 </div>
@@ -158,6 +221,8 @@ export function WorkBoardDrilldown({
                 <span>leased {taskCounts.leased}</span>
                 <span>paused {taskCounts.paused}</span>
                 <span>completed {taskCounts.completed}</span>
+                <span>failed {taskCounts.failed}</span>
+                <span>cancelled {taskCounts.cancelled}</span>
               </div>
               {taskList.length > 0 ? (
                 <div className="grid gap-2">
@@ -171,17 +236,25 @@ export function WorkBoardDrilldown({
                           <strong className="text-fg">{task.status}</strong>
                         </span>
                         <span className="font-mono break-all">{task.task_id}</span>
+                        {task.subagent_id ? (
+                          <span className="break-all">subagent {task.subagent_id}</span>
+                        ) : null}
                         <span>{new Date(task.last_event_at).toLocaleString()}</span>
                       </div>
                       {(task.run_id ||
-                        typeof task.approval_id === "number" ||
+                        task.approval_id ||
+                        task.pause_reason ||
                         task.result_summary) && (
                         <div className="mt-2 flex flex-wrap gap-2 text-xs text-fg-muted">
                           {task.run_id ? (
                             <span className="break-all">run {task.run_id}</span>
                           ) : null}
-                          {typeof task.approval_id === "number" ? (
-                            <span>approval {task.approval_id}</span>
+                          {task.approval_id ? <span>approval {task.approval_id}</span> : null}
+                          {task.pause_reason ? <span>pause {task.pause_reason}</span> : null}
+                          {task.pause_detail ? (
+                            <span className="break-words [overflow-wrap:anywhere]">
+                              detail {task.pause_detail}
+                            </span>
                           ) : null}
                           {task.result_summary ? (
                             <span className="break-words [overflow-wrap:anywhere]">
@@ -303,9 +376,17 @@ export function WorkBoardDrilldown({
           open={cancelOpen}
           onOpenChange={setCancelOpen}
           title="Cancel this WorkItem?"
-          description="This will cancel the WorkItem and stop any running tasks."
+          description="This will cancel the WorkItem after it is no longer actively leased."
           confirmLabel="Cancel WorkItem"
           onConfirm={() => onTransition("cancelled", "operator cancelled")}
+        />
+        <ConfirmDangerDialog
+          open={deleteOpen}
+          onOpenChange={setDeleteOpen}
+          title="Delete this WorkItem?"
+          description="This permanently removes the WorkItem once it is no longer actively leased."
+          confirmLabel="Delete WorkItem"
+          onConfirm={onDelete}
         />
       </CardContent>
     </Card>

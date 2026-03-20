@@ -56,7 +56,7 @@ vi.mock("../../src/modules/agent/runtime/turn-direct-helpers.js", () => ({
   throwToolApprovalError: vi.fn(),
 }));
 
-vi.mock("../../src/modules/agent/runtime/intake-delegation.js", () => ({
+vi.mock("../../src/modules/agent/runtime/execution-profile-resolution.js", () => ({
   delegateFromIntake: vi.fn(),
   handleIntakeModeDecision: vi.fn(async () => null),
   resolveIntakeDecision: vi.fn(async () => ({ mode: "continue" })),

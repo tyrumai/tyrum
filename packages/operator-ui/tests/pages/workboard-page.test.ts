@@ -270,14 +270,14 @@ describe("WorkBoardPage", () => {
                 task_id: "task-1",
                 status: "paused",
                 last_event_at: "2026-01-01T00:01:00.000Z",
-                approval_id: 42,
+                approval_id: "approval-42",
               },
             },
           },
         }));
       });
       await flushEffects();
-      expect(testRoot.container.textContent).toContain("approval 42");
+      expect(testRoot.container.textContent).toContain("approval approval-42");
 
       act(() => {
         ws.emit("work.artifact.created", {
@@ -465,25 +465,6 @@ describe("WorkBoardPage", () => {
         limit: 200,
       });
     } finally {
-      cleanupTestRoot(testRoot);
-    }
-  });
-
-  it("shows unsupported-request message when work.list is not available", async () => {
-    const { core } = createCore("connected", undefined, {
-      supported: false,
-      error: "WorkBoard is not supported by this gateway (database not configured).",
-    });
-
-    const matchMedia = stubMatchMedia("(min-width: 1160px)", true);
-    const testRoot = renderIntoDocument(React.createElement(WorkBoardPage, { core }));
-    try {
-      await flushEffects();
-      expect(testRoot.container.textContent).toContain(
-        "WorkBoard is not supported by this gateway (database not configured).",
-      );
-    } finally {
-      matchMedia.cleanup();
       cleanupTestRoot(testRoot);
     }
   });

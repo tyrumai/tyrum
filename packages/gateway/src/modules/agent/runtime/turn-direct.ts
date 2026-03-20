@@ -17,11 +17,6 @@ import { coerceRecord } from "../../util/coerce.js";
 import { finalizeTurn } from "./turn-finalization.js";
 import { resolveAutomationMetadata } from "./automation-delivery.js";
 import {
-  resolveIntakeDecision,
-  delegateFromIntake,
-  handleIntakeModeDecision,
-} from "./intake-delegation.js";
-import {
   createStopWhenWithWithinTurnLoopDetection,
   compactForOverflow,
   makeEventfulAbortSignal,
@@ -38,7 +33,6 @@ import { prepareTurn } from "./turn-preparation.js";
 import { handleStatusQuery, throwToolApprovalError } from "./turn-direct-helpers.js";
 import { isContextOverflowError } from "./session-compaction-service.js";
 import {
-  buildDelegationStreamResult,
   buildDirectPromptMessages,
   createDirectTurnDownloadFunction,
   pruneDirectPromptMessages,
@@ -60,9 +54,7 @@ export async function turnDirect(
   const prepared = await prepareTurn(deps.prepareTurnDeps, input, turnOpts?.execution);
   const {
     ctx,
-    executionProfile,
     session,
-    mainLaneSessionKey,
     model,
     modelResolution,
     toolSet,
@@ -112,41 +104,6 @@ export async function turnDirect(
   if (isStatusQuery(resolved.message)) {
     const reply = await handleStatusQuery(deps.opts.container, workScope);
     const response = await finalizeAndPersist({ reply, turnKind: "skip" });
-    return { response, contextReport };
-  }
-
-  const intakeResult = await handleIntakeModeDecision(
-    { container: deps.opts.container },
-    { resolved, workScope },
-  );
-  if (intakeResult) {
-    const response = await finalizeAndPersist({
-      reply: intakeResult.reply,
-      turnKind: "skip",
-    });
-    return { response, contextReport };
-  }
-
-  const intake = await resolveIntakeDecision(
-    { container: deps.opts.container },
-    { input, executionProfile, resolved, mainLaneSessionKey },
-  );
-  if (intake.mode === "delegate_execute" || intake.mode === "delegate_plan") {
-    const delegation = await delegateFromIntake(
-      { agentId: deps.agentId, container: deps.opts.container },
-      {
-        executionProfile,
-        mode: intake.mode,
-        reason_code: intake.reason_code,
-        resolved,
-        scope: workScope,
-        createdFromSessionKey: mainLaneSessionKey,
-      },
-    );
-    const response = await finalizeAndPersist({
-      reply: delegation.reply,
-      turnKind: "skip",
-    });
     return { response, contextReport };
   }
 
@@ -318,9 +275,7 @@ export async function turnStreamDirect(
   const prepared = await prepareTurn(deps.prepareTurnDeps, input);
   const {
     ctx,
-    executionProfile,
     session,
-    mainLaneSessionKey,
     model,
     modelResolution,
     toolSet,
@@ -336,51 +291,6 @@ export async function turnStreamDirect(
   } = prepared;
   let activeSession = session;
   const downloadPartUrl = createDirectTurnDownloadFunction(deps);
-
-  const intake = await resolveIntakeDecision(
-    { container: deps.opts.container },
-    { input, executionProfile, resolved, mainLaneSessionKey },
-  );
-  if (intake.mode === "delegate_execute" || intake.mode === "delegate_plan") {
-    const delegation = await delegateFromIntake(
-      { agentId: deps.agentId, container: deps.opts.container },
-      {
-        executionProfile,
-        mode: intake.mode,
-        reason_code: intake.reason_code,
-        resolved,
-        scope: {
-          tenant_id: session.tenant_id,
-          agent_id: session.agent_id,
-          workspace_id: session.workspace_id,
-        },
-        createdFromSessionKey: mainLaneSessionKey,
-      },
-    );
-    const response = await finalizeTurn({
-      container: deps.opts.container,
-      sessionDal: deps.sessionDal,
-      ctx,
-      session,
-      resolved,
-      reply: delegation.reply,
-      model,
-      usedTools,
-      memoryWritten: memoryWriteState?.wrote ?? false,
-      contextReport,
-      turnKind: "skip",
-    });
-
-    const streamResult = buildDelegationStreamResult(delegation.reply);
-
-    return {
-      streamResult,
-      sessionId: session.session_id,
-      contextReport,
-      guardianReviewDecisionCollector,
-      finalize: async () => response,
-    };
-  }
 
   await maybeAutoCompactSession({
     deps,

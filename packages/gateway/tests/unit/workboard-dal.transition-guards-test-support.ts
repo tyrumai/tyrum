@@ -20,7 +20,7 @@ export function registerTransitionGuardTests(fixture: WorkboardDalFixture): void
     await dal.setStateKv({
       scope: { kind: "work_item", ...scope, work_item_id: item.work_item_id },
       key: "work.refinement.phase",
-      value_json: "complete",
+      value_json: "done",
       provenance_json: { source: "test" },
     });
     await dal.setStateKv({

@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it } from "vitest";
-import type { GatewayContainer } from "../../src/container.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import {
   DEFAULT_AGENT_ID,
@@ -7,7 +6,6 @@ import {
   DEFAULT_WORKSPACE_ID,
 } from "../../src/modules/identity/scope.js";
 import { executeWorkboardTool } from "../../src/modules/agent/tool-executor-workboard-tools.js";
-import { buildWorkFocusDigest } from "../../src/modules/agent/runtime/work-focus-digest.js";
 import { WorkboardDispatcher } from "../../src/modules/workboard/dispatcher.js";
 import { WorkboardReconciler } from "../../src/modules/workboard/reconciler.js";
 import { SubagentJanitor } from "../../src/modules/workboard/subagent-janitor.js";
@@ -23,6 +21,31 @@ function createFakeAgents(reply: string): AgentRegistry {
         turn: async () => ({ reply }),
       }) as Awaited<ReturnType<AgentRegistry["getRuntime"]>>,
   } as AgentRegistry;
+}
+
+async function waitForWorkItemStatus(input: {
+  workboard: WorkboardDal;
+  scope: { tenant_id: string; agent_id: string; workspace_id: string };
+  workItemId: string;
+  status: string;
+  attempts?: number;
+}): Promise<void> {
+  const attempts = input.attempts ?? 50;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const item = await input.workboard.getItem({
+      scope: input.scope,
+      work_item_id: input.workItemId,
+    });
+    if (item?.status === input.status) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  const item = await input.workboard.getItem({
+    scope: input.scope,
+    work_item_id: input.workItemId,
+  });
+  expect(item).toMatchObject({ status: input.status });
 }
 
 describe("WorkBoard orchestration follow-up behaviors", () => {
@@ -52,7 +75,7 @@ describe("WorkBoard orchestration follow-up behaviors", () => {
     await workboard.setStateKv({
       scope: { kind: "work_item", ...scope, work_item_id: item.work_item_id },
       key: "work.refinement.phase",
-      value_json: "complete",
+      value_json: "done",
       provenance_json: { source: "test" },
     });
     await workboard.setStateKv({
@@ -103,7 +126,7 @@ describe("WorkBoard orchestration follow-up behaviors", () => {
     await workboard.setStateKv({
       scope: { kind: "work_item", ...scope, work_item_id: item.work_item_id },
       key: "work.refinement.phase",
-      value_json: "complete",
+      value_json: "done",
       provenance_json: { source: "test" },
     });
     await workboard.setStateKv({
@@ -324,7 +347,7 @@ describe("WorkBoard orchestration follow-up behaviors", () => {
     await workboard.setStateKv({
       scope: { kind: "work_item", ...scope, work_item_id: item.work_item_id },
       key: "work.refinement.phase",
-      value_json: "complete",
+      value_json: "done",
       provenance_json: { source: "test" },
     });
     await workboard.setStateKv({
@@ -391,6 +414,12 @@ describe("WorkBoard orchestration follow-up behaviors", () => {
       sessionLaneNodeAttachmentDal: attachmentDal,
     });
     await dispatcher.tick();
+    await waitForWorkItemStatus({
+      workboard,
+      scope,
+      workItemId: item.work_item_id,
+      status: "done",
+    });
 
     expect(
       await workboard.getItem({
@@ -398,70 +427,5 @@ describe("WorkBoard orchestration follow-up behaviors", () => {
         work_item_id: item.work_item_id,
       }),
     ).toMatchObject({ status: "done" });
-  });
-
-  it("includes refinement and ownership details in the work focus digest", async () => {
-    db = openTestSqliteDb();
-    attachmentDal = new SessionLaneNodeAttachmentDal(db);
-    const workboard = new WorkboardDal(db);
-    const scope = {
-      tenant_id: DEFAULT_TENANT_ID,
-      agent_id: DEFAULT_AGENT_ID,
-      workspace_id: DEFAULT_WORKSPACE_ID,
-    } as const;
-    const item = await workboard.createItem({
-      scope,
-      createdFromSessionKey: "agent:default:test:default:channel:thread-6",
-      item: { kind: "action", title: "Digest detail", acceptance: { done: true } },
-    });
-    await workboard.setStateKv({
-      scope: { kind: "work_item", ...scope, work_item_id: item.work_item_id },
-      key: "work.refinement.phase",
-      value_json: "complete",
-      provenance_json: { source: "test" },
-    });
-    await workboard.setStateKv({
-      scope: { kind: "work_item", ...scope, work_item_id: item.work_item_id },
-      key: "work.size.class",
-      value_json: "small",
-      provenance_json: { source: "test" },
-    });
-    await workboard.setStateKv({
-      scope: { kind: "work_item", ...scope, work_item_id: item.work_item_id },
-      key: "work.dispatch.phase",
-      value_json: "running",
-      provenance_json: { source: "test" },
-    });
-    await workboard.transitionItem({ scope, work_item_id: item.work_item_id, status: "ready" });
-    await db.run(
-      `UPDATE work_items
-       SET status = 'doing'
-       WHERE tenant_id = ? AND work_item_id = ?`,
-      [DEFAULT_TENANT_ID, item.work_item_id],
-    );
-    await workboard.createSubagent({
-      scope,
-      subagentId: "323e4567-e89b-12d3-a456-426614174111",
-      subagent: {
-        work_item_id: item.work_item_id,
-        execution_profile: "executor_rw",
-        session_key: "agent:default:subagent:323e4567-e89b-12d3-a456-426614174111",
-        lane: "subagent",
-        status: "running",
-      },
-    });
-
-    const digest = await buildWorkFocusDigest({
-      container: {
-        db,
-        redactionEngine: undefined,
-        logger: { warn: () => undefined } as GatewayContainer["logger"],
-      },
-      scope,
-    });
-
-    expect(digest).toContain("refinement=complete");
-    expect(digest).toContain("dispatch=running");
-    expect(digest).toContain("owners=executor_rw:running");
   });
 });

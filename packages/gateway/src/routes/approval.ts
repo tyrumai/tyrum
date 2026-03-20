@@ -6,6 +6,7 @@
  */
 
 import type { PolicyOverrideStore } from "@tyrum/runtime-policy";
+import type { PolicyService } from "@tyrum/runtime-policy";
 import { Hono } from "hono";
 import {
   isApprovalTerminalStatus,
@@ -14,16 +15,18 @@ import {
 } from "../modules/approval/dal.js";
 import type { Logger } from "../modules/observability/logger.js";
 import type { WsEventDal } from "../modules/ws-event/dal.js";
-import type { ConnectionManager } from "../ws/connection-manager.js";
-import type { OutboxDal } from "../modules/backplane/outbox-dal.js";
 import type { WsEventEnvelope } from "@tyrum/contracts";
 import { UuidSchema } from "@tyrum/contracts";
 import { getClientIp } from "../modules/auth/client-ip.js";
 import { requireTenantId } from "../modules/auth/claims.js";
+import type { RedactionEngine } from "../modules/redaction/engine.js";
+import type { SqlDb } from "../statestore/types.js";
 import { type WsBroadcastAudience } from "../ws/audience.js";
 import { broadcastWsEvent } from "../ws/broadcast.js";
 import { resolveApproval } from "../modules/approval/resolve-service.js";
 import { toApprovalContract } from "../modules/approval/to-contract.js";
+import { createGatewayWorkboardService } from "../modules/workboard/service.js";
+import type { ProtocolDeps } from "../ws/protocol/types.js";
 
 const VALID_STATUSES = new Set<ApprovalStatus>([
   "queued",
@@ -40,14 +43,10 @@ export interface ApprovalRouteDeps {
   logger?: Logger;
   policyOverrideDal?: PolicyOverrideStore;
   wsEventDal?: WsEventDal;
-  ws?: {
-    connectionManager: ConnectionManager;
-    maxBufferedBytes?: number;
-    cluster?: {
-      edgeId: string;
-      outboxDal: OutboxDal;
-    };
-  };
+  db?: SqlDb;
+  redactionEngine?: RedactionEngine;
+  policyService?: PolicyService;
+  ws?: Pick<ProtocolDeps, "connectionManager" | "maxBufferedBytes" | "cluster">;
 }
 
 function emitEvent(
@@ -59,6 +58,24 @@ function emitEvent(
   const ws = deps.ws;
   if (!ws) return;
   broadcastWsEvent(tenantId, evt, { ...ws, logger: deps.logger }, audience);
+}
+
+function buildWorkboardProtocolDeps(deps: ApprovalRouteDeps): ProtocolDeps | undefined {
+  if (!deps.ws) {
+    return undefined;
+  }
+
+  return {
+    connectionManager: deps.ws.connectionManager,
+    cluster: deps.ws.cluster,
+    maxBufferedBytes: deps.ws.maxBufferedBytes,
+    logger: deps.logger,
+    db: deps.db,
+    wsEventDal: deps.wsEventDal,
+    redactionEngine: deps.redactionEngine,
+    approvalDal: deps.approvalDal,
+    policyService: deps.policyService,
+  };
 }
 
 export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
@@ -145,11 +162,40 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
       ip: getClientIp(c),
       user_agent: c.req.header("user-agent") ?? undefined,
     };
+    const workboardDb = deps.db;
     const result = await resolveApproval(
       {
         approvalDal: deps.approvalDal,
         policyOverrideDal: deps.policyOverrideDal,
         wsEventDal: deps.wsEventDal,
+        workboardIntervention: workboardDb
+          ? {
+              handleResolvedIntervention: async ({
+                approval,
+                decision: resolvedDecision,
+                reason,
+              }) => {
+                if (!approval.work_item_id || !approval.work_item_task_id) {
+                  return;
+                }
+                await createGatewayWorkboardService({
+                  db: workboardDb,
+                  redactionEngine: deps.redactionEngine,
+                  approvalDal: deps.approvalDal,
+                  policyService: deps.policyService,
+                  protocolDeps: buildWorkboardProtocolDeps(deps),
+                }).resolveInterventionApproval({
+                  tenantId,
+                  agentId: approval.agent_id,
+                  workspaceId: approval.workspace_id,
+                  work_item_id: approval.work_item_id,
+                  work_item_task_id: approval.work_item_task_id,
+                  decision: resolvedDecision,
+                  reason,
+                });
+              },
+            }
+          : undefined,
         emitEvent: ({ tenantId: eventTenantId, event, audience }) => {
           emitEvent(deps, eventTenantId, event, audience);
         },

@@ -1,11 +1,11 @@
 import type {
   AgentStateKVEntry,
   DecisionRecord,
-  WorkArtifact,
   Lane,
   SubagentDescriptor,
   SubagentStatus,
   WorkClarification,
+  WorkArtifact,
   WorkItemLink,
   WorkItem,
   WorkItemState,
@@ -15,12 +15,6 @@ import type {
   WorkSignal,
   WorkStateKVScopeIds,
   WorkItemStateKVEntry,
-  WsWorkArtifactCreateInput,
-  WsWorkCreateItemInput,
-  WsWorkDecisionCreateInput,
-  WsWorkSignalCreateInput,
-  WsWorkSignalUpdatePatch,
-  WsWorkUpdatePatch,
 } from "@tyrum/contracts";
 
 export interface WorkboardLogger {
@@ -37,13 +31,66 @@ export interface WorkboardStateEntry {
   value_json: unknown;
 }
 
-export interface WorkboardItemRef extends WorkScope {
+export interface WorkboardItemRef {
+  tenant_id: string;
+  agent_id: string;
+  workspace_id: string;
   work_item_id: string;
 }
 
-export interface WorkboardPlannerSubagentRef extends WorkScope {
+export interface WorkboardPlannerSubagentRef {
+  tenant_id: string;
+  agent_id: string;
+  workspace_id: string;
   subagent_id: string;
   work_item_id: string;
+}
+
+export interface CreateWorkItemInput {
+  kind: WorkItem["kind"];
+  title: string;
+  priority?: number;
+  acceptance?: unknown;
+  fingerprint?: WorkItem["fingerprint"];
+  budgets?: WorkItem["budgets"];
+  parent_work_item_id?: string;
+  created_from_session_key?: string;
+}
+
+export interface UpdateWorkItemPatch {
+  title?: string;
+  priority?: number;
+  acceptance?: unknown;
+  fingerprint?: WorkItem["fingerprint"];
+  budgets?: WorkItem["budgets"] | null;
+  last_active_at?: string | null;
+}
+
+export interface CreateWorkArtifactInput {
+  work_item_id?: string;
+  kind: WorkArtifact["kind"];
+  title: string;
+  body_md?: string;
+  refs?: WorkArtifact["refs"];
+}
+
+export interface CreateWorkDecisionInput {
+  work_item_id: string;
+  question: string;
+  chosen: string;
+  rationale_md: string;
+}
+
+export interface CreateWorkSignalInput {
+  work_item_id: string;
+  trigger_kind: WorkSignal["trigger_kind"];
+  trigger_spec_json: unknown;
+}
+
+export interface UpdateWorkSignalPatch {
+  status?: WorkSignal["status"];
+  trigger_spec_json?: unknown;
+  last_fired_at?: string | null;
 }
 
 export interface CreateWorkItemTaskInput {
@@ -56,6 +103,11 @@ export interface CreateWorkItemTaskInput {
 
 export interface UpdateWorkItemTaskPatch {
   status?: WorkItemTaskState;
+  run_id?: string | null;
+  approval_id?: string | null;
+  subagent_id?: string | null;
+  pause_reason?: string | null;
+  pause_detail?: string | null;
   started_at?: string;
   finished_at?: string;
   result_summary?: string;
@@ -175,7 +227,7 @@ export interface WorkboardRepository {
 export interface WorkboardCrudRepository {
   createItem(params: {
     scope: WorkScope;
-    item: WsWorkCreateItemInput;
+    item: CreateWorkItemInput;
     createdFromSessionKey?: string;
   }): Promise<WorkItem>;
   listItems(params: {
@@ -189,7 +241,7 @@ export interface WorkboardCrudRepository {
   updateItem(params: {
     scope: WorkScope;
     work_item_id: string;
-    patch: WsWorkUpdatePatch;
+    patch: UpdateWorkItemPatch;
   }): Promise<WorkItem | undefined>;
   transitionItem(params: {
     scope: WorkScope;
@@ -218,7 +270,7 @@ export interface WorkboardCrudRepository {
   getArtifact(params: { scope: WorkScope; artifact_id: string }): Promise<WorkArtifact | undefined>;
   createArtifact(params: {
     scope: WorkScope;
-    artifact: WsWorkArtifactCreateInput;
+    artifact: CreateWorkArtifactInput;
   }): Promise<WorkArtifact>;
   listDecisions(params: {
     scope: WorkScope;
@@ -232,7 +284,7 @@ export interface WorkboardCrudRepository {
   }): Promise<DecisionRecord | undefined>;
   createDecision(params: {
     scope: WorkScope;
-    decision: WsWorkDecisionCreateInput;
+    decision: CreateWorkDecisionInput;
   }): Promise<DecisionRecord>;
   listSignals(params: {
     scope: WorkScope;
@@ -242,11 +294,11 @@ export interface WorkboardCrudRepository {
     cursor?: string;
   }): Promise<{ signals: WorkSignal[]; next_cursor?: string }>;
   getSignal(params: { scope: WorkScope; signal_id: string }): Promise<WorkSignal | undefined>;
-  createSignal(params: { scope: WorkScope; signal: WsWorkSignalCreateInput }): Promise<WorkSignal>;
+  createSignal(params: { scope: WorkScope; signal: CreateWorkSignalInput }): Promise<WorkSignal>;
   updateSignal(params: {
     scope: WorkScope;
     signal_id: string;
-    patch: WsWorkSignalUpdatePatch;
+    patch: UpdateWorkSignalPatch;
   }): Promise<{ signal: WorkSignal; changed: boolean } | undefined>;
   getStateKv(params: {
     scope: WorkStateKVScopeIds;
@@ -285,6 +337,7 @@ export type WorkboardOrchestratorRepository = Pick<
   | "createTask"
   | "updateTask"
   | "leaseRunnableTasks"
+  | "setStateKv"
   | "listSubagents"
   | "markSubagentClosed"
 > &
@@ -293,6 +346,7 @@ export type WorkboardOrchestratorRepository = Pick<
 export type WorkboardDispatcherRepository = Pick<
   WorkboardRepository,
   | "listReadyItems"
+  | "listDoingItems"
   | "getItem"
   | "listTasks"
   | "createTask"
@@ -300,10 +354,21 @@ export type WorkboardDispatcherRepository = Pick<
   | "leaseRunnableTasks"
   | "transitionItem"
   | "getStateKv"
+  | "setStateKv"
   | "markSubagentClosed"
   | "markSubagentFailed"
 > &
-  SubagentRepository;
+  SubagentRepository & {
+    acquireExecutionSlot(params: {
+      scope: WorkScope;
+      task_id: string;
+      owner: string;
+      limit: number;
+      nowMs?: number;
+      ttlMs?: number;
+    }): Promise<boolean>;
+    releaseExecutionSlot(params: { scope: WorkScope; task_id: string }): Promise<void>;
+  };
 
 export type WorkboardReconcilerRepository = Pick<
   WorkboardRepository,
@@ -311,10 +376,19 @@ export type WorkboardReconcilerRepository = Pick<
   | "listSubagents"
   | "listTasks"
   | "transitionItem"
+  | "getStateKv"
   | "setStateKv"
   | "requeueOrphanedTasks"
   | "getItem"
->;
+  | "updateTask"
+> & {
+  createInterventionApproval(params: {
+    scope: WorkScope;
+    work_item_id: string;
+    task_id: string;
+    reason: string;
+  }): Promise<{ approval_id: string } | undefined>;
+};
 
 export type WorkboardSubagentTurnTarget = Pick<
   SubagentDescriptor,
