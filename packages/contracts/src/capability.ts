@@ -15,6 +15,7 @@ export const CANONICAL_CAPABILITY_IDS = [
   "tyrum.audio.record",
   "tyrum.location.get",
   // Desktop automation
+  "tyrum.desktop.clipboard-write",
   "tyrum.desktop.screenshot",
   "tyrum.desktop.snapshot",
   "tyrum.desktop.query",
@@ -216,6 +217,10 @@ const DESCRIPTOR_TO_LEGACY = Object.fromEntries(
   ),
 ) as Record<string, CapabilityKind>;
 
+const ADDITIONAL_DESCRIPTOR_TO_LEGACY: Record<string, CapabilityKind> = {
+  "tyrum.desktop.clipboard-write": "desktop",
+};
+
 /**
  * Capability descriptor used in the vNext handshake.
  *
@@ -296,5 +301,5 @@ export function clientCapabilityFromDescriptorId(id: string): CapabilityKind | u
       ([, legacyId]) => legacyId === id,
     )?.[0] as CapabilityKind | undefined;
   }
-  return DESCRIPTOR_TO_LEGACY[id];
+  return DESCRIPTOR_TO_LEGACY[id] ?? ADDITIONAL_DESCRIPTOR_TO_LEGACY[id];
 }

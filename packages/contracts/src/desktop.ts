@@ -21,6 +21,7 @@ const MAX_TREE_TEXT_CHARS = 32_768;
 const MAX_WINDOWS = 32;
 const MAX_QUERY_MATCHES = 64;
 const MAX_OCR_TEXT_CHARS = 512;
+const MAX_CLIPBOARD_TEXT_CHARS = 32_768;
 
 const trimmed = (max: number) => z.string().trim().max(max);
 const trimmedNonEmpty = (max: number) => z.string().trim().min(1).max(max);
@@ -195,6 +196,17 @@ export const DesktopKeyboardArgs = z.object({
 });
 export type DesktopKeyboardArgs = z.infer<typeof DesktopKeyboardArgs>;
 
+export const DesktopClipboardWriteArgs = z
+  .object({
+    op: z.literal("clipboard_write"),
+    text: z
+      .string()
+      .max(MAX_CLIPBOARD_TEXT_CHARS)
+      .refine((value) => value.trim().length > 0, { message: "text is required" }),
+  })
+  .strict();
+export type DesktopClipboardWriteArgs = z.infer<typeof DesktopClipboardWriteArgs>;
+
 export const DesktopSelector = z.discriminatedUnion("kind", [
   z
     .object({
@@ -276,6 +288,7 @@ export const DesktopActionArgs = z.discriminatedUnion("op", [
   DesktopScreenshotArgs,
   DesktopMouseArgs,
   DesktopKeyboardArgs,
+  DesktopClipboardWriteArgs,
   DesktopSnapshotArgs,
   DesktopQueryArgs,
   DesktopActArgs,
@@ -363,10 +376,19 @@ export const DesktopWaitForResult = z
   .strict();
 export type DesktopWaitForResult = z.infer<typeof DesktopWaitForResult>;
 
+export const DesktopClipboardWriteResult = z
+  .object({
+    op: z.literal("clipboard_write"),
+    status: z.literal("ok"),
+  })
+  .strict();
+export type DesktopClipboardWriteResult = z.infer<typeof DesktopClipboardWriteResult>;
+
 export const DesktopAutomationResult = z.discriminatedUnion("op", [
   DesktopSnapshotResult,
   DesktopQueryResult,
   DesktopActResult,
   DesktopWaitForResult,
+  DesktopClipboardWriteResult,
 ]);
 export type DesktopAutomationResult = z.infer<typeof DesktopAutomationResult>;

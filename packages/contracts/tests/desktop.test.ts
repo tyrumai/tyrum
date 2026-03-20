@@ -3,6 +3,8 @@ import {
   DesktopScreenshotArgs,
   DesktopMouseArgs,
   DesktopKeyboardArgs,
+  DesktopClipboardWriteArgs,
+  DesktopClipboardWriteResult,
   DesktopActionArgs,
 } from "../src/index.js";
 
@@ -280,6 +282,49 @@ describe("DesktopKeyboardArgs", () => {
   });
 });
 
+describe("DesktopClipboardWriteArgs", () => {
+  it("parses clipboard writes without trimming plaintext", () => {
+    const parsed = DesktopClipboardWriteArgs.parse({
+      op: "clipboard_write",
+      text: "  keep surrounding spaces  ",
+    });
+    expect(parsed.op).toBe("clipboard_write");
+    expect(parsed.text).toBe("  keep surrounding spaces  ");
+  });
+
+  it("rejects blank clipboard text", () => {
+    expect(() =>
+      DesktopClipboardWriteArgs.parse({
+        op: "clipboard_write",
+        text: "   ",
+      }),
+    ).toThrow();
+  });
+});
+
+describe("DesktopClipboardWriteResult", () => {
+  it("returns acknowledgement-only results", () => {
+    const parsed = DesktopClipboardWriteResult.parse({
+      op: "clipboard_write",
+      status: "ok",
+    });
+    expect(parsed).toEqual({
+      op: "clipboard_write",
+      status: "ok",
+    });
+  });
+
+  it("rejects clipboard results that echo plaintext fields", () => {
+    expect(() =>
+      DesktopClipboardWriteResult.parse({
+        op: "clipboard_write",
+        status: "ok",
+        text: "secret",
+      }),
+    ).toThrow();
+  });
+});
+
 describe("DesktopActionArgs (discriminated union)", () => {
   it("dispatches screenshot op correctly", () => {
     const parsed = DesktopActionArgs.parse({
@@ -306,6 +351,14 @@ describe("DesktopActionArgs (discriminated union)", () => {
       key: "Tab",
     });
     expect(parsed.op).toBe("keyboard");
+  });
+
+  it("dispatches clipboard_write op correctly", () => {
+    const parsed = DesktopActionArgs.parse({
+      op: "clipboard_write",
+      text: "copy me",
+    });
+    expect(parsed.op).toBe("clipboard_write");
   });
 
   it("rejects unknown op", () => {

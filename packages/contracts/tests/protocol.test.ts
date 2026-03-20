@@ -348,6 +348,9 @@ describe("requiredCapabilityDescriptor", () => {
     expect(requiredCapabilityDescriptor("Desktop", { op: "wait_for" })).toBe(
       "tyrum.desktop.wait-for",
     );
+    expect(requiredCapabilityDescriptor("Desktop", { op: "clipboard_write" })).toBe(
+      "tyrum.desktop.clipboard-write",
+    );
     expect(requiredCapabilityDescriptor("Desktop", { op: "unknown" })).toBeUndefined();
   });
 

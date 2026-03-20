@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { MemorySensitivity } from "./memory.js";
 import { AgentMcpConfig, AgentSkillConfig, AgentToolConfig } from "./agent-access.js";
-import { canonicalizeToolIdList } from "./tool-id.js";
+import { SecretReferenceAlias, SecretReferenceId, ExplicitDedicatedToolId } from "./routed-tool.js";
+import { canonicalizeToolIdList, normalizeStringIdList } from "./tool-id.js";
 
 function asPlainObject(value: unknown): Record<string, unknown> | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -202,6 +203,52 @@ export const AgentPersona = z.preprocess(
 );
 export type AgentPersona = z.infer<typeof AgentPersona>;
 
+export const AgentSecretReference = z
+  .object({
+    secret_ref_id: SecretReferenceId,
+    secret_alias: SecretReferenceAlias.optional(),
+    allowed_tool_ids: z.array(ExplicitDedicatedToolId).min(1).overwrite(normalizeStringIdList),
+    display_name: z.string().trim().min(1).max(120).optional(),
+  })
+  .strict();
+export type AgentSecretReference = z.infer<typeof AgentSecretReference>;
+
+function assertUniqueAgentSecretReferences(
+  value: readonly AgentSecretReference[],
+  ctx: z.RefinementCtx,
+): void {
+  const secretRefIds = new Set<string>();
+  const aliases = new Set<string>();
+
+  for (const [index, ref] of value.entries()) {
+    if (secretRefIds.has(ref.secret_ref_id)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [index, "secret_ref_id"],
+        message: `secret_ref_id '${ref.secret_ref_id}' must be unique within an agent config`,
+      });
+    } else {
+      secretRefIds.add(ref.secret_ref_id);
+    }
+
+    if (!ref.secret_alias) continue;
+    if (aliases.has(ref.secret_alias)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [index, "secret_alias"],
+        message: `secret_alias '${ref.secret_alias}' must be unique within an agent config`,
+      });
+      continue;
+    }
+    aliases.add(ref.secret_alias);
+  }
+}
+
+export const AgentSecretReferences = z
+  .array(AgentSecretReference)
+  .superRefine(assertUniqueAgentSecretReferences);
+export type AgentSecretReferences = z.infer<typeof AgentSecretReferences>;
+
 export const AgentConfig = z
   .object({
     model: AgentModelConfig,
@@ -211,6 +258,7 @@ export const AgentConfig = z
     tools: AgentToolConfig.prefault({}),
     sessions: AgentSessionConfig.prefault({}),
     attachments: AgentAttachmentConfig.prefault({}),
+    secret_refs: AgentSecretReferences.default([]),
   })
   .strict();
 export type AgentConfig = z.infer<typeof AgentConfig>;
