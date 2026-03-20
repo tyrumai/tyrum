@@ -101,68 +101,79 @@ async function handleTranscriptListMessage(
       }
     }
 
-    const listedRoots = await listSessionRecords({
-      deps,
-      tenantId,
-      workspaceId,
-      agentKey,
-      channel: parsed.data.payload.channel,
-      archived: parsed.data.payload.archived,
-      limit: parsed.data.payload.limit ?? 200,
-      cursor: parsed.data.payload.cursor,
-    });
-    const rootSessionKeys = listedRoots.sessions.map((session) => session.sessionKey);
-    const childSessions = await listChildSessionRecords({
-      deps,
-      tenantId,
-      workspaceId,
-      rootSessionKeys,
-    });
-    const sessions = [...listedRoots.sessions, ...childSessions];
-    const sessionKeys = sessions.map((session) => session.sessionKey);
-    const subagentRows = await listSubagentRows({
-      deps,
-      tenantId,
-      workspaceId,
-      sessionKeys,
-    });
-    const runDetailsByKey = await loadRunDetailsByKey({
-      deps,
-      tenantId,
-      keys: sessionKeys,
-    });
-    const summaries = buildTranscriptSessionSummaries({
-      sessions,
-      subagentsBySessionKey: new Map(subagentRows.map((row) => [row.session_key, row])),
-      latestRunsByKey: buildLatestRunInfoByKey(runDetailsByKey),
-      pendingApprovalsByKey: await loadPendingApprovalCountByKey({
+    const activeOnly = parsed.data.payload.active_only === true;
+    const limit = parsed.data.payload.limit ?? 200;
+    let cursor = parsed.data.payload.cursor;
+
+    while (true) {
+      const listedRoots = await listSessionRecords({
+        deps,
+        tenantId,
+        workspaceId,
+        agentKey,
+        channel: parsed.data.payload.channel,
+        archived: parsed.data.payload.archived,
+        limit,
+        cursor,
+      });
+      const rootSessionKeys = listedRoots.sessions.map((session) => session.sessionKey);
+      const childSessions = await listChildSessionRecords({
+        deps,
+        tenantId,
+        workspaceId,
+        rootSessionKeys,
+      });
+      const sessions = [...listedRoots.sessions, ...childSessions];
+      const sessionKeys = sessions.map((session) => session.sessionKey);
+      const subagentRows = await listSubagentRows({
+        deps,
+        tenantId,
+        workspaceId,
+        sessionKeys,
+      });
+      const runDetailsByKey = await loadRunDetailsByKey({
         deps,
         tenantId,
         keys: sessionKeys,
-      }),
-    });
-    const summariesBySessionKey = new Map(
-      summaries.map((summary) => [summary.session_key, summary] as const),
-    );
-    const roots = listedRoots.sessions
-      .map((session) => summariesBySessionKey.get(session.sessionKey))
-      .filter((summary): summary is TranscriptSessionSummary => summary !== undefined);
-    const children = childSessions
-      .map((session) => summariesBySessionKey.get(session.sessionKey))
-      .filter((summary): summary is TranscriptSessionSummary => summary !== undefined);
-    const attached = attachDirectChildSummaries({ roots, children }).filter((summary) =>
-      shouldKeepTranscriptRootSummary(summary, parsed.data.payload.active_only === true),
-    );
+      });
+      const summaries = buildTranscriptSessionSummaries({
+        sessions,
+        subagentsBySessionKey: new Map(subagentRows.map((row) => [row.session_key, row])),
+        latestRunsByKey: buildLatestRunInfoByKey(runDetailsByKey),
+        pendingApprovalsByKey: await loadPendingApprovalCountByKey({
+          deps,
+          tenantId,
+          keys: sessionKeys,
+        }),
+      });
+      const summariesBySessionKey = new Map(
+        summaries.map((summary) => [summary.session_key, summary] as const),
+      );
+      const roots = listedRoots.sessions
+        .map((session) => summariesBySessionKey.get(session.sessionKey))
+        .filter((summary): summary is TranscriptSessionSummary => summary !== undefined);
+      const children = childSessions
+        .map((session) => summariesBySessionKey.get(session.sessionKey))
+        .filter((summary): summary is TranscriptSessionSummary => summary !== undefined);
+      const attached = attachDirectChildSummaries({ roots, children }).filter((summary) =>
+        shouldKeepTranscriptRootSummary(summary, activeOnly),
+      );
 
-    return {
-      request_id: msg.request_id,
-      type: msg.type,
-      ok: true,
-      result: WsTranscriptListResult.parse({
-        sessions: attached,
-        next_cursor: listedRoots.nextCursor,
-      }),
-    };
+      if (activeOnly && attached.length === 0 && listedRoots.nextCursor) {
+        cursor = listedRoots.nextCursor;
+        continue;
+      }
+
+      return {
+        request_id: msg.request_id,
+        type: msg.type,
+        ok: true,
+        result: WsTranscriptListResult.parse({
+          sessions: attached,
+          next_cursor: listedRoots.nextCursor,
+        }),
+      };
+    }
   } catch (err) {
     return sessionErrorResponse({
       deps,

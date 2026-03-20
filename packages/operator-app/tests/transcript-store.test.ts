@@ -80,6 +80,16 @@ function createTranscriptGetResult(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function createDeferred<T>() {
+  let resolve = (_value: T) => {
+    throw new Error("deferred promise resolved before initialization");
+  };
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
+
 function createFakeWs() {
   const api = {
     requestDynamic: vi.fn(
@@ -201,6 +211,39 @@ describe("createTranscriptStore", () => {
 
     transcript.clearDetail();
     expect(transcript.getSnapshot().detail).toBeNull();
+  });
+
+  it("cancels a stale transcript detail load when filters change", async () => {
+    const ws = createFakeWs();
+    const deferred = createDeferred<ReturnType<typeof createTranscriptGetResult>>();
+    ws.transcriptGet.mockReturnValueOnce(deferred.promise);
+    const transcript = createTranscriptStore(ws as never);
+
+    const openSessionPromise = transcript.openSession(" session-child ");
+    expect(transcript.getSnapshot()).toMatchObject({
+      selectedSessionKey: "session-child",
+      loadingDetail: true,
+      detail: null,
+      errorDetail: null,
+    });
+
+    transcript.setArchived(true);
+    expect(transcript.getSnapshot()).toMatchObject({
+      selectedSessionKey: null,
+      loadingDetail: false,
+      detail: null,
+      errorDetail: null,
+    });
+
+    deferred.resolve(createTranscriptGetResult());
+    await openSessionPromise;
+
+    expect(transcript.getSnapshot()).toMatchObject({
+      selectedSessionKey: null,
+      loadingDetail: false,
+      detail: null,
+      errorDetail: null,
+    });
   });
 
   it("stores transcript list and detail errors when requests fail", async () => {

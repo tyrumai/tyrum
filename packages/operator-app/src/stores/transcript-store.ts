@@ -108,6 +108,10 @@ export function createTranscriptStore(ws: OperatorWsClient): TranscriptStore {
   let listRunId = 0;
   let detailRunId = 0;
 
+  function invalidateDetailLoad(): void {
+    detailRunId += 1;
+  }
+
   async function refresh(): Promise<void> {
     const runId = ++listRunId;
     const snapshot = store.getSnapshot();
@@ -134,6 +138,10 @@ export function createTranscriptStore(ws: OperatorWsClient): TranscriptStore {
           flattenedSessions.some((session) => session.session_key === prev.selectedSessionKey)
             ? prev.selectedSessionKey
             : (flattenedSessions[0]?.session_key ?? null);
+        const selectionChanged = nextSelectedSessionKey !== prev.selectedSessionKey;
+        if (selectionChanged) {
+          invalidateDetailLoad();
+        }
         return {
           ...prev,
           sessions: flattenedSessions,
@@ -141,9 +149,7 @@ export function createTranscriptStore(ws: OperatorWsClient): TranscriptStore {
           selectedSessionKey: nextSelectedSessionKey,
           loadingList: false,
           errorList: null,
-          ...(nextSelectedSessionKey === prev.selectedSessionKey
-            ? {}
-            : { detail: null, errorDetail: null }),
+          ...(selectionChanged ? { detail: null, errorDetail: null, loadingDetail: false } : {}),
         };
       });
     } catch (error) {
@@ -247,66 +253,80 @@ export function createTranscriptStore(ws: OperatorWsClient): TranscriptStore {
     ...store,
     setAgentId(agentId) {
       const nextAgentId = normalizeOptionalString(agentId);
-      setState((prev) =>
-        prev.agentId === nextAgentId
-          ? prev
-          : {
-              ...prev,
-              agentId: nextAgentId,
-              selectedSessionKey: null,
-              detail: null,
-              errorDetail: null,
-            },
-      );
+      setState((prev) => {
+        if (prev.agentId === nextAgentId) {
+          return prev;
+        }
+        invalidateDetailLoad();
+        return {
+          ...prev,
+          agentId: nextAgentId,
+          selectedSessionKey: null,
+          detail: null,
+          loadingDetail: false,
+          errorDetail: null,
+        };
+      });
     },
     setChannel(channel) {
       const nextChannel = normalizeOptionalString(channel);
-      setState((prev) =>
-        prev.channel === nextChannel
-          ? prev
-          : {
-              ...prev,
-              channel: nextChannel,
-              selectedSessionKey: null,
-              detail: null,
-              errorDetail: null,
-            },
-      );
+      setState((prev) => {
+        if (prev.channel === nextChannel) {
+          return prev;
+        }
+        invalidateDetailLoad();
+        return {
+          ...prev,
+          channel: nextChannel,
+          selectedSessionKey: null,
+          detail: null,
+          loadingDetail: false,
+          errorDetail: null,
+        };
+      });
     },
     setActiveOnly(activeOnly) {
-      setState((prev) =>
-        prev.activeOnly === activeOnly
-          ? prev
-          : {
-              ...prev,
-              activeOnly,
-              selectedSessionKey: null,
-              detail: null,
-              errorDetail: null,
-            },
-      );
+      setState((prev) => {
+        if (prev.activeOnly === activeOnly) {
+          return prev;
+        }
+        invalidateDetailLoad();
+        return {
+          ...prev,
+          activeOnly,
+          selectedSessionKey: null,
+          detail: null,
+          loadingDetail: false,
+          errorDetail: null,
+        };
+      });
     },
     setArchived(archived) {
-      setState((prev) =>
-        prev.archived === archived
-          ? prev
-          : {
-              ...prev,
-              archived,
-              selectedSessionKey: null,
-              detail: null,
-              errorDetail: null,
-            },
-      );
+      setState((prev) => {
+        if (prev.archived === archived) {
+          return prev;
+        }
+        invalidateDetailLoad();
+        return {
+          ...prev,
+          archived,
+          selectedSessionKey: null,
+          detail: null,
+          loadingDetail: false,
+          errorDetail: null,
+        };
+      });
     },
     refresh,
     loadMore,
     openSession,
     clearDetail() {
+      invalidateDetailLoad();
       setState((prev) => ({
         ...prev,
         selectedSessionKey: null,
         detail: null,
+        loadingDetail: false,
         errorDetail: null,
       }));
     },
