@@ -9,6 +9,7 @@ import type {
 } from "@tyrum/contracts";
 import type { GatewayStateMode } from "../runtime-state/mode.js";
 import type { SqlDb } from "../../statestore/types.js";
+import { sqlBoolParam } from "../../statestore/sql.js";
 import type { IdentityScopeDal } from "../identity/scope.js";
 import { DEFAULT_WORKSPACE_KEY } from "../identity/scope.js";
 import { AgentConfigDal } from "../config/agent-config-dal.js";
@@ -153,15 +154,15 @@ export class AgentAdminService {
         if (params.isPrimary) {
           await tx.run(
             `UPDATE agents
-             SET is_primary = 0
-             WHERE tenant_id = ? AND is_primary = TRUE`,
-            [params.tenantId],
+             SET is_primary = ?
+             WHERE tenant_id = ? AND is_primary = ?`,
+            [sqlBoolParam(tx, false), params.tenantId, sqlBoolParam(tx, true)],
           );
         }
         await tx.run(
           `INSERT INTO agents (tenant_id, agent_id, agent_key, is_primary)
            VALUES (?, ?, ?, ?)`,
-          [params.tenantId, agentId, params.agentKey, params.isPrimary ? 1 : 0],
+          [params.tenantId, agentId, params.agentKey, sqlBoolParam(tx, Boolean(params.isPrimary))],
         );
         await tx.run(
           `INSERT INTO agent_workspaces (tenant_id, agent_id, workspace_id)
