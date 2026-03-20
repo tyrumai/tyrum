@@ -30,7 +30,8 @@
     "format": "node scripts/format-repo.mjs --write",
     "format:check": "node scripts/format-repo.mjs --check",
     "format:check-staged": "node scripts/format-changed.mjs --check --staged",
-    "typecheck": "tsc -b && pnpm --filter @tyrum/mobile typecheck"
+    "typecheck": "tsc -b && pnpm --filter @tyrum/mobile typecheck",
+    "typecheck:desktop": "pnpm pretypecheck && pnpm exec tsc --noEmit --project apps/desktop/tsconfig.json"
   },
   "pnpm": {
     "overrides": {

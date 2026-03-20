@@ -259,7 +259,7 @@ jobs:
       - run: pnpm install --frozen-lockfile --prefer-offline
 
       - name: Typecheck (desktop app)
-        run: pnpm exec tsc --noEmit --project apps/desktop/tsconfig.json
+        run: pnpm typecheck:desktop
 
   validation-lint:
     name: Lint (ubuntu-latest)
