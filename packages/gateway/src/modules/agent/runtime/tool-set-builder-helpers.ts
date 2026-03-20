@@ -156,7 +156,7 @@ export async function awaitApprovalForToolExecution(
   const deadline = Date.now() + deps.approvalWaitMs;
   const approvalKey = `${context.planId}:step:${String(stepIndex)}:tool_call:${toolCallId}`;
   const routing = buildRoutedToolExecutionMetadata(tool.id, args);
-  const promptSuffix = buildRoutedToolApprovalPromptSuffix(tool.id, args);
+  const promptSuffix = buildRoutedToolApprovalPromptSuffix(routing);
   const approval = await createReviewedApproval({
     approvalDal: deps.approvalDal,
     policyService: deps.policyService,

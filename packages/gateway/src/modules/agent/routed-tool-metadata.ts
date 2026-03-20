@@ -40,8 +40,9 @@ export function buildRoutedToolExecutionMetadata(toolId: string, args: unknown) 
   });
 }
 
-export function buildRoutedToolApprovalPromptSuffix(toolId: string, args: unknown): string {
-  const routing = buildRoutedToolExecutionMetadata(toolId, args);
+export function buildRoutedToolApprovalPromptSuffix(
+  routing: ReturnType<typeof buildRoutedToolExecutionMetadata>,
+): string {
   if (!routing || routing.selection_mode !== "explicit") {
     return "";
   }
