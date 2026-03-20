@@ -1,4 +1,4 @@
-import { resolve } from "node:path";
+import { createBuildsFromSpecs } from "./workspace-build-specs.mjs";
 
 export const PACKAGE_BUILD_SPECS = [
   {
@@ -64,25 +64,5 @@ export const PACKAGE_BUILD_SPECS = [
 ];
 
 export function createPackageBuilds(repoRoot) {
-  const outputsByKey = new Map(
-    PACKAGE_BUILD_SPECS.map((spec) => [
-      spec.key,
-      spec.outputPaths.map((outputPath) => resolve(repoRoot, outputPath)),
-    ]),
-  );
-
-  return PACKAGE_BUILD_SPECS.map((spec) => ({
-    name: spec.name,
-    inputs: [
-      ...spec.inputPaths.map((inputPath) => resolve(repoRoot, inputPath)),
-      ...(spec.dependencies ?? []).flatMap((dependency) => {
-        const outputs = outputsByKey.get(dependency);
-        if (!outputs) {
-          throw new Error(`Unknown package build dependency: ${dependency}`);
-        }
-        return outputs;
-      }),
-    ],
-    outputs: outputsByKey.get(spec.key) ?? [],
-  }));
+  return createBuildsFromSpecs(repoRoot, PACKAGE_BUILD_SPECS, "package build dependency");
 }
