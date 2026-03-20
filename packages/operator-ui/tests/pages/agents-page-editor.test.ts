@@ -56,7 +56,7 @@ describe("AgentsPage editor", () => {
 
     const testRoot = renderIntoDocument(React.createElement(AgentsPage, { core }));
     await flush();
-    expect(get).toHaveBeenCalledWith("default");
+    expect(get).toHaveBeenCalledWith("agent-1");
 
     const agentButton = testRoot.container.querySelector<HTMLButtonElement>(
       '[data-testid="agents-select-agent-1"]',

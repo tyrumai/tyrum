@@ -376,6 +376,58 @@ export function createConfigureCore(): OperatorCore {
   return core;
 }
 
+export function createTranscriptsCore(): OperatorCore {
+  const connectionStore = createStore({
+    status: "disconnected" as const,
+    recovering: false,
+    nextRetryAtMs: null,
+    clientId: null,
+    lastDisconnect: null,
+    transportError: null,
+  }).store;
+  const transcriptStoreState = createStore({
+    agentId: null,
+    channel: null,
+    activeOnly: false,
+    archived: false,
+    sessions: [],
+    nextCursor: null,
+    selectedSessionKey: null,
+    detail: null,
+    loadingList: false,
+    loadingDetail: false,
+    errorList: null,
+    errorDetail: null,
+  });
+  const http = {
+    agents: {
+      list: async () => ({
+        agents: [{ agent_key: "default", persona: { name: "Default Agent" } }],
+      }),
+    },
+  };
+
+  const core = {
+    connectionStore,
+    transcriptStore: {
+      ...transcriptStoreState.store,
+      setAgentId() {},
+      setChannel() {},
+      setActiveOnly() {},
+      setArchived() {},
+      async refresh() {},
+      async loadMore() {},
+      async openSession() {},
+      clearDetail() {},
+    },
+    http,
+  } as unknown as OperatorCore & {
+    http: OperatorCore["admin"];
+  };
+  core.admin = core.http;
+  return core;
+}
+
 export function createOnboardingCore(): OperatorCore {
   const elevatedModeStore = createElevatedModeStore();
   elevatedModeStore.enter({

@@ -26,7 +26,9 @@ export async function maybeEmitWorkItemOverlapWarningArtifact(params: {
     const overlaps = active
       .filter((other) => other.work_item_id !== params.item.work_item_id)
       .map((other) => {
-        const shared = (other.fingerprint?.resources ?? []).filter((r) => resourceSet.has(r));
+        const shared = (other.fingerprint?.resources ?? []).filter((resource: string) =>
+          resourceSet.has(resource),
+        );
         return shared.length > 0 ? { other, shared } : null;
       })
       .filter(

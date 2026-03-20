@@ -72,6 +72,12 @@ import {
   WsSubagentSpawnResponseOkEnvelope,
 } from "./subagent.js";
 import {
+  WsTranscriptGetResponseErrEnvelope,
+  WsTranscriptGetResponseOkEnvelope,
+  WsTranscriptListResponseErrEnvelope,
+  WsTranscriptListResponseOkEnvelope,
+} from "./transcript.js";
+import {
   WsWorkflowCancelResponseErrEnvelope,
   WsWorkflowCancelResponseOkEnvelope,
   WsWorkflowResumeResponseErrEnvelope,
@@ -175,6 +181,10 @@ export const WsResponse = z.union([
   WsApprovalResolveResponseErrEnvelope,
   WsSubagentSpawnResponseOkEnvelope,
   WsSubagentSpawnResponseErrEnvelope,
+  WsTranscriptListResponseOkEnvelope,
+  WsTranscriptListResponseErrEnvelope,
+  WsTranscriptGetResponseOkEnvelope,
+  WsTranscriptGetResponseErrEnvelope,
   WsSubagentListResponseOkEnvelope,
   WsSubagentListResponseErrEnvelope,
   WsSubagentGetResponseOkEnvelope,

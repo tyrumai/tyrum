@@ -17,6 +17,7 @@ import { handleNodeMessage } from "./node-handlers.js";
 import { handleResponseMessage } from "./response-handlers.js";
 import { handleSessionMessage } from "./session-handlers.js";
 import { handleSubagentMessage } from "./subagent-handlers.js";
+import { handleTranscriptMessage } from "./transcript-handlers.js";
 import type { ProtocolDeps, ProtocolRequestEnvelope, ProtocolResponseEnvelope } from "./types.js";
 import { handleWorkboardMessage } from "./workboard-handlers.js";
 import { requireTenantIdValue } from "../../modules/identity/scope.js";
@@ -180,6 +181,7 @@ async function routeRequest(
     async () => handleNodeMessage(client, msg, raw, deps),
     async () => handleSessionMessage(client, msg, deps),
     async () => handleSubagentMessage(client, msg, deps),
+    async () => handleTranscriptMessage(client, msg, deps),
     async () => handleWorkboardMessage(client, msg, deps),
   ];
 

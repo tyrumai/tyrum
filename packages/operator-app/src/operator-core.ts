@@ -16,6 +16,7 @@ import { createRunsStore } from "./stores/runs-store.js";
 import { createElevatedModeStore } from "./stores/elevated-mode-store.js";
 import { createStatusStore, type OperatorPresenceEntry } from "./stores/status-store.js";
 import { createChatStore } from "./stores/chat-store.js";
+import { createTranscriptStore } from "./stores/transcript-store.js";
 import { createAutoSyncManager, type AutoSyncTask } from "./auto-sync.js";
 import { createWorkboardStore } from "./stores/workboard-store.js";
 import { createAgentStatusStore } from "./stores/agent-status-store.js";
@@ -75,6 +76,7 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
   const approvals = createApprovalsStore({ ws, getPrivilegedWs: createPrivilegedWs });
   const pairing = createPairingStore({ http, getPrivilegedHttp: createPrivilegedHttp });
   const status = createStatusStore(http);
+  const transcript = createTranscriptStore(ws);
   const runs = createRunsStore(ws);
   const chat = createChatStore(ws, http);
   const workboard = createWorkboardStore(ws);
@@ -93,6 +95,7 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
     pairingStore: pairing.store,
     runsStore: runs.store,
     statusStore: status.store,
+    transcriptStore: transcript,
     workboardStore: workboard.store,
     agentStatusStore: agentStatus.store,
     desktopEnvironmentHostsStore: desktopEnvironmentHosts.store,
@@ -155,6 +158,7 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
         },
       },
     ],
+    transcriptStore: [],
     workboardStore: [
       {
         id: "workboard.refreshList",
@@ -372,6 +376,7 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
     approvalsStore: approvals.store,
     pairingStore: pairing.store,
     statusStore: status.store,
+    transcriptStore: transcript,
     runsStore: runs.store,
     workboardStore: workboard.store,
     agentStatusStore: agentStatus.store,

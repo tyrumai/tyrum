@@ -29,6 +29,7 @@ export * from "./protocol/location.js";
 export * from "./protocol/pairing.js";
 export * from "./protocol/presence.js";
 export * from "./protocol/subagent.js";
+export * from "./protocol/transcript.js";
 export * from "./protocol/work.js";
 export * from "./protocol/work-drilldown.js";
 export * from "./protocol/unions.js";

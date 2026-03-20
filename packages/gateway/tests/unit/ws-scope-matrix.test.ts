@@ -31,6 +31,8 @@ describe("WS scope authorization matrix", () => {
     expect(resolveWsRequestRequiredScopes("chat.session.get")).toEqual(["operator.read"]);
     expect(resolveWsRequestRequiredScopes("chat.session.reconnect")).toEqual(["operator.read"]);
     expect(resolveWsRequestRequiredScopes("run.list")).toEqual(["operator.read"]);
+    expect(resolveWsRequestRequiredScopes("transcript.list")).toEqual(["operator.read"]);
+    expect(resolveWsRequestRequiredScopes("transcript.get")).toEqual(["operator.read"]);
   });
 
   it("allows presence.beacon without additional scopes", () => {

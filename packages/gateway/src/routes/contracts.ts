@@ -2,6 +2,7 @@ import { Hono, type Context } from "hono";
 import { readFile } from "node:fs/promises";
 import { basename, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { ZodTypeAny } from "zod";
 
 const TRANSIENT_READ_MAX_ATTEMPTS = 50;
 const TRANSIENT_READ_DELAY_MS = 100;
@@ -178,6 +179,13 @@ type JsonSchemaSource = {
   toJSONSchema?: (opts?: { io?: "input" | "output" }) => unknown;
 };
 
+function hasToJsonSchema(value: unknown): value is ZodTypeAny & {
+  toJSONSchema: (opts?: { io?: "input" | "output" }) => Record<string, unknown> | undefined;
+} {
+  if (!value || typeof value !== "object") return false;
+  return typeof (value as { toJSONSchema?: unknown }).toJSONSchema === "function";
+}
+
 function contractModuleEntries(module: object): Array<[string, unknown]> {
   return Object.entries(module as Record<string, unknown>);
 }
@@ -215,6 +223,7 @@ async function buildGeneratedContractState(): Promise<GeneratedContractState> {
   })();
 
   for (const [name, value] of contractEntries) {
+    if (!hasToJsonSchema(value)) continue;
     try {
       const schema = jsonSchemaOf(value, "input");
       if (!schema) continue;

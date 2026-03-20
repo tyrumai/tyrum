@@ -11,6 +11,7 @@ import type {
 } from "./dal-types.js";
 import { ApprovalEngineActionDal } from "./engine-action-dal.js";
 import { expireStaleApprovals, toApprovalRow } from "./dal-support.js";
+import { buildSqlPlaceholders } from "../../utils/sql.js";
 import {
   type ApprovalStatus,
   approvalNeedsHumanDecision,
@@ -200,6 +201,33 @@ export class ApprovalDal {
   }): Promise<ApprovalRow | undefined> {
     const row = await this.getRawById(input);
     return row ? await this.hydrate(row, { includeReviews: input.includeReviews }) : undefined;
+  }
+
+  async getByIds(input: {
+    tenantId: string;
+    approvalIds: readonly string[];
+    includeReviews?: boolean;
+  }): Promise<ApprovalRow[]> {
+    if (input.approvalIds.length === 0) {
+      return [];
+    }
+
+    const approvalIds = [
+      ...new Set(input.approvalIds.map((approvalId) => approvalId.trim())),
+    ].filter((approvalId) => approvalId.length > 0);
+    if (approvalIds.length === 0) {
+      return [];
+    }
+
+    const rows = await this.db.all<RawApprovalRow>(
+      `SELECT *
+       FROM approvals
+       WHERE tenant_id = ?
+         AND approval_id IN (${buildSqlPlaceholders(approvalIds.length)})
+       ORDER BY created_at ASC, approval_id ASC`,
+      [input.tenantId.trim(), ...approvalIds],
+    );
+    return await this.hydrateMany(rows, { includeReviews: input.includeReviews });
   }
 
   async getByKey(input: {

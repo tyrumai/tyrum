@@ -2,6 +2,8 @@ import {
   WsChatSessionCreateResult,
   WsChatSessionDeleteResult,
   WsChatSessionGetResult,
+  WsTranscriptGetResult,
+  WsTranscriptListResult,
 } from "@tyrum/contracts";
 import { vi } from "vitest";
 import type { OperatorWsClient } from "../../operator-app/src/deps.js";
@@ -52,6 +54,12 @@ export class FakeWsClient implements OperatorWsClient {
         case "chat.session.delete":
           result = await this.sessionDelete(payload);
           break;
+        case "transcript.list":
+          result = await this.transcriptList(payload);
+          break;
+        case "transcript.get":
+          result = await this.transcriptGet(payload);
+          break;
         default:
           throw new Error(`unsupported dynamic request: ${type}`);
       }
@@ -95,6 +103,81 @@ export class FakeWsClient implements OperatorWsClient {
       }).session,
   );
   sessionDelete = vi.fn(async () => WsChatSessionDeleteResult.parse({ session_id: "session-1" }));
+  transcriptList = vi.fn(async () =>
+    WsTranscriptListResult.parse({
+      sessions: [
+        {
+          session_id: "session-root-1-id",
+          session_key: "session-root-1",
+          agent_id: "default",
+          channel: "ui",
+          thread_id: "thread-root-1",
+          title: "Default Agent session",
+          message_count: 2,
+          updated_at: "2026-01-01T00:01:00.000Z",
+          created_at: "2026-01-01T00:00:00.000Z",
+          archived: false,
+          latest_run_id: null,
+          latest_run_status: null,
+          has_active_run: false,
+          pending_approval_count: 0,
+        },
+      ],
+      next_cursor: null,
+    }),
+  );
+  transcriptGet = vi.fn(async () =>
+    WsTranscriptGetResult.parse({
+      root_session_key: "session-root-1",
+      focus_session_key: "session-root-1",
+      sessions: [
+        {
+          session_id: "session-root-1-id",
+          session_key: "session-root-1",
+          agent_id: "default",
+          channel: "ui",
+          thread_id: "thread-root-1",
+          title: "Default Agent session",
+          message_count: 2,
+          updated_at: "2026-01-01T00:01:00.000Z",
+          created_at: "2026-01-01T00:00:00.000Z",
+          archived: false,
+          latest_run_id: null,
+          latest_run_status: null,
+          has_active_run: false,
+          pending_approval_count: 0,
+        },
+      ],
+      events: [
+        {
+          event_id: "message:session-root-1:msg-1",
+          kind: "message",
+          occurred_at: "2026-01-01T00:00:10.000Z",
+          session_key: "session-root-1",
+          payload: {
+            message: {
+              id: "msg-1",
+              role: "user",
+              parts: [{ type: "text", text: "Inspect this agent" }],
+            },
+          },
+        },
+        {
+          event_id: "message:session-root-1:msg-2",
+          kind: "message",
+          occurred_at: "2026-01-01T00:00:20.000Z",
+          session_key: "session-root-1",
+          payload: {
+            message: {
+              id: "msg-2",
+              role: "assistant",
+              parts: [{ type: "text", text: "Transcript retained." }],
+            },
+          },
+        },
+      ],
+    }),
+  );
   commandExecute = vi.fn(async () => ({}));
 
   private readonly handlers = new Map<string, Set<Handler>>();

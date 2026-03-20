@@ -108,6 +108,11 @@ export type { Pairing, PairingState, PairingStore } from "./stores/pairing-store
 export type { RunsState, RunsStore } from "./stores/runs-store.js";
 export type { OperatorPresenceEntry, StatusState, StatusStore } from "./stores/status-store.js";
 export type {
+  TranscriptDetailState,
+  TranscriptState,
+  TranscriptStore,
+} from "./stores/transcript-store.js";
+export type {
   WorkboardScopeKeys,
   WorkboardState,
   WorkboardStore,

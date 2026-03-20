@@ -88,6 +88,20 @@ export function createMockCore(overrides?: Partial<Record<string, unknown>>) {
     error: null,
     lastSyncedAt: null,
   });
+  const { store: transcriptStore } = createStore({
+    agentId: null as string | null,
+    channel: null as string | null,
+    activeOnly: false,
+    archived: false,
+    sessions: [] as unknown[],
+    nextCursor: null as string | null,
+    selectedSessionKey: null as string | null,
+    detail: null,
+    loadingList: false,
+    loadingDetail: false,
+    errorList: null,
+    errorDetail: null,
+  });
 
   const activityStore = createMockActivityStore();
   const nodesList = vi.fn(async () => sampleDashboardNodeInventoryResponse());
@@ -97,6 +111,17 @@ export function createMockCore(overrides?: Partial<Record<string, unknown>>) {
     statusStore,
     approvalsStore,
     pairingStore,
+    transcriptStore: {
+      ...transcriptStore,
+      setAgentId: vi.fn(),
+      setChannel: vi.fn(),
+      setActiveOnly: vi.fn(),
+      setArchived: vi.fn(),
+      refresh: vi.fn(),
+      loadMore: vi.fn(),
+      openSession: vi.fn(),
+      clearDetail: vi.fn(),
+    },
     runsStore,
     workboardStore,
     activityStore,

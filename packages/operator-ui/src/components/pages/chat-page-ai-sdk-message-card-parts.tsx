@@ -231,6 +231,7 @@ function ReasoningPartCard({
 function ToolPartCard({
   approval,
   core,
+  interactiveApprovals,
   onResolveApproval,
   part,
   resolvingApproval,
@@ -238,6 +239,7 @@ function ToolPartCard({
 }: {
   approval: Approval | null;
   core?: OperatorCore;
+  interactiveApprovals: boolean;
   onResolveApproval: (input: ResolveApprovalInput) => void;
   part: Extract<UIMessage["parts"][number], { type: string }>;
   resolvingApproval: { approvalId: string; state: "always" | "approved" | "denied" } | null;
@@ -319,7 +321,7 @@ function ToolPartCard({
           <Badge variant={toolBadgeVariant(part.state)}>{formatToolState(part.state)}</Badge>
         </div>
 
-        {showApprovalDetails && isPendingApproval && approvalId ? (
+        {interactiveApprovals && showApprovalDetails && isPendingApproval && approvalId ? (
           <div className="rounded-md border border-warning-300/70 bg-warning-50/70 px-2 py-1.5">
             <div className="text-xs text-warning-900">
               User approval is required before this tool can continue.
@@ -342,11 +344,13 @@ function ToolPartCard({
 
 function ApprovalDataPartCard({
   approval,
+  interactiveApprovals,
   onResolveApproval,
   part,
   resolvingApproval,
 }: {
   approval: Approval | null;
+  interactiveApprovals: boolean;
   onResolveApproval: (input: ResolveApprovalInput) => void;
   part: ApprovalDataPart;
   resolvingApproval: { approvalId: string; state: "always" | "approved" | "denied" } | null;
@@ -367,7 +371,7 @@ function ApprovalDataPartCard({
         <Badge variant={approvalStateVariant(part.state)}>{part.state}</Badge>
       </div>
 
-      {pending ? (
+      {interactiveApprovals && pending ? (
         <div className="mt-2">
           <div className="text-xs text-warning-900">
             User approval is required before this tool can continue.
@@ -392,6 +396,7 @@ function ApprovalDataPartCard({
 export function MessageParts({
   approvalsById,
   core,
+  interactiveApprovals = true,
   message,
   onResolveApproval,
   renderMode,
@@ -399,6 +404,7 @@ export function MessageParts({
 }: {
   approvalsById: Record<string, Approval>;
   core?: OperatorCore;
+  interactiveApprovals?: boolean;
   message: UIMessage;
   onResolveApproval: (input: ResolveApprovalInput) => void;
   renderMode: "markdown" | "text";
@@ -444,6 +450,7 @@ export function MessageParts({
               key={`${message.id}:tool:${index}`}
               approval={approval}
               core={core}
+              interactiveApprovals={interactiveApprovals}
               onResolveApproval={onResolveApproval}
               part={part}
               resolvingApproval={resolvingApproval}
@@ -458,6 +465,7 @@ export function MessageParts({
               <ApprovalDataPartCard
                 key={`${message.id}:approval:${index}`}
                 approval={approvalsById[approvalPart.approval_id] ?? null}
+                interactiveApprovals={interactiveApprovals}
                 onResolveApproval={onResolveApproval}
                 part={approvalPart}
                 resolvingApproval={resolvingApproval}

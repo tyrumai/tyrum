@@ -1,25 +1,59 @@
 import { expect, it, vi } from "vitest";
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { toast } from "sonner";
 import { createBearerTokenAuth, createOperatorCore } from "../../operator-app/src/index.js";
 import { OperatorUiApp } from "../src/index.js";
 import { ConfigurePage } from "../src/components/pages/configure-page.js";
 import { waitForSelector, openConfigureGeneral } from "./operator-ui.test-support.js";
-import {
-  FakeWsClient,
-  createFakeHttpClient,
-  sampleExecutionRun,
-  sampleExecutionStep,
-  sampleExecutionAttempt,
-} from "./operator-ui.test-fixtures.js";
+import { FakeWsClient, createFakeHttpClient } from "./operator-ui.test-fixtures.js";
 
-export function registerAgentRunsGeneralTests(): void {
-  it("renders incoming runs on the agent runs tab", async () => {
+export function registerAgentTranscriptsGeneralTests(): void {
+  it("opens the transcript explorer from the agent page and removes the runs tab", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-01-01T00:02:00.000Z"));
 
     const ws = new FakeWsClient();
+    ws.transcriptList.mockResolvedValueOnce({
+      sessions: [
+        {
+          session_id: "session-root-1-id",
+          session_key: "session-root-1",
+          agent_id: "default",
+          channel: "ui",
+          thread_id: "thread-root-1",
+          title: "Default Agent session",
+          message_count: 2,
+          updated_at: "2026-01-01T00:01:00.000Z",
+          created_at: "2026-01-01T00:00:00.000Z",
+          archived: false,
+          latest_run_id: null,
+          latest_run_status: null,
+          has_active_run: false,
+          pending_approval_count: 0,
+          child_sessions: [
+            {
+              session_id: "session-child-1-id",
+              session_key: "session-child-1",
+              agent_id: "default",
+              channel: "subagent",
+              thread_id: "thread-child-1",
+              title: "Delegated child session",
+              message_count: 1,
+              updated_at: "2026-01-01T00:01:30.000Z",
+              created_at: "2026-01-01T00:01:00.000Z",
+              archived: false,
+              parent_session_key: "session-root-1",
+              subagent_id: "subagent-1",
+              latest_run_id: null,
+              latest_run_status: null,
+              has_active_run: false,
+              pending_approval_count: 0,
+            },
+          ],
+        },
+      ],
+      next_cursor: null,
+    });
     const { http } = createFakeHttpClient();
     const core = createOperatorCore({
       wsUrl: "ws://example.test/ws",
@@ -48,116 +82,179 @@ export function registerAgentRunsGeneralTests(): void {
       await Promise.resolve();
     });
 
-    const runsTab = await waitForSelector<HTMLButtonElement>(
+    expect(container.querySelector('[data-testid="agents-tab-runs"]')).toBeNull();
+
+    const openTranscripts = await waitForSelector<HTMLButtonElement>(
       container,
-      '[data-testid="agents-tab-runs"]',
+      '[data-testid="agents-open-transcripts"]',
     );
-
-    act(() => {
-      runsTab?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
-    });
-
-    expect(container.textContent).toContain("No runs yet");
-    expect(container.textContent).toContain(
-      "Runs for this agent appear here when it starts executing.",
-    );
-
-    act(() => {
-      ws.emit("run.updated", { payload: { run: sampleExecutionRun() } });
-    });
-
-    const runStatusBadge = container.querySelector<HTMLSpanElement>(
-      `[data-testid="run-status-${sampleExecutionRun().run_id}"]`,
-    );
-    expect(runStatusBadge).not.toBeNull();
-    expect(runStatusBadge?.textContent).toContain("running");
-    expect(runStatusBadge?.getAttribute("aria-live")).toBe("polite");
-    expect(runStatusBadge?.getAttribute("aria-atomic")).toBe("true");
-    expect(container.textContent).toContain("beefcafe");
-    expect(container.textContent).toContain("2m ago");
-
-    const step0 = sampleExecutionStep({
-      stepId: "33333333-3333-3333-3333-0123456789ab",
-      stepIndex: 0,
-      status: "queued",
-      actionType: "Decide",
-    });
-    const step1 = sampleExecutionStep({
-      stepId: "33333333-3333-3333-3333-acde0000babe",
-      stepIndex: 1,
-      status: "running",
-      actionType: "Research",
-    });
-
-    act(() => {
-      ws.emit("step.updated", { payload: { step: step1 } });
-      ws.emit("step.updated", { payload: { step: step0 } });
-    });
-
-    const attempt2 = sampleExecutionAttempt({
-      attemptId: "44444444-4444-4444-4444-acde0000beef",
-      stepId: step0.step_id,
-      attempt: 2,
-      status: "running",
-    });
-    const attempt1 = sampleExecutionAttempt({
-      attemptId: "44444444-4444-4444-4444-acde0000face",
-      stepId: step0.step_id,
-      attempt: 1,
-      status: "succeeded",
-      finishedAt: "2026-01-01T00:00:05.000Z",
-    });
-
-    act(() => {
-      ws.emit("attempt.updated", { payload: { attempt: attempt2 } });
-      ws.emit("attempt.updated", { payload: { attempt: attempt1 } });
-    });
-
-    const runToggle = container.querySelector<HTMLButtonElement>(
-      `[data-testid="run-toggle-${sampleExecutionRun().run_id}"]`,
-    );
-    expect(runToggle).not.toBeNull();
-
-    act(() => {
-      runToggle?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-
-    const pageText = container.textContent ?? "";
-    expect(pageText).toContain("Step 0");
-    expect(pageText).toContain("Step 1");
-    expect(pageText.indexOf("Step 0")).toBeLessThan(pageText.indexOf("Step 1"));
-
-    expect(pageText).toContain("queued");
-    expect(container.textContent).toContain("Decide");
-    expect(container.textContent).toContain("Research");
-    expect(pageText.indexOf("Attempt 1")).toBeLessThan(pageText.indexOf("Attempt 2"));
-    expect(pageText).toContain("completed • 5s");
-
-    expect(container.textContent).toContain("Attempt 1");
-    expect(container.textContent).toContain("456789ab");
-    expect(container.textContent).toContain("0000face");
-    expect(container.textContent).toContain("0000beef");
-
-    const writeText = vi.fn(async () => {});
-    Object.defineProperty(globalThis.navigator, "clipboard", {
-      value: { writeText },
-      configurable: true,
-    });
-    const toastSuccess = vi.spyOn(toast, "success");
-
-    const copyRunId = container.querySelector<HTMLButtonElement>(
-      `[data-testid="copy-id-${sampleExecutionRun().run_id}"]`,
-    );
-    expect(copyRunId).not.toBeNull();
-    expect(copyRunId?.getAttribute("aria-label")).toBe(`Copy ID ${sampleExecutionRun().run_id}`);
 
     await act(async () => {
-      copyRunId?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      openTranscripts?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await vi.dynamicImportSettled();
       await Promise.resolve();
     });
 
-    expect(writeText).toHaveBeenCalledWith(sampleExecutionRun().run_id);
-    expect(toastSuccess).toHaveBeenCalledWith("Copied to clipboard");
+    expect(container.querySelector('[data-testid="transcripts-page"]')).not.toBeNull();
+    expect(container.textContent).toContain("Default Agent session");
+    expect(container.textContent).toContain("Delegated child session");
+    expect(ws.requestDynamic).toHaveBeenCalledWith(
+      "transcript.list",
+      expect.objectContaining({ agent_id: "default" }),
+      expect.anything(),
+    );
+
+    act(() => {
+      root?.unmount();
+    });
+    container.remove();
+  });
+
+  it("loads more transcript roots from the transcript explorer", async () => {
+    const ws = new FakeWsClient();
+    ws.transcriptList.mockImplementation(async (payload) => {
+      const cursor =
+        typeof payload === "object" && payload !== null && "cursor" in payload
+          ? (payload.cursor as string | undefined)
+          : undefined;
+      if (cursor === "cursor-1") {
+        return {
+          sessions: [
+            {
+              session_id: "session-root-2-id",
+              session_key: "session-root-2",
+              agent_id: "default",
+              channel: "ui",
+              thread_id: "thread-root-2",
+              title: "Second transcript",
+              message_count: 1,
+              updated_at: "2026-01-01T00:02:00.000Z",
+              created_at: "2026-01-01T00:01:00.000Z",
+              archived: false,
+              latest_run_id: null,
+              latest_run_status: null,
+              has_active_run: false,
+              pending_approval_count: 0,
+            },
+          ],
+          next_cursor: null,
+        };
+      }
+      return {
+        sessions: [
+          {
+            session_id: "session-root-1-id",
+            session_key: "session-root-1",
+            agent_id: "default",
+            channel: "ui",
+            thread_id: "thread-root-1",
+            title: "First transcript",
+            message_count: 2,
+            updated_at: "2026-01-01T00:01:00.000Z",
+            created_at: "2026-01-01T00:00:00.000Z",
+            archived: false,
+            latest_run_id: null,
+            latest_run_status: null,
+            has_active_run: false,
+            pending_approval_count: 0,
+          },
+        ],
+        next_cursor: "cursor-1",
+      };
+    });
+    ws.transcriptGet.mockResolvedValue({
+      root_session_key: "session-root-1",
+      focus_session_key: "session-root-1",
+      sessions: [
+        {
+          session_id: "session-root-1-id",
+          session_key: "session-root-1",
+          agent_id: "default",
+          channel: "ui",
+          thread_id: "thread-root-1",
+          title: "First transcript",
+          message_count: 2,
+          updated_at: "2026-01-01T00:01:00.000Z",
+          created_at: "2026-01-01T00:00:00.000Z",
+          archived: false,
+          latest_run_id: null,
+          latest_run_status: null,
+          has_active_run: false,
+          pending_approval_count: 0,
+        },
+      ],
+      events: [
+        {
+          event_id: "message:session-root-1:msg-1",
+          kind: "message",
+          occurred_at: "2026-01-01T00:00:10.000Z",
+          session_key: "session-root-1",
+          payload: {
+            message: {
+              id: "msg-1",
+              role: "user",
+              parts: [{ type: "text", text: "Inspect the first transcript" }],
+            },
+          },
+        },
+      ],
+    });
+    const { http } = createFakeHttpClient();
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test"),
+      deps: { ws, http },
+    });
+    act(() => {
+      core.connect();
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    act(() => {
+      root = createRoot(container);
+      root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
+    });
+
+    const agentsLink = container.querySelector<HTMLButtonElement>('[data-testid="nav-agents"]');
+    expect(agentsLink).not.toBeNull();
+
+    await act(async () => {
+      agentsLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    const openTranscripts = await waitForSelector<HTMLButtonElement>(
+      container,
+      '[data-testid="agents-open-transcripts"]',
+    );
+
+    await act(async () => {
+      openTranscripts?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await vi.dynamicImportSettled();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain("First transcript");
+    const loadMoreButton = [...container.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent?.includes("Load more"),
+    );
+    expect(loadMoreButton).not.toBeNull();
+
+    await act(async () => {
+      loadMoreButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain("Second transcript");
+    expect(ws.requestDynamic).toHaveBeenCalledWith(
+      "transcript.list",
+      expect.objectContaining({ agent_id: "default", cursor: "cursor-1" }),
+      expect.anything(),
+    );
 
     act(() => {
       root?.unmount();
