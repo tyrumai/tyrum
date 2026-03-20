@@ -103,13 +103,16 @@ export function AgentsPage({
     setAgentsError(null);
     try {
       const response = await core.admin.agents.list();
-      const nextAgents = normalizeAgentOptions(response.agents, ({ agentKey, personaName, source }) => ({
-        agentKey,
-        agentId: source.agent_id.trim(),
-        displayName: personaName || agentKey,
-        canDelete: source.can_delete,
-        isPrimary: source.is_primary === true,
-      }));
+      const nextAgents = normalizeAgentOptions(
+        response.agents,
+        ({ agentKey, personaName, source }) => ({
+          agentKey,
+          agentId: source.agent_id.trim(),
+          displayName: personaName || agentKey,
+          canDelete: source.can_delete,
+          isPrimary: source.is_primary === true,
+        }),
+      );
       setAgentOptions(nextAgents);
       const nextSelectedAgentKey = selectInitialAgentKey({
         currentAgentKey: preferredAgentKey ?? selectedAgentKey,

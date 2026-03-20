@@ -7,11 +7,7 @@ export type AgentOptionSource = {
 
 export function normalizeAgentOptions<TInput extends AgentOptionSource, TOutput>(
   input: readonly TInput[],
-  toOption: (input: {
-    source: TInput;
-    agentKey: string;
-    personaName: string;
-  }) => TOutput | null,
+  toOption: (input: { source: TInput; agentKey: string; personaName: string }) => TOutput | null,
   options?: {
     sort?: (left: TOutput, right: TOutput) => number;
   },
