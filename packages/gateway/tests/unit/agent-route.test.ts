@@ -128,6 +128,21 @@ describe("createAgentRoutes", () => {
     expect(missingRes.status).toBe(404);
     expect(await missingRes.json()).toEqual({
       error: "not_found",
+      message: "agent 'missing' not found",
+    });
+  });
+
+  it("returns a primary-agent not found message when /agent/status has no explicit agent key", async () => {
+    const app = createAuthedApp({
+      agents: { getRuntime: vi.fn() } as never,
+      db: { get: vi.fn(async () => undefined) } as never,
+    });
+
+    const res = await app.request("/agent/status");
+
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({
+      error: "not_found",
       message: "primary agent not found",
     });
   });
@@ -229,7 +244,7 @@ describe("createAgentRoutes", () => {
     expect(missingRes.status).toBe(404);
     expect(await missingRes.json()).toEqual({
       error: "not_found",
-      message: "primary agent not found",
+      message: "agent 'missing' not found",
     });
     expect(runtimeLookupRes.status).toBe(400);
     expect(await runtimeLookupRes.json()).toEqual({
@@ -240,6 +255,29 @@ describe("createAgentRoutes", () => {
     expect(await runtimeTurnRes.json()).toEqual({
       error: "agent_runtime_error",
       message: "turn exploded",
+    });
+  });
+
+  it("returns a primary-agent not found message when /agent/turn omits agent_key", async () => {
+    const app = createAuthedApp({
+      agents: { getRuntime: vi.fn() } as never,
+      db: { get: vi.fn(async () => undefined) } as never,
+    });
+
+    const res = await app.request("/agent/turn", {
+      method: "POST",
+      body: JSON.stringify({
+        channel: "web",
+        thread_id: "thread-1",
+        parts: [{ type: "text", text: "hello" }],
+      }),
+      headers: { "content-type": "application/json" },
+    });
+
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({
+      error: "not_found",
+      message: "primary agent not found",
     });
   });
 });

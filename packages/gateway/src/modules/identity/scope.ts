@@ -418,8 +418,4 @@ export class IdentityScopeDal {
     this.setCached(this.primaryAgentCache, tenantId, { agentId, agentKey: key });
     this.setCached(this.agentCache, `${tenantId}:${key}`, agentId);
   }
-
-  forgetPrimaryAgent(tenantId: string): void {
-    this.deleteCached(this.primaryAgentCache, tenantId);
-  }
 }

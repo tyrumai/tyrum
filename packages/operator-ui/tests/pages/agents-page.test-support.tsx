@@ -1,5 +1,5 @@
 import { vi } from "vitest";
-import React, { act } from "react";
+import { act } from "react";
 import type { OperatorCore } from "../../../operator-app/src/index.js";
 import { createStore } from "../../../operator-app/src/store.js";
 import { sampleManagedAgentDetail } from "../operator-ui.agent-test-fixtures.js";

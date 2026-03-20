@@ -48,17 +48,30 @@ async function resolveRequestedAgentRecord(
   db: SqlDb,
   tenantId: string,
   agentKey: string | undefined,
-): Promise<
-  { agent_id: string; agent_key: string; is_primary: boolean | number | null } | undefined
-> {
+): Promise<{
+  requestedAgentKey: string | undefined;
+  record: { agent_id: string; agent_key: string; is_primary: boolean | number | null } | undefined;
+}> {
   if (agentKey === undefined) {
-    return await resolvePrimaryAgentRecord(db, tenantId);
+    return {
+      requestedAgentKey: undefined,
+      record: await resolvePrimaryAgentRecord(db, tenantId),
+    };
   }
   const normalized = agentKey.trim();
   if (!normalized) {
     throw new Error("agent_key must be a non-empty string");
   }
-  return await resolveAgentRecord(db, tenantId, normalized);
+  return {
+    requestedAgentKey: normalized,
+    record: await resolveAgentRecord(db, tenantId, normalized),
+  };
+}
+
+function buildAgentNotFoundMessage(requestedAgentKey: string | undefined): string {
+  return requestedAgentKey === undefined
+    ? "primary agent not found"
+    : `agent '${requestedAgentKey}' not found`;
 }
 
 export function createAgentRoutes(opts: { agents: AgentRegistry; db: SqlDb }): Hono {
@@ -118,19 +131,22 @@ export function createAgentRoutes(opts: { agents: AgentRegistry; db: SqlDb }): H
 
   agent.get("/agent/status", async (c) => {
     const tenantId = requireTenantId(c);
-    let record;
+    let resolved;
     try {
-      record = await resolveRequestedAgentRecord(opts.db, tenantId, c.req.query("agent_key"));
+      resolved = await resolveRequestedAgentRecord(opts.db, tenantId, c.req.query("agent_key"));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return c.json({ error: "invalid_request", message }, 400);
     }
-    if (!record) {
-      return c.json({ error: "not_found", message: "primary agent not found" }, 404);
+    if (!resolved.record) {
+      return c.json(
+        { error: "not_found", message: buildAgentNotFoundMessage(resolved.requestedAgentKey) },
+        404,
+      );
     }
     let runtime;
     try {
-      runtime = await opts.agents.getRuntime({ tenantId, agentKey: record.agent_key });
+      runtime = await opts.agents.getRuntime({ tenantId, agentKey: resolved.record.agent_key });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return c.json({ error: "invalid_request", message }, 400);
@@ -155,13 +171,16 @@ export function createAgentRoutes(opts: { agents: AgentRegistry; db: SqlDb }): H
     }
 
     try {
-      const record = await resolveRequestedAgentRecord(opts.db, tenantId, parsed.data.agent_key);
-      if (!record) {
-        return c.json({ error: "not_found", message: "primary agent not found" }, 404);
+      const resolved = await resolveRequestedAgentRecord(opts.db, tenantId, parsed.data.agent_key);
+      if (!resolved.record) {
+        return c.json(
+          { error: "not_found", message: buildAgentNotFoundMessage(resolved.requestedAgentKey) },
+          404,
+        );
       }
       let runtime;
       try {
-        runtime = await opts.agents.getRuntime({ tenantId, agentKey: record.agent_key });
+        runtime = await opts.agents.getRuntime({ tenantId, agentKey: resolved.record.agent_key });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         return c.json({ error: "invalid_request", message }, 400);
