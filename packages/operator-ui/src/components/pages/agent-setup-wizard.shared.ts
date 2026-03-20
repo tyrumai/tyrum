@@ -1,4 +1,4 @@
-import { AgentConfig, PolicyBundle } from "@tyrum/contracts";
+import { AgentConfig, CODEX_AGENT_NAMES, PolicyBundle } from "@tyrum/contracts";
 import type { AgentConfig as AgentConfigT } from "@tyrum/contracts";
 import React from "react";
 import { modelRefFor, type ModelPreset } from "./admin-http-models.shared.js";
@@ -208,7 +208,8 @@ export function buildAgentPolicyBundle(policyPreset: AgentPolicyPresetKey): Agen
 }
 
 export function buildAgentSetupStepMeta(input: {
-  canReturnToProvider: boolean;
+  hasPresetStep: boolean;
+  hasProviderStep: boolean;
   mode: AgentSetupWizardMode;
   step: AgentSetupWizardStep;
 }): StepMeta {
@@ -229,22 +230,22 @@ export function buildAgentSetupStepMeta(input: {
       title: "Add a provider account",
       description: "Connect a model provider so the wizard can discover available models.",
       stepIndex: 1,
-      totalSteps: 3,
+      totalSteps: input.hasPresetStep ? 3 : 2,
     };
   }
   if (input.step === "preset") {
     return {
       title: "Choose or create a model preset",
       description: "Pick an existing preset or create a new one for this agent.",
-      stepIndex: input.canReturnToProvider ? 2 : 1,
-      totalSteps: input.canReturnToProvider ? 3 : 2,
+      stepIndex: input.hasProviderStep ? 2 : 1,
+      totalSteps: input.hasProviderStep ? 3 : 2,
     };
   }
   return {
     title: "Configure the agent",
     description: "Name the agent, choose its tone, and apply an agent policy preset.",
-    stepIndex: input.canReturnToProvider ? 3 : 2,
-    totalSteps: input.canReturnToProvider ? 3 : 2,
+    stepIndex: input.hasProviderStep ? 3 : input.hasPresetStep ? 2 : 1,
+    totalSteps: input.hasProviderStep ? 3 : input.hasPresetStep ? 2 : 1,
   };
 }
 
@@ -317,4 +318,22 @@ export function createUniqueAgentKey(input: {
     }
   }
   return `${base}-${String(Date.now()).slice(-6)}`;
+}
+
+export function pickRandomAgentName(input: {
+  currentName: string;
+  existingAgentNames: readonly string[];
+  random?: () => number;
+}): string {
+  const random = input.random ?? Math.random;
+  const normalizedCurrent = input.currentName.trim().toLowerCase();
+  const usedNames = new Set(
+    input.existingAgentNames
+      .map((name) => name.trim().toLowerCase())
+      .filter((name) => name.length > 0 && name !== normalizedCurrent),
+  );
+  const availableNames = CODEX_AGENT_NAMES.filter((name) => !usedNames.has(name.toLowerCase()));
+  const pool = availableNames.length > 0 ? availableNames : CODEX_AGENT_NAMES;
+  const index = Math.min(pool.length - 1, Math.floor(random() * pool.length));
+  return pool[index] ?? CODEX_AGENT_NAMES[0];
 }

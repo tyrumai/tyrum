@@ -14,8 +14,17 @@ import {
   samplePresets,
 } from "./agents-page.test-support.js";
 
+const toastWarningMock = vi.hoisted(() => vi.fn());
+
+vi.mock("sonner", () => ({
+  toast: {
+    warning: toastWarningMock,
+    error: vi.fn(),
+  },
+}));
+
 describe("AgentsPage management", () => {
-  it("creates a managed agent from the editor", async () => {
+  it("creates a managed agent from the wizard and refreshes even when policy sync fails", async () => {
     const list = vi
       .fn()
       .mockResolvedValueOnce({
@@ -66,7 +75,7 @@ describe("AgentsPage management", () => {
         ],
       });
     const create = vi.fn().mockResolvedValue(sampleManagedAgentDetail("agent-2-2"));
-    const updateAgentPolicy = vi.fn().mockResolvedValue({});
+    const updateAgentPolicy = vi.fn().mockRejectedValue(new Error("route not found"));
     const { core, setAgentKey } = createCore({ list, create, updateAgentPolicy });
 
     const testRoot = renderIntoDocument(React.createElement(AgentsPage, { core }));
@@ -82,21 +91,17 @@ describe("AgentsPage management", () => {
       await Promise.resolve();
     });
 
-    await act(async () => {
-      click(
-        Array.from(testRoot.container.querySelectorAll<HTMLButtonElement>("button")).find(
-          (button) => button.textContent?.includes("Use selected preset"),
-        )!,
-      );
-      await Promise.resolve();
-    });
-
     const nameInput = testRoot.container.querySelector<HTMLInputElement>(
       '[data-testid="agents-create-name"]',
     );
     expect(nameInput).not.toBeNull();
+    const randomizeButton = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="agents-create-randomize-name"]',
+    );
+    expect(randomizeButton).not.toBeNull();
 
     act(() => {
+      randomizeButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       setNativeValue(nameInput as HTMLInputElement, "Agent 2");
     });
 
@@ -117,6 +122,9 @@ describe("AgentsPage management", () => {
     expect(updateAgentPolicy).toHaveBeenCalledTimes(1);
     expect(list).toHaveBeenCalledTimes(3);
     expect(setAgentKey).toHaveBeenLastCalledWith("agent-2-2");
+    expect(toastWarningMock).toHaveBeenCalledWith("Agent created with limited setup", {
+      description: "route not found. The agent was created, but the policy preset was not applied.",
+    });
 
     cleanupTestRoot(testRoot);
   });

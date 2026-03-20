@@ -5,6 +5,7 @@ import { AgentConfig } from "@tyrum/contracts";
 import {
   buildAgentConfigFromPreset,
   buildAgentPolicyBundle,
+  pickRandomAgentName,
 } from "../../src/components/pages/agent-setup-wizard.shared.js";
 
 const SAMPLE_PRESET = {
@@ -110,5 +111,23 @@ describe("agent-setup-wizard.shared", () => {
       connectors: { default: "deny", allow: ["*"], require_approval: [], deny: [] },
       provenance: { untrusted_shell_requires_approval: false },
     });
+  });
+
+  it("picks a random canonical agent name while preferring unused names", () => {
+    expect(
+      pickRandomAgentName({
+        currentName: "Hypatia",
+        existingAgentNames: ["Euclid", "Archimedes"],
+        random: () => 0,
+      }),
+    ).toBe("Ptolemy");
+
+    expect(
+      pickRandomAgentName({
+        currentName: "Custom Agent",
+        existingAgentNames: ["Euclid", "Archimedes", "Ptolemy"],
+        random: () => 0.5,
+      }),
+    ).not.toBe("Euclid");
   });
 });

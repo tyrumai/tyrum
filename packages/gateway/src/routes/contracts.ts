@@ -197,6 +197,7 @@ async function buildGeneratedContractState(): Promise<GeneratedContractState> {
     readFile(resolveContractsPackageJsonPath(), "utf-8").catch(() => undefined),
   ]);
   const contractsModule: Record<string, unknown> = contractsImport;
+  const contractEntries = contractModuleEntries(contractsModule);
 
   const generatedAt = new Date().toISOString();
   const schemasByFile = new Map<string, unknown>();
@@ -213,7 +214,7 @@ async function buildGeneratedContractState(): Promise<GeneratedContractState> {
     }
   })();
 
-  for (const [name, value] of contractModuleEntries(contractsModule)) {
+  for (const [name, value] of contractEntries) {
     try {
       const schema = jsonSchemaOf(value, "input");
       if (!schema) continue;

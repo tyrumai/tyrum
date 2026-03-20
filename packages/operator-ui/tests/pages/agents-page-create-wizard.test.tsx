@@ -112,7 +112,7 @@ describe("AgentsPageCreateWizard", () => {
     cleanupTestRoot(testRoot);
   });
 
-  it("starts on the preset step when providers and presets already exist", async () => {
+  it("starts on the agent step when providers and presets already exist", async () => {
     const createAgent = vi.fn(
       async ({ agent_key, config }: { agent_key: string; config: unknown }) => ({
         ...config,
@@ -141,20 +141,20 @@ describe("AgentsPageCreateWizard", () => {
       <AgentsPageCreateWizard core={core} onCancel={vi.fn()} onSaved={onSaved} />,
     );
 
-    await waitForSelector(testRoot.container, '[data-testid="agents-create-step-preset"]');
-    await act(async () => {
-      findButtonByText(testRoot.container, "Use selected preset")?.dispatchEvent(
-        new MouseEvent("click", { bubbles: true }),
-      );
-      await Promise.resolve();
-    });
     await waitForSelector(testRoot.container, '[data-testid="agents-create-step-agent"]');
+
+    const createButton = findButtonByText(testRoot.container, "Create agent");
+    expect(createButton).not.toBeNull();
+    expect(createButton?.disabled).toBe(true);
+    expect(
+      Array.from(testRoot.container.querySelectorAll<HTMLLabelElement>("label")).find((label) =>
+        label.textContent?.includes("Model preset"),
+      ),
+    ).toBeUndefined();
 
     setInputByLabel(testRoot.container, "Agent name", "Operations Agent");
     await act(async () => {
-      findButtonByText(testRoot.container, "Create agent")?.dispatchEvent(
-        new MouseEvent("click", { bubbles: true }),
-      );
+      createButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       await Promise.resolve();
     });
 

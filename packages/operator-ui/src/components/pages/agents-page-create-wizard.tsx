@@ -11,6 +11,7 @@ import {
   buildAgentConfigFromPreset,
   buildAgentPolicyBundle,
   createUniqueAgentKey,
+  pickRandomAgentName,
   type AgentPolicyPresetKey,
 } from "./agent-setup-wizard.shared.js";
 import {
@@ -44,6 +45,7 @@ type CreateWizardStep = "provider" | "preset" | "agent";
 type CreateWizardData = {
   availableModels: AvailableModel[];
   existingAgentKeys: string[];
+  existingAgentNames: string[];
   presets: ModelPreset[];
   providers: ConfiguredProviderGroup[];
   registry: ProviderRegistryEntry[];
@@ -52,6 +54,7 @@ type CreateWizardData = {
 const EMPTY_WIZARD_DATA: CreateWizardData = {
   availableModels: [],
   existingAgentKeys: [],
+  existingAgentNames: [],
   presets: [],
   providers: [],
   registry: [],
@@ -61,15 +64,21 @@ function supportsProviders(registry: readonly ProviderRegistryEntry[]): Provider
   return registry.filter((provider) => provider.supported && provider.methods.length > 0);
 }
 
-function resolveInitialStep(data: CreateWizardData): CreateWizardStep {
-  const activeProviderCount = countActiveProviders(data.providers);
-  if (
-    activeProviderCount === 0 ||
+function needsProviderStep(data: CreateWizardData): boolean {
+  return (
+    countActiveProviders(data.providers) === 0 ||
     (data.availableModels.length === 0 && data.presets.length === 0)
-  ) {
-    return "provider";
-  }
-  return "preset";
+  );
+}
+
+function needsPresetStep(data: CreateWizardData): boolean {
+  return data.presets.length === 0;
+}
+
+function resolveInitialStep(data: CreateWizardData): CreateWizardStep {
+  if (needsProviderStep(data)) return "provider";
+  if (needsPresetStep(data)) return "preset";
+  return "agent";
 }
 
 export function AgentsPageCreateWizard({
@@ -82,7 +91,7 @@ export function AgentsPageCreateWizard({
   onSaved: (agentKey: string) => void;
 }): React.ReactElement {
   const mutationHttp = core.admin;
-  const [step, setStep] = React.useState<CreateWizardStep>("preset");
+  const [step, setStep] = React.useState<CreateWizardStep>("agent");
   const [data, setData] = React.useState<CreateWizardData>(EMPTY_WIZARD_DATA);
   const [loading, setLoading] = React.useState(true);
   const [loadError, setLoadError] = React.useState<string | null>(null);
@@ -91,7 +100,7 @@ export function AgentsPageCreateWizard({
   const [modelState, setModelState] = React.useState<ModelDialogState>(emptyDialogState());
   const [modelFilter, setModelFilter] = React.useState("");
   const [selectedPresetKey, setSelectedPresetKey] = React.useState("");
-  const [agentName, setAgentName] = React.useState("New Agent");
+  const [agentName, setAgentName] = React.useState("");
   const [agentTone, setAgentTone] = React.useState("direct");
   const [policyPreset, setPolicyPreset] = React.useState<AgentPolicyPresetKey>("moderate");
   const saveAction = useApiAction<void>();
@@ -120,9 +129,8 @@ export function AgentsPageCreateWizard({
   const providerFormError = validateProviderForm(providerState, selectedMethod, "create");
   const selectedPreset =
     data.presets.find((preset) => preset.preset_key === selectedPresetKey) ?? null;
-  const canReturnToProvider =
-    countActiveProviders(data.providers) === 0 ||
-    (data.availableModels.length === 0 && data.presets.length === 0);
+  const showProviderStep = needsProviderStep(data);
+  const showPresetStep = needsPresetStep(data);
 
   const refreshData = React.useCallback(
     async (preferredStep?: CreateWizardStep): Promise<void> => {
@@ -145,6 +153,10 @@ export function AgentsPageCreateWizard({
         const nextData = {
           availableModels: availableModelsResult.models,
           existingAgentKeys: agentsResult.agents.map((agent) => agent.agent_key),
+          existingAgentNames: agentsResult.agents.flatMap((agent) => {
+            const name = agent.persona?.name?.trim();
+            return name ? [name] : [];
+          }),
           presets: presetsResult.presets,
           providers: providersResult.providers,
           registry: registryResult.providers,
@@ -237,7 +249,7 @@ export function AgentsPageCreateWizard({
       selectedMethodKey: selectedMethod.method_key,
       selectedMethod,
     });
-    await refreshData("preset");
+    await refreshData();
   };
 
   const savePreset = async (): Promise<void> => {
@@ -246,11 +258,11 @@ export function AgentsPageCreateWizard({
       modelState,
     });
     setSelectedPresetKey(presetKey);
-    await refreshData("agent");
+    await refreshData();
   };
 
   const createAgent = async (): Promise<void> => {
-    if (!selectedPreset || !mutationHttp.policyConfig) {
+    if (!selectedPreset) {
       throw new Error("Choose a model preset before creating the agent.");
     }
     const agentKey = createUniqueAgentKey({
@@ -268,12 +280,34 @@ export function AgentsPageCreateWizard({
       config,
       reason: "agents: create via setup wizard",
     });
-    await mutationHttp.policyConfig.updateAgent(created.agent_key, {
-      bundle: buildAgentPolicyBundle(policyPreset),
-      reason: "agents: apply setup wizard policy preset",
-    });
+    if (!mutationHttp.policyConfig) {
+      toast.warning("Agent created with limited setup", {
+        description: "The agent was created, but the policy preset was not applied.",
+      });
+      onSaved(created.agent_key);
+      return;
+    }
+    try {
+      await mutationHttp.policyConfig.updateAgent(created.agent_key, {
+        bundle: buildAgentPolicyBundle(policyPreset),
+        reason: "agents: apply setup wizard policy preset",
+      });
+    } catch (error) {
+      toast.warning("Agent created with limited setup", {
+        description: `${formatErrorMessage(error)}. The agent was created, but the policy preset was not applied.`,
+      });
+    }
     onSaved(created.agent_key);
   };
+
+  const randomizeAgentName = React.useCallback(() => {
+    setAgentName((current) =>
+      pickRandomAgentName({
+        currentName: current,
+        existingAgentNames: data.existingAgentNames,
+      }),
+    );
+  }, [data.existingAgentNames]);
 
   if (loading) {
     return (
@@ -294,6 +328,8 @@ export function AgentsPageCreateWizard({
       <CardContent className="grid gap-5 pt-6">
         <AgentSetupWizard
           busy={saveAction.isLoading}
+          hasPresetStep={showPresetStep}
+          hasProviderStep={showProviderStep}
           mode="create_agent"
           onCancel={onCancel}
           step={step}
@@ -315,13 +351,13 @@ export function AgentsPageCreateWizard({
           }}
           preset={{
             canApplySelectedPreset: true,
-            canReturnToProvider,
+            canReturnToProvider: showProviderStep,
             canSave: true,
             filteredAvailableModels,
             modelFilter,
             modelState,
             onApplySelectedPreset: () => setStep("agent"),
-            onBackToProvider: canReturnToProvider ? () => setStep("provider") : undefined,
+            onBackToProvider: showProviderStep ? () => setStep("provider") : undefined,
             onModelFilterChange: setModelFilter,
             onModelSave: () => {
               void runAction(savePreset);
@@ -335,17 +371,19 @@ export function AgentsPageCreateWizard({
           agent={{
             canSave: Boolean(selectedPreset),
             name: agentName,
-            onBackToPreset: () => setStep("preset"),
+            nameRequired: true,
+            onBackToPreset: showPresetStep ? () => setStep("preset") : undefined,
             onNameChange: setAgentName,
             onPolicyPresetChange: setPolicyPreset,
+            onRandomizeName: randomizeAgentName,
             onSave: () => {
               void runAction(createAgent);
             },
             onToneChange: setAgentTone,
             policyPreset,
-            selectedPresetLabel: selectedPreset
-              ? `${selectedPreset.display_name} (${selectedPreset.provider_key}/${selectedPreset.model_id})`
-              : "None selected",
+            selectedPresetLabel: "",
+            showBackToPreset: showPresetStep,
+            showPresetSummary: false,
             tone: agentTone,
           }}
         />
