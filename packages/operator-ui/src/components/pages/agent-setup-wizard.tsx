@@ -1,4 +1,5 @@
 import { PERSONA_TONES } from "@tyrum/contracts";
+import { Dices } from "lucide-react";
 import type * as React from "react";
 import { Button } from "../ui/button.js";
 import { Alert } from "../ui/alert.js";
@@ -72,15 +73,21 @@ type AgentStepProps = {
   onBackToPreset?: () => void;
   onNameChange: (value: string) => void;
   onPolicyPresetChange: (value: AgentPolicyPresetKey) => void;
+  onRandomizeName?: () => void;
   onSave: () => void;
   onToneChange: (value: string) => void;
   policyPreset: AgentPolicyPresetKey;
   selectedPresetLabel: string;
+  showBackToPreset?: boolean;
+  showPresetSummary?: boolean;
+  nameRequired?: boolean;
   tone: string;
 };
 
 export type AgentSetupWizardProps = {
   busy: boolean;
+  hasPresetStep?: boolean;
+  hasProviderStep?: boolean;
   mode: AgentSetupWizardMode;
   onCancel?: () => void;
   step: AgentSetupWizardStep;
@@ -92,6 +99,8 @@ export type AgentSetupWizardProps = {
 export function AgentSetupWizard({
   agent,
   busy,
+  hasPresetStep = true,
+  hasProviderStep,
   mode,
   onCancel,
   preset,
@@ -99,13 +108,14 @@ export function AgentSetupWizard({
   step,
 }: AgentSetupWizardProps): React.ReactElement {
   const meta = buildAgentSetupStepMeta({
-    canReturnToProvider: preset.canReturnToProvider,
+    hasPresetStep,
+    hasProviderStep: hasProviderStep ?? preset.canReturnToProvider,
     mode,
     step,
   });
   const showCancel = mode === "create_agent" && onCancel !== undefined;
   const showBackToProvider = mode === "create_agent" && preset.canReturnToProvider;
-  const showBackToPreset = mode === "create_agent";
+  const showBackToPreset = mode === "create_agent" && agent.showBackToPreset !== false;
 
   if (step === "provider") {
     return (
@@ -372,6 +382,22 @@ export function AgentSetupWizard({
           <Input
             data-testid={mode === "create_agent" ? "agents-create-name" : undefined}
             label="Agent name"
+            required={agent.nameRequired}
+            suffix={
+              agent.onRandomizeName ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 w-6 p-0 text-fg-muted hover:text-fg"
+                  data-testid={mode === "create_agent" ? "agents-create-randomize-name" : undefined}
+                  aria-label="Randomize agent name"
+                  onClick={agent.onRandomizeName}
+                >
+                  <Dices className="h-3.5 w-3.5" aria-hidden="true" />
+                </Button>
+              ) : null
+            }
             value={agent.name}
             onChange={(event) => agent.onNameChange(event.currentTarget.value)}
           />
@@ -387,9 +413,11 @@ export function AgentSetupWizard({
             ))}
           </Select>
         </div>
-        <div className="grid gap-4 md:grid-cols-2">
-          <Input label="Model preset" readOnly value={agent.selectedPresetLabel} />
-        </div>
+        {agent.showPresetSummary !== false ? (
+          <div className="grid gap-4 md:grid-cols-2">
+            <Input label="Model preset" readOnly value={agent.selectedPresetLabel} />
+          </div>
+        ) : null}
         <div className="grid gap-3">
           <div className="text-sm font-medium text-fg">Agent policy preset</div>
           <RadioGroup
@@ -425,7 +453,11 @@ export function AgentSetupWizard({
             type="button"
             data-testid={mode === "create_agent" ? "agents-create-save" : undefined}
             isLoading={busy}
-            disabled={!agent.canSave || !agent.name.trim() || !agent.tone.trim()}
+            disabled={
+              !agent.canSave ||
+              (agent.nameRequired !== false && !agent.name.trim()) ||
+              !agent.tone.trim()
+            }
             onClick={agent.onSave}
           >
             {mode === "create_agent" ? "Create agent" : "Save agent"}

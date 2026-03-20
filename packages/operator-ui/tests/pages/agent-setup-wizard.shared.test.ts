@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 
 import { describe, expect, it } from "vitest";
-import { AgentConfig } from "@tyrum/contracts";
+import { AgentConfig, CODEX_AGENT_NAMES } from "@tyrum/contracts";
 import {
   buildAgentConfigFromPreset,
   buildAgentPolicyBundle,
+  buildAgentSetupStepMeta,
+  pickRandomAgentName,
 } from "../../src/components/pages/agent-setup-wizard.shared.js";
 
 const SAMPLE_PRESET = {
@@ -110,5 +112,49 @@ describe("agent-setup-wizard.shared", () => {
       connectors: { default: "deny", allow: ["*"], require_approval: [], deny: [] },
       provenance: { untrusted_shell_requires_approval: false },
     });
+  });
+
+  it("counts the create-agent steps correctly when the preset step is skipped", () => {
+    expect(
+      buildAgentSetupStepMeta({
+        mode: "create_agent",
+        step: "agent",
+        hasProviderStep: true,
+        hasPresetStep: false,
+      }),
+    ).toMatchObject({
+      stepIndex: 2,
+      totalSteps: 2,
+    });
+  });
+
+  it("picks a random canonical agent name while preferring unused names", () => {
+    expect(
+      pickRandomAgentName({
+        currentName: "Hypatia",
+        existingAgentNames: ["Euclid", "Archimedes"],
+        random: () => 0,
+      }),
+    ).toBe("Ptolemy");
+
+    expect(
+      pickRandomAgentName({
+        currentName: "Custom Agent",
+        existingAgentNames: ["Euclid", "Archimedes", "Ptolemy"],
+        random: () => 0.5,
+      }),
+    ).not.toBe("Euclid");
+  });
+
+  it("does not return the current canonical name when another unused name is available", () => {
+    expect(
+      pickRandomAgentName({
+        currentName: "Hypatia",
+        existingAgentNames: CODEX_AGENT_NAMES.filter(
+          (name) => name !== "Hypatia" && name !== "Avicenna",
+        ),
+        random: () => 0,
+      }),
+    ).toBe("Avicenna");
   });
 });
