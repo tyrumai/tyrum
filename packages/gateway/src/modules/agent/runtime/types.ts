@@ -39,7 +39,7 @@ export interface AgentRuntimeOptions {
   maxSteps?: number;
   secretProvider?: SecretProvider;
   approvalDal?: ApprovalDal;
-  /** Optional protocol deps for node dispatch (tool.node.dispatch). */
+  /** Optional protocol deps for dedicated node-backed dispatch. */
   protocolDeps?: ProtocolDeps;
   /** How long to wait for a human approval before expiring it. */
   approvalWaitMs?: number;

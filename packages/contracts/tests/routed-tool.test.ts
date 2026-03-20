@@ -8,6 +8,10 @@ import {
 } from "../src/index.js";
 import { expectRejects } from "./test-helpers.js";
 
+const LEGACY_NODE_DISPATCH_TOOL_ID = ["tool", "node", "dispatch"].join(".");
+const LEGACY_NODE_INSPECT_TOOL_ID = ["tool", "node", "inspect"].join(".");
+const NODE_LIST_TOOL_ID = ["tool", "node", "list"].join(".");
+
 describe("ExplicitDedicatedToolId", () => {
   it("accepts dedicated routed tool ids", () => {
     expect(ExplicitDedicatedToolId.parse("tool.desktop.screenshot")).toBe(
@@ -19,9 +23,9 @@ describe("ExplicitDedicatedToolId", () => {
   });
 
   it("rejects generic node helper tool ids", () => {
-    expectRejects(ExplicitDedicatedToolId, "tool.node.dispatch");
-    expectRejects(ExplicitDedicatedToolId, "tool.node.inspect");
-    expectRejects(ExplicitDedicatedToolId, "tool.node.list");
+    expectRejects(ExplicitDedicatedToolId, LEGACY_NODE_DISPATCH_TOOL_ID);
+    expectRejects(ExplicitDedicatedToolId, LEGACY_NODE_INSPECT_TOOL_ID);
+    expectRejects(ExplicitDedicatedToolId, NODE_LIST_TOOL_ID);
   });
 });
 

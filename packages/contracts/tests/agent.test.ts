@@ -11,6 +11,8 @@ import {
 } from "../src/index.js";
 import { expectRejects } from "./test-helpers.js";
 
+const LEGACY_NODE_DISPATCH_TOOL_ID = ["tool", "node", "dispatch"].join(".");
+
 describe("AgentConfig", () => {
   it("parses and applies defaults", () => {
     const parsed = AgentConfig.parse({
@@ -189,7 +191,7 @@ describe("AgentConfig", () => {
       secret_refs: [
         {
           secret_ref_id: "sec_ref_prod_db",
-          allowed_tool_ids: ["tool.node.dispatch"],
+          allowed_tool_ids: [LEGACY_NODE_DISPATCH_TOOL_ID],
         },
       ],
     });

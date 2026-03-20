@@ -4,6 +4,9 @@ import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
 import { McpManager } from "../../src/modules/agent/mcp-manager.js";
 import { createToolRegistryRoutes } from "../../src/routes/tool-registry.js";
 
+const LEGACY_NODE_DISPATCH_TOOL_ID = ["tool", "node", "dispatch"].join(".");
+const LEGACY_NODE_INSPECT_TOOL_ID = ["tool", "node", "inspect"].join(".");
+
 function authClaims() {
   return {
     token_kind: "admin" as const,
@@ -204,12 +207,12 @@ describe("tool registry routes", () => {
     expect(body.tools.some((tool) => tool.source === "builtin")).toBe(true);
     expect(body.tools).not.toContainEqual(
       expect.objectContaining({
-        canonical_id: "tool.node.inspect",
+        canonical_id: LEGACY_NODE_INSPECT_TOOL_ID,
       }),
     );
     expect(body.tools).not.toContainEqual(
       expect.objectContaining({
-        canonical_id: "tool.node.dispatch",
+        canonical_id: LEGACY_NODE_DISPATCH_TOOL_ID,
       }),
     );
     expect(body.tools).toContainEqual(

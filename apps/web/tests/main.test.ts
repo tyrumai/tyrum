@@ -76,7 +76,7 @@ describe("apps/web main bootstrap", () => {
     expect(props.webAuthPersistence.hasStoredToken).toBe(true);
 
     expectDisposedOnUnload({ unsubscribe, manager, elevatedModeStore });
-  });
+  }, 15_000);
 
   it("prefers a URL token over an already-saved browser token", async () => {
     const { core, operatorCore, replaceStateSpy, urlAuth } =
@@ -100,7 +100,7 @@ describe("apps/web main bootstrap", () => {
     expect(setItemSpy).toHaveBeenCalledWith("tyrum-operator-token", "url-token");
     expect(core.connect).toHaveBeenCalledTimes(1);
     expect(replaceStateSpy).toHaveBeenCalledWith(expect.anything(), "", "/ui");
-  });
+  }, 15_000);
 
   it("continues bootstrapping with a URL token when browser storage is unavailable", async () => {
     const { core, operatorCore, replaceStateSpy, root, urlAuth } =

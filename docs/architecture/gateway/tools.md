@@ -32,7 +32,7 @@ flowchart TB
 
 The router is the hard boundary: prompt text suggests actions, but policy decides whether a tool call is allowed, denied, or requires approval.
 
-The clean-break model-facing replacement for generic node dispatch is defined in [ARCH-19 dedicated node-backed tool and routing decision](/architecture/arch-19-dedicated-node-backed-tools). This page stays focused on the shared gateway enforcement pipeline that all tool families pass through.
+The clean-break model-facing replacement for the legacy generic node helpers is defined in [ARCH-19 dedicated node-backed tool and routing decision](/architecture/arch-19-dedicated-node-backed-tools). This page stays focused on the shared gateway enforcement pipeline that all tool families pass through.
 
 For model-facing prompts, each tool exposes two layers:
 
@@ -91,7 +91,7 @@ Examples:
 - `fs`: `op:workspace/relative/path` after canonical path normalization.
 - `bash`: normalized structured command representation (not raw shell text).
 - `messaging`: stable destination key, not message body text.
-- `tool.node.dispatch`: capability id + action kind (+ normalized desktop operation where relevant).
+- Dedicated node-backed tools such as `tool.desktop.act`, `tool.browser.navigate`, and `tool.location.get`: exact tool id + normalized action-specific target.
 - `tool.automation.schedule.*`: stable schedule semantics or exact `schedule_id`, not free-form cadence text.
 
 ## Model-facing guidance examples
@@ -104,9 +104,9 @@ High-risk tools should include canonical examples in their prompt-facing descrip
   - use `edit` or `apply_patch` for surgical changes
   - use `write` only for full-file replacement
 - `bash` should show bounded commands with explicit `cwd` and `timeout_ms` when relevant.
-- `tool.node.dispatch` should show that action-specific arguments go inside `input`, for example:
-  `{"node_id":"...","capability":"tyrum.browser.navigate","action_name":"navigate","input":{"url":"https://example.com"}}`
-- `tool.node.list` and `tool.node.inspect` should make the discovery order explicit before dispatch.
+- Dedicated node-backed tools should show direct action-shaped arguments, for example `tool.browser.navigate` with:
+  `{"url":"https://example.com","node_id":"node_456","timeout_ms":30000}`
+- `tool.node.list` and the dedicated action tool should make the discovery order explicit before execution when node selection is ambiguous.
 - `tool.automation.schedule.create` and `.update` should show canonical nested `cadence`, `execution`, and `delivery` objects instead of free-form schedule prose.
 - `webfetch` should distinguish `mode: "raw"` from `mode: "extract"` and show that extract mode uses a focused `prompt`.
 - delegation and work-tracking tools such as `subagent.spawn`, `workboard.capture`, and `workboard.clarification.request` should include examples that show the intended bounded workflow.

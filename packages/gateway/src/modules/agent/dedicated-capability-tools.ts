@@ -1,4 +1,5 @@
 import { listCapabilityCatalogEntries } from "../node/capability-catalog.js";
+import { toolIdForCapabilityDescriptor } from "../node/capability-tool-id.js";
 import type { ToolDescriptor } from "./tools.js";
 
 type CatalogEntry = ReturnType<typeof listCapabilityCatalogEntries>[number];
@@ -37,10 +38,6 @@ function isDedicatedCapabilityId(capabilityId: string): boolean {
     capabilityId.startsWith("tyrum.camera.") ||
     capabilityId === "tyrum.audio.record"
   );
-}
-
-function toDedicatedToolId(capabilityId: string): string {
-  return `tool.${capabilityId.slice("tyrum.".length)}`;
 }
 
 function hasObjectProperty(schema: Record<string, unknown>, property: string): boolean {
@@ -279,7 +276,7 @@ const DEDICATED_CAPABILITY_TOOLS: readonly DedicatedCapabilityTool[] =
       }
       return [
         {
-          toolId: toDedicatedToolId(entry.descriptor.id),
+          toolId: toolIdForCapabilityDescriptor(entry.descriptor.id),
           capabilityId: entry.descriptor.id,
           action,
           supportsDispatchTimeout: !hasObjectProperty(action.inputSchema, "timeout_ms"),

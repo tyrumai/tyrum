@@ -20,7 +20,7 @@ flowchart LR
   Queue --> Run["Run + step state"]
   Run --> Claim["Worker claim / lease"]
   Claim --> Execute["Execute step"]
-  Execute --> ToolRunner["ToolRunner / tools / node dispatch"]
+  Execute --> ToolRunner["ToolRunner / tools / dedicated node-backed routing"]
   Execute --> Evidence["Artifacts + postconditions"]
   Execute --> Events["Run events + audit"]
 
