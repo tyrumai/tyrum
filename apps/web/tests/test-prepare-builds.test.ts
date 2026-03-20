@@ -15,6 +15,7 @@ describe("workspace test build graph", () => {
       expect.arrayContaining([
         resolve(repoRoot, "apps/web/src"),
         resolve(repoRoot, "apps/web/public"),
+        resolve(repoRoot, "packages/node-sdk/dist/browser.mjs"),
         resolve(repoRoot, "packages/operator-ui/dist/index.mjs"),
         resolve(repoRoot, "packages/operator-app/dist/index.mjs"),
       ]),

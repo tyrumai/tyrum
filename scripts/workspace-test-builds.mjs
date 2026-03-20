@@ -1,4 +1,4 @@
-import { resolve } from "node:path";
+import { createBuildsFromSpecs } from "./workspace-build-specs.mjs";
 
 export const WORKSPACE_TEST_BUILD_SPECS = [
   {
@@ -162,6 +162,7 @@ export const WORKSPACE_TEST_BUILD_SPECS = [
     dependencies: [
       "cli-utils",
       "contracts",
+      "node-sdk",
       "operator-app",
       "operator-ui",
       "runtime-agent",
@@ -191,25 +192,9 @@ export const WORKSPACE_TEST_BUILD_SPECS = [
 ];
 
 export function createWorkspaceTestBuilds(repoRoot) {
-  const outputsByKey = new Map(
-    WORKSPACE_TEST_BUILD_SPECS.map((spec) => [
-      spec.key,
-      spec.outputPaths.map((outputPath) => resolve(repoRoot, outputPath)),
-    ]),
+  return createBuildsFromSpecs(
+    repoRoot,
+    WORKSPACE_TEST_BUILD_SPECS,
+    "workspace test build dependency",
   );
-
-  return WORKSPACE_TEST_BUILD_SPECS.map((spec) => ({
-    name: spec.name,
-    inputs: [
-      ...spec.inputPaths.map((inputPath) => resolve(repoRoot, inputPath)),
-      ...(spec.dependencies ?? []).flatMap((dependency) => {
-        const outputs = outputsByKey.get(dependency);
-        if (!outputs) {
-          throw new Error(`Unknown workspace test build dependency: ${dependency}`);
-        }
-        return outputs;
-      }),
-    ],
-    outputs: outputsByKey.get(spec.key) ?? [],
-  }));
 }
