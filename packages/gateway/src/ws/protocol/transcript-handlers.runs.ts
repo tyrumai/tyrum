@@ -325,14 +325,17 @@ export function attachDirectChildSummaries(input: {
     childrenByParentKey.set(parentSessionKey, siblings);
   }
 
-  return input.roots.map((root) => {
+  const attachChildren = (summary: TranscriptSessionSummary): TranscriptSessionSummary => {
     const childSessions = childrenByParentKey
-      .get(root.session_key)
-      ?.toSorted((left, right) => left.created_at.localeCompare(right.created_at));
+      .get(summary.session_key)
+      ?.toSorted((left, right) => left.created_at.localeCompare(right.created_at))
+      .map(attachChildren);
     return childSessions && childSessions.length > 0
-      ? { ...root, child_sessions: childSessions }
-      : root;
-  });
+      ? { ...summary, child_sessions: childSessions }
+      : summary;
+  };
+
+  return input.roots.map(attachChildren);
 }
 
 export function shouldKeepTranscriptRootSummary(
@@ -346,6 +349,6 @@ export function shouldKeepTranscriptRootSummary(
     return true;
   }
   return (summary.child_sessions ?? []).some((child: TranscriptSessionSummary) => {
-    return child.has_active_run || child.pending_approval_count > 0;
+    return shouldKeepTranscriptRootSummary(child, true);
   });
 }

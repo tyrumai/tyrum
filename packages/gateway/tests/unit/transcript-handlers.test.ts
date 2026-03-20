@@ -5,6 +5,11 @@ import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { ApprovalDal } from "../../src/modules/approval/dal.js";
 import { createAdminWsClient, serializeWsRequest } from "../helpers/ws-protocol-test-helpers.js";
 import { createSessionDalFixture, setSessionUpdatedAt } from "./session-dal.test-support.js";
+import {
+  insertRunningExecution,
+  insertRunningExecutionTrace,
+  linkSubagentSession,
+} from "./transcript-handlers.test-support.js";
 
 describe("transcript WS handlers", () => {
   let db: SqliteDb | undefined;
@@ -30,11 +35,17 @@ describe("transcript WS handlers", () => {
       containerKind: "group",
     });
     const childSessionKey = `agent:default:subagent:${subagentId}`;
-    await db!.run("UPDATE sessions SET session_key = ? WHERE tenant_id = ? AND session_id = ?", [
-      childSessionKey,
-      child1.tenant_id,
-      child1.session_id,
-    ]);
+    await linkSubagentSession({
+      db: db!,
+      tenantId: child1.tenant_id,
+      sessionId: child1.session_id,
+      sessionKey: childSessionKey,
+      subagentId,
+      agentId: root1.agent_id,
+      workspaceId: root1.workspace_id,
+      parentSessionKey: root1.session_key,
+      createdAt: "2026-02-17T00:00:30.000Z",
+    });
     const root2 = await fixture.dal.getOrCreate({
       connectorKey: "ui",
       providerThreadId: "thread-root-2",
@@ -51,47 +62,6 @@ describe("transcript WS handlers", () => {
       providerThreadId: "thread-other-tenant",
       containerKind: "group",
     });
-
-    await db!.run(
-      `INSERT INTO subagents (
-         subagent_id,
-         tenant_id,
-         agent_id,
-         workspace_id,
-         parent_session_key,
-         work_item_id,
-         work_item_task_id,
-         execution_profile,
-         session_key,
-         lane,
-         status,
-         desktop_environment_id,
-         attached_node_id,
-         created_at,
-         updated_at,
-         last_heartbeat_at,
-         closed_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        subagentId,
-        root1.tenant_id,
-        root1.agent_id,
-        root1.workspace_id,
-        root1.session_key,
-        null,
-        null,
-        "executor",
-        childSessionKey,
-        "subagent",
-        "running",
-        null,
-        null,
-        "2026-02-17T00:00:30.000Z",
-        "2026-02-17T00:00:30.000Z",
-        null,
-        null,
-      ],
-    );
 
     await setSessionUpdatedAt({
       db: db!,
@@ -252,34 +222,16 @@ describe("transcript WS handlers", () => {
     const client = createAdminWsClient();
     const deps = { connectionManager: new ConnectionManager(), db: db! };
 
-    await db!.run(
-      `INSERT INTO execution_jobs (tenant_id, job_id, agent_id, workspace_id, key, lane, status, trigger_json)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        child1.tenant_id,
-        "job-transcript-1",
-        child1.agent_id,
-        child1.workspace_id,
-        child1.session_key,
-        "main",
-        "running",
-        "{}",
-      ],
-    );
-    await db!.run(
-      `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        child1.tenant_id,
-        "550e8400-e29b-41d4-a716-446655440100",
-        "job-transcript-1",
-        child1.session_key,
-        "main",
-        "running",
-        1,
-        "2026-02-17T00:04:00.000Z",
-      ],
-    );
+    await insertRunningExecution({
+      db: db!,
+      tenantId: child1.tenant_id,
+      agentId: child1.agent_id,
+      workspaceId: child1.workspace_id,
+      sessionKey: child1.session_key,
+      jobId: "job-transcript-1",
+      runId: "550e8400-e29b-41d4-a716-446655440100",
+      createdAt: "2026-02-17T00:04:00.000Z",
+    });
 
     const response = (await handleClientMessage(
       client,
@@ -296,6 +248,66 @@ describe("transcript WS handlers", () => {
     expect(response.result.sessions).toHaveLength(1);
     expect(response.result.sessions[0]?.session_key).toBe(root1.session_key);
     expect(response.result.sessions[0]?.child_sessions?.[0]?.session_key).toBe(child1.session_key);
+  });
+
+  it("keeps a root transcript visible in active_only mode when only a grandchild session is active", async () => {
+    const { dal, child1, root1 } = await createTranscriptFixture();
+    const client = createAdminWsClient();
+    const deps = { connectionManager: new ConnectionManager(), db: db! };
+    const grandchildSubagentId = "550e8400-e29b-41d4-a716-446655440002";
+
+    const grandchild = await dal.getOrCreate({
+      connectorKey: "ui",
+      providerThreadId: "thread-grandchild-1",
+      containerKind: "group",
+    });
+    const grandchildSessionKey = `agent:default:subagent:${grandchildSubagentId}`;
+    await linkSubagentSession({
+      db: db!,
+      tenantId: grandchild.tenant_id,
+      sessionId: grandchild.session_id,
+      sessionKey: grandchildSessionKey,
+      subagentId: grandchildSubagentId,
+      agentId: child1.agent_id,
+      workspaceId: child1.workspace_id,
+      parentSessionKey: child1.session_key,
+      createdAt: "2026-02-17T00:00:45.000Z",
+    });
+    await insertRunningExecution({
+      db: db!,
+      tenantId: grandchild.tenant_id,
+      agentId: grandchild.agent_id,
+      workspaceId: grandchild.workspace_id,
+      sessionKey: grandchildSessionKey,
+      jobId: "job-transcript-grandchild-1",
+      runId: "550e8400-e29b-41d4-a716-446655440101",
+      createdAt: "2026-02-17T00:04:30.000Z",
+    });
+
+    const response = (await handleClientMessage(
+      client,
+      serializeWsRequest({ type: "transcript.list", payload: { active_only: true, limit: 50 } }),
+      deps,
+    )) as {
+      ok: boolean;
+      result: {
+        sessions: Array<{
+          session_key: string;
+          child_sessions?: Array<{
+            session_key: string;
+            child_sessions?: Array<{ session_key: string }>;
+          }>;
+        }>;
+      };
+    };
+
+    expect(response.ok).toBe(true);
+    expect(response.result.sessions).toHaveLength(1);
+    expect(response.result.sessions[0]?.session_key).toBe(root1.session_key);
+    expect(response.result.sessions[0]?.child_sessions?.[0]?.session_key).toBe(child1.session_key);
+    expect(response.result.sessions[0]?.child_sessions?.[0]?.child_sessions?.[0]?.session_key).toBe(
+      grandchildSessionKey,
+    );
   });
 
   it("resolves a child transcript to its root lineage and returns ordered events", async () => {
@@ -330,59 +342,18 @@ describe("transcript WS handlers", () => {
       ],
     });
 
-    await db!.run(
-      `INSERT INTO execution_jobs (tenant_id, job_id, agent_id, workspace_id, key, lane, status, trigger_json)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        root1.tenant_id,
-        "550e8400-e29b-41d4-a716-446655440201",
-        root1.agent_id,
-        root1.workspace_id,
-        root1.session_key,
-        "main",
-        "running",
-        "{}",
-      ],
-    );
-    await db!.run(
-      `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        root1.tenant_id,
-        "550e8400-e29b-41d4-a716-446655440200",
-        "550e8400-e29b-41d4-a716-446655440201",
-        root1.session_key,
-        "main",
-        "running",
-        1,
-        "2026-02-17T00:00:20.000Z",
-      ],
-    );
-    await db!.run(
-      `INSERT INTO execution_steps (tenant_id, step_id, run_id, step_index, status, action_json, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [
-        root1.tenant_id,
-        "6f9619ff-8b86-4d11-b42d-00c04fc964aa",
-        "550e8400-e29b-41d4-a716-446655440200",
-        0,
-        "running",
-        JSON.stringify({ type: "Research", args: {} }),
-        "2026-02-17T00:00:20.000Z",
-      ],
-    );
-    await db!.run(
-      `INSERT INTO execution_attempts (tenant_id, attempt_id, step_id, attempt, status, started_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [
-        root1.tenant_id,
-        "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d0f",
-        "6f9619ff-8b86-4d11-b42d-00c04fc964aa",
-        1,
-        "running",
-        "2026-02-17T00:00:20.000Z",
-      ],
-    );
+    await insertRunningExecutionTrace({
+      db: db!,
+      tenantId: root1.tenant_id,
+      agentId: root1.agent_id,
+      workspaceId: root1.workspace_id,
+      sessionKey: root1.session_key,
+      jobId: "550e8400-e29b-41d4-a716-446655440201",
+      runId: "550e8400-e29b-41d4-a716-446655440200",
+      stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964aa",
+      attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d0f",
+      createdAt: "2026-02-17T00:00:20.000Z",
+    });
 
     const response = (await handleClientMessage(
       client,
@@ -432,59 +403,18 @@ describe("transcript WS handlers", () => {
     const client = createAdminWsClient();
     const deps = { connectionManager: new ConnectionManager(), db: db! };
 
-    await db!.run(
-      `INSERT INTO execution_jobs (tenant_id, job_id, agent_id, workspace_id, key, lane, status, trigger_json)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        root1.tenant_id,
-        "550e8400-e29b-41d4-a716-446655440301",
-        root1.agent_id,
-        root1.workspace_id,
-        root1.session_key,
-        "main",
-        "running",
-        "{}",
-      ],
-    );
-    await db!.run(
-      `INSERT INTO execution_runs (tenant_id, run_id, job_id, key, lane, status, attempt, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        root1.tenant_id,
-        "550e8400-e29b-41d4-a716-446655440300",
-        "550e8400-e29b-41d4-a716-446655440301",
-        root1.session_key,
-        "main",
-        "running",
-        1,
-        "2026-02-17T00:00:20.000Z",
-      ],
-    );
-    await db!.run(
-      `INSERT INTO execution_steps (tenant_id, step_id, run_id, step_index, status, action_json, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [
-        root1.tenant_id,
-        "6f9619ff-8b86-4d11-b42d-00c04fc964ab",
-        "550e8400-e29b-41d4-a716-446655440300",
-        0,
-        "running",
-        JSON.stringify({ type: "Research", args: {} }),
-        "2026-02-17T00:00:20.000Z",
-      ],
-    );
-    await db!.run(
-      `INSERT INTO execution_attempts (tenant_id, attempt_id, step_id, attempt, status, started_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [
-        root1.tenant_id,
-        "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d1a",
-        "6f9619ff-8b86-4d11-b42d-00c04fc964ab",
-        1,
-        "running",
-        "2026-02-17T00:00:20.000Z",
-      ],
-    );
+    await insertRunningExecutionTrace({
+      db: db!,
+      tenantId: root1.tenant_id,
+      agentId: root1.agent_id,
+      workspaceId: root1.workspace_id,
+      sessionKey: root1.session_key,
+      jobId: "550e8400-e29b-41d4-a716-446655440301",
+      runId: "550e8400-e29b-41d4-a716-446655440300",
+      stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ab",
+      attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d1a",
+      createdAt: "2026-02-17T00:00:20.000Z",
+    });
 
     const approval = await new ApprovalDal(db!).create({
       tenantId: root1.tenant_id,

@@ -16,11 +16,11 @@ import { errorResponse } from "./helpers.js";
 import { resolveChatAgentKey } from "./ai-sdk-chat-session-ops.js";
 import { createSessionDal, sessionErrorResponse } from "./session-protocol-shared.js";
 import {
+  loadDescendantSessionRecords,
+  loadLineageSubagentRows,
   listChildSessionRecords,
   listSessionRecords,
-  getSubagentRowBySessionKey,
   listSubagentRows,
-  listSubagentRowsByParentSessionKeys,
   resolveWorkspaceId,
 } from "./transcript-handlers.data.js";
 import {
@@ -40,8 +40,6 @@ import type { SessionLineageRecord } from "./transcript-handlers.types.js";
 import type { ProtocolDeps, ProtocolRequestEnvelope } from "./types.js";
 
 const MAX_ACTIVE_ONLY_SCAN_PAGES = 10;
-const SUBAGENT_DESCENDANT_PARENT_BATCH_SIZE = 64;
-
 export async function handleTranscriptMessage(
   client: ConnectedClient,
   msg: ProtocolRequestEnvelope,
@@ -124,12 +122,19 @@ async function handleTranscriptListMessage(
         cursor,
       });
       const rootSessionKeys = listedRoots.sessions.map((session) => session.sessionKey);
-      const childSessions = await listChildSessionRecords({
-        deps,
-        tenantId,
-        workspaceId,
-        rootSessionKeys,
-      });
+      const childSessions = activeOnly
+        ? await loadDescendantSessionRecords({
+            deps,
+            tenantId,
+            workspaceId,
+            parentSessionKeys: rootSessionKeys,
+          })
+        : await listChildSessionRecords({
+            deps,
+            tenantId,
+            workspaceId,
+            rootSessionKeys,
+          });
       const sessions = [...listedRoots.sessions, ...childSessions];
       const sessionKeys = sessions.map((session) => session.sessionKey);
       const subagentRows = await listSubagentRows({
@@ -196,98 +201,6 @@ async function handleTranscriptListMessage(
       invalidCursor: err instanceof Error && err.message === "invalid cursor",
     });
   }
-}
-
-async function loadLineageSubagentRows(input: {
-  deps: ProtocolDeps;
-  tenantId: string;
-  workspaceId: string;
-  focusSessionKey: string;
-}): Promise<{
-  subagentRows: RawSubagentRow[];
-  rootSessionKey: string;
-  lineageKeys: string[];
-}> {
-  const subagentRowsBySessionKey = new Map<string, RawSubagentRow>();
-  const lineageKeysFromFocus: string[] = [input.focusSessionKey];
-  const visitedAncestorSessionKeys = new Set<string>([input.focusSessionKey]);
-
-  let rootSessionKey = input.focusSessionKey;
-  let currentRow = await getSubagentRowBySessionKey({
-    deps: input.deps,
-    tenantId: input.tenantId,
-    workspaceId: input.workspaceId,
-    sessionKey: input.focusSessionKey,
-  });
-  if (currentRow) {
-    subagentRowsBySessionKey.set(currentRow.session_key, currentRow);
-  }
-
-  while (currentRow?.parent_session_key) {
-    const parentSessionKey = currentRow.parent_session_key;
-    if (visitedAncestorSessionKeys.has(parentSessionKey)) {
-      break;
-    }
-    visitedAncestorSessionKeys.add(parentSessionKey);
-    rootSessionKey = parentSessionKey;
-    lineageKeysFromFocus.push(parentSessionKey);
-
-    const parentRow = await getSubagentRowBySessionKey({
-      deps: input.deps,
-      tenantId: input.tenantId,
-      workspaceId: input.workspaceId,
-      sessionKey: parentSessionKey,
-    });
-    if (!parentRow) {
-      break;
-    }
-    currentRow = parentRow;
-    subagentRowsBySessionKey.set(currentRow.session_key, currentRow);
-  }
-
-  const lineageKeys = lineageKeysFromFocus.toReversed();
-  const lineageSessionKeySet = new Set<string>(lineageKeys);
-  const processedParentSessionKeys = new Set<string>();
-  const queue = [rootSessionKey];
-
-  while (queue.length > 0) {
-    const parentSessionKeys: string[] = [];
-    while (queue.length > 0 && parentSessionKeys.length < SUBAGENT_DESCENDANT_PARENT_BATCH_SIZE) {
-      const parentSessionKey = queue.shift();
-      if (!parentSessionKey || processedParentSessionKeys.has(parentSessionKey)) {
-        continue;
-      }
-      processedParentSessionKeys.add(parentSessionKey);
-      parentSessionKeys.push(parentSessionKey);
-    }
-
-    if (parentSessionKeys.length === 0) {
-      continue;
-    }
-
-    const childRows = await listSubagentRowsByParentSessionKeys({
-      deps: input.deps,
-      tenantId: input.tenantId,
-      workspaceId: input.workspaceId,
-      parentSessionKeys,
-    });
-    for (const row of childRows) {
-      if (!subagentRowsBySessionKey.has(row.session_key)) {
-        subagentRowsBySessionKey.set(row.session_key, row);
-      }
-      if (!lineageSessionKeySet.has(row.session_key)) {
-        lineageSessionKeySet.add(row.session_key);
-        lineageKeys.push(row.session_key);
-      }
-      queue.push(row.session_key);
-    }
-  }
-
-  return {
-    subagentRows: [...subagentRowsBySessionKey.values()],
-    rootSessionKey,
-    lineageKeys,
-  };
 }
 
 async function handleTranscriptGetMessage(

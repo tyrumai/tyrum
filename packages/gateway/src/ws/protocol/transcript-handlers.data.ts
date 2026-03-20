@@ -12,6 +12,8 @@ import { buildSqlPlaceholders } from "../../utils/sql.js";
 import type { ProtocolDeps } from "./types.js";
 import type { ListSessionRecordsResult, SessionRecord } from "./transcript-handlers.types.js";
 
+const SUBAGENT_DESCENDANT_PARENT_BATCH_SIZE = 64;
+
 export async function resolveWorkspaceId(
   deps: ProtocolDeps,
   tenantId: string,
@@ -197,6 +199,68 @@ export async function listChildSessionRecords(input: {
   });
 }
 
+export async function listSessionRecordsByKeys(input: {
+  deps: ProtocolDeps;
+  tenantId: string;
+  workspaceId: string;
+  sessionKeys: string[];
+}): Promise<SessionRecord[]> {
+  if (!input.deps.db || input.sessionKeys.length === 0) {
+    return [];
+  }
+
+  const rows = await input.deps.db.all<RawSessionListRow>(
+    `SELECT
+       s.session_id,
+       s.session_key,
+       ag.agent_key,
+       ca.connector_key,
+       ct.provider_thread_id,
+       s.title,
+       s.messages_json,
+       s.context_state_json,
+       s.archived_at,
+       s.created_at,
+       s.updated_at
+     FROM sessions s
+     JOIN agents ag
+       ON ag.tenant_id = s.tenant_id
+      AND ag.agent_id = s.agent_id
+     JOIN channel_threads ct
+       ON ct.tenant_id = s.tenant_id
+      AND ct.workspace_id = s.workspace_id
+      AND ct.channel_thread_id = s.channel_thread_id
+     JOIN channel_accounts ca
+       ON ca.tenant_id = ct.tenant_id
+      AND ca.workspace_id = ct.workspace_id
+      AND ca.channel_account_id = ct.channel_account_id
+     WHERE s.tenant_id = ?
+       AND s.workspace_id = ?
+       AND s.session_key IN (${buildSqlPlaceholders(input.sessionKeys.length)})
+     ORDER BY s.created_at ASC, s.session_id ASC`,
+    [input.tenantId, input.workspaceId, ...input.sessionKeys],
+  );
+
+  return rows.map((row) => {
+    const preview = toSessionListRow(row, {
+      logger: input.deps.logger,
+      metrics: undefined,
+    });
+    return {
+      sessionId: row.session_id,
+      sessionKey: row.session_key,
+      agentKey: preview.agent_id,
+      channel: preview.channel,
+      threadId: preview.thread_id,
+      title: preview.title,
+      messageCount: preview.message_count,
+      updatedAt: preview.updated_at,
+      createdAt: preview.created_at,
+      archived: preview.archived,
+    };
+  });
+}
+
 export async function listSubagentRows(input: {
   deps: ProtocolDeps;
   tenantId: string;
@@ -263,4 +327,169 @@ export async function listSubagentRowsByParentSessionKeys(input: {
      ORDER BY created_at ASC, subagent_id ASC`,
     [input.tenantId, input.workspaceId, ...input.parentSessionKeys],
   );
+}
+
+export async function loadDescendantSessionRecords(input: {
+  deps: ProtocolDeps;
+  tenantId: string;
+  workspaceId: string;
+  parentSessionKeys: string[];
+}): Promise<SessionRecord[]> {
+  const descendantSessionKeys: string[] = [];
+  const seenDescendantSessionKeys = new Set<string>();
+  const processedParentSessionKeys = new Set<string>();
+  const queue = [...input.parentSessionKeys];
+
+  while (queue.length > 0) {
+    const parentSessionKeys: string[] = [];
+    while (queue.length > 0 && parentSessionKeys.length < SUBAGENT_DESCENDANT_PARENT_BATCH_SIZE) {
+      const parentSessionKey = queue.shift();
+      if (!parentSessionKey || processedParentSessionKeys.has(parentSessionKey)) {
+        continue;
+      }
+      processedParentSessionKeys.add(parentSessionKey);
+      parentSessionKeys.push(parentSessionKey);
+    }
+
+    if (parentSessionKeys.length === 0) {
+      continue;
+    }
+
+    const childRows = await listSubagentRowsByParentSessionKeys({
+      deps: input.deps,
+      tenantId: input.tenantId,
+      workspaceId: input.workspaceId,
+      parentSessionKeys,
+    });
+    for (const row of childRows) {
+      if (seenDescendantSessionKeys.has(row.session_key)) {
+        continue;
+      }
+      seenDescendantSessionKeys.add(row.session_key);
+      descendantSessionKeys.push(row.session_key);
+      queue.push(row.session_key);
+    }
+  }
+
+  return await listSessionRecordsByKeys({
+    deps: input.deps,
+    tenantId: input.tenantId,
+    workspaceId: input.workspaceId,
+    sessionKeys: descendantSessionKeys,
+  });
+}
+
+export async function loadLineageSubagentRows(input: {
+  deps: ProtocolDeps;
+  tenantId: string;
+  workspaceId: string;
+  focusSessionKey: string;
+}): Promise<{
+  subagentRows: RawSubagentRow[];
+  rootSessionKey: string;
+  lineageKeys: string[];
+}> {
+  const subagentRowsBySessionKey = new Map<string, RawSubagentRow>();
+  const lineageKeysFromFocus: string[] = [input.focusSessionKey];
+  const visitedAncestorSessionKeys = new Set<string>([input.focusSessionKey]);
+
+  let rootSessionKey = input.focusSessionKey;
+  let currentRow = await getSubagentRowBySessionKey({
+    deps: input.deps,
+    tenantId: input.tenantId,
+    workspaceId: input.workspaceId,
+    sessionKey: input.focusSessionKey,
+  });
+  if (currentRow) {
+    subagentRowsBySessionKey.set(currentRow.session_key, currentRow);
+  }
+
+  while (currentRow?.parent_session_key) {
+    const parentSessionKey = currentRow.parent_session_key;
+    if (visitedAncestorSessionKeys.has(parentSessionKey)) {
+      break;
+    }
+    visitedAncestorSessionKeys.add(parentSessionKey);
+    rootSessionKey = parentSessionKey;
+    lineageKeysFromFocus.push(parentSessionKey);
+
+    const parentRow = await getSubagentRowBySessionKey({
+      deps: input.deps,
+      tenantId: input.tenantId,
+      workspaceId: input.workspaceId,
+      sessionKey: parentSessionKey,
+    });
+    if (!parentRow) {
+      break;
+    }
+    currentRow = parentRow;
+    subagentRowsBySessionKey.set(currentRow.session_key, currentRow);
+  }
+
+  const lineageKeys = lineageKeysFromFocus.toReversed();
+  const lineageSessionKeySet = new Set<string>(lineageKeys);
+  const descendantRows = await loadDescendantSubagentRows({
+    deps: input.deps,
+    tenantId: input.tenantId,
+    workspaceId: input.workspaceId,
+    parentSessionKeys: [rootSessionKey],
+  });
+
+  for (const row of descendantRows) {
+    if (!subagentRowsBySessionKey.has(row.session_key)) {
+      subagentRowsBySessionKey.set(row.session_key, row);
+    }
+    if (!lineageSessionKeySet.has(row.session_key)) {
+      lineageSessionKeySet.add(row.session_key);
+      lineageKeys.push(row.session_key);
+    }
+  }
+
+  return {
+    subagentRows: [...subagentRowsBySessionKey.values()],
+    rootSessionKey,
+    lineageKeys,
+  };
+}
+
+async function loadDescendantSubagentRows(input: {
+  deps: ProtocolDeps;
+  tenantId: string;
+  workspaceId: string;
+  parentSessionKeys: string[];
+}): Promise<RawSubagentRow[]> {
+  const rowsBySessionKey = new Map<string, RawSubagentRow>();
+  const processedParentSessionKeys = new Set<string>();
+  const queue = [...input.parentSessionKeys];
+
+  while (queue.length > 0) {
+    const parentSessionKeys: string[] = [];
+    while (queue.length > 0 && parentSessionKeys.length < SUBAGENT_DESCENDANT_PARENT_BATCH_SIZE) {
+      const parentSessionKey = queue.shift();
+      if (!parentSessionKey || processedParentSessionKeys.has(parentSessionKey)) {
+        continue;
+      }
+      processedParentSessionKeys.add(parentSessionKey);
+      parentSessionKeys.push(parentSessionKey);
+    }
+
+    if (parentSessionKeys.length === 0) {
+      continue;
+    }
+
+    const childRows = await listSubagentRowsByParentSessionKeys({
+      deps: input.deps,
+      tenantId: input.tenantId,
+      workspaceId: input.workspaceId,
+      parentSessionKeys,
+    });
+    for (const row of childRows) {
+      if (!rowsBySessionKey.has(row.session_key)) {
+        rowsBySessionKey.set(row.session_key, row);
+      }
+      queue.push(row.session_key);
+    }
+  }
+
+  return [...rowsBySessionKey.values()];
 }
