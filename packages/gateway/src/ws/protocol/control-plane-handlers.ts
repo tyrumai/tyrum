@@ -18,7 +18,7 @@ import { IdentityScopeDal, requirePrimaryAgentKey } from "../../modules/identity
 import { normalizeDbDateTime } from "../../utils/db-time.js";
 import { safeJsonParse } from "../../utils/json.js";
 import type { ConnectedClient } from "../connection-manager.js";
-import { errorResponse } from "./helpers.js";
+import { buildSqlPlaceholders, errorResponse } from "./helpers.js";
 import type { ProtocolDeps, ProtocolRequestEnvelope } from "./types.js";
 
 export async function handleControlPlaneMessage(
@@ -65,10 +65,6 @@ function handlePingMessage(msg: ProtocolRequestEnvelope): WsResponseEnvelope {
     type: msg.type,
     ok: true,
   };
-}
-
-function buildSqlPlaceholders(count: number): string {
-  return Array.from({ length: count }, () => "?").join(", ");
 }
 
 async function handleRunListMessage(

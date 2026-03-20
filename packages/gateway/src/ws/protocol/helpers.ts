@@ -15,6 +15,10 @@ export function errorResponse(
   return { request_id: requestId, type, ok: false, error };
 }
 
+export function buildSqlPlaceholders(count: number): string {
+  return Array.from({ length: count }, () => "?").join(", ");
+}
+
 export function broadcastEvent(
   tenantId: string,
   evt: WsEventEnvelope,

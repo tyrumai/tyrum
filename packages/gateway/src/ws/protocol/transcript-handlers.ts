@@ -241,8 +241,14 @@ async function handleTranscriptGetMessage(
 
     let rootSessionKey = focus.session.session_key;
     let currentRow = subagentBySessionKey.get(rootSessionKey);
+    const visitedAncestorSessionKeys = new Set([rootSessionKey]);
     while (currentRow?.parent_session_key) {
-      rootSessionKey = currentRow.parent_session_key;
+      const parentSessionKey = currentRow.parent_session_key;
+      if (visitedAncestorSessionKeys.has(parentSessionKey)) {
+        break;
+      }
+      visitedAncestorSessionKeys.add(parentSessionKey);
+      rootSessionKey = parentSessionKey;
       currentRow = subagentBySessionKey.get(rootSessionKey);
     }
 
