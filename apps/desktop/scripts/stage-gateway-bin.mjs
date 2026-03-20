@@ -40,6 +40,15 @@ const runtimeWorkboardDist = join(
   "node_modules/@tyrum/runtime-workboard/dist/index.mjs",
 );
 const isWindows = process.platform === "win32";
+const removableGatewayNodeModuleSuffixes = [
+  ".d.ts",
+  ".d.mts",
+  ".d.cts",
+  ".md",
+  ".markdown",
+  ".map",
+];
+const removableGatewayNodeModuleBasenames = new Set(["tsconfig.json", "tsconfig.build.json"]);
 
 if (!existsSync(sourcePath)) {
   throw new Error(
@@ -99,6 +108,35 @@ function resolveWorkspaceNodeGypScript() {
   }
 
   throw new Error(`Failed to locate node-gyp in workspace install under ${pnpmStoreDir}.`);
+}
+
+function pruneGatewayNodeModuleFiles(rootDir) {
+  /** @type {string[]} */
+  const directories = [rootDir];
+  let removedFiles = 0;
+
+  while (directories.length > 0) {
+    const currentDir = directories.pop();
+    if (!currentDir) continue;
+
+    for (const entry of readdirSync(currentDir, { withFileTypes: true })) {
+      const entryPath = join(currentDir, entry.name);
+      if (entry.isDirectory()) {
+        directories.push(entryPath);
+        continue;
+      }
+
+      if (
+        removableGatewayNodeModuleBasenames.has(entry.name) ||
+        removableGatewayNodeModuleSuffixes.some((suffix) => entry.name.endsWith(suffix))
+      ) {
+        rmSync(entryPath, { force: true });
+        removedFiles += 1;
+      }
+    }
+  }
+
+  return removedFiles;
 }
 
 const deploy = spawnSync(pnpmCmd, deployArgs, {
@@ -225,6 +263,8 @@ if (prebuildInstall.status !== 0) {
   }
 }
 
+const removedGatewayNodeModuleFiles = pruneGatewayNodeModuleFiles(join(targetDir, "node_modules"));
+
 // Copy all .mjs bundle files (entry + any code-split chunks) and their source maps.
 for (const file of readdirSync(sourceDistDir)) {
   if (file.endsWith(".mjs") || file.endsWith(".mjs.map")) {
@@ -234,4 +274,5 @@ for (const file of readdirSync(sourceDistDir)) {
 
 cpSync(migrationsSourceDir, migrationsTargetDir, { recursive: true });
 
+console.log(`Pruned ${removedGatewayNodeModuleFiles} runtime-irrelevant gateway dependency files.`);
 console.log(`Staged embedded gateway bundle: ${sourceDistDir} -> ${targetDir}`);

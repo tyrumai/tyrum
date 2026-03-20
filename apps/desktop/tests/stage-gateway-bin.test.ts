@@ -136,4 +136,26 @@ describe("stage-gateway-bin script", () => {
     expect(packageJson.scripts?.pretest).toContain("@tyrum/runtime-workboard build");
     expect(packageJson.scripts?.["build:gateway"]).toContain("@tyrum/runtime-workboard build");
   });
+
+  it("prunes runtime-irrelevant gateway dependency files before packaging", () => {
+    const script = readFileSync(stageGatewayBinPath, "utf8");
+
+    expect(script).toContain("function pruneGatewayNodeModuleFiles(rootDir)");
+    expect(script).toContain("const removableGatewayNodeModuleSuffixes = [");
+    expect(script).toContain('".d.ts"');
+    expect(script).toContain('".d.mts"');
+    expect(script).toContain('".d.cts"');
+    expect(script).toContain('".md"');
+    expect(script).toContain('".markdown"');
+    expect(script).toContain('".map"');
+    expect(script).toContain("const removableGatewayNodeModuleBasenames = new Set([");
+    expect(script).toContain('"tsconfig.json"');
+    expect(script).toContain('"tsconfig.build.json"');
+    expect(script).toContain(
+      'const removedGatewayNodeModuleFiles = pruneGatewayNodeModuleFiles(join(targetDir, "node_modules"));',
+    );
+    expect(script).toContain(
+      "console.log(`Pruned ${removedGatewayNodeModuleFiles} runtime-irrelevant gateway dependency files.`);",
+    );
+  });
 });
