@@ -78,4 +78,29 @@ describe("capability catalog", () => {
     ).not.toThrow();
     expect(() => sensorAction?.inputParser.parse({ op: "get" })).not.toThrow();
   });
+
+  it("advertises only canonical shared fields for cross-platform sensor tools", () => {
+    const cameraAction = getCapabilityCatalogAction("tyrum.camera.capture-photo", "capture_photo");
+    const audioAction = getCapabilityCatalogAction("tyrum.audio.record", "record");
+
+    expect(cameraAction?.inputSchema).toMatchObject({
+      type: "object",
+      properties: expect.objectContaining({
+        facing_mode: expect.objectContaining({ type: "string" }),
+        format: expect.objectContaining({ type: "string" }),
+        quality: expect.objectContaining({ type: "number" }),
+      }),
+    });
+    expect(cameraAction?.inputSchema.properties).not.toHaveProperty("camera");
+    expect(cameraAction?.inputSchema.properties).not.toHaveProperty("device_id");
+
+    expect(audioAction?.inputSchema).toMatchObject({
+      type: "object",
+      properties: expect.objectContaining({
+        duration_ms: expect.objectContaining({ type: "integer" }),
+        mime: expect.objectContaining({ type: "string" }),
+      }),
+    });
+    expect(audioAction?.inputSchema.properties).not.toHaveProperty("device_id");
+  });
 });

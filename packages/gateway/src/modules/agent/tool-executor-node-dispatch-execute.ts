@@ -63,6 +63,29 @@ function primitiveKindForPlatform(platform: DevicePlatform): ActionPrimitiveKind
   return ACTION_PRIMITIVE_KIND_BY_PLATFORM[platform];
 }
 
+function adaptCrossPlatformActionArgs(
+  capabilityId: string,
+  primitiveKind: ActionPrimitiveKind,
+  actionArgs: Record<string, unknown>,
+): Record<string, unknown> {
+  if (capabilityId !== "tyrum.camera.capture-photo") {
+    return actionArgs;
+  }
+
+  if (primitiveKind !== "IOS" && primitiveKind !== "Android") {
+    return actionArgs;
+  }
+
+  const { facing_mode, ...rest } = actionArgs;
+  if (facing_mode === "user") {
+    return { ...rest, camera: "front" };
+  }
+  if (facing_mode === "environment") {
+    return { ...rest, camera: "rear" };
+  }
+  return rest;
+}
+
 async function resolvePrimitiveKindFromNode(
   context: DispatchExecutionContext,
   nodeId: string,
@@ -244,7 +267,7 @@ export async function executeNodeDispatchRequest(
   }
   const primitive: ActionPrimitive = {
     type: primitiveKind,
-    args: actionArgs,
+    args: adaptCrossPlatformActionArgs(request.capability, primitiveKind, actionArgs),
   };
 
   try {

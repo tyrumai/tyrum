@@ -330,6 +330,43 @@ describe("tool registry routes", () => {
         }),
       }),
     );
+    const cameraTool = body.tools.find(
+      (tool: { canonical_id?: string }) => tool.canonical_id === "tool.camera.capture-photo",
+    );
+    expect(cameraTool).toMatchObject({
+      source: "builtin",
+      canonical_id: "tool.camera.capture-photo",
+      input_schema: expect.objectContaining({
+        type: "object",
+        properties: expect.objectContaining({
+          facing_mode: expect.objectContaining({ type: "string" }),
+          format: expect.objectContaining({ type: "string" }),
+          quality: expect.objectContaining({ type: "number" }),
+          node_id: expect.objectContaining({ type: "string" }),
+          timeout_ms: expect.objectContaining({ type: "number" }),
+        }),
+      }),
+    });
+    expect(cameraTool?.input_schema?.properties).not.toHaveProperty("camera");
+    expect(cameraTool?.input_schema?.properties).not.toHaveProperty("device_id");
+
+    const audioTool = body.tools.find(
+      (tool: { canonical_id?: string }) => tool.canonical_id === "tool.audio.record",
+    );
+    expect(audioTool).toMatchObject({
+      source: "builtin",
+      canonical_id: "tool.audio.record",
+      input_schema: expect.objectContaining({
+        type: "object",
+        properties: expect.objectContaining({
+          duration_ms: expect.objectContaining({ type: "integer" }),
+          mime: expect.objectContaining({ type: "string" }),
+          node_id: expect.objectContaining({ type: "string" }),
+          timeout_ms: expect.objectContaining({ type: "number" }),
+        }),
+      }),
+    });
+    expect(audioTool?.input_schema?.properties).not.toHaveProperty("device_id");
     expect(body.tools).toContainEqual(
       expect.objectContaining({
         source: "builtin",

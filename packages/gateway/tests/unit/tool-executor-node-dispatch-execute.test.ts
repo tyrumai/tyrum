@@ -101,4 +101,114 @@ describe("executeNodeDispatchRequest", () => {
     expect(response.ok).toBe(true);
     expect(response.payload_source).toBe("evidence");
   });
+
+  it("maps canonical facing_mode to a mobile camera target before dispatch", async () => {
+    const connectionManager = new ConnectionManager();
+    const nodeWs = { on: vi.fn(), send: vi.fn(), readyState: 1 } as never;
+    connectionManager.addClient(nodeWs, [], {
+      id: "conn-1",
+      role: "node",
+      deviceId: "node-1",
+      devicePlatform: "ios",
+      protocolRev: 2,
+    });
+
+    const dispatchAndWait = vi.fn(async () => ({
+      taskId: "task-1",
+      result: {
+        ok: true,
+        evidence: { mime: "image/jpeg" },
+        result: undefined,
+        error: undefined,
+      },
+    }));
+
+    await executeNodeDispatchRequest(
+      {
+        tenantId: DEFAULT_TENANT_ID,
+        connectionManager,
+        inspectionService: {
+          inspect: vi.fn(async () =>
+            sampleInspection("tyrum.camera.capture-photo", "capture_photo"),
+          ),
+        } as never,
+        nodeDispatchService: { dispatchAndWait } as never,
+      },
+      {
+        node_id: "node-1",
+        capability: "tyrum.camera.capture-photo",
+        action_name: "capture_photo",
+        input: { facing_mode: "user", format: "jpeg", quality: 0.9 },
+      },
+    );
+
+    expect(dispatchAndWait).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "IOS",
+        args: expect.objectContaining({
+          op: "capture_photo",
+          camera: "front",
+          format: "jpeg",
+          quality: 0.9,
+        }),
+      }),
+      expect.any(Object),
+      expect.objectContaining({ nodeId: "node-1" }),
+    );
+  });
+
+  it("preserves canonical camera args for browser dispatch", async () => {
+    const connectionManager = new ConnectionManager();
+    const nodeWs = { on: vi.fn(), send: vi.fn(), readyState: 1 } as never;
+    connectionManager.addClient(nodeWs, [], {
+      id: "conn-1",
+      role: "node",
+      deviceId: "node-1",
+      devicePlatform: "web",
+      protocolRev: 2,
+    });
+
+    const dispatchAndWait = vi.fn(async () => ({
+      taskId: "task-1",
+      result: {
+        ok: true,
+        evidence: { mime: "image/jpeg" },
+        result: undefined,
+        error: undefined,
+      },
+    }));
+
+    await executeNodeDispatchRequest(
+      {
+        tenantId: DEFAULT_TENANT_ID,
+        connectionManager,
+        inspectionService: {
+          inspect: vi.fn(async () =>
+            sampleInspection("tyrum.camera.capture-photo", "capture_photo"),
+          ),
+        } as never,
+        nodeDispatchService: { dispatchAndWait } as never,
+      },
+      {
+        node_id: "node-1",
+        capability: "tyrum.camera.capture-photo",
+        action_name: "capture_photo",
+        input: { facing_mode: "environment", format: "jpeg", quality: 0.92 },
+      },
+    );
+
+    expect(dispatchAndWait).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "Browser",
+        args: expect.objectContaining({
+          op: "capture_photo",
+          facing_mode: "environment",
+          format: "jpeg",
+          quality: 0.92,
+        }),
+      }),
+      expect.any(Object),
+      expect.objectContaining({ nodeId: "node-1" }),
+    );
+  });
 });
