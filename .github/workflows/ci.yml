@@ -334,7 +334,15 @@ jobs:
       - validation-lint
       - validation-format
       - validation-build
-    if: needs.changes.outputs.ci == 'true' || needs.changes.outputs.deps == 'true'
+    if: >-
+      always() &&
+      (needs.changes.outputs.ci == 'true' || needs.changes.outputs.deps == 'true') &&
+      needs.validation-new-files.result == 'success' &&
+      needs.validation-typecheck.result == 'success' &&
+      (needs.validation-desktop-typecheck.result == 'success' || needs.validation-desktop-typecheck.result == 'skipped') &&
+      needs.validation-lint.result == 'success' &&
+      needs.validation-format.result == 'success' &&
+      needs.validation-build.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - run: echo "Validation jobs completed."
