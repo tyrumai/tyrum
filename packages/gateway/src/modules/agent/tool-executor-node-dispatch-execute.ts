@@ -221,6 +221,7 @@ export async function executeNodeDispatchRequest(
     ? true
     : await ensureSyntheticExecutionScope(context, {
         nodeId: request.node_id,
+        capabilityId: request.capability,
         runId,
         stepId,
         attemptId,

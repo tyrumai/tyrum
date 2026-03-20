@@ -1,5 +1,6 @@
 import { NodeInventoryResponse, type NodeCapabilityInspectionResponse } from "@tyrum/contracts";
 import type { ArtifactStore } from "../artifact/store.js";
+import { toolIdForCapabilityDescriptor } from "../node/capability-tool-id.js";
 import type { WorkspaceLeaseConfig } from "./tool-executor-shared.js";
 
 type SyntheticExecutionScopeContext = {
@@ -71,6 +72,7 @@ export async function ensureSyntheticExecutionScope(
   context: SyntheticExecutionScopeContext,
   input: {
     nodeId: string;
+    capabilityId: string;
     runId: string;
     stepId: string;
     attemptId: string;
@@ -98,6 +100,7 @@ export async function ensureSyntheticExecutionScope(
 
   const key = input.key?.trim() || `node:${input.nodeId}`;
   const lane = input.lane?.trim() || "main";
+  const toolId = toolIdForCapabilityDescriptor(input.capabilityId);
   const existingRun = await db.get<{ run_id: string }>(
     "SELECT run_id FROM execution_runs WHERE tenant_id = ? AND run_id = ?",
     [lease.tenantId, input.runId],
@@ -132,7 +135,7 @@ export async function ensureSyntheticExecutionScope(
           key,
           lane,
           metadata: {
-            source: "tool.node.dispatch",
+            source: toolId,
             synthetic: true,
             node_id: input.nodeId,
           },

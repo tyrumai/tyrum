@@ -21,7 +21,7 @@ docker compose --profile desktop-sandbox up -d --build
 
 ## Manual QA checklist (operator UI)
 
-- [ ] Trigger a Desktop `act` approval (any flow that causes `tool.node.dispatch` with `capability=tyrum.desktop` and `op=act`).
+- [ ] Trigger a Desktop `act` approval (any flow that calls `tool.desktop.act`).
 - [ ] In **Approvals**, the card shows a **Desktop** summary (op + action + target) and an **Open takeover** link.
 - [ ] Approve and deny both work; the approval disappears after resolution.
 - [ ] In **Runs**, open the run → attempt → **Artifacts** and confirm:

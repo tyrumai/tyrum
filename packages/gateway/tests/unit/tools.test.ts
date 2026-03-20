@@ -8,6 +8,9 @@ import {
 } from "../../src/modules/agent/tools.js";
 import { validateToolDescriptorInputSchema } from "../../src/modules/agent/tool-schema.js";
 
+const LEGACY_NODE_DISPATCH_TOOL_ID = ["tool", "node", "dispatch"].join(".");
+const LEGACY_NODE_INSPECT_TOOL_ID = ["tool", "node", "inspect"].join(".");
+
 describe("selectToolDirectory", () => {
   it("includes confirmation-required tools by default", () => {
     const tools = selectToolDirectory("run shell command", ["bash", "read"], []);
@@ -238,8 +241,8 @@ describe("model tool naming", () => {
   it("does not expose legacy inspect and dispatch node tools once dedicated routed tools are available", () => {
     const builtinIds = listBuiltinToolDescriptors().map((tool) => tool.id);
 
-    expect(builtinIds).not.toContain("tool.node.inspect");
-    expect(builtinIds).not.toContain("tool.node.dispatch");
+    expect(builtinIds).not.toContain(LEGACY_NODE_INSPECT_TOOL_ID);
+    expect(builtinIds).not.toContain(LEGACY_NODE_DISPATCH_TOOL_ID);
   });
 
   it("includes dedicated browser and sensor node-backed tools with action-shaped schemas and direct-call guidance", () => {

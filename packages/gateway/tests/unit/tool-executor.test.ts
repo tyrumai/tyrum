@@ -12,7 +12,6 @@ import {
 } from "./tool-executor.security-test-support.js";
 import { registerTempHomeLifecycle } from "./tool-executor.shared-test-support.js";
 import { registerToolExecutorDedicatedNodeToolTests } from "./tool-executor.dedicated-node-tools-test-support.js";
-import { registerToolExecutorNodeDispatchTests } from "./tool-executor.node-dispatch-test-support.js";
 import { registerToolExecutorDesktopToolTests } from "./tool-executor.desktop-tools-test-support.js";
 import { registerToolExecutorNodeToolTests } from "./tool-executor.node-tools-test-support.js";
 
@@ -23,7 +22,6 @@ describe("ToolExecutor", () => {
     registerToolExecutorBuiltinCoreTests(home);
     registerToolExecutorLocationToolTests(home);
     registerToolExecutorDedicatedNodeToolTests(home);
-    registerToolExecutorNodeDispatchTests(home);
     registerToolExecutorDesktopToolTests(home);
     registerToolExecutorNodeToolTests(home);
   });

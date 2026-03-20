@@ -3,6 +3,7 @@ import {
   requiredCapabilityDescriptorForAction,
 } from "@tyrum/contracts";
 import type { ActionPrimitive, CapabilityDescriptor, WsRequestEnvelope } from "@tyrum/contracts";
+import { toolIdForCapabilityDescriptor } from "../../modules/node/capability-tool-id.js";
 import { canonicalizeNodeDispatchMatchTarget } from "../../modules/policy/match-target.js";
 import type { ConnectionDirectoryRow } from "../../modules/backplane/connection-directory.js";
 import type { ConnectedClient } from "../connection-manager.js";
@@ -41,6 +42,7 @@ function hasCapability(
 async function resolvePolicyDispatchState(
   deps: ProtocolDeps,
   _scope: DispatchScope,
+  toolId: string,
   toolMatchTarget: string,
   policyEnabled: boolean,
   policyEvalPromise:
@@ -51,7 +53,7 @@ async function resolvePolicyDispatchState(
     ? await policyEvalPromise.catch((err) => {
         const message = err instanceof Error ? err.message : String(err);
         deps.logger?.error("policy.evaluate_failed", {
-          tool_id: "tool.node.dispatch",
+          tool_id: toolId,
           tool_match_target: toolMatchTarget,
           error: message,
         });
@@ -161,6 +163,7 @@ async function resolveTargetedDispatch(
   input: {
     nodeId: string;
     capability: string;
+    toolId: string;
     toolMatchTarget: string;
     policyEnabled: boolean;
     policyEvalPromise:
@@ -192,6 +195,7 @@ async function resolveTargetedDispatch(
     const policyState = await resolvePolicyDispatchState(
       deps,
       scope,
+      input.toolId,
       input.toolMatchTarget,
       input.policyEnabled,
       input.policyEvalPromise,
@@ -236,6 +240,7 @@ async function resolveTargetedDispatch(
       const policyState = await resolvePolicyDispatchState(
         deps,
         scope,
+        input.toolId,
         input.toolMatchTarget,
         input.policyEnabled,
         input.policyEvalPromise,
@@ -288,12 +293,13 @@ export function dispatchTask(
     action.type,
     action.args,
   )}`;
+  const toolId = toolIdForCapabilityDescriptor(descriptorId);
   const policyEnabled = deps.policyService !== undefined;
   const policyEvalPromise = policyEnabled
     ? deps.policyService!.evaluateToolCall({
         tenantId: scope.tenantId,
         agentId: "default",
-        toolId: "tool.node.dispatch",
+        toolId,
         toolMatchTarget,
         toolEffect: "state_changing",
       })
@@ -315,6 +321,7 @@ export function dispatchTask(
     return resolveTargetedDispatch(action, scope, deps, {
       nodeId: targetNodeId.trim(),
       capability: descriptorId,
+      toolId,
       toolMatchTarget,
       policyEnabled,
       policyEvalPromise,
@@ -341,6 +348,7 @@ export function dispatchTask(
       const policyState = await resolvePolicyDispatchState(
         deps,
         scope,
+        toolId,
         toolMatchTarget,
         policyEnabled,
         policyEvalPromise,
@@ -393,6 +401,7 @@ export function dispatchTask(
     const policyState = await resolvePolicyDispatchState(
       deps,
       scope,
+      toolId,
       toolMatchTarget,
       policyEnabled,
       policyEvalPromise,

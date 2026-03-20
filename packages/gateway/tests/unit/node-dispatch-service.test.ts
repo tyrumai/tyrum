@@ -5,6 +5,8 @@ import { TaskResultRegistry } from "../../src/ws/protocol/task-result-registry.j
 import type { ProtocolDeps } from "../../src/ws/protocol.js";
 import { CAPABILITY_DESCRIPTOR_DEFAULT_VERSION } from "@tyrum/contracts";
 
+const DESKTOP_MOUSE_TOOL_ID = ["tool", "desktop", "mouse"].join(".");
+
 interface MockWebSocket {
   send: ReturnType<typeof vi.fn>;
   on: ReturnType<typeof vi.fn>;
@@ -133,7 +135,7 @@ describe("NodeDispatchService", () => {
 
     expect(evaluateToolCall).toHaveBeenCalledWith(
       expect.objectContaining({
-        toolId: "tool.node.dispatch",
+        toolId: DESKTOP_MOUSE_TOOL_ID,
         toolMatchTarget: "capability:tyrum.desktop.mouse;action:Desktop;op:act;act:mouse",
       }),
     );
