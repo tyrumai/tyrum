@@ -9,6 +9,7 @@ describe("createPackageBuilds", () => {
 
     expect(buildsByName.get("@tyrum/transport-sdk")?.inputs).toEqual(
       expect.arrayContaining([
+        resolve(repoRoot, "tsconfig.base.json"),
         resolve(repoRoot, "packages/contracts/dist/index.mjs"),
         resolve(repoRoot, "packages/contracts/dist/index.d.ts"),
         resolve(repoRoot, "packages/contracts/dist/jsonschema/catalog.json"),

@@ -1,6 +1,10 @@
 import { resolve } from "node:path";
 
+// Every workspace tsconfig.json extends the repo-level compiler baseline.
+const WORKSPACE_INPUT_PATHS = ["tsconfig.base.json"];
+
 export function createBuildsFromSpecs(repoRoot, specs, dependencyLabel) {
+  const workspaceInputs = WORKSPACE_INPUT_PATHS.map((inputPath) => resolve(repoRoot, inputPath));
   const outputsByKey = new Map(
     specs.map((spec) => [
       spec.key,
@@ -11,6 +15,7 @@ export function createBuildsFromSpecs(repoRoot, specs, dependencyLabel) {
   return specs.map((spec) => ({
     name: spec.name,
     inputs: [
+      ...workspaceInputs,
       ...spec.inputPaths.map((inputPath) => resolve(repoRoot, inputPath)),
       ...(spec.dependencies ?? []).flatMap((dependency) => {
         const outputs = outputsByKey.get(dependency);

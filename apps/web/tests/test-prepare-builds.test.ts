@@ -13,6 +13,7 @@ describe("workspace test build graph", () => {
 
     expect(buildsByName.get("@tyrum/gateway")?.inputs).toEqual(
       expect.arrayContaining([
+        resolve(repoRoot, "tsconfig.base.json"),
         resolve(repoRoot, "apps/web/src"),
         resolve(repoRoot, "apps/web/public"),
         resolve(repoRoot, "packages/node-sdk/dist/browser.mjs"),
