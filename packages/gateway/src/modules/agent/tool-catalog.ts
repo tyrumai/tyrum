@@ -1,4 +1,5 @@
 import { AUTOMATION_TOOL_REGISTRY } from "./tool-catalog-automation.js";
+import { DESKTOP_TOOL_REGISTRY } from "./tool-catalog-desktop.js";
 import { LOCATION_TOOL_REGISTRY } from "./tool-catalog-location.js";
 import type { ToolDescriptor } from "./tools.js";
 import { SUBAGENT_TOOL_REGISTRY } from "./tool-catalog-subagent.js";
@@ -332,8 +333,8 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
       "Use node device metadata (type, platform, last_tyrum_interaction_at) to choose the best node for an action. Prefer nodes the user is actively using.",
     ],
     promptExamples: [
-      '{"node_id":"node_123","capability":"tyrum.desktop.screenshot","action_name":"screenshot","input":{"display":"all"},"timeout_ms":30000}',
       '{"node_id":"node_456","capability":"tyrum.browser.navigate","action_name":"navigate","input":{"url":"https://example.com"},"timeout_ms":30000}',
+      '{"node_id":"node_789","capability":"tyrum.location.get","action_name":"get","timeout_ms":30000}',
     ],
     source: "builtin",
     family: "node",
@@ -366,6 +367,7 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
       additionalProperties: false,
     },
   },
+  ...DESKTOP_TOOL_REGISTRY,
   ...LOCATION_TOOL_REGISTRY,
   ...AUTOMATION_TOOL_REGISTRY,
   ...SUBAGENT_TOOL_REGISTRY,

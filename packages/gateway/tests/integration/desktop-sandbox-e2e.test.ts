@@ -45,7 +45,7 @@ const migrationsDir = join(__dirname, "../../migrations/sqlite");
 
 const CAN_RUN_DESKTOP_SANDBOX_E2E = process.platform === "linux" && dockerAvailable();
 
-describe("e2e: tool.node.dispatch against docker desktop-sandbox", () => {
+describe("e2e: dedicated desktop tools against docker desktop-sandbox", () => {
   it.skipIf(!CAN_RUN_DESKTOP_SANDBOX_E2E)(
     "dispatches Desktop snapshot + mouse move and stores screenshot as a fetchable artifact",
     { timeout: 15 * 60_000 },
@@ -257,13 +257,13 @@ describe("e2e: tool.node.dispatch against docker desktop-sandbox", () => {
           );
 
           const snapshotResult = await executor.execute(
-            "tool.node.dispatch",
+            "tool.desktop.snapshot",
             "call-1",
             {
               node_id: pairing.node.node_id,
-              capability: "tyrum.desktop.snapshot",
-              action_name: "snapshot",
-              input: { include_tree: true, max_nodes: 512, max_text_chars: 8192 },
+              include_tree: true,
+              max_nodes: 512,
+              max_text_chars: 8192,
               timeout_ms: 120_000,
             },
             {
@@ -372,13 +372,13 @@ describe("e2e: tool.node.dispatch against docker desktop-sandbox", () => {
           expect(treeJson?.root?.role).toEqual(expect.any(String));
 
           const actResult = await executor.execute(
-            "tool.node.dispatch",
+            "tool.desktop.mouse",
             "call-2",
             {
               node_id: pairing.node.node_id,
-              capability: "tyrum.desktop.mouse",
-              action_name: "mouse",
-              input: { action: "move", x: 5, y: 5 },
+              action: "move",
+              x: 5,
+              y: 5,
               timeout_ms: 60_000,
             },
             {

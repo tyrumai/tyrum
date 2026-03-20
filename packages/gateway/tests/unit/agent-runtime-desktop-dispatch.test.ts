@@ -17,7 +17,7 @@ import { TaskResultRegistry } from "../../src/ws/protocol/task-result-registry.j
 import { MockLanguageModelV3 } from "ai/test";
 import { CAPABILITY_DESCRIPTOR_DEFAULT_VERSION } from "@tyrum/contracts";
 
-describe("AgentRuntime - desktop dispatch", () => {
+describe("AgentRuntime - dedicated desktop tools", () => {
   const desktopSnapshotDescriptor = {
     id: "tyrum.desktop.snapshot",
     version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
@@ -32,7 +32,7 @@ describe("AgentRuntime - desktop dispatch", () => {
     homeDir = undefined;
   });
 
-  it("executes tool.node.dispatch Desktop snapshot during a turn and returns artifact refs without base64", async () => {
+  it("executes tool.desktop.snapshot during a turn and returns artifact refs without base64", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
     container = await createContainer({
       dbPath: ":memory:",
@@ -48,7 +48,7 @@ describe("AgentRuntime - desktop dispatch", () => {
           enabled: [],
           server_settings: { memory: { enabled: false } },
         },
-        tools: { allow: ["tool.node.dispatch"] },
+        tools: { allow: ["tool.desktop.snapshot"] },
         sessions: { ttl_days: 30, max_turns: 20 },
       },
     });
@@ -176,12 +176,9 @@ describe("AgentRuntime - desktop dispatch", () => {
               {
                 type: "tool-call" as const,
                 toolCallId: "tc-1",
-                toolName: "tool.node.dispatch",
+                toolName: "tool.desktop.snapshot",
                 input: JSON.stringify({
-                  node_id: nodeId,
-                  capability: "tyrum.desktop.snapshot",
-                  action_name: "snapshot",
-                  input: { include_tree: false },
+                  include_tree: false,
                 }),
               },
             ],
@@ -235,10 +232,10 @@ describe("AgentRuntime - desktop dispatch", () => {
     const result = await runtime.turn({
       channel: "test",
       thread_id: "thread-1",
-      message: "take a desktop snapshot via node dispatch",
+      message: "take a desktop snapshot",
     });
 
     expect(result.reply).toBe("done");
-    expect(result.used_tools).toContain("tool.node.dispatch");
+    expect(result.used_tools).toContain("tool.desktop.snapshot");
   }, 20_000);
 });

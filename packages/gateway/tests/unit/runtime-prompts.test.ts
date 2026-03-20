@@ -82,22 +82,21 @@ describe("formatSkillsPrompt", () => {
         promptExamples: ['{"command":"pnpm lint","cwd":"packages/gateway","timeout_ms":120000}'],
       },
       {
-        id: "tool.node.dispatch",
-        description: "Dispatch a specific capability action to a connected node.",
-        effect: "state_changing",
+        id: "tool.desktop.snapshot",
+        description: "Collect a desktop accessibility snapshot.",
+        effect: "read_only",
         keywords: [],
-        promptGuidance: ["Put action-specific arguments inside the input object."],
-        promptExamples: [
-          '{"node_id":"node_123","capability":"tyrum.desktop.screenshot","action_name":"screenshot","input":{"display":"all"}}',
-        ],
+        promptGuidance: ["Use node_id when you need to target a specific desktop node."],
+        promptExamples: ['{"include_tree":false,"node_id":"node_123"}'],
       },
     ]);
 
     expect(prompt).toContain("Guidance: Prefer one bounded command at a time.");
     expect(prompt).toContain('Example: {"command":"pnpm lint"');
-    expect(prompt).toContain("Guidance: Put action-specific arguments inside the input object.");
-    expect(prompt).toContain('Example: {"node_id":"node_123"');
-    expect(prompt).toContain('"input":{"display":"all"}');
+    expect(prompt).toContain(
+      "Guidance: Use node_id when you need to target a specific desktop node.",
+    );
+    expect(prompt).toContain('Example: {"include_tree":false,"node_id":"node_123"}');
   });
 });
 

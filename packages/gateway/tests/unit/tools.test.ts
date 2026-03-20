@@ -205,6 +205,18 @@ describe("model tool naming", () => {
     expect(toolSet["tool_fs_read"]).toBe(secondTool);
   });
 
+  it("includes the dedicated desktop tool family", () => {
+    const builtinIds = listBuiltinToolDescriptors().map((tool) => tool.id);
+
+    expect(builtinIds).toContain("tool.desktop.screenshot");
+    expect(builtinIds).toContain("tool.desktop.snapshot");
+    expect(builtinIds).toContain("tool.desktop.query");
+    expect(builtinIds).toContain("tool.desktop.act");
+    expect(builtinIds).toContain("tool.desktop.mouse");
+    expect(builtinIds).toContain("tool.desktop.keyboard");
+    expect(builtinIds).toContain("tool.desktop.wait-for");
+  });
+
   it("includes distinct inspect and dispatch node tools", () => {
     const builtinIds = listBuiltinToolDescriptors().map((tool) => tool.id);
 
