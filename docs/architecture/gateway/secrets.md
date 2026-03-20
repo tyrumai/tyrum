@@ -10,7 +10,7 @@ Tyrum is built around one hard rule: models and ordinary runtime state should no
 
 - Read this if: you need the handle model, resolution boundary, and audit expectations.
 - Skip this if: you only need provider-specific storage mechanics.
-- Go deeper: [Provider auth and onboarding](/architecture/auth), [Sandbox and policy](/architecture/sandbox-policy), [Execution engine](/architecture/execution-engine).
+- Go deeper: [Provider auth and onboarding](/architecture/auth), [Sandbox and policy](/architecture/sandbox-policy), [Execution engine](/architecture/execution-engine), [ARCH-19 dedicated node-backed tool and routing decision](/architecture/arch-19-dedicated-node-backed-tools).
 
 ## Secret resolution boundary
 
@@ -28,6 +28,8 @@ flowchart LR
 ```
 
 The handle can travel through plans, approvals, run state, and logs. The raw secret value cannot.
+
+The dedicated secret-to-node-clipboard flow is specified in [ARCH-19 dedicated node-backed tool and routing decision](/architecture/arch-19-dedicated-node-backed-tools). That record is the canonical source for `tool.secret.copy-to-node-clipboard`, the `secret_ref_id` / `secret_alias` contract, and the stricter ambiguity rules for clipboard delivery.
 
 ## What lives where
 
@@ -72,3 +74,4 @@ Common trusted patterns are:
 - [Sandbox and policy](/architecture/sandbox-policy)
 - [Execution engine](/architecture/execution-engine)
 - [Approvals](/architecture/approvals)
+- [ARCH-19 dedicated node-backed tool and routing decision](/architecture/arch-19-dedicated-node-backed-tools)
