@@ -1,73 +1,8 @@
-:root {
-  /* Dark is the default operator theme. */
-  color-scheme: dark;
+/* Base copper palette: :root defaults + light + system mode (no data-palette attr needed). */
+@import "./themes/copper.css";
 
-  --tyrum-color-bg: #141614;
-  --tyrum-app-bg-image: none;
-  --tyrum-color-bg-subtle: #1b1d1b;
-  --tyrum-color-bg-card: #1f211f;
-  --tyrum-color-fg: #ede9df;
-  --tyrum-color-fg-muted: #9e9889;
-  --tyrum-color-border: #2e322d;
-
-  --tyrum-color-primary: oklch(60% 0.155 46);
-  --tyrum-color-primary-dim: oklch(60% 0.155 46 / 0.14);
-
-  --tyrum-color-success: #3d8a56;
-  --tyrum-color-warning: #c4882e;
-  --tyrum-color-error: #c45549;
-  --tyrum-color-neutral: #7d7b72;
-  --tyrum-color-focus-ring: oklch(60% 0.155 46 / 0.35);
-  --tyrum-color-selection: oklch(60% 0.155 46 / 0.20);
-}
-
-html[data-theme="light"] {
-  color-scheme: light;
-
-  --tyrum-color-bg: #f2efe6;
-  --tyrum-app-bg-image: none;
-  --tyrum-color-bg-subtle: #e8e3d8;
-  --tyrum-color-bg-card: #faf8f2;
-  --tyrum-color-fg: #1c1b17;
-  --tyrum-color-fg-muted: #5c574c;
-  --tyrum-color-border: #d1c9b8;
-
-  --tyrum-color-primary: oklch(47% 0.128 40);
-  --tyrum-color-primary-dim: oklch(47% 0.128 40 / 0.10);
-
-  --tyrum-color-success: #267a4a;
-  --tyrum-color-warning: #9a6518;
-  --tyrum-color-error: #b03d32;
-  --tyrum-color-neutral: #65625a;
-  --tyrum-color-focus-ring: oklch(47% 0.128 40 / 0.30);
-  --tyrum-color-selection: oklch(47% 0.128 40 / 0.14);
-}
-
-/* System mode: rely on prefers-color-scheme when data-theme-mode=system. */
-html[data-theme-mode="system"] {
-  color-scheme: dark;
-}
-
-@media (prefers-color-scheme: light) {
-  html[data-theme-mode="system"] {
-    color-scheme: light;
-
-    --tyrum-color-bg: #f2efe6;
-    --tyrum-app-bg-image: none;
-    --tyrum-color-bg-subtle: #e8e3d8;
-    --tyrum-color-bg-card: #faf8f2;
-    --tyrum-color-fg: #1c1b17;
-    --tyrum-color-fg-muted: #5c574c;
-    --tyrum-color-border: #d1c9b8;
-
-    --tyrum-color-primary: oklch(47% 0.128 40);
-    --tyrum-color-primary-dim: oklch(47% 0.128 40 / 0.10);
-
-    --tyrum-color-success: #267a4a;
-    --tyrum-color-warning: #9a6518;
-    --tyrum-color-error: #b03d32;
-    --tyrum-color-neutral: #65625a;
-    --tyrum-color-focus-ring: oklch(47% 0.128 40 / 0.30);
-    --tyrum-color-selection: oklch(47% 0.128 40 / 0.14);
-  }
-}
+/* Named palette overrides. Each uses html[data-palette="<name>"] to override copper defaults. */
+@import "./themes/ocean.css";
+@import "./themes/ember.css";
+@import "./themes/sage.css";
+@import "./themes/neon.css";

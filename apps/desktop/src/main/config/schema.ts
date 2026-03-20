@@ -18,8 +18,9 @@ export const DesktopNodeConfig = z.object({
   theme: z
     .object({
       source: z.enum(["system", "light", "dark"]).default("system"),
+      colorPalette: z.enum(["copper", "ocean", "ember", "sage", "neon"]).default("copper"),
     })
-    .default({ source: "system" }),
+    .default({ source: "system", colorPalette: "copper" }),
   remote: z
     .object({
       wsUrl: z.string().default("ws://127.0.0.1:8788/ws"),

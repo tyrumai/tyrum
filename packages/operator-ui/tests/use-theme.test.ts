@@ -244,3 +244,148 @@ describe("ThemeProvider/useTheme", () => {
     container.remove();
   });
 });
+
+describe("ThemeProvider palette", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    delete (window as unknown as { tyrumDesktop?: unknown }).tyrumDesktop;
+    delete document.documentElement.dataset.palette;
+  });
+
+  it("defaults to copper palette with no data-palette attribute", () => {
+    const { container, root } = createTestRoot();
+    stubLocalStorage();
+
+    let palette: string | null = null;
+    const Probe = () => {
+      palette = useTheme().palette;
+      return null;
+    };
+
+    act(() => {
+      root.render(React.createElement(ThemeProvider, null, React.createElement(Probe, null)));
+    });
+
+    expect(palette).toBe("copper");
+    expect(document.documentElement.dataset.palette).toBeUndefined();
+
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+  });
+
+  it("reads and persists localStorage palette", () => {
+    const { container, root } = createTestRoot();
+    const store = stubLocalStorage();
+    localStorage.setItem("tyrum.colorPalette", "ocean");
+
+    let api: ReturnType<typeof useTheme> | null = null;
+    const Probe = () => {
+      api = useTheme();
+      return null;
+    };
+
+    act(() => {
+      root.render(React.createElement(ThemeProvider, null, React.createElement(Probe, null)));
+    });
+
+    expect(api?.palette).toBe("ocean");
+    expect(document.documentElement.dataset.palette).toBe("ocean");
+
+    act(() => {
+      api?.setPalette("sage");
+    });
+
+    expect(store.get("tyrum.colorPalette")).toBe("sage");
+    expect(document.documentElement.dataset.palette).toBe("sage");
+
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+  });
+
+  it("removes data-palette attribute when switching to copper", () => {
+    const { container, root } = createTestRoot();
+    stubLocalStorage();
+    localStorage.setItem("tyrum.colorPalette", "neon");
+
+    let api: ReturnType<typeof useTheme> | null = null;
+    const Probe = () => {
+      api = useTheme();
+      return null;
+    };
+
+    act(() => {
+      root.render(React.createElement(ThemeProvider, null, React.createElement(Probe, null)));
+    });
+
+    expect(document.documentElement.dataset.palette).toBe("neon");
+
+    act(() => {
+      api?.setPalette("copper");
+    });
+
+    expect(document.documentElement.dataset.palette).toBeUndefined();
+
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+  });
+
+  it("uses desktop config colorPalette when Desktop API exists", async () => {
+    const { container, root } = createTestRoot();
+    stubLocalStorage();
+
+    const setConfig = vi.fn(async () => ({}));
+    const desktopApi = {
+      getConfig: async () => ({ theme: { source: "dark", colorPalette: "sage" } }),
+      setConfig,
+      gateway: {
+        getStatus: async () => ({ status: "ok", port: 0 }),
+        start: async () => ({ status: "ok", port: 0 }),
+        stop: async () => ({ status: "ok" }),
+      },
+      node: {
+        connect: async () => ({ status: "ok" }),
+        disconnect: async () => ({ status: "ok" }),
+      },
+      onStatusChange: () => () => {},
+    };
+    (window as unknown as { tyrumDesktop?: unknown }).tyrumDesktop = desktopApi;
+
+    let api: ReturnType<typeof useTheme> | null = null;
+    const Probe = () => {
+      api = useTheme();
+      return null;
+    };
+
+    await act(async () => {
+      root.render(
+        React.createElement(
+          OperatorUiHostProvider,
+          { value: { kind: "desktop", api: desktopApi } },
+          React.createElement(ThemeProvider, null, React.createElement(Probe, null)),
+        ),
+      );
+      await Promise.resolve();
+    });
+
+    expect(api?.palette).toBe("sage");
+    expect(document.documentElement.dataset.palette).toBe("sage");
+
+    await act(async () => {
+      api?.setPalette("neon");
+      await Promise.resolve();
+    });
+
+    expect(setConfig).toHaveBeenCalledWith({ theme: { colorPalette: "neon" } });
+
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+  });
+});

@@ -1,0 +1,72 @@
+/* Neon palette: vibrant electric magenta-purple. */
+html[data-palette="neon"] {
+  color-scheme: dark;
+
+  --tyrum-color-bg: #141216;
+  --tyrum-app-bg-image: none;
+  --tyrum-color-bg-subtle: #1b181e;
+  --tyrum-color-bg-card: #201c24;
+  --tyrum-color-fg: #ede7f0;
+  --tyrum-color-fg-muted: #9e93a5;
+  --tyrum-color-border: #332c3a;
+
+  --tyrum-color-primary: oklch(65% 0.250 300);
+  --tyrum-color-primary-dim: oklch(65% 0.250 300 / 0.14);
+
+  --tyrum-color-success: #3d8a56;
+  --tyrum-color-warning: #c4882e;
+  --tyrum-color-error: #c45549;
+  --tyrum-color-neutral: #7d7582;
+  --tyrum-color-focus-ring: oklch(65% 0.250 300 / 0.35);
+  --tyrum-color-selection: oklch(65% 0.250 300 / 0.20);
+}
+
+html[data-palette="neon"][data-theme="light"] {
+  color-scheme: light;
+
+  --tyrum-color-bg: #f3eef5;
+  --tyrum-app-bg-image: none;
+  --tyrum-color-bg-subtle: #e8e0ec;
+  --tyrum-color-bg-card: #faf6fc;
+  --tyrum-color-fg: #1c171e;
+  --tyrum-color-fg-muted: #5c5062;
+  --tyrum-color-border: #d1c5d8;
+
+  --tyrum-color-primary: oklch(50% 0.220 300);
+  --tyrum-color-primary-dim: oklch(50% 0.220 300 / 0.10);
+
+  --tyrum-color-success: #267a4a;
+  --tyrum-color-warning: #9a6518;
+  --tyrum-color-error: #b03d32;
+  --tyrum-color-neutral: #655c6a;
+  --tyrum-color-focus-ring: oklch(50% 0.220 300 / 0.30);
+  --tyrum-color-selection: oklch(50% 0.220 300 / 0.14);
+}
+
+html[data-palette="neon"][data-theme-mode="system"] {
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: light) {
+  html[data-palette="neon"][data-theme-mode="system"] {
+    color-scheme: light;
+
+    --tyrum-color-bg: #f3eef5;
+    --tyrum-app-bg-image: none;
+    --tyrum-color-bg-subtle: #e8e0ec;
+    --tyrum-color-bg-card: #faf6fc;
+    --tyrum-color-fg: #1c171e;
+    --tyrum-color-fg-muted: #5c5062;
+    --tyrum-color-border: #d1c5d8;
+
+    --tyrum-color-primary: oklch(50% 0.220 300);
+    --tyrum-color-primary-dim: oklch(50% 0.220 300 / 0.10);
+
+    --tyrum-color-success: #267a4a;
+    --tyrum-color-warning: #9a6518;
+    --tyrum-color-error: #b03d32;
+    --tyrum-color-neutral: #655c6a;
+    --tyrum-color-focus-ring: oklch(50% 0.220 300 / 0.30);
+    --tyrum-color-selection: oklch(50% 0.220 300 / 0.14);
+  }
+}

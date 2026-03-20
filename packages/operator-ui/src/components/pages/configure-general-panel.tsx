@@ -7,7 +7,7 @@ import {
   useAdminAccessModeOptional,
   type AdminAccessMode,
 } from "../../hooks/use-admin-access-mode.js";
-import { useTheme, type ThemeMode } from "../../hooks/use-theme.js";
+import { useTheme, type ColorPalette, type ThemeMode } from "../../hooks/use-theme.js";
 import { cn } from "../../lib/cn.js";
 import { toast } from "sonner";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
@@ -46,6 +46,53 @@ const THEME_OPTIONS: ThemeOption[] = [
     description: "Dim theme for low light.",
     icon: Moon,
     testId: "configure-theme-dark",
+  },
+];
+
+type PaletteOption = {
+  id: ColorPalette;
+  label: string;
+  description: string;
+  /** Representative swatch colors: [primary-dark, bg-dark, primary-light]. */
+  swatches: [string, string, string];
+  testId: string;
+};
+
+const PALETTE_OPTIONS: PaletteOption[] = [
+  {
+    id: "copper",
+    label: "Copper",
+    description: "Warm earthy tones.",
+    swatches: ["oklch(60% 0.155 46)", "#141614", "oklch(47% 0.128 40)"],
+    testId: "configure-palette-copper",
+  },
+  {
+    id: "ocean",
+    label: "Ocean",
+    description: "Cool blue depths.",
+    swatches: ["oklch(60% 0.150 240)", "#121518", "oklch(47% 0.128 240)"],
+    testId: "configure-palette-ocean",
+  },
+  {
+    id: "ember",
+    label: "Ember",
+    description: "Fiery red-orange warmth.",
+    swatches: ["oklch(60% 0.165 18)", "#171312", "oklch(47% 0.138 18)"],
+    testId: "configure-palette-ember",
+  },
+  {
+    id: "sage",
+    label: "Sage",
+    description: "Calm natural greens.",
+    swatches: ["oklch(60% 0.120 155)", "#121615", "oklch(47% 0.100 155)"],
+    testId: "configure-palette-sage",
+  },
+  {
+    id: "neon",
+    label: "Neon",
+    description: "Vibrant electric hues.",
+    swatches: ["oklch(65% 0.250 300)", "#141216", "oklch(50% 0.220 300)"],
+    testId: "configure-palette-neon",
   },
 ];
 
@@ -134,6 +181,58 @@ export function ConfigureGeneralPanel({
                   }}
                 >
                   <Icon className="mt-0.5 h-5 w-5 shrink-0" aria-hidden={true} />
+                  <div className="grid gap-0.5">
+                    <div className="text-sm font-medium">{option.label}</div>
+                    <div className="text-xs text-fg-muted">{option.description}</div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card data-testid="configure-palette">
+        <CardHeader className="pb-2.5">
+          <div className="text-sm font-medium text-fg">Color palette</div>
+          <div className="text-sm text-fg-muted">
+            Choose a color identity. Works with any theme mode.
+          </div>
+        </CardHeader>
+        <CardContent className="grid gap-3">
+          <div
+            className="grid gap-3 grid-cols-2 sm:grid-cols-5"
+            role="radiogroup"
+            aria-label="Color palette"
+          >
+            {PALETTE_OPTIONS.map((option) => {
+              const active = theme.palette === option.id;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  data-testid={option.testId}
+                  className={cn(
+                    "flex w-full flex-col items-center gap-2 rounded-lg border px-3 py-3 text-center transition-colors",
+                    "hover:bg-bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
+                    active ? "border-primary bg-bg" : "border-border bg-bg",
+                  )}
+                  onClick={() => {
+                    theme.setPalette(option.id);
+                  }}
+                >
+                  <div className="flex gap-1.5">
+                    {option.swatches.map((color, i) => (
+                      <span
+                        key={i}
+                        className="h-5 w-5 rounded-full border border-border"
+                        style={{ backgroundColor: color }}
+                        aria-hidden
+                      />
+                    ))}
+                  </div>
                   <div className="grid gap-0.5">
                     <div className="text-sm font-medium">{option.label}</div>
                     <div className="text-xs text-fg-muted">{option.description}</div>

@@ -12,17 +12,40 @@ import { useHostApiOptional } from "../host/host-api.js";
 
 export type ThemeMode = "system" | "light" | "dark";
 
+export type ColorPalette = "copper" | "ocean" | "ember" | "sage" | "neon";
+
+export const COLOR_PALETTES: readonly ColorPalette[] = [
+  "copper",
+  "ocean",
+  "ember",
+  "sage",
+  "neon",
+] as const;
+
 type ThemeContextValue = {
   mode: ThemeMode;
   setMode: (mode: ThemeMode) => void;
+  palette: ColorPalette;
+  setPalette: (palette: ColorPalette) => void;
 };
 
 const THEME_STORAGE_KEY = "tyrum.themeMode";
+const PALETTE_STORAGE_KEY = "tyrum.colorPalette";
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 function isThemeMode(value: unknown): value is ThemeMode {
   return value === "system" || value === "light" || value === "dark";
+}
+
+function isColorPalette(value: unknown): value is ColorPalette {
+  return (
+    value === "copper" ||
+    value === "ocean" ||
+    value === "ember" ||
+    value === "sage" ||
+    value === "neon"
+  );
 }
 
 function resolveWebStoredMode(): ThemeMode | null {
@@ -45,6 +68,26 @@ function persistWebMode(mode: ThemeMode): void {
   }
 }
 
+function resolveWebStoredPalette(): ColorPalette | null {
+  try {
+    if (typeof localStorage?.getItem !== "function") return null;
+    const raw = localStorage.getItem(PALETTE_STORAGE_KEY);
+    if (isColorPalette(raw)) return raw;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function persistWebPalette(palette: ColorPalette): void {
+  try {
+    if (typeof localStorage?.setItem !== "function") return;
+    localStorage.setItem(PALETTE_STORAGE_KEY, palette);
+  } catch {
+    // ignore
+  }
+}
+
 function resolveSystemColorScheme(): "dark" | "light" {
   if (typeof globalThis.matchMedia !== "function") {
     return "dark";
@@ -60,6 +103,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const host = useHostApiOptional();
   const desktopApi = host?.kind === "desktop" ? host.api : null;
   const [mode, setMode] = useState<ThemeMode>(() => resolveWebStoredMode() ?? "dark");
+  const [palette, setPalette] = useState<ColorPalette>(() => resolveWebStoredPalette() ?? "copper");
   const [systemColorScheme, setSystemColorScheme] = useState<"dark" | "light">(() =>
     resolveSystemColorScheme(),
   );
@@ -90,6 +134,15 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, [mode, systemColorScheme]);
 
   useEffect(() => {
+    const root = document.documentElement;
+    if (palette === "copper") {
+      delete root.dataset.palette;
+    } else {
+      root.dataset.palette = palette;
+    }
+  }, [palette]);
+
+  useEffect(() => {
     if (!desktopApi) return;
     let cancelled = false;
     void desktopApi
@@ -102,6 +155,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
             const source = (theme as Record<string, unknown>)["source"];
             if (isThemeMode(source)) {
               setMode(source);
+            }
+            const colorPalette = (theme as Record<string, unknown>)["colorPalette"];
+            if (isColorPalette(colorPalette)) {
+              setPalette(colorPalette);
             }
           }
         }
@@ -126,12 +183,25 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     [desktopApi],
   );
 
+  const setPaletteAndPersist = useCallback(
+    (nextPalette: ColorPalette) => {
+      setPalette(nextPalette);
+      persistWebPalette(nextPalette);
+      if (desktopApi) {
+        void desktopApi.setConfig({ theme: { colorPalette: nextPalette } });
+      }
+    },
+    [desktopApi],
+  );
+
   const value = useMemo<ThemeContextValue>(
     () => ({
       mode,
       setMode: setModeAndPersist,
+      palette,
+      setPalette: setPaletteAndPersist,
     }),
-    [mode, setModeAndPersist],
+    [mode, setModeAndPersist, palette, setPaletteAndPersist],
   );
 
   return createElement(ThemeContext.Provider, { value }, children);
