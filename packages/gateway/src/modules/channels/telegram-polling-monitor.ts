@@ -500,6 +500,7 @@ export class TelegramPollingMonitor {
         agents: this.deps.agents,
         stateDal: this.deps.stateDal,
         routingConfigDal: this.deps.routingConfigDal,
+        identityScopeDal: this.deps.identityScopeDal,
         memoryDal: this.deps.memoryDal,
         artifactStore: this.deps.artifactStore,
         logger: this.deps.logger,

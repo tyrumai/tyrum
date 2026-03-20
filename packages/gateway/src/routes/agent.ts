@@ -38,7 +38,7 @@ async function resolvePrimaryAgentRecord(
   return await db.get<{ agent_id: string; agent_key: string; is_primary: boolean | number | null }>(
     `SELECT agent_id, agent_key, is_primary
      FROM agents
-     WHERE tenant_id = ? AND is_primary = 1
+     WHERE tenant_id = ? AND is_primary = TRUE
      LIMIT 1`,
     [tenantId],
   );

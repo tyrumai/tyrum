@@ -274,8 +274,6 @@ describe("AgentEditorSections", () => {
         ["Agent key", "agent-review"],
         ["Name", "Agent Review"],
         ["Tone", "measured"],
-        ["Palette", "ember"],
-        ["Character", "analyst"],
         ["Variant", "fast"],
         ["TTL days", "45"],
         ["Max turns", "18"],
@@ -415,8 +413,6 @@ describe("AgentEditorSections", () => {
       expect(calls).toContainEqual(["agentKey", "agent-review"]);
       expect(calls).toContainEqual(["name", "Agent Review"]);
       expect(calls).toContainEqual(["tone", "measured"]);
-      expect(calls).toContainEqual(["palette", "ember"]);
-      expect(calls).toContainEqual(["character", "analyst"]);
       expect(calls).toContainEqual(["model", "openai/gpt-4.1-mini"]);
       expect(calls).toContainEqual(["fallbacks", "openai/gpt-4.1"]);
       expect(calls).toContainEqual(["fallbacks", "openai/gpt-4.1\nopenai/gpt-4.1-mini"]);

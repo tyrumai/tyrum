@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
-import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
+import { DEFAULT_TENANT_ID, IdentityScopeDal } from "../../src/modules/identity/scope.js";
 import { ChannelConfigDal } from "../../src/modules/channels/channel-config-dal.js";
 import { TelegramPollingMonitor } from "../../src/modules/channels/telegram-polling-monitor.js";
 import { TelegramPollingStateDal } from "../../src/modules/channels/telegram-polling-state-dal.js";
@@ -49,11 +49,13 @@ describe("TelegramPollingMonitor regressions", () => {
   let db: SqliteDb;
   let dal: ChannelConfigDal;
   let stateDal: TelegramPollingStateDal;
+  let identityScopeDal: IdentityScopeDal;
 
   beforeEach(() => {
     db = openTestSqliteDb();
     dal = new ChannelConfigDal(db);
     stateDal = new TelegramPollingStateDal(db);
+    identityScopeDal = new IdentityScopeDal(db);
   });
 
   afterEach(async () => {
@@ -84,6 +86,7 @@ describe("TelegramPollingMonitor regressions", () => {
       queue: { enqueue: vi.fn() } as never,
       agents: {} as never,
       stateDal,
+      identityScopeDal,
       reconcileIntervalMs: 20,
       idleDelayMs: 10,
       errorBackoffMs: 10,
@@ -135,6 +138,7 @@ describe("TelegramPollingMonitor regressions", () => {
       queue: { enqueue } as never,
       agents: {} as never,
       stateDal,
+      identityScopeDal,
       logger: logger as never,
       reconcileIntervalMs: 10_000,
       idleDelayMs: 10,
@@ -213,6 +217,7 @@ describe("TelegramPollingMonitor regressions", () => {
       queue: workerAQueue as never,
       agents: {} as never,
       stateDal,
+      identityScopeDal,
       reconcileIntervalMs: 20,
       leaseTtlMs: 40,
       idleDelayMs: 5,
@@ -225,6 +230,7 @@ describe("TelegramPollingMonitor regressions", () => {
       queue: workerBQueue as never,
       agents: {} as never,
       stateDal,
+      identityScopeDal,
       reconcileIntervalMs: 20,
       leaseTtlMs: 40,
       idleDelayMs: 5,
@@ -283,6 +289,7 @@ describe("TelegramPollingMonitor regressions", () => {
       queue: { enqueue: vi.fn() } as never,
       agents: {} as never,
       stateDal,
+      identityScopeDal,
       logger: logger as never,
       reconcileIntervalMs: 10_000,
       leaseTtlMs: 30,
@@ -343,6 +350,7 @@ describe("TelegramPollingMonitor regressions", () => {
       queue: { enqueue: vi.fn() } as never,
       agents: {} as never,
       stateDal,
+      identityScopeDal,
       logger: logger as never,
       reconcileIntervalMs: 20,
       idleDelayMs: 10,

@@ -11,5 +11,7 @@ WHERE agent_key = 'default'
   );
 
 CREATE UNIQUE INDEX IF NOT EXISTS agents_primary_per_tenant_idx
-ON agents (tenant_id)
-WHERE is_primary = 1;
+ON agents (
+  tenant_id,
+  CASE WHEN is_primary = 1 THEN 'primary' ELSE NULL END
+);

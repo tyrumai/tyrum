@@ -154,7 +154,7 @@ export class AgentAdminService {
           await tx.run(
             `UPDATE agents
              SET is_primary = 0
-             WHERE tenant_id = ? AND is_primary = 1`,
+             WHERE tenant_id = ? AND is_primary = TRUE`,
             [params.tenantId],
           );
         }

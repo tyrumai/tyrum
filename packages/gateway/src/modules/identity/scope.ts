@@ -211,7 +211,7 @@ export class IdentityScopeDal {
     const found = await this.db.get<{ agent_id: string; agent_key: string }>(
       `SELECT agent_id, agent_key
        FROM agents
-       WHERE tenant_id = ? AND is_primary = 1
+       WHERE tenant_id = ? AND is_primary = TRUE
        LIMIT 1`,
       [tenantId],
     );
@@ -239,11 +239,23 @@ export class IdentityScopeDal {
     const cached = this.getCached(this.agentCache, cacheKey);
     if (cached) return cached;
 
+    const maybePromoteDefaultPrimary = async (agentId: string): Promise<void> => {
+      if (key !== DEFAULT_AGENT_KEY) return;
+      const primary = await this.resolvePrimaryAgentId(tenantId);
+      if (primary) return;
+      await this.db.run(
+        `UPDATE agents SET is_primary = TRUE WHERE tenant_id = ? AND agent_id = ?`,
+        [tenantId, agentId],
+      );
+      this.rememberPrimaryAgent(tenantId, key, agentId);
+    };
+
     const found = await this.db.get<{ agent_id: string }>(
       "SELECT agent_id FROM agents WHERE tenant_id = ? AND agent_key = ? LIMIT 1",
       [tenantId, key],
     );
     if (found?.agent_id) {
+      await maybePromoteDefaultPrimary(found.agent_id);
       this.setCached(this.agentCache, cacheKey, found.agent_id);
       return found.agent_id;
     }
@@ -268,6 +280,7 @@ export class IdentityScopeDal {
       throw new Error("failed to ensure agent");
     }
 
+    await maybePromoteDefaultPrimary(resolved);
     this.setCached(this.agentCache, cacheKey, resolved);
     return resolved;
   }

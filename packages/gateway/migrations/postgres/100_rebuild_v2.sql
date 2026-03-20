@@ -107,6 +107,7 @@ CREATE TABLE agents (
   tenant_id  UUID NOT NULL,
   agent_id   UUID NOT NULL,
   agent_key  TEXT NOT NULL,
+  is_primary BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (tenant_id, agent_id),
@@ -1364,11 +1365,12 @@ INSERT INTO tenants (tenant_id, tenant_key)
 VALUES ('00000000-0000-4000-8000-000000000001'::uuid, 'default')
 ON CONFLICT (tenant_key) DO NOTHING;
 
-INSERT INTO agents (tenant_id, agent_id, agent_key)
+INSERT INTO agents (tenant_id, agent_id, agent_key, is_primary)
 VALUES (
   '00000000-0000-4000-8000-000000000001'::uuid,
   '00000000-0000-4000-8000-000000000002'::uuid,
-  'default'
+  'default',
+  TRUE
 )
 ON CONFLICT (tenant_id, agent_key) DO NOTHING;
 

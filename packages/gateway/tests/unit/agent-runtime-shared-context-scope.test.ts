@@ -10,7 +10,6 @@ import { AgentConfigDal } from "../../src/modules/config/agent-config-dal.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
 import type { AgentContextScope } from "../../src/modules/agent/context-store.js";
 import { DEFAULT_WORKSPACE_KEY } from "../../src/modules/identity/scope.js";
-import { pickSeededPersonaName } from "../../src/modules/agent/persona.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -128,7 +127,7 @@ describe("AgentRuntime shared context scopes", () => {
     ]);
   });
 
-  it("seeds persona/config using the agent key instead of the resolved UUID", async () => {
+  it("does not persist seeded persona/config during shared runtime status loading", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-seeded-key-"));
     container = createContainer(
       { dbPath: ":memory:", migrationsDir, tyrumHome: homeDir },
@@ -174,13 +173,7 @@ describe("AgentRuntime shared context scopes", () => {
       tenantId,
       agentId: resolvedAgentId,
     });
-    expect(latest?.config.persona?.name).toBe(
-      pickSeededPersonaName({
-        tenantId,
-        agentKey,
-        usedNames: [],
-      }),
-    );
+    expect(latest).toBeUndefined();
   });
 
   it("keeps source-less non-builtin tools in shared mode while excluding blocked builtins", async () => {

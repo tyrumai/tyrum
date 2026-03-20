@@ -97,7 +97,7 @@ export function registerWorkboardScopeNonCreationTests(): void {
             workspace_key: "missing-workspace",
             item: {
               title: "Missing scope",
-              kind: "task",
+              kind: "action",
             },
           },
         }),
