@@ -100,10 +100,14 @@ async function selectNode(
 
 export async function executeSecretClipboardTool(
   context: SecretToolContext,
+  toolId: string,
   toolCallId: string,
   args: unknown,
   audit?: NodeDispatchAudit,
 ): Promise<SecretToolExecutionResult | undefined> {
+  if (toolId !== SECRET_CLIPBOARD_TOOL_ID) {
+    return undefined;
+  }
   if (!context.agentSecretRefs || context.agentSecretRefs.length === 0) {
     return undefined;
   }

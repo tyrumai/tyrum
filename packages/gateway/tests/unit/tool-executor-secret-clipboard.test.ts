@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -245,5 +245,48 @@ describe("ToolExecutor secret clipboard delivery", () => {
       "ambiguous node selection for 'tool.secret.copy-to-node-clipboard'; provide node_id when multiple eligible clipboard-capable nodes exist",
     );
     expect(nodeDispatchService.dispatchAndWait).not.toHaveBeenCalled();
+  });
+
+  it("does not intercept unrelated tool calls when agent secret refs are configured", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tool-executor-secret-"));
+    db = openTestSqliteDb();
+
+    const filePath = join(homeDir, "notes.txt");
+    await writeFile(filePath, "dispatch still works\n", "utf8");
+
+    const executor = new ToolExecutor(
+      homeDir,
+      stubMcpManager(),
+      new Map(),
+      fetch,
+      stubSecretProvider(new Map([["sec-ref-db", "super-secret-token"]])),
+      allowPublicDnsLookup,
+      undefined,
+      undefined,
+      {
+        db,
+        tenantId: DEFAULT_TENANT_ID,
+        agentId: "default",
+        workspaceId: DEFAULT_WORKSPACE_ID,
+      },
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      [createClipboardAgentSecretRef()],
+    );
+
+    const result = await executor.execute("read", "call-read-1", { path: "notes.txt" });
+
+    expect(result.error).toBeUndefined();
+    expect(result.output).toContain("dispatch still works");
   });
 });

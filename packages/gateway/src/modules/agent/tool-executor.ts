@@ -218,6 +218,7 @@ export class ToolExecutor {
         secretProvider: this.secretProvider,
         agentSecretRefs: this.agentSecretRefs,
       },
+      toolId,
       toolCallId,
       args,
       audit,
