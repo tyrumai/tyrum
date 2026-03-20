@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { app } from "electron";
+import { app, clipboard } from "electron";
 import type { DesktopBackend, ScreenCapture } from "@tyrum/desktop-node";
 import { checkMacPermissions, type MacPermissions } from "../../platform/permissions.js";
 
@@ -156,6 +156,8 @@ export function resolveDesktopScreenshotHelperLaunchCommand(
 }
 
 export class IsolatedDesktopBackend implements DesktopBackend {
+  readonly supportsClipboardWrite = true;
+
   constructor(
     private readonly delegate: DesktopBackend,
     private readonly options: IsolatedDesktopBackendOptions = {},
@@ -267,6 +269,14 @@ export class IsolatedDesktopBackend implements DesktopBackend {
         rejectOnce("Screen capture helper returned no result");
       });
     });
+  }
+
+  async writeClipboardText(text: string): Promise<void> {
+    try {
+      clipboard.writeText(text);
+    } catch {
+      throw new Error("Clipboard write failed");
+    }
   }
 
   async moveMouse(x: number, y: number): Promise<void> {
