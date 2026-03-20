@@ -4,6 +4,8 @@ import {
   WsChatSessionCreateResult,
   WsChatSessionDeleteResult,
   WsChatSessionGetResult,
+  WsTranscriptGetResult,
+  WsTranscriptListResult,
 } from "@tyrum/contracts";
 import { createBearerTokenAuth, createOperatorCore } from "../src/index.js";
 import {
@@ -117,6 +119,17 @@ export class FakeWsClient {
       }).session,
   );
   sessionDelete = vi.fn(async () => WsChatSessionDeleteResult.parse({ session_id: "session-1" }));
+  transcriptList = vi.fn(async () =>
+    WsTranscriptListResult.parse({ sessions: [], next_cursor: null }),
+  );
+  transcriptGet = vi.fn(async () =>
+    WsTranscriptGetResult.parse({
+      root_session_key: "session-1",
+      focus_session_key: "session-1",
+      sessions: [],
+      events: [],
+    }),
+  );
   workList = vi.fn(async () => ({ items: [] }) as unknown);
   requestDynamic = vi.fn(
     async (type: string, payload: unknown, schema?: { parse?: (input: unknown) => unknown }) => {
@@ -133,6 +146,12 @@ export class FakeWsClient {
           break;
         case "chat.session.delete":
           result = await this.sessionDelete(payload);
+          break;
+        case "transcript.list":
+          result = await this.transcriptList(payload);
+          break;
+        case "transcript.get":
+          result = await this.transcriptGet(payload);
           break;
         default:
           throw new Error(`unsupported dynamic request: ${type}`);

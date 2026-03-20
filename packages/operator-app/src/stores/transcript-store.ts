@@ -1,0 +1,314 @@
+import type {
+  TranscriptSessionSummary,
+  TranscriptTimelineEvent,
+  WsTranscriptGetResult,
+} from "@tyrum/contracts";
+import { WsTranscriptGetResult as WsTranscriptGetResultSchema } from "@tyrum/contracts";
+import { WsTranscriptListResult as WsTranscriptListResultSchema } from "@tyrum/contracts";
+import type { OperatorWsClient } from "../deps.js";
+import { toOperatorCoreError } from "../operator-error.js";
+import { createStore, type ExternalStore } from "../store.js";
+
+export interface TranscriptDetailState {
+  rootSessionKey: string;
+  focusSessionKey: string;
+  sessions: TranscriptSessionSummary[];
+  events: TranscriptTimelineEvent[];
+}
+
+export interface TranscriptState {
+  agentId: string | null;
+  channel: string | null;
+  activeOnly: boolean;
+  archived: boolean;
+  sessions: TranscriptSessionSummary[];
+  nextCursor: string | null;
+  selectedSessionKey: string | null;
+  detail: TranscriptDetailState | null;
+  loadingList: boolean;
+  loadingDetail: boolean;
+  errorList: ReturnType<typeof toOperatorCoreError> | null;
+  errorDetail: ReturnType<typeof toOperatorCoreError> | null;
+}
+
+export interface TranscriptStore extends ExternalStore<TranscriptState> {
+  setAgentId(agentId: string | null): void;
+  setChannel(channel: string | null): void;
+  setActiveOnly(activeOnly: boolean): void;
+  setArchived(archived: boolean): void;
+  refresh(): Promise<void>;
+  loadMore(): Promise<void>;
+  openSession(sessionKey: string): Promise<void>;
+  clearDetail(): void;
+}
+
+function createInitialTranscriptState(): TranscriptState {
+  return {
+    agentId: null,
+    channel: null,
+    activeOnly: false,
+    archived: false,
+    sessions: [],
+    nextCursor: null,
+    selectedSessionKey: null,
+    detail: null,
+    loadingList: false,
+    loadingDetail: false,
+    errorList: null,
+    errorDetail: null,
+  };
+}
+
+function normalizeOptionalString(value: string | null): string | null {
+  const trimmed = value?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : null;
+}
+
+function flattenTranscriptSessionSummaries(
+  sessions: readonly TranscriptSessionSummary[],
+): TranscriptSessionSummary[] {
+  const flattened: TranscriptSessionSummary[] = [];
+  const visit = (session: TranscriptSessionSummary): void => {
+    flattened.push({ ...session, child_sessions: undefined });
+    for (const child of session.child_sessions ?? []) {
+      visit(child);
+    }
+  };
+  for (const session of sessions) {
+    visit(session);
+  }
+  return flattened;
+}
+
+function mergeTranscriptSessionSummaries(
+  current: readonly TranscriptSessionSummary[],
+  incoming: readonly TranscriptSessionSummary[],
+): TranscriptSessionSummary[] {
+  const byKey = new Map<string, TranscriptSessionSummary>();
+  for (const session of current) {
+    byKey.set(session.session_key, session);
+  }
+  for (const session of incoming) {
+    byKey.set(session.session_key, session);
+  }
+  return [...byKey.values()];
+}
+
+function toDetail(result: WsTranscriptGetResult): TranscriptDetailState {
+  return {
+    rootSessionKey: result.root_session_key,
+    focusSessionKey: result.focus_session_key,
+    sessions: result.sessions,
+    events: result.events,
+  };
+}
+
+export function createTranscriptStore(ws: OperatorWsClient): TranscriptStore {
+  const { store, setState } = createStore<TranscriptState>(createInitialTranscriptState());
+  let listRunId = 0;
+  let detailRunId = 0;
+
+  async function refresh(): Promise<void> {
+    const runId = ++listRunId;
+    const snapshot = store.getSnapshot();
+    setState((prev) => ({ ...prev, loadingList: true, errorList: null }));
+    try {
+      const result = await ws.requestDynamic(
+        "transcript.list",
+        {
+          ...(snapshot.agentId ? { agent_id: snapshot.agentId } : {}),
+          ...(snapshot.channel ? { channel: snapshot.channel } : {}),
+          ...(snapshot.activeOnly ? { active_only: true } : {}),
+          ...(snapshot.archived ? { archived: true } : {}),
+          limit: 200,
+        },
+        WsTranscriptListResultSchema,
+      );
+      if (runId !== listRunId) {
+        return;
+      }
+      const flattenedSessions = flattenTranscriptSessionSummaries(result.sessions);
+      setState((prev) => {
+        const nextSelectedSessionKey =
+          prev.selectedSessionKey &&
+          flattenedSessions.some((session) => session.session_key === prev.selectedSessionKey)
+            ? prev.selectedSessionKey
+            : (flattenedSessions[0]?.session_key ?? null);
+        return {
+          ...prev,
+          sessions: flattenedSessions,
+          nextCursor: result.next_cursor ?? null,
+          selectedSessionKey: nextSelectedSessionKey,
+          loadingList: false,
+          errorList: null,
+          ...(nextSelectedSessionKey === prev.selectedSessionKey
+            ? {}
+            : { detail: null, errorDetail: null }),
+        };
+      });
+    } catch (error) {
+      if (runId !== listRunId) {
+        return;
+      }
+      setState((prev) => ({
+        ...prev,
+        loadingList: false,
+        nextCursor: null,
+        errorList: toOperatorCoreError("ws", "transcript.list", error),
+      }));
+    }
+  }
+
+  async function loadMore(): Promise<void> {
+    const snapshot = store.getSnapshot();
+    if (snapshot.loadingList || !snapshot.nextCursor) {
+      return;
+    }
+
+    const runId = ++listRunId;
+    setState((prev) => ({ ...prev, loadingList: true, errorList: null }));
+    try {
+      const result = await ws.requestDynamic(
+        "transcript.list",
+        {
+          ...(snapshot.agentId ? { agent_id: snapshot.agentId } : {}),
+          ...(snapshot.channel ? { channel: snapshot.channel } : {}),
+          ...(snapshot.activeOnly ? { active_only: true } : {}),
+          ...(snapshot.archived ? { archived: true } : {}),
+          limit: 200,
+          cursor: snapshot.nextCursor,
+        },
+        WsTranscriptListResultSchema,
+      );
+      if (runId !== listRunId) {
+        return;
+      }
+      const flattenedSessions = flattenTranscriptSessionSummaries(result.sessions);
+      setState((prev) => ({
+        ...prev,
+        sessions: mergeTranscriptSessionSummaries(prev.sessions, flattenedSessions),
+        nextCursor: result.next_cursor ?? null,
+        loadingList: false,
+        errorList: null,
+      }));
+    } catch (error) {
+      if (runId !== listRunId) {
+        return;
+      }
+      setState((prev) => ({
+        ...prev,
+        loadingList: false,
+        errorList: toOperatorCoreError("ws", "transcript.list", error),
+      }));
+    }
+  }
+
+  async function openSession(sessionKey: string): Promise<void> {
+    const normalizedSessionKey = sessionKey.trim();
+    if (normalizedSessionKey.length === 0) {
+      return;
+    }
+    const runId = ++detailRunId;
+    setState((prev) => ({
+      ...prev,
+      selectedSessionKey: normalizedSessionKey,
+      loadingDetail: true,
+      errorDetail: null,
+    }));
+    try {
+      const result = await ws.requestDynamic(
+        "transcript.get",
+        { session_key: normalizedSessionKey },
+        WsTranscriptGetResultSchema,
+      );
+      if (runId !== detailRunId) {
+        return;
+      }
+      setState((prev) => ({
+        ...prev,
+        selectedSessionKey: normalizedSessionKey,
+        detail: toDetail(result),
+        loadingDetail: false,
+        errorDetail: null,
+      }));
+    } catch (error) {
+      if (runId !== detailRunId) {
+        return;
+      }
+      setState((prev) => ({
+        ...prev,
+        loadingDetail: false,
+        errorDetail: toOperatorCoreError("ws", "transcript.get", error),
+      }));
+    }
+  }
+
+  return {
+    ...store,
+    setAgentId(agentId) {
+      const nextAgentId = normalizeOptionalString(agentId);
+      setState((prev) =>
+        prev.agentId === nextAgentId
+          ? prev
+          : {
+              ...prev,
+              agentId: nextAgentId,
+              selectedSessionKey: null,
+              detail: null,
+              errorDetail: null,
+            },
+      );
+    },
+    setChannel(channel) {
+      const nextChannel = normalizeOptionalString(channel);
+      setState((prev) =>
+        prev.channel === nextChannel
+          ? prev
+          : {
+              ...prev,
+              channel: nextChannel,
+              selectedSessionKey: null,
+              detail: null,
+              errorDetail: null,
+            },
+      );
+    },
+    setActiveOnly(activeOnly) {
+      setState((prev) =>
+        prev.activeOnly === activeOnly
+          ? prev
+          : {
+              ...prev,
+              activeOnly,
+              selectedSessionKey: null,
+              detail: null,
+              errorDetail: null,
+            },
+      );
+    },
+    setArchived(archived) {
+      setState((prev) =>
+        prev.archived === archived
+          ? prev
+          : {
+              ...prev,
+              archived,
+              selectedSessionKey: null,
+              detail: null,
+              errorDetail: null,
+            },
+      );
+    },
+    refresh,
+    loadMore,
+    openSession,
+    clearDetail() {
+      setState((prev) => ({
+        ...prev,
+        selectedSessionKey: null,
+        detail: null,
+        errorDetail: null,
+      }));
+    },
+  };
+}

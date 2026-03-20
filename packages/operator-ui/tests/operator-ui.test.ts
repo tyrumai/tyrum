@@ -11,7 +11,7 @@ import { registerApprovalsTests } from "./operator-ui.approvals-test-support.js"
 import { registerPairingAdminAccessTests } from "./operator-ui.pairing-admin-access-test-support.js";
 import { registerPairingTests } from "./operator-ui.pairing-test-support.js";
 import { registerPairingNodeInventoryTests } from "./operator-ui.pairing-nodes-test-support.js";
-import { registerAgentRunsGeneralTests } from "./operator-ui.agent-runs-general-test-support.js";
+import { registerAgentTranscriptsGeneralTests } from "./operator-ui.agent-runs-general-test-support.js";
 import { registerElevatedModeTests } from "./operator-ui.elevated-mode-test-support.js";
 import { registerElevatedModePersistenceTests } from "./operator-ui.elevated-mode-persistence-test-support.js";
 import { registerElevatedModeAuthTests } from "./operator-ui.elevated-mode-auth-test-support.js";
@@ -37,7 +37,7 @@ describe("operator-ui", () => {
   registerPairingAdminAccessTests();
   registerPairingTests();
   registerPairingNodeInventoryTests();
-  registerAgentRunsGeneralTests();
+  registerAgentTranscriptsGeneralTests();
   registerElevatedModeTests();
   registerElevatedModePersistenceTests();
   registerElevatedModeAuthTests();

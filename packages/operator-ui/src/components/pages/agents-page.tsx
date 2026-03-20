@@ -27,9 +27,8 @@ import {
 import { AgentsPageCreateWizard } from "./agents-page-create-wizard.js";
 import { AgentIdentityPanel } from "./agents-page-identity.js";
 import { AgentsPageEditor } from "./agents-page-editor.js";
-import { RunsPage } from "./runs-page.js";
 import { useReconnectScrollArea, useReconnectTabState } from "../../reconnect-ui-state.js";
-type AgentsPageTab = "identity" | "editor" | "runs";
+type AgentsPageTab = "identity" | "editor";
 
 function trimAgentKey(value: string): string {
   const trimmed = value.trim();
@@ -78,7 +77,13 @@ function selectInitialAgentKey(input: {
   );
 }
 
-export function AgentsPage({ core }: { core: OperatorCore }) {
+export function AgentsPage({
+  core,
+  onNavigate,
+}: {
+  core: OperatorCore;
+  onNavigate?: (id: string) => void;
+}) {
   const connection = useOperatorStore(core.connectionStore);
   const agentStatus = useOperatorStore(core.agentStatusStore);
   const runs = useOperatorStore(core.runsStore);
@@ -364,6 +369,25 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
               <Button
                 type="button"
                 size="sm"
+                variant="outline"
+                data-testid="agents-open-transcripts"
+                disabled={!isConnected || !selectedAgentOption || !onNavigate}
+                onClick={() => {
+                  if (!selectedAgentOption || !onNavigate) {
+                    return;
+                  }
+                  core.transcriptStore.setAgentId(selectedAgentOption.agentKey);
+                  core.transcriptStore.setChannel(null);
+                  core.transcriptStore.setArchived(false);
+                  core.transcriptStore.setActiveOnly(false);
+                  onNavigate("transcripts");
+                }}
+              >
+                View transcripts
+              </Button>
+              <Button
+                type="button"
+                size="sm"
                 variant="danger"
                 data-testid="agents-delete"
                 disabled={!isConnected || !selectedAgentOption?.canDelete}
@@ -413,9 +437,6 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
                     </TabsTrigger>
                     <TabsTrigger value="editor" data-testid="agents-tab-editor">
                       Editor
-                    </TabsTrigger>
-                    <TabsTrigger value="runs" data-testid="agents-tab-runs">
-                      Runs
                     </TabsTrigger>
                   </TabsList>
 
@@ -469,10 +490,6 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
                         </CardContent>
                       </Card>
                     )}
-                  </TabsContent>
-
-                  <TabsContent value="runs">
-                    <RunsPage core={core} agentId={selectedAgentKey} embedded />
                   </TabsContent>
                 </Tabs>
               </div>

@@ -136,6 +136,8 @@ export { WorkScope, WorkItemId, WorkItemKind, WorkItemState, WorkItemFingerprint
 // prettier-ignore
 export { SubagentId, SubagentStatus, SubagentSessionKey, SubagentDescriptor, Subagent } from "./subagent.js";
 // prettier-ignore
+export { TranscriptSessionSummary, TranscriptMessageEvent, TranscriptRunEvent, TranscriptApprovalEvent, TranscriptSubagentEvent, TranscriptTimelineEvent, WsTranscriptListPayload, WsTranscriptListRequest, WsTranscriptListResult, WsTranscriptListResponseOkEnvelope, WsTranscriptListResponseErrEnvelope, WsTranscriptGetPayload, WsTranscriptGetRequest, WsTranscriptGetResult, WsTranscriptGetResponseOkEnvelope, WsTranscriptGetResponseErrEnvelope } from "./protocol/transcript.js";
+// prettier-ignore
 export { WorkClarificationId, WorkClarificationStatus, WorkClarification } from "./work-clarifications.js";
 // prettier-ignore
 export { WorkArtifactId, WorkArtifactKind, WorkArtifact } from "./work-artifacts.js";

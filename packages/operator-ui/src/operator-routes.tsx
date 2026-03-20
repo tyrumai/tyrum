@@ -1,4 +1,4 @@
-import type { ExecutionRun, OperatorCore } from "@tyrum/operator-app";
+import type { OperatorCore } from "@tyrum/operator-app";
 import type { LucideIcon } from "lucide-react";
 import {
   Bot,
@@ -6,12 +6,12 @@ import {
   Boxes,
   Brain,
   CalendarClock,
+  FileText,
   Globe,
   LayoutGrid,
   Link2,
   MessageSquare,
   Monitor,
-  Play,
   Settings,
   ShieldCheck,
   Smartphone,
@@ -44,6 +44,10 @@ const ChatPage = lazyNamed<{ core: OperatorCore }>(
   () => import("./components/pages/chat-page-ai-sdk.js"),
   "AiSdkChatPage",
 );
+const TranscriptPage = lazyNamed<{ core: OperatorCore }>(
+  () => import("./components/pages/transcripts-page.js"),
+  "TranscriptsPage",
+);
 const ApprovalsPage = lazyNamed<{ core: OperatorCore }>(
   () => import("./components/pages/approvals-page.js"),
   "ApprovalsPage",
@@ -52,7 +56,7 @@ const WorkBoardPage = lazyNamed<{ core: OperatorCore }>(
   () => import("./components/pages/workboard-page.js"),
   "WorkBoardPage",
 );
-const AgentsPage = lazyNamed<{ core: OperatorCore }>(
+const AgentsPage = lazyNamed<{ core: OperatorCore; onNavigate?: (id: string) => void }>(
   () => import("./components/pages/agents-page.js"),
   "AgentsPage",
 );
@@ -68,10 +72,6 @@ const SchedulesPage = lazyNamed<{ core: OperatorCore }>(
   () => import("./components/pages/schedules-page.js"),
   "SchedulesPage",
 );
-const RunsPage = lazyNamed<{
-  core: OperatorCore;
-  statuses?: ExecutionRun["status"][];
-}>(() => import("./components/pages/runs-page.js"), "RunsPage");
 const PairingPage = lazyNamed<{ core: OperatorCore }>(
   () => import("./components/pages/pairing-page.js"),
   "PairingPage",
@@ -89,19 +89,18 @@ const NodeConfigPage = lazyNamed<{ core?: OperatorCore; onReloadPage?: () => voi
   () => import("./components/pages/node-config/node-config-page.js"),
   "NodeConfigPage",
 );
-const ACTIVE_RUN_STATUSES: ExecutionRun["status"][] = ["queued", "running", "paused"];
 const SHARED_HOST_KINDS = ["desktop", "mobile", "web"] as const satisfies readonly HostKind[];
 
 export type OperatorUiRouteId =
   | "dashboard"
   | "chat"
+  | "transcripts"
   | "approvals"
   | "workboard"
   | "agents"
   | "extensions"
   | "memory"
   | "schedules"
-  | "runs"
   | "pairing"
   | "desktop-environments"
   | "configure"
@@ -183,7 +182,16 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
     navGroup: "sidebar",
     shortcut: true,
     hostKinds: SHARED_HOST_KINDS,
-    render: ({ core }) => <AgentsPage core={core} />,
+    render: ({ core, navigate }) => <AgentsPage core={core} onNavigate={navigate} />,
+  },
+  {
+    id: "transcripts",
+    label: "Transcripts",
+    icon: FileText,
+    navGroup: "sidebar",
+    shortcut: false,
+    hostKinds: SHARED_HOST_KINDS,
+    render: ({ core }) => <TranscriptPage core={core} />,
   },
   {
     id: "extensions",
@@ -211,15 +219,6 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
     shortcut: true,
     hostKinds: SHARED_HOST_KINDS,
     render: ({ core }) => <SchedulesPage core={core} />,
-  },
-  {
-    id: "runs",
-    label: "Runs",
-    icon: Play,
-    navGroup: "none",
-    shortcut: false,
-    hostKinds: SHARED_HOST_KINDS,
-    render: ({ core }) => <RunsPage core={core} statuses={ACTIVE_RUN_STATUSES} />,
   },
   {
     id: "pairing",

@@ -7,6 +7,7 @@ const {
   handleNodeMessageMock,
   handleResponseMessageMock,
   handleSessionMessageMock,
+  handleTranscriptMessageMock,
 } = vi.hoisted(() => ({
   handleApprovalMessageMock: vi.fn(async (_client: unknown, msg: unknown) => {
     const type = (msg as { type?: string }).type;
@@ -63,6 +64,17 @@ const {
       result: { mocked: "session" },
     };
   }),
+  handleTranscriptMessageMock: vi.fn(async (_client: unknown, msg: unknown) => {
+    const type = (msg as { type?: string }).type;
+    const requestId = (msg as { request_id?: string }).request_id;
+    if (type !== "transcript.list") return undefined;
+    return {
+      request_id: requestId ?? "missing",
+      type,
+      ok: true as const,
+      result: { mocked: "transcript" },
+    };
+  }),
 }));
 
 vi.mock("../../src/ws/protocol/approval-handlers.js", () => {
@@ -85,6 +97,10 @@ vi.mock("../../src/ws/protocol/session-handlers.js", () => {
   return { handleSessionMessage: handleSessionMessageMock };
 });
 
+vi.mock("../../src/ws/protocol/transcript-handlers.js", () => {
+  return { handleTranscriptMessage: handleTranscriptMessageMock };
+});
+
 describe("remaining WS handler extraction", () => {
   afterEach(() => {
     handleApprovalMessageMock.mockClear();
@@ -92,6 +108,7 @@ describe("remaining WS handler extraction", () => {
     handleNodeMessageMock.mockClear();
     handleResponseMessageMock.mockClear();
     handleSessionMessageMock.mockClear();
+    handleTranscriptMessageMock.mockClear();
     vi.resetModules();
     vi.restoreAllMocks();
   });
@@ -167,6 +184,28 @@ describe("remaining WS handler extraction", () => {
     });
   });
 
+  it("routes transcript requests through transcript-handlers", async () => {
+    const client = createAdminWsClient();
+    const deps = {};
+    const raw = serializeWsRequest({ type: "transcript.list" });
+
+    const { handleClientMessage } = await import("../../src/ws/protocol/handler.js");
+    const res = await handleClientMessage(client, raw, deps);
+
+    expect(handleTranscriptMessageMock).toHaveBeenCalledTimes(1);
+    expect(handleTranscriptMessageMock).toHaveBeenCalledWith(
+      client,
+      expect.objectContaining({ request_id: "req-1", type: "transcript.list" }),
+      deps,
+    );
+    expect(res).toEqual({
+      request_id: "req-1",
+      type: "transcript.list",
+      ok: true,
+      result: { mocked: "transcript" },
+    });
+  });
+
   it("routes command/workflow control-plane requests through control-plane-handlers", async () => {
     const client = createAdminWsClient();
     const deps = {};
@@ -208,6 +247,7 @@ describe("remaining WS handler extraction", () => {
     expect(handleApprovalMessageMock).not.toHaveBeenCalled();
     expect(handleNodeMessageMock).not.toHaveBeenCalled();
     expect(handleSessionMessageMock).not.toHaveBeenCalled();
+    expect(handleTranscriptMessageMock).not.toHaveBeenCalled();
     expect(res).toMatchObject({
       request_id: "req-1",
       type: "command.execute",

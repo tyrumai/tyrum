@@ -135,27 +135,28 @@ function registerDashboardTests(): void {
     container.remove();
   });
 
-  it("navigates to active runs when clicking the active runs card", async () => {
+  it("navigates to active transcripts when clicking the active runs card", async () => {
     const ws = new FakeWsClient();
-    ws.runList.mockResolvedValueOnce({
-      runs: [
+    ws.transcriptList.mockResolvedValueOnce({
+      sessions: [
         {
-          run: {
-            run_id: "11111111-1111-1111-1111-111111111111",
-            job_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
-            key: "agent:default:main",
-            lane: "main",
-            status: "running",
-            attempt: 1,
-            created_at: "2026-01-01T00:00:00.000Z",
-            started_at: "2026-01-01T00:00:00.000Z",
-            finished_at: null,
-          },
-          agent_key: "default",
+          session_id: "session-root-1-id",
+          session_key: "session-root-1",
+          agent_id: "default",
+          channel: "ui",
+          thread_id: "thread-root-1",
+          title: "Default Agent session",
+          message_count: 2,
+          updated_at: "2026-01-01T00:01:00.000Z",
+          created_at: "2026-01-01T00:00:00.000Z",
+          archived: false,
+          latest_run_id: "11111111-1111-1111-1111-111111111111",
+          latest_run_status: "running",
+          has_active_run: true,
+          pending_approval_count: 0,
         },
       ],
-      steps: [],
-      attempts: [],
+      next_cursor: null,
     });
     const { http } = createFakeHttpClient();
     const core = createOperatorCore({
@@ -194,9 +195,8 @@ function registerDashboardTests(): void {
       await Promise.resolve();
     });
 
-    expect(
-      container.querySelector('[data-testid="run-status-11111111-1111-1111-1111-111111111111"]'),
-    ).not.toBeNull();
+    expect(container.querySelector('[data-testid="transcripts-page"]')).not.toBeNull();
+    expect(container.textContent).toContain("Default Agent session");
 
     act(() => {
       root?.unmount();

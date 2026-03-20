@@ -25,6 +25,7 @@ function messageContainerClassName(role: UIMessage["role"]): string {
 export function MessageCard({
   approvalsById,
   core,
+  interactiveApprovals = true,
   message,
   onResolveApproval,
   renderMode,
@@ -32,6 +33,7 @@ export function MessageCard({
 }: {
   approvalsById: Record<string, Approval>;
   core?: OperatorCore;
+  interactiveApprovals?: boolean;
   message: UIMessage;
   onResolveApproval: (input: ResolveApprovalInput) => void;
   renderMode: "markdown" | "text";
@@ -73,6 +75,7 @@ export function MessageCard({
       <MessageParts
         approvalsById={approvalsById}
         core={core}
+        interactiveApprovals={interactiveApprovals}
         message={message}
         onResolveApproval={onResolveApproval}
         renderMode={renderMode}

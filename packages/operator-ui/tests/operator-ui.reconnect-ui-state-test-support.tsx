@@ -284,12 +284,12 @@ export function registerReconnectUiStateTests(): void {
       });
       await flush();
 
-      const runsTab = await waitForSelector<HTMLButtonElement>(
+      const editorTab = await waitForSelector<HTMLButtonElement>(
         container,
-        '[data-testid="agents-tab-runs"]',
+        '[data-testid="agents-tab-editor"]',
       );
       await act(async () => {
-        runsTab.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
+        editorTab.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
         await Promise.resolve();
       });
 
@@ -313,7 +313,7 @@ export function registerReconnectUiStateTests(): void {
 
       await waitForSelector<HTMLElement>(
         container,
-        '[data-testid="agents-tab-runs"][data-state="active"]',
+        '[data-testid="agents-tab-editor"][data-state="active"]',
       );
       const restoredViewport = await waitForSelector<HTMLElement>(
         container,

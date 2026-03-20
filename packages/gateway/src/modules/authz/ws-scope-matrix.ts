@@ -31,6 +31,10 @@ export function resolveWsRequestRequiredScopes(type: string): string[] | null {
     case "chat.session.reconnect": {
       return ["operator.read"];
     }
+    case "transcript.list":
+    case "transcript.get": {
+      return ["operator.read"];
+    }
     case "workflow.run":
     case "workflow.resume":
     case "workflow.cancel": {

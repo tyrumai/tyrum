@@ -14,6 +14,7 @@ import type { DesktopEnvironmentsStore } from "./stores/desktop-environments-sto
 import type { PairingStore } from "./stores/pairing-store.js";
 import type { RunsStore } from "./stores/runs-store.js";
 import type { StatusStore } from "./stores/status-store.js";
+import type { TranscriptStore } from "./stores/transcript-store.js";
 import type { WorkboardStore } from "./stores/workboard-store.js";
 import type { ExternalStore } from "./store.js";
 
@@ -93,6 +94,7 @@ export interface OperatorCore {
   runsStore: RunsStore;
   pairingStore: PairingStore;
   statusStore: StatusStore;
+  transcriptStore: TranscriptStore;
   workboardStore: WorkboardStore;
   agentStatusStore: AgentStatusStore;
   desktopEnvironmentHostsStore: DesktopEnvironmentHostsStore;

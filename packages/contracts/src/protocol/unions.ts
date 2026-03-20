@@ -89,6 +89,7 @@ import {
   WsSubagentSpawnRequest,
   WsSubagentUpdatedEvent,
 } from "./subagent.js";
+import { WsTranscriptGetRequest, WsTranscriptListRequest } from "./transcript.js";
 import { WsResponse } from "./unions-response.js";
 import {
   WsWorkflowCancelRequest,
@@ -165,6 +166,8 @@ export const WsRequest = z.discriminatedUnion("type", [
   WsApprovalListRequest,
   WsApprovalResolveRequest,
   WsSubagentSpawnRequest,
+  WsTranscriptListRequest,
+  WsTranscriptGetRequest,
   WsSubagentListRequest,
   WsSubagentGetRequest,
   WsSubagentSendRequest,
