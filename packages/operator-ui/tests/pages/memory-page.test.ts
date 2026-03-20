@@ -3,6 +3,7 @@
 import type { MemoryItem, MemoryTombstone } from "@tyrum/contracts";
 import React, { act } from "react";
 import type { OperatorCore } from "../../../operator-app/src/index.js";
+import { toast } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryPage } from "../../src/components/pages/memory-page.js";
 import { cleanupTestRoot, click, renderIntoDocument, setNativeValue } from "../test-utils.js";
@@ -298,6 +299,74 @@ describe("MemoryPage", () => {
         expect(testRoot.container.textContent).not.toContain(item.title ?? "");
       });
     } finally {
+      cleanupTestRoot(testRoot);
+    }
+  });
+
+  it("shows a single toast when deleting a memory item fails", async () => {
+    const item = createNoteItem("550e8400-e29b-41d4-a716-446655440011", "Broken delete");
+    const deleteMemoryItem = vi.fn(async () => {
+      throw new Error("delete failed");
+    });
+    const toastError = vi.spyOn(toast, "error").mockImplementation(() => "");
+
+    adminHttpClient = {
+      agentList: {
+        get: vi.fn(async () => ({ agents: [] })),
+      },
+      memory: {
+        list: vi.fn(async () => ({ items: [item] })),
+        listTombstones: vi.fn(async () => ({ tombstones: [] })),
+        search: vi.fn(async () => ({ v: 1 as const, hits: [] })),
+        getById: vi.fn(async () => ({ item })),
+      },
+    };
+    mutationHttpClient = {
+      memory: {
+        delete: deleteMemoryItem,
+      },
+    };
+    canMutate = true;
+
+    const testRoot = renderIntoDocument(
+      React.createElement(MemoryPage, { core: {} as OperatorCore }),
+    );
+
+    try {
+      await flushPage();
+
+      const deleteButton = testRoot.container.querySelector<HTMLButtonElement>(
+        'button[title="Delete memory item"]',
+      );
+      expect(deleteButton).not.toBeNull();
+
+      await act(async () => {
+        click(deleteButton!);
+        await Promise.resolve();
+      });
+
+      await act(async () => {
+        document.body
+          .querySelector<HTMLElement>('[data-testid="confirm-danger-checkbox"]')
+          ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await Promise.resolve();
+      });
+
+      await act(async () => {
+        click(
+          document.body.querySelector<HTMLButtonElement>('[data-testid="confirm-danger-confirm"]')!,
+        );
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(toastError).toHaveBeenCalledWith("Action failed", {
+        description: "delete failed",
+      });
+      expect(testRoot.container.textContent).not.toContain("Failed to delete memory item");
+      expect(document.body.textContent).toContain("Delete memory item");
+    } finally {
+      toastError.mockRestore();
       cleanupTestRoot(testRoot);
     }
   });

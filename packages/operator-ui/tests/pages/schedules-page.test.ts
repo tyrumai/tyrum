@@ -3,6 +3,7 @@
 import type { OperatorCore } from "@tyrum/operator-app";
 import type { ScheduleRecord } from "@tyrum/contracts";
 import React, { act } from "react";
+import { toast } from "sonner";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SchedulesPage } from "../../src/components/pages/schedules-page.js";
 import { click, cleanupTestRoot, renderIntoDocument, setNativeValue } from "../test-utils.js";
@@ -194,7 +195,8 @@ describe("SchedulesPage", () => {
     }
   });
 
-  it("renders a page alert when deleting a schedule fails", async () => {
+  it("shows a single toast when deleting a schedule fails", async () => {
+    const toastError = vi.spyOn(toast, "error").mockImplementation(() => "");
     schedulesApi.remove.mockRejectedValueOnce(new Error("delete failed"));
 
     const testRoot = renderIntoDocument(React.createElement(SchedulesPage, { core: createCore() }));
@@ -208,9 +210,13 @@ describe("SchedulesPage", () => {
       await clickAndFlush(getByTestId<HTMLButtonElement>(document.body, "confirm-danger-confirm"));
       await flushPage();
 
-      expect(testRoot.container.textContent).toContain("Schedule deletion failed");
-      expect(testRoot.container.textContent).toContain("delete failed");
+      expect(toastError).toHaveBeenCalledWith("Action failed", {
+        description: "delete failed",
+      });
+      expect(testRoot.container.textContent).not.toContain("Schedule deletion failed");
+      expect(document.body.textContent).toContain("Delete schedule");
     } finally {
+      toastError.mockRestore();
       cleanupTestRoot(testRoot);
     }
   });

@@ -176,15 +176,6 @@ export function SchedulesPage({ core }: { core: OperatorCore }) {
           onDismiss={() => toggleAction.reset()}
         />
       ) : null}
-      {deleteAction.state.status === "error" ? (
-        <Alert
-          variant="error"
-          title="Schedule deletion failed"
-          description={formatErrorMessage(deleteAction.state.error)}
-          onDismiss={() => deleteAction.reset()}
-        />
-      ) : null}
-
       {/* Schedule list */}
       {loading && schedules.length === 0 ? (
         <Card>

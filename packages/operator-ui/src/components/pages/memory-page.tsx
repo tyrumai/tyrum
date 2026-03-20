@@ -469,17 +469,6 @@ export function MemoryPage({ core }: { core: OperatorCore }) {
         </TabsContent>
       </Tabs>
 
-      {deleteAction.state.status === "error" ? (
-        <Alert
-          variant="error"
-          title="Failed to delete memory item"
-          description={formatErrorMessage(deleteAction.state.error)}
-          onDismiss={() => {
-            deleteAction.reset();
-          }}
-        />
-      ) : null}
-
       <ConfirmDangerDialog
         open={deleteTarget !== null}
         onOpenChange={(open) => {
