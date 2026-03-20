@@ -1,5 +1,8 @@
 import { isAbsolute, relative, resolve } from "node:path";
-import type { McpServerSpec as McpServerSpecT } from "@tyrum/contracts";
+import type {
+  AgentSecretReference as AgentSecretReferenceT,
+  McpServerSpec as McpServerSpecT,
+} from "@tyrum/contracts";
 import type { NodeDispatchService, NodeInventoryService } from "@tyrum/runtime-node-control";
 import type { ArtifactStore } from "../artifact/store.js";
 import { requireTenantIdValue } from "../identity/scope.js";
@@ -14,6 +17,7 @@ import type { LocationService } from "../location/service.js";
 import { executeCoreTool, executeMcpTool } from "./tool-executor-core-tools.js";
 import { executeLocationPlaceTool } from "./tool-executor-location-tools.js";
 import { executeDedicatedNodeTool } from "./tool-executor-dedicated-node-tools.js";
+import { executeSecretClipboardTool } from "./tool-executor-secret-tools.js";
 import {
   executeDedicatedDesktopTool,
   executeNodeDispatchTool,
@@ -72,6 +76,7 @@ export class ToolExecutor {
     private readonly workboardBroadcastDeps?: WorkboardBroadcastDeps,
     private readonly artifactDescribeRuntime?: ArtifactDescribeToolRuntime,
     private readonly locationService?: LocationService,
+    private readonly agentSecretRefs: readonly AgentSecretReferenceT[] = [],
   ) {}
 
   private workspaceLeaseOwner(toolCallId: string): string {
@@ -200,6 +205,26 @@ export class ToolExecutor {
     );
     if (dedicatedNodeResult) {
       return dedicatedNodeResult;
+    }
+    const secretClipboardResult = await executeSecretClipboardTool(
+      {
+        workspaceLease: this.workspaceLease,
+        nodeDispatchService: this.nodeDispatchService,
+        nodeInventoryService: this.nodeInventoryService,
+        inspectionService: this.nodeCapabilityInspectionService,
+        connectionManager: this.connectionManager,
+        connectionDirectory: this.connectionDirectory,
+        artifactStore: this.artifactStore,
+        secretProvider: this.secretProvider,
+        agentSecretRefs: this.agentSecretRefs,
+      },
+      toolCallId,
+      args,
+      audit,
+    );
+    if (secretClipboardResult) {
+      this.redactionEngine?.registerSecrets(secretClipboardResult.secrets);
+      return this.redactResult(secretClipboardResult.result, secretClipboardResult.secrets);
     }
     if (toolId === "tool.node.dispatch") {
       if (!this.nodeDispatchService) {

@@ -238,4 +238,217 @@ describe("AgentRuntime - dedicated desktop tools", () => {
     expect(result.reply).toBe("done");
     expect(result.used_tools).toContain("tool.desktop.snapshot");
   }, 20_000);
+
+  it("executes tool.secret.copy-to-node-clipboard using an allowed secret alias without exposing plaintext", async () => {
+    const desktopClipboardDescriptor = {
+      id: "tyrum.desktop.clipboard-write",
+      version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+    } as const;
+
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
+    container = await createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+      tyrumHome: homeDir,
+    });
+
+    await seedAgentConfig(container, {
+      config: {
+        model: { model: "openai/gpt-4.1" },
+        skills: { enabled: [] },
+        mcp: {
+          enabled: [],
+          server_settings: { memory: { enabled: false } },
+        },
+        tools: { allow: ["tool.secret.copy-to-node-clipboard"] },
+        secret_refs: [
+          {
+            secret_ref_id: "sec-ref-db",
+            secret_alias: "prod-db-password",
+            allowed_tool_ids: ["tool.secret.copy-to-node-clipboard"],
+            display_name: "Production DB password",
+          },
+        ],
+        sessions: { ttl_days: 30, max_turns: 20 },
+      },
+    });
+
+    const secretProvider = {
+      resolve: vi.fn(async (handle: { handle_id: string }) =>
+        handle.handle_id === "sec-ref-db" ? "super-secret-token" : null,
+      ),
+      store: vi.fn(async () => ({
+        handle_id: "unused",
+        provider: "db" as const,
+        scope: "unused",
+        created_at: new Date().toISOString(),
+      })),
+      revoke: vi.fn(async () => true),
+      list: vi.fn(async () => [
+        {
+          handle_id: "sec-ref-db",
+          provider: "db" as const,
+          scope: "gateway:secret:db",
+          created_at: new Date().toISOString(),
+        },
+      ]),
+    };
+
+    const policyService = {
+      isEnabled: () => true,
+      isObserveOnly: () => false,
+      evaluateToolCall: vi.fn(async () => ({ decision: "allow" as const })),
+    };
+
+    const connectionManager = new ConnectionManager();
+    const taskResults = new TaskResultRegistry();
+
+    const nodeId = "node-clipboard-1";
+    const nodeWs = {
+      send: vi.fn((raw: string) => {
+        const parsed = JSON.parse(raw) as Record<string, unknown>;
+        expect(parsed["type"]).toBe("task.execute");
+
+        const payloadObj = parsed["payload"] as Record<string, unknown>;
+        const actionObj = payloadObj["action"] as Record<string, unknown>;
+        const actionArgsObj = actionObj["args"] as Record<string, unknown>;
+
+        expect(actionObj["type"]).toBe("Desktop");
+        expect(actionArgsObj["op"]).toBe("clipboard_write");
+        expect(actionArgsObj["text"]).toBe("super-secret-token");
+
+        const requestId = parsed["request_id"];
+        expect(requestId).toSatisfy(
+          (value: unknown) => typeof value === "string" && value.trim().length > 0,
+          "request_id is a non-empty string",
+        );
+
+        taskResults.resolve(requestId as string, {
+          ok: true,
+          result: { op: "clipboard_write", status: "ok" },
+        });
+      }),
+      on: vi.fn(() => undefined as never),
+      readyState: 1,
+    };
+
+    connectionManager.addClient(nodeWs as never, [desktopClipboardDescriptor], {
+      id: "conn-clipboard-1",
+      role: "node",
+      deviceId: nodeId,
+      authClaims: {
+        token_kind: "device",
+        token_id: "token-clipboard-1",
+        tenant_id: DEFAULT_TENANT_ID,
+        device_id: nodeId,
+        role: "node",
+        scopes: [],
+      },
+      protocolRev: 2,
+    });
+
+    const pending = await container.nodePairingDal.upsertOnConnect({
+      tenantId: DEFAULT_TENANT_ID,
+      nodeId,
+      pubkey: "pubkey-clipboard-1",
+      label: "node-clipboard-1",
+      capabilities: [desktopClipboardDescriptor],
+      nowIso: new Date().toISOString(),
+    });
+    await container.nodePairingDal.resolve({
+      tenantId: DEFAULT_TENANT_ID,
+      pairingId: pending.pairing_id,
+      decision: "approved",
+      trustLevel: "local",
+      capabilityAllowlist: [desktopClipboardDescriptor],
+    });
+
+    const usage = () => ({
+      inputTokens: {
+        total: 10,
+        noCache: 10,
+        cacheRead: undefined,
+        cacheWrite: undefined,
+      },
+      outputTokens: {
+        total: 5,
+        text: 5,
+        reasoning: undefined,
+      },
+    });
+
+    let callCount = 0;
+    const toolLoopModel = new MockLanguageModelV3({
+      doGenerate: async (options) => {
+        callCount += 1;
+        if (callCount === 1) {
+          return {
+            content: [
+              {
+                type: "tool-call" as const,
+                toolCallId: "tc-secret-1",
+                toolName: "tool.secret.copy-to-node-clipboard",
+                input: JSON.stringify({
+                  secret_alias: "prod-db-password",
+                }),
+              },
+            ],
+            finishReason: { unified: "tool-calls" as const, raw: undefined },
+            usage: usage(),
+            warnings: [],
+          };
+        }
+
+        const safeMessages = (() => {
+          const candidate =
+            (options as unknown as { messages?: unknown; prompt?: unknown }).messages ??
+            (options as unknown as { prompt?: unknown }).prompt ??
+            options;
+          try {
+            const json = JSON.stringify(candidate);
+            return typeof json === "string" ? json : String(candidate);
+          } catch {
+            return String(candidate);
+          }
+        })();
+
+        expect(safeMessages.includes("super-secret-token")).toBe(false);
+        expect(safeMessages.includes("prod-db-password")).toBe(true);
+
+        return {
+          content: [{ type: "text" as const, text: "done" }],
+          finishReason: { unified: "stop" as const, raw: undefined },
+          usage: usage(),
+          warnings: [],
+        };
+      },
+    });
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: toolLoopModel,
+      fetchImpl: fetch404,
+      secretProvider: secretProvider as never,
+      policyService: policyService as unknown as ConstructorParameters<
+        typeof AgentRuntime
+      >[0]["policyService"],
+      protocolDeps: {
+        connectionManager,
+        taskResults,
+        nodePairingDal: container.nodePairingDal,
+        db: container.db,
+        logger: container.logger,
+      } as never,
+    });
+
+    const result = await runtime.turn({
+      channel: "test",
+      thread_id: "thread-1",
+      message: "copy the production DB password to my clipboard",
+    });
+
+    expect(result.reply).toBe("done");
+    expect(result.used_tools).toContain("tool.secret.copy-to-node-clipboard");
+  }, 20_000);
 });

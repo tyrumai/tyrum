@@ -10,8 +10,9 @@ describe("capability catalog", () => {
   it("keeps the expected entry count and representative capability ids", () => {
     const entryIds = listCapabilityCatalogEntries().map((entry) => entry.descriptor.id);
 
-    expect(entryIds).toHaveLength(40);
+    expect(entryIds).toHaveLength(41);
     expect(entryIds).toContain("tyrum.desktop.screenshot");
+    expect(entryIds).toContain("tyrum.desktop.clipboard-write");
     expect(entryIds).toContain("tyrum.location.get");
     expect(entryIds).toContain("tyrum.browser.run-code");
     expect(entryIds).toContain("tyrum.fs.write");

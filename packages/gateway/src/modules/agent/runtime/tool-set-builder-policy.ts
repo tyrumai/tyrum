@@ -8,6 +8,10 @@ import { suggestedOverridesForToolCall } from "@tyrum/runtime-policy";
 import { hasToolResult } from "../../ai-sdk/message-utils.js";
 import { coerceRecord } from "../../util/coerce.js";
 import { LaneQueueInterruptError } from "../../lanes/queue-signal-dal.js";
+import {
+  resolveAllowedSecretReference,
+  SECRET_CLIPBOARD_TOOL_ID,
+} from "../tool-secret-definitions.js";
 import type {
   ToolExecutionContext,
   ToolCallPolicyState,
@@ -182,7 +186,7 @@ async function resolveToolCallPolicyState(input: {
     toolId: input.toolDesc.id,
     toolMatchTarget: matchTarget,
     url: resolveToolUrl(input.toolDesc.id, input.args),
-    secretScopes: await resolveSecretScopes(input.deps, input.args),
+    secretScopes: await resolveSecretScopes(input.deps, input.toolDesc.id, input.args),
     inputProvenance: input.inputProvenance,
     toolEffect: input.toolDesc.effect,
     roleAllowed,
@@ -240,9 +244,28 @@ function resolveToolUrl(toolId: string, args: unknown): string | undefined {
 
 async function resolveSecretScopes(
   deps: ToolSetBuilderDeps,
+  toolId: string,
   args: unknown,
 ): Promise<string[] | undefined> {
   const handleIds = collectSecretHandleIds(args);
+  const argsRecord = coerceRecord(args);
+  if (toolId === SECRET_CLIPBOARD_TOOL_ID && deps.secretRefs && argsRecord) {
+    const secretAlias =
+      typeof argsRecord["secret_alias"] === "string" ? argsRecord["secret_alias"] : undefined;
+    const secretRefId =
+      typeof argsRecord["secret_ref_id"] === "string" ? argsRecord["secret_ref_id"] : undefined;
+    const selector = secretAlias
+      ? { secret_alias: secretAlias }
+      : secretRefId
+        ? { secret_ref_id: secretRefId }
+        : undefined;
+    const allowedSecretRef = selector
+      ? resolveAllowedSecretReference(deps.secretRefs, SECRET_CLIPBOARD_TOOL_ID, selector)
+      : undefined;
+    if (allowedSecretRef) {
+      handleIds.push(allowedSecretRef.secret_ref_id);
+    }
+  }
   if (handleIds.length === 0 || !deps.secretProvider) {
     return undefined;
   }
