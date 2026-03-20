@@ -55,7 +55,8 @@ export function MemoryPage({ core }: { core: OperatorCore }) {
 
   // Loading state
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
+  const [itemsLoadingMore, setItemsLoadingMore] = useState(false);
+  const [tombstonesLoadingMore, setTombstonesLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshNonce, setRefreshNonce] = useState(0);
 
@@ -144,8 +145,8 @@ export function MemoryPage({ core }: { core: OperatorCore }) {
   }, [readClient, agentId, kinds, sensitivity, searchQuery, searchMode, refreshNonce]);
 
   const loadMoreItems = useCallback(async () => {
-    if (!itemsCursor || loadingMore) return;
-    setLoadingMore(true);
+    if (!itemsCursor || itemsLoadingMore) return;
+    setItemsLoadingMore(true);
     try {
       const sensitivities = sensitivity ? [sensitivity] : undefined;
       const result = await readClient.memory?.list({
@@ -161,13 +162,13 @@ export function MemoryPage({ core }: { core: OperatorCore }) {
     } catch (err) {
       setError(formatErrorMessage(err));
     } finally {
-      setLoadingMore(false);
+      setItemsLoadingMore(false);
     }
-  }, [readClient, agentId, kinds, sensitivity, itemsCursor, loadingMore]);
+  }, [readClient, agentId, kinds, sensitivity, itemsCursor, itemsLoadingMore]);
 
   const loadMoreTombstones = useCallback(async () => {
-    if (!tombstonesCursor || loadingMore) return;
-    setLoadingMore(true);
+    if (!tombstonesCursor || tombstonesLoadingMore) return;
+    setTombstonesLoadingMore(true);
     try {
       const result = await readClient.memory?.listTombstones({
         agent_id: agentId,
@@ -180,9 +181,9 @@ export function MemoryPage({ core }: { core: OperatorCore }) {
     } catch (err) {
       setError(formatErrorMessage(err));
     } finally {
-      setLoadingMore(false);
+      setTombstonesLoadingMore(false);
     }
-  }, [readClient, agentId, tombstonesCursor, loadingMore]);
+  }, [readClient, agentId, tombstonesCursor, tombstonesLoadingMore]);
 
   function handleExpandItem(key: string | null) {
     setExpandedItemId(key);
@@ -211,14 +212,23 @@ export function MemoryPage({ core }: { core: OperatorCore }) {
   }
 
   async function confirmDelete() {
-    if (!deleteTarget || !mutationClient?.memory) return;
+    const target = deleteTarget;
+    if (!target || !mutationClient?.memory) return;
     const tombstone = await deleteAction.runAndThrow(async () => {
-      const result = await mutationClient.memory!.delete(deleteTarget.memory_item_id, {
+      const result = await mutationClient.memory!.delete(target.memory_item_id, {
         reason: "Operator deletion via UI",
       });
       return result.tombstone;
     });
-    setItems((prev) => prev.filter((i) => i.memory_item_id !== deleteTarget.memory_item_id));
+    setItems((prev) => prev.filter((i) => i.memory_item_id !== target.memory_item_id));
+    setSearchHits((prev) => prev.filter((hit) => hit.memory_item_id !== target.memory_item_id));
+    setSearchItemCache((prev) => {
+      if (!(target.memory_item_id in prev)) return prev;
+      const next = { ...prev };
+      delete next[target.memory_item_id];
+      return next;
+    });
+    setExpandedItemId((prev) => (prev === target.memory_item_id ? null : prev));
     if (tombstone) {
       setTombstones((prev) => [tombstone, ...prev]);
     }
@@ -406,8 +416,8 @@ export function MemoryPage({ core }: { core: OperatorCore }) {
                   <Button
                     variant="outline"
                     size="sm"
-                    disabled={loadingMore}
-                    isLoading={loadingMore}
+                    disabled={itemsLoadingMore}
+                    isLoading={itemsLoadingMore}
                     onClick={() => {
                       void loadMoreItems();
                     }}
@@ -444,8 +454,8 @@ export function MemoryPage({ core }: { core: OperatorCore }) {
                   <Button
                     variant="outline"
                     size="sm"
-                    disabled={loadingMore}
-                    isLoading={loadingMore}
+                    disabled={tombstonesLoadingMore}
+                    isLoading={tombstonesLoadingMore}
                     onClick={() => {
                       void loadMoreTombstones();
                     }}
