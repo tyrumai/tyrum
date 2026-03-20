@@ -90,8 +90,14 @@ function wildcardHelper(toolId: string): string {
   if (toolId === "connector.send") {
     return "Use exact destinations when possible, for example `telegram:work:123`.";
   }
-  if (toolId === "tool.node.dispatch") {
-    return "Prefer narrow capability/action targets instead of broad `*` patterns.";
+  if (
+    toolId.startsWith("tool.desktop.") ||
+    toolId.startsWith("tool.browser.") ||
+    toolId === "tool.location.get" ||
+    toolId.startsWith("tool.camera.") ||
+    toolId === "tool.audio.record"
+  ) {
+    return "Prefer exact dedicated tool targets instead of broad wildcard families.";
   }
   return "Use `*` for many characters and `?` for one. Avoid broad leading wildcards when possible.";
 }

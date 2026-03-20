@@ -126,198 +126,46 @@ describe("canonicalizeToolMatchTarget", () => {
     expect(target).toBe("mcp.calendar.events_list");
   });
 
-  it("canonicalizes desktop node dispatch by capability + action + desktop op", () => {
-    const target = canonicalizeToolMatchTarget("tool.node.dispatch", {
-      capability: "tyrum.desktop.snapshot",
-      action_name: "snapshot",
-      input: { secret: "should-not-appear" },
-    });
-
-    expect(target).toBe("capability:tyrum.desktop.snapshot;action:Desktop;op:snapshot");
-  });
-
-  it("canonicalizes nested desktop args wrappers for node dispatch without leaking values", () => {
-    const target = canonicalizeToolMatchTarget("tool.node.dispatch", {
-      capability: "tyrum.desktop.snapshot",
-      action_name: "snapshot",
-      input: { secret: "should-not-appear" },
-    });
-
-    expect(target).toBe("capability:tyrum.desktop.snapshot;action:Desktop;op:snapshot");
-    expect(target).not.toContain("secret");
-  });
-
-  it("canonicalizes other desktop ops without leaking high-entropy values", () => {
-    const queryTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
-      capability: "tyrum.desktop.query",
-      action_name: "query",
-      input: { selector: { kind: "a11y", role: "button", name: "Save" } },
-    });
-    expect(queryTarget).toBe("capability:tyrum.desktop.query;action:Desktop;op:query");
-    expect(queryTarget).not.toContain("Save");
-
-    const waitForTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
-      capability: "tyrum.desktop.wait-for",
-      action_name: "wait_for",
-      input: {
-        selector: { kind: "ocr", text: "2FA code", bounds: { x: 1, y: 2, width: 3, height: 4 } },
-      },
-    });
-    expect(waitForTarget).toBe("capability:tyrum.desktop.wait-for;action:Desktop;op:wait_for");
-    expect(waitForTarget).not.toContain("2FA");
-
-    const screenshotTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
-      capability: "tyrum.desktop.screenshot",
-      action_name: "screenshot",
-      input: { display: "primary" },
-    });
-    expect(screenshotTarget).toBe("capability:tyrum.desktop.screenshot;action:Desktop;op:snapshot");
-
-    const unknownTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
-      capability: "tyrum.desktop.query",
-      action_name: "not-a-real-op",
-      input: { text: "secret" },
-    });
-    expect(unknownTarget).toBe("capability:tyrum.desktop.query;action:Desktop;op:unknown");
-    expect(unknownTarget).not.toContain("secret");
-  });
-
-  it("groups legacy desktop mouse/keyboard ops under op:act with a minimal subtype", () => {
-    const mouseTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
-      capability: "tyrum.desktop.mouse",
-      action_name: "mouse",
-      input: { action: "click", x: 1, y: 2 },
-    });
-    expect(mouseTarget).toBe("capability:tyrum.desktop.mouse;action:Desktop;op:act;act:mouse");
-
-    const keyboardTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
-      capability: "tyrum.desktop.keyboard",
-      action_name: "keyboard",
-      input: { action: "type", text: "secret" },
-    });
-    expect(keyboardTarget).toBe(
-      "capability:tyrum.desktop.keyboard;action:Desktop;op:act;act:keyboard",
-    );
-    expect(keyboardTarget).not.toContain("secret");
-
-    const actTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
-      capability: "tyrum.desktop.act",
-      action_name: "act",
-      input: {
-        target: { kind: "ref", ref: "pixel:1,2" },
+  it("canonicalizes dedicated desktop routed tools to the exact dedicated tool id", () => {
+    expect(
+      canonicalizeToolMatchTarget("tool.desktop.snapshot", {
+        node_id: "node-1",
+        display: "all",
+      }),
+    ).toBe("tool.desktop.snapshot");
+    expect(
+      canonicalizeToolMatchTarget("tool.desktop.act", {
+        node_id: "node-1",
+        target: { kind: "a11y", role: "button", name: "Save" },
         action: { kind: "click" },
-      },
-    });
-    expect(actTarget).toBe("capability:tyrum.desktop.act;action:Desktop;op:act;act:ui");
-    expect(actTarget).not.toContain("pixel:");
+      }),
+    ).toBe("tool.desktop.act");
   });
 
-  it("canonicalizes browser node dispatch by capability + action + browser op", () => {
-    const geoTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
-      capability: "tyrum.browser.geolocation.get",
-      action_name: "get",
-      input: { enable_high_accuracy: true },
-    });
-    expect(geoTarget).toBe("capability:tyrum.browser.geolocation.get;action:Browser;op:get");
-    expect(geoTarget).not.toContain("enable_high_accuracy");
-
-    const unknownTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
-      capability: "tyrum.browser.camera.capture-photo",
-      action_name: "not-a-real-op",
-      input: { secret: "should-not-appear" },
-    });
-    expect(unknownTarget).toBe(
-      "capability:tyrum.browser.camera.capture-photo;action:Browser;op:unknown",
-    );
-    expect(unknownTarget).not.toContain("secret");
-  });
-
-  it("canonicalizes iOS and Android node dispatch by capability + action + mobile op", () => {
-    const iosTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
-      capability: "tyrum.ios.location.get-current",
-      action_name: "get",
-      input: { enable_high_accuracy: true },
-    });
-    expect(iosTarget).toBe("capability:tyrum.ios.location.get-current;action:IOS;op:get");
-    expect(iosTarget).not.toContain("enable_high_accuracy");
-
-    const androidTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
-      capability: "tyrum.android.audio.record-clip",
-      action_name: "record",
-      input: { duration_ms: 5000 },
-    });
-    expect(androidTarget).toBe(
-      "capability:tyrum.android.audio.record-clip;action:Android;op:record",
-    );
-    expect(androidTarget).not.toContain("5000");
-
-    const unknownTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
-      capability: "tyrum.ios.camera.capture-photo",
-      action_name: "not-a-real-op",
-      input: { secret: "should-not-appear" },
-    });
-    expect(unknownTarget).toBe("capability:tyrum.ios.camera.capture-photo;action:IOS;op:unknown");
-    expect(unknownTarget).not.toContain("secret");
-  });
-
-  it("defaults unknown mobile-like capabilities to IOS for location/audio fallback inference", () => {
-    const locationTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
-      capability: "tyrum.mobile-preview",
-      action_name: "get",
-      input: { enable_high_accuracy: true },
-    });
-    expect(locationTarget).toBe("capability:tyrum.mobile-preview;action:IOS;op:get");
-
-    const audioTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
-      capability: "",
-      action_name: "record",
-      input: { duration_ms: 5000 },
-    });
-    expect(audioTarget).toBe("capability:;action:IOS;op:record");
-  });
-
-  it("uses capability hints and input shape to disambiguate capture_photo for unknown capabilities", () => {
-    const hintedMobileTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
-      capability: "acme.mobile-camera",
-      action_name: "capture_photo",
-      input: { format: "jpeg" },
-    });
-    expect(hintedMobileTarget).toBe("capability:acme.mobile-camera;action:IOS;op:capture_photo");
-
-    const androidHintTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
-      capability: "vendor.android-edge",
-      action_name: "capture_photo",
-      input: { format: "jpeg" },
-    });
-    expect(androidHintTarget).toBe(
-      "capability:vendor.android-edge;action:Android;op:capture_photo",
-    );
-
-    const mobileInputTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
-      capability: "custom.camera-node",
-      action_name: "capture_photo",
-      input: { camera: "rear", format: "jpeg" },
-    });
-    expect(mobileInputTarget).toBe("capability:custom.camera-node;action:IOS;op:capture_photo");
-
-    const browserInputTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
-      capability: "custom.camera-node",
-      action_name: "capture_photo",
-      input: { facing_mode: "environment", format: "jpeg" },
-    });
-    expect(browserInputTarget).toBe(
-      "capability:custom.camera-node;action:Browser;op:capture_photo",
-    );
-  });
-
-  it("does not treat incidental ios substrings inside capability words as mobile hints", () => {
-    const target = canonicalizeToolMatchTarget("tool.node.dispatch", {
-      capability: "acme.studios-camera",
-      action_name: "capture_photo",
-      input: { format: "jpeg" },
-    });
-
-    expect(target).toBe("capability:acme.studios-camera;action:Browser;op:capture_photo");
+  it("canonicalizes dedicated browser and sensor routed tools to their exact dedicated tool ids", () => {
+    expect(
+      canonicalizeToolMatchTarget("tool.browser.navigate", {
+        node_id: "node-1",
+        url: "https://example.com",
+      }),
+    ).toBe("tool.browser.navigate");
+    expect(
+      canonicalizeToolMatchTarget("tool.location.get", {
+        enable_high_accuracy: true,
+      }),
+    ).toBe("tool.location.get");
+    expect(
+      canonicalizeToolMatchTarget("tool.camera.capture-photo", {
+        node_id: "node-1",
+        facing_mode: "environment",
+      }),
+    ).toBe("tool.camera.capture-photo");
+    expect(
+      canonicalizeToolMatchTarget("tool.audio.record", {
+        node_id: "node-1",
+        duration_ms: 5000,
+      }),
+    ).toBe("tool.audio.record");
   });
 
   it("canonicalizes heartbeat schedule creation using normalized schedule semantics", () => {

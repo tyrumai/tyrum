@@ -183,10 +183,11 @@ function hasToJsonSchema(value: unknown): value is ZodTypeAny & {
 }
 
 async function buildGeneratedContractState(): Promise<GeneratedContractState> {
-  const [contractsModule, contractsPackageRaw] = await Promise.all([
+  const [contractsImport, contractsPackageRaw] = await Promise.all([
     import("@tyrum/contracts"),
     readFile(resolveContractsPackageJsonPath(), "utf-8").catch(() => undefined),
   ]);
+  const contractsModule: Record<string, unknown> = contractsImport;
 
   const generatedAt = new Date().toISOString();
   const schemasByFile = new Map<string, unknown>();

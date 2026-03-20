@@ -19,10 +19,6 @@ export {
   formatMoney,
   overallDecision,
 } from "./engine.js";
-export {
-  expandLegacyNodeDispatchOverridePatterns,
-  hasLegacyUmbrellaNodeDispatchPattern,
-} from "./node-dispatch-override-patterns.js";
 export { isSafeSuggestedOverridePattern } from "./override-guardrails.js";
 export type {
   PolicyBundleStore,

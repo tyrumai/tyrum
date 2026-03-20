@@ -60,27 +60,27 @@ describe("PolicyOverrideDal", () => {
     });
   });
 
-  it("normalizes legacy node dispatch capability patterns on create and read", async () => {
+  it("preserves dedicated routed tool override patterns on create and read", async () => {
     db = openTestSqliteDb();
     const dal = new PolicyOverrideDal(db);
 
     const created = await dal.create({
       tenantId: DEFAULT_TENANT_ID,
       agentId: DEFAULT_AGENT_ID,
-      toolId: "tool.node.dispatch",
-      pattern: "action:invoke;capability:tyrum.browser;mode:allow",
+      toolId: "tool.desktop.act",
+      pattern: "tool.desktop.act",
     });
 
-    expect(created.pattern).toBe("action:invoke;capability:tyrum.browser.*;mode:allow");
+    expect(created.pattern).toBe("tool.desktop.act");
 
     const listed = await dal.listActiveForTool({
       tenantId: DEFAULT_TENANT_ID,
       agentId: DEFAULT_AGENT_ID,
-      toolId: "tool.node.dispatch",
+      toolId: "tool.desktop.act",
     });
 
     expect(listed).toHaveLength(1);
-    expect(listed[0]?.pattern).toBe("action:invoke;capability:tyrum.browser.*;mode:allow");
+    expect(listed[0]?.pattern).toBe("tool.desktop.act");
   });
 
   it("filters list results by status", async () => {

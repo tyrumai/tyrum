@@ -1,4 +1,3 @@
-import { clientCapabilityFromDescriptorId } from "@tyrum/contracts";
 import type { Approval, ExecutionAttempt, RunsState } from "@tyrum/operator-app";
 import { parseAgentIdFromKey } from "../../lib/status-session-lanes.js";
 import { isRecord } from "../../utils/is-record.js";
@@ -26,21 +25,19 @@ export type DesktopApprovalSummary = {
 
 export function describeDesktopApprovalContext(context: unknown): DesktopApprovalSummary | null {
   const ctx = isRecord(context) ? context : null;
-  if (!ctx || ctx["source"] !== "agent-tool-execution" || ctx["tool_id"] !== "tool.node.dispatch") {
+  if (!ctx || ctx["source"] !== "agent-tool-execution") {
     return null;
   }
 
-  const args = isRecord(ctx["args"]) ? (ctx["args"] as Record<string, unknown>) : null;
-  if (!args) return null;
-  const capability = typeof args["capability"] === "string" ? args["capability"].trim() : undefined;
-  if (!capability || clientCapabilityFromDescriptorId(capability) !== "desktop") {
+  const toolId = typeof ctx["tool_id"] === "string" ? ctx["tool_id"].trim() : "";
+  if (!toolId.startsWith("tool.desktop.")) {
     return null;
   }
-  const op = typeof args["action_name"] === "string" ? args["action_name"].trim() : "";
+  const op = toolId.slice("tool.desktop.".length).trim();
   if (!op) return null;
 
   const summary: DesktopApprovalSummary = { op };
-  const actionArgs = isRecord(args["input"]) ? (args["input"] as Record<string, unknown>) : null;
+  const actionArgs = isRecord(ctx["args"]) ? (ctx["args"] as Record<string, unknown>) : null;
 
   if (op === "act" && actionArgs) {
     const action = isRecord(actionArgs["action"])

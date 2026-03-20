@@ -2,7 +2,19 @@ import { describe, expect, it } from "vitest";
 import { PolicyAdminService } from "@tyrum/runtime-policy";
 
 describe("PolicyAdminService", () => {
-  it("rejects legacy umbrella node dispatch override patterns", async () => {
+  it("creates dedicated routed tool overrides without generic node-dispatch validation", async () => {
+    const create = async (input: {
+      tenantId: string;
+      agentId: string;
+      toolId: string;
+      pattern: string;
+    }) => ({
+      policy_override_id: "override-1",
+      tenant_id: input.tenantId,
+      agent_id: input.agentId,
+      tool_id: input.toolId,
+      pattern: input.pattern,
+    });
     const service = new PolicyAdminService({
       policyOverrideStore: {
         async list() {
@@ -11,9 +23,7 @@ describe("PolicyAdminService", () => {
         async expireStale() {
           return [];
         },
-        async create() {
-          throw new Error("create should not be called");
-        },
+        create,
         async revoke() {
           return undefined;
         },
@@ -23,15 +33,19 @@ describe("PolicyAdminService", () => {
     const result = await service.createOverride({
       tenantId: "tenant-1",
       agentId: "agent-1",
-      toolId: "tool.node.dispatch",
-      pattern: "capability:tyrum.desktop;action:Desktop;op:act",
+      toolId: "tool.desktop.act",
+      pattern: "tool.desktop.act",
     });
 
     expect(result).toEqual({
-      ok: false,
-      code: "invalid_request",
-      message:
-        "tool.node.dispatch override patterns must use exact split descriptors or family wildcards such as 'tyrum.desktop.*'",
+      ok: true,
+      override: {
+        policy_override_id: "override-1",
+        tenant_id: "tenant-1",
+        agent_id: "agent-1",
+        tool_id: "tool.desktop.act",
+        pattern: "tool.desktop.act",
+      },
     });
   });
 });

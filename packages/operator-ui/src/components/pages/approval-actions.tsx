@@ -49,25 +49,25 @@ function describeSuggestedOverride(input: SuggestedOverride): {
   title: string;
   description: string;
 } {
-  if (input.tool_id === "tool.node.dispatch") {
-    if (input.pattern.includes(";op:act*")) {
-      return {
-        title: "Desktop act actions in this scope",
-        description: "Covers future Desktop act operations for this agent/workspace.",
-      };
-    }
-    if (input.pattern.includes(";op:query")) {
-      return {
-        title: "Desktop query actions in this scope",
-        description: "Covers read-only Desktop queries for this agent/workspace.",
-      };
-    }
-    if (input.pattern.includes(";op:snapshot")) {
-      return {
-        title: "Desktop snapshots in this scope",
-        description: "Covers Desktop screenshot or snapshot operations for this agent/workspace.",
-      };
-    }
+  if (input.tool_id === "tool.desktop.act") {
+    return {
+      title: "Desktop act actions in this scope",
+      description: "Covers future Desktop act operations for this agent/workspace.",
+    };
+  }
+
+  if (input.tool_id === "tool.desktop.query") {
+    return {
+      title: "Desktop query actions in this scope",
+      description: "Covers read-only Desktop queries for this agent/workspace.",
+    };
+  }
+
+  if (input.tool_id === "tool.desktop.snapshot" || input.tool_id === "tool.desktop.screenshot") {
+    return {
+      title: "Desktop snapshots in this scope",
+      description: "Covers Desktop screenshot or snapshot operations for this agent/workspace.",
+    };
   }
 
   if (input.tool_id === "connector.send") {
