@@ -3,6 +3,38 @@ export const DETAILED_TOOL_REGISTRY_FIXTURE = {
   tools: [
     {
       source: "builtin",
+      canonical_id: "tool.browser.navigate",
+      description: "Navigate to a URL.",
+      effect: "state_changing",
+      effective_exposure: {
+        enabled: true,
+        reason: "enabled",
+        agent_key: "default",
+      },
+      family: "node",
+      keywords: ["node", "browser", "navigate"],
+      input_schema: {
+        type: "object",
+        properties: {
+          url: {
+            type: "string",
+            description: "URL to open.",
+          },
+          node_id: {
+            type: "string",
+            description: "Optional node id to target explicitly.",
+          },
+          timeout_ms: {
+            type: "number",
+            description: "Optional dispatch timeout in milliseconds.",
+          },
+        },
+        required: ["url"],
+        additionalProperties: false,
+      },
+    },
+    {
+      source: "builtin",
       canonical_id: "read",
       description: "Read files from disk.",
       effect: "read_only",

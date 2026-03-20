@@ -12,7 +12,6 @@ import {
   GLOB_TOOL_PROMPT_METADATA,
   GREP_TOOL_PROMPT_METADATA,
   READ_TOOL_PROMPT_METADATA,
-  TOOL_NODE_INSPECT_PROMPT_METADATA,
   TOOL_NODE_LIST_PROMPT_METADATA,
   WRITE_TOOL_PROMPT_METADATA,
 } from "./tool-catalog-prompt-metadata.js";
@@ -295,76 +294,6 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
           description: "Optional lane used to resolve lane attachment.",
         },
       },
-      additionalProperties: false,
-    },
-  },
-  {
-    id: "tool.node.inspect",
-    description: "Inspect the enabled actions for a specific connected node capability.",
-    effect: "read_only",
-    keywords: ["node", "device", "inspect", "capability", "actions"],
-    ...TOOL_NODE_INSPECT_PROMPT_METADATA,
-    source: "builtin",
-    family: "node",
-    inputSchema: {
-      type: "object",
-      properties: {
-        node_id: {
-          type: "string",
-          description: "Target node id returned by tool.node.list.",
-        },
-        capability: {
-          type: "string",
-          description: "Exact capability descriptor id (example: tyrum.camera.capture-photo).",
-        },
-      },
-      required: ["node_id", "capability"],
-      additionalProperties: false,
-    },
-  },
-  {
-    id: "tool.node.dispatch",
-    description: "Dispatch a specific capability action to a connected node.",
-    effect: "state_changing",
-    keywords: ["node", "device", "screen", "automation", "dispatch"],
-    promptGuidance: [
-      "Inspect the capability first so you know the exact action_name and input shape.",
-      "Put action-specific arguments inside the input object.",
-      "Do not add the transport op field yourself; the dispatcher derives it from action_name.",
-      "Use node device metadata (type, platform, last_tyrum_interaction_at) to choose the best node for an action. Prefer nodes the user is actively using.",
-    ],
-    promptExamples: [
-      '{"node_id":"node_456","capability":"tyrum.browser.navigate","action_name":"navigate","input":{"url":"https://example.com"},"timeout_ms":30000}',
-      '{"node_id":"node_789","capability":"tyrum.location.get","action_name":"get","timeout_ms":30000}',
-    ],
-    source: "builtin",
-    family: "node",
-    inputSchema: {
-      type: "object",
-      properties: {
-        node_id: {
-          type: "string",
-          description: "Target node id returned by tool.node.list.",
-        },
-        capability: {
-          type: "string",
-          description: "Exact capability descriptor id (example: tyrum.audio.record).",
-        },
-        action_name: {
-          type: "string",
-          description: "Capability action name discovered via tool.node.inspect.",
-        },
-        input: {
-          type: "object",
-          additionalProperties: {},
-          description: "Action input object excluding the transport op field.",
-        },
-        timeout_ms: {
-          type: "number",
-          description: "Optional timeout in milliseconds (default: 30000).",
-        },
-      },
-      required: ["node_id", "capability", "action_name"],
       additionalProperties: false,
     },
   },
