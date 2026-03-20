@@ -289,4 +289,30 @@ describe("ToolExecutor secret clipboard delivery", () => {
     expect(result.error).toBeUndefined();
     expect(result.output).toContain("dispatch still works");
   });
+
+  it("returns a configuration error when the secret clipboard tool has no configured refs", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tool-executor-secret-"));
+
+    const executor = new ToolExecutor(
+      homeDir,
+      stubMcpManager(),
+      new Map(),
+      fetch,
+      undefined,
+      allowPublicDnsLookup,
+    );
+
+    const result = await executor.execute(
+      "tool.secret.copy-to-node-clipboard",
+      "call-clipboard-no-refs",
+      {
+        secret_alias: "prod-db-password",
+      },
+    );
+
+    expect(result.output).toBe("");
+    expect(result.error).toBe(
+      "no secret references configured for 'tool.secret.copy-to-node-clipboard'",
+    );
+  });
 });

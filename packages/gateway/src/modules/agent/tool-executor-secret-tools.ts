@@ -109,7 +109,10 @@ export async function executeSecretClipboardTool(
     return undefined;
   }
   if (!context.agentSecretRefs || context.agentSecretRefs.length === 0) {
-    return undefined;
+    return errorResult(
+      toolCallId,
+      `no secret references configured for '${SECRET_CLIPBOARD_TOOL_ID}'`,
+    );
   }
 
   const parsedArgs = SecretCopyToNodeClipboardArgs.safeParse(args);
