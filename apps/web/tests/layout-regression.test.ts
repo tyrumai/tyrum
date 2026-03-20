@@ -74,10 +74,9 @@ const cases: LayoutCase[] = [
     selectors: ['[data-testid="agents-content-layout"]', '[role="tabpanel"][data-state="active"]'],
   },
   {
-    name: "agents runs",
-    route: "agents",
-    clicks: ['[data-testid="agents-tab-runs"]'],
-    selectors: ['[data-testid="agents-content-layout"]', '[role="tabpanel"][data-state="active"]'],
+    name: "transcripts",
+    route: "transcripts",
+    selectors: ["[data-layout-content]", '[data-testid="transcripts-page"]'],
   },
   {
     name: "extensions",

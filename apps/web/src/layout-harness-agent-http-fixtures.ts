@@ -147,5 +147,8 @@ export function createHarnessAgentHttpFixtures(
         item: getManagedExtensionDetail(kind, key),
       }),
     },
+    modelConfig: {
+      listPresets: async () => ({ status: "ok" as const, presets: [] }),
+    },
   };
 }
