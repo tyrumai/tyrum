@@ -27,41 +27,13 @@ import {
 import { AgentsPageCreateWizard } from "./agents-page-create-wizard.js";
 import { AgentIdentityPanel } from "./agents-page-identity.js";
 import { AgentsPageEditor } from "./agents-page-editor.js";
+import { normalizeAgentOptions } from "./agent-options.shared.js";
 import { useReconnectScrollArea, useReconnectTabState } from "../../reconnect-ui-state.js";
 type AgentsPageTab = "identity" | "editor";
 
 function trimAgentKey(value: string): string {
   const trimmed = value.trim();
   return trimmed;
-}
-
-function normalizeAgentOptions(
-  input: Array<{
-    agent_key: string;
-    agent_id: string;
-    can_delete: boolean;
-    is_primary?: boolean;
-    persona?: { name?: string };
-  }>,
-): AgentOption[] {
-  const byKey = new Map<string, AgentOption>();
-  for (const agent of input) {
-    const trimmed = agent.agent_key.trim();
-    if (!trimmed) continue;
-    const normalizedAgentId = agent.agent_id.trim();
-    const displayName = agent.persona?.name?.trim() || trimmed;
-    const existing = byKey.get(trimmed);
-    if (!existing) {
-      byKey.set(trimmed, {
-        agentKey: trimmed,
-        agentId: normalizedAgentId,
-        canDelete: agent.can_delete,
-        displayName,
-        isPrimary: agent.is_primary === true,
-      });
-    }
-  }
-  return [...byKey.values()];
 }
 
 function selectInitialAgentKey(input: {
@@ -131,7 +103,13 @@ export function AgentsPage({
     setAgentsError(null);
     try {
       const response = await core.admin.agents.list();
-      const nextAgents = normalizeAgentOptions(response.agents);
+      const nextAgents = normalizeAgentOptions(response.agents, ({ agentKey, personaName, source }) => ({
+        agentKey,
+        agentId: source.agent_id.trim(),
+        displayName: personaName || agentKey,
+        canDelete: source.can_delete,
+        isPrimary: source.is_primary === true,
+      }));
       setAgentOptions(nextAgents);
       const nextSelectedAgentKey = selectInitialAgentKey({
         currentAgentKey: preferredAgentKey ?? selectedAgentKey,

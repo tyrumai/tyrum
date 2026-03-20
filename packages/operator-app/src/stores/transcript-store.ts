@@ -136,16 +136,13 @@ export function createTranscriptStore(ws: OperatorWsClient): TranscriptStore {
         return;
       }
       const flattenedSessions = flattenTranscriptSessionSummaries(result.sessions);
+      const previousSelectedSessionKey = store.getSnapshot().selectedSessionKey;
       setState((prev) => {
         const nextSelectedSessionKey =
           prev.selectedSessionKey &&
           flattenedSessions.some((session) => session.session_key === prev.selectedSessionKey)
             ? prev.selectedSessionKey
             : (flattenedSessions[0]?.session_key ?? null);
-        const selectionChanged = nextSelectedSessionKey !== prev.selectedSessionKey;
-        if (selectionChanged) {
-          invalidateDetailLoad();
-        }
         return {
           ...prev,
           sessions: flattenedSessions,
@@ -153,9 +150,14 @@ export function createTranscriptStore(ws: OperatorWsClient): TranscriptStore {
           selectedSessionKey: nextSelectedSessionKey,
           loadingList: false,
           errorList: null,
-          ...(selectionChanged ? { detail: null, errorDetail: null, loadingDetail: false } : {}),
+          ...(nextSelectedSessionKey !== prev.selectedSessionKey
+            ? { detail: null, errorDetail: null, loadingDetail: false }
+            : {}),
         };
       });
+      if (previousSelectedSessionKey !== store.getSnapshot().selectedSessionKey) {
+        invalidateDetailLoad();
+      }
     } catch (error) {
       if (runId !== listRunId) {
         return;

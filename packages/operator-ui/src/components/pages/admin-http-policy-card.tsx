@@ -22,6 +22,7 @@ import {
   type PolicyOverrideRecord,
   type PolicyToolOption,
 } from "./admin-http-policy-overrides.js";
+import { normalizeAgentOptions } from "./agent-options.shared.js";
 
 type PolicyConfigApi = {
   getDeployment: () => Promise<PolicyConfigDeployment>;
@@ -54,23 +55,6 @@ type PolicyHttpClient = AdminHttpClient & {
 
 function isNotFoundError(error: unknown): boolean {
   return error instanceof TyrumHttpClientError && error.status === 404;
-}
-
-function normalizeAgentOptions(
-  agents: Array<{
-    agent_id: string;
-    agent_key: string;
-    persona?: { name?: string };
-  }>,
-): PolicyAgentOption[] {
-  return agents
-    .map((agent) => ({
-      agentId: agent.agent_id.trim(),
-      agentKey: agent.agent_key.trim(),
-      displayName: agent.persona?.name?.trim() || agent.agent_key.trim(),
-    }))
-    .filter((agent) => agent.agentId && agent.agentKey)
-    .toSorted((left, right) => left.agentKey.localeCompare(right.agentKey));
 }
 
 function normalizeToolOptions(
@@ -172,7 +156,25 @@ export function AdminHttpPolicyCard({
       setRevisions(revisionsResult.value.revisions);
       setConfigUnavailable(revisionResult.unavailable || revisionsResult.unavailable);
       setOverrides(overridesResult.overrides);
-      setAgents(normalizeAgentOptions(agentResult.agents));
+      setAgents(
+        normalizeAgentOptions(
+          agentResult.agents,
+          ({ source, agentKey, personaName }) => {
+            const agentId = source.agent_id.trim();
+            if (!agentId || !agentKey) {
+              return null;
+            }
+            return {
+              agentId,
+              agentKey,
+              displayName: personaName || agentKey,
+            };
+          },
+          {
+            sort: (left, right) => left.agentKey.localeCompare(right.agentKey),
+          },
+        ),
+      );
       setTools(normalizeToolOptions(toolResult.tools));
       setRequiresAdminAccess(false);
     } catch (error) {

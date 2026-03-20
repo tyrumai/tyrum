@@ -7,6 +7,7 @@ import type {
   TranscriptTimelineEvent,
 } from "@tyrum/contracts";
 import type { UIMessage } from "ai";
+import { normalizeAgentOptions as normalizeAgentOptionsShared } from "./agent-options.shared.js";
 
 export type AgentOption = {
   agentKey: string;
@@ -33,19 +34,16 @@ export function normalizeAgentOptions(
     persona?: { name?: string };
   }>,
 ): AgentOption[] {
-  const byKey = new Map<string, AgentOption>();
-  for (const agent of input) {
-    const agentKey = agent.agent_key?.trim() ?? "";
-    if (!agentKey || byKey.has(agentKey)) {
-      continue;
-    }
-    const personaName = agent.persona?.name?.trim() ?? "";
-    byKey.set(agentKey, {
+  return normalizeAgentOptionsShared(
+    input,
+    ({ agentKey, personaName }) => ({
       agentKey,
       label: personaName && personaName !== agentKey ? `${personaName} (${agentKey})` : agentKey,
-    });
-  }
-  return [...byKey.values()].toSorted((left, right) => left.label.localeCompare(right.label));
+    }),
+    {
+      sort: (left, right) => left.label.localeCompare(right.label),
+    },
+  );
 }
 
 export function formatSessionTitle(session: TranscriptSessionSummary): string {
