@@ -118,6 +118,8 @@ export function registerToolExecutorLocationToolTests(home: HomeDirState): void 
     const harness = await createLocationToolHarness(home);
 
     try {
+      await harness.identityScopeDal.ensureAgentId(DEFAULT_TENANT_ID, "travel");
+
       const createdResult = await harness.executor.execute(
         "tool.location.place.create",
         "call-place-6",
