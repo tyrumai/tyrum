@@ -225,3 +225,42 @@ export async function listSubagentRows(input: {
     params,
   );
 }
+
+export async function getSubagentRowBySessionKey(input: {
+  deps: ProtocolDeps;
+  tenantId: string;
+  workspaceId: string;
+  sessionKey: string;
+}): Promise<RawSubagentRow | undefined> {
+  if (!input.deps.db) {
+    throw new Error("missing db");
+  }
+  return input.deps.db.get<RawSubagentRow>(
+    `SELECT *
+     FROM subagents
+     WHERE tenant_id = ?
+       AND workspace_id = ?
+       AND session_key = ?`,
+    [input.tenantId, input.workspaceId, input.sessionKey],
+  );
+}
+
+export async function listSubagentRowsByParentSessionKeys(input: {
+  deps: ProtocolDeps;
+  tenantId: string;
+  workspaceId: string;
+  parentSessionKeys: string[];
+}): Promise<RawSubagentRow[]> {
+  if (!input.deps.db || input.parentSessionKeys.length === 0) {
+    return [];
+  }
+  return await input.deps.db.all<RawSubagentRow>(
+    `SELECT *
+     FROM subagents
+     WHERE tenant_id = ?
+       AND workspace_id = ?
+       AND parent_session_key IN (${buildSqlPlaceholders(input.parentSessionKeys.length)})
+     ORDER BY created_at ASC, subagent_id ASC`,
+    [input.tenantId, input.workspaceId, ...input.parentSessionKeys],
+  );
+}
