@@ -2,7 +2,6 @@ import { Hono, type Context } from "hono";
 import { readFile } from "node:fs/promises";
 import { basename, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { ZodTypeAny } from "zod";
 
 const TRANSIENT_READ_MAX_ATTEMPTS = 50;
 const TRANSIENT_READ_DELAY_MS = 100;
@@ -175,11 +174,21 @@ async function getGeneratedContractState(): Promise<GeneratedContractState> {
   return await generatedContractStatePromise;
 }
 
-function hasToJsonSchema(value: unknown): value is ZodTypeAny & {
-  toJSONSchema: (opts?: { io?: "input" | "output" }) => Record<string, unknown> | undefined;
-} {
-  if (!value || typeof value !== "object") return false;
-  return typeof (value as { toJSONSchema?: unknown }).toJSONSchema === "function";
+type JsonSchemaSource = {
+  toJSONSchema?: (opts?: { io?: "input" | "output" }) => unknown;
+};
+
+function contractModuleEntries(module: object): Array<[string, unknown]> {
+  return Object.entries(module as Record<string, unknown>);
+}
+
+function jsonSchemaOf(value: unknown, io: "input" | "output"): Record<string, unknown> | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const schema = (value as JsonSchemaSource).toJSONSchema?.({ io });
+  if (!schema || typeof schema !== "object" || Array.isArray(schema)) {
+    return undefined;
+  }
+  return schema as Record<string, unknown>;
 }
 
 async function buildGeneratedContractState(): Promise<GeneratedContractState> {
@@ -203,12 +212,10 @@ async function buildGeneratedContractState(): Promise<GeneratedContractState> {
     }
   })();
 
-  for (const [name, value] of Object.entries(contractsModule)) {
-    if (!hasToJsonSchema(value)) continue;
-
+  for (const [name, value] of contractModuleEntries(contractsModule)) {
     try {
-      const schema = value.toJSONSchema({ io: "input" });
-      if (!schema || typeof schema !== "object") continue;
+      const schema = jsonSchemaOf(value, "input");
+      if (!schema) continue;
 
       const file = `${name}.json`;
       const id = `https://contracts.tyrum.dev/${packageVersion}/${encodeURIComponent(name)}.json`;

@@ -23,6 +23,24 @@ describe("HTTP scope middleware route mapping", () => {
     ]);
   });
 
+  it("maps memory routes to read/write operator scopes", () => {
+    expect(resolveHttpRouteRequiredScopes({ method: "GET", routePath: "/memory/items" })).toEqual([
+      "operator.read",
+    ]);
+    expect(
+      resolveHttpRouteRequiredScopes({ method: "GET", routePath: "/memory/items/:id" }),
+    ).toEqual(["operator.read"]);
+    expect(resolveHttpRouteRequiredScopes({ method: "GET", routePath: "/memory/search" })).toEqual([
+      "operator.read",
+    ]);
+    expect(
+      resolveHttpRouteRequiredScopes({ method: "GET", routePath: "/memory/tombstones" }),
+    ).toEqual(["operator.read"]);
+    expect(
+      resolveHttpRouteRequiredScopes({ method: "DELETE", routePath: "/memory/items/:id" }),
+    ).toEqual(["operator.write"]);
+  });
+
   it("maps approval reads to operator.read and mutations to operator.approvals", () => {
     expect(resolveHttpRouteRequiredScopes({ method: "GET", routePath: "/approvals" })).toEqual([
       "operator.read",

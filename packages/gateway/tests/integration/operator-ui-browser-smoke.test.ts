@@ -217,6 +217,24 @@ describe.skipIf(!canRunPlaywright && !isCi)("operator UI real-browser smoke (/ui
         { timeout: 10_000 },
       );
 
+      await page.getByTestId("nav-memory").click();
+      await page.waitForSelector('[data-testid="memory-page"]', {
+        state: "visible",
+        timeout: 10_000,
+      });
+      await page.waitForFunction(
+        () => {
+          const text = document.body.textContent ?? "";
+          return (
+            text.includes("Agent Memory") &&
+            !text.includes("Failed to load memory") &&
+            !text.includes("route is not scope-authorized for scoped tokens")
+          );
+        },
+        undefined,
+        { timeout: 10_000 },
+      );
+
       await page.getByTestId("nav-configure").click();
       await page.waitForSelector('[data-testid="admin-http-tab-policy"]', {
         state: "visible",
