@@ -244,10 +244,11 @@ export class IdentityScopeDal {
       if (key !== DEFAULT_AGENT_KEY) return;
       const primary = await this.resolvePrimaryAgentId(tenantId);
       if (primary) return;
-      await this.db.run(
-        `UPDATE agents SET is_primary = ? WHERE tenant_id = ? AND agent_id = ?`,
-        [sqlBoolParam(this.db, true), tenantId, agentId],
-      );
+      await this.db.run(`UPDATE agents SET is_primary = ? WHERE tenant_id = ? AND agent_id = ?`, [
+        sqlBoolParam(this.db, true),
+        tenantId,
+        agentId,
+      ]);
       this.rememberPrimaryAgent(tenantId, key, agentId);
     };
 

@@ -19,10 +19,7 @@ import { Logger } from "../observability/logger.js";
 import { createPoiProvider, type PoiProvider } from "./poi-provider.js";
 import { haversineDistanceMeters } from "./geo.js";
 import { LocationDal } from "./dal.js";
-import {
-  resolveExistingAgentIdOrThrow,
-  resolveExistingScopedIds,
-} from "./scope-resolution.js";
+import { resolveExistingAgentIdOrThrow, resolveExistingScopedIds } from "./scope-resolution.js";
 import { evaluateSavedPlaceEvent, type LocationSubjectState } from "./event-evaluator.js";
 import { evaluateCategoryTriggerEvents } from "./category-trigger-evaluator.js";
 import { fireLocationTriggers, recordLocationEpisode } from "./trigger-execution.js";
