@@ -25,10 +25,16 @@ export function resolveGatewayBin(options: ResolveGatewayBinPathOptions = {}): R
   const candidates: ResolvedGatewayBin[] = [];
 
   if (isPackaged) {
-    candidates.push({
-      path: join(resourcesPath, "gateway", "index.mjs"),
-      source: "packaged",
-    });
+    candidates.push(
+      {
+        path: join(resourcesPath, "app.asar", "dist", "gateway", "index.mjs"),
+        source: "packaged",
+      },
+      {
+        path: join(resourcesPath, "gateway", "index.mjs"),
+        source: "packaged",
+      },
+    );
   }
 
   // Built desktop layout: apps/desktop/dist/main -> apps/desktop/dist/gateway/index.mjs

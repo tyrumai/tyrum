@@ -13,20 +13,12 @@ publish:
     repo: tyrum
 files:
   - dist/**/*
-  - "!dist/gateway/**"
 asarUnpack:
   - node_modules/@nut-tree-fork/**
   - node_modules/tesseract.js/**
   - node_modules/tesseract.js-core/**
+  - dist/gateway/node_modules/**/better-sqlite3/**
 extraResources:
-  - from: dist/gateway
-    to: gateway
-    filter:
-      - "**/*"
-      - "!node_modules"
-      - "!node_modules/**"
-  - from: dist/gateway/node_modules
-    to: gateway/node_modules
   - from: build/icons/32x32.png
     to: tray/32x32.png
   - from: build/tray-macos-template.svg

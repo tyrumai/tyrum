@@ -284,7 +284,7 @@ describe("GatewayManager", () => {
     },
     {
       name: "uses Electron-as-Node for packaged gateway bundles",
-      gatewayBin: "/Applications/Tyrum.app/Contents/Resources/gateway/index.mjs",
+      gatewayBin: "/Applications/Tyrum.app/Contents/Resources/app.asar/dist/gateway/index.mjs",
       gatewayBinSource: "packaged" as const,
       expected: {
         command: "/Applications/Tyrum.app/Contents/MacOS/Tyrum",

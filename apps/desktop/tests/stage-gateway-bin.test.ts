@@ -39,6 +39,7 @@ describe("stage-gateway-bin script", () => {
     const script = readFileSync(stageGatewayBinPath, "utf8");
 
     expect(script).toContain('"--config.inject-workspace-packages=true"');
+    expect(script).toContain('"--config.node-linker=hoisted"');
     expect(script).not.toContain('"--legacy"');
     expect(script).not.toContain("ERR_PNPM_DEPLOY_NONINJECTED_WORKSPACE");
   });
@@ -137,25 +138,11 @@ describe("stage-gateway-bin script", () => {
     expect(packageJson.scripts?.["build:gateway"]).toContain("@tyrum/runtime-workboard build");
   });
 
-  it("prunes runtime-irrelevant gateway dependency files before packaging", () => {
+  it("does not rely on the node_modules pruning workaround", () => {
     const script = readFileSync(stageGatewayBinPath, "utf8");
 
-    expect(script).toContain("function pruneGatewayNodeModuleFiles(rootDir)");
-    expect(script).toContain("const removableGatewayNodeModuleSuffixes = [");
-    expect(script).toContain('".d.ts"');
-    expect(script).toContain('".d.mts"');
-    expect(script).toContain('".d.cts"');
-    expect(script).toContain('".md"');
-    expect(script).toContain('".markdown"');
-    expect(script).toContain('".map"');
-    expect(script).toContain("const removableGatewayNodeModuleBasenames = new Set([");
-    expect(script).toContain('"tsconfig.json"');
-    expect(script).toContain('"tsconfig.build.json"');
-    expect(script).toContain(
-      'const removedGatewayNodeModuleFiles = pruneGatewayNodeModuleFiles(join(targetDir, "node_modules"));',
-    );
-    expect(script).toContain(
-      "console.log(`Pruned ${removedGatewayNodeModuleFiles} runtime-irrelevant gateway dependency files.`);",
-    );
+    expect(script).not.toContain("function pruneGatewayNodeModuleFiles(rootDir)");
+    expect(script).not.toContain("removedGatewayNodeModuleFiles");
+    expect(script).not.toContain("runtime-irrelevant gateway dependency files");
   });
 });
