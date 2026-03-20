@@ -297,6 +297,13 @@ describe("tool registry routes", () => {
     expect(body.tools).toContainEqual(
       expect.objectContaining({
         source: "builtin",
+        canonical_id: "tool.location.place.list",
+        family: "location",
+      }),
+    );
+    expect(body.tools).toContainEqual(
+      expect.objectContaining({
+        source: "builtin",
         canonical_id: "workboard.artifact.get",
         input_schema: {
           type: "object",

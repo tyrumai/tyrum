@@ -1,6 +1,7 @@
 import type { WorkScope } from "@tyrum/contracts";
 import type { SqlDb } from "../../statestore/types.js";
 import type { AgentRegistry } from "../agent/registry.js";
+import { IdentityScopeDal } from "../identity/scope.js";
 
 type SubagentTurnTarget = {
   subagent_id: string;
@@ -17,13 +18,9 @@ export async function resolveAgentKeyById(params: {
   tenantId: string;
   agentId: string;
 }): Promise<string> {
-  const row = await params.db.get<{ agent_key: string }>(
-    `SELECT agent_key
-     FROM agents
-     WHERE tenant_id = ? AND agent_id = ?`,
-    [params.tenantId, params.agentId],
-  );
-  const agentKey = row?.agent_key?.trim();
+  const agentKey = (
+    await new IdentityScopeDal(params.db).resolveAgentKey(params.tenantId, params.agentId)
+  )?.trim();
   if (!agentKey) {
     throw new Error("agent_key not found for work scope");
   }

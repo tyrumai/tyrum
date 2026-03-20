@@ -379,4 +379,38 @@ describe("canonicalizeToolMatchTarget", () => {
       }),
     ).toBe("schedule_id:11111111-1111-1111-1111-111111111111");
   });
+
+  it("canonicalizes location place scope actions to the explicit or resolved current agent scope", () => {
+    expect(canonicalizeToolMatchTarget("tool.location.place.list", {}, undefined, "default")).toBe(
+      "agent_key:default",
+    );
+    expect(canonicalizeToolMatchTarget("tool.location.place.list", {})).toBe("agent_key:current");
+    expect(
+      canonicalizeToolMatchTarget(
+        "tool.location.place.create",
+        {
+          agent_key: "travel",
+          name: "Hotel",
+          latitude: 52.37,
+          longitude: 4.89,
+        },
+        undefined,
+        "default",
+      ),
+    ).toBe("agent_key:travel");
+  });
+
+  it("canonicalizes direct location place actions to the exact place id", () => {
+    expect(
+      canonicalizeToolMatchTarget("tool.location.place.update", {
+        place_id: "11111111-1111-1111-1111-111111111111",
+        name: "Home Base",
+      }),
+    ).toBe("place_id:11111111-1111-1111-1111-111111111111");
+    expect(
+      canonicalizeToolMatchTarget("tool.location.place.delete", {
+        place_id: "11111111-1111-1111-1111-111111111111",
+      }),
+    ).toBe("place_id:11111111-1111-1111-1111-111111111111");
+  });
 });

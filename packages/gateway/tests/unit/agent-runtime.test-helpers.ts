@@ -67,6 +67,7 @@ export function createToolSetBuilder(input: {
     tenantId: DEFAULT_TENANT_ID,
     agentId: DEFAULT_AGENT_ID,
     workspaceId: DEFAULT_WORKSPACE_ID,
+    identityScopeDal: input.container.identityScopeDal,
     policyService,
     approvalDal: input.container.approvalDal,
     approvalWaitMs: 120_000,

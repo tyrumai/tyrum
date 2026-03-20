@@ -1,4 +1,5 @@
 import { AUTOMATION_TOOL_REGISTRY } from "./tool-catalog-automation.js";
+import { LOCATION_TOOL_REGISTRY } from "./tool-catalog-location.js";
 import type { ToolDescriptor } from "./tools.js";
 import { SUBAGENT_TOOL_REGISTRY } from "./tool-catalog-subagent.js";
 import {
@@ -365,6 +366,7 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
       additionalProperties: false,
     },
   },
+  ...LOCATION_TOOL_REGISTRY,
   ...AUTOMATION_TOOL_REGISTRY,
   ...SUBAGENT_TOOL_REGISTRY,
   ...WORKBOARD_TOOL_REGISTRY,

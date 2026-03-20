@@ -34,6 +34,7 @@ describe("ToolSetBuilder shared mode", () => {
       tenantId: "tenant-1",
       agentId: "agent-1",
       workspaceId: "workspace-1",
+      identityScopeDal: undefined,
       policyService: {
         isEnabled: () => false,
         isObserveOnly: () => false,

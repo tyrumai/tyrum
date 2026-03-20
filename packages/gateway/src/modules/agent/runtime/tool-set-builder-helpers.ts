@@ -12,6 +12,7 @@ import { createReviewedApproval } from "../../review/review-init.js";
 import type { SqlDb } from "../../../statestore/types.js";
 import type { SessionDal } from "../session-dal.js";
 import type { ProtocolDeps } from "../../../ws/protocol.js";
+import type { IdentityScopeDal } from "../../identity/scope.js";
 
 export interface ToolExecutionContext {
   tenantId: string;
@@ -53,6 +54,7 @@ export interface ToolSetBuilderDeps {
   tenantId: string;
   agentId: string;
   workspaceId: string;
+  identityScopeDal?: IdentityScopeDal;
   sessionDal?: SessionDal;
   wsEventDb?: SqlDb;
   policyService: PolicyService;

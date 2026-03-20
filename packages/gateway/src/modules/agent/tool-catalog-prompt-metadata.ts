@@ -103,6 +103,26 @@ export const AUTOMATION_SCHEDULE_UPDATE_PROMPT_METADATA = {
   ],
 } as const;
 
+export const LOCATION_PLACE_CREATE_PROMPT_METADATA = {
+  promptGuidance: [
+    "Create saved places with exact coordinates and a deliberate radius_m in meters.",
+    "Omit agent_key to use the current agent scope, or set it explicitly when managing another agent's places.",
+  ],
+  promptExamples: [
+    '{"name":"Home","latitude":52.3676,"longitude":4.9041,"radius_m":100,"tags":["home"],"source":"manual"}',
+  ],
+} as const;
+
+export const LOCATION_PLACE_UPDATE_PROMPT_METADATA = {
+  promptGuidance: [
+    "Use place.list first so you patch the correct place_id.",
+    "Only include the fields you intend to change; omitted fields keep their current values.",
+  ],
+  promptExamples: [
+    '{"place_id":"123e4567-e89b-12d3-a456-426614174000","name":"Home Base","radius_m":150}',
+  ],
+} as const;
+
 export const ARTIFACT_DESCRIBE_TOOL_PROMPT_METADATA = {
   promptGuidance: [
     "Use artifact.describe when a prior tool call or message produced an artifact id and you need to inspect that file in the same turn.",

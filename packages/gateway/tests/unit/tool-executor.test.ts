@@ -1,5 +1,6 @@
 import { describe } from "vitest";
 import { registerToolExecutorBuiltinCoreTests } from "./tool-executor.builtin-core-test-support.js";
+import { registerToolExecutorLocationToolTests } from "./tool-executor.location-tools-test-support.js";
 import {
   registerMcpDelegationTests,
   registerPathSandboxingTests,
@@ -18,6 +19,7 @@ describe("ToolExecutor", () => {
 
   describe("builtin routing", () => {
     registerToolExecutorBuiltinCoreTests(home);
+    registerToolExecutorLocationToolTests(home);
     registerToolExecutorNodeDispatchTests(home);
     registerToolExecutorNodeToolTests(home);
   });
