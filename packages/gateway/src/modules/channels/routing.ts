@@ -1,3 +1,6 @@
+import type { IdentityScopeDal } from "../identity/scope.js";
+import { requirePrimaryAgentKey } from "../identity/scope.js";
+
 export type TelegramAccountRoutingConfig = {
   default_agent_key?: string;
   threads?: Record<string, string>;
@@ -12,15 +15,25 @@ export type RoutingConfig = {
   telegram?: TelegramRoutingConfig;
 };
 
-export function resolveTelegramAgentId(
-  config: RoutingConfig,
-  accountKey: string,
-  threadId: string,
-): string {
+export async function resolveTelegramAgentId(input: {
+  config: RoutingConfig;
+  tenantId: string;
+  accountKey: string;
+  threadId: string;
+  identityScopeDal: IdentityScopeDal;
+}): Promise<string> {
+  const { config, tenantId, accountKey, threadId, identityScopeDal } = input;
   const t = threadId.trim();
   const account = config.telegram?.accounts?.[accountKey.trim() || "default"];
   if (account?.threads && t && account.threads[t]) {
-    return String(account.threads[t]).trim() || account.default_agent_key?.trim() || "default";
+    const threadAgentKey = String(account.threads[t]).trim();
+    if (threadAgentKey) {
+      return threadAgentKey;
+    }
   }
-  return account?.default_agent_key?.trim() || "default";
+  const accountAgentKey = account?.default_agent_key?.trim();
+  if (accountAgentKey) {
+    return accountAgentKey;
+  }
+  return await requirePrimaryAgentKey(identityScopeDal, tenantId);
 }

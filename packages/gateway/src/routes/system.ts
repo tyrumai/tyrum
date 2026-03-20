@@ -120,8 +120,8 @@ export function createSystemRoutes(deps: SystemRouteDeps): Hono {
     const agentId = randomUUID();
     const workspaceId = randomUUID();
     await deps.db.run(
-      `INSERT INTO agents (tenant_id, agent_id, agent_key)
-       VALUES (?, ?, 'default')
+      `INSERT INTO agents (tenant_id, agent_id, agent_key, is_primary)
+       VALUES (?, ?, 'default', 1)
        ON CONFLICT (tenant_id, agent_key) DO NOTHING`,
       [tenantId, agentId],
     );

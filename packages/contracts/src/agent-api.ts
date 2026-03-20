@@ -103,6 +103,7 @@ export const AgentListItem = z
     agent_id: AgentId.optional(),
     home: z.string().trim().min(1).optional(),
     has_config: z.boolean().optional(),
+    is_primary: z.boolean().optional(),
     persona: AgentPersona,
   })
   .strict();
@@ -122,6 +123,7 @@ export const AgentConfigListItem = z
     created_at: z.string().nullable(),
     updated_at: z.string().nullable(),
     has_config: z.boolean().optional(),
+    is_primary: z.boolean(),
     persona: AgentPersona,
   })
   .strict();
@@ -170,6 +172,7 @@ export const ManagedAgentSummary = z
     updated_at: z.string().nullable(),
     has_config: z.boolean(),
     has_identity: z.boolean(),
+    is_primary: z.boolean(),
     can_delete: z.boolean(),
     persona: AgentPersona,
   })
@@ -218,6 +221,17 @@ export const ManagedAgentUpdateRequest = z.preprocess(
     .strict(),
 );
 export type ManagedAgentUpdateRequest = z.infer<typeof ManagedAgentUpdateRequest>;
+
+export const ManagedAgentRenameRequest = z
+  .object({
+    agent_key: AgentKey,
+    reason: z.string().trim().min(1).optional(),
+  })
+  .strict();
+export type ManagedAgentRenameRequest = z.infer<typeof ManagedAgentRenameRequest>;
+
+export const ManagedAgentRenameResponse = ManagedAgentDetail;
+export type ManagedAgentRenameResponse = z.infer<typeof ManagedAgentRenameResponse>;
 
 export const ManagedAgentDeleteResponse = z
   .object({

@@ -81,6 +81,7 @@ export function createAgentConfigRoutes(deps: AgentConfigRouteDeps): Hono {
       created_at: agent.created_at,
       updated_at: agent.updated_at,
       has_config: agent.has_config,
+      is_primary: agent.is_primary,
       persona: agent.persona,
     }));
 

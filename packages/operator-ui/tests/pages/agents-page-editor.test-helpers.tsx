@@ -16,6 +16,7 @@ export function sampleManagedAgentDetail(agentKey: string) {
     updated_at: "2026-03-08T00:00:00.000Z",
     has_config: true,
     has_identity: true,
+    is_primary: agentKey === "default",
     can_delete: agentKey !== "default",
     persona: {
       name: agentKey === "default" ? "Default Agent" : "Agent One",

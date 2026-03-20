@@ -6,7 +6,11 @@ import { normalizeDbDateTime } from "../../utils/db-time.js";
 import { safeJsonParse } from "../../utils/json.js";
 import { insertPlannerEventNext, retryOnUniqueViolation } from "../planner/planner-events.js";
 import { PlanDal } from "../planner/plan-dal.js";
-import { DEFAULT_AGENT_KEY, DEFAULT_WORKSPACE_KEY, IdentityScopeDal } from "../identity/scope.js";
+import {
+  DEFAULT_WORKSPACE_KEY,
+  IdentityScopeDal,
+  requirePrimaryAgentId,
+} from "../identity/scope.js";
 
 export type RoutingConfig = RoutingConfigT;
 
@@ -216,7 +220,7 @@ export class RoutingConfigDal {
       }
 
       const identityScopeDal = new IdentityScopeDal(tx);
-      const agentId = await identityScopeDal.ensureAgentId(tenantId, DEFAULT_AGENT_KEY);
+      const agentId = await requirePrimaryAgentId(identityScopeDal, tenantId);
       const workspaceId = await identityScopeDal.ensureWorkspaceId(tenantId, DEFAULT_WORKSPACE_KEY);
       await identityScopeDal.ensureMembership(tenantId, agentId, workspaceId);
 

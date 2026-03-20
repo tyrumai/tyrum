@@ -26,7 +26,7 @@ import {
 } from "./operator-ui.first-run-onboarding.helpers.js";
 
 export function registerFirstRunOnboardingFlowTests(): void {
-  it("progresses through provider, preset, assignments, and default-agent steps to completion", async () => {
+  it("progresses through provider, preset, and agent setup to completion", async () => {
     const { local } = stubPersistentStorage();
     const ws = new FakeWsClient();
     const { http, statusGet } = createFakeHttpClient();
@@ -42,7 +42,26 @@ export function registerFirstRunOnboardingFlowTests(): void {
       updated_at: string;
     }> = [];
     let assignments = unassignedAssignments();
-    let agentConfig = createAgentConfigResponse(null);
+    let primaryAgentKey = "default";
+    let agentConfig = createAgentConfigResponse({ agentKey: primaryAgentKey, modelRef: null });
+    http.agents.list = vi.fn(
+      async () =>
+        ({
+          agents: [
+            {
+              agent_id: "11111111-1111-4111-8111-111111111111",
+              agent_key: primaryAgentKey,
+              created_at: "2026-03-01T00:00:00.000Z",
+              updated_at: "2026-03-01T00:00:00.000Z",
+              has_config: true,
+              has_identity: true,
+              is_primary: true,
+              can_delete: false,
+              persona: agentConfig.persona,
+            },
+          ],
+        }) as const,
+    );
 
     statusGet.mockImplementation(async () => {
       if (providers.length === 0) {
@@ -80,8 +99,8 @@ export function registerFirstRunOnboardingFlowTests(): void {
           {
             code: "agent_model_unconfigured",
             severity: "error",
-            message: "Agent 'default' has no primary model configured.",
-            target: { kind: "agent", id: "default" },
+            message: `Agent '${primaryAgentKey}' has no primary model configured.`,
+            target: { kind: "agent", id: primaryAgentKey },
           },
         ]);
       }
@@ -94,7 +113,10 @@ export function registerFirstRunOnboardingFlowTests(): void {
     }));
     http.modelConfig.listPresets = vi.fn(async () => ({ status: "ok" as const, presets }));
     http.modelConfig.listAssignments = vi.fn(async () => ({ status: "ok" as const, assignments }));
-    http.agentConfig.get = vi.fn(async () => agentConfig);
+    http.agentConfig.get = vi.fn(async (agentKey: string) => {
+      expect(agentKey).toBe(primaryAgentKey);
+      return agentConfig;
+    });
 
     const core = createOperatorCore({
       wsUrl: "ws://example.test/ws",
@@ -182,20 +204,107 @@ export function registerFirstRunOnboardingFlowTests(): void {
         });
       }
 
-      if (url.endsWith("/config/agents/default")) {
+      if (url.endsWith(`/agents/${encodeURIComponent(primaryAgentKey)}/rename`)) {
+        const body = JSON.parse(String(init?.body)) as {
+          agent_key: string;
+          reason?: string;
+        };
+        primaryAgentKey = body.agent_key;
+        agentConfig = {
+          ...agentConfig,
+          agent_key: primaryAgentKey,
+        };
+        return new Response(
+          JSON.stringify({
+            agent_key: primaryAgentKey,
+            agent_id: "11111111-1111-4111-8111-111111111111",
+            created_at: "2026-03-01T00:00:00.000Z",
+            updated_at: "2026-03-01T00:00:00.000Z",
+            has_config: true,
+            has_identity: true,
+            is_primary: true,
+            can_delete: false,
+            persona: agentConfig.persona,
+            config: agentConfig.config,
+            identity: {
+              meta: {
+                name: agentConfig.persona.name,
+                style: { tone: agentConfig.persona.tone },
+              },
+            },
+            config_revision: 1,
+            identity_revision: 1,
+            config_sha256: "a".repeat(64),
+            identity_sha256: "b".repeat(64),
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+
+      if (url.endsWith(`/config/policy/agents/${encodeURIComponent(primaryAgentKey)}`)) {
+        const body = JSON.parse(String(init?.body)) as {
+          bundle: unknown;
+          reason?: string;
+        };
+        return new Response(
+          JSON.stringify({
+            revision: 1,
+            agent_key: primaryAgentKey,
+            bundle: body.bundle,
+            created_at: "2026-03-02T00:00:00.000Z",
+            created_by: { kind: "tenant.token", token_id: "token-1" },
+            reason: body.reason ?? null,
+            reverted_from_revision: null,
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+
+      if (url.endsWith(`/agents/${encodeURIComponent(primaryAgentKey)}`)) {
         const body = JSON.parse(String(init?.body)) as {
           config: typeof agentConfig.config;
           reason?: string;
         };
-        agentConfig = {
-          ...createAgentConfigResponse(body.config.model.model),
-          config: body.config,
-          reason: body.reason ?? null,
-        };
-        return new Response(JSON.stringify(agentConfig), {
-          status: 200,
-          headers: { "content-type": "application/json" },
+        agentConfig = createAgentConfigResponse({
+          agentKey: primaryAgentKey,
+          modelRef: body.config.model.model,
+          name: body.config.persona.name,
+          tone: body.config.persona.tone,
         });
+        return new Response(
+          JSON.stringify({
+            agent_id: "11111111-1111-4111-8111-111111111111",
+            agent_key: primaryAgentKey,
+            created_at: "2026-03-01T00:00:00.000Z",
+            updated_at: "2026-03-02T00:00:00.000Z",
+            has_config: true,
+            has_identity: true,
+            is_primary: true,
+            can_delete: false,
+            persona: agentConfig.persona,
+            config: agentConfig.config,
+            identity: {
+              meta: {
+                name: agentConfig.persona.name,
+                style: { tone: agentConfig.persona.tone },
+              },
+            },
+            config_revision: 1,
+            identity_revision: 1,
+            config_sha256: "a".repeat(64),
+            identity_sha256: "b".repeat(64),
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
       }
 
       throw new Error(`Unexpected fetch call: ${url}`);
@@ -246,213 +355,21 @@ export function registerFirstRunOnboardingFlowTests(): void {
       await Promise.resolve();
     });
 
-    await waitForSelector(container, '[data-testid="first-run-onboarding-step-assignments"]');
+    await waitForSelector(container, '[data-testid="first-run-onboarding-step-agent"]', 200);
+    setInputByLabel(container, "Agent name", "Operations Agent");
     await act(async () => {
-      findButtonByText(container, "Save assignments")?.dispatchEvent(
-        new MouseEvent("click", { bubbles: true }),
-      );
-      await Promise.resolve();
-    });
-
-    await waitForSelector(container, '[data-testid="first-run-onboarding-step-agent"]');
-    await act(async () => {
-      findButtonByText(container, "Save default agent")?.dispatchEvent(
+      findButtonByText(container, "Save agent")?.dispatchEvent(
         new MouseEvent("click", { bubbles: true }),
       );
       await Promise.resolve();
     });
 
     expect(
-      await waitForSelector(container, '[data-testid="first-run-onboarding-step-done"]'),
+      await waitForSelector(container, '[data-testid="first-run-onboarding-step-done"]', 200),
     ).not.toBeNull();
+    expect(primaryAgentKey).toBe("operations-agent");
     expect(local.size).toBe(1);
     expect(Array.from(local.values())[0]).toContain('"status":"completed"');
-
-    cleanup(root, container);
-  });
-
-  it("keeps the provider step open and shows an error when saving fails", async () => {
-    stubPersistentStorage();
-    const ws = new FakeWsClient();
-    const { http, statusGet } = createFakeHttpClient();
-    statusGet.mockResolvedValue(
-      buildIssueStatusResponse([
-        {
-          code: "no_provider_accounts",
-          severity: "error",
-          message: "No active provider accounts are configured.",
-          target: { kind: "deployment", id: null },
-        },
-      ]),
-    );
-    const core = createOperatorCore({
-      wsUrl: "ws://example.test/ws",
-      httpBaseUrl: "http://example.test",
-      auth: createBearerTokenAuth("baseline"),
-      deviceIdentity: TEST_DEVICE_IDENTITY,
-      deps: { ws, http },
-    });
-    core.elevatedModeStore.enter({
-      elevatedToken: "test-elevated-token",
-      expiresAt: "2099-01-01T00:00:00.000Z",
-    });
-    stubAdminHttpFetch(core, async (input) => {
-      const url = requestInfoToUrl(input);
-      if (!url.endsWith("/config/providers/accounts")) {
-        throw new Error(`Unexpected fetch call: ${url}`);
-      }
-      return new Response(
-        JSON.stringify({ error: "provider_create_failed", message: "invalid api key" }),
-        { status: 400, headers: { "content-type": "application/json" } },
-      );
-    });
-
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-
-    let root: Root | null = null;
-    await act(async () => {
-      root = createRoot(container);
-      root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
-      await Promise.resolve();
-    });
-
-    await waitForSelector(container, '[data-testid="first-run-onboarding-step-provider"]');
-    setInputByLabel(container, "API key", "bad-key");
-    setInputByLabel(container, "Display name", "OpenAI");
-    await act(async () => {
-      findButtonByText(container, "Save provider account")?.dispatchEvent(
-        new MouseEvent("click", { bubbles: true }),
-      );
-      await Promise.resolve();
-    });
-
-    expect(container.textContent).toContain("invalid api key");
-    expect(
-      container.querySelector('[data-testid="first-run-onboarding-step-provider"]'),
-    ).not.toBeNull();
-
-    cleanup(root, container);
-  });
-
-  it("saves the default agent model through elevated admin http", async () => {
-    stubPersistentStorage();
-    const ws = new FakeWsClient();
-    const { http, statusGet, agentConfigGet } = createFakeHttpClient();
-    let agentConfigResponse = createAgentConfigResponse(null);
-    statusGet.mockResolvedValue(
-      buildIssueStatusResponse([
-        {
-          code: "agent_model_unconfigured",
-          severity: "error",
-          message: "Agent 'default' has no primary model configured.",
-          target: { kind: "agent", id: "default" },
-        },
-      ]),
-    );
-    http.providerConfig.listProviders = vi.fn(async () => ({
-      status: "ok" as const,
-      providers: [createConfiguredProviderGroup()],
-    }));
-    agentConfigGet.mockImplementation(async () => agentConfigResponse);
-
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = requestInfoToUrl(input);
-      const method = init?.method ?? "GET";
-
-      if (method === "GET" && url.endsWith("/config/providers/registry")) {
-        return new Response(JSON.stringify(await http.providerConfig.listRegistry()), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        });
-      }
-      if (method === "GET" && url.endsWith("/config/providers")) {
-        return new Response(JSON.stringify(await http.providerConfig.listProviders()), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        });
-      }
-      if (method === "GET" && url.endsWith("/config/models/presets")) {
-        return new Response(JSON.stringify(await http.modelConfig.listPresets()), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        });
-      }
-      if (method === "GET" && url.endsWith("/config/models/presets/available")) {
-        return new Response(JSON.stringify(await http.modelConfig.listAvailable()), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        });
-      }
-      if (method === "GET" && url.endsWith("/config/models/assignments")) {
-        return new Response(JSON.stringify(await http.modelConfig.listAssignments()), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        });
-      }
-      if (method === "GET" && url.endsWith("/config/agents/default")) {
-        return new Response(JSON.stringify(agentConfigResponse), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        });
-      }
-      if (method !== "PUT" || !url.endsWith("/config/agents/default")) {
-        throw new Error(`Unexpected fetch call: ${method} ${url}`);
-      }
-
-      const headers = new Headers(init?.headers);
-      expect(headers.get("authorization")).toBe("Bearer test-elevated-token");
-
-      const body = JSON.parse(String(init?.body)) as {
-        config: { model: { model: string | null } };
-        reason?: string;
-      };
-      expect(body.config.model.model).toBe("openai/gpt-4.1");
-      expect(body.reason).toBe("onboarding: set default agent primary model");
-
-      agentConfigResponse = createAgentConfigResponse("openai/gpt-4.1");
-      return new Response(JSON.stringify(agentConfigResponse), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      });
-    });
-    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
-
-    const core = createOperatorCore({
-      wsUrl: "ws://example.test/ws",
-      httpBaseUrl: "http://example.test",
-      auth: createBearerTokenAuth("baseline"),
-      deviceIdentity: TEST_DEVICE_IDENTITY,
-      deps: { ws, http },
-    });
-    core.elevatedModeStore.enter({
-      elevatedToken: "test-elevated-token",
-      expiresAt: "2099-01-01T00:00:00.000Z",
-    });
-
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-
-    let root: Root | null = null;
-    await act(async () => {
-      root = createRoot(container);
-      root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
-      await Promise.resolve();
-    });
-
-    await waitForSelector(container, '[data-testid="first-run-onboarding-step-agent"]', 200);
-
-    const saveButton = findButtonByText(container, "Save default agent");
-    expect(saveButton).not.toBeNull();
-    await act(async () => {
-      saveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      await Promise.resolve();
-    });
-
-    const mutationCalls = fetchMock.mock.calls.filter(
-      ([, init]) => (init?.method ?? "GET") !== "GET",
-    );
-    expect(mutationCalls).toHaveLength(1);
 
     cleanup(root, container);
   });

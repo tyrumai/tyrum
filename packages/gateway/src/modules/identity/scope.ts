@@ -22,6 +22,11 @@ export interface ScopeIds {
   workspaceId: string;
 }
 
+export interface PrimaryAgentRecord {
+  agentId: string;
+  agentKey: string;
+}
+
 export class ScopeNotFoundError extends Error {
   readonly code = "not_found";
 
@@ -56,11 +61,49 @@ export function normalizeScopeKeys(input?: Partial<ScopeKeys>): ScopeKeys {
   };
 }
 
+export async function requirePrimaryAgentKey(
+  identityScopeDal: IdentityScopeDal,
+  tenantId: string,
+): Promise<string> {
+  const agentKey = await identityScopeDal.resolvePrimaryAgentKey(tenantId);
+  if (!agentKey) {
+    throw new ScopeNotFoundError("primary agent not found", { tenantId });
+  }
+  return agentKey;
+}
+
+export async function requirePrimaryAgentId(
+  identityScopeDal: IdentityScopeDal,
+  tenantId: string,
+): Promise<string> {
+  const agentId = await identityScopeDal.resolvePrimaryAgentId(tenantId);
+  if (!agentId) {
+    throw new ScopeNotFoundError("primary agent not found", { tenantId });
+  }
+  return agentId;
+}
+
+export async function resolveRequestedAgentKey(input: {
+  identityScopeDal: IdentityScopeDal;
+  tenantId: string;
+  agentKey?: string | null;
+}): Promise<string> {
+  if (input.agentKey === undefined || input.agentKey === null) {
+    return await requirePrimaryAgentKey(input.identityScopeDal, input.tenantId);
+  }
+  const normalized = input.agentKey.trim();
+  if (!normalized) {
+    throw new Error("agent_key must be a non-empty string");
+  }
+  return normalized;
+}
+
 type Cached<T> = { value: T; expiresAtMs: number };
 
 export class IdentityScopeDal {
   private readonly tenantCache = new Map<string, Cached<string>>();
   private readonly agentCache = new Map<string, Cached<string>>();
+  private readonly primaryAgentCache = new Map<string, Cached<PrimaryAgentRecord>>();
   private readonly workspaceCache = new Map<string, Cached<string>>();
 
   constructor(
@@ -73,7 +116,7 @@ export class IdentityScopeDal {
     return Math.max(5_000, ttl);
   }
 
-  private getCached(map: Map<string, Cached<string>>, key: string): string | undefined {
+  private getCached<T>(map: Map<string, Cached<T>>, key: string): T | undefined {
     const now = Date.now();
     const cached = map.get(key);
     if (!cached) return undefined;
@@ -84,11 +127,11 @@ export class IdentityScopeDal {
     return cached.value;
   }
 
-  private setCached(map: Map<string, Cached<string>>, key: string, value: string): void {
+  private setCached<T>(map: Map<string, Cached<T>>, key: string, value: T): void {
     map.set(key, { value, expiresAtMs: Date.now() + this.cacheTtlMs() });
   }
 
-  private deleteCached(map: Map<string, Cached<string>>, key: string): void {
+  private deleteCached<T>(map: Map<string, Cached<T>>, key: string): void {
     map.delete(key);
   }
 
@@ -159,6 +202,35 @@ export class IdentityScopeDal {
 
     this.setCached(this.agentCache, cacheKey, found.agent_id);
     return found.agent_id;
+  }
+
+  async resolvePrimaryAgent(tenantId: string): Promise<PrimaryAgentRecord | null> {
+    const cached = this.getCached(this.primaryAgentCache, tenantId);
+    if (cached) return cached;
+
+    const found = await this.db.get<{ agent_id: string; agent_key: string }>(
+      `SELECT agent_id, agent_key
+       FROM agents
+       WHERE tenant_id = ? AND is_primary = 1
+       LIMIT 1`,
+      [tenantId],
+    );
+    if (!found?.agent_id || !found.agent_key) return null;
+
+    const primary = { agentId: found.agent_id, agentKey: found.agent_key };
+    this.setCached(this.primaryAgentCache, tenantId, primary);
+    this.setCached(this.agentCache, `${tenantId}:${found.agent_key}`, found.agent_id);
+    return primary;
+  }
+
+  async resolvePrimaryAgentId(tenantId: string): Promise<string | null> {
+    const primary = await this.resolvePrimaryAgent(tenantId);
+    return primary?.agentId ?? null;
+  }
+
+  async resolvePrimaryAgentKey(tenantId: string): Promise<string | null> {
+    const primary = await this.resolvePrimaryAgent(tenantId);
+    return primary?.agentKey ?? null;
   }
 
   async ensureAgentId(tenantId: string, agentKey: string): Promise<string> {
@@ -326,5 +398,15 @@ export class IdentityScopeDal {
   forgetAgentId(tenantId: string, agentKey: string): void {
     const key = agentKey.trim() || DEFAULT_AGENT_KEY;
     this.deleteCached(this.agentCache, `${tenantId}:${key}`);
+  }
+
+  rememberPrimaryAgent(tenantId: string, agentKey: string, agentId: string): void {
+    const key = agentKey.trim() || DEFAULT_AGENT_KEY;
+    this.setCached(this.primaryAgentCache, tenantId, { agentId, agentKey: key });
+    this.setCached(this.agentCache, `${tenantId}:${key}`, agentId);
+  }
+
+  forgetPrimaryAgent(tenantId: string): void {
+    this.deleteCached(this.primaryAgentCache, tenantId);
   }
 }

@@ -1,6 +1,6 @@
 import type { AgentRegistry } from "../agent/registry.js";
 import type { Logger } from "../observability/logger.js";
-import { DEFAULT_TENANT_ID } from "../identity/scope.js";
+import { DEFAULT_TENANT_ID, type IdentityScopeDal } from "../identity/scope.js";
 import type { ChannelConfigDal, StoredTelegramChannelConfig } from "./channel-config-dal.js";
 import type { TelegramChannelRuntime } from "./telegram-runtime.js";
 import type { TelegramChannelQueue } from "./telegram.js";
@@ -71,6 +71,7 @@ class TelegramPollingWorker {
       agents: AgentRegistry;
       stateDal: TelegramPollingStateDal;
       routingConfigDal?: RoutingConfigDal;
+      identityScopeDal?: IdentityScopeDal;
       memoryDal?: MemoryDal;
       artifactStore?: ArtifactStore;
       logger?: Logger;
@@ -287,6 +288,7 @@ class TelegramPollingWorker {
             agents: this.deps.agents,
             telegramQueue: this.deps.queue,
             routingConfigDal: this.deps.routingConfigDal,
+            identityScopeDal: this.deps.identityScopeDal,
             memoryDal: this.deps.memoryDal,
             artifactStore: this.deps.artifactStore,
             logger: this.deps.logger,
@@ -405,6 +407,7 @@ export class TelegramPollingMonitor {
       agents: AgentRegistry;
       stateDal: TelegramPollingStateDal;
       routingConfigDal?: RoutingConfigDal;
+      identityScopeDal?: IdentityScopeDal;
       memoryDal?: MemoryDal;
       artifactStore?: ArtifactStore;
       logger?: Logger;

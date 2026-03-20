@@ -29,18 +29,32 @@ export function createAutomationTriggerRoutes(service: LocationService): Hono {
 
   app.post("/automation/triggers", async (c) => {
     const tenantId = requireTenantId(c);
-    const agentKey = c.req.query("agent_key")?.trim() || "default";
     const parsed = LocationAutomationTriggerCreateRequest.safeParse(await c.req.json());
     if (!parsed.success) {
       return c.json({ error: "invalid_request", message: parsed.error.message }, 400);
     }
-    return c.json(
-      {
-        status: "ok",
-        trigger: await service.createAutomationTrigger({ tenantId, agentKey, body: parsed.data }),
-      },
-      201,
-    );
+    try {
+      const rawAgentKey = c.req.query("agent_key");
+      if (rawAgentKey !== undefined && rawAgentKey.trim().length === 0) {
+        return c.json(
+          { error: "invalid_request", message: "agent_key must be a non-empty string" },
+          400,
+        );
+      }
+      const agentKey = await service.resolveAgentKey({ tenantId, agentKey: rawAgentKey });
+      return c.json(
+        {
+          status: "ok",
+          trigger: await service.createAutomationTrigger({ tenantId, agentKey, body: parsed.data }),
+        },
+        201,
+      );
+    } catch (error) {
+      if (error instanceof ScopeNotFoundError) {
+        return c.json({ error: error.code, message: error.message }, 404);
+      }
+      throw error;
+    }
   });
 
   app.patch("/automation/triggers/:id", async (c) => {

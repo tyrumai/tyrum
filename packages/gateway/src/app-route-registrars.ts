@@ -296,6 +296,7 @@ export function registerModelsAndConfigRoutes(context: AppRouteContext): void {
         oauthPendingDal: context.container.oauthPendingDal,
         oauthProviderRegistry: context.container.oauthProviderRegistry,
         authProfileDal: context.routeDeps.authProfileDal,
+        identityScopeDal: context.container.identityScopeDal,
         secretProviderForTenant: context.secretProviderForTenant,
         logger: context.container.logger,
       }),
@@ -387,6 +388,7 @@ export function registerExecutionAndWorkflowRoutes(context: AppRouteContext): vo
       policyService: context.container.policyService,
       approvalDal: context.container.approvalDal,
       db: context.container.db,
+      identityScopeDal: context.container.identityScopeDal,
     }),
   );
 }
@@ -425,6 +427,7 @@ export function registerAgentsAndWorkspaceRoutes(context: AppRouteContext): void
             })
           : undefined,
       agents: context.opts.agents,
+      identityScopeDal: context.container.identityScopeDal,
       artifactStore: context.container.artifactStore,
       artifactMaxUploadBytes: context.container.deploymentConfig.attachments.maxUploadBytes,
       memoryDal: context.container.memoryDal,
@@ -489,6 +492,7 @@ export function registerAgentsAndWorkspaceRoutes(context: AppRouteContext): void
       createContextRoutes({
         agents: context.opts.agents,
         contextReportDal: context.container.contextReportDal,
+        identityScopeDal: context.container.identityScopeDal,
       }),
     );
   }

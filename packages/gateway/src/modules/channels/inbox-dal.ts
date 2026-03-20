@@ -103,14 +103,16 @@ export class ChannelInboxDal {
       ? normalizedContainerKindFromThreadKind(payloadParsed.data.thread.kind)
       : "channel";
 
-    let agentKey = "default";
+    let agentKey: string;
     try {
       const parsedKey = parseTyrumKey(input.key as never);
       if (parsedKey.kind === "agent") {
         agentKey = parsedKey.agent_key;
+      } else {
+        throw new Error("channel inbox key must target an agent");
       }
-    } catch {
-      // Intentional: fall back to default agent when key parsing fails.
+    } catch (error) {
+      throw new Error("channel inbox key must be a valid agent key", { cause: error });
     }
 
     const session = await this.sessionDal.getOrCreate({

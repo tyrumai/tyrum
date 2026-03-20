@@ -13,7 +13,11 @@ import {
 } from "../modules/agent/tools.js";
 import { validateToolDescriptorInputSchema } from "../modules/agent/tool-schema.js";
 import { requireTenantId } from "../modules/auth/claims.js";
-import { ScopeNotFoundError } from "../modules/identity/scope.js";
+import {
+  IdentityScopeDal,
+  resolveRequestedAgentKey,
+  ScopeNotFoundError,
+} from "../modules/identity/scope.js";
 import type { Logger } from "../modules/observability/logger.js";
 import type { PluginCatalogProvider } from "../modules/plugins/catalog-provider.js";
 import type { PluginRegistry } from "../modules/plugins/registry.js";
@@ -352,7 +356,20 @@ export function createToolRegistryRoutes(deps: ToolRegistryRouteDeps): Hono {
 
   app.get("/config/tools", async (c) => {
     const tenantId = requireTenantId(c);
-    const agentKey = c.req.query("agent_key")?.trim() || "default";
+    let agentKey: string;
+    try {
+      agentKey = await resolveRequestedAgentKey({
+        identityScopeDal: new IdentityScopeDal(deps.db),
+        tenantId,
+        agentKey: c.req.query("agent_key"),
+      });
+    } catch (error) {
+      if (error instanceof ScopeNotFoundError) {
+        return c.json({ error: error.code, message: error.message }, 404);
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      return c.json({ error: "invalid_request", message }, 400);
+    }
     const mcpManager = new McpManager({ logger: deps.logger });
     try {
       const sharedStateMcpServerTools = await listSharedStateMcpServerTools(

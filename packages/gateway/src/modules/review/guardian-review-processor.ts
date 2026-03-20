@@ -1,6 +1,7 @@
 import type { NodePairingRequest } from "@tyrum/contracts";
 import { IntervalScheduler, resolvePositiveInt } from "../lifecycle/scheduler.js";
 import type { Logger } from "../observability/logger.js";
+import { AgentRuntime } from "../agent/runtime.js";
 import type { ApprovalRow } from "../approval/dal.js";
 import { ApprovalDal } from "../approval/dal.js";
 import { NodePairingDal } from "../node/pairing-dal.js";
@@ -39,10 +40,7 @@ export class GuardianReviewProcessor {
   private readonly staleReviewMs: number;
   private readonly batchSize: number;
   private readonly interval: IntervalScheduler;
-  private readonly reviewerRuntimeByTenant = new Map<
-    string,
-    ReturnType<typeof getOrCreateReviewerRuntime>
-  >();
+  private readonly reviewerRuntimeByTenant = new Map<string, AgentRuntime>();
 
   constructor(private readonly opts: GuardianProcessorOptions) {
     this.approvalDal = opts.container.approvalDal;
@@ -434,12 +432,16 @@ export class GuardianReviewProcessor {
     if (!subagentId) {
       throw new Error("guardian reviewer subagent id is missing");
     }
-    const runtime = getOrCreateReviewerRuntime({
+    const runtime = await getOrCreateReviewerRuntime({
       cache: this.reviewerRuntimeByTenant,
       container: this.opts.container,
       tenantId: approval.tenant_id,
       secretProviderForTenant: this.opts.secretProviderForTenant,
     });
+    const runtimeAgentKey = runtime.opts.agentId;
+    if (!runtimeAgentKey) {
+      throw new Error("guardian reviewer runtime agent id is missing");
+    }
     const session = approval.session_id
       ? await this.opts.container.sessionDal.getById({
           tenantId: approval.tenant_id,
@@ -451,6 +453,7 @@ export class GuardianReviewProcessor {
       thread_id: subagentId,
       parts: [{ type: "text", text: buildApprovalReviewMessage(approval, session) }],
       metadata: reviewerTurnMetadata({
+        agentKey: runtimeAgentKey,
         subagentId,
         subjectType: "approval",
         targetId: approval.approval_id,
@@ -467,17 +470,22 @@ export class GuardianReviewProcessor {
     if (!subagentId) {
       throw new Error("guardian reviewer subagent id is missing");
     }
-    const runtime = getOrCreateReviewerRuntime({
+    const runtime = await getOrCreateReviewerRuntime({
       cache: this.reviewerRuntimeByTenant,
       container: this.opts.container,
       tenantId: this.tenantId,
       secretProviderForTenant: this.opts.secretProviderForTenant,
     });
+    const runtimeAgentKey = runtime.opts.agentId;
+    if (!runtimeAgentKey) {
+      throw new Error("guardian reviewer runtime agent id is missing");
+    }
     const result = await runtime.executeGuardianReview({
       channel: "subagent",
       thread_id: subagentId,
       parts: [{ type: "text", text: buildPairingReviewMessage(pairing) }],
       metadata: reviewerTurnMetadata({
+        agentKey: runtimeAgentKey,
         subagentId,
         subjectType: "pairing",
         targetId: String(pairing.pairing_id),

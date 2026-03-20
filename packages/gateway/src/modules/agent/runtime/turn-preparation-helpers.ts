@@ -1,7 +1,7 @@
 import type { AgentConfig as AgentConfigT } from "@tyrum/contracts";
 import { resolveEmbeddingPipeline } from "./embedding-pipeline-resolution.js";
 import type { AgentRuntimeOptions } from "./types.js";
-import { ensureAgentConfigSeeded } from "../default-config.js";
+import { loadAgentConfigOrDefault } from "../default-config.js";
 import {
   MemorySemanticIndex,
   type MemorySemanticSearchHit,
@@ -103,15 +103,10 @@ export async function loadAgentConfigFromDb(
   deps: PrepareTurnHelperDeps,
   scope: { tenantId: string; agentId: string; agentKey: string },
 ): Promise<AgentConfigT> {
-  return (
-    await ensureAgentConfigSeeded({
-      db: deps.opts.container.db,
-      stateMode: resolveGatewayStateMode(deps.opts.container.deploymentConfig),
-      tenantId: scope.tenantId,
-      agentId: scope.agentId,
-      agentKey: scope.agentKey,
-      createdBy: { kind: "agent-runtime" },
-      reason: "seed",
-    })
-  ).config;
+  return await loadAgentConfigOrDefault({
+    db: deps.opts.container.db,
+    stateMode: resolveGatewayStateMode(deps.opts.container.deploymentConfig),
+    tenantId: scope.tenantId,
+    agentId: scope.agentId,
+  });
 }

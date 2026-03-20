@@ -83,6 +83,8 @@ describe("gateway config routes", () => {
   });
 
   it("stores deployment and agent policy bundle configs", async () => {
+    await container.identityScopeDal.ensureAgentId(tenantId, "default");
+
     const deploymentRes = await app.request("/config/policy/deployment", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -137,6 +139,39 @@ describe("gateway config routes", () => {
 
     const revisionsRes = await app.request("/config/policy/agents/typo-agent/revisions");
     expect(revisionsRes.status).toBe(404);
+
+    const after = await container.db.get<{ count: number }>(
+      "SELECT COUNT(1) AS count FROM agents WHERE tenant_id = ?",
+      [tenantId],
+    );
+    expect(after?.count ?? 0).toBe(before?.count ?? 0);
+  });
+
+  it("does not create agents when writing or reverting a missing agent policy bundle", async () => {
+    const before = await container.db.get<{ count: number }>(
+      "SELECT COUNT(1) AS count FROM agents WHERE tenant_id = ?",
+      [tenantId],
+    );
+
+    const putRes = await app.request("/config/policy/agents/typo-agent", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        bundle: {
+          v: 1,
+          tools: { default: "deny", allow: [], require_approval: ["bash"], deny: [] },
+        },
+        reason: "agent",
+      }),
+    });
+    expect(putRes.status).toBe(404);
+
+    const revertRes = await app.request("/config/policy/agents/typo-agent/revert", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ revision: 1, reason: "revert" }),
+    });
+    expect(revertRes.status).toBe(404);
 
     const after = await container.db.get<{ count: number }>(
       "SELECT COUNT(1) AS count FROM agents WHERE tenant_id = ?",

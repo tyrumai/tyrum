@@ -5,6 +5,7 @@ import { createBearerTokenAuth, createOperatorCore } from "../../operator-app/sr
 import { OperatorUiApp } from "../src/index.js";
 import { stubAdminHttpFetch } from "./admin-http-fetch-test-support.js";
 import {
+  EXECUTION_PROFILE_IDS,
   TEST_DEVICE_IDENTITY,
   requestInfoToUrl,
   setControlledInputValue,
@@ -124,10 +125,10 @@ export function registerFirstRunOnboardingModelPickerTests(): void {
 
       return buildIssueStatusResponse([
         {
-          code: "execution_profile_unassigned",
+          code: "agent_model_unconfigured",
           severity: "error",
-          message: "Execution profiles still need assignments.",
-          target: { kind: "execution_profile", id: "interaction" },
+          message: "Agent setup still needs configuration.",
+          target: { kind: "agent", id: "default" },
         },
       ]);
     });
@@ -146,6 +147,24 @@ export function registerFirstRunOnboardingModelPickerTests(): void {
 
     stubAdminHttpFetch(core, async (input, init) => {
       const url = requestInfoToUrl(input);
+      if (url.endsWith("/config/models/assignments")) {
+        return new Response(
+          JSON.stringify({
+            status: "ok",
+            assignments: EXECUTION_PROFILE_IDS.map((execution_profile_id) => ({
+              execution_profile_id,
+              preset_key: presets[0]?.preset_key ?? null,
+              preset_display_name: presets[0]?.display_name ?? null,
+              provider_key: presets[0]?.provider_key ?? null,
+              model_id: presets[0]?.model_id ?? null,
+            })),
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
       if (!url.endsWith("/config/models/presets")) {
         throw new Error(`Unexpected fetch call: ${url}`);
       }
@@ -219,7 +238,7 @@ export function registerFirstRunOnboardingModelPickerTests(): void {
       options: {},
     });
     expect(
-      await waitForSelector(container, '[data-testid="first-run-onboarding-step-assignments"]'),
+      await waitForSelector(container, '[data-testid="first-run-onboarding-step-agent"]', 200),
     ).not.toBeNull();
 
     cleanup(root, container);

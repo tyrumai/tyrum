@@ -166,7 +166,7 @@ export function createGatewayConfigRoutes(deps: GatewayConfigRouteDeps): Hono {
     ) => Promise<{ tenantId: string; agentId?: string; agentKey?: string } | null>,
     resolveWriteScope: (
       c: any,
-    ) => Promise<{ tenantId: string; agentId?: string; agentKey?: string }>,
+    ) => Promise<{ tenantId: string; agentId?: string; agentKey?: string } | null>,
   ) => {
     app.get(path, async (c) => {
       const scope = await resolveReadScope(c);
@@ -222,6 +222,9 @@ export function createGatewayConfigRoutes(deps: GatewayConfigRouteDeps): Hono {
 
     app.put(path, async (c) => {
       const scope = await resolveWriteScope(c);
+      if (!scope) {
+        return c.json({ error: "not_found", message: "agent not found" }, 404);
+      }
       const claims = requireAuthClaims(c);
       let body: unknown;
       try {
@@ -258,6 +261,9 @@ export function createGatewayConfigRoutes(deps: GatewayConfigRouteDeps): Hono {
 
     app.post(`${path}/revert`, async (c) => {
       const scope = await resolveWriteScope(c);
+      if (!scope) {
+        return c.json({ error: "not_found", message: "agent not found" }, 404);
+      }
       const claims = requireAuthClaims(c);
       let body: unknown;
       try {
@@ -310,7 +316,10 @@ export function createGatewayConfigRoutes(deps: GatewayConfigRouteDeps): Hono {
     async (c) => {
       const tenantId = requireTenantId(c);
       const agentKey = normalizeAgentKey(c.req.param("key"));
-      const agentId = await deps.identityScopeDal.ensureAgentId(tenantId, agentKey);
+      const agentId = await resolveExistingAgentId(tenantId, agentKey);
+      if (!agentId) {
+        return null;
+      }
       const workspaceId = await deps.identityScopeDal.ensureWorkspaceId(
         tenantId,
         DEFAULT_WORKSPACE_KEY,

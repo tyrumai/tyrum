@@ -24,6 +24,7 @@ import {
   AgentMobilePicker,
   type AgentOption,
 } from "./agents-page-agent-display.js";
+import { AgentsPageCreateWizard } from "./agents-page-create-wizard.js";
 import { AgentIdentityPanel } from "./agents-page-identity.js";
 import { AgentsPageEditor } from "./agents-page-editor.js";
 import { RunsPage } from "./runs-page.js";
@@ -32,7 +33,7 @@ type AgentsPageTab = "identity" | "editor" | "runs";
 
 function trimAgentKey(value: string): string {
   const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : "default";
+  return trimmed;
 }
 
 function normalizeAgentOptions(
@@ -40,6 +41,7 @@ function normalizeAgentOptions(
     agent_key: string;
     agent_id: string;
     can_delete: boolean;
+    is_primary?: boolean;
     persona?: { name?: string };
   }>,
 ): AgentOption[] {
@@ -56,20 +58,24 @@ function normalizeAgentOptions(
         agentId: normalizedAgentId,
         canDelete: agent.can_delete,
         displayName,
+        isPrimary: agent.is_primary === true,
       });
     }
   }
-  return [...byKey.values()].toSorted((a, b) => a.agentKey.localeCompare(b.agentKey));
+  return [...byKey.values()];
 }
 
 function selectInitialAgentKey(input: {
   currentAgentKey: string;
-  availableAgentKeys: string[];
+  availableAgents: AgentOption[];
 }): string {
   const current = trimAgentKey(input.currentAgentKey);
-  if (input.availableAgentKeys.includes(current)) return current;
-  if (input.availableAgentKeys.includes("default")) return "default";
-  return input.availableAgentKeys[0] ?? current;
+  if (input.availableAgents.some((agent) => agent.agentKey === current)) return current;
+  return (
+    input.availableAgents.find((agent) => agent.isPrimary)?.agentKey ??
+    input.availableAgents[0]?.agentKey ??
+    current
+  );
 }
 
 export function AgentsPage({ core }: { core: OperatorCore }) {
@@ -121,14 +127,13 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
     try {
       const response = await core.admin.agents.list();
       const nextAgents = normalizeAgentOptions(response.agents);
-      const nextKeys = nextAgents.map((agent) => agent.agentKey);
       setAgentOptions(nextAgents);
       const nextSelectedAgentKey = selectInitialAgentKey({
         currentAgentKey: preferredAgentKey ?? selectedAgentKey,
-        availableAgentKeys: nextKeys,
+        availableAgents: nextAgents,
       });
       setSelectedAgentKey(nextSelectedAgentKey);
-      setSelectionReady(nextKeys.length > 0);
+      setSelectionReady(nextAgents.length > 0);
     } catch (error) {
       setAgentsError(error instanceof Error ? error.message : String(error));
       setSelectionReady(false);
@@ -147,10 +152,10 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
     setSelectedAgentKey((prev) =>
       selectInitialAgentKey({
         currentAgentKey: prev,
-        availableAgentKeys: agentKeys,
+        availableAgents: agentOptions,
       }),
     );
-  }, [agentKeys]);
+  }, [agentKeys, agentOptions]);
 
   useEffect(() => {
     if (!isConnected || !selectionReady) return;
@@ -427,21 +432,36 @@ export function AgentsPage({ core }: { core: OperatorCore }) {
 
                   <TabsContent value="editor" forceMount>
                     {renderEditor ? (
-                      <AgentsPageEditor
-                        core={core}
-                        mode={createMode ? "create" : "edit"}
-                        createNonce={createNonce}
-                        agentKey={createMode ? undefined : selectedAgentOption?.agentKey}
-                        onSaved={(savedAgentKey) => {
-                          setCreateMode(false);
-                          setActiveTab("identity");
-                          void refreshAgentList(savedAgentKey);
-                        }}
-                        onCancelCreate={() => {
-                          setCreateMode(false);
-                          setActiveTab("identity");
-                        }}
-                      />
+                      createMode ? (
+                        <AgentsPageCreateWizard
+                          core={core}
+                          onSaved={(savedAgentKey) => {
+                            setCreateMode(false);
+                            setActiveTab("identity");
+                            void refreshAgentList(savedAgentKey);
+                          }}
+                          onCancel={() => {
+                            setCreateMode(false);
+                            setActiveTab("identity");
+                          }}
+                        />
+                      ) : (
+                        <AgentsPageEditor
+                          core={core}
+                          mode="edit"
+                          createNonce={createNonce}
+                          agentKey={selectedAgentOption?.agentKey}
+                          onSaved={(savedAgentKey) => {
+                            setCreateMode(false);
+                            setActiveTab("identity");
+                            void refreshAgentList(savedAgentKey);
+                          }}
+                          onCancelCreate={() => {
+                            setCreateMode(false);
+                            setActiveTab("identity");
+                          }}
+                        />
+                      )
                     ) : (
                       <Card data-testid="agents-editor-placeholder">
                         <CardContent className="py-10 text-sm text-fg-muted">

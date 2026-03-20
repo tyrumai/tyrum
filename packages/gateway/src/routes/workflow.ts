@@ -82,25 +82,30 @@ export function createWorkflowRoutes(deps: WorkflowRouteDeps): Hono {
     }
     const budgets = budgetsParsed;
 
-    let agentKey = "default";
+    let agentKey: string;
     try {
       const parsedKey = parseTyrumKey(key as never);
       if (parsedKey.kind === "agent") {
         agentKey = parsedKey.agent_key;
+      } else {
+        return c.json({ error: "invalid_request", message: "key must target an agent" }, 400);
       }
     } catch (err) {
       void err;
-      // ignore; treat as default agent
+      return c.json({ error: "invalid_request", message: "key must be a valid agent key" }, 400);
     }
 
     const policy = deps.agents ? deps.agents.getPolicyService(agentKey) : deps.policyService;
     const resolvedAgentId =
       deps.agents && deps.identityScopeDal
-        ? await deps.identityScopeDal.ensureAgentId(tenantId, agentKey)
+        ? await deps.identityScopeDal.resolveAgentId(tenantId, agentKey)
         : undefined;
+    if (deps.agents && deps.identityScopeDal && !resolvedAgentId) {
+      return c.json({ error: "not_found", message: `agent '${agentKey}' not found` }, 404);
+    }
     const effectivePolicy = await policy.loadEffectiveBundle({
       tenantId,
-      agentId: resolvedAgentId,
+      agentId: resolvedAgentId ?? undefined,
     });
     const snapshot = await policy.getOrCreateSnapshot(tenantId, effectivePolicy.bundle);
 

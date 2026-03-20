@@ -4,6 +4,8 @@ import {
   ManagedAgentDeleteResponse,
   ManagedAgentGetResponse,
   ManagedAgentListResponse,
+  ManagedAgentRenameRequest,
+  ManagedAgentRenameResponse,
   ManagedAgentUpdateRequest,
 } from "@tyrum/contracts";
 import type { z } from "zod";
@@ -14,7 +16,9 @@ export type ManagedAgentGetResult = z.output<typeof ManagedAgentGetResponse>;
 export type AgentCapabilitiesResult = z.output<typeof AgentCapabilitiesResponse>;
 export type ManagedAgentCreateInput = z.input<typeof ManagedAgentCreateRequest>;
 export type ManagedAgentUpdateInput = z.input<typeof ManagedAgentUpdateRequest>;
+export type ManagedAgentRenameInput = z.input<typeof ManagedAgentRenameRequest>;
 export type ManagedAgentDeleteResult = z.output<typeof ManagedAgentDeleteResponse>;
+export type ManagedAgentRenameResult = z.output<typeof ManagedAgentRenameResponse>;
 
 export interface AgentsApi {
   list(options?: TyrumRequestOptions): Promise<ManagedAgentListResult>;
@@ -29,6 +33,11 @@ export interface AgentsApi {
     input: ManagedAgentUpdateInput,
     options?: TyrumRequestOptions,
   ): Promise<ManagedAgentGetResult>;
+  rename(
+    agentKey: string,
+    input: ManagedAgentRenameInput,
+    options?: TyrumRequestOptions,
+  ): Promise<ManagedAgentRenameResult>;
   delete(agentKey: string, options?: TyrumRequestOptions): Promise<ManagedAgentDeleteResult>;
 }
 
@@ -80,6 +89,17 @@ export function createAgentsApi(transport: HttpTransport): AgentsApi {
         path: `/agents/${encodeURIComponent(agentKey)}`,
         body,
         response: ManagedAgentGetResponse,
+        signal: options?.signal,
+      });
+    },
+
+    async rename(agentKey, input, options) {
+      const body = validateOrThrow(ManagedAgentRenameRequest, input, "agent rename request");
+      return await transport.request({
+        method: "POST",
+        path: `/agents/${encodeURIComponent(agentKey)}/rename`,
+        body,
+        response: ManagedAgentRenameResponse,
         signal: options?.signal,
       });
     },

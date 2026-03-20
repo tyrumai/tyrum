@@ -14,6 +14,7 @@ export type AgentOption = {
   agentId: string;
   canDelete: boolean;
   displayName: string;
+  isPrimary: boolean;
 };
 
 function hashAgentKey(value: string): number {

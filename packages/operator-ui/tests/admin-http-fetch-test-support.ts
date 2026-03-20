@@ -34,6 +34,20 @@ async function routeAdminReadRequest(
 ): Promise<Response | undefined> {
   if (method !== "GET") return undefined;
 
+  if (requestUrl.pathname.startsWith("/config/agents/")) {
+    const agentKey = decodeURIComponent(requestUrl.pathname.slice("/config/agents/".length));
+    return jsonResponse(await core.admin.agentConfig.get(agentKey));
+  }
+  if (requestUrl.pathname.startsWith("/config/policy/agents/")) {
+    const path = requestUrl.pathname.slice("/config/policy/agents/".length);
+    const [encodedAgentKey, suffix] = path.split("/", 2);
+    const agentKey = decodeURIComponent(encodedAgentKey ?? "");
+    if (suffix === "revisions") {
+      return jsonResponse(await core.admin.policyConfig.listAgentRevisions(agentKey));
+    }
+    return jsonResponse(await core.admin.policyConfig.getAgent(agentKey));
+  }
+
   switch (requestUrl.pathname) {
     case "/agent/list":
       return jsonResponse(
@@ -44,8 +58,6 @@ async function routeAdminReadRequest(
               : requestUrl.searchParams.get("include_default") === "true",
         }),
       );
-    case "/config/agents/default":
-      return jsonResponse(await core.admin.agentConfig.get("default"));
     case "/config/models/assignments":
       return jsonResponse(await core.admin.modelConfig.listAssignments());
     case "/config/models/presets":
@@ -103,10 +115,6 @@ async function routeAdminReadRequest(
     default:
       if (requestUrl.pathname === "/agents") {
         return jsonResponse(await core.admin.agents.list());
-      }
-      if (requestUrl.pathname.startsWith("/config/agents/")) {
-        const agentKey = decodeURIComponent(requestUrl.pathname.slice("/config/agents/".length));
-        return jsonResponse(await core.admin.agentConfig.get(agentKey));
       }
       return undefined;
   }

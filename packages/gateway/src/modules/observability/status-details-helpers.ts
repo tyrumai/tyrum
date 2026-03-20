@@ -1,6 +1,7 @@
 import { isAuthProfilesEnabled } from "../models/auth-profiles-enabled.js";
 import type { ModelsDevService } from "../models/models-dev-service.js";
 import type { AgentRegistry } from "../agent/registry.js";
+import { IdentityScopeDal } from "../identity/scope.js";
 import type { SqlDb } from "../../statestore/types.js";
 import { isMissingTableError } from "./db-errors.js";
 
@@ -137,12 +138,17 @@ async function countByStatus(
 
 export async function loadActiveModel(
   agents: AgentRegistry | undefined,
+  db: SqlDb | undefined,
   tenantId: string,
 ): Promise<ActiveModelStatus | null> {
-  if (!agents) return null;
+  if (!agents || !db) return null;
 
   try {
-    const runtime = await agents.getRuntime({ tenantId, agentKey: "default" });
+    const primaryAgentKey = await new IdentityScopeDal(db).resolvePrimaryAgentKey(tenantId);
+    if (!primaryAgentKey) {
+      return null;
+    }
+    const runtime = await agents.getRuntime({ tenantId, agentKey: primaryAgentKey });
     const status = await runtime.status(true);
     const modelId = status.model.model;
     if (modelId === null) {

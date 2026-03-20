@@ -18,14 +18,16 @@ export async function enqueuePlanInTx(
   if (!tenantId) {
     throw new Error("tenantId is required to enqueue execution plans");
   }
-  let agentKey = "default";
+  let agentKey: string;
   try {
     const parsedKey = parseTyrumKey(input.key as never);
     if (parsedKey.kind === "agent") {
       agentKey = parsedKey.agent_key;
+    } else {
+      throw new Error("execution key must target an agent");
     }
-  } catch {
-    // ignore; treat as default agent
+  } catch (error) {
+    throw new Error("execution key must be a valid agent key", { cause: error });
   }
 
   const identityScopeDal = new IdentityScopeDal(tx);

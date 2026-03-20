@@ -1,17 +1,18 @@
 import type { WorkItem, WsResponseEnvelope } from "@tyrum/contracts";
-import type { WorkboardService } from "@tyrum/runtime-workboard";
 import type { ConnectedClient } from "../connection-manager.js";
 import { WORKBOARD_WS_AUDIENCE } from "../workboard-audience.js";
 import {
+  DEFAULT_WORKSPACE_KEY,
   IdentityScopeDal,
   ScopeNotFoundError,
-  normalizeScopeKeys,
+  resolveRequestedAgentKey,
 } from "../../modules/identity/scope.js";
 import { createGatewayWorkboardService } from "../../modules/workboard/service.js";
 import type { ProtocolDeps, ProtocolRequestEnvelope } from "./types.js";
 import { broadcastEvent, errorResponse, workboardErrorResponse } from "./helpers.js";
 
 export type ScopeKeysPayload = { tenant_key?: string; agent_key?: string; workspace_key?: string };
+type WorkboardService = ReturnType<typeof createGatewayWorkboardService>;
 
 async function buildWorkScope(params: {
   deps: ProtocolDeps;
@@ -24,10 +25,13 @@ async function buildWorkScope(params: {
 }> {
   if (!params.deps.db) throw new Error("db is required");
   const identityScopeDal = params.deps.identityScopeDal ?? new IdentityScopeDal(params.deps.db);
-  const keys = normalizeScopeKeys({
+  const agentKey = await resolveRequestedAgentKey({
+    identityScopeDal,
+    tenantId: params.tenantId,
     agentKey: params.payload.agent_key,
-    workspaceKey: params.payload.workspace_key,
   });
+  const explicitWorkspaceKey = params.payload.workspace_key?.trim();
+  const workspaceKey = explicitWorkspaceKey || DEFAULT_WORKSPACE_KEY;
   const tenantId = params.tenantId.trim();
   let agentId: string;
   let workspaceId: string;
@@ -35,24 +39,40 @@ async function buildWorkScope(params: {
   if (params.resolveOnly) {
     const resolved = await identityScopeDal.resolveExistingScopeIdsForTenant({
       tenantId,
-      agentKey: keys.agentKey,
-      workspaceKey: keys.workspaceKey,
+      agentKey,
+      workspaceKey,
     });
     if (!resolved) {
       throw new ScopeNotFoundError("scope not found", {
-        agent_key: keys.agentKey,
-        workspace_key: keys.workspaceKey,
+        agent_key: agentKey,
+        workspace_key: workspaceKey,
       });
     }
     agentId = resolved.agentId;
     workspaceId = resolved.workspaceId;
   } else {
-    agentId = await identityScopeDal.ensureAgentId(tenantId, keys.agentKey);
-    workspaceId = await identityScopeDal.ensureWorkspaceId(tenantId, keys.workspaceKey);
+    const resolvedAgentId = await identityScopeDal.resolveAgentId(tenantId, agentKey);
+    if (!resolvedAgentId) {
+      throw new ScopeNotFoundError(`agent '${agentKey}' not found`, {
+        agent_key: agentKey,
+      });
+    }
+    agentId = resolvedAgentId;
+    if (explicitWorkspaceKey) {
+      const resolvedWorkspaceId = await identityScopeDal.resolveWorkspaceId(tenantId, workspaceKey);
+      if (!resolvedWorkspaceId) {
+        throw new ScopeNotFoundError(`workspace '${workspaceKey}' not found`, {
+          workspace_key: workspaceKey,
+        });
+      }
+      workspaceId = resolvedWorkspaceId;
+    } else {
+      workspaceId = await identityScopeDal.ensureWorkspaceId(tenantId, workspaceKey);
+    }
     await identityScopeDal.ensureMembership(tenantId, agentId, workspaceId);
   }
   return {
-    keys: { agentKey: keys.agentKey, workspaceKey: keys.workspaceKey },
+    keys: { agentKey, workspaceKey },
     scope: { tenant_id: tenantId, agent_id: agentId, workspace_id: workspaceId },
   };
 }

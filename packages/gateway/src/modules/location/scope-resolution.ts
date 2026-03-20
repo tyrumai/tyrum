@@ -14,6 +14,22 @@ export async function resolveExistingAgentIdOrThrow(input: {
   return agentId;
 }
 
+export async function resolveLocationAgentKey(input: {
+  identityScopeDal: IdentityScopeDal;
+  tenantId: string;
+  agentKey?: string | null;
+}): Promise<string> {
+  const explicitAgentKey = input.agentKey?.trim();
+  if (explicitAgentKey) {
+    return explicitAgentKey;
+  }
+  const primaryAgentKey = await input.identityScopeDal.resolvePrimaryAgentKey(input.tenantId);
+  if (!primaryAgentKey) {
+    throw new Error("primary agent not found");
+  }
+  return primaryAgentKey;
+}
+
 export async function resolveExistingScopedIds(input: {
   identityScopeDal: IdentityScopeDal;
   tenantId: string;

@@ -2,7 +2,7 @@ import { AgentConfig } from "@tyrum/contracts";
 import { expect, vi } from "vitest";
 import { act, type Root } from "react";
 import type { MobileHostApi } from "../src/index.js";
-import { setControlledInputValue } from "./operator-ui.test-support.js";
+import { EXECUTION_PROFILE_IDS, setControlledInputValue } from "./operator-ui.test-support.js";
 import { sampleStatusResponse } from "./operator-ui.test-fixtures.js";
 
 export function cleanup(root: Root | null, container: HTMLDivElement): void {
@@ -90,24 +90,43 @@ export function createConfiguredProviderGroup() {
   return configuredGroup;
 }
 
-export function createAgentConfigResponse(modelRef: string | null) {
+export function createAgentConfigResponse(
+  input:
+    | string
+    | null
+    | {
+        agentKey?: string;
+        modelRef: string | null;
+        name?: string;
+        tone?: string;
+      },
+) {
+  const normalized =
+    typeof input === "object" && input !== null
+      ? input
+      : {
+          modelRef: input,
+        };
+  const agentKey = normalized.agentKey ?? "default";
+  const name = normalized.name ?? "Default Agent";
+  const tone = normalized.tone ?? "direct";
   return {
     revision: 1,
     tenant_id: "tenant-1",
     agent_id: "11111111-1111-4111-8111-111111111111",
-    agent_key: "default",
+    agent_key: agentKey,
     config: AgentConfig.parse({
-      model: { model: modelRef },
+      model: { model: normalized.modelRef },
       persona: {
-        name: "Default Agent",
-        tone: "direct",
+        name,
+        tone,
         palette: "graphite",
         character: "architect",
       },
     }),
     persona: {
-      name: "Default Agent",
-      tone: "direct",
+      name,
+      tone,
       palette: "graphite",
       character: "architect",
     },
@@ -182,15 +201,7 @@ export function createMobileHostApi(): MobileHostApi {
 }
 
 export function unassignedAssignments() {
-  return [
-    "interaction",
-    "explorer_ro",
-    "reviewer_ro",
-    "planner",
-    "jury",
-    "executor_rw",
-    "integrator",
-  ].map((execution_profile_id) => ({
+  return EXECUTION_PROFILE_IDS.map((execution_profile_id) => ({
     execution_profile_id,
     preset_key: null,
     preset_display_name: null,

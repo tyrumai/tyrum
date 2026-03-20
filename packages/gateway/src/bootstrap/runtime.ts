@@ -33,7 +33,6 @@ import {
   resolveGatewayLogStackTraces,
   resolveGatewayMigrationsDir,
   resolveGatewayPort,
-  seedDefaultAgentConfig,
   type GatewayStartOptions,
   type StartCommandOverrides,
 } from "./config.js";
@@ -193,7 +192,6 @@ async function createGatewayBootContext(
   );
   container.modelsDev.startBackgroundRefresh();
   assertSharedStateModeGuardrails({ dbPath, deploymentConfig });
-  await seedDefaultAgentConfig(container);
 
   const provisionedGatewayToken = resolveProvisionedGatewayToken();
   const authTokens = new AuthTokenService(container.db, {

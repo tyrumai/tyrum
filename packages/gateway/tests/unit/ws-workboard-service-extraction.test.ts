@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
+import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { createAdminWsClient } from "../helpers/ws-protocol-test-helpers.js";
 
 const { createGatewayWorkboardServiceMock } = vi.hoisted(() => ({
@@ -35,5 +37,74 @@ describe("workboard WS service extraction", () => {
       redactionEngine: expect.anything(),
     });
     expect(access).toMatchObject({ workboardService: { mocked: true }, db });
+  });
+
+  it("resolves the primary agent when creating work scope without an explicit agent key", async () => {
+    const { ensureWorkScope } = await import("../../src/ws/protocol/workboard-handlers-shared.js");
+    const db = openTestSqliteDb();
+
+    try {
+      const resolved = await ensureWorkScope({
+        deps: { db },
+        tenantId: DEFAULT_TENANT_ID,
+        payload: {},
+      });
+
+      expect(resolved.keys).toMatchObject({
+        agentKey: "default",
+        workspaceKey: "default",
+      });
+    } finally {
+      await db.close();
+    }
+  });
+
+  it("rejects explicit missing work scopes without creating agents or workspaces", async () => {
+    const { ensureWorkScope } = await import("../../src/ws/protocol/workboard-handlers-shared.js");
+    const db = openTestSqliteDb();
+
+    try {
+      const beforeAgents = await db.get<{ count: number }>(
+        "SELECT COUNT(1) AS count FROM agents WHERE tenant_id = ?",
+        [DEFAULT_TENANT_ID],
+      );
+      const beforeWorkspaces = await db.get<{ count: number }>(
+        "SELECT COUNT(1) AS count FROM workspaces WHERE tenant_id = ?",
+        [DEFAULT_TENANT_ID],
+      );
+      const beforeMemberships = await db.get<{ count: number }>(
+        "SELECT COUNT(1) AS count FROM agent_workspaces WHERE tenant_id = ?",
+        [DEFAULT_TENANT_ID],
+      );
+
+      await expect(
+        ensureWorkScope({
+          deps: { db },
+          tenantId: DEFAULT_TENANT_ID,
+          payload: { agent_key: "missing-agent", workspace_key: "missing-workspace" },
+        }),
+      ).rejects.toMatchObject({
+        name: "ScopeNotFoundError",
+        message: "agent 'missing-agent' not found",
+      });
+
+      const afterAgents = await db.get<{ count: number }>(
+        "SELECT COUNT(1) AS count FROM agents WHERE tenant_id = ?",
+        [DEFAULT_TENANT_ID],
+      );
+      const afterWorkspaces = await db.get<{ count: number }>(
+        "SELECT COUNT(1) AS count FROM workspaces WHERE tenant_id = ?",
+        [DEFAULT_TENANT_ID],
+      );
+      const afterMemberships = await db.get<{ count: number }>(
+        "SELECT COUNT(1) AS count FROM agent_workspaces WHERE tenant_id = ?",
+        [DEFAULT_TENANT_ID],
+      );
+      expect(afterAgents?.count ?? 0).toBe(beforeAgents?.count ?? 0);
+      expect(afterWorkspaces?.count ?? 0).toBe(beforeWorkspaces?.count ?? 0);
+      expect(afterMemberships?.count ?? 0).toBe(beforeMemberships?.count ?? 0);
+    } finally {
+      await db.close();
+    }
   });
 });

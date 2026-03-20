@@ -1,9 +1,11 @@
 import { ShieldCheck } from "lucide-react";
+import { PERSONA_TONES } from "@tyrum/contracts";
 import type * as React from "react";
 import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
 import { Checkbox } from "../ui/checkbox.js";
 import { Input } from "../ui/input.js";
+import { RadioGroup, RadioGroupItem } from "../ui/radio-group.js";
 import { Select } from "../ui/select.js";
 import {
   getBooleanConfigDefaults,
@@ -14,14 +16,16 @@ import {
   type ProviderRegistryEntry,
 } from "./admin-http-providers.shared.js";
 import {
-  EXECUTION_PROFILE_IDS,
-  EXECUTION_PROFILE_LABELS,
   REASONING_OPTIONS,
   REASONING_VISIBILITY_OPTIONS,
   type AvailableModel,
   type ModelDialogState,
   type ModelPreset,
 } from "./admin-http-models.shared.js";
+import {
+  AGENT_POLICY_PRESET_OPTIONS,
+  type AgentPolicyPresetKey,
+} from "./agent-setup-wizard.shared.js";
 import { ModelPickerField } from "./model-picker-field.js";
 import { OnboardingStepFrame } from "./first-run-onboarding.parts.js";
 import { ProviderPickerField } from "./provider-picker-field.js";
@@ -142,7 +146,8 @@ export function OnboardingProviderStep({
             value={providerState.methodKey}
             onChange={(event) => {
               const nextMethod = selectedProvider?.methods.find(
-                (method) => method.method_key === event.currentTarget.value,
+                (method: ProviderRegistryEntry["methods"][number]) =>
+                  method.method_key === event.currentTarget.value,
               );
               onProviderStateChange((current) => ({
                 ...current,
@@ -152,11 +157,13 @@ export function OnboardingProviderStep({
               }));
             }}
           >
-            {(selectedProvider?.methods ?? []).map((method) => (
-              <option key={method.method_key} value={method.method_key}>
-                {method.label}
-              </option>
-            ))}
+            {(selectedProvider?.methods ?? []).map(
+              (method: ProviderRegistryEntry["methods"][number]) => (
+                <option key={method.method_key} value={method.method_key}>
+                  {method.label}
+                </option>
+              ),
+            )}
           </Select>
           <Input
             label="Display name"
@@ -176,69 +183,71 @@ export function OnboardingProviderStep({
             description="The model catalog does not currently expose any supported provider setup flows."
           />
         ) : null}
-        {(selectedRegistryProvider?.fields ?? []).map((field) => {
-          if (field.kind === "config" && field.input === "boolean") {
-            return (
-              <label
-                key={field.key}
-                className="flex items-start gap-3 rounded-lg border border-border/70 px-3 py-3"
-              >
-                <Checkbox
-                  checked={getFieldBooleanValue(providerState.configValues[field.key])}
-                  onCheckedChange={(checked) => {
-                    onProviderStateChange((current) => ({
-                      ...current,
-                      configValues: {
-                        ...current.configValues,
-                        [field.key]: checked === true,
-                      },
-                    }));
-                  }}
-                />
-                <div className="grid gap-1">
-                  <div className="text-sm font-medium text-fg">{field.label}</div>
-                  {field.description ? (
-                    <div className="text-xs text-fg-muted">{field.description}</div>
-                  ) : null}
-                </div>
-              </label>
-            );
-          }
-
-          const isSecret = field.kind === "secret";
-          return (
-            <Input
-              key={field.key}
-              label={field.label}
-              type={isSecret ? "password" : "text"}
-              required={field.required}
-              value={
-                isSecret
-                  ? getFieldStringValue(providerState.secretValues[field.key])
-                  : getFieldStringValue(providerState.configValues[field.key])
-              }
-              onChange={(event) => {
-                onProviderStateChange((current) => ({
-                  ...current,
-                  ...(isSecret
-                    ? {
-                        secretValues: {
-                          ...current.secretValues,
-                          [field.key]: event.currentTarget.value,
-                        },
-                      }
-                    : {
+        {(selectedRegistryProvider?.fields ?? []).map(
+          (field: ProviderRegistryEntry["methods"][number]["fields"][number]) => {
+            if (field.kind === "config" && field.input === "boolean") {
+              return (
+                <label
+                  key={field.key}
+                  className="flex items-start gap-3 rounded-lg border border-border/70 px-3 py-3"
+                >
+                  <Checkbox
+                    checked={getFieldBooleanValue(providerState.configValues[field.key])}
+                    onCheckedChange={(checked) => {
+                      onProviderStateChange((current) => ({
+                        ...current,
                         configValues: {
                           ...current.configValues,
-                          [field.key]: event.currentTarget.value,
+                          [field.key]: checked === true,
                         },
-                      }),
-                }));
-              }}
-              helperText={field.description ?? undefined}
-            />
-          );
-        })}
+                      }));
+                    }}
+                  />
+                  <div className="grid gap-1">
+                    <div className="text-sm font-medium text-fg">{field.label}</div>
+                    {field.description ? (
+                      <div className="text-xs text-fg-muted">{field.description}</div>
+                    ) : null}
+                  </div>
+                </label>
+              );
+            }
+
+            const isSecret = field.kind === "secret";
+            return (
+              <Input
+                key={field.key}
+                label={field.label}
+                type={isSecret ? "password" : "text"}
+                required={field.required}
+                value={
+                  isSecret
+                    ? getFieldStringValue(providerState.secretValues[field.key])
+                    : getFieldStringValue(providerState.configValues[field.key])
+                }
+                onChange={(event) => {
+                  onProviderStateChange((current) => ({
+                    ...current,
+                    ...(isSecret
+                      ? {
+                          secretValues: {
+                            ...current.secretValues,
+                            [field.key]: event.currentTarget.value,
+                          },
+                        }
+                      : {
+                          configValues: {
+                            ...current.configValues,
+                            [field.key]: event.currentTarget.value,
+                          },
+                        }),
+                  }));
+                }}
+                helperText={field.description ?? undefined}
+              />
+            );
+          },
+        )}
         {providerFormError ? (
           <Alert
             variant="warning"
@@ -267,24 +276,61 @@ export function OnboardingPresetStep({
   canSave,
   modelFilter,
   modelState,
+  onApplySelectedPreset,
   onModelFilterChange,
   onModelSave,
   onModelSelectionChange,
   onModelStateChange,
+  onSelectedPresetKeyChange,
+  presets,
+  selectedPresetKey,
 }: {
   filteredAvailableModels: AvailableModel[];
   busy: boolean;
   canSave: boolean;
   modelFilter: string;
   modelState: ModelDialogState;
+  onApplySelectedPreset: () => void;
   onModelFilterChange: (value: string) => void;
   onModelSave: () => void;
   onModelSelectionChange: (modelRef: string) => void;
   onModelStateChange: (updater: (current: ModelDialogState) => ModelDialogState) => void;
+  onSelectedPresetKeyChange: (value: string) => void;
+  presets: readonly ModelPreset[];
+  selectedPresetKey: string;
 }): React.ReactElement {
   return (
     <OnboardingStepFrame stepId="preset">
       <div className="grid gap-4" data-testid="first-run-onboarding-step-preset">
+        {presets.length > 0 ? (
+          <div className="grid gap-3 rounded-xl border border-border/70 bg-bg-subtle/30 p-4">
+            <Select
+              label="Saved preset"
+              value={selectedPresetKey}
+              onChange={(event) => onSelectedPresetKeyChange(event.currentTarget.value)}
+            >
+              {presets.map((preset) => (
+                <option key={preset.preset_key} value={preset.preset_key}>
+                  {preset.display_name} ({preset.provider_key}/{preset.model_id})
+                </option>
+              ))}
+            </Select>
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                type="button"
+                variant="secondary"
+                isLoading={busy}
+                disabled={!canSave || !selectedPresetKey}
+                onClick={onApplySelectedPreset}
+              >
+                Use selected preset
+              </Button>
+              <div className="text-xs text-fg-muted">
+                This applies the preset to all built-in execution profiles automatically.
+              </div>
+            </div>
+          </div>
+        ) : null}
         <Input
           label="Display name"
           value={modelState.displayName}
@@ -352,113 +398,81 @@ export function OnboardingPresetStep({
   );
 }
 
-export function OnboardingAssignmentsStep({
-  assignmentDraft,
-  busy,
-  canSave,
-  onApplyPresetToAll,
-  onAssignmentChange,
-  onAssignmentSave,
-  onPresetChange,
-  presets,
-  selectedPresetKey,
-}: {
-  assignmentDraft: Record<string, string | null>;
-  busy: boolean;
-  canSave: boolean;
-  onApplyPresetToAll: () => void;
-  onAssignmentChange: (profileId: string, presetKey: string | null) => void;
-  onAssignmentSave: () => void;
-  onPresetChange: (presetKey: string) => void;
-  presets: readonly ModelPreset[];
-  selectedPresetKey: string;
-}): React.ReactElement {
-  return (
-    <OnboardingStepFrame stepId="assignments">
-      <div className="grid gap-4" data-testid="first-run-onboarding-step-assignments">
-        <Select
-          label="Preset to apply"
-          value={selectedPresetKey}
-          onChange={(event) => onPresetChange(event.currentTarget.value)}
-        >
-          {presets.map((preset) => (
-            <option key={preset.preset_key} value={preset.preset_key}>
-              {preset.display_name} ({preset.provider_key}/{preset.model_id})
-            </option>
-          ))}
-        </Select>
-        <div className="grid gap-3 md:grid-cols-2">
-          {EXECUTION_PROFILE_IDS.map((profileId) => (
-            <Select
-              key={profileId}
-              label={EXECUTION_PROFILE_LABELS[profileId]}
-              value={assignmentDraft[profileId] ?? ""}
-              onChange={(event) => onAssignmentChange(profileId, event.currentTarget.value || null)}
-            >
-              <option value="">None</option>
-              {presets.map((preset) => (
-                <option key={preset.preset_key} value={preset.preset_key}>
-                  {preset.display_name}
-                </option>
-              ))}
-            </Select>
-          ))}
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="secondary" onClick={onApplyPresetToAll}>
-            Apply preset to all profiles
-          </Button>
-          <Button
-            type="button"
-            isLoading={busy}
-            disabled={!canSave || !selectedPresetKey}
-            onClick={onAssignmentSave}
-          >
-            Save assignments
-          </Button>
-        </div>
-      </div>
-    </OnboardingStepFrame>
-  );
-}
-
 export function OnboardingAgentStep({
   busy,
   canSave,
-  currentModel,
+  name,
   onAgentSave,
-  onPresetChange,
-  presets,
-  selectedPresetKey,
+  onNameChange,
+  onPolicyPresetChange,
+  onToneChange,
+  policyPreset,
+  selectedPresetLabel,
+  tone,
 }: {
   busy: boolean;
   canSave: boolean;
-  currentModel: string;
+  name: string;
   onAgentSave: () => void;
-  onPresetChange: (presetKey: string) => void;
-  presets: readonly ModelPreset[];
-  selectedPresetKey: string;
+  onNameChange: (value: string) => void;
+  onPolicyPresetChange: (value: AgentPolicyPresetKey) => void;
+  onToneChange: (value: string) => void;
+  policyPreset: AgentPolicyPresetKey;
+  selectedPresetLabel: string;
+  tone: string;
 }): React.ReactElement {
   return (
     <OnboardingStepFrame stepId="agent">
       <div className="grid gap-4" data-testid="first-run-onboarding-step-agent">
         <div className="grid gap-4 md:grid-cols-2">
+          <Input
+            label="Agent name"
+            value={name}
+            onChange={(event) => onNameChange(event.currentTarget.value)}
+          />
           <Select
-            label="Preset"
-            value={selectedPresetKey}
-            onChange={(event) => onPresetChange(event.currentTarget.value)}
+            label="Tone"
+            value={tone}
+            onChange={(event) => onToneChange(event.currentTarget.value)}
           >
-            {presets.map((preset) => (
-              <option key={preset.preset_key} value={preset.preset_key}>
-                {preset.display_name} ({preset.provider_key}/{preset.model_id})
+            {PERSONA_TONES.map((toneOption: string) => (
+              <option key={toneOption} value={toneOption}>
+                {toneOption}
               </option>
             ))}
           </Select>
-          <Input label="Current default agent model" readOnly value={currentModel} />
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <Input label="Model preset" readOnly value={selectedPresetLabel} />
+        </div>
+        <div className="grid gap-3">
+          <div className="text-sm font-medium text-fg">Agent policy preset</div>
+          <RadioGroup
+            value={policyPreset}
+            onValueChange={(value) => onPolicyPresetChange(value as AgentPolicyPresetKey)}
+          >
+            {AGENT_POLICY_PRESET_OPTIONS.map((option) => (
+              <label
+                key={option.key}
+                className="flex cursor-pointer items-start gap-3 rounded-xl border border-border/70 px-4 py-3"
+              >
+                <RadioGroupItem value={option.key} />
+                <div className="grid gap-1">
+                  <div className="text-sm font-medium text-fg">{option.label}</div>
+                  <div className="text-xs text-fg-muted">{option.description}</div>
+                </div>
+              </label>
+            ))}
+          </RadioGroup>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <Button type="button" isLoading={busy} disabled={!canSave} onClick={onAgentSave}>
-            Save default agent
+          <Button
+            type="button"
+            isLoading={busy}
+            disabled={!canSave || !name.trim() || !tone.trim()}
+            onClick={onAgentSave}
+          >
+            Save agent
           </Button>
         </div>
       </div>

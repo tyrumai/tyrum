@@ -44,3 +44,16 @@ export async function ensureAgentConfigSeeded(params: {
     reason: params.reason,
   });
 }
+
+export async function loadAgentConfigOrDefault(params: {
+  db: SqlDb;
+  stateMode: GatewayStateMode;
+  tenantId: string;
+  agentId: string;
+}): Promise<AgentConfigT> {
+  const latest = await new AgentConfigDal(params.db).getLatest({
+    tenantId: params.tenantId,
+    agentId: params.agentId,
+  });
+  return latest?.config ?? buildDefaultAgentConfig(params.stateMode);
+}

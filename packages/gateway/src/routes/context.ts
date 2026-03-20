@@ -12,11 +12,16 @@ import type { AgentRegistry } from "../modules/agent/registry.js";
 import type { ContextReportDal } from "../modules/context/report-dal.js";
 import { requireTenantId } from "../modules/auth/claims.js";
 import { isToolAllowed } from "../modules/agent/tools.js";
-import { ScopeNotFoundError } from "../modules/identity/scope.js";
+import {
+  resolveRequestedAgentKey,
+  ScopeNotFoundError,
+  type IdentityScopeDal,
+} from "../modules/identity/scope.js";
 
 export interface ContextRouteDeps {
   agents: AgentRegistry;
   contextReportDal: ContextReportDal;
+  identityScopeDal: IdentityScopeDal;
 }
 
 export function createContextRoutes(deps: ContextRouteDeps): Hono {
@@ -24,7 +29,20 @@ export function createContextRoutes(deps: ContextRouteDeps): Hono {
 
   app.get("/context", async (c) => {
     const tenantId = requireTenantId(c);
-    const agentKey = c.req.query("agent_key")?.trim() || "default";
+    let agentKey: string;
+    try {
+      agentKey = await resolveRequestedAgentKey({
+        identityScopeDal: deps.identityScopeDal,
+        tenantId,
+        agentKey: c.req.query("agent_key"),
+      });
+    } catch (err) {
+      if (err instanceof ScopeNotFoundError) {
+        return c.json({ error: err.code, message: err.message }, 404);
+      }
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ error: "invalid_request", message }, 400);
+    }
     let runtime;
     try {
       runtime = await deps.agents.getRuntime({ tenantId, agentKey });
@@ -64,7 +82,20 @@ export function createContextRoutes(deps: ContextRouteDeps): Hono {
 
   app.get("/context/tools", async (c) => {
     const tenantId = requireTenantId(c);
-    const agentKey = c.req.query("agent_key")?.trim() || "default";
+    let agentKey: string;
+    try {
+      agentKey = await resolveRequestedAgentKey({
+        identityScopeDal: deps.identityScopeDal,
+        tenantId,
+        agentKey: c.req.query("agent_key"),
+      });
+    } catch (err) {
+      if (err instanceof ScopeNotFoundError) {
+        return c.json({ error: err.code, message: err.message }, 404);
+      }
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ error: "invalid_request", message }, 400);
+    }
     let runtime;
     try {
       runtime = await deps.agents.getRuntime({ tenantId, agentKey });

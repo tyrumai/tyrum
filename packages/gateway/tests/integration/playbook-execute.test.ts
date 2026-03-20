@@ -28,7 +28,7 @@ describe("POST /playbooks/:id/execute", () => {
     const res = await app.request("/playbooks/test-playbook/execute", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ key: "key-1", lane: "lane-1" }),
+      body: JSON.stringify({ key: "agent:default:main", lane: "lane-1" }),
     });
     expect(res.status).toBe(200);
 

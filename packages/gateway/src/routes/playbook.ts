@@ -3,7 +3,7 @@
  */
 
 import { Hono } from "hono";
-import { ExecutionBudgets, PlaybookRuntimeRequest } from "@tyrum/contracts";
+import { ExecutionBudgets, parseTyrumKey, PlaybookRuntimeRequest } from "@tyrum/contracts";
 import type { Playbook } from "@tyrum/contracts";
 import type { ExecutionBudgets as ExecutionBudgetsT } from "@tyrum/contracts";
 import { PlaybookRunner } from "../modules/playbook/runner.js";
@@ -17,6 +17,7 @@ import type { PolicyService } from "@tyrum/runtime-policy";
 import type { ApprovalDal } from "../modules/approval/dal.js";
 import type { SqlDb } from "../statestore/types.js";
 import { requireTenantId } from "../modules/auth/claims.js";
+import type { IdentityScopeDal } from "../modules/identity/scope.js";
 
 export interface PlaybookRouteDeps {
   playbooks: Playbook[];
@@ -25,6 +26,7 @@ export interface PlaybookRouteDeps {
   policyService?: PolicyService;
   approvalDal?: ApprovalDal;
   db?: SqlDb;
+  identityScopeDal?: IdentityScopeDal;
 }
 
 export function createPlaybookRoutes(deps: PlaybookRouteDeps): Hono {
@@ -124,7 +126,7 @@ export function createPlaybookRoutes(deps: PlaybookRouteDeps): Hono {
    */
   app.post("/playbooks/:id/execute", async (c) => {
     const tenantId = requireTenantId(c);
-    if (!deps.engine || !deps.policyService) {
+    if (!deps.engine || !deps.policyService || !deps.identityScopeDal) {
       return c.json({ error: "unsupported", message: "execution engine API is not enabled" }, 400);
     }
 
@@ -135,10 +137,31 @@ export function createPlaybookRoutes(deps: PlaybookRouteDeps): Hono {
     }
 
     const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
-    const key =
-      typeof body["key"] === "string" && body["key"].trim().length > 0
-        ? body["key"].trim()
-        : pb.manifest.id;
+    let key: string;
+    let agentKey: string;
+    if (typeof body["key"] === "string" && body["key"].trim().length > 0) {
+      key = body["key"].trim();
+      try {
+        const parsedKey = parseTyrumKey(key as never);
+        if (parsedKey.kind !== "agent") {
+          return c.json({ error: "invalid_request", message: "key must target an agent" }, 400);
+        }
+        agentKey = parsedKey.agent_key;
+      } catch {
+        return c.json({ error: "invalid_request", message: "key must be a valid agent key" }, 400);
+      }
+    } else {
+      const primaryAgentKey = await deps.identityScopeDal.resolvePrimaryAgentKey(tenantId);
+      if (!primaryAgentKey) {
+        return c.json({ error: "not_found", message: "primary agent not found" }, 404);
+      }
+      agentKey = primaryAgentKey;
+      key = `agent:${primaryAgentKey}:main`;
+    }
+    const resolvedAgentId = await deps.identityScopeDal.resolveAgentId(tenantId, agentKey);
+    if (!resolvedAgentId) {
+      return c.json({ error: "not_found", message: `agent '${agentKey}' not found` }, 404);
+    }
     const lane =
       typeof body["lane"] === "string" && body["lane"].trim().length > 0
         ? body["lane"].trim()
@@ -167,6 +190,7 @@ export function createPlaybookRoutes(deps: PlaybookRouteDeps): Hono {
 
     const effectivePolicy = await deps.policyService.loadEffectiveBundle({
       tenantId,
+      agentId: resolvedAgentId,
       playbookBundle,
     });
     const snapshot = await deps.policyService.getOrCreateSnapshot(tenantId, effectivePolicy.bundle);

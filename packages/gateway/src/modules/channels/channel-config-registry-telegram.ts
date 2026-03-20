@@ -233,15 +233,18 @@ export const telegramSpec: ChannelRegistrySpec<StoredTelegramChannelConfig> = {
     };
   },
   toConfiguredAccount(input) {
+    const accountConfig = {
+      ...((input.effectiveAgentKey ?? input.config.agent_key)
+        ? { agent_key: input.effectiveAgentKey ?? input.config.agent_key }
+        : {}),
+      ingress_mode: input.config.ingress_mode,
+      allowed_user_ids: input.config.allowed_user_ids,
+      pipeline_enabled: input.config.pipeline_enabled,
+    };
     return toConfiguredChannelAccount({
       channel: "telegram",
       accountKey: input.config.account_key,
-      config: {
-        agent_key: input.effectiveAgentKey ?? input.config.agent_key ?? "default",
-        ingress_mode: input.config.ingress_mode,
-        allowed_user_ids: input.config.allowed_user_ids,
-        pipeline_enabled: input.config.pipeline_enabled,
-      },
+      config: accountConfig,
       configuredSecretKeys: configuredSecretKeysForConfig(input.config),
       createdAt: input.createdAt,
       updatedAt: input.updatedAt,
