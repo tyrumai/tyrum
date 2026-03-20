@@ -18,6 +18,14 @@ on:
   pull_request:
     branches:
       - main
+    paths:
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "patches/**"
+      - "packages/**/package.json"
+      - "apps/**/package.json"
+      - ".github/workflows/security-baseline.yml"
 
 jobs:
   baseline:
@@ -31,42 +39,19 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Detect dependency changes
-        if: github.event_name == 'pull_request'
-        uses: dorny/paths-filter@v4
-        id: filter
-        with:
-          filters: |
-            deps:
-              - "package.json"
-              - "pnpm-lock.yaml"
-              - "pnpm-workspace.yaml"
-              - "patches/**"
-              - "packages/**/package.json"
-              - "apps/**/package.json"
-              - ".github/workflows/security-baseline.yml"
-
-      - name: Skip baseline (no dependency changes)
-        if: github.event_name == 'pull_request' && steps.filter.outputs.deps != 'true'
-        run: echo "No dependency manifest changes detected; skipping pnpm audit."
-
       - uses: pnpm/action-setup@v5
-        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push' || steps.filter.outputs.deps == 'true'
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
-        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push' || steps.filter.outputs.deps == 'true'
         with:
           node-version: 24
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
-        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push' || steps.filter.outputs.deps == 'true'
         run: pnpm install --frozen-lockfile
 
       - name: pnpm audit (workspace packages)
-        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push' || steps.filter.outputs.deps == 'true'
         # CVE-2026-31808 (file-type) is fixed upstream, but @nut-tree-fork/nut-js still pulls file-type 16.5.4 via Jimp.
         # We apply the loop-guard patch locally and keep the audit ignore until that transitive chain upgrades.
         run: pnpm audit
