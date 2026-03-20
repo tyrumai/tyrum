@@ -187,6 +187,57 @@ describe("createTranscriptStore", () => {
     expect(snapshot.nextCursor).toBeNull();
   });
 
+  it("clears list state and ignores stale loadMore results when filters change", async () => {
+    const ws = createFakeWs();
+    const deferred = createDeferred<ReturnType<typeof createTranscriptListResult>>();
+    ws.transcriptList
+      .mockResolvedValueOnce(createTranscriptListResult())
+      .mockReturnValueOnce(deferred.promise);
+    const transcript = createTranscriptStore(ws as never);
+
+    await transcript.refresh();
+
+    const loadMorePromise = transcript.loadMore();
+    expect(transcript.getSnapshot()).toMatchObject({
+      sessions: expect.arrayContaining([expect.objectContaining({ session_key: "session-root" })]),
+      nextCursor: "cursor-1",
+      loadingList: true,
+    });
+
+    transcript.setChannel(" other ");
+
+    expect(transcript.getSnapshot()).toMatchObject({
+      channel: "other",
+      sessions: [],
+      nextCursor: null,
+      loadingList: false,
+      errorList: null,
+      selectedSessionKey: null,
+      detail: null,
+    });
+
+    deferred.resolve({
+      sessions: [
+        createSessionSummary({
+          session_id: "session-extra-id",
+          session_key: "session-extra",
+          thread_id: "thread-extra",
+          title: "Extra session",
+        }),
+      ],
+      next_cursor: null,
+    });
+    await loadMorePromise;
+
+    expect(transcript.getSnapshot()).toMatchObject({
+      channel: "other",
+      sessions: [],
+      nextCursor: null,
+      loadingList: false,
+      errorList: null,
+    });
+  });
+
   it("opens a transcript detail view and clears it when filters change", async () => {
     const ws = createFakeWs();
     const transcript = createTranscriptStore(ws as never);

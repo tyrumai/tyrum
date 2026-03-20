@@ -108,6 +108,10 @@ export function createTranscriptStore(ws: OperatorWsClient): TranscriptStore {
   let listRunId = 0;
   let detailRunId = 0;
 
+  function invalidateListLoad(): void {
+    listRunId += 1;
+  }
+
   function invalidateDetailLoad(): void {
     detailRunId += 1;
   }
@@ -257,13 +261,18 @@ export function createTranscriptStore(ws: OperatorWsClient): TranscriptStore {
         if (prev.agentId === nextAgentId) {
           return prev;
         }
+        invalidateListLoad();
         invalidateDetailLoad();
         return {
           ...prev,
           agentId: nextAgentId,
+          sessions: [],
+          nextCursor: null,
           selectedSessionKey: null,
+          loadingList: false,
           detail: null,
           loadingDetail: false,
+          errorList: null,
           errorDetail: null,
         };
       });
@@ -274,13 +283,18 @@ export function createTranscriptStore(ws: OperatorWsClient): TranscriptStore {
         if (prev.channel === nextChannel) {
           return prev;
         }
+        invalidateListLoad();
         invalidateDetailLoad();
         return {
           ...prev,
           channel: nextChannel,
+          sessions: [],
+          nextCursor: null,
           selectedSessionKey: null,
+          loadingList: false,
           detail: null,
           loadingDetail: false,
+          errorList: null,
           errorDetail: null,
         };
       });
@@ -290,13 +304,18 @@ export function createTranscriptStore(ws: OperatorWsClient): TranscriptStore {
         if (prev.activeOnly === activeOnly) {
           return prev;
         }
+        invalidateListLoad();
         invalidateDetailLoad();
         return {
           ...prev,
           activeOnly,
+          sessions: [],
+          nextCursor: null,
           selectedSessionKey: null,
+          loadingList: false,
           detail: null,
           loadingDetail: false,
+          errorList: null,
           errorDetail: null,
         };
       });
@@ -306,13 +325,18 @@ export function createTranscriptStore(ws: OperatorWsClient): TranscriptStore {
         if (prev.archived === archived) {
           return prev;
         }
+        invalidateListLoad();
         invalidateDetailLoad();
         return {
           ...prev,
           archived,
+          sessions: [],
+          nextCursor: null,
           selectedSessionKey: null,
+          loadingList: false,
           detail: null,
           loadingDetail: false,
+          errorList: null,
           errorDetail: null,
         };
       });
