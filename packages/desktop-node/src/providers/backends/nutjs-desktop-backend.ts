@@ -34,6 +34,7 @@ interface NutJsApi {
 
 export class NutJsDesktopBackend implements DesktopBackend {
   private api: NutJsApi | null = null;
+  readonly supportsClipboardWrite = false;
 
   private async load(): Promise<NutJsApi> {
     if (this.api) return this.api;
@@ -184,5 +185,9 @@ export class NutJsDesktopBackend implements DesktopBackend {
     } catch (err) {
       throw new Error(`Keyboard press "${key}" failed: ${(err as Error).message}`);
     }
+  }
+
+  async writeClipboardText(_text: string): Promise<void> {
+    throw new Error("Clipboard write is unavailable on this desktop runtime");
   }
 }

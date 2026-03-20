@@ -7,6 +7,7 @@ export interface ScreenCapture {
 }
 
 export interface DesktopBackend {
+  readonly supportsClipboardWrite?: boolean;
   captureScreen(display: DesktopDisplayTarget): Promise<ScreenCapture>;
   moveMouse(x: number, y: number): Promise<void>;
   clickMouse(x: number, y: number, button?: "left" | "right" | "middle"): Promise<void>;
@@ -14,6 +15,7 @@ export interface DesktopBackend {
   dragMouse(x: number, y: number, duration_ms?: number): Promise<void>;
   typeText(text: string): Promise<void>;
   pressKey(key: string): Promise<void>;
+  writeClipboardText(text: string): Promise<void>;
 }
 
 const TINY_PNG = Buffer.from(
@@ -23,6 +25,7 @@ const TINY_PNG = Buffer.from(
 
 export class MockDesktopBackend implements DesktopBackend {
   readonly calls: Array<{ method: string; args: unknown[] }> = [];
+  readonly supportsClipboardWrite = false;
 
   async captureScreen(display: DesktopDisplayTarget): Promise<ScreenCapture> {
     this.calls.push({ method: "captureScreen", args: [display] });
@@ -55,5 +58,10 @@ export class MockDesktopBackend implements DesktopBackend {
 
   async pressKey(key: string): Promise<void> {
     this.calls.push({ method: "pressKey", args: [key] });
+  }
+
+  async writeClipboardText(text: string): Promise<void> {
+    this.calls.push({ method: "writeClipboardText", args: [text] });
+    throw new Error("Clipboard write is unavailable in MockDesktopBackend");
   }
 }

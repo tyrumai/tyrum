@@ -4,6 +4,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("electron", () => ({
   app: { isPackaged: false },
+  clipboard: {
+    writeText: clipboardWriteTextMock,
+  },
 }));
 
 import {
@@ -23,6 +26,10 @@ const allowMacScreenRecording = () => ({
   screenRecording: true,
 });
 
+const { clipboardWriteTextMock } = vi.hoisted(() => ({
+  clipboardWriteTextMock: vi.fn(),
+}));
+
 function createDelegate() {
   return {
     captureScreen: vi.fn(),
@@ -32,6 +39,7 @@ function createDelegate() {
     dragMouse: vi.fn(),
     typeText: vi.fn(),
     pressKey: vi.fn(),
+    writeClipboardText: vi.fn(),
   };
 }
 
@@ -94,6 +102,7 @@ describe("resolveDesktopScreenshotHelperLaunchCommand", () => {
 describe("IsolatedDesktopBackend", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    clipboardWriteTextMock.mockReset();
   });
 
   it("returns screenshot bytes from the helper response", async () => {
@@ -214,5 +223,30 @@ describe("IsolatedDesktopBackend", () => {
         writable: true,
       });
     }
+  });
+
+  it("writes clipboard text through Electron without delegating to nut.js", async () => {
+    const delegate = createDelegate();
+    const backend = new IsolatedDesktopBackend(delegate, {
+      macPermissions: allowMacScreenRecording,
+    });
+
+    await backend.writeClipboardText("copied from Electron");
+
+    expect(clipboardWriteTextMock).toHaveBeenCalledWith("copied from Electron");
+    expect(delegate.writeClipboardText).not.toHaveBeenCalled();
+  });
+
+  it("redacts clipboard payloads when Electron clipboard writes fail", async () => {
+    clipboardWriteTextMock.mockImplementation(() => {
+      throw new Error("failed to copy super-secret-clipboard-text");
+    });
+    const backend = new IsolatedDesktopBackend(createDelegate(), {
+      macPermissions: allowMacScreenRecording,
+    });
+
+    await expect(backend.writeClipboardText("super-secret-clipboard-text")).rejects.toThrow(
+      "Clipboard write failed",
+    );
   });
 });

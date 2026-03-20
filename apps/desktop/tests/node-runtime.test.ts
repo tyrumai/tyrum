@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   descriptorIdsForClientCapability,
@@ -10,6 +10,7 @@ import {
 } from "@tyrum/contracts";
 import type { WsCapabilityReadyPayload } from "@tyrum/contracts";
 import type { CapabilityProvider, TaskResult } from "@tyrum/node-sdk";
+import { DesktopProvider, MockDesktopBackend, type ConfirmationFn } from "@tyrum/desktop-node";
 import { NodeRuntime } from "../src/main/node-runtime.js";
 import { resolvePermissions } from "../src/main/config/permissions.js";
 import { DEFAULT_CONFIG } from "../src/main/config/schema.js";
@@ -120,6 +121,28 @@ describe("NodeRuntime capability advertisement", () => {
     const payload = readCapabilityReadyPayload(runtime);
     expect(payload.capabilities).toEqual(expectedDescriptorsFor("desktop"));
     expect(payload.capability_states).toEqual([]);
+  });
+
+  it("includes clipboard-write when the registered desktop provider supports it", () => {
+    const runtime = new NodeRuntime(DEFAULT_CONFIG, resolvePermissions("balanced", {}), callbacks);
+    const backend = Object.assign(new MockDesktopBackend(), {
+      supportsClipboardWrite: true,
+      writeClipboardText: async (_text: string) => undefined,
+    });
+
+    runtime.registerProvider(
+      new DesktopProvider(
+        backend,
+        resolvePermissions("balanced", {}),
+        vi.fn<ConfirmationFn>().mockResolvedValue(true),
+      ),
+    );
+
+    const payload = readCapabilityReadyPayload(runtime);
+    expect(payload.capabilities).toContainEqual({
+      id: "tyrum.desktop.clipboard-write",
+      version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+    });
   });
 
   it("provider with no capability or capabilityIds produces no descriptors", () => {

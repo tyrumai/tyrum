@@ -16,6 +16,13 @@ import {
 import { DEFAULT_A11Y_MAX_DEPTH, pruneUiTree } from "./a11y/prune-ui-tree.js";
 import type { DesktopA11yBackend } from "./backends/desktop-a11y-backend.js";
 import type { DesktopBackend } from "./backends/desktop-backend.js";
+import {
+  describeDesktopExecutionError,
+  executeClipboardWrite,
+  executeKeyboardAction,
+  executeMouseAction,
+  resolveDesktopCapabilityIds,
+} from "./desktop-provider-input.js";
 import type { OcrEngine, OcrMatch } from "./ocr/types.js";
 
 import {
@@ -50,6 +57,7 @@ type SnapshotState = {
 
 export class DesktopProvider implements CapabilityProvider {
   readonly capability: ClientCapability = "desktop";
+  readonly capabilityIds: readonly string[];
   private a11yBackendState: "unknown" | "available" | "unavailable" = "unknown";
 
   constructor(
@@ -58,7 +66,11 @@ export class DesktopProvider implements CapabilityProvider {
     private requestConfirmation: ConfirmationFn,
     private ocr?: OcrEngine,
     private a11yBackend?: DesktopA11yBackend,
-  ) {}
+  ) {
+    this.capabilityIds = resolveDesktopCapabilityIds({
+      supportsClipboardWrite: this.backend.supportsClipboardWrite,
+    });
+  }
 
   private fail(error: string): TaskResult {
     return { success: false, error };
@@ -103,9 +115,29 @@ export class DesktopProvider implements CapabilityProvider {
         case "screenshot":
           return await this.screenshot(args);
         case "mouse":
-          return await this.mouseAction(args);
+          return await executeMouseAction(args, {
+            backend: this.backend,
+            requireInput: () => this.requireInput(),
+            confirm: (prompt, deniedMessage) => this.confirm(prompt, deniedMessage),
+            fail: (error) => this.fail(error),
+            evidence: (value) => this.evidence(value),
+          });
         case "keyboard":
-          return await this.keyboardAction(args);
+          return await executeKeyboardAction(args, {
+            backend: this.backend,
+            requireInput: () => this.requireInput(),
+            confirm: (prompt, deniedMessage) => this.confirm(prompt, deniedMessage),
+            fail: (error) => this.fail(error),
+            evidence: (value) => this.evidence(value),
+          });
+        case "clipboard_write":
+          return await executeClipboardWrite(args, {
+            backend: this.backend,
+            requireInput: () => this.requireInput(),
+            confirm: (prompt, deniedMessage) => this.confirm(prompt, deniedMessage),
+            fail: (error) => this.fail(error),
+            evidence: (value) => this.evidence(value),
+          });
         case "snapshot":
           return await this.snapshot(args);
         case "query":
@@ -118,7 +150,7 @@ export class DesktopProvider implements CapabilityProvider {
           return this.fail(`Unsupported desktop operation: ${(args as { op: string }).op}`);
       }
     } catch (err) {
-      return this.fail(`Desktop backend error: ${toErrorMessage(err)}`);
+      return this.fail(describeDesktopExecutionError(args.op, err));
     }
   }
 
@@ -431,80 +463,6 @@ export class DesktopProvider implements CapabilityProvider {
         elapsed_ms: elapsed,
         match: args.state === "hidden" ? lastMatch : undefined,
       },
-    };
-  }
-
-  private async mouseAction(args: {
-    action: string;
-    x: number;
-    y: number;
-    button?: string;
-    duration_ms?: number;
-  }): Promise<TaskResult> {
-    const denied = this.requireInput();
-    if (denied) return denied;
-    const confirmation = await this.confirm(
-      `Allow mouse ${args.action} at (${args.x}, ${args.y})?`,
-      "User denied mouse action",
-    );
-    if (confirmation) return confirmation;
-    switch (args.action) {
-      case "move":
-        await this.backend.moveMouse(args.x, args.y);
-        break;
-      case "click":
-        await this.backend.clickMouse(
-          args.x,
-          args.y,
-          args.button as "left" | "right" | "middle" | undefined,
-        );
-        break;
-      case "drag":
-        await this.backend.dragMouse(args.x, args.y, args.duration_ms);
-        break;
-      default:
-        return this.fail(`Unsupported mouse action: ${args.action}`);
-    }
-    return {
-      success: true,
-      evidence: this.evidence({ type: "mouse", action: args.action, x: args.x, y: args.y }),
-    };
-  }
-
-  private async keyboardAction(args: {
-    action: string;
-    text?: string;
-    key?: string;
-  }): Promise<TaskResult> {
-    const denied = this.requireInput();
-    if (denied) return denied;
-    const detail =
-      args.action === "type" ? args.text : args.action === "press" ? args.key : undefined;
-    const confirmation = await this.confirm(
-      `Allow keyboard ${args.action}: "${detail ?? "<missing>"}"?`,
-      "User denied keyboard action",
-    );
-    if (confirmation) return confirmation;
-    switch (args.action) {
-      case "type":
-        if (!args.text) return this.fail("Missing text for keyboard type action");
-        await this.backend.typeText(args.text);
-        break;
-      case "press":
-        if (!args.key) return this.fail("Missing key for keyboard press action");
-        await this.backend.pressKey(args.key);
-        break;
-      default:
-        return this.fail(`Unsupported keyboard action: ${args.action}`);
-    }
-    return {
-      success: true,
-      evidence: this.evidence({
-        type: "keyboard",
-        action: args.action,
-        text: args.text,
-        key: args.key,
-      }),
     };
   }
 
