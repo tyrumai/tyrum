@@ -268,11 +268,15 @@ describe("WorkBoard orchestration follow-up runtime behavior", () => {
     expect(await workboard.getItem({ scope, work_item_id: item.work_item_id })).toMatchObject({
       status: "cancelled",
     });
-    expect(await workboard.getTask({ scope, task_id: interventionTask.task_id })).toMatchObject({
+    const cancelledInterventionTask = await workboard.getTask({
+      scope,
+      task_id: interventionTask.task_id,
+    });
+    expect(cancelledInterventionTask).toMatchObject({
       status: "cancelled",
-      approval_id: null,
       result_summary: "Stop this work",
     });
+    expect(cancelledInterventionTask?.approval_id).toBeUndefined();
     expect(await workboard.getTask({ scope, task_id: activeTask.task_id })).toMatchObject({
       status: "cancelled",
     });
