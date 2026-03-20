@@ -112,6 +112,9 @@ export function AgentsPage({
           canDelete: source.can_delete,
           isPrimary: source.is_primary === true,
         }),
+        {
+          sort: (left, right) => left.displayName.localeCompare(right.displayName),
+        },
       );
       setAgentOptions(nextAgents);
       const nextSelectedAgentKey = selectInitialAgentKey({
