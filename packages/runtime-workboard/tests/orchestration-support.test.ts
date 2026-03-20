@@ -128,8 +128,8 @@ describe("maybeFinalizeWorkItem", () => {
   it("transitions doing items to done when all tasks are completed or skipped", async () => {
     const repository = createRepository();
     repository.listTasks.mockResolvedValue([
-      makeTask({ status: "completed" }),
-      makeTask({ task_id: "task-2", status: "skipped" }),
+      makeTask({ status: "completed", execution_profile: "executor_rw" }),
+      makeTask({ task_id: "task-2", status: "skipped", execution_profile: "executor_rw" }),
     ]);
     repository.getItem.mockResolvedValue(makeWorkItem({ status: "doing" }));
 
@@ -149,7 +149,9 @@ describe("maybeFinalizeWorkItem", () => {
 
   it("does not transition non-doing items", async () => {
     const repository = createRepository();
-    repository.listTasks.mockResolvedValue([makeTask({ status: "completed" })]);
+    repository.listTasks.mockResolvedValue([
+      makeTask({ status: "completed", execution_profile: "executor_rw" }),
+    ]);
     repository.getItem.mockResolvedValue(makeWorkItem({ status: "ready" }));
 
     await maybeFinalizeWorkItem({

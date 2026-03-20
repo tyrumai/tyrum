@@ -208,6 +208,18 @@ export class WorkboardTaskUpdatesDal {
       set.push("approval_id = ?");
       values.push(patch.approval_id);
     }
+    if (patch.subagent_id !== undefined) {
+      set.push("subagent_id = ?");
+      values.push(patch.subagent_id);
+    }
+    if (patch.pause_reason !== undefined) {
+      set.push("pause_reason = ?");
+      values.push(patch.pause_reason);
+    }
+    if (patch.pause_detail !== undefined) {
+      set.push("pause_detail = ?");
+      values.push(patch.pause_detail);
+    }
     if (patch.artifacts !== undefined) {
       set.push("artifacts_json = ?");
       values.push(JSON.stringify(patch.artifacts));

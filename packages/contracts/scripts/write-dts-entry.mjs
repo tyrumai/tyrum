@@ -15,6 +15,7 @@ if (!declarationChunk) {
 }
 
 const entryFile = join(distDir, "index.d.ts");
-const entryContents = `export * from "./${declarationChunk}";\n`;
+const runtimeEntry = declarationChunk.endsWith(".d.mts") ? "index.mjs" : "index.js";
+const entryContents = `export * from "./${runtimeEntry}";\n`;
 
 writeFileSync(entryFile, entryContents, "utf8");

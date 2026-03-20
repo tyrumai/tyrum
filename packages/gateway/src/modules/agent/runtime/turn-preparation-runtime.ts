@@ -21,7 +21,6 @@ import {
   type PrepareTurnHelperDeps,
 } from "./turn-preparation-helpers.js";
 import { type ResolvedAgentTurnInput } from "./turn-helpers.js";
-import type { ResolvedExecutionProfile } from "./execution-profile-resolution.js";
 import type { AgentLoadedContext } from "./types.js";
 import type { AgentContextStore } from "../context-store.js";
 import { loadCurrentAgentContext } from "../load-context.js";
