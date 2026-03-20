@@ -13,9 +13,12 @@ function createRepository(): WorkboardReconcilerRepository {
     listSubagents: vi.fn(async () => ({ subagents: [] })),
     listTasks: vi.fn(async () => []),
     transitionItem: vi.fn(async () => makeWorkItem({ status: "ready" })),
+    updateTask: vi.fn(async () => undefined),
     setStateKv: vi.fn(async () => undefined),
     requeueOrphanedTasks: vi.fn(async () => undefined),
     getItem: vi.fn(async () => makeWorkItem({ status: "doing" })),
+    getStateKv: vi.fn(async () => undefined),
+    createInterventionApproval: vi.fn(async () => undefined),
   };
 }
 
@@ -37,7 +40,9 @@ describe("WorkboardReconciler", () => {
   it("blocks work when a failed task has no active subagent", async () => {
     const repository = createRepository();
     repository.listDoingItems.mockResolvedValue([{ ...TEST_SCOPE, work_item_id: "work-1" }]);
-    repository.listTasks.mockResolvedValue([makeTask({ status: "failed" })]);
+    repository.listTasks.mockResolvedValue([
+      makeTask({ status: "failed", execution_profile: "executor_rw" }),
+    ]);
     const reconciler = new WorkboardReconciler({ repository });
 
     await reconciler.tick();
@@ -53,7 +58,9 @@ describe("WorkboardReconciler", () => {
   it("swallows failures while trying to block failed work", async () => {
     const repository = createRepository();
     repository.listDoingItems.mockResolvedValue([{ ...TEST_SCOPE, work_item_id: "work-1" }]);
-    repository.listTasks.mockResolvedValue([makeTask({ status: "failed" })]);
+    repository.listTasks.mockResolvedValue([
+      makeTask({ status: "failed", execution_profile: "executor_rw" }),
+    ]);
     repository.transitionItem.mockRejectedValue(new Error("db busy"));
     const reconciler = new WorkboardReconciler({ repository });
 
@@ -64,8 +71,8 @@ describe("WorkboardReconciler", () => {
     const repository = createRepository();
     repository.listDoingItems.mockResolvedValue([{ ...TEST_SCOPE, work_item_id: "work-1" }]);
     repository.listTasks.mockResolvedValue([
-      makeTask({ status: "completed" }),
-      makeTask({ task_id: "task-2", status: "skipped" }),
+      makeTask({ status: "completed", execution_profile: "executor_rw" }),
+      makeTask({ task_id: "task-2", status: "skipped", execution_profile: "executor_rw" }),
     ]);
     repository.getItem.mockResolvedValue(makeWorkItem({ status: "doing" }));
     const reconciler = new WorkboardReconciler({ repository });
@@ -83,7 +90,9 @@ describe("WorkboardReconciler", () => {
   it("does not transition non-doing items during finalization", async () => {
     const repository = createRepository();
     repository.listDoingItems.mockResolvedValue([{ ...TEST_SCOPE, work_item_id: "work-1" }]);
-    repository.listTasks.mockResolvedValue([makeTask({ status: "completed" })]);
+    repository.listTasks.mockResolvedValue([
+      makeTask({ status: "completed", execution_profile: "executor_rw" }),
+    ]);
     repository.getItem.mockResolvedValue(makeWorkItem({ status: "ready" }));
     const reconciler = new WorkboardReconciler({ repository });
 
@@ -96,8 +105,8 @@ describe("WorkboardReconciler", () => {
     const repository = createRepository();
     repository.listDoingItems.mockResolvedValue([{ ...TEST_SCOPE, work_item_id: "work-1" }]);
     repository.listTasks.mockResolvedValue([
-      makeTask({ status: "cancelled" }),
-      makeTask({ task_id: "task-2", status: "completed" }),
+      makeTask({ status: "cancelled", execution_profile: "executor_rw" }),
+      makeTask({ task_id: "task-2", status: "cancelled", execution_profile: "executor_rw" }),
     ]);
     const reconciler = new WorkboardReconciler({ repository });
 
@@ -107,21 +116,23 @@ describe("WorkboardReconciler", () => {
       scope: TEST_ITEM_SCOPE,
       work_item_id: "work-1",
       status: "blocked",
-      reason: "Execution task cancelled without an active subagent.",
+      reason: "Execution work was cancelled without an active subagent.",
     });
   });
 
   it("swallows failures while blocking cancelled work", async () => {
     const repository = createRepository();
     repository.listDoingItems.mockResolvedValue([{ ...TEST_SCOPE, work_item_id: "work-1" }]);
-    repository.listTasks.mockResolvedValue([makeTask({ status: "cancelled" })]);
+    repository.listTasks.mockResolvedValue([
+      makeTask({ status: "cancelled", execution_profile: "executor_rw" }),
+    ]);
     repository.transitionItem.mockRejectedValue(new Error("db busy"));
     const reconciler = new WorkboardReconciler({ repository });
 
     await expect(reconciler.tick()).resolves.toBeUndefined();
   });
 
-  it("requeues orphaned work when no tasks exist", async () => {
+  it("returns work to ready when execution tasks are missing", async () => {
     const repository = createRepository();
     repository.listDoingItems.mockResolvedValue([{ ...TEST_SCOPE, work_item_id: "work-1" }]);
     repository.listTasks.mockResolvedValue([]);
@@ -129,11 +140,7 @@ describe("WorkboardReconciler", () => {
 
     await reconciler.tick();
 
-    expect(repository.requeueOrphanedTasks).toHaveBeenCalledWith({
-      scope: TEST_ITEM_SCOPE,
-      work_item_id: "work-1",
-      updated_at: expect.any(String),
-    });
+    expect(repository.requeueOrphanedTasks).not.toHaveBeenCalled();
     expect(repository.setStateKv).toHaveBeenCalledWith({
       scope: { kind: "work_item", ...TEST_ITEM_SCOPE },
       key: "work.dispatch.phase",
@@ -144,24 +151,29 @@ describe("WorkboardReconciler", () => {
       scope: TEST_ITEM_SCOPE,
       work_item_id: "work-1",
       status: "ready",
-      reason: "Automatically requeued orphaned execution work.",
+      reason: "Execution work is missing and must be redispatched.",
     });
   });
 
-  it("requeues orphaned work for queued, leased, running, and paused tasks", async () => {
+  it("requeues orphaned work for leased, running, and paused tasks", async () => {
     const repository = createRepository();
     repository.listDoingItems.mockResolvedValue([{ ...TEST_SCOPE, work_item_id: "work-1" }]);
     repository.listTasks.mockResolvedValue([
-      makeTask({ status: "queued" }),
-      makeTask({ task_id: "task-2", status: "leased" }),
-      makeTask({ task_id: "task-3", status: "running" }),
-      makeTask({ task_id: "task-4", status: "paused" }),
+      makeTask({ status: "leased", execution_profile: "executor_rw" }),
+      makeTask({ task_id: "task-2", status: "running", execution_profile: "executor_rw" }),
+      makeTask({ task_id: "task-3", status: "paused", execution_profile: "executor_rw" }),
     ]);
     const reconciler = new WorkboardReconciler({ repository });
 
     await reconciler.tick();
 
     expect(repository.requeueOrphanedTasks).toHaveBeenCalledOnce();
+    expect(repository.setStateKv).toHaveBeenCalledWith(
+      expect.objectContaining({
+        key: "work.dispatch.phase",
+        value_json: "unassigned",
+      }),
+    );
     expect(repository.transitionItem).toHaveBeenCalledWith({
       scope: TEST_ITEM_SCOPE,
       work_item_id: "work-1",
@@ -173,12 +185,19 @@ describe("WorkboardReconciler", () => {
   it("swallows transition failures while requeueing orphaned work", async () => {
     const repository = createRepository();
     repository.listDoingItems.mockResolvedValue([{ ...TEST_SCOPE, work_item_id: "work-1" }]);
-    repository.listTasks.mockResolvedValue([makeTask({ status: "running" })]);
+    repository.listTasks.mockResolvedValue([
+      makeTask({ status: "running", execution_profile: "executor_rw" }),
+    ]);
     repository.transitionItem.mockRejectedValue(new Error("db busy"));
     const reconciler = new WorkboardReconciler({ repository });
 
     await expect(reconciler.tick()).resolves.toBeUndefined();
     expect(repository.requeueOrphanedTasks).toHaveBeenCalledOnce();
-    expect(repository.setStateKv).toHaveBeenCalledOnce();
+    expect(repository.setStateKv).toHaveBeenCalledWith(
+      expect.objectContaining({
+        key: "work.dispatch.phase",
+        value_json: "unassigned",
+      }),
+    );
   });
 });

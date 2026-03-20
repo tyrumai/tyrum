@@ -15,6 +15,7 @@ const TEST_ITEM_SCOPE = {
 function createRepository(): WorkboardDispatcherRepository {
   return {
     listReadyItems: vi.fn(async () => []),
+    listDoingItems: vi.fn(async () => []),
     getItem: vi.fn(async () => makeWorkItem({ status: "ready" })),
     listTasks: vi.fn(async () => []),
     createTask: vi.fn(async ({ task }) => makeTask(task)),
@@ -22,8 +23,11 @@ function createRepository(): WorkboardDispatcherRepository {
     leaseRunnableTasks: vi.fn(async () => ({ leased: [] })),
     transitionItem: vi.fn(async () => makeWorkItem({ status: "doing" })),
     getStateKv: vi.fn(async () => undefined),
+    setStateKv: vi.fn(async () => undefined),
     markSubagentClosed: vi.fn(async () => undefined),
     markSubagentFailed: vi.fn(async () => undefined),
+    acquireExecutionSlot: vi.fn(async () => true),
+    releaseExecutionSlot: vi.fn(async () => undefined),
     createSubagent: vi.fn(async ({ subagentId, subagent }) =>
       makeSubagent({
         subagent_id: subagentId ?? "subagent-1",
@@ -67,7 +71,20 @@ describe("WorkboardDispatcher", () => {
       .mockResolvedValueOnce(makeWorkItem({ work_item_id: "work-ready", status: "doing" }));
     repository.listTasks
       .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([makeTask({ work_item_id: "work-ready", status: "completed" })]);
+      .mockResolvedValueOnce([
+        makeTask({
+          work_item_id: "work-ready",
+          status: "leased",
+          execution_profile: "executor_rw",
+        }),
+      ])
+      .mockResolvedValueOnce([
+        makeTask({
+          work_item_id: "work-ready",
+          status: "completed",
+          execution_profile: "executor_rw",
+        }),
+      ]);
     repository.leaseRunnableTasks.mockResolvedValue({
       leased: [
         {
@@ -90,7 +107,9 @@ describe("WorkboardDispatcher", () => {
       status: "doing",
       reason: "Auto-dispatched to executor.",
     });
-    expect(runtime.runTurn).toHaveBeenCalledOnce();
+    await vi.waitFor(() => {
+      expect(runtime.runTurn).toHaveBeenCalledOnce();
+    });
   });
 
   it("creates a default execution task when none exist", async () => {
@@ -208,6 +227,7 @@ describe("WorkboardDispatcher", () => {
     repository.listReadyItems.mockResolvedValue([{ ...TEST_SCOPE, work_item_id: "work-1" }]);
     repository.listTasks
       .mockResolvedValueOnce([makeTask({ execution_profile: "integrator", status: "queued" })])
+      .mockResolvedValueOnce([makeTask({ execution_profile: "integrator", status: "leased" })])
       .mockResolvedValueOnce([makeTask({ execution_profile: "integrator", status: "completed" })]);
     repository.leaseRunnableTasks.mockResolvedValue({
       leased: [{ task: makeTask({ execution_profile: "integrator", status: "leased" }) }],
@@ -231,11 +251,13 @@ describe("WorkboardDispatcher", () => {
 
     await dispatcher.tick();
 
-    expect(desktopProvisioner.provisionManagedDesktop).toHaveBeenCalledWith({
-      tenantId: TEST_SCOPE.tenant_id,
-      subagentSessionKey: expect.stringContaining("agent:default:subagent:"),
-      subagentLane: "subagent",
-      label: "executor:work-1",
+    await vi.waitFor(() => {
+      expect(desktopProvisioner.provisionManagedDesktop).toHaveBeenCalledWith({
+        tenantId: TEST_SCOPE.tenant_id,
+        subagentSessionKey: expect.stringContaining("agent:default:subagent:"),
+        subagentLane: "subagent",
+        label: "executor:work-1",
+      });
     });
     expect(repository.createSubagent).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -260,6 +282,7 @@ describe("WorkboardDispatcher", () => {
     repository.listReadyItems.mockResolvedValue([{ ...TEST_SCOPE, work_item_id: "work-1" }]);
     repository.listTasks
       .mockResolvedValueOnce([makeTask({ execution_profile: "executor_rw", status: "queued" })])
+      .mockResolvedValueOnce([makeTask({ execution_profile: "executor_rw", status: "leased" })])
       .mockResolvedValueOnce([makeTask({ execution_profile: "executor_rw", status: "completed" })]);
     repository.leaseRunnableTasks.mockResolvedValue({
       leased: [{ task: makeTask({ execution_profile: "executor_rw", status: "leased" }) }],
@@ -274,16 +297,18 @@ describe("WorkboardDispatcher", () => {
 
     await dispatcher.tick();
 
-    expect(repository.createSubagent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        scope: TEST_ITEM_SCOPE,
-        subagentId: expect.any(String),
-        subagent: expect.objectContaining({
-          desktop_environment_id: undefined,
-          attached_node_id: undefined,
+    await vi.waitFor(() => {
+      expect(repository.createSubagent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          scope: TEST_ITEM_SCOPE,
+          subagentId: expect.any(String),
+          subagent: expect.objectContaining({
+            desktop_environment_id: undefined,
+            attached_node_id: undefined,
+          }),
         }),
-      }),
-    );
+      );
+    });
     expect(runtime.runTurn).toHaveBeenCalledWith(
       expect.objectContaining({
         message: expect.not.stringContaining("managed desktop node"),
@@ -318,10 +343,12 @@ describe("WorkboardDispatcher", () => {
 
     await dispatcher.tick();
 
-    expect(repository.markSubagentFailed).toHaveBeenCalledWith({
-      scope: TEST_ITEM_SCOPE,
-      subagent_id: expect.any(String),
-      reason: "executor failed",
+    await vi.waitFor(() => {
+      expect(repository.markSubagentFailed).toHaveBeenCalledWith({
+        scope: TEST_ITEM_SCOPE,
+        subagent_id: expect.any(String),
+        reason: "executor failed",
+      });
     });
     expect(repository.updateTask).toHaveBeenCalledWith({
       scope: TEST_ITEM_SCOPE,
