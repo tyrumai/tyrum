@@ -37,6 +37,8 @@ import {
 import type { SessionLineageRecord } from "./transcript-handlers.types.js";
 import type { ProtocolDeps, ProtocolRequestEnvelope } from "./types.js";
 
+const MAX_ACTIVE_ONLY_SCAN_PAGES = 10;
+
 export async function handleTranscriptMessage(
   client: ConnectedClient,
   msg: ProtocolRequestEnvelope,
@@ -104,8 +106,10 @@ async function handleTranscriptListMessage(
     const activeOnly = parsed.data.payload.active_only === true;
     const limit = parsed.data.payload.limit ?? 200;
     let cursor = parsed.data.payload.cursor;
+    let scannedPages = 0;
 
     while (true) {
+      scannedPages += 1;
       const listedRoots = await listSessionRecords({
         deps,
         tenantId,
@@ -159,7 +163,12 @@ async function handleTranscriptListMessage(
         shouldKeepTranscriptRootSummary(summary, activeOnly),
       );
 
-      if (activeOnly && attached.length === 0 && listedRoots.nextCursor) {
+      if (
+        activeOnly &&
+        attached.length === 0 &&
+        listedRoots.nextCursor &&
+        scannedPages < MAX_ACTIVE_ONLY_SCAN_PAGES
+      ) {
         cursor = listedRoots.nextCursor;
         continue;
       }
@@ -235,9 +244,8 @@ async function handleTranscriptGetMessage(
        FROM subagents
        WHERE tenant_id = ?
          AND workspace_id = ?
-         AND agent_id = ?
        ORDER BY created_at ASC, subagent_id ASC`,
-      [tenantId, focus.session.workspace_id, focus.session.agent_id],
+      [tenantId, focus.session.workspace_id],
     );
     const subagentBySessionKey = new Map(subagentRows.map((row) => [row.session_key, row]));
     const childRowsByParentKey = new Map<string, RawSubagentRow[]>();

@@ -93,4 +93,37 @@ describe("transcript WS active-only pagination", () => {
     ]);
     expect(response.result.next_cursor).toBeNull();
   });
+
+  it("stops scanning after a bounded number of empty active_only pages", async () => {
+    const fixture = createSessionDalFixture();
+    db = fixture.db;
+
+    for (let index = 0; index < 12; index += 1) {
+      const session = await fixture.dal.getOrCreate({
+        connectorKey: "ui",
+        providerThreadId: `thread-root-${String(index)}`,
+        containerKind: "group",
+      });
+      const minute = String(59 - index).padStart(2, "0");
+      await setSessionUpdatedAt({
+        db: db!,
+        tenantId: session.tenant_id,
+        sessionIds: [session.session_id],
+        valueSql: `'2026-02-17T00:${minute}:00.000Z'`,
+      });
+    }
+
+    const response = (await handleClientMessage(
+      createAdminWsClient(),
+      serializeWsRequest({ type: "transcript.list", payload: { active_only: true, limit: 1 } }),
+      { connectionManager: new ConnectionManager(), db: db! },
+    )) as {
+      ok: boolean;
+      result: { sessions: Array<{ session_key: string }>; next_cursor: string | null };
+    };
+
+    expect(response.ok).toBe(true);
+    expect(response.result.sessions).toEqual([]);
+    expect(response.result.next_cursor).toEqual(expect.any(String));
+  });
 });

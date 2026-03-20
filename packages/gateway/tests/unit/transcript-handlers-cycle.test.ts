@@ -86,6 +86,87 @@ describe("transcript WS handlers cycle protection", () => {
       child1SessionKey,
     ]);
   });
+
+  it("resolves cross-agent transcript lineage through intermediate subagent sessions", async () => {
+    const fixture = createSessionDalFixture();
+    db = fixture.db;
+    const parentSubagentId = "550e8400-e29b-41d4-a716-446655440010";
+    const childSubagentId = "550e8400-e29b-41d4-a716-446655440011";
+    const root = await fixture.dal.getOrCreate({
+      connectorKey: "ui",
+      providerThreadId: "thread-root",
+      containerKind: "group",
+    });
+    const parent = await fixture.dal.getOrCreate({
+      scopeKeys: { agentKey: "reviewer" },
+      connectorKey: "ui",
+      providerThreadId: "thread-parent",
+      containerKind: "group",
+    });
+    const child = await fixture.dal.getOrCreate({
+      connectorKey: "ui",
+      providerThreadId: "thread-child",
+      containerKind: "group",
+    });
+    const parentSessionKey = `agent:reviewer:subagent:${parentSubagentId}`;
+    const childSessionKey = `agent:default:subagent:${childSubagentId}`;
+
+    await db.run("UPDATE sessions SET session_key = ? WHERE tenant_id = ? AND session_id = ?", [
+      parentSessionKey,
+      parent.tenant_id,
+      parent.session_id,
+    ]);
+    await db.run("UPDATE sessions SET session_key = ? WHERE tenant_id = ? AND session_id = ?", [
+      childSessionKey,
+      child.tenant_id,
+      child.session_id,
+    ]);
+    await insertSubagent({
+      db,
+      subagentId: parentSubagentId,
+      tenantId: root.tenant_id,
+      agentId: parent.agent_id,
+      workspaceId: root.workspace_id,
+      parentSessionKey: root.session_key,
+      sessionKey: parentSessionKey,
+      createdAt: "2026-02-17T00:00:30.000Z",
+    });
+    await insertSubagent({
+      db,
+      subagentId: childSubagentId,
+      tenantId: root.tenant_id,
+      agentId: child.agent_id,
+      workspaceId: root.workspace_id,
+      parentSessionKey: parentSessionKey,
+      sessionKey: childSessionKey,
+      createdAt: "2026-02-17T00:00:40.000Z",
+    });
+
+    const response = (await handleClientMessage(
+      createAdminWsClient(),
+      serializeWsRequest({
+        type: "transcript.get",
+        payload: { session_key: childSessionKey },
+      }),
+      { connectionManager: new ConnectionManager(), db },
+    )) as {
+      ok: boolean;
+      result: {
+        root_session_key: string;
+        focus_session_key: string;
+        sessions: Array<{ session_key: string }>;
+      };
+    };
+
+    expect(response.ok).toBe(true);
+    expect(response.result.root_session_key).toBe(root.session_key);
+    expect(response.result.focus_session_key).toBe(childSessionKey);
+    expect(response.result.sessions.map((session) => session.session_key)).toEqual([
+      root.session_key,
+      parentSessionKey,
+      childSessionKey,
+    ]);
+  });
 });
 
 async function insertSubagent(input: {
