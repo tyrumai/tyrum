@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { sqlBoolParam } from "../../statestore/sql.js";
 import type { SqlDb } from "../../statestore/types.js";
 
 export const DEFAULT_TENANT_KEY = "default" as const;
@@ -211,9 +212,9 @@ export class IdentityScopeDal {
     const found = await this.db.get<{ agent_id: string; agent_key: string }>(
       `SELECT agent_id, agent_key
        FROM agents
-       WHERE tenant_id = ? AND is_primary = TRUE
+       WHERE tenant_id = ? AND is_primary = ?
        LIMIT 1`,
-      [tenantId],
+      [tenantId, sqlBoolParam(this.db, true)],
     );
     if (!found?.agent_id || !found.agent_key) return null;
 
@@ -244,8 +245,8 @@ export class IdentityScopeDal {
       const primary = await this.resolvePrimaryAgentId(tenantId);
       if (primary) return;
       await this.db.run(
-        `UPDATE agents SET is_primary = TRUE WHERE tenant_id = ? AND agent_id = ?`,
-        [tenantId, agentId],
+        `UPDATE agents SET is_primary = ? WHERE tenant_id = ? AND agent_id = ?`,
+        [sqlBoolParam(this.db, true), tenantId, agentId],
       );
       this.rememberPrimaryAgent(tenantId, key, agentId);
     };

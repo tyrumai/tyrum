@@ -22,7 +22,6 @@ import { LocationDal } from "./dal.js";
 import {
   resolveExistingAgentIdOrThrow,
   resolveExistingScopedIds,
-  resolveLocationAgentKey,
 } from "./scope-resolution.js";
 import { evaluateSavedPlaceEvent, type LocationSubjectState } from "./event-evaluator.js";
 import { evaluateCategoryTriggerEvents } from "./category-trigger-evaluator.js";
@@ -32,7 +31,7 @@ import type {
   LocationAutomationTriggerPatchRequest,
   LocationAutomationTriggerRecord,
 } from "./types.js";
-import { requirePrimaryAgentKey } from "../identity/scope.js";
+import { requirePrimaryAgentKey, resolveRequestedAgentKey } from "../identity/scope.js";
 
 const logger = new Logger({ base: { module: "location.service" } });
 
@@ -68,7 +67,7 @@ export class LocationService {
   }
 
   async resolveAgentKey(input: { tenantId: string; agentKey?: string | null }): Promise<string> {
-    return await resolveLocationAgentKey({
+    return await resolveRequestedAgentKey({
       identityScopeDal: this.opts.identityScopeDal,
       ...input,
     });

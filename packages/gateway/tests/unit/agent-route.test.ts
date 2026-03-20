@@ -82,8 +82,8 @@ describe("createAgentRoutes", () => {
     const app = createAuthedApp({
       agents: { getRuntime } as never,
       db: {
-        get: vi.fn(async (sql: string) => {
-          if (sql.includes("is_primary = TRUE")) {
+        get: vi.fn(async (_sql: string, params?: unknown[]) => {
+          if (Array.isArray(params) && params[1] === 1) {
             return {
               agent_id: "11111111-1111-4111-8111-111111111111",
               agent_key: "primary-agent",

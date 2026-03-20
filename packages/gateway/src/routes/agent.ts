@@ -12,6 +12,7 @@ import { requireTenantId } from "../modules/auth/claims.js";
 import { listLatestAgentConfigsByAgentId, resolveAgentPersona } from "../modules/agent/persona.js";
 import { loadOptionalIdentity } from "../modules/agent/optional-identity.js";
 import { ScopeNotFoundError } from "../modules/identity/scope.js";
+import { sqlBoolParam } from "../statestore/sql.js";
 
 async function resolveAgentRecord(
   db: SqlDb,
@@ -38,9 +39,9 @@ async function resolvePrimaryAgentRecord(
   return await db.get<{ agent_id: string; agent_key: string; is_primary: boolean | number | null }>(
     `SELECT agent_id, agent_key, is_primary
      FROM agents
-     WHERE tenant_id = ? AND is_primary = TRUE
+     WHERE tenant_id = ? AND is_primary = ?
      LIMIT 1`,
-    [tenantId],
+    [tenantId, sqlBoolParam(db, true)],
   );
 }
 
