@@ -92,7 +92,7 @@ async function handleChatSessionListMessage(
   }
 
   const connectorKey = parsed.data.payload.channel ?? "ui";
-  let agentKey = parsed.data.payload.agent_id ?? undefined;
+  let agentKey: string | undefined;
 
   try {
     agentKey = await resolveChatAgentKey({
@@ -229,7 +229,7 @@ async function handleChatSessionCreateMessage(
   }
 
   const connectorKey = parsed.data.payload.channel ?? "ui";
-  let agentKey = parsed.data.payload.agent_id ?? undefined;
+  let agentKey: string | undefined;
 
   try {
     agentKey = await resolveChatAgentKey({

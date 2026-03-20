@@ -20,7 +20,7 @@ export async function resolveTelegramAgentId(input: {
   tenantId: string;
   accountKey: string;
   threadId: string;
-  identityScopeDal: IdentityScopeDal;
+  identityScopeDal?: IdentityScopeDal;
 }): Promise<string> {
   const { config, tenantId, accountKey, threadId, identityScopeDal } = input;
   const t = threadId.trim();
@@ -34,6 +34,9 @@ export async function resolveTelegramAgentId(input: {
   const accountAgentKey = account?.default_agent_key?.trim();
   if (accountAgentKey) {
     return accountAgentKey;
+  }
+  if (!identityScopeDal) {
+    throw new Error("identity scope is required to resolve the primary telegram agent");
   }
   return await requirePrimaryAgentKey(identityScopeDal, tenantId);
 }

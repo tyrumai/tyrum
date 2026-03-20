@@ -107,11 +107,7 @@ export async function processTelegramInboundUpdate(input: {
       tenantId: input.tenantId,
       accountKey: input.account.accountKey,
       threadId: chatId,
-      identityScopeDal:
-        input.identityScopeDal ??
-        (() => {
-          throw new Error("identity scope is required to resolve the primary telegram agent");
-        })(),
+      identityScopeDal: input.identityScopeDal,
     }));
 
   if (input.telegramQueue && input.account.pipelineEnabled) {

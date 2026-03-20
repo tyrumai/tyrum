@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { ExecutionTrigger as ExecutionTriggerT } from "@tyrum/contracts";
 import { parseTyrumKey, WorkspaceKey } from "@tyrum/contracts";
-import { IdentityScopeDal } from "../../identity/scope.js";
+import { IdentityScopeDal, requirePrimaryAgentId } from "../../identity/scope.js";
 import type { SqlDb } from "../../../statestore/types.js";
 import { normalizeWorkspaceKey } from "./db.js";
 import type { EnqueuePlanInput, EnqueuePlanResult } from "./types.js";
@@ -18,19 +18,9 @@ export async function enqueuePlanInTx(
   if (!tenantId) {
     throw new Error("tenantId is required to enqueue execution plans");
   }
-  let agentKey = "default";
-  try {
-    const parsedKey = parseTyrumKey(input.key as never);
-    if (parsedKey.kind === "agent") {
-      agentKey = parsedKey.agent_key;
-    }
-  } catch {
-    // Execution keys are broader than agent-scoped session keys; fall back to the
-    // primary seeded agent for internal workflow lanes that do not encode an agent key.
-  }
 
   const identityScopeDal = new IdentityScopeDal(tx);
-  const agentId = await identityScopeDal.ensureAgentId(tenantId, agentKey);
+  const agentId = await resolveExecutionAgentId(identityScopeDal, tenantId, input.key);
   const workspaceId = await resolveWorkspaceId(identityScopeDal, tx, tenantId, input);
   await identityScopeDal.ensureMembership(tenantId, agentId, workspaceId);
 
@@ -205,6 +195,24 @@ export async function enqueuePlan(
     steps_count: input.steps.length,
   });
   return res;
+}
+
+async function resolveExecutionAgentId(
+  identityScopeDal: IdentityScopeDal,
+  tenantId: string,
+  key: string,
+): Promise<string> {
+  try {
+    const parsedKey = parseTyrumKey(key as never);
+    if (parsedKey.kind === "agent") {
+      return await identityScopeDal.ensureAgentId(tenantId, parsedKey.agent_key);
+    }
+  } catch {
+    // Execution keys are broader than agent-scoped session keys; fall back to the
+    // existing primary agent for internal workflow lanes that do not encode an agent key.
+  }
+
+  return await requirePrimaryAgentId(identityScopeDal, tenantId);
 }
 
 async function resolveWorkspaceId(

@@ -145,6 +145,88 @@ describe("routing config (durable) + ingress", () => {
     expect(stored?.agent_key).toBeUndefined();
   });
 
+  it("routes durable thread overrides without requiring identity scope when primary fallback is unused", async () => {
+    const routing = new RoutingConfigDal(db);
+    await routing.set({
+      tenantId: DEFAULT_TENANT_ID,
+      config: {
+        v: 1,
+        telegram: {
+          accounts: {
+            work: {
+              default_agent_key: "default",
+              threads: {
+                "123": "agent-b",
+              },
+            },
+          },
+        },
+      },
+      createdBy: { kind: "test" },
+      reason: "seed",
+      occurredAtIso: "2026-02-24T00:00:00.000Z",
+    });
+    await seedTelegramAccount({
+      accountKey: "work",
+      botToken: "bot-token-work",
+      webhookSecret: "secret-work",
+      pipelineEnabled: true,
+    });
+
+    let capturedAgentId: string | undefined;
+
+    const app = new Hono();
+    app.route(
+      "/",
+      createIngressRoutes({
+        telegramRuntime: createTelegramRuntime(),
+        agents: {} as never,
+        telegramQueue: {
+          enqueue: async (_normalized, opts) => {
+            capturedAgentId = opts?.agentId;
+            return {
+              inbox: { inbox_id: 1, status: "queued" },
+              deduped: false,
+              message_text: "Hello bot",
+            };
+          },
+        } as never,
+        routingConfigDal: routing,
+      }),
+    );
+
+    const update = {
+      update_id: 100,
+      message: {
+        message_id: 42,
+        date: 1700000000,
+        from: {
+          id: 999,
+          is_bot: false,
+          first_name: "Alice",
+          username: "alice",
+        },
+        chat: {
+          id: 123,
+          type: "private",
+        },
+        text: "Hello bot",
+      },
+    };
+
+    const res = await app.request("/ingress/telegram", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-telegram-bot-api-secret-token": "secret-work",
+      },
+      body: JSON.stringify(update),
+    });
+
+    expect(res.status).toBe(200);
+    expect(capturedAgentId).toBe("agent-b");
+  });
+
   it("falls back to the default agent when durable routing config state is invalid", async () => {
     await db.run(
       "INSERT INTO routing_configs (tenant_id, config_json, created_by_json, reason) VALUES (?, ?, ?, ?)",
