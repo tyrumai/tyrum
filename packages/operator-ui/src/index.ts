@@ -40,8 +40,8 @@ export { cn } from "./lib/cn.js";
 export type { AdminAccessMode } from "./hooks/use-admin-access-mode.js";
 export { AdminAccessModeProvider, useAdminAccessMode } from "./hooks/use-admin-access-mode.js";
 
-export type { ThemeMode } from "./hooks/use-theme.js";
-export { ThemeProvider, useTheme } from "./hooks/use-theme.js";
+export type { ColorPalette, ThemeMode } from "./hooks/use-theme.js";
+export { COLOR_PALETTES, ThemeProvider, useTheme } from "./hooks/use-theme.js";
 
 export { useMediaQuery } from "./hooks/use-media-query.js";
 

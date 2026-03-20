@@ -8,6 +8,7 @@ import { notifyBackgroundConfigChanged } from "../background-mode.js";
 const RENDERER_MUTABLE_PATHS = new Set([
   "mode",
   "theme.source",
+  "theme.colorPalette",
   "remote.wsUrl",
   "remote.tokenRef",
   "remote.tlsCertFingerprint256",

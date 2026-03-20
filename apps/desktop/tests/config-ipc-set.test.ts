@@ -107,6 +107,28 @@ describe("config-ipc config:set allowlist", () => {
     expect(nativeTheme.themeSource).toBe("light");
   });
 
+  it("allows theme.colorPalette via config:set", async () => {
+    const { registerConfigIpc } = await import("../src/main/ipc/config-ipc.js");
+    registerConfigIpc();
+
+    const handler = registeredHandlers.get("config:set");
+    expect(handler).toBeTypeOf("function");
+
+    const result = handler?.({}, { theme: { colorPalette: "ocean" } });
+
+    expect(saveConfigMock).toHaveBeenCalledTimes(1);
+    expect(saveConfigMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        theme: expect.objectContaining({ colorPalette: "ocean" }),
+      }),
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        theme: expect.objectContaining({ colorPalette: "ocean" }),
+      }),
+    );
+  });
+
   it("does not allow background.enabled via config:set", async () => {
     const { registerConfigIpc } = await import("../src/main/ipc/config-ipc.js");
     registerConfigIpc();
