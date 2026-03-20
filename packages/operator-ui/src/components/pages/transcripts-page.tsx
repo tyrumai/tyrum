@@ -64,7 +64,12 @@ export function TranscriptsPage({ core }: { core: OperatorCore }) {
   ]);
 
   useEffect(() => {
-    if (!isConnected || transcript.loadingList || transcript.loadingDetail) {
+    if (
+      !isConnected ||
+      transcript.loadingList ||
+      transcript.loadingDetail ||
+      transcript.errorDetail
+    ) {
       return;
     }
     const selectedSessionKey = transcript.selectedSessionKey;
@@ -76,6 +81,7 @@ export function TranscriptsPage({ core }: { core: OperatorCore }) {
     core.transcriptStore,
     isConnected,
     transcript.detail?.focusSessionKey,
+    transcript.errorDetail,
     transcript.loadingDetail,
     transcript.loadingList,
     transcript.selectedSessionKey,
@@ -207,7 +213,6 @@ export function TranscriptsPage({ core }: { core: OperatorCore }) {
         />
         <TranscriptTimelinePanel
           approvalsById={approvalsById}
-          core={core}
           errorDetailMessage={transcript.errorDetail?.message ?? null}
           focusSession={focusSession}
           kindFilters={kindFilters}

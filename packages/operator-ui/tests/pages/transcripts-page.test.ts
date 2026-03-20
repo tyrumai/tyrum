@@ -402,6 +402,24 @@ describe("TranscriptsPage", () => {
     cleanupTestRoot(testRoot);
   });
 
+  it("does not auto-retry transcript detail loading after a failed detail request", async () => {
+    const { core, transcriptStore } = createTranscriptCore({
+      transcriptState: {
+        selectedSessionKey: "agent:default:ui:main",
+        detail: null,
+        loadingDetail: false,
+        errorDetail: { message: "timed out" },
+      },
+    });
+    const testRoot = renderIntoDocument(React.createElement(TranscriptsPage, { core }));
+
+    await flushPage();
+
+    expect(transcriptStore.openSession).not.toHaveBeenCalled();
+
+    cleanupTestRoot(testRoot);
+  });
+
   it("keeps the selected transcript event in the inspector across transcript detail updates", async () => {
     const { core, fixture, setTranscriptState } = createTranscriptCore();
     const testRoot = renderIntoDocument(React.createElement(TranscriptsPage, { core }));

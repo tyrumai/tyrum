@@ -82,22 +82,16 @@ export async function resolveApprovalEvents(input: {
   );
 
   const approvalDal = new ApprovalDal(input.deps.db);
-  const seen = new Set<string>();
-  const events: TranscriptTimelineEvent[] = [];
+  const approvalRows = await approvalDal.getByIds({
+    tenantId: input.tenantId,
+    approvalIds: rows.map((row) => row.approval_id),
+    includeReviews: true,
+  });
 
-  for (const row of rows) {
-    if (seen.has(row.approval_id)) {
-      continue;
-    }
-    seen.add(row.approval_id);
-    const approvalRow = await approvalDal.getById({
-      tenantId: input.tenantId,
-      approvalId: row.approval_id,
-      includeReviews: true,
-    });
-    const approval = approvalRow ? toApprovalContract(approvalRow) : undefined;
+  return approvalRows.flatMap((approvalRow) => {
+    const approval = toApprovalContract(approvalRow);
     if (!approval) {
-      continue;
+      return [];
     }
     const sessionKey =
       (typeof approval.scope?.run_id === "string"
@@ -105,19 +99,19 @@ export async function resolveApprovalEvents(input: {
         : undefined) ??
       (approval.scope?.key?.trim() || "");
     if (!sessionKey) {
-      continue;
+      return [];
     }
     const summary = input.summaryBySessionKey.get(sessionKey);
-    events.push({
-      event_id: `approval:${approval.approval_id}`,
-      kind: "approval",
-      occurred_at: approval.created_at,
-      session_key: sessionKey,
-      parent_session_key: summary?.parent_session_key,
-      subagent_id: summary?.subagent_id,
-      payload: { approval },
-    });
-  }
-
-  return events;
+    return [
+      {
+        event_id: `approval:${approval.approval_id}`,
+        kind: "approval" as const,
+        occurred_at: approval.created_at,
+        session_key: sessionKey,
+        parent_session_key: summary?.parent_session_key,
+        subagent_id: summary?.subagent_id,
+        payload: { approval },
+      },
+    ];
+  });
 }

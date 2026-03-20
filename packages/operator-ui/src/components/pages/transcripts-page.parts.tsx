@@ -189,7 +189,6 @@ function TranscriptSubagentCard({ event }: { event: TranscriptSubagentEvent }) {
 
 export function TranscriptTimelinePanel(props: {
   approvalsById: Record<string, Approval>;
-  core: OperatorCore;
   errorDetailMessage: string | null;
   focusSession: TranscriptSessionSummary | null;
   kindFilters: TimelineKindFilters;
@@ -204,7 +203,6 @@ export function TranscriptTimelinePanel(props: {
 }) {
   const {
     approvalsById,
-    core: _core,
     errorDetailMessage,
     focusSession,
     kindFilters,
@@ -217,7 +215,6 @@ export function TranscriptTimelinePanel(props: {
     onToggleKind,
     onSelectEvent,
   } = props;
-  void _core;
 
   return (
     <div className="min-h-0 border-b border-border lg:border-b-0 lg:border-r">

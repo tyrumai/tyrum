@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { handleClientMessage } from "../../src/ws/protocol.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
@@ -501,6 +501,7 @@ describe("transcript WS handlers", () => {
       stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ab",
       attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d1a",
     });
+    const getByIdSpy = vi.spyOn(ApprovalDal.prototype, "getById");
 
     const response = (await handleClientMessage(
       client,
@@ -523,5 +524,6 @@ describe("transcript WS handlers", () => {
       kind: "approval",
       session_key: root1.session_key,
     });
+    expect(getByIdSpy).not.toHaveBeenCalled();
   });
 });

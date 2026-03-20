@@ -28,6 +28,10 @@ function toReviewEntryContract(review: ReviewEntryRow): ReviewEntryT {
   return contract;
 }
 
+function buildSqlPlaceholders(count: number): string {
+  return Array.from({ length: count }, () => "?").join(", ");
+}
+
 export class ApprovalDal {
   constructor(
     private readonly db: SqlDb,
@@ -200,6 +204,33 @@ export class ApprovalDal {
   }): Promise<ApprovalRow | undefined> {
     const row = await this.getRawById(input);
     return row ? await this.hydrate(row, { includeReviews: input.includeReviews }) : undefined;
+  }
+
+  async getByIds(input: {
+    tenantId: string;
+    approvalIds: readonly string[];
+    includeReviews?: boolean;
+  }): Promise<ApprovalRow[]> {
+    if (input.approvalIds.length === 0) {
+      return [];
+    }
+
+    const approvalIds = [
+      ...new Set(input.approvalIds.map((approvalId) => approvalId.trim())),
+    ].filter((approvalId) => approvalId.length > 0);
+    if (approvalIds.length === 0) {
+      return [];
+    }
+
+    const rows = await this.db.all<RawApprovalRow>(
+      `SELECT *
+       FROM approvals
+       WHERE tenant_id = ?
+         AND approval_id IN (${buildSqlPlaceholders(approvalIds.length)})
+       ORDER BY created_at ASC, approval_id ASC`,
+      [input.tenantId.trim(), ...approvalIds],
+    );
+    return await this.hydrateMany(rows, { includeReviews: input.includeReviews });
   }
 
   async getByKey(input: {
