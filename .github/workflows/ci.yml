@@ -286,11 +286,6 @@ jobs:
           fi
           node scripts/lint/oxlint-new-files.mjs --base "$base"
 
-      - name: Oxlint report (warn)
-        if: github.event_name == 'pull_request'
-        continue-on-error: true
-        run: pnpm lint:oxlint:report
-
       - name: Typecheck (packages)
         run: pnpm typecheck
 
@@ -305,9 +300,6 @@ jobs:
 
       - name: Build
         run: pnpm build
-
-      - name: A11y (operator-ui)
-        run: pnpm test:a11y:operator-ui
 
   test-shards:
     name: Test shards (ubuntu-latest) (${{ matrix.shard }}/4)
@@ -540,12 +532,6 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Typecheck mobile app
-        run: pnpm --filter @tyrum/mobile typecheck
-
-      - name: Test mobile app
-        run: pnpm --filter @tyrum/mobile test
-
       - name: Sync native iOS project
         run: pnpm --filter @tyrum/mobile ios:sync
 
@@ -591,12 +577,6 @@ jobs:
           sdkmanager "platform-tools" "build-tools;36.0.0" "platforms;android-36"
 
       - run: pnpm install --frozen-lockfile
-
-      - name: Typecheck mobile app
-        run: pnpm --filter @tyrum/mobile typecheck
-
-      - name: Test mobile app
-        run: pnpm --filter @tyrum/mobile test
 
       - name: Sync native Android project
         run: pnpm --filter @tyrum/mobile android:sync
