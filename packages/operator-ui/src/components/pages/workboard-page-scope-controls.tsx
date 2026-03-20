@@ -100,12 +100,12 @@ export function WorkboardScopeControls({
   const applyScope = useCallback(async (): Promise<void> => {
     const nextScopeKeys = {
       agent_key: normalizeAgentKey(agentKeyDraft),
-      workspace_key: DEFAULT_SCOPE_KEYS.workspace_key,
+      workspace_key: scopeKeys.workspace_key,
     } satisfies WorkboardScopeKeys;
     core.workboardStore.setScopeKeys(nextScopeKeys);
     if (!isConnected) return;
     await core.workboardStore.refreshList();
-  }, [agentKeyDraft, core.workboardStore, isConnected]);
+  }, [agentKeyDraft, core.workboardStore, isConnected, scopeKeys.workspace_key]);
 
   return (
     <div className="flex flex-wrap items-center gap-3">

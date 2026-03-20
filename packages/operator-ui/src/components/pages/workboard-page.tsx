@@ -33,9 +33,9 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
   const effectiveScopeKeys = useMemo(
     () => ({
       agent_key: currentScopeKeys.agent_key,
-      workspace_key: "default",
+      workspace_key: currentScopeKeys.workspace_key,
     }),
-    [currentScopeKeys.agent_key],
+    [currentScopeKeys.agent_key, currentScopeKeys.workspace_key],
   );
   const desktopBoard = useAppShellMinWidth(WORKBOARD_DESKTOP_CONTENT_WIDTH_PX);
 

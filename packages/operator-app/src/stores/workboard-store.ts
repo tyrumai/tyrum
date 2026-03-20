@@ -1,4 +1,4 @@
-import type { WorkItem } from "@tyrum/contracts";
+import type { WorkItem, WorkScope } from "@tyrum/contracts";
 import type { OperatorWsClient } from "../deps.js";
 import { createStore, type ExternalStore } from "../store.js";
 import { toErrorMessage } from "../to-error-message.js";
@@ -13,6 +13,7 @@ export interface WorkboardState {
   items: WorkItem[];
   tasksByWorkItemId: WorkTasksByWorkItemId;
   scopeKeys: WorkboardScopeKeys;
+  resolvedScope: WorkScope | null;
   supported: boolean | null;
   loading: boolean;
   error: string | null;
@@ -60,6 +61,7 @@ export function createWorkboardStore(ws: OperatorWsClient): {
     items: [],
     tasksByWorkItemId: {},
     scopeKeys: DEFAULT_SCOPE_KEYS,
+    resolvedScope: null,
     supported: null,
     loading: false,
     error: null,
@@ -95,6 +97,7 @@ export function createWorkboardStore(ws: OperatorWsClient): {
         items: [],
         tasksByWorkItemId: {},
         scopeKeys: nextScopeKeys,
+        resolvedScope: null,
         loading: false,
         error: null,
         lastSyncedAt: null,
@@ -159,6 +162,7 @@ export function createWorkboardStore(ws: OperatorWsClient): {
         return {
           ...prev,
           items,
+          resolvedScope: result.scope,
           supported: true,
           loading: false,
           lastSyncedAt: new Date().toISOString(),

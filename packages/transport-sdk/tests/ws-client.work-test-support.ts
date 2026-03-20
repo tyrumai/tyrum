@@ -129,7 +129,15 @@ function registerWorkItemTests(fixture: WorkFixture): void {
       () => client.workList(listPayload),
       "work.list",
       listPayload,
-      { items: [workItem], next_cursor: "cursor-1" },
+      {
+        scope: {
+          tenant_id: workItem.tenant_id,
+          agent_id: workItem.agent_id,
+          workspace_id: workItem.workspace_id,
+        },
+        items: [workItem],
+        next_cursor: "cursor-1",
+      },
     );
     expect(listRes.items[0].work_item_id).toBe(workItem.work_item_id);
 

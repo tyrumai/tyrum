@@ -160,6 +160,7 @@ export type WsWorkLinkListRequest = z.infer<typeof WsWorkLinkListRequest>;
 // ---------------------------------------------------------------------------
 
 export const WsWorkListResult = strictObject({
+  scope: WorkScope,
   items: z.array(WorkItem),
   next_cursor: NonEmptyString.optional(),
 });

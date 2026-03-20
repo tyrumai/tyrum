@@ -37,7 +37,17 @@ export class FakeWsClient implements OperatorWsClient {
   memoryUpdate = vi.fn(async () => ({ v: 1, item: {} }) as unknown);
   memoryForget = vi.fn(async () => ({ v: 1, deleted_count: 0, tombstones: [] }) as unknown);
   memoryExport = vi.fn(async () => ({ v: 1, artifact_id: "artifact-1" }) as unknown);
-  workList = vi.fn(async () => ({ items: [] }) as unknown);
+  workList = vi.fn(
+    async () =>
+      ({
+        scope: {
+          tenant_id: "tenant-default",
+          agent_id: "agent-default",
+          workspace_id: "workspace-default",
+        },
+        items: [],
+      }) as unknown,
+  );
   requestDynamic = vi.fn(
     async (type: string, payload: unknown, schema?: { parse?: (input: unknown) => unknown }) => {
       let result: unknown;
