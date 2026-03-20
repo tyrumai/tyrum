@@ -1,6 +1,7 @@
 import type { OperatorCore } from "@tyrum/operator-app";
 import * as React from "react";
 import { CheckCircle2 } from "lucide-react";
+import { toast } from "sonner";
 import { useOperatorStore } from "../../use-operator-store.js";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { AppPage } from "../layout/app-page.js";
@@ -377,10 +378,16 @@ export function FirstRunOnboardingPage({
                 config,
                 reason: "onboarding: configure primary agent",
               });
-              await mutationHttp.policyConfig.updateAgent(nextAgentKey, {
-                bundle: buildAgentPolicyBundle(drafts.agentPolicyPreset),
-                reason: "onboarding: configure primary agent policy",
-              });
+              try {
+                await mutationHttp.policyConfig.updateAgent(nextAgentKey, {
+                  bundle: buildAgentPolicyBundle(drafts.agentPolicyPreset),
+                  reason: "onboarding: configure primary agent policy",
+                });
+              } catch (error) {
+                toast.warning("Agent created with limited setup", {
+                  description: `${formatErrorMessage(error)}. The agent was configured, but the policy preset was not applied.`,
+                });
+              }
             });
           },
           onToneChange: drafts.setAgentTone,
