@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { ContextReport as ContextReportSchema } from "@tyrum/contracts";
 import type { ToolDescriptor } from "../tools.js";
 import type { AgentContextReport, AgentLoadedContext } from "./types.js";
-import type { ResolvedExecutionProfile } from "./intake-delegation.js";
+import type { ResolvedExecutionProfile } from "./execution-profile-resolution.js";
 import type { ResolvedAgentTurnInput } from "./turn-helpers.js";
 import type { SessionRow } from "../session-dal.js";
 

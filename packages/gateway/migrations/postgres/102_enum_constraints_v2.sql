@@ -37,6 +37,7 @@ WHERE kind NOT IN (
   'intent',
   'retry',
   'connector.send',
+  'work.intervention',
   'other'
 );
 
@@ -57,6 +58,7 @@ ALTER TABLE approvals
       'intent',
       'retry',
       'connector.send',
+      'work.intervention',
       'other'
     )
   ),

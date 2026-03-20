@@ -342,7 +342,12 @@ function registerLeaseOwnerAndEventTests(fixture: WorkboardDalFixture): void {
       task_id: task.task_id,
       lease_owner: leaseOwner,
       nowMs: nowMs + 1_000,
-      patch: { status: "running", run_id: runId, started_at: "2026-02-27T00:00:02.000Z" },
+      patch: {
+        status: "running",
+        run_id: runId,
+        subagent_id: "00000000-0000-4000-8000-000000000700",
+        started_at: "2026-02-27T00:00:02.000Z",
+      },
       updatedAtIso: "2026-02-27T00:00:02.000Z",
     });
 
@@ -377,7 +382,12 @@ function registerLeaseOwnerAndEventTests(fixture: WorkboardDalFixture): void {
     await dal.updateTask({
       scope,
       task_id: task.task_id,
-      patch: { status: "paused", approval_id: approval!.approval_id },
+      patch: {
+        status: "paused",
+        approval_id: approval!.approval_id,
+        pause_reason: "manual",
+        pause_detail: "Operator paused the leased task.",
+      },
       updatedAtIso: "2026-02-27T00:00:03.000Z",
     });
 
@@ -417,8 +427,27 @@ function registerLeaseOwnerAndEventTests(fixture: WorkboardDalFixture): void {
     expect(workTaskEvents[0]?.payload?.task_id).toBe(task.task_id);
     expect(workTaskEvents[0]?.payload?.lease_expires_at_ms).toBe(nowMs + ttlMs);
     expect(workTaskEvents[1]?.payload?.run_id).toBe(runId);
+    expect(workTaskEvents[1]?.payload?.subagent_id).toBe("00000000-0000-4000-8000-000000000700");
     expect(workTaskEvents[2]?.payload?.approval_id).toBe(approval!.approval_id);
+    expect(workTaskEvents[2]?.payload?.pause_reason).toBe("manual");
+    expect(workTaskEvents[2]?.payload?.pause_detail).toBe("Operator paused the leased task.");
     expect(workTaskEvents[3]?.payload?.result_summary).toBe("ok");
+
+    const persisted = await db!.get<{
+      subagent_id: string | null;
+      pause_reason: string | null;
+      pause_detail: string | null;
+    }>(
+      `SELECT subagent_id, pause_reason, pause_detail
+       FROM work_item_tasks
+       WHERE tenant_id = ? AND task_id = ?`,
+      [scope.tenant_id, task.task_id],
+    );
+    expect(persisted).toEqual({
+      subagent_id: "00000000-0000-4000-8000-000000000700",
+      pause_reason: "manual",
+      pause_detail: "Operator paused the leased task.",
+    });
   });
 }
 

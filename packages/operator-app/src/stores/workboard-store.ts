@@ -23,6 +23,7 @@ export interface WorkboardStore extends ExternalStore<WorkboardState> {
   refreshList(): Promise<void>;
   setScopeKeys(scopeKeys: Partial<WorkboardScopeKeys>): void;
   upsertWorkItem(item: WorkItem): void;
+  removeWorkItem(workItemId: string): void;
   resetSupportProbe(): void;
 }
 
@@ -52,6 +53,7 @@ function isUnsupportedRequestForWorkList(errorMessage: string): boolean {
 export function createWorkboardStore(ws: OperatorWsClient): {
   store: WorkboardStore;
   handleWorkItemUpsert: (item: WorkItem) => void;
+  removeWorkItem: (workItemId: string) => void;
   handleWorkTaskEvent: (event: WorkTaskEvent) => void;
 } {
   const { store, setState } = createStore<WorkboardState>({
@@ -109,6 +111,18 @@ export function createWorkboardStore(ws: OperatorWsClient): {
       supported: prev.supported ?? true,
       items: upsertWorkItem(prev.items, item),
     }));
+  }
+
+  function removeWorkItem(workItemId: string): void {
+    setState((prev) => {
+      const nextTasks = { ...prev.tasksByWorkItemId };
+      delete nextTasks[workItemId];
+      return {
+        ...prev,
+        items: prev.items.filter((item) => item.work_item_id !== workItemId),
+        tasksByWorkItemId: nextTasks,
+      };
+    });
   }
 
   function handleWorkTaskEvent(event: WorkTaskEvent): void {
@@ -182,9 +196,11 @@ export function createWorkboardStore(ws: OperatorWsClient): {
       refreshList,
       setScopeKeys,
       upsertWorkItem: handleWorkItemUpsert,
+      removeWorkItem,
       resetSupportProbe,
     },
     handleWorkItemUpsert,
+    removeWorkItem,
     handleWorkTaskEvent,
   };
 }

@@ -31,6 +31,7 @@ describe("buildExecutorInstruction", () => {
     const instruction = buildExecutorInstruction({
       item: makeWorkItem({ work_item_id: "work-42" }),
       task: makeTask({ task_id: "task-42", execution_profile: "executor_rw" }),
+      tasks: [makeTask({ task_id: "task-42", execution_profile: "executor_rw" })],
     });
 
     expect(instruction).toContain("You own execution for WorkItem work-42: Ship runtime split");
@@ -42,10 +43,56 @@ describe("buildExecutorInstruction", () => {
     const instruction = buildExecutorInstruction({
       item: makeWorkItem(),
       task: makeTask(),
+      tasks: [makeTask()],
       attachedNodeId: "node-7",
     });
 
     expect(instruction).toContain("A managed desktop node is attached for this run: node-7");
+  });
+
+  it("includes the current item and task graph snapshot when resuming work", () => {
+    const instruction = buildExecutorInstruction({
+      item: makeWorkItem({
+        work_item_id: "work-1",
+        title: "Ship dependency-aware dispatch",
+        status: "blocked",
+        priority: 3,
+        acceptance: { done: true },
+      }),
+      task: makeTask({
+        task_id: "task-2",
+        status: "paused",
+        execution_profile: "executor_rw",
+        depends_on: ["task-1"],
+      }),
+      tasks: [
+        makeTask({
+          task_id: "task-1",
+          status: "completed",
+          execution_profile: "executor_ro",
+        }),
+        makeTask({
+          task_id: "task-2",
+          status: "paused",
+          execution_profile: "executor_rw",
+          depends_on: ["task-1"],
+        }),
+      ],
+      resumed: true,
+    });
+
+    expect(instruction).toContain("This task was paused and resumed.");
+    expect(instruction).toContain(
+      'Current work item snapshot: status=blocked priority=3 acceptance={"done":true}',
+    );
+    expect(instruction).toContain("Current task graph snapshot:");
+    expect(instruction).toContain("- task-1: status=completed profile=executor_ro depends_on=none");
+    expect(instruction).toContain(
+      "- task-2: status=paused profile=executor_rw depends_on=task-1 current_task=yes",
+    );
+    expect(instruction).toContain(
+      "Operator edits may have changed prior assumptions. Treat this snapshot as authoritative before continuing.",
+    );
   });
 });
 
@@ -81,8 +128,8 @@ describe("maybeFinalizeWorkItem", () => {
   it("transitions doing items to done when all tasks are completed or skipped", async () => {
     const repository = createRepository();
     repository.listTasks.mockResolvedValue([
-      makeTask({ status: "completed" }),
-      makeTask({ task_id: "task-2", status: "skipped" }),
+      makeTask({ status: "completed", execution_profile: "executor_rw" }),
+      makeTask({ task_id: "task-2", status: "skipped", execution_profile: "executor_rw" }),
     ]);
     repository.getItem.mockResolvedValue(makeWorkItem({ status: "doing" }));
 
@@ -102,7 +149,9 @@ describe("maybeFinalizeWorkItem", () => {
 
   it("does not transition non-doing items", async () => {
     const repository = createRepository();
-    repository.listTasks.mockResolvedValue([makeTask({ status: "completed" })]);
+    repository.listTasks.mockResolvedValue([
+      makeTask({ status: "completed", execution_profile: "executor_rw" }),
+    ]);
     repository.getItem.mockResolvedValue(makeWorkItem({ status: "ready" }));
 
     await maybeFinalizeWorkItem({

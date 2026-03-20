@@ -290,8 +290,8 @@ describe("AgentRuntime (WorkBoard integration)", () => {
     expect(stitched).toContain("Old doing item");
   });
 
-  it("delegates /delegate_execute to a WorkItem and returns its id immediately", async () => {
-    mockNoNonTitleInference();
+  it("treats /delegate_execute as normal text input", async () => {
+    generateTextMock.mockResolvedValueOnce({ text: "ok", steps: [] });
 
     const { createContainer } = await import("../../src/container.js");
     const { AgentRuntime } = await import("../../src/modules/agent/runtime.js");
@@ -312,78 +312,19 @@ describe("AgentRuntime (WorkBoard integration)", () => {
       parts: textParts("/delegate_execute Ship a WorkItem quickly"),
     });
 
-    const item = await container.db.get<{
-      work_item_id: string;
-      kind: string;
-      title: string;
-      created_from_session_key: string;
-    }>(
-      `SELECT work_item_id, kind, title, created_from_session_key
+    expect(result.reply).toBe("ok");
+    expect(generateTextMock).toHaveBeenCalled();
+
+    const count = await container.db.get<{ count: number }>(
+      `SELECT COUNT(*) AS count
        FROM work_items
        WHERE tenant_id = ? AND agent_id = ? AND workspace_id = ?`,
       [DEFAULT_TENANT_ID, DEFAULT_AGENT_ID, DEFAULT_WORKSPACE_ID],
     );
-
-    expect(item?.kind).toBe("action");
-    expect(item?.title).toContain("Ship a WorkItem quickly");
-    expect(item?.created_from_session_key).toBe("agent:default:test:default:channel:thread-1");
-    expect(result.reply).toContain(item?.work_item_id ?? "");
-
-    const activeKv = await container.db.get<{ value_json: string }>(
-      `SELECT value_json
-       FROM agent_state_kv
-       WHERE tenant_id = ?
-         AND agent_id = ?
-         AND workspace_id = ?
-         AND key = 'work.active_work_item_id'`,
-      [DEFAULT_TENANT_ID, DEFAULT_AGENT_ID, DEFAULT_WORKSPACE_ID],
-    );
-    expect(activeKv?.value_json).toContain(item?.work_item_id ?? "");
+    expect(count?.count ?? 0).toBe(0);
   });
 
-  it("delegates /delegate_plan to an initiative WorkItem", async () => {
-    mockNoNonTitleInference();
-
-    const { createContainer } = await import("../../src/container.js");
-    const { AgentRuntime } = await import("../../src/modules/agent/runtime.js");
-
-    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
-    container = await createContainer({ dbPath: ":memory:", migrationsDir });
-
-    const runtime = new AgentRuntime({
-      container,
-      home: homeDir,
-      languageModel: createStubLanguageModel("unused"),
-      fetchImpl: fetch404,
-    } as ConstructorParameters<typeof AgentRuntime>[0]);
-
-    const result = await runtime.turn({
-      channel: "test",
-      thread_id: "thread-1",
-      parts: textParts("/delegate_plan Design a safe rollout plan"),
-    });
-
-    const item = await container.db.get<{ work_item_id: string; kind: string; title: string }>(
-      `SELECT work_item_id, kind, title
-       FROM work_items
-       WHERE tenant_id = ? AND agent_id = ? AND workspace_id = ?`,
-      [DEFAULT_TENANT_ID, DEFAULT_AGENT_ID, DEFAULT_WORKSPACE_ID],
-    );
-
-    expect(item?.kind).toBe("initiative");
-    expect(item?.title).toContain("Design a safe rollout plan");
-    expect(result.reply).toContain(item?.work_item_id ?? "");
-
-    const task = await container.db.get<{ execution_profile: string }>(
-      `SELECT execution_profile
-       FROM work_item_tasks
-       WHERE work_item_id = ?`,
-      [item?.work_item_id ?? ""],
-    );
-    expect(task?.execution_profile).toBe("planner");
-  });
-
-  it("does not treat /delegate_executeX as a delegation directive", async () => {
+  it("treats /delegate_plan as normal text input", async () => {
     generateTextMock.mockResolvedValueOnce({ text: "ok", steps: [] });
 
     const { createContainer } = await import("../../src/container.js");
@@ -402,7 +343,7 @@ describe("AgentRuntime (WorkBoard integration)", () => {
     const result = await runtime.turn({
       channel: "test",
       thread_id: "thread-1",
-      parts: textParts("/delegate_executeX not a real directive"),
+      parts: textParts("/delegate_plan Design a safe rollout plan"),
     });
 
     expect(result.reply).toBe("ok");

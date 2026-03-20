@@ -17,7 +17,7 @@ export class SubagentService {
   constructor(opts: { db: SqlDb; agents?: AgentRegistry }) {
     const identityScopeDal = new IdentityScopeDal(opts.db);
     this.service = new RuntimeSubagentService({
-      repository: createGatewayWorkboardRepository(opts.db),
+      repository: createGatewayWorkboardRepository({ db: opts.db }),
       sessionKeyBuilder: createGatewaySessionKeyBuilder({ db: opts.db, identityScopeDal }),
       runtime: opts.agents
         ? createGatewaySubagentRuntime({

@@ -12,7 +12,7 @@ import { validateToolDescriptorInputSchema } from "../tool-schema.js";
 import { resolveGatewayStateMode } from "../../runtime-state/mode.js";
 import { ToolSetBuilder } from "./tool-set-builder.js";
 import type { ToolSetBuilderDeps } from "./tool-set-builder.js";
-import type { ResolvedExecutionProfile } from "./intake-delegation.js";
+import type { ResolvedExecutionProfile } from "./execution-profile-resolution.js";
 import type { AgentLoadedContext } from "./types.js";
 import type { TurnPreparationRuntimeDeps } from "./turn-preparation-runtime.js";
 import { buildSecretClipboardToolDescriptor } from "../tool-secret-definitions.js";

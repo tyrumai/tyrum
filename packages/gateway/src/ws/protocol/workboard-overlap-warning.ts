@@ -1,11 +1,13 @@
-import type { WorkboardService } from "@tyrum/runtime-workboard";
+import type { GatewayWorkboardService } from "../../modules/workboard/service.js";
 import type { ProtocolDeps } from "./types.js";
 import { WORKBOARD_WS_AUDIENCE } from "../workboard-audience.js";
 import { broadcastEvent } from "./helpers.js";
 
+type OverlapWarningWorkboardService = Pick<GatewayWorkboardService, "listItems" | "createArtifact">;
+
 export async function maybeEmitWorkItemOverlapWarningArtifact(params: {
-  workboardService: WorkboardService;
-  scope: Parameters<WorkboardService["listItems"]>[0]["scope"];
+  workboardService: OverlapWarningWorkboardService;
+  scope: Parameters<OverlapWarningWorkboardService["listItems"]>[0]["scope"];
   item: { work_item_id: string; title: string; fingerprint?: { resources: string[] } };
   deps: ProtocolDeps;
   fingerprintTouched?: boolean;

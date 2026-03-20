@@ -33,7 +33,13 @@ describe("workboard WS service extraction", () => {
     );
 
     expect(createGatewayWorkboardServiceMock).toHaveBeenCalledWith({
+      approvalDal: undefined,
       db,
+      policyService: undefined,
+      protocolDeps: {
+        db,
+        redactionEngine: expect.anything(),
+      },
       redactionEngine: expect.anything(),
     });
     expect(access).toMatchObject({ workboardService: { mocked: true }, db });

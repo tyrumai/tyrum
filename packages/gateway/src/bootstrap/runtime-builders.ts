@@ -309,6 +309,10 @@ export async function startEdgeRuntime(
     ? new WorkboardOrchestrator({
         db: context.container.db,
         agents,
+        redactionEngine: context.container.redactionEngine,
+        approvalDal: context.container.approvalDal,
+        policyService: context.container.policyService,
+        protocolDeps: protocol.protocolDeps,
         owner: context.instanceId,
         logger: context.logger,
       })
@@ -321,6 +325,10 @@ export async function startEdgeRuntime(
         agents,
         sessionLaneNodeAttachmentDal: context.container.sessionLaneNodeAttachmentDal,
         defaultDeploymentConfig: context.container.deploymentConfig,
+        redactionEngine: context.container.redactionEngine,
+        approvalDal: context.container.approvalDal,
+        policyService: context.container.policyService,
+        protocolDeps: protocol.protocolDeps,
         owner: context.instanceId,
         logger: context.logger,
       })
@@ -330,6 +338,10 @@ export async function startEdgeRuntime(
   const workboardReconciler = agents
     ? new WorkboardReconciler({
         db: context.container.db,
+        redactionEngine: context.container.redactionEngine,
+        approvalDal: context.container.approvalDal,
+        policyService: context.container.policyService,
+        protocolDeps: protocol.protocolDeps,
         logger: context.logger,
       })
     : undefined;

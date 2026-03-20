@@ -3,6 +3,10 @@ import { IntervalScheduler, resolvePositiveInt } from "../lifecycle/scheduler.js
 import type { Logger } from "../observability/logger.js";
 import type { SqlDb } from "../../statestore/types.js";
 import type { AgentRegistry } from "../agent/registry.js";
+import type { ApprovalDal } from "../approval/dal.js";
+import type { PolicyService } from "@tyrum/runtime-policy";
+import type { ProtocolDeps } from "../../ws/protocol/types.js";
+import type { RedactionEngine } from "../redaction/engine.js";
 import {
   createGatewaySubagentRuntime,
   createGatewayWorkboardRepository,
@@ -18,6 +22,10 @@ export class WorkboardOrchestrator {
     private readonly opts: {
       db: SqlDb;
       agents: AgentRegistry;
+      redactionEngine?: RedactionEngine;
+      approvalDal?: ApprovalDal;
+      policyService?: PolicyService;
+      protocolDeps?: ProtocolDeps;
       owner?: string;
       logger?: Logger;
       tickMs?: number;
@@ -25,7 +33,13 @@ export class WorkboardOrchestrator {
     },
   ) {
     this.orchestrator = new RuntimeWorkboardOrchestrator({
-      repository: createGatewayWorkboardRepository(opts.db),
+      repository: createGatewayWorkboardRepository({
+        db: opts.db,
+        redactionEngine: opts.redactionEngine,
+        approvalDal: opts.approvalDal,
+        policyService: opts.policyService,
+        protocolDeps: opts.protocolDeps,
+      }),
       runtime: createGatewaySubagentRuntime({ db: opts.db, agents: opts.agents }),
       owner: opts.owner,
       logger: opts.logger,

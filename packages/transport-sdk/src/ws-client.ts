@@ -35,6 +35,8 @@ import {
   type WsWorkArtifactListResult as WsWorkArtifactListResultT,
   type WsWorkCreatePayload,
   type WsWorkCreateResult as WsWorkCreateResultT,
+  type WsWorkDeletePayload,
+  type WsWorkDeleteResult as WsWorkDeleteResultT,
   type WsWorkDecisionCreatePayload,
   type WsWorkDecisionCreateResult as WsWorkDecisionCreateResultT,
   type WsWorkDecisionGetPayload,
@@ -49,6 +51,10 @@ import {
   type WsWorkLinkListResult as WsWorkLinkListResultT,
   type WsWorkListPayload,
   type WsWorkListResult as WsWorkListResultT,
+  type WsWorkPausePayload,
+  type WsWorkPauseResult as WsWorkPauseResultT,
+  type WsWorkResumePayload,
+  type WsWorkResumeResult as WsWorkResumeResultT,
   type WsWorkSignalCreatePayload,
   type WsWorkSignalCreateResult as WsWorkSignalCreateResultT,
   type WsWorkSignalGetPayload,
@@ -94,6 +100,7 @@ import {
   WsWorkArtifactGetResult,
   WsWorkArtifactListResult,
   WsWorkCreateResult,
+  WsWorkDeleteResult,
   WsWorkDecisionCreateResult,
   WsWorkDecisionGetResult,
   WsWorkDecisionListResult,
@@ -101,6 +108,8 @@ import {
   WsWorkLinkCreateResult,
   WsWorkLinkListResult,
   WsWorkListResult,
+  WsWorkPauseResult,
+  WsWorkResumeResult,
   WsWorkSignalCreateResult,
   WsWorkSignalGetResult,
   WsWorkSignalListResult,
@@ -220,8 +229,17 @@ export class TyrumClient extends TyrumClientTransportCore {
   workUpdate(payload: WsWorkUpdatePayload): Promise<WsWorkUpdateResultT> {
     return this.request("work.update", payload, WsWorkUpdateResult);
   }
+  workDelete(payload: WsWorkDeletePayload): Promise<WsWorkDeleteResultT> {
+    return this.request("work.delete", payload, WsWorkDeleteResult);
+  }
   workTransition(payload: WsWorkTransitionPayload): Promise<WsWorkTransitionResultT> {
     return this.request("work.transition", payload, WsWorkTransitionResult);
+  }
+  workPause(payload: WsWorkPausePayload): Promise<WsWorkPauseResultT> {
+    return this.request("work.pause", payload, WsWorkPauseResult);
+  }
+  workResume(payload: WsWorkResumePayload): Promise<WsWorkResumeResultT> {
+    return this.request("work.resume", payload, WsWorkResumeResult);
   }
   workLinkCreate(payload: WsWorkLinkCreatePayload): Promise<WsWorkLinkCreateResultT> {
     return this.request("work.link.create", payload, WsWorkLinkCreateResult);

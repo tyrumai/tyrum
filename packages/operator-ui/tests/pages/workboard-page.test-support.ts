@@ -74,6 +74,16 @@ function createWorkboardStore(snapshot?: Partial<Record<string, unknown>>) {
       };
       for (const listener of listeners) listener();
     },
+    removeWorkItem: vi.fn((workItemId: string) => {
+      state = {
+        ...state,
+        items: state.items.filter((item: any) => item.work_item_id !== workItemId),
+        tasksByWorkItemId: Object.fromEntries(
+          Object.entries(state.tasksByWorkItemId).filter(([key]) => key !== workItemId),
+        ),
+      };
+      for (const listener of listeners) listener();
+    }),
   };
 
   return {
@@ -104,8 +114,23 @@ function createWsStub(overrides?: Partial<Record<string, unknown>>) {
       for (const handler of handlers.get(event) ?? []) handler(payload);
     },
     workList: vi.fn(async () => ({ items: [] })),
+    workCreate: vi.fn(async ({ item }: any) => ({
+      item: makeWorkItem({ work_item_id: "wi-created", status: "backlog", ...item }),
+    })),
+    workUpdate: vi.fn(async ({ work_item_id, patch }: any) => ({
+      item: makeWorkItem({ work_item_id, ...patch }),
+    })),
+    workDelete: vi.fn(async ({ work_item_id }: any) => ({
+      item: makeWorkItem({ work_item_id }),
+    })),
     workTransition: vi.fn(async ({ work_item_id, status }: any) => ({
       item: makeWorkItem({ work_item_id, status }),
+    })),
+    workPause: vi.fn(async ({ work_item_id }: any) => ({
+      item: makeWorkItem({ work_item_id, status: "blocked" }),
+    })),
+    workResume: vi.fn(async ({ work_item_id }: any) => ({
+      item: makeWorkItem({ work_item_id, status: "ready" }),
     })),
     workGet: vi.fn(async ({ work_item_id }: any) => ({ item: makeWorkItem({ work_item_id }) })),
     workArtifactList: vi.fn(async () => ({ artifacts: [] })),
@@ -133,10 +158,14 @@ function createWsStub(overrides?: Partial<Record<string, unknown>>) {
 export function makeWorkItem(partial: Partial<Record<string, unknown>> & { work_item_id: string }) {
   return {
     work_item_id: partial.work_item_id,
+    tenant_id: "tenant-default",
+    agent_id: "agent-default",
+    workspace_id: "workspace-default",
     title: "Ship regression tests",
-    kind: "task",
+    kind: "action",
     priority: 2,
     status: "backlog",
+    created_from_session_key: "session-default",
     acceptance: { done: true },
     created_at: "2026-01-01T00:00:00.000Z",
     updated_at: "2026-01-01T00:05:00.000Z",

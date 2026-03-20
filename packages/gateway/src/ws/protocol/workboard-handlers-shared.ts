@@ -139,6 +139,9 @@ export function requireClientWorkboardAccess(
     workboardService: createGatewayWorkboardService({
       db: ctx.deps.db,
       redactionEngine: ctx.deps.redactionEngine,
+      approvalDal: ctx.deps.approvalDal,
+      policyService: ctx.deps.policyService,
+      protocolDeps: ctx.deps,
     }),
   };
 }

@@ -26,7 +26,8 @@ const HUMAN_RESOLVABLE_APPROVAL_STATUSES = ["queued", "awaiting_human"] satisfie
 type ApprovalResolveErrorCode = "invalid_request" | "not_found" | "unsupported";
 
 export interface ResolveApprovalDeps {
-  approvalDal: Pick<ApprovalDal, "resolveWithEngineAction"> & Partial<Pick<ApprovalDal, "getById">>;
+  approvalDal: Pick<ApprovalDal, "resolveWithEngineAction" | "transitionWithReview"> &
+    Partial<Pick<ApprovalDal, "getById">>;
   policyOverrideDal?: Pick<PolicyOverrideStore, "create">;
   wsEventDal?: WsEventDal;
   emitEvent?: (input: {
@@ -34,6 +35,13 @@ export interface ResolveApprovalDeps {
     event: WsEventEnvelope;
     audience?: WsBroadcastAudience;
   }) => void;
+  workboardIntervention?: {
+    handleResolvedIntervention(input: {
+      approval: ApprovalRow;
+      decision: "approved" | "denied";
+      reason?: string;
+    }): Promise<void>;
+  };
 }
 
 export interface ResolveApprovalInput {
@@ -141,8 +149,84 @@ export async function resolveApproval(
   input: ResolveApprovalInput,
 ): Promise<ResolveApprovalResult> {
   const overrideDal = deps.policyOverrideDal;
+  const existing = deps.approvalDal.getById
+    ? await deps.approvalDal.getById({
+        tenantId: input.tenantId,
+        approvalId: input.approvalId,
+      })
+    : undefined;
   let selectedOverrides: NormalizedSelectedOverride[] | undefined;
   let policySnapshotId: string | undefined;
+
+  if (deps.approvalDal.getById && !existing) {
+    return notFound(input.approvalId);
+  }
+
+  if (existing?.kind === "work.intervention") {
+    if (input.mode === "always") {
+      return invalidRequest("mode=always is not supported for work intervention approvals");
+    }
+    if (existing.status === "reviewing") {
+      return invalidRequest("approval is still being reviewed by the guardian");
+    }
+    if (!isHumanResolvableApprovalStatus(existing.status)) {
+      return { ok: true, approval: existing, transitioned: false };
+    }
+
+    const resolved = await deps.approvalDal.transitionWithReview({
+      tenantId: input.tenantId,
+      approvalId: input.approvalId,
+      status: input.decision === "approved" ? "approved" : "denied",
+      reviewerKind: "human",
+      reviewState: input.decision === "approved" ? "approved" : "denied",
+      reason: input.reason,
+      decisionPayload: {
+        decision: input.decision,
+        reason: input.reason ?? null,
+        mode: "once",
+        actor: input.resolvedBy ?? null,
+      },
+      allowedCurrentStatuses: [...HUMAN_RESOLVABLE_APPROVAL_STATUSES],
+    });
+    if (!resolved) {
+      return notFound(input.approvalId);
+    }
+
+    if (
+      resolved.transitioned &&
+      resolved.approval.work_item_id &&
+      resolved.approval.work_item_task_id &&
+      deps.workboardIntervention
+    ) {
+      await deps.workboardIntervention.handleResolvedIntervention({
+        approval: resolved.approval,
+        decision: input.decision,
+        reason: input.reason,
+      });
+    }
+
+    if (resolved.transitioned && deps.emitEvent) {
+      const approval = toApprovalContract(resolved.approval);
+      if (approval) {
+        const persistedEvent = await ensureApprovalUpdatedEvent({
+          tenantId: input.tenantId,
+          approval,
+          wsEventDal: deps.wsEventDal,
+        });
+        deps.emitEvent({
+          tenantId: input.tenantId,
+          event: persistedEvent.event,
+          audience: APPROVAL_WS_AUDIENCE,
+        });
+      }
+    }
+
+    return {
+      ok: true,
+      approval: resolved.approval,
+      transitioned: resolved.transitioned,
+    };
+  }
 
   if (input.decision === "approved" && input.mode === "always") {
     if (!deps.approvalDal.getById) {
@@ -152,10 +236,6 @@ export async function resolveApproval(
         message: "approval lookup not configured",
       };
     }
-    const existing = await deps.approvalDal.getById({
-      tenantId: input.tenantId,
-      approvalId: input.approvalId,
-    });
     if (!existing) {
       return notFound(input.approvalId);
     }

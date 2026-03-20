@@ -11,19 +11,39 @@ import type { SqlDb } from "../../statestore/types.js";
 import type { AgentRegistry } from "../agent/registry.js";
 import type { SessionLaneNodeAttachmentDal } from "../agent/session-lane-node-attachment-dal.js";
 import { IdentityScopeDal } from "../identity/scope.js";
+import type { ApprovalDal } from "../approval/dal.js";
 import type { RedactionEngine } from "../redaction/engine.js";
+import type { ProtocolDeps } from "../../ws/protocol/types.js";
+import type { PolicyService } from "@tyrum/runtime-policy";
+import { tryAcquireConcurrencySlotTx } from "../execution/engine/concurrency-manager.js";
+import { broadcastApprovalUpdated } from "../approval/update-broadcast.js";
+import { createReviewedApproval } from "../review/review-init.js";
 import { WorkboardDal } from "./dal.js";
 import { provisionManagedDesktop } from "./orchestration-support.js";
+import { createGatewayWorkboardService as createGatewayCrudWorkboardService } from "./service.js";
 import { resolveAgentKeyById, runSubagentTurn } from "./subagent-runtime-support.js";
 
 class GatewayWorkboardRepository implements WorkboardRepository, WorkboardCrudRepository {
   private readonly workboard: WorkboardDal;
+  private readonly service: ReturnType<typeof createGatewayCrudWorkboardService>;
 
   constructor(
     private readonly db: SqlDb,
-    redactionEngine?: RedactionEngine,
+    private readonly opts: {
+      redactionEngine?: RedactionEngine;
+      approvalDal?: ApprovalDal;
+      policyService?: PolicyService;
+      protocolDeps?: ProtocolDeps;
+    } = {},
   ) {
-    this.workboard = new WorkboardDal(db, redactionEngine);
+    this.workboard = new WorkboardDal(db, opts.redactionEngine);
+    this.service = createGatewayCrudWorkboardService({
+      db,
+      redactionEngine: opts.redactionEngine,
+      approvalDal: opts.approvalDal,
+      policyService: opts.policyService,
+      protocolDeps: opts.protocolDeps,
+    });
   }
 
   async listBacklogItems(limit: number) {
@@ -97,8 +117,15 @@ class GatewayWorkboardRepository implements WorkboardRepository, WorkboardCrudRe
     return await this.workboard.getItem(params);
   }
 
-  async createItem(params: Parameters<WorkboardDal["createItem"]>[0]) {
-    return await this.workboard.createItem(params);
+  async createItem(params: Parameters<WorkboardCrudRepository["createItem"]>[0]) {
+    return await this.service.createItem({
+      scope: params.scope,
+      item: {
+        ...params.item,
+        budgets: params.item.budgets ?? undefined,
+      },
+      createdFromSessionKey: params.createdFromSessionKey,
+    });
   }
 
   async listItems(params: Parameters<WorkboardDal["listItems"]>[0]) {
@@ -106,11 +133,11 @@ class GatewayWorkboardRepository implements WorkboardRepository, WorkboardCrudRe
   }
 
   async updateItem(params: Parameters<WorkboardDal["updateItem"]>[0]) {
-    return await this.workboard.updateItem(params);
+    return await this.service.updateItem(params);
   }
 
   async transitionItem(params: Parameters<WorkboardDal["transitionItem"]>[0]) {
-    return await this.workboard.transitionItem(params);
+    return await this.service.transitionItemSystem(params);
   }
 
   async listTasks(params: Parameters<WorkboardDal["listTasks"]>[0]) {
@@ -193,7 +220,7 @@ class GatewayWorkboardRepository implements WorkboardRepository, WorkboardCrudRe
   }
 
   async createLink(params: Parameters<WorkboardDal["createLink"]>[0]) {
-    return WorkItemLink.parse(await this.workboard.createLink(params));
+    return WorkItemLink.parse(await this.service.createLink(params));
   }
 
   async listLinks(params: Parameters<WorkboardDal["listLinks"]>[0]) {
@@ -240,22 +267,122 @@ class GatewayWorkboardRepository implements WorkboardRepository, WorkboardCrudRe
   async updateSignal(params: Parameters<WorkboardDal["updateSignal"]>[0]) {
     return await this.workboard.updateSignal(params);
   }
+
+  async acquireExecutionSlot(params: {
+    scope: { tenant_id: string; agent_id: string; workspace_id: string };
+    task_id: string;
+    owner: string;
+    limit: number;
+    nowMs?: number;
+    ttlMs?: number;
+  }): Promise<boolean> {
+    const nowMs = params.nowMs ?? Date.now();
+    const nowIso = new Date(nowMs).toISOString();
+    const scopeId = `${params.scope.agent_id}:${params.scope.workspace_id}`;
+    return await this.db.transaction(
+      async (tx) =>
+        await tryAcquireConcurrencySlotTx(tx, {
+          tenantId: params.scope.tenant_id,
+          scope: "workboard.execution",
+          scopeId,
+          limit: params.limit,
+          attemptId: params.task_id,
+          owner: params.owner,
+          nowMs,
+          nowIso,
+          ttlMs: Math.max(1_000, params.ttlMs ?? 60_000),
+        }),
+    );
+  }
+
+  async releaseExecutionSlot(params: {
+    scope: { tenant_id: string; agent_id: string; workspace_id: string };
+    task_id: string;
+  }): Promise<void> {
+    await this.db.run(
+      `UPDATE concurrency_slots
+       SET lease_owner = NULL,
+           lease_expires_at_ms = NULL,
+           attempt_id = NULL,
+           updated_at = ?
+       WHERE tenant_id = ?
+         AND scope = 'workboard.execution'
+         AND attempt_id = ?`,
+      [new Date().toISOString(), params.scope.tenant_id, params.task_id],
+    );
+  }
+
+  async createInterventionApproval(params: {
+    scope: { tenant_id: string; agent_id: string; workspace_id: string };
+    work_item_id: string;
+    task_id: string;
+    reason: string;
+  }): Promise<{ approval_id: string } | undefined> {
+    if (!this.opts.approvalDal) {
+      return undefined;
+    }
+
+    const approval = await createReviewedApproval({
+      approvalDal: this.opts.approvalDal,
+      policyService: this.opts.policyService,
+      emitUpdate: async (createdApproval) => {
+        if (!this.opts.protocolDeps) {
+          return;
+        }
+        await broadcastApprovalUpdated({
+          tenantId: params.scope.tenant_id,
+          approval: createdApproval,
+          protocolDeps: this.opts.protocolDeps,
+        });
+      },
+      params: {
+        tenantId: params.scope.tenant_id,
+        agentId: params.scope.agent_id,
+        workspaceId: params.scope.workspace_id,
+        approvalKey: `work.intervention:${params.work_item_id}:${params.task_id}`,
+        kind: "work.intervention",
+        prompt: `Manual intervention required for work item ${params.work_item_id}`,
+        motivation: params.reason,
+        context: {
+          source: "workboard.reconciler",
+          work_item_id: params.work_item_id,
+          work_item_task_id: params.task_id,
+          reason: params.reason,
+        },
+        workItemId: params.work_item_id,
+        workItemTaskId: params.task_id,
+      },
+    });
+    return { approval_id: approval.approval_id };
+  }
 }
 
-export function createGatewayWorkboardRepository(db: SqlDb): WorkboardRepository {
-  return new GatewayWorkboardRepository(db);
+export function createGatewayWorkboardRepository(opts: {
+  db: SqlDb;
+  redactionEngine?: RedactionEngine;
+  approvalDal?: ApprovalDal;
+  policyService?: PolicyService;
+  protocolDeps?: ProtocolDeps;
+}): GatewayWorkboardRepository {
+  return new GatewayWorkboardRepository(opts.db, opts);
 }
 
 export function createGatewayWorkboardCrudRepository(opts: {
   db: SqlDb;
   redactionEngine?: RedactionEngine;
-}): WorkboardCrudRepository {
-  return new GatewayWorkboardRepository(opts.db, opts.redactionEngine);
+  approvalDal?: ApprovalDal;
+  policyService?: PolicyService;
+  protocolDeps?: ProtocolDeps;
+}): GatewayWorkboardRepository {
+  return new GatewayWorkboardRepository(opts.db, opts);
 }
 
 export function createGatewayWorkboardService(opts: {
   db: SqlDb;
   redactionEngine?: RedactionEngine;
+  approvalDal?: ApprovalDal;
+  policyService?: PolicyService;
+  protocolDeps?: ProtocolDeps;
 }): RuntimeWorkboardService {
   return new RuntimeWorkboardService({
     repository: createGatewayWorkboardCrudRepository(opts),

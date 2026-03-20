@@ -1,6 +1,6 @@
 import { LaneQueueSignalDal } from "../lanes/queue-signal-dal.js";
 import { WorkboardDal } from "../workboard/dal.js";
-import { broadcastWorkItemCreated } from "../workboard/item-broadcast.js";
+import { createGatewayWorkboardService } from "../workboard/service.js";
 import { SubagentService } from "../workboard/subagent-service.js";
 import { requireHelperExecutionProfile } from "./subagent-helper-profiles.js";
 import type { ToolExecutionAudit, ToolResult } from "./tool-executor-shared.js";
@@ -32,10 +32,9 @@ async function createCapture(
     throw new Error("workboard.capture requires an active work_session_key");
   }
 
-  const workboard = new WorkboardDal(db);
-  const item = await workboard.createItem({
+  const workboardService = createGatewayWorkboardService({ db });
+  const item = await workboardService.createItem({
     scope,
-    createdFromSessionKey,
     item: {
       kind: readString(record, "kind") === "initiative" ? "initiative" : "action",
       title: readString(record, "title") ?? "Captured work item",
@@ -45,40 +44,15 @@ async function createCapture(
         (readString(record, "request") ? { request: readString(record, "request") } : undefined),
       parent_work_item_id: readString(record, "parent_work_item_id"),
     },
-  });
-
-  await workboard.createTask({
-    scope,
-    task: {
-      work_item_id: item.work_item_id,
-      status: "queued",
-      execution_profile: "planner",
-      side_effect_class: "workspace",
-      result_summary: "Initial refinement task",
+    createdFromSessionKey,
+    captureEvent: {
+      kind: "work.capture",
+      payload_json: {
+        request: readString(record, "request") ?? null,
+        source_session_key: createdFromSessionKey,
+      },
     },
   });
-  await workboard.setStateKv({
-    scope: { kind: "work_item", ...scope, work_item_id: item.work_item_id },
-    key: "work.refinement.phase",
-    value_json: "new",
-    provenance_json: { source: "workboard.capture" },
-  });
-  await workboard.setStateKv({
-    scope: { kind: "work_item", ...scope, work_item_id: item.work_item_id },
-    key: "work.dispatch.phase",
-    value_json: "unassigned",
-    provenance_json: { source: "workboard.capture" },
-  });
-  await workboard.appendEvent({
-    scope,
-    work_item_id: item.work_item_id,
-    kind: "work.capture",
-    payload_json: {
-      request: readString(record, "request") ?? null,
-      source_session_key: createdFromSessionKey,
-    },
-  });
-  broadcastWorkItemCreated({ item, deps: context.broadcastDeps });
 
   return jsonResult(toolCallId, {
     work_item_id: item.work_item_id,

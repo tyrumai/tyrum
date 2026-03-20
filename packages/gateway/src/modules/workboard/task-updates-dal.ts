@@ -18,7 +18,10 @@ type TaskUpdatePatch = {
   execution_profile?: string;
   side_effect_class?: string;
   run_id?: string | null;
+  subagent_id?: string | null;
   approval_id?: string | null;
+  pause_reason?: string | null;
+  pause_detail?: string | null;
   artifacts?: unknown[];
   started_at?: string | null;
   finished_at?: string | null;
@@ -77,7 +80,14 @@ export class WorkboardTaskUpdatesDal {
       if (!row) return undefined;
 
       const updated = dalHelpers.toWorkItemTask(row);
-      await this.emitStatusChange(tx, params.scope, updatedAtIso, previousStatus, updated);
+      await this.emitStatusChange(
+        tx,
+        params.scope,
+        updatedAtIso,
+        previousStatus,
+        updated,
+        params.patch,
+      );
       return updated;
     });
   }
@@ -198,6 +208,18 @@ export class WorkboardTaskUpdatesDal {
       set.push("approval_id = ?");
       values.push(patch.approval_id);
     }
+    if (patch.subagent_id !== undefined) {
+      set.push("subagent_id = ?");
+      values.push(patch.subagent_id);
+    }
+    if (patch.pause_reason !== undefined) {
+      set.push("pause_reason = ?");
+      values.push(patch.pause_reason);
+    }
+    if (patch.pause_detail !== undefined) {
+      set.push("pause_detail = ?");
+      values.push(patch.pause_detail);
+    }
     if (patch.artifacts !== undefined) {
       set.push("artifacts_json = ?");
       values.push(JSON.stringify(patch.artifacts));
@@ -245,12 +267,13 @@ export class WorkboardTaskUpdatesDal {
     occurredAtIso: string,
     previousStatus: WorkItemTaskState,
     updated: WorkItemTask,
+    patch: TaskUpdatePatch,
   ): Promise<void> {
     if (updated.status === previousStatus) {
       return;
     }
 
-    if (updated.status === "running" && updated.run_id) {
+    if (updated.status === "running") {
       await this.deps.enqueueWsEventTx(tx, {
         event_id: randomUUID(),
         type: "work.task.started",
@@ -260,13 +283,14 @@ export class WorkboardTaskUpdatesDal {
           ...scope,
           work_item_id: updated.work_item_id,
           task_id: updated.task_id,
-          run_id: updated.run_id,
+          ...(updated.run_id ? { run_id: updated.run_id } : {}),
+          ...(patch.subagent_id ? { subagent_id: patch.subagent_id } : {}),
         },
       });
       return;
     }
 
-    if (updated.status === "paused" && updated.approval_id) {
+    if (updated.status === "paused") {
       await this.deps.enqueueWsEventTx(tx, {
         event_id: randomUUID(),
         type: "work.task.paused",
@@ -276,7 +300,9 @@ export class WorkboardTaskUpdatesDal {
           ...scope,
           work_item_id: updated.work_item_id,
           task_id: updated.task_id,
-          approval_id: updated.approval_id,
+          ...(updated.approval_id ? { approval_id: updated.approval_id } : {}),
+          ...(patch.pause_reason ? { pause_reason: patch.pause_reason } : {}),
+          ...(patch.pause_detail ? { pause_detail: patch.pause_detail } : {}),
         },
       });
       return;
@@ -286,6 +312,38 @@ export class WorkboardTaskUpdatesDal {
       await this.deps.enqueueWsEventTx(tx, {
         event_id: randomUUID(),
         type: "work.task.completed",
+        occurred_at: occurredAtIso,
+        scope: { kind: "agent", agent_id: scope.agent_id },
+        payload: {
+          ...scope,
+          work_item_id: updated.work_item_id,
+          task_id: updated.task_id,
+          ...(updated.result_summary ? { result_summary: updated.result_summary } : {}),
+        },
+      });
+      return;
+    }
+
+    if (updated.status === "failed") {
+      await this.deps.enqueueWsEventTx(tx, {
+        event_id: randomUUID(),
+        type: "work.task.failed",
+        occurred_at: occurredAtIso,
+        scope: { kind: "agent", agent_id: scope.agent_id },
+        payload: {
+          ...scope,
+          work_item_id: updated.work_item_id,
+          task_id: updated.task_id,
+          ...(updated.result_summary ? { result_summary: updated.result_summary } : {}),
+        },
+      });
+      return;
+    }
+
+    if (updated.status === "cancelled") {
+      await this.deps.enqueueWsEventTx(tx, {
+        event_id: randomUUID(),
+        type: "work.task.cancelled",
         occurred_at: occurredAtIso,
         scope: { kind: "agent", agent_id: scope.agent_id },
         payload: {

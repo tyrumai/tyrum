@@ -239,10 +239,13 @@ export function registerAuthAndSecurityRoutes(context: AppRouteContext): void {
     "/",
     createApprovalRoutes({
       approvalDal: context.container.approvalDal,
+      db: context.container.db,
       logger: context.container.logger,
       policyOverrideDal: context.container.policyOverrideDal,
+      redactionEngine: context.container.redactionEngine,
+      policyService: context.container.policyService,
       wsEventDal: context.routeDeps.wsEventDal,
-      ws: createWsRouteOptions(context),
+      ws: createClusterWsRouteOptions(context),
     }),
   );
 

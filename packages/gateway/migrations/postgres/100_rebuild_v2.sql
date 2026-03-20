@@ -30,7 +30,6 @@ DROP TABLE IF EXISTS execution_jobs CASCADE;
 DROP TABLE IF EXISTS execution_runs CASCADE;
 DROP TABLE IF EXISTS execution_steps CASCADE;
 DROP TABLE IF EXISTS idempotency_records CASCADE;
-DROP TABLE IF EXISTS intake_mode_overrides CASCADE;
 DROP TABLE IF EXISTS jobs CASCADE;
 DROP TABLE IF EXISTS lane_leases CASCADE;
 DROP TABLE IF EXISTS lane_queue_mode_overrides CASCADE;
@@ -209,15 +208,6 @@ CREATE TABLE session_send_policy_overrides (
   send_policy   TEXT NOT NULL CHECK (send_policy IN ('on','off')),
   updated_at_ms BIGINT NOT NULL,
   PRIMARY KEY (tenant_id, key)
-);
-
-CREATE TABLE intake_mode_overrides (
-  tenant_id     UUID NOT NULL,
-  key           TEXT NOT NULL,
-  lane          TEXT NOT NULL,
-  intake_mode   TEXT NOT NULL CHECK (intake_mode IN ('inline','delegate_execute','delegate_plan')),
-  updated_at_ms BIGINT NOT NULL,
-  PRIMARY KEY (tenant_id, key, lane)
 );
 
 CREATE TABLE lane_queue_mode_overrides (

@@ -464,7 +464,7 @@ function registerPaginationAndWipTests(fixture: WorkboardDalFixture): void {
     expect(page2.next_cursor).toBeUndefined();
   });
 
-  it("enforces WIP limit when claiming work items", async () => {
+  it("enforces item-level WIP cap on operator transitions", async () => {
     const dal = fixture.createDal();
     const scope = await fixture.resolveScope();
 
@@ -485,6 +485,27 @@ function registerPaginationAndWipTests(fixture: WorkboardDalFixture): void {
         createdAtIso: "2026-02-27T00:00:02.000Z",
       }),
     ]);
+
+    for (const item of [first, second, third]) {
+      await dal.updateItem({
+        scope,
+        work_item_id: item.work_item_id,
+        patch: { acceptance: { done: true } },
+        updatedAtIso: "2026-02-27T00:00:02.500Z",
+      });
+      await dal.setStateKv({
+        scope: { kind: "work_item", ...scope, work_item_id: item.work_item_id },
+        key: "work.refinement.phase",
+        value_json: "done",
+        provenance_json: { source: "test" },
+      });
+      await dal.setStateKv({
+        scope: { kind: "work_item", ...scope, work_item_id: item.work_item_id },
+        key: "work.size.class",
+        value_json: "small",
+        provenance_json: { source: "test" },
+      });
+    }
 
     await dal.transitionItem({
       scope,
@@ -517,7 +538,6 @@ function registerPaginationAndWipTests(fixture: WorkboardDalFixture): void {
       status: "doing",
       occurredAtIso: "2026-02-27T00:00:04.001Z",
     });
-
     await expect(
       dal.transitionItem({
         scope,
@@ -527,7 +547,7 @@ function registerPaginationAndWipTests(fixture: WorkboardDalFixture): void {
       }),
     ).rejects.toMatchObject({
       code: "wip_limit_exceeded",
-      details: { limit: 2 },
+      details: { from: "ready", to: "doing", limit: 2, current: 2 },
     });
   });
 }

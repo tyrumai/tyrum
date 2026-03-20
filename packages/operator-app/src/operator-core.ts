@@ -317,20 +317,27 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
     }
   });
 
-  const handleWorkItemEvent = (data: unknown) => {
-    const payload = readPayload(data);
-    const item = payload?.["item"];
-    if (item) {
-      workboard.handleWorkItemUpsert(item as WorkItem);
-    }
-  };
+  const handleWorkItemEvent =
+    (mode: "upsert" | "remove" = "upsert") =>
+    (data: unknown) => {
+      const payload = readPayload(data);
+      const item = payload?.["item"];
+      if (item) {
+        if (mode === "remove") {
+          workboard.removeWorkItem((item as WorkItem).work_item_id);
+          return;
+        }
+        workboard.handleWorkItemUpsert(item as WorkItem);
+      }
+    };
 
-  on("work.item.created", handleWorkItemEvent);
-  on("work.item.updated", handleWorkItemEvent);
-  on("work.item.blocked", handleWorkItemEvent);
-  on("work.item.completed", handleWorkItemEvent);
-  on("work.item.failed", handleWorkItemEvent);
-  on("work.item.cancelled", handleWorkItemEvent);
+  on("work.item.created", handleWorkItemEvent());
+  on("work.item.updated", handleWorkItemEvent());
+  on("work.item.blocked", handleWorkItemEvent());
+  on("work.item.completed", handleWorkItemEvent());
+  on("work.item.failed", handleWorkItemEvent());
+  on("work.item.cancelled", handleWorkItemEvent());
+  on("work.item.deleted", handleWorkItemEvent("remove"));
 
   const handleWorkTaskEvent = (type: WorkTaskEvent["type"]) => (data: unknown) => {
     const payload = readPayload(data);
@@ -348,6 +355,8 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
   on("work.task.started", handleWorkTaskEvent("work.task.started"));
   on("work.task.paused", handleWorkTaskEvent("work.task.paused"));
   on("work.task.completed", handleWorkTaskEvent("work.task.completed"));
+  on("work.task.failed", handleWorkTaskEvent("work.task.failed"));
+  on("work.task.cancelled", handleWorkTaskEvent("work.task.cancelled"));
   registerActivityWsHandlers(ws, activity, unsubscribes);
 
   const dispose = (): void => {

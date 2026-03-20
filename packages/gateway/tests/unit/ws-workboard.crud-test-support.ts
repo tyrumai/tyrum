@@ -2,7 +2,7 @@ import { expect, it } from "vitest";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { handleClientMessage } from "../../src/ws/protocol.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
-import { makeDeps, makeClient } from "./ws-workboard.test-support.js";
+import { makeDeps, makeClient, markWorkItemDispatchReady } from "./ws-workboard.test-support.js";
 
 function registerCreateAndOverlapTests(): void {
   it("handles work.create and broadcasts work.item.created", async () => {
@@ -79,6 +79,7 @@ function registerCreateAndOverlapTests(): void {
       expect((create1Res as unknown as { ok: boolean }).ok).toBe(true);
       const item1Id = (create1Res as unknown as { result: { item: { work_item_id: string } } })
         .result.item.work_item_id;
+      await markWorkItemDispatchReady(db, item1Id);
       ws.send.mockClear();
 
       const triageRes = await handleClientMessage(
@@ -185,6 +186,7 @@ function registerCreateAndOverlapTests(): void {
       expect((create1Res as unknown as { ok: boolean }).ok).toBe(true);
       const item1Id = (create1Res as unknown as { result: { item: { work_item_id: string } } })
         .result.item.work_item_id;
+      await markWorkItemDispatchReady(db, item1Id);
       ws.send.mockClear();
 
       const triageRes = await handleClientMessage(

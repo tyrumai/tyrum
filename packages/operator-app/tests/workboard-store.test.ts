@@ -139,4 +139,28 @@ describe("workboard-store", () => {
 
     expect(store.getSnapshot().items.map((item) => item.work_item_id)).toEqual(["new"]);
   });
+
+  it("removes work items and their task cache entries", () => {
+    const ws = {
+      workList: vi.fn(async () => ({ items: [] })),
+    } as any;
+
+    const { store, handleWorkTaskEvent } = createWorkboardStore(ws);
+    store.upsertWorkItem({ work_item_id: "work-1", status: "ready" } as any);
+    store.upsertWorkItem({ work_item_id: "work-2", status: "blocked" } as any);
+    handleWorkTaskEvent({
+      type: "work.task.paused",
+      occurred_at: "2026-01-01T00:00:00.000Z",
+      payload: {
+        work_item_id: "work-1",
+        task_id: "task-1",
+      },
+    });
+
+    store.removeWorkItem("work-1");
+
+    const snapshot = store.getSnapshot();
+    expect(snapshot.items.map((item) => item.work_item_id)).toEqual(["work-2"]);
+    expect(snapshot.tasksByWorkItemId["work-1"]).toBeUndefined();
+  });
 });

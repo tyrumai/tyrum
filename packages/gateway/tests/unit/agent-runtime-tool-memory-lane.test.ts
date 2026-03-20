@@ -16,7 +16,7 @@ import { AgentRuntime } from "../../src/modules/agent/runtime.js";
 import { ChannelInboxDal } from "../../src/modules/channels/inbox-dal.js";
 import { LaneQueueSignalDal } from "../../src/modules/lanes/queue-signal-dal.js";
 import { WorkboardDal } from "../../src/modules/workboard/dal.js";
-import { resolveExecutionProfile } from "../../src/modules/agent/runtime/intake-delegation.js";
+import { resolveExecutionProfile } from "../../src/modules/agent/runtime/execution-profile-resolution.js";
 import {
   createMemoryDecisionLanguageModel,
   createStubLanguageModel,

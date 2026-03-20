@@ -7,6 +7,8 @@ import {
   WsWorkArtifactListResult,
   WsWorkCreateRequest,
   WsWorkCreateResult,
+  WsWorkDeleteRequest,
+  WsWorkDeleteResult,
   WsWorkDecisionCreateRequest,
   WsWorkDecisionCreateResult,
   WsWorkDecisionGetRequest,
@@ -21,6 +23,10 @@ import {
   WsWorkLinkListResult,
   WsWorkListRequest,
   WsWorkListResult,
+  WsWorkPauseRequest,
+  WsWorkPauseResult,
+  WsWorkResumeRequest,
+  WsWorkResumeResult,
   WsWorkSignalCreateRequest,
   WsWorkSignalCreateResult,
   WsWorkSignalGetRequest,
@@ -42,7 +48,6 @@ import {
   type WsResponseEnvelope,
 } from "@tyrum/contracts";
 import type { ConnectedClient } from "../connection-manager.js";
-import { enqueueWorkItemStateChangeNotification } from "../../modules/workboard/notifications.js";
 import type { ProtocolDeps, ProtocolRequestEnvelope } from "./types.js";
 import { errorResponse } from "./helpers.js";
 import {
@@ -50,47 +55,13 @@ import {
   createHandler,
   ensureStateKvScope,
   ensureWorkScope,
-  getWorkTransitionEventType,
   notFound,
   okResult,
   resolveExistingStateKvScope,
   resolveExistingWorkScope,
-  type ScopedHandlerContext,
   type WorkboardHandler,
-  type WorkScope,
-  type TransitionItem,
 } from "./workboard-handlers-shared.js";
-import { broadcastWorkItemCreated } from "../../modules/workboard/item-broadcast.js";
 import { maybeEmitWorkItemOverlapWarningArtifact } from "./workboard-overlap-warning.js";
-
-async function maybeEnqueueTransitionNotification(params: {
-  ctx: ScopedHandlerContext;
-  scope: WorkScope;
-  item: TransitionItem;
-  status: string;
-}): Promise<void> {
-  if (params.status !== "done" && params.status !== "blocked" && params.status !== "failed") return;
-  try {
-    await enqueueWorkItemStateChangeNotification({
-      db: params.ctx.db,
-      scope: params.scope,
-      item: params.item,
-      approvalDal: params.ctx.deps.approvalDal,
-      policyService: params.ctx.deps.policyService,
-      protocolDeps: params.ctx.deps,
-    });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    params.ctx.deps.logger?.warn("workboard.notification_failed", {
-      request_id: params.ctx.msg.request_id,
-      client_id: params.ctx.client.id,
-      request_type: params.ctx.msg.type,
-      work_item_id: params.item.work_item_id,
-      status: params.status,
-      error: message,
-    });
-  }
-}
 
 const workboardHandlers: Record<string, WorkboardHandler> = {
   "work.create": createHandler({
@@ -103,8 +74,14 @@ const workboardHandlers: Record<string, WorkboardHandler> = {
         scope,
         item: payload.item,
         createdFromSessionKey: `agent:${keys.agentKey}:main`,
+        captureEvent: {
+          kind: "work.capture",
+          payload_json: {
+            source: "work.create",
+            source_session_key: `agent:${keys.agentKey}:main`,
+          },
+        },
       });
-      broadcastWorkItemCreated({ item, deps });
       await maybeEmitWorkItemOverlapWarningArtifact({ workboardService, scope, item, deps });
       return okResult(msg, WsWorkCreateResult.parse({ item }));
     },
@@ -147,7 +124,6 @@ const workboardHandlers: Record<string, WorkboardHandler> = {
         patch: payload.patch,
       });
       if (!item) return notFound(msg, "work item");
-      broadcastAgentEvent(scope.tenant_id, "work.item.updated", item.agent_id, { item }, deps);
       await maybeEmitWorkItemOverlapWarningArtifact({
         workboardService,
         scope,
@@ -156,6 +132,19 @@ const workboardHandlers: Record<string, WorkboardHandler> = {
         fingerprintTouched: payload.patch.fingerprint !== undefined,
       });
       return okResult(msg, WsWorkUpdateResult.parse({ item }));
+    },
+  }),
+  "work.delete": createHandler({
+    action: "delete work items",
+    unsupportedMessage: "work.delete not supported",
+    schema: WsWorkDeleteRequest,
+    run: async ({ msg, deps, tenantId, workboardService }, payload) => {
+      const { scope } = await resolveExistingWorkScope({ deps, tenantId, payload });
+      const item = await workboardService.deleteItem({
+        scope,
+        work_item_id: payload.work_item_id,
+      });
+      return item ? okResult(msg, WsWorkDeleteResult.parse({ item })) : notFound(msg, "work item");
     },
   }),
   "work.transition": createHandler({
@@ -172,15 +161,35 @@ const workboardHandlers: Record<string, WorkboardHandler> = {
         reason: payload.reason,
       });
       if (!item) return notFound(msg, "work item");
-      broadcastAgentEvent(
-        scope.tenant_id,
-        getWorkTransitionEventType(payload.status),
-        item.agent_id,
-        { item },
-        deps,
-      );
-      await maybeEnqueueTransitionNotification({ ctx, scope, item, status: payload.status });
       return okResult(msg, WsWorkTransitionResult.parse({ item }));
+    },
+  }),
+  "work.pause": createHandler({
+    action: "pause work items",
+    unsupportedMessage: "work.pause not supported",
+    schema: WsWorkPauseRequest,
+    run: async ({ msg, deps, tenantId, workboardService }, payload) => {
+      const { scope } = await resolveExistingWorkScope({ deps, tenantId, payload });
+      const item = await workboardService.pauseItem({
+        scope,
+        work_item_id: payload.work_item_id,
+        reason: payload.reason,
+      });
+      return item ? okResult(msg, WsWorkPauseResult.parse({ item })) : notFound(msg, "work item");
+    },
+  }),
+  "work.resume": createHandler({
+    action: "resume work items",
+    unsupportedMessage: "work.resume not supported",
+    schema: WsWorkResumeRequest,
+    run: async ({ msg, deps, tenantId, workboardService }, payload) => {
+      const { scope } = await resolveExistingWorkScope({ deps, tenantId, payload });
+      const item = await workboardService.resumeItem({
+        scope,
+        work_item_id: payload.work_item_id,
+        reason: payload.reason,
+      });
+      return item ? okResult(msg, WsWorkResumeResult.parse({ item })) : notFound(msg, "work item");
     },
   }),
   "work.link.create": createHandler({

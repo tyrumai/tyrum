@@ -208,9 +208,6 @@ export async function turnViaExecutionEngine(
     agent_key: agentKey,
     workspace_key: workspaceKey,
   };
-  if (normalizedInput.intake_mode) {
-    stepArgs["intake_mode"] = normalizedInput.intake_mode;
-  }
   stepArgs["metadata"] = {
     ...(normalizedInput.metadata as Record<string, unknown> | undefined),
     work_session_key: key,

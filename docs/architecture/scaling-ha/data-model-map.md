@@ -55,7 +55,7 @@ Tables:
 
 - `channel_accounts`, `channel_threads`
 - `sessions`, `session_model_overrides`, `session_provider_pins`
-- `session_send_policy_overrides`, `intake_mode_overrides`, `lane_queue_mode_overrides`, `lane_queue_signals`
+- `session_send_policy_overrides`, `lane_queue_mode_overrides`, `lane_queue_signals`
 - `channel_inbound_dedupe`, `channel_inbox`, `channel_outbox`
 
 Purpose: connector accounts/threads, durable sessions/transcripts, and inbound/outbound queueing.

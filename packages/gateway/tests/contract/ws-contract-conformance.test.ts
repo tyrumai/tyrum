@@ -19,7 +19,8 @@ import { TyrumClient } from "@tyrum/transport-sdk";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { WorkSignalScheduler } from "../../src/modules/workboard/signal-scheduler.js";
 import { AuthTokenService } from "../../src/modules/auth/auth-token-service.js";
-import { DEFAULT_TENANT_ID } from "../../src/modules/identity/scope.js";
+import { DEFAULT_TENANT_ID, IdentityScopeDal } from "../../src/modules/identity/scope.js";
+import { WorkboardDal } from "../../src/modules/workboard/dal.js";
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -38,6 +39,42 @@ async function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise
   } finally {
     if (timeoutId) clearTimeout(timeoutId);
   }
+}
+
+async function markWorkItemDispatchReady(
+  server: Awaited<ReturnType<typeof startInstrumentedGateway>>,
+  scope: { tenant_key: string; agent_key: string; workspace_key: string },
+  workItemId: string,
+): Promise<void> {
+  const identityScopeDal = new IdentityScopeDal(server.protocolDeps.db!);
+  const resolvedScope = await identityScopeDal.resolveScopeIds({
+    tenantKey: scope.tenant_key,
+    agentKey: scope.agent_key,
+    workspaceKey: scope.workspace_key,
+  });
+  const scopeIds = {
+    tenant_id: resolvedScope.tenantId,
+    agent_id: resolvedScope.agentId,
+    workspace_id: resolvedScope.workspaceId,
+  } as const;
+  const workboard = new WorkboardDal(server.protocolDeps.db!);
+  await workboard.updateItem({
+    scope: scopeIds,
+    work_item_id: workItemId,
+    patch: { acceptance: { done: true } },
+  });
+  await workboard.setStateKv({
+    scope: { kind: "work_item", ...scopeIds, work_item_id: workItemId },
+    key: "work.refinement.phase",
+    value_json: "done",
+    provenance_json: { source: "test" },
+  });
+  await workboard.setStateKv({
+    scope: { kind: "work_item", ...scopeIds, work_item_id: workItemId },
+    key: "work.size.class",
+    value_json: "small",
+    provenance_json: { source: "test" },
+  });
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -377,6 +414,7 @@ describe("WS contract conformance (gateway <-> client <-> schemas)", () => {
       item: { kind: "action", title: "Hello" },
     });
     const itemId = created.item.work_item_id;
+    await markWorkItemDispatchReady(server, scope, itemId);
 
     const createdSignal = await client.workSignalCreate({
       ...scope,

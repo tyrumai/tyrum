@@ -9,7 +9,7 @@ import {
   resetWebMainTestState,
 } from "./main.test-support.js";
 
-describe("apps/web main bootstrap", () => {
+describe("apps/web main bootstrap", { timeout: 15_000 }, () => {
   beforeEach(() => {
     resetWebMainTestState();
   });

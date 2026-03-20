@@ -79,6 +79,13 @@ export class WorkboardItemTransitionsDal {
 
   private assertTransitionAllowed(from: WorkItemState, to: WorkItemState): void {
     const allowed = dalHelpers.WORK_ITEM_TRANSITIONS[from];
+    if (!allowed) {
+      throw new dalHelpers.WorkboardTransitionError(
+        "invalid_transition",
+        { code: "invalid_transition", from, to, allowed: [] },
+        `invalid transition from ${from} to ${to}`,
+      );
+    }
     if (allowed.includes(to)) {
       return;
     }
@@ -86,50 +93,6 @@ export class WorkboardItemTransitionsDal {
       "invalid_transition",
       { code: "invalid_transition", from, to, allowed },
       `invalid transition from ${from} to ${to}`,
-    );
-  }
-
-  private async enforceDoingLimit(
-    tx: SqlDb,
-    scope: WorkScope,
-    from: WorkItemState,
-    to: WorkItemState,
-  ): Promise<void> {
-    if (to !== "doing") {
-      return;
-    }
-
-    if (tx.kind === "postgres") {
-      await tx.get("SELECT pg_advisory_xact_lock($1, $2)", [
-        dalHelpers.hashScopeLockSeed(`${scope.tenant_id}|${scope.agent_id}`),
-        dalHelpers.hashScopeLockSeed(scope.workspace_id),
-      ]);
-    }
-
-    const doingCount = await tx.get<{ count: number }>(
-      `SELECT COUNT(*) AS count
-       FROM work_items
-       WHERE tenant_id = ?
-         AND agent_id = ?
-         AND workspace_id = ?
-         AND status = 'doing'`,
-      [scope.tenant_id, scope.agent_id, scope.workspace_id],
-    );
-    const currentDoing = dalHelpers.normalizeCount(doingCount?.count);
-    if (currentDoing < dalHelpers.DEFAULT_WORK_ITEM_WIP_LIMIT) {
-      return;
-    }
-
-    throw new dalHelpers.WorkboardTransitionError(
-      "wip_limit_exceeded",
-      {
-        code: "wip_limit_exceeded",
-        from,
-        to: "doing",
-        limit: dalHelpers.DEFAULT_WORK_ITEM_WIP_LIMIT,
-        current: currentDoing,
-      },
-      `WIP limit ${dalHelpers.DEFAULT_WORK_ITEM_WIP_LIMIT} reached for doing items`,
     );
   }
 
@@ -376,6 +339,50 @@ export class WorkboardItemTransitionsDal {
         scope.workspace_id,
         workItemId,
       ],
+    );
+  }
+
+  private async enforceDoingLimit(
+    tx: SqlDb,
+    scope: WorkScope,
+    from: WorkItemState,
+    to: WorkItemState,
+  ): Promise<void> {
+    if (to !== "doing") {
+      return;
+    }
+
+    if (tx.kind === "postgres") {
+      await tx.get("SELECT pg_advisory_xact_lock($1, $2)", [
+        dalHelpers.hashScopeLockSeed(`${scope.tenant_id}|${scope.agent_id}`),
+        dalHelpers.hashScopeLockSeed(scope.workspace_id),
+      ]);
+    }
+
+    const doingCount = await tx.get<{ count: number }>(
+      `SELECT COUNT(*) AS count
+       FROM work_items
+       WHERE tenant_id = ?
+         AND agent_id = ?
+         AND workspace_id = ?
+         AND status = 'doing'`,
+      [scope.tenant_id, scope.agent_id, scope.workspace_id],
+    );
+    const currentDoing = dalHelpers.normalizeCount(doingCount?.count);
+    if (currentDoing < dalHelpers.DEFAULT_WORK_ITEM_WIP_LIMIT) {
+      return;
+    }
+
+    throw new dalHelpers.WorkboardTransitionError(
+      "wip_limit_exceeded",
+      {
+        code: "wip_limit_exceeded",
+        from,
+        to: "doing",
+        limit: dalHelpers.DEFAULT_WORK_ITEM_WIP_LIMIT,
+        current: currentDoing,
+      },
+      `WIP limit ${dalHelpers.DEFAULT_WORK_ITEM_WIP_LIMIT} reached for doing items`,
     );
   }
 }

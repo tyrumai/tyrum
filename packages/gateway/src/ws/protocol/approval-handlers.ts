@@ -9,6 +9,7 @@ import type { Approval as ApprovalT, WsResponseEnvelope } from "@tyrum/contracts
 import { isApprovalTerminalStatus } from "../../modules/approval/dal.js";
 import { resolveApproval } from "../../modules/approval/resolve-service.js";
 import { toApprovalContract } from "../../modules/approval/to-contract.js";
+import { createGatewayWorkboardService } from "../../modules/workboard/service.js";
 import type { ConnectedClient } from "../connection-manager.js";
 import { broadcastEvent, errorResponse } from "./helpers.js";
 import type { ProtocolDeps, ProtocolRequestEnvelope } from "./types.js";
@@ -130,6 +131,30 @@ async function handleApprovalResolveMessage(
       approvalDal: deps.approvalDal,
       policyOverrideDal: deps.policyOverrideDal,
       wsEventDal: deps.wsEventDal,
+      workboardIntervention: deps.db
+        ? {
+            handleResolvedIntervention: async ({ approval, decision, reason }) => {
+              if (!approval.work_item_id || !approval.work_item_task_id) {
+                return;
+              }
+              await createGatewayWorkboardService({
+                db: deps.db!,
+                redactionEngine: deps.redactionEngine,
+                approvalDal: deps.approvalDal,
+                policyService: deps.policyService,
+                protocolDeps: deps,
+              }).resolveInterventionApproval({
+                tenantId,
+                agentId: approval.agent_id,
+                workspaceId: approval.workspace_id,
+                work_item_id: approval.work_item_id,
+                work_item_task_id: approval.work_item_task_id,
+                decision,
+                reason,
+              });
+            },
+          }
+        : undefined,
       emitEvent: ({ tenantId: eventTenantId, event, audience }) => {
         broadcastEvent(eventTenantId, event, deps, audience);
       },

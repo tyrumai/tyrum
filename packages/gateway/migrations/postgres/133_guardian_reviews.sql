@@ -70,7 +70,8 @@ WHERE kind NOT IN (
   'takeover',
   'intent',
   'retry',
-  'connector.send'
+  'connector.send',
+  'work.intervention'
 );
 
 UPDATE approvals
@@ -100,7 +101,8 @@ ALTER TABLE approvals
       'takeover',
       'intent',
       'retry',
-      'connector.send'
+      'connector.send',
+      'work.intervention'
     )
   ),
   ADD CONSTRAINT approvals_status_check CHECK (

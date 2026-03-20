@@ -8,6 +8,10 @@ import type {
   WorkboardSubagentRuntime,
 } from "./types.js";
 
+function isInterruptError(error: unknown): boolean {
+  return error instanceof Error && error.name === "LaneQueueInterruptError";
+}
+
 export class WorkboardOrchestrator {
   private readonly subagents: SubagentService;
 
@@ -82,6 +86,22 @@ export class WorkboardOrchestrator {
       subagent_id: planner.subagent_id,
       patch: { status: "running" },
     });
+    await this.opts.repository.updateTask({
+      scope,
+      task_id: plannerTask.task.task_id,
+      lease_owner: leaseOwner,
+      patch: {
+        status: "running",
+        started_at: new Date().toISOString(),
+        subagent_id: planner.subagent_id,
+      },
+    });
+    await this.opts.repository.setStateKv({
+      scope: { kind: "work_item", ...scope, work_item_id: workItemId },
+      key: "work.refinement.phase",
+      value_json: "refining",
+      provenance_json: { source: "workboard.orchestrator" },
+    });
 
     const item = await this.opts.repository.getItem({ scope, work_item_id: workItemId });
     if (!item) {
@@ -113,6 +133,12 @@ export class WorkboardOrchestrator {
           patch: { status: "paused" },
         });
       } else {
+        await this.opts.repository.setStateKv({
+          scope: { kind: "work_item", ...scope, work_item_id: workItemId },
+          key: "work.refinement.phase",
+          value_json: "done",
+          provenance_json: { source: "workboard.orchestrator" },
+        });
         await this.opts.repository.markSubagentClosed({
           scope,
           subagent_id: planner.subagent_id,
@@ -120,6 +146,41 @@ export class WorkboardOrchestrator {
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      if (isInterruptError(error)) {
+        const currentTasks = await this.opts.repository.listTasks({
+          scope,
+          work_item_id: workItemId,
+        });
+        const currentPlannerTask = currentTasks.find(
+          (task) => task.task_id === plannerTask.task.task_id,
+        );
+        if (currentPlannerTask?.status === "paused" || currentPlannerTask?.status === "cancelled") {
+          return;
+        }
+        await this.opts.repository.updateTask({
+          scope,
+          task_id: plannerTask.task.task_id,
+          patch: {
+            status: "paused",
+            approval_id: null,
+            pause_reason: "manual",
+            pause_detail: message,
+            result_summary: message,
+          },
+        });
+        await this.opts.repository.updateSubagent({
+          scope,
+          subagent_id: planner.subagent_id,
+          patch: { status: "paused" },
+        });
+        await this.opts.repository.setStateKv({
+          scope: { kind: "work_item", ...scope, work_item_id: workItemId },
+          key: "work.refinement.phase",
+          value_json: "awaiting_human",
+          provenance_json: { source: "workboard.orchestrator" },
+        });
+        return;
+      }
       await this.opts.repository.updateTask({
         scope,
         task_id: plannerTask.task.task_id,

@@ -76,14 +76,12 @@ describe("AgentTurnRequest inline content", () => {
           filename: "capture.png",
         },
       ],
-      intake_mode: "inline",
       metadata: {
         source: "operator-ui",
       },
     });
 
     expect(parsed.parts).toHaveLength(2);
-    expect(parsed.intake_mode).toBe("inline");
     expect(parsed.metadata).toEqual({ source: "operator-ui" });
   });
 });
