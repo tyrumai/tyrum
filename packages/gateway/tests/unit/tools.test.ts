@@ -214,6 +214,30 @@ describe("model tool naming", () => {
     expect(builtinIds.filter((id) => id === "tool.node.inspect")).toHaveLength(1);
   });
 
+  it("includes the location place tool family", () => {
+    const builtinIds = listBuiltinToolDescriptors().map((tool) => tool.id);
+
+    expect(builtinIds).toContain("tool.location.place.list");
+    expect(builtinIds).toContain("tool.location.place.create");
+    expect(builtinIds).toContain("tool.location.place.update");
+    expect(builtinIds).toContain("tool.location.place.delete");
+  });
+
+  it("advertises nullable provider_place_id for location place updates", () => {
+    const updateTool = listBuiltinToolDescriptors().find(
+      (tool) => tool.id === "tool.location.place.update",
+    );
+
+    expect(updateTool?.inputSchema).toMatchObject({
+      type: "object",
+      properties: {
+        provider_place_id: {
+          type: ["string", "null"],
+        },
+      },
+    });
+  });
+
   it("publishes object-root input schemas for all builtin model tools", () => {
     const invalid = listBuiltinToolDescriptors()
       .map((tool) => ({ tool, validation: validateToolDescriptorInputSchema(tool) }))

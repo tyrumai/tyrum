@@ -45,6 +45,17 @@ export function createToolSetPolicyRuntime(input: {
   toolCallPolicyStates?: Map<string, ToolCallPolicyState>;
 }): ToolSetPolicyRuntime {
   let approvalStepIndex = 0;
+  let currentAgentKeyPromise: Promise<string | undefined> | undefined;
+
+  const resolveCurrentAgentKey = async (): Promise<string | undefined> => {
+    if (!input.deps.identityScopeDal) {
+      return undefined;
+    }
+    currentAgentKeyPromise ??= input.deps.identityScopeDal
+      .resolveAgentKey(input.deps.tenantId, input.deps.agentId)
+      .then((agentKey) => agentKey ?? undefined);
+    return await currentAgentKeyPromise;
+  };
 
   return {
     syncLaneQueue: async () => await syncLaneQueue(input.laneQueue),
@@ -54,6 +65,7 @@ export function createToolSetPolicyRuntime(input: {
       await resolveToolCallPolicyState({
         deps: input.deps,
         toolCallPolicyStates: input.toolCallPolicyStates,
+        currentAgentKey: await resolveCurrentAgentKey(),
         ...args,
       }),
     canReuseResolvedApproval: async (args) =>
@@ -139,6 +151,7 @@ async function resolveResumedToolArgs(
 async function resolveToolCallPolicyState(input: {
   deps: ToolSetBuilderDeps;
   toolCallPolicyStates?: Map<string, ToolCallPolicyState>;
+  currentAgentKey?: string;
   toolDesc: ToolDescriptor;
   toolCallId: string;
   args: unknown;
@@ -149,7 +162,12 @@ async function resolveToolCallPolicyState(input: {
     return existing;
   }
 
-  const matchTarget = canonicalizeToolMatchTarget(input.toolDesc.id, input.args, input.deps.home);
+  const matchTarget = canonicalizeToolMatchTarget(
+    input.toolDesc.id,
+    input.args,
+    input.deps.home,
+    input.currentAgentKey,
+  );
   const policy = input.deps.policyService;
   const roleAllowed = isRoleAllowedForTool(input.deps, input.toolDesc);
 

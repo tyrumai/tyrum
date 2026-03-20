@@ -518,6 +518,7 @@ export function buildToolSetBuilderDeps(
     tenantId: session.tenant_id,
     agentId: session.agent_id,
     workspaceId: session.workspace_id,
+    identityScopeDal: deps.opts.container.identityScopeDal,
     sessionDal: deps.sessionDal,
     wsEventDb: deps.opts.container.db,
     policyService: deps.policyService,

@@ -105,6 +105,7 @@ export class IdentityScopeDal {
   private readonly tenantCache = new Map<string, Cached<string>>();
   private readonly agentCache = new Map<string, Cached<string>>();
   private readonly primaryAgentCache = new Map<string, Cached<PrimaryAgentRecord>>();
+  private readonly agentKeyCache = new Map<string, Cached<string>>();
   private readonly workspaceCache = new Map<string, Cached<string>>();
 
   constructor(
@@ -202,6 +203,7 @@ export class IdentityScopeDal {
     if (!found?.agent_id) return null;
 
     this.setCached(this.agentCache, cacheKey, found.agent_id);
+    this.setCached(this.agentKeyCache, `${tenantId}:${found.agent_id}`, key);
     return found.agent_id;
   }
 
@@ -221,6 +223,7 @@ export class IdentityScopeDal {
     const primary = { agentId: found.agent_id, agentKey: found.agent_key };
     this.setCached(this.primaryAgentCache, tenantId, primary);
     this.setCached(this.agentCache, `${tenantId}:${found.agent_key}`, found.agent_id);
+    this.setCached(this.agentKeyCache, `${tenantId}:${found.agent_id}`, found.agent_key);
     return primary;
   }
 
@@ -232,6 +235,25 @@ export class IdentityScopeDal {
   async resolvePrimaryAgentKey(tenantId: string): Promise<string | null> {
     const primary = await this.resolvePrimaryAgent(tenantId);
     return primary?.agentKey ?? null;
+  }
+
+  async resolveAgentKey(tenantId: string, agentId: string): Promise<string | null> {
+    const key = agentId.trim();
+    if (key.length === 0) return null;
+
+    const cacheKey = `${tenantId}:${key}`;
+    const cached = this.getCached(this.agentKeyCache, cacheKey);
+    if (cached) return cached;
+
+    const found = await this.db.get<{ agent_key: string }>(
+      "SELECT agent_key FROM agents WHERE tenant_id = ? AND agent_id = ? LIMIT 1",
+      [tenantId, key],
+    );
+    if (!found?.agent_key) return null;
+
+    this.setCached(this.agentKeyCache, cacheKey, found.agent_key);
+    this.setCached(this.agentCache, `${tenantId}:${found.agent_key}`, key);
+    return found.agent_key;
   }
 
   async ensureAgentId(tenantId: string, agentKey: string): Promise<string> {
@@ -259,6 +281,7 @@ export class IdentityScopeDal {
     if (found?.agent_id) {
       await maybePromoteDefaultPrimary(found.agent_id);
       this.setCached(this.agentCache, cacheKey, found.agent_id);
+      this.setCached(this.agentKeyCache, `${tenantId}:${found.agent_id}`, key);
       return found.agent_id;
     }
 
@@ -284,6 +307,7 @@ export class IdentityScopeDal {
 
     await maybePromoteDefaultPrimary(resolved);
     this.setCached(this.agentCache, cacheKey, resolved);
+    this.setCached(this.agentKeyCache, `${tenantId}:${resolved}`, key);
     return resolved;
   }
 
@@ -408,16 +432,23 @@ export class IdentityScopeDal {
   rememberAgentId(tenantId: string, agentKey: string, agentId: string): void {
     const key = agentKey.trim() || DEFAULT_AGENT_KEY;
     this.setCached(this.agentCache, `${tenantId}:${key}`, agentId);
+    this.setCached(this.agentKeyCache, `${tenantId}:${agentId}`, key);
   }
 
   forgetAgentId(tenantId: string, agentKey: string): void {
     const key = agentKey.trim() || DEFAULT_AGENT_KEY;
-    this.deleteCached(this.agentCache, `${tenantId}:${key}`);
+    const cacheKey = `${tenantId}:${key}`;
+    const cachedAgentId = this.getCached(this.agentCache, cacheKey);
+    this.deleteCached(this.agentCache, cacheKey);
+    if (cachedAgentId) {
+      this.deleteCached(this.agentKeyCache, `${tenantId}:${cachedAgentId}`);
+    }
   }
 
   rememberPrimaryAgent(tenantId: string, agentKey: string, agentId: string): void {
     const key = agentKey.trim() || DEFAULT_AGENT_KEY;
     this.setCached(this.primaryAgentCache, tenantId, { agentId, agentKey: key });
     this.setCached(this.agentCache, `${tenantId}:${key}`, agentId);
+    this.setCached(this.agentKeyCache, `${tenantId}:${agentId}`, key);
   }
 }

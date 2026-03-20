@@ -15,6 +15,7 @@ import { hasToolResult } from "../ai-sdk/message-utils.js";
 import type { StepExecutionContext, StepExecutor } from "./engine.js";
 import {
   deriveAgentIdFromKey,
+  deriveAgentKeyFromKey,
   type ToolBudgetState,
   type ToolCallPolicyState,
 } from "./gateway-step-executor-types.js";
@@ -111,7 +112,12 @@ function createPolicyStateResolver(input: BuildToolSetInput) {
       return existing;
     }
 
-    const matchTarget = canonicalizeToolMatchTarget(input2.toolId, input2.args, undefined);
+    const matchTarget = canonicalizeToolMatchTarget(
+      input2.toolId,
+      input2.args,
+      undefined,
+      deriveAgentKeyFromKey(input.executionContext.key),
+    );
     const policySnapshotId = input.executionContext.policySnapshotId;
     const url =
       input2.toolId === "webfetch"

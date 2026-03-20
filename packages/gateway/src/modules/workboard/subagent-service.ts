@@ -9,16 +9,22 @@ import {
   createGatewaySubagentRuntime,
   createGatewayWorkboardRepository,
 } from "./runtime-workboard-adapters.js";
+import { IdentityScopeDal } from "../identity/scope.js";
 
 export class SubagentService {
   private readonly service: RuntimeSubagentService;
 
   constructor(opts: { db: SqlDb; agents?: AgentRegistry }) {
+    const identityScopeDal = new IdentityScopeDal(opts.db);
     this.service = new RuntimeSubagentService({
       repository: createGatewayWorkboardRepository(opts.db),
-      sessionKeyBuilder: createGatewaySessionKeyBuilder({ db: opts.db }),
+      sessionKeyBuilder: createGatewaySessionKeyBuilder({ db: opts.db, identityScopeDal }),
       runtime: opts.agents
-        ? createGatewaySubagentRuntime({ db: opts.db, agents: opts.agents })
+        ? createGatewaySubagentRuntime({
+            db: opts.db,
+            agents: opts.agents,
+            identityScopeDal,
+          })
         : undefined,
     });
   }

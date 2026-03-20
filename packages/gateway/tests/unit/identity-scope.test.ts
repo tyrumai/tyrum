@@ -33,6 +33,21 @@ describe("IdentityScopeDal resolve-only scope lookup", () => {
     expect(after?.count ?? 0).toBe(before?.count ?? 0);
   });
 
+  it("resolves an agent key from agent id and caches hits", async () => {
+    const dal = createDal();
+    const tenantId = await dal.ensureTenantId("scope-agent-key-test");
+    const agentId = await dal.ensureAgentId(tenantId, "agent-a");
+
+    const resolveDal = new IdentityScopeDal(db!, { cacheTtlMs: 60_000 });
+    const getSpy = vi.spyOn(db!, "get");
+    const first = await resolveDal.resolveAgentKey(tenantId, agentId);
+    const second = await resolveDal.resolveAgentKey(tenantId, agentId);
+
+    expect(first).toBe("agent-a");
+    expect(second).toBe("agent-a");
+    expect(getSpy).toHaveBeenCalledTimes(1);
+  });
+
   it("does not create a workspace when resolveWorkspaceId misses and caches hits", async () => {
     const dal = createDal();
     const tenantId = await dal.ensureTenantId("scope-workspace-test");

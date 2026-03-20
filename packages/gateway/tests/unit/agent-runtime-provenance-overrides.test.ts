@@ -256,6 +256,94 @@ describe("AgentRuntime - provenance and policy overrides", () => {
     expect(usedTools.has("read")).toBe(true);
   });
 
+  it("uses the resolved current agent key for location place policy targets when agent_key is omitted", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
+    container = await createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+    });
+
+    const policyService = {
+      isEnabled: () => true,
+      isObserveOnly: () => false,
+      evaluateToolCall: vi.fn(async () => ({ decision: "require_approval" as const })),
+    };
+
+    const toolSetBuilder = createToolSetBuilder({ home: homeDir, container, policyService });
+
+    vi.mocked(awaitApprovalForToolExecution).mockClear();
+    const approvalSpy = vi.mocked(awaitApprovalForToolExecution).mockResolvedValue({
+      approved: true,
+      status: "approved",
+      approvalId: "approval-location-1",
+    });
+
+    const toolDesc = {
+      id: "tool.location.place.list",
+      description: "List saved places for the current or specified agent.",
+      effect: "read_only" as const,
+      keywords: [],
+      inputSchema: {
+        type: "object",
+        properties: {
+          agent_key: { type: "string" },
+        },
+        additionalProperties: false,
+      },
+    };
+
+    const toolExecutor = {
+      execute: vi.fn(async () => ({
+        tool_call_id: "tc-test-location",
+        output: '{"places":[]}',
+        error: undefined,
+        provenance: undefined,
+      })),
+    };
+
+    const usedTools = new Set<string>();
+    const toolSet = toolSetBuilder.buildToolSet(
+      [toolDesc],
+      toolExecutor,
+      usedTools,
+      {
+        planId: "plan-location-1",
+        sessionId: "session-location-1",
+        channel: "test",
+        threadId: "thread-location-1",
+      },
+      makeContextReport(),
+    );
+
+    const result = await toolSet["tool.location.place.list"]!.execute({});
+
+    expect(result).toBe('{"places":[]}');
+    expect(policyService.evaluateToolCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toolMatchTarget: "agent_key:default",
+      }),
+    );
+    expect(approvalSpy).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({ id: "tool.location.place.list" }),
+      expect.any(Object),
+      expect.any(String),
+      expect.any(Object),
+      expect.any(Number),
+      expect.objectContaining({
+        workspace_id: DEFAULT_WORKSPACE_ID,
+        suggested_overrides: [
+          {
+            tool_id: "tool.location.place.list",
+            pattern: "agent_key:default",
+            workspace_id: DEFAULT_WORKSPACE_ID,
+          },
+        ],
+      }),
+      expect.any(Function),
+    );
+  });
+
   it("suggests a conservative prefix override for Desktop act node dispatch", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
     container = await createContainer({

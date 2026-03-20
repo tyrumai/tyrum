@@ -10,7 +10,9 @@ import type { SecretResolutionAuditDal } from "../secret/resolution-audit-dal.js
 import { acquireWorkspaceLease, releaseWorkspaceLease } from "../workspace/lease.js";
 import type { AgentMemoryToolRuntime } from "../memory/agent-tool-runtime.js";
 import { executeBuiltinMemoryMcpTool } from "../memory/builtin-mcp.js";
+import type { LocationService } from "../location/service.js";
 import { executeCoreTool, executeMcpTool } from "./tool-executor-core-tools.js";
+import { executeLocationPlaceTool } from "./tool-executor-location-tools.js";
 import {
   executeNodeDispatchTool,
   executeNodeInspectTool,
@@ -67,6 +69,7 @@ export class ToolExecutor {
     private readonly agents?: AgentRegistry,
     private readonly workboardBroadcastDeps?: WorkboardBroadcastDeps,
     private readonly artifactDescribeRuntime?: ArtifactDescribeToolRuntime,
+    private readonly locationService?: LocationService,
   ) {}
 
   private workspaceLeaseOwner(toolCallId: string): string {
@@ -261,6 +264,20 @@ export class ToolExecutor {
     );
     if (scheduleResult) {
       return scheduleResult;
+    }
+
+    const locationPlaceResult = await executeLocationPlaceTool(
+      {
+        workspaceLease: this.workspaceLease,
+        identityScopeDal: this.identityScopeDal,
+        locationService: this.locationService,
+      },
+      toolId,
+      toolCallId,
+      args,
+    );
+    if (locationPlaceResult) {
+      return locationPlaceResult;
     }
 
     const subagentResult = await executeSubagentTool(

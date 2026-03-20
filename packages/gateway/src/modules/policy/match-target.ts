@@ -336,6 +336,15 @@ function canonicalizeScheduleUpdateMatchTarget(parsed: Record<string, unknown> |
   return tokens.join(";");
 }
 
+function canonicalizeLocationPlaceScopeMatchTarget(
+  parsed: Record<string, unknown> | null,
+  currentAgentKey?: string,
+): string {
+  const agentKey =
+    normalizeToken(parsed?.["agent_key"]) ?? normalizeToken(currentAgentKey) ?? "current";
+  return `agent_key:${agentKey}`;
+}
+
 export function canonicalizeNodeDispatchMatchTarget(
   actionKind: ActionPrimitiveKind,
   actionArgs: unknown,
@@ -370,6 +379,7 @@ export function canonicalizeToolMatchTarget(
   toolId: string,
   args: unknown,
   workspaceRoot?: string,
+  currentAgentKey?: string,
 ): string {
   const normalizedToolId = canonicalizeToolId(toolId.trim());
   const parsed = asRecord(args);
@@ -445,6 +455,21 @@ export function canonicalizeToolMatchTarget(
   ) {
     const scheduleId = normalizeToken(parsed?.["schedule_id"]) ?? "";
     return `schedule_id:${scheduleId}`;
+  }
+
+  if (
+    normalizedToolId === "tool.location.place.list" ||
+    normalizedToolId === "tool.location.place.create"
+  ) {
+    return canonicalizeLocationPlaceScopeMatchTarget(parsed, currentAgentKey);
+  }
+
+  if (
+    normalizedToolId === "tool.location.place.update" ||
+    normalizedToolId === "tool.location.place.delete"
+  ) {
+    const placeId = normalizeToken(parsed?.["place_id"]) ?? "";
+    return `place_id:${placeId}`;
   }
 
   if (normalizedToolId.startsWith("mcp.")) {
