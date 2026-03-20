@@ -3,8 +3,16 @@ name: sast
 on:
   push:
     branches: [main]
+    paths:
+      - "packages/**"
+      - "apps/**"
+      - ".github/workflows/sast.yml"
   pull_request:
     branches: [main]
+    paths:
+      - "packages/**"
+      - "apps/**"
+      - ".github/workflows/sast.yml"
 
 permissions:
   contents: read
@@ -14,33 +22,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  changes:
-    name: Change Detection
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: read
-    outputs:
-      code: ${{ steps.filter.outputs.code }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - uses: dorny/paths-filter@v4
-        id: filter
-        with:
-          filters: |
-            code:
-              - "packages/**"
-              - "apps/**"
-              - ".github/workflows/sast.yml"
-
   semgrep:
     name: Semgrep SAST
     runs-on: ubuntu-latest
-    needs: changes
-    if: needs.changes.outputs.code == 'true'
     permissions:
       contents: read
       security-events: write
