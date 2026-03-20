@@ -112,6 +112,56 @@ describe("AgentsPageCreateWizard", () => {
     cleanupTestRoot(testRoot);
   });
 
+  it("stays on the preset step after saving a provider before models are indexed", async () => {
+    let providerCreated = false;
+
+    const createProviderAccount = vi.fn(async () => {
+      providerCreated = true;
+      return { status: "ok" as const };
+    });
+
+    const { core } = createCore({
+      listProviders: vi.fn(async () => ({
+        status: "ok" as const,
+        providers: providerCreated ? [createActiveProviderGroup()] : [],
+      })),
+      listPresets: vi.fn(async () => ({
+        status: "ok" as const,
+        presets: [],
+      })),
+      listAvailableModels: vi.fn(async () => ({
+        status: "ok" as const,
+        models: [],
+      })),
+      listRegistry: vi.fn(async () => sampleRegistry()),
+      createProviderAccount,
+      list: vi.fn(async () => ({ agents: [] })),
+    });
+
+    const testRoot = renderIntoDocument(
+      <AgentsPageCreateWizard core={core} onCancel={vi.fn()} onSaved={vi.fn()} />,
+    );
+
+    await waitForSelector(testRoot.container, '[data-testid="agents-create-step-provider"]');
+
+    setInputByLabel(testRoot.container, "API key", "secret-key");
+    setInputByLabel(testRoot.container, "Display name", "OpenRouter");
+    await act(async () => {
+      findButtonByText(testRoot.container, "Save provider account")?.dispatchEvent(
+        new MouseEvent("click", { bubbles: true }),
+      );
+      await Promise.resolve();
+    });
+
+    await waitForSelector(testRoot.container, '[data-testid="agents-create-step-preset"]');
+    expect(
+      testRoot.container.querySelector('[data-testid="agents-create-step-provider"]'),
+    ).toBeNull();
+    expect(createProviderAccount).toHaveBeenCalledOnce();
+
+    cleanupTestRoot(testRoot);
+  });
+
   it("starts on the agent step when providers and presets already exist", async () => {
     const createAgent = vi.fn(
       async ({ agent_key, config }: { agent_key: string; config: unknown }) => ({

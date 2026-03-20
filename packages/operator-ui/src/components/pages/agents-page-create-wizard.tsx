@@ -249,7 +249,7 @@ export function AgentsPageCreateWizard({
       selectedMethodKey: selectedMethod.method_key,
       selectedMethod,
     });
-    await refreshData();
+    await refreshData("preset");
   };
 
   const savePreset = async (): Promise<void> => {
