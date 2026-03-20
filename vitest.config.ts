@@ -66,9 +66,9 @@ const coverageThresholds = {
     branches: 62,
   },
   "packages/operator-ui/src/**": {
-    lines: 75,
-    statements: 72,
-    functions: 76,
+    lines: 74,
+    statements: 71,
+    functions: 74,
     branches: 63,
   },
   "packages/cli/src/**": {

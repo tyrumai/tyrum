@@ -31,7 +31,7 @@ export { ProviderConfigFieldKind, ProviderConfigFieldInput, ProviderConfigField,
 // prettier-ignore
 export { ConfiguredExecutionProfileId, ConfiguredModelPresetOptionSet, ConfiguredModelPreset, ConfiguredModelPresetListResponse, ConfiguredModelPresetCreateRequest, ConfiguredModelPresetUpdateRequest, ConfiguredModelPresetMutateResponse, ConfiguredAvailableModel, ConfiguredAvailableModelListResponse, ExecutionProfileModelAssignment, ExecutionProfileModelAssignmentListResponse, ExecutionProfileModelAssignmentUpdateRequest, ExecutionProfileModelAssignmentUpdateResponse, ModelConfigDeleteRequest, ModelConfigDeleteConflictResponse, ModelConfigDeleteResponse } from "./model-config.js";
 // prettier-ignore
-export { MemoryItemId, MemoryItemKind, MemorySensitivity, MemoryProvenanceSourceKind, MemoryProvenance, MemoryItemBase, MemoryFactItem, MemoryNoteItem, MemoryProcedureItem, MemoryEpisodeItem, MemoryItem, MemoryDeletedBy, MemoryTombstone, BuiltinMemorySeedArgs, BuiltinMemorySearchArgs, BuiltinMemoryWriteArgs } from "./memory.js";
+export { MemoryItemId, MemoryItemKind, MemorySensitivity, MemoryProvenanceSourceKind, MemoryProvenance, MemoryItemBase, MemoryFactItem, MemoryNoteItem, MemoryProcedureItem, MemoryEpisodeItem, MemoryItem, MemoryDeletedBy, MemoryTombstone, MemorySearchHit, MemoryItemListResponse, MemoryItemGetResponse, MemorySearchResponse, MemoryDeleteResponse, MemoryTombstoneListResponse, BuiltinMemorySeedArgs, BuiltinMemorySearchArgs, BuiltinMemoryWriteArgs } from "./memory.js";
 // prettier-ignore
 export { DiscoveryStrategy, DiscoveryRequest, DiscoveryResolution, DiscoveryOutcome } from "./discovery.js";
 // prettier-ignore

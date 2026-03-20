@@ -26,6 +26,7 @@ import { createDeviceTokenRoutes } from "./routes/device-token.js";
 import { createDesktopEnvironmentRoutes } from "./routes/desktop-environments.js";
 import { createHealthRoute } from "./routes/health.js";
 import { createIngressRoutes } from "./routes/ingress.js";
+import { createMemoryRoutes } from "./routes/memory.js";
 import { createMetricsRoutes } from "./routes/metrics.js";
 import { createModelConfigRoutes } from "./routes/model-config.js";
 import { createModelsDevRoutes } from "./routes/models-dev.js";
@@ -435,6 +436,8 @@ export function registerAgentsAndWorkspaceRoutes(context: AppRouteContext): void
       logger: context.container.logger,
     }),
   );
+
+  context.app.route("/", createMemoryRoutes({ memoryDal: context.container.memoryDal }));
 
   context.app.route(
     "/",

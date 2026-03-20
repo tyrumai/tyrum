@@ -16,6 +16,7 @@ describe("Operator UI app/page component structure", () => {
         { specifier: "../src/components/pages/workboard-page.js", exportName: "WorkBoardPage" },
         { specifier: "../src/components/pages/agents-page.js", exportName: "AgentsPage" },
         { specifier: "../src/components/pages/extensions-page.js", exportName: "ExtensionsPage" },
+        { specifier: "../src/components/pages/memory-page.js", exportName: "MemoryPage" },
         { specifier: "../src/components/pages/pairing-page.js", exportName: "PairingPage" },
         {
           specifier: "../src/components/pages/desktop-environments-page.js",
@@ -49,6 +50,7 @@ describe("Operator UI app/page component structure", () => {
       "workboard",
       "agents",
       "extensions",
+      "memory",
       "pairing",
       "configure",
     ]);

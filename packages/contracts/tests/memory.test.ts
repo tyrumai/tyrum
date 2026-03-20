@@ -181,7 +181,6 @@ describe("Memory contracts", () => {
   it("does not export retired CRUD/event memory contracts", () => {
     const removedExports = [
       "MemorySearchRequest",
-      "MemorySearchResponse",
       "MemoryGetRequest",
       "MemoryGetResponse",
       "MemoryListRequest",
@@ -191,14 +190,12 @@ describe("Memory contracts", () => {
       "MemoryUpdateRequest",
       "MemoryUpdateResponse",
       "MemoryDeleteRequest",
-      "MemoryDeleteResponse",
       "MemoryForgetRequest",
       "MemoryForgetResponse",
       "MemoryExportRequest",
       "MemoryExportResponse",
       "MemoryChangeEvent",
       "MemoryItemPatch",
-      "MemorySearchHit",
       "MemoryItemFilter",
       "MemoryForgetSelector",
     ] as const;
