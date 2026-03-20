@@ -68,8 +68,8 @@ export const TOOL_NODE_LIST_PROMPT_METADATA = {
     "Use node device metadata (type, platform, last_tyrum_interaction_at) to choose the best node for an action. Prefer nodes the user is actively using.",
   ],
   promptExamples: [
-    '{"capability":"tyrum.desktop.screenshot","dispatchable_only":true}',
     '{"capability":"tyrum.browser.navigate","dispatchable_only":true}',
+    '{"capability":"tyrum.location.get","dispatchable_only":true}',
   ],
 } as const;
 
@@ -78,7 +78,7 @@ export const TOOL_NODE_INSPECT_PROMPT_METADATA = {
     "Inspect the capability before dispatch so you know the exact action names and input shape.",
   ],
   promptExamples: [
-    '{"node_id":"node_123","capability":"tyrum.desktop.screenshot"}',
+    '{"node_id":"node_123","capability":"tyrum.browser.navigate"}',
     '{"node_id":"node_456","capability":"tyrum.camera.capture-photo"}',
   ],
 } as const;

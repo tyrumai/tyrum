@@ -105,7 +105,7 @@ High-risk tools should include canonical examples in their prompt-facing descrip
   - use `write` only for full-file replacement
 - `bash` should show bounded commands with explicit `cwd` and `timeout_ms` when relevant.
 - `tool.node.dispatch` should show that action-specific arguments go inside `input`, for example:
-  `{"node_id":"...","capability":"tyrum.desktop.screenshot","action_name":"screenshot","input":{"display":"all"}}`
+  `{"node_id":"...","capability":"tyrum.browser.navigate","action_name":"navigate","input":{"url":"https://example.com"}}`
 - `tool.node.list` and `tool.node.inspect` should make the discovery order explicit before dispatch.
 - `tool.automation.schedule.create` and `.update` should show canonical nested `cadence`, `execution`, and `delivery` objects instead of free-form schedule prose.
 - `webfetch` should distinguish `mode: "raw"` from `mode: "extract"` and show that extract mode uses a focused `prompt`.

@@ -14,6 +14,7 @@ import type { LocationService } from "../location/service.js";
 import { executeCoreTool, executeMcpTool } from "./tool-executor-core-tools.js";
 import { executeLocationPlaceTool } from "./tool-executor-location-tools.js";
 import {
+  executeDedicatedDesktopTool,
   executeNodeDispatchTool,
   executeNodeInspectTool,
   executeNodeListTool,
@@ -242,6 +243,24 @@ export class ToolExecutor {
             output: "",
             error: "node capability inspection is not configured",
           };
+    }
+    const dedicatedDesktopResult = await executeDedicatedDesktopTool(
+      {
+        workspaceLease: this.workspaceLease,
+        nodeDispatchService: this.nodeDispatchService,
+        nodeInventoryService: this.nodeInventoryService,
+        inspectionService: this.nodeCapabilityInspectionService,
+        connectionManager: this.connectionManager,
+        connectionDirectory: this.connectionDirectory,
+        artifactStore: this.artifactStore,
+      },
+      toolId,
+      toolCallId,
+      args,
+      audit,
+    );
+    if (dedicatedDesktopResult) {
+      return dedicatedDesktopResult;
     }
     const artifactDescribeResult = await executeArtifactDescribeTool(
       this.artifactDescribeRuntime,

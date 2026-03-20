@@ -28,7 +28,7 @@ const EXECUTION_SCOPE = {
   lane: "main",
 } as const;
 
-describe("tool.node.dispatch desktop evidence artifacts a11y", () => {
+describe("dedicated desktop tool evidence artifacts a11y", () => {
   let originalTyrumHome: string | undefined;
   let homeDir: string | undefined;
 
@@ -104,13 +104,11 @@ describe("tool.node.dispatch desktop evidence artifacts a11y", () => {
     await seedExecutionScope(container.db, scope, EXECUTION_SCOPE);
 
     const result = await executor.execute(
-      "tool.node.dispatch",
+      "tool.desktop.snapshot",
       "call-3",
       {
         node_id: NODE_ID,
-        capability: "tyrum.desktop.snapshot",
-        action_name: "snapshot",
-        input: { include_tree: true },
+        include_tree: true,
       },
       {
         execution_run_id: scope.runId,
@@ -184,13 +182,11 @@ describe("tool.node.dispatch desktop evidence artifacts a11y", () => {
     await seedExecutionScope(container.db, scope, EXECUTION_SCOPE);
 
     const result = await executor.execute(
-      "tool.node.dispatch",
+      "tool.desktop.snapshot",
       "call-a11y-1",
       {
         node_id: NODE_ID,
-        capability: "tyrum.desktop.snapshot",
-        action_name: "snapshot",
-        input: { include_tree: true },
+        include_tree: true,
       },
       {
         execution_run_id: scope.runId,
@@ -264,13 +260,11 @@ describe("tool.node.dispatch desktop evidence artifacts a11y", () => {
     );
 
     const result = await executor.execute(
-      "tool.node.dispatch",
+      "tool.desktop.screenshot",
       "call-sandbox-sensitivity",
       {
         node_id: nodeId,
-        capability: "tyrum.desktop.screenshot",
-        action_name: "screenshot",
-        input: { display: "primary" },
+        display: "primary",
       },
       {
         execution_run_id: scope.runId,

@@ -29,7 +29,7 @@ const EXECUTION_SCOPE = {
   lane: "main",
 } as const;
 
-describe("tool.node.dispatch desktop evidence artifacts", () => {
+describe("dedicated desktop tool evidence artifacts", () => {
   let originalTyrumHome: string | undefined;
   let homeDir: string | undefined;
 
@@ -85,13 +85,11 @@ describe("tool.node.dispatch desktop evidence artifacts", () => {
     await seedExecutionScope(container.db, scope, EXECUTION_SCOPE);
 
     const result = await executor.execute(
-      "tool.node.dispatch",
+      "tool.desktop.screenshot",
       "call-1",
       {
         node_id: NODE_ID,
-        capability: "tyrum.desktop.screenshot",
-        action_name: "screenshot",
-        input: { display: "primary" },
+        display: "primary",
       },
       {
         execution_run_id: scope.runId,
@@ -152,11 +150,9 @@ describe("tool.node.dispatch desktop evidence artifacts", () => {
       service: nodeDispatchService,
     });
 
-    const result = await executor.execute("tool.node.dispatch", "call-synthetic-1", {
+    const result = await executor.execute("tool.desktop.screenshot", "call-synthetic-1", {
       node_id: NODE_ID,
-      capability: "tyrum.desktop.screenshot",
-      action_name: "screenshot",
-      input: { display: "primary" },
+      display: "primary",
     });
 
     expect(result.error).toBeUndefined();
@@ -226,13 +222,11 @@ describe("tool.node.dispatch desktop evidence artifacts", () => {
     await seedExecutionScope(container.db, scope, EXECUTION_SCOPE);
 
     const result = await executor.execute(
-      "tool.node.dispatch",
+      "tool.desktop.snapshot",
       "call-3",
       {
         node_id: NODE_ID,
-        capability: "tyrum.desktop.snapshot",
-        action_name: "snapshot",
-        input: { include_tree: true },
+        include_tree: true,
       },
       {
         execution_run_id: scope.runId,
@@ -311,13 +305,11 @@ describe("tool.node.dispatch desktop evidence artifacts", () => {
     await seedExecutionScope(container.db, scope, EXECUTION_SCOPE);
 
     const result = await executor.execute(
-      "tool.node.dispatch",
+      "tool.desktop.snapshot",
       "call-2",
       {
         node_id: NODE_ID,
-        capability: "tyrum.desktop.snapshot",
-        action_name: "snapshot",
-        input: { include_tree: true },
+        include_tree: true,
       },
       {
         execution_run_id: scope.runId,
@@ -413,13 +405,11 @@ describe("tool.node.dispatch desktop evidence artifacts", () => {
     );
 
     const result = await executor.execute(
-      "tool.node.dispatch",
+      "tool.desktop.screenshot",
       "call-4",
       {
         node_id: nodeId,
-        capability: "tyrum.desktop.screenshot",
-        action_name: "screenshot",
-        input: { display: "primary" },
+        display: "primary",
       },
       {
         execution_run_id: scope.runId,
