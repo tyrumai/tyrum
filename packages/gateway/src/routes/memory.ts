@@ -81,7 +81,8 @@ export function createMemoryRoutes(deps: MemoryRouteDeps): Hono {
     try {
       const body = (await c.req.json()) as Record<string, unknown>;
       reason = typeof body.reason === "string" ? body.reason.trim() || undefined : undefined;
-    } catch {
+    } catch (error) {
+      void error;
       // No body is fine — reason is optional
     }
 

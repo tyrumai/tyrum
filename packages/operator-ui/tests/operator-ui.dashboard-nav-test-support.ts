@@ -301,7 +301,7 @@ function registerNavShortcutTests(): void {
 
     await act(async () => {
       window.dispatchEvent(
-        new KeyboardEvent("keydown", { key: "8", ctrlKey: true, bubbles: true }),
+        new KeyboardEvent("keydown", { key: "9", ctrlKey: true, bubbles: true }),
       );
       await vi.dynamicImportSettled();
       await Promise.resolve();
