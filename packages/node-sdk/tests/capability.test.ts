@@ -1,9 +1,69 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { WebSocketServer } from "ws";
 import type { WebSocket as WsWebSocket } from "ws";
 import { TyrumClient } from "@tyrum/transport-sdk";
 import { autoExecute } from "../src/capability.js";
 import type { CapabilityProvider, TaskExecuteContext } from "../src/capability.js";
+
+type TaskExecuteMessage = {
+  request_id: string;
+  payload: {
+    run_id: string;
+    step_id: string;
+    attempt_id: string;
+    action: {
+      type: string;
+      args: Record<string, unknown>;
+    };
+  };
+};
+
+class FakeAutoExecuteClient implements Pick<TyrumClient, "on" | "respondTaskExecute"> {
+  respondTaskExecute = vi.fn();
+  private handler: ((msg: TaskExecuteMessage) => void) | undefined;
+
+  on(event: string, handler: (msg: TaskExecuteMessage) => void): void {
+    expect(event).toBe("task_execute");
+    this.handler = handler;
+  }
+
+  dispatch(message: TaskExecuteMessage): void {
+    if (!this.handler) {
+      throw new Error("task_execute handler not registered");
+    }
+    this.handler(message);
+  }
+}
+
+function makeTaskExecuteMessage(
+  action: TaskExecuteMessage["payload"]["action"],
+  overrides?: Partial<TaskExecuteMessage>,
+): TaskExecuteMessage {
+  return {
+    request_id: overrides?.request_id ?? "t-1",
+    payload: {
+      run_id: "550e8400-e29b-41d4-a716-446655440000",
+      step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+      attempt_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+      action,
+      ...overrides?.payload,
+    },
+  };
+}
+
+async function flushAsyncDispatch(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
+async function waitForRespondTaskCalls(
+  respondTaskExecute: { mock: { calls: unknown[] } },
+  count: number,
+): Promise<void> {
+  await vi.waitFor(() => {
+    expect(respondTaskExecute.mock.calls).toHaveLength(count);
+  });
+}
 
 function createTestServer(): {
   wss: WebSocketServer;
@@ -143,5 +203,178 @@ describe("autoExecute", () => {
       ok: true,
       result: { evidence: { screenshot: "base64..." } },
     });
+  });
+
+  it("routes actions through explicit capabilityIds when they are provided", async () => {
+    const fakeClient = new FakeAutoExecuteClient();
+    const execute = vi.fn(
+      async (action: { type: string; args: Record<string, unknown> }, ctx?: TaskExecuteContext) => {
+        expect(action).toEqual({ type: "Desktop", args: { op: "screenshot" } });
+        expect(ctx).toEqual({
+          requestId: "t-1",
+          runId: "550e8400-e29b-41d4-a716-446655440000",
+          stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+          attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+        });
+        return { success: true, result: { ok: true } };
+      },
+    );
+    const provider: CapabilityProvider = {
+      capabilityIds: ["tyrum.desktop.screenshot"],
+      execute,
+    };
+
+    autoExecute(fakeClient, [provider]);
+    fakeClient.dispatch(makeTaskExecuteMessage({ type: "Desktop", args: { op: "screenshot" } }));
+    await waitForRespondTaskCalls(fakeClient.respondTaskExecute, 1);
+
+    expect(execute).toHaveBeenCalledOnce();
+    expect(fakeClient.respondTaskExecute).toHaveBeenCalledWith(
+      "t-1",
+      true,
+      { ok: true },
+      undefined,
+      undefined,
+    );
+  });
+
+  it("prefers capabilityIds over deprecated capability when both are present", async () => {
+    const fakeClient = new FakeAutoExecuteClient();
+    const execute = vi.fn();
+    const provider: CapabilityProvider = {
+      capability: "desktop",
+      capabilityIds: ["tyrum.browser.navigate"],
+      execute,
+    };
+
+    autoExecute(fakeClient, [provider]);
+    fakeClient.dispatch(makeTaskExecuteMessage({ type: "Desktop", args: { op: "screenshot" } }));
+    await flushAsyncDispatch();
+
+    expect(execute).not.toHaveBeenCalled();
+    expect(fakeClient.respondTaskExecute).toHaveBeenCalledWith(
+      "t-1",
+      false,
+      undefined,
+      undefined,
+      "no provider for capability: tyrum.desktop.screenshot",
+    );
+  });
+
+  it("fails when no provider matches the required capability", async () => {
+    const fakeClient = new FakeAutoExecuteClient();
+
+    autoExecute(fakeClient, []);
+    fakeClient.dispatch(makeTaskExecuteMessage({ type: "Desktop", args: { op: "screenshot" } }));
+    await flushAsyncDispatch();
+
+    expect(fakeClient.respondTaskExecute).toHaveBeenCalledWith(
+      "t-1",
+      false,
+      undefined,
+      undefined,
+      "no provider for capability: tyrum.desktop.screenshot",
+    );
+  });
+
+  it("returns provider errors as failed task responses", async () => {
+    const fakeClient = new FakeAutoExecuteClient();
+    const provider: CapabilityProvider = {
+      capability: "desktop",
+      execute: vi.fn(async () => {
+        throw new Error("desktop unavailable");
+      }),
+    };
+
+    autoExecute(fakeClient, [provider]);
+    fakeClient.dispatch(makeTaskExecuteMessage({ type: "Desktop", args: { op: "screenshot" } }));
+    await waitForRespondTaskCalls(fakeClient.respondTaskExecute, 1);
+
+    expect(fakeClient.respondTaskExecute).toHaveBeenCalledWith(
+      "t-1",
+      false,
+      undefined,
+      undefined,
+      "desktop unavailable",
+    );
+  });
+
+  it("passes through unsuccessful task results unchanged", async () => {
+    const fakeClient = new FakeAutoExecuteClient();
+    const provider: CapabilityProvider = {
+      capability: "desktop",
+      execute: vi.fn(async () => ({
+        success: false,
+        evidence: { reason: "operator-denied" },
+        error: "approval required",
+      })),
+    };
+
+    autoExecute(fakeClient, [provider]);
+    fakeClient.dispatch(makeTaskExecuteMessage({ type: "Desktop", args: { op: "screenshot" } }));
+    await waitForRespondTaskCalls(fakeClient.respondTaskExecute, 1);
+
+    expect(fakeClient.respondTaskExecute).toHaveBeenCalledWith(
+      "t-1",
+      false,
+      undefined,
+      { reason: "operator-denied" },
+      "approval required",
+    );
+  });
+
+  it("attempts a fallback failure response when serialization fails", async () => {
+    const fakeClient = new FakeAutoExecuteClient();
+    fakeClient.respondTaskExecute
+      .mockImplementationOnce(() => {
+        throw new Error("serialize failed");
+      })
+      .mockImplementationOnce(() => undefined);
+
+    const provider: CapabilityProvider = {
+      capability: "desktop",
+      execute: vi.fn(async () => ({
+        success: true,
+        result: { answer: 42 },
+      })),
+    };
+
+    autoExecute(fakeClient, [provider]);
+    fakeClient.dispatch(makeTaskExecuteMessage({ type: "Desktop", args: { op: "screenshot" } }));
+    await waitForRespondTaskCalls(fakeClient.respondTaskExecute, 2);
+
+    expect(fakeClient.respondTaskExecute).toHaveBeenCalledTimes(2);
+    expect(fakeClient.respondTaskExecute).toHaveBeenNthCalledWith(
+      2,
+      "t-1",
+      false,
+      undefined,
+      undefined,
+      "task.execute response serialization failed: serialize failed",
+    );
+  });
+
+  it("swallows a fallback serialization failure", async () => {
+    const fakeClient = new FakeAutoExecuteClient();
+    fakeClient.respondTaskExecute.mockImplementation(() => {
+      throw new Error("still broken");
+    });
+
+    const provider: CapabilityProvider = {
+      capability: "desktop",
+      execute: vi.fn(async () => ({
+        success: true,
+        result: { ok: true },
+      })),
+    };
+
+    autoExecute(fakeClient, [provider]);
+
+    expect(() => {
+      fakeClient.dispatch(makeTaskExecuteMessage({ type: "Desktop", args: { op: "screenshot" } }));
+    }).not.toThrow();
+
+    await waitForRespondTaskCalls(fakeClient.respondTaskExecute, 2);
+    expect(fakeClient.respondTaskExecute).toHaveBeenCalledTimes(2);
   });
 });
