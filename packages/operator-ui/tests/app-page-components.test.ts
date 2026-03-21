@@ -49,11 +49,11 @@ describe("Operator UI app/page component structure", () => {
       "chat",
       "approvals",
       "workboard",
+      "transcripts",
       "agents",
       "extensions",
       "memory",
       "schedules",
-      "pairing",
       "configure",
     ]);
   });

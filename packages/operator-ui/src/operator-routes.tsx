@@ -120,22 +120,33 @@ export interface OperatorRouteRenderContext {
   webAuthPersistence?: WebAuthPersistence;
 }
 
+export type SidebarSectionId = "operate" | "build" | "system";
+
+export const SIDEBAR_SECTION_LABELS: Record<SidebarSectionId, string> = {
+  operate: "Operate",
+  build: "Build",
+  system: "System",
+};
+
 export interface OperatorRouteDefinition {
   id: OperatorUiRouteId;
   label: string;
   icon: LucideIcon;
   navGroup: "sidebar" | "platformDesktop" | "platformMobile" | "platformWeb" | "none";
+  sidebarSection?: SidebarSectionId;
   shortcut: boolean;
   hostKinds: readonly HostKind[];
   render(context: OperatorRouteRenderContext): ReactNode;
 }
 
 export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
+  // ── Operate ──
   {
     id: "dashboard",
     label: "Dashboard",
     icon: LayoutGrid,
     navGroup: "sidebar",
+    sidebarSection: "operate",
     shortcut: true,
     hostKinds: SHARED_HOST_KINDS,
     render: ({ core, hostKind, navigate, onboardingAvailable, onOpenOnboarding }) => (
@@ -153,6 +164,7 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
     label: "Chat",
     icon: MessageSquare,
     navGroup: "sidebar",
+    sidebarSection: "operate",
     shortcut: true,
     hostKinds: SHARED_HOST_KINDS,
     render: ({ core }) => <ChatPage core={core} />,
@@ -162,6 +174,7 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
     label: "Approvals",
     icon: ShieldCheck,
     navGroup: "sidebar",
+    sidebarSection: "operate",
     shortcut: true,
     hostKinds: SHARED_HOST_KINDS,
     render: ({ core }) => <ApprovalsPage core={core} />,
@@ -171,33 +184,38 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
     label: "Work",
     icon: SquareKanban,
     navGroup: "sidebar",
+    sidebarSection: "operate",
     shortcut: true,
     hostKinds: SHARED_HOST_KINDS,
     render: ({ core }) => <WorkBoardPage core={core} />,
-  },
-  {
-    id: "agents",
-    label: "Agents",
-    icon: Bot,
-    navGroup: "sidebar",
-    shortcut: true,
-    hostKinds: SHARED_HOST_KINDS,
-    render: ({ core, navigate }) => <AgentsPage core={core} onNavigate={navigate} />,
   },
   {
     id: "transcripts",
     label: "Transcripts",
     icon: FileText,
     navGroup: "sidebar",
-    shortcut: false,
+    sidebarSection: "operate",
+    shortcut: true,
     hostKinds: SHARED_HOST_KINDS,
     render: ({ core }) => <TranscriptPage core={core} />,
+  },
+  // ── Build ──
+  {
+    id: "agents",
+    label: "Agents",
+    icon: Bot,
+    navGroup: "sidebar",
+    sidebarSection: "build",
+    shortcut: true,
+    hostKinds: SHARED_HOST_KINDS,
+    render: ({ core, navigate }) => <AgentsPage core={core} onNavigate={navigate} />,
   },
   {
     id: "extensions",
     label: "Extensions",
     icon: Blocks,
     navGroup: "sidebar",
+    sidebarSection: "build",
     shortcut: true,
     hostKinds: SHARED_HOST_KINDS,
     render: ({ core }) => <ExtensionsPage core={core} />,
@@ -207,6 +225,7 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
     label: "Memory",
     icon: Brain,
     navGroup: "sidebar",
+    sidebarSection: "build",
     shortcut: true,
     hostKinds: SHARED_HOST_KINDS,
     render: ({ core }) => <MemoryPage core={core} />,
@@ -216,16 +235,19 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
     label: "Schedules",
     icon: CalendarClock,
     navGroup: "sidebar",
+    sidebarSection: "build",
     shortcut: true,
     hostKinds: SHARED_HOST_KINDS,
     render: ({ core }) => <SchedulesPage core={core} />,
   },
+  // ── System ──
   {
     id: "pairing",
     label: "Nodes",
     icon: Link2,
     navGroup: "sidebar",
-    shortcut: true,
+    sidebarSection: "system",
+    shortcut: false,
     hostKinds: SHARED_HOST_KINDS,
     render: ({ core }) => <PairingPage core={core} />,
   },
@@ -234,15 +256,17 @@ export const OPERATOR_ROUTE_DEFINITIONS: readonly OperatorRouteDefinition[] = [
     label: "Desktops",
     icon: Boxes,
     navGroup: "sidebar",
+    sidebarSection: "system",
     shortcut: false,
     hostKinds: SHARED_HOST_KINDS,
     render: ({ core, mode }) => <DesktopEnvironmentsPage core={core} mode={mode} />,
   },
   {
     id: "configure",
-    label: "Configure",
+    label: "Settings",
     icon: Settings,
     navGroup: "sidebar",
+    sidebarSection: "system",
     shortcut: true,
     hostKinds: SHARED_HOST_KINDS,
     render: ({ core, mode, webAuthPersistence }) => (

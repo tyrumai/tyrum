@@ -179,8 +179,9 @@ function OperatorUiAppRoot({
         viewModel.showShell && !navigationBlocked ? (
           <Sidebar
             items={viewModel.sidebarItems}
+            groups={viewModel.sidebarGroups}
             secondaryItems={viewModel.platformItems}
-            secondaryLabel="Node"
+            secondaryLabel="This Device"
             activeItemId={viewModel.route}
             onNavigate={viewModel.navigate}
             collapsible
@@ -203,6 +204,7 @@ function OperatorUiAppRoot({
           <MobileNav
             items={viewModel.mobileItems}
             overflowItems={viewModel.mobileOverflowItems}
+            overflowGroups={viewModel.mobileOverflowGroups}
             activeItemId={viewModel.route}
             onNavigate={viewModel.navigate}
           />

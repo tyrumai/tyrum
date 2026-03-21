@@ -1,10 +1,10 @@
 import * as React from "react";
-import { ChevronDown, ChevronsLeft, ChevronsRight, RefreshCw } from "lucide-react";
-import { getConnectionDisplay, type ConnectionStatus } from "../../lib/connection-display.js";
+import { ChevronDown } from "lucide-react";
+import { type ConnectionStatus } from "../../lib/connection-display.js";
 import { cn } from "../../lib/cn.js";
 import { Badge, type BadgeVariant } from "../ui/badge.js";
-import { StatusDot } from "../ui/status-dot.js";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip.js";
+import { SidebarFooter } from "./sidebar-footer.js";
 
 export type SidebarConnectionStatus = ConnectionStatus;
 
@@ -18,8 +18,15 @@ export interface SidebarNavItem {
   badgeVariant?: BadgeVariant;
 }
 
+export interface SidebarItemGroup {
+  id: string;
+  label: string;
+  items: SidebarNavItem[];
+}
+
 export interface SidebarProps extends React.HTMLAttributes<HTMLElement> {
   items: SidebarNavItem[];
+  groups?: SidebarItemGroup[];
   activeItemId: string;
   onNavigate: (id: string) => void;
   onConnectionClick?: () => void;
@@ -58,14 +65,17 @@ function writeStoredBool(key: string, value: boolean): void {
   }
 }
 
-interface SidebarNavButtonProps {
+function SidebarNavButton({
+  item,
+  activeItemId,
+  collapsed,
+  onNavigate,
+}: {
   item: SidebarNavItem;
   activeItemId: string;
   collapsed: boolean;
   onNavigate: (id: string) => void;
-}
-
-function SidebarNavButton({ item, activeItemId, collapsed, onNavigate }: SidebarNavButtonProps) {
+}) {
   const Icon = item.icon;
   const active = item.id === activeItemId;
   const badgeCount = item.badgeCount ?? 0;
@@ -126,20 +136,9 @@ function SidebarNavButton({ item, activeItemId, collapsed, onNavigate }: Sidebar
   );
 }
 
-interface SidebarNavProps {
-  items: SidebarNavItem[];
-  activeItemId: string;
-  onNavigate: (id: string) => void;
-  collapsed: boolean;
-  secondaryItems?: SidebarNavItem[];
-  secondaryLabel: string;
-  secondaryCollapsible: boolean;
-  secondaryCollapsed: boolean;
-  onToggleSecondary: () => void;
-}
-
 function SidebarNav({
   items,
+  groups,
   activeItemId,
   onNavigate,
   collapsed,
@@ -148,7 +147,18 @@ function SidebarNav({
   secondaryCollapsible,
   secondaryCollapsed,
   onToggleSecondary,
-}: SidebarNavProps) {
+}: {
+  items: SidebarNavItem[];
+  groups?: SidebarItemGroup[];
+  activeItemId: string;
+  onNavigate: (id: string) => void;
+  collapsed: boolean;
+  secondaryItems?: SidebarNavItem[];
+  secondaryLabel: string;
+  secondaryCollapsible: boolean;
+  secondaryCollapsed: boolean;
+  onToggleSecondary: () => void;
+}) {
   const showSecondaryItems = secondaryItems && secondaryItems.length > 0;
   const secondaryVisible = showSecondaryItems && (!secondaryCollapsible || !secondaryCollapsed);
 
@@ -171,7 +181,27 @@ function SidebarNav({
           collapsed ? "px-1" : "px-2",
         )}
       >
-        {items.map(renderNavItem)}
+        {groups && groups.length > 0
+          ? groups.map((group, groupIndex) => (
+              <React.Fragment key={group.id}>
+                {groupIndex > 0 ? (
+                  <div className="mt-3 border-t border-border" aria-hidden="true" />
+                ) : null}
+                {!collapsed ? (
+                  <div
+                    data-testid={`sidebar-section-${group.id}`}
+                    className={cn(
+                      "px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-fg-muted/70",
+                      groupIndex > 0 ? "mt-1" : null,
+                    )}
+                  >
+                    {group.label}
+                  </div>
+                ) : null}
+                {group.items.map(renderNavItem)}
+              </React.Fragment>
+            ))
+          : items.map(renderNavItem)}
         {showSecondaryItems ? (
           <>
             <div className="mt-4 border-t border-border" />
@@ -215,235 +245,13 @@ function SidebarNav({
   );
 }
 
-interface SidebarSyncNowButtonProps {
-  collapsed: boolean;
-  onSyncNow: () => void;
-  syncNowDisabled: boolean;
-  syncNowLoading: boolean;
-}
-
-interface SidebarFooterRowContentProps {
-  collapsed: boolean;
-  icon: React.ReactNode;
-  children?: React.ReactNode;
-}
-
-function SidebarFooterRowContent({ collapsed, icon, children }: SidebarFooterRowContentProps) {
-  return (
-    <>
-      <span className="flex h-4 w-4 shrink-0 items-center justify-center">{icon}</span>
-      {!collapsed ? (
-        <span className="min-w-0 flex-1 break-words leading-5 [overflow-wrap:anywhere]">
-          {children}
-        </span>
-      ) : null}
-    </>
-  );
-}
-
-function SidebarSyncNowButton({
-  collapsed,
-  onSyncNow,
-  syncNowDisabled,
-  syncNowLoading,
-}: SidebarSyncNowButtonProps) {
-  return (
-    <button
-      type="button"
-      data-testid="sidebar-sync-now"
-      title={syncNowLoading ? "Syncing..." : syncNowDisabled ? "Connect to sync." : "Sync now"}
-      aria-label={syncNowLoading ? "Syncing" : "Sync now"}
-      disabled={syncNowDisabled || syncNowLoading}
-      className={cn(
-        "flex w-full items-center rounded-md text-sm transition-colors",
-        collapsed
-          ? "justify-center px-1.5 py-1.5"
-          : `${SIDEBAR_EXPANDED_ROW_LAYOUT} px-2.5 py-1.5 text-left`,
-        syncNowDisabled || syncNowLoading
-          ? "cursor-not-allowed opacity-50"
-          : "text-fg-muted hover:bg-bg-subtle hover:text-fg",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
-      )}
-      onClick={() => {
-        onSyncNow();
-      }}
-    >
-      <SidebarFooterRowContent
-        collapsed={collapsed}
-        icon={<RefreshCw className={cn("h-4 w-4", syncNowLoading ? "animate-spin" : null)} />}
-      >
-        {syncNowLoading ? "Syncing…" : "Sync now"}
-      </SidebarFooterRowContent>
-    </button>
-  );
-}
-
-interface SidebarStatusControlsProps {
-  collapsed: boolean;
-  connectionStatus: SidebarConnectionStatus;
-  onConnectionClick?: () => void;
-}
-
-function SidebarStatusControls({
-  collapsed,
-  connectionStatus,
-  onConnectionClick,
-}: SidebarStatusControlsProps) {
-  const connectionDisplay = getConnectionDisplay(connectionStatus);
-  const interactive = onConnectionClick !== undefined;
-  const content = (
-    <SidebarFooterRowContent
-      collapsed={collapsed}
-      icon={
-        <StatusDot
-          data-testid="connection-status-dot"
-          variant={connectionDisplay.variant}
-          pulse={connectionDisplay.pulse}
-          role="img"
-          aria-label={`Connection ${connectionDisplay.label}`}
-        />
-      }
-    >
-      <span data-testid="connection-status-label">{connectionDisplay.label}</span>
-    </SidebarFooterRowContent>
-  );
-
-  return (
-    <div
-      data-testid="sidebar-status-controls"
-      className={cn("flex items-center", collapsed ? "justify-center" : "justify-start")}
-    >
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            {interactive ? (
-              <button
-                type="button"
-                data-testid="sidebar-connection-status"
-                className={cn(
-                  "inline-flex w-full items-center rounded-md text-sm text-fg-muted transition-colors",
-                  collapsed
-                    ? "justify-center px-1.5 py-1.5"
-                    : `${SIDEBAR_EXPANDED_ROW_LAYOUT} px-2.5 py-1.5 text-left`,
-                  "hover:bg-bg-subtle hover:text-fg",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
-                )}
-                onClick={onConnectionClick}
-              >
-                {content}
-              </button>
-            ) : (
-              <span
-                data-testid="sidebar-connection-status"
-                className={cn(
-                  "inline-flex w-full items-center rounded-md text-sm text-fg-muted",
-                  collapsed
-                    ? "justify-center px-1.5 py-1.5"
-                    : `${SIDEBAR_EXPANDED_ROW_LAYOUT} px-2.5 py-1.5 text-left`,
-                )}
-              >
-                {content}
-              </span>
-            )}
-          </TooltipTrigger>
-          <TooltipContent side={collapsed ? "right" : "top"}>
-            {connectionDisplay.label}
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-    </div>
-  );
-}
-
-interface SidebarCollapseToggleProps {
-  collapsed: boolean;
-  onToggleCollapsed: () => void;
-}
-
-function SidebarCollapseToggle({ collapsed, onToggleCollapsed }: SidebarCollapseToggleProps) {
-  return (
-    <button
-      type="button"
-      data-testid="sidebar-collapse-toggle"
-      title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-      className={cn(
-        "flex w-full items-center rounded-md text-sm transition-colors",
-        collapsed
-          ? "justify-center px-1.5 py-1.5"
-          : `${SIDEBAR_EXPANDED_ROW_LAYOUT} px-2.5 py-1.5 text-left`,
-        "text-fg-muted hover:bg-bg-subtle hover:text-fg",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
-      )}
-      onClick={onToggleCollapsed}
-    >
-      <SidebarFooterRowContent
-        collapsed={collapsed}
-        icon={
-          collapsed ? <ChevronsRight className="h-4 w-4" /> : <ChevronsLeft className="h-4 w-4" />
-        }
-      >
-        Collapse
-      </SidebarFooterRowContent>
-    </button>
-  );
-}
-
-interface SidebarFooterProps {
-  collapsed: boolean;
-  collapsible: boolean;
-  connectionStatus: SidebarConnectionStatus;
-  onConnectionClick?: () => void;
-  onSyncNow?: () => void;
-  syncNowDisabled: boolean;
-  syncNowLoading: boolean;
-  onToggleCollapsed: () => void;
-}
-
-function SidebarFooter({
-  collapsed,
-  collapsible,
-  connectionStatus,
-  onConnectionClick,
-  onSyncNow,
-  syncNowDisabled,
-  syncNowLoading,
-  onToggleCollapsed,
-}: SidebarFooterProps) {
-  return (
-    <div
-      className={cn(
-        "mt-auto flex shrink-0 flex-col gap-1.5 border-t border-border",
-        collapsed ? "p-2" : "p-3",
-      )}
-    >
-      {onSyncNow ? (
-        <SidebarSyncNowButton
-          collapsed={collapsed}
-          onSyncNow={onSyncNow}
-          syncNowDisabled={syncNowDisabled}
-          syncNowLoading={syncNowLoading}
-        />
-      ) : null}
-
-      <SidebarStatusControls
-        collapsed={collapsed}
-        connectionStatus={connectionStatus}
-        onConnectionClick={onConnectionClick}
-      />
-
-      {collapsible ? (
-        <SidebarCollapseToggle collapsed={collapsed} onToggleCollapsed={onToggleCollapsed} />
-      ) : null}
-    </div>
-  );
-}
-
 export function Sidebar({
   items,
+  groups,
   activeItemId,
   onNavigate,
   secondaryItems,
-  secondaryLabel = "Node",
+  secondaryLabel = "This Device",
   secondaryCollapsible = false,
   secondaryDefaultCollapsed = true,
   collapsible = false,
@@ -501,6 +309,7 @@ export function Sidebar({
     >
       <SidebarNav
         items={items}
+        groups={groups}
         activeItemId={activeItemId}
         onNavigate={onNavigate}
         collapsed={collapsed}

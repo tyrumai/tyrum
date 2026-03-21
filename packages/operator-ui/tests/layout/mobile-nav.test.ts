@@ -49,6 +49,41 @@ describe("MobileNav", () => {
     cleanupTestRoot({ container, root });
   });
 
+  it("highlights More when an overflow group item is active", () => {
+    const MobileNav = (operatorUi as Record<string, unknown>)["MobileNav"];
+    const onNavigate = vi.fn();
+
+    const { container, root } = renderIntoDocument(
+      React.createElement(MobileNav as React.ComponentType, {
+        items,
+        overflowItems: [],
+        overflowGroups: [
+          {
+            id: "operate",
+            label: "Operate",
+            items: [{ id: "transcripts", label: "Transcripts", icon: LayoutDashboard }],
+          },
+          {
+            id: "build",
+            label: "Build",
+            items: [
+              { id: "agents", label: "Agents", icon: ShieldCheck },
+              { id: "extensions", label: "Extensions", icon: SquareKanban },
+            ],
+          },
+        ],
+        activeItemId: "agents",
+        onNavigate,
+      }),
+    );
+
+    const more = container.querySelector<HTMLButtonElement>("[data-testid='nav-more']");
+    expect(more).not.toBeNull();
+    expect(more?.getAttribute("data-active")).toBe("true");
+
+    cleanupTestRoot({ container, root });
+  });
+
   it("uses a z-index below legacy admin dialogs", () => {
     const MobileNav = (operatorUi as Record<string, unknown>)["MobileNav"];
     expect(MobileNav).toBeDefined();
