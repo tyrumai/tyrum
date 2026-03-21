@@ -1,5 +1,6 @@
 import { describe } from "vitest";
 import { registerWorkboardCrudTests } from "./ws-workboard.crud-test-support.js";
+import { registerWorkboardDeleteTests } from "./ws-workboard.delete-test-support.js";
 import { registerWorkboardTransitionTests } from "./ws-workboard.transitions-test-support.js";
 import { registerWorkboardTransitionErrorTests } from "./ws-workboard.transition-errors-test-support.js";
 import { registerWorkboardWipArtifactTests } from "./ws-workboard.wip-artifacts-test-support.js";
@@ -10,6 +11,7 @@ import { registerWorkboardScopeNonCreationTests } from "./ws-workboard.scope-non
 
 describe("handleClientMessage (work.*)", () => {
   registerWorkboardCrudTests();
+  registerWorkboardDeleteTests();
   registerWorkboardTransitionTests();
   registerWorkboardTransitionErrorTests();
   registerWorkboardWipArtifactTests();

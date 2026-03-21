@@ -5,9 +5,9 @@ import type { ProtocolDeps } from "../../ws/protocol/types.js";
 import type { ApprovalDal } from "../approval/dal.js";
 import type { RedactionEngine } from "../redaction/engine.js";
 import { WorkboardDal } from "./dal.js";
+import { deleteWorkItem } from "./service-delete.js";
 import {
   assertItemMutable,
-  cancelPausedTasks,
   closePausedSubagents,
   completePendingInterventionApprovals,
   createCapturedWorkItem,
@@ -78,41 +78,15 @@ export class GatewayWorkboardService {
   }
 
   async deleteItem(params: Parameters<WorkboardDal["deleteItem"]>[0]) {
-    await assertItemMutable(this.opts.db, params.scope, params.work_item_id);
-    await completePendingInterventionApprovals({
+    return await deleteWorkItem({
       db: this.opts.db,
-      scope: params.scope,
-      workItemId: params.work_item_id,
-      decision: "denied",
-      reason: "Work deleted by operator.",
+      workboard: this.workboard,
+      redactionEngine: this.opts.redactionEngine,
       approvalDal: this.opts.approvalDal,
       protocolDeps: this.opts.protocolDeps,
-    });
-    await closePausedSubagents({
-      db: this.opts.db,
       scope: params.scope,
-      workItemId: params.work_item_id,
-      reason: "Deleted by operator.",
-      workboard: this.workboard,
+      work_item_id: params.work_item_id,
     });
-    await cancelPausedTasks({
-      db: this.opts.db,
-      scope: params.scope,
-      workItemId: params.work_item_id,
-      detail: "Deleted by operator.",
-      workboard: this.workboard,
-    });
-    const item = await this.workboard.deleteItem(params);
-    if (item) {
-      await emitItemEvent({
-        db: this.opts.db,
-        redactionEngine: this.opts.redactionEngine,
-        protocolDeps: this.opts.protocolDeps,
-        type: "work.item.deleted",
-        item,
-      });
-    }
-    return item;
   }
 
   async pauseItem(params: { scope: WorkScope; work_item_id: string; reason?: string }) {

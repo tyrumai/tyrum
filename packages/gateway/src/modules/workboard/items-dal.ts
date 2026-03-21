@@ -206,69 +206,160 @@ export class WorkboardItemsDal {
     scope: WorkScope;
     work_item_id: string;
   }): Promise<WorkItem | undefined> {
-    const existing = await this.getItem(params);
-    if (!existing) {
-      return undefined;
-    }
+    return await this.db.transaction(async (tx) => {
+      const existing = await tx.get<DalHelpers.RawWorkItemRow>(
+        `SELECT *
+         FROM work_items
+         WHERE tenant_id = ?
+           AND agent_id = ?
+           AND workspace_id = ?
+           AND work_item_id = ?`,
+        [
+          params.scope.tenant_id,
+          params.scope.agent_id,
+          params.scope.workspace_id,
+          params.work_item_id,
+        ],
+      );
+      if (!existing) {
+        return undefined;
+      }
 
-    const activeSubagent = await this.db.get<{ subagent_id: string }>(
-      `SELECT subagent_id
-       FROM subagents
-       WHERE tenant_id = ?
-         AND agent_id = ?
-         AND workspace_id = ?
-         AND work_item_id = ?
-         AND status IN ('running', 'paused', 'closing')
-       LIMIT 1`,
-      [
-        params.scope.tenant_id,
-        params.scope.agent_id,
-        params.scope.workspace_id,
-        params.work_item_id,
-      ],
-    );
-    if (activeSubagent) {
-      throw new Error("cannot delete work item with active subagents");
-    }
+      const activeSubagent = await tx.get<{ subagent_id: string }>(
+        `SELECT subagent_id
+         FROM subagents
+         WHERE tenant_id = ?
+           AND agent_id = ?
+           AND workspace_id = ?
+           AND work_item_id = ?
+           AND status IN ('running', 'paused', 'closing')
+         LIMIT 1`,
+        [
+          params.scope.tenant_id,
+          params.scope.agent_id,
+          params.scope.workspace_id,
+          params.work_item_id,
+        ],
+      );
+      if (activeSubagent) {
+        throw new Error("cannot delete work item with active subagents");
+      }
 
-    const activeTask = await this.db.get<{ task_id: string }>(
-      `SELECT t.task_id
-       FROM work_item_tasks t
-       JOIN work_items i ON i.tenant_id = t.tenant_id AND i.work_item_id = t.work_item_id
-       WHERE i.tenant_id = ?
-         AND i.agent_id = ?
-         AND i.workspace_id = ?
-         AND t.tenant_id = ?
-         AND t.work_item_id = ?
-         AND t.status IN ('leased', 'running', 'paused')
-       LIMIT 1`,
-      [
-        params.scope.tenant_id,
-        params.scope.agent_id,
-        params.scope.workspace_id,
-        params.scope.tenant_id,
-        params.work_item_id,
-      ],
-    );
-    if (activeTask) {
-      throw new Error("cannot delete work item with active tasks");
-    }
+      const activeTask = await tx.get<{ task_id: string }>(
+        `SELECT t.task_id
+         FROM work_item_tasks t
+         JOIN work_items i ON i.tenant_id = t.tenant_id AND i.work_item_id = t.work_item_id
+         WHERE i.tenant_id = ?
+           AND i.agent_id = ?
+           AND i.workspace_id = ?
+           AND t.tenant_id = ?
+           AND t.work_item_id = ?
+           AND t.status IN ('leased', 'running', 'paused')
+         LIMIT 1`,
+        [
+          params.scope.tenant_id,
+          params.scope.agent_id,
+          params.scope.workspace_id,
+          params.scope.tenant_id,
+          params.work_item_id,
+        ],
+      );
+      if (activeTask) {
+        throw new Error("cannot delete work item with active tasks");
+      }
 
-    const row = await this.db.get<DalHelpers.RawWorkItemRow>(
-      `DELETE FROM work_items
-       WHERE tenant_id = ?
-         AND agent_id = ?
-         AND workspace_id = ?
-         AND work_item_id = ?
-       RETURNING *`,
-      [
-        params.scope.tenant_id,
-        params.scope.agent_id,
-        params.scope.workspace_id,
-        params.work_item_id,
-      ],
-    );
-    return row ? dalHelpers.toWorkItem(row) : undefined;
+      // SQLite/Postgres composite FKs with ON DELETE SET NULL will null every key column,
+      // including tenant_id. Clear the optional work-item references explicitly first.
+      await Promise.all([
+        tx.run(
+          `UPDATE work_items
+           SET parent_work_item_id = NULL
+           WHERE tenant_id = ?
+             AND agent_id = ?
+             AND workspace_id = ?
+             AND parent_work_item_id = ?`,
+          [
+            params.scope.tenant_id,
+            params.scope.agent_id,
+            params.scope.workspace_id,
+            params.work_item_id,
+          ],
+        ),
+        tx.run(
+          `UPDATE subagents
+           SET work_item_id = NULL,
+               work_item_task_id = NULL
+           WHERE tenant_id = ?
+             AND agent_id = ?
+             AND workspace_id = ?
+             AND work_item_id = ?`,
+          [
+            params.scope.tenant_id,
+            params.scope.agent_id,
+            params.scope.workspace_id,
+            params.work_item_id,
+          ],
+        ),
+        tx.run(
+          `UPDATE work_artifacts
+           SET work_item_id = NULL
+           WHERE tenant_id = ?
+             AND agent_id = ?
+             AND workspace_id = ?
+             AND work_item_id = ?`,
+          [
+            params.scope.tenant_id,
+            params.scope.agent_id,
+            params.scope.workspace_id,
+            params.work_item_id,
+          ],
+        ),
+        tx.run(
+          `UPDATE work_decisions
+           SET work_item_id = NULL
+           WHERE tenant_id = ?
+             AND agent_id = ?
+             AND workspace_id = ?
+             AND work_item_id = ?`,
+          [
+            params.scope.tenant_id,
+            params.scope.agent_id,
+            params.scope.workspace_id,
+            params.work_item_id,
+          ],
+        ),
+        tx.run(
+          `UPDATE work_signals
+           SET work_item_id = NULL
+           WHERE tenant_id = ?
+             AND agent_id = ?
+             AND workspace_id = ?
+             AND work_item_id = ?`,
+          [
+            params.scope.tenant_id,
+            params.scope.agent_id,
+            params.scope.workspace_id,
+            params.work_item_id,
+          ],
+        ),
+      ]);
+
+      const row = await tx.get<DalHelpers.RawWorkItemRow>(
+        `DELETE FROM work_items
+         WHERE tenant_id = ?
+           AND agent_id = ?
+           AND workspace_id = ?
+           AND work_item_id = ?
+         RETURNING *`,
+        [
+          params.scope.tenant_id,
+          params.scope.agent_id,
+          params.scope.workspace_id,
+          params.work_item_id,
+        ],
+      );
+      return row ? dalHelpers.toWorkItem(row) : undefined;
+    });
   }
 
   private async assertParentInScope(scope: WorkScope, workItemId: string): Promise<void> {
