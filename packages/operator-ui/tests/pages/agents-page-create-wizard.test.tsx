@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
 import { AgentsPageCreateWizard } from "../../src/components/pages/agents-page-create-wizard.js";
 import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
@@ -17,6 +17,20 @@ import {
   samplePresets,
   sampleRegistry,
 } from "./agents-page.test-support.js";
+
+const { toastErrorMock } = vi.hoisted(() => ({
+  toastErrorMock: vi.fn(),
+}));
+
+vi.mock("sonner", () => ({
+  toast: {
+    error: toastErrorMock,
+  },
+}));
+
+afterEach(() => {
+  toastErrorMock.mockReset();
+});
 
 describe("AgentsPageCreateWizard", () => {
   it("runs the full provider, preset, and agent flow when setup data is missing", async () => {
@@ -205,6 +219,56 @@ describe("AgentsPageCreateWizard", () => {
       }),
     );
     expect(onSaved).toHaveBeenCalledWith("operations-agent-2");
+
+    cleanupTestRoot(testRoot);
+  });
+
+  it("shows a setup error toast when saving a provider fails", async () => {
+    const createProviderAccount = vi.fn(async () => {
+      throw new Error("Provider unreachable");
+    });
+    const onSaved = vi.fn();
+
+    const { core } = createCore({
+      listProviders: vi.fn(async () => ({
+        status: "ok" as const,
+        providers: [],
+      })),
+      listPresets: vi.fn(async () => ({
+        status: "ok" as const,
+        presets: [],
+      })),
+      listAvailableModels: vi.fn(async () => sampleAvailableModels()),
+      listRegistry: vi.fn(async () => sampleRegistry()),
+      createProviderAccount,
+      list: vi.fn(async () => ({ agents: [] })),
+    });
+
+    const testRoot = renderIntoDocument(
+      <AgentsPageCreateWizard core={core} onCancel={vi.fn()} onSaved={onSaved} />,
+    );
+
+    await waitForSelector(testRoot.container, '[data-testid="agents-create-step-provider"]');
+
+    setInputByLabel(testRoot.container, "API key", "secret-key");
+    setInputByLabel(testRoot.container, "Display name", "OpenRouter");
+
+    await act(async () => {
+      findButtonByText(testRoot.container, "Save provider account")?.dispatchEvent(
+        new MouseEvent("click", { bubbles: true }),
+      );
+      await Promise.resolve();
+    });
+    await flush();
+
+    expect(createProviderAccount).toHaveBeenCalledOnce();
+    expect(toastErrorMock).toHaveBeenCalledWith("Setup failed", {
+      description: "Provider unreachable",
+    });
+    expect(onSaved).not.toHaveBeenCalled();
+    expect(
+      testRoot.container.querySelector('[data-testid="agents-create-step-provider"]'),
+    ).not.toBeNull();
 
     cleanupTestRoot(testRoot);
   });

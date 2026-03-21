@@ -1,5 +1,6 @@
 import type { OperatorCore } from "@tyrum/operator-app";
 import * as React from "react";
+import { toast } from "sonner";
 import { useApiAction } from "../../hooks/use-api-action.js";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { Alert } from "../ui/alert.js";
@@ -228,7 +229,11 @@ export function AgentsPageCreateWizard({
   );
 
   const runAction = async (action: () => Promise<void>): Promise<void> => {
-    await saveAction.runAndThrow(action);
+    try {
+      await saveAction.runAndThrow(action);
+    } catch (error) {
+      toast.error("Setup failed", { description: formatErrorMessage(error) });
+    }
   };
 
   const saveProvider = async (): Promise<void> => {
