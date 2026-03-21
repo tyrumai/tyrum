@@ -36,11 +36,11 @@ describe("BrowserNodeProvider consent flow", () => {
     stubLocalStorage();
     stubBrowserApis();
 
-    const { getApi, testRoot } = await renderProvider();
+    const { testRoot, waitForApi } = await renderProvider();
 
     try {
       await flushEffects();
-      const api = getApi();
+      const api = await waitForApi();
 
       expect(api.status).toBe("disabled");
       await expect(
@@ -63,12 +63,11 @@ describe("BrowserNodeProvider consent flow", () => {
     stubLocalStorage({ "tyrum.operator-ui.browserNode.enabled": "1" });
     stubBrowserApis();
 
-    const { getApi, testRoot } = await renderProvider();
+    const { testRoot, waitForApi } = await renderProvider();
 
     try {
       await flushEffects();
-      await flushEffects();
-      const api = getApi();
+      const api = await waitForApi();
 
       expect(api.status).toBe("connected");
 
@@ -157,12 +156,11 @@ describe("BrowserNodeProvider consent flow", () => {
     stubLocalStorage({ "tyrum.operator-ui.browserNode.enabled": "1" });
     stubBrowserApis();
 
-    const { getApi, testRoot } = await renderProvider();
+    const { getApi, testRoot, waitForApi } = await renderProvider();
 
     try {
       await flushEffects();
-      await flushEffects();
-      const api = getApi();
+      const api = await waitForApi();
       const lifecycleInput = getBrowserNodeRuntimeState().lifecycleInputs.at(-1);
       expect(lifecycleInput?.providers).toBeDefined();
       const provider = lifecycleInput?.providers?.[0] as {

@@ -34,8 +34,7 @@ describe("BrowserNodeProvider lifecycle", () => {
 
     try {
       await flushEffects();
-      await flushEffects();
-      const api = failed.getApi();
+      const api = await failed.waitForApi();
       expect(api.status).toBe("error");
       expect(api.error).toBe("identity locked");
     } finally {
@@ -63,12 +62,11 @@ describe("BrowserNodeProvider lifecycle", () => {
     stubLocalStorage({ "tyrum.operator-ui.browserNode.enabled": "1" });
     stubBrowserApis({ mediaDevices: false, secureContext: false });
 
-    const { getApi, testRoot } = await renderProvider();
+    const { getApi, testRoot, waitForApi } = await renderProvider();
 
     try {
       await flushEffects();
-      await flushEffects();
-      const api = getApi();
+      const api = await waitForApi();
 
       await expect(
         api.executeLocal({

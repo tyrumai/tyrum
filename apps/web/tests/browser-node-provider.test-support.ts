@@ -381,10 +381,27 @@ export function stubBrowserApis(options?: {
   );
 }
 
-export async function flushEffects(): Promise<void> {
-  await act(async () => {
-    await Promise.resolve();
-  });
+export async function flushEffects(iterations = 1): Promise<void> {
+  for (let index = 0; index < iterations; index += 1) {
+    await act(async () => {
+      await Promise.resolve();
+    });
+  }
+}
+
+async function waitForValue<T>(
+  readValue: () => T | null | undefined,
+  errorMessage: string,
+  attempts = 20,
+): Promise<T> {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const value = readValue();
+    if (value !== null && value !== undefined) {
+      return value;
+    }
+    await flushEffects();
+  }
+  throw new Error(errorMessage);
 }
 
 export async function renderProvider(wsUrl = "ws://example.test/ws") {
@@ -421,6 +438,9 @@ export async function renderProvider(wsUrl = "ws://example.test/ws") {
     getApi() {
       expect(api).not.toBeNull();
       return api as BrowserNodeApi;
+    },
+    async waitForApi() {
+      return await waitForValue(() => api, "BrowserNodeApi was not published", 40);
     },
     testRoot,
   };
