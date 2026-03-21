@@ -386,6 +386,7 @@ export function registerFirstRunOnboardingPolicyWarningTests(): void {
       await Promise.resolve();
     });
 
+    await advanceOnboardingIntro(container);
     await waitForSelector(
       container,
       '[data-testid="first-run-onboarding-step-workspace-policy"]',
