@@ -53,6 +53,14 @@ function expandNodeRow(container: HTMLElement, rowKey: string): void {
   });
 }
 
+function listRenderedPairingRows(container: HTMLElement): string[] {
+  return Array.from(container.querySelectorAll<HTMLElement>('[data-testid^="pairing-row-"]'))
+    .map((el) => el.getAttribute("data-testid"))
+    .filter(
+      (id): id is string => id !== null && !id.includes("identifier") && !id.includes("tools"),
+    );
+}
+
 function sampleCapabilitySummary(capability: string) {
   return {
     capability,
@@ -144,13 +152,7 @@ describe("PairingPage", () => {
 
       // Rows are rendered as <tr> elements with data-testid="pairing-row-<key>"
       // Keys: pairing:1 (pending node-1), node:node-2 (connected), pairing:2 (offline node-3)
-      const rows = Array.from(
-        container.querySelectorAll<HTMLElement>('[data-testid^="pairing-row-"]'),
-      )
-        .map((el) => el.getAttribute("data-testid"))
-        .filter(
-          (id): id is string => id !== null && !id.includes("identifier") && !id.includes("tools"),
-        );
+      const rows = listRenderedPairingRows(container);
       expect(rows).toEqual([
         "pairing-row-pairing:1",
         "pairing-row-node:node-2",
@@ -220,15 +222,66 @@ describe("PairingPage", () => {
     try {
       await flushPairingPage();
 
-      const rows = Array.from(
-        container.querySelectorAll<HTMLElement>('[data-testid^="pairing-row-"]'),
-      )
-        .map((el) => el.getAttribute("data-testid"))
-        .filter(
-          (id): id is string => id !== null && !id.includes("identifier") && !id.includes("tools"),
-        );
-      expect(rows).toEqual(["pairing-row-pairing:1"]);
+      expect(listRenderedPairingRows(container)).toEqual(["pairing-row-pairing:1"]);
       expect(container.textContent).toContain("1 pending, 0 connected, 0 offline");
+    } finally {
+      cleanupTestRoot({ container, root });
+    }
+  });
+
+  it("filters rows by the visible node label", async () => {
+    const ws = new FakeWsClient();
+    const { http, nodesList, pairingsList } = createFakeHttpClient();
+    const sampleInventory = sampleNodeInventoryResponse();
+    pairingsList.mockResolvedValue({
+      status: "ok",
+      pairings: [],
+    });
+    nodesList.mockResolvedValue({
+      ...sampleInventory,
+      nodes: [
+        {
+          ...sampleInventory.nodes[0],
+          node_id: "node-1",
+          label: "My Desktop",
+          connected: true,
+          paired_status: "approved",
+          mode: "desktop",
+          capabilities: [sampleCapabilitySummary("tyrum.cli")],
+        },
+        {
+          ...sampleInventory.nodes[0],
+          node_id: "node-2",
+          label: "Background Worker",
+          connected: true,
+          paired_status: "approved",
+          mode: "worker",
+          capabilities: [sampleCapabilitySummary("tyrum.http")],
+        },
+      ],
+    });
+
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test"),
+      deps: { ws, http },
+    });
+
+    const { container, root } = renderPairingPage(core);
+
+    try {
+      await flushPairingPage();
+
+      const search = container.querySelector<HTMLInputElement>('[data-testid="pairing-search"]');
+      expect(search).not.toBeNull();
+      setNativeValue(search as HTMLInputElement, "desktop");
+      await flushPairingPage();
+
+      expect(listRenderedPairingRows(container)).toEqual(["pairing-row-node:node-1"]);
+      expect(
+        container.querySelector('[data-testid="pairing-row-identifier-node-1"]')?.textContent,
+      ).toContain("My Desktop");
     } finally {
       cleanupTestRoot({ container, root });
     }

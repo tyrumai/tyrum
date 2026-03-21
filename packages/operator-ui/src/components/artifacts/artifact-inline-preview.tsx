@@ -52,7 +52,7 @@ function defaultArtifactDownloadName(
     if (filename.length > 0) return filename;
   }
 
-  return `artifact${extensionForContentType(contentType)}`;
+  return `${artifact.artifact_id}${extensionForContentType(contentType)}`;
 }
 
 function ArtifactDownloadLink({

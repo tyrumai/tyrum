@@ -245,6 +245,7 @@ function matchesSearch(row: NodeListRow, query: string): boolean {
   if (!query) return true;
   const needle = query.toLowerCase();
   return (
+    row.label.toLowerCase().includes(needle) ||
     row.nodeId.toLowerCase().includes(needle) ||
     row.shortIdentifier.toLowerCase().includes(needle) ||
     (row.mode?.toLowerCase().includes(needle) ?? false)

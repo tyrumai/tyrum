@@ -229,7 +229,7 @@ describe("MessageCard tool output rendering", () => {
     ) as HTMLAnchorElement | null;
     expect(downloadLink).not.toBeNull();
     expect(downloadLink?.getAttribute("href")).toBe("blob:chat-artifact-preview");
-    expect(downloadLink?.getAttribute("download")).toBe("artifact.png");
+    expect(downloadLink?.getAttribute("download")).toBe("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa.png");
     expect(getBytes).toHaveBeenCalledWith(
       "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
