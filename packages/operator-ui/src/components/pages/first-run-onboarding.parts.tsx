@@ -27,7 +27,10 @@ export function OnboardingProgressCard({
   const currentItem = items.find((item) => item.status === "current") ?? null;
 
   return (
-    <Card className={className} data-testid="first-run-onboarding-progress">
+    <Card
+      className={cn("max-h-full overflow-hidden", className)}
+      data-testid="first-run-onboarding-progress"
+    >
       <CardHeader className="pb-3">
         <div className="grid gap-2">
           <div className="flex flex-wrap items-center gap-2">
@@ -43,7 +46,7 @@ export function OnboardingProgressCard({
           </div>
         </div>
       </CardHeader>
-      <CardContent className="grid gap-3">
+      <CardContent className="grid max-h-full gap-3 overflow-auto">
         {items.map((item, index) => {
           const statusCopy =
             item.status === "done"
@@ -107,13 +110,13 @@ export function OnboardingStepFrame({
   }
 
   return (
-    <div className="grid gap-5">
+    <div className="grid gap-4">
       <div className="grid gap-2">
         <div className="text-xs font-medium tracking-[0.18em] text-fg-muted uppercase">
           Step {stepIndex} of {FIRST_RUN_ONBOARDING_STEPS.length}
         </div>
         <div className="grid gap-1">
-          <h3 className="text-xl font-semibold text-fg">{step.title}</h3>
+          <h3 className="text-lg font-semibold text-fg">{step.title}</h3>
           <div className="text-sm text-fg-muted">{step.detail}</div>
         </div>
       </div>

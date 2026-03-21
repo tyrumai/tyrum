@@ -74,15 +74,21 @@ export function OnboardingPaletteStep({
   onSelectPalette: (palette: ColorPalette) => void;
   selectedPalette: ColorPalette;
 }): React.ReactElement {
+  const selectedOption = PALETTE_OPTIONS.find((option) => option.id === selectedPalette);
+
+  if (!selectedOption) {
+    throw new Error(`Unknown onboarding palette: ${selectedPalette}`);
+  }
+
   return (
     <OnboardingStepFrame stepId="palette">
       <div className="grid gap-4" data-testid="first-run-onboarding-step-palette">
-        <div className="grid gap-3">
+        <div className="grid gap-2">
           <div className="text-sm text-fg-muted">
             Choose the color identity you want Tyrum to use across the operator UI.
           </div>
           <div
-            className="grid grid-cols-2 gap-3 sm:grid-cols-5"
+            className="grid grid-cols-2 gap-2 sm:grid-cols-5"
             role="radiogroup"
             aria-label="Color palette"
           >
@@ -96,7 +102,7 @@ export function OnboardingPaletteStep({
                   aria-checked={active}
                   data-testid={`first-run-onboarding-palette-${option.id}`}
                   className={cn(
-                    "flex w-full flex-col items-center gap-2 rounded-lg border px-3 py-3 text-center transition-colors",
+                    "flex w-full flex-col items-center gap-1.5 rounded-lg border px-2.5 py-2.5 text-center transition-colors",
                     "hover:bg-bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
                     active ? "border-primary bg-bg" : "border-border bg-bg",
                   )}
@@ -104,23 +110,48 @@ export function OnboardingPaletteStep({
                     onSelectPalette(option.id);
                   }}
                 >
-                  <div className="flex gap-1.5">
+                  <div className="flex gap-1">
                     {option.swatches.map((color, index) => (
                       <span
                         key={index}
-                        className="h-5 w-5 rounded-full border border-border"
+                        className="h-4 w-4 rounded-full border border-border"
                         style={{ backgroundColor: color }}
                         aria-hidden={true}
                       />
                     ))}
                   </div>
-                  <div className="grid gap-0.5">
+                  <div className="grid gap-0.5 leading-tight">
                     <div className="text-sm font-medium">{option.label}</div>
-                    <div className="text-xs text-fg-muted">{option.description}</div>
+                    <div className="text-[11px] text-fg-muted">{option.description}</div>
                   </div>
                 </button>
               );
             })}
+          </div>
+          <div className="rounded-lg border border-border/70 bg-bg-subtle/30 px-3 py-2 text-xs text-fg-muted">
+            You can change the palette later from Configure if you want a different look.
+          </div>
+          <div className="grid gap-3 rounded-xl border border-border/70 bg-bg-subtle/20 px-4 py-3">
+            <div className="grid gap-1">
+              <div className="text-sm font-medium text-fg">Palette preview</div>
+              <div className="text-xs text-fg-muted">{selectedOption.description}</div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {selectedOption.swatches.map((color, index) => (
+                <span
+                  key={index}
+                  className="h-6 w-6 rounded-full border border-border"
+                  style={{ backgroundColor: color }}
+                  aria-hidden={true}
+                />
+              ))}
+              <span className="rounded-full border border-primary/30 bg-primary-dim/20 px-2.5 py-1 text-xs font-medium text-fg">
+                Accent
+              </span>
+              <span className="rounded-full border border-border/70 bg-bg px-2.5 py-1 text-xs text-fg-muted">
+                Surface
+              </span>
+            </div>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-3">

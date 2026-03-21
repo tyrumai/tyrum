@@ -1,8 +1,8 @@
 import type { OperatorCore } from "@tyrum/operator-app";
 import { TyrumHttpClientError } from "@tyrum/operator-app/browser";
 import * as React from "react";
-import { useAdminAccessMode } from "../../hooks/use-admin-access-mode.js";
-import { useTheme } from "../../hooks/use-theme.js";
+import { useAdminAccessModeOptional } from "../../hooks/use-admin-access-mode.js";
+import { useThemeOptional } from "../../hooks/use-theme.js";
 import { useOperatorStore } from "../../use-operator-store.js";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { AppPage } from "../layout/app-page.js";
@@ -58,18 +58,18 @@ export function FirstRunOnboardingPage({
 
   const { canMutate } = useAdminMutationAccess(core);
   const { enterElevatedMode } = useElevatedModeUiContext();
-  const adminAccessModeSetting = useAdminAccessMode();
+  const adminAccessModeSetting = useAdminAccessModeOptional();
+  const adminAccessMode = adminAccessModeSetting?.mode ?? "on-demand";
   const mutationHttp = useAdminMutationHttpClient();
   const status = useOperatorStore(core.statusStore);
-  const theme = useTheme();
+  const theme = useThemeOptional();
+  const selectedPalette = theme?.palette ?? "copper";
   const issues = getRelevantOnboardingIssues(status.status?.config_health.issues ?? []);
   const [submitBusy, setSubmitBusy] = React.useState(false);
   const [submitErrorMessage, setSubmitErrorMessage] = React.useState<string | null>(null);
   const [paletteStepComplete, setPaletteStepComplete] = React.useState(false);
   const [adminStepComplete, setAdminStepComplete] = React.useState(false);
-  const [selectedAdminAccessMode, setSelectedAdminAccessMode] = React.useState(
-    adminAccessModeSetting.mode,
-  );
+  const [selectedAdminAccessMode, setSelectedAdminAccessMode] = React.useState(adminAccessMode);
   const { data, refresh } = useOnboardingData();
   const drafts = useOnboardingDrafts(data);
   const activeProviderCount = React.useMemo(
@@ -85,8 +85,8 @@ export function FirstRunOnboardingPage({
   );
 
   React.useEffect(() => {
-    setSelectedAdminAccessMode(adminAccessModeSetting.mode);
-  }, [adminAccessModeSetting.mode]);
+    setSelectedAdminAccessMode(adminAccessMode);
+  }, [adminAccessMode]);
 
   React.useEffect(() => {
     if (issues.length === 0) {
@@ -190,8 +190,10 @@ export function FirstRunOnboardingPage({
     if (step === "palette") {
       return (
         <OnboardingPaletteStep
-          selectedPalette={theme.palette}
-          onSelectPalette={theme.setPalette}
+          selectedPalette={selectedPalette}
+          onSelectPalette={(palette) => {
+            theme?.setPalette(palette);
+          }}
           onContinue={() => {
             setPaletteStepComplete(true);
           }}
@@ -208,7 +210,7 @@ export function FirstRunOnboardingPage({
           continueWithAdminAccess={() => {
             void (async () => {
               const saved = await runMutation(async () => {
-                adminAccessModeSetting.setMode(selectedAdminAccessMode);
+                adminAccessModeSetting?.setMode(selectedAdminAccessMode);
                 if (!canMutate) {
                   await enterElevatedMode();
                 }
