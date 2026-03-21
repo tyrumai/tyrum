@@ -15,12 +15,24 @@ import {
   createRunningDesktopAttemptFixture,
   DESKTOP_TAKEOVER_URL,
 } from "./approvals-page.desktop.test-fixtures.js";
-import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
+import { act } from "react";
+import { cleanupTestRoot, renderIntoDocument, click } from "../test-utils.js";
 
 const NOOP_ADMIN_ACCESS_CONTROLLER = {
   enter: async () => {},
   exit: async () => {},
 };
+
+/** Click the "Show context" toggle on a card to expand its collapsible section. */
+function expandCardContext(container: HTMLElement): void {
+  const toggle = [...container.querySelectorAll<HTMLButtonElement>("button")].find(
+    (btn) => btn.textContent === "Show context",
+  );
+  if (!toggle) throw new Error("Show context button not found");
+  act(() => {
+    click(toggle);
+  });
+}
 
 function renderApprovalsPage(core: OperatorCore) {
   return renderIntoDocument(
@@ -77,6 +89,8 @@ describe("ApprovalsPage (desktop approvals)", () => {
     const { container, root } = renderApprovalsPage(core);
 
     try {
+      expandCardContext(container);
+
       const summary = container.querySelector<HTMLDivElement>(
         '[data-testid="desktop-approval-summary-1"]',
       );
@@ -85,10 +99,6 @@ describe("ApprovalsPage (desktop approvals)", () => {
       expect(summary?.textContent).toContain("act");
       expect(summary?.textContent).toContain("click");
       expect(summary?.textContent).toContain("Submit");
-
-      const details = container.querySelector<HTMLDivElement>('[data-testid="approval-details-1"]');
-      expect(details).not.toBeNull();
-      expect(details?.textContent).toContain("approval:1");
 
       const takeoverLink = container.querySelector<HTMLAnchorElement>(
         '[data-testid="approval-takeover-1"]',
@@ -145,6 +155,8 @@ describe("ApprovalsPage (desktop approvals)", () => {
     const { container, root } = renderApprovalsPage(core);
 
     try {
+      expandCardContext(container);
+
       const takeoverLink = container.querySelector<HTMLAnchorElement>(
         '[data-testid="approval-takeover-1"]',
       );
@@ -216,6 +228,8 @@ describe("ApprovalsPage (desktop approvals)", () => {
     const { container, root } = renderApprovalsPage(core);
 
     try {
+      expandCardContext(container);
+
       const motivation = container.querySelector<HTMLDivElement>(
         '[data-testid="approval-motivation-1"]',
       );
@@ -306,6 +320,8 @@ describe("ApprovalsPage (desktop approvals)", () => {
     const { container, root } = renderApprovalsPage(core);
 
     try {
+      expandCardContext(container);
+
       const artifactsButton = container.querySelector<HTMLButtonElement>(
         `[data-testid="attempt-artifacts-${attemptId}"]`,
       );
@@ -403,6 +419,8 @@ describe("ApprovalsPage (desktop approvals)", () => {
     const { container, root } = renderApprovalsPage(core);
 
     try {
+      expandCardContext(container);
+
       const artifactsButton = container.querySelector<HTMLButtonElement>(
         `[data-testid="attempt-artifacts-${attemptIdWithArtifacts}"]`,
       );

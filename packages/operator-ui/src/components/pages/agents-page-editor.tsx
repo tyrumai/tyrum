@@ -499,6 +499,7 @@ export function AgentsPageEditor({
         onSelectPrimaryPreset={selectPrimaryPreset}
         onClearPrimaryModel={clearPrimaryModel}
         unsupportedModelOptions={unsupportedModelOptions}
+        preservedModelOptionsRaw={preservedModelOptions}
         capabilities={capabilities}
         capabilitiesLoading={capabilitiesLoading}
         capabilitiesError={capabilitiesError}

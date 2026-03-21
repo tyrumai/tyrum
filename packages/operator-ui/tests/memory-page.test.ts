@@ -205,16 +205,10 @@ describe("memory-page.sections", () => {
   });
 
   describe("buildTombstoneColumns", () => {
-    it("returns 5 columns with expected ids", () => {
+    it("returns 4 columns with expected ids", () => {
       const columns = buildTombstoneColumns(new Map());
-      expect(columns).toHaveLength(5);
-      expect(columns.map((c) => c.id)).toEqual([
-        "memory_item_id",
-        "agent",
-        "deleted_by",
-        "reason",
-        "deleted_at",
-      ]);
+      expect(columns).toHaveLength(4);
+      expect(columns.map((c) => c.id)).toEqual(["agent", "deleted_by", "reason", "deleted_at"]);
     });
   });
 });

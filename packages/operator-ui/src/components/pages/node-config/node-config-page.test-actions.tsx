@@ -2,7 +2,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { isRecord } from "../../../utils/is-record.js";
 import { Button } from "../../ui/button.js";
-import { JsonViewer } from "../../ui/json-viewer.js";
+import { StructuredValue } from "../../ui/structured-value.js";
 import type { CapabilityTestAction } from "./node-config-page.types.js";
 
 // ─── Base64 truncation (matches browser-capabilities-page pattern) ──────────
@@ -96,7 +96,7 @@ export function TestActionsPanel({ testActions }: TestActionsPanelProps) {
         })}
       </div>
 
-      {summarized !== null ? <JsonViewer value={summarized} defaultExpandedDepth={3} /> : null}
+      {summarized !== null ? <StructuredValue value={summarized} /> : null}
     </div>
   );
 }

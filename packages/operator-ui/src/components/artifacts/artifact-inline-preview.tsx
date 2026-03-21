@@ -3,8 +3,8 @@ import type { OperatorCore } from "@tyrum/operator-app";
 import { useEffect, useState, type ReactNode } from "react";
 import { Download } from "lucide-react";
 import { Badge } from "../ui/badge.js";
-import { JsonViewer } from "../ui/json-viewer.js";
 import { Spinner } from "../ui/spinner.js";
+import { StructuredValue } from "../ui/structured-value.js";
 import { toArrayBufferBytes } from "../../utils/blob-bytes.js";
 import { buildGatewayArtifactUrl } from "../../utils/gateway-artifact-url.js";
 import { isRecord } from "../../utils/is-record.js";
@@ -52,7 +52,7 @@ function defaultArtifactDownloadName(
     if (filename.length > 0) return filename;
   }
 
-  return `${artifact.artifact_id}${extensionForContentType(contentType)}`;
+  return `artifact${extensionForContentType(contentType)}`;
 }
 
 function ArtifactDownloadLink({
@@ -307,7 +307,7 @@ function ArtifactInlinePreviewJson({
           {text}
         </pre>
       ) : (
-        <JsonViewer value={parsed} contentClassName="max-h-[420px]" />
+        <StructuredValue value={parsed} />
       )}
     </div>
   );

@@ -143,58 +143,25 @@ export function toRenderableMessage(event: TranscriptTimelineEvent): UIMessage |
 
 export function buildInspectorFields(
   event: TranscriptTimelineEvent | null,
-  focusSession: TranscriptSessionSummary | null,
+  _focusSession: TranscriptSessionSummary | null,
 ): InspectorField[] {
   const fields: InspectorField[] = [];
-  if (focusSession) {
-    fields.push({ label: "Session key", value: focusSession.session_key });
-    fields.push({ label: "Session id", value: focusSession.session_id });
-  }
   if (!event) {
     return fields;
   }
-  fields.push({ label: "Event id", value: event.event_id });
   fields.push({ label: "Occurred", value: event.occurred_at });
-  if (event.parent_session_key) {
-    fields.push({ label: "Parent session", value: event.parent_session_key });
-  }
-  if (event.subagent_id) {
-    fields.push({ label: "Subagent id", value: event.subagent_id });
-  }
 
   if (event.kind === "run") {
-    fields.push({ label: "Run id", value: event.payload.run.run_id });
-    fields.push({ label: "Job id", value: event.payload.run.job_id });
     fields.push({ label: "Run key", value: event.payload.run.key });
-    for (const step of event.payload.steps) {
-      fields.push({ label: `Step ${step.step_index}`, value: step.step_id });
-    }
-    for (const attempt of event.payload.attempts) {
-      fields.push({ label: `Attempt ${attempt.attempt}`, value: attempt.attempt_id });
-    }
     return fields;
   }
 
   if (event.kind === "approval") {
-    fields.push({ label: "Approval id", value: event.payload.approval.approval_id });
-    if (event.payload.approval.scope?.run_id) {
-      fields.push({ label: "Run id", value: event.payload.approval.scope.run_id });
-    }
-    if (event.payload.approval.scope?.step_id) {
-      fields.push({ label: "Step id", value: event.payload.approval.scope.step_id });
-    }
-    if (event.payload.approval.scope?.attempt_id) {
-      fields.push({ label: "Attempt id", value: event.payload.approval.scope.attempt_id });
-    }
     return fields;
   }
 
   if (event.kind === "subagent") {
-    fields.push({ label: "Subagent id", value: event.payload.subagent.subagent_id });
-    fields.push({ label: "Subagent session", value: event.payload.subagent.session_key });
-    if (event.payload.subagent.parent_session_key) {
-      fields.push({ label: "Parent session", value: event.payload.subagent.parent_session_key });
-    }
+    fields.push({ label: "Profile", value: event.payload.subagent.execution_profile });
   }
 
   return fields;

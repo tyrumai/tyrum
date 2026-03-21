@@ -5,6 +5,7 @@ import { Button } from "../ui/button.js";
 import { Card, CardContent } from "../ui/card.js";
 import { ConfirmDangerDialog } from "../ui/confirm-danger-dialog.js";
 import { LoadingState } from "../ui/loading-state.js";
+import { StructuredValue } from "../ui/structured-value.js";
 import type { WorkStateKvEntry, WorkTaskSummary } from "../workboard/workboard-store.js";
 import { DetailListSection, InlineEmptyHint, KvSection, Section } from "./workboard-page.shared.js";
 
@@ -190,12 +191,9 @@ export function WorkBoardDrilldown({
                   ) : null}
                 </div>
               ) : null}
-              <div className="font-mono text-xs text-fg-muted break-all">
-                {selectedItem.work_item_id}
-              </div>
             </Section>
 
-            <Section title="Timestamps">
+            <Section title="Timestamps" collapsible defaultOpen={false}>
               <div className="flex flex-wrap gap-2 text-xs text-fg-muted">
                 <span>created {new Date(selectedItem.created_at).toLocaleString()}</span>
                 {selectedItem.updated_at ? (
@@ -207,15 +205,15 @@ export function WorkBoardDrilldown({
               </div>
             </Section>
 
-            <Section title="Acceptance">
-              <pre className="whitespace-pre-wrap break-words rounded-md border border-border bg-bg-subtle p-3 font-mono text-xs text-fg [overflow-wrap:anywhere]">
-                {selectedItem.acceptance === undefined
-                  ? "—"
-                  : JSON.stringify(selectedItem.acceptance, null, 2)}
-              </pre>
+            <Section title="Acceptance" collapsible defaultOpen={false}>
+              {selectedItem.acceptance === undefined ? (
+                <span className="text-sm text-fg-muted">—</span>
+              ) : (
+                <StructuredValue value={selectedItem.acceptance} />
+              )}
             </Section>
 
-            <Section title="Tasks">
+            <Section title="Tasks" collapsible>
               <div className="flex flex-wrap gap-2 text-xs text-fg-muted">
                 <span>running {taskCounts.running}</span>
                 <span>leased {taskCounts.leased}</span>
@@ -229,27 +227,17 @@ export function WorkBoardDrilldown({
                   {taskList.map((task) => (
                     <div
                       key={task.task_id}
+                      data-task-id={task.task_id}
                       className="rounded-lg border border-border bg-bg-subtle p-3"
                     >
                       <div className="flex flex-wrap gap-2 text-xs text-fg-muted">
                         <span>
                           <strong className="text-fg">{task.status}</strong>
                         </span>
-                        <span className="font-mono break-all">{task.task_id}</span>
-                        {task.subagent_id ? (
-                          <span className="break-all">subagent {task.subagent_id}</span>
-                        ) : null}
                         <span>{new Date(task.last_event_at).toLocaleString()}</span>
                       </div>
-                      {(task.run_id ||
-                        task.approval_id ||
-                        task.pause_reason ||
-                        task.result_summary) && (
+                      {(task.pause_reason || task.result_summary) && (
                         <div className="mt-2 flex flex-wrap gap-2 text-xs text-fg-muted">
-                          {task.run_id ? (
-                            <span className="break-all">run {task.run_id}</span>
-                          ) : null}
-                          {task.approval_id ? <span>approval {task.approval_id}</span> : null}
                           {task.pause_reason ? <span>pause {task.pause_reason}</span> : null}
                           {task.pause_detail ? (
                             <span className="break-words [overflow-wrap:anywhere]">
@@ -272,15 +260,15 @@ export function WorkBoardDrilldown({
             <DetailListSection
               title="Blockers"
               items={approvalBlockers}
-              empty="No approval blockers."
+              collapsible
+              defaultOpen={false}
               renderItem={(task) => (
                 <div
                   key={task.task_id}
                   className="rounded-lg border border-border bg-bg-subtle p-3"
                 >
                   <div className="flex flex-wrap gap-2 text-xs text-fg-muted">
-                    <span>approval {task.approval_id}</span>
-                    <span className="font-mono break-all">{task.task_id}</span>
+                    <span>Blocked by approval</span>
                   </div>
                 </div>
               )}
@@ -289,7 +277,8 @@ export function WorkBoardDrilldown({
             <DetailListSection
               title="Decisions"
               items={decisions}
-              empty="No DecisionRecords."
+              collapsible
+              defaultOpen={false}
               renderItem={(decision) => (
                 <div
                   key={decision.decision_id}
@@ -310,7 +299,8 @@ export function WorkBoardDrilldown({
             <DetailListSection
               title="Artifacts"
               items={artifacts}
-              empty="No WorkArtifacts."
+              collapsible
+              defaultOpen={false}
               renderItem={(artifact) => (
                 <div
                   key={artifact.artifact_id}
@@ -332,9 +322,6 @@ export function WorkBoardDrilldown({
                       <span className="font-mono break-all">{artifact.refs.join(", ")}</span>
                     </div>
                   ) : null}
-                  <div className="mt-2 font-mono text-xs text-fg-muted break-all">
-                    {artifact.artifact_id}
-                  </div>
                 </div>
               )}
             />
@@ -342,7 +329,8 @@ export function WorkBoardDrilldown({
             <DetailListSection
               title="Signals"
               items={signals}
-              empty="No WorkSignals."
+              collapsible
+              defaultOpen={false}
               renderItem={(signal) => (
                 <div
                   key={signal.signal_id}
@@ -358,18 +346,25 @@ export function WorkBoardDrilldown({
                       <span>last fired {new Date(signal.last_fired_at).toLocaleString()}</span>
                     ) : null}
                   </div>
-                  <pre className="mt-2 whitespace-pre-wrap break-words font-mono text-xs text-fg [overflow-wrap:anywhere]">
-                    {JSON.stringify(signal.trigger_spec_json, null, 2)}
-                  </pre>
-                  <div className="mt-2 font-mono text-xs text-fg-muted break-all">
-                    {signal.signal_id}
+                  <div className="mt-2">
+                    <StructuredValue value={signal.trigger_spec_json} />
                   </div>
                 </div>
               )}
             />
 
-            <KvSection title="State KV (agent)" entries={agentKvEntries} />
-            <KvSection title="State KV (work item)" entries={workItemKvEntries} />
+            <KvSection
+              title="State KV (agent)"
+              entries={agentKvEntries}
+              collapsible
+              defaultOpen={false}
+            />
+            <KvSection
+              title="State KV (work item)"
+              entries={workItemKvEntries}
+              collapsible
+              defaultOpen={false}
+            />
           </div>
         )}
         <ConfirmDangerDialog

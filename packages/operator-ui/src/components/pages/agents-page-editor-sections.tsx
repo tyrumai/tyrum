@@ -13,7 +13,7 @@ import { FieldGroup, ToggleField } from "./agents-page-editor-shared.js";
 import { MemorySettingsFields } from "./memory-settings-fields.js";
 import { Input } from "../ui/input.js";
 import { Select } from "../ui/select.js";
-import { Textarea } from "../ui/textarea.js";
+import { StructuredValue } from "../ui/structured-value.js";
 
 export function AgentEditorSections({
   form,
@@ -30,6 +30,7 @@ export function AgentEditorSections({
   onSelectPrimaryPreset,
   onClearPrimaryModel,
   unsupportedModelOptions,
+  preservedModelOptionsRaw,
   mcpExtensionDetailsById,
   mcpExplicitServerSettings,
   mcpExtensionsLoading,
@@ -52,6 +53,7 @@ export function AgentEditorSections({
   onSelectPrimaryPreset: (preset: ModelPreset) => void;
   onClearPrimaryModel: () => void;
   unsupportedModelOptions: string | null;
+  preservedModelOptionsRaw: Record<string, unknown>;
   mcpExtensionDetailsById: Record<string, ManagedExtensionDetail>;
   mcpExplicitServerSettings: Record<string, Record<string, unknown>>;
   mcpExtensionsLoading: boolean;
@@ -118,12 +120,10 @@ export function AgentEditorSections({
           onClearPrimaryModel={onClearPrimaryModel}
         />
         {unsupportedModelOptions ? (
-          <Textarea
-            label="Existing model options"
-            value={unsupportedModelOptions}
-            readOnly
-            rows={6}
-          />
+          <div className="grid gap-1">
+            <span className="text-sm font-medium text-fg">Existing model options</span>
+            <StructuredValue value={preservedModelOptionsRaw} />
+          </div>
         ) : null}
       </FieldGroup>
 

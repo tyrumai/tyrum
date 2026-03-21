@@ -355,7 +355,7 @@ export function SelectedDesktopEnvironmentCard({
             </div>
             <div className="grid gap-1 text-sm text-fg-muted">
               <div>{selectedEnvironment.image_ref}</div>
-              <div>{selectedEnvironment.node_id ?? "node not connected yet"}</div>
+              <div>{selectedEnvironment.node_id ? "Node connected" : "Not connected"}</div>
               <div>
                 {selectedEnvironment.takeover_url ? (
                   onOpenTakeover ? (

@@ -216,7 +216,6 @@ export function AuditExportResultCard({
           <>
             <div className="grid gap-3 sm:grid-cols-2">
               <AuditSummaryField label="Plan" value={plan?.plan_key ?? "Unknown"} mono />
-              <AuditSummaryField label="Internal plan ID" value={result.plan_id} mono />
               <AuditSummaryField
                 label="Chain status"
                 value={result.chain_verification.valid ? "Valid" : "Broken"}
@@ -280,7 +279,6 @@ export function AuditForgetResultCard({
           <div className="grid gap-3 sm:grid-cols-2">
             <AuditSummaryField label="Plan" value={planKey ?? "Unknown"} mono />
             <AuditSummaryField label="Deleted receipts" value={String(result.deleted_count)} />
-            <AuditSummaryField label="Proof event ID" value={String(result.proof_event_id)} />
             <AuditSummaryField label="Decision" value={result.decision} />
           </div>
         ) : null}

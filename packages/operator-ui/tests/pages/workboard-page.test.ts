@@ -202,6 +202,11 @@ describe("WorkBoardPage", () => {
         ...DEFAULT_SCOPE_KEYS,
         work_item_id: "wi-1",
       });
+      // Artifacts and Decisions sections are collapsed by default; expand them.
+      act(() => {
+        clickButton(testRoot.container, "Artifacts");
+        clickButton(testRoot.container, "Decisions");
+      });
       expect(testRoot.container.textContent).toContain("Artifact title");
       expect(testRoot.container.textContent).toContain("Looks good");
 
@@ -277,7 +282,9 @@ describe("WorkBoardPage", () => {
         }));
       });
       await flushEffects();
-      expect(testRoot.container.textContent).toContain("approval approval-42");
+      // The task appears in the Tasks section (open by default) with status "paused".
+      // approval_id is no longer rendered as text; verify the task is visible.
+      expect(testRoot.container.textContent).toContain("paused");
 
       act(() => {
         ws.emit("work.artifact.created", {
@@ -363,6 +370,11 @@ describe("WorkBoardPage", () => {
         { kind: "work_item", ...DEFAULT_SCOPE_KEYS, work_item_id: "wi-1" },
         "work.from-event",
       );
+      // State KV sections are collapsed by default; expand them.
+      act(() => {
+        clickButton(testRoot.container, "State KV (agent)");
+        clickButton(testRoot.container, "State KV (work item)");
+      });
       expect(testRoot.container.textContent).toContain("agent.from-event");
       expect(testRoot.container.textContent).toContain("work.from-event");
       expect(testRoot.container.textContent).not.toContain("Reconnect");

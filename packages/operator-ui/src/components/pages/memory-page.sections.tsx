@@ -12,7 +12,7 @@ import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
 import { Input } from "../ui/input.js";
 import { Select } from "../ui/select.js";
-import { JsonViewer } from "../ui/json-viewer.js";
+import { StructuredValue } from "../ui/structured-value.js";
 import {
   formatRelativeTime,
   memoryDeletedByLabel,
@@ -186,11 +186,10 @@ export function MemoryItemExpandedDetail({
   return (
     <div className="grid gap-3 p-4 text-sm">
       <div className="grid gap-2">
-        <DetailRow label="ID">{item.memory_item_id}</DetailRow>
         <DetailRow label="Kind">
           <MemoryKindBadge kind={item.kind} />
         </DetailRow>
-        <DetailRow label="Agent">{agentLabel ?? item.agent_id}</DetailRow>
+        <DetailRow label="Agent">{agentLabel ?? "Unknown agent"}</DetailRow>
         <DetailRow label="Sensitivity">
           <MemorySensitivityBadge sensitivity={item.sensitivity} />
         </DetailRow>
@@ -201,7 +200,7 @@ export function MemoryItemExpandedDetail({
               <code className="text-xs bg-bg-subtle rounded px-1 py-0.5">{item.key}</code>
             </DetailRow>
             <DetailRow label="Value">
-              <JsonViewer value={item.value} defaultExpandedDepth={3} withCopyButton />
+              <StructuredValue value={item.value} />
             </DetailRow>
             <DetailRow label="Observed at">{formatRelativeTime(item.observed_at)}</DetailRow>
             <DetailRow label="Confidence">{`${Math.round(item.confidence * 100)}%`}</DetailRow>
@@ -260,12 +259,6 @@ export function MemoryItemExpandedDetail({
         {item.provenance.channel ? (
           <DetailRow label="Channel">{item.provenance.channel}</DetailRow>
         ) : null}
-        {item.provenance.session_id ? (
-          <DetailRow label="Session">{item.provenance.session_id}</DetailRow>
-        ) : null}
-        {item.provenance.thread_id ? (
-          <DetailRow label="Thread">{item.provenance.thread_id}</DetailRow>
-        ) : null}
 
         <DetailRow label="Created">{formatRelativeTime(item.created_at)}</DetailRow>
         {item.updated_at ? (
@@ -311,7 +304,7 @@ export function buildItemColumns(options: {
       header: "Agent",
       cell: (row) => (
         <span className="text-sm text-fg-muted">
-          {agentLookup.get(row.agent_id) ?? row.agent_id.slice(0, 8)}
+          {agentLookup.get(row.agent_id) ?? "Unknown agent"}
         </span>
       ),
       sortValue: (row) => agentLookup.get(row.agent_id) ?? row.agent_id,
@@ -352,18 +345,11 @@ export function buildTombstoneColumns(
 ): DataTableColumn<MemoryTombstone>[] {
   return [
     {
-      id: "memory_item_id",
-      header: "Item ID",
-      cell: (row) => (
-        <code className="text-xs text-fg-muted">{row.memory_item_id.slice(0, 12)}…</code>
-      ),
-    },
-    {
       id: "agent",
       header: "Agent",
       cell: (row) => (
         <span className="text-sm text-fg-muted">
-          {agentLookup.get(row.agent_id) ?? row.agent_id.slice(0, 8)}
+          {agentLookup.get(row.agent_id) ?? "Unknown agent"}
         </span>
       ),
       sortValue: (row) => agentLookup.get(row.agent_id) ?? row.agent_id,

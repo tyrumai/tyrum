@@ -116,6 +116,7 @@ function buildPairingRow(input: {
     key: `pairing:${String(pairing.pairing_id)}`,
     nodeId: pairing.node.node_id,
     shortIdentifier: formatShortIdentifier(pairing.node.node_id),
+    label: pairing.node.label || "Unnamed node",
     state,
     mode: resolveMode(pairing, inventory),
     toolCount: resolveToolCount(pairing, inventory),
@@ -136,6 +137,7 @@ function buildInventoryRow(input: {
     key: `node:${inventory.node_id}`,
     nodeId: inventory.node_id,
     shortIdentifier: formatShortIdentifier(inventory.node_id),
+    label: inventory.label || "Unnamed node",
     state: "connected",
     mode: inventory.mode ?? null,
     toolCount: inventory.capabilities.length,
@@ -263,17 +265,17 @@ function getStateSortRank(state: NodeListState): number {
 const NODE_COLUMNS: DataTableColumn<NodeListRow>[] = [
   {
     id: "identifier",
-    header: "Identifier",
+    header: "Node",
     cell: (row) => (
       <div
-        className="truncate font-mono text-sm text-fg"
-        title={row.nodeId}
+        className="truncate text-sm text-fg"
         data-testid={`pairing-row-identifier-${row.nodeId}`}
+        data-node-id={row.nodeId}
       >
-        {row.shortIdentifier}
+        {row.label}
       </div>
     ),
-    sortValue: (row) => row.nodeId,
+    sortValue: (row) => row.label,
   },
   {
     id: "mode",

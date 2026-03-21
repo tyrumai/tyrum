@@ -61,7 +61,6 @@ export function AttemptArtifactsDialog({
                       </Badge>
                     ))}
                   </div>
-                  <code className="text-xs text-fg-muted">{artifact.artifact_id}</code>
                 </div>
                 <ArtifactInlinePreview core={core} artifact={artifact} />
               </div>

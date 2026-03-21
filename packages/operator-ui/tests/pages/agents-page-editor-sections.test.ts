@@ -255,6 +255,7 @@ describe("AgentEditorSections", () => {
             setForm((current) => ({ ...current, model: "" }));
           },
           unsupportedModelOptions: '{\n  "temperature": 0.2\n}',
+          preservedModelOptionsRaw: { temperature: 0.2 },
           mcpExtensionDetailsById: sampleMcpExtensionDetails(),
           mcpExplicitServerSettings: {},
           mcpExtensionsLoading: false,
@@ -453,8 +454,9 @@ describe("AgentEditorSections", () => {
         calls.some(([key, value]) => key === "semanticEnabled" && typeof value === "boolean"),
       ).toBe(true);
 
-      const unsupportedOptions = findLabeledControl(container, "Existing model options");
-      expect(unsupportedOptions.hasAttribute("readonly")).toBe(true);
+      // Existing model options renders as a StructuredValue (read-only text), not a form control.
+      expect(container.textContent).toContain("Existing model options");
+      expect(container.textContent).toContain("Temperature");
 
       cleanupTestRoot({ root, container });
     },
@@ -483,6 +485,7 @@ describe("AgentEditorSections", () => {
         onSelectPrimaryPreset: vi.fn(),
         onClearPrimaryModel: vi.fn(),
         unsupportedModelOptions: null,
+        preservedModelOptionsRaw: {},
         mcpExtensionDetailsById: sampleMcpExtensionDetails(),
         mcpExplicitServerSettings: {},
         mcpExtensionsLoading: false,

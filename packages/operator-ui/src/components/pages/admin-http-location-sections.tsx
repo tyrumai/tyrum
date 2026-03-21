@@ -133,8 +133,7 @@ export function validatePlaceDraft(draft: PlaceDraft): string | null {
 }
 
 function formatNodeOption(node: NodeInventoryEntry): string {
-  if (node.label?.trim()) return `${node.label} (${node.node_id})`;
-  return node.node_id;
+  return node.label?.trim() || "Unnamed node";
 }
 
 function formatCoordinates(place: LocationPlace): string {

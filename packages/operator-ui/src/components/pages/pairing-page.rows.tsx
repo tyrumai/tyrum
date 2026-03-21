@@ -13,6 +13,7 @@ type PairingBackedRow = {
   key: string;
   nodeId: string;
   shortIdentifier: string;
+  label: string;
   state: NodeListState;
   mode: string | null;
   toolCount: number;
@@ -27,6 +28,7 @@ type InventoryOnlyRow = {
   key: string;
   nodeId: string;
   shortIdentifier: string;
+  label: string;
   state: "connected";
   mode: string | null;
   toolCount: number;
@@ -88,10 +90,9 @@ function ConnectedNodeDetails({
           <div className="text-sm font-medium text-fg">Connected node</div>
           <Badge variant={pairingStatus.variant}>{pairingStatus.label}</Badge>
         </div>
-        <div className="text-sm text-fg-muted">
-          Node <span className="break-all font-medium text-fg">{inventory.node_id}</span>
+        <div className="text-sm text-fg-muted" data-node-id={inventory.node_id}>
+          <span className="break-all font-medium text-fg">{inventory.label || "Unnamed node"}</span>
         </div>
-        {inventory.label ? <div className="text-xs text-fg-muted">{inventory.label}</div> : null}
         <ConnectionBadges inventory={inventory} attachmentKind={attachmentKind} />
         <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-fg-muted">
           {inventory.mode ? (

@@ -1,7 +1,7 @@
 import * as React from "react";
 import { cn } from "../../lib/cn.js";
 
-export type SectionHeadingLevel = "section" | "page";
+export type SectionHeadingLevel = "section" | "page" | "subsection";
 
 export interface SectionHeadingProps extends React.HTMLAttributes<HTMLElement> {
   /** Visual size tier. @default "section" */
@@ -11,8 +11,9 @@ export interface SectionHeadingProps extends React.HTMLAttributes<HTMLElement> {
 }
 
 const LEVEL_CLASSES: Record<SectionHeadingLevel, string> = {
-  section: "text-sm font-medium text-fg",
   page: "text-lg font-medium text-fg",
+  section: "text-base font-semibold text-fg",
+  subsection: "text-xs font-medium uppercase tracking-wide text-fg-muted",
 };
 
 export const SectionHeading = React.forwardRef<HTMLElement, SectionHeadingProps>(
