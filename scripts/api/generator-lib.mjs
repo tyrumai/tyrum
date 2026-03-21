@@ -1,5 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
+import prettier from "prettier";
 import { extractHttpCatalog } from "./http-introspection.mjs";
 import {
   asyncApiSpecPath,
@@ -35,6 +36,14 @@ function buildGatewayManifest(httpCatalog, wsCatalog) {
     http: httpCatalog.operations,
     ws: wsCatalog,
   };
+}
+
+async function formatGeneratedFile(filePath, content) {
+  const prettierConfig = (await prettier.resolveConfig(filePath)) ?? {};
+  return prettier.format(content, {
+    ...prettierConfig,
+    filepath: filePath,
+  });
 }
 
 export async function generateApiArtifacts() {
@@ -81,9 +90,18 @@ export async function generateApiArtifacts() {
     },
     ...renderHttpGeneratedModules(httpCatalog),
   ];
+  const formattedFiles = await Promise.all(
+    files.map(async (file) => {
+      const formattedContent = await formatGeneratedFile(file.path, file.content);
+      return {
+        path: file.path,
+        content: formattedContent,
+      };
+    }),
+  );
 
   return {
-    files,
+    files: formattedFiles,
     metadata: {
       httpOperationCount: httpCatalog.operations.length,
       wsRequestCount: wsCatalog.requests.length,
