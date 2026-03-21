@@ -134,7 +134,6 @@ Download machine-readable specs:
 - SDK operation: `secrets.revoke`
 - Auth: Required
 - Device scope: operator.admin
-- Request body schema: `SecretListQuery`
 - Path params: `id` -> `SecretPathId`
 - Query schema: `SecretListQuery`
 - Response schema: `SecretRevokeResponse`

@@ -359,8 +359,7 @@
           "schemaName": "SecretPathId"
         }
       ],
-      "querySchemaName": "SecretListQuery",
-      "bodySchemaName": "SecretListQuery"
+      "querySchemaName": "SecretListQuery"
     },
     {
       "id": "Watcher.DELETE./watchers/{id}",

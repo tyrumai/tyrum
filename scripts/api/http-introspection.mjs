@@ -49,6 +49,7 @@ function categorizeHttpParameters(input) {
   const { method, pathTemplate, validations } = input;
   const pathParameters = [];
   const querySchemas = [];
+  const claimedValidationVariables = new Set();
   let bodySchemaName;
   const placeholders = [...pathTemplate.matchAll(/\{([^}]+)\}/gu)]
     .map((match) => match[1])
@@ -64,11 +65,15 @@ function categorizeHttpParameters(input) {
         entry.variableName === `parsed${upperFirst(placeholder)}` ||
         entry.variableName === `parsed${upperFirst(camelPlaceholder)}`,
     );
+    if (validation?.variableName) {
+      claimedValidationVariables.add(validation.variableName);
+    }
     pathParameters.push({ name: placeholder, schemaName: validation?.schemaName });
   }
 
   for (const validation of validations) {
     if (validation.variableName === "query" || validation.variableName === "parsedQuery") {
+      claimedValidationVariables.add(validation.variableName);
       querySchemas.push(validation.schemaName);
       continue;
     }
@@ -83,7 +88,7 @@ function categorizeHttpParameters(input) {
 
   if (!bodySchemaName && !["GET", "HEAD", "OPTIONS"].includes(method)) {
     const candidate = validations.find(
-      (entry) => !pathParameters.some((param) => param.schemaName === entry.schemaName),
+      (entry) => !claimedValidationVariables.has(entry.variableName),
     );
     bodySchemaName = candidate?.schemaName;
   }
