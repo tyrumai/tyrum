@@ -58,15 +58,6 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
     setSelectedWorkItemId(null);
   }, [effectiveScopeKeys.agent_key, effectiveScopeKeys.workspace_key]);
 
-  useEffect(() => {
-    if (currentScopeKeys.workspace_key === effectiveScopeKeys.workspace_key) {
-      return;
-    }
-    core.workboardStore.setScopeKeys(effectiveScopeKeys);
-    if (!isConnected) return;
-    void core.workboardStore.refreshList();
-  }, [core.workboardStore, currentScopeKeys.workspace_key, effectiveScopeKeys, isConnected]);
-
   const {
     selectedItem,
     setSelectedItem,
