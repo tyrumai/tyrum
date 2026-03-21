@@ -7,9 +7,9 @@
   "license": "MIT",
   "type": "module",
   "packageManager": "pnpm@10.28.0",
-  "main": "dist/main/index.mjs",
+  "main": "dist/main/bootstrap.mjs",
   "scripts": {
-    "dev": "electron dist/main/index.mjs",
+    "dev": "electron dist/main/bootstrap.mjs",
     "pretest": "pnpm --filter @tyrum/contracts build && pnpm --filter @tyrum/runtime-policy build && pnpm --filter @tyrum/transport-sdk build && pnpm --filter @tyrum/node-sdk build && pnpm --filter @tyrum/cli-utils build && pnpm --filter @tyrum/operator-app build && pnpm --filter @tyrum/operator-ui build && pnpm --filter @tyrum/runtime-node-control build && pnpm --filter @tyrum/runtime-execution build && pnpm --filter @tyrum/runtime-agent build && pnpm --filter @tyrum/runtime-workboard build && pnpm --filter @tyrum/desktop-node build",
     "test": "pnpm -w vitest run apps/desktop/tests",
     "build:main": "tsdown --config tsdown.config.ts --filter desktop-main",
