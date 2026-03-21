@@ -33,6 +33,7 @@ export type FirstRunOnboardingIssueBadge = {
   variant: "danger" | "warning";
 };
 export type FirstRunOnboardingStepId =
+  | "palette"
   | "admin"
   | "provider"
   | "preset"
@@ -58,9 +59,15 @@ export const FIRST_RUN_ONBOARDING_STEPS: ReadonlyArray<{
   detail: string;
 }> = [
   {
+    id: "palette",
+    title: "Choose a color palette",
+    detail: "Pick the interface color palette Tyrum should use while you finish setup.",
+  },
+  {
     id: "admin",
-    title: "Authorize admin access",
-    detail: "Unlock temporary admin access once so Tyrum can save the initial configuration.",
+    title: "Choose admin access",
+    detail:
+      "Pick on-demand or always-on admin access before Tyrum saves the initial configuration.",
   },
   {
     id: "provider",
@@ -243,4 +250,24 @@ export function resolveFirstRunOnboardingStep(input: {
     return "agent";
   }
   return "done";
+}
+
+export function resolveVisibleFirstRunOnboardingStep(input: {
+  issues: readonly FirstRunOnboardingIssue[];
+  activeProviderCount: number;
+  availableModelCount: number;
+  presetCount: number;
+  canMutate: boolean;
+  paletteStepComplete: boolean;
+  adminStepComplete: boolean;
+}): FirstRunOnboardingStepId {
+  if (input.issues.length === 0) return "done";
+  if (!input.paletteStepComplete) return "palette";
+  if (!input.adminStepComplete || !input.canMutate) return "admin";
+  return resolveFirstRunOnboardingStep({
+    issues: input.issues,
+    activeProviderCount: input.activeProviderCount,
+    availableModelCount: input.availableModelCount,
+    presetCount: input.presetCount,
+  });
 }

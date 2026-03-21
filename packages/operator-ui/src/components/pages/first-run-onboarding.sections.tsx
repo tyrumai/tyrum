@@ -1,4 +1,3 @@
-import { ShieldCheck } from "lucide-react";
 import { PERSONA_TONES } from "@tyrum/contracts";
 import type * as React from "react";
 import { Alert } from "../ui/alert.js";
@@ -63,39 +62,6 @@ export function OnboardingDoneStep({
         </Button>
       </div>
     </div>
-  );
-}
-
-export function OnboardingAdminStep({
-  busy,
-  enterAdminAccess,
-}: {
-  busy: boolean;
-  enterAdminAccess: () => void;
-}): React.ReactElement {
-  return (
-    <OnboardingStepFrame stepId="admin">
-      <div className="grid gap-4" data-testid="first-run-onboarding-step-admin">
-        <div className="grid gap-2 rounded-xl border border-warning/30 bg-warning/10 px-4 py-4">
-          <div className="text-sm font-medium text-fg">Temporary admin access is required.</div>
-          <div className="text-sm text-fg-muted">
-            Tyrum needs one elevated session to save the initial configuration safely.
-          </div>
-        </div>
-        <Button
-          type="button"
-          variant="warning"
-          size="lg"
-          className="w-full justify-center sm:w-auto"
-          data-testid="first-run-onboarding-admin-access"
-          isLoading={busy}
-          onClick={enterAdminAccess}
-        >
-          <ShieldCheck className="h-4 w-4" />
-          Authorize admin access
-        </Button>
-      </div>
-    </OnboardingStepFrame>
   );
 }
 

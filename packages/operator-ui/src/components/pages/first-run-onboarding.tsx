@@ -1,17 +1,16 @@
 import type { OperatorCore } from "@tyrum/operator-app";
-import { TyrumHttpClientError } from "@tyrum/operator-app/browser";
 import * as React from "react";
-import { CheckCircle2 } from "lucide-react";
+import { useAdminAccessModeOptional } from "../../hooks/use-admin-access-mode.js";
+import { useThemeOptional } from "../../hooks/use-theme.js";
 import { useOperatorStore } from "../../use-operator-store.js";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { AppPage } from "../layout/app-page.js";
 import { Alert } from "../ui/alert.js";
-import { Button } from "../ui/button.js";
 import { Card, CardContent } from "../ui/card.js";
 import { LoadingState } from "../ui/loading-state.js";
 import { useElevatedModeUiContext } from "../elevated-mode/elevated-mode-provider.js";
 import { useAdminMutationAccess, useAdminMutationHttpClient } from "./admin-http-shared.js";
-import { selectProviderFormState, validateProviderForm } from "./admin-http-providers.shared.js";
+import { selectProviderFormState } from "./admin-http-providers.shared.js";
 import { selectModelDialogState } from "./admin-http-models.shared.js";
 import { AgentSetupWizard } from "./agent-setup-wizard.js";
 import { buildAgentConfigFromPreset, createUniqueAgentKey } from "./agent-setup-wizard.shared.js";
@@ -19,6 +18,8 @@ import {
   buildDefaultAssignments,
   countActiveProviders,
   createPresetFromState,
+  getOnboardingProviderFormError,
+  getSelectedPresetLabel,
   saveProviderAccountFromState,
   useOnboardingData,
   useOnboardingDrafts,
@@ -26,19 +27,17 @@ import {
 import {
   buildOnboardingProgressItems,
   getRelevantOnboardingIssues,
-  resolveFirstRunOnboardingStep,
-  type FirstRunOnboardingStepId,
+  resolveVisibleFirstRunOnboardingStep,
 } from "./first-run-onboarding.shared.js";
+import { FirstRunOnboardingHeader } from "./first-run-onboarding.header.js";
+import { OnboardingAdminStep, OnboardingPaletteStep } from "./first-run-onboarding.intro.js";
 import { OnboardingProgressCard } from "./first-run-onboarding.parts.js";
 import {
-  OnboardingAdminStep,
   OnboardingDoneStep,
   OnboardingWorkspacePolicyStep,
 } from "./first-run-onboarding.sections.js";
-import { buildWorkspacePolicyBundle } from "./workspace-policy-presets.js";
-
+import { saveWorkspacePolicyDeployment } from "./workspace-policy-presets.js";
 export { useFirstRunOnboardingController } from "./first-run-onboarding.logic.js";
-
 export function FirstRunOnboardingPage({
   core,
   onClose,
@@ -52,35 +51,34 @@ export function FirstRunOnboardingPage({
   onMarkCompleted: () => void;
   onNavigate: (routeId: "agents" | "configure" | "dashboard") => void;
 }) {
-  const isWorkspacePolicyConfigUnavailableError = (error: unknown): boolean => {
-    return (
-      error instanceof TyrumHttpClientError && error.status === 404 && error.error === "not_found"
-    );
-  };
-
   const { canMutate } = useAdminMutationAccess(core);
   const { enterElevatedMode } = useElevatedModeUiContext();
+  const adminAccessModeSetting = useAdminAccessModeOptional();
+  const adminAccessMode = adminAccessModeSetting?.mode ?? "on-demand";
   const mutationHttp = useAdminMutationHttpClient();
   const status = useOperatorStore(core.statusStore);
+  const theme = useThemeOptional();
+  const selectedPalette = theme?.palette ?? "copper";
   const issues = getRelevantOnboardingIssues(status.status?.config_health.issues ?? []);
   const [submitBusy, setSubmitBusy] = React.useState(false);
   const [submitErrorMessage, setSubmitErrorMessage] = React.useState<string | null>(null);
+  const [paletteStepComplete, setPaletteStepComplete] = React.useState(false);
+  const [adminStepComplete, setAdminStepComplete] = React.useState(false);
+  const [selectedAdminAccessMode, setSelectedAdminAccessMode] = React.useState(adminAccessMode);
   const { data, refresh } = useOnboardingData();
   const drafts = useOnboardingDrafts(data);
-  const activeProviderCount = React.useMemo(
-    () => countActiveProviders(data.providers),
-    [data.providers],
-  );
+  const activeProviderCount = countActiveProviders(data.providers);
   const selectedPreset =
     data.presets.find((preset) => preset.preset_key === drafts.selectedPresetKey) ?? null;
-  const selectedPresetLabel = selectedPreset
-    ? `${selectedPreset.display_name} (${selectedPreset.provider_key}/${selectedPreset.model_id})`
-    : "None selected";
-  const providerFormError = validateProviderForm(
+  const selectedPresetLabel = getSelectedPresetLabel(selectedPreset);
+  const providerFormError = getOnboardingProviderFormError(
     drafts.providerState,
     drafts.selectedMethod,
-    "create",
   );
+
+  React.useEffect(() => {
+    setSelectedAdminAccessMode(adminAccessMode);
+  }, [adminAccessMode]);
 
   React.useEffect(() => {
     if (issues.length === 0) {
@@ -88,16 +86,27 @@ export function FirstRunOnboardingPage({
     }
   }, [issues.length, onMarkCompleted]);
 
-  const step = React.useMemo<FirstRunOnboardingStepId>(() => {
-    if (issues.length === 0) return "done";
-    if (!canMutate) return "admin";
-    return resolveFirstRunOnboardingStep({
-      issues,
+  const step = React.useMemo(
+    () =>
+      resolveVisibleFirstRunOnboardingStep({
+        issues,
+        activeProviderCount,
+        availableModelCount: data.availableModels.length,
+        presetCount: data.presets.length,
+        canMutate,
+        paletteStepComplete,
+        adminStepComplete,
+      }),
+    [
       activeProviderCount,
-      availableModelCount: data.availableModels.length,
-      presetCount: data.presets.length,
-    });
-  }, [activeProviderCount, canMutate, data.availableModels.length, data.presets.length, issues]);
+      adminStepComplete,
+      canMutate,
+      data.availableModels.length,
+      data.presets.length,
+      issues,
+      paletteStepComplete,
+    ],
+  );
   const progressItems = React.useMemo(() => buildOnboardingProgressItems(step), [step]);
 
   const applyProviderSelection = React.useCallback(
@@ -127,15 +136,17 @@ export function FirstRunOnboardingPage({
   );
 
   const runMutation = React.useCallback(
-    async (action: () => Promise<void>) => {
+    async (action: () => Promise<void>): Promise<boolean> => {
       setSubmitBusy(true);
       setSubmitErrorMessage(null);
       try {
         await action();
         await core.syncAllNow();
         await refresh();
+        return true;
       } catch (error) {
         setSubmitErrorMessage(formatErrorMessage(error));
+        return false;
       } finally {
         setSubmitBusy(false);
       }
@@ -168,14 +179,38 @@ export function FirstRunOnboardingPage({
         />
       );
     }
+    if (step === "palette") {
+      return (
+        <OnboardingPaletteStep
+          selectedPalette={selectedPalette}
+          onSelectPalette={(palette) => {
+            theme?.setPalette(palette);
+          }}
+          onContinue={() => {
+            setPaletteStepComplete(true);
+          }}
+        />
+      );
+    }
     if (step === "admin") {
       return (
         <OnboardingAdminStep
           busy={submitBusy}
-          enterAdminAccess={() => {
-            void runMutation(async () => {
-              await enterElevatedMode();
-            });
+          canMutate={canMutate}
+          selectedMode={selectedAdminAccessMode}
+          onModeChange={setSelectedAdminAccessMode}
+          continueWithAdminAccess={() => {
+            void (async () => {
+              const saved = await runMutation(async () => {
+                adminAccessModeSetting?.setMode(selectedAdminAccessMode);
+                if (!canMutate) {
+                  await enterElevatedMode();
+                }
+              });
+              if (saved) {
+                setAdminStepComplete(true);
+              }
+            })();
           }}
         />
       );
@@ -316,20 +351,10 @@ export function FirstRunOnboardingPage({
           onSelectionChange={drafts.setWorkspacePolicyPreset}
           onSave={() => {
             void runMutation(async () => {
-              if (!mutationHttp?.policyConfig) {
-                throw new Error("Workspace policy configuration is unavailable on this gateway.");
-              }
-              try {
-                await mutationHttp.policyConfig.updateDeployment({
-                  bundle: buildWorkspacePolicyBundle(drafts.workspacePolicyPreset),
-                  reason: "onboarding: configure workspace policy",
-                });
-              } catch (error) {
-                if (isWorkspacePolicyConfigUnavailableError(error)) {
-                  throw new Error("Workspace policy configuration is unavailable on this gateway.");
-                }
-                throw error;
-              }
+              await saveWorkspacePolicyDeployment({
+                policyConfig: mutationHttp?.policyConfig,
+                preset: drafts.workspacePolicyPreset,
+              });
             });
           }}
           selectedPreset={drafts.workspacePolicyPreset}
@@ -423,53 +448,15 @@ export function FirstRunOnboardingPage({
       contentLayout="fill"
       data-testid="first-run-onboarding"
     >
-      <section
-        className="shrink-0 grid gap-4 rounded-2xl border border-border bg-bg-card px-5 py-5 shadow-sm md:grid-cols-[minmax(0,1fr)_auto] md:items-start"
-        data-testid="first-run-onboarding-header"
-      >
-        <div className="grid gap-2">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="grid gap-2">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-primary" />
-                <h2 className="text-lg font-semibold text-fg">Initial Setup</h2>
-              </div>
-              <div className="text-sm text-fg-muted">
-                Finish the required setup before using the main operator workspace. You can skip now
-                and resume later from the dashboard if needed.
-              </div>
-            </div>
-          </div>
-          <div className="text-xs text-fg-muted">
-            Status is refreshed against the live gateway after each step.
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 md:justify-end">
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => {
-              void refresh();
-            }}
-          >
-            Refresh
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => {
-              if (step === "done") {
-                onMarkCompleted();
-                onClose();
-                return;
-              }
-              onSkip();
-            }}
-          >
-            {step === "done" ? "Close" : "Skip setup"}
-          </Button>
-        </div>
-      </section>
+      <FirstRunOnboardingHeader
+        step={step}
+        onClose={onClose}
+        onMarkCompleted={onMarkCompleted}
+        onRefresh={() => {
+          void refresh();
+        }}
+        onSkip={onSkip}
+      />
       {data.errorMessage ? (
         <Alert
           variant="error"

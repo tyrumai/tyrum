@@ -26,6 +26,7 @@ import {
   buildProviderPayload,
   emptyFormState,
   reconcileProviderFormState,
+  validateProviderForm,
   type ConfiguredProviderGroup,
   type ProviderFormState,
   type ProviderRegistryEntry,
@@ -98,6 +99,19 @@ export function buildDefaultAssignments(presetKey: string): Record<string, strin
   return Object.fromEntries(
     EXECUTION_PROFILE_IDS.map((profileId) => [profileId, presetKey || null]),
   );
+}
+
+export function getSelectedPresetLabel(preset: ModelPreset | null): string {
+  return preset
+    ? `${preset.display_name} (${preset.provider_key}/${preset.model_id})`
+    : "None selected";
+}
+
+export function getOnboardingProviderFormError(
+  providerState: ProviderFormState,
+  selectedMethod: ProviderRegistryEntry["methods"][number] | undefined,
+): string | null {
+  return validateProviderForm(providerState, selectedMethod, "create");
 }
 
 export function useFirstRunOnboardingController(input: {

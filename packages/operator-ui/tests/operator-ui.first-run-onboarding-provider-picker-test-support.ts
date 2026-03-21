@@ -13,6 +13,7 @@ import {
 } from "./operator-ui.test-support.js";
 import { FakeWsClient, createFakeHttpClient } from "./operator-ui.test-fixtures.js";
 import {
+  advanceOnboardingIntro,
   buildIssueStatusResponse,
   cleanup,
   createConfiguredProviderGroup,
@@ -147,6 +148,7 @@ export function registerFirstRunOnboardingProviderPickerTests(): void {
       await Promise.resolve();
     });
 
+    await advanceOnboardingIntro(container);
     await waitForSelector(container, '[data-testid="first-run-onboarding-step-provider"]');
     const filterInput = container.querySelector<HTMLInputElement>(
       '[data-testid="providers-filter-input"]',
@@ -239,6 +241,7 @@ export function registerFirstRunOnboardingProviderPickerTests(): void {
       await Promise.resolve();
     });
 
+    await advanceOnboardingIntro(container);
     await waitForSelector(container, '[data-testid="first-run-onboarding-step-provider"]');
     const filterInput = container.querySelector<HTMLInputElement>(
       '[data-testid="providers-filter-input"]',
