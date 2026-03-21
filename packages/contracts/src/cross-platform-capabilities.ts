@@ -48,9 +48,7 @@ export type LocationGetResult = z.infer<typeof LocationGetResult>;
 
 export const CameraCapturePhotoArgs = z
   .object({
-    camera: z.enum(["front", "rear"]).optional(),
     facing_mode: z.enum(["user", "environment"]).optional(),
-    device_id: z.string().trim().min(1).optional(),
     format: z.enum(["jpeg", "png"]).default("jpeg"),
     quality: z.number().min(0).max(1).default(0.92),
   })
@@ -103,7 +101,6 @@ export const AudioRecordArgs = z
   .object({
     duration_ms: z.number().int().min(250).max(300_000).default(5_000),
     mime: z.string().trim().min(1).optional(),
-    device_id: z.string().trim().min(1).optional(),
   })
   .strict();
 export type AudioRecordArgs = z.infer<typeof AudioRecordArgs>;
