@@ -390,6 +390,29 @@ describe("chatStore", () => {
     expect(snapshot.archivedSessions.nextCursor).toBe("ac1");
   });
 
+  it("omits empty agent_id when loading archived sessions", async () => {
+    const ws = createFakeWs();
+    ws.sessionList
+      .mockResolvedValueOnce({ sessions: [sampleListItem("session-a")], next_cursor: "ac1" })
+      .mockResolvedValueOnce({ sessions: [sampleListItem("session-b")], next_cursor: null });
+    const chat = createChatStore(ws as never, createFakeHttp() as never);
+
+    await chat.loadArchivedSessions();
+    await chat.loadMoreArchivedSessions();
+
+    expect(ws.sessionList).toHaveBeenNthCalledWith(1, {
+      channel: "ui",
+      archived: true,
+      limit: 50,
+    });
+    expect(ws.sessionList).toHaveBeenNthCalledWith(2, {
+      channel: "ui",
+      archived: true,
+      limit: 50,
+      cursor: "ac1",
+    });
+  });
+
   it("loads more archived sessions with cursor pagination", async () => {
     const ws = createFakeWs();
     const first = { ...sampleListItem("session-a"), archived: true };

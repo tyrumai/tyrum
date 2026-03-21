@@ -470,4 +470,47 @@ describe("WorkBoardPage", () => {
       cleanupTestRoot(testRoot);
     }
   });
+
+  it("omits empty scope keys when loading work state kv drilldown data", async () => {
+    const workItem = makeWorkItem({ work_item_id: "wi-empty-scope" });
+    const { core, ws } = createCore(
+      "connected",
+      {
+        workGet: vi.fn(async () => ({ item: workItem })),
+        workArtifactList: vi.fn(async () => ({ artifacts: [] })),
+        workDecisionList: vi.fn(async () => ({ decisions: [] })),
+        workSignalList: vi.fn(async () => ({ signals: [] })),
+        workStateKvList: vi.fn(async () => ({ entries: [] })),
+      },
+      {
+        items: [workItem],
+        scopeKeys: { agent_key: "", workspace_key: "" },
+        supported: true,
+      },
+    );
+
+    const testRoot = renderIntoDocument(React.createElement(WorkBoardPage, { core }));
+    try {
+      await flushEffects();
+
+      const scopedCard = testRoot.container.querySelector<HTMLButtonElement>(
+        '[data-testid="work-item-wi-empty-scope"]',
+      );
+      expect(scopedCard).not.toBeNull();
+
+      await act(async () => {
+        scopedCard!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await Promise.resolve();
+      });
+
+      expect(ws.workGet).toHaveBeenCalledWith({ work_item_id: "wi-empty-scope" });
+      expectStateScopeListCall(ws.workStateKvList, 1, { kind: "agent" });
+      expectStateScopeListCall(ws.workStateKvList, 2, {
+        kind: "work_item",
+        work_item_id: "wi-empty-scope",
+      });
+    } finally {
+      cleanupTestRoot(testRoot);
+    }
+  });
 });

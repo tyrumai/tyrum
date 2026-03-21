@@ -18,7 +18,7 @@ import {
   type WorkStateKvEntry,
 } from "../workboard/workboard-store.js";
 
-type ScopeKeys = { agent_key: string; workspace_key: string };
+type ScopeKeys = { agent_key?: string; workspace_key?: string };
 
 function makeAgentScope(scopeKeys: ScopeKeys): WorkStateKVScope {
   return { kind: "agent", ...scopeKeys };
@@ -196,17 +196,11 @@ export function useWorkboardPageData(params: {
               limit: 200,
             }),
             params.core.workboard.workStateKvList({
-              scope: makeAgentScope({
-                ...params.effectiveScopeKeys,
-                ...toWorkboardScopePayload(params.effectiveScopeKeys),
-              }),
+              scope: makeAgentScope(toWorkboardScopePayload(params.effectiveScopeKeys)),
             }),
             params.core.workboard.workStateKvList({
               scope: makeWorkItemScope(
-                {
-                  ...params.effectiveScopeKeys,
-                  ...toWorkboardScopePayload(params.effectiveScopeKeys),
-                },
+                toWorkboardScopePayload(params.effectiveScopeKeys),
                 workItemId,
               ),
             }),
