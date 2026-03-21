@@ -307,7 +307,9 @@ function ArtifactInlinePreviewJson({
           {text}
         </pre>
       ) : (
-        <StructuredValue value={parsed} />
+        <div className="max-h-[420px] overflow-auto rounded-md border border-border bg-bg-card/40 px-3 py-2">
+          <StructuredValue value={parsed} />
+        </div>
       )}
     </div>
   );

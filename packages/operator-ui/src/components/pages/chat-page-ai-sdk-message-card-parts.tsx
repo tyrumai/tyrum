@@ -277,7 +277,9 @@ function ToolPartCard({
           <div>
             <div className="mb-1 text-[11px] uppercase tracking-wide text-fg-muted">Output</div>
             {outputState.isStructured ? (
-              <StructuredValue value={outputState.displayValue} />
+              <div className="max-h-[420px] overflow-auto rounded-md border border-border bg-bg px-2 py-1.5">
+                <StructuredValue value={outputState.displayValue} />
+              </div>
             ) : (
               <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded-md bg-bg px-2 py-1.5 text-xs text-fg [overflow-wrap:anywhere]">
                 {stringifyPart(part.output)}

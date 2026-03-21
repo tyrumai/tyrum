@@ -96,7 +96,11 @@ export function TestActionsPanel({ testActions }: TestActionsPanelProps) {
         })}
       </div>
 
-      {summarized !== null ? <StructuredValue value={summarized} /> : null}
+      {summarized !== null ? (
+        <div className="max-h-[420px] overflow-auto rounded-md border border-border bg-bg-subtle/30 p-3">
+          <StructuredValue value={summarized} />
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -30,16 +30,29 @@ function findToggle(container: HTMLElement, label: string): HTMLButtonElement {
   return toggle as HTMLButtonElement;
 }
 
-function expectStructuredValue(container: HTMLElement): void {
-  // StructuredValue renders as plain text key-value pairs (no <details>/<summary> tree).
-  // Confirm it is NOT falling back to a <pre> block for this output.
-  const outputSection = Array.from(container.querySelectorAll("div")).find((div) =>
-    div.textContent?.includes("Output"),
+function expectStructuredValue(container: HTMLElement, expectedText: string[]): void {
+  const outputLabel = Array.from(container.querySelectorAll("div")).find(
+    (div) => div.textContent?.trim() === "Output",
   );
-  expect(outputSection).not.toBeUndefined();
-  // StructuredValue does not render a <pre> inside the output section.
-  // However the Input section may have a <pre>. Check that we don't have a <pre>
-  // that contains the raw JSON string.
+  expect(outputLabel).not.toBeUndefined();
+
+  const outputSection = outputLabel?.parentElement as HTMLDivElement | null;
+  expect(outputSection).not.toBeNull();
+
+  const scrollContainer = Array.from(outputSection?.querySelectorAll("div") ?? []).find(
+    (div) =>
+      typeof div.className === "string" &&
+      div.className.includes("max-h-[420px]") &&
+      div.className.includes("overflow-auto"),
+  );
+
+  expect(scrollContainer).not.toBeUndefined();
+  expect(outputSection?.querySelector("pre")).toBeNull();
+  expect(container.querySelector("button[aria-label='Copy JSON']")).toBeNull();
+
+  for (const text of expectedText) {
+    expect(outputSection?.textContent).toContain(text);
+  }
 }
 
 describe("MessageCard tool output rendering", () => {
@@ -65,10 +78,7 @@ describe("MessageCard tool output rendering", () => {
       click(findToggle(testRoot.container, "tool.node.list"));
     });
 
-    expectStructuredValue(testRoot.container);
-    // StructuredValue renders keys as formatted labels
-    expect(testRoot.container.textContent).toContain("Status");
-    expect(testRoot.container.textContent).toContain("Nodes");
+    expectStructuredValue(testRoot.container, ["Status", "Nodes", "node-1"]);
 
     cleanupTestRoot(testRoot);
   });
@@ -122,10 +132,7 @@ describe("MessageCard tool output rendering", () => {
       click(findToggle(testRoot.container, "tool.browser.snapshot"));
     });
 
-    expectStructuredValue(testRoot.container);
-    // StructuredValue renders keys as formatted labels
-    expect(testRoot.container.textContent).toContain("Snapshot");
-    expect(testRoot.container.textContent).toContain("Example");
+    expectStructuredValue(testRoot.container, ["Status", "Snapshot", "Example"]);
 
     cleanupTestRoot(testRoot);
   });
@@ -221,7 +228,7 @@ describe("MessageCard tool output rendering", () => {
       "[data-testid='artifact-preview-image-aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa']",
     ) as HTMLImageElement | null;
 
-    expectStructuredValue(testRoot.container);
+    expectStructuredValue(testRoot.container, ["Run id", "Payload"]);
     expect(preview).not.toBeNull();
     expect(preview?.getAttribute("src")).toBe("blob:chat-artifact-preview");
     const downloadLink = testRoot.container.querySelector(
