@@ -40,7 +40,7 @@ function matchesResolvedWorkScope(
   candidate: { agent_id?: unknown; workspace_id?: unknown },
 ): boolean {
   if (!resolvedScope) {
-    return false;
+    return true;
   }
   return (
     candidate.agent_id === resolvedScope.agent_id &&

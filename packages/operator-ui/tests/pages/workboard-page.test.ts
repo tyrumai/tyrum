@@ -423,16 +423,13 @@ describe("WorkBoardPage", () => {
         workSignalList: vi.fn(async () => ({ signals: [] })),
         workStateKvList: vi.fn(async () => ({ entries: [] })),
       },
-      { scopeKeys: { agent_key: "planner", workspace_key: "ops" }, supported: true },
-    );
-    workboard.store.refreshList = vi.fn(async () => {
-      workboard.setState((prev) => ({
-        ...prev,
+      {
         items: [workItem],
+        scopeKeys: { agent_key: "planner", workspace_key: "ops" },
         supported: true,
         lastSyncedAt: "2026-01-01T00:00:00.000Z",
-      }));
-    });
+      },
+    );
 
     const testRoot = renderIntoDocument(React.createElement(WorkBoardPage, { core }));
     try {
