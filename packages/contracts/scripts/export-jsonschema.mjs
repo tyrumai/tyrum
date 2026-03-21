@@ -29,7 +29,7 @@ for (const [name, value] of Object.entries(dist)) {
     const schema = toJSONSchema.call(value, { io: "input" });
     if (!schema || typeof schema !== "object") continue;
 
-    const id = `https://schemas.tyrum.dev/${pkg.version}/${encodeURIComponent(name)}.json`;
+    const id = `https://contracts.tyrum.dev/${pkg.version}/${encodeURIComponent(name)}.json`;
     if (!("$id" in schema)) schema.$id = id;
     if (!("title" in schema)) schema.title = name;
 
