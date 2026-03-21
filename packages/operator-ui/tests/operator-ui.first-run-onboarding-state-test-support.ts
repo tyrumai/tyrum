@@ -18,6 +18,7 @@ import {
   sampleStatusResponse,
 } from "./operator-ui.test-fixtures.js";
 import {
+  advanceOnboardingIntro,
   buildIssueStatusResponse,
   cleanup,
   createMobileHostApi,
@@ -60,16 +61,19 @@ export function registerFirstRunOnboardingStateTests(): void {
     expect(container.querySelector('[data-testid="nav-dashboard"]')).toBeNull();
     expect(container.textContent).toContain("Setup progress");
     expect(
+      container.querySelector('[data-testid="first-run-onboarding-progress-palette"]'),
+    ).not.toBeNull();
+    expect(
       container.querySelector('[data-testid="first-run-onboarding-progress-provider"]'),
     ).not.toBeNull();
     expect(
       container
-        .querySelector('[data-testid="first-run-onboarding-progress-admin"]')
+        .querySelector('[data-testid="first-run-onboarding-progress-palette"]')
         ?.getAttribute("data-status"),
     ).toBe("current");
     expect(
       container
-        .querySelector('[data-testid="first-run-onboarding-progress-provider"]')
+        .querySelector('[data-testid="first-run-onboarding-progress-admin"]')
         ?.getAttribute("data-status"),
     ).toBe("upcoming");
     expect(container.textContent).not.toContain("no_provider_accounts:deployment:");
@@ -444,7 +448,10 @@ export function registerFirstRunOnboardingStateTests(): void {
       await Promise.resolve();
     });
 
-    await waitForSelector(container, '[data-testid="first-run-onboarding-step-admin"]');
+    await waitForSelector(container, '[data-testid="first-run-onboarding-step-palette"]');
+    expect(
+      container.querySelector('[data-testid="first-run-onboarding-progress-palette"]'),
+    ).not.toBeNull();
     expect(
       container.querySelector('[data-testid="first-run-onboarding-progress-admin"]'),
     ).not.toBeNull();
@@ -459,20 +466,20 @@ export function registerFirstRunOnboardingStateTests(): void {
     ).not.toBeNull();
     expect(
       container
-        .querySelector('[data-testid="first-run-onboarding-progress-admin"]')
+        .querySelector('[data-testid="first-run-onboarding-progress-palette"]')
         ?.getAttribute("data-status"),
     ).toBe("current");
-    const authorizeButton = findButtonByText(container, "Authorize admin access");
-    expect(authorizeButton).not.toBeNull();
-    await act(async () => {
-      authorizeButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      await Promise.resolve();
-    });
+    await advanceOnboardingIntro(container);
 
     expect(deviceTokensIssue).toHaveBeenCalledTimes(1);
     expect(
       await waitForSelector(container, '[data-testid="first-run-onboarding-step-provider"]'),
     ).not.toBeNull();
+    expect(
+      container
+        .querySelector('[data-testid="first-run-onboarding-progress-palette"]')
+        ?.getAttribute("data-status"),
+    ).toBe("done");
     expect(
       container
         .querySelector('[data-testid="first-run-onboarding-progress-admin"]')

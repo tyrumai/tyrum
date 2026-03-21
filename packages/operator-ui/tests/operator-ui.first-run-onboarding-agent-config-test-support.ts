@@ -12,6 +12,7 @@ import {
 import { createFakeHttpClient, FakeWsClient } from "./operator-ui.test-fixtures.js";
 import { stubAdminHttpFetch } from "./admin-http-fetch-test-support.js";
 import {
+  advanceOnboardingIntro,
   buildIssueStatusResponse,
   cleanup,
   createAgentConfigResponse,
@@ -67,6 +68,7 @@ export function registerFirstRunOnboardingAgentConfigTests(): void {
       await Promise.resolve();
     });
 
+    await advanceOnboardingIntro(container);
     await waitForSelector(container, '[data-testid="first-run-onboarding-step-provider"]');
     setInputByLabel(container, "API key", "bad-key");
     setInputByLabel(container, "Display name", "OpenAI");
@@ -304,6 +306,7 @@ export function registerFirstRunOnboardingAgentConfigTests(): void {
       await Promise.resolve();
     });
 
+    await advanceOnboardingIntro(container);
     await waitForSelector(container, '[data-testid="first-run-onboarding-step-agent"]', 200);
     setInputByLabel(container, "Agent name", "Research Agent");
 

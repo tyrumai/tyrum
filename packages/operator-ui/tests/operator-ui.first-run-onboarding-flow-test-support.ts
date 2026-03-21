@@ -16,6 +16,7 @@ import {
   sampleStatusResponse,
 } from "./operator-ui.test-fixtures.js";
 import {
+  advanceOnboardingIntro,
   buildIssueStatusResponse,
   cleanup,
   createAgentConfigResponse,
@@ -334,7 +335,18 @@ export function registerFirstRunOnboardingFlowTests(): void {
       await Promise.resolve();
     });
 
+    await advanceOnboardingIntro(container);
     await waitForSelector(container, '[data-testid="first-run-onboarding-step-provider"]');
+    expect(
+      container
+        .querySelector('[data-testid="first-run-onboarding-progress-palette"]')
+        ?.getAttribute("data-status"),
+    ).toBe("done");
+    expect(
+      container
+        .querySelector('[data-testid="first-run-onboarding-progress-admin"]')
+        ?.getAttribute("data-status"),
+    ).toBe("done");
     expect(
       container
         .querySelector('[data-testid="first-run-onboarding-progress-provider"]')
@@ -394,8 +406,9 @@ export function registerFirstRunOnboardingFlowTests(): void {
       await waitForSelector(container, '[data-testid="first-run-onboarding-step-done"]', 200),
     ).not.toBeNull();
     expect(primaryAgentKey).toBe("operations-agent");
-    expect(local.size).toBe(1);
-    expect(Array.from(local.values())[0]).toContain('"status":"completed"');
+    expect(Array.from(local.values())).toContainEqual(
+      expect.stringContaining('"status":"completed"'),
+    );
 
     cleanup(root, container);
   });

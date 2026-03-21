@@ -14,6 +14,7 @@ import {
 } from "./operator-ui.test-support.js";
 import { FakeWsClient, createFakeHttpClient } from "./operator-ui.test-fixtures.js";
 import {
+  advanceOnboardingIntro,
   buildIssueStatusResponse,
   cleanup,
   createConfiguredProviderGroup,
@@ -199,6 +200,7 @@ export function registerFirstRunOnboardingModelPickerTests(): void {
       await Promise.resolve();
     });
 
+    await advanceOnboardingIntro(container);
     await waitForSelector(container, '[data-testid="first-run-onboarding-step-preset"]');
     const filterInput = container.querySelector<HTMLInputElement>(
       '[data-testid="models-filter-input"]',
@@ -318,6 +320,7 @@ export function registerFirstRunOnboardingModelPickerTests(): void {
       await Promise.resolve();
     });
 
+    await advanceOnboardingIntro(container);
     await waitForSelector(container, '[data-testid="first-run-onboarding-step-preset"]');
     const filterInput = container.querySelector<HTMLInputElement>(
       '[data-testid="models-filter-input"]',

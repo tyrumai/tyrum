@@ -2,7 +2,11 @@ import { AgentConfig } from "@tyrum/contracts";
 import { expect, vi } from "vitest";
 import { act, type Root } from "react";
 import type { MobileHostApi } from "../src/index.js";
-import { EXECUTION_PROFILE_IDS, setControlledInputValue } from "./operator-ui.test-support.js";
+import {
+  EXECUTION_PROFILE_IDS,
+  setControlledInputValue,
+  waitForSelector,
+} from "./operator-ui.test-support.js";
 import { sampleStatusResponse } from "./operator-ui.test-fixtures.js";
 
 export function cleanup(root: Root | null, container: HTMLDivElement): void {
@@ -162,6 +166,40 @@ export function setInputByLabel(container: HTMLElement, label: string, value: st
   const input = getInputByLabel(container, label);
   expect(input).not.toBeNull();
   setControlledInputValue(input!, value);
+}
+
+export async function advanceOnboardingIntro(
+  container: HTMLElement,
+  options?: { adminMode?: "always-on" | "on-demand" },
+): Promise<void> {
+  const paletteContinue = await waitForSelector<HTMLButtonElement>(
+    container,
+    '[data-testid="first-run-onboarding-palette-continue"]',
+  );
+  await act(async () => {
+    paletteContinue.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await Promise.resolve();
+  });
+
+  if (options?.adminMode) {
+    const adminModeButton = await waitForSelector<HTMLButtonElement>(
+      container,
+      `[data-testid="first-run-onboarding-admin-mode-${options.adminMode}"]`,
+    );
+    await act(async () => {
+      adminModeButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+  }
+
+  const adminContinue = await waitForSelector<HTMLButtonElement>(
+    container,
+    '[data-testid="first-run-onboarding-admin-continue"]',
+  );
+  await act(async () => {
+    adminContinue.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await Promise.resolve();
+  });
 }
 
 export function createMobileHostApi(): MobileHostApi {
