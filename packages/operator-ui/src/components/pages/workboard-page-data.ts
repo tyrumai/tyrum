@@ -6,6 +6,7 @@ import type {
   WorkSignal,
   WorkStateKVScope,
 } from "@tyrum/operator-app";
+import { toWorkboardScopePayload } from "@tyrum/operator-app";
 import { useEffect, useRef, useState } from "react";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 import {
@@ -17,7 +18,7 @@ import {
   type WorkStateKvEntry,
 } from "../workboard/workboard-store.js";
 
-type ScopeKeys = { agent_key: string; workspace_key: string };
+type ScopeKeys = { agent_key?: string; workspace_key?: string };
 
 function makeAgentScope(scopeKeys: ScopeKeys): WorkStateKVScope {
   return { kind: "agent", ...scopeKeys };
@@ -98,7 +99,7 @@ export function useWorkboardPageData(params: {
       }
       void params.core.workboard
         .workSignalGet({
-          ...params.effectiveScopeKeys,
+          ...toWorkboardScopePayload(params.effectiveScopeKeys),
           signal_id: event.payload.signal_id,
         })
         .then((res) => {
@@ -176,29 +177,32 @@ export function useWorkboardPageData(params: {
         const [workItemRes, artifactsRes, decisionsRes, signalsRes, agentKvRes, workItemKvRes] =
           await Promise.all([
             params.core.workboard.workGet({
-              ...params.effectiveScopeKeys,
+              ...toWorkboardScopePayload(params.effectiveScopeKeys),
               work_item_id: workItemId,
             }),
             params.core.workboard.workArtifactList({
-              ...params.effectiveScopeKeys,
+              ...toWorkboardScopePayload(params.effectiveScopeKeys),
               work_item_id: workItemId,
               limit: 200,
             }),
             params.core.workboard.workDecisionList({
-              ...params.effectiveScopeKeys,
+              ...toWorkboardScopePayload(params.effectiveScopeKeys),
               work_item_id: workItemId,
               limit: 200,
             }),
             params.core.workboard.workSignalList({
-              ...params.effectiveScopeKeys,
+              ...toWorkboardScopePayload(params.effectiveScopeKeys),
               work_item_id: workItemId,
               limit: 200,
             }),
             params.core.workboard.workStateKvList({
-              scope: makeAgentScope(params.effectiveScopeKeys),
+              scope: makeAgentScope(toWorkboardScopePayload(params.effectiveScopeKeys)),
             }),
             params.core.workboard.workStateKvList({
-              scope: makeWorkItemScope(params.effectiveScopeKeys, workItemId),
+              scope: makeWorkItemScope(
+                toWorkboardScopePayload(params.effectiveScopeKeys),
+                workItemId,
+              ),
             }),
           ]);
 

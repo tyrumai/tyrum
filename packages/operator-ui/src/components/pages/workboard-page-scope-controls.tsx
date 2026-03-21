@@ -15,12 +15,12 @@ type AgentOption = {
 };
 
 const DEFAULT_SCOPE_KEYS: WorkboardScopeKeys = {
-  agent_key: "default",
-  workspace_key: "default",
+  agent_key: "",
+  workspace_key: "",
 } as const;
 
 function normalizeAgentKey(agentKey?: string): string {
-  return agentKey?.trim() || DEFAULT_SCOPE_KEYS.agent_key;
+  return agentKey?.trim() ?? DEFAULT_SCOPE_KEYS.agent_key;
 }
 
 function normalizeAgentOptions(agents: unknown): AgentOption[] {

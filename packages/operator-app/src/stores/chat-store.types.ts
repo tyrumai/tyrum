@@ -82,7 +82,7 @@ export type ChatStoreContext = {
 
 export function createInitialChatState(): ChatState {
   return {
-    agentId: "default",
+    agentId: "",
     agents: {
       agents: [],
       loading: false,

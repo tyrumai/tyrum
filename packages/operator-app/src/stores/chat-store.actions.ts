@@ -11,8 +11,7 @@ import { toOperatorCoreError } from "../operator-error.js";
 import type { ChatState, ChatStoreContext } from "./chat-store.types.js";
 
 function normalizeAgentId(agentId: string): string {
-  const trimmed = agentId.trim();
-  return trimmed.length > 0 ? trimmed : "default";
+  return agentId.trim();
 }
 
 function requireChatSocket(ctx: ChatStoreContext) {
@@ -267,7 +266,11 @@ export async function refreshSessions(ctx: ChatStoreContext): Promise<void> {
   }));
   try {
     const agentId = ctx.store.getSnapshot().agentId;
-    const res = await sessionClient.list({ agent_id: agentId, channel: "ui", limit: 50 });
+    const res = await sessionClient.list({
+      channel: "ui",
+      limit: 50,
+      ...(agentId ? { agent_id: agentId } : {}),
+    });
     if (runId !== ctx.runIds.sessions) return;
     ctx.setState((prev) => ({
       ...prev,
@@ -303,10 +306,10 @@ export async function loadMoreSessions(ctx: ChatStoreContext): Promise<void> {
 
   try {
     const res = await sessionClient.list({
-      agent_id: snapshot.agentId,
       channel: "ui",
       limit: 50,
       cursor,
+      ...(snapshot.agentId ? { agent_id: snapshot.agentId } : {}),
     });
     if (runId !== ctx.runIds.sessions) return;
     ctx.setState((prev) => ({
@@ -372,7 +375,10 @@ export async function newChat(ctx: ChatStoreContext): Promise<void> {
   ctx.setState((prev) => ({ ...prev, sessions: { ...prev.sessions, error: null } }));
   const expectedAgentId = ctx.store.getSnapshot().agentId;
   try {
-    const created = await sessionClient.create({ agent_id: expectedAgentId, channel: "ui" });
+    const created = await sessionClient.create({
+      channel: "ui",
+      ...(expectedAgentId ? { agent_id: expectedAgentId } : {}),
+    });
     if (ctx.store.getSnapshot().agentId !== expectedAgentId) return;
     hydrateActiveSession(ctx, created);
   } catch (err) {

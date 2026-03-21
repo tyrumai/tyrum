@@ -405,14 +405,14 @@ describe("WorkBoardPage", () => {
 
       expect(workboard.store.setScopeKeys).toHaveBeenLastCalledWith({
         agent_key: "builder",
-        workspace_key: "default",
+        workspace_key: DEFAULT_SCOPE_KEYS.workspace_key,
       });
     } finally {
       cleanupTestRoot(testRoot);
     }
   });
 
-  it("keeps the current workspace scope for workboard requests", async () => {
+  it("preserves the current hidden workspace scope until the user changes it", async () => {
     const workItem = makeWorkItem({ work_item_id: "wi-scope" });
     const { core, ws, workboard } = createCore(
       "connected",
@@ -430,6 +430,14 @@ describe("WorkBoardPage", () => {
         lastSyncedAt: "2026-01-01T00:00:00.000Z",
       },
     );
+    workboard.store.refreshList = vi.fn(async () => {
+      workboard.setState((prev) => ({
+        ...prev,
+        items: [workItem],
+        supported: true,
+        lastSyncedAt: "2026-01-01T00:00:00.000Z",
+      }));
+    });
 
     const testRoot = renderIntoDocument(React.createElement(WorkBoardPage, { core }));
     try {
@@ -457,6 +465,49 @@ describe("WorkBoardPage", () => {
         workspace_key: "ops",
         work_item_id: "wi-scope",
         limit: 200,
+      });
+    } finally {
+      cleanupTestRoot(testRoot);
+    }
+  });
+
+  it("omits empty scope keys when loading work state kv drilldown data", async () => {
+    const workItem = makeWorkItem({ work_item_id: "wi-empty-scope" });
+    const { core, ws } = createCore(
+      "connected",
+      {
+        workGet: vi.fn(async () => ({ item: workItem })),
+        workArtifactList: vi.fn(async () => ({ artifacts: [] })),
+        workDecisionList: vi.fn(async () => ({ decisions: [] })),
+        workSignalList: vi.fn(async () => ({ signals: [] })),
+        workStateKvList: vi.fn(async () => ({ entries: [] })),
+      },
+      {
+        items: [workItem],
+        scopeKeys: { agent_key: "", workspace_key: "" },
+        supported: true,
+      },
+    );
+
+    const testRoot = renderIntoDocument(React.createElement(WorkBoardPage, { core }));
+    try {
+      await flushEffects();
+
+      const scopedCard = testRoot.container.querySelector<HTMLButtonElement>(
+        '[data-testid="work-item-wi-empty-scope"]',
+      );
+      expect(scopedCard).not.toBeNull();
+
+      await act(async () => {
+        scopedCard!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await Promise.resolve();
+      });
+
+      expect(ws.workGet).toHaveBeenCalledWith({ work_item_id: "wi-empty-scope" });
+      expectStateScopeListCall(ws.workStateKvList, 1, { kind: "agent" });
+      expectStateScopeListCall(ws.workStateKvList, 2, {
+        kind: "work_item",
+        work_item_id: "wi-empty-scope",
       });
     } finally {
       cleanupTestRoot(testRoot);

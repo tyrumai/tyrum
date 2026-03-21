@@ -34,17 +34,34 @@ export interface WorkboardScopeKeys {
 }
 
 const DEFAULT_SCOPE_KEYS: WorkboardScopeKeys = {
-  agent_key: "default",
-  workspace_key: "default",
+  agent_key: "",
+  workspace_key: "",
 } as const;
 
 function normalizeScopeKeys(scopeKeys?: Partial<WorkboardScopeKeys>): WorkboardScopeKeys {
-  const agentKey = scopeKeys?.agent_key?.trim() || DEFAULT_SCOPE_KEYS.agent_key;
-  const workspaceKey = scopeKeys?.workspace_key?.trim() || DEFAULT_SCOPE_KEYS.workspace_key;
+  const agentKey = scopeKeys?.agent_key?.trim() ?? DEFAULT_SCOPE_KEYS.agent_key;
+  const workspaceKey = scopeKeys?.workspace_key?.trim() ?? DEFAULT_SCOPE_KEYS.workspace_key;
   return {
     agent_key: agentKey,
     workspace_key: workspaceKey,
   };
+}
+
+export function toWorkboardScopePayload(
+  scopeKeys: Partial<WorkboardScopeKeys>,
+): Partial<WorkboardScopeKeys> {
+  const payload: Partial<WorkboardScopeKeys> = {};
+  const agentKey = scopeKeys.agent_key?.trim();
+  const workspaceKey = scopeKeys.workspace_key?.trim();
+
+  if (agentKey) {
+    payload.agent_key = agentKey;
+  }
+  if (workspaceKey) {
+    payload.workspace_key = workspaceKey;
+  }
+
+  return payload;
 }
 
 function isUnsupportedRequestForWorkList(errorMessage: string): boolean {
@@ -149,7 +166,7 @@ export function createWorkboardStore(ws: OperatorWsClient): {
 
     try {
       const scopeKeys = store.getSnapshot().scopeKeys;
-      const result = await ws.workList({ ...scopeKeys, limit: 200 });
+      const result = await ws.workList({ ...toWorkboardScopePayload(scopeKeys), limit: 200 });
       if (activeRefreshRunId !== runId) return;
       const buffered = bufferedWorkItemUpserts;
 

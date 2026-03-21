@@ -94,7 +94,7 @@ args:
     const skills = await store.getEnabledSkills(scope, config);
     const mcpServers = await store.getEnabledMcpServers(scope, config);
 
-    expect(identity.meta.name).toBe("Tyrum");
+    expect(identity.meta.name).toBe("Agent");
     expect(skills.map((skill) => skill.meta.id)).toEqual(["file-reader"]);
     expect(mcpServers.map((server) => server.id)).toEqual(["calendar"]);
   });
@@ -388,7 +388,7 @@ cwd: .
     expect(agents).toEqual([{ agent_id: agentId, agent_key: "default" }]);
 
     const identity = await new AgentIdentityDal(container.db).getLatest({ tenantId, agentId });
-    expect(identity?.identity.meta.name).toBe("Tyrum");
+    expect(identity?.identity.meta.name).toBe("Agent");
   });
 
   it("does not create a spurious agent row when a UUID is passed as agentId", async () => {

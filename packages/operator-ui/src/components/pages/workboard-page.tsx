@@ -1,4 +1,5 @@
 import type { WorkItem, OperatorCore } from "@tyrum/operator-app";
+import { toWorkboardScopePayload } from "@tyrum/operator-app";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useOperatorStore } from "../../use-operator-store.js";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
@@ -36,6 +37,10 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
       workspace_key: currentScopeKeys.workspace_key,
     }),
     [currentScopeKeys.agent_key, currentScopeKeys.workspace_key],
+  );
+  const effectiveScopePayload = useMemo(
+    () => toWorkboardScopePayload(effectiveScopeKeys),
+    [effectiveScopeKeys],
   );
   const desktopBoard = useAppShellMinWidth(WORKBOARD_DESKTOP_CONTENT_WIDTH_PX);
 
@@ -105,7 +110,7 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
       setDrilldownError(null);
       try {
         const res = await core.workboard.workTransition({
-          ...effectiveScopeKeys,
+          ...effectiveScopePayload,
           work_item_id: selectedWorkItemId,
           status,
           reason,
@@ -119,7 +124,7 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
         setPendingAction(null);
       }
     },
-    [core.workboard, core.workboardStore, effectiveScopeKeys, isConnected, selectedWorkItemId],
+    [core.workboard, core.workboardStore, effectiveScopePayload, isConnected, selectedWorkItemId],
   );
 
   const pauseSelected = useCallback(
@@ -132,7 +137,7 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
       setDrilldownError(null);
       try {
         const res = await core.workboard.workPause({
-          ...effectiveScopeKeys,
+          ...effectiveScopePayload,
           work_item_id: selectedWorkItemId,
           reason,
         });
@@ -144,7 +149,7 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
         setPendingAction(null);
       }
     },
-    [core.workboard, core.workboardStore, effectiveScopeKeys, isConnected, selectedWorkItemId],
+    [core.workboard, core.workboardStore, effectiveScopePayload, isConnected, selectedWorkItemId],
   );
 
   const resumeSelected = useCallback(
@@ -157,7 +162,7 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
       setDrilldownError(null);
       try {
         const res = await core.workboard.workResume({
-          ...effectiveScopeKeys,
+          ...effectiveScopePayload,
           work_item_id: selectedWorkItemId,
           reason,
         });
@@ -169,7 +174,7 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
         setPendingAction(null);
       }
     },
-    [core.workboard, core.workboardStore, effectiveScopeKeys, isConnected, selectedWorkItemId],
+    [core.workboard, core.workboardStore, effectiveScopePayload, isConnected, selectedWorkItemId],
   );
 
   const deleteSelected = useCallback(async (): Promise<void> => {
@@ -181,7 +186,7 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
     setDrilldownError(null);
     try {
       const res = await core.workboard.workDelete({
-        ...effectiveScopeKeys,
+        ...effectiveScopePayload,
         work_item_id: selectedWorkItemId,
       });
       core.workboardStore.removeWorkItem(res.item.work_item_id);
@@ -197,7 +202,7 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
     } finally {
       setPendingAction(null);
     }
-  }, [core.workboard, core.workboardStore, effectiveScopeKeys, isConnected, selectedWorkItemId]);
+  }, [core.workboard, core.workboardStore, effectiveScopePayload, isConnected, selectedWorkItemId]);
 
   const submitEditor = useCallback(
     async (input: WorkboardEditorSubmitInput): Promise<void> => {
@@ -212,7 +217,7 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
       try {
         if (mode === "create") {
           const res = await core.workboard.workCreate({
-            ...effectiveScopeKeys,
+            ...effectiveScopePayload,
             item: input.item,
           });
           core.workboardStore.upsertWorkItem(res.item);
@@ -227,7 +232,7 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
         }
 
         const res = await core.workboard.workUpdate({
-          ...effectiveScopeKeys,
+          ...effectiveScopePayload,
           work_item_id: selectedWorkItemId,
           patch: input.patch,
         });
@@ -240,7 +245,7 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
         setEditorBusy(null);
       }
     },
-    [core.workboard, core.workboardStore, effectiveScopeKeys, isConnected, selectedWorkItemId],
+    [core.workboard, core.workboardStore, effectiveScopePayload, isConnected, selectedWorkItemId],
   );
 
   const tasksForSelected = selectTasksForSelectedWorkItem(

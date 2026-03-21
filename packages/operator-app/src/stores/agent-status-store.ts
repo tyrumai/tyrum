@@ -17,7 +17,7 @@ export interface AgentStatusStore extends ExternalStore<AgentStatusState> {
 
 export function createAgentStatusStore(http: OperatorHttpClient): { store: AgentStatusStore } {
   const { store, setState } = createStore<AgentStatusState>({
-    agentKey: "default",
+    agentKey: "",
     status: null,
     loading: false,
     error: null,

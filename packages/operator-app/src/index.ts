@@ -117,6 +117,7 @@ export type {
   WorkboardState,
   WorkboardStore,
 } from "./stores/workboard-store.js";
+export { toWorkboardScopePayload } from "./stores/workboard-store.js";
 export type {
   ChatActiveSessionState,
   ChatAgent,
