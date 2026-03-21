@@ -35,6 +35,40 @@ export const DETAILED_TOOL_REGISTRY_FIXTURE = {
     },
     {
       source: "builtin",
+      canonical_id: "tool.node.capability.get",
+      description:
+        "Inspect one capability on one node, including live action availability and input/output schemas.",
+      effect: "read_only",
+      effective_exposure: {
+        enabled: true,
+        reason: "enabled",
+        agent_key: "default",
+      },
+      family: "node",
+      keywords: ["node", "capability", "inspect"],
+      input_schema: {
+        type: "object",
+        properties: {
+          node_id: {
+            type: "string",
+            description: "Exact node id to inspect.",
+          },
+          capability: {
+            type: "string",
+            description:
+              "Exact capability descriptor id to inspect (example: tyrum.browser.navigate).",
+          },
+          include_disabled: {
+            type: "boolean",
+            description: "When true, include disabled actions in the response.",
+          },
+        },
+        required: ["node_id", "capability"],
+        additionalProperties: false,
+      },
+    },
+    {
+      source: "builtin",
       canonical_id: "read",
       description: "Read files from disk.",
       effect: "read_only",

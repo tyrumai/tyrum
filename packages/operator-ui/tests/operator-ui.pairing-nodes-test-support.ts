@@ -48,6 +48,7 @@ function sampleCapabilitySummary(capability: string) {
     capability,
     capability_version: "1.0.0",
     connected: true,
+    ready: false,
     paired: false,
     dispatchable: false,
     supported_action_count: 1,

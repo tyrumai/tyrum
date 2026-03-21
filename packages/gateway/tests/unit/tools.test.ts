@@ -241,8 +241,39 @@ describe("model tool naming", () => {
   it("does not expose legacy inspect and dispatch node tools once dedicated routed tools are available", () => {
     const builtinIds = listBuiltinToolDescriptors().map((tool) => tool.id);
 
+    expect(builtinIds).toContain("tool.node.capability.get");
     expect(builtinIds).not.toContain(LEGACY_NODE_INSPECT_TOOL_ID);
     expect(builtinIds).not.toContain(LEGACY_NODE_DISPATCH_TOOL_ID);
+  });
+
+  it("describes node discovery with an unfiltered default and a dedicated capability detail tool", () => {
+    const nodeListTool = listBuiltinToolDescriptors().find((tool) => tool.id === "tool.node.list");
+    const nodeCapabilityGetTool = listBuiltinToolDescriptors().find(
+      (tool) => tool.id === "tool.node.capability.get",
+    );
+
+    expect(nodeListTool?.description).toContain("capability summary status");
+    expect(nodeListTool?.promptExamples).toContain("{}");
+    expect(nodeListTool?.inputSchema).toMatchObject({
+      type: "object",
+      properties: {
+        capability: expect.objectContaining({
+          description: expect.stringContaining("Omit to list all nodes"),
+        }),
+        dispatchable_only: expect.objectContaining({
+          description: expect.stringContaining("Optional."),
+        }),
+      },
+    });
+    expect(nodeCapabilityGetTool?.inputSchema).toMatchObject({
+      type: "object",
+      required: ["node_id", "capability"],
+      properties: {
+        node_id: { type: "string" },
+        capability: { type: "string" },
+        include_disabled: { type: "boolean" },
+      },
+    });
   });
 
   it("includes dedicated browser and sensor node-backed tools with action-shaped schemas and direct-call guidance", () => {

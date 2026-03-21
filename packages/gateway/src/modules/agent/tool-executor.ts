@@ -18,7 +18,11 @@ import { executeCoreTool, executeMcpTool } from "./tool-executor-core-tools.js";
 import { executeLocationPlaceTool } from "./tool-executor-location-tools.js";
 import { executeDedicatedNodeTool } from "./tool-executor-dedicated-node-tools.js";
 import { executeSecretClipboardTool } from "./tool-executor-secret-tools.js";
-import { executeDedicatedDesktopTool, executeNodeListTool } from "./tool-executor-node-dispatch.js";
+import {
+  executeDedicatedDesktopTool,
+  executeNodeCapabilityGetTool,
+  executeNodeListTool,
+} from "./tool-executor-node-dispatch.js";
 import { executeAutomationScheduleTool } from "./tool-executor-schedule-tools.js";
 import { executeSubagentTool } from "./tool-executor-subagent-tools.js";
 import { executeWorkboardTool } from "./tool-executor-workboard-tools.js";
@@ -237,6 +241,22 @@ export class ToolExecutor {
             tool_call_id: toolCallId,
             output: "",
             error: "node inventory is not configured",
+          };
+    }
+    if (toolId === "tool.node.capability.get") {
+      return this.nodeCapabilityInspectionService
+        ? await executeNodeCapabilityGetTool(
+            {
+              workspaceLease: this.workspaceLease,
+              inspectionService: this.nodeCapabilityInspectionService,
+            },
+            toolCallId,
+            args,
+          )
+        : {
+            tool_call_id: toolCallId,
+            output: "",
+            error: "node capability inspection is not configured",
           };
     }
     const dedicatedDesktopResult = await executeDedicatedDesktopTool(

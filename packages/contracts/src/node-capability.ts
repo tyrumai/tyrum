@@ -96,6 +96,7 @@ export const NodeCapabilitySummary = z
     capability_version: CapabilityDescriptor.shape.version,
     description: z.string().trim().min(1).optional(),
     connected: z.boolean(),
+    ready: z.boolean(),
     paired: z.boolean(),
     dispatchable: z.boolean(),
     supported_action_count: z.number().int().nonnegative(),

@@ -33,7 +33,8 @@ flowchart LR
 - Capability-backed model-facing tools mirror canonical capability descriptor IDs under the `tool.` namespace by replacing the `tyrum.` prefix with `tool.`. Examples: `tyrum.desktop.screenshot` becomes `tool.desktop.screenshot`, `tyrum.browser.navigate-back` becomes `tool.browser.navigate-back`, and `tyrum.location.get` becomes `tool.location.get`.
 - Dedicated tool schemas expose action-specific business inputs plus shared routing metadata such as optional `node_id` and `timeout_ms` when the routed action needs them.
 - Agents never send `capability`, `action_name`, or transport `op` fields on the supported model-facing surface.
-- `tool.node.list` remains the only generic node discovery helper. It should report dedicated routed tool availability directly so agents do not need a second inspection step to discover schemas.
+- `tool.node.list` is the generic node discovery helper. It returns node and capability summary status for discovery without requiring eligibility-only filtering.
+- `tool.node.capability.get` is the model-facing capability detail helper for one capability on one node.
 - `tool.node.inspect` and `tool.node.dispatch` are removed from the supported model-facing surface.
 - Secret delivery is a composed gateway action rather than a raw capability mirror. Its dedicated model-facing tool ID is `tool.secret.copy-to-node-clipboard`.
 
@@ -48,7 +49,7 @@ Current capability-backed families covered by this decision:
 - Desktop: `tool.desktop.screenshot`, `tool.desktop.snapshot`, `tool.desktop.query`, `tool.desktop.act`, `tool.desktop.mouse`, `tool.desktop.keyboard`, `tool.desktop.wait-for`
 - Browser: `tool.browser.launch`, `tool.browser.navigate`, `tool.browser.navigate-back`, `tool.browser.snapshot`, `tool.browser.click`, `tool.browser.type`, `tool.browser.fill-form`, `tool.browser.select-option`, `tool.browser.hover`, `tool.browser.drag`, `tool.browser.press-key`, `tool.browser.screenshot`, `tool.browser.evaluate`, `tool.browser.wait-for`, `tool.browser.tabs`, `tool.browser.upload-file`, `tool.browser.console-messages`, `tool.browser.network-requests`, `tool.browser.resize`, `tool.browser.close`, `tool.browser.handle-dialog`, `tool.browser.run-code`
 - Cross-platform sensors: `tool.location.get`, `tool.camera.capture-photo`, `tool.camera.capture-video`, `tool.audio.record`
-- Discovery helper retained: `tool.node.list`
+- Discovery helpers: `tool.node.list`, `tool.node.capability.get`
 - Generic execution helpers removed: `tool.node.inspect`, `tool.node.dispatch`
 - Secret delivery: `tool.secret.copy-to-node-clipboard`
 

@@ -56,6 +56,7 @@ describe("ToolExecutor secret clipboard delivery", () => {
                 dispatchable: true,
                 capability_version: "1.0.0",
                 connected: true,
+                ready: true,
                 paired: true,
                 supported_action_count: 1,
                 enabled_action_count: 1,
