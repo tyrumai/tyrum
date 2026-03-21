@@ -26,7 +26,7 @@ import { runWithLock } from "./run-with-lock.js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 const REPO_ROOT = resolve(__dirname, "../../../../");
-const DESKTOP_MAIN_ENTRYPOINT = resolve(REPO_ROOT, "apps/desktop/dist/main/index.mjs");
+const DESKTOP_MAIN_ENTRYPOINT = resolve(REPO_ROOT, "apps/desktop/dist/main/bootstrap.mjs");
 const DESKTOP_RELEASE_DIR = resolve(REPO_ROOT, "apps/desktop/release");
 const electronPackageExport = require("electron");
 if (typeof electronPackageExport !== "string") {

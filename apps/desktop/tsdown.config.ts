@@ -7,7 +7,7 @@ const externalElectron = {
 export default defineConfig([
   {
     name: "desktop-main",
-    entry: ["src/main/index.ts", "src/main/desktop-screenshot-helper.ts"],
+    entry: ["src/main/bootstrap.ts", "src/main/index.ts", "src/main/desktop-screenshot-helper.ts"],
     format: "esm",
     outDir: "dist/main",
     deps: externalElectron,
