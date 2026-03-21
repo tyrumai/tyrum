@@ -176,7 +176,7 @@ describe("WorkBoard WS protocol", () => {
     };
 
     const responses: Array<{ type: string; result?: unknown }> = [
-      { type: "work.list", result: { items: [workItem], next_cursor: "cursor-1" } },
+      { type: "work.list", result: { scope, items: [workItem], next_cursor: "cursor-1" } },
       { type: "work.get", result: { item: workItem } },
       { type: "work.create", result: { item: workItem } },
       { type: "work.update", result: { item: workItem } },

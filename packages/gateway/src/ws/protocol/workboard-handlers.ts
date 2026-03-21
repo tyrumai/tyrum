@@ -99,7 +99,7 @@ const workboardHandlers: Record<string, WorkboardHandler> = {
         limit: payload.limit,
         cursor: payload.cursor,
       });
-      return okResult(msg, WsWorkListResult.parse({ items, next_cursor }));
+      return okResult(msg, WsWorkListResult.parse({ scope, items, next_cursor }));
     },
   }),
   "work.get": createHandler({

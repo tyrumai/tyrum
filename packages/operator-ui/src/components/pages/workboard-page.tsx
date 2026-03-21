@@ -33,9 +33,9 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
   const effectiveScopeKeys = useMemo(
     () => ({
       agent_key: currentScopeKeys.agent_key,
-      workspace_key: "default",
+      workspace_key: currentScopeKeys.workspace_key,
     }),
-    [currentScopeKeys.agent_key],
+    [currentScopeKeys.agent_key, currentScopeKeys.workspace_key],
   );
   const desktopBoard = useAppShellMinWidth(WORKBOARD_DESKTOP_CONTENT_WIDTH_PX);
 
@@ -57,15 +57,6 @@ export function WorkBoardPage({ core }: WorkBoardPageProps) {
   useEffect(() => {
     setSelectedWorkItemId(null);
   }, [effectiveScopeKeys.agent_key, effectiveScopeKeys.workspace_key]);
-
-  useEffect(() => {
-    if (currentScopeKeys.workspace_key === effectiveScopeKeys.workspace_key) {
-      return;
-    }
-    core.workboardStore.setScopeKeys(effectiveScopeKeys);
-    if (!isConnected) return;
-    void core.workboardStore.refreshList();
-  }, [core.workboardStore, currentScopeKeys.workspace_key, effectiveScopeKeys, isConnected]);
 
   const {
     selectedItem,

@@ -30,6 +30,11 @@ describe("workboard-store", () => {
     handleWorkItemUpsert({ work_item_id: "w-buffered", status: "ready" } as any);
 
     nextList.resolve({
+      scope: {
+        tenant_id: "tenant-1",
+        agent_id: "agent-1",
+        workspace_id: "workspace-1",
+      },
       items: [{ work_item_id: "w1", status: "backlog" }],
     });
 
@@ -45,6 +50,11 @@ describe("workboard-store", () => {
       agent_key: "default",
       workspace_key: "default",
     });
+    expect(snapshot.resolvedScope).toEqual({
+      tenant_id: "tenant-1",
+      agent_id: "agent-1",
+      workspace_id: "workspace-1",
+    });
     expect(snapshot.supported).toBe(true);
     expect(snapshot.loading).toBe(false);
     expect(snapshot.error).toBe(null);
@@ -54,7 +64,14 @@ describe("workboard-store", () => {
 
   it("uses updated scope keys after a scope change", async () => {
     const ws = {
-      workList: vi.fn(async () => ({ items: [] })),
+      workList: vi.fn(async () => ({
+        scope: {
+          tenant_id: "tenant-1",
+          agent_id: "agent-planner",
+          workspace_id: "workspace-ops",
+        },
+        items: [],
+      })),
     } as any;
 
     const { store } = createWorkboardStore(ws);
@@ -74,16 +91,36 @@ describe("workboard-store", () => {
       workspace_key: "ops",
       limit: 200,
     });
+    expect(store.getSnapshot().resolvedScope).toEqual({
+      tenant_id: "tenant-1",
+      agent_id: "agent-planner",
+      workspace_id: "workspace-ops",
+    });
   });
 
   it("marks WorkBoard as unsupported on the gateway unsupported_request error", async () => {
     const ws = {
-      workList: vi.fn(async () => {
-        throw new Error("work.list failed: unsupported_request");
-      }),
+      workList: vi
+        .fn()
+        .mockResolvedValueOnce({
+          scope: {
+            tenant_id: "tenant-1",
+            agent_id: "agent-1",
+            workspace_id: "workspace-1",
+          },
+          items: [{ work_item_id: "w1", status: "ready" }],
+        })
+        .mockRejectedValueOnce(new Error("work.list failed: unsupported_request")),
     } as any;
 
     const { store } = createWorkboardStore(ws);
+
+    await store.refreshList();
+    expect(store.getSnapshot().resolvedScope).toEqual({
+      tenant_id: "tenant-1",
+      agent_id: "agent-1",
+      workspace_id: "workspace-1",
+    });
 
     await store.refreshList();
 
@@ -94,6 +131,7 @@ describe("workboard-store", () => {
     expect(snapshot.error).toBe(
       "WorkBoard is not supported by this gateway (database not configured).",
     );
+    expect(snapshot.resolvedScope).toBe(null);
 
     store.resetSupportProbe();
     expect(store.getSnapshot().supported).toBe(null);
@@ -114,6 +152,7 @@ describe("workboard-store", () => {
     expect(snapshot.supported).toBe(null);
     expect(snapshot.loading).toBe(false);
     expect(snapshot.error).toBe("boom");
+    expect(snapshot.resolvedScope).toBe(null);
   });
 
   it("ignores refresh results when a newer refresh starts", async () => {
@@ -131,13 +170,32 @@ describe("workboard-store", () => {
     const p1 = store.refreshList();
     const p2 = store.refreshList();
 
-    b.resolve({ items: [{ work_item_id: "new", status: "ready" }] });
+    b.resolve({
+      scope: {
+        tenant_id: "tenant-1",
+        agent_id: "agent-new",
+        workspace_id: "workspace-new",
+      },
+      items: [{ work_item_id: "new", status: "ready" }],
+    });
     await p2;
 
-    a.resolve({ items: [{ work_item_id: "old", status: "ready" }] });
+    a.resolve({
+      scope: {
+        tenant_id: "tenant-1",
+        agent_id: "agent-old",
+        workspace_id: "workspace-old",
+      },
+      items: [{ work_item_id: "old", status: "ready" }],
+    });
     await p1;
 
     expect(store.getSnapshot().items.map((item) => item.work_item_id)).toEqual(["new"]);
+    expect(store.getSnapshot().resolvedScope).toEqual({
+      tenant_id: "tenant-1",
+      agent_id: "agent-new",
+      workspace_id: "workspace-new",
+    });
   });
 
   it("removes work items and their task cache entries", () => {

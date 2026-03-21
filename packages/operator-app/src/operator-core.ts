@@ -35,6 +35,19 @@ import type { Approval, WorkItem } from "@tyrum/contracts";
 import type { WorkTaskEvent } from "./workboard/workboard-utils.js";
 export type { OperatorCore, OperatorCoreOptions } from "./operator-core.types.js";
 
+function matchesResolvedWorkScope(
+  resolvedScope: { agent_id: string; workspace_id: string } | null,
+  candidate: { agent_id?: unknown; workspace_id?: unknown },
+): boolean {
+  if (!resolvedScope) {
+    return true;
+  }
+  return (
+    candidate.agent_id === resolvedScope.agent_id &&
+    candidate.workspace_id === resolvedScope.workspace_id
+  );
+}
+
 export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
   const elevatedModeStore = options.elevatedModeStore ?? createElevatedModeStore();
   const elevatedModeStoreOwned = options.elevatedModeStore === undefined;
@@ -323,6 +336,15 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
       const payload = readPayload(data);
       const item = payload?.["item"];
       if (item) {
+        const resolvedScope = workboard.store.getSnapshot().resolvedScope;
+        if (
+          !matchesResolvedWorkScope(
+            resolvedScope,
+            item as { agent_id?: unknown; workspace_id?: unknown },
+          )
+        ) {
+          return;
+        }
         if (mode === "remove") {
           workboard.removeWorkItem((item as WorkItem).work_item_id);
           return;
@@ -342,6 +364,15 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
   const handleWorkTaskEvent = (type: WorkTaskEvent["type"]) => (data: unknown) => {
     const payload = readPayload(data);
     if (!payload) return;
+    const resolvedScope = workboard.store.getSnapshot().resolvedScope;
+    if (
+      !matchesResolvedWorkScope(
+        resolvedScope,
+        payload as { agent_id?: unknown; workspace_id?: unknown },
+      )
+    ) {
+      return;
+    }
     const occurredAt = readOccurredAt(data) ?? readOccurredAt(payload) ?? new Date().toISOString();
 
     workboard.handleWorkTaskEvent({

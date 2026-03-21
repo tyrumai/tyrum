@@ -113,7 +113,14 @@ function createWsStub(overrides?: Partial<Record<string, unknown>>) {
     emit(event: string, payload: any) {
       for (const handler of handlers.get(event) ?? []) handler(payload);
     },
-    workList: vi.fn(async () => ({ items: [] })),
+    workList: vi.fn(async () => ({
+      scope: {
+        tenant_id: "tenant-default",
+        agent_id: "agent-default",
+        workspace_id: "workspace-default",
+      },
+      items: [],
+    })),
     workCreate: vi.fn(async ({ item }: any) => ({
       item: makeWorkItem({ work_item_id: "wi-created", status: "backlog", ...item }),
     })),

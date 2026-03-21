@@ -372,7 +372,7 @@ describe("WorkBoardPage", () => {
     }
   });
 
-  it("shows agent names without keys and applies scope with the default workspace", async () => {
+  it("shows agent names without keys and preserves the active workspace when applying scope", async () => {
     const { core, http, workboard } = createCore("connected");
     http.agents.list.mockResolvedValueOnce({
       agents: [
@@ -412,7 +412,7 @@ describe("WorkBoardPage", () => {
     }
   });
 
-  it("normalizes hidden workspace scope back to default for workboard requests", async () => {
+  it("keeps the current workspace scope for workboard requests", async () => {
     const workItem = makeWorkItem({ work_item_id: "wi-scope" });
     const { core, ws, workboard } = createCore(
       "connected",
@@ -423,25 +423,19 @@ describe("WorkBoardPage", () => {
         workSignalList: vi.fn(async () => ({ signals: [] })),
         workStateKvList: vi.fn(async () => ({ entries: [] })),
       },
-      { scopeKeys: { agent_key: "planner", workspace_key: "ops" }, supported: true },
-    );
-    workboard.store.refreshList = vi.fn(async () => {
-      workboard.setState((prev) => ({
-        ...prev,
+      {
         items: [workItem],
+        scopeKeys: { agent_key: "planner", workspace_key: "ops" },
         supported: true,
         lastSyncedAt: "2026-01-01T00:00:00.000Z",
-      }));
-    });
+      },
+    );
 
     const testRoot = renderIntoDocument(React.createElement(WorkBoardPage, { core }));
     try {
       await flushEffects();
-      expect(workboard.store.setScopeKeys).toHaveBeenCalledWith({
-        agent_key: "planner",
-        workspace_key: "default",
-      });
-      expect(workboard.store.refreshList).toHaveBeenCalledTimes(1);
+      expect(workboard.store.setScopeKeys).not.toHaveBeenCalled();
+      expect(workboard.store.refreshList).not.toHaveBeenCalled();
 
       const scopedCard = testRoot.container.querySelector<HTMLButtonElement>(
         '[data-testid="work-item-wi-scope"]',
@@ -455,12 +449,12 @@ describe("WorkBoardPage", () => {
 
       expect(ws.workGet).toHaveBeenCalledWith({
         agent_key: "planner",
-        workspace_key: "default",
+        workspace_key: "ops",
         work_item_id: "wi-scope",
       });
       expect(ws.workArtifactList).toHaveBeenCalledWith({
         agent_key: "planner",
-        workspace_key: "default",
+        workspace_key: "ops",
         work_item_id: "wi-scope",
         limit: 200,
       });

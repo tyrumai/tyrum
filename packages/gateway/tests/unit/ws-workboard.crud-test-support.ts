@@ -466,8 +466,14 @@ function registerLinkAndListTests(): void {
 
       expect(listRes).toBeDefined();
       expect((listRes as unknown as { ok: boolean }).ok).toBe(true);
-      const items = (listRes as unknown as { result: { items: Array<{ title: string }> } }).result
-        .items;
+      const parsed = listRes as unknown as {
+        result: {
+          scope: { workspace_id: string };
+          items: Array<{ title: string }>;
+        };
+      };
+      expect(parsed.result.scope.workspace_id).toEqual(expect.any(String));
+      const items = parsed.result.items;
       expect(items.map((i) => i.title)).toContain("Item 1");
       expect(ws.send).not.toHaveBeenCalled();
     } finally {
