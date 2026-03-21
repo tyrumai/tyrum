@@ -175,6 +175,7 @@ export function createWorkboardStore(ws: OperatorWsClient): {
         setState((prev) => ({
           ...prev,
           items: [],
+          resolvedScope: null,
           supported: false,
           loading: false,
           error: "WorkBoard is not supported by this gateway (database not configured).",

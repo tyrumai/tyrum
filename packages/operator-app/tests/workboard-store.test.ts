@@ -100,12 +100,27 @@ describe("workboard-store", () => {
 
   it("marks WorkBoard as unsupported on the gateway unsupported_request error", async () => {
     const ws = {
-      workList: vi.fn(async () => {
-        throw new Error("work.list failed: unsupported_request");
-      }),
+      workList: vi
+        .fn()
+        .mockResolvedValueOnce({
+          scope: {
+            tenant_id: "tenant-1",
+            agent_id: "agent-1",
+            workspace_id: "workspace-1",
+          },
+          items: [{ work_item_id: "w1", status: "ready" }],
+        })
+        .mockRejectedValueOnce(new Error("work.list failed: unsupported_request")),
     } as any;
 
     const { store } = createWorkboardStore(ws);
+
+    await store.refreshList();
+    expect(store.getSnapshot().resolvedScope).toEqual({
+      tenant_id: "tenant-1",
+      agent_id: "agent-1",
+      workspace_id: "workspace-1",
+    });
 
     await store.refreshList();
 
