@@ -400,9 +400,13 @@ export function FirstRunOnboardingPage({
   };
 
   return (
-    <AppPage contentClassName="max-w-5xl gap-6" data-testid="first-run-onboarding">
+    <AppPage
+      contentLayout="fill"
+      contentClassName="max-w-5xl gap-6"
+      data-testid="first-run-onboarding"
+    >
       <section
-        className="grid gap-4 rounded-2xl border border-border bg-bg-card px-5 py-5 shadow-sm md:grid-cols-[minmax(0,1fr)_auto] md:items-start"
+        className="shrink-0 grid gap-4 rounded-2xl border border-border bg-bg-card px-5 py-5 shadow-sm md:grid-cols-[minmax(0,1fr)_auto] md:items-start"
         data-testid="first-run-onboarding-header"
       >
         <div className="grid gap-2">
@@ -469,12 +473,11 @@ export function FirstRunOnboardingPage({
           </CardContent>
         </Card>
       ) : (
-        <div className="grid items-start gap-4 xl:grid-cols-[19rem_minmax(0,1fr)]">
+        <div className="grid flex-1 min-h-0 items-start gap-4 xl:grid-cols-[19rem_minmax(0,1fr)]">
           <OnboardingProgressCard items={progressItems} />
           <Card
-            className="flex min-h-0 flex-col overflow-hidden"
+            className="flex min-h-0 flex-col self-stretch overflow-hidden"
             data-testid="first-run-onboarding-card"
-            style={{ maxHeight: "calc(100vh - 18rem)" }}
           >
             <CardContent
               className="grid min-h-0 flex-1 gap-4 overflow-auto pt-6"
