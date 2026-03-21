@@ -2356,61 +2356,6 @@
       "sdk": null
     },
     {
-      "id": "Plugins.GET.authClaims",
-      "file": "packages/gateway/src/routes/plugins.ts",
-      "tag": "Plugins",
-      "summary": "GET authClaims",
-      "method": "GET",
-      "path": "authClaims",
-      "auth": "required",
-      "scopes": null,
-      "sdk": null
-    },
-    {
-      "id": "Audit.GET.SELECT plan_id FROM plans WHERE tenant_id = ? AND plan_id = ? FOR UPDATE",
-      "file": "packages/gateway/src/routes/audit.ts",
-      "tag": "Audit",
-      "summary": "GET SELECT plan_id FROM plans WHERE tenant_id = ? AND plan_id = ? FOR UPDATE",
-      "method": "GET",
-      "path": "SELECT plan_id FROM plans WHERE tenant_id = ? AND plan_id = ? FOR UPDATE",
-      "auth": "required",
-      "scopes": null,
-      "sdk": null
-    },
-    {
-      "id": "SnapshotSequenceRepair.GET.SELECT setval(pg_get_serial_sequence(?, ?), ?, false)",
-      "file": "packages/gateway/src/routes/snapshot-sequence-repair.ts",
-      "tag": "Snapshot Sequence Repair",
-      "summary": "GET SELECT setval(pg_get_serial_sequence(?, ?), ?, false)",
-      "method": "GET",
-      "path": "SELECT setval(pg_get_serial_sequence(?, ?), ?, false)",
-      "auth": "required",
-      "scopes": null,
-      "sdk": null
-    },
-    {
-      "id": "SnapshotSequenceRepair.GET.SELECT setval(pg_get_serial_sequence(?, ?), ?, true)",
-      "file": "packages/gateway/src/routes/snapshot-sequence-repair.ts",
-      "tag": "Snapshot Sequence Repair",
-      "summary": "GET SELECT setval(pg_get_serial_sequence(?, ?), ?, true)",
-      "method": "GET",
-      "path": "SELECT setval(pg_get_serial_sequence(?, ?), ?, true)",
-      "auth": "required",
-      "scopes": null,
-      "sdk": null
-    },
-    {
-      "id": "Artifact.GET.x-request-id",
-      "file": "packages/gateway/src/routes/artifact.ts",
-      "tag": "Artifact",
-      "summary": "GET x-request-id",
-      "method": "GET",
-      "path": "x-request-id",
-      "auth": "required",
-      "scopes": null,
-      "sdk": null
-    },
-    {
       "id": "authProfiles.update",
       "file": "packages/transport-sdk/src/http/auth.ts",
       "tag": "Auth Profiles",

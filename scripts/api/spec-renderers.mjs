@@ -233,6 +233,10 @@ export async function buildAsyncApiSpec(wsCatalog) {
   return spec;
 }
 
+function escapeMarkdownHeadingText(value) {
+  return value.replaceAll("{", "\\{").replaceAll("}", "\\}");
+}
+
 export function renderHttpDocs(httpOperations) {
   const sections = [
     "# API Reference",
@@ -255,7 +259,7 @@ export function renderHttpDocs(httpOperations) {
   ];
 
   for (const operation of httpOperations) {
-    sections.push(`#### ${operation.method} ${operation.path}`);
+    sections.push(`#### ${escapeMarkdownHeadingText(`${operation.method} ${operation.path}`)}`);
     sections.push("");
     if (operation.sdk) {
       sections.push(`- SDK operation: \`${operation.id}\``);

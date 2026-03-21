@@ -24,5 +24,13 @@ describe("API reference docs (Issue #842)", () => {
 
     expect(doc).toContain("/specs/openapi.json");
     expect(doc).toContain("/specs/asyncapi.json");
+    expect(doc).not.toContain("#### GET authClaims");
+    expect(doc).not.toContain("#### GET x-request-id");
+    expect(doc).not.toContain("#### GET SELECT plan_id FROM plans");
+
+    const allHttpHeadings = doc.match(/^#### (GET|POST|PUT|PATCH|DELETE|ALL) .+$/gm) ?? [];
+    for (const heading of allHttpHeadings) {
+      expect(heading).not.toMatch(/(?<!\\)\{[^}]+\}/u);
+    }
   });
 });

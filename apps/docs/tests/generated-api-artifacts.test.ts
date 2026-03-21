@@ -18,4 +18,21 @@ describe("generated API artifacts", () => {
       expect(existing).toBe(file.content);
     }
   });
+
+  it("generate OpenAPI paths only for valid HTTP routes", async () => {
+    const openApi = JSON.parse(await readFile(resolve(repoRoot, "specs/openapi.json"), "utf8")) as {
+      paths?: Record<string, unknown>;
+    };
+    const paths = Object.keys(openApi.paths ?? {});
+
+    expect(paths.length).toBeGreaterThan(0);
+    for (const path of paths) {
+      expect(path.startsWith("/")).toBe(true);
+    }
+    expect(paths).not.toContain("authClaims");
+    expect(paths).not.toContain("x-request-id");
+    expect(paths).not.toContain(
+      "SELECT plan_id FROM plans WHERE tenant_id = ? AND plan_id = ? FOR UPDATE",
+    );
+  });
 });

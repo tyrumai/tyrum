@@ -306,21 +306,65 @@ function normalizeRouteLiteral(rawPath) {
   return rawPath.replace(/:([A-Za-z0-9_]+)/gu, "{$1}");
 }
 
-function extractLiteralRouteEntries(fileText, fileName) {
-  const entries = [];
-  const matcher = /\b[A-Za-z_]\w*\.(get|post|put|patch|delete|all)\(\s*(`[^`]+`|"[^"]+"|'[^']+')/gu;
-  for (const match of fileText.matchAll(matcher)) {
-    const method = match[1]?.toUpperCase();
-    const rawLiteral = match[2];
-    if (!method || !rawLiteral) continue;
-    const literal = rawLiteral.slice(1, -1);
-    if (literal.includes("${")) continue;
-    entries.push({
-      method,
-      path: normalizeRouteLiteral(literal),
-      sourceFile: fileName,
-    });
+function isHonoTypeNode(typeNode) {
+  if (!typeNode) return false;
+  if (ts.isTypeReferenceNode(typeNode)) {
+    return typeNode.typeName.getText() === "Hono";
   }
+  return false;
+}
+
+function isHonoConstructor(node) {
+  return (
+    ts.isNewExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "Hono"
+  );
+}
+
+function extractRouteLiteral(node) {
+  if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
+    return node.text;
+  }
+  return undefined;
+}
+
+function extractLiteralRouteEntries(sourceFile, fileName) {
+  const entries = [];
+  const routeTargetNames = new Set();
+  const routeMethods = new Set(["get", "post", "put", "patch", "delete", "all"]);
+
+  function visit(node) {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
+      if (isHonoConstructor(node.initializer)) {
+        routeTargetNames.add(node.name.text);
+      }
+    }
+    if (ts.isParameter(node) && ts.isIdentifier(node.name) && isHonoTypeNode(node.type)) {
+      routeTargetNames.add(node.name.text);
+    }
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      ts.isIdentifier(node.expression.expression)
+    ) {
+      const targetName = node.expression.expression.text;
+      const methodName = node.expression.name.text;
+      const literal = node.arguments[0] ? extractRouteLiteral(node.arguments[0]) : undefined;
+      if (
+        routeTargetNames.has(targetName) &&
+        routeMethods.has(methodName) &&
+        literal &&
+        !literal.includes("${")
+      ) {
+        entries.push({
+          method: methodName.toUpperCase(),
+          path: normalizeRouteLiteral(literal),
+          sourceFile: fileName,
+        });
+      }
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
   return entries;
 }
 
@@ -387,7 +431,8 @@ export async function extractHttpCatalog() {
     if (!routeFile.isFile() || extname(routeFile.name) !== ".ts") continue;
     const filePath = join(gatewayRoutesDir, routeFile.name);
     const sourceText = await readFile(filePath, "utf8");
-    for (const entry of extractLiteralRouteEntries(sourceText, routeFile.name)) {
+    const sourceFile = createSourceFile(filePath, sourceText);
+    for (const entry of extractLiteralRouteEntries(sourceFile, routeFile.name)) {
       manifestOperations.set(routeEntryKey(entry.method, entry.path), {
         id: `${pascalFromFile(routeFile.name)}.${entry.method}.${entry.path}`,
         file: relative(repoRoot, filePath),

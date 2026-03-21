@@ -16,19 +16,19 @@ Download machine-readable specs:
 
 ## HTTP API
 
-#### ALL /plugins/{id}/rpc
+#### ALL /plugins/\{id\}/rpc
 
 - Auth: Required
 - Device scope: operator.admin
 - Response schema: `unknown`
 
-#### ALL /plugins/{id}/rpc/\*
+#### ALL /plugins/\{id\}/rpc/\*
 
 - Auth: Required
 - Device scope: operator.admin
 - Response schema: `unknown`
 
-#### DELETE /agents/{key}
+#### DELETE /agents/\{key\}
 
 - SDK operation: `agents.delete`
 - Auth: Required
@@ -36,7 +36,7 @@ Download machine-readable specs:
 - Path params: `key`
 - Response schema: `ManagedAgentDeleteResponse`
 
-#### DELETE /automation/schedules/{id}
+#### DELETE /automation/schedules/\{id\}
 
 - SDK operation: `schedules.remove`
 - Auth: Required
@@ -44,13 +44,13 @@ Download machine-readable specs:
 - Path params: `id` -> `scheduleIdSchema`
 - Response schema: `ScheduleDeleteResponse`
 
-#### DELETE /automation/triggers/{id}
+#### DELETE /automation/triggers/\{id\}
 
 - Auth: Required
 - Device scope: operator.write
 - Response schema: `unknown`
 
-#### DELETE /config/channels/accounts/{channel}/{accountKey}
+#### DELETE /config/channels/accounts/\{channel\}/\{accountKey\}
 
 - SDK operation: `channelConfig.deleteAccount`
 - Auth: Required
@@ -58,7 +58,7 @@ Download machine-readable specs:
 - Path params: `channel` -> `ChannelPathKey`, `accountKey` -> `ChannelPathKey`
 - Response schema: `ChannelAccountDeleteResponse`
 
-#### DELETE /config/models/presets/{key}
+#### DELETE /config/models/presets/\{key\}
 
 - SDK operation: `modelConfig.deletePreset`
 - Auth: Required
@@ -67,7 +67,7 @@ Download machine-readable specs:
 - Path params: `key` -> `PresetPathKey`
 - Response schema: `raw-response`
 
-#### DELETE /config/providers/{provider}
+#### DELETE /config/providers/\{provider\}
 
 - SDK operation: `providerConfig.deleteProvider`
 - Auth: Required
@@ -76,7 +76,7 @@ Download machine-readable specs:
 - Path params: `provider` -> `ProviderPathKey`
 - Response schema: `raw-response`
 
-#### DELETE /config/providers/accounts/{key}
+#### DELETE /config/providers/accounts/\{key\}
 
 - SDK operation: `providerConfig.deleteAccount`
 - Auth: Required
@@ -84,7 +84,7 @@ Download machine-readable specs:
 - Path params: `key` -> `ProviderPathKey`
 - Response schema: `ModelConfigDeleteResponse`
 
-#### DELETE /desktop-environments/{environmentId}
+#### DELETE /desktop-environments/\{environmentId\}
 
 - SDK operation: `desktopEnvironments.remove`
 - Auth: Required
@@ -92,7 +92,7 @@ Download machine-readable specs:
 - Path params: `environmentId`
 - Response schema: `DesktopEnvironmentDeleteResponse`
 
-#### DELETE /location/places/{id}
+#### DELETE /location/places/\{id\}
 
 - SDK operation: `location.deletePlace`
 - Auth: Required
@@ -100,7 +100,7 @@ Download machine-readable specs:
 - Path params: `id` -> `PlaceId`
 - Response schema: `LocationPlaceDeleteResponse`
 
-#### DELETE /memory/items/{id}
+#### DELETE /memory/items/\{id\}
 
 - SDK operation: `memory.delete`
 - Auth: Required
@@ -109,19 +109,19 @@ Download machine-readable specs:
 - Path params: `id` -> `NonEmptyString`
 - Response schema: `MemoryDeleteResponse`
 
-#### DELETE /models/overrides/providers/{id}
+#### DELETE /models/overrides/providers/\{id\}
 
 - Auth: Required
 - Device scope: operator.admin
 - Response schema: `unknown`
 
-#### DELETE /models/overrides/providers/{id}/models/{model}
+#### DELETE /models/overrides/providers/\{id\}/models/\{model\}
 
 - Auth: Required
 - Device scope: operator.admin
 - Response schema: `unknown`
 
-#### DELETE /routing/channels/configs/{channel}/{accountKey}
+#### DELETE /routing/channels/configs/\{channel\}/\{accountKey\}
 
 - SDK operation: `routingConfig.deleteChannelConfig`
 - Auth: Required
@@ -129,7 +129,7 @@ Download machine-readable specs:
 - Path params: `channel`, `accountKey`
 - Response schema: `ChannelConfigDeleteResponse`
 
-#### DELETE /secrets/{id}
+#### DELETE /secrets/\{id\}
 
 - SDK operation: `secrets.revoke`
 - Auth: Required
@@ -139,13 +139,13 @@ Download machine-readable specs:
 - Query schema: `SecretListQuery`
 - Response schema: `SecretRevokeResponse`
 
-#### DELETE /watchers/{id}
+#### DELETE /watchers/\{id\}
 
 - Auth: Required
 - Device scope: operator.write
 - Response schema: `unknown`
 
-#### GET /a/{id}
+#### GET /a/\{id\}
 
 - SDK operation: `artifacts.getBytes`
 - Auth: Required
@@ -176,7 +176,7 @@ Download machine-readable specs:
 - Device scope: operator.admin
 - Response schema: `ManagedAgentListResponse`
 
-#### GET /agents/{key}
+#### GET /agents/\{key\}
 
 - SDK operation: `agents.get`
 - Auth: Required
@@ -184,7 +184,7 @@ Download machine-readable specs:
 - Path params: `key`
 - Response schema: `ManagedAgentGetResponse`
 
-#### GET /agents/{key}/capabilities
+#### GET /agents/\{key\}/capabilities
 
 - SDK operation: `agents.capabilities`
 - Auth: Required
@@ -198,19 +198,19 @@ Download machine-readable specs:
 - Device scope: operator.read
 - Response schema: `unknown`
 
-#### GET /approvals/{id}
+#### GET /approvals/\{id\}
 
 - Auth: Required
 - Device scope: operator.read
 - Response schema: `unknown`
 
-#### GET /approvals/{id}/preview
+#### GET /approvals/\{id\}/preview
 
 - Auth: Required
 - Device scope: operator.read
 - Response schema: `unknown`
 
-#### GET /artifacts/{id}/metadata
+#### GET /artifacts/\{id\}/metadata
 
 - SDK operation: `artifacts.getMetadata`
 - Auth: Required
@@ -218,7 +218,7 @@ Download machine-readable specs:
 - Path params: `id` -> `ArtifactId`
 - Response schema: `ArtifactMetadataResponse`
 
-#### GET /audit/export/{planKey}
+#### GET /audit/export/\{planKey\}
 
 - SDK operation: `audit.exportReceiptBundle`
 - Auth: Required
@@ -264,7 +264,7 @@ Download machine-readable specs:
 - Query schema: `listQuerySchema`
 - Response schema: `ScheduleListResponse`
 
-#### GET /automation/schedules/{id}
+#### GET /automation/schedules/\{id\}
 
 - SDK operation: `schedules.get`
 - Auth: Required
@@ -278,13 +278,13 @@ Download machine-readable specs:
 - Device scope: operator.read
 - Response schema: `unknown`
 
-#### GET /canvas/{id}
+#### GET /canvas/\{id\}
 
 - Auth: Required
 - Device scope: operator.read
 - Response schema: `unknown`
 
-#### GET /canvas/{id}/meta
+#### GET /canvas/\{id\}/meta
 
 - Auth: Required
 - Device scope: operator.read
@@ -297,7 +297,7 @@ Download machine-readable specs:
 - Device scope: operator.admin
 - Response schema: `AgentConfigListResponse`
 
-#### GET /config/agents/{key}
+#### GET /config/agents/\{key\}
 
 - SDK operation: `agentConfig.get`
 - Auth: Required
@@ -305,19 +305,19 @@ Download machine-readable specs:
 - Path params: `key`
 - Response schema: `AgentConfigGetResponse`
 
-#### GET /config/agents/{key}/identity
+#### GET /config/agents/\{key\}/identity
 
 - Auth: Required
 - Device scope: operator.admin
 - Response schema: `unknown`
 
-#### GET /config/agents/{key}/identity/revisions
+#### GET /config/agents/\{key\}/identity/revisions
 
 - Auth: Required
 - Device scope: operator.admin
 - Response schema: `unknown`
 
-#### GET /config/agents/{key}/revisions
+#### GET /config/agents/\{key\}/revisions
 
 - Auth: Required
 - Device scope: operator.admin
@@ -344,7 +344,7 @@ Download machine-readable specs:
 - Device scope: operator.admin
 - Response schema: `DesktopEnvironmentDefaultsResponse`
 
-#### GET /config/extensions/{kind}
+#### GET /config/extensions/\{kind\}
 
 - SDK operation: `extensions.list`
 - Auth: Required
@@ -352,7 +352,7 @@ Download machine-readable specs:
 - Path params: `kind` -> `extensionKindSchema`
 - Response schema: `ExtensionsListResponse`
 
-#### GET /config/extensions/{kind}/{key}
+#### GET /config/extensions/\{kind\}/\{key\}
 
 - SDK operation: `extensions.get`
 - Auth: Required
@@ -393,7 +393,7 @@ Download machine-readable specs:
 - Device scope: operator.admin
 - Response schema: `ConfiguredAvailableModelListResponse`
 
-#### GET /config/policy/agents/{key}
+#### GET /config/policy/agents/\{key\}
 
 - SDK operation: `policyConfig.getAgent`
 - Auth: Required
@@ -401,7 +401,7 @@ Download machine-readable specs:
 - Path params: `key`
 - Response schema: `DeploymentPolicyConfigGetResponse`
 
-#### GET /config/policy/agents/{key}/revisions
+#### GET /config/policy/agents/\{key\}/revisions
 
 - SDK operation: `policyConfig.listAgentRevisions`
 - Auth: Required
@@ -443,13 +443,13 @@ Download machine-readable specs:
 - Device scope: operator.admin
 - Response schema: `unknown`
 
-#### GET /config/runtime-packages/{kind}/{key}
+#### GET /config/runtime-packages/\{kind\}/\{key\}
 
 - Auth: Required
 - Device scope: operator.admin
 - Response schema: `unknown`
 
-#### GET /config/runtime-packages/{kind}/{key}/revisions
+#### GET /config/runtime-packages/\{kind\}/\{key\}/revisions
 
 - Auth: Required
 - Device scope: operator.admin
@@ -476,7 +476,7 @@ Download machine-readable specs:
 - Query schema: `ContextGetQuery`
 - Response schema: `ContextGetResponse`
 
-#### GET /context/detail/{id}
+#### GET /context/detail/\{id\}
 
 - SDK operation: `context.detail`
 - Auth: Required
@@ -500,7 +500,7 @@ Download machine-readable specs:
 - Query schema: `ToolRegistryQuery`
 - Response schema: `ToolRegistryResponse`
 
-#### GET /contracts/jsonschema/{file}
+#### GET /contracts/jsonschema/\{file\}
 
 - SDK operation: `contracts.getSchema`
 - Auth: Required
@@ -529,7 +529,7 @@ Download machine-readable specs:
 - Device scope: operator.admin
 - Response schema: `DesktopEnvironmentListResponse`
 
-#### GET /desktop-environments/{environmentId}
+#### GET /desktop-environments/\{environmentId\}
 
 - SDK operation: `desktopEnvironments.get`
 - Auth: Required
@@ -537,7 +537,7 @@ Download machine-readable specs:
 - Path params: `environmentId`
 - Response schema: `DesktopEnvironmentGetResponse`
 
-#### GET /desktop-environments/{environmentId}/logs
+#### GET /desktop-environments/\{environmentId\}/logs
 
 - SDK operation: `desktopEnvironments.logs`
 - Auth: Required
@@ -545,13 +545,13 @@ Download machine-readable specs:
 - Path params: `environmentId`
 - Response schema: `DesktopEnvironmentLogsResponse`
 
-#### GET /desktop-environments/{environmentId}/takeover
+#### GET /desktop-environments/\{environmentId\}/takeover
 
 - Auth: Required
 - Device scope: operator.admin
 - Response schema: `unknown`
 
-#### GET /desktop-environments/{environmentId}/takeover-url
+#### GET /desktop-environments/\{environmentId\}/takeover-url
 
 - SDK operation: `desktopEnvironments.takeoverUrl`
 - Auth: Required
@@ -594,7 +594,7 @@ Download machine-readable specs:
 - Query schema: `MemoryListQuery`
 - Response schema: `MemoryItemListResponse`
 
-#### GET /memory/items/{id}
+#### GET /memory/items/\{id\}
 
 - SDK operation: `memory.getById`
 - Auth: Required
@@ -629,7 +629,7 @@ Download machine-readable specs:
 - Device scope: operator.admin
 - Response schema: `unknown`
 
-#### GET /models/overrides/providers/{id}/models
+#### GET /models/overrides/providers/\{id\}/models
 
 - Auth: Required
 - Device scope: operator.admin
@@ -642,7 +642,7 @@ Download machine-readable specs:
 - Device scope: operator.read
 - Response schema: `ModelsHttpProviderListResponse`
 
-#### GET /models/providers/{id}
+#### GET /models/providers/\{id\}
 
 - SDK operation: `models.getProvider`
 - Auth: Required
@@ -650,7 +650,7 @@ Download machine-readable specs:
 - Path params: `id` -> `ProviderIdPath`
 - Response schema: `ModelsHttpProviderDetailResponse`
 
-#### GET /models/providers/{id}/models
+#### GET /models/providers/\{id\}/models
 
 - SDK operation: `models.listProviderModels`
 - Auth: Required
@@ -673,7 +673,7 @@ Download machine-readable specs:
 - Query schema: `NodesListQuery`
 - Response schema: `NodeInventoryResponseSchema`
 
-#### GET /nodes/{nodeId}/capabilities/{capabilityId}
+#### GET /nodes/\{nodeId\}/capabilities/\{capabilityId\}
 
 - SDK operation: `nodes.inspect`
 - Auth: Required
@@ -690,7 +690,7 @@ Download machine-readable specs:
 - Query schema: `PairingsListQuery`
 - Response schema: `PairingListResponse`
 
-#### GET /pairings/{id}
+#### GET /pairings/\{id\}
 
 - SDK operation: `pairings.get`
 - Auth: Required
@@ -704,7 +704,7 @@ Download machine-readable specs:
 - Device scope: operator.read
 - Response schema: `unknown`
 
-#### GET /playbooks/{id}
+#### GET /playbooks/\{id\}
 
 - Auth: Required
 - Device scope: operator.read
@@ -717,7 +717,7 @@ Download machine-readable specs:
 - Device scope: operator.admin
 - Response schema: `PluginListResponse`
 
-#### GET /plugins/{id}
+#### GET /plugins/\{id\}
 
 - SDK operation: `plugins.get`
 - Auth: Required
@@ -746,7 +746,7 @@ Download machine-readable specs:
 - Device scope: operator.read
 - Response schema: `PresenceResponse`
 
-#### GET /providers/{provider}/oauth/callback
+#### GET /providers/\{provider\}/oauth/callback
 
 - Auth: Required
 - Device scope: operator.admin
@@ -851,37 +851,7 @@ Download machine-readable specs:
 - Device scope: operator.read
 - Response schema: `unknown`
 
-#### GET authClaims
-
-- Auth: Required
-- Device scope: n/a
-- Response schema: `unknown`
-
-#### GET SELECT plan_id FROM plans WHERE tenant_id = ? AND plan_id = ? FOR UPDATE
-
-- Auth: Required
-- Device scope: n/a
-- Response schema: `unknown`
-
-#### GET SELECT setval(pg_get_serial_sequence(?, ?), ?, false)
-
-- Auth: Required
-- Device scope: n/a
-- Response schema: `unknown`
-
-#### GET SELECT setval(pg_get_serial_sequence(?, ?), ?, true)
-
-- Auth: Required
-- Device scope: n/a
-- Response schema: `unknown`
-
-#### GET x-request-id
-
-- Auth: Required
-- Device scope: n/a
-- Response schema: `unknown`
-
-#### PATCH /auth/profiles/{key}
+#### PATCH /auth/profiles/\{key\}
 
 - SDK operation: `authProfiles.update`
 - Auth: Required
@@ -890,7 +860,7 @@ Download machine-readable specs:
 - Path params: `key` -> `AuthProfilePathId`
 - Response schema: `AuthProfileMutateResponse`
 
-#### PATCH /auth/tokens/{tokenId}
+#### PATCH /auth/tokens/\{tokenId\}
 
 - SDK operation: `authTokens.update`
 - Auth: Required
@@ -899,7 +869,7 @@ Download machine-readable specs:
 - Path params: `tokenId`
 - Response schema: `AuthTokenUpdateResponse`
 
-#### PATCH /automation/schedules/{id}
+#### PATCH /automation/schedules/\{id\}
 
 - SDK operation: `schedules.update`
 - Auth: Required
@@ -908,13 +878,13 @@ Download machine-readable specs:
 - Path params: `id` -> `scheduleIdSchema`
 - Response schema: `ScheduleSingleResponse`
 
-#### PATCH /automation/triggers/{id}
+#### PATCH /automation/triggers/\{id\}
 
 - Auth: Required
 - Device scope: operator.write
 - Response schema: `unknown`
 
-#### PATCH /config/channels/accounts/{channel}/{accountKey}
+#### PATCH /config/channels/accounts/\{channel\}/\{accountKey\}
 
 - SDK operation: `channelConfig.updateAccount`
 - Auth: Required
@@ -922,7 +892,7 @@ Download machine-readable specs:
 - Path params: `channel` -> `ChannelPathKey`, `accountKey` -> `ChannelPathKey`
 - Response schema: `ChannelAccountMutateResponse`
 
-#### PATCH /config/models/presets/{key}
+#### PATCH /config/models/presets/\{key\}
 
 - SDK operation: `modelConfig.updatePreset`
 - Auth: Required
@@ -930,7 +900,7 @@ Download machine-readable specs:
 - Path params: `key` -> `PresetPathKey`
 - Response schema: `ConfiguredModelPresetMutateResponse`
 
-#### PATCH /config/providers/accounts/{key}
+#### PATCH /config/providers/accounts/\{key\}
 
 - SDK operation: `providerConfig.updateAccount`
 - Auth: Required
@@ -938,7 +908,7 @@ Download machine-readable specs:
 - Path params: `key` -> `ProviderPathKey`
 - Response schema: `ProviderAccountMutateResponse`
 
-#### PATCH /desktop-environments/{environmentId}
+#### PATCH /desktop-environments/\{environmentId\}
 
 - SDK operation: `desktopEnvironments.update`
 - Auth: Required
@@ -946,7 +916,7 @@ Download machine-readable specs:
 - Path params: `environmentId`
 - Response schema: `DesktopEnvironmentMutateResponse`
 
-#### PATCH /location/places/{id}
+#### PATCH /location/places/\{id\}
 
 - SDK operation: `location.updatePlace`
 - Auth: Required
@@ -961,7 +931,7 @@ Download machine-readable specs:
 - Device scope: operator.write
 - Response schema: `LocationProfileResponse`
 
-#### PATCH /routing/channels/configs/{channel}/{accountKey}
+#### PATCH /routing/channels/configs/\{channel\}/\{accountKey\}
 
 - SDK operation: `routingConfig.updateChannelConfig`
 - Auth: Required
@@ -969,7 +939,7 @@ Download machine-readable specs:
 - Path params: `channel`, `accountKey`
 - Response schema: `ChannelConfigUpdateResponse`
 
-#### PATCH /watchers/{id}
+#### PATCH /watchers/\{id\}
 
 - Auth: Required
 - Device scope: operator.write
@@ -989,7 +959,7 @@ Download machine-readable specs:
 - Request body schema: `ManagedAgentCreateRequest`
 - Response schema: `ManagedAgentGetResponse`
 
-#### POST /agents/{key}/rename
+#### POST /agents/\{key\}/rename
 
 - SDK operation: `agents.rename`
 - Auth: Required
@@ -998,7 +968,7 @@ Download machine-readable specs:
 - Path params: `key`
 - Response schema: `ManagedAgentRenameResponse`
 
-#### POST /approvals/{id}/respond
+#### POST /approvals/\{id\}/respond
 
 - Auth: Required
 - Device scope: operator.approvals
@@ -1058,7 +1028,7 @@ Download machine-readable specs:
 - Request body schema: `AuthProfileCreateRequest`
 - Response schema: `AuthProfileCreateResponse`
 
-#### POST /auth/profiles/{key}/disable
+#### POST /auth/profiles/\{key\}/disable
 
 - SDK operation: `authProfiles.disable`
 - Auth: Required
@@ -1066,7 +1036,7 @@ Download machine-readable specs:
 - Path params: `key` -> `AuthProfilePathId`
 - Response schema: `AuthProfileMutateResponse`
 
-#### POST /auth/profiles/{key}/enable
+#### POST /auth/profiles/\{key\}/enable
 
 - SDK operation: `authProfiles.enable`
 - Auth: Required
@@ -1105,7 +1075,7 @@ Download machine-readable specs:
 - Request body schema: `createInputSchema`
 - Response schema: `ScheduleSingleResponse`
 
-#### POST /automation/schedules/{id}/pause
+#### POST /automation/schedules/\{id\}/pause
 
 - SDK operation: `schedules.pause`
 - Auth: Required
@@ -1113,7 +1083,7 @@ Download machine-readable specs:
 - Path params: `id` -> `scheduleIdSchema`
 - Response schema: `ScheduleSingleResponse`
 
-#### POST /automation/schedules/{id}/resume
+#### POST /automation/schedules/\{id\}/resume
 
 - SDK operation: `schedules.resume`
 - Auth: Required
@@ -1133,13 +1103,13 @@ Download machine-readable specs:
 - Device scope: operator.write
 - Response schema: `unknown`
 
-#### POST /config/agents/{key}/identity/revert
+#### POST /config/agents/\{key\}/identity/revert
 
 - Auth: Required
 - Device scope: operator.admin
 - Response schema: `unknown`
 
-#### POST /config/agents/{key}/revert
+#### POST /config/agents/\{key\}/revert
 
 - Auth: Required
 - Device scope: operator.admin
@@ -1152,7 +1122,7 @@ Download machine-readable specs:
 - Device scope: operator.admin
 - Response schema: `ChannelAccountMutateResponse`
 
-#### POST /config/extensions/{kind}/{key}/refresh
+#### POST /config/extensions/\{kind\}/\{key\}/refresh
 
 - SDK operation: `extensions.refresh`
 - Auth: Required
@@ -1160,7 +1130,7 @@ Download machine-readable specs:
 - Path params: `kind` -> `extensionKindSchema`, `key` -> `extensionKeySchema`
 - Response schema: `ExtensionsMutateResponse`
 
-#### POST /config/extensions/{kind}/{key}/revert
+#### POST /config/extensions/\{kind\}/\{key\}/revert
 
 - SDK operation: `extensions.revert`
 - Auth: Required
@@ -1169,7 +1139,7 @@ Download machine-readable specs:
 - Path params: `kind` -> `extensionKindSchema`, `key` -> `extensionKeySchema`
 - Response schema: `ExtensionsMutateResponse`
 
-#### POST /config/extensions/{kind}/{key}/toggle
+#### POST /config/extensions/\{kind\}/\{key\}/toggle
 
 - SDK operation: `extensions.toggle`
 - Auth: Required
@@ -1230,7 +1200,7 @@ Download machine-readable specs:
 - Device scope: operator.admin
 - Response schema: `ConfiguredModelPresetMutateResponse`
 
-#### POST /config/policy/agents/{key}/revert
+#### POST /config/policy/agents/\{key\}/revert
 
 - SDK operation: `policyConfig.revertAgent`
 - Auth: Required
@@ -1252,7 +1222,7 @@ Download machine-readable specs:
 - Device scope: operator.admin
 - Response schema: `ProviderAccountMutateResponse`
 
-#### POST /config/runtime-packages/{kind}/{key}/revert
+#### POST /config/runtime-packages/\{kind\}/\{key\}/revert
 
 - Auth: Required
 - Device scope: operator.admin
@@ -1265,7 +1235,7 @@ Download machine-readable specs:
 - Device scope: operator.admin
 - Response schema: `DesktopEnvironmentMutateResponse`
 
-#### POST /desktop-environments/{environmentId}/reset
+#### POST /desktop-environments/\{environmentId\}/reset
 
 - SDK operation: `desktopEnvironments.reset`
 - Auth: Required
@@ -1273,7 +1243,7 @@ Download machine-readable specs:
 - Path params: `environmentId`
 - Response schema: `DesktopEnvironmentMutateResponse`
 
-#### POST /desktop-environments/{environmentId}/start
+#### POST /desktop-environments/\{environmentId\}/start
 
 - SDK operation: `desktopEnvironments.start`
 - Auth: Required
@@ -1281,7 +1251,7 @@ Download machine-readable specs:
 - Path params: `environmentId`
 - Response schema: `DesktopEnvironmentMutateResponse`
 
-#### POST /desktop-environments/{environmentId}/stop
+#### POST /desktop-environments/\{environmentId\}/stop
 
 - SDK operation: `desktopEnvironments.stop`
 - Auth: Required
@@ -1315,7 +1285,7 @@ Download machine-readable specs:
 - Device scope: operator.admin
 - Response schema: `ModelsHttpStatusResponse`
 
-#### POST /nodes/{nodeId}/capabilities/{capabilityId}/actions/{actionName}/dispatch
+#### POST /nodes/\{nodeId\}/capabilities/\{capabilityId\}/actions/\{actionName\}/dispatch
 
 - SDK operation: `nodes.dispatch`
 - Auth: Required
@@ -1323,7 +1293,7 @@ Download machine-readable specs:
 - Path params: `nodeId`, `capabilityId`, `actionName`
 - Response schema: `NodeActionDispatchResponseSchema`
 
-#### POST /pairings/{id}/approve
+#### POST /pairings/\{id\}/approve
 
 - SDK operation: `pairings.approve`
 - Auth: Required
@@ -1332,7 +1302,7 @@ Download machine-readable specs:
 - Path params: `id`
 - Response schema: `PairingMutateResponse`
 
-#### POST /pairings/{id}/deny
+#### POST /pairings/\{id\}/deny
 
 - SDK operation: `pairings.deny`
 - Auth: Required
@@ -1341,7 +1311,7 @@ Download machine-readable specs:
 - Path params: `id`
 - Response schema: `PairingMutateResponse`
 
-#### POST /pairings/{id}/revoke
+#### POST /pairings/\{id\}/revoke
 
 - SDK operation: `pairings.revoke`
 - Auth: Required
@@ -1355,13 +1325,13 @@ Download machine-readable specs:
 - Device scope: operator.write
 - Response schema: `unknown`
 
-#### POST /playbooks/{id}/execute
+#### POST /playbooks/\{id\}/execute
 
 - Auth: Required
 - Device scope: operator.write
 - Response schema: `unknown`
 
-#### POST /playbooks/{id}/run
+#### POST /playbooks/\{id\}/run
 
 - Auth: Required
 - Device scope: operator.write
@@ -1393,7 +1363,7 @@ Download machine-readable specs:
 - Device scope: operator.admin
 - Response schema: `PolicyOverrideRevokeResponse`
 
-#### POST /providers/{provider}/oauth/authorize
+#### POST /providers/\{provider\}/oauth/authorize
 
 - Auth: Required
 - Device scope: operator.admin
@@ -1422,7 +1392,7 @@ Download machine-readable specs:
 - Query schema: `SecretListQuery`
 - Response schema: `SecretStoreResponse`
 
-#### POST /secrets/{id}/rotate
+#### POST /secrets/\{id\}/rotate
 
 - SDK operation: `secrets.rotate`
 - Auth: Required
@@ -1468,7 +1438,7 @@ Download machine-readable specs:
 - Device scope: operator.write
 - Response schema: `unknown`
 
-#### POST /watchers/{id}/trigger/webhook
+#### POST /watchers/\{id\}/trigger/webhook
 
 - Auth: Required
 - Device scope: operator.write
@@ -1492,7 +1462,7 @@ Download machine-readable specs:
 - Device scope: operator.write
 - Response schema: `unknown`
 
-#### PUT /agents/{key}
+#### PUT /agents/\{key\}
 
 - SDK operation: `agents.update`
 - Auth: Required
@@ -1501,7 +1471,7 @@ Download machine-readable specs:
 - Path params: `key`
 - Response schema: `ManagedAgentGetResponse`
 
-#### PUT /config/agents/{key}
+#### PUT /config/agents/\{key\}
 
 - SDK operation: `agentConfig.update`
 - Auth: Required
@@ -1510,7 +1480,7 @@ Download machine-readable specs:
 - Path params: `key`
 - Response schema: `AgentConfigUpdateResponse`
 
-#### PUT /config/agents/{key}/identity
+#### PUT /config/agents/\{key\}/identity
 
 - Auth: Required
 - Device scope: operator.admin
@@ -1523,7 +1493,7 @@ Download machine-readable specs:
 - Device scope: operator.admin
 - Response schema: `DesktopEnvironmentDefaultsResponse`
 
-#### PUT /config/extensions/{kind}/{key}/defaults
+#### PUT /config/extensions/\{kind\}/\{key\}/defaults
 
 - SDK operation: `extensions.updateDefaults`
 - Auth: Required
@@ -1545,7 +1515,7 @@ Download machine-readable specs:
 - Device scope: operator.admin
 - Response schema: `ExecutionProfileModelAssignmentUpdateResponse`
 
-#### PUT /config/policy/agents/{key}
+#### PUT /config/policy/agents/\{key\}
 
 - SDK operation: `policyConfig.updateAgent`
 - Auth: Required
@@ -1560,19 +1530,19 @@ Download machine-readable specs:
 - Device scope: operator.admin
 - Response schema: `DeploymentPolicyConfigUpdateResponse`
 
-#### PUT /config/runtime-packages/{kind}/{key}
+#### PUT /config/runtime-packages/\{kind\}/\{key\}
 
 - Auth: Required
 - Device scope: operator.admin
 - Response schema: `unknown`
 
-#### PUT /models/overrides/providers/{id}
+#### PUT /models/overrides/providers/\{id\}
 
 - Auth: Required
 - Device scope: operator.admin
 - Response schema: `unknown`
 
-#### PUT /models/overrides/providers/{id}/models/{model}
+#### PUT /models/overrides/providers/\{id\}/models/\{model\}
 
 - Auth: Required
 - Device scope: operator.admin
