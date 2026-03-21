@@ -267,6 +267,7 @@ export function createDashboardCore(): OperatorCore {
     approvalsStore: createApprovalsStore(),
     pairingStore: createPairingStore(),
     runsStore: createRunsStore(),
+    chatStore: createChatStore(),
     workboardStore: createWorkboardStore(),
     activityStore: createActivityStore(),
     http: {
