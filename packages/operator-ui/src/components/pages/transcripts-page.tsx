@@ -21,6 +21,7 @@ export function TranscriptsPage({ core }: { core: OperatorCore }) {
   const connection = useOperatorStore(core.connectionStore);
   const transcript = useOperatorStore(core.transcriptStore);
   const isConnected = connection.status === "connected";
+  const isRefreshing = transcript.loadingList || transcript.loadingDetail;
 
   const [agentOptions, setAgentOptions] = useState<AgentOption[]>([]);
   const [renderMode, setRenderMode] = useState<"markdown" | "text">("markdown");
@@ -180,10 +181,16 @@ export function TranscriptsPage({ core }: { core: OperatorCore }) {
             type="button"
             size="sm"
             variant="outline"
-            disabled={!isConnected || transcript.loadingList}
-            isLoading={transcript.loadingList}
+            disabled={!isConnected || isRefreshing}
+            isLoading={isRefreshing}
             onClick={() => {
-              void core.transcriptStore.refresh();
+              void (async () => {
+                await core.transcriptStore.refresh();
+                const snapshot = core.transcriptStore.getSnapshot();
+                if (snapshot.selectedSessionKey) {
+                  await core.transcriptStore.openSession(snapshot.selectedSessionKey);
+                }
+              })();
             }}
           >
             <RefreshCw className="h-3.5 w-3.5" />

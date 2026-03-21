@@ -320,6 +320,52 @@ describe("createTranscriptStore", () => {
     });
   });
 
+  it("clears stale detail before loading a different transcript session", async () => {
+    const ws = createFakeWs();
+    const deferred = createDeferred<ReturnType<typeof createTranscriptGetResult>>();
+    const transcript = createTranscriptStore(ws as never);
+
+    await transcript.openSession("session-child");
+    ws.transcriptGet.mockReturnValueOnce(deferred.promise);
+
+    const openSessionPromise = transcript.openSession("session-root");
+
+    expect(transcript.getSnapshot()).toMatchObject({
+      selectedSessionKey: "session-root",
+      loadingDetail: true,
+      detail: null,
+      errorDetail: null,
+    });
+
+    deferred.resolve(createTranscriptGetResult({ focus_session_key: "session-root" }));
+    await openSessionPromise;
+
+    expect(transcript.getSnapshot().detail).toMatchObject({
+      focusSessionKey: "session-root",
+    });
+  });
+
+  it("does not keep previous detail when loading a different transcript session fails", async () => {
+    const ws = createFakeWs();
+    const transcript = createTranscriptStore(ws as never);
+
+    await transcript.openSession("session-child");
+    ws.transcriptGet.mockRejectedValueOnce(new Error("transcript.get timed out"));
+
+    await transcript.openSession("session-root");
+
+    expect(transcript.getSnapshot()).toMatchObject({
+      selectedSessionKey: "session-root",
+      detail: null,
+      errorDetail: {
+        kind: "ws",
+        operation: "transcript.get",
+        code: "timeout",
+        message: "timed out",
+      },
+    });
+  });
+
   it("keeps existing sessions when loadMore fails", async () => {
     const ws = createFakeWs();
     ws.transcriptList

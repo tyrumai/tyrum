@@ -88,8 +88,12 @@ export function copyToClipboard(clipboard: ReturnType<typeof useClipboard>, valu
     });
 }
 
-export function formatToolState(state: string): string {
-  return state.replace(/-/g, " ");
+export function formatToolState(state: unknown): string {
+  if (typeof state !== "string") {
+    return "unknown";
+  }
+  const normalized = state.trim();
+  return normalized.length > 0 ? normalized.replace(/-/g, " ") : "unknown";
 }
 
 export function isArtifactRef(value: unknown): value is ArtifactRef {
