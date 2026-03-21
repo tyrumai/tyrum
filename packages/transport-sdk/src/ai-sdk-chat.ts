@@ -21,7 +21,7 @@ import {
   type WsChatSessionSendTrigger,
   type WsChatSessionSummary,
 } from "@tyrum/contracts";
-import type { TyrumClientDynamicSchema } from "./ws-client.js";
+import type { TyrumClientDynamicSchema } from "./ws-client.generated.js";
 
 export interface TyrumAiSdkChatSocket {
   connected: boolean;

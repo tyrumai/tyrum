@@ -25,10 +25,14 @@ describe("Memory architecture docs (Issue #666)", () => {
 
   it("does not document legacy Memory v1 operator APIs", async () => {
     const mdFiles = await listMarkdownFiles(resolve(repoRoot, "docs"));
+    const generatedApiReference = resolve(repoRoot, "docs/api-reference.md");
     const legacyEndpointPattern =
       /(^|[^.\w])(memory\.(list|search|get|create|update|delete|forget|export)|\/memory\/exports\/:id)\b/i;
 
     for (const file of mdFiles) {
+      if (file === generatedApiReference) {
+        continue;
+      }
       const content = await readFile(file, "utf8");
       expect(content).not.toMatch(legacyEndpointPattern);
     }

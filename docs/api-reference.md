@@ -1,1611 +1,1948 @@
 # API Reference
 
-This document is a hand-maintained API reference for the Tyrum Gateway HTTP and WebSocket APIs.
+<!-- GENERATED: pnpm api:generate -->
 
-This is a manually written first version; **future automation** may generate this document (or an OpenAPI/JSON Schema equivalent) from `packages/gateway/src/routes/*` and `@tyrum/contracts`.
+This document is generated from the canonical gateway API manifest.
+
+Download machine-readable specs:
+
+- `/specs/openapi.json`
+- `/specs/asyncapi.json`
 
 ## Table of Contents
 
-- [Conventions](#conventions)
-- [Authentication & Authorization](#authentication--authorization)
 - [HTTP API](#http-api)
 - [WebSocket API](#websocket-api)
 
-## Conventions
-
-- Base URL: `http(s)://<gateway-host>:<port>`
-- All JSON requests/responses use `Content-Type: application/json` unless noted.
-- Most error responses are JSON shaped like:
-  - `{ "error": "<code>", "message": "<human-readable message>" }`
-- When enabled, the gateway returns a stable `x-request-id` response header.
-
-## Authentication & Authorization
-
-### HTTP auth
-
-When gateway auth is enabled (default for most deployments), requests are authenticated via:
-
-- `Authorization: Bearer <token>` (preferred)
-- Cookie `tyrum_admin_token=<token>` (primarily for browser `/ui` usage)
-
-**Public allowlist (no token required):**
-
-- `GET /healthz`
-- `GET /ui` and `GET /ui/*`
-- `POST /auth/session` and `POST /auth/logout`
-- `GET /providers/:provider/oauth/callback` (OAuth callback; state/PKCE protected)
-
-### Token types
-
-- **Admin token**: Break-glass; bypasses scope enforcement.
-- **Device token**: Scoped; per-request scope enforcement applies (HTTP + WS).
-- Tenant-scoped runtime surfaces require a non-empty `tenant_id` claim. Missing or blank tenant context is rejected; the gateway does not fall back to a default tenant for pairing or execution paths.
-
-### HTTP scopes (device tokens)
-
-For device tokens, HTTP routes are scope-checked based on method + path template:
-
-- Admin surfaces (examples: `/policy/*`, `/secrets/*`, `/snapshot/*`, `/routing/*`, `/providers/*`) require `operator.admin`.
-- `/approvals/*` requires `operator.approvals`.
-- `/pairings/*` requires `operator.pairing`.
-- Most operator surfaces default to:
-  - `GET` → `operator.read`
-  - `POST|PUT|PATCH|DELETE` → `operator.write`
-
-If a route is not in the authorization matrix, device tokens are **forbidden** (deny-by-default).
-
-### WebSocket scopes (device tokens)
-
-For device tokens, each WS request `type` is scope-checked via `packages/gateway/src/modules/authz/ws-scope-matrix.ts`.
-
 ## HTTP API
 
-### Public endpoints
+#### ALL /plugins/\{id\}/rpc
+
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `unknown`
+
+#### ALL /plugins/\{id\}/rpc/\*
+
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `unknown`
+
+#### DELETE /agents/\{key\}
+
+- SDK operation: `agents.delete`
+- Auth: Required
+- Device scope: operator.admin
+- Path params: `key`
+- Response schema: `ManagedAgentDeleteResponse`
+
+#### DELETE /automation/schedules/\{id\}
+
+- SDK operation: `schedules.remove`
+- Auth: Required
+- Device scope: operator.write
+- Path params: `id` -> `scheduleIdSchema`
+- Response schema: `ScheduleDeleteResponse`
+
+#### DELETE /automation/triggers/\{id\}
+
+- Auth: Required
+- Device scope: operator.write
+- Response schema: `unknown`
+
+#### DELETE /config/channels/accounts/\{channel\}/\{accountKey\}
+
+- SDK operation: `channelConfig.deleteAccount`
+- Auth: Required
+- Device scope: operator.admin
+- Path params: `channel` -> `ChannelPathKey`, `accountKey` -> `ChannelPathKey`
+- Response schema: `ChannelAccountDeleteResponse`
+
+#### DELETE /config/models/presets/\{key\}
+
+- SDK operation: `modelConfig.deletePreset`
+- Auth: Required
+- Device scope: operator.admin
+- Request body schema: `ModelConfigDeleteRequest`
+- Path params: `key` -> `PresetPathKey`
+- Response schema: `raw-response`
+
+#### DELETE /config/providers/\{provider\}
+
+- SDK operation: `providerConfig.deleteProvider`
+- Auth: Required
+- Device scope: operator.admin
+- Request body schema: `ModelConfigDeleteRequest`
+- Path params: `provider` -> `ProviderPathKey`
+- Response schema: `raw-response`
+
+#### DELETE /config/providers/accounts/\{key\}
+
+- SDK operation: `providerConfig.deleteAccount`
+- Auth: Required
+- Device scope: operator.admin
+- Path params: `key` -> `ProviderPathKey`
+- Response schema: `ModelConfigDeleteResponse`
+
+#### DELETE /desktop-environments/\{environmentId\}
+
+- SDK operation: `desktopEnvironments.remove`
+- Auth: Required
+- Device scope: operator.admin
+- Path params: `environmentId`
+- Response schema: `DesktopEnvironmentDeleteResponse`
+
+#### DELETE /location/places/\{id\}
+
+- SDK operation: `location.deletePlace`
+- Auth: Required
+- Device scope: operator.write
+- Path params: `id` -> `PlaceId`
+- Response schema: `LocationPlaceDeleteResponse`
+
+#### DELETE /memory/items/\{id\}
+
+- SDK operation: `memory.delete`
+- Auth: Required
+- Device scope: operator.write
+- Request body schema: `MemoryDeleteBody`
+- Path params: `id` -> `NonEmptyString`
+- Response schema: `MemoryDeleteResponse`
+
+#### DELETE /models/overrides/providers/\{id\}
+
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `unknown`
+
+#### DELETE /models/overrides/providers/\{id\}/models/\{model\}
+
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `unknown`
+
+#### DELETE /routing/channels/configs/\{channel\}/\{accountKey\}
+
+- SDK operation: `routingConfig.deleteChannelConfig`
+- Auth: Required
+- Device scope: operator.admin
+- Path params: `channel`, `accountKey`
+- Response schema: `ChannelConfigDeleteResponse`
+
+#### DELETE /secrets/\{id\}
+
+- SDK operation: `secrets.revoke`
+- Auth: Required
+- Device scope: operator.admin
+- Path params: `id` -> `SecretPathId`
+- Query schema: `SecretListQuery`
+- Response schema: `SecretRevokeResponse`
+
+#### DELETE /watchers/\{id\}
+
+- Auth: Required
+- Device scope: operator.write
+- Response schema: `unknown`
+
+#### GET /a/\{id\}
+
+- SDK operation: `artifacts.getBytes`
+- Auth: Required
+- Device scope: n/a
+- Path params: `id` -> `ArtifactId`
+- Response schema: `raw-response`
+
+#### GET /agent/list
+
+- SDK operation: `agentList.get`
+- Auth: Required
+- Device scope: operator.read
+- Query schema: `AgentListQuery`
+- Response schema: `AgentListResponse`
+
+#### GET /agent/status
+
+- SDK operation: `agentStatus.get`
+- Auth: Required
+- Device scope: operator.read
+- Query schema: `AgentStatusQuery`
+- Response schema: `AgentStatusResponse`
+
+#### GET /agents
+
+- SDK operation: `agents.list`
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `ManagedAgentListResponse`
+
+#### GET /agents/\{key\}
+
+- SDK operation: `agents.get`
+- Auth: Required
+- Device scope: operator.admin
+- Path params: `key`
+- Response schema: `ManagedAgentGetResponse`
+
+#### GET /agents/\{key\}/capabilities
+
+- SDK operation: `agents.capabilities`
+- Auth: Required
+- Device scope: operator.admin
+- Path params: `key`
+- Response schema: `AgentCapabilitiesResponse`
+
+#### GET /approvals
+
+- Auth: Required
+- Device scope: operator.read
+- Response schema: `unknown`
+
+#### GET /approvals/\{id\}
+
+- Auth: Required
+- Device scope: operator.read
+- Response schema: `unknown`
+
+#### GET /approvals/\{id\}/preview
+
+- Auth: Required
+- Device scope: operator.read
+- Response schema: `unknown`
+
+#### GET /artifacts/\{id\}/metadata
+
+- SDK operation: `artifacts.getMetadata`
+- Auth: Required
+- Device scope: operator.read
+- Path params: `id` -> `ArtifactId`
+- Response schema: `ArtifactMetadataResponse`
+
+#### GET /audit/export/\{planKey\}
+
+- SDK operation: `audit.exportReceiptBundle`
+- Auth: Required
+- Device scope: operator.admin
+- Path params: `planKey` -> `NonEmptyString`
+- Response schema: `ReceiptBundle`
+
+#### GET /audit/plans
+
+- SDK operation: `audit.listPlans`
+- Auth: Required
+- Device scope: operator.admin
+- Query schema: `AuditPlansListQuery`
+- Response schema: `AuditPlansListResponse`
+
+#### GET /auth/pins
+
+- SDK operation: `authPins.list`
+- Auth: Required
+- Device scope: operator.admin
+- Query schema: `AuthPinListQuery`
+- Response schema: `SessionProviderPinListResponse`
+
+#### GET /auth/profiles
+
+- SDK operation: `authProfiles.list`
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `AuthProfileListResponse`
+
+#### GET /auth/tokens
+
+- SDK operation: `authTokens.list`
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `AuthTokenListResponse`
+
+#### GET /automation/schedules
+
+- SDK operation: `schedules.list`
+- Auth: Required
+- Device scope: operator.read
+- Query schema: `listQuerySchema`
+- Response schema: `ScheduleListResponse`
+
+#### GET /automation/schedules/\{id\}
+
+- SDK operation: `schedules.get`
+- Auth: Required
+- Device scope: operator.read
+- Path params: `id` -> `scheduleIdSchema`
+- Response schema: `ScheduleSingleResponse`
+
+#### GET /automation/triggers
+
+- Auth: Required
+- Device scope: operator.read
+- Response schema: `unknown`
+
+#### GET /canvas/\{id\}
+
+- Auth: Required
+- Device scope: operator.read
+- Response schema: `unknown`
+
+#### GET /canvas/\{id\}/meta
+
+- Auth: Required
+- Device scope: operator.read
+- Response schema: `unknown`
+
+#### GET /config/agents
+
+- SDK operation: `agentConfig.list`
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `AgentConfigListResponse`
+
+#### GET /config/agents/\{key\}
+
+- SDK operation: `agentConfig.get`
+- Auth: Required
+- Device scope: operator.admin
+- Path params: `key`
+- Response schema: `AgentConfigGetResponse`
+
+#### GET /config/agents/\{key\}/identity
+
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `unknown`
+
+#### GET /config/agents/\{key\}/identity/revisions
+
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `unknown`
+
+#### GET /config/agents/\{key\}/revisions
+
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `unknown`
+
+#### GET /config/channels
+
+- SDK operation: `channelConfig.listChannels`
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `ConfiguredChannelListResponse`
+
+#### GET /config/channels/registry
+
+- SDK operation: `channelConfig.listRegistry`
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `ChannelRegistryResponse`
+
+#### GET /config/desktop-environments/defaults
+
+- SDK operation: `desktopEnvironments.getDefaults`
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `DesktopEnvironmentDefaultsResponse`
+
+#### GET /config/extensions/\{kind\}
+
+- SDK operation: `extensions.list`
+- Auth: Required
+- Device scope: operator.read
+- Path params: `kind` -> `extensionKindSchema`
+- Response schema: `ExtensionsListResponse`
+
+#### GET /config/extensions/\{kind\}/\{key\}
+
+- SDK operation: `extensions.get`
+- Auth: Required
+- Device scope: operator.read
+- Path params: `kind` -> `extensionKindSchema`, `key` -> `extensionKeySchema`
+- Response schema: `ExtensionsDetailResponse`
+
+#### GET /config/hooks
+
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `unknown`
+
+#### GET /config/hooks/revisions
+
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `unknown`
+
+#### GET /config/models/assignments
+
+- SDK operation: `modelConfig.listAssignments`
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `ExecutionProfileModelAssignmentListResponse`
+
+#### GET /config/models/presets
+
+- SDK operation: `modelConfig.listPresets`
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `ConfiguredModelPresetListResponse`
+
+#### GET /config/models/presets/available
+
+- SDK operation: `modelConfig.listAvailable`
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `ConfiguredAvailableModelListResponse`
+
+#### GET /config/policy/agents/\{key\}
+
+- SDK operation: `policyConfig.getAgent`
+- Auth: Required
+- Device scope: operator.admin
+- Path params: `key`
+- Response schema: `DeploymentPolicyConfigGetResponse`
+
+#### GET /config/policy/agents/\{key\}/revisions
+
+- SDK operation: `policyConfig.listAgentRevisions`
+- Auth: Required
+- Device scope: operator.admin
+- Path params: `key`
+- Response schema: `DeploymentPolicyConfigListRevisionsResponse`
+
+#### GET /config/policy/deployment
+
+- SDK operation: `policyConfig.getDeployment`
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `DeploymentPolicyConfigGetResponse`
+
+#### GET /config/policy/deployment/revisions
+
+- SDK operation: `policyConfig.listDeploymentRevisions`
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `DeploymentPolicyConfigListRevisionsResponse`
+
+#### GET /config/providers
+
+- SDK operation: `providerConfig.listProviders`
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `ConfiguredProviderListResponse`
+
+#### GET /config/providers/registry
+
+- SDK operation: `providerConfig.listRegistry`
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `ProviderRegistryResponse`
+
+#### GET /config/runtime-packages
+
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `unknown`
+
+#### GET /config/runtime-packages/\{kind\}/\{key\}
+
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `unknown`
+
+#### GET /config/runtime-packages/\{kind\}/\{key\}/revisions
+
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `unknown`
+
+#### GET /config/tools
+
+- SDK operation: `toolRegistry.list`
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `ToolRegistryListResponse`
+
+#### GET /connections
+
+- Auth: Required
+- Device scope: operator.read
+- Response schema: `unknown`
+
+#### GET /context
+
+- SDK operation: `context.get`
+- Auth: Required
+- Device scope: operator.read
+- Query schema: `ContextGetQuery`
+- Response schema: `ContextGetResponse`
+
+#### GET /context/detail/\{id\}
+
+- SDK operation: `context.detail`
+- Auth: Required
+- Device scope: operator.read
+- Path params: `id` -> `UuidSchema`
+- Response schema: `ContextDetailResponse`
+
+#### GET /context/list
+
+- SDK operation: `context.list`
+- Auth: Required
+- Device scope: operator.read
+- Query schema: `ContextListQuery`
+- Response schema: `ContextListResponse`
+
+#### GET /context/tools
+
+- SDK operation: `context.tools`
+- Auth: Required
+- Device scope: operator.read
+- Query schema: `ToolRegistryQuery`
+- Response schema: `ToolRegistryResponse`
+
+#### GET /contracts/jsonschema/\{file\}
+
+- SDK operation: `contracts.getSchema`
+- Auth: Required
+- Device scope: operator.read
+- Path params: `file` -> `ContractSchemaFilename`
+- Response schema: `JsonObjectSchema`
+
+#### GET /contracts/jsonschema/catalog.json
+
+- SDK operation: `contracts.getCatalog`
+- Auth: Required
+- Device scope: operator.read
+- Response schema: `ContractCatalogSchema`
+
+#### GET /desktop-environment-hosts
+
+- SDK operation: `desktopEnvironmentHosts.list`
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `DesktopEnvironmentHostListResponse`
+
+#### GET /desktop-environments
+
+- SDK operation: `desktopEnvironments.list`
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `DesktopEnvironmentListResponse`
+
+#### GET /desktop-environments/\{environmentId\}
+
+- SDK operation: `desktopEnvironments.get`
+- Auth: Required
+- Device scope: operator.admin
+- Path params: `environmentId`
+- Response schema: `DesktopEnvironmentGetResponse`
+
+#### GET /desktop-environments/\{environmentId\}/logs
+
+- SDK operation: `desktopEnvironments.logs`
+- Auth: Required
+- Device scope: operator.admin
+- Path params: `environmentId`
+- Response schema: `DesktopEnvironmentLogsResponse`
+
+#### GET /desktop-environments/\{environmentId\}/takeover
+
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `unknown`
+
+#### GET /desktop-environments/\{environmentId\}/takeover-url
+
+- SDK operation: `desktopEnvironments.takeoverUrl`
+- Auth: Required
+- Device scope: operator.admin
+- Path params: `environmentId`
+- Response schema: `DesktopEnvironmentTakeoverResponse`
 
 #### GET /healthz
 
+- SDK operation: `health.get`
 - Auth: Public
-- Request: None
-- Response:
-  - `200` JSON `{ status: "ok", is_exposed: boolean }`
+- Device scope: n/a
+- Response schema: `HealthResponse`
+
+#### GET /location/events
+
+- Auth: Required
+- Device scope: operator.read
+- Response schema: `unknown`
+
+#### GET /location/places
+
+- SDK operation: `location.listPlaces`
+- Auth: Required
+- Device scope: operator.read
+- Response schema: `LocationPlaceListResponse`
+
+#### GET /location/profile
+
+- SDK operation: `location.getProfile`
+- Auth: Required
+- Device scope: operator.read
+- Response schema: `LocationProfileResponse`
+
+#### GET /memory/items
+
+- SDK operation: `memory.list`
+- Auth: Required
+- Device scope: operator.read
+- Query schema: `MemoryListQuery`
+- Response schema: `MemoryItemListResponse`
+
+#### GET /memory/items/\{id\}
+
+- SDK operation: `memory.getById`
+- Auth: Required
+- Device scope: operator.read
+- Path params: `id` -> `NonEmptyString`
+- Response schema: `MemoryItemGetResponse`
+
+#### GET /memory/search
+
+- SDK operation: `memory.search`
+- Auth: Required
+- Device scope: operator.read
+- Query schema: `MemorySearchQuery`
+- Response schema: `MemorySearchResponse`
+
+#### GET /memory/tombstones
+
+- SDK operation: `memory.listTombstones`
+- Auth: Required
+- Device scope: operator.read
+- Response schema: `MemoryTombstoneListResponse`
+
+#### GET /metrics
+
+- Auth: Required
+- Device scope: operator.read
+- Response schema: `unknown`
+
+#### GET /models/overrides/providers
+
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `unknown`
+
+#### GET /models/overrides/providers/\{id\}/models
+
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `unknown`
+
+#### GET /models/providers
+
+- SDK operation: `models.listProviders`
+- Auth: Required
+- Device scope: operator.read
+- Response schema: `ModelsHttpProviderListResponse`
+
+#### GET /models/providers/\{id\}
+
+- SDK operation: `models.getProvider`
+- Auth: Required
+- Device scope: operator.read
+- Path params: `id` -> `ProviderIdPath`
+- Response schema: `ModelsHttpProviderDetailResponse`
+
+#### GET /models/providers/\{id\}/models
+
+- SDK operation: `models.listProviderModels`
+- Auth: Required
+- Device scope: operator.read
+- Path params: `id` -> `ProviderIdPath`
+- Response schema: `ModelsHttpProviderModelsResponse`
+
+#### GET /models/status
+
+- SDK operation: `models.status`
+- Auth: Required
+- Device scope: operator.read
+- Response schema: `ModelsHttpStatusResponse`
+
+#### GET /nodes
+
+- SDK operation: `nodes.list`
+- Auth: Required
+- Device scope: n/a
+- Query schema: `NodesListQuery`
+- Response schema: `NodeInventoryResponseSchema`
+
+#### GET /nodes/\{nodeId\}/capabilities/\{capabilityId\}
+
+- SDK operation: `nodes.inspect`
+- Auth: Required
+- Device scope: n/a
+- Path params: `nodeId`, `capabilityId`
+- Query schema: `NodesInspectQuery`
+- Response schema: `NodeCapabilityInspectionResponseSchema`
+
+#### GET /pairings
+
+- SDK operation: `pairings.list`
+- Auth: Required
+- Device scope: operator.read
+- Query schema: `PairingsListQuery`
+- Response schema: `PairingListResponse`
+
+#### GET /pairings/\{id\}
+
+- SDK operation: `pairings.get`
+- Auth: Required
+- Device scope: operator.read
+- Path params: `id` -> `PairingIdParam`
+- Response schema: `PairingGetResponse`
+
+#### GET /playbooks
+
+- Auth: Required
+- Device scope: operator.read
+- Response schema: `unknown`
+
+#### GET /playbooks/\{id\}
+
+- Auth: Required
+- Device scope: operator.read
+- Response schema: `unknown`
+
+#### GET /plugins
+
+- SDK operation: `plugins.list`
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `PluginListResponse`
+
+#### GET /plugins/\{id\}
+
+- SDK operation: `plugins.get`
+- Auth: Required
+- Device scope: operator.admin
+- Path params: `id` -> `PluginIdPath`
+- Response schema: `PluginGetResponse`
+
+#### GET /policy/bundle
+
+- SDK operation: `policy.getBundle`
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `PolicyBundleResponse`
+
+#### GET /policy/overrides
+
+- SDK operation: `policy.listOverrides`
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `PolicyOverrideListResponse`
+
+#### GET /presence
+
+- SDK operation: `presence.list`
+- Auth: Required
+- Device scope: operator.read
+- Response schema: `PresenceResponse`
+
+#### GET /providers/\{provider\}/oauth/callback
+
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `unknown`
+
+#### GET /routing/channels/configs
+
+- SDK operation: `routingConfig.listChannelConfigs`
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `ChannelConfigListResponse`
+
+#### GET /routing/channels/telegram/threads
+
+- SDK operation: `routingConfig.listObservedTelegramThreads`
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `ObservedTelegramThreadListResponse`
+
+#### GET /routing/config
+
+- SDK operation: `routingConfig.get`
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `RoutingConfigGetResponse`
+
+#### GET /routing/config/revisions
+
+- SDK operation: `routingConfig.listRevisions`
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `RoutingConfigRevisionListResponse`
+
+#### GET /secrets
+
+- SDK operation: `secrets.list`
+- Auth: Required
+- Device scope: operator.admin
+- Query schema: `SecretListQuery`
+- Response schema: `SecretListResponse`
+
+#### GET /snapshot/export
+
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `unknown`
+
+#### GET /specs/asyncapi.json
+
+- Auth: Required
+- Device scope: operator.read
+- Response schema: `unknown`
+
+#### GET /specs/openapi.json
+
+- Auth: Required
+- Device scope: operator.read
+- Response schema: `unknown`
+
+#### GET /status
+
+- SDK operation: `status.get`
+- Auth: Required
+- Device scope: operator.read
+- Response schema: `StatusResponse`
+
+#### GET /system/deployment-config
+
+- Auth: Required
+- Device scope: n/a
+- Response schema: `unknown`
+
+#### GET /system/tenants
+
+- Auth: Required
+- Device scope: n/a
+- Response schema: `unknown`
 
 #### GET /ui
 
 - Auth: Public
-- Request: None
-- Response:
-  - `200` HTML (operator SPA shell)
-  - `404` text `operator_ui_assets_unavailable` (if UI assets are missing)
+- Device scope: n/a
+- Response schema: `unknown`
 
 #### GET /ui/\*
 
 - Auth: Public
-- Request: Path tail (static asset or SPA route)
-- Response:
-  - `200` HTML (SPA routes) or bytes (static assets)
-  - `404` text `not_found`
+- Device scope: n/a
+- Response schema: `unknown`
 
-#### POST /auth/session
+#### GET /usage
 
-- Auth: Public (bootstrap endpoint)
-- Availability: Only when gateway auth is enabled (TokenStore is wired)
-- Request: JSON `{ token: string }`
-- Response:
-  - `204` (sets `tyrum_admin_token` httpOnly cookie)
-  - `400` invalid JSON / missing token
-  - `401` invalid token
+- SDK operation: `usage.get`
+- Auth: Required
+- Device scope: operator.read
+- Query schema: `UsageQuery`
+- Response schema: `UsageResponse`
+
+#### GET /watchers
+
+- Auth: Required
+- Device scope: operator.read
+- Response schema: `unknown`
+
+#### PATCH /auth/profiles/\{key\}
+
+- SDK operation: `authProfiles.update`
+- Auth: Required
+- Device scope: operator.admin
+- Request body schema: `AuthProfileUpdateRequest`
+- Path params: `key` -> `AuthProfilePathId`
+- Response schema: `AuthProfileMutateResponse`
+
+#### PATCH /auth/tokens/\{tokenId\}
+
+- SDK operation: `authTokens.update`
+- Auth: Required
+- Device scope: operator.admin
+- Request body schema: `AuthTokenUpdateRequest`
+- Path params: `tokenId`
+- Response schema: `AuthTokenUpdateResponse`
+
+#### PATCH /automation/schedules/\{id\}
+
+- SDK operation: `schedules.update`
+- Auth: Required
+- Device scope: operator.write
+- Request body schema: `updateInputSchema`
+- Path params: `id` -> `scheduleIdSchema`
+- Response schema: `ScheduleSingleResponse`
+
+#### PATCH /automation/triggers/\{id\}
+
+- Auth: Required
+- Device scope: operator.write
+- Response schema: `unknown`
+
+#### PATCH /config/channels/accounts/\{channel\}/\{accountKey\}
+
+- SDK operation: `channelConfig.updateAccount`
+- Auth: Required
+- Device scope: operator.admin
+- Path params: `channel` -> `ChannelPathKey`, `accountKey` -> `ChannelPathKey`
+- Response schema: `ChannelAccountMutateResponse`
+
+#### PATCH /config/models/presets/\{key\}
+
+- SDK operation: `modelConfig.updatePreset`
+- Auth: Required
+- Device scope: operator.admin
+- Path params: `key` -> `PresetPathKey`
+- Response schema: `ConfiguredModelPresetMutateResponse`
+
+#### PATCH /config/providers/accounts/\{key\}
+
+- SDK operation: `providerConfig.updateAccount`
+- Auth: Required
+- Device scope: operator.admin
+- Path params: `key` -> `ProviderPathKey`
+- Response schema: `ProviderAccountMutateResponse`
+
+#### PATCH /desktop-environments/\{environmentId\}
+
+- SDK operation: `desktopEnvironments.update`
+- Auth: Required
+- Device scope: operator.admin
+- Path params: `environmentId`
+- Response schema: `DesktopEnvironmentMutateResponse`
+
+#### PATCH /location/places/\{id\}
+
+- SDK operation: `location.updatePlace`
+- Auth: Required
+- Device scope: operator.write
+- Path params: `id` -> `PlaceId`
+- Response schema: `LocationPlaceMutateResponse`
+
+#### PATCH /location/profile
+
+- SDK operation: `location.updateProfile`
+- Auth: Required
+- Device scope: operator.write
+- Response schema: `LocationProfileResponse`
+
+#### PATCH /routing/channels/configs/\{channel\}/\{accountKey\}
+
+- SDK operation: `routingConfig.updateChannelConfig`
+- Auth: Required
+- Device scope: operator.admin
+- Path params: `channel`, `accountKey`
+- Response schema: `ChannelConfigUpdateResponse`
+
+#### PATCH /watchers/\{id\}
+
+- Auth: Required
+- Device scope: operator.write
+- Response schema: `unknown`
+
+#### POST /agent/turn
+
+- Auth: Required
+- Device scope: operator.write
+- Response schema: `unknown`
+
+#### POST /agents
+
+- SDK operation: `agents.create`
+- Auth: Required
+- Device scope: operator.admin
+- Request body schema: `ManagedAgentCreateRequest`
+- Response schema: `ManagedAgentGetResponse`
+
+#### POST /agents/\{key\}/rename
+
+- SDK operation: `agents.rename`
+- Auth: Required
+- Device scope: operator.admin
+- Request body schema: `ManagedAgentRenameRequest`
+- Path params: `key`
+- Response schema: `ManagedAgentRenameResponse`
+
+#### POST /approvals/\{id\}/respond
+
+- Auth: Required
+- Device scope: operator.approvals
+- Response schema: `unknown`
+
+#### POST /audit/forget
+
+- SDK operation: `audit.forget`
+- Auth: Required
+- Device scope: operator.admin
+- Request body schema: `AuditForgetRequest`
+- Response schema: `AuditForgetResponse`
+
+#### POST /audit/verify
+
+- SDK operation: `audit.verify`
+- Auth: Required
+- Device scope: operator.admin
+- Request body schema: `AuditVerifyRequest`
+- Response schema: `ChainVerification`
+
+#### POST /auth/device-tokens/issue
+
+- SDK operation: `deviceTokens.issue`
+- Auth: Required
+- Device scope: operator.admin
+- Request body schema: `DeviceTokenIssueRequest`
+- Response schema: `DeviceTokenIssueResponse`
+
+#### POST /auth/device-tokens/revoke
+
+- SDK operation: `deviceTokens.revoke`
+- Auth: Required
+- Device scope: operator.admin
+- Request body schema: `DeviceTokenRevokeRequest`
+- Response schema: `DeviceTokenRevokeResponse`
 
 #### POST /auth/logout
 
 - Auth: Public
-- Availability: Only when gateway auth is enabled (TokenStore is wired)
-- Request: None
-- Response:
-  - `204` (clears `tyrum_admin_token` cookie)
-
-#### GET /providers/:provider/oauth/callback
-
-- Auth: Public
-- Purpose: OAuth authorization-code callback (PKCE + state)
-- Request: Query params include `state`, `code` (or `error`, `error_description`)
-- Response:
-  - `200` HTML success/failure page
-  - `400` for invalid/expired state, missing params, etc.
-
-### Runtime & diagnostics
-
-#### GET /status
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.read`
-- Request: None
-- Response:
-  - `200` JSON runtime details (`version`, `instance_id`, `role`, `db_kind`, `ws`, `policy`, etc.)
-  - Includes advisory `config_health` with normalized `issues[]` for invalid or incomplete configuration.
-  - `config_health` does not affect `/healthz`; it is for operator dashboards and diagnostics only.
-  - `401` missing/invalid token
-  - `403` insufficient scope (device tokens)
-
-#### GET /metrics
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.read`
-- Request: None
-- Response:
-  - `200` Prometheus text format (content-type set by registry)
-  - `401`, `403`
-
-### System administration
-
-These routes require a **system admin token** (`tenant_id === null`). Deployment config is revisioned and is the durable source of truth for server, execution, and agent feature gates.
-
-#### GET /system/deployment-config
-
-- Auth: Required (system token)
-- Request: None
-- Response:
-  - `200` JSON `{ revision, config, created_at, created_by, reason?, reverted_from_revision? }`
-  - Seeds the default revision on first read if the gateway has never stored deployment config before.
-  - `401`, `403`
-
-#### PUT /system/deployment-config
-
-- Auth: Required (system token)
-- Request: JSON `{ config, reason? }`
-- Response:
-  - `200` JSON `{ revision, config, created_at, created_by, reason?, reverted_from_revision? }`
-  - `400` invalid request
-  - `401`, `403`
-
-#### POST /system/deployment-config/revert
-
-- Auth: Required (system token)
-- Request: JSON `{ revision, reason? }`
-- Response:
-  - `200` JSON `{ revision, config, created_at, created_by, reason?, reverted_from_revision? }`
-  - `400` invalid request
-  - `401`, `403`
-
-#### GET /connections
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.read`
-- Request: None
-- Response:
-  - `200` JSON WebSocket connection stats (from `ConnectionManager.getStats()`)
-  - `401`, `403`
-
-#### GET /presence
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.read`
-- Request: None
-- Response:
-  - `200` JSON `{ status: "ok", generated_at, entries: [...] }`
-  - `401`, `403`
-
-### Contracts (JSON Schema)
-
-#### GET /contracts/jsonschema/catalog.json
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.read`
-- Request: None
-- Response:
-  - `200` JSON schema catalog
-  - `500` `{ error: "contracts_unavailable", ... }` when schemas are not available
-  - `401`, `403`
-
-#### GET /contracts/jsonschema/:file
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.read`
-- Request: `:file` must be a safe `*.json` filename (no paths); `catalog.json` is not served here
-- Response:
-  - `200` JSON schema file contents
-  - `404` `{ error: "not_found", ... }` (missing/invalid filename)
-  - `500` `{ error: "contracts_unavailable", ... }`
-  - `401`, `403`
-
-### Usage
-
-#### GET /usage
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.read`
-- Request: Optional query params (mutually exclusive): `run_id`, `key`, `agent_key`
-- Response:
-  - `200` JSON usage totals (local DB) + optional provider polling status
-  - `400` for invalid scope param combinations
-  - `401`, `403`
-
-### Policy
-
-#### POST /policy/check
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.admin`
-- Request: JSON `PolicyCheckRequest` (`@tyrum/contracts`)
-- Response:
-  - `200` JSON `PolicyDecision` (`@tyrum/contracts`)
-  - `400` invalid request
-  - `401`, `403`
-
-#### GET /policy/bundle
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.admin`
-- Request: None
-- Response:
-  - `200` JSON `{ status: "ok", generated_at, effective: { sha256, bundle, sources } }`
-  - `401`, `403`
-
-#### GET /policy/overrides
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.admin`
-- Request: Query params (validated by `PolicyOverrideListRequest`): `agent_id`, `tool_id`, `status`, `limit`, `cursor`
-- Response:
-  - `200` JSON `PolicyOverrideListResponse`
-  - `400` invalid request
-  - `401`, `403`
-
-#### POST /policy/overrides
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.admin`
-- Request: JSON `PolicyOverrideCreateRequest`
-- Response:
-  - `201` JSON `PolicyOverrideCreateResponse`
-  - `400` invalid request
-  - `401`, `403`
-
-#### POST /policy/overrides/revoke
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.admin`
-- Request: JSON `PolicyOverrideRevokeRequest`
-- Response:
-  - `200` JSON `PolicyOverrideRevokeResponse`
-  - `404` override not found / not active
-  - `400`, `401`, `403`
-
-### Approvals
-
-#### GET /approvals
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.approvals`
-- Request: Optional query param `status` (`queued|reviewing|awaiting_human|approved|denied|expired|cancelled`)
-- Response:
-  - `200` JSON `{ approvals: [...] }`
-  - `400` invalid status
-  - `401`, `403`
-- Notes: Approval records follow `Approval` and may include `agent_id` for managed-agent correlation.
-
-#### GET /approvals/:id
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.approvals`
-- Request: `:id` UUID
-- Response:
-  - `200` JSON `{ approval: ... }`
-  - `400` invalid id
-  - `404` not found
-  - `401`, `403`
-
-#### POST /approvals/:id/respond
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.approvals`
-- Request: JSON `{ decision: "approved" | "denied", reason?: string, mode?: "once"|"always", overrides?: [...] }`
-- Response:
-  - `200` JSON `{ approval: ..., created_overrides?: [...] }` (idempotent if already resolved)
-  - `400` invalid request
-  - `404` not found
-  - `401`, `403`
-
-#### GET /approvals/:id/preview
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.approvals`
-- Request: `:id` UUID
-- Response:
-  - `200` JSON `{ id, plan_id, step_index, prompt, context, status, expires_at }`
-  - `400` invalid id
-  - `404` not found
-  - `401`, `403`
-
-### Pairing (node enrollment)
-
-#### GET /pairings
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.pairing`
-- Tenant context: Requires a tenant-scoped token with a non-empty `tenant_id`
-- Request: Optional query param `status` (`pending|approved|denied|revoked`)
-- Response:
-  - `200` JSON `{ status: "ok", pairings: [...] }`
-  - `401`, `403`
-
-#### POST /pairings/:id/approve
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.pairing`
-- Tenant context: Requires a tenant-scoped token with a non-empty `tenant_id`
-- Request: JSON `{ trust_level: "local"|"remote", capability_allowlist: CapabilityDescriptor[], reason?: string }`
-- Response:
-  - `200` JSON `{ status: "ok", pairing: ... }`
-  - `400` invalid request
-  - `404` pairing not found / not pending
-  - `401`, `403`
-
-#### POST /pairings/:id/deny
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.pairing`
-- Tenant context: Requires a tenant-scoped token with a non-empty `tenant_id`
-- Request: JSON `{ reason?: string }`
-- Response:
-  - `200` JSON `{ status: "ok", pairing: ... }`
-  - `400`, `404`, `401`, `403`
-
-#### POST /pairings/:id/revoke
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.pairing`
-- Tenant context: Requires a tenant-scoped token with a non-empty `tenant_id`
-- Request: JSON `{ reason?: string }`
-- Response:
-  - `200` JSON `{ status: "ok", pairing: ... }`
-  - `400`, `404`, `401`, `403`
-
-### Auth profiles & session pins
-
-#### GET /auth/profiles
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.admin`
-- Request: Optional query params: `provider_key`, `status=active|disabled`
-- Response:
-  - `200` JSON `AuthProfileListResponse`
-  - `401`, `403`
-
-#### POST /auth/profiles
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.admin`
-- Request: JSON `AuthProfileCreateRequest`
-- Response:
-  - `201` JSON `AuthProfileCreateResponse`
-  - `400`, `401`, `403`
-
-#### PATCH /auth/profiles/:key
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.admin`
-- Request: JSON `AuthProfileUpdateRequest`
-- Response:
-  - `200` JSON `{ status: "ok", profile: AuthProfile }`
-  - `404` profile not found
-  - `400`, `401`, `403`
-
-#### POST /auth/profiles/:key/disable
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.admin`
-- Request: JSON `AuthProfileDisableRequest`
-- Response:
-  - `200` JSON `{ status: "ok", profile: AuthProfile }`
-  - `404` profile not found
-  - `400`, `401`, `403`
-
-#### POST /auth/profiles/:key/enable
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.admin`
-- Request: JSON `AuthProfileEnableRequest`
-- Response:
-  - `200` JSON `{ status: "ok", profile: AuthProfile }`
-  - `404` profile not found
-  - `400`, `401`, `403`
-
-#### GET /auth/pins
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.admin`
-- Request: Optional query params: `session_id`, `provider_key`
-- Response:
-  - `200` JSON `SessionProviderPinListResponse`
-  - `401`, `403`
+- Device scope: n/a
+- Response schema: `unknown`
 
 #### POST /auth/pins
 
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.admin`
-- Request: JSON `SessionProviderPinSetRequest`
-- Response:
-  - `201` JSON `{ status: "ok", pin: SessionProviderPin }` (set)
-  - `200` JSON `{ status: "ok", cleared: boolean }` (clear when `profile_id: null`)
-  - `400`, `401`, `403`
+- SDK operation: `authPins.set`
+- Auth: Required
+- Device scope: operator.admin
+- Request body schema: `SessionProviderPinSetRequest`
+- Response schema: `AuthPinSetClearResponse`
 
-### Tenant tokens
+#### POST /auth/profiles
 
-These routes manage tenant-scoped auth tokens used by the operator UI and other admin tooling.
-Responses expose metadata only; token secrets are returned once at creation time and are not
-readable later.
+- SDK operation: `authProfiles.create`
+- Auth: Required
+- Device scope: operator.admin
+- Request body schema: `AuthProfileCreateRequest`
+- Response schema: `AuthProfileCreateResponse`
 
-#### GET /auth/tokens
+#### POST /auth/profiles/\{key\}/disable
 
-- Auth: Admin token required
-- Availability: Only when gateway auth is enabled (TokenStore is wired)
-- Request: None
-- Response:
-  - `200` JSON `AuthTokenListResponse`
-  - Each token item includes `display_name`, `updated_at`, timestamps, role, device binding, and scopes
-  - `403` if admin token is missing/invalid
+- SDK operation: `authProfiles.disable`
+- Auth: Required
+- Device scope: operator.admin
+- Path params: `key` -> `AuthProfilePathId`
+- Response schema: `AuthProfileMutateResponse`
+
+#### POST /auth/profiles/\{key\}/enable
+
+- SDK operation: `authProfiles.enable`
+- Auth: Required
+- Device scope: operator.admin
+- Request body schema: `AuthProfileEnableRequest`
+- Path params: `key` -> `AuthProfilePathId`
+- Response schema: `AuthProfileMutateResponse`
+
+#### POST /auth/session
+
+- Auth: Public
+- Device scope: n/a
+- Response schema: `unknown`
 
 #### POST /auth/tokens/issue
 
-- Auth: Admin token required
-- Availability: Only when gateway auth is enabled (TokenStore is wired)
-- Request: JSON `TenantAuthTokenIssueRequest`
-  - `display_name` is optional for compatibility; when omitted the gateway derives one from the device ID or role
-- Response:
-  - `201` JSON `AuthTokenIssueResponse`
-  - Includes the one-time token secret plus `display_name` and `updated_at`
-  - `403` if admin token is missing/invalid
-  - `400` invalid request
-
-#### PATCH /auth/tokens/:tokenId
-
-- Auth: Admin token required
-- Availability: Only when gateway auth is enabled (TokenStore is wired)
-- Request: JSON `AuthTokenUpdateRequest`
-- Response:
-  - `200` JSON `AuthTokenUpdateResponse`
-  - `404` token not found / outside current tenant
-  - `409` revoked tokens cannot be edited
-  - `403` if admin token is missing/invalid
-  - `400` invalid request
+- SDK operation: `authTokens.issue`
+- Auth: Required
+- Device scope: operator.admin
+- Request body schema: `TenantAuthTokenIssueRequest`
+- Response schema: `AuthTokenIssueResponse`
 
 #### POST /auth/tokens/revoke
 
-- Auth: Admin token required
-- Availability: Only when gateway auth is enabled (TokenStore is wired)
-- Request: JSON `AuthTokenRevokeRequest`
-- Response:
-  - `200` JSON `AuthTokenRevokeResponse`
-  - `403` if admin token is missing/invalid
-  - `400` invalid request
-
-### Device tokens
-
-#### POST /auth/device-tokens/issue
-
-- Auth: Admin token required
-- Availability: Only when gateway auth is enabled (TokenStore is wired)
-- Request: JSON `DeviceTokenIssueRequest`
-- Response:
-  - `201` JSON `DeviceTokenIssueResponse`
-  - `403` if admin token is missing/invalid
-  - `400` invalid request
-
-#### POST /auth/device-tokens/revoke
-
-- Auth: Admin token required
-- Availability: Only when gateway auth is enabled (TokenStore is wired)
-- Request: JSON `DeviceTokenRevokeRequest`
-- Response:
-  - `200` JSON `DeviceTokenRevokeResponse`
-  - `403` if admin token is missing/invalid
-  - `404` token not found / already revoked
-
-### Provider config
-
-These routes manage provider accounts used by model execution. Provider-account `config`
-stores non-secret provider settings such as `baseURL`, region, project, or account IDs.
-Provider-account `secrets` stores managed secret slots defined by the provider registry.
-
-#### GET /config/providers/registry
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.admin`
-- Request: None
-- Response:
-  - `200` JSON `ProviderRegistryResponse`
-  - `401`, `403`
-
-#### GET /config/providers
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.admin`
-- Request: None
-- Response:
-  - `200` JSON `ConfiguredProviderListResponse`
-  - `401`, `403`
-
-#### POST /config/providers/accounts
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.admin`
-- Request: JSON `ProviderAccountCreateRequest`
-- Response:
-  - `201` JSON `ProviderAccountMutateResponse`
-  - `400` unsupported provider or invalid config/secrets
-  - `401`, `403`
-
-#### PATCH /config/providers/accounts/:key
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.admin`
-- Request: JSON `ProviderAccountUpdateRequest`
-- Response:
-  - `200` JSON `ProviderAccountMutateResponse`
-  - `404` provider account not found
-  - `400` invalid config/secrets or unsupported method
-  - `401`, `403`
-
-#### DELETE /config/providers/accounts/:key
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.admin`
-- Request: None
-- Response:
-  - `200` JSON `{ status: "ok", deleted: true }`
-  - `404` provider account not found
-  - `401`, `403`
-
-#### DELETE /config/providers/:provider
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.admin`
-- Request: Optional JSON `ModelConfigDeleteRequest`
-  - Use `replacement_assignments` when the provider still owns presets assigned to execution profiles.
-  - Each replacement assignment value may be another preset key or `null` to set that execution profile to `None`.
-- Response:
-  - `200` JSON `ModelConfigDeleteResponse`
-  - `409` JSON `ModelConfigDeleteConflictResponse` when replacement presets are required
-  - `404` provider not found
-  - `401`, `403`
-
-### Provider OAuth (authorization code + PKCE)
-
-#### POST /providers/:provider/oauth/authorize
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.admin`
-- Availability: Only when auth profiles are enabled and OAuth providers are configured
-- Request: JSON (partial; see `packages/gateway/src/routes/provider-oauth.ts`):
-  - `agent_key?: string`
-  - `public_base_url?: string` (http/https)
-  - `auth_profile_key?: string`
-- Response:
-  - `200` JSON `{ status: "ok", provider, state, expires_at, authorize_url }`
-  - `404` oauth provider not configured
-  - `400` invalid request / missing env / etc.
-  - `401`, `403`
-
-### Routing config
-
-#### GET /routing/config
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.admin`
-- Availability: Only when gateway auth is enabled (TokenStore is wired)
-- Request: None
-- Response:
-  - `200` JSON `{ revision, config, created_at?, created_by?, reason?, reverted_from_revision? }`
-  - `500` `{ error: "corrupt_state", ... }`
-  - `401`, `403`
-
-#### PUT /routing/config
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.admin`
-- Availability: Only when gateway auth is enabled (TokenStore is wired)
-- Request: JSON `RoutingConfigUpdateRequest`
-- Response:
-  - `201` JSON `{ revision, config, created_at, created_by, reason?, reverted_from_revision? }`
-  - `400` invalid request
-  - `401`, `403`
-
-#### POST /routing/config/revert
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.admin`
-- Availability: Only when gateway auth is enabled (TokenStore is wired)
-- Request: JSON `RoutingConfigRevertRequest`
-- Response:
-  - `201` JSON `{ revision, config, created_at, created_by, reason?, reverted_from_revision }`
-  - `404` revision not found
-  - `400`, `401`, `403`
-
-### Secrets
-
-#### POST /secrets
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.admin`
-- Availability: Only when a `SecretProvider` is configured
-- Request: Optional query param/header to select agent: `agent_key` or `x-tyrum-agent-key`
-- Request: JSON `SecretStoreRequest`
-- Response:
-  - `201` JSON `{ handle: SecretHandle }` (never returns secret value)
-  - `400` invalid request
-  - `401`, `403`
-
-#### GET /secrets
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.admin`
-- Availability: Only when a `SecretProvider` is configured
-- Request: Optional query param/header to select agent: `agent_key` or `x-tyrum-agent-key`
-- Response:
-  - `200` JSON `{ handles: SecretHandle[] }`
-  - `400` invalid agent
-  - `401`, `403`
-
-#### DELETE /secrets/:id
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.admin`
-- Availability: Only when a `SecretProvider` is configured
-- Request: `:id` secret handle id
-- Request: Optional query param/header to select agent: `agent_key` or `x-tyrum-agent-key`
-- Response:
-  - `200` JSON `{ revoked: true }`
-  - `404` not found
-  - `401`, `403`
-
-#### POST /secrets/:id/rotate
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.admin`
-- Availability: Only when a non-env `SecretProvider` is configured
-- Request: Optional query param/header to select agent: `agent_key` or `x-tyrum-agent-key`
-- Request: JSON `SecretRotateRequest`
-- Response:
-  - `201` JSON `{ revoked: boolean, handle: SecretHandle }`
-  - `404` not found
-  - `400` invalid request / env secrets not rotatable
-  - `500` rotation propagation failures (best-effort rollback)
-  - `401`, `403`
-
-### Snapshot export/import
-
-#### GET /snapshot/export
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.admin`
-- Request: Optional query param `tables` (comma-separated); defaults to gateway snapshot table set
-- Response:
-  - `200` JSON `SnapshotBundle` (format `tyrum.snapshot.v2`)
-  - `400` invalid table name
-  - `500` unexpected export failure
-  - `401`, `403`
-
-#### POST /snapshot/import
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.admin`
-- Request: JSON `SnapshotImportRequest`
-- Response:
-  - `200` JSON `{ status: "ok", imported_at, format, tables, inserted_total, inserted_by_table }`
-  - `403` `{ error: "disabled", ... }` unless snapshot import is explicitly enabled for the deployment. On fresh state you can seed this with `TYRUM_SNAPSHOT_IMPORT_ENABLED=1`; after config is already seeded, use `--enable-snapshot-import` on startup instead.
-  - `400` invalid request / unknown tables
-  - `500` import refused (non-empty tables) or internal failures
-  - `401`, `403`
-
-### Models.dev catalog
-
-#### GET /models/status
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.read`
-- Request: None
-- Response:
-  - `200` JSON `{ status: "ok", models_dev: ... }`
-  - `401`, `403`
-
-#### POST /models/refresh
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.admin` (special-cased)
-- Request: None
-- Response:
-  - `200` JSON `{ status: "ok", models_dev: ... }`
-  - `401`, `403`
-
-#### GET /models/providers
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.read`
-- Request: None
-- Response:
-  - `200` JSON provider summary list
-  - `401`, `403`
-
-#### GET /models/providers/:id
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.read`
-- Request: Path param `:id`
-- Response:
-  - `200` JSON provider details
-  - `404` provider not found
-  - `401`, `403`
-
-#### GET /models/providers/:id/models
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.read`
-- Request: Path param `:id`
-- Response:
-  - `200` JSON provider + model list
-  - `404` provider not found
-  - `401`, `403`
-
-### Plugins
-
-#### GET /plugins
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.admin`
-- Availability: Only when plugins are enabled
-- Request: None
-- Response:
-  - `200` JSON `{ status: "ok", plugins: [...] }`
-  - `401`, `403`
-
-#### GET /plugins/:id
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.admin`
-- Availability: Only when plugins are enabled
-- Request: Path param `:id`
-- Response:
-  - `200` JSON `{ status: "ok", plugin: ... }`
-  - `404` plugin not found
-  - `401`, `403`
-
-Additional plugin-defined routers may be mounted under:
-
-- `/plugins/<plugin_id>/rpc/*` (methods + paths defined by the plugin)
-
-### Plan runner
-
-#### POST /plan
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.write`
-- Request: JSON `PlanRequest` (`@tyrum/contracts`)
-- Response:
-  - `200` JSON `PlanResponse` (`@tyrum/contracts`)
-  - `400` invalid request
-  - `401`, `403`
-
-### Workflow engine API (feature-gated)
-
-#### POST /workflow/run
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.write`
-- Availability: Only when deployment config `execution.engineApiEnabled=true` (fresh installs can seed this with `--enable-engine-api`)
-- Request: JSON `{ key, lane?, plan_id?, request_id?, steps: ActionPrimitive[], budgets? }`
-- Response:
-  - `200` JSON `{ status: "ok", job_id, run_id, plan_id, request_id, key, lane, steps_count }`
-  - `400` invalid request
-  - `401`, `403`
-
-#### POST /workflow/resume
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.write`
-- Availability: Only when deployment config `execution.engineApiEnabled=true`
-- Request: JSON `{ token: string }`
-- Response:
-  - `200` JSON `{ status: "ok", run_id }`
-  - `404` resume token not found
-  - `400`, `401`, `403`
-
-#### POST /workflow/cancel
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.write`
-- Availability: Only when deployment config `execution.engineApiEnabled=true`
-- Request: JSON `{ run_id: string, reason?: string }`
-- Response:
-  - `200` JSON `{ status: "ok", run_id, cancelled: boolean }`
-  - `404` run not found
-  - `400`, `401`, `403`
-
-### Playbooks
-
-#### GET /playbooks
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.read`
-- Request: None
-- Response:
-  - `200` JSON `{ playbooks: [...] }`
-  - `401`, `403`
-
-#### GET /playbooks/:id
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.read`
-- Request: Path param `:id`
-- Response:
-  - `200` JSON playbook record
-  - `404` not found
-  - `401`, `403`
-
-#### POST /playbooks/:id/run
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.write`
-- Request: None
-- Response:
-  - `200` JSON playbook run result (non-durable runner)
-  - `404` not found
-  - `401`, `403`
-
-#### POST /playbooks/runtime
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.write`
-- Request: JSON `PlaybookRuntimeRequest`
-- Response:
-  - `200` JSON runtime envelope (run/resume)
-  - `400` unsupported (engine not configured) or invalid request
-  - `401`, `403`
-
-#### POST /playbooks/:id/execute
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.write`
-- Availability: Only when deployment config `execution.engineApiEnabled=true`
-- Request: JSON (optional overrides): `{ key?, lane?, plan_id?, request_id?, budgets? }`
-- Response:
-  - `200` JSON `{ status: "ok", job_id, run_id, playbook_id, plan_id, request_id, key, lane, steps_count }`
-  - `400` unsupported / invalid request
-  - `404` playbook not found
-  - `401`, `403`
-
-### Watchers
-
-#### POST /watchers
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.write`
-- Request: JSON `{ plan_id: string, trigger_type: string, trigger_config?: unknown }`
-- Response:
-  - `201` JSON `{ id, plan_id, trigger_type }`
-  - `400` invalid request
-  - `401`, `403`
-
-#### GET /watchers
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.read`
-- Request: None
-- Response:
-  - `200` JSON `{ watchers: [...] }`
-  - `401`, `403`
-
-#### PATCH /watchers/:id
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.write`
-- Request: JSON `{ active?: boolean }` (only `active:false` is meaningful)
-- Response:
-  - `200` JSON `{ id, updated: true }`
-  - `400` invalid id
-  - `401`, `403`
-
-#### DELETE /watchers/:id
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.write`
-- Request: None
-- Response:
-  - `200` JSON `{ id, deleted: true }`
-  - `400` invalid id
-  - `401`, `403`
-
-#### POST /watchers/:id/trigger/webhook
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.write`
-- Request:
-  - Headers:
-    - `x-tyrum-webhook-signature: sha256=<hex>`
-    - `x-tyrum-webhook-timestamp: <unix seconds|ms>`
-    - `x-tyrum-webhook-nonce: <base64url|uuid>`
-  - Body: raw text (signed as `<timestamp>.<nonce>.<body>`)
-- Response:
-  - `200` JSON `{ ok: true }` (or trigger-specific result)
-  - `401` invalid/missing signature envelope / replay window
-  - `404` watcher not found / not webhook
-  - `503` misconfigured (missing secret provider / invalid watcher config)
-  - `401`, `403`
-
-### Automation schedules
-
-User-facing automation should prefer schedules over raw watchers. Schedule APIs map onto the same durable automation backend but expose explicit `heartbeat` vs `cron`, cadence, enable/disable, and delete semantics.
-
-#### GET /automation/schedules
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.read`
-- Query params:
-  - `agent_key?`
-  - `workspace_key?`
-  - `include_deleted?=true|false`
-- Response:
-  - `200` JSON `{ schedules: [...] }`
-  - `401`, `403`
-
-#### GET /automation/schedules/:id
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.read`
-- Request: Path param `:id`
-- Response:
-  - `200` JSON `{ schedule }`
-  - `400` invalid id
-  - `404` not found
-  - `401`, `403`
+- SDK operation: `authTokens.revoke`
+- Auth: Required
+- Device scope: operator.admin
+- Request body schema: `AuthTokenRevokeRequest`
+- Response schema: `AuthTokenRevokeResponse`
 
 #### POST /automation/schedules
 
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.write`
-- Request: JSON
-  - `kind: "heartbeat" | "cron"`
-  - `enabled?: boolean`
-  - `agent_key?: string`
-  - `workspace_key?: string`
-  - `cadence: { type: "interval", interval_ms } | { type: "cron", expression, timezone }`
-  - `execution: { kind: "agent_turn", instruction? } | { kind: "playbook", playbook_id } | { kind: "steps", steps }`
-  - `delivery?: { mode: "quiet" | "notify" }`
-- Response:
-  - `201` JSON `{ schedule }`
-  - `400` invalid request
-  - `401`, `403`
+- SDK operation: `schedules.create`
+- Auth: Required
+- Device scope: operator.write
+- Request body schema: `createInputSchema`
+- Response schema: `ScheduleSingleResponse`
 
-#### PATCH /automation/schedules/:id
+#### POST /automation/schedules/\{id\}/pause
 
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.write`
-- Request: Path param `:id`, JSON patch with any of:
-  - `kind`
-  - `enabled`
-  - `cadence`
-  - `execution`
-  - `delivery`
-- Response:
-  - `200` JSON `{ schedule }`
-  - `400` invalid request
-  - `404` not found
-  - `401`, `403`
+- SDK operation: `schedules.pause`
+- Auth: Required
+- Device scope: operator.write
+- Path params: `id` -> `scheduleIdSchema`
+- Response schema: `ScheduleSingleResponse`
 
-#### POST /automation/schedules/:id/pause
+#### POST /automation/schedules/\{id\}/resume
 
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.write`
-- Request: Path param `:id`
-- Response:
-  - `200` JSON `{ schedule }`
-  - `400` invalid id
-  - `404` not found
-  - `401`, `403`
+- SDK operation: `schedules.resume`
+- Auth: Required
+- Device scope: operator.write
+- Path params: `id` -> `scheduleIdSchema`
+- Response schema: `ScheduleSingleResponse`
 
-#### POST /automation/schedules/:id/resume
+#### POST /automation/triggers
 
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.write`
-- Request: Path param `:id`
-- Response:
-  - `200` JSON `{ schedule }`
-  - `400` invalid id
-  - `404` not found
-  - `401`, `403`
-
-#### DELETE /automation/schedules/:id
-
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.write`
-- Request: Path param `:id`
-- Response:
-  - `200` JSON `{ schedule_id, deleted: true }`
-  - `400` invalid id
-  - `401`, `403`
-
-### Canvas artifacts
+- Auth: Required
+- Device scope: operator.write
+- Response schema: `unknown`
 
 #### POST /canvas/publish
 
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.write`
-- Request: JSON `{ plan_id?, title, content_type, html_content, metadata? }`
-- Response:
-  - `201` JSON `{ id, created_at }`
-  - `400` invalid request
-  - `401`, `403`
+- Auth: Required
+- Device scope: operator.write
+- Response schema: `unknown`
 
-#### GET /canvas/:id
+#### POST /config/agents/\{key\}/identity/revert
 
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.read`
-- Request: Path param `:id`
-- Response:
-  - `200` HTML/text bytes with restrictive CSP
-  - `404` not found
-  - `401`, `403`
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `unknown`
 
-#### GET /canvas/:id/meta
+#### POST /config/agents/\{key\}/revert
 
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.read`
-- Request: Path param `:id`
-- Response:
-  - `200` JSON metadata
-  - `404` not found
-  - `401`, `403`
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `unknown`
 
-### Artifacts (execution scope-bound)
+#### POST /config/channels/accounts
 
-#### GET /artifacts/:id/metadata
+- SDK operation: `channelConfig.createAccount`
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `ChannelAccountMutateResponse`
 
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.read`
-- Request: Path param `:id`
-- Response:
-  - `400` `{ error: "invalid_request", message: "artifact fetch APIs must be scope-bound; use GET /runs/:runId/artifacts/:id/metadata" }`
-  - `401`, `403`
+#### POST /config/extensions/\{kind\}/\{key\}/refresh
 
-#### GET /artifacts/:id
+- SDK operation: `extensions.refresh`
+- Auth: Required
+- Device scope: operator.admin
+- Path params: `kind` -> `extensionKindSchema`, `key` -> `extensionKeySchema`
+- Response schema: `ExtensionsMutateResponse`
 
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.read`
-- Request: Path param `:id`
-- Response:
-  - `400` `{ error: "invalid_request", message: "artifact fetch APIs must be scope-bound; use GET /runs/:runId/artifacts/:id" }`
-  - `401`, `403`
+#### POST /config/extensions/\{kind\}/\{key\}/revert
 
-#### GET /runs/:runId/artifacts/:id/metadata
+- SDK operation: `extensions.revert`
+- Auth: Required
+- Device scope: operator.admin
+- Request body schema: `revertInputSchema`
+- Path params: `kind` -> `extensionKindSchema`, `key` -> `extensionKeySchema`
+- Response schema: `ExtensionsMutateResponse`
 
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.read`
-- Request: Path params `:runId`, `:id` (`ArtifactId`)
-- Response:
-  - `200` JSON `{ artifact, scope }`
-  - `403` forbidden (missing durable scope linkage / policy denies / requires approval)
-  - `404` not found
-  - `400`, `401`, `403`
+#### POST /config/extensions/\{kind\}/\{key\}/toggle
 
-#### GET /runs/:runId/artifacts/:id
+- SDK operation: `extensions.toggle`
+- Auth: Required
+- Device scope: operator.admin
+- Request body schema: `toggleInputSchema`
+- Path params: `kind` -> `extensionKindSchema`, `key` -> `extensionKeySchema`
+- Response schema: `ExtensionsMutateResponse`
 
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.read`
-- Request: Path params `:runId`, `:id` (`ArtifactId`)
-- Response:
-  - `302` redirect to signed URL (when artifact store supports it)
-  - `200` bytes (when artifact bytes are served directly)
-  - `403` forbidden (missing durable scope linkage / policy denies / requires approval)
-  - `404` not found
-  - `400`, `401`, `403`
+#### POST /config/extensions/mcp/import
 
-### Agent runtime (feature-gated)
+- SDK operation: `extensions.importMcp`
+- Auth: Required
+- Device scope: operator.admin
+- Request body schema: `mcpImportInputSchema`
+- Response schema: `ExtensionsMutateResponse`
 
-#### GET /agent/list
+#### POST /config/extensions/mcp/parse-settings
 
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.read`
-- Availability: Only when deployment config `agent.enabled=true` (default: enabled)
-- Request: Optional query param `include_default` (default: `true`)
-- Response:
-  - `200` JSON `{ agents: [{ agent_id, home?, has_config? }] }`
-  - `401`, `403`
+- SDK operation: `extensions.parseMcpSettings`
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `parseMcpSettingsResponseSchema`
 
-#### GET /agent/status
+#### POST /config/extensions/mcp/upload
 
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.read`
-- Availability: Only when deployment config `agent.enabled=true` (default: enabled)
-- Request: Optional query param `agent_key` (default: `default`)
-- Response:
-  - `200` JSON agent runtime status
-  - `400` invalid agent key
-  - `401`, `403`
+- SDK operation: `extensions.uploadMcp`
+- Auth: Required
+- Device scope: operator.admin
+- Request body schema: `uploadInputSchema`
+- Response schema: `ExtensionsMutateResponse`
 
-#### POST /agent/turn
+#### POST /config/extensions/skill/import
 
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.write`
-- Availability: Only when deployment config `agent.enabled=true` (default: enabled)
-- Request: JSON `AgentTurnRequest`
-- Response:
-  - `200` JSON agent turn result
-  - `400` invalid request
-  - `502` `{ error: "agent_runtime_error", ... }`
-  - `401`, `403`
+- SDK operation: `extensions.importSkill`
+- Auth: Required
+- Device scope: operator.admin
+- Request body schema: `skillImportInputSchema`
+- Response schema: `ExtensionsMutateResponse`
 
-### Context reports (feature-gated)
+#### POST /config/extensions/skill/upload
 
-#### GET /context
+- SDK operation: `extensions.uploadSkill`
+- Auth: Required
+- Device scope: operator.admin
+- Request body schema: `uploadInputSchema`
+- Response schema: `ExtensionsMutateResponse`
 
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.read`
-- Availability: Only when deployment config `agent.enabled=true` (default: enabled)
-- Request: Optional query param `agent_key` (default: `default`)
-- Response:
-  - `200` JSON `{ status: "ok", report }`
-  - `400` invalid agent key
-  - `401`, `403`
+#### POST /config/hooks/revert
 
-#### GET /context/list
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `unknown`
 
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.read`
-- Availability: Only when deployment config `agent.enabled=true` (default: enabled)
-- Request: Optional query params: `session_id`, `run_id`, `limit`
-- Response:
-  - `200` JSON `{ status: "ok", reports: [...] }`
-  - `401`, `403`
+#### POST /config/models/presets
 
-#### GET /context/detail/:id
+- SDK operation: `modelConfig.createPreset`
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `ConfiguredModelPresetMutateResponse`
 
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.read`
-- Availability: Only when deployment config `agent.enabled=true` (default: enabled)
-- Request: Path param `:id`
-- Response:
-  - `200` JSON `{ status: "ok", report }`
-  - `404` not found
-  - `401`, `403`
+#### POST /config/policy/agents/\{key\}/revert
 
-### Ingress (Telegram)
+- SDK operation: `policyConfig.revertAgent`
+- Auth: Required
+- Device scope: operator.admin
+- Path params: `key`
+- Response schema: `DeploymentPolicyConfigRevertResponse`
+
+#### POST /config/policy/deployment/revert
+
+- SDK operation: `policyConfig.revertDeployment`
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `DeploymentPolicyConfigRevertResponse`
+
+#### POST /config/providers/accounts
+
+- SDK operation: `providerConfig.createAccount`
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `ProviderAccountMutateResponse`
+
+#### POST /config/runtime-packages/\{kind\}/\{key\}/revert
+
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `unknown`
+
+#### POST /desktop-environments
+
+- SDK operation: `desktopEnvironments.create`
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `DesktopEnvironmentMutateResponse`
+
+#### POST /desktop-environments/\{environmentId\}/reset
+
+- SDK operation: `desktopEnvironments.reset`
+- Auth: Required
+- Device scope: operator.admin
+- Path params: `environmentId`
+- Response schema: `DesktopEnvironmentMutateResponse`
+
+#### POST /desktop-environments/\{environmentId\}/start
+
+- SDK operation: `desktopEnvironments.start`
+- Auth: Required
+- Device scope: operator.admin
+- Path params: `environmentId`
+- Response schema: `DesktopEnvironmentMutateResponse`
+
+#### POST /desktop-environments/\{environmentId\}/stop
+
+- SDK operation: `desktopEnvironments.stop`
+- Auth: Required
+- Device scope: operator.admin
+- Path params: `environmentId`
+- Response schema: `DesktopEnvironmentMutateResponse`
+
+#### POST /ingress/googlechat
+
+- Auth: Required
+- Device scope: operator.write
+- Response schema: `unknown`
 
 #### POST /ingress/telegram
 
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.write`
-- Request:
-  - Raw body text (Telegram update JSON)
-  - When Telegram integration is enabled, requires header `x-telegram-bot-api-secret-token`
-  - Optional query param `agent_key` to force routing
-- Response:
-  - `200` JSON normalized update (when agent runtime disabled)
-  - `200` JSON `{ ok: true, ... }` when processed/queued
-  - `401` invalid telegram webhook secret (when enabled)
-  - `503` misconfigured (missing `TELEGRAM_WEBHOOK_SECRET`) or temporary queue failure
-  - `400` invalid request / normalization failure
-  - `401`, `403`
+- Auth: Required
+- Device scope: operator.write
+- Response schema: `unknown`
 
-### Audit
+#### POST /location/places
 
-#### GET /audit/plans
+- SDK operation: `location.createPlace`
+- Auth: Required
+- Device scope: operator.write
+- Response schema: `LocationPlaceMutateResponse`
 
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.admin`
-- Request: Optional query param `limit` (default/max `100`)
-- Response:
-  - `200` JSON `{ status: "ok", plans: AuditPlanSummary[] }`
-  - `401`, `403`
+#### POST /models/refresh
 
-#### GET /audit/export/:planKey
+- SDK operation: `models.refresh`
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `ModelsHttpStatusResponse`
 
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.admin`
-- Request: Path param `:planKey` (plan key from `GET /audit/plans`)
-- Response:
-  - `200` JSON receipt bundle
-  - `404` no events found
-  - `401`, `403`
+#### POST /nodes/\{nodeId\}/capabilities/\{capabilityId\}/actions/\{actionName\}/dispatch
 
-#### POST /audit/verify
+- SDK operation: `nodes.dispatch`
+- Auth: Required
+- Device scope: n/a
+- Path params: `nodeId`, `capabilityId`, `actionName`
+- Response schema: `NodeActionDispatchResponseSchema`
 
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.admin`
-- Request: JSON `{ events: ChainableEvent[] }`
-- Response:
-  - `200` JSON verification result
-  - `400` invalid request
-  - `401`, `403`
+#### POST /pairings/\{id\}/approve
 
-#### POST /audit/forget
+- SDK operation: `pairings.approve`
+- Auth: Required
+- Device scope: operator.pairing
+- Request body schema: `PairingApproveRequest`
+- Path params: `id`
+- Response schema: `PairingMutateResponse`
 
-- Auth: Required (unless gateway auth is disabled)
-- Device scope: `operator.admin`
-- Request: JSON `AuditForgetRequest`
-- Response:
-  - `200` JSON `{ decision, deleted_count, proof_event_id }`
-  - `400`, `401`, `403`
+#### POST /pairings/\{id\}/deny
+
+- SDK operation: `pairings.deny`
+- Auth: Required
+- Device scope: operator.pairing
+- Request body schema: `PairingDenyOrRevokeRequest`
+- Path params: `id`
+- Response schema: `PairingMutateResponse`
+
+#### POST /pairings/\{id\}/revoke
+
+- SDK operation: `pairings.revoke`
+- Auth: Required
+- Device scope: operator.pairing
+- Path params: `id`
+- Response schema: `PairingMutateResponse`
+
+#### POST /plan
+
+- Auth: Required
+- Device scope: operator.write
+- Response schema: `unknown`
+
+#### POST /playbooks/\{id\}/execute
+
+- Auth: Required
+- Device scope: operator.write
+- Response schema: `unknown`
+
+#### POST /playbooks/\{id\}/run
+
+- Auth: Required
+- Device scope: operator.write
+- Response schema: `unknown`
+
+#### POST /playbooks/runtime
+
+- Auth: Required
+- Device scope: operator.write
+- Response schema: `unknown`
+
+#### POST /policy/check
+
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `unknown`
+
+#### POST /policy/overrides
+
+- SDK operation: `policy.createOverride`
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `PolicyOverrideCreateResponse`
+
+#### POST /policy/overrides/revoke
+
+- SDK operation: `policy.revokeOverride`
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `PolicyOverrideRevokeResponse`
+
+#### POST /providers/\{provider\}/oauth/authorize
+
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `unknown`
+
+#### POST /routing/channels/configs
+
+- SDK operation: `routingConfig.createChannelConfig`
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `ChannelConfigCreateResponse`
+
+#### POST /routing/config/revert
+
+- SDK operation: `routingConfig.revert`
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `RoutingConfigRevertResponse`
+
+#### POST /secrets
+
+- SDK operation: `secrets.store`
+- Auth: Required
+- Device scope: operator.admin
+- Request body schema: `SecretStoreRequest`
+- Query schema: `SecretListQuery`
+- Response schema: `SecretStoreResponse`
+
+#### POST /secrets/\{id\}/rotate
+
+- SDK operation: `secrets.rotate`
+- Auth: Required
+- Device scope: operator.admin
+- Request body schema: `SecretRotateRequest`
+- Path params: `id` -> `SecretPathId`
+- Query schema: `SecretListQuery`
+- Response schema: `SecretRotateResponse`
+
+#### POST /snapshot/import
+
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `unknown`
+
+#### POST /system/deployment-config/revert
+
+- Auth: Required
+- Device scope: n/a
+- Response schema: `unknown`
+
+#### POST /system/tenants
+
+- Auth: Required
+- Device scope: n/a
+- Response schema: `unknown`
+
+#### POST /system/tokens/issue
+
+- Auth: Required
+- Device scope: n/a
+- Response schema: `unknown`
+
+#### POST /system/tokens/revoke
+
+- Auth: Required
+- Device scope: n/a
+- Response schema: `unknown`
+
+#### POST /watchers
+
+- Auth: Required
+- Device scope: operator.write
+- Response schema: `unknown`
+
+#### POST /watchers/\{id\}/trigger/webhook
+
+- Auth: Required
+- Device scope: operator.write
+- Response schema: `unknown`
+
+#### POST /workflow/cancel
+
+- Auth: Required
+- Device scope: operator.write
+- Response schema: `unknown`
+
+#### POST /workflow/resume
+
+- Auth: Required
+- Device scope: operator.write
+- Response schema: `unknown`
+
+#### POST /workflow/run
+
+- Auth: Required
+- Device scope: operator.write
+- Response schema: `unknown`
+
+#### PUT /agents/\{key\}
+
+- SDK operation: `agents.update`
+- Auth: Required
+- Device scope: operator.admin
+- Request body schema: `ManagedAgentUpdateRequest`
+- Path params: `key`
+- Response schema: `ManagedAgentGetResponse`
+
+#### PUT /config/agents/\{key\}
+
+- SDK operation: `agentConfig.update`
+- Auth: Required
+- Device scope: operator.admin
+- Request body schema: `AgentConfigUpdateRequest`
+- Path params: `key`
+- Response schema: `AgentConfigUpdateResponse`
+
+#### PUT /config/agents/\{key\}/identity
+
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `unknown`
+
+#### PUT /config/desktop-environments/defaults
+
+- SDK operation: `desktopEnvironments.updateDefaults`
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `DesktopEnvironmentDefaultsResponse`
+
+#### PUT /config/extensions/\{kind\}/\{key\}/defaults
+
+- SDK operation: `extensions.updateDefaults`
+- Auth: Required
+- Device scope: operator.admin
+- Request body schema: `defaultsUpdateInputSchema`
+- Path params: `kind` -> `extensionKindSchema`, `key` -> `extensionKeySchema`
+- Response schema: `ExtensionsMutateResponse`
+
+#### PUT /config/hooks
+
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `unknown`
+
+#### PUT /config/models/assignments
+
+- SDK operation: `modelConfig.updateAssignments`
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `ExecutionProfileModelAssignmentUpdateResponse`
+
+#### PUT /config/policy/agents/\{key\}
+
+- SDK operation: `policyConfig.updateAgent`
+- Auth: Required
+- Device scope: operator.admin
+- Path params: `key`
+- Response schema: `DeploymentPolicyConfigUpdateResponse`
+
+#### PUT /config/policy/deployment
+
+- SDK operation: `policyConfig.updateDeployment`
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `DeploymentPolicyConfigUpdateResponse`
+
+#### PUT /config/runtime-packages/\{kind\}/\{key\}
+
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `unknown`
+
+#### PUT /models/overrides/providers/\{id\}
+
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `unknown`
+
+#### PUT /models/overrides/providers/\{id\}/models/\{model\}
+
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `unknown`
+
+#### PUT /routing/config
+
+- SDK operation: `routingConfig.update`
+- Auth: Required
+- Device scope: operator.admin
+- Response schema: `RoutingConfigUpdateResponse`
+
+#### PUT /system/deployment-config
+
+- Auth: Required
+- Device scope: n/a
+- Response schema: `unknown`
 
 ## WebSocket API
 
-### URL and authentication
-
-- Upgrade endpoint: `GET /ws` (HTTP upgrade)
-- WebSocket URL: `ws(s)://<gateway-host>:<port>/ws`
-
-When gateway auth is enabled, the `/ws` upgrade requires a valid token, provided via one of:
-
-- `Authorization: Bearer <token>` header
-- Cookie `tyrum_admin_token=<token>` (same-origin upgrades only)
-- `Sec-WebSocket-Protocol` token transport:
-  - Every client MUST offer `tyrum-v1`
-  - Clients using subprotocol token transport additionally offer `tyrum-auth.<base64url(token)>`
-
-### Handshake (connect.init / connect.proof)
-
-After upgrade, the client must complete the v2 handshake:
-
-1. Send `connect.init` (includes role, device identity proof material, and capability descriptors)
-2. Receive `connect.init` response (includes a `connection_id` and a server challenge)
-3. Send `connect.proof` (signature over a stable transcript including `connection_id` + challenge)
-4. Receive `connect.proof` response (includes `client_id`, `device_id`, and `role`)
-
-### Message envelopes
-
-All non-handshake messages are JSON envelopes:
-
-- Requests: `{ request_id: string, type: string, payload: unknown }`
-- Responses: `{ request_id: string, type: string, ok: boolean, result?: unknown, error?: { code, message, details? } }`
-- Events: `{ event_id: string, type: string, occurred_at: string, payload: unknown, scope?: ... }`
-
-Client-sent events are rejected.
-
-### Message types
-
-#### `connect.init`
-
-- Direction: client → gateway (request), gateway → client (response)
-- Schema: `WsConnectInitRequest` (`@tyrum/contracts`)
-- Result: `{ connection_id: string, challenge: string }`
-- Notes: `protocol_rev` must match the gateway protocol rev; device proof is validated.
-
-#### `connect.proof`
-
-- Direction: client → gateway (request), gateway → client (response)
-- Schema: `WsConnectProofRequest` (`@tyrum/contracts`)
-- Result: `{ client_id: string, device_id: string, role: WsPeerRole }`
-
-#### `connect`
-
-- Direction: client → gateway (legacy request)
-- Notes: Deprecated; the gateway closes with `"legacy connect is deprecated; use connect.init/connect.proof"`.
-
-#### `ping`
-
-- Direction:
-  - client → gateway (request)
-  - gateway → client (response)
-- Scope (device tokens): allowed (no scopes required)
-- Schema: `WsPingRequest`
-- Result: none (`ok: true`)
-- Notes: This is a protocol-level health-check request initiated by clients. Gateway connection liveness and eviction use WebSocket ping/pong control frames, not protocol `ping`, and the gateway does not send protocol `ping` heartbeats.
-
 #### `approval.list`
 
-- Direction: client → gateway (request)
-- Scope (device tokens): `operator.approvals`
-- Schema: `WsApprovalListRequest` (payload parsed as `ApprovalListRequest`)
-- Result: `ApprovalListResponse`
-- Notes: Approval entries may include `agent_id`; terminal statuses are returned newest-first when a specific terminal `status` filter is requested.
+- Direction: `client_to_server`
+- Request schema: `WsApprovalListRequest`
+- Device scope: operator.read
+- Response schemas: `WsApprovalListResponseErrEnvelope`, `WsApprovalListResponseOkEnvelope`
 
 #### `approval.resolve`
 
-- Direction: client → gateway (request)
-- Scope (device tokens): `operator.approvals`
-- Schema: `WsApprovalResolveRequest` (payload parsed as `ApprovalResolveRequest`)
-- Result: `ApprovalResolveResponse`
-- Notes: Idempotent — resolving an already-resolved approval returns current state without re-triggering engine side effects; resume/cancel is performed asynchronously via a durable action processor.
-
-#### `approval.request`
-
-- Direction:
-  - gateway → client (request)
-  - client → gateway (response)
-- Notes: Used for interactive approval flows; client responses are validated with `WsApprovalDecision`.
-
-#### `pairing.approve`
-
-- Direction: client → gateway (request)
-- Scope (device tokens): `operator.pairing`
-- Schema: `WsPairingApproveRequest`
-- Result: `WsPairingResolveResult`
-
-#### `pairing.deny`
-
-- Direction: client → gateway (request)
-- Scope (device tokens): `operator.pairing`
-- Schema: `WsPairingDenyRequest`
-- Result: `WsPairingResolveResult`
-
-#### `pairing.revoke`
-
-- Direction: client → gateway (request)
-- Scope (device tokens): `operator.pairing`
-- Schema: `WsPairingRevokeRequest`
-- Result: `WsPairingResolveResult`
-
-#### `capability.ready`
-
-- Direction: node → gateway (request)
-- Scope (device tokens): request is scope-authorized only for connected nodes (device scopes not required)
-- Schema: `WsCapabilityReadyRequest`
-- Result: none (`ok: true`)
+- Direction: `client_to_server`
+- Request schema: `WsApprovalResolveRequest`
+- Device scope: operator.approvals
+- Response schemas: `WsApprovalResolveResponseErrEnvelope`, `WsApprovalResolveResponseOkEnvelope`
 
 #### `attempt.evidence`
 
-- Direction: node → gateway (request)
-- Schema: `WsAttemptEvidenceRequest`
-- Result: none (`ok: true`)
-- Notes: Evidence is broadcast as an event on success.
+- Direction: `client_to_server`
+- Request schema: `WsAttemptEvidenceRequest`
+- Device scope: n/a
+- Response schemas: `WsAttemptEvidenceResponseErrEnvelope`, `WsAttemptEvidenceResponseOkEnvelope`
 
-#### `task.execute`
+#### `capability.ready`
 
-- Direction:
-  - gateway → node (request)
-  - node → gateway (response)
-- Notes: Nodes respond with `WsTaskExecuteResult` (success) or an error with evidence details.
+- Direction: `client_to_server`
+- Request schema: `WsCapabilityReadyRequest`
+- Device scope: n/a
+- Response schemas: `WsCapabilityReadyResponseErrEnvelope`, `WsCapabilityReadyResponseOkEnvelope`
 
-#### `session.send`
+#### `chat.session.archive`
 
-- Direction: client → gateway (request)
-- Scope (device tokens): `operator.write`
-- Schema: `WsSessionSendRequest`
-- Result: `WsSessionSendResult`
+- Direction: `client_to_server`
+- Request schema: `WsChatSessionArchiveRequest`
+- Device scope: n/a
+- Response schemas: `WsChatSessionArchiveResponseErrEnvelope`, `WsChatSessionArchiveResponseOkEnvelope`
 
-#### `session.list`
+#### `chat.session.create`
 
-- Direction: client → gateway (request)
-- Scope (device tokens): `operator.read`
-- Schema: `WsSessionListRequest`
-- Result: `WsSessionListResult`
-- Notes: Defaults `agent_id=default`, `channel=ui`, `limit=50`. Cursor is opaque.
+- Direction: `client_to_server`
+- Request schema: `WsChatSessionCreateRequest`
+- Device scope: operator.write
+- Response schemas: `WsChatSessionCreateResponseErrEnvelope`, `WsChatSessionCreateResponseOkEnvelope`
 
-#### `session.get`
+#### `chat.session.delete`
 
-- Direction: client → gateway (request)
-- Scope (device tokens): `operator.read`
-- Schema: `WsSessionGetRequest`
-- Result: `WsSessionGetResult`
+- Direction: `client_to_server`
+- Request schema: `WsChatSessionDeleteRequest`
+- Device scope: operator.write
+- Response schemas: `WsChatSessionDeleteResponseErrEnvelope`, `WsChatSessionDeleteResponseOkEnvelope`
 
-#### `session.create`
+#### `chat.session.get`
 
-- Direction: client → gateway (request)
-- Scope (device tokens): `operator.write`
-- Schema: `WsSessionCreateRequest`
-- Result: `WsSessionCreateResult`
-- Notes: Defaults `agent_id=default`, `channel=ui`. Server generates `thread_id`.
+- Direction: `client_to_server`
+- Request schema: `WsChatSessionGetRequest`
+- Device scope: operator.read
+- Response schemas: `WsChatSessionGetResponseErrEnvelope`, `WsChatSessionGetResponseOkEnvelope`
 
-#### `session.compact`
+#### `chat.session.list`
 
-- Direction: client → gateway (request)
-- Scope (device tokens): `operator.write`
-- Schema: `WsSessionCompactRequest`
-- Result: `WsSessionCompactResult`
-- Notes: Defaults `keep_last_messages=8`.
+- Direction: `client_to_server`
+- Request schema: `WsChatSessionListRequest`
+- Device scope: operator.read
+- Response schemas: `WsChatSessionListResponseErrEnvelope`, `WsChatSessionListResponseOkEnvelope`
 
-#### `session.delete`
+#### `chat.session.reconnect`
 
-- Direction: client → gateway (request)
-- Scope (device tokens): `operator.write`
-- Schema: `WsSessionDeleteRequest`
-- Result: `WsSessionDeleteResult`
-- Notes: Best-effort cleanup mirrors `/reset` for the deleted session.
+- Direction: `client_to_server`
+- Request schema: `WsChatSessionReconnectRequest`
+- Device scope: operator.read
+- Response schemas: `WsChatSessionReconnectResponseErrEnvelope`, `WsChatSessionReconnectResponseOkEnvelope`
+
+#### `chat.session.send`
+
+- Direction: `client_to_server`
+- Request schema: `WsChatSessionSendRequest`
+- Device scope: operator.write
+- Response schemas: `WsChatSessionSendResponseErrEnvelope`, `WsChatSessionSendResponseOkEnvelope`
 
 #### `command.execute`
 
-- Direction: client → gateway (request)
-- Scope (device tokens): `operator.admin`
-- Schema: `WsCommandExecuteRequest`
-- Result: `WsCommandExecuteResult`
+- Direction: `client_to_server`
+- Request schema: `WsCommandExecuteRequest`
+- Device scope: operator.admin
+- Response schemas: none
 
-#### `subagent.spawn`
+#### `connect.init`
 
-- Direction: client → gateway (request)
-- Scope (device tokens): `operator.write`
-- Schema: `WsSubagentSpawnRequest`
-- Result: `WsSubagentSpawnResult`
+- Direction: `client_to_server`
+- Request schema: `WsConnectInitRequest`
+- Device scope: n/a
+- Response schemas: `WsConnectInitResponseErrEnvelope`, `WsConnectInitResponseOkEnvelope`
 
-#### `subagent.list`
+#### `connect.proof`
 
-- Direction: client → gateway (request)
-- Scope (device tokens): `operator.read`
-- Schema: `WsSubagentListRequest`
-- Result: `WsSubagentListResult`
+- Direction: `client_to_server`
+- Request schema: `WsConnectProofRequest`
+- Device scope: n/a
+- Response schemas: `WsConnectProofResponseErrEnvelope`, `WsConnectProofResponseOkEnvelope`
 
-#### `subagent.get`
+#### `location.beacon`
 
-- Direction: client → gateway (request)
-- Scope (device tokens): `operator.read`
-- Schema: `WsSubagentGetRequest`
-- Result: `WsSubagentGetResult`
+- Direction: `client_to_server`
+- Request schema: `WsLocationBeaconRequest`
+- Device scope: none
+- Response schemas: `WsLocationBeaconResponseErrEnvelope`, `WsLocationBeaconResponseOkEnvelope`
 
-#### `subagent.send`
+#### `pairing.approve`
 
-- Direction: client → gateway (request)
-- Scope (device tokens): `operator.write`
-- Schema: `WsSubagentSendRequest`
-- Result: `WsSubagentSendResult`
+- Direction: `client_to_server`
+- Request schema: `WsPairingApproveRequest`
+- Device scope: operator.pairing
+- Response schemas: `WsPairingApproveResponseErrEnvelope`, `WsPairingApproveResponseOkEnvelope`
 
-#### `subagent.close`
+#### `pairing.deny`
 
-- Direction: client → gateway (request)
-- Scope (device tokens): `operator.write`
-- Schema: `WsSubagentCloseRequest`
-- Result: `WsSubagentCloseResult`
+- Direction: `client_to_server`
+- Request schema: `WsPairingDenyRequest`
+- Device scope: operator.pairing
+- Response schemas: `WsPairingDenyResponseErrEnvelope`, `WsPairingDenyResponseOkEnvelope`
 
-#### `workflow.run`
+#### `pairing.revoke`
 
-- Direction: client → gateway (request)
-- Scope (device tokens): `operator.write`
-- Schema: `WsWorkflowRunRequest`
-- Result: `WsWorkflowRunResult`
+- Direction: `client_to_server`
+- Request schema: `WsPairingRevokeRequest`
+- Device scope: operator.pairing
+- Response schemas: `WsPairingRevokeResponseErrEnvelope`, `WsPairingRevokeResponseOkEnvelope`
 
-#### `workflow.resume`
+#### `ping`
 
-- Direction: client → gateway (request)
-- Scope (device tokens): `operator.write`
-- Schema: `WsWorkflowResumeRequest`
-- Result: `WsWorkflowResumeResult`
-
-#### `workflow.cancel`
-
-- Direction: client → gateway (request)
-- Scope (device tokens): `operator.write`
-- Schema: `WsWorkflowCancelRequest`
-- Result: `WsWorkflowCancelResult`
+- Direction: `client_to_server`
+- Request schema: `WsPingRequest`
+- Device scope: none
+- Response schemas: `WsPingResponseErrEnvelope`, `WsPingResponseOkEnvelope`
 
 #### `presence.beacon`
 
-- Direction: client|node → gateway (request)
-- Scope (device tokens): allowed (no scopes required)
-- Schema: `WsPresenceBeaconRequest`
-- Result: `WsPresenceBeaconResult`
+- Direction: `client_to_server`
+- Request schema: `WsPresenceBeaconRequest`
+- Device scope: none
+- Response schemas: `WsPresenceBeaconResponseErrEnvelope`, `WsPresenceBeaconResponseOkEnvelope`
 
-#### `work.create`
+#### `run.list`
 
-- Direction: client → gateway (request)
-- Scope (device tokens): `operator.write`
-- Schema: `WsWorkCreateRequest`
-- Result: `WsWorkCreateResult`
+- Direction: `client_to_server`
+- Request schema: `WsRunListRequest`
+- Device scope: operator.read
+- Response schemas: `WsRunListResponseErrEnvelope`, `WsRunListResponseOkEnvelope`
 
-#### `work.list`
+#### `subagent.close`
 
-- Direction: client → gateway (request)
-- Scope (device tokens): `operator.read`
-- Schema: `WsWorkListRequest`
-- Result: `WsWorkListResult`
+- Direction: `client_to_server`
+- Request schema: `WsSubagentCloseRequest`
+- Device scope: operator.write
+- Response schemas: `WsSubagentCloseResponseErrEnvelope`, `WsSubagentCloseResponseOkEnvelope`
 
-#### `work.get`
+#### `subagent.get`
 
-- Direction: client → gateway (request)
-- Scope (device tokens): `operator.read`
-- Schema: `WsWorkGetRequest`
-- Result: `WsWorkGetResult`
+- Direction: `client_to_server`
+- Request schema: `WsSubagentGetRequest`
+- Device scope: operator.read
+- Response schemas: `WsSubagentGetResponseErrEnvelope`, `WsSubagentGetResponseOkEnvelope`
 
-#### `work.update`
+#### `subagent.list`
 
-- Direction: client → gateway (request)
-- Scope (device tokens): `operator.write`
-- Schema: `WsWorkUpdateRequest`
-- Result: `WsWorkUpdateResult`
+- Direction: `client_to_server`
+- Request schema: `WsSubagentListRequest`
+- Device scope: operator.read
+- Response schemas: `WsSubagentListResponseErrEnvelope`, `WsSubagentListResponseOkEnvelope`
 
-#### `work.transition`
+#### `subagent.send`
 
-- Direction: client → gateway (request)
-- Scope (device tokens): `operator.write`
-- Schema: `WsWorkTransitionRequest`
-- Result: `WsWorkTransitionResult`
+- Direction: `client_to_server`
+- Request schema: `WsSubagentSendRequest`
+- Device scope: operator.write
+- Response schemas: `WsSubagentSendResponseErrEnvelope`, `WsSubagentSendResponseOkEnvelope`
 
-#### `work.link.create`
+#### `subagent.spawn`
 
-- Direction: client → gateway (request)
-- Scope (device tokens): `operator.write`
-- Schema: `WsWorkLinkCreateRequest`
-- Result: `WsWorkLinkCreateResult`
+- Direction: `client_to_server`
+- Request schema: `WsSubagentSpawnRequest`
+- Device scope: operator.write
+- Response schemas: `WsSubagentSpawnResponseErrEnvelope`, `WsSubagentSpawnResponseOkEnvelope`
 
-#### `work.link.list`
+#### `task.execute`
 
-- Direction: client → gateway (request)
-- Scope (device tokens): `operator.read`
-- Schema: `WsWorkLinkListRequest`
-- Result: `WsWorkLinkListResult`
+- Direction: `server_to_client`
+- Request schema: `WsTaskExecuteRequest`
+- Device scope: n/a
+- Response schemas: `WsTaskExecuteResponseErrEnvelope`, `WsTaskExecuteResponseOkEnvelope`
 
-#### `work.artifact.list`
+#### `transcript.get`
 
-- Direction: client → gateway (request)
-- Scope (device tokens): `operator.read`
-- Schema: `WsWorkArtifactListRequest`
-- Result: `WsWorkArtifactListResult`
+- Direction: `client_to_server`
+- Request schema: `WsTranscriptGetRequest`
+- Device scope: operator.read
+- Response schemas: `WsTranscriptGetResponseErrEnvelope`, `WsTranscriptGetResponseOkEnvelope`
 
-#### `work.artifact.get`
+#### `transcript.list`
 
-- Direction: client → gateway (request)
-- Scope (device tokens): `operator.read`
-- Schema: `WsWorkArtifactGetRequest`
-- Result: `WsWorkArtifactGetResult`
+- Direction: `client_to_server`
+- Request schema: `WsTranscriptListRequest`
+- Device scope: operator.read
+- Response schemas: `WsTranscriptListResponseErrEnvelope`, `WsTranscriptListResponseOkEnvelope`
 
 #### `work.artifact.create`
 
-- Direction: client → gateway (request)
-- Scope (device tokens): `operator.write`
-- Schema: `WsWorkArtifactCreateRequest`
-- Result: `WsWorkArtifactCreateResult`
+- Direction: `client_to_server`
+- Request schema: `WsWorkArtifactCreateRequest`
+- Device scope: operator.write
+- Response schemas: `WsWorkArtifactCreateResponseErrEnvelope`, `WsWorkArtifactCreateResponseOkEnvelope`
 
-#### `work.decision.list`
+#### `work.artifact.get`
 
-- Direction: client → gateway (request)
-- Scope (device tokens): `operator.read`
-- Schema: `WsWorkDecisionListRequest`
-- Result: `WsWorkDecisionListResult`
+- Direction: `client_to_server`
+- Request schema: `WsWorkArtifactGetRequest`
+- Device scope: operator.read
+- Response schemas: `WsWorkArtifactGetResponseErrEnvelope`, `WsWorkArtifactGetResponseOkEnvelope`
 
-#### `work.decision.get`
+#### `work.artifact.list`
 
-- Direction: client → gateway (request)
-- Scope (device tokens): `operator.read`
-- Schema: `WsWorkDecisionGetRequest`
-- Result: `WsWorkDecisionGetResult`
+- Direction: `client_to_server`
+- Request schema: `WsWorkArtifactListRequest`
+- Device scope: operator.read
+- Response schemas: `WsWorkArtifactListResponseErrEnvelope`, `WsWorkArtifactListResponseOkEnvelope`
+
+#### `work.create`
+
+- Direction: `client_to_server`
+- Request schema: `WsWorkCreateRequest`
+- Device scope: operator.write
+- Response schemas: `WsWorkCreateResponseErrEnvelope`, `WsWorkCreateResponseOkEnvelope`
 
 #### `work.decision.create`
 
-- Direction: client → gateway (request)
-- Scope (device tokens): `operator.write`
-- Schema: `WsWorkDecisionCreateRequest`
-- Result: `WsWorkDecisionCreateResult`
+- Direction: `client_to_server`
+- Request schema: `WsWorkDecisionCreateRequest`
+- Device scope: operator.write
+- Response schemas: `WsWorkDecisionCreateResponseErrEnvelope`, `WsWorkDecisionCreateResponseOkEnvelope`
 
-#### `work.signal.list`
+#### `work.decision.get`
 
-- Direction: client → gateway (request)
-- Scope (device tokens): `operator.read`
-- Schema: `WsWorkSignalListRequest`
-- Result: `WsWorkSignalListResult`
+- Direction: `client_to_server`
+- Request schema: `WsWorkDecisionGetRequest`
+- Device scope: operator.read
+- Response schemas: `WsWorkDecisionGetResponseErrEnvelope`, `WsWorkDecisionGetResponseOkEnvelope`
 
-#### `work.signal.get`
+#### `work.decision.list`
 
-- Direction: client → gateway (request)
-- Scope (device tokens): `operator.read`
-- Schema: `WsWorkSignalGetRequest`
-- Result: `WsWorkSignalGetResult`
+- Direction: `client_to_server`
+- Request schema: `WsWorkDecisionListRequest`
+- Device scope: operator.read
+- Response schemas: `WsWorkDecisionListResponseErrEnvelope`, `WsWorkDecisionListResponseOkEnvelope`
+
+#### `work.delete`
+
+- Direction: `client_to_server`
+- Request schema: `WsWorkDeleteRequest`
+- Device scope: operator.write
+- Response schemas: `WsWorkDeleteResponseErrEnvelope`, `WsWorkDeleteResponseOkEnvelope`
+
+#### `work.get`
+
+- Direction: `client_to_server`
+- Request schema: `WsWorkGetRequest`
+- Device scope: operator.read
+- Response schemas: `WsWorkGetResponseErrEnvelope`, `WsWorkGetResponseOkEnvelope`
+
+#### `work.link.create`
+
+- Direction: `client_to_server`
+- Request schema: `WsWorkLinkCreateRequest`
+- Device scope: operator.write
+- Response schemas: `WsWorkLinkCreateResponseErrEnvelope`, `WsWorkLinkCreateResponseOkEnvelope`
+
+#### `work.link.list`
+
+- Direction: `client_to_server`
+- Request schema: `WsWorkLinkListRequest`
+- Device scope: operator.read
+- Response schemas: `WsWorkLinkListResponseErrEnvelope`, `WsWorkLinkListResponseOkEnvelope`
+
+#### `work.list`
+
+- Direction: `client_to_server`
+- Request schema: `WsWorkListRequest`
+- Device scope: operator.read
+- Response schemas: `WsWorkListResponseErrEnvelope`, `WsWorkListResponseOkEnvelope`
+
+#### `work.pause`
+
+- Direction: `client_to_server`
+- Request schema: `WsWorkPauseRequest`
+- Device scope: operator.write
+- Response schemas: `WsWorkPauseResponseErrEnvelope`, `WsWorkPauseResponseOkEnvelope`
+
+#### `work.resume`
+
+- Direction: `client_to_server`
+- Request schema: `WsWorkResumeRequest`
+- Device scope: operator.write
+- Response schemas: `WsWorkResumeResponseErrEnvelope`, `WsWorkResumeResponseOkEnvelope`
 
 #### `work.signal.create`
 
-- Direction: client → gateway (request)
-- Scope (device tokens): `operator.write`
-- Schema: `WsWorkSignalCreateRequest`
-- Result: `WsWorkSignalCreateResult`
+- Direction: `client_to_server`
+- Request schema: `WsWorkSignalCreateRequest`
+- Device scope: operator.write
+- Response schemas: `WsWorkSignalCreateResponseErrEnvelope`, `WsWorkSignalCreateResponseOkEnvelope`
+
+#### `work.signal.get`
+
+- Direction: `client_to_server`
+- Request schema: `WsWorkSignalGetRequest`
+- Device scope: operator.read
+- Response schemas: `WsWorkSignalGetResponseErrEnvelope`, `WsWorkSignalGetResponseOkEnvelope`
+
+#### `work.signal.list`
+
+- Direction: `client_to_server`
+- Request schema: `WsWorkSignalListRequest`
+- Device scope: operator.read
+- Response schemas: `WsWorkSignalListResponseErrEnvelope`, `WsWorkSignalListResponseOkEnvelope`
 
 #### `work.signal.update`
 
-- Direction: client → gateway (request)
-- Scope (device tokens): `operator.write`
-- Schema: `WsWorkSignalUpdateRequest`
-- Result: `WsWorkSignalUpdateResult`
+- Direction: `client_to_server`
+- Request schema: `WsWorkSignalUpdateRequest`
+- Device scope: operator.write
+- Response schemas: `WsWorkSignalUpdateResponseErrEnvelope`, `WsWorkSignalUpdateResponseOkEnvelope`
 
 #### `work.state_kv.get`
 
-- Direction: client → gateway (request)
-- Scope (device tokens): `operator.read`
-- Schema: `WsWorkStateKvGetRequest`
-- Result: `WsWorkStateKvGetResult`
+- Direction: `client_to_server`
+- Request schema: `WsWorkStateKvGetRequest`
+- Device scope: operator.read
+- Response schemas: `WsWorkStateKvGetResponseErrEnvelope`, `WsWorkStateKvGetResponseOkEnvelope`
 
 #### `work.state_kv.list`
 
-- Direction: client → gateway (request)
-- Scope (device tokens): `operator.read`
-- Schema: `WsWorkStateKvListRequest`
-- Result: `WsWorkStateKvListResult`
+- Direction: `client_to_server`
+- Request schema: `WsWorkStateKvListRequest`
+- Device scope: operator.read
+- Response schemas: `WsWorkStateKvListResponseErrEnvelope`, `WsWorkStateKvListResponseOkEnvelope`
 
 #### `work.state_kv.set`
 
-- Direction: client → gateway (request)
-- Scope (device tokens): `operator.write`
-- Schema: `WsWorkStateKvSetRequest`
-- Result: `WsWorkStateKvSetResult`
+- Direction: `client_to_server`
+- Request schema: `WsWorkStateKvSetRequest`
+- Device scope: operator.write
+- Response schemas: `WsWorkStateKvSetResponseErrEnvelope`, `WsWorkStateKvSetResponseOkEnvelope`
+
+#### `work.transition`
+
+- Direction: `client_to_server`
+- Request schema: `WsWorkTransitionRequest`
+- Device scope: operator.write
+- Response schemas: `WsWorkTransitionResponseErrEnvelope`, `WsWorkTransitionResponseOkEnvelope`
+
+#### `work.update`
+
+- Direction: `client_to_server`
+- Request schema: `WsWorkUpdateRequest`
+- Device scope: operator.write
+- Response schemas: `WsWorkUpdateResponseErrEnvelope`, `WsWorkUpdateResponseOkEnvelope`
+
+#### `workflow.cancel`
+
+- Direction: `client_to_server`
+- Request schema: `WsWorkflowCancelRequest`
+- Device scope: operator.write
+- Response schemas: `WsWorkflowCancelResponseErrEnvelope`, `WsWorkflowCancelResponseOkEnvelope`
+
+#### `workflow.resume`
+
+- Direction: `client_to_server`
+- Request schema: `WsWorkflowResumeRequest`
+- Device scope: operator.write
+- Response schemas: `WsWorkflowResumeResponseErrEnvelope`, `WsWorkflowResumeResponseOkEnvelope`
+
+#### `workflow.run`
+
+- Direction: `client_to_server`
+- Request schema: `WsWorkflowRunRequest`
+- Device scope: operator.write
+- Response schemas: `WsWorkflowRunResponseErrEnvelope`, `WsWorkflowRunResponseOkEnvelope`

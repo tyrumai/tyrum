@@ -45,6 +45,7 @@ import { createProviderOAuthRoutes } from "./routes/provider-oauth.js";
 import { createRoutingConfigRoutes } from "./routes/routing-config.js";
 import { createSecretRoutes } from "./routes/secret.js";
 import { createSharedStateConfigRoutes } from "./routes/shared-state-config.js";
+import { createSpecRoutes } from "./routes/specs.js";
 import { createStatusRoutes } from "./routes/status.js";
 import { createSystemRoutes } from "./routes/system.js";
 import { createToolRegistryRoutes } from "./routes/tool-registry.js";
@@ -127,6 +128,7 @@ export function registerSystemAndPublicRoutes(context: AppRouteContext): void {
     }),
   );
   context.app.route("/", createContractRoutes());
+  context.app.route("/", createSpecRoutes());
   context.app.route(
     "/",
     createPresenceRoutes({

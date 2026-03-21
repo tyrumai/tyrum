@@ -11,39 +11,16 @@
 import type { Context, Next } from "hono";
 import type { AuthTokenClaims } from "@tyrum/contracts";
 import { hasAnyRequiredScope } from "../auth/scopes.js";
-import { matchesPathPrefixSegment } from "../../app-path.js";
 import type { AuthAudit } from "../auth/audit.js";
 import { getClientIp } from "../auth/client-ip.js";
 import { requestIdForAudit } from "../observability/request-id.js";
 import { resolveHonoRoutePath } from "../../hono-route.js";
+import { resolveGatewayHttpRequiredScopes } from "../../api/manifest.js";
 
 const FORBIDDEN_BODY = {
   error: "forbidden",
   message: "insufficient scope",
 };
-
-const METHOD_SCOPED_OPERATOR_ROUTE_PREFIXES = [
-  "/agent",
-  "/automation",
-  "/artifacts",
-  "/canvas",
-  "/connections",
-  "/context",
-  "/contracts",
-  "/ingress",
-  "/memory",
-  "/metrics",
-  "/models",
-  "/location",
-  "/plan",
-  "/playbooks",
-  "/presence",
-  "/runs",
-  "/status",
-  "/usage",
-  "/watchers",
-  "/workflow",
-] as const satisfies readonly string[];
 
 function getAuthClaims(c: Context): AuthTokenClaims | undefined {
   // Populated by createAuthMiddleware.
@@ -51,80 +28,11 @@ function getAuthClaims(c: Context): AuthTokenClaims | undefined {
   return value as AuthTokenClaims | undefined;
 }
 
-function isMethodScopedOperatorRoute(routePath: string): boolean {
-  if (routePath === "/") return true;
-  return METHOD_SCOPED_OPERATOR_ROUTE_PREFIXES.some((prefix) =>
-    matchesPathPrefixSegment(routePath, prefix),
-  );
-}
-
-function isReadOnlyMethod(method: string): boolean {
-  return method === "GET" || method === "HEAD" || method === "OPTIONS";
-}
-
-function isExtensionsInventoryRoute(routePath: string): boolean {
-  const segments = routePath.split("/").filter((segment) => segment.length > 0);
-  if (segments[0] !== "config" || segments[1] !== "extensions") {
-    return false;
-  }
-
-  return segments.length === 3 || segments.length === 4;
-}
-
 export function resolveHttpRouteRequiredScopes(input: {
   method: string;
   routePath: string;
 }): string[] | null {
-  const method = input.method.toUpperCase();
-  const routePath = input.routePath;
-
-  if (isReadOnlyMethod(method) && isExtensionsInventoryRoute(routePath)) {
-    return ["operator.read"];
-  }
-
-  // Tenant administration surfaces.
-  if (
-    matchesPathPrefixSegment(routePath, "/agents") ||
-    matchesPathPrefixSegment(routePath, "/auth") ||
-    matchesPathPrefixSegment(routePath, "/audit") ||
-    matchesPathPrefixSegment(routePath, "/config") ||
-    matchesPathPrefixSegment(routePath, "/desktop-environment-hosts") ||
-    matchesPathPrefixSegment(routePath, "/desktop-environments") ||
-    matchesPathPrefixSegment(routePath, "/policy") ||
-    matchesPathPrefixSegment(routePath, "/routing") ||
-    matchesPathPrefixSegment(routePath, "/plugins") ||
-    matchesPathPrefixSegment(routePath, "/providers") ||
-    matchesPathPrefixSegment(routePath, "/secrets") ||
-    matchesPathPrefixSegment(routePath, "/snapshot") ||
-    matchesPathPrefixSegment(routePath, "/models/overrides") ||
-    routePath === "/models/refresh"
-  ) {
-    return ["operator.admin"];
-  }
-
-  // Dedicated approval surface.
-  if (matchesPathPrefixSegment(routePath, "/approvals")) {
-    return isReadOnlyMethod(method) ? ["operator.read"] : ["operator.approvals"];
-  }
-
-  // Pairing / device enrollment surface.
-  if (matchesPathPrefixSegment(routePath, "/pairings")) {
-    return isReadOnlyMethod(method) ? ["operator.read"] : ["operator.pairing"];
-  }
-
-  if (!isMethodScopedOperatorRoute(routePath)) {
-    return null;
-  }
-
-  // Default operator surface scopes by method.
-  if (isReadOnlyMethod(method)) {
-    return ["operator.read"];
-  }
-  if (method === "POST" || method === "PUT" || method === "PATCH" || method === "DELETE") {
-    return ["operator.write"];
-  }
-
-  return null;
+  return resolveGatewayHttpRequiredScopes(input);
 }
 
 export function createHttpScopeAuthorizationMiddleware(opts?: {
