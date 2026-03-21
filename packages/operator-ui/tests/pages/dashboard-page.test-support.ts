@@ -79,6 +79,33 @@ export function createMockCore(overrides?: Partial<Record<string, unknown>>) {
     stepIdsByRunId: {},
     attemptIdsByStepId: {},
   });
+  const { store: chatStore } = createStore({
+    agentId: "",
+    agents: {
+      agents: [{ agent_id: "default" }],
+      loading: false,
+      error: null,
+    },
+    sessions: {
+      sessions: [],
+      nextCursor: null,
+      loading: false,
+      error: null,
+    },
+    archivedSessions: {
+      sessions: [],
+      nextCursor: null,
+      loading: false,
+      loaded: false,
+      error: null,
+    },
+    active: {
+      sessionId: null,
+      session: null,
+      loading: false,
+      error: null,
+    },
+  });
 
   const { store: workboardStore } = createStore({
     items: [] as unknown[],
@@ -105,6 +132,9 @@ export function createMockCore(overrides?: Partial<Record<string, unknown>>) {
 
   const activityStore = createMockActivityStore();
   const nodesList = vi.fn(async () => sampleDashboardNodeInventoryResponse());
+  const managedAgentsList = vi.fn(async () => ({
+    agents: [{ agent_key: "default", agent_id: "default" }],
+  }));
 
   const core = {
     connectionStore,
@@ -123,9 +153,13 @@ export function createMockCore(overrides?: Partial<Record<string, unknown>>) {
       clearDetail: vi.fn(),
     },
     runsStore,
+    chatStore,
     workboardStore,
     activityStore,
     http: {
+      agents: {
+        list: managedAgentsList,
+      },
       nodes: {
         list: nodesList,
       },
@@ -139,5 +173,5 @@ export function createMockCore(overrides?: Partial<Record<string, unknown>>) {
     core.admin = core.http;
   }
 
-  return { core, setConnectionState, setStatusState, nodesList };
+  return { core, setConnectionState, setStatusState, managedAgentsList, nodesList };
 }

@@ -52,6 +52,20 @@ function getAuthEnabledLabel(status: StatusResponse | null): string {
   return enabled ? "enabled" : "disabled";
 }
 
+function normalizeManagedAgentKeys(
+  agents: Array<{
+    agent_id?: string;
+  }>,
+): string[] {
+  const unique = new Set<string>();
+  for (const agent of agents) {
+    const agentKey = agent.agent_id?.trim() ?? "";
+    if (!agentKey) continue;
+    unique.add(agentKey);
+  }
+  return [...unique].toSorted((left, right) => left.localeCompare(right));
+}
+
 export interface DashboardPageProps {
   core: OperatorCore;
   onNavigate?: (id: string) => void;
@@ -75,6 +89,7 @@ export function DashboardPage({
   const runs = useOperatorStore(core.runsStore);
   const workboard = useOperatorStore(core.workboardStore);
   const activity = useOperatorStore(core.activityStore);
+  const chat = useOperatorStore(core.chatStore);
   const nodeInventory = useNodeInventory({
     core,
     connected:
@@ -91,24 +106,36 @@ export function DashboardPage({
   }, []);
 
   // -- Derived: agents
-  const agentIds = new Set<string>();
-  const activeAgentIds = new Set<string>();
+  const activeRunAgentKeys = new Set<string>();
   for (const run of Object.values(runs.runsById)) {
+    if (run.status !== "queued" && run.status !== "running" && run.status !== "paused") {
+      continue;
+    }
     const agentId = resolveAgentIdForRun(run, runs.agentKeyByRunId);
     if (!agentId) continue;
-    agentIds.add(agentId);
-    if (run.status === "queued" || run.status === "running" || run.status === "paused") {
-      activeAgentIds.add(agentId);
-    }
+    activeRunAgentKeys.add(agentId);
   }
   for (const agentId of getActiveAgentIdsFromSessionLanes(status.status?.session_lanes)) {
-    activeAgentIds.add(agentId);
+    activeRunAgentKeys.add(agentId);
   }
-  const totalAgentIds = new Set([...agentIds, ...activeAgentIds]);
+  const managedAgentKeys = normalizeManagedAgentKeys(chat.agents.agents);
+  const activeAgentsCount =
+    managedAgentKeys.length === 0
+      ? activeRunAgentKeys.size
+      : managedAgentKeys.filter((agentKey) => activeRunAgentKeys.has(agentKey)).length;
   const activeAgentsText =
-    totalAgentIds.size > 0
-      ? `${activeAgentIds.size}/${totalAgentIds.size}`
-      : `${activeAgentIds.size}/-`;
+    managedAgentKeys.length === 0
+      ? `${activeAgentsCount}/-`
+      : `${activeAgentsCount}/${managedAgentKeys.length}`;
+  const activeAgentsLoading =
+    chat.agents.loading &&
+    managedAgentKeys.length === 0 &&
+    (connection.status === "connected" ||
+      (connection.status === "connecting" && connection.recovering));
+  const activeAgentsAriaLabel =
+    managedAgentKeys.length === 0
+      ? `${activeAgentsCount} active agents, managed total unavailable, navigate to agents`
+      : `${activeAgentsCount} active agents out of ${managedAgentKeys.length} managed, navigate to agents`;
 
   // -- Derived: work counts
   let openWorkCount = 0;
@@ -269,9 +296,10 @@ export function DashboardPage({
           icon={Bot}
           value={activeAgentsText}
           label="Active Agents"
+          loading={activeAgentsLoading}
           onClick={onNavigate ? () => onNavigate("agents") : undefined}
           testId="dashboard-card-agents"
-          ariaLabel={`${activeAgentIds.size} active agents, navigate to agents`}
+          ariaLabel={activeAgentsAriaLabel}
         />
         <KpiCard
           icon={SquareKanban}
