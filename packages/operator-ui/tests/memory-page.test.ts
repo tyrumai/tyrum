@@ -210,5 +210,44 @@ describe("memory-page.sections", () => {
       expect(columns).toHaveLength(4);
       expect(columns.map((c) => c.id)).toEqual(["agent", "deleted_by", "reason", "deleted_at"]);
     });
+
+    it("sorts unknown agents by the visible fallback label", () => {
+      const columns = buildTombstoneColumns(new Map());
+      const agentColumn = columns.find((column) => column.id === "agent");
+      expect(agentColumn?.sortValue).toBeDefined();
+
+      const tombstone: MemoryTombstone = {
+        v: 1,
+        memory_item_id: "550e8400-e29b-41d4-a716-446655440010",
+        agent_id: "550e8400-e29b-41d4-a716-446655440999",
+        deleted_at: "2026-03-20T10:05:00.000Z",
+        deleted_by: "operator",
+        reason: "Operator deletion via UI",
+      };
+
+      expect(agentColumn?.sortValue?.(tombstone)).toBe("Unknown agent");
+    });
+  });
+
+  describe("buildItemColumns", () => {
+    it("sorts unknown agents by the visible fallback label", () => {
+      const columns = buildItemColumns({
+        agentLookup: new Map(),
+        canMutate: true,
+        onDelete: () => {},
+      });
+      const agentColumn = columns.find((column) => column.id === "agent");
+      expect(agentColumn?.sortValue).toBeDefined();
+
+      const item: MemoryItem = {
+        ...BASE_ITEM,
+        memory_item_id: "550e8400-e29b-41d4-a716-446655440020",
+        kind: "note",
+        title: "Visible label test",
+        body_md: "Visible label test body",
+      };
+
+      expect(agentColumn?.sortValue?.(item)).toBe("Unknown agent");
+    });
   });
 });

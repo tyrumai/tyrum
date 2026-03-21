@@ -401,6 +401,32 @@ describe("TranscriptsPage", () => {
     cleanupTestRoot(testRoot);
   });
 
+  it("shows inspector guidance when a transcript is focused but no event is selected", async () => {
+    const fixture = createTranscriptFixture();
+    const { core } = createTranscriptCore({
+      transcriptState: {
+        selectedSessionKey: fixture.rootSession.session_key,
+        detail: {
+          rootSessionKey: fixture.rootSession.session_key,
+          focusSessionKey: fixture.rootSession.session_key,
+          sessions: [fixture.rootSession, fixture.childSession],
+          events: [],
+        },
+      },
+    });
+    const testRoot = renderIntoDocument(React.createElement(TranscriptsPage, { core }));
+
+    await flushPage();
+
+    expect(testRoot.container.textContent).toContain("Inspector");
+    expect(testRoot.container.textContent).toContain("Root transcript");
+    expect(testRoot.container.textContent).toContain(
+      "Select a transcript event to inspect its raw payload.",
+    );
+
+    cleanupTestRoot(testRoot);
+  });
+
   it("does not auto-retry transcript detail loading after a failed detail request", async () => {
     const { core, transcriptStore } = createTranscriptCore({
       transcriptState: {

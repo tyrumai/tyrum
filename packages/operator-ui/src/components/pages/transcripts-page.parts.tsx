@@ -356,6 +356,9 @@ export function TranscriptInspectorPanel(props: {
   selectedEventArtifacts: ArtifactRef[];
 }) {
   const { core, focusSession, inspectorFields, selectedEvent, selectedEventArtifacts } = props;
+  const inspectorHint = focusSession
+    ? "Select a transcript event to inspect its raw payload."
+    : "Select a transcript to inspect its events.";
 
   return (
     <div className="min-h-0">
@@ -369,13 +372,13 @@ export function TranscriptInspectorPanel(props: {
               </div>
             </CardHeader>
             <CardContent className="grid gap-3">
+              {focusSession ? (
+                <div className="grid gap-1 text-sm text-fg-muted">
+                  <div className="font-medium text-fg">{formatSessionTitle(focusSession)}</div>
+                </div>
+              ) : null}
               {inspectorFields.length > 0 ? (
                 <div className="grid gap-2">
-                  {focusSession ? (
-                    <div className="grid gap-1 text-sm text-fg-muted">
-                      <div className="font-medium text-fg">{formatSessionTitle(focusSession)}</div>
-                    </div>
-                  ) : null}
                   <div className="grid gap-2 rounded-md border border-border bg-bg-subtle/30 p-3">
                     {inspectorFields.map((field) => (
                       <div
@@ -418,11 +421,9 @@ export function TranscriptInspectorPanel(props: {
                     </time>
                   </div>
                 </div>
-              ) : !focusSession ? (
-                <div className="text-sm text-fg-muted">
-                  Select a transcript event to inspect its raw payload.
-                </div>
-              ) : null}
+              ) : (
+                <div className="text-sm text-fg-muted">{inspectorHint}</div>
+              )}
             </CardContent>
           </Card>
         </div>
