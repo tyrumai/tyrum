@@ -58,3 +58,19 @@ export const DropdownMenuSeparator = React.forwardRef<
   );
 });
 DropdownMenuSeparator.displayName = "DropdownMenuSeparator";
+
+export const DropdownMenuLabel = React.forwardRef<
+  React.ElementRef<typeof DropdownMenuPrimitive.Label>,
+  DropdownMenuPrimitive.DropdownMenuLabelProps
+>(({ className, ...props }, ref) => {
+  return (
+    <DropdownMenuPrimitive.Label
+      ref={ref}
+      className={cn("px-2 py-1.5 text-xs font-semibold text-fg-muted", className)}
+      {...props}
+    />
+  );
+});
+DropdownMenuLabel.displayName = "DropdownMenuLabel";
+
+export const DropdownMenuGroup = DropdownMenuPrimitive.Group;

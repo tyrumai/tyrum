@@ -7,7 +7,7 @@ import { waitForSelector, openConfigureTab } from "./operator-ui.test-support.js
 import { FakeWsClient, createFakeHttpClient } from "./operator-ui.test-fixtures.js";
 
 function registerConfigurePanelsNavTests(): void {
-  it("renders a Configure nav item and strict admin section tabs", async () => {
+  it("renders a Settings nav item and strict admin section tabs", async () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
     const core = createOperatorCore({

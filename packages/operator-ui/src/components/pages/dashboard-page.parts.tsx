@@ -15,13 +15,13 @@ type ConfigHealthIssue = NonNullable<StatusResponse["config_health"]>["issues"][
 const MAX_VISIBLE_CONFIG_HEALTH_ISSUES = 3;
 
 function getConfigHealthAction(issue: ConfigHealthIssue): {
-  label: "Configure" | "Agents";
+  label: "Settings" | "Agents";
   routeId: "configure" | "agents";
 } {
   if (issue.target.kind === "agent") {
     return { label: "Agents", routeId: "agents" };
   }
-  return { label: "Configure", routeId: "configure" };
+  return { label: "Settings", routeId: "configure" };
 }
 
 // ---------------------------------------------------------------------------

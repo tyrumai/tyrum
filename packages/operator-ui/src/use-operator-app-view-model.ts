@@ -8,11 +8,26 @@ import {
 import {
   getOperatorRouteDefinition,
   OPERATOR_ROUTE_DEFINITIONS,
+  SIDEBAR_SECTION_LABELS,
+  type OperatorRouteDefinition,
   type OperatorUiRouteId,
+  type SidebarSectionId,
 } from "./operator-routes.js";
 import type { HostKind } from "./host/host-api.js";
 import type { SidebarNavItem } from "./components/layout/sidebar.js";
 import { useOperatorStore } from "./use-operator-store.js";
+
+export interface SidebarGroup {
+  id: SidebarSectionId;
+  label: string;
+  items: SidebarNavItem[];
+}
+
+export interface MobileOverflowGroup {
+  id: string;
+  label: string;
+  items: SidebarNavItem[];
+}
 
 const KEYBOARD_NAV_KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"] as const;
 const MOBILE_NAV_LABELS: Partial<Record<OperatorUiRouteId, string>> = {
@@ -23,7 +38,24 @@ const MOBILE_NAV_LABELS: Partial<Record<OperatorUiRouteId, string>> = {
 };
 
 function isOperatorUiRouteId(value: string): value is OperatorUiRouteId {
-  return OPERATOR_ROUTE_DEFINITIONS.some((route) => route.id === value);
+  return OPERATOR_ROUTE_DEFINITIONS.some((r) => r.id === value);
+}
+
+function buildSidebarGroups(
+  routes: readonly OperatorRouteDefinition[],
+  toNavItem: (id: OperatorUiRouteId) => SidebarNavItem,
+): SidebarGroup[] {
+  const groups: SidebarGroup[] = [];
+  for (const routeDef of routes) {
+    const section = routeDef.sidebarSection;
+    if (!section) continue;
+    const lastGroup = groups[groups.length - 1];
+    if (!lastGroup || lastGroup.id !== section) {
+      groups.push({ id: section, label: SIDEBAR_SECTION_LABELS[section], items: [] });
+    }
+    groups[groups.length - 1]!.items.push(toNavItem(routeDef.id));
+  }
+  return groups;
 }
 
 export function useOperatorAppViewModel(opts: {
@@ -86,11 +118,14 @@ export function useOperatorAppViewModel(opts: {
   const availableRoutes = OPERATOR_ROUTE_DEFINITIONS.filter((item) =>
     item.hostKinds.includes(hostKind),
   );
-  const sidebarItems = availableRoutes
-    .filter((item) => item.navGroup === "sidebar")
-    .map((item) => toNavItem(item.id));
+  const sidebarRoutes = availableRoutes.filter((item) => item.navGroup === "sidebar");
+  const sidebarItems = sidebarRoutes.map((item) => toNavItem(item.id));
   const mobileItems = sidebarItems.slice(0, 4);
   const mobileOverflowItems = sidebarItems.slice(4);
+
+  const sidebarGroups = buildSidebarGroups(sidebarRoutes, toNavItem);
+  const mobileOverflowGroups = buildSidebarGroups(sidebarRoutes.slice(4), toNavItem);
+
   const platformItems = availableRoutes
     .filter((item) => {
       if (hostKind === "desktop") return item.navGroup === "platformDesktop";
@@ -159,8 +194,10 @@ export function useOperatorAppViewModel(opts: {
     showOperatorRoutes,
     showConnectPage,
     sidebarItems: mode === "desktop" && !showOperatorRoutes ? [] : sidebarItems,
+    sidebarGroups: mode === "desktop" && !showOperatorRoutes ? [] : sidebarGroups,
     mobileItems,
     mobileOverflowItems,
+    mobileOverflowGroups,
     platformItems,
   };
 }

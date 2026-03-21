@@ -4,7 +4,10 @@ import { cn } from "../../lib/cn.js";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu.js";
 
@@ -16,9 +19,16 @@ export interface MobileNavItem {
   testId?: string;
 }
 
+export interface MobileOverflowGroup {
+  id: string;
+  label: string;
+  items: MobileNavItem[];
+}
+
 export interface MobileNavProps extends React.HTMLAttributes<HTMLElement> {
   items: MobileNavItem[];
   overflowItems: MobileNavItem[];
+  overflowGroups?: MobileOverflowGroup[];
   activeItemId: string;
   onNavigate: (id: string) => void;
 }
@@ -26,12 +36,14 @@ export interface MobileNavProps extends React.HTMLAttributes<HTMLElement> {
 export function MobileNav({
   items,
   overflowItems,
+  overflowGroups,
   activeItemId,
   onNavigate,
   className,
   ...props
 }: MobileNavProps) {
-  const overflowActive = overflowItems.some((item) => item.id === activeItemId);
+  const allOverflowItems = overflowGroups ? overflowGroups.flatMap((g) => g.items) : overflowItems;
+  const overflowActive = allOverflowItems.some((item) => item.id === activeItemId);
 
   const renderTab = (item: MobileNavItem) => {
     const Icon = item.icon;
@@ -88,18 +100,37 @@ export function MobileNav({
               <span className="max-w-full truncate leading-none">More</span>
             </button>
           </DropdownMenuTrigger>
-          {overflowItems.length > 0 ? (
+          {allOverflowItems.length > 0 ? (
             <DropdownMenuContent align="end" className="mb-2">
-              {overflowItems.map((item) => (
-                <DropdownMenuItem
-                  key={item.id}
-                  onSelect={() => {
-                    onNavigate(item.id);
-                  }}
-                >
-                  {item.label}
-                </DropdownMenuItem>
-              ))}
+              {overflowGroups
+                ? overflowGroups.map((group, groupIndex) => (
+                    <React.Fragment key={group.id}>
+                      {groupIndex > 0 ? <DropdownMenuSeparator /> : null}
+                      <DropdownMenuLabel>{group.label}</DropdownMenuLabel>
+                      <DropdownMenuGroup>
+                        {group.items.map((item) => (
+                          <DropdownMenuItem
+                            key={item.id}
+                            onSelect={() => {
+                              onNavigate(item.id);
+                            }}
+                          >
+                            {item.label}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuGroup>
+                    </React.Fragment>
+                  ))
+                : overflowItems.map((item) => (
+                    <DropdownMenuItem
+                      key={item.id}
+                      onSelect={() => {
+                        onNavigate(item.id);
+                      }}
+                    >
+                      {item.label}
+                    </DropdownMenuItem>
+                  ))}
             </DropdownMenuContent>
           ) : null}
         </DropdownMenu>

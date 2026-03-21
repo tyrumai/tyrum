@@ -1,7 +1,9 @@
 import type { OperatorCore } from "@tyrum/operator-app";
+import * as React from "react";
 import type { OperatorUiMode } from "../../app.js";
 import { AuditPanel } from "../admin-http/audit-panel.js";
 import { AppPage } from "../layout/app-page.js";
+import { Separator } from "../ui/separator.js";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs.js";
 import { AuthTokensCard } from "./admin-http-tokens.js";
 import { ToolRegistryCard } from "./admin-http-tools.js";
@@ -57,6 +59,15 @@ const CONFIGURE_TAB_OPTIONS: ReadonlyArray<{
   { value: "commands", label: "Commands", testId: "admin-ws-tab-commands" },
 ] as const;
 
+const CONFIGURE_TAB_CLUSTERS: ReadonlyArray<{
+  label: string;
+  tabs: readonly ConfigurePageTab[];
+}> = [
+  { label: "Core", tabs: ["general", "location"] },
+  { label: "AI", tabs: ["providers", "models", "routing-config", "tools"] },
+  { label: "Admin", tabs: ["policy", "secrets", "audit", "device-tokens", "commands"] },
+];
+
 function ConfigurePageContent({ core, mode, webAuthPersistence }: ConfigurePageProps) {
   const [activeTab, setActiveTab] = useReconnectTabState<ConfigurePageTab>(
     "configure.tab",
@@ -88,10 +99,18 @@ function ConfigurePageContent({ core, mode, webAuthPersistence }: ConfigurePageP
                 setActiveTab(event.currentTarget.value as ConfigurePageTab);
               }}
             >
-              {CONFIGURE_TAB_OPTIONS.map((tab) => (
-                <option key={tab.value} value={tab.value}>
-                  {tab.label}
-                </option>
+              {CONFIGURE_TAB_CLUSTERS.map((cluster) => (
+                <optgroup key={cluster.label} label={cluster.label}>
+                  {cluster.tabs.map((tabValue) => {
+                    const tab = CONFIGURE_TAB_OPTIONS.find((t) => t.value === tabValue);
+                    if (!tab) return null;
+                    return (
+                      <option key={tab.value} value={tab.value}>
+                        {tab.label}
+                      </option>
+                    );
+                  })}
+                </optgroup>
               ))}
             </Select>
           </div>
@@ -100,11 +119,22 @@ function ConfigurePageContent({ core, mode, webAuthPersistence }: ConfigurePageP
           className={isMobileViewport ? "hidden" : "overflow-x-auto pb-1"}
           data-testid="configure-tab-strip"
         >
-          <TabsList aria-label="Configure sections" className="min-w-max flex-nowrap">
-            {CONFIGURE_TAB_OPTIONS.map((tab) => (
-              <TabsTrigger key={tab.value} value={tab.value} data-testid={tab.testId}>
-                {tab.label}
-              </TabsTrigger>
+          <TabsList aria-label="Settings sections" className="min-w-max flex-nowrap">
+            {CONFIGURE_TAB_CLUSTERS.map((cluster, clusterIndex) => (
+              <React.Fragment key={cluster.label}>
+                {clusterIndex > 0 ? (
+                  <Separator orientation="vertical" className="mx-1.5 h-4" decorative />
+                ) : null}
+                {cluster.tabs.map((tabValue) => {
+                  const tab = CONFIGURE_TAB_OPTIONS.find((t) => t.value === tabValue);
+                  if (!tab) return null;
+                  return (
+                    <TabsTrigger key={tab.value} value={tab.value} data-testid={tab.testId}>
+                      {tab.label}
+                    </TabsTrigger>
+                  );
+                })}
+              </React.Fragment>
             ))}
           </TabsList>
         </div>

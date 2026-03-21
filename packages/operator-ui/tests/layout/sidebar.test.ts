@@ -277,7 +277,7 @@ describe("Sidebar", () => {
           activeItemId: "dashboard",
           onNavigate: vi.fn(),
           secondaryItems: [{ id: "approvals", label: "Approvals", icon: ShieldCheck }],
-          secondaryLabel: "Node",
+          secondaryLabel: "This Device",
           secondaryCollapsible: true,
           connectionStatus: "connected",
           onSyncNow: vi.fn(),
@@ -331,6 +331,93 @@ describe("Sidebar", () => {
     );
     expect(syncButton).not.toBeNull();
     expect(syncButton?.disabled).toBe(true);
+
+    cleanupTestRoot({ container, root });
+  });
+
+  it("renders section labels when groups are provided", () => {
+    const ThemeProvider = (operatorUi as Record<string, unknown>)["ThemeProvider"];
+    const Sidebar = (operatorUi as Record<string, unknown>)["Sidebar"];
+
+    const { container, root } = renderIntoDocument(
+      React.createElement(
+        ThemeProvider as React.ComponentType,
+        null,
+        React.createElement(Sidebar as React.ComponentType, {
+          items: [],
+          groups: [
+            {
+              id: "operate",
+              label: "Operate",
+              items: [{ id: "dashboard", label: "Dashboard", icon: LayoutDashboard }],
+            },
+            {
+              id: "build",
+              label: "Build",
+              items: [{ id: "agents", label: "Agents", icon: ShieldCheck }],
+            },
+          ],
+          activeItemId: "dashboard",
+          onNavigate: vi.fn(),
+          connectionStatus: "connected",
+        }),
+      ),
+    );
+
+    expect(container.querySelector("[data-testid='sidebar-section-operate']")).not.toBeNull();
+    expect(container.querySelector("[data-testid='sidebar-section-build']")).not.toBeNull();
+    expect(container.querySelector("[data-testid='sidebar-section-operate']")?.textContent).toBe(
+      "Operate",
+    );
+    expect(container.querySelector("[data-testid='sidebar-section-build']")?.textContent).toBe(
+      "Build",
+    );
+
+    cleanupTestRoot({ container, root });
+  });
+
+  it("hides section labels when collapsed", () => {
+    const ThemeProvider = (operatorUi as Record<string, unknown>)["ThemeProvider"];
+    const Sidebar = (operatorUi as Record<string, unknown>)["Sidebar"];
+
+    const { container, root } = renderIntoDocument(
+      React.createElement(
+        ThemeProvider as React.ComponentType,
+        null,
+        React.createElement(Sidebar as React.ComponentType, {
+          items: [],
+          groups: [
+            {
+              id: "operate",
+              label: "Operate",
+              items: [{ id: "dashboard", label: "Dashboard", icon: LayoutDashboard }],
+            },
+            {
+              id: "build",
+              label: "Build",
+              items: [{ id: "agents", label: "Agents", icon: ShieldCheck }],
+            },
+          ],
+          activeItemId: "dashboard",
+          onNavigate: vi.fn(),
+          connectionStatus: "connected",
+          collapsible: true,
+        }),
+      ),
+    );
+
+    const toggle = container.querySelector<HTMLButtonElement>(
+      "[data-testid='sidebar-collapse-toggle']",
+    );
+    expect(toggle).not.toBeNull();
+
+    act(() => {
+      toggle?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(container.querySelector("[data-testid='sidebar-section-operate']")).toBeNull();
+    expect(container.querySelector("[data-testid='sidebar-section-build']")).toBeNull();
+    expect(container.querySelector("[data-testid='nav-dashboard']")).not.toBeNull();
 
     cleanupTestRoot({ container, root });
   });
