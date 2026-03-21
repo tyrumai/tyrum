@@ -454,7 +454,7 @@ describe("layout regression harness", () => {
         "[data-layout-content]",
         '[data-testid="configure-tab-strip"]',
       ]);
-      await assertSingleRowTabs(page, '[aria-label="Configure sections"]');
+      await assertSingleRowTabs(page, '[aria-label="Settings sections"]');
     } finally {
       await page.close();
     }
