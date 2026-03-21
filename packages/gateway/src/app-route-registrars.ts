@@ -35,7 +35,7 @@ import { createPairingRoutes } from "./routes/pairing.js";
 import { createPlanRoutes } from "./routes/plan.js";
 import { createPlaybookRoutes } from "./routes/playbook.js";
 import { policy } from "./routes/policy.js";
-import { createGatewayConfigRoutes } from "./routes/gateway-config.js";
+import { createGatewayConfigRoutes, createPolicyConfigRoutes } from "./routes/gateway-config.js";
 import { createLocationRoutes } from "./routes/location.js";
 import { createPolicyBundleRoutes } from "./routes/policy-bundle.js";
 import { createPluginRoutes } from "./routes/plugins.js";
@@ -461,14 +461,19 @@ export function registerAgentsAndWorkspaceRoutes(context: AppRouteContext): void
       stateMode: resolveGatewayStateMode(context.container.deploymentConfig),
     }),
   );
+  context.app.route(
+    "/",
+    createPolicyConfigRoutes({
+      db: context.container.db,
+      identityScopeDal: context.container.identityScopeDal,
+      policyBundleDal: new PolicyBundleConfigDal(context.container.db),
+    }),
+  );
   if (isSharedStateMode(context.container.deploymentConfig)) {
     context.app.route(
       "/",
       createGatewayConfigRoutes({
-        db: context.container.db,
-        identityScopeDal: context.container.identityScopeDal,
         hooksDal: new LifecycleHookConfigDal(context.container.db),
-        policyBundleDal: new PolicyBundleConfigDal(context.container.db),
       }),
     );
     context.app.route(

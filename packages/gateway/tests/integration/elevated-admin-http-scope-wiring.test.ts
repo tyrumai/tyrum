@@ -39,16 +39,21 @@ describe("elevated admin HTTP scope wiring", () => {
         expect(res.status, path).toBe(200);
       }
 
-      for (const path of ["/config/policy/deployment", "/config/policy/deployment/revisions"]) {
-        const res = await requestUnauthenticated(path, {
-          method: "GET",
-          headers: { Authorization: `Bearer ${issued.token}` },
-        });
-        expect(res.status, path).toBe(404);
-        await expect(res.json()).resolves.toMatchObject({
-          error: "not_found",
-        });
-      }
+      const deploymentRes = await requestUnauthenticated("/config/policy/deployment", {
+        method: "GET",
+        headers: { Authorization: `Bearer ${issued.token}` },
+      });
+      expect(deploymentRes.status, "/config/policy/deployment").toBe(404);
+      await expect(deploymentRes.json()).resolves.toMatchObject({
+        error: "not_found",
+      });
+
+      const revisionsRes = await requestUnauthenticated("/config/policy/deployment/revisions", {
+        method: "GET",
+        headers: { Authorization: `Bearer ${issued.token}` },
+      });
+      expect(revisionsRes.status, "/config/policy/deployment/revisions").toBe(200);
+      await expect(revisionsRes.json()).resolves.toEqual({ revisions: [] });
     } finally {
       await container.db.close();
     }

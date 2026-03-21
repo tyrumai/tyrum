@@ -4,10 +4,10 @@ import { describe, expect, it } from "vitest";
 import { AgentConfig, CODEX_AGENT_NAMES } from "@tyrum/contracts";
 import {
   buildAgentConfigFromPreset,
-  buildAgentPolicyBundle,
   buildAgentSetupStepMeta,
   pickRandomAgentName,
 } from "../../src/components/pages/agent-setup-wizard.shared.js";
+import { buildWorkspacePolicyBundle } from "../../src/components/pages/workspace-policy-presets.js";
 
 const SAMPLE_PRESET = {
   preset_id: "33333333-3333-4333-8333-333333333333",
@@ -20,20 +20,18 @@ const SAMPLE_PRESET = {
   updated_at: "2026-03-08T00:00:00.000Z",
 } as const;
 
-function buildConfig(policyPreset: "safest" | "moderate" | "power_user") {
+function buildConfig() {
   return buildAgentConfigFromPreset({
     baseConfig: AgentConfig.parse({ model: { model: null } }),
     preset: SAMPLE_PRESET,
     name: "Research Agent",
     tone: "direct",
-    policyPreset,
   });
 }
 
 describe("agent-setup-wizard.shared", () => {
-  it("builds the safest agent config and policy bundle", () => {
-    const config = buildConfig("safest");
-    const bundle = buildAgentPolicyBundle("safest");
+  it("builds the agent config with fixed setup defaults", () => {
+    const config = buildConfig();
 
     expect(config.persona).toEqual({
       name: "Research Agent",
@@ -41,33 +39,6 @@ describe("agent-setup-wizard.shared", () => {
       palette: "graphite",
       character: "architect",
     });
-    expect(config.skills).toMatchObject({
-      default_mode: "deny",
-      workspace_trusted: false,
-      allow: [],
-      deny: [],
-    });
-    expect(config.mcp).toMatchObject({
-      default_mode: "deny",
-      allow: [],
-      deny: [],
-      pre_turn_tools: [],
-    });
-    expect(config.tools).toEqual({ default_mode: "deny", allow: [], deny: [] });
-    expect(bundle).toEqual({
-      v: 1,
-      tools: { allow: [], require_approval: [], deny: ["*"] },
-      network_egress: { default: "deny", allow: [], require_approval: [], deny: [] },
-      secrets: { default: "deny", allow: [], require_approval: [], deny: [] },
-      connectors: { default: "deny", allow: [], require_approval: [], deny: [] },
-      provenance: { untrusted_shell_requires_approval: true },
-    });
-  });
-
-  it("builds the moderate agent config and policy bundle", () => {
-    const config = buildConfig("moderate");
-    const bundle = buildAgentPolicyBundle("moderate");
-
     expect(config.skills).toMatchObject({
       default_mode: "allow",
       workspace_trusted: false,
@@ -81,36 +52,49 @@ describe("agent-setup-wizard.shared", () => {
       pre_turn_tools: ["mcp.memory.seed"],
     });
     expect(config.tools).toEqual({ default_mode: "allow", allow: [], deny: [] });
-    expect(bundle).toEqual({
+  });
+
+  it("builds the moderate workspace policy bundle", () => {
+    expect(buildWorkspacePolicyBundle("moderate")).toEqual({
       v: 1,
       tools: { allow: [], require_approval: [], deny: [] },
+      network_egress: { default: "require_approval", allow: [], require_approval: [], deny: [] },
+      secrets: { default: "require_approval", allow: [], require_approval: [], deny: [] },
+      connectors: {
+        default: "require_approval",
+        allow: ["telegram:*"],
+        require_approval: [],
+        deny: [],
+      },
+      artifacts: { default: "allow" },
+      provenance: { untrusted_shell_requires_approval: true },
+      approvals: { auto_review: { mode: "auto_review" } },
     });
   });
 
-  it("builds the power user agent config and policy bundle", () => {
-    const config = buildConfig("power_user");
-    const bundle = buildAgentPolicyBundle("power_user");
+  it("builds the safest workspace policy bundle", () => {
+    expect(buildWorkspacePolicyBundle("safest")).toEqual({
+      v: 1,
+      tools: { allow: [], require_approval: [], deny: ["*"] },
+      network_egress: { default: "deny", allow: [], require_approval: [], deny: [] },
+      secrets: { default: "deny", allow: [], require_approval: [], deny: [] },
+      connectors: { default: "deny", allow: [], require_approval: [], deny: [] },
+      artifacts: { default: "allow" },
+      provenance: { untrusted_shell_requires_approval: true },
+      approvals: { auto_review: { mode: "auto_review" } },
+    });
+  });
 
-    expect(config.skills).toMatchObject({
-      default_mode: "allow",
-      workspace_trusted: true,
-      allow: [],
-      deny: [],
-    });
-    expect(config.mcp).toMatchObject({
-      default_mode: "allow",
-      allow: [],
-      deny: [],
-      pre_turn_tools: ["mcp.memory.seed"],
-    });
-    expect(config.tools).toEqual({ default_mode: "allow", allow: [], deny: [] });
-    expect(bundle).toEqual({
+  it("builds the power user workspace policy bundle", () => {
+    expect(buildWorkspacePolicyBundle("power_user")).toEqual({
       v: 1,
       tools: { allow: ["*"], require_approval: [], deny: [] },
       network_egress: { default: "deny", allow: ["*"], require_approval: [], deny: [] },
       secrets: { default: "deny", allow: ["*"], require_approval: [], deny: [] },
       connectors: { default: "deny", allow: ["*"], require_approval: [], deny: [] },
+      artifacts: { default: "allow" },
       provenance: { untrusted_shell_requires_approval: false },
+      approvals: { auto_review: { mode: "auto_review" } },
     });
   });
 

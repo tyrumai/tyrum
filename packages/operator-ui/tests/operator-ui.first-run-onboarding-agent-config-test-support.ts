@@ -85,7 +85,7 @@ export function registerFirstRunOnboardingAgentConfigTests(): void {
     cleanup(root, container);
   });
 
-  it("saves the primary agent configuration and policy through elevated admin http", async () => {
+  it("saves the primary agent configuration through elevated admin http", async () => {
     stubPersistentStorage();
     const ws = new FakeWsClient();
     const { http, statusGet, agentConfigGet } = createFakeHttpClient();
@@ -278,35 +278,7 @@ export function registerFirstRunOnboardingAgentConfigTests(): void {
           { status: 200, headers: { "content-type": "application/json" } },
         );
       }
-      if (
-        method !== "PUT" ||
-        !url.endsWith(`/config/policy/agents/${encodeURIComponent(primaryAgentKey)}`)
-      ) {
-        throw new Error(`Unexpected fetch call: ${method} ${url}`);
-      }
-
-      const headers = new Headers(init?.headers);
-      expect(headers.get("authorization")).toBe("Bearer test-elevated-token");
-
-      const body = JSON.parse(String(init?.body)) as {
-        bundle: { v: number };
-        reason?: string;
-      };
-      expect(body.bundle.v).toBe(1);
-      expect(body.reason).toBe("onboarding: configure primary agent policy");
-
-      return new Response(
-        JSON.stringify({
-          revision: 1,
-          agent_key: primaryAgentKey,
-          bundle: body.bundle,
-          created_at: "2026-03-01T00:00:00.000Z",
-          created_by: { kind: "tenant.token", token_id: "token-1" },
-          reason: body.reason ?? null,
-          reverted_from_revision: null,
-        }),
-        { status: 200, headers: { "content-type": "application/json" } },
-      );
+      throw new Error(`Unexpected fetch call: ${method} ${url}`);
     });
     vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
 
@@ -345,7 +317,14 @@ export function registerFirstRunOnboardingAgentConfigTests(): void {
     const mutationCalls = fetchMock.mock.calls.filter(
       ([, init]) => (init?.method ?? "GET") !== "GET",
     );
-    expect(mutationCalls).toHaveLength(3);
+    expect(mutationCalls).toHaveLength(2);
+    expect(
+      fetchMock.mock.calls.some(([input]) =>
+        requestInfoToUrl(input).includes(
+          `/config/policy/agents/${encodeURIComponent(primaryAgentKey)}`,
+        ),
+      ),
+    ).toBe(false);
 
     cleanup(root, container);
   });

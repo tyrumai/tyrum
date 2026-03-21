@@ -165,10 +165,8 @@ describe("AgentSetupWizard", () => {
           name: "",
           onBackToPreset: undefined,
           onNameChange: vi.fn(),
-          onPolicyPresetChange: vi.fn(),
           onSave: vi.fn(),
           onToneChange: vi.fn(),
-          policyPreset: "moderate",
           selectedPresetLabel: "",
           tone: "direct",
         }}

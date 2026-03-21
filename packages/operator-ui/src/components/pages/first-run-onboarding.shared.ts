@@ -3,6 +3,7 @@ import type { StatusResponse } from "@tyrum/operator-app/browser";
 const STORAGE_KEY_PREFIX = "tyrum.first-run-onboarding";
 
 const RELEVANT_CODES = new Set<StatusResponse["config_health"]["issues"][number]["code"]>([
+  "workspace_policy_unconfigured",
   "no_provider_accounts",
   "no_model_presets",
   "execution_profile_unassigned",
@@ -31,7 +32,13 @@ export type FirstRunOnboardingIssueBadge = {
   label: string;
   variant: "danger" | "warning";
 };
-export type FirstRunOnboardingStepId = "admin" | "provider" | "preset" | "agent" | "done";
+export type FirstRunOnboardingStepId =
+  | "admin"
+  | "provider"
+  | "preset"
+  | "workspace_policy"
+  | "agent"
+  | "done";
 export type FirstRunOnboardingRenderableStepId = Exclude<FirstRunOnboardingStepId, "done">;
 export type FirstRunOnboardingStoredState = {
   issueSignature?: string;
@@ -66,14 +73,20 @@ export const FIRST_RUN_ONBOARDING_STEPS: ReadonlyArray<{
     detail: "Choose or create the preset Tyrum should reuse across the default runtime profiles.",
   },
   {
+    id: "workspace_policy",
+    title: "Choose a workspace policy",
+    detail: "Apply the tenant-wide policy baseline that every new agent will inherit.",
+  },
+  {
     id: "agent",
     title: "Configure the first agent",
-    detail: "Name the primary agent, pick its tone, and apply an agent policy preset.",
+    detail: "Name the primary agent and pick its tone.",
   },
 ] as const;
 const ISSUE_BADGE_COPY: Partial<
   Record<FirstRunOnboardingIssue["code"], { key: string; label: string }>
 > = {
+  workspace_policy_unconfigured: { key: "workspace-policy", label: "Workspace policy" },
   no_provider_accounts: { key: "providers", label: "Provider account" },
   no_model_presets: { key: "presets", label: "Model preset" },
   execution_profile_unassigned: { key: "execution-profiles", label: "Execution profiles" },
@@ -222,6 +235,9 @@ export function resolveFirstRunOnboardingStep(input: {
   }
   if (input.issues.some((issue) => EXECUTION_CODES.has(issue.code))) {
     return "preset";
+  }
+  if (input.issues.some((issue) => issue.code === "workspace_policy_unconfigured")) {
+    return "workspace_policy";
   }
   if (input.issues.some((issue) => AGENT_CODES.has(issue.code))) {
     return "agent";

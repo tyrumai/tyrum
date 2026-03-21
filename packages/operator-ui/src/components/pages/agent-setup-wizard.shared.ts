@@ -1,4 +1,4 @@
-import { AgentConfig, CODEX_AGENT_NAMES, PolicyBundle } from "@tyrum/contracts";
+import { AgentConfig, CODEX_AGENT_NAMES } from "@tyrum/contracts";
 import type { AgentConfig as AgentConfigT } from "@tyrum/contracts";
 import React from "react";
 import { modelRefFor, type ModelPreset } from "./admin-http-models.shared.js";
@@ -16,138 +16,23 @@ type StepMeta = {
   totalSteps: number;
 };
 
-export type AgentPolicyPresetKey = "safest" | "moderate" | "power_user";
 const ONBOARDING_STEP_COPY = new Map(
   FIRST_RUN_ONBOARDING_STEPS.map((step) => [step.id, step] as const),
 );
-
-export const AGENT_POLICY_PRESET_OPTIONS: ReadonlyArray<{
-  key: AgentPolicyPresetKey;
-  label: string;
-  description: string;
-}> = [
-  {
-    key: "safest",
-    label: "Safest",
-    description: "Deny tools and external access by default.",
-  },
-  {
-    key: "moderate",
-    label: "Moderate",
-    description: "Balanced defaults with memory enabled and standard approvals.",
-  },
-  {
-    key: "power_user",
-    label: "Power user",
-    description: "Trust the workspace and allow broad access with fewer approvals.",
-  },
-] as const;
 
 export const HIDDEN_AGENT_PERSONA_DEFAULTS = {
   palette: "graphite",
   character: "architect",
 } as const;
 
-export type AgentPolicyBundleInput = {
-  v: 1;
-  tools: {
-    allow: string[];
-    require_approval: string[];
-    deny: string[];
-  };
-  network_egress?: {
-    default: "allow" | "require_approval" | "deny";
-    allow: string[];
-    require_approval: string[];
-    deny: string[];
-  };
-  secrets?: {
-    default: "allow" | "require_approval" | "deny";
-    allow: string[];
-    require_approval: string[];
-    deny: string[];
-  };
-  connectors?: {
-    default: "allow" | "require_approval" | "deny";
-    allow: string[];
-    require_approval: string[];
-    deny: string[];
-  };
-  provenance?: {
-    untrusted_shell_requires_approval: boolean;
-  };
-};
-
 export function buildAgentConfigFromPreset(input: {
   baseConfig?: AgentConfigT | null;
   preset: ModelPreset;
   name: string;
   tone: string;
-  policyPreset: AgentPolicyPresetKey;
 }): AgentConfigT {
   const baseConfig = input.baseConfig ?? AgentConfig.parse({ model: { model: null } });
   const memoryServerSettings = baseConfig.mcp.server_settings["memory"];
-
-  const policyDefaults =
-    input.policyPreset === "safest"
-      ? {
-          skills: {
-            default_mode: "deny" as const,
-            allow: [],
-            deny: [],
-            workspace_trusted: false,
-          },
-          mcp: {
-            default_mode: "deny" as const,
-            allow: [],
-            deny: [],
-            pre_turn_tools: [] as string[],
-          },
-          tools: {
-            default_mode: "deny" as const,
-            allow: [],
-            deny: [],
-          },
-        }
-      : input.policyPreset === "power_user"
-        ? {
-            skills: {
-              default_mode: "allow" as const,
-              allow: [],
-              deny: [],
-              workspace_trusted: true,
-            },
-            mcp: {
-              default_mode: "allow" as const,
-              allow: [],
-              deny: [],
-              pre_turn_tools: ["mcp.memory.seed"],
-            },
-            tools: {
-              default_mode: "allow" as const,
-              allow: [],
-              deny: [],
-            },
-          }
-        : {
-            skills: {
-              default_mode: "allow" as const,
-              allow: [],
-              deny: [],
-              workspace_trusted: false,
-            },
-            mcp: {
-              default_mode: "deny" as const,
-              allow: ["memory"],
-              deny: [],
-              pre_turn_tools: ["mcp.memory.seed"],
-            },
-            tools: {
-              default_mode: "allow" as const,
-              allow: [],
-              deny: [],
-            },
-          };
 
   return AgentConfig.parse({
     ...baseConfig,
@@ -161,50 +46,25 @@ export function buildAgentConfigFromPreset(input: {
       palette: HIDDEN_AGENT_PERSONA_DEFAULTS.palette,
       character: HIDDEN_AGENT_PERSONA_DEFAULTS.character,
     },
-    skills: policyDefaults.skills,
+    skills: {
+      default_mode: "allow",
+      allow: [],
+      deny: [],
+      workspace_trusted: false,
+    },
     mcp: {
-      ...policyDefaults.mcp,
+      default_mode: "deny",
+      allow: ["memory"],
+      deny: [],
+      pre_turn_tools: ["mcp.memory.seed"],
       server_settings: memoryServerSettings === undefined ? {} : { memory: memoryServerSettings },
     },
-    tools: policyDefaults.tools,
-  });
-}
-
-export function buildAgentPolicyBundle(policyPreset: AgentPolicyPresetKey): AgentPolicyBundleInput {
-  const baseBundle = {
-    v: 1 as const,
     tools: {
-      allow: [] as string[],
-      require_approval: [] as string[],
-      deny: [] as string[],
+      default_mode: "allow",
+      allow: [],
+      deny: [],
     },
-  };
-  if (policyPreset === "safest") {
-    const bundle = {
-      ...baseBundle,
-      tools: { allow: [], require_approval: [], deny: ["*"] },
-      network_egress: { default: "deny" as const, allow: [], require_approval: [], deny: [] },
-      secrets: { default: "deny" as const, allow: [], require_approval: [], deny: [] },
-      connectors: { default: "deny" as const, allow: [], require_approval: [], deny: [] },
-      provenance: { untrusted_shell_requires_approval: true },
-    };
-    PolicyBundle.parse(bundle);
-    return bundle;
-  }
-  if (policyPreset === "power_user") {
-    const bundle = {
-      ...baseBundle,
-      tools: { allow: ["*"], require_approval: [], deny: [] },
-      network_egress: { default: "deny" as const, allow: ["*"], require_approval: [], deny: [] },
-      secrets: { default: "deny" as const, allow: ["*"], require_approval: [], deny: [] },
-      connectors: { default: "deny" as const, allow: ["*"], require_approval: [], deny: [] },
-      provenance: { untrusted_shell_requires_approval: false },
-    };
-    PolicyBundle.parse(bundle);
-    return bundle;
-  }
-  PolicyBundle.parse(baseBundle);
-  return baseBundle;
+  });
 }
 
 export function buildAgentSetupStepMeta(input: {
@@ -244,7 +104,7 @@ export function buildAgentSetupStepMeta(input: {
   }
   return {
     title: "Configure the agent",
-    description: "Name the agent, choose its tone, and apply an agent policy preset.",
+    description: "Name the agent and choose its tone.",
     stepIndex: totalSteps,
     totalSteps,
   };

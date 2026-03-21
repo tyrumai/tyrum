@@ -30,6 +30,7 @@ import {
   type ProviderFormState,
   type ProviderRegistryEntry,
 } from "./admin-http-providers.shared.js";
+import { type WorkspacePolicyPresetKey } from "./workspace-policy-presets.js";
 
 export type FirstRunOnboardingController = {
   available: boolean;
@@ -251,9 +252,8 @@ export function useOnboardingDrafts(data: OnboardingDataState) {
   const [selectedPresetKey, setSelectedPresetKey] = React.useState("");
   const [agentName, setAgentName] = React.useState("");
   const [agentTone, setAgentTone] = React.useState("");
-  const [agentPolicyPreset, setAgentPolicyPreset] = React.useState<
-    "safest" | "moderate" | "power_user"
-  >("moderate");
+  const [workspacePolicyPreset, setWorkspacePolicyPreset] =
+    React.useState<WorkspacePolicyPresetKey>("moderate");
 
   const supportedProviders = React.useMemo(
     () => data.registry.filter((provider) => provider.supported && provider.methods.length > 0),
@@ -328,7 +328,6 @@ export function useOnboardingDrafts(data: OnboardingDataState) {
 
   return {
     agentName,
-    agentPolicyPreset,
     agentTone,
     filteredAvailableModels,
     filteredProviders,
@@ -340,14 +339,15 @@ export function useOnboardingDrafts(data: OnboardingDataState) {
     selectedPresetKey,
     selectedProvider,
     setAgentName,
-    setAgentPolicyPreset,
     setAgentTone,
     setModelFilter,
     setModelState,
     setProviderFilter,
     setProviderState,
     setSelectedPresetKey,
+    setWorkspacePolicyPreset,
     supportedProviders,
+    workspacePolicyPreset,
   };
 }
 

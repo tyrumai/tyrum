@@ -31,134 +31,31 @@ const RevertRequest = z
   .strict();
 
 export interface GatewayConfigRouteDeps {
+  hooksDal: LifecycleHookConfigDal;
+}
+
+export interface PolicyConfigRouteDeps {
   db: SqlDb;
   identityScopeDal: IdentityScopeDal;
-  hooksDal: LifecycleHookConfigDal;
   policyBundleDal: PolicyBundleConfigDal;
 }
 
-export function createGatewayConfigRoutes(deps: GatewayConfigRouteDeps): Hono {
-  const app = new Hono();
-  const resolveExistingAgentId = async (
-    tenantId: string,
-    agentKey: string,
-  ): Promise<string | null> => {
-    const row = await deps.db.get<{ agent_id: string }>(
-      `SELECT agent_id
-       FROM agents
-       WHERE tenant_id = ? AND agent_key = ?
-       LIMIT 1`,
-      [tenantId, agentKey],
-    );
-    return row?.agent_id ?? null;
-  };
+async function resolveExistingAgentId(
+  deps: Pick<PolicyConfigRouteDeps, "db">,
+  tenantId: string,
+  agentKey: string,
+): Promise<string | null> {
+  const row = await deps.db.get<{ agent_id: string }>(
+    `SELECT agent_id
+     FROM agents
+     WHERE tenant_id = ? AND agent_key = ?
+     LIMIT 1`,
+    [tenantId, agentKey],
+  );
+  return row?.agent_id ?? null;
+}
 
-  app.get("/config/hooks", async (c) => {
-    const tenantId = requireTenantId(c);
-    const revision = await deps.hooksDal.getLatest(tenantId);
-    if (!revision) {
-      return c.json(
-        { revision: 0, hooks: [], created_at: null, created_by: null, reason: null },
-        200,
-      );
-    }
-    return c.json(
-      {
-        revision: revision.revision,
-        hooks: revision.hooks,
-        created_at: revision.createdAt,
-        created_by: revision.createdBy,
-        reason: revision.reason ?? null,
-        reverted_from_revision: revision.revertedFromRevision ?? null,
-      },
-      200,
-    );
-  });
-
-  app.get("/config/hooks/revisions", async (c) => {
-    const tenantId = requireTenantId(c);
-    const revisions = await deps.hooksDal.listRevisions(tenantId);
-    return c.json(
-      {
-        revisions: revisions.map((revision) => ({
-          revision: revision.revision,
-          hooks: revision.hooks,
-          created_at: revision.createdAt,
-          created_by: revision.createdBy,
-          reason: revision.reason ?? null,
-          reverted_from_revision: revision.revertedFromRevision ?? null,
-        })),
-      },
-      200,
-    );
-  });
-
-  app.put("/config/hooks", async (c) => {
-    const tenantId = requireTenantId(c);
-    const claims = requireAuthClaims(c);
-    let body: unknown;
-    try {
-      body = (await c.req.json()) as unknown;
-    } catch (err) {
-      void err;
-      return c.json({ error: "invalid_request", message: "invalid json" }, 400);
-    }
-    const parsed = HooksUpdateRequest.safeParse(body);
-    if (!parsed.success) {
-      return c.json({ error: "invalid_request", message: parsed.error.message }, 400);
-    }
-    const revision = await deps.hooksDal.set({
-      tenantId,
-      hooks: parsed.data.hooks,
-      createdBy: { kind: "tenant.token", token_id: claims.token_id },
-      reason: parsed.data.reason,
-    });
-    return c.json(
-      {
-        revision: revision.revision,
-        hooks: revision.hooks,
-        created_at: revision.createdAt,
-        created_by: revision.createdBy,
-        reason: revision.reason ?? null,
-        reverted_from_revision: revision.revertedFromRevision ?? null,
-      },
-      200,
-    );
-  });
-
-  app.post("/config/hooks/revert", async (c) => {
-    const tenantId = requireTenantId(c);
-    const claims = requireAuthClaims(c);
-    let body: unknown;
-    try {
-      body = (await c.req.json()) as unknown;
-    } catch (err) {
-      void err;
-      return c.json({ error: "invalid_request", message: "invalid json" }, 400);
-    }
-    const parsed = RevertRequest.safeParse(body);
-    if (!parsed.success) {
-      return c.json({ error: "invalid_request", message: parsed.error.message }, 400);
-    }
-    const revision = await deps.hooksDal.revertToRevision({
-      tenantId,
-      revision: parsed.data.revision,
-      createdBy: { kind: "tenant.token", token_id: claims.token_id },
-      reason: parsed.data.reason,
-    });
-    return c.json(
-      {
-        revision: revision.revision,
-        hooks: revision.hooks,
-        created_at: revision.createdAt,
-        created_by: revision.createdBy,
-        reason: revision.reason ?? null,
-        reverted_from_revision: revision.revertedFromRevision ?? null,
-      },
-      200,
-    );
-  });
-
+function registerPolicyConfigRoutes(app: Hono, deps: PolicyConfigRouteDeps): void {
   const registerPolicyRoutes = (
     path: string,
     resolveReadScope: (
@@ -310,13 +207,13 @@ export function createGatewayConfigRoutes(deps: GatewayConfigRouteDeps): Hono {
     async (c) => {
       const tenantId = requireTenantId(c);
       const agentKey = normalizeAgentKey(c.req.param("key"));
-      const agentId = await resolveExistingAgentId(tenantId, agentKey);
+      const agentId = await resolveExistingAgentId(deps, tenantId, agentKey);
       return agentId ? { tenantId, agentId, agentKey } : null;
     },
     async (c) => {
       const tenantId = requireTenantId(c);
       const agentKey = normalizeAgentKey(c.req.param("key"));
-      const agentId = await resolveExistingAgentId(tenantId, agentKey);
+      const agentId = await resolveExistingAgentId(deps, tenantId, agentKey);
       if (!agentId) {
         return null;
       }
@@ -328,6 +225,122 @@ export function createGatewayConfigRoutes(deps: GatewayConfigRouteDeps): Hono {
       return { tenantId, agentId, agentKey };
     },
   );
+}
 
+export function createGatewayConfigRoutes(deps: GatewayConfigRouteDeps): Hono {
+  const app = new Hono();
+
+  app.get("/config/hooks", async (c) => {
+    const tenantId = requireTenantId(c);
+    const revision = await deps.hooksDal.getLatest(tenantId);
+    if (!revision) {
+      return c.json(
+        { revision: 0, hooks: [], created_at: null, created_by: null, reason: null },
+        200,
+      );
+    }
+    return c.json(
+      {
+        revision: revision.revision,
+        hooks: revision.hooks,
+        created_at: revision.createdAt,
+        created_by: revision.createdBy,
+        reason: revision.reason ?? null,
+        reverted_from_revision: revision.revertedFromRevision ?? null,
+      },
+      200,
+    );
+  });
+
+  app.get("/config/hooks/revisions", async (c) => {
+    const tenantId = requireTenantId(c);
+    const revisions = await deps.hooksDal.listRevisions(tenantId);
+    return c.json(
+      {
+        revisions: revisions.map((revision) => ({
+          revision: revision.revision,
+          hooks: revision.hooks,
+          created_at: revision.createdAt,
+          created_by: revision.createdBy,
+          reason: revision.reason ?? null,
+          reverted_from_revision: revision.revertedFromRevision ?? null,
+        })),
+      },
+      200,
+    );
+  });
+
+  app.put("/config/hooks", async (c) => {
+    const tenantId = requireTenantId(c);
+    const claims = requireAuthClaims(c);
+    let body: unknown;
+    try {
+      body = (await c.req.json()) as unknown;
+    } catch (err) {
+      void err;
+      return c.json({ error: "invalid_request", message: "invalid json" }, 400);
+    }
+    const parsed = HooksUpdateRequest.safeParse(body);
+    if (!parsed.success) {
+      return c.json({ error: "invalid_request", message: parsed.error.message }, 400);
+    }
+    const revision = await deps.hooksDal.set({
+      tenantId,
+      hooks: parsed.data.hooks,
+      createdBy: { kind: "tenant.token", token_id: claims.token_id },
+      reason: parsed.data.reason,
+    });
+    return c.json(
+      {
+        revision: revision.revision,
+        hooks: revision.hooks,
+        created_at: revision.createdAt,
+        created_by: revision.createdBy,
+        reason: revision.reason ?? null,
+        reverted_from_revision: revision.revertedFromRevision ?? null,
+      },
+      200,
+    );
+  });
+
+  app.post("/config/hooks/revert", async (c) => {
+    const tenantId = requireTenantId(c);
+    const claims = requireAuthClaims(c);
+    let body: unknown;
+    try {
+      body = (await c.req.json()) as unknown;
+    } catch (err) {
+      void err;
+      return c.json({ error: "invalid_request", message: "invalid json" }, 400);
+    }
+    const parsed = RevertRequest.safeParse(body);
+    if (!parsed.success) {
+      return c.json({ error: "invalid_request", message: parsed.error.message }, 400);
+    }
+    const revision = await deps.hooksDal.revertToRevision({
+      tenantId,
+      revision: parsed.data.revision,
+      createdBy: { kind: "tenant.token", token_id: claims.token_id },
+      reason: parsed.data.reason,
+    });
+    return c.json(
+      {
+        revision: revision.revision,
+        hooks: revision.hooks,
+        created_at: revision.createdAt,
+        created_by: revision.createdBy,
+        reason: revision.reason ?? null,
+        reverted_from_revision: revision.revertedFromRevision ?? null,
+      },
+      200,
+    );
+  });
+
+  return app;
+}
+
+export function createPolicyConfigRoutes(deps: PolicyConfigRouteDeps): Hono {
+  const app = new Hono();
+  registerPolicyConfigRoutes(app, deps);
   return app;
 }

@@ -30,7 +30,6 @@ describe("AgentSetupWizard create-agent steps", () => {
     const onBackToPreset = vi.fn();
     const onCancel = vi.fn();
     const onNameChange = vi.fn();
-    const onPolicyPresetChange = vi.fn();
     const onRandomizeName = vi.fn();
     const onSave = vi.fn();
     const onToneChange = vi.fn();
@@ -105,10 +104,8 @@ describe("AgentSetupWizard create-agent steps", () => {
           name: "",
           onBackToPreset: undefined,
           onNameChange: vi.fn(),
-          onPolicyPresetChange: vi.fn(),
           onSave: vi.fn(),
           onToneChange: vi.fn(),
-          policyPreset: "moderate",
           selectedPresetLabel: "",
           tone: "direct",
         }}
@@ -228,11 +225,9 @@ describe("AgentSetupWizard create-agent steps", () => {
           nameRequired: true,
           onBackToPreset,
           onNameChange,
-          onPolicyPresetChange,
           onRandomizeName,
           onSave,
           onToneChange,
-          policyPreset: "moderate",
           selectedPresetLabel: "GPT-5.4 (openrouter/openai/gpt-5.4)",
           showBackToPreset: false,
           showPresetSummary: false,
@@ -250,9 +245,6 @@ describe("AgentSetupWizard create-agent steps", () => {
     const nameLabel = Array.from(
       agentRoot.container.querySelectorAll<HTMLLabelElement>("label"),
     ).find((label) => label.textContent?.includes("Agent name"));
-    const powerUserLabel = Array.from(
-      agentRoot.container.querySelectorAll<HTMLLabelElement>("label"),
-    ).find((label) => label.textContent?.includes("Power user"));
     const randomizeButton = agentRoot.container.querySelector<HTMLButtonElement>(
       '[data-testid="agents-create-randomize-name"]',
     );
@@ -280,7 +272,6 @@ describe("AgentSetupWizard create-agent steps", () => {
       setControlledInputValue(agentNameInput!, "Operations Agent");
       setSelectValue(toneSelect!, "warm");
       click(randomizeButton!);
-      click(powerUserLabel!);
       click(agentCancelButton!);
       click(createButton!);
     });
@@ -288,7 +279,6 @@ describe("AgentSetupWizard create-agent steps", () => {
     expect(onNameChange).toHaveBeenCalledWith("Operations Agent");
     expect(onToneChange).toHaveBeenCalledWith("warm");
     expect(onRandomizeName).toHaveBeenCalledOnce();
-    expect(onPolicyPresetChange).toHaveBeenCalledWith("power_user");
     expect(onBackToPreset).not.toHaveBeenCalled();
     expect(onSave).toHaveBeenCalledOnce();
 

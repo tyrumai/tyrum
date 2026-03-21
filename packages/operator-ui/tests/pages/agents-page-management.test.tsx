@@ -14,17 +14,8 @@ import {
   samplePresets,
 } from "./agents-page.test-support.js";
 
-const toastWarningMock = vi.hoisted(() => vi.fn());
-
-vi.mock("sonner", () => ({
-  toast: {
-    warning: toastWarningMock,
-    error: vi.fn(),
-  },
-}));
-
 describe("AgentsPage management", () => {
-  it("creates a managed agent from the wizard and refreshes even when policy sync fails", async () => {
+  it("creates a managed agent from the wizard and refreshes the list", async () => {
     const list = vi
       .fn()
       .mockResolvedValueOnce({
@@ -75,8 +66,7 @@ describe("AgentsPage management", () => {
         ],
       });
     const create = vi.fn().mockResolvedValue(sampleManagedAgentDetail("agent-2-2"));
-    const updateAgentPolicy = vi.fn().mockRejectedValue(new Error("route not found"));
-    const { core, setAgentKey } = createCore({ list, create, updateAgentPolicy });
+    const { core, setAgentKey } = createCore({ list, create });
 
     const testRoot = renderIntoDocument(React.createElement(AgentsPage, { core }));
     await flush();
@@ -119,12 +109,8 @@ describe("AgentsPage management", () => {
 
     expect(create).toHaveBeenCalledTimes(1);
     expect(create).toHaveBeenCalledWith(expect.objectContaining({ agent_key: "agent-2-2" }));
-    expect(updateAgentPolicy).toHaveBeenCalledTimes(1);
     expect(list).toHaveBeenCalledTimes(3);
     expect(setAgentKey).toHaveBeenLastCalledWith("agent-2-2");
-    expect(toastWarningMock).toHaveBeenCalledWith("Agent created with limited setup", {
-      description: "route not found. The agent was created, but the policy preset was not applied.",
-    });
 
     cleanupTestRoot(testRoot);
   });

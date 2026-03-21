@@ -26,7 +26,7 @@ import {
 } from "./operator-ui.first-run-onboarding.helpers.js";
 
 export function registerFirstRunOnboardingFlowTests(): void {
-  it("progresses through provider, preset, and agent setup to completion", async () => {
+  it("progresses through provider, preset, workspace policy, and agent setup to completion", async () => {
     const { local } = stubPersistentStorage();
     const ws = new FakeWsClient();
     const { http, statusGet } = createFakeHttpClient();
@@ -42,6 +42,7 @@ export function registerFirstRunOnboardingFlowTests(): void {
       updated_at: string;
     }> = [];
     let assignments = unassignedAssignments();
+    let workspacePolicyConfigured = false;
     let primaryAgentKey = "default";
     let agentConfig = createAgentConfigResponse({ agentKey: primaryAgentKey, modelRef: null });
     http.agents.list = vi.fn(
@@ -91,6 +92,16 @@ export function registerFirstRunOnboardingFlowTests(): void {
             severity: "error",
             message: "Execution profile is unassigned.",
             target: { kind: "execution_profile", id: "interaction" },
+          },
+        ]);
+      }
+      if (!workspacePolicyConfigured) {
+        return buildIssueStatusResponse([
+          {
+            code: "workspace_policy_unconfigured",
+            severity: "warning",
+            message: "Workspace policy has not been configured.",
+            target: { kind: "deployment", id: null },
           },
         ]);
       }
@@ -204,6 +215,31 @@ export function registerFirstRunOnboardingFlowTests(): void {
         });
       }
 
+      if (url.endsWith("/config/policy/deployment")) {
+        const body = JSON.parse(String(init?.body)) as {
+          bundle: { v: number };
+          reason?: string;
+        };
+        expect(body.bundle.v).toBe(1);
+        expect(body.reason).toBe("onboarding: configure workspace policy");
+        workspacePolicyConfigured = true;
+        return new Response(
+          JSON.stringify({
+            revision: 1,
+            bundle: body.bundle,
+            agent_key: null,
+            created_at: "2026-03-02T00:00:00.000Z",
+            created_by: { kind: "tenant.token", token_id: "token-1" },
+            reason: body.reason ?? null,
+            reverted_from_revision: null,
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+
       if (url.endsWith(`/agents/${encodeURIComponent(primaryAgentKey)}/rename`)) {
         const body = JSON.parse(String(init?.body)) as {
           agent_key: string;
@@ -236,28 +272,6 @@ export function registerFirstRunOnboardingFlowTests(): void {
             identity_revision: 1,
             config_sha256: "a".repeat(64),
             identity_sha256: "b".repeat(64),
-          }),
-          {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          },
-        );
-      }
-
-      if (url.endsWith(`/config/policy/agents/${encodeURIComponent(primaryAgentKey)}`)) {
-        const body = JSON.parse(String(init?.body)) as {
-          bundle: unknown;
-          reason?: string;
-        };
-        return new Response(
-          JSON.stringify({
-            revision: 1,
-            agent_key: primaryAgentKey,
-            bundle: body.bundle,
-            created_at: "2026-03-02T00:00:00.000Z",
-            created_by: { kind: "tenant.token", token_id: "token-1" },
-            reason: body.reason ?? null,
-            reverted_from_revision: null,
           }),
           {
             status: 200,
@@ -350,6 +364,18 @@ export function registerFirstRunOnboardingFlowTests(): void {
     setInputByLabel(container, "Display name", "Onboarding Default");
     await act(async () => {
       findButtonByText(container, "Save model preset")?.dispatchEvent(
+        new MouseEvent("click", { bubbles: true }),
+      );
+      await Promise.resolve();
+    });
+
+    await waitForSelector(
+      container,
+      '[data-testid="first-run-onboarding-step-workspace-policy"]',
+      200,
+    );
+    await act(async () => {
+      findButtonByText(container, "Save workspace policy")?.dispatchEvent(
         new MouseEvent("click", { bubbles: true }),
       );
       await Promise.resolve();
