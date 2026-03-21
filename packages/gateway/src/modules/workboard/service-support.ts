@@ -1,5 +1,11 @@
 import { randomUUID } from "node:crypto";
-import type { SubagentDescriptor, WorkItem, WorkScope, WsEventEnvelope } from "@tyrum/contracts";
+import type {
+  SubagentDescriptor,
+  WorkItem,
+  WorkScope,
+  WorkSignal,
+  WsEventEnvelope,
+} from "@tyrum/contracts";
 import type { PolicyService } from "@tyrum/runtime-policy";
 import type { SqlDb } from "../../statestore/types.js";
 import { broadcastWsEvent } from "../../ws/broadcast.js";
@@ -20,6 +26,8 @@ export type WorkItemEventType =
   | "work.item.failed"
   | "work.item.cancelled"
   | "work.item.deleted";
+
+export type WorkSignalEventType = "work.signal.updated";
 
 export type WorkTaskRow = {
   task_id: string;
@@ -269,6 +277,48 @@ export async function emitItemEvent(params: {
   );
 }
 
+export async function emitSignalEvent(params: {
+  db: SqlDb;
+  redactionEngine?: RedactionEngine;
+  protocolDeps?: ProtocolDeps;
+  type: WorkSignalEventType;
+  signal: WorkSignal;
+}): Promise<void> {
+  const message = {
+    event_id: randomUUID(),
+    type: params.type,
+    occurred_at: new Date().toISOString(),
+    scope: { kind: "agent", agent_id: params.signal.agent_id },
+    payload: { signal: params.signal },
+  } satisfies WsEventEnvelope;
+  if (params.protocolDeps) {
+    broadcastWsEvent(
+      params.signal.tenant_id,
+      message,
+      {
+        connectionManager: params.protocolDeps.connectionManager,
+        cluster: params.protocolDeps.cluster,
+        logger: params.protocolDeps.logger,
+        maxBufferedBytes: params.protocolDeps.maxBufferedBytes,
+      },
+      WORKBOARD_WS_AUDIENCE,
+    );
+    return;
+  }
+  const payload = {
+    message,
+    audience: WORKBOARD_WS_AUDIENCE,
+  };
+  const redactedPayload = params.redactionEngine
+    ? params.redactionEngine.redactUnknown(payload).redacted
+    : payload;
+  await params.db.run(
+    `INSERT INTO outbox (tenant_id, topic, target_edge_id, payload_json)
+     VALUES (?, ?, ?, ?)`,
+    [params.signal.tenant_id, "ws.broadcast", null, JSON.stringify(redactedPayload)],
+  );
+}
+
 export async function maybeEnqueueStateChangeNotification(params: {
   db: SqlDb;
   scope: WorkScope;
@@ -292,6 +342,83 @@ export async function maybeEnqueueStateChangeNotification(params: {
     policyService: params.policyService,
     protocolDeps: params.protocolDeps,
   }).catch(() => undefined);
+}
+
+export async function loadDeleteEffects(params: {
+  db: SqlDb;
+  scope: WorkScope;
+  workItemId: string;
+}): Promise<{ childItemIds: string[]; attachedSignalIds: string[] }> {
+  const [childRows, attachedSignalRows] = await Promise.all([
+    params.db.all<{ work_item_id: string }>(
+      `SELECT work_item_id
+       FROM work_items
+       WHERE tenant_id = ?
+         AND agent_id = ?
+         AND workspace_id = ?
+         AND parent_work_item_id = ?`,
+      [params.scope.tenant_id, params.scope.agent_id, params.scope.workspace_id, params.workItemId],
+    ),
+    params.db.all<{ signal_id: string }>(
+      `SELECT signal_id
+       FROM work_signals
+       WHERE tenant_id = ?
+         AND agent_id = ?
+         AND workspace_id = ?
+         AND work_item_id = ?
+         AND status IN ('active', 'paused')`,
+      [params.scope.tenant_id, params.scope.agent_id, params.scope.workspace_id, params.workItemId],
+    ),
+  ]);
+
+  return {
+    childItemIds: childRows.map((row) => row.work_item_id),
+    attachedSignalIds: attachedSignalRows.map((row) => row.signal_id),
+  };
+}
+
+export async function emitDeleteEffects(params: {
+  db: SqlDb;
+  workboard: WorkboardDal;
+  scope: WorkScope;
+  childItemIds: string[];
+  attachedSignalIds: string[];
+  redactionEngine?: RedactionEngine;
+  protocolDeps?: ProtocolDeps;
+}): Promise<void> {
+  for (const childItemId of params.childItemIds) {
+    const child = await params.workboard.getItem({
+      scope: params.scope,
+      work_item_id: childItemId,
+    });
+    if (!child) {
+      continue;
+    }
+    await emitItemEvent({
+      db: params.db,
+      redactionEngine: params.redactionEngine,
+      protocolDeps: params.protocolDeps,
+      type: "work.item.updated",
+      item: child,
+    });
+  }
+
+  for (const signalId of params.attachedSignalIds) {
+    const signal = await params.workboard.getSignal({
+      scope: params.scope,
+      signal_id: signalId,
+    });
+    if (!signal) {
+      continue;
+    }
+    await emitSignalEvent({
+      db: params.db,
+      redactionEngine: params.redactionEngine,
+      protocolDeps: params.protocolDeps,
+      type: "work.signal.updated",
+      signal,
+    });
+  }
 }
 
 export async function createCapturedWorkItem(params: {
