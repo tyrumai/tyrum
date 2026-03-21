@@ -84,7 +84,7 @@ function registerPairingApproveTests(): void {
     });
 
     expect(pairingsList).toHaveBeenCalledTimes(1);
-    expect(container.textContent).toContain("node-1");
+    expect(container.textContent).toContain("my takeover: label");
     expandNodeRow(container);
 
     const takeoverLink = container.querySelector<HTMLAnchorElement>(
