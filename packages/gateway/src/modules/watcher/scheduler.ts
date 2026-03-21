@@ -4,7 +4,6 @@ import type { ActionPrimitive, Lane as LaneT, Playbook } from "@tyrum/contracts"
 import type { SqlDb } from "../../statestore/types.js";
 import { sqlActiveWhereClause } from "../../statestore/sql.js";
 import type { MemoryDal } from "../memory/memory-dal.js";
-import { recordMemorySystemEpisode } from "../memory/memory-episode-recorder.js";
 import type { Logger } from "../observability/logger.js";
 import type { ExecutionEngine } from "../execution/engine.js";
 import type { PolicyService } from "@tyrum/runtime-policy";
@@ -52,7 +51,6 @@ export interface WatcherSchedulerOptions {
 }
 export class WatcherScheduler {
   private readonly db: SqlDb;
-  private readonly memoryDal: MemoryDal;
   private readonly eventBus: Emitter<GatewayEvents>;
   private readonly owner: string;
   private readonly logger?: Logger;
@@ -70,7 +68,6 @@ export class WatcherScheduler {
 
   constructor(opts: WatcherSchedulerOptions) {
     this.db = opts.db;
-    this.memoryDal = opts.memoryDal;
     this.eventBus = opts.eventBus;
     this.owner = opts.owner?.trim() || "scheduler";
     this.logger = opts.logger;
@@ -184,40 +181,6 @@ export class WatcherScheduler {
       watcherFiringId: firing.watcher_firing_id,
       owner: this.owner,
     });
-  }
-  private async recordPeriodicFireEpisode(
-    firing: WatcherFiringRow,
-    watcher: RawPeriodicWatcherRow,
-    planId: string,
-    triggerType: string,
-  ): Promise<void> {
-    try {
-      await recordMemorySystemEpisode(
-        this.memoryDal,
-        {
-          occurred_at: new Date(firing.scheduled_at_ms).toISOString(),
-          channel: "watcher",
-          event_type: "periodic_fired",
-          summary_md: "Watcher fired: periodic_fired",
-          tags: ["watcher", `watcher_id:${firing.watcher_id}`, `plan_id:${planId}`],
-          metadata: {
-            firing_id: firing.watcher_firing_id,
-            watcher_id: firing.watcher_id,
-            plan_id: planId,
-            trigger_type: triggerType,
-            scheduled_at_ms: firing.scheduled_at_ms,
-          },
-        },
-        { tenantId: firing.tenant_id, agentId: watcher.agent_id },
-      );
-    } catch (err) {
-      console.warn("watcher.periodic_episode_record_failed", {
-        watcher_id: firing.watcher_id,
-        plan_id: planId,
-        firing_id: firing.watcher_firing_id,
-        error: getErrorMessage(err),
-      });
-    }
   }
   private async getScopeKeys(
     firing: WatcherFiringRow,
@@ -405,7 +368,6 @@ export class WatcherScheduler {
       return this.markFiringFailed(firing, `unexpected watcher trigger type '${triggerType}'`);
     }
 
-    await this.recordPeriodicFireEpisode(firing, watcher, planId, triggerType);
     this.eventBus.emit("watcher:fired", { watcherId: firing.watcher_id, planId, triggerType });
     if (!this.automationEnabled) return this.markFiringEnqueued(firing);
     if (!this.engine || !this.policyService) {

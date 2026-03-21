@@ -29,57 +29,32 @@ export function registerWatcherSchedulerCoreTests(state: WatcherSchedulerState):
 
     await scheduler.tick();
 
-    expect(await countEpisodesByEventType(state, "periodic_fired")).toBe(1);
+    expect(await countEpisodesByEventType(state, "periodic_fired")).toBe(0);
 
     const firings = await db.all<{ status: string }>("SELECT status FROM watcher_firings");
     expect(firings).toHaveLength(1);
     expect(firings[0]!.status).toBe("enqueued");
   });
 
-  it("treats periodic episode recording as best-effort and continues firing batch processing", async () => {
-    const { db, eventBus, memoryDal, processor, scheduler } = requireWatcherSchedulerContext(state);
-    const watcher1 = await processor.createWatcher("plan-1", "periodic", { intervalMs: 1000 });
-    const watcher2 = await processor.createWatcher("plan-2", "periodic", { intervalMs: 1000 });
+  it("continues batch processing without creating periodic memory", async () => {
+    const { db, eventBus, processor, scheduler } = requireWatcherSchedulerContext(state);
+    await processor.createWatcher("plan-1", "periodic", { intervalMs: 1000 });
+    await processor.createWatcher("plan-2", "periodic", { intervalMs: 1000 });
 
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const createSpy = vi
-      .spyOn(memoryDal, "create")
-      .mockRejectedValue(new Error("episode recording failure"));
+    const received: GatewayEvents["watcher:fired"][] = [];
+    eventBus.on("watcher:fired", (event) => received.push(event));
 
-    try {
-      const received: GatewayEvents["watcher:fired"][] = [];
-      eventBus.on("watcher:fired", (event) => received.push(event));
+    await scheduler.tick();
 
-      await scheduler.tick();
+    expect(received).toHaveLength(2);
+    expect(await countEpisodesByEventType(state, "periodic_fired")).toBe(0);
 
-      expect(received).toHaveLength(2);
-      expect(warnSpy).toHaveBeenCalledWith(
-        "watcher.periodic_episode_record_failed",
-        expect.objectContaining({
-          watcher_id: watcher1,
-          plan_id: "plan-1",
-          error: "episode recording failure",
-        }),
-      );
-      expect(warnSpy).toHaveBeenCalledWith(
-        "watcher.periodic_episode_record_failed",
-        expect.objectContaining({
-          watcher_id: watcher2,
-          plan_id: "plan-2",
-          error: "episode recording failure",
-        }),
-      );
-
-      const firings = await db.all<{ watcher_id: string; status: string }>(
-        "SELECT watcher_id, status FROM watcher_firings ORDER BY watcher_id",
-      );
-      expect(firings).toHaveLength(2);
-      expect(firings[0]!.status).toBe("enqueued");
-      expect(firings[1]!.status).toBe("enqueued");
-    } finally {
-      createSpy.mockRestore();
-      warnSpy.mockRestore();
-    }
+    const firings = await db.all<{ watcher_id: string; status: string }>(
+      "SELECT watcher_id, status FROM watcher_firings ORDER BY watcher_id",
+    );
+    expect(firings).toHaveLength(2);
+    expect(firings[0]!.status).toBe("enqueued");
+    expect(firings[1]!.status).toBe("enqueued");
   });
 
   it("does not fire if interval has not elapsed", async () => {
@@ -89,7 +64,7 @@ export function registerWatcherSchedulerCoreTests(state: WatcherSchedulerState):
     await scheduler.tick();
     await scheduler.tick();
 
-    expect(await countEpisodesByEventType(state, "periodic_fired")).toBe(1);
+    expect(await countEpisodesByEventType(state, "periodic_fired")).toBe(0);
   });
 
   it("does not fire a newly created interval schedule until the first full interval elapses", async () => {
@@ -257,7 +232,7 @@ export function registerWatcherSchedulerCoreTests(state: WatcherSchedulerState):
     expect(firings).toHaveLength(1);
     expect(firings[0]!.trigger_type).toBe("webhook");
     expect(firings[0]!.status).toBe("enqueued");
-    expect(await countEpisodesByEventType(state, "webhook_fired")).toBe(1);
+    expect(await countEpisodesByEventType(state, "webhook_fired")).toBe(0);
     expect(await countEpisodesByEventType(state, "periodic_fired")).toBe(0);
   });
 }

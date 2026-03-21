@@ -29,74 +29,23 @@ describe("WatcherProcessor", () => {
     await db.close();
   });
 
-  function findEpisodeByType(episodes: any[], eventType: string): any | undefined {
-    return episodes.find((item) => (item?.provenance?.metadata as any)?.event_type === eventType);
-  }
-
-  it("creates episodic events for matching plan completion", async () => {
+  it("does not create memory for matching plan completion", async () => {
     await processor.createWatcher("plan-1", "plan_complete", { planId: "plan-1" });
 
     await processor.onPlanCompleted({ planId: "plan-1", stepsExecuted: 5 });
 
     const episodes = await listWatcherEpisodes(memoryDal);
-    expect(findEpisodeByType(episodes, "plan_completed")).toBeTruthy();
+    expect(episodes).toHaveLength(0);
   });
 
-  it("treats plan completion episode recording as best-effort", async () => {
-    const id = await processor.createWatcher("plan-1", "plan_complete", { planId: "plan-1" });
-
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const createSpy = vi
-      .spyOn(memoryDal, "create")
-      .mockRejectedValue(new Error("episode recording failure"));
-
-    await processor.onPlanCompleted({ planId: "plan-1", stepsExecuted: 5 });
-
-    expect(warnSpy).toHaveBeenCalledWith(
-      "watcher.plan_completed_episode_record_failed",
-      expect.objectContaining({
-        watcher_id: id,
-        plan_id: "plan-1",
-        error: "episode recording failure",
-      }),
-    );
-
-    createSpy.mockRestore();
-    warnSpy.mockRestore();
-  });
-
-  it("logs plan failure and deactivates plan_complete watchers", async () => {
+  it("deactivates plan_complete watchers without creating memory on plan failure", async () => {
     await processor.createWatcher("plan-1", "plan_complete", { planId: "plan-1" });
 
     await processor.onPlanFailed({ planId: "plan-1", reason: "timeout" });
 
     const episodes = await listWatcherEpisodes(memoryDal);
-    expect(findEpisodeByType(episodes, "plan_failed")).toBeTruthy();
+    expect(episodes).toHaveLength(0);
     expect(await processor.listWatchers()).toHaveLength(0);
-  });
-
-  it("treats plan failure episode recording as best-effort and still deactivates plan_complete watchers", async () => {
-    const id = await processor.createWatcher("plan-1", "plan_complete", { planId: "plan-1" });
-
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const createSpy = vi
-      .spyOn(memoryDal, "create")
-      .mockRejectedValue(new Error("episode recording failure"));
-
-    await processor.onPlanFailed({ planId: "plan-1", reason: "timeout" });
-
-    expect(await processor.listWatchers()).toHaveLength(0);
-    expect(warnSpy).toHaveBeenCalledWith(
-      "watcher.plan_failed_episode_record_failed",
-      expect.objectContaining({
-        watcher_id: id,
-        plan_id: "plan-1",
-        error: "episode recording failure",
-      }),
-    );
-
-    createSpy.mockRestore();
-    warnSpy.mockRestore();
   });
 
   it("keeps periodic watchers active after failure", async () => {
@@ -124,7 +73,7 @@ describe("WatcherProcessor", () => {
     eventBus.emit("plan:completed", { planId: "plan-1", stepsExecuted: 3 });
     await new Promise((resolve) => setTimeout(resolve, 0));
     const episodes = await listWatcherEpisodes(memoryDal);
-    expect(findEpisodeByType(episodes, "plan_completed")).toBeTruthy();
+    expect(episodes).toHaveLength(0);
 
     processor.stop();
   });
@@ -155,7 +104,7 @@ describe("WatcherProcessor", () => {
     warnSpy.mockRestore();
   });
 
-  it("records webhook triggers and rejects replayed nonce+timestamp envelopes", async () => {
+  it("records webhook triggers without creating memory and rejects replayed nonce+timestamp envelopes", async () => {
     const id = await processor.createWatcher("plan-1", "webhook", {
       secret_handle: {
         handle_id: "secret-handle",
@@ -185,53 +134,7 @@ describe("WatcherProcessor", () => {
     expect(replay).toBe(false);
 
     const episodes = await listWatcherEpisodes(memoryDal);
-    expect(
-      episodes.filter((e) => (e?.provenance?.metadata as any)?.event_type === "webhook_fired"),
-    ).toHaveLength(1);
-  });
-
-  it("treats webhook episode recording as best-effort", async () => {
-    const id = await processor.createWatcher("plan-1", "webhook", {
-      secret_handle: {
-        handle_id: "secret-handle",
-        provider: "db",
-        scope: "watcher:webhook:test",
-        created_at: new Date().toISOString(),
-      },
-    });
-    const watcher = await processor.getActiveWatcherById(id);
-    expect(watcher).not.toBeNull();
-
-    const fired = vi.fn();
-    eventBus.on("watcher:fired", fired);
-
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const createSpy = vi
-      .spyOn(memoryDal, "create")
-      .mockRejectedValue(new Error("episode recording failure"));
-
-    const recorded = await processor.recordWebhookTrigger(watcher!, {
-      timestampMs: 1_700_000_000_000,
-      nonce: "nonce-best-effort",
-      bodySha256: "abc123",
-      bodyBytes: 11,
-    });
-    expect(recorded).toBe(true);
-    expect(fired).toHaveBeenCalledTimes(1);
-    expect(warnSpy).toHaveBeenCalledWith(
-      "watcher.webhook_episode_record_failed",
-      expect.objectContaining({
-        watcher_id: id,
-        plan_id: "plan-1",
-        error: "episode recording failure",
-      }),
-    );
-
-    const count = await db.get<{ n: number }>("SELECT COUNT(*) AS n FROM watcher_firings");
-    expect(count?.n).toBe(1);
-
-    createSpy.mockRestore();
-    warnSpy.mockRestore();
+    expect(episodes).toHaveLength(0);
   });
 
   it("creates durable firing rows for webhook triggers", async () => {
@@ -266,10 +169,7 @@ describe("WatcherProcessor", () => {
     expect(firings[0]!.scheduled_at_ms).toBe(timestampMs);
 
     const episodes = await listWatcherEpisodes(memoryDal);
-    const fired = findEpisodeByType(episodes, "webhook_fired");
-    expect(fired).toBeDefined();
-    const payload = fired!.provenance.metadata as Record<string, unknown> | undefined;
-    expect(payload?.["firing_id"]).toBe(firings[0]!.watcher_firing_id);
+    expect(episodes).toHaveLength(0);
   });
 
   it("rejects webhook nonce replays even when timestamp differs", async () => {

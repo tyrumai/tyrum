@@ -129,6 +129,17 @@ describe("formatMemoryGuidancePrompt", () => {
     expect(result).toContain("search with alternative terms, paraphrases");
   });
 
+  it("adds automation-specific write guidance for triggered work", () => {
+    const tools = [
+      makeTool("mcp.memory.seed"),
+      makeTool("mcp.memory.search"),
+      makeTool("mcp.memory.write"),
+    ];
+    const result = formatMemoryGuidancePrompt(tools, { isAutomationTurn: true });
+    expect(result).toContain("For triggered automation work");
+    expect(result).toContain("If nothing worth reusing emerged, do not write memory.");
+  });
+
   it("returns only search guidance for read-only profiles without mcp.memory.write", () => {
     const tools = [makeTool("mcp.memory.seed"), makeTool("mcp.memory.search")];
     const result = formatMemoryGuidancePrompt(tools);
@@ -144,5 +155,14 @@ describe("formatMemoryGuidancePrompt", () => {
   it("returns undefined when only seed is present", () => {
     const result = formatMemoryGuidancePrompt([makeTool("mcp.memory.seed")]);
     expect(result).toBeUndefined();
+  });
+
+  it("does not mention automation-specific writes when the write tool is unavailable", () => {
+    const result = formatMemoryGuidancePrompt(
+      [makeTool("mcp.memory.seed"), makeTool("mcp.memory.search")],
+      { isAutomationTurn: true },
+    );
+    expect(result).toBeDefined();
+    expect(result).not.toContain("For triggered automation work");
   });
 });

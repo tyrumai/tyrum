@@ -219,9 +219,7 @@ describe("Watcher routes + scheduler integration", () => {
     await scheduler.tick();
 
     const episodes = await listWatcherEpisodes();
-    expect(
-      episodes.filter((e) => (e?.provenance?.metadata as any)?.event_type === "periodic_fired"),
-    ).toHaveLength(1);
+    expect(episodes).toHaveLength(0);
   });
 
   it("POST /watchers/:id/trigger/webhook rejects requests without signature envelope", async () => {
@@ -271,9 +269,7 @@ describe("Watcher routes + scheduler integration", () => {
 
     expect(replay.status).toBe(409);
     const episodes = await listWatcherEpisodes();
-    expect(
-      episodes.filter((e) => (e?.provenance?.metadata as any)?.event_type === "webhook_fired"),
-    ).toHaveLength(1);
+    expect(episodes).toHaveLength(0);
   });
 
   it("POST /watchers/:id/trigger/webhook rejects nonce replays even if timestamp unit differs", async () => {
@@ -387,8 +383,6 @@ describe("Watcher routes + scheduler integration", () => {
 
     expect(res.status).toBe(401);
     const episodes = await listWatcherEpisodes();
-    expect(
-      episodes.filter((e) => (e?.provenance?.metadata as any)?.event_type === "webhook_fired"),
-    ).toHaveLength(0);
+    expect(episodes).toHaveLength(0);
   });
 });

@@ -157,7 +157,9 @@ export function assemblePrompts(
   const promptContractPrompt = PROMPT_CONTRACT_PROMPT;
   const skillsText = `Skill guidance:\n${formatSkillsPrompt(ctx.skills)}`;
   const workOrchestrationText = formatWorkOrchestrationPrompt(filteredTools);
-  const memoryGuidanceText = formatMemoryGuidancePrompt(filteredTools);
+  const memoryGuidanceText = formatMemoryGuidancePrompt(filteredTools, {
+    isAutomationTurn: automation !== null && automation !== undefined,
+  });
   const toolsText = `Tool contracts:\n${formatToolPrompt(filteredTools)}`;
   const sessionText = `Session state:\n${sessionCtx.trim() || "No stored session state."}`;
   const automationDirectiveText =
