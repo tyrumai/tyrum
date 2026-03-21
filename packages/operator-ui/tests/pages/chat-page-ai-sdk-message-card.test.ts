@@ -252,7 +252,7 @@ describe("MessageCard", () => {
     const toggle = findToggle(testRoot.container, "web_search");
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
     expect(testRoot.container.textContent).not.toContain("latest docs");
-    expect(testRoot.container.textContent).not.toContain("result");
+    expect(testRoot.container.textContent).not.toContain("Result");
     expect(testRoot.container.textContent).not.toContain("tool-call-1");
 
     act(() => {
@@ -260,7 +260,7 @@ describe("MessageCard", () => {
     });
     expect(findToggle(testRoot.container, "web_search").getAttribute("aria-expanded")).toBe("true");
     expect(testRoot.container.textContent).toContain("latest docs");
-    expect(testRoot.container.textContent).toContain("result");
+    expect(testRoot.container.textContent).toContain("Result");
     expect(testRoot.container.textContent).not.toContain("tool-call-1");
 
     cleanupTestRoot(testRoot);

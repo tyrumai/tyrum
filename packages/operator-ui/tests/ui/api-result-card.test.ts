@@ -6,7 +6,7 @@ import * as operatorUi from "../../src/index.js";
 import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
 
 describe("ApiResultCard", () => {
-  it("renders successful responses with a JsonViewer", () => {
+  it("renders successful responses with structured values", () => {
     const ApiResultCard = (operatorUi as Record<string, unknown>)["ApiResultCard"];
     expect(ApiResultCard).toBeDefined();
 
@@ -18,7 +18,7 @@ describe("ApiResultCard", () => {
     );
 
     expect(container.textContent).toContain("Success");
-    expect(container.textContent).toContain("hello");
+    expect(container.textContent).toContain("Hello");
     expect(container.textContent).toContain("world");
 
     cleanupTestRoot({ container, root });

@@ -13,7 +13,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ArtifactInlinePreview } from "../artifacts/artifact-inline-preview.js";
 import { Badge } from "../ui/badge.js";
-import { JsonViewer } from "../ui/json-viewer.js";
+import { StructuredValue } from "../ui/structured-value.js";
 import { ApprovalActions } from "./approval-actions.js";
 import { useArtifactAwareMarkdownComponents } from "./chat-page-ai-sdk-artifact-markdown.js";
 import { DisclosureCard, useAutoDisclosure } from "./chat-page-ai-sdk-disclosure-card.js";
@@ -277,7 +277,9 @@ function ToolPartCard({
           <div>
             <div className="mb-1 text-[11px] uppercase tracking-wide text-fg-muted">Output</div>
             {outputState.isStructured ? (
-              <JsonViewer value={outputState.displayValue} contentClassName="max-h-[420px]" />
+              <div className="max-h-[420px] overflow-auto rounded-md border border-border bg-bg px-2 py-1.5">
+                <StructuredValue value={outputState.displayValue} />
+              </div>
             ) : (
               <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded-md bg-bg px-2 py-1.5 text-xs text-fg [overflow-wrap:anywhere]">
                 {stringifyPart(part.output)}
@@ -362,11 +364,9 @@ function ApprovalDataPartCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 text-sm font-medium text-warning-950">
             <ShieldCheck className="h-4 w-4 shrink-0" />
-            <span className="truncate">Approval {part.approval_id}</span>
+            <span className="truncate">Approval request</span>
           </div>
-          <div className="mt-1 text-xs text-warning-900/80">
-            {part.tool_name} <code className="font-mono">{part.tool_call_id}</code>
-          </div>
+          <div className="mt-1 text-xs text-warning-900/80">{part.tool_name}</div>
         </div>
         <Badge variant={approvalStateVariant(part.state)}>{part.state}</Badge>
       </div>

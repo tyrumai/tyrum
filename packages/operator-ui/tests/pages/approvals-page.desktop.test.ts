@@ -15,12 +15,24 @@ import {
   createRunningDesktopAttemptFixture,
   DESKTOP_TAKEOVER_URL,
 } from "./approvals-page.desktop.test-fixtures.js";
-import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
+import { act } from "react";
+import { cleanupTestRoot, renderIntoDocument, click } from "../test-utils.js";
 
 const NOOP_ADMIN_ACCESS_CONTROLLER = {
   enter: async () => {},
   exit: async () => {},
 };
+
+/** Click the "Show context" toggle on a card to expand its collapsible section. */
+function expandCardContext(container: HTMLElement): void {
+  const toggle = [...container.querySelectorAll<HTMLButtonElement>("button")].find(
+    (btn) => btn.textContent === "Show context",
+  );
+  if (!toggle) throw new Error("Show context button not found");
+  act(() => {
+    click(toggle);
+  });
+}
 
 function renderApprovalsPage(core: OperatorCore) {
   return renderIntoDocument(
@@ -77,6 +89,8 @@ describe("ApprovalsPage (desktop approvals)", () => {
     const { container, root } = renderApprovalsPage(core);
 
     try {
+      expandCardContext(container);
+
       const summary = container.querySelector<HTMLDivElement>(
         '[data-testid="desktop-approval-summary-1"]',
       );
@@ -85,10 +99,6 @@ describe("ApprovalsPage (desktop approvals)", () => {
       expect(summary?.textContent).toContain("act");
       expect(summary?.textContent).toContain("click");
       expect(summary?.textContent).toContain("Submit");
-
-      const details = container.querySelector<HTMLDivElement>('[data-testid="approval-details-1"]');
-      expect(details).not.toBeNull();
-      expect(details?.textContent).toContain("approval:1");
 
       const takeoverLink = container.querySelector<HTMLAnchorElement>(
         '[data-testid="approval-takeover-1"]',
@@ -145,6 +155,8 @@ describe("ApprovalsPage (desktop approvals)", () => {
     const { container, root } = renderApprovalsPage(core);
 
     try {
+      expandCardContext(container);
+
       const takeoverLink = container.querySelector<HTMLAnchorElement>(
         '[data-testid="approval-takeover-1"]',
       );
@@ -216,6 +228,8 @@ describe("ApprovalsPage (desktop approvals)", () => {
     const { container, root } = renderApprovalsPage(core);
 
     try {
+      expandCardContext(container);
+
       const motivation = container.querySelector<HTMLDivElement>(
         '[data-testid="approval-motivation-1"]',
       );
@@ -226,6 +240,73 @@ describe("ApprovalsPage (desktop approvals)", () => {
       expect(review).not.toBeNull();
       expect(review?.textContent).toContain("known desktop node");
       expect(review?.textContent).toContain("Risk MEDIUM · score 42");
+    } finally {
+      cleanupTestRoot({ container, root });
+    }
+  });
+
+  it("keeps approval key and scope details behind the context toggle", () => {
+    const runId = "11111111-1111-1111-1111-111111111111";
+    const stepId = "22222222-2222-2222-2222-222222222222";
+    const approval = createDesktopApprovalFixture({
+      approvalKey: "approval:desktop:submit",
+      scope: {
+        run_id: runId,
+        step_id: stepId,
+      },
+      context: {},
+      latestReview: null,
+    });
+
+    const { store: approvalsStore } = createStore({
+      byId: { 1: approval },
+      pendingIds: [1],
+      loading: false,
+      error: null,
+      lastSyncedAt: null,
+    });
+
+    const { store: pairingStore } = createStore({
+      byId: {},
+      pendingIds: [],
+      blockedIds: [],
+      loading: false,
+      error: null,
+      lastSyncedAt: null,
+    });
+
+    const { store: runsStore } = createStore({
+      runsById: {},
+      stepsById: {},
+      attemptsById: {},
+      stepIdsByRunId: {},
+      attemptIdsByStepId: {},
+    });
+
+    const core = {
+      approvalsStore,
+      pairingStore,
+      runsStore,
+      elevatedModeStore: createElevatedModeStore({
+        tickIntervalMs: 0,
+      }),
+    } as unknown as OperatorCore;
+
+    const { container, root } = renderApprovalsPage(core);
+
+    try {
+      expect(container.textContent).not.toContain("approval:desktop:submit");
+
+      expandCardContext(container);
+
+      const details = container.querySelector<HTMLDivElement>('[data-testid="approval-details-1"]');
+      expect(details).not.toBeNull();
+      expect(details?.textContent).toContain("Approval key");
+      expect(details?.textContent).toContain("approval:desktop:submit");
+      expect(details?.textContent).toContain("Run");
+      expect(details?.textContent).toContain(runId);
+      expect(details?.textContent).toContain("Step");
+      expect(details?.textContent).toContain(stepId);
     } finally {
       cleanupTestRoot({ container, root });
     }
@@ -306,6 +387,8 @@ describe("ApprovalsPage (desktop approvals)", () => {
     const { container, root } = renderApprovalsPage(core);
 
     try {
+      expandCardContext(container);
+
       const artifactsButton = container.querySelector<HTMLButtonElement>(
         `[data-testid="attempt-artifacts-${attemptId}"]`,
       );
@@ -403,6 +486,8 @@ describe("ApprovalsPage (desktop approvals)", () => {
     const { container, root } = renderApprovalsPage(core);
 
     try {
+      expandCardContext(container);
+
       const artifactsButton = container.querySelector<HTMLButtonElement>(
         `[data-testid="attempt-artifacts-${attemptIdWithArtifacts}"]`,
       );

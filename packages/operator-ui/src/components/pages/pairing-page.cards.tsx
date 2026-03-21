@@ -128,11 +128,10 @@ export function PendingPairingDetails({
           <Badge variant={statusDisplay.variant}>{statusDisplay.label}</Badge>
         </div>
         <div className="text-sm text-fg-muted">
-          Node <span className="break-all font-medium text-fg">{pairing.node.node_id}</span>
+          <span className="break-all font-medium text-fg">
+            {pairing.node.label || "Unnamed node"}
+          </span>
         </div>
-        {pairing.node.label ? (
-          <div className="text-xs text-fg-muted">{pairing.node.label}</div>
-        ) : null}
         <NodeInventoryBadges
           pairingId={pairing.pairing_id}
           inventory={inventory}
@@ -352,11 +351,10 @@ export function ApprovedPairingDetails({
       <div className="grid gap-1">
         <div className="text-sm font-medium text-fg">Trusted node</div>
         <div className="text-sm text-fg-muted">
-          Node <span className="break-all font-medium text-fg">{pairing.node.node_id}</span>
+          <span className="break-all font-medium text-fg">
+            {pairing.node.label || "Unnamed node"}
+          </span>
         </div>
-        {pairing.node.label ? (
-          <div className="text-xs text-fg-muted">{pairing.node.label}</div>
-        ) : null}
         <NodeInventoryBadges
           pairingId={pairing.pairing_id}
           inventory={inventory}

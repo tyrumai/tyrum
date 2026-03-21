@@ -190,14 +190,6 @@ export function AuditPanel({ core }: { core: OperatorCore }) {
                   </div>
                   <div className="grid gap-1 rounded-lg border border-border bg-bg-subtle p-3">
                     <div className="text-xs font-medium uppercase tracking-wide text-fg-muted">
-                      Internal plan ID
-                    </div>
-                    <div className="font-mono text-sm text-fg break-words">
-                      {selectedPlan.plan_id}
-                    </div>
-                  </div>
-                  <div className="grid gap-1 rounded-lg border border-border bg-bg-subtle p-3">
-                    <div className="text-xs font-medium uppercase tracking-wide text-fg-muted">
                       Kind
                     </div>
                     <div className="text-sm text-fg">{selectedPlan.kind}</div>

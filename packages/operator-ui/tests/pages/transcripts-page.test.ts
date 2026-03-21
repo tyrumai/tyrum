@@ -336,10 +336,11 @@ describe("TranscriptsPage", () => {
     await flushPage();
 
     expect(testRoot.container.textContent).toContain("Inspector");
-    expect(testRoot.container.textContent).toContain("Run id");
-    expect(testRoot.container.textContent).toContain("550e8400-e29b-41d4-a716-446655440110");
+    expect(testRoot.container.textContent).toContain("Run key");
+    expect(testRoot.container.textContent).toContain(fixture.rootSession.session_key);
+    expect(testRoot.container.textContent).toContain("Job id");
+    expect(testRoot.container.textContent).toContain("550e8400-e29b-41d4-a716-446655440111");
     expect(testRoot.container.textContent).toContain("Artifacts");
-    expect(testRoot.container.textContent).toContain(fixture.artifact.artifact_id);
     expect(testRoot.container.textContent).toContain("Open artifact");
     expect(testRoot.container.textContent).toContain("Download");
     expect(artifactsApi.getMetadata).toHaveBeenCalledWith(
@@ -402,6 +403,32 @@ describe("TranscriptsPage", () => {
     cleanupTestRoot(testRoot);
   });
 
+  it("shows focused transcript details when no event is selected", async () => {
+    const fixture = createTranscriptFixture();
+    const { core } = createTranscriptCore({
+      transcriptState: {
+        selectedSessionKey: fixture.rootSession.session_key,
+        detail: {
+          rootSessionKey: fixture.rootSession.session_key,
+          focusSessionKey: fixture.rootSession.session_key,
+          sessions: [fixture.rootSession, fixture.childSession],
+          events: [],
+        },
+      },
+    });
+    const testRoot = renderIntoDocument(React.createElement(TranscriptsPage, { core }));
+
+    await flushPage();
+
+    expect(testRoot.container.textContent).toContain("Inspector");
+    expect(testRoot.container.textContent).toContain("Root transcript");
+    expect(testRoot.container.textContent).toContain("Session id");
+    expect(testRoot.container.textContent).toContain("Session key");
+    expect(testRoot.container.textContent).toContain(fixture.rootSession.session_key);
+
+    cleanupTestRoot(testRoot);
+  });
+
   it("does not auto-retry transcript detail loading after a failed detail request", async () => {
     const { core, transcriptStore } = createTranscriptCore({
       transcriptState: {
@@ -453,8 +480,8 @@ describe("TranscriptsPage", () => {
     });
     await flushPage();
 
-    expect(testRoot.container.textContent).toContain("Approval id");
-    expect(testRoot.container.textContent).toContain("550e8400-e29b-41d4-a716-446655440114");
+    expect(testRoot.container.textContent).toContain("Occurred");
+    expect(testRoot.container.textContent).toContain("2026-01-01T00:03:00.000Z");
 
     act(() => {
       setTranscriptState((previous) => ({
@@ -484,8 +511,8 @@ describe("TranscriptsPage", () => {
     });
     await flushPage();
 
-    expect(testRoot.container.textContent).toContain("Approval id");
-    expect(testRoot.container.textContent).toContain("550e8400-e29b-41d4-a716-446655440114");
+    expect(testRoot.container.textContent).toContain("Occurred");
+    expect(testRoot.container.textContent).toContain("2026-01-01T00:03:00.000Z");
 
     cleanupTestRoot(testRoot);
   });

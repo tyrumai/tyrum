@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
 
-import { act } from "react";
+import type { NodeInventoryEntry } from "@tyrum/contracts";
+import React, { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { setNativeValue } from "../test-utils.js";
+import { LocationProfileCard } from "../../src/components/pages/admin-http-location-sections.js";
+import { cleanupTestRoot, renderIntoDocument, setNativeValue } from "../test-utils.js";
 import {
   cleanupAdminHttpPage,
   click,
@@ -101,6 +103,63 @@ afterEach(() => {
 });
 
 describe("ConfigurePage (HTTP) location", () => {
+  it("keeps primary node options distinguishable when labels are missing", () => {
+    const nodes: NodeInventoryEntry[] = [
+      {
+        node_id: "alpha-node",
+        connected: true,
+        paired_status: "approved",
+        attached_to_requested_lane: false,
+        capabilities: [],
+      },
+      {
+        node_id: "beta-node",
+        label: "Named node",
+        connected: true,
+        paired_status: "approved",
+        attached_to_requested_lane: false,
+        capabilities: [],
+      },
+      {
+        node_id: "gamma-node",
+        connected: true,
+        paired_status: "approved",
+        attached_to_requested_lane: false,
+        capabilities: [],
+      },
+    ];
+    const { container, root } = renderIntoDocument(
+      React.createElement(LocationProfileCard, {
+        busyKey: null,
+        loading: false,
+        nodes,
+        profile: null,
+        profileDirty: false,
+        profileDraft: {
+          primaryNodeId: "",
+          poiProviderKey: "",
+        },
+        onDraftChange: () => {},
+        onRefresh: () => {},
+        onSave: () => {},
+      }),
+    );
+
+    try {
+      const options = Array.from(getLabeledSelect(container, "Primary tracked node").options).map(
+        (option) => option.text,
+      );
+      expect(options).toEqual([
+        "No primary node assigned",
+        "alpha-node",
+        "Named node (beta-node)",
+        "gamma-node",
+      ]);
+    } finally {
+      cleanupTestRoot({ container, root });
+    }
+  });
+
   it("renders the location tab with saved places and profile settings", async () => {
     const { core } = createAdminHttpTestCore();
     stubLocationFetch();

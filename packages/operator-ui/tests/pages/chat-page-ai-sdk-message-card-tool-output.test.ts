@@ -30,17 +30,33 @@ function findToggle(container: HTMLElement, label: string): HTMLButtonElement {
   return toggle as HTMLButtonElement;
 }
 
-function expectStructuredJsonViewer(container: HTMLElement, rootSummaryText: string): void {
-  const rootSummary = Array.from(container.querySelectorAll("summary")).find((summary) =>
-    summary.textContent?.includes(rootSummaryText),
+function expectStructuredValue(container: HTMLElement, expectedText: string[]): void {
+  const outputLabel = Array.from(container.querySelectorAll("div")).find(
+    (div) => div.textContent?.trim() === "Output",
+  );
+  expect(outputLabel).not.toBeUndefined();
+
+  const outputSection = outputLabel?.parentElement as HTMLDivElement | null;
+  expect(outputSection).not.toBeNull();
+
+  const scrollContainer = Array.from(outputSection?.querySelectorAll("div") ?? []).find(
+    (div) =>
+      typeof div.className === "string" &&
+      div.className.includes("max-h-[420px]") &&
+      div.className.includes("overflow-auto"),
   );
 
-  expect(rootSummary).not.toBeUndefined();
-  expect(container.querySelector("pre")).toBeNull();
+  expect(scrollContainer).not.toBeUndefined();
+  expect(outputSection?.querySelector("pre")).toBeNull();
+  expect(container.querySelector("button[aria-label='Copy JSON']")).toBeNull();
+
+  for (const text of expectedText) {
+    expect(outputSection?.textContent).toContain(text);
+  }
 }
 
 describe("MessageCard tool output rendering", () => {
-  it("renders bare JSON tool output with the JsonViewer", () => {
+  it("renders bare JSON tool output with StructuredValue", () => {
     const testRoot = renderMessageCard({
       id: "assistant-tool-json",
       role: "assistant",
@@ -62,9 +78,7 @@ describe("MessageCard tool output rendering", () => {
       click(findToggle(testRoot.container, "tool.node.list"));
     });
 
-    expectStructuredJsonViewer(testRoot.container, "root: {2}");
-    expect(testRoot.container.textContent).toContain("status");
-    expect(testRoot.container.textContent).toContain("nodes");
+    expectStructuredValue(testRoot.container, ["Status", "Nodes", "node-1"]);
 
     cleanupTestRoot(testRoot);
   });
@@ -96,7 +110,7 @@ describe("MessageCard tool output rendering", () => {
     cleanupTestRoot(testRoot);
   });
 
-  it("keeps existing object-shaped tool output rendered as structured JSON", () => {
+  it("keeps existing object-shaped tool output rendered as StructuredValue", () => {
     const testRoot = renderMessageCard({
       id: "assistant-tool-object",
       role: "assistant",
@@ -118,9 +132,7 @@ describe("MessageCard tool output rendering", () => {
       click(findToggle(testRoot.container, "tool.browser.snapshot"));
     });
 
-    expectStructuredJsonViewer(testRoot.container, "root: {2}");
-    expect(testRoot.container.textContent).toContain("snapshot");
-    expect(testRoot.container.textContent).toContain("Example");
+    expectStructuredValue(testRoot.container, ["Status", "Snapshot", "Example"]);
 
     cleanupTestRoot(testRoot);
   });
@@ -216,7 +228,7 @@ describe("MessageCard tool output rendering", () => {
       "[data-testid='artifact-preview-image-aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa']",
     ) as HTMLImageElement | null;
 
-    expectStructuredJsonViewer(testRoot.container, "root: {2}");
+    expectStructuredValue(testRoot.container, ["Run id", "Payload"]);
     expect(preview).not.toBeNull();
     expect(preview?.getAttribute("src")).toBe("blob:chat-artifact-preview");
     const downloadLink = testRoot.container.querySelector(

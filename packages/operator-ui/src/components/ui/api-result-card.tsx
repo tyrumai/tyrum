@@ -3,7 +3,7 @@ import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { cn } from "../../lib/cn.js";
 import { Alert } from "./alert.js";
 import { Card, CardContent, CardHeader } from "./card.js";
-import { JsonViewer } from "./json-viewer.js";
+import { StructuredValue } from "./structured-value.js";
 
 function normalizeErrorValue(error: unknown): unknown {
   if (error instanceof Error) {
@@ -16,14 +16,12 @@ export interface ApiResultCardProps extends React.HTMLAttributes<HTMLDivElement>
   heading?: React.ReactNode;
   value?: unknown;
   error?: unknown;
-  jsonViewerProps?: Omit<React.ComponentProps<typeof JsonViewer>, "value">;
 }
 
 export function ApiResultCard({
   heading = "Result",
   value,
   error,
-  jsonViewerProps,
   className,
   ...props
 }: ApiResultCardProps): React.ReactElement | null {
@@ -36,7 +34,7 @@ export function ApiResultCard({
     <Alert variant="success" title="Success" />
   );
 
-  const jsonValue = isError ? normalizeErrorValue(error) : value;
+  const structuredValue = isError ? normalizeErrorValue(error) : value;
 
   return (
     <Card className={cn("overflow-hidden", className)} {...props}>
@@ -45,7 +43,7 @@ export function ApiResultCard({
       </CardHeader>
       <CardContent className="grid gap-3">
         {alert}
-        <JsonViewer value={jsonValue} {...jsonViewerProps} />
+        <StructuredValue value={structuredValue} />
       </CardContent>
     </Card>
   );

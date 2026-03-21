@@ -26,7 +26,7 @@ import {
 import { Alert } from "../ui/alert.js";
 import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
-import { Card, CardContent, CardFooter, CardHeader } from "../ui/card.js";
+import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { EmptyState } from "../ui/empty-state.js";
 import { LiveRegion } from "../ui/live-region.js";
 import { LoadingState } from "../ui/loading-state.js";
@@ -71,6 +71,7 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
   >({});
   const [managedAgents, setManagedAgents] = useState<ManagedAgentOption[]>([]);
   const [agentFilter, setAgentFilter] = useState("all");
+  const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
   const [approvalsErrorDismissed, setApprovalsErrorDismissed] = useState(false);
 
   useEffect(() => {
@@ -232,13 +233,20 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
         const approvalAgent = resolveApprovalAgentInfo(approval, managedAgentsByIdentity);
         const detailEntries = [
           ["Approval key", approval.approval_key],
-          ["Agent", approvalAgent?.label],
           ["Scope key", scope?.key],
           ["Lane", scope?.lane],
           ["Run", scope?.run_id],
           ["Step", scope?.step_id],
           ["Attempt", scope?.attempt_id],
         ].filter((entry): entry is [string, string] => typeof entry[1] === "string");
+
+        const desktop = describeDesktopApprovalContext(approval.context);
+        const hasMotivation = Boolean(approval.motivation);
+        const hasReview = Boolean(reviewReason || reviewRisk);
+        const hasDesktop = desktop !== null;
+        const hasDetails = detailEntries.length > 0;
+        const hasContext = hasMotivation || hasReview || hasDesktop || hasDetails;
+        const isExpanded = expandedCards[approvalId] === true;
 
         return (
           <Card key={approvalId}>
@@ -247,6 +255,9 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant="outline">{approval.kind}</Badge>
                   <Badge variant={statusDisplay.variant}>{statusDisplay.label}</Badge>
+                  {approvalAgent ? (
+                    <span className="text-xs text-fg-muted">{approvalAgent.label}</span>
+                  ) : null}
                 </div>
                 <time
                   dateTime={approval.created_at}
@@ -262,111 +273,135 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
                 {approval.prompt}
               </blockquote>
 
-              <div
-                data-testid={`approval-motivation-${approvalId}`}
-                className="grid gap-0.5 rounded-md border border-border bg-bg-subtle px-3 py-2.5"
-              >
-                <div className="text-xs font-medium text-fg-muted">Motivation</div>
-                <div className="text-sm text-fg break-words [overflow-wrap:anywhere]">
-                  {approval.motivation}
-                </div>
+              <div className="flex items-center gap-3 pt-2">
+                {actionable ? (
+                  <ApprovalActions
+                    approvalId={approvalId}
+                    approval={approval}
+                    resolvingState={resolvingDecision}
+                    onResolve={(input) => {
+                      void resolveApproval(input);
+                    }}
+                  />
+                ) : (
+                  <div className="text-sm text-fg-muted">
+                    {approval.status === "reviewing"
+                      ? "Guardian review is in progress."
+                      : describeApprovalOutcome(approval.status)}
+                  </div>
+                )}
               </div>
 
-              {reviewReason || reviewRisk ? (
-                <div
-                  data-testid={`approval-review-${approvalId}`}
-                  className="grid gap-1 rounded-md border border-border bg-bg-subtle px-3 py-2.5"
+              {hasContext ? (
+                <button
+                  type="button"
+                  className="text-xs text-fg-muted hover:text-fg transition-colors text-left w-fit"
+                  onClick={() =>
+                    setExpandedCards((prev) => ({
+                      ...prev,
+                      [approvalId]: !prev[approvalId],
+                    }))
+                  }
                 >
-                  <div className="text-xs font-medium text-fg-muted">Latest review</div>
-                  {reviewReason ? (
-                    <div className="text-sm text-fg break-words [overflow-wrap:anywhere]">
-                      {reviewReason}
-                    </div>
-                  ) : null}
-                  {reviewRisk ? (
-                    <div className="text-xs text-fg-muted">Risk {reviewRisk}</div>
-                  ) : null}
-                </div>
+                  {isExpanded ? "Hide context" : "Show context"}
+                </button>
               ) : null}
 
-              {detailEntries.length > 0 ? (
-                <div
-                  data-testid={`approval-details-${approvalId}`}
-                  className="grid gap-2 rounded-md border border-border bg-bg-subtle px-3 py-2.5"
-                >
-                  {detailEntries.map(([label, value]) => (
-                    <div key={label} className="grid gap-0.5">
-                      <div className="text-xs font-medium text-fg-muted">{label}</div>
-                      <div className="font-mono text-xs text-fg break-all">{value}</div>
+              {isExpanded ? (
+                <>
+                  {hasMotivation ? (
+                    <div
+                      data-testid={`approval-motivation-${approvalId}`}
+                      className="grid gap-0.5 rounded-md border border-border bg-bg-subtle px-3 py-2.5"
+                    >
+                      <div className="text-xs font-medium text-fg-muted">Motivation</div>
+                      <div className="text-sm text-fg break-words [overflow-wrap:anywhere]">
+                        {approval.motivation}
+                      </div>
                     </div>
-                  ))}
-                </div>
-              ) : null}
+                  ) : null}
 
-              {(() => {
-                const desktop = describeDesktopApprovalContext(approval.context);
-                if (!desktop) return null;
-
-                const artifacts = resolveArtifactsForApprovalStep(runsState, approval.scope);
-
-                return (
-                  <div
-                    data-testid={`desktop-approval-summary-${approvalId}`}
-                    className="grid gap-1.5 rounded-md border border-border bg-bg-subtle px-3 py-2.5"
-                  >
-                    <div className="flex flex-wrap items-center gap-2 text-sm text-fg">
-                      <Badge variant="outline">Desktop</Badge>
-                      <span className="font-medium text-fg">{desktop.op}</span>
-                      {desktop.actionKind ? (
-                        <span className="text-fg-muted">• {desktop.actionKind}</span>
+                  {hasReview ? (
+                    <div
+                      data-testid={`approval-review-${approvalId}`}
+                      className="grid gap-1 rounded-md border border-border bg-bg-subtle px-3 py-2.5"
+                    >
+                      <div className="text-xs font-medium text-fg-muted">Latest review</div>
+                      {reviewReason ? (
+                        <div className="text-sm text-fg break-words [overflow-wrap:anywhere]">
+                          {reviewReason}
+                        </div>
+                      ) : null}
+                      {reviewRisk ? (
+                        <div className="text-xs text-fg-muted">Risk {reviewRisk}</div>
                       ) : null}
                     </div>
-                    {desktop.targetText ? (
-                      <div className="text-xs text-fg-muted">{desktop.targetText}</div>
-                    ) : null}
-                    {artifacts ? (
-                      <div className="flex flex-wrap items-center gap-2">
-                        <AttemptArtifactsDialog
-                          core={core}
-                          attemptId={artifacts.attemptId}
-                          artifacts={artifacts.artifacts}
-                        />
-                      </div>
-                    ) : null}
-                    {takeoverUrl ? (
-                      <Button asChild size="sm" variant="outline" className="w-fit">
-                        <a
-                          data-testid={`approval-takeover-${approvalId}`}
-                          href={takeoverUrl}
-                          target="_blank"
-                          rel="noreferrer noopener"
-                        >
-                          Open takeover
-                        </a>
-                      </Button>
-                    ) : null}
-                  </div>
-                );
-              })()}
+                  ) : null}
+
+                  {hasDetails ? (
+                    <div
+                      data-testid={`approval-details-${approvalId}`}
+                      className="grid gap-2 rounded-md border border-border bg-bg-subtle px-3 py-2.5"
+                    >
+                      {detailEntries.map(([label, value]) => (
+                        <div key={label} className="grid gap-0.5">
+                          <div className="text-xs font-medium text-fg-muted">{label}</div>
+                          <div className="font-mono text-xs text-fg break-all">{value}</div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {hasDesktop
+                    ? (() => {
+                        const artifacts = resolveArtifactsForApprovalStep(
+                          runsState,
+                          approval.scope,
+                        );
+
+                        return (
+                          <div
+                            data-testid={`desktop-approval-summary-${approvalId}`}
+                            className="grid gap-1.5 rounded-md border border-border bg-bg-subtle px-3 py-2.5"
+                          >
+                            <div className="flex flex-wrap items-center gap-2 text-sm text-fg">
+                              <Badge variant="outline">Desktop</Badge>
+                              <span className="font-medium text-fg">{desktop.op}</span>
+                              {desktop.actionKind ? (
+                                <span className="text-fg-muted">&bull; {desktop.actionKind}</span>
+                              ) : null}
+                            </div>
+                            {desktop.targetText ? (
+                              <div className="text-xs text-fg-muted">{desktop.targetText}</div>
+                            ) : null}
+                            {artifacts ? (
+                              <div className="flex flex-wrap items-center gap-2">
+                                <AttemptArtifactsDialog
+                                  core={core}
+                                  attemptId={artifacts.attemptId}
+                                  artifacts={artifacts.artifacts}
+                                />
+                              </div>
+                            ) : null}
+                            {takeoverUrl ? (
+                              <Button asChild size="sm" variant="outline" className="w-fit">
+                                <a
+                                  data-testid={`approval-takeover-${approvalId}`}
+                                  href={takeoverUrl}
+                                  target="_blank"
+                                  rel="noreferrer noopener"
+                                >
+                                  Open takeover
+                                </a>
+                              </Button>
+                            ) : null}
+                          </div>
+                        );
+                      })()
+                    : null}
+                </>
+              ) : null}
             </CardContent>
-            <CardFooter className="gap-2">
-              {actionable ? (
-                <ApprovalActions
-                  approvalId={approvalId}
-                  approval={approval}
-                  resolvingState={resolvingDecision}
-                  onResolve={(input) => {
-                    void resolveApproval(input);
-                  }}
-                />
-              ) : (
-                <div className="text-sm text-fg-muted">
-                  {approval.status === "reviewing"
-                    ? "Guardian review is in progress."
-                    : describeApprovalOutcome(approval.status)}
-                </div>
-              )}
-            </CardFooter>
           </Card>
         );
       })}

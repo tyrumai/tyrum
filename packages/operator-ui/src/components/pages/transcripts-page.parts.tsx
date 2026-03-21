@@ -18,9 +18,9 @@ import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
 import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { EmptyState } from "../ui/empty-state.js";
-import { JsonViewer } from "../ui/json-viewer.js";
 import { LoadingState } from "../ui/loading-state.js";
 import { ScrollArea } from "../ui/scroll-area.js";
+import { StructuredValue } from "../ui/structured-value.js";
 import { MessageCard } from "./chat-page-ai-sdk-message-card.js";
 import {
   approvalStatusVariant,
@@ -102,7 +102,6 @@ function TranscriptRunCard({ event }: { event: TranscriptRunEvent }) {
           {event.payload.run.status}
         </Badge>
         <Badge variant="outline">{event.payload.run.lane}</Badge>
-        <span className="font-mono text-xs text-fg-muted">{event.payload.run.run_id}</span>
       </div>
       <div className="grid gap-2 text-sm text-fg-muted sm:grid-cols-3">
         <div>{event.payload.steps.length} steps</div>
@@ -153,16 +152,10 @@ function TranscriptApprovalCard({ event }: { event: TranscriptApprovalEvent }) {
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant="outline">{approval.kind}</Badge>
         <Badge variant={approvalStatusVariant(approval.status)}>{approval.status}</Badge>
-        <span className="font-mono text-xs text-fg-muted">{approval.approval_id}</span>
       </div>
       <blockquote className="rounded-md border border-border bg-bg-subtle/40 px-3 py-2 text-sm text-fg">
         {approval.prompt}
       </blockquote>
-      <div className="grid gap-2 text-xs text-fg-muted sm:grid-cols-3">
-        <div>Run {approval.scope?.run_id ?? "-"}</div>
-        <div>Step {approval.scope?.step_id ?? "-"}</div>
-        <div>Attempt {approval.scope?.attempt_id ?? "-"}</div>
-      </div>
     </div>
   );
 }
@@ -178,10 +171,8 @@ function TranscriptSubagentCard({ event }: { event: TranscriptSubagentEvent }) {
         <Badge variant="outline">{subagent.lane}</Badge>
       </div>
       <div className="grid gap-2 text-sm text-fg-muted sm:grid-cols-2">
-        <div>Subagent {subagent.subagent_id}</div>
-        <div>Parent {subagent.parent_session_key ?? "-"}</div>
-        <div>Profile {subagent.execution_profile}</div>
-        <div>Closed {subagent.closed_at ?? "-"}</div>
+        <div>{subagent.execution_profile}</div>
+        <div>Closed {subagent.closed_at ?? "\u2014"}</div>
       </div>
     </div>
   );
@@ -366,6 +357,9 @@ export function TranscriptInspectorPanel(props: {
   selectedEventArtifacts: ArtifactRef[];
 }) {
   const { core, focusSession, inspectorFields, selectedEvent, selectedEventArtifacts } = props;
+  const inspectorHint = focusSession
+    ? "Select a transcript event to inspect its raw payload."
+    : "Select a transcript to inspect its events.";
 
   return (
     <div className="min-h-0">
@@ -379,13 +373,13 @@ export function TranscriptInspectorPanel(props: {
               </div>
             </CardHeader>
             <CardContent className="grid gap-3">
+              {focusSession ? (
+                <div className="grid gap-1 text-sm text-fg-muted">
+                  <div className="font-medium text-fg">{formatSessionTitle(focusSession)}</div>
+                </div>
+              ) : null}
               {inspectorFields.length > 0 ? (
                 <div className="grid gap-2">
-                  {focusSession ? (
-                    <div className="grid gap-1 text-sm text-fg-muted">
-                      <div className="font-medium text-fg">{formatSessionTitle(focusSession)}</div>
-                    </div>
-                  ) : null}
                   <div className="grid gap-2 rounded-md border border-border bg-bg-subtle/30 p-3">
                     {inspectorFields.map((field) => (
                       <div
@@ -409,9 +403,6 @@ export function TranscriptInspectorPanel(props: {
                     >
                       <div className="flex flex-wrap items-center gap-2">
                         <Badge variant="outline">{artifact.kind}</Badge>
-                        <span className="font-mono text-xs text-fg-muted">
-                          {artifact.artifact_id}
-                        </span>
                       </div>
                       <ArtifactInlinePreview core={core} artifact={artifact} />
                     </div>
@@ -430,14 +421,16 @@ export function TranscriptInspectorPanel(props: {
                       {selectedEvent.occurred_at}
                     </time>
                   </div>
-                  <JsonViewer value={selectedEvent} contentClassName="max-h-[480px]" />
+                  <div className="max-h-[480px] overflow-auto rounded-md border border-border bg-bg-subtle/30 p-3">
+                    <StructuredValue value={selectedEvent} />
+                  </div>
                 </div>
               ) : focusSession ? (
-                <JsonViewer value={focusSession} contentClassName="max-h-[480px]" />
-              ) : (
-                <div className="text-sm text-fg-muted">
-                  Select a transcript event to inspect its raw payload.
+                <div className="max-h-[480px] overflow-auto rounded-md border border-border bg-bg-subtle/30 p-3">
+                  <StructuredValue value={focusSession} />
                 </div>
+              ) : (
+                <div className="text-sm text-fg-muted">{inspectorHint}</div>
               )}
             </CardContent>
           </Card>

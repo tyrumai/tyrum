@@ -3,8 +3,8 @@ import type { OperatorCore } from "@tyrum/operator-app";
 import { useEffect, useState, type ReactNode } from "react";
 import { Download } from "lucide-react";
 import { Badge } from "../ui/badge.js";
-import { JsonViewer } from "../ui/json-viewer.js";
 import { Spinner } from "../ui/spinner.js";
+import { StructuredValue } from "../ui/structured-value.js";
 import { toArrayBufferBytes } from "../../utils/blob-bytes.js";
 import { buildGatewayArtifactUrl } from "../../utils/gateway-artifact-url.js";
 import { isRecord } from "../../utils/is-record.js";
@@ -307,7 +307,9 @@ function ArtifactInlinePreviewJson({
           {text}
         </pre>
       ) : (
-        <JsonViewer value={parsed} contentClassName="max-h-[420px]" />
+        <div className="max-h-[420px] overflow-auto rounded-md border border-border bg-bg-card/40 px-3 py-2">
+          <StructuredValue value={parsed} />
+        </div>
       )}
     </div>
   );

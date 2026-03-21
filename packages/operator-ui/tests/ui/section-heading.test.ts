@@ -21,8 +21,8 @@ describe("SectionHeading", () => {
     const el = container.firstElementChild as HTMLElement;
     expect(el.tagName).toBe("DIV");
     expect(el.textContent).toBe("Section Title");
-    expect(el.classList.contains("text-sm")).toBe(true);
-    expect(el.classList.contains("font-medium")).toBe(true);
+    expect(el.classList.contains("text-base")).toBe(true);
+    expect(el.classList.contains("font-semibold")).toBe(true);
 
     cleanupTestRoot({ container, root });
   });
@@ -41,6 +41,26 @@ describe("SectionHeading", () => {
     const el = container.firstElementChild as HTMLElement;
     expect(el.tagName).toBe("H2");
     expect(el.classList.contains("text-lg")).toBe(true);
+
+    cleanupTestRoot({ container, root });
+  });
+
+  it("renders a subsection-level heading with appropriate classes", () => {
+    const SectionHeading = (operatorUi as Record<string, unknown>)["SectionHeading"];
+
+    const { container, root } = renderIntoDocument(
+      React.createElement(
+        SectionHeading as React.ComponentType<Record<string, unknown>>,
+        { level: "subsection" },
+        "Sub Title",
+      ),
+    );
+
+    const el = container.firstElementChild as HTMLElement;
+    expect(el.textContent).toBe("Sub Title");
+    expect(el.classList.contains("text-xs")).toBe(true);
+    expect(el.classList.contains("uppercase")).toBe(true);
+    expect(el.classList.contains("tracking-wide")).toBe(true);
 
     cleanupTestRoot({ container, root });
   });

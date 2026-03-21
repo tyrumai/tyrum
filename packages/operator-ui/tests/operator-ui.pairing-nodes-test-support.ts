@@ -357,7 +357,7 @@ export function registerPairingNodeInventoryTests(): void {
 
     expect(
       container.querySelector('[data-testid="pairing-row-identifier-node-1"]')?.textContent,
-    ).toBe("node-1");
+    ).toBe("pending node");
     expect(container.querySelector('[data-testid="pairing-row-tools-node-2"]')?.textContent).toBe(
       "2",
     );
