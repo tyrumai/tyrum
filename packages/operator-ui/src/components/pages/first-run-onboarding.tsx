@@ -1,5 +1,4 @@
 import type { OperatorCore } from "@tyrum/operator-app";
-import { TyrumHttpClientError } from "@tyrum/operator-app/browser";
 import * as React from "react";
 import { useAdminAccessModeOptional } from "../../hooks/use-admin-access-mode.js";
 import { useThemeOptional } from "../../hooks/use-theme.js";
@@ -33,10 +32,12 @@ import {
 import { FirstRunOnboardingHeader } from "./first-run-onboarding.header.js";
 import { OnboardingAdminStep, OnboardingPaletteStep } from "./first-run-onboarding.intro.js";
 import { OnboardingProgressCard } from "./first-run-onboarding.parts.js";
-import { OnboardingDoneStep, OnboardingWorkspacePolicyStep } from "./first-run-onboarding.sections.js";
-import { buildWorkspacePolicyBundle } from "./workspace-policy-presets.js";
+import {
+  OnboardingDoneStep,
+  OnboardingWorkspacePolicyStep,
+} from "./first-run-onboarding.sections.js";
+import { saveWorkspacePolicyDeployment } from "./workspace-policy-presets.js";
 export { useFirstRunOnboardingController } from "./first-run-onboarding.logic.js";
-
 export function FirstRunOnboardingPage({
   core,
   onClose,
@@ -50,12 +51,6 @@ export function FirstRunOnboardingPage({
   onMarkCompleted: () => void;
   onNavigate: (routeId: "agents" | "configure" | "dashboard") => void;
 }) {
-  const isWorkspacePolicyConfigUnavailableError = (error: unknown): boolean => {
-    return (
-      error instanceof TyrumHttpClientError && error.status === 404 && error.error === "not_found"
-    );
-  };
-
   const { canMutate } = useAdminMutationAccess(core);
   const { enterElevatedMode } = useElevatedModeUiContext();
   const adminAccessModeSetting = useAdminAccessModeOptional();
@@ -72,10 +67,7 @@ export function FirstRunOnboardingPage({
   const [selectedAdminAccessMode, setSelectedAdminAccessMode] = React.useState(adminAccessMode);
   const { data, refresh } = useOnboardingData();
   const drafts = useOnboardingDrafts(data);
-  const activeProviderCount = React.useMemo(
-    () => countActiveProviders(data.providers),
-    [data.providers],
-  );
+  const activeProviderCount = countActiveProviders(data.providers);
   const selectedPreset =
     data.presets.find((preset) => preset.preset_key === drafts.selectedPresetKey) ?? null;
   const selectedPresetLabel = getSelectedPresetLabel(selectedPreset);
@@ -359,20 +351,10 @@ export function FirstRunOnboardingPage({
           onSelectionChange={drafts.setWorkspacePolicyPreset}
           onSave={() => {
             void runMutation(async () => {
-              if (!mutationHttp?.policyConfig) {
-                throw new Error("Workspace policy configuration is unavailable on this gateway.");
-              }
-              try {
-                await mutationHttp.policyConfig.updateDeployment({
-                  bundle: buildWorkspacePolicyBundle(drafts.workspacePolicyPreset),
-                  reason: "onboarding: configure workspace policy",
-                });
-              } catch (error) {
-                if (isWorkspacePolicyConfigUnavailableError(error)) {
-                  throw new Error("Workspace policy configuration is unavailable on this gateway.");
-                }
-                throw error;
-              }
+              await saveWorkspacePolicyDeployment({
+                policyConfig: mutationHttp?.policyConfig,
+                preset: drafts.workspacePolicyPreset,
+              });
             });
           }}
           selectedPreset={drafts.workspacePolicyPreset}

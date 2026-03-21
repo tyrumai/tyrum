@@ -1,3 +1,4 @@
+import { TyrumHttpClientError } from "@tyrum/operator-app/browser";
 import { PolicyBundle } from "@tyrum/contracts";
 
 export type WorkspacePolicyPresetKey = "safest" | "moderate" | "power_user";
@@ -106,4 +107,33 @@ export function buildWorkspacePolicyBundle(
     provenance: { untrusted_shell_requires_approval: true },
     approvals: { auto_review: { mode: "auto_review" } },
   });
+}
+
+type DeploymentPolicyConfigUpdater = {
+  updateDeployment(input: { bundle: WorkspacePolicyBundleInput; reason: string }): Promise<unknown>;
+};
+
+export async function saveWorkspacePolicyDeployment(input: {
+  policyConfig: DeploymentPolicyConfigUpdater | undefined;
+  preset: WorkspacePolicyPresetKey;
+}): Promise<void> {
+  if (!input.policyConfig) {
+    throw new Error("Workspace policy configuration is unavailable on this gateway.");
+  }
+
+  try {
+    await input.policyConfig.updateDeployment({
+      bundle: buildWorkspacePolicyBundle(input.preset),
+      reason: "onboarding: configure workspace policy",
+    });
+  } catch (error) {
+    if (
+      error instanceof TyrumHttpClientError &&
+      error.status === 404 &&
+      error.error === "not_found"
+    ) {
+      throw new Error("Workspace policy configuration is unavailable on this gateway.");
+    }
+    throw error;
+  }
 }
