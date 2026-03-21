@@ -494,7 +494,7 @@ export function FirstRunOnboardingPage({
         <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[19rem_minmax(0,1fr)] xl:grid-rows-[minmax(0,1fr)]">
           <OnboardingProgressCard className="xl:self-start" items={progressItems} />
           <Card
-            className="flex min-h-0 flex-col self-stretch overflow-hidden"
+            className="flex min-h-0 max-h-full flex-col self-start overflow-hidden"
             data-testid="first-run-onboarding-card"
           >
             <CardContent
