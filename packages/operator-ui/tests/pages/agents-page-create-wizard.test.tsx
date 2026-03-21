@@ -3,7 +3,6 @@
 import { describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
 import { AgentsPageCreateWizard } from "../../src/components/pages/agents-page-create-wizard.js";
-import { buildAgentPolicyBundle } from "../../src/components/pages/agent-setup-wizard.shared.js";
 import { cleanupTestRoot, renderIntoDocument } from "../test-utils.js";
 import { waitForSelector } from "../operator-ui.test-support.js";
 import {
@@ -38,7 +37,6 @@ describe("AgentsPageCreateWizard", () => {
         agent_key,
       }),
     );
-    const updateAgentPolicy = vi.fn(async () => ({}));
     const onCancel = vi.fn();
     const onSaved = vi.fn();
 
@@ -56,7 +54,6 @@ describe("AgentsPageCreateWizard", () => {
       createProviderAccount,
       createPreset,
       create: createAgent,
-      updateAgentPolicy,
       list: vi.fn(async () => ({ agents: [] })),
     });
 
@@ -102,10 +99,6 @@ describe("AgentsPageCreateWizard", () => {
         reason: "agents: create via setup wizard",
       }),
     );
-    expect(updateAgentPolicy).toHaveBeenCalledWith("operations-agent", {
-      bundle: buildAgentPolicyBundle("moderate"),
-      reason: "agents: apply setup wizard policy preset",
-    });
     expect(onCancel).not.toHaveBeenCalled();
     expect(onSaved).toHaveBeenCalledWith("operations-agent");
 
@@ -169,7 +162,6 @@ describe("AgentsPageCreateWizard", () => {
         agent_key,
       }),
     );
-    const updateAgentPolicy = vi.fn(async () => ({}));
     const onSaved = vi.fn();
 
     const { core } = createCore({
@@ -181,7 +173,6 @@ describe("AgentsPageCreateWizard", () => {
       listAvailableModels: vi.fn(async () => sampleAvailableModels()),
       listRegistry: vi.fn(async () => sampleRegistry()),
       create: createAgent,
-      updateAgentPolicy,
       list: vi.fn(async () => ({
         agents: [{ agent_key: "operations-agent", agent_id: "agent-1", is_primary: false }],
       })),

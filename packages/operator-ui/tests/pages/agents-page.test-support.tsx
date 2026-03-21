@@ -156,7 +156,6 @@ export function createCore(options?: {
   listRegistry?: ReturnType<typeof vi.fn>;
   listProviders?: ReturnType<typeof vi.fn>;
   createProviderAccount?: ReturnType<typeof vi.fn>;
-  updateAgentPolicy?: ReturnType<typeof vi.fn>;
 }) {
   const { store: connectionStore } = createStore({
     status: "connected",
@@ -230,9 +229,6 @@ export function createCore(options?: {
           vi.fn().mockResolvedValue({ preset: samplePresets().presets[0] }),
         listAvailable:
           options?.listAvailableModels ?? vi.fn().mockResolvedValue(sampleAvailableModels()),
-      },
-      policyConfig: {
-        updateAgent: options?.updateAgentPolicy ?? vi.fn().mockResolvedValue({}),
       },
       extensions: {
         list: vi.fn().mockResolvedValue({ items: [] }),

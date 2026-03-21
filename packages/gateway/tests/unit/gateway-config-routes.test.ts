@@ -4,7 +4,10 @@ import { join } from "node:path";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { LifecycleHookConfigDal } from "../../src/modules/hooks/config-dal.js";
 import { PolicyBundleConfigDal } from "../../src/modules/policy/config-dal.js";
-import { createGatewayConfigRoutes } from "../../src/routes/gateway-config.js";
+import {
+  createGatewayConfigRoutes,
+  createPolicyConfigRoutes,
+} from "../../src/routes/gateway-config.js";
 
 const migrationsDir = join(import.meta.dirname, "../../migrations/sqlite");
 
@@ -26,6 +29,14 @@ function createApp(container: GatewayContainer, tenantId: string): Hono {
       db: container.db,
       identityScopeDal: container.identityScopeDal,
       hooksDal: new LifecycleHookConfigDal(container.db),
+      policyBundleDal: new PolicyBundleConfigDal(container.db),
+    }),
+  );
+  app.route(
+    "/",
+    createPolicyConfigRoutes({
+      db: container.db,
+      identityScopeDal: container.identityScopeDal,
       policyBundleDal: new PolicyBundleConfigDal(container.db),
     }),
   );

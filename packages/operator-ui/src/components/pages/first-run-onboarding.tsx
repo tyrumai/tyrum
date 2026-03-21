@@ -1,7 +1,7 @@
 import type { OperatorCore } from "@tyrum/operator-app";
+import { TyrumHttpClientError } from "@tyrum/operator-app/browser";
 import * as React from "react";
 import { CheckCircle2 } from "lucide-react";
-import { toast } from "sonner";
 import { useOperatorStore } from "../../use-operator-store.js";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { AppPage } from "../layout/app-page.js";
@@ -14,11 +14,7 @@ import { useAdminMutationAccess, useAdminMutationHttpClient } from "./admin-http
 import { selectProviderFormState, validateProviderForm } from "./admin-http-providers.shared.js";
 import { selectModelDialogState } from "./admin-http-models.shared.js";
 import { AgentSetupWizard } from "./agent-setup-wizard.js";
-import {
-  buildAgentConfigFromPreset,
-  buildAgentPolicyBundle,
-  createUniqueAgentKey,
-} from "./agent-setup-wizard.shared.js";
+import { buildAgentConfigFromPreset, createUniqueAgentKey } from "./agent-setup-wizard.shared.js";
 import {
   buildDefaultAssignments,
   countActiveProviders,
@@ -34,7 +30,12 @@ import {
   type FirstRunOnboardingStepId,
 } from "./first-run-onboarding.shared.js";
 import { OnboardingProgressCard } from "./first-run-onboarding.parts.js";
-import { OnboardingAdminStep, OnboardingDoneStep } from "./first-run-onboarding.sections.js";
+import {
+  OnboardingAdminStep,
+  OnboardingDoneStep,
+  OnboardingWorkspacePolicyStep,
+} from "./first-run-onboarding.sections.js";
+import { buildWorkspacePolicyBundle } from "./workspace-policy-presets.js";
 
 export { useFirstRunOnboardingController } from "./first-run-onboarding.logic.js";
 
@@ -51,6 +52,12 @@ export function FirstRunOnboardingPage({
   onMarkCompleted: () => void;
   onNavigate: (routeId: "agents" | "configure" | "dashboard") => void;
 }) {
+  const isWorkspacePolicyConfigUnavailableError = (error: unknown): boolean => {
+    return (
+      error instanceof TyrumHttpClientError && error.status === 404 && error.error === "not_found"
+    );
+  };
+
   const { canMutate } = useAdminMutationAccess(core);
   const { enterElevatedMode } = useElevatedModeUiContext();
   const mutationHttp = useAdminMutationHttpClient();
@@ -226,10 +233,8 @@ export function FirstRunOnboardingPage({
             canSave: false,
             name: drafts.agentName,
             onNameChange: drafts.setAgentName,
-            onPolicyPresetChange: drafts.setAgentPolicyPreset,
             onSave: () => {},
             onToneChange: drafts.setAgentTone,
-            policyPreset: drafts.agentPolicyPreset,
             selectedPresetLabel,
             tone: drafts.agentTone,
           }}
@@ -295,13 +300,39 @@ export function FirstRunOnboardingPage({
             canSave: false,
             name: drafts.agentName,
             onNameChange: drafts.setAgentName,
-            onPolicyPresetChange: drafts.setAgentPolicyPreset,
             onSave: () => {},
             onToneChange: drafts.setAgentTone,
-            policyPreset: drafts.agentPolicyPreset,
             selectedPresetLabel,
             tone: drafts.agentTone,
           }}
+        />
+      );
+    }
+    if (step === "workspace_policy") {
+      return (
+        <OnboardingWorkspacePolicyStep
+          busy={submitBusy}
+          canSave={Boolean(mutationHttp?.policyConfig)}
+          onSelectionChange={drafts.setWorkspacePolicyPreset}
+          onSave={() => {
+            void runMutation(async () => {
+              if (!mutationHttp?.policyConfig) {
+                throw new Error("Workspace policy configuration is unavailable on this gateway.");
+              }
+              try {
+                await mutationHttp.policyConfig.updateDeployment({
+                  bundle: buildWorkspacePolicyBundle(drafts.workspacePolicyPreset),
+                  reason: "onboarding: configure workspace policy",
+                });
+              } catch (error) {
+                if (isWorkspacePolicyConfigUnavailableError(error)) {
+                  throw new Error("Workspace policy configuration is unavailable on this gateway.");
+                }
+                throw error;
+              }
+            });
+          }}
+          selectedPreset={drafts.workspacePolicyPreset}
         />
       );
     }
@@ -344,15 +375,13 @@ export function FirstRunOnboardingPage({
           canSave: Boolean(mutationHttp && selectedPreset && data.primaryAgentKey),
           name: drafts.agentName,
           onNameChange: drafts.setAgentName,
-          onPolicyPresetChange: drafts.setAgentPolicyPreset,
           onSave: () => {
             void runMutation(async () => {
               if (
                 !mutationHttp ||
                 !selectedPreset ||
                 !data.primaryAgentKey ||
-                !mutationHttp.agents ||
-                !mutationHttp.policyConfig
+                !mutationHttp.agents
               ) {
                 throw new Error("Primary agent configuration is unavailable.");
               }
@@ -372,26 +401,14 @@ export function FirstRunOnboardingPage({
                 preset: selectedPreset,
                 name: drafts.agentName,
                 tone: drafts.agentTone,
-                policyPreset: drafts.agentPolicyPreset,
               });
               await mutationHttp.agents.update(nextAgentKey, {
                 config,
                 reason: "onboarding: configure primary agent",
               });
-              try {
-                await mutationHttp.policyConfig.updateAgent(nextAgentKey, {
-                  bundle: buildAgentPolicyBundle(drafts.agentPolicyPreset),
-                  reason: "onboarding: configure primary agent policy",
-                });
-              } catch (error) {
-                toast.warning("Agent created with limited setup", {
-                  description: `${formatErrorMessage(error)}. The agent was configured, but the policy preset was not applied.`,
-                });
-              }
             });
           },
           onToneChange: drafts.setAgentTone,
-          policyPreset: drafts.agentPolicyPreset,
           selectedPresetLabel,
           tone: drafts.agentTone,
         }}

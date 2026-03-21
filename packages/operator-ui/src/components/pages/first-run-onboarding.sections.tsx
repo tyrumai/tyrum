@@ -5,7 +5,6 @@ import { Alert } from "../ui/alert.js";
 import { Button } from "../ui/button.js";
 import { Checkbox } from "../ui/checkbox.js";
 import { Input } from "../ui/input.js";
-import { RadioGroup, RadioGroupItem } from "../ui/radio-group.js";
 import { Select } from "../ui/select.js";
 import {
   getBooleanConfigDefaults,
@@ -22,13 +21,13 @@ import {
   type ModelDialogState,
   type ModelPreset,
 } from "./admin-http-models.shared.js";
-import {
-  AGENT_POLICY_PRESET_OPTIONS,
-  type AgentPolicyPresetKey,
-} from "./agent-setup-wizard.shared.js";
 import { ModelPickerField } from "./model-picker-field.js";
 import { OnboardingStepFrame } from "./first-run-onboarding.parts.js";
 import { ProviderPickerField } from "./provider-picker-field.js";
+import {
+  WORKSPACE_POLICY_PRESET_OPTIONS,
+  type WorkspacePolicyPresetKey,
+} from "./workspace-policy-presets.js";
 
 export function OnboardingDoneStep({
   onClose,
@@ -398,15 +397,65 @@ export function OnboardingPresetStep({
   );
 }
 
+export function OnboardingWorkspacePolicyStep({
+  busy,
+  canSave,
+  onSave,
+  onSelectionChange,
+  selectedPreset,
+}: {
+  busy: boolean;
+  canSave: boolean;
+  onSave: () => void;
+  onSelectionChange: (value: WorkspacePolicyPresetKey) => void;
+  selectedPreset: WorkspacePolicyPresetKey;
+}): React.ReactElement {
+  return (
+    <OnboardingStepFrame stepId="workspace_policy">
+      <div className="grid gap-4" data-testid="first-run-onboarding-step-workspace-policy">
+        <div className="grid gap-3">
+          {WORKSPACE_POLICY_PRESET_OPTIONS.map((option) => {
+            const isSelected = option.key === selectedPreset;
+            return (
+              <button
+                key={option.key}
+                type="button"
+                className={`grid gap-1 rounded-xl border px-4 py-4 text-left transition-colors ${
+                  isSelected
+                    ? "border-primary/50 bg-primary-dim/20"
+                    : "border-border/70 bg-bg hover:bg-bg-subtle"
+                }`}
+                data-testid={`first-run-onboarding-workspace-policy-${option.key}`}
+                onClick={() => onSelectionChange(option.key)}
+              >
+                <div className="text-sm font-medium text-fg">{option.label}</div>
+                <div className="text-xs text-fg-muted">{option.description}</div>
+              </button>
+            );
+          })}
+        </div>
+        <Alert
+          variant="info"
+          title="Workspace policy applies to every new agent"
+          description="Choose the baseline once here. Agents created later inherit this workspace-wide policy."
+        />
+        <div className="flex flex-wrap items-center gap-3">
+          <Button type="button" isLoading={busy} disabled={!canSave} onClick={onSave}>
+            Save workspace policy
+          </Button>
+        </div>
+      </div>
+    </OnboardingStepFrame>
+  );
+}
+
 export function OnboardingAgentStep({
   busy,
   canSave,
   name,
   onAgentSave,
   onNameChange,
-  onPolicyPresetChange,
   onToneChange,
-  policyPreset,
   selectedPresetLabel,
   tone,
 }: {
@@ -415,9 +464,7 @@ export function OnboardingAgentStep({
   name: string;
   onAgentSave: () => void;
   onNameChange: (value: string) => void;
-  onPolicyPresetChange: (value: AgentPolicyPresetKey) => void;
   onToneChange: (value: string) => void;
-  policyPreset: AgentPolicyPresetKey;
   selectedPresetLabel: string;
   tone: string;
 }): React.ReactElement {
@@ -444,26 +491,6 @@ export function OnboardingAgentStep({
         </div>
         <div className="grid gap-4 md:grid-cols-2">
           <Input label="Model preset" readOnly value={selectedPresetLabel} />
-        </div>
-        <div className="grid gap-3">
-          <div className="text-sm font-medium text-fg">Agent policy preset</div>
-          <RadioGroup
-            value={policyPreset}
-            onValueChange={(value) => onPolicyPresetChange(value as AgentPolicyPresetKey)}
-          >
-            {AGENT_POLICY_PRESET_OPTIONS.map((option) => (
-              <label
-                key={option.key}
-                className="flex cursor-pointer items-start gap-3 rounded-xl border border-border/70 px-4 py-3"
-              >
-                <RadioGroupItem value={option.key} />
-                <div className="grid gap-1">
-                  <div className="text-sm font-medium text-fg">{option.label}</div>
-                  <div className="text-xs text-fg-muted">{option.description}</div>
-                </div>
-              </label>
-            ))}
-          </RadioGroup>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <Button

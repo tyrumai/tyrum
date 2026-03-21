@@ -28,6 +28,7 @@ async function safeAll<T>(
 
 export type ConfigHealthIssue = {
   code:
+    | "workspace_policy_unconfigured"
     | "no_provider_accounts"
     | "no_model_presets"
     | "execution_profile_unassigned"
@@ -133,36 +134,53 @@ export async function loadConfigHealth(input: {
     };
   }
 
-  const [providerResult, presetResult, assignmentResult, agentResult, catalogLookup] =
-    await Promise.all([
-      safeAll<{ provider_key: string; status: string }>(
-        input.db,
-        `SELECT provider_key, status
+  const [
+    deploymentPolicyResult,
+    providerResult,
+    presetResult,
+    assignmentResult,
+    agentResult,
+    catalogLookup,
+  ] = await Promise.all([
+    safeAll<{ revision: number }>(
+      input.db,
+      `SELECT revision
+       FROM policy_bundle_config_revisions
+       WHERE tenant_id = ?
+         AND scope_kind = 'deployment'
+         AND agent_id IS NULL
+       ORDER BY revision DESC
+       LIMIT 1`,
+      [input.tenantId],
+    ),
+    safeAll<{ provider_key: string; status: string }>(
+      input.db,
+      `SELECT provider_key, status
        FROM auth_profiles
        WHERE tenant_id = ?
        ORDER BY updated_at DESC, auth_profile_id DESC
        LIMIT 500`,
-        [input.tenantId],
-      ),
-      safeAll<{ preset_key: string; provider_key: string; model_id: string }>(
-        input.db,
-        `SELECT preset_key, provider_key, model_id
+      [input.tenantId],
+    ),
+    safeAll<{ preset_key: string; provider_key: string; model_id: string }>(
+      input.db,
+      `SELECT preset_key, provider_key, model_id
        FROM configured_model_presets
        WHERE tenant_id = ?
        ORDER BY preset_key ASC`,
-        [input.tenantId],
-      ),
-      safeAll<{ execution_profile_id: string; preset_key: string }>(
-        input.db,
-        `SELECT execution_profile_id, preset_key
+      [input.tenantId],
+    ),
+    safeAll<{ execution_profile_id: string; preset_key: string }>(
+      input.db,
+      `SELECT execution_profile_id, preset_key
        FROM execution_profile_model_assignments
        WHERE tenant_id = ?
        ORDER BY execution_profile_id ASC`,
-        [input.tenantId],
-      ),
-      safeAll<{ agent_key: string; config_json: string | null }>(
-        input.db,
-        `SELECT a.agent_key, ac.config_json
+      [input.tenantId],
+    ),
+    safeAll<{ agent_key: string; config_json: string | null }>(
+      input.db,
+      `SELECT a.agent_key, ac.config_json
        FROM agents a
        LEFT JOIN agent_configs ac
          ON ac.tenant_id = a.tenant_id
@@ -175,12 +193,13 @@ export async function loadConfigHealth(input: {
         )
        WHERE a.tenant_id = ?
        ORDER BY a.agent_key ASC`,
-        [input.tenantId],
-      ),
-      loadCatalogLookup(input.db, input.modelsDev),
-    ]);
+      [input.tenantId],
+    ),
+    loadCatalogLookup(input.db, input.modelsDev),
+  ]);
 
   if (
+    deploymentPolicyResult.missingTable ||
     providerResult.missingTable ||
     presetResult.missingTable ||
     assignmentResult.missingTable ||
@@ -198,6 +217,14 @@ export async function loadConfigHealth(input: {
   const agentRows = agentResult.rows;
 
   const issues: ConfigHealthIssue[] = [];
+  if (deploymentPolicyResult.rows.length === 0) {
+    issues.push({
+      code: "workspace_policy_unconfigured",
+      severity: "warning",
+      message: "Workspace policy has not been configured.",
+      target: { kind: "deployment", id: null },
+    });
+  }
   const activeProviderKeys = new Set(
     providerRows
       .filter((row) => row.status === "active")

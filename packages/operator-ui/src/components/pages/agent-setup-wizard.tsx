@@ -5,7 +5,6 @@ import { Button } from "../ui/button.js";
 import { Alert } from "../ui/alert.js";
 import { Checkbox } from "../ui/checkbox.js";
 import { Input } from "../ui/input.js";
-import { RadioGroup, RadioGroupItem } from "../ui/radio-group.js";
 import { Select } from "../ui/select.js";
 import { ModelPickerField } from "./model-picker-field.js";
 import { ProviderPickerField } from "./provider-picker-field.js";
@@ -27,9 +26,7 @@ import {
 import {
   agentSetupWizardTestId,
   AgentSetupStepFrame,
-  AGENT_POLICY_PRESET_OPTIONS,
   buildAgentSetupStepMeta,
-  type AgentPolicyPresetKey,
   type AgentSetupWizardMode,
   type AgentSetupWizardStep,
 } from "./agent-setup-wizard.shared.js";
@@ -72,11 +69,9 @@ type AgentStepProps = {
   name: string;
   onBackToPreset?: () => void;
   onNameChange: (value: string) => void;
-  onPolicyPresetChange: (value: AgentPolicyPresetKey) => void;
   onRandomizeName?: () => void;
   onSave: () => void;
   onToneChange: (value: string) => void;
-  policyPreset: AgentPolicyPresetKey;
   selectedPresetLabel: string;
   showBackToPreset?: boolean;
   showPresetSummary?: boolean;
@@ -418,26 +413,6 @@ export function AgentSetupWizard({
             <Input label="Model preset" readOnly value={agent.selectedPresetLabel} />
           </div>
         ) : null}
-        <div className="grid gap-3">
-          <div className="text-sm font-medium text-fg">Agent policy preset</div>
-          <RadioGroup
-            value={agent.policyPreset}
-            onValueChange={(value) => agent.onPolicyPresetChange(value as AgentPolicyPresetKey)}
-          >
-            {AGENT_POLICY_PRESET_OPTIONS.map((option) => (
-              <label
-                key={option.key}
-                className="flex cursor-pointer items-start gap-3 rounded-xl border border-border/70 px-4 py-3"
-              >
-                <RadioGroupItem value={option.key} />
-                <div className="grid gap-1">
-                  <div className="text-sm font-medium text-fg">{option.label}</div>
-                  <div className="text-xs text-fg-muted">{option.description}</div>
-                </div>
-              </label>
-            ))}
-          </RadioGroup>
-        </div>
         <div className="flex flex-wrap items-center gap-3">
           {showBackToPreset && agent.onBackToPreset ? (
             <Button type="button" variant="secondary" onClick={agent.onBackToPreset}>

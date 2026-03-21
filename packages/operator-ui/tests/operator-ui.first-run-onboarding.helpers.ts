@@ -29,7 +29,8 @@ export function buildIssueStatusResponse(
       | "agent_model_unconfigured"
       | "execution_profile_unassigned"
       | "no_model_presets"
-      | "no_provider_accounts";
+      | "no_provider_accounts"
+      | "workspace_policy_unconfigured";
     severity: "error" | "warning";
     message: string;
     target: { kind: "agent" | "deployment" | "execution_profile"; id: string | null };

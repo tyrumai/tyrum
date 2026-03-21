@@ -65,9 +65,11 @@ describe("shared config route registration", () => {
     containers.push(container);
 
     const hooksRes = await app.request("/config/hooks");
+    const policyRes = await app.request("/config/policy/deployment");
     const sharedStateRes = await app.request("/config/runtime-packages?kind=skill");
 
     expect(hooksRes.status).toBe(404);
+    expect(policyRes.status).toBe(404);
     expect(sharedStateRes.status).toBe(404);
   });
 
@@ -76,9 +78,11 @@ describe("shared config route registration", () => {
     containers.push(container);
 
     const hooksRes = await app.request("/config/hooks");
+    const policyRes = await app.request("/config/policy/deployment");
     const sharedStateRes = await app.request("/config/runtime-packages?kind=skill");
 
     expect(hooksRes.status).toBe(200);
+    expect(policyRes.status).toBe(404);
     expect(sharedStateRes.status).toBe(200);
   });
 });

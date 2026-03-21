@@ -1,6 +1,5 @@
 import type { OperatorCore } from "@tyrum/operator-app";
 import * as React from "react";
-import { toast } from "sonner";
 import { useApiAction } from "../../hooks/use-api-action.js";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
 import { Alert } from "../ui/alert.js";
@@ -9,10 +8,8 @@ import { LoadingState } from "../ui/loading-state.js";
 import { AgentSetupWizard } from "./agent-setup-wizard.js";
 import {
   buildAgentConfigFromPreset,
-  buildAgentPolicyBundle,
   createUniqueAgentKey,
   pickRandomAgentName,
-  type AgentPolicyPresetKey,
 } from "./agent-setup-wizard.shared.js";
 import {
   emptyDialogState,
@@ -102,7 +99,6 @@ export function AgentsPageCreateWizard({
   const [selectedPresetKey, setSelectedPresetKey] = React.useState("");
   const [agentName, setAgentName] = React.useState("");
   const [agentTone, setAgentTone] = React.useState("direct");
-  const [policyPreset, setPolicyPreset] = React.useState<AgentPolicyPresetKey>("moderate");
   const saveAction = useApiAction<void>();
 
   const supportedProviders = React.useMemo(() => supportsProviders(data.registry), [data.registry]);
@@ -232,10 +228,7 @@ export function AgentsPageCreateWizard({
   );
 
   const runAction = async (action: () => Promise<void>): Promise<void> => {
-    await saveAction.runAndThrow(action).catch((error) => {
-      toast.error("Setup failed", { description: formatErrorMessage(error) });
-      throw error;
-    });
+    await saveAction.runAndThrow(action);
   };
 
   const saveProvider = async (): Promise<void> => {
@@ -273,30 +266,12 @@ export function AgentsPageCreateWizard({
       preset: selectedPreset,
       name: agentName,
       tone: agentTone,
-      policyPreset,
     });
     const created = await mutationHttp.agents.create({
       agent_key: agentKey,
       config,
       reason: "agents: create via setup wizard",
     });
-    if (!mutationHttp.policyConfig) {
-      toast.warning("Agent created with limited setup", {
-        description: "The agent was created, but the policy preset was not applied.",
-      });
-      onSaved(created.agent_key);
-      return;
-    }
-    try {
-      await mutationHttp.policyConfig.updateAgent(created.agent_key, {
-        bundle: buildAgentPolicyBundle(policyPreset),
-        reason: "agents: apply setup wizard policy preset",
-      });
-    } catch (error) {
-      toast.warning("Agent created with limited setup", {
-        description: `${formatErrorMessage(error)}. The agent was created, but the policy preset was not applied.`,
-      });
-    }
     onSaved(created.agent_key);
   };
 
@@ -374,13 +349,11 @@ export function AgentsPageCreateWizard({
             nameRequired: true,
             onBackToPreset: showPresetStep ? () => setStep("preset") : undefined,
             onNameChange: setAgentName,
-            onPolicyPresetChange: setPolicyPreset,
             onRandomizeName: randomizeAgentName,
             onSave: () => {
               void runAction(createAgent);
             },
             onToneChange: setAgentTone,
-            policyPreset,
             selectedPresetLabel: "",
             showBackToPreset: showPresetStep,
             showPresetSummary: false,
