@@ -42,13 +42,11 @@ describe("workboard-store", () => {
 
     const snapshot = store.getSnapshot();
     expect(ws.workList).toHaveBeenCalledWith({
-      agent_key: "default",
-      workspace_key: "default",
       limit: 200,
     });
     expect(snapshot.scopeKeys).toEqual({
-      agent_key: "default",
-      workspace_key: "default",
+      agent_key: "",
+      workspace_key: "",
     });
     expect(snapshot.resolvedScope).toEqual({
       tenant_id: "tenant-1",

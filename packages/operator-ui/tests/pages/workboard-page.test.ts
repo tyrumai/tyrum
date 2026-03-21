@@ -372,7 +372,7 @@ describe("WorkBoardPage", () => {
     }
   });
 
-  it("shows agent names without keys and preserves the active workspace when applying scope", async () => {
+  it("shows agent names without keys and applies scope without forcing a default workspace", async () => {
     const { core, http, workboard } = createCore("connected");
     http.agents.list.mockResolvedValueOnce({
       agents: [
@@ -405,14 +405,14 @@ describe("WorkBoardPage", () => {
 
       expect(workboard.store.setScopeKeys).toHaveBeenLastCalledWith({
         agent_key: "builder",
-        workspace_key: "default",
+        workspace_key: "",
       });
     } finally {
       cleanupTestRoot(testRoot);
     }
   });
 
-  it("keeps the current workspace scope for workboard requests", async () => {
+  it("preserves the current hidden workspace scope until the user changes it", async () => {
     const workItem = makeWorkItem({ work_item_id: "wi-scope" });
     const { core, ws, workboard } = createCore(
       "connected",
@@ -430,6 +430,14 @@ describe("WorkBoardPage", () => {
         lastSyncedAt: "2026-01-01T00:00:00.000Z",
       },
     );
+    workboard.store.refreshList = vi.fn(async () => {
+      workboard.setState((prev) => ({
+        ...prev,
+        items: [workItem],
+        supported: true,
+        lastSyncedAt: "2026-01-01T00:00:00.000Z",
+      }));
+    });
 
     const testRoot = renderIntoDocument(React.createElement(WorkBoardPage, { core }));
     try {

@@ -82,7 +82,7 @@ export function resolveMcpDir(home = resolveTyrumHome()): string {
 }
 
 export const DEFAULT_IDENTITY_MD = `---
-name: Tyrum
+name: Agent
 style:
   tone: direct
 ---
