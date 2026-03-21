@@ -99,8 +99,14 @@ export function buildSessionTreeEntries(
   }
 
   const orderedRoots = roots.toSorted(compareSessionsByUpdatedAtDesc);
+  const orderedSessions = sessions.toSorted(compareSessionsByUpdatedAtDesc);
   const result: Array<{ session: TranscriptSessionSummary; depth: number }> = [];
+  const visited = new Set<string>();
   const visit = (session: TranscriptSessionSummary, depth: number): void => {
+    if (visited.has(session.session_key)) {
+      return;
+    }
+    visited.add(session.session_key);
     result.push({ session, depth });
     const children = (byParentKey.get(session.session_key) ?? []).toSorted(
       compareSessionsByCreatedAtAsc,
@@ -112,6 +118,9 @@ export function buildSessionTreeEntries(
 
   for (const root of orderedRoots) {
     visit(root, 0);
+  }
+  for (const session of orderedSessions) {
+    visit(session, 0);
   }
 
   return result;

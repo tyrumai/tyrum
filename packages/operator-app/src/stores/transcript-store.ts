@@ -224,6 +224,7 @@ export function createTranscriptStore(ws: OperatorWsClient): TranscriptStore {
     setState((prev) => ({
       ...prev,
       selectedSessionKey: normalizedSessionKey,
+      detail: prev.detail?.focusSessionKey === normalizedSessionKey ? prev.detail : null,
       loadingDetail: true,
       errorDetail: null,
     }));

@@ -420,6 +420,23 @@ describe("TranscriptsPage", () => {
     cleanupTestRoot(testRoot);
   });
 
+  it("refreshes the selected transcript detail when the page refresh action is used", async () => {
+    const { core, transcriptStore, fixture } = createTranscriptCore();
+    const testRoot = renderIntoDocument(React.createElement(TranscriptsPage, { core }));
+
+    await flushPage();
+
+    act(() => {
+      click(findButtonByText(testRoot.container, "Refresh"));
+    });
+    await flushPage();
+
+    expect(transcriptStore.refresh).toHaveBeenCalledTimes(2);
+    expect(transcriptStore.openSession).toHaveBeenCalledWith(fixture.rootSession.session_key);
+
+    cleanupTestRoot(testRoot);
+  });
+
   it("keeps the selected transcript event in the inspector across transcript detail updates", async () => {
     const { core, fixture, setTranscriptState } = createTranscriptCore();
     const testRoot = renderIntoDocument(React.createElement(TranscriptsPage, { core }));

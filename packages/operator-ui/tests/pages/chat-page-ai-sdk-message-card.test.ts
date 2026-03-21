@@ -181,6 +181,34 @@ describe("MessageCard", () => {
     cleanupTestRoot(testRoot);
   });
 
+  it("renders tool parts with a missing state without crashing", () => {
+    const testRoot = renderMessageCard({
+      id: "assistant-tool-missing-state",
+      role: "assistant",
+      parts: [
+        {
+          type: "dynamic-tool",
+          toolName: "web_search",
+          toolCallId: "tool-call-1",
+          input: { query: "latest docs" },
+        },
+      ],
+    } as unknown as UIMessage);
+
+    const toggle = findToggle(testRoot.container, "web_search");
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+
+    act(() => {
+      click(toggle);
+    });
+
+    expect(testRoot.container.textContent).toContain("web_search");
+    expect(testRoot.container.textContent).toContain("unknown");
+    expect(testRoot.container.textContent).toContain("latest docs");
+
+    cleanupTestRoot(testRoot);
+  });
+
   it("auto-collapses tool calls once they finish and only shows input/output when expanded", () => {
     const message = {
       id: "assistant-tool-finished",
