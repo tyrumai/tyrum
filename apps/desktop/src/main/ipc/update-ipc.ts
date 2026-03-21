@@ -37,6 +37,16 @@ export interface UpdateIpcOptions {
   clearQuitForUpdate?: () => void;
 }
 
+function isStartupUpdateCheckDisabled(): boolean {
+  const value = process.env["TYRUM_DISABLE_STARTUP_UPDATE_CHECK"];
+  if (typeof value !== "string") {
+    return false;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  return normalized === "1" || normalized === "true" || normalized === "yes";
+}
+
 function ensureUpdateOsIntegration(): ReturnType<typeof createDesktopUpdateOsIntegration> {
   if (updateOsIntegration) return updateOsIntegration;
 
@@ -175,5 +185,7 @@ export function registerUpdateIpc(window: BrowserWindow, options: UpdateIpcOptio
     });
   }
 
-  void service.checkForUpdatesOnStartup();
+  if (!isStartupUpdateCheckDisabled()) {
+    void service.checkForUpdatesOnStartup();
+  }
 }

@@ -109,6 +109,7 @@ describe("registerUpdateIpc handlers", () => {
         registeredHandlers.set(channel, handler);
       },
     );
+    delete process.env["TYRUM_DISABLE_STARTUP_UPDATE_CHECK"];
   });
 
   it("registers update handlers and returns initial state", async () => {
@@ -134,6 +135,33 @@ describe("registerUpdateIpc handlers", () => {
     expect(state.stage).toBe("checking");
     expect(state.currentVersion).toBe("1.0.0");
     expect(checkForUpdatesMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips the startup update check when explicitly disabled", async () => {
+    process.env["TYRUM_DISABLE_STARTUP_UPDATE_CHECK"] = "1";
+
+    const { registerUpdateIpc } = await import("../src/main/ipc/update-ipc.js");
+
+    const windowStub = {
+      isDestroyed: () => false,
+      webContents: {
+        isDestroyed: () => false,
+        send: vi.fn(),
+      },
+    } as never;
+
+    registerUpdateIpc(windowStub);
+
+    const stateHandler = registeredHandlers.get("updates:state");
+    expect(stateHandler).toBeDefined();
+
+    const state = stateHandler!({} as never) as {
+      stage: string;
+      currentVersion: string;
+    };
+    expect(state.stage).toBe("idle");
+    expect(state.currentVersion).toBe("1.0.0");
+    expect(checkForUpdatesMock).not.toHaveBeenCalled();
   });
 
   it("opens a selected installer file", async () => {
