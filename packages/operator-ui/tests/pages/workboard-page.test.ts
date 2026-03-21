@@ -372,7 +372,7 @@ describe("WorkBoardPage", () => {
     }
   });
 
-  it("shows agent names without keys and applies scope without forcing a default workspace", async () => {
+  it("shows agent names without keys and preserves the active workspace when applying scope", async () => {
     const { core, http, workboard } = createCore("connected");
     http.agents.list.mockResolvedValueOnce({
       agents: [
@@ -405,7 +405,7 @@ describe("WorkBoardPage", () => {
 
       expect(workboard.store.setScopeKeys).toHaveBeenLastCalledWith({
         agent_key: "builder",
-        workspace_key: "",
+        workspace_key: DEFAULT_SCOPE_KEYS.workspace_key,
       });
     } finally {
       cleanupTestRoot(testRoot);
