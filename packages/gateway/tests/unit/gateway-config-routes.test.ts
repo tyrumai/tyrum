@@ -26,10 +26,7 @@ function createApp(container: GatewayContainer, tenantId: string): Hono {
   app.route(
     "/",
     createGatewayConfigRoutes({
-      db: container.db,
-      identityScopeDal: container.identityScopeDal,
       hooksDal: new LifecycleHookConfigDal(container.db),
-      policyBundleDal: new PolicyBundleConfigDal(container.db),
     }),
   );
   app.route(

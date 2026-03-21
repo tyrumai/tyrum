@@ -418,8 +418,9 @@ export function FirstRunOnboardingPage({
 
   return (
     <AppPage
-      contentLayout="fill"
+      bodyClassName="overflow-auto"
       contentClassName="max-w-5xl gap-6"
+      contentLayout="fill"
       data-testid="first-run-onboarding"
     >
       <section
@@ -490,8 +491,8 @@ export function FirstRunOnboardingPage({
           </CardContent>
         </Card>
       ) : (
-        <div className="grid flex-1 min-h-0 items-start gap-4 xl:grid-cols-[19rem_minmax(0,1fr)]">
-          <OnboardingProgressCard items={progressItems} />
+        <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[19rem_minmax(0,1fr)] xl:grid-rows-[minmax(0,1fr)]">
+          <OnboardingProgressCard className="xl:self-start" items={progressItems} />
           <Card
             className="flex min-h-0 flex-col self-stretch overflow-hidden"
             data-testid="first-run-onboarding-card"

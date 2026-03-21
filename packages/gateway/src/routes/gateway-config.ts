@@ -31,14 +31,17 @@ const RevertRequest = z
   .strict();
 
 export interface GatewayConfigRouteDeps {
+  hooksDal: LifecycleHookConfigDal;
+}
+
+export interface PolicyConfigRouteDeps {
   db: SqlDb;
   identityScopeDal: IdentityScopeDal;
-  hooksDal: LifecycleHookConfigDal;
   policyBundleDal: PolicyBundleConfigDal;
 }
 
 async function resolveExistingAgentId(
-  deps: Pick<GatewayConfigRouteDeps, "db">,
+  deps: Pick<PolicyConfigRouteDeps, "db">,
   tenantId: string,
   agentKey: string,
 ): Promise<string | null> {
@@ -52,10 +55,7 @@ async function resolveExistingAgentId(
   return row?.agent_id ?? null;
 }
 
-function registerPolicyConfigRoutes(
-  app: Hono,
-  deps: Pick<GatewayConfigRouteDeps, "db" | "identityScopeDal" | "policyBundleDal">,
-): void {
+function registerPolicyConfigRoutes(app: Hono, deps: PolicyConfigRouteDeps): void {
   const registerPolicyRoutes = (
     path: string,
     resolveReadScope: (
@@ -339,9 +339,7 @@ export function createGatewayConfigRoutes(deps: GatewayConfigRouteDeps): Hono {
   return app;
 }
 
-export function createPolicyConfigRoutes(
-  deps: Pick<GatewayConfigRouteDeps, "db" | "identityScopeDal" | "policyBundleDal">,
-): Hono {
+export function createPolicyConfigRoutes(deps: PolicyConfigRouteDeps): Hono {
   const app = new Hono();
   registerPolicyConfigRoutes(app, deps);
   return app;

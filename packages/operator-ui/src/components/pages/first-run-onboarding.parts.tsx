@@ -16,8 +16,10 @@ function getStepIndex(stepId: FirstRunOnboardingRenderableStepId): number {
 }
 
 export function OnboardingProgressCard({
+  className,
   items,
 }: {
+  className?: string;
   items: readonly FirstRunOnboardingProgressItem[];
 }): React.ReactElement {
   const completedCount = items.filter((item) => item.status === "done").length;
@@ -25,7 +27,7 @@ export function OnboardingProgressCard({
   const currentItem = items.find((item) => item.status === "current") ?? null;
 
   return (
-    <Card data-testid="first-run-onboarding-progress">
+    <Card className={className} data-testid="first-run-onboarding-progress">
       <CardHeader className="pb-3">
         <div className="grid gap-2">
           <div className="flex flex-wrap items-center gap-2">

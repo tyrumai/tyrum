@@ -1,3 +1,5 @@
+import { PolicyBundle } from "@tyrum/contracts";
+
 export type WorkspacePolicyPresetKey = "safest" | "moderate" | "power_user";
 type PolicyDecision = "allow" | "require_approval" | "deny";
 
@@ -31,6 +33,13 @@ type WorkspacePolicyBundleInput = {
   };
 };
 
+function validateWorkspacePolicyBundle(
+  bundle: WorkspacePolicyBundleInput,
+): WorkspacePolicyBundleInput {
+  PolicyBundle.parse(bundle);
+  return bundle;
+}
+
 export const WORKSPACE_POLICY_PRESET_OPTIONS: ReadonlyArray<{
   key: WorkspacePolicyPresetKey;
   label: string;
@@ -57,7 +66,7 @@ export function buildWorkspacePolicyBundle(
   preset: WorkspacePolicyPresetKey,
 ): WorkspacePolicyBundleInput {
   if (preset === "safest") {
-    return {
+    return validateWorkspacePolicyBundle({
       v: 1,
       tools: { allow: [], require_approval: [], deny: ["*"] },
       network_egress: { default: "deny", allow: [], require_approval: [], deny: [] },
@@ -66,11 +75,11 @@ export function buildWorkspacePolicyBundle(
       artifacts: { default: "allow" },
       provenance: { untrusted_shell_requires_approval: true },
       approvals: { auto_review: { mode: "auto_review" } },
-    };
+    });
   }
 
   if (preset === "power_user") {
-    return {
+    return validateWorkspacePolicyBundle({
       v: 1,
       tools: { allow: ["*"], require_approval: [], deny: [] },
       network_egress: { default: "deny", allow: ["*"], require_approval: [], deny: [] },
@@ -79,10 +88,10 @@ export function buildWorkspacePolicyBundle(
       artifacts: { default: "allow" },
       provenance: { untrusted_shell_requires_approval: false },
       approvals: { auto_review: { mode: "auto_review" } },
-    };
+    });
   }
 
-  return {
+  return validateWorkspacePolicyBundle({
     v: 1,
     tools: { allow: [], require_approval: [], deny: [] },
     network_egress: { default: "require_approval", allow: [], require_approval: [], deny: [] },
@@ -96,5 +105,5 @@ export function buildWorkspacePolicyBundle(
     artifacts: { default: "allow" },
     provenance: { untrusted_shell_requires_approval: true },
     approvals: { auto_review: { mode: "auto_review" } },
-  };
+  });
 }

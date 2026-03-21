@@ -473,10 +473,7 @@ export function registerAgentsAndWorkspaceRoutes(context: AppRouteContext): void
     context.app.route(
       "/",
       createGatewayConfigRoutes({
-        db: context.container.db,
-        identityScopeDal: context.container.identityScopeDal,
         hooksDal: new LifecycleHookConfigDal(context.container.db),
-        policyBundleDal: new PolicyBundleConfigDal(context.container.db),
       }),
     );
     context.app.route(
