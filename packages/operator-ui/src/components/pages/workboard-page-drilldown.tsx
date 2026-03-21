@@ -261,7 +261,6 @@ export function WorkBoardDrilldown({
               title="Blockers"
               items={approvalBlockers}
               collapsible
-              defaultOpen={false}
               renderItem={(task) => (
                 <div
                   key={task.task_id}
