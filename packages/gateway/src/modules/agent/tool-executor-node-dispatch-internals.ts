@@ -29,6 +29,8 @@ export function stripNodeListControlState(
       ...(node.mode ? { mode: node.mode } : {}),
       ...(node.version ? { version: node.version } : {}),
       connected: node.connected,
+      paired_status: node.paired_status,
+      attached_to_requested_lane: node.attached_to_requested_lane,
       ...(node.last_seen_at ? { last_seen_at: node.last_seen_at } : {}),
       ...(node.device ? { device: node.device } : {}),
       ...(node.last_tyrum_interaction_at
@@ -46,6 +48,9 @@ export function stripNodeListControlState(
         capability_version: capabilitySummary.capability_version,
         ...(capabilitySummary.description ? { description: capabilitySummary.description } : {}),
         connected: capabilitySummary.connected,
+        ready: capabilitySummary.ready,
+        paired: capabilitySummary.paired,
+        dispatchable: capabilitySummary.dispatchable,
         supported_action_count: capabilitySummary.supported_action_count,
         enabled_action_count: capabilitySummary.enabled_action_count,
         available_action_count: capabilitySummary.available_action_count,

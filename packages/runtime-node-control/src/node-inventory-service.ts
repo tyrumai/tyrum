@@ -341,6 +341,7 @@ export class NodeInventoryService {
             CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
           ...(catalogDescription ? { description: catalogDescription } : {}),
           connected: node.connected && advertisedCapability !== undefined,
+          ready,
           paired,
           dispatchable: node.connected && ready && paired && enabledActionCount > 0,
           supported_action_count: supportedActionCount,

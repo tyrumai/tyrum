@@ -330,6 +330,22 @@ describe("tool registry routes", () => {
         }),
       }),
     );
+    expect(body.tools).toContainEqual(
+      expect.objectContaining({
+        source: "builtin",
+        canonical_id: "tool.node.capability.get",
+        family: "node",
+        input_schema: expect.objectContaining({
+          type: "object",
+          required: ["node_id", "capability"],
+          properties: expect.objectContaining({
+            node_id: expect.objectContaining({ type: "string" }),
+            capability: expect.objectContaining({ type: "string" }),
+            include_disabled: expect.objectContaining({ type: "boolean" }),
+          }),
+        }),
+      }),
+    );
     const cameraTool = body.tools.find(
       (tool: { canonical_id?: string }) => tool.canonical_id === "tool.camera.capture-photo",
     );

@@ -140,6 +140,7 @@ describe("NodeInventoryService", () => {
     expect(result.nodes[0]?.capabilities).toContainEqual(
       expect.objectContaining({
         capability: descriptorIdForClientCapability("playwright"),
+        ready: true,
         dispatchable: false,
         supported_action_count: 0,
         enabled_action_count: 0,

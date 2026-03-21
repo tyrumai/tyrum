@@ -12,6 +12,7 @@ import {
   GLOB_TOOL_PROMPT_METADATA,
   GREP_TOOL_PROMPT_METADATA,
   READ_TOOL_PROMPT_METADATA,
+  TOOL_NODE_CAPABILITY_GET_PROMPT_METADATA,
   TOOL_NODE_LIST_PROMPT_METADATA,
   WRITE_TOOL_PROMPT_METADATA,
 } from "./tool-catalog-prompt-metadata.js";
@@ -267,7 +268,8 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
   },
   {
     id: "tool.node.list",
-    description: "List connected and dispatchable nodes for the current lane or a specified lane.",
+    description:
+      "List nodes and capability summary status for the current lane or a specified lane.",
     effect: "read_only",
     keywords: ["node", "device", "inventory", "list", "discover"],
     ...TOOL_NODE_LIST_PROMPT_METADATA,
@@ -279,11 +281,12 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
         capability: {
           type: "string",
           description:
-            "Optional exact capability descriptor id filter (example: tyrum.location.get).",
+            "Optional exact capability descriptor id filter (example: tyrum.location.get). Omit to list all nodes. Wildcards are not supported.",
         },
         dispatchable_only: {
           type: "boolean",
-          description: "When true, return only nodes with at least one dispatchable action.",
+          description:
+            "Optional. When true, return only nodes with at least one dispatchable action.",
         },
         key: {
           type: "string",
@@ -294,6 +297,36 @@ export const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
           description: "Optional lane used to resolve lane attachment.",
         },
       },
+      additionalProperties: false,
+    },
+  },
+  {
+    id: "tool.node.capability.get",
+    description:
+      "Inspect one capability on one node, including live action availability and input/output schemas.",
+    effect: "read_only",
+    keywords: ["node", "capability", "inspect", "schema", "actions", "availability"],
+    ...TOOL_NODE_CAPABILITY_GET_PROMPT_METADATA,
+    source: "builtin",
+    family: "node",
+    inputSchema: {
+      type: "object",
+      properties: {
+        node_id: {
+          type: "string",
+          description: "Exact node id to inspect.",
+        },
+        capability: {
+          type: "string",
+          description:
+            "Exact capability descriptor id to inspect (example: tyrum.browser.navigate).",
+        },
+        include_disabled: {
+          type: "boolean",
+          description: "When true, include disabled actions in the response.",
+        },
+      },
+      required: ["node_id", "capability"],
       additionalProperties: false,
     },
   },

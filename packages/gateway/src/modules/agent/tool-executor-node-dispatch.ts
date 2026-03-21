@@ -39,6 +39,32 @@ type NodeToolContext = {
   artifactStore?: ArtifactStore;
 };
 
+function hasUnsupportedCapabilityWildcard(capability: string): boolean {
+  return capability.includes("*") || capability.includes("?");
+}
+
+function normalizeCapabilityFilter(capability: string | undefined): {
+  capability?: string;
+  error?: string;
+} {
+  if (!capability) {
+    return {};
+  }
+  if (isLegacyUmbrellaCapabilityDescriptorId(capability)) {
+    return { error: legacyCapabilityError(capability) };
+  }
+  if (isLegacyCapabilityDescriptorId(capability)) {
+    return { error: legacyNamespacedCapabilityError(capability) };
+  }
+  if (hasUnsupportedCapabilityWildcard(capability)) {
+    return {
+      error:
+        "wildcard capability filters are not supported; omit capability to list all nodes or use an exact split capability descriptor",
+    };
+  }
+  return { capability };
+}
+
 export async function executeHttpNodeDispatch(
   context: DispatchExecutionContext,
   request: NodeActionDispatchRequestT,
@@ -65,7 +91,7 @@ export async function executeNodeListTool(
   const capability =
     typeof parsed?.["capability"] === "string" ? parsed["capability"].trim() : undefined;
   const dispatchableOnly =
-    typeof parsed?.["dispatchable_only"] === "boolean" ? parsed["dispatchable_only"] : true;
+    typeof parsed?.["dispatchable_only"] === "boolean" ? parsed["dispatchable_only"] : false;
   const key =
     typeof parsed?.["key"] === "string" && parsed["key"].trim().length > 0
       ? parsed["key"].trim()
@@ -74,18 +100,12 @@ export async function executeNodeListTool(
     typeof parsed?.["lane"] === "string" && parsed["lane"].trim().length > 0
       ? parsed["lane"].trim()
       : audit?.work_lane?.trim() || undefined;
-  if (capability && isLegacyUmbrellaCapabilityDescriptorId(capability)) {
+  const normalizedCapability = normalizeCapabilityFilter(capability);
+  if (normalizedCapability.error) {
     return {
       tool_call_id: toolCallId,
       output: "",
-      error: legacyCapabilityError(capability),
-    };
-  }
-  if (capability && isLegacyCapabilityDescriptorId(capability)) {
-    return {
-      tool_call_id: toolCallId,
-      output: "",
-      error: legacyNamespacedCapabilityError(capability),
+      error: normalizedCapability.error,
     };
   }
 
@@ -95,14 +115,71 @@ export async function executeNodeListTool(
       status: "ok",
       ...(await context.nodeInventoryService.list({
         tenantId,
-        capability,
+        capability: normalizedCapability.capability,
         dispatchableOnly,
         key,
         lane,
       })),
     }),
-    { capability, dispatchableOnly, key, lane },
+    { capability: normalizedCapability.capability, dispatchableOnly, key, lane },
   );
+  const tagged = tagContent(JSON.stringify(payload), "tool");
+  return {
+    tool_call_id: toolCallId,
+    output: sanitizeForModel(tagged),
+    provenance: tagged,
+  };
+}
+
+export async function executeNodeCapabilityGetTool(
+  context: NodeToolContext,
+  toolCallId: string,
+  args: unknown,
+): Promise<ToolResult> {
+  const parsed = normalizeJsonObject(args);
+  const tenantId = context.workspaceLease?.tenantId;
+  if (!tenantId || !context.inspectionService) {
+    return {
+      tool_call_id: toolCallId,
+      output: "",
+      error: "node capability inspection is not configured",
+    };
+  }
+
+  const nodeId =
+    typeof parsed?.["node_id"] === "string" && parsed["node_id"].trim().length > 0
+      ? parsed["node_id"].trim()
+      : undefined;
+  const capabilityRaw =
+    typeof parsed?.["capability"] === "string" ? parsed["capability"].trim() : undefined;
+  const includeDisabled =
+    typeof parsed?.["include_disabled"] === "boolean" ? parsed["include_disabled"] : false;
+
+  if (!nodeId) {
+    return {
+      tool_call_id: toolCallId,
+      output: "",
+      error: "node_id is required for tool.node.capability.get",
+    };
+  }
+
+  const normalizedCapability = normalizeCapabilityFilter(capabilityRaw);
+  if (!normalizedCapability.capability || normalizedCapability.error) {
+    return {
+      tool_call_id: toolCallId,
+      output: "",
+      error:
+        normalizedCapability.error ??
+        "capability is required for tool.node.capability.get and must be an exact split capability descriptor",
+    };
+  }
+
+  const payload = await context.inspectionService.inspect({
+    tenantId,
+    nodeId,
+    capabilityId: normalizedCapability.capability,
+    includeDisabled,
+  });
   const tagged = tagContent(JSON.stringify(payload), "tool");
   return {
     tool_call_id: toolCallId,

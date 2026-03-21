@@ -64,18 +64,20 @@ export const GREP_TOOL_PROMPT_METADATA = {
 
 export const TOOL_NODE_LIST_PROMPT_METADATA = {
   promptGuidance: [
-    "List nodes before inspect or dispatch so you target a connected node and capability.",
-    "Use node device metadata (type, platform, last_tyrum_interaction_at) to choose the best node for an action. Prefer nodes the user is actively using.",
+    "Call tool.node.list with no filters first when you need to see all nodes and capability summary status.",
+    "Use exact capability descriptor ids only when filtering. Omit capability to list all nodes; wildcard filters are not supported.",
+    "Use node device metadata and attached_to_requested_lane to choose the best node for an action. Prefer nodes the user is actively using.",
   ],
   promptExamples: [
+    "{}",
     '{"capability":"tyrum.browser.navigate","dispatchable_only":true}',
     '{"capability":"tyrum.location.get","dispatchable_only":true}',
   ],
 } as const;
 
-export const TOOL_NODE_INSPECT_PROMPT_METADATA = {
+export const TOOL_NODE_CAPABILITY_GET_PROMPT_METADATA = {
   promptGuidance: [
-    "Inspect the capability before dispatch so you know the exact action names and input shape.",
+    "Use this after tool.node.list when you need action-level availability, input schema, or consent/permission detail for one capability on one node.",
   ],
   promptExamples: [
     '{"node_id":"node_123","capability":"tyrum.browser.navigate"}',

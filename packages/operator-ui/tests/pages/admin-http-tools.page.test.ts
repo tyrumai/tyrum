@@ -48,6 +48,7 @@ describe("ConfigurePage (HTTP) tools", () => {
       page.container.querySelector("[data-testid='admin-http-tools-group-extensions']"),
     ).not.toBeNull();
     expect(page.container.textContent).toContain("tool.browser.navigate");
+    expect(page.container.textContent).toContain("tool.node.capability.get");
     expect(page.container.textContent).toContain("read");
     expect(page.container.textContent).toContain("websearch");
     expect(page.container.textContent).toContain("mcp.exa.web_search_exa");
