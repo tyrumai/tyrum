@@ -26,7 +26,15 @@ const ALL_KINDS: MemoryItemKind[] = ["fact", "note", "procedure", "episode"];
 const ALL_SENSITIVITIES: MemorySensitivity[] = ["public", "private", "sensitive"];
 
 function resolveMemoryAgentLabel(agentLookup: Map<string, string>, agentId: string): string {
-  return agentLookup.get(agentId) ?? "Unknown agent";
+  const agentLabel = agentLookup.get(agentId);
+  if (agentLabel) {
+    return agentLabel;
+  }
+  return `Unknown agent (${agentId.slice(0, 8)})`;
+}
+
+function resolveMemoryAgentSortValue(agentLookup: Map<string, string>, agentId: string): string {
+  return agentLookup.get(agentId) ?? agentId;
 }
 
 export function MemoryKindBadge({ kind }: { kind: MemoryItemKind }) {
@@ -311,7 +319,7 @@ export function buildItemColumns(options: {
           {resolveMemoryAgentLabel(agentLookup, row.agent_id)}
         </span>
       ),
-      sortValue: (row) => resolveMemoryAgentLabel(agentLookup, row.agent_id),
+      sortValue: (row) => resolveMemoryAgentSortValue(agentLookup, row.agent_id),
       headerClassName: "w-28",
     },
     {
@@ -356,7 +364,7 @@ export function buildTombstoneColumns(
           {resolveMemoryAgentLabel(agentLookup, row.agent_id)}
         </span>
       ),
-      sortValue: (row) => resolveMemoryAgentLabel(agentLookup, row.agent_id),
+      sortValue: (row) => resolveMemoryAgentSortValue(agentLookup, row.agent_id),
     },
     {
       id: "deleted_by",

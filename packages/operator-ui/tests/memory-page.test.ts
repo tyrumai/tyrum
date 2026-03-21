@@ -1,3 +1,5 @@
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import {
   formatRelativeTime,
@@ -211,7 +213,7 @@ describe("memory-page.sections", () => {
       expect(columns.map((c) => c.id)).toEqual(["agent", "deleted_by", "reason", "deleted_at"]);
     });
 
-    it("sorts unknown agents by the visible fallback label", () => {
+    it("sorts unknown agents by their agent id", () => {
       const columns = buildTombstoneColumns(new Map());
       const agentColumn = columns.find((column) => column.id === "agent");
       expect(agentColumn?.sortValue).toBeDefined();
@@ -225,12 +227,36 @@ describe("memory-page.sections", () => {
         reason: "Operator deletion via UI",
       };
 
-      expect(agentColumn?.sortValue?.(tombstone)).toBe("Unknown agent");
+      expect(agentColumn?.sortValue?.(tombstone)).toBe(tombstone.agent_id);
     });
   });
 
   describe("buildItemColumns", () => {
-    it("sorts unknown agents by the visible fallback label", () => {
+    it("renders a distinguishable fallback label for unknown agents", () => {
+      const columns = buildItemColumns({
+        agentLookup: new Map(),
+        canMutate: true,
+        onDelete: () => {},
+      });
+      const agentColumn = columns.find((column) => column.id === "agent");
+      expect(agentColumn?.cell).toBeDefined();
+
+      const item: MemoryItem = {
+        ...BASE_ITEM,
+        memory_item_id: "550e8400-e29b-41d4-a716-446655440020",
+        kind: "note",
+        title: "Visible label test",
+        body_md: "Visible label test body",
+      };
+
+      const markup = renderToStaticMarkup(
+        React.createElement(React.Fragment, null, agentColumn?.cell?.(item)),
+      );
+
+      expect(markup).toContain("Unknown agent (00000000)");
+    });
+
+    it("sorts unknown agents by their agent id", () => {
       const columns = buildItemColumns({
         agentLookup: new Map(),
         canMutate: true,
@@ -247,7 +273,7 @@ describe("memory-page.sections", () => {
         body_md: "Visible label test body",
       };
 
-      expect(agentColumn?.sortValue?.(item)).toBe("Unknown agent");
+      expect(agentColumn?.sortValue?.(item)).toBe(item.agent_id);
     });
   });
 });

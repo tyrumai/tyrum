@@ -236,7 +236,7 @@ export function WorkBoardDrilldown({
                         </span>
                         <span>{new Date(task.last_event_at).toLocaleString()}</span>
                       </div>
-                      {(task.pause_reason || task.result_summary) && (
+                      {(task.pause_reason || task.pause_detail || task.result_summary) && (
                         <div className="mt-2 flex flex-wrap gap-2 text-xs text-fg-muted">
                           {task.pause_reason ? <span>pause {task.pause_reason}</span> : null}
                           {task.pause_detail ? (
