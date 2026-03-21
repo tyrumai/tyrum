@@ -229,13 +229,23 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
         const statusDisplay = getApprovalStatusDisplay(approval.status);
         const reviewReason = approval.latest_review?.reason?.trim() ?? "";
         const reviewRisk = formatReviewRisk(approval.latest_review);
+        const scope = approval.scope;
         const approvalAgent = resolveApprovalAgentInfo(approval, managedAgentsByIdentity);
+        const detailEntries = [
+          ["Approval key", approval.approval_key],
+          ["Scope key", scope?.key],
+          ["Lane", scope?.lane],
+          ["Run", scope?.run_id],
+          ["Step", scope?.step_id],
+          ["Attempt", scope?.attempt_id],
+        ].filter((entry): entry is [string, string] => typeof entry[1] === "string");
 
         const desktop = describeDesktopApprovalContext(approval.context);
         const hasMotivation = Boolean(approval.motivation);
         const hasReview = Boolean(reviewReason || reviewRisk);
         const hasDesktop = desktop !== null;
-        const hasContext = hasMotivation || hasReview || hasDesktop;
+        const hasDetails = detailEntries.length > 0;
+        const hasContext = hasMotivation || hasReview || hasDesktop || hasDetails;
         const isExpanded = expandedCards[approvalId] === true;
 
         return (
@@ -325,6 +335,20 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
                       {reviewRisk ? (
                         <div className="text-xs text-fg-muted">Risk {reviewRisk}</div>
                       ) : null}
+                    </div>
+                  ) : null}
+
+                  {hasDetails ? (
+                    <div
+                      data-testid={`approval-details-${approvalId}`}
+                      className="grid gap-2 rounded-md border border-border bg-bg-subtle px-3 py-2.5"
+                    >
+                      {detailEntries.map(([label, value]) => (
+                        <div key={label} className="grid gap-0.5">
+                          <div className="text-xs font-medium text-fg-muted">{label}</div>
+                          <div className="font-mono text-xs text-fg break-all">{value}</div>
+                        </div>
+                      ))}
                     </div>
                   ) : null}
 

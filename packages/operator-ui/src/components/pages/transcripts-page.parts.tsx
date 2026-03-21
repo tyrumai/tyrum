@@ -20,6 +20,7 @@ import { Card, CardContent, CardHeader } from "../ui/card.js";
 import { EmptyState } from "../ui/empty-state.js";
 import { LoadingState } from "../ui/loading-state.js";
 import { ScrollArea } from "../ui/scroll-area.js";
+import { StructuredValue } from "../ui/structured-value.js";
 import { MessageCard } from "./chat-page-ai-sdk-message-card.js";
 import {
   approvalStatusVariant,
@@ -420,6 +421,13 @@ export function TranscriptInspectorPanel(props: {
                       {selectedEvent.occurred_at}
                     </time>
                   </div>
+                  <div className="max-h-[480px] overflow-auto rounded-md border border-border bg-bg-subtle/30 p-3">
+                    <StructuredValue value={selectedEvent} />
+                  </div>
+                </div>
+              ) : focusSession ? (
+                <div className="max-h-[480px] overflow-auto rounded-md border border-border bg-bg-subtle/30 p-3">
+                  <StructuredValue value={focusSession} />
                 </div>
               ) : (
                 <div className="text-sm text-fg-muted">{inspectorHint}</div>

@@ -245,6 +245,73 @@ describe("ApprovalsPage (desktop approvals)", () => {
     }
   });
 
+  it("keeps approval key and scope details behind the context toggle", () => {
+    const runId = "11111111-1111-1111-1111-111111111111";
+    const stepId = "22222222-2222-2222-2222-222222222222";
+    const approval = createDesktopApprovalFixture({
+      approvalKey: "approval:desktop:submit",
+      scope: {
+        run_id: runId,
+        step_id: stepId,
+      },
+      context: {},
+      latestReview: null,
+    });
+
+    const { store: approvalsStore } = createStore({
+      byId: { 1: approval },
+      pendingIds: [1],
+      loading: false,
+      error: null,
+      lastSyncedAt: null,
+    });
+
+    const { store: pairingStore } = createStore({
+      byId: {},
+      pendingIds: [],
+      blockedIds: [],
+      loading: false,
+      error: null,
+      lastSyncedAt: null,
+    });
+
+    const { store: runsStore } = createStore({
+      runsById: {},
+      stepsById: {},
+      attemptsById: {},
+      stepIdsByRunId: {},
+      attemptIdsByStepId: {},
+    });
+
+    const core = {
+      approvalsStore,
+      pairingStore,
+      runsStore,
+      elevatedModeStore: createElevatedModeStore({
+        tickIntervalMs: 0,
+      }),
+    } as unknown as OperatorCore;
+
+    const { container, root } = renderApprovalsPage(core);
+
+    try {
+      expect(container.textContent).not.toContain("approval:desktop:submit");
+
+      expandCardContext(container);
+
+      const details = container.querySelector<HTMLDivElement>('[data-testid="approval-details-1"]');
+      expect(details).not.toBeNull();
+      expect(details?.textContent).toContain("Approval key");
+      expect(details?.textContent).toContain("approval:desktop:submit");
+      expect(details?.textContent).toContain("Run");
+      expect(details?.textContent).toContain(runId);
+      expect(details?.textContent).toContain("Step");
+      expect(details?.textContent).toContain(stepId);
+    } finally {
+      cleanupTestRoot({ container, root });
+    }
+  });
+
   it("renders desktop artifacts drilldown when available for an approval step", () => {
     const runId = "11111111-1111-1111-1111-111111111111";
     const stepId = "22222222-2222-2222-2222-222222222222";

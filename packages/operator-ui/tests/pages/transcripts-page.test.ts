@@ -338,6 +338,8 @@ describe("TranscriptsPage", () => {
     expect(testRoot.container.textContent).toContain("Inspector");
     expect(testRoot.container.textContent).toContain("Run key");
     expect(testRoot.container.textContent).toContain(fixture.rootSession.session_key);
+    expect(testRoot.container.textContent).toContain("Job id");
+    expect(testRoot.container.textContent).toContain("550e8400-e29b-41d4-a716-446655440111");
     expect(testRoot.container.textContent).toContain("Artifacts");
     expect(testRoot.container.textContent).toContain("Open artifact");
     expect(testRoot.container.textContent).toContain("Download");
@@ -401,7 +403,7 @@ describe("TranscriptsPage", () => {
     cleanupTestRoot(testRoot);
   });
 
-  it("shows inspector guidance when a transcript is focused but no event is selected", async () => {
+  it("shows focused transcript details when no event is selected", async () => {
     const fixture = createTranscriptFixture();
     const { core } = createTranscriptCore({
       transcriptState: {
@@ -420,9 +422,9 @@ describe("TranscriptsPage", () => {
 
     expect(testRoot.container.textContent).toContain("Inspector");
     expect(testRoot.container.textContent).toContain("Root transcript");
-    expect(testRoot.container.textContent).toContain(
-      "Select a transcript event to inspect its raw payload.",
-    );
+    expect(testRoot.container.textContent).toContain("Session id");
+    expect(testRoot.container.textContent).toContain("Session key");
+    expect(testRoot.container.textContent).toContain(fixture.rootSession.session_key);
 
     cleanupTestRoot(testRoot);
   });
